@@ -818,7 +818,11 @@ export class Viewport {
     for (const fn of this.listeners) fn();
   }
 
-  snapshot(width = 480, height = 360): string {
+  snapshot(width = 480, height = 360, clean = false): string {
+    // Thumbnails leave out helpers so only the model is pictured.
+    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay];
+    const shown = helpers.map((h) => h.visible);
+    if (clean) helpers.forEach((h) => (h.visible = false));
     const prev = this.renderer.getSize(new THREE.Vector2());
     this.renderer.setSize(width, height, false);
     const aspect = width / height;
@@ -836,6 +840,7 @@ export class Viewport {
     this.ortho.left = saved.l;
     this.ortho.right = saved.r;
     this.ortho.updateProjectionMatrix();
+    if (clean) helpers.forEach((h, i) => (h.visible = shown[i]!));
     return url;
   }
 

@@ -188,7 +188,10 @@ export function scheduleRebuild(): void {
     const { doc, preview, problem } = displayDoc();
     set({ previewError: problem });
     kernel.rebuild(doc).then(
-      (output) => set(preview ? { output, previewing: true } : { output, baseOutput: output, previewing: false }),
+      (output) => {
+        set(preview ? { output, previewing: true } : { output, baseOutput: output, previewing: false });
+        if (!preview) scheduleThumbnail();
+      },
       (e: unknown) => {
         if (e instanceof SupersededError) return;
         const msg = e instanceof Error ? e.message : String(e);
@@ -354,6 +357,8 @@ export async function newProject(doc: LeocadDocument = emptyDocument(), name = "
 }
 
 function loadDoc(doc: LeocadDocument, meta: ProjectMeta): void {
+  // Refresh the project's picture once per opening, after the first rebuild.
+  thumbFor = null;
   docStore = new DocumentStore(doc);
   set({
     screen: "editor",
@@ -375,7 +380,7 @@ function loadDoc(doc: LeocadDocument, meta: ProjectMeta): void {
 export const undoAvailable = () => docStore.canUndo;
 
 export function goHome(): void {
-  void flushSave().then(refreshProjects);
+  void flushSave(true).then(refreshProjects);
   set({ screen: "home", project: null, sketchId: null, dialog: null });
   history.replaceState(null, "", "#/");
 }
@@ -401,17 +406,35 @@ function scheduleSave(): void {
   saveTimer = window.setTimeout(() => void flushSave(), 800);
 }
 
-export async function flushSave(): Promise<void> {
+/** Projects get a picture once the model has been built, even if nothing was changed yet. */
+let thumbTimer: number | undefined;
+let thumbFor: string | null = null;
+function scheduleThumbnail(): void {
+  const p = get().project;
+  if (!p || thumbFor === p.id) return;
+  clearTimeout(thumbTimer);
+  thumbTimer = window.setTimeout(() => {
+    if (get().project?.id !== p.id || get().sketchId || get().dialog) return;
+    thumbFor = p.id;
+    void flushSave(true);
+  }, 1200);
+}
+
+function snapshot(): string | undefined {
+  try {
+    return viewportRef?.snapshot(480, 360, true);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Saves pending changes; `withThumbnail` also refreshes the picture when nothing changed. */
+export async function flushSave(withThumbnail = false): Promise<void> {
   clearTimeout(saveTimer);
   const p = get().project;
-  if (!p || get().saveState === "saved") return;
+  if (!p || (get().saveState === "saved" && !withThumbnail)) return;
   set({ saveState: "saving" });
-  let thumbnail: string | undefined;
-  try {
-    thumbnail = viewportRef?.snapshot(320, 240);
-  } catch {
-    thumbnail = undefined;
-  }
+  const thumbnail = snapshot();
   try {
     await saveProject({ ...p, updatedAt: Date.now(), doc: docStore.doc, ...(thumbnail ? { thumbnail } : {}) });
     set({ saveState: "saved" });
