@@ -22,9 +22,17 @@ export interface Toast {
   kind: "info" | "error";
 }
 
+export interface Tab {
+  id: string;
+  name: string;
+  folder?: string;
+}
+
 interface State {
   screen: "home" | "editor";
   projects: ProjectMeta[];
+  /** Open projects, in tab order. */
+  tabs: Tab[];
   /** All project folders, and the one the project overview is showing. */
   folders: string[];
   folder: string;
@@ -60,6 +68,25 @@ interface State {
 
 export const kernel = new KernelClient(new KernelWorker());
 let docStore = new DocumentStore();
+/** Each open tab keeps its document and undo history in memory while it is in the background. */
+const tabStores = new Map<string, DocumentStore>();
+const closedTabs: string[] = [];
+
+function loadTabs(): Tab[] {
+  try {
+    return (JSON.parse(localStorage.getItem("leocad.tabs") ?? "[]") as Tab[]).filter((t) => typeof t.id === "string");
+  } catch {
+    return [];
+  }
+}
+function setTabs(tabs: Tab[]): void {
+  useApp.setState({ tabs });
+  try {
+    localStorage.setItem("leocad.tabs", JSON.stringify(tabs));
+  } catch {
+    // tabs just won't be restored
+  }
+}
 let viewportRef: Viewport | null = null;
 export const setViewport = (v: Viewport | null) => (viewportRef = v);
 export const getViewport = () => viewportRef;
@@ -67,6 +94,7 @@ export const getViewport = () => viewportRef;
 export const useApp = create<State>(() => ({
   screen: "home",
   projects: [],
+  tabs: loadTabs(),
   folders: [],
   folder: "",
   project: null,
@@ -195,12 +223,42 @@ export async function rebuildNow(): Promise<RebuildOutput> {
   for (;;) {
     try {
       const output = await kernel.rebuild(docStore.doc);
-      if (!get().dialog && !get().proposalDoc) set({ output, baseOutput: output, previewing: false });
+      if (!get().dialog && !get().proposalDoc) set({ output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
       return output;
     } catch (e) {
       if (!(e instanceof SupersededError)) throw e;
     }
   }
+}
+
+/**
+ * Face and edge numbers change between rebuilds. Faces are found again by their persistent names;
+ * edges are kept only while the part's topology is unchanged. Anything else is deselected rather
+ * than silently pointing at a different face.
+ */
+function remapSelection(selection: Pick[], before: RebuildOutput | null, after: RebuildOutput): Pick[] {
+  if (!selection.length) return selection;
+  const out: Pick[] = [];
+  for (const p of selection) {
+    if (p.kind !== "face" && p.kind !== "edge") {
+      out.push(p);
+      continue;
+    }
+    const m = after.meshes.find((x) => x.bodyId === p.bodyId);
+    if (!m) continue;
+    const old = before?.meshes.find((x) => x.bodyId === p.bodyId);
+    const same = old && old.faceTags.length === m.faceTags.length && old.faceTags.every((t, i) => t.join() === m.faceTags[i]!.join());
+    if (same) {
+      out.push(p);
+      continue;
+    }
+    if (p.kind === "face") {
+      const key = p.tags.join();
+      const face = m.faceTags.findIndex((t) => t.join() === key);
+      if (face >= 0) out.push({ ...p, face, tags: m.faceTags[face]! });
+    }
+  }
+  return out.length === selection.length && out.every((p, i) => p === selection[i]) ? selection : out;
 }
 
 let rebuildQueued = false;
@@ -213,7 +271,7 @@ export function scheduleRebuild(): void {
     set({ previewError: problem });
     kernel.rebuild(doc).then(
       (output) => {
-        set(preview ? { output, previewing: true } : { output, baseOutput: output, previewing: false });
+        set(preview ? { output, previewing: true } : { output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
         if (!preview) scheduleThumbnail();
       },
       (e: unknown) => {
@@ -363,12 +421,26 @@ export function closeSketch(): void {
 export async function refreshProjects(): Promise<void> {
   const [projects, folders] = await Promise.all([listProjects(), listFolders()]);
   set({ projects, folders, folder: folders.includes(get().folder) ? get().folder : "" });
+  // Tabs of projects that no longer exist close; names follow renames made elsewhere.
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const tabs = get().tabs.filter((t) => byId.has(t.id) || t.id === get().project?.id).map((t) => (byId.has(t.id) ? { ...t, name: byId.get(t.id)!.name } : t));
+  if (tabs.length !== get().tabs.length || tabs.some((t, i) => t.name !== get().tabs[i]!.name)) setTabs(tabs);
 }
 
 export async function openProject(id: string): Promise<void> {
-  const p = await loadProject(id);
+  if (get().project?.id === id && get().screen === "editor") return;
+  await flushSave(true);
+  const cached = tabStores.get(id);
+  const tab = get().tabs.find((t) => t.id === id);
+  if (cached && tab) {
+    loadDoc(cached.doc, { id, name: tab.name, folder: tab.folder ?? "", updatedAt: Date.now() }, cached);
+    history.replaceState(null, "", `#/p/${encodeURIComponent(id)}`);
+    return;
+  }
+  const p = await loadProject(id).catch(() => undefined);
   if (!p) {
     toast("Project not found", "error");
+    closeTab(id, false);
     return;
   }
   loadDoc(p.doc, { id: p.id, name: p.name, folder: p.folder ?? "", updatedAt: p.updatedAt });
@@ -383,10 +455,14 @@ export async function newProject(doc: LeocadDocument = emptyDocument(), name = "
   history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
 }
 
-function loadDoc(doc: LeocadDocument, meta: ProjectMeta): void {
+function loadDoc(doc: LeocadDocument, meta: ProjectMeta, store?: DocumentStore): void {
   // Refresh the project's picture once per opening, after the first rebuild.
   thumbFor = null;
-  docStore = new DocumentStore(doc);
+  const leaving = get().project;
+  if (leaving) tabStores.set(leaving.id, docStore);
+  docStore = store ?? new DocumentStore(doc);
+  tabStores.set(meta.id, docStore);
+  if (!get().tabs.some((t) => t.id === meta.id)) setTabs([...get().tabs, { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) }]);
   set({
     screen: "editor",
     project: meta,
@@ -407,6 +483,8 @@ function loadDoc(doc: LeocadDocument, meta: ProjectMeta): void {
 export const undoAvailable = () => docStore.canUndo;
 
 export function goHome(): void {
+  const p = get().project;
+  if (p) tabStores.set(p.id, docStore);
   void flushSave(true).then(refreshProjects);
   set({ screen: "home", project: null, sketchId: null, dialog: null });
   history.replaceState(null, "", "#/");
@@ -419,6 +497,7 @@ export async function renameProject(name: string): Promise<void> {
   try {
     const meta = await renameProjectFile(p.id, name.trim());
     set({ project: { ...p, ...meta } });
+    retargetTab(p.id, meta);
     history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
   } catch (e) {
     toast(`Could not rename: ${e instanceof Error ? e.message : String(e)}`, "error");
@@ -479,3 +558,58 @@ export function replaceDocument(doc: LeocadDocument): void {
 
 // Debug handle for development and end-to-end checks.
 if (import.meta.env.DEV) Object.assign(window, { leocad: { useApp, apply, currentDoc, getViewport, kernel } });
+
+// ---------------------------------------------------------------- tabs
+
+/** Closes a tab; the active one switches to its neighbour (or home). */
+export function closeTab(id: string, remember = true): void {
+  const tabs = get().tabs;
+  const i = tabs.findIndex((t) => t.id === id);
+  if (i < 0) return;
+  if (remember) closedTabs.push(id);
+  const active = get().project?.id === id;
+  const finish = () => {
+    tabStores.delete(id);
+    setTabs(get().tabs.filter((t) => t.id !== id));
+  };
+  if (!active) return finish();
+  const next = tabs[i + 1] ?? tabs[i - 1];
+  void flushSave(true).then(() => {
+    finish();
+    if (next) void openProject(next.id);
+    else goHome();
+  });
+}
+
+export function reopenClosedTab(): void {
+  const id = closedTabs.pop();
+  if (id) void openProject(id);
+}
+
+/** Switches to the next (+1) or previous (-1) tab, wrapping around. */
+export function cycleTab(step: 1 | -1): void {
+  const tabs = get().tabs;
+  if (!tabs.length) return;
+  const i = tabs.findIndex((t) => t.id === get().project?.id);
+  const next = tabs[(i + step + tabs.length) % tabs.length]!;
+  void openProject(next.id);
+}
+
+export function moveTab(id: string, before: string | null): void {
+  const tabs = get().tabs.filter((t) => t.id !== id);
+  const tab = get().tabs.find((t) => t.id === id);
+  if (!tab) return;
+  const at = before ? tabs.findIndex((t) => t.id === before) : tabs.length;
+  tabs.splice(at < 0 ? tabs.length : at, 0, tab);
+  setTabs(tabs);
+}
+
+/** A project's id changed (renamed or moved): keep its tab and in-memory state. */
+export function retargetTab(oldId: string, meta: { id: string; name: string; folder?: string }): void {
+  const store = tabStores.get(oldId);
+  if (store) {
+    tabStores.delete(oldId);
+    tabStores.set(meta.id, store);
+  }
+  setTabs(get().tabs.map((t) => (t.id === oldId ? { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) } : t)));
+}

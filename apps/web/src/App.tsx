@@ -22,7 +22,7 @@ import { desktop } from "./lib/persistence";
 import { saveFile } from "./components/io";
 import { actionFor, MODEL_ACTIONS, type ModelAction } from "./lib/keymap";
 import type { FeatureOp } from "@leocad/schema";
-import { toggleSide } from "./store";
+import { closeTab, cycleTab, reopenClosedTab, toggleSide } from "./store";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@leocad/viewport";
@@ -116,6 +116,10 @@ export function App() {
       else if (cmd === "home") goHome();
       else if (cmd === "save-as" && useApp.getState().project) saveFile();
       else if (cmd === "shortcuts") setHelp((h) => !h);
+      else if (cmd === "settings") window.dispatchEvent(new Event("leocad:settings"));
+      else if (cmd === "close-tab" && useApp.getState().project) closeTab(useApp.getState().project!.id);
+      else if (cmd === "reopen-tab") reopenClosedTab();
+      else if (cmd === "next-tab" || cmd === "prev-tab") cycleTab(cmd === "next-tab" ? 1 : -1);
     });
     const offOpen = desktop.on("open-project", (id) => void openProject(id));
     const offError = desktop.on("error", (msg) => toast(msg, "error"));
@@ -124,6 +128,23 @@ export function App() {
       offOpen();
       offError();
     };
+  }, []);
+  // Tabs: the usual browser/editor keys.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      const k = e.key.toLowerCase();
+      const run = (fn: () => void) => (e.preventDefault(), e.stopImmediatePropagation(), fn());
+      if (e.ctrlKey && e.key === "Tab") return run(() => cycleTab(e.shiftKey ? -1 : 1));
+      if (!mod) return;
+      if (k === "t" && e.shiftKey) return run(reopenClosedTab);
+      if (k === "t" && !e.altKey) return run(() => void newProject());
+      if (k === "w" && !e.shiftKey && useApp.getState().project) return run(() => closeTab(useApp.getState().project!.id));
+      if (e.shiftKey && (e.code === "BracketRight" || e.code === "BracketLeft")) return run(() => cycleTab(e.code === "BracketRight" ? 1 : -1));
+      if (e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft")) return run(() => cycleTab(e.key === "ArrowRight" ? 1 : -1));
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

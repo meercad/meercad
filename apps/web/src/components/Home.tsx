@@ -6,7 +6,8 @@ import { createFolder, deleteFolder, deleteProject, desktop, moveProject, rename
 import { newProject, openProject, refreshProjects, toast, useApp } from "../store";
 import { EXAMPLES } from "../lib/examples";
 import { importFile } from "./io";
-import { Logo, toggleTheme } from "./TopBar";
+import { toggleTheme } from "./TopBar";
+import { TabStrip } from "./Tabs";
 
 const DRAG_TYPE = "application/x-leocad-project";
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
@@ -109,11 +110,10 @@ export function Home() {
   return (
     <div className="home">
       <div className={`home-top ${desktop ? "desktop" : ""}`}>
-        <span className="logo">
-          <Logo /> leocad
+        <span className="home-tab" aria-current="page">
+          Projects
         </span>
-        <span className="muted">Parametric CAD for makers — free, open source, works offline.</span>
-        <span className="spacer" />
+        <TabStrip />
         <button className="btn" onClick={toggleTheme}>
           Theme
         </button>

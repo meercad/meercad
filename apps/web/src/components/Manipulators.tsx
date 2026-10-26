@@ -2,7 +2,7 @@
  * Direct manipulation: drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
-import { ArrowUpFromLine, EyeOff, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
+import { ArrowUpFromLine, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
@@ -23,6 +23,9 @@ const num = (e: Expr | undefined, fallback = 0): number => {
     return fallback;
   }
 };
+
+/** What ties a hole's size to others (variable, equal constraints), and how to cut that tie. */
+const holeLinks = new Map<string, { what: string; unlink: () => void } | null>();
 
 export function Manipulators({ viewport }: { viewport: Viewport }) {
   const dialog = useApp((s) => s.dialog);
@@ -203,6 +206,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
    * circle itself when it has no dimension.
    */
   function holeHandle(out: NonNullable<typeof base>, tags: string[] | undefined): Handle | null {
+    holeLinks.delete("hole");
     for (const tag of tags ?? []) {
       const m = /^[\w-]+\.side\[([\w-]+)\.([\w-]+)\]/.exec(tag);
       if (!m) continue;
@@ -234,6 +238,24 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             : { entities: latest.entities.map((e) => (e.id === curveId && e.type === "circle" ? { ...e, radius: +r.toFixed(3) } : e)) },
         });
       };
+      const equal = sk.constraints.filter((c) => c.type === "equal" && (("a" in c && c.a === curveId) || ("b" in c && c.b === curveId)));
+      const byVar = dim && typeof dim.value === "string" && Object.keys(params).some((n) => new RegExp(`\\b${n}\\b`).test(dim.value as string));
+      holeLinks.set("hole", byVar || equal.length ? {
+        what: [byVar ? `the variable "${dim!.value}"` : null, equal.length ? `${equal.length === 1 ? "another circle" : `${equal.length} other circles`} (Equal)` : null].filter(Boolean).join(" and "),
+        unlink: () => {
+          const latest = currentDoc().features.find((f) => f.id === sketchId) as typeof sk;
+          const r = curve.radius;
+          apply({
+            type: "edit_feature",
+            id: sketchId,
+            patch: {
+              constraints: latest.constraints
+                .filter((c) => !equal.some((e) => e.id === c.id))
+                .map((c) => (dim && c.id === dim.id ? ({ ...c, value: +(dim.type === "diameter" ? 2 * r : r).toFixed(3) } as typeof c) : c)),
+            },
+          });
+        },
+      } : null);
       return {
         id: "hole",
         origin: center,
@@ -281,24 +303,20 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           {tip.text}
         </div>
       ) : null}
-      {!dialog && !sketchId && !measure && selection.length ? <QuickActions viewport={viewport} selection={selection} /> : null}
+      {!dialog && !sketchId && !measure && selection.length ? <QuickActions selection={selection} /> : null}
     </>
   );
 }
 
 
 /** Floating action bar next to the selection, with the shortcut of every action. */
-function QuickActions({ viewport, selection }: { viewport: Viewport; selection: Pick[] }) {
-  const [, tick] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => viewport.onChange(tick), [viewport]);
+/** Actions for the current selection, docked at the bottom so they never cover a drag arrow. */
+function QuickActions({ selection }: { selection: Pick[] }) {
+  usePrefs((s) => s.keys);
   const last = selection.at(-1)!;
-  const point = "point" in last ? last.point : null;
-  const screen = point ? viewport.worldToScreen(point) : null;
-  if (!screen) return null;
   const meshes = useApp.getState().output?.meshes ?? [];
   const kinds = new Set(selection.map((p) => p.kind));
   const actions: { icon: ReactNode; label: string; kbd?: string | undefined; run: () => void }[] = [];
-  usePrefs((s) => s.keys);
   const partIds = new Set(selection.map((p) => (p.kind === "face" ? p.bodyId : "")));
   const wholePart = selection.length > 1 && partIds.size === 1 && !partIds.has("") && meshes.find((m) => m.bodyId === [...partIds][0])?.faceTags.length === selection.length;
   if (wholePart) {
@@ -325,7 +343,7 @@ function QuickActions({ viewport, selection }: { viewport: Viewport; selection: 
   if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: keyFor("measure"), run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
   if (!actions.length) return null;
   return (
-    <div className="quick-actions" style={{ left: screen[0] + 18, top: screen[1] + 18 }} onPointerDown={(e) => e.stopPropagation()}>
+    <div className="quick-actions docked" onPointerDown={(e) => e.stopPropagation()}>
       {actions.map((a) => (
         <button key={a.label} className="qa" onClick={a.run} title={`${a.label}${a.kbd ? ` (${a.kbd})` : ""}`}>
           {a.icon}
@@ -346,8 +364,9 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
     const t = setInterval(tick, 250);
     return () => clearInterval(t);
   }, []);
+  const showValues = usePrefs((s) => s.showValues);
   const handles = (viewport as unknown as { handles: Handle[] }).handles ?? [];
-  if (viewport.draggingHandle) return null;
+  if (viewport.draggingHandle || !showValues) return null;
   return (
     <div className="overlay-layer">
       {handles.map((h) => {
@@ -373,9 +392,16 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
                 }}
               />
             ) : (
-              <button onClick={() => setTyping(h.id)} title="Click to type a value">
-                {text}
-              </button>
+              <>
+                <button onClick={() => setTyping(h.id)} title="Click to type a value">
+                  {text}
+                </button>
+                {holeLinks.get(h.id) ? (
+                  <button className="unlink" onClick={() => holeLinks.get(h.id)!.unlink()} title={`Changes together with ${holeLinks.get(h.id)!.what}. Click to change only this hole.`}>
+                    <Link2Off />
+                  </button>
+                ) : null}
+              </>
             )}
           </div>
         );

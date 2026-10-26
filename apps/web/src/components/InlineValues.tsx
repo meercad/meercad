@@ -8,7 +8,10 @@ import type { Expr, Feature, SketchConstraint, SketchFeature } from "@leocad/sch
 import { toWorld, type Vec2 } from "@leocad/sketch";
 import type { Viewport } from "@leocad/viewport";
 import { faceAnchor, profileAnchor } from "../lib/anchors";
-import { apply, useApp } from "../store";
+import { Link2Off } from "lucide-react";
+import { evaluate } from "@leocad/model";
+import { apply, toast, useApp } from "../store";
+import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";
 
 type V3 = [number, number, number];
@@ -18,6 +21,8 @@ interface Item {
   at: V3;
   text: string;
   value: Expr;
+  /** Can be detached from its variables (lengths only; angles are stored in other units). */
+  unlinkable?: boolean;
   commit: (v: Expr) => void;
 }
 
@@ -34,7 +39,7 @@ function faceCenterByTag(out: RebuildOutput, prefix: string): V3 | null {
 function featureItems(f: Feature, out: RebuildOutput): Item[] {
   const edit = (patch: Record<string, unknown>) => apply({ type: "edit_feature", id: f.id, patch });
   const item = (key: string, at: V3 | null, label: string, value: Expr, field: string, unit = " mm"): Item[] =>
-    at ? [{ key: `${f.id}.${key}`, at, text: `${label}${fmt(value, unit)}`, value, commit: (v) => edit({ [field]: v }) }] : [];
+    at ? [{ key: `${f.id}.${key}`, at, text: `${label}${fmt(value, unit)}`, value, unlinkable: unit === " mm", commit: (v) => edit({ [field]: v }) }] : [];
   switch (f.op) {
     case "extrude": {
       const at = faceCenterByTag(out, `${f.id}.end_cap`) ?? profileAnchor(out, f.profile)?.origin ?? null;
@@ -96,6 +101,7 @@ function sketchItems(sk: SketchFeature, out: RebuildOutput): Item[] {
       at: toWorld(view.frame, at),
       text: `${prefix}${fmt(c.value, c.type === "angle" ? "°" : "")}`,
       value: c.value,
+      unlinkable: c.type !== "angle",
       commit: (v) => apply({ type: "edit_feature", id: sk.id, patch: { constraints: sk.constraints.map((x) => (x.id === c.id ? ({ ...x, value: v } as SketchConstraint) : x)) } }),
     });
   }
@@ -110,8 +116,9 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const sketchId = useApp((s) => s.sketchId);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const [editing, setEditing] = useState<string | null>(null);
+  const showValues = usePrefs((s) => s.showValues);
   useEffect(() => viewport.onChange(tick), [viewport]);
-  if (!out || sketchId || dialog || !selected) return null;
+  if (!out || sketchId || dialog || !selected || !showValues) return null;
   const f = doc.features.find((x) => x.id === selected);
   if (!f) return null;
   const items = [...featureItems(f, out)];
@@ -129,9 +136,16 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
             {editing === it.key ? (
               <InlineInput value={it.value} onDone={(v) => (setEditing(null), v !== null && v !== it.value && commitKeepingParams(it, v))} />
             ) : (
-              <button onClick={() => setEditing(it.key)} title="Click to edit">
-                {it.text}
-              </button>
+              <>
+                <button onClick={() => setEditing(it.key)} title="Click to edit">
+                  {it.text}
+                </button>
+                {it.unlinkable && typeof it.value === "string" && isLinked(it.value) ? (
+                  <button className="unlink" onClick={() => unlink(it)} title="Linked to a variable — click to use a plain number here instead">
+                    <Link2Off />
+                  </button>
+                ) : null}
+              </>
             )}
           </div>
         );
@@ -144,6 +158,22 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
  * A value that is just a variable name keeps its link: typing a number changes the variable
  * (everything using it follows); typing an expression replaces the link deliberately.
  */
+/** True for values that reference variables (anything but a plain number). */
+function isLinked(value: string): boolean {
+  return Object.keys(useApp.getState().doc.params).some((name) => new RegExp(`\\b${name}\\b`).test(value));
+}
+
+/** Replaces a variable-driven value with its current number, so only this dimension changes from now on. */
+function unlink(it: Item): void {
+  try {
+    const n = evaluate(it.value, new Map(Object.entries(useApp.getState().baseOutput?.report.params ?? {})));
+    it.commit(+n.toFixed(4));
+    toast("Unlinked — this value no longer follows the variable");
+  } catch {
+    toast("Could not evaluate this value", "error");
+  }
+}
+
 function commitKeepingParams(it: Item, v: Expr): void {
   const params = useApp.getState().doc.params;
   if (typeof it.value === "string" && it.value in params && typeof v === "number") {

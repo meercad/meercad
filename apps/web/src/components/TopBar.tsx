@@ -1,9 +1,11 @@
-import { ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Keyboard, Moon, PanelLeft, Redo2, Settings, Share2, Undo2, Upload } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { goHome, redo, renameProject, toggleSide, undo, useApp } from "../store";
+import { ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Keyboard, Moon, PanelLeft, Redo2, Ruler, Settings, Share2, Undo2, Upload } from "lucide-react";
+import { setPrefs, usePrefs } from "../lib/keymap";
+import { useRef } from "react";
+import { goHome, redo, toggleSide, undo, useApp } from "../store";
 import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
+import { TabStrip } from "./Tabs";
 import { showMenu } from "./Menu";
 
 const NONE: never[] = [];
@@ -25,14 +27,10 @@ export function toggleTheme(): void {
 }
 
 export function TopBar() {
-  const project = useApp((s) => s.project);
   const sideOpen = useApp((s) => s.sideOpen);
-  const saveState = useApp((s) => s.saveState);
   const canUndo = useApp((s) => s.canUndo);
   const canRedo = useApp((s) => s.canRedo);
   const sketches = useApp((s) => s.output?.report.sketches) ?? NONE;
-  const [name, setName] = useState(project?.name ?? "");
-  useEffect(() => setName(project?.name ?? ""), [project?.name]);
 
   const fileBtn = useRef<HTMLButtonElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
@@ -59,6 +57,8 @@ export function TopBar() {
       { label: "Settings…", icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("leocad:settings")) },
       { label: "Help & guides", icon: <CircleHelp />, onClick: () => window.dispatchEvent(new Event("leocad:help")) },
       { label: "Keyboard shortcuts", icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) },
+      { label: `${usePrefs.getState().showValues ? "Hide" : "Show"} dimensions on the model`, icon: <Ruler />, onClick: () => setPrefs({ showValues: !usePrefs.getState().showValues }) },
+      { label: `${usePrefs.getState().showKeys ? "Hide" : "Show"} shortcut badges`, icon: <Keyboard />, onClick: () => setPrefs({ showKeys: !usePrefs.getState().showKeys }) },
       { label: "Toggle dark mode", icon: <Moon />, onClick: toggleTheme },
     ]);
   };
@@ -71,18 +71,7 @@ export function TopBar() {
       <button className="icon-btn" onClick={goHome} title="All projects">
         <House />
       </button>
-      <button className="logo" onClick={goHome} title={`All projects — ${saveState === "saved" ? "saved" : saveState === "saving" ? "saving…" : "unsaved changes"}`}>
-        <Logo />
-      </button>
-      <input
-        className="doc-name"
-        value={name}
-        aria-label="Project name"
-        onChange={(e) => setName(e.target.value)}
-        onBlur={() => renameProject(name)}
-        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-      />
-      <span className="spacer" />
+      <TabStrip />
       <button className="icon-btn" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
         <Undo2 />
       </button>

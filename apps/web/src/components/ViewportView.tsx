@@ -1,6 +1,6 @@
 import { Box, Copy, Eye, EyeOff, Focus, Grid2x2, Layers, Pencil, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { navigationFor, usePrefs } from "../lib/keymap";
+import { navigationFor, setPrefs, usePrefs } from "../lib/keymap";
 import type { FeatureOp } from "@leocad/schema";
 import { samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@leocad/viewport";
 import { FEATURES } from "../lib/features";
@@ -29,6 +29,7 @@ export function ViewportView() {
   const hidden = useApp((s) => s.hidden);
   const showPlanes = useApp((s) => s.showPlanes);
   const showSketches = useApp((s) => s.showSketches);
+  const showValues = usePrefs((s) => s.showValues);
   const sketchId = useApp((s) => s.sketchId);
   const dialog = useApp((s) => s.dialog);
   const selection = useApp((s) => s.selection);
@@ -356,6 +357,9 @@ export function ViewportView() {
         </button>
         <button className={`icon-btn sm ${showSketches ? "active" : ""}`} title="Sketches" onClick={() => useApp.setState({ showSketches: !showSketches })}>
           <Grid2x2 />
+        </button>
+        <button className={`icon-btn sm ${showValues ? "active" : ""}`} title={`${showValues ? "Hide" : "Show"} dimensions on the model`} onClick={() => setPrefs({ showValues: !showValues })}>
+          <Ruler />
         </button>
       </div>
     </div>

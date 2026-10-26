@@ -1,5 +1,5 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { FolderOpen, HardDrive, Keyboard, Mouse, X } from "lucide-react";
+import { FolderOpen, HardDrive, Keyboard, Mouse, Ruler, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { desktop } from "../lib/persistence";
@@ -81,12 +81,26 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
               </button>
             ))}
           </div>
+          <label className="check">
+            <input type="checkbox" checked={prefs.showKeys} onChange={(e) => setPrefs({ showKeys: e.target.checked })} />
+            Show shortcut badges on tools and menus
+          </label>
           <p className="muted">
             {keyScheme.note} Every badge in the app follows this choice.{" "}
             <button className="link" onClick={() => (setOpen(false), onShortcuts())}>
               Show all shortcuts <Kbd k="?" />
             </button>
           </p>
+        </section>
+
+        <section>
+          <h3>
+            <Ruler /> On the model
+          </h3>
+          <label className="check">
+            <input type="checkbox" checked={prefs.showValues} onChange={(e) => setPrefs({ showValues: e.target.checked })} />
+            Show dimensions and sizes (diameters, distances, drag values)
+          </label>
         </section>
 
         {desktop ? (

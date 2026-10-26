@@ -202,18 +202,24 @@ interface Prefs {
   keys: KeyScheme;
   mouse: MouseScheme;
   invertZoom: boolean;
+  /** Shortcut badges on tools and menus. */
+  showKeys: boolean;
+  /** Dimension and size chips on the model. */
+  showValues: boolean;
 }
 
 const STORAGE_KEY = "leocad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "leocad", mouse: "leocad", invertZoom: false };
+  const fallback: Prefs = { keys: "leocad", mouse: "leocad", invertZoom: false, showKeys: true, showValues: true };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
       keys: KEY_SCHEMES.some((s) => s.id === raw.keys) ? raw.keys! : fallback.keys,
       mouse: MOUSE_SCHEMES.some((s) => s.id === raw.mouse) ? raw.mouse! : fallback.mouse,
       invertZoom: raw.invertZoom === true,
+      showKeys: raw.showKeys !== false,
+      showValues: raw.showValues !== false,
     };
   } catch {
     return fallback;
@@ -221,6 +227,11 @@ function load(): Prefs {
 }
 
 export const usePrefs = create<Prefs>(load);
+
+// Badges are hidden with one class on the root, so every Kbd follows without extra wiring.
+const applyRootClasses = (p: Prefs) => document.documentElement.classList.toggle("hide-kbd", !p.showKeys);
+applyRootClasses(usePrefs.getState());
+usePrefs.subscribe(applyRootClasses);
 
 export function setPrefs(p: Partial<Prefs>): void {
   usePrefs.setState(p);
