@@ -1,6 +1,6 @@
 /**
- * opencad desktop shell. Serves the web app from an app:// origin (with the cross-origin isolation
- * headers it needs), stores projects as plain .ocad files in ~/Documents/opencad and exposes a
+ * leocad desktop shell. Serves the web app from an app:// origin (with the cross-origin isolation
+ * headers it needs), stores projects as plain .leocad files in ~/Documents/leocad and exposes a
  * small, explicit file API to the renderer.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, type MenuItemConstructorOptions } from "electron";
@@ -14,7 +14,7 @@ const DEV = process.argv.includes("--dev");
 const DEV_URL = "http://localhost:5173";
 const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dirname, "../../web/dist");
 const mcpServer = app.isPackaged ? join(process.resourcesPath, "mcp", "server.js") : join(__dirname, "../../../packages/mcp/dist/server.js");
-const projectsDir = () => process.env["OPENCAD_PROJECTS_DIR"] ?? join(app.getPath("documents"), "opencad");
+const projectsDir = () => process.env["LEOCAD_PROJECTS_DIR"] ?? join(app.getPath("documents"), "leocad");
 const thumbsDir = () => join(app.getPath("userData"), "thumbnails");
 
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
@@ -50,17 +50,17 @@ function serveApp(): void {
 /** Project ids are file names without the extension; reject anything that could escape the folder. */
 function projectPath(id: string): string {
   if (!/^[^/\\:*?"<>|]{1,120}$/.test(id) || id.startsWith(".")) throw new Error(`invalid project name "${id}"`);
-  return join(projectsDir(), `${id}.ocad`);
+  return join(projectsDir(), `${id}.leocad`);
 }
 
 const thumbPath = (id: string) => join(thumbsDir(), `${createHash("sha1").update(projectPath(id)).digest("hex")}.png`);
 
 async function listProjects() {
   await mkdir(projectsDir(), { recursive: true });
-  const files = (await readdir(projectsDir())).filter((f) => f.endsWith(".ocad"));
+  const files = (await readdir(projectsDir())).filter((f) => f.endsWith(".leocad"));
   const out = await Promise.all(
     files.map(async (f) => {
-      const id = basename(f, ".ocad");
+      const id = basename(f, ".leocad");
       const st = await stat(join(projectsDir(), f));
       let thumbnail: string | undefined;
       try {
@@ -139,10 +139,11 @@ function createWindow(): BrowserWindow {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    title: "opencad",
+    title: "leocad",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 14 },
     backgroundColor: "#eef1f5",
+    icon: join(__dirname, "../build/icon.png"),
     show: false,
     webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
@@ -155,14 +156,14 @@ function createWindow(): BrowserWindow {
   win.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
   });
-  void win.loadURL(DEV ? DEV_URL : "app://opencad/");
+  void win.loadURL(DEV ? DEV_URL : "app://leocad/");
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });
   return win;
 }
 
-/** Imports an .ocad file opened from Finder into the projects folder and opens it. */
+/** Imports an .leocad file opened from Finder into the projects folder and opens it. */
 async function openExternalFile(file: string): Promise<void> {
   if (!mainWindow) {
     pendingOpen.push(file);
@@ -171,7 +172,7 @@ async function openExternalFile(file: string): Promise<void> {
   try {
     const doc = JSON.parse(await readFile(file, "utf8")) as unknown;
     const inProjects = normalize(file).startsWith(projectsDir() + sep);
-    const id = inProjects ? basename(file, ".ocad") : await uniqueId(basename(file, extname(file)));
+    const id = inProjects ? basename(file, ".leocad") : await uniqueId(basename(file, extname(file)));
     if (!inProjects) await writeFile(projectPath(id), `${JSON.stringify(doc, null, 2)}\n`);
     mainWindow.webContents.send("open-project", id);
     mainWindow.focus();
@@ -196,7 +197,7 @@ function buildMenu(): void {
         { label: "Open…", accelerator: "CmdOrCtrl+O", click: send("menu", "import") },
         { label: "All Projects", accelerator: "CmdOrCtrl+Shift+H", click: send("menu", "home") },
         { type: "separator" },
-        { label: "Save Copy As .ocad…", accelerator: "CmdOrCtrl+Shift+S", click: send("menu", "save-as") },
+        { label: "Save Copy As .leocad…", accelerator: "CmdOrCtrl+Shift+S", click: send("menu", "save-as") },
         { label: "Show Projects Folder", click: () => void shell.openPath(projectsDir()) },
         { type: "separator" },
         { role: "close" },
@@ -215,7 +216,7 @@ function buildMenu(): void {
       ],
     },
     { role: "windowMenu" },
-    { role: "help", submenu: [{ label: "opencad on GitHub", click: () => void shell.openExternal("https://github.com/") }] },
+    { role: "help", submenu: [{ label: "leocad on GitHub", click: () => void shell.openExternal("https://github.com/") }] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -223,7 +224,7 @@ function buildMenu(): void {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", (_e, argv) => {
-    const file = argv.find((a) => a.endsWith(".ocad"));
+    const file = argv.find((a) => a.endsWith(".leocad"));
     if (file) void openExternalFile(file);
     mainWindow?.focus();
   });

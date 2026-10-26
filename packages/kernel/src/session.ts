@@ -1,6 +1,6 @@
-import { RebuildEngine, type FeatureStatus } from "@opencad/model";
-import type { OpencadDocument } from "@opencad/schema";
-import type { PlaneFrame, SketchSolver, SolveDiagnostics, SolvedCurve, Vec2 } from "@opencad/sketch";
+import { RebuildEngine, type FeatureStatus } from "@leocad/model";
+import type { LeocadDocument } from "@leocad/schema";
+import type { PlaneFrame, SketchSolver, SolveDiagnostics, SolvedCurve, Vec2 } from "@leocad/sketch";
 import { OcctBackend } from "./backend.js";
 import type { Body } from "./body.js";
 import { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
@@ -50,7 +50,7 @@ export class KernelSession {
     this.engine = new RebuildEngine(new OcctBackend(oc, solver));
   }
 
-  rebuild(doc: OpencadDocument, opts: { mesh?: boolean } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
+  rebuild(doc: LeocadDocument, opts: { mesh?: boolean } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
     const r = this.engine.rebuild(doc);
     this.last = r.state;
     const t = performance.now();

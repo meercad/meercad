@@ -1,4 +1,4 @@
-import { SketchSolver } from "@opencad/sketch";
+import { SketchSolver } from "@leocad/sketch";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import { loadOcct, occtErrorMessage, type OC } from "./occt.js";
 import { KernelSession } from "./session.js";

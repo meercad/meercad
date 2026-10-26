@@ -11,7 +11,7 @@ import type {
   ShellFeature,
   SketchConstraint,
   SketchFeature,
-} from "@opencad/schema";
+} from "@leocad/schema";
 import { evaluate, ExprError } from "./expr.js";
 
 /** `T` with the expression fields `K` evaluated to numbers. */

@@ -1,5 +1,5 @@
 {
-  "name": "@opencad/kernel",
+  "name": "@leocad/kernel",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,11 +13,11 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@opencad/model": "workspace:*",
-    "@opencad/naming": "workspace:*",
-    "@opencad/schema": "workspace:*",
-    "@opencad/sketch": "workspace:*",
+    "@leocad/model": "workspace:*",
+    "@leocad/naming": "workspace:*",
+    "@leocad/schema": "workspace:*",
+    "@leocad/sketch": "workspace:*",
     "replicad-opencascadejs": "1.1.0",
-    "@opencad/io": "workspace:*"
+    "@leocad/io": "workspace:*"
   }
 }

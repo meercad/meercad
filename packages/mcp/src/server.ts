@@ -1,5 +1,5 @@
 /**
- * opencad MCP server. Claude (or any MCP client) launches this over stdio; the running opencad app
+ * leocad MCP server. Claude (or any MCP client) launches this over stdio; the running leocad app
  * connects to it over a local WebSocket and executes every tool call against the open document.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -8,16 +8,16 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { z } from "zod";
-import { SYSTEM_PROMPT } from "@opencad/ai/prompt";
+import { SYSTEM_PROMPT } from "@leocad/ai/prompt";
 import { DEFAULT_PORT, type BridgeHello, type BridgeMethod, type BridgeResponse } from "./protocol.js";
 
-const port = Number(process.env["OPENCAD_MCP_PORT"] ?? DEFAULT_PORT);
+const port = Number(process.env["LEOCAD_MCP_PORT"] ?? DEFAULT_PORT);
 // Only the app may connect: browsers always send Origin, and web pages cannot forge it.
-const extraOrigins = (process.env["OPENCAD_ORIGINS"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const extraOrigins = (process.env["LEOCAD_ORIGINS"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const originAllowed = (origin: string | undefined) =>
   !origin || origin === "null" || origin.startsWith("file://") || origin.startsWith("app://") || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || extraOrigins.includes(origin);
 
-const log = (...a: unknown[]) => console.error("[opencad-mcp]", ...a);
+const log = (...a: unknown[]) => console.error("[leocad-mcp]", ...a);
 
 let app: WebSocket | null = null;
 let hello: BridgeHello | null = null;
@@ -25,7 +25,7 @@ let seq = 0;
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
 
 const wss = new WebSocketServer({ host: "127.0.0.1", port, verifyClient: ({ origin }: { origin?: string }) => originAllowed(origin) });
-wss.on("listening", () => log(`waiting for the opencad app on ws://127.0.0.1:${port}`));
+wss.on("listening", () => log(`waiting for the leocad app on ws://127.0.0.1:${port}`));
 wss.on("error", (e) => log(`bridge error: ${e.message}`));
 wss.on("connection", (ws) => {
   app?.close(4000, "replaced by a newer connection");
@@ -55,7 +55,7 @@ wss.on("connection", (ws) => {
       hello = null;
       for (const [id, p] of pending) {
         clearTimeout(p.timer);
-        p.reject(new Error("the opencad app disconnected"));
+        p.reject(new Error("the leocad app disconnected"));
         pending.delete(id);
       }
     }
@@ -66,7 +66,7 @@ function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown>
   if (!app || app.readyState !== app.OPEN) {
     return Promise.reject(
       new Error(
-        "The opencad app is not connected. Open opencad and enable 'Connect AI assistants (MCP)' in the toolbar menu, then try again.",
+        "The leocad app is not connected. Open leocad and enable 'Connect AI assistants (MCP)' in the toolbar menu, then try again.",
       ),
     );
   }
@@ -93,12 +93,12 @@ const guard =
     }
   };
 
-const server = new McpServer({ name: "opencad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas)." });
+const server = new McpServer({ name: "leocad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas)." });
 
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
 
-server.registerTool("get_guide", { title: "Modelling guide", description: "How opencad documents, sketches, features, face tags and selectors work, with the JSON Schema of every op. Read before editing." }, async () => text(SYSTEM_PROMPT));
+server.registerTool("get_guide", { title: "Modelling guide", description: "How leocad documents, sketches, features, face tags and selectors work, with the JSON Schema of every op. Read before editing." }, async () => text(SYSTEM_PROMPT));
 
 server.registerTool(
   "get_model",
@@ -174,7 +174,7 @@ server.registerTool(
   {
     title: "Export a file",
     description: "Exports the model (stl, 3mf, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer.",
-    inputSchema: { format: z.enum(["stl", "3mf", "step", "dxf", "svg", "ocad"]), path: z.string().describe("Absolute or relative output path"), sketch: z.string().optional() },
+    inputSchema: { format: z.enum(["stl", "3mf", "step", "dxf", "svg", "leocad"]), path: z.string().describe("Absolute or relative output path"), sketch: z.string().optional() },
   },
   guard(async ({ format, path, sketch }) => {
     const r = await call<{ base64: string }>("export", { format, sketch });
@@ -198,9 +198,9 @@ server.registerTool(
 
 server.registerTool(
   "status",
-  { title: "Connection status", description: "Whether the opencad app is connected, which project is open, and the available projects.", annotations: { readOnlyHint: true } },
+  { title: "Connection status", description: "Whether the leocad app is connected, which project is open, and the available projects.", annotations: { readOnlyHint: true } },
   async () => {
-    if (!app) return text({ connected: false, hint: `Open opencad and enable 'Allow assistants to control opencad' (plug icon). Listening on ws://127.0.0.1:${port}.` });
+    if (!app) return text({ connected: false, hint: `Open leocad and enable 'Allow assistants to control leocad' (plug icon). Listening on ws://127.0.0.1:${port}.` });
     try {
       return text({ connected: true, ...(await call<Record<string, unknown>>("get_status")) });
     } catch {

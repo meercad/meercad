@@ -1,10 +1,10 @@
 {
-  "name": "@opencad/model",
+  "name": "@leocad/model",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit -p ." },
-  "dependencies": { "@opencad/schema": "workspace:*" }
+  "dependencies": { "@leocad/schema": "workspace:*" }
 }

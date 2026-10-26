@@ -1,12 +1,12 @@
 {
-  "name": "@opencad/tests",
+  "name": "@leocad/tests",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@opencad/io": "workspace:*",
-    "@opencad/kernel": "workspace:*",
-    "@opencad/model": "workspace:*",
-    "@opencad/schema": "workspace:*",
-    "@opencad/sketch": "workspace:*"
+    "@leocad/io": "workspace:*",
+    "@leocad/kernel": "workspace:*",
+    "@leocad/model": "workspace:*",
+    "@leocad/schema": "workspace:*",
+    "@leocad/sketch": "workspace:*"
   }
 }

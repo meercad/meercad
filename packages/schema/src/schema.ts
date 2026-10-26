@@ -1,5 +1,5 @@
 /**
- * JSON Schema (draft-07) for the opencad document format and the Operations-API.
+ * JSON Schema (draft-07) for the leocad document format and the Operations-API.
  * Single source of truth for validation of untrusted input and for AI tool definitions.
  */
 
@@ -158,10 +158,10 @@ export const definitions: Record<string, Json> = {
 
 export const documentSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
-  $id: "https://opencad.dev/schema/document.json",
+  $id: "https://leocad.dev/schema/document.json",
   ...obj(
     {
-      format: { const: "opencad/1" },
+      format: { const: "leocad/1" },
       params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") },
       features: arr(ref("feature")),
       rollback: oneOf({ type: "null" }, id),
@@ -173,7 +173,7 @@ export const documentSchema = {
 
 export const docOpSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
-  $id: "https://opencad.dev/schema/op.json",
+  $id: "https://leocad.dev/schema/op.json",
   ...tagged("type", {
     add_features: obj({ type: true, features: arr(ref("feature"), { minItems: 1 }), after: oneOf({ type: "null" }, id) }, ["features"]),
     edit_feature: obj({ type: true, id, patch: { type: "object" } }, ["id", "patch"]),

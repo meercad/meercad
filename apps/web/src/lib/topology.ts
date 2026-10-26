@@ -1,8 +1,8 @@
 /** Viewport picks → persistent selectors, and human-readable selector summaries. */
-import type { BodyMesh } from "@opencad/kernel";
-import { selectorForEdge, selectorForFace, type Topology } from "@opencad/naming";
-import type { AxisRef, EdgeSelector, FaceSelector, PlaneSpec } from "@opencad/schema";
-import type { Pick } from "@opencad/viewport";
+import type { BodyMesh } from "@leocad/kernel";
+import { selectorForEdge, selectorForFace, type Topology } from "@leocad/naming";
+import type { AxisRef, EdgeSelector, FaceSelector, PlaneSpec } from "@leocad/schema";
+import type { Pick } from "@leocad/viewport";
 
 type Vec3 = [number, number, number];
 const cache = new WeakMap<BodyMesh, Topology>();

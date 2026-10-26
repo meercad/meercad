@@ -1,5 +1,5 @@
-import type { BooleanMode } from "@opencad/schema";
-import type { PlaneFrame, Region, SolvedSketch } from "@opencad/sketch";
+import type { BooleanMode } from "@leocad/schema";
+import type { PlaneFrame, Region, SolvedSketch } from "@leocad/sketch";
 import type { Arena } from "./arena.js";
 import type { Body } from "./body.js";
 

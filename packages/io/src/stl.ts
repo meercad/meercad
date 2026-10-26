@@ -4,7 +4,7 @@ export interface TriangleMesh {
 }
 
 /** Binary STL of one or more indexed triangle meshes (units: mm). Facet normals are computed from winding. */
-export function writeStl(meshes: readonly TriangleMesh[], header = "opencad"): Uint8Array {
+export function writeStl(meshes: readonly TriangleMesh[], header = "leocad"): Uint8Array {
   const triangles = meshes.reduce((n, m) => n + m.indices.length / 3, 0);
   const out = new Uint8Array(84 + triangles * 50);
   const view = new DataView(out.buffer);

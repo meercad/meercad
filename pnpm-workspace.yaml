@@ -7,3 +7,5 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
+  # Windows-only installer helper pulled in by electron-builder; not needed.
+  electron-winstaller: false

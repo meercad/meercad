@@ -1,7 +1,7 @@
 import { Box, Copy, Eye, EyeOff, FileDown, Layers, Pencil, Plus, SkipBack, SkipForward, Trash, X } from "lucide-react";
 import { useState } from "react";
-import { referencedNames } from "@opencad/model";
-import type { Feature } from "@opencad/schema";
+import { referencedNames } from "@leocad/model";
+import type { Feature } from "@leocad/schema";
 import { FEATURES, featureName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, useApp } from "../store";

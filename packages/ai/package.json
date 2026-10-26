@@ -1,5 +1,5 @@
 {
-  "name": "@opencad/ai",
+  "name": "@leocad/ai",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@opencad/schema": "workspace:*"
+    "@leocad/schema": "workspace:*"
   },
   "description": "Modelling guide given to AI assistants (via MCP)"
 }

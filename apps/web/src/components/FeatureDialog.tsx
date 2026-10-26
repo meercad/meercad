@@ -1,7 +1,7 @@
 import { ArrowLeftRight, Check, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@opencad/schema";
-import type { Pick, PickKind } from "@opencad/viewport";
+import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@leocad/schema";
+import type { Pick, PickKind } from "@leocad/viewport";
 import { FEATURES, featureName } from "../lib/features";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";

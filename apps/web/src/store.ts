@@ -1,10 +1,10 @@
 /** Application state (zustand) and the document → kernel rebuild loop. */
 import { create } from "zustand";
-import { KernelClient, SupersededError, type Measurement, type RebuildOutput } from "@opencad/kernel/client";
-import { DocumentStore, OpError } from "@opencad/model";
-import { emptyDocument, type DocOp, type Feature, type FeatureOp, type OpencadDocument, type PlaneSpec } from "@opencad/schema";
+import { KernelClient, SupersededError, type Measurement, type RebuildOutput } from "@leocad/kernel/client";
+import { DocumentStore, OpError } from "@leocad/model";
+import { emptyDocument, type DocOp, type Feature, type FeatureOp, type LeocadDocument, type PlaneSpec } from "@leocad/schema";
 import { planeSpecForPick } from "./lib/topology";
-import type { Pick, Viewport } from "@opencad/viewport";
+import type { Pick, Viewport } from "@leocad/viewport";
 import { draftFeature, draftProblem } from "./lib/features";
 import { createProject, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
@@ -26,7 +26,7 @@ interface State {
   screen: "home" | "editor";
   projects: ProjectMeta[];
   project: ProjectMeta | null;
-  doc: OpencadDocument;
+  doc: LeocadDocument;
   canUndo: boolean;
   canRedo: boolean;
   output: RebuildOutput | null;
@@ -43,7 +43,7 @@ interface State {
   showPlanes: boolean;
   showSketches: boolean;
   measure: { active: boolean; picks: Pick[]; result: Measurement | null };
-  proposalDoc: OpencadDocument | null;
+  proposalDoc: LeocadDocument | null;
   toasts: Toast[];
   saveState: "saved" | "saving" | "unsaved";
   selectedFeature: string | null;
@@ -147,7 +147,7 @@ export const currentDoc = () => docStore.doc;
 // ---------------------------------------------------------------- rebuild loop
 
 /** The document the viewport should show: proposal, draft preview or the real document. */
-function displayDoc(): { doc: OpencadDocument; preview: boolean; problem: string | null } {
+function displayDoc(): { doc: LeocadDocument; preview: boolean; problem: string | null } {
   const s = get();
   if (s.proposalDoc) return { doc: s.proposalDoc, preview: true, problem: null };
   const d = s.dialog;
@@ -346,14 +346,14 @@ export async function openProject(id: string): Promise<void> {
   history.replaceState(null, "", `#/p/${encodeURIComponent(p.id)}`);
 }
 
-export async function newProject(doc: OpencadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
+export async function newProject(doc: LeocadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
   await flushSave();
   const meta = await createProject(name, doc);
   loadDoc(doc, meta);
   history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
 }
 
-function loadDoc(doc: OpencadDocument, meta: ProjectMeta): void {
+function loadDoc(doc: LeocadDocument, meta: ProjectMeta): void {
   docStore = new DocumentStore(doc);
   set({
     screen: "editor",
@@ -423,9 +423,9 @@ export async function flushSave(): Promise<void> {
 
 window.addEventListener("beforeunload", () => void flushSave());
 
-export function replaceDocument(doc: OpencadDocument): void {
+export function replaceDocument(doc: LeocadDocument): void {
   apply({ type: "replace", doc });
 }
 
 // Debug handle for development and end-to-end checks.
-if (import.meta.env.DEV) Object.assign(window, { opencad: { useApp, apply, currentDoc, getViewport, kernel } });
+if (import.meta.env.DEV) Object.assign(window, { leocad: { useApp, apply, currentDoc, getViewport, kernel } });

@@ -1,24 +1,24 @@
 {
-  "name": "opencad-desktop",
-  "productName": "opencad",
+  "name": "leocad-desktop",
+  "productName": "leocad",
   "version": "0.1.0",
   "private": true,
   "description": "Free, open-source parametric CAD",
-  "author": "opencad contributors",
+  "author": "leocad contributors",
   "license": "AGPL-3.0-only",
   "main": "dist/main.cjs",
   "scripts": {
     "build:main": "node build.mjs",
     "dev": "node build.mjs && electron . --dev",
     "start": "node build.mjs && electron .",
-    "package": "pnpm --filter @opencad/web build && pnpm --filter @opencad/mcp build && node build.mjs && electron-builder --mac --dir",
-    "dist": "pnpm --filter @opencad/web build && pnpm --filter @opencad/mcp build && node build.mjs && electron-builder --mac --publish never",
+    "package": "pnpm --filter @leocad/web build && pnpm --filter @leocad/mcp build && node build.mjs && electron-builder --mac --dir",
+    "dist": "pnpm --filter @leocad/web build && pnpm --filter @leocad/mcp build && node build.mjs && electron-builder --mac --publish never",
     "typecheck": "tsc --noEmit -p ."
   },
   "build": {
-    "appId": "dev.opencad.app",
-    "productName": "opencad",
-    "copyright": "opencad contributors",
+    "appId": "dev.leocad.app",
+    "productName": "leocad",
+    "copyright": "leocad contributors",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -39,11 +39,11 @@
     ],
     "fileAssociations": [
       {
-        "ext": "ocad",
-        "name": "opencad part",
-        "description": "opencad parametric part",
+        "ext": "leocad",
+        "name": "leocad part",
+        "description": "leocad parametric part",
         "role": "Editor",
-        "mimeType": "application/vnd.opencad+json"
+        "mimeType": "application/vnd.leocad+json"
       }
     ],
     "mac": {
@@ -64,7 +64,7 @@
           ]
         }
       ],
-      "artifactName": "opencad-${version}-${arch}.${ext}",
+      "artifactName": "leocad-${version}-${arch}.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "icon": "build/icon.png",
@@ -72,7 +72,7 @@
       "notarize": false
     },
     "dmg": {
-      "title": "opencad ${version}"
+      "title": "leocad ${version}"
     }
   },
   "devDependencies": {

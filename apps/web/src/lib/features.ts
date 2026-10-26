@@ -16,8 +16,8 @@ import {
   Orbit,
   type LucideIcon,
 } from "lucide-react";
-import type { EdgeSelector, Feature, FeatureOp, OpencadDocument } from "@opencad/schema";
-import { nextFeatureId } from "@opencad/model";
+import type { EdgeSelector, Feature, FeatureOp, LeocadDocument } from "@leocad/schema";
+import { nextFeatureId } from "@leocad/model";
 
 export interface FeatureMeta {
   label: string;
@@ -47,7 +47,7 @@ export const COPY_ICON = Copy;
 export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
-export function draftFeature(op: FeatureOp, doc: OpencadDocument): Feature {
+export function draftFeature(op: FeatureOp, doc: LeocadDocument): Feature {
   const id = nextFeatureId(doc, op);
   const lastSketch = [...doc.features].reverse().find((f) => f.op === "sketch");
   const lastSketchUsed = lastSketch && doc.features.some((f) => (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile && f.profile.sketch === lastSketch.id);

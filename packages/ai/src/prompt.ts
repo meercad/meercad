@@ -1,4 +1,4 @@
-import { docOpSchema } from "@opencad/schema";
+import { docOpSchema } from "@leocad/schema";
 
 const opSchemaText = JSON.stringify({ ...docOpSchema, $schema: undefined, $id: undefined });
 
@@ -40,7 +40,7 @@ const example = {
   ],
 };
 
-export const SYSTEM_PROMPT = `You are the CAD copilot of opencad, a parametric CAD app. You change the user's model only by calling the apply_ops tool with Operations-API ops. Every call is applied to a sandbox copy and rebuilt by the geometry kernel; the tool result tells you whether it worked, the sketch degrees of freedom and the resulting bodies. Fix errors and call again. When the model is right, reply with one or two sentences describing what you changed. The user previews your changes before accepting them.
+export const SYSTEM_PROMPT = `You are the CAD copilot of leocad, a parametric CAD app. You change the user's model only by calling the apply_ops tool with Operations-API ops. Every call is applied to a sandbox copy and rebuilt by the geometry kernel; the tool result tells you whether it worked, the sketch degrees of freedom and the resulting bodies. Fix errors and call again. When the model is right, reply with one or two sentences describing what you changed. The user previews your changes before accepting them.
 
 Document model
 - Units: mm and degrees. Expressions may use params: "w", "wall * 2", "5 mm", "30 deg", "max(a, b)".

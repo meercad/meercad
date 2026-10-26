@@ -1,8 +1,8 @@
 /**
- * Local-first project storage. In the desktop app projects are plain .ocad files in
- * ~/Documents/opencad (open JSON format); in the browser they live in IndexedDB.
+ * Local-first project storage. In the desktop app projects are plain .leocad files in
+ * ~/Documents/leocad (open JSON format); in the browser they live in IndexedDB.
  */
-import type { OpencadDocument } from "@opencad/schema";
+import type { LeocadDocument } from "@leocad/schema";
 
 export interface ProjectMeta {
   id: string;
@@ -11,7 +11,7 @@ export interface ProjectMeta {
   thumbnail?: string;
 }
 export interface Project extends ProjectMeta {
-  doc: OpencadDocument;
+  doc: LeocadDocument;
 }
 
 interface DesktopApi {
@@ -20,8 +20,8 @@ interface DesktopApi {
   projects: {
     list(): Promise<ProjectMeta[]>;
     load(id: string): Promise<Project>;
-    save(p: { id: string; doc: OpencadDocument; thumbnail?: string }): Promise<void>;
-    create(p: { name: string; doc: OpencadDocument }): Promise<ProjectMeta>;
+    save(p: { id: string; doc: LeocadDocument; thumbnail?: string }): Promise<void>;
+    create(p: { name: string; doc: LeocadDocument }): Promise<ProjectMeta>;
     rename(p: { id: string; name: string }): Promise<{ id: string; name: string }>;
     delete(id: string): Promise<void>;
     reveal(id?: string): Promise<void>;
@@ -30,11 +30,11 @@ interface DesktopApi {
   on(channel: "menu" | "open-project", fn: (arg: string) => void): () => void;
 }
 
-export const desktop: DesktopApi | undefined = (window as unknown as { opencadDesktop?: DesktopApi }).opencadDesktop;
+export const desktop: DesktopApi | undefined = (window as unknown as { leocadDesktop?: DesktopApi }).leocadDesktop;
 
 // ---------------------------------------------------------------- IndexedDB (browser)
 
-const DB = "opencad";
+const DB = "leocad";
 const STORE = "projects";
 
 function open(): Promise<IDBDatabase> {
@@ -75,7 +75,7 @@ export async function loadProject(id: string): Promise<Project | undefined> {
   return tx<Project | undefined>("readonly", (s) => s.get(id) as IDBRequest<Project | undefined>);
 }
 
-export async function createProject(name: string, doc: OpencadDocument): Promise<ProjectMeta> {
+export async function createProject(name: string, doc: LeocadDocument): Promise<ProjectMeta> {
   if (desktop) return desktop.projects.create({ name, doc });
   const meta = { id: newId(), name, updatedAt: Date.now() };
   await tx("readwrite", (s) => s.put({ ...meta, doc }));

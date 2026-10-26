@@ -1,6 +1,6 @@
 # Open-Source-Web-CAD — Projektplan
 
-> Arbeitstitel: **TBD** (Platzhalter im Code: `opencad`)
+> Arbeitstitel: **TBD** (Platzhalter im Code: `leocad`)
 > Stand: 26.10.2026 · Status: Planung → Phase 0
 
 ---
@@ -142,7 +142,7 @@ Ein Dokument ist eine geordnete Liste von Operationen. Jede Operation hat eine s
 
 ```json
 {
-  "format": "opencad/1",
+  "format": "leocad/1",
   "params": { "wall": "2 mm", "w": "40 mm", "d": "20 mm", "h": "10 mm" },
   "features": [
     {
@@ -206,7 +206,7 @@ Diese Selektoren sind gleichzeitig die Sprache, in der die AI Geometrie adressie
 | Weg | Inhalt | Kosten |
 |---|---|---|
 | Browser-Speicher (OPFS) | Projekte, Autosave, Versionen | 0 |
-| Lokaler Ordner (File System Access API) | `.ocad`-Dateien (JSON) | 0 |
+| Lokaler Ordner (File System Access API) | `.leocad`-Dateien (JSON) | 0 |
 | Share-Link | komprimiertes Feature-Log in URL-Fragment (geht nie an Server) | 0 |
 | Export/Import | Datei | 0 |
 | Cloud-Sync (später, optional) | — | einziger Kostentreiber |

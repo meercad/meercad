@@ -1,7 +1,7 @@
 /** File import/export and share links. */
-import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@opencad/io";
-import { nextFeatureId } from "@opencad/model";
-import { validateDocument, type SketchConstraint, type SketchEntity } from "@opencad/schema";
+import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@leocad/io";
+import { nextFeatureId } from "@leocad/model";
+import { validateDocument, type SketchConstraint, type SketchEntity } from "@leocad/schema";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, kernel, newProject, openSketch, toast, useApp } from "../store";
 
@@ -11,7 +11,7 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   step: { name: "STEP model", extensions: ["step", "stp"] },
   dxf: { name: "DXF drawing", extensions: ["dxf"] },
   svg: { name: "SVG drawing", extensions: ["svg"] },
-  ocad: { name: "opencad part", extensions: ["ocad"] },
+  ocad: { name: "leocad part", extensions: ["leocad"] },
 };
 
 /** Saves a file: a native save dialog on desktop, a browser download otherwise. */
@@ -81,7 +81,7 @@ export async function shareLink(): Promise<void> {
 }
 
 export function saveFile(): void {
-  download(`${baseName()}.ocad`, JSON.stringify(currentDoc(), null, 2), "application/json");
+  download(`${baseName()}.leocad`, JSON.stringify(currentDoc(), null, 2), "application/json");
 }
 
 function pickFile(accept: string): Promise<File | null> {
@@ -100,14 +100,14 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-/** Opens a file picker; STEP/STL become import features, DXF/SVG a new sketch, .ocad a project. */
+/** Opens a file picker; STEP/STL become import features, DXF/SVG a new sketch, .leocad a project. */
 export async function importFile(file?: File | null): Promise<void> {
-  file ??= await pickFile(".step,.stp,.stl,.dxf,.svg,.ocad,.json");
+  file ??= await pickFile(".step,.stp,.stl,.dxf,.svg,.leocad,.json");
   if (!file) return;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "ocad" || ext === "json") {
+  if (ext === "leocad" || ext === "json") {
     const v = validateDocument(JSON.parse(await file.text()));
-    if (!v.ok) return toast(`Not a valid opencad file: ${v.errors[0]}`, "error");
+    if (!v.ok) return toast(`Not a valid leocad file: ${v.errors[0]}`, "error");
     await flushSave();
     await newProject(v.value, file.name.replace(/\.\w+$/, ""));
     return;

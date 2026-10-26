@@ -1,4 +1,4 @@
-# opencad (working title)
+# leocad (working title)
 
 Free, open-source parametric CAD for makers — runs locally on your Mac, no account, no cloud.
 Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/patterns/mirror/booleans, direct
@@ -7,21 +7,21 @@ push/pull editing, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model f
 ## Download (macOS)
 
 Grab the latest `.dmg` from the [Releases](../../releases) page (`arm64` = Apple Silicon, `x64` = Intel),
-drag **opencad** to Applications. Builds are not notarized yet: on first start choose
+drag **leocad** to Applications. Builds are not notarized yet: on first start choose
 **System Settings → Privacy & Security → Open Anyway**, or run
-`xattr -dr com.apple.quarantine /Applications/opencad.app`.
+`xattr -dr com.apple.quarantine /Applications/leocad.app`.
 
 Every push to `main` publishes a fresh build as the **latest** pre-release; tags `v*` create versioned releases.
 
 ## Your files
 
-Projects are plain `.ocad` files in `~/Documents/opencad` — human-readable JSON (see
+Projects are plain `.leocad` files in `~/Documents/leocad` — human-readable JSON (see
 [docs/FORMAT.md](docs/FORMAT.md)) that you can version with git, edit by hand or generate with scripts.
 Exchange with other CAD tools via STEP; 3D printing via STL/3MF; laser cutting via DXF/SVG.
 
 ## Let Claude drive it (MCP)
 
-Click the plug icon in the top bar, enable *Allow assistants to control opencad* and copy the shown
+Click the plug icon in the top bar, enable *Allow assistants to control leocad* and copy the shown
 configuration into Claude Desktop (Settings → Developer → Edit Config) or run the shown
 `claude mcp add …` command for Claude Code. Tools: `get_guide`, `get_model`, `get_sketch`,
 `apply_ops`, `preview_ops`, `undo`/`redo`, project management, `render_view`, `set_view`,
@@ -32,8 +32,8 @@ configuration into Claude Desktop (Settings → Developer → Edit Config) or ru
 ```bash
 pnpm install
 pnpm dev                                   # web app at http://localhost:5173
-pnpm --filter opencad-desktop dev          # desktop shell against the dev server
-pnpm --filter opencad-desktop run dist     # build the .dmg locally
+pnpm --filter leocad-desktop dev          # desktop shell against the dev server
+pnpm --filter leocad-desktop run dist     # build the .dmg locally
 pnpm test && pnpm typecheck
 ```
 

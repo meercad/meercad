@@ -1,4 +1,4 @@
-import { propagateTags, resolveEdges, resolveFaces, ResolveError, selectorForEdge } from "@opencad/naming";
+import { propagateTags, resolveEdges, resolveFaces, ResolveError, selectorForEdge } from "@leocad/naming";
 import {
   FeatureError,
   type ExecResult,
@@ -13,9 +13,9 @@ import {
   type ResolvedRevolve,
   type ResolvedShell,
   type ResolvedSketch,
-} from "@opencad/model";
-import { parseStl } from "@opencad/io";
-import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef } from "@opencad/schema";
+} from "@leocad/model";
+import { parseStl } from "@leocad/io";
+import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef } from "@leocad/schema";
 import {
   findRegions,
   frameFromPlane,
@@ -29,7 +29,7 @@ import {
   type SketchSolver,
   type SolvedCurve,
   type Vec3,
-} from "@opencad/sketch";
+} from "@leocad/sketch";
 import type { TopoDS_Shape, gp_Trsf } from "replicad-opencascadejs";
 import { Arena } from "./arena.js";
 import { Body, listToArray } from "./body.js";

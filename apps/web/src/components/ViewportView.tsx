@@ -1,7 +1,7 @@
 import { Box, Copy, Eye, EyeOff, Focus, Grid2x2, Layers, Pencil, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FeatureOp } from "@opencad/schema";
-import { samePick, Viewport, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@opencad/viewport";
+import type { FeatureOp } from "@leocad/schema";
+import { samePick, Viewport, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@leocad/viewport";
 import { FEATURES } from "../lib/features";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";

@@ -7,13 +7,13 @@ const corpus = (name: string) =>
 
 describe("validateDocument", () => {
   it("accepts the reference box", () => {
-    const r = validateDocument(corpus("box-fillet.ocad.json"));
+    const r = validateDocument(corpus("box-fillet.leocad.json"));
     expect(r.ok ? [] : r.errors).toEqual([]);
   });
 
   it("rejects unknown properties and ops with readable messages", () => {
     const r = validateDocument({
-      format: "opencad/1",
+      format: "leocad/1",
       params: {},
       features: [{ id: "x", op: "loft" }, { id: "e", op: "extrude", profile: { sketch: "x" }, extent: "blind", distance: 1, mode: "new_body", color: "red" }],
       rollback: null,
@@ -26,7 +26,7 @@ describe("validateDocument", () => {
   });
 
   it("rejects dangling references inside sketches and between features", () => {
-    const doc = corpus("box-fillet.ocad.json") as { features: Record<string, unknown>[]; rollback: unknown };
+    const doc = corpus("box-fillet.leocad.json") as { features: Record<string, unknown>[]; rollback: unknown };
     const sk = doc.features[0] as { constraints: unknown[]; entities: unknown[] };
     sk.constraints.push({ id: "c9", type: "length", line: "l9", value: 1 });
     sk.entities.push({ id: "l5", type: "line", p1: "p1", p2: "nope" });

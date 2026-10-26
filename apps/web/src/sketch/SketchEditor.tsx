@@ -4,10 +4,10 @@
  * with PlaneGCS temporary constraints.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { resolveFeature } from "@opencad/model";
-import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@opencad/schema";
-import { findRegions, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@opencad/sketch";
-import { frameMatrix, THREE, type Viewport } from "@opencad/viewport";
+import { resolveFeature } from "@leocad/model";
+import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@leocad/schema";
+import { findRegions, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@leocad/sketch";
+import { frameMatrix, THREE, type Viewport } from "@leocad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";

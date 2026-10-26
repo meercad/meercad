@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateDocument } from "@opencad/schema";
+import { validateDocument } from "@leocad/schema";
 import { EXAMPLES } from "../../apps/web/src/lib/examples.js";
 import { newSession, withParams } from "./helpers.js";
 

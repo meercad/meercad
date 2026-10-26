@@ -4,9 +4,9 @@
  */
 import { ArrowUpFromLine, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, Triangle } from "lucide-react";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
-import { evaluate, nextFeatureId } from "@opencad/model";
-import { asArray, type EdgeSelector, type Expr, type Feature } from "@opencad/schema";
-import type { Handle, Pick, Viewport } from "@opencad/viewport";
+import { evaluate, nextFeatureId } from "@leocad/model";
+import { asArray, type EdgeSelector, type Expr, type Feature } from "@leocad/schema";
+import type { Handle, Pick, Viewport } from "@leocad/viewport";
 import { edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
 import { cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";

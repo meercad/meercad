@@ -1,12 +1,12 @@
-import type { OpencadDocument } from "@opencad/schema";
+import type { LeocadDocument } from "@leocad/schema";
 import type { BodyMesh } from "./mesh.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Measurement, PickRef } from "./tools.js";
 
 export type WorkerRequest =
-  | { type: "rebuild"; seq: number; doc: OpencadDocument; mesh?: boolean }
+  | { type: "rebuild"; seq: number; doc: LeocadDocument; mesh?: boolean }
   /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
-  | { type: "sandbox"; seq: number; doc: OpencadDocument }
+  | { type: "sandbox"; seq: number; doc: LeocadDocument }
   | { type: "export_step"; seq: number; bodies?: string[] }
   | { type: "measure"; seq: number; a: PickRef; b?: PickRef };
 

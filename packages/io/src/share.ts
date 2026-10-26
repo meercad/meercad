@@ -29,7 +29,7 @@ export async function encodeShareFragment(doc: unknown): Promise<string> {
 /** Returns the parsed (still unvalidated) JSON, or throws if the fragment is not a share link. */
 export async function decodeShareFragment(fragment: string): Promise<unknown> {
   const s = fragment.replace(/^#/, "");
-  if (!s.startsWith(PREFIX)) throw new Error("not an opencad share link");
+  if (!s.startsWith(PREFIX)) throw new Error("not an leocad share link");
   const raw = await pipe(fromBase64Url(s.slice(PREFIX.length)), new DecompressionStream("deflate-raw"));
   if (raw.byteLength > 16 * 1024 * 1024) throw new Error("share link too large");
   return JSON.parse(new TextDecoder().decode(raw)) as unknown;

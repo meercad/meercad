@@ -1,12 +1,12 @@
 {
-  "name": "@opencad/mcp",
+  "name": "@leocad/mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "description": "MCP server that lets Claude and other assistants drive a running opencad app",
+  "description": "MCP server that lets Claude and other assistants drive a running leocad app",
   "bin": {
-    "opencad-mcp": "./dist/server.js"
+    "leocad-mcp": "./dist/server.js"
   },
   "exports": {
     ".": "./src/protocol.ts"
@@ -22,7 +22,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@opencad/ai": "workspace:*",
+    "@leocad/ai": "workspace:*",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2"
   }

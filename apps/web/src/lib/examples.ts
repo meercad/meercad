@@ -1,5 +1,5 @@
 /** Fully parametric starter models for the home screen. */
-import type { Expr, OpencadDocument, SketchConstraint, SketchEntity } from "@opencad/schema";
+import type { Expr, LeocadDocument, SketchConstraint, SketchEntity } from "@leocad/schema";
 
 /** Rectangle anchored at the origin with width/height dimensions. */
 function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: SketchEntity[]; constraints: SketchConstraint[] } {
@@ -29,8 +29,8 @@ function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: 
 }
 
 const plate = rect("width", "depth", true, 60, 40);
-const bracket: OpencadDocument = {
-  format: "opencad/1",
+const bracket: LeocadDocument = {
+  format: "leocad/1",
   params: { width: "60 mm", depth: "40 mm", thickness: "4 mm", hole: "4.5 mm", inset: "10 mm", corner: "5 mm" },
   features: [
     { id: "sk1", op: "sketch", name: "Plate outline", plane: { ref: "origin.XY" }, ...plate },
@@ -83,8 +83,8 @@ const bracket: OpencadDocument = {
 };
 
 const boxRect = rect("width", "length", true, 80, 50);
-const box: OpencadDocument = {
-  format: "opencad/1",
+const box: LeocadDocument = {
+  format: "leocad/1",
   params: { width: "80 mm", length: "50 mm", height: "30 mm", wall: "2 mm", round: "4 mm" },
   features: [
     { id: "sk1", op: "sketch", name: "Footprint", plane: { ref: "origin.XY" }, ...boxRect },
@@ -96,8 +96,8 @@ const box: OpencadDocument = {
   rollback: null,
 };
 
-const flange: OpencadDocument = {
-  format: "opencad/1",
+const flange: LeocadDocument = {
+  format: "leocad/1",
   params: { outer: "60 mm", bore: "20 mm", thickness: "8 mm", holes: 6, hole: "6 mm", pcd: "45 mm" },
   features: [
     {
@@ -139,7 +139,7 @@ const flange: OpencadDocument = {
   rollback: null,
 };
 
-export const EXAMPLES: { name: string; description: string; doc: OpencadDocument }[] = [
+export const EXAMPLES: { name: string; description: string; doc: LeocadDocument }[] = [
   { name: "Mounting plate", description: "Holes, countersinks, rounded corners", doc: bracket },
   { name: "Project box", description: "Shelled enclosure with fillets", doc: box },
   { name: "Flange", description: "Circular bolt pattern", doc: flange },

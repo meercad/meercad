@@ -3,8 +3,8 @@
  * through UnifySameDomain (which merges coplanar faces but exposes no history in this build).
  */
 
-import { propagateTags } from "@opencad/naming";
-import { FeatureError } from "@opencad/model";
+import { propagateTags } from "@leocad/naming";
+import { FeatureError } from "@leocad/model";
 import type { TopoDS_Face, TopoDS_Shape } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
 import { Body, listToArray } from "./body.js";

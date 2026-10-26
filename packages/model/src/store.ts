@@ -1,11 +1,11 @@
-import { emptyDocument, validateDocument, validateOp, type DocOp, type Feature, type OpencadDocument } from "@opencad/schema";
+import { emptyDocument, validateDocument, validateOp, type DocOp, type Feature, type LeocadDocument } from "@leocad/schema";
 import { renameInExpr } from "./expr.js";
 import { mapFeatureExprs } from "./resolve.js";
 
 export class OpError extends Error {}
 
 /** Applies one Operations-API op to a document, returning a new document. Validates input and result. */
-export function applyOp(doc: OpencadDocument, input: unknown): OpencadDocument {
+export function applyOp(doc: LeocadDocument, input: unknown): LeocadDocument {
   const v = validateOp(input);
   if (!v.ok) throw new OpError(`invalid op: ${v.errors.join("; ")}`);
   const op = v.value;
@@ -64,20 +64,20 @@ export function applyOp(doc: OpencadDocument, input: unknown): OpencadDocument {
   return checked(next);
 }
 
-function checked(doc: unknown): OpencadDocument {
+function checked(doc: unknown): LeocadDocument {
   const v = validateDocument(doc);
   if (!v.ok) throw new OpError(v.errors.join("; "));
   return v.value;
 }
 
-function indexOf(doc: OpencadDocument, id: string): number {
+function indexOf(doc: LeocadDocument, id: string): number {
   const i = doc.features.findIndex((f) => f.id === id);
   if (i < 0) throw new OpError(`unknown feature "${id}"`);
   return i;
 }
 
 /** Next unused feature id for an op, e.g. "ex2". */
-export function nextFeatureId(doc: OpencadDocument, op: Feature["op"]): string {
+export function nextFeatureId(doc: LeocadDocument, op: Feature["op"]): string {
   const prefix: Record<Feature["op"], string> = {
     sketch: "sk",
     plane: "pl",
@@ -98,19 +98,19 @@ export function nextFeatureId(doc: OpencadDocument, op: Feature["op"]): string {
   return `${prefix[op]}${n}`;
 }
 
-type Listener = (doc: OpencadDocument) => void;
+type Listener = (doc: LeocadDocument) => void;
 
 /** Holds the current document and its undo history. Undo/redo is a position in the history of documents. */
 export class DocumentStore {
-  private history: OpencadDocument[];
+  private history: LeocadDocument[];
   private position = 0;
   private listeners = new Set<Listener>();
 
-  constructor(initial: OpencadDocument = emptyDocument()) {
+  constructor(initial: LeocadDocument = emptyDocument()) {
     this.history = [checked(initial)];
   }
 
-  get doc(): OpencadDocument {
+  get doc(): LeocadDocument {
     return this.history[this.position]!;
   }
 
@@ -123,8 +123,8 @@ export class DocumentStore {
   }
 
   /** Applies ops atomically as one undo step. Throws OpError and leaves the store unchanged on failure. */
-  apply(...ops: DocOp[]): OpencadDocument {
-    const next = ops.reduce<OpencadDocument>((d, op) => applyOp(d, op), this.doc);
+  apply(...ops: DocOp[]): LeocadDocument {
+    const next = ops.reduce<LeocadDocument>((d, op) => applyOp(d, op), this.doc);
     this.history.length = this.position + 1;
     this.history.push(next);
     this.position++;
@@ -133,9 +133,9 @@ export class DocumentStore {
   }
 
   /** Applies ops but replaces the current undo step instead of adding one (continuous edits). */
-  amend(...ops: DocOp[]): OpencadDocument {
+  amend(...ops: DocOp[]): LeocadDocument {
     if (this.position === 0) return this.apply(...ops);
-    const next = ops.reduce<OpencadDocument>((d, op) => applyOp(d, op), this.doc);
+    const next = ops.reduce<LeocadDocument>((d, op) => applyOp(d, op), this.doc);
     this.history.length = this.position + 1;
     this.history[this.position] = next;
     this.emit();

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { decodeShareFragment } from "@opencad/io";
-import { validateDocument } from "@opencad/schema";
+import { decodeShareFragment } from "@leocad/io";
+import { validateDocument } from "@leocad/schema";
 import { FeatureDialog } from "./components/FeatureDialog";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
 import { MenuHost } from "./components/Menu";
+import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
+import { Tour, tourDone } from "./components/Tour";
 import { Toasts } from "./components/Toasts";
 import { Toolbar } from "./components/Toolbar";
 import { TopBar } from "./components/TopBar";
@@ -18,7 +20,7 @@ import { FEATURES } from "./lib/features";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, toast, undo, useApp } from "./store";
 
 try {
-  const theme = localStorage.getItem("opencad.theme");
+  const theme = localStorage.getItem("leocad.theme");
   if (theme) document.documentElement.dataset["theme"] = theme;
 } catch {
   // default theme
@@ -45,6 +47,17 @@ async function route(): Promise<void> {
 export function App() {
   const screen = useApp((s) => s.screen);
   const [help, setHelp] = useState(false);
+  const [guide, setGuide] = useState(false);
+  const [tour, setTour] = useState(false);
+  // First time in the editor: offer the introduction tour.
+  useEffect(() => {
+    if (screen === "editor" && !tourDone()) setTour(true);
+  }, [screen]);
+  useEffect(() => {
+    const open = () => setGuide((g) => !g);
+    window.addEventListener("leocad:help", open);
+    return () => window.removeEventListener("leocad:help", open);
+  }, []);
   useEffect(() => {
     void route();
     initBridge();
@@ -145,6 +158,7 @@ export function App() {
           <TopBar />
           <Toolbar />
           <SidePanel />
+          <div className="right">{guide ? <HelpPanel onClose={() => setGuide(false)} onTour={() => (setGuide(false), setTour(true))} onShortcuts={() => setHelp(true)} /> : null}</div>
           <div className="view-wrap" style={{ gridArea: "view", position: "relative", minWidth: 0, minHeight: 0, display: "flex" }}>
             <ViewportView />
             <FeatureDialog />
@@ -152,6 +166,7 @@ export function App() {
         </div>
       )}
       {help ? <ShortcutHelp onClose={() => setHelp(false)} /> : null}
+      {tour && screen === "editor" ? <Tour onClose={() => setTour(false)} /> : null}
       <Toasts />
       <MenuHost />
     </>

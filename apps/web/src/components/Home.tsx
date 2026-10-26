@@ -20,7 +20,7 @@ export function Home() {
     <div className="home">
       <div className={`home-top ${desktop ? "desktop" : ""}`}>
         <span className="logo">
-          <Logo /> opencad
+          <Logo /> leocad
         </span>
         <span className="muted">Parametric CAD in your browser — free, open source, no account.</span>
         <span className="spacer" />
@@ -39,7 +39,7 @@ export function Home() {
         <p className="sub">
           {desktop ? (
             <>
-              Saved as open <span className="mono">.ocad</span> files in your Documents/opencad folder.{" "}
+              Saved as open <span className="mono">.leocad</span> files in your Documents/leocad folder.{" "}
               <button className="btn" style={{ height: 24, marginLeft: 6 }} onClick={() => void desktop!.projects.reveal()}>
                 Show folder
               </button>

@@ -1,13 +1,13 @@
 /**
- * Connects the app to a local opencad MCP server so assistants like Claude can drive it. The app is
+ * Connects the app to a local leocad MCP server so assistants like Claude can drive it. The app is
  * the WebSocket client; the server only listens on 127.0.0.1 and checks the page origin.
  */
-import { write3mf, writeDxf, writeStl, writeSvg } from "@opencad/io";
-import type { RebuildOutput } from "@opencad/kernel/client";
-import { DEFAULT_PORT, type BridgeRequest } from "@opencad/mcp";
-import { resolveEdges, resolveFaces } from "@opencad/naming";
-import { applyOp } from "@opencad/model";
-import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type OpencadDocument } from "@opencad/schema";
+import { write3mf, writeDxf, writeStl, writeSvg } from "@leocad/io";
+import type { RebuildOutput } from "@leocad/kernel/client";
+import { DEFAULT_PORT, type BridgeRequest } from "@leocad/mcp";
+import { resolveEdges, resolveFaces } from "@leocad/naming";
+import { applyOp } from "@leocad/model";
+import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type LeocadDocument } from "@leocad/schema";
 import { sketchCurves } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import { meshTopology } from "./topology";
@@ -31,7 +31,7 @@ export const onBridgeStatus = (fn: (s: Status) => void) => {
 export function setBridgeEnabled(on: boolean): void {
   wanted = on;
   try {
-    localStorage.setItem("opencad.mcp", on ? "1" : "");
+    localStorage.setItem("leocad.mcp", on ? "1" : "");
   } catch {
     // preference not persisted
   }
@@ -47,7 +47,7 @@ export function setBridgeEnabled(on: boolean): void {
 export function initBridge(): void {
   let on = false;
   try {
-    on = localStorage.getItem("opencad.mcp") === "1";
+    on = localStorage.getItem("leocad.mcp") === "1";
   } catch {
     on = false;
   }
@@ -61,7 +61,7 @@ function connect(): void {
   socket = ws;
   ws.onopen = () => {
     setStatus("connected");
-    ws.send(JSON.stringify({ hello: "opencad", version: "0.1.0", project: useApp.getState().project?.name ?? null }));
+    ws.send(JSON.stringify({ hello: "leocad", version: "0.1.0", project: useApp.getState().project?.name ?? null }));
   };
   ws.onclose = () => {
     socket = null;
@@ -139,13 +139,13 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       useApp.setState({ proposalDoc: null });
       const ops = p["ops"] as DocOp[];
       // Validate first so a bad op returns a precise error instead of a toast.
-      ops.reduce<OpencadDocument>((d, op) => applyOp(d, op), currentDoc());
+      ops.reduce<LeocadDocument>((d, op) => applyOp(d, op), currentDoc());
       if (!apply(...ops)) throw new Error("ops were rejected");
       return summary(await rebuildNow());
     }
     case "preview_ops": {
       needProject();
-      const doc = (p["ops"] as DocOp[]).reduce<OpencadDocument>((d, op) => applyOp(d, op), currentDoc());
+      const doc = (p["ops"] as DocOp[]).reduce<LeocadDocument>((d, op) => applyOp(d, op), currentDoc());
       const result = summary(await kernel.sandbox(doc));
       // Show it live; the document itself stays untouched.
       useApp.setState({ proposalDoc: doc });
@@ -194,7 +194,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       if (format === "stl") return { base64: toB64(writeStl(out.meshes)) };
       if (format === "3mf") return { base64: toB64(write3mf(out.meshes.map((m) => ({ ...m, name: m.bodyId })))) };
       if (format === "step") return { base64: toB64(await kernel.exportStep()) };
-      if (format === "ocad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
+      if (format === "leocad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
       const sketch = String(p["sketch"] ?? "");
       if (!sketch) throw new Error("dxf/svg export needs a sketch id");
       const curves = sketchCurves(sketch);

@@ -1,6 +1,6 @@
 import { House, RotateCcw, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { THREE, type Viewport } from "@opencad/viewport";
+import { THREE, type Viewport } from "@leocad/viewport";
 
 type V = [number, number, number];
 const FACES: { label: string; n: V; u: V; v: V }[] = [

@@ -1,4 +1,4 @@
-import { ChevronDown, Download, FileDown, House, Moon, Redo2, Share2, Sun, Undo2 } from "lucide-react";
+import { ChevronDown, CircleHelp, Download, FileDown, House, Moon, Redo2, Share2, Sun, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { goHome, redo, renameProject, undo, useApp } from "../store";
 import { exportMesh, exportSketch, exportStep, saveFile, shareLink } from "./io";
@@ -10,13 +10,7 @@ const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
 
 export function Logo() {
-  return (
-    <svg viewBox="0 0 32 32" aria-hidden>
-      <path d="M16 3l11 6v14l-11 6-11-6V9z" fill="var(--accent)" />
-      <path d="M16 3l11 6-11 6-11-6z" fill="color-mix(in srgb, var(--accent) 45%, white)" />
-      <path d="M16 15v14l-11-6V9z" fill="color-mix(in srgb, var(--accent) 80%, black)" />
-    </svg>
-  );
+  return <img src="/logo.svg" alt="" width={24} height={24} style={{ borderRadius: 6 }} />;
 }
 
 export function toggleTheme(): void {
@@ -24,7 +18,7 @@ export function toggleTheme(): void {
   const dark = root.dataset["theme"] ? root.dataset["theme"] === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset["theme"] = dark ? "light" : "dark";
   try {
-    localStorage.setItem("opencad.theme", root.dataset["theme"]);
+    localStorage.setItem("leocad.theme", root.dataset["theme"]);
   } catch {
     // theme just won't persist
   }
@@ -52,7 +46,7 @@ export function TopBar() {
         { label: `${s.id} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
       ]),
       ...(sketches.length ? (["sep"] as const) : []),
-      { label: "opencad file (.ocad)", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
+      { label: "leocad file (.leocad)", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
     ]);
   };
 
@@ -60,7 +54,7 @@ export function TopBar() {
     <header className={`topbar ${desktop ? "desktop" : ""}`}>
       <button className="logo" onClick={goHome} title="All projects">
         <Logo />
-        opencad
+        leocad
       </button>
       <span className="muted">/</span>
       <input
@@ -71,7 +65,7 @@ export function TopBar() {
         onBlur={() => renameProject(name)}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
-      <span className="save-state" title={desktop ? "Projects are .ocad files in Documents/opencad" : "Projects are stored in this browser"}>
+      <span className="save-state" title={desktop ? "Projects are .leocad files in Documents/leocad" : "Projects are stored in this browser"}>
         {saveState === "saved" ? (desktop ? "Saved" : "Saved in this browser") : saveState === "saving" ? "Saving…" : "Unsaved changes"}
       </span>
       <div className="spacer" />
@@ -85,7 +79,12 @@ export function TopBar() {
         <Sun className="light-only" />
         <Moon style={{ display: "none" }} />
       </button>
-      <McpButton />
+      <span className="mcp-anchor">
+        <McpButton />
+      </span>
+      <button className="icon-btn" title="Help & guides" onClick={() => window.dispatchEvent(new Event("leocad:help"))}>
+        <CircleHelp />
+      </button>
       <button className="icon-btn" onClick={goHome} title="Projects">
         <House />
       </button>

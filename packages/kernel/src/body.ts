@@ -1,4 +1,4 @@
-import type { FaceInfo, Topology } from "@opencad/naming";
+import type { FaceInfo, Topology } from "@leocad/naming";
 import type {
   NCollection_List_TopoDS_Shape,
   TopoDS_Edge,

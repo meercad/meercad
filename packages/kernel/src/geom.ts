@@ -1,7 +1,7 @@
 /** OCCT construction helpers: points, frames, sketch regions → faces, transforms. */
 
-import type { LoopEdge, PlaneFrame, Region, Vec3 } from "@opencad/sketch";
-import { toWorld } from "@opencad/sketch";
+import type { LoopEdge, PlaneFrame, Region, Vec3 } from "@leocad/sketch";
+import { toWorld } from "@leocad/sketch";
 import type { TopoDS_Edge, TopoDS_Face, TopoDS_Shape, TopoDS_Vertex, gp_Trsf } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
 import type { OC } from "./occt.js";

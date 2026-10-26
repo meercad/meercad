@@ -9,13 +9,13 @@ import { desktop } from "../lib/persistence";
 export function McpButton() {
   const [status, setStatus] = useState(bridgeStatus());
   const [open, setOpen] = useState(false);
-  const [cmd, setCmd] = useState<{ command: string; args: string[]; env?: Record<string, string> }>({ command: "node", args: ["<path to opencad>/packages/mcp/dist/server.js"] });
+  const [cmd, setCmd] = useState<{ command: string; args: string[]; env?: Record<string, string> }>({ command: "node", args: ["<path to leocad>/packages/mcp/dist/server.js"] });
   useEffect(() => {
     const off = onBridgeStatus(setStatus);
     void desktop?.info().then((i) => setCmd(i.mcpCommand));
     return () => void off();
   }, []);
-  const config = JSON.stringify({ mcpServers: { opencad: cmd } }, null, 2);
+  const config = JSON.stringify({ mcpServers: { leocad: cmd } }, null, 2);
   return (
     <>
       <button className={`icon-btn ${status === "connected" ? "active" : ""}`} title={`AI assistants (MCP): ${status}`} onClick={() => setOpen(true)}>
@@ -38,7 +38,7 @@ export function McpButton() {
               </p>
               <label className="checkbox">
                 <input type="checkbox" checked={status !== "off"} onChange={(e) => setBridgeEnabled(e.target.checked)} />
-                Allow assistants to control opencad
+                Allow assistants to control leocad
                 <span className="muted">— {status === "connected" ? "connected" : status === "connecting" ? "waiting for an assistant…" : "off"}</span>
               </label>
               <div className="fld">
@@ -55,7 +55,7 @@ export function McpButton() {
                   <Copy /> Copy configuration
                 </button>
                 <span className="muted" style={{ fontSize: 12 }}>
-                  Claude Code: <span className="mono">claude mcp add opencad {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
+                  Claude Code: <span className="mono">claude mcp add leocad {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
                 </span>
               </div>
               {status === "connected" ? (

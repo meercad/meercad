@@ -1,4 +1,4 @@
-// Drives a running opencad app through the MCP server like an assistant would.
+// Drives a running leocad app through the MCP server like an assistant would.
 // Usage: node scripts/smoke.mjs   (open the app with the MCP bridge enabled first)
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -34,9 +34,9 @@ const bad = await client.callTool({ name: "apply_ops", arguments: { ops: [{ type
 console.log("bad op rejected:", bad.isError, bad.content[0].text);
 console.log("measure:", await call("measure", { a: { face: "ex1.end_cap" }, b: { face: "ex1.start_cap" } }));
 const img = await call("render_view", { view: "iso", width: 400, height: 300 });
-writeFileSync("/tmp/opencad-smoke.png", Buffer.from(img.data, "base64"));
+writeFileSync("/tmp/leocad-smoke.png", Buffer.from(img.data, "base64"));
 console.log("render_view: png", img.data.length, "b64 chars");
-console.log("export:", await call("export", { format: "step", path: "/tmp/opencad-smoke.step" }));
+console.log("export:", await call("export", { format: "step", path: "/tmp/leocad-smoke.step" }));
 console.log("undo:", JSON.parse(await call("undo")).features.length, "features after undo");
 await client.close();
 process.exit(0);

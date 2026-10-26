@@ -1,4 +1,4 @@
-import type { OpencadDocument } from "@opencad/schema";
+import type { LeocadDocument } from "@leocad/schema";
 import type { BodyMesh } from "./mesh.js";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
@@ -53,14 +53,14 @@ export class KernelClient {
   }
 
   /** Rebuilds the document. Older rebuilds still queued reject with SupersededError. */
-  async rebuild(doc: OpencadDocument): Promise<RebuildOutput> {
+  async rebuild(doc: LeocadDocument): Promise<RebuildOutput> {
     const r = await this.send({ type: "rebuild", doc });
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     return { report: r.report, meshes: r.meshes, references: r.references };
   }
 
   /** Rebuilds without touching the main session (AI proposals, feature previews). */
-  async sandbox(doc: OpencadDocument): Promise<RebuildOutput> {
+  async sandbox(doc: LeocadDocument): Promise<RebuildOutput> {
     const r = await this.send({ type: "sandbox", doc });
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     return { report: r.report, meshes: r.meshes, references: r.references };
