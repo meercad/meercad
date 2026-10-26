@@ -62,6 +62,10 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          # Missing secrets arrive as empty strings, which electron-builder would treat as a path.
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
           EXTRA=""
           if [ -n "$CSC_LINK" ]; then EXTRA="-c.mac.identity=null -c.mac.hardenedRuntime=true"; fi
           if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ]; then EXTRA="$EXTRA -c.mac.notarize=true"; fi

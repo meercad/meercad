@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, normalize, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { canSelfUpdate, checkForUpdate, installUpdate, type UpdateInfo } from "./updater";
 
 const DEV = process.argv.includes("--dev");
 const DEV_URL = "http://localhost:5173";
@@ -128,6 +129,30 @@ ipcMain.handle("app:info", () => ({
   mcpCommand: { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } },
 }));
 
+// ---------------------------------------------------------------- updates
+
+let pendingUpdate: UpdateInfo | null = null;
+async function runUpdateCheck(manual = false): Promise<void> {
+  try {
+    const info = await checkForUpdate();
+    if (info) {
+      pendingUpdate = info;
+      mainWindow?.webContents.send("update-available", { version: info.version, notes: info.notes, page: info.page, canInstall: await canSelfUpdate() });
+    } else if (manual) mainWindow?.webContents.send("update-none", app.getVersion());
+  } catch (e) {
+    if (manual) mainWindow?.webContents.send("update-error", e instanceof Error ? e.message : String(e));
+  }
+}
+ipcMain.handle("update:check", () => runUpdateCheck(true));
+ipcMain.handle("update:install", async () => {
+  if (!pendingUpdate) return;
+  try {
+    await installUpdate(pendingUpdate, mainWindow);
+  } catch (e) {
+    mainWindow?.webContents.send("update-error", e instanceof Error ? e.message : String(e));
+  }
+});
+
 // ---------------------------------------------------------------- windows
 
 let mainWindow: BrowserWindow | null = null;
@@ -189,7 +214,21 @@ app.on("open-file", (e, file) => {
 function buildMenu(): void {
   const send = (channel: string, ...args: unknown[]) => () => mainWindow?.webContents.send(channel, ...args);
   const template: MenuItemConstructorOptions[] = [
-    { role: "appMenu" },
+    {
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { label: "Check for Updates…", click: () => void runUpdateCheck(true) },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
     {
       label: "File",
       submenu: [
@@ -234,6 +273,11 @@ else {
     mainWindow = createWindow();
     mainWindow.webContents.once("did-finish-load", () => {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
+      // Check shortly after start, then hourly.
+      if (app.isPackaged) {
+        setTimeout(() => void runUpdateCheck(), 5000);
+        setInterval(() => void runUpdateCheck(), 60 * 60 * 1000);
+      }
     });
     app.on("activate", () => {
       if (!BrowserWindow.getAllWindows().length) mainWindow = createWindow();

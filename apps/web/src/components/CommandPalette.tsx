@@ -9,6 +9,7 @@ import { closeSketch, getViewport, goHome, newProject, redo, startFeature, undo,
 import { exportMesh, exportStep, importFile, saveFile } from "./io";
 import { Kbd } from "./Kbd";
 import { toggleTheme } from "./TopBar";
+import { desktop } from "../lib/persistence";
 
 interface Command {
   label: string;
@@ -107,6 +108,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       { group: "Help", label: "Keyboard shortcuts", kbd: "?", run: onShortcuts },
       { group: "Help", label: "Introduction tour", run: onTour },
       { group: "Help", label: "Toggle dark mode", run: toggleTheme },
+      ...(desktop ? [{ group: "Help", label: "Check for updates", run: () => void desktop!.updates.check() }] : []),
     );
     return list;
   }, [sketchId, screen, onHelp, onShortcuts, onTour]);

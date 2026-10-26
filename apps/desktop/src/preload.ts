@@ -1,4 +1,5 @@
 /** The only bridge between the web app and the desktop: a small, explicit API. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { contextBridge, ipcRenderer } from "electron";
 
 const api = {
@@ -14,8 +15,12 @@ const api = {
     reveal: (id?: string) => ipcRenderer.invoke("projects:reveal", id),
   },
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
-  on: (channel: "menu" | "open-project", fn: (arg: string) => void) => {
-    const listener = (_e: unknown, arg: string) => fn(arg);
+  updates: {
+    check: () => ipcRenderer.invoke("update:check"),
+    install: () => ipcRenderer.invoke("update:install"),
+  },
+  on: (channel: "menu" | "open-project" | "update-available" | "update-progress" | "update-none" | "update-error", fn: (arg: any) => void) => {
+    const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },

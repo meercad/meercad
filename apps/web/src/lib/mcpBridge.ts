@@ -31,7 +31,7 @@ export const onBridgeStatus = (fn: (s: Status) => void) => {
 export function setBridgeEnabled(on: boolean): void {
   wanted = on;
   try {
-    localStorage.setItem("leocad.mcp", on ? "1" : "");
+    localStorage.setItem("leocad.mcp", on ? "1" : "0");
   } catch {
     // preference not persisted
   }
@@ -45,13 +45,15 @@ export function setBridgeEnabled(on: boolean): void {
 }
 
 export function initBridge(): void {
-  let on = false;
+  let pref: string | null = null;
   try {
-    on = localStorage.getItem("leocad.mcp") === "1";
+    pref = localStorage.getItem("leocad.mcp");
   } catch {
-    on = false;
+    pref = null;
   }
-  if (on) setBridgeEnabled(true);
+  // The desktop app is ready for assistants out of the box; the browser version asks first.
+  const desktop = !!(window as { leocadDesktop?: unknown }).leocadDesktop;
+  if (pref === "1" || (desktop && pref !== "0")) setBridgeEnabled(true);
 }
 
 function connect(): void {

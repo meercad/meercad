@@ -27,7 +27,10 @@ interface DesktopApi {
     reveal(id?: string): Promise<void>;
   };
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
-  on(channel: "menu" | "open-project", fn: (arg: string) => void): () => void;
+  updates: { check(): Promise<void>; install(): Promise<void> };
+  on(channel: "menu" | "open-project" | "update-none" | "update-error", fn: (arg: string) => void): () => void;
+  on(channel: "update-available", fn: (arg: { version: string; notes: string; page: string; canInstall: boolean }) => void): () => void;
+  on(channel: "update-progress", fn: (arg: number) => void): () => void;
 }
 
 export const desktop: DesktopApi | undefined = (window as unknown as { leocadDesktop?: DesktopApi }).leocadDesktop;

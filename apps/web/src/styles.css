@@ -490,3 +490,11 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .handle-chip { transform: translate(0, -50%); }
 .handle-chip button { color: var(--accent); }
 .value-input { width: 110px; height: 26px; padding: 0 9px; border-radius: 999px; border: 1.5px solid var(--accent); background: var(--glass-strong); font: 600 12px var(--mono); color: var(--text); outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* update banner */
+.update-banner { position: fixed; top: 72px; right: 14px; width: 330px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border-radius: 18px; z-index: 40; animation: pop 0.2s ease-out;
+  background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); }
+.update-notes { font-size: 12px; line-height: 1.5; }
+.update-progress { position: relative; height: 26px; border-radius: 9px; background: var(--field); overflow: hidden; font-size: 12px; }
+.update-progress div { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--accent) 30%, transparent); transition: width 0.2s; }
+.update-progress span { position: relative; line-height: 26px; padding: 0 10px; }
