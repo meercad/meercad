@@ -87,7 +87,11 @@ export interface Handle {
   onEnd: (value: number) => void;
   /** Smallest value allowed (e.g. 0 for radii). */
   min?: number;
+  /** Arrow colour (hex); defaults to the accent blue. */
+  color?: number;
 }
+
+export type DisplayMode = "shaded_edges" | "shaded" | "wireframe" | "xray" | "hidden_line";
 
 export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom" | "iso";
 
@@ -150,7 +154,9 @@ export class Viewport {
   private resizeObserver: ResizeObserver;
   private disposed = false;
   private listeners = new Set<() => void>();
-  private grid: THREE.GridHelper;
+  private grid: THREE.Group;
+  private displayMode: DisplayMode = "shaded_edges";
+  private dark = false;
   private sceneData: SceneData | null = null;
   handles: Handle[] = [];
   private handleGroup = new THREE.Group();
@@ -190,12 +196,8 @@ export class Viewport {
       this.scene.add(cam);
     }
 
-    this.grid = new THREE.GridHelper(400, 40, 0x9aa7b6, 0xd3dae2);
-    this.grid.rotation.x = Math.PI / 2;
-    const gm = this.grid.material as THREE.Material;
-    gm.transparent = true;
-    gm.opacity = 0.35;
-    gm.depthWrite = false;
+    this.grid = new THREE.Group();
+    this.buildGrid(200);
     this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay, this.handleGroup);
     this.scene.add(axesHelper());
 
@@ -222,6 +224,12 @@ export class Viewport {
     this.selected = this.selected.filter((s) => this.pickStillValid(s));
     if (this.hover && !this.pickStillValid(this.hover)) this.hover = null;
     this.paint();
+    this.applyDisplayMode();
+    const box = new THREE.Box3().setFromObject(this.bodiesGroup);
+    if (!box.isEmpty()) {
+      const extent = Math.max(50, ...box.min.toArray().map(Math.abs), ...box.max.toArray().map(Math.abs)) * 1.6;
+      if (extent > this.gridExtent * 1.5 || extent < this.gridExtent / 3) this.buildGrid(extent);
+    }
     if (!this.framed && (data.bodies.length || data.sketches.length)) {
       this.framed = true;
       this.fit(false);
@@ -381,6 +389,64 @@ export class Viewport {
     }
   }
 
+  /** Two-level grid (minor and major lines) sized to the model, with theme-aware contrast. */
+  private buildGrid(extent: number): void {
+    disposeTree(this.grid);
+    const nice = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+    const minor = nice.find((n) => (extent * 2) / n <= 80) ?? 500;
+    const major = minor * 10;
+    const size = Math.ceil((extent * 2) / major) * major;
+    const mk = (step: number, color: number, opacity: number) => {
+      const g = new THREE.GridHelper(size, Math.round(size / step), color, color);
+      g.rotation.x = Math.PI / 2;
+      const m = g.material as THREE.Material;
+      m.transparent = true;
+      m.opacity = opacity;
+      m.depthWrite = false;
+      return g;
+    };
+    const [minorC, majorC] = this.dark ? [0x3a4256, 0x56607a] : [0xc3cad6, 0x98a3b5];
+    this.grid.add(mk(minor, minorC, this.dark ? 0.55 : 0.6), mk(major, majorC, this.dark ? 0.8 : 0.85));
+    this.gridExtent = extent;
+  }
+  private gridExtent = 200;
+
+  /** Light/dark scene colours (grid contrast). */
+  setDark(dark: boolean): void {
+    if (dark === this.dark) return;
+    this.dark = dark;
+    this.buildGrid(this.gridExtent);
+  }
+
+  get mode(): DisplayMode {
+    return this.displayMode;
+  }
+
+  /** Classic CAD display modes. */
+  setDisplayMode(mode: DisplayMode): void {
+    this.displayMode = mode;
+    this.applyDisplayMode();
+  }
+
+  private applyDisplayMode(): void {
+    const m = this.displayMode;
+    for (const b of this.bodies) {
+      const fm = b.faces.material as THREE.MeshStandardMaterial;
+      const em = b.edges.material as THREE.LineBasicMaterial;
+      b.faces.visible = m !== "wireframe";
+      b.edges.visible = m !== "shaded";
+      fm.transparent = m === "xray";
+      fm.opacity = m === "xray" ? 0.22 : 1;
+      fm.depthWrite = m !== "xray";
+      // Hidden-line: flat white faces that only occlude, plus visible edges.
+      fm.emissive.setHex(m === "hidden_line" ? 0xffffff : 0x000000);
+      fm.emissiveIntensity = m === "hidden_line" ? 1 : 0;
+      fm.needsUpdate = true;
+      em.depthTest = !(m === "wireframe" || m === "xray");
+      em.needsUpdate = true;
+    }
+  }
+
   setPlanesVisible(v: boolean): void {
     this.planeGroup.visible = v;
   }
@@ -459,7 +525,7 @@ export class Viewport {
   }
 
   private handleBase(h: Handle): number {
-    return this.pixelSize(h.origin) * 28;
+    return this.pixelSize(h.origin) * 46;
   }
 
   private handleTip(h: Handle, value = h.value): THREE.Vector3 {
@@ -469,6 +535,12 @@ export class Viewport {
 
   private drawHandles(): void {
     disposeTree(this.handleGroup);
+    const onTop = (m: THREE.Material) => {
+      m.depthTest = false;
+      m.depthWrite = false;
+      m.transparent = true;
+      return m;
+    };
     for (const h0 of this.handles) {
       const h = this.activeHandle?.h.id === h0.id ? { ...h0, value: this.activeHandle.value } : h0;
       const px = this.pixelSize(h.origin);
@@ -476,30 +548,46 @@ export class Viewport {
       const o = new THREE.Vector3(...h.origin);
       const tip = this.handleTip(h);
       const hot = this.activeHandle?.h.id === h.id || this.hoverHandle === h.id;
-      const color = hot ? 0xff7a1a : 0x2f6fed;
-      const shaft = new THREE.Line(new THREE.BufferGeometry().setFromPoints([o, tip]), new THREE.LineBasicMaterial({ color, depthTest: false }));
-      shaft.renderOrder = 50;
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(px * 5.5, px * 16, 20), new THREE.MeshBasicMaterial({ color, depthTest: false }));
-      cone.position.copy(tip);
-      const up = new THREE.Vector3(0, 1, 0);
-      cone.quaternion.setFromUnitVectors(up, h.value < 0 ? d.clone().negate() : d);
-      cone.renderOrder = 51;
-      const base = new THREE.Mesh(new THREE.SphereGeometry(px * 3.5, 12, 8), new THREE.MeshBasicMaterial({ color, depthTest: false }));
-      base.position.copy(o);
-      base.renderOrder = 51;
-      this.handleGroup.add(shaft, cone, base);
+      const color = hot ? 0xff7a1a : (h.color ?? 0x4f46e5);
+      const along = tip.clone().sub(o);
+      const len = along.length();
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), along.lengthSq() ? along.clone().normalize() : d);
+      // Halo first (white, slightly larger), then the coloured arrow: readable on any surface.
+      for (const [scale, col, order] of [
+        [1.6, 0xffffff, 50],
+        [1, color, 51],
+      ] as const) {
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(px * 1.6 * scale, px * 1.6 * scale, Math.max(len, px), 10), onTop(new THREE.MeshBasicMaterial({ color: col })));
+        shaft.position.copy(o).addScaledVector(along, 0.5);
+        shaft.quaternion.copy(q);
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(px * 7 * (scale === 1 ? 1 : 1.25), px * 20 * (scale === 1 ? 1 : 1.15), 24), onTop(new THREE.MeshBasicMaterial({ color: col })));
+        cone.position.copy(tip);
+        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), h.value < 0 ? d.clone().negate() : d);
+        const base = new THREE.Mesh(new THREE.SphereGeometry(px * 4.5 * scale, 16, 12), onTop(new THREE.MeshBasicMaterial({ color: col })));
+        base.position.copy(o);
+        for (const m of [shaft, cone, base]) m.renderOrder = order + (m === cone ? 2 : 0);
+        this.handleGroup.add(shaft, cone, base);
+      }
     }
   }
 
   private hitHandle(clientX: number, clientY: number): Handle | null {
     const r = this.renderer.domElement.getBoundingClientRect();
+    const px = clientX - r.left;
+    const py = clientY - r.top;
     let best: Handle | null = null;
-    let bd = 16;
+    let bd = 18;
     for (const h of this.handles) {
       const tip = this.handleTip(h);
-      const s = this.worldToScreen([tip.x, tip.y, tip.z]);
-      if (!s) continue;
-      const dist = Math.hypot(s[0] + r.left - clientX, s[1] + r.top - clientY);
+      const a = this.worldToScreen(h.origin);
+      const b = this.worldToScreen([tip.x, tip.y, tip.z]);
+      if (!a || !b) continue;
+      // Distance to the arrow segment, favouring the tip.
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0.35, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / l2));
+      const dist = Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py) - (t > 0.9 ? 6 : 0);
       if (dist < bd) {
         bd = dist;
         best = h;

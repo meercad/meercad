@@ -1,6 +1,7 @@
-import { ChevronDown, CircleHelp, Download, FileDown, House, Moon, Redo2, Share2, Sun, Undo2 } from "lucide-react";
+import { ChevronDown, CircleHelp, PanelLeft, Download, FileDown, House, Moon, Redo2, Share2, Sun, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { goHome, redo, renameProject, undo, useApp } from "../store";
+import { goHome, redo, renameProject, toggleSide, undo, useApp } from "../store";
+import { Toolbar } from "./Toolbar";
 import { exportMesh, exportSketch, exportStep, saveFile, shareLink } from "./io";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
@@ -26,6 +27,7 @@ export function toggleTheme(): void {
 
 export function TopBar() {
   const project = useApp((s) => s.project);
+  const sideOpen = useApp((s) => s.sideOpen);
   const saveState = useApp((s) => s.saveState);
   const canUndo = useApp((s) => s.canUndo);
   const canRedo = useApp((s) => s.canRedo);
@@ -52,6 +54,9 @@ export function TopBar() {
 
   return (
     <header className={`topbar ${desktop ? "desktop" : ""}`}>
+      <button className={`icon-btn side-toggle ${sideOpen ? "active" : ""}`} onClick={() => toggleSide()} title={`${sideOpen ? "Hide" : "Show"} history, parts and variables (⌘⌥H)`}>
+        <PanelLeft />
+      </button>
       <button className="logo" onClick={goHome} title="All projects">
         <Logo />
         leocad
@@ -68,7 +73,7 @@ export function TopBar() {
       <span className="save-state" title={desktop ? "Projects are .leocad files in Documents/leocad" : "Projects are stored in this browser"}>
         {saveState === "saved" ? (desktop ? "Saved" : "Saved in this browser") : saveState === "saving" ? "Saving…" : "Unsaved changes"}
       </span>
-      <div className="spacer" />
+      <Toolbar />
       <button className="icon-btn" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
         <Undo2 />
       </button>

@@ -78,7 +78,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       list.push({ group: "Sketch", label: "Toggle construction", kbd: "X", run: toggleConstruction }, { group: "Sketch", label: "Finish sketch", kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {
       for (const op of TOOLBAR) list.push({ group: "Modeling", label: FEATURES[op].label, ...(FEATURES[op].shortcut ? { kbd: FEATURES[op].shortcut } : {}), run: () => startFeature(op as FeatureOp) });
-      list.push({ group: "Modeling", label: "Measure", kbd: "M", run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
+      list.push({ group: "Modeling", label: "Measure", kbd: "Shift+M", run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
     }
     if (screen === "editor") {
       list.push(

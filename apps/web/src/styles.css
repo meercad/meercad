@@ -502,3 +502,34 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .select-box { position: absolute; z-index: 4; pointer-events: none; border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 4px; }
 .select-box.crossing { border-style: dashed; background: color-mix(in srgb, #16a34a 10%, transparent); border-color: #16a34a; }
 .select-box span { position: absolute; left: 0; top: -22px; font-size: 11px; padding: 2px 6px; border-radius: 6px; background: var(--glass-strong); white-space: nowrap; }
+
+/* ======================================================================
+   One bar: tools live in the top bar; the sidebar collapses
+   ====================================================================== */
+.app { --left: 14px; --top: 88px; }
+.app.side-open { --left: 300px; }
+.topbar { height: 64px; gap: 6px; }
+.topbar .toolbar { position: static; flex: 1 1 auto; min-width: 0; width: auto; max-width: none; justify-content: center; padding: 0 6px; gap: 1px;
+  background: none !important; border: none !important; box-shadow: none !important; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; overflow-x: auto; }
+.topbar .tool { min-width: 50px; height: 52px; padding: 4px 5px 3px; justify-content: center; flex-direction: column; gap: 2px; }
+.topbar .tool > span { display: block; font-size: 10.5px; line-height: 1.1; color: var(--text-2); }
+.topbar .tool.active > span { color: var(--accent); }
+.topbar .tool svg { width: 20px; height: 20px; }
+.topbar .tool .kbd { top: 1px; right: 0; }
+.topbar .tool.primary { padding: 4px 12px 3px; }
+.topbar .tool.primary > span { color: var(--accent-text); font-weight: 600; }
+.topbar .toolbar .sep { margin: 10px 4px; }
+.topbar .doc-name { max-width: 200px; }
+.side-toggle { flex: none; }
+.side { top: var(--top); animation: slide-in 0.18s ease-out; }
+@keyframes slide-in { from { opacity: 0; transform: translateX(-12px); } }
+.app > .right { top: var(--top); }
+.viewcube { top: var(--top); }
+.dialog, .measure-card, .sketch-hud { top: var(--top); left: var(--left); }
+.hint-banner, .ai-activity { top: var(--top); }
+.status-pill { left: var(--left); }
+.update-banner { top: var(--top); }
+.topbar .save-state { display: none; }
+@media (max-width: 1180px) { .topbar .doc-name { max-width: 120px; } }
+
+.view-controls .mode-btn { width: auto; padding: 0 8px; gap: 5px; font-size: 11.5px; }

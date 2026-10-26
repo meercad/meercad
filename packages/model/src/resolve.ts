@@ -1,4 +1,5 @@
 import type {
+  AxisRef,
   ChamferFeature,
   CircularPatternFeature,
   Expr,
@@ -11,6 +12,7 @@ import type {
   ShellFeature,
   SketchConstraint,
   SketchFeature,
+  TransformFeature,
 } from "@leocad/schema";
 import { evaluate, ExprError } from "./expr.js";
 
@@ -27,7 +29,9 @@ export type ResolvedChamfer = R<ChamferFeature, "distance">;
 export type ResolvedShell = R<ShellFeature, "thickness">;
 export type ResolvedLinearPattern = R<LinearPatternFeature, "count" | "spacing" | "count2" | "spacing2">;
 export type ResolvedCircularPattern = R<CircularPatternFeature, "count" | "angle">;
+export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
+  | ResolvedTransform
   | ResolvedSketch
   | ResolvedPlane
   | ResolvedExtrude
@@ -77,6 +81,14 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return { ...f, count: count("count", f.count)!, spacing: ev("spacing", f.spacing), count2: count("count2", f.count2), spacing2: opt("spacing2", f.spacing2) };
     case "circular_pattern":
       return { ...f, count: count("count", f.count)!, angle: opt("angle", f.angle) };
+    case "transform": {
+      const { translate, rotate, ...rest } = f;
+      return {
+        ...rest,
+        ...(translate ? { translate: translate.map((e, i) => ev(`translate[${i}]`, e)) as [number, number, number] } : {}),
+        ...(rotate ? { rotate: { axis: rotate.axis, angle: ev("angle", rotate.angle) } } : {}),
+      };
+    }
     default:
       return f;
   }
@@ -95,6 +107,11 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
   };
+  if (f.op === "transform") {
+    if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
+    const rot = g["rotate"] as { angle: Expr } | undefined;
+    if (rot) rot.angle = fn(rot.angle);
+  }
   for (const k of keys[f.op] ?? []) if (g[k] !== undefined) g[k] = fn(g[k] as Expr);
   if (f.op === "sketch") {
     for (const c of g["constraints"] as { value?: Expr }[]) if (c.value !== undefined) c.value = fn(c.value);

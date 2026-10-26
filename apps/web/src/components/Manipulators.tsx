@@ -2,7 +2,8 @@
  * Direct manipulation (Shapr3D-style): drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
-import { ArrowUpFromLine, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, Triangle } from "lucide-react";
+import { ArrowUpFromLine, EyeOff, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
+import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { evaluate, nextFeatureId } from "@leocad/model";
 import { asArray, type EdgeSelector, type Expr, type Feature } from "@leocad/schema";
@@ -86,6 +87,14 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           },
         ];
       }
+      if (f.op === "transform" && f.bodies[0]) {
+        const t = (f.translate ?? [0, 0, 0]).map((e) => num(e, 0)) as [number, number, number];
+        const c = bodyCenter(out, f.bodies[0]);
+        if (!c) return [];
+        // The base output may already include this move when editing it: anchor at the original spot.
+        const origin = (d.isNew ? c : c.map((v, i) => v - t[i]!)) as [number, number, number];
+        return moveHandles(origin, t, (i, v) => updateDraft((g) => ({ ...g, translate: (((g as Extract<Feature, { op: "transform" }>).translate ?? [0, 0, 0]).map((x, j) => (j === i ? v : x))) as [Expr, Expr, Expr] }) as Feature), () => undefined);
+      }
       if (f.op === "shell" && f.faces[0]) {
         const a = faceSelectorAnchor(out, f.faces[0]);
         if (!a) return [];
@@ -94,6 +103,15 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       return [];
     }
     const sel = selection;
+    // A whole part is selected (double-click): show move arrows along X/Y/Z.
+    const bodyIds = new Set(sel.map((p) => (p.kind === "face" ? p.bodyId : null)));
+    const whole = sel.length > 1 && bodyIds.size === 1 && !bodyIds.has(null) && out.meshes.find((m) => m.bodyId === [...bodyIds][0])?.faceTags.length === sel.length;
+    if (whole) {
+      const bodyId = [...bodyIds][0]!;
+      const c = bodyCenter(out, bodyId);
+      if (!c) return [];
+      return moveHandles(c, [0, 0, 0], (i, v) => updateDraft((g) => ({ ...g, translate: [0, 1, 2].map((j) => (j === i ? v : 0)) as [Expr, Expr, Expr] }) as Feature), (v) => finish(v), () => startDraft({ id: nextFeatureId(currentDoc(), "transform"), op: "transform", bodies: [bodyId], translate: [0, 0, 0] }));
+    }
     if (sel.length === 1 && sel[0]!.kind === "face" && sel[0]!.normal) {
       const p = sel[0]!;
       const m = out.meshes.find((x) => x.bodyId === p.bodyId);
@@ -166,6 +184,25 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
     return [];
   }
 
+  function moveHandles(origin: [number, number, number], t: [number, number, number], drag: (axis: number, v: number) => void, end: (v: number) => void, start?: () => void): Handle[] {
+    const dirs: [number, number, number][] = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ];
+    const colors = [0xe5484d, 0x30a46c, 0x3e63dd];
+    return dirs.map((dir, i) => ({
+      id: `move-${"xyz"[i]}`,
+      color: colors[i]!,
+      origin,
+      dir,
+      value: t[i]!,
+      ...(start ? { onStart: start } : {}),
+      onDrag: (v: number) => drag(i, v),
+      onEnd: end,
+    }));
+  }
+
   function finish(v: number): void {
     autoMode.current = false;
     if (Math.abs(v) < 1e-6) return cancelDialog();
@@ -197,7 +234,14 @@ function QuickActions({ viewport, selection }: { viewport: Viewport; selection: 
   const meshes = useApp.getState().output?.meshes ?? [];
   const kinds = new Set(selection.map((p) => p.kind));
   const actions: { icon: ReactNode; label: string; kbd?: string; run: () => void }[] = [];
-  if (kinds.size === 1 && kinds.has("face")) {
+  const partIds = new Set(selection.map((p) => (p.kind === "face" ? p.bodyId : "")));
+  const wholePart = selection.length > 1 && partIds.size === 1 && !partIds.has("") && meshes.find((m) => m.bodyId === [...partIds][0])?.faceTags.length === selection.length;
+  if (wholePart) {
+    actions.push({ icon: <Move3d />, label: "Move", kbd: "M", run: () => startFeature("transform") });
+    actions.push({ icon: <SquareSplitHorizontal />, label: "Mirror", kbd: "I", run: () => startFeature("mirror") });
+    actions.push({ icon: <Grid3x3 />, label: "Pattern", kbd: "L", run: () => startFeature("linear_pattern") });
+    actions.push({ icon: <EyeOff />, label: "Hide", run: () => toggleHidden([...partIds][0]!) });
+  } else if (kinds.size === 1 && kinds.has("face")) {
     const plane = planeSpecForPick(last, meshes);
     if (plane && selection.length === 1) actions.push({ icon: <Pencil />, label: "Sketch", kbd: "S", run: () => startSketch(plane) });
     if (selection.length === 1 && last.kind === "face" && last.normal) actions.push({ icon: <ArrowUpFromLine />, label: "Push/Pull", kbd: "drag", run: () => startFeature("extrude") });
@@ -213,7 +257,7 @@ function QuickActions({ viewport, selection }: { viewport: Viewport; selection: 
   } else if (kinds.has("plane") && selection.length === 1 && last.kind === "plane") {
     actions.push({ icon: <Pencil />, label: "Sketch", kbd: "S", run: () => startSketch({ ref: last.planeId }) });
   }
-  if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: "M", run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
+  if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: "Shift+M", run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
   if (!actions.length) return null;
   return (
     <div className="quick-actions" style={{ left: screen[0] + 18, top: screen[1] + 18 }} onPointerDown={(e) => e.stopPropagation()}>
@@ -270,4 +314,9 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
       })}
     </div>
   );
+}
+
+function bodyCenter(out: { report: { bodies: { id: string; bbox: { min: number[]; max: number[] } }[] } }, id: string): [number, number, number] | null {
+  const b = out.report.bodies.find((x) => x.id === id);
+  return b ? ([0, 1, 2].map((i) => (b.bbox.min[i]! + b.bbox.max[i]!) / 2) as [number, number, number]) : null;
 }

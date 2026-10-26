@@ -1,7 +1,7 @@
 import { Box, Copy, Eye, EyeOff, Focus, Grid2x2, Layers, Pencil, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureOp } from "@leocad/schema";
-import { samePick, Viewport, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@leocad/viewport";
+import { samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@leocad/viewport";
 import { FEATURES } from "../lib/features";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
@@ -37,6 +37,24 @@ export function ViewportView() {
   const kernelState = useApp((s) => s.kernel);
   const previewing = useApp((s) => s.previewing);
   const [ortho, setOrtho] = useState(false);
+  const [mode, setMode] = useState<DisplayMode>("shaded_edges");
+  // Grid contrast follows the light/dark theme.
+  useEffect(() => {
+    if (!vp) return;
+    const apply = () => {
+      const t = document.documentElement.dataset["theme"];
+      vp.setDark(t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
+    };
+    apply();
+    const mo = new MutationObserver(apply);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", apply);
+    return () => {
+      mo.disconnect();
+      mq.removeEventListener("change", apply);
+    };
+  }, [vp]);
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number; filter: "all" | "face" | "edge" } | null>(null);
   const boxRef = useRef(box);
   boxRef.current = box;
@@ -148,6 +166,15 @@ export function ViewportView() {
     const onDbl = (e: MouseEvent) => {
       if (useApp.getState().sketchId || useApp.getState().dialog) return;
       const pick = vp.pick(e.clientX, e.clientY, DEFAULT_KINDS);
+      // Shapr3D: double-clicking a face selects its whole part; other entities open their feature.
+      if (pick?.kind === "face") {
+        const m = useApp.getState().output?.meshes.find((x) => x.bodyId === pick.bodyId);
+        if (m) {
+          const faces = m.faceTags.map((tags, face) => ({ kind: "face" as const, bodyId: m.bodyId, face, tags, point: pick.point, normal: null }));
+          useApp.setState({ selection: faces, selectedFeature: null });
+        }
+        return;
+      }
       const fid = pick ? featureOfPick(pick) : null;
       if (fid) editFeature(fid);
     };
@@ -210,7 +237,7 @@ export function ViewportView() {
     };
     const common = [
       ...(fid ? [{ label: `Edit ${fid}`, icon: <Pencil />, onClick: () => editFeature(fid) }] : []),
-      { label: "Measure", icon: <Ruler />, kbd: "M", onClick: () => useApp.setState({ measure: { active: true, picks: pick && (pick.kind === "face" || pick.kind === "edge") ? [pick] : [], result: null } }) },
+      { label: "Measure", icon: <Ruler />, kbd: "Shift+M", onClick: () => useApp.setState({ measure: { active: true, picks: pick && (pick.kind === "face" || pick.kind === "edge") ? [pick] : [], result: null } }) },
     ];
     if (!pick)
       return showMenu(x, y, [
@@ -302,6 +329,23 @@ export function ViewportView() {
         >
           <Box />
         </button>
+        <button
+          className="icon-btn sm mode-btn"
+          title="Display mode"
+          onClick={(e) => {
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const modes: [DisplayMode, string][] = [
+              ["shaded_edges", "Shaded with edges"],
+              ["shaded", "Shaded"],
+              ["hidden_line", "Hidden lines removed"],
+              ["xray", "X-ray"],
+              ["wireframe", "Wireframe"],
+            ];
+            showMenu(r.left, r.top - 200, modes.map(([m, label]) => ({ label: `${vp?.mode === m ? "✓ " : "   "}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })));
+          }}
+        >
+          <Box /> {MODE_LABEL[mode]}
+        </button>
         <button className={`icon-btn sm ${showPlanes ? "active" : ""}`} title="Planes" onClick={() => useApp.setState({ showPlanes: !showPlanes })}>
           <Layers />
         </button>
@@ -312,6 +356,8 @@ export function ViewportView() {
     </div>
   );
 }
+
+const MODE_LABEL: Record<DisplayMode, string> = { shaded_edges: "Shaded", shaded: "Shaded (no edges)", hidden_line: "Hidden line", xray: "X-ray", wireframe: "Wireframe" };
 
 function hiddenOverride(_id: string): boolean {
   return false;

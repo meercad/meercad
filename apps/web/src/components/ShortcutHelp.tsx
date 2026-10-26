@@ -3,7 +3,7 @@ import { FEATURES, TOOLBAR } from "../lib/features";
 import { Kbd } from "./Kbd";
 
 const SECTIONS: { title: string; rows: [string, string][] }[] = [
-  { title: "Modeling", rows: [...TOOLBAR.filter((op) => FEATURES[op].shortcut).map((op) => [FEATURES[op].label, FEATURES[op].shortcut!] as [string, string]), ["Measure", "M"], ["Command search", "X"], ["Import file", "Mod+O"]] },
+  { title: "Modeling", rows: [...TOOLBAR.filter((op) => FEATURES[op].shortcut).map((op) => [FEATURES[op].label, FEATURES[op].shortcut!] as [string, string]), ["Measure", "Shift+M"], ["Command search", "X"], ["Import file", "Mod+O"]] },
   {
     title: "Direct editing",
     rows: [

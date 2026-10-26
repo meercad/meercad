@@ -1,6 +1,6 @@
 import { ArrowLeftRight, Check, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@leocad/schema";
+import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@leocad/schema";
 import type { Pick, PickKind } from "@leocad/viewport";
 import { FEATURES, featureName } from "../lib/features";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
@@ -26,6 +26,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     targets: ["face"],
     target: ["face"],
     tools: ["face"],
+    bodies: ["face", "edge"],
     source: ["face"],
     plane: ["plane", "face"],
     base: ["plane", "face"],
@@ -73,7 +74,8 @@ function handlePick(p: Pick, d: DialogState): void {
       case "direction":
       case "direction2": {
         const a = axisForPick(p, meshes);
-        if (a) (g as unknown as Record<string, AxisRef>)[field] = a;
+        if (a && g.op === "transform" && g.rotate) g.rotate = { ...g.rotate, axis: a };
+        else if (a) (g as unknown as Record<string, AxisRef>)[field] = a;
         break;
       }
       case "edges": {
@@ -97,6 +99,11 @@ function handlePick(p: Pick, d: DialogState): void {
           (g as Of<"boolean">).target = b;
           (g as Of<"boolean">).tools = (g as Of<"boolean">).tools.filter((t) => t !== b);
         }
+        break;
+      }
+      case "bodies": {
+        const b = bodyOf(p);
+        if (b) (g as Of<"transform">).bodies = toggle((g as Of<"transform">).bodies, b);
         break;
       }
       case "tools": {
@@ -142,7 +149,16 @@ export function FeatureDialog() {
       if (cur) handlePick(p, cur);
     });
     // Picks made before opening the dialog seed its first field (select edges → Fillet).
-    const pre = useApp.getState().selection;
+    let pre = useApp.getState().selection;
+    // A whole selected part becomes a body selection for move/mirror/pattern.
+    const f0 = d.feature;
+    if (pre.length > 1 && (f0.op === "transform" || f0.op === "mirror" || f0.op === "linear_pattern" || f0.op === "circular_pattern")) {
+      const ids = [...new Set(pre.flatMap((p) => (p.kind === "face" ? [p.bodyId] : [])))];
+      if (f0.op === "transform") updateDraft({ bodies: ids } as Partial<Feature>);
+      else updateDraft({ source: { bodies: ids } } as Partial<Feature>);
+      pre = [];
+      useApp.setState({ selection: [] });
+    }
     if (pre.length && d.isNew) {
       for (const p of pre) {
         const cur = useApp.getState().dialog;
@@ -485,6 +501,43 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "transform": {
+      const t = f.translate ?? [0, 0, 0];
+      const setT = (i: number, v: Expr) => set({ translate: t.map((x, j) => (j === i ? v : x)) });
+      return (
+        <>
+          <Field label="Parts">
+            <SelBox field="bodies" items={f.bodies.map((b) => `Part ${b}`)} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
+          </Field>
+          <Field label="Move by (X / Y / Z)">
+            <div className="row">
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{ flex: 1 }}>
+                  <ExprInput value={t[i]} onCommit={(v) => setT(i, v)} onLive={(v) => setT(i, v)} />
+                </div>
+              ))}
+            </div>
+          </Field>
+          <label className="checkbox">
+            <input type="checkbox" checked={!!f.rotate} onChange={(e) => set({ rotate: e.target.checked ? { axis: { ref: "origin.Z" }, angle: 90 } : undefined })} /> Rotate
+          </label>
+          {f.rotate ? (
+            <>
+              <Field label="Axis">
+                <SelBox field="axis" items={[describeAxis(f.rotate.axis)]} placeholder="Pick an edge or line" />
+                <AxisButtons value={f.rotate.axis} onChange={(axis) => set({ rotate: { ...f.rotate!, axis } })} />
+              </Field>
+              <Field label="Angle">
+                <ExprInput value={f.rotate.angle} unit="deg" onCommit={(angle) => set({ rotate: { ...f.rotate!, angle } })} onLive={(angle) => set({ rotate: { ...f.rotate!, angle } })} />
+              </Field>
+            </>
+          ) : null}
+          <label className="checkbox">
+            <input type="checkbox" checked={!!f.copy} onChange={(e) => set({ copy: e.target.checked || undefined })} /> Keep original (copy)
+          </label>
+        </>
+      );
+    }
     case "plane":
       return (
         <>

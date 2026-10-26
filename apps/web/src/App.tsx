@@ -10,7 +10,6 @@ import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Tour, tourDone } from "./components/Tour";
 import { Toasts } from "./components/Toasts";
 import { UpdateBanner } from "./components/UpdateBanner";
-import { Toolbar } from "./components/Toolbar";
 import { TopBar } from "./components/TopBar";
 import { ViewportView } from "./components/ViewportView";
 import { importFile } from "./components/io";
@@ -18,6 +17,7 @@ import { initBridge } from "./lib/mcpBridge";
 import { desktop } from "./lib/persistence";
 import { saveFile } from "./components/io";
 import { FEATURES } from "./lib/features";
+import { toggleSide } from "./store";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@leocad/viewport";
@@ -53,6 +53,7 @@ async function route(): Promise<void> {
 
 export function App() {
   const screen = useApp((s) => s.screen);
+  const sideOpen = useApp((s) => s.sideOpen);
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);
@@ -107,6 +108,12 @@ export function App() {
         } else if (k === "y") {
           e.preventDefault();
           redo();
+        } else if (k === "h" && e.altKey) {
+          e.preventDefault();
+          toggleSide();
+        } else if (k === "\\") {
+          e.preventDefault();
+          toggleSide();
         } else if (k === "o") {
           e.preventDefault();
           void importFile();
@@ -145,7 +152,7 @@ export function App() {
         const spec = planeSpecForPick(hovered, s.output?.meshes ?? []);
         if (spec) return startSketch(spec);
       }
-      if (k === "m") return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
+      if (k === "m" && e.shiftKey) return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
       if (k === "z") return getViewport()?.fit();
       for (const [op, meta] of Object.entries(FEATURES)) {
         if (meta.shortcut?.toLowerCase() === k) return startFeature(op as keyof typeof FEATURES);
@@ -176,10 +183,9 @@ export function App() {
       {screen === "home" ? (
         <Home />
       ) : (
-        <div className="app">
+        <div className={`app ${sideOpen ? "side-open" : ""}`}>
           <TopBar />
-          <Toolbar />
-          <SidePanel />
+          {sideOpen ? <SidePanel /> : null}
           <div className="right">{guide ? <HelpPanel onClose={() => setGuide(false)} onTour={() => (setGuide(false), setTour(true))} onShortcuts={() => setHelp(true)} /> : null}</div>
           <div className="view-wrap" style={{ gridArea: "view", position: "relative", minWidth: 0, minHeight: 0, display: "flex" }}>
             <ViewportView />

@@ -161,8 +161,11 @@ export function validateDocument(input: unknown): Validation<LeocadDocument> {
         if (f.op === "mirror") planeSpec(f.plane, at);
         break;
       }
+      case "transform":
+        for (const b of f.bodies) earlier(b.split("_")[0]!, at, "body");
+        break;
       case "boolean":
-        for (const b of [f.target, ...f.tools]) earlier(b, at, "body");
+        for (const b of [f.target, ...f.tools]) earlier(b.split("_")[0]!, at, "body");
         if (f.tools.includes(f.target)) errors.push(`${at}: target cannot also be a tool`);
         break;
       default:

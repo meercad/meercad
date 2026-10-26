@@ -68,7 +68,6 @@ export function Toolbar() {
         {CONSTRAINT_TOOLS.map((c) => (
           <Tool key={c.type} icon={c.icon} label={c.label} title={`${c.label}${c.key ? ` (${c.key})` : ""} — ${c.hint}`} {...(c.key ? { kbd: c.key } : {})} onClick={() => applyConstraint(c.type)} />
         ))}
-        <div className="spacer" />
         <Tool icon={Check} label="Finish" title="Finish sketch (Enter)" kbd="↵" primary onClick={closeSketch} />
       </div>
     );
@@ -86,10 +85,8 @@ export function Toolbar() {
     <div className="toolbar">
       {groups}
       <div className="sep" />
-      <Tool icon={Ruler} label="Measure" title="Measure (M)" kbd="M" active={measure} onClick={() => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null }))} />
+      <Tool icon={Ruler} label="Measure" title="Measure (Shift+M)" kbd="Shift+M" active={measure} onClick={() => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null }))} />
       <Tool icon={Upload} label="Import" title="Import STEP, STL, DXF or SVG (⌘O)" kbd="Mod+O" onClick={() => importFile()} />
-      <div className="spacer" />
-      <Tool icon={Keyboard} label="Shortcuts" title="Keyboard shortcuts (?)" kbd="?" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" }))} />
     </div>
   );
 }

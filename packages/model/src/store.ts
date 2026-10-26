@@ -90,6 +90,7 @@ export function nextFeatureId(doc: LeocadDocument, op: Feature["op"]): string {
     circular_pattern: "cp",
     mirror: "mi",
     boolean: "bo",
+    transform: "mv",
     import: "im",
   };
   const used = new Set(doc.features.map((f) => f.id));

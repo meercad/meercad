@@ -195,6 +195,15 @@ export interface BooleanFeature extends FeatureBase {
   keepTools?: boolean;
 }
 
+/** Moves (or copies) whole bodies: rotation about an axis, then translation. */
+export interface TransformFeature extends FeatureBase {
+  op: "transform";
+  bodies: string[];
+  translate?: [Expr, Expr, Expr];
+  rotate?: { axis: AxisRef; angle: Expr };
+  copy?: boolean;
+}
+
 export interface ImportFeature extends FeatureBase {
   op: "import";
   format: "step" | "stl";
@@ -215,6 +224,7 @@ export type Feature =
   | CircularPatternFeature
   | MirrorFeature
   | BooleanFeature
+  | TransformFeature
   | ImportFeature;
 export type FeatureOp = Feature["op"];
 

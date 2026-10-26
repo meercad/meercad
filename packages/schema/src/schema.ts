@@ -152,6 +152,16 @@ export const definitions: Record<string, Json> = {
       { operation: { enum: ["union", "subtract", "intersect"] }, target: id, tools: arr(id, { minItems: 1 }), keepTools: bool },
       ["operation", "target", "tools"],
     ),
+    transform: feature(
+      "transform",
+      {
+        bodies: arr(id, { minItems: 1 }),
+        translate: arr(ref("expr"), { minItems: 3, maxItems: 3 }),
+        rotate: obj({ axis: ref("axisRef"), angle: ref("expr") }, ["axis", "angle"]),
+        copy: bool,
+      },
+      ["bodies"],
+    ),
     import: feature("import", { format: { enum: ["step", "stl"] }, fileName: { type: "string", maxLength: 256 }, data: { type: "string", maxLength: 64 * 1024 * 1024 } }, ["format", "fileName", "data"]),
   }),
 };

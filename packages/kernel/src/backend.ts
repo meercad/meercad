@@ -13,6 +13,7 @@ import {
   type ResolvedRevolve,
   type ResolvedShell,
   type ResolvedSketch,
+  type ResolvedTransform,
 } from "@leocad/model";
 import { parseStl } from "@leocad/io";
 import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef } from "@leocad/schema";
@@ -97,6 +98,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return pattern(f, ctx);
       case "boolean":
         return booleanFeature(f, ctx);
+      case "transform":
+        return transformFeature(f, ctx);
       case "import":
         return importFeature(f, ctx);
     }
@@ -564,6 +567,26 @@ function booleanFeature(f: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> 
     if (!f.keepTools) bodies.delete(t);
   }
   bodies.set(f.target, target);
+  return { ...ctx.prev, bodies };
+}
+
+function transformFeature(f: ResolvedTransform, ctx: Ctx): Omit<ModelState, "arena"> {
+  // Rotation first, then translation: combined = T · R.
+  const combined = ctx.g.translation(f.translate ?? [0, 0, 0]);
+  if (f.rotate) {
+    const ax = axis(f.rotate.axis, ctx);
+    combined.Multiply(ctx.g.rotation(ax.origin, ax.dir, f.rotate.angle));
+  }
+  return moveBodies(ctx, f, new Map(ctx.prev.bodies), combined);
+}
+
+function moveBodies(ctx: Ctx, f: ResolvedTransform, bodies: Map<string, Body>, trsf: gp_Trsf): Omit<ModelState, "arena"> {
+  for (const id of f.bodies) {
+    const body = bodies.get(id);
+    if (!body) throw new FeatureError(`body "${id}" not found`);
+    const newId = f.copy ? `${f.id}_${id}` : id;
+    bodies.set(newId, transformBody(ctx, body, trsf, newId, f.copy ? `@${f.id}` : ""));
+  }
   return { ...ctx.prev, bodies };
 }
 

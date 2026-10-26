@@ -22,7 +22,7 @@ export function Home() {
         <span className="logo">
           <Logo /> leocad
         </span>
-        <span className="muted">Parametric CAD in your browser — free, open source, no account.</span>
+        <span className="muted">Parametric CAD for makers — free, open source, works offline.</span>
         <span className="spacer" />
         <button className="btn" onClick={toggleTheme}>
           Theme

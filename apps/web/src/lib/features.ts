@@ -14,6 +14,7 @@ import {
   SquareSplitHorizontal,
   Triangle,
   Orbit,
+  Move3d,
   type LucideIcon,
 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, LeocadDocument } from "@leocad/schema";
@@ -36,6 +37,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   linear_pattern: { shortcut: "L", label: "Linear pattern", icon: Grid3x3, hint: "Repeat features or bodies along a direction" },
   circular_pattern: { shortcut: "O", label: "Circular pattern", icon: Orbit, hint: "Repeat features or bodies around an axis" },
   mirror: { shortcut: "I", label: "Mirror", icon: SquareSplitHorizontal, hint: "Mirror features or bodies about a plane" },
+  transform: { shortcut: "M", label: "Move", icon: Move3d, hint: "Move, rotate or copy parts" },
   boolean: { shortcut: "B", label: "Boolean", icon: Combine, hint: "Union, subtract or intersect bodies" },
   plane: { shortcut: "N", label: "Plane", icon: Layers, hint: "Construction plane offset from a plane or face" },
   import: { label: "Import", icon: FileUp, hint: "Import STEP or STL" },
@@ -44,7 +46,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: LeocadDocument): Feature {
@@ -74,6 +76,8 @@ export function draftFeature(op: FeatureOp, doc: LeocadDocument): Feature {
       return { id, op, source: { features: [] }, plane: { ref: "origin.YZ" } };
     case "boolean":
       return { id, op, operation: "union", target: "", tools: [] };
+    case "transform":
+      return { id, op, bodies: [], translate: [0, 0, 0] };
     case "plane":
       return { id, op, base: { ref: "origin.XY" }, offset: 20 };
     case "import":
@@ -98,6 +102,8 @@ export function draftProblem(f: Feature): string | null {
       return ("features" in f.source ? f.source.features : f.source.bodies).length ? null : "Select features or bodies to copy";
     case "boolean":
       return !f.target ? "Select the target body" : f.tools.length ? null : "Select tool bodies";
+    case "transform":
+      return f.bodies.length ? null : "Select parts to move";
     case "import":
       return f.data ? null : "Choose a file";
     default:

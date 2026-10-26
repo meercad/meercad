@@ -47,6 +47,8 @@ interface State {
   toasts: Toast[];
   saveState: "saved" | "saving" | "unsaved";
   selectedFeature: string | null;
+  /** History/parts/variables sidebar (collapsed by default). */
+  sideOpen: boolean;
   /** What a connected assistant is doing right now (MCP). */
   aiActivity: { client: string; tool: string; at: number } | null;
   /** Waiting for the user to click a plane/face to start a sketch. */
@@ -84,7 +86,24 @@ export const useApp = create<State>(() => ({
   selectedFeature: null,
   pickingSketchPlane: false,
   aiActivity: null,
+  sideOpen: (() => {
+    try {
+      return localStorage.getItem("leocad.sideOpen") === "1";
+    } catch {
+      return false;
+    }
+  })(),
 }));
+
+export function toggleSide(open?: boolean): void {
+  const next = open ?? !useApp.getState().sideOpen;
+  useApp.setState({ sideOpen: next });
+  try {
+    localStorage.setItem("leocad.sideOpen", next ? "1" : "0");
+  } catch {
+    // preference not persisted
+  }
+}
 
 const set = useApp.setState;
 const get = useApp.getState;
@@ -296,6 +315,7 @@ function firstField(op: FeatureOp): string | null {
       circular_pattern: "source",
       mirror: "source",
       boolean: "target",
+      transform: "bodies",
       plane: "base",
     } as Partial<Record<FeatureOp, string>>
   )[op] ?? null;
