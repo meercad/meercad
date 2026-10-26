@@ -8,6 +8,7 @@ export interface SandboxReport {
   features: { id: string; status: string; message?: string; hint?: string }[];
   paramErrors: Record<string, string>;
   bodies: { id: string; volume: number; bbox: { min: number[]; max: number[] } }[];
+  sketches?: { id: string; diagnostics: { dof: number; ok: boolean } }[];
 }
 
 export type Sandbox = (doc: OpencadDocument) => Promise<SandboxReport>;
@@ -45,7 +46,12 @@ export function describeReport(r: SandboxReport): string {
     (b) => `${b.id}: volume ${b.volume.toFixed(1)} mm³, bbox ${b.bbox.min.map((v) => v.toFixed(1)).join(",")} → ${b.bbox.max.map((v) => v.toFixed(1)).join(",")}`,
   );
   const warnings = r.features.filter((f) => f.status === "warning").map((f) => `${f.id}: ${f.message}`);
-  return [`bodies: ${bodies.join("; ") || "none"}`, ...(warnings.length ? [`warnings: ${warnings.join("; ")}`] : [])].join("\n");
+  const sketches = (r.sketches ?? []).map((s) => `${s.id}: ${s.diagnostics.ok ? (s.diagnostics.dof ? `${s.diagnostics.dof} DOF left` : "fully constrained") : "over-constrained"}`);
+  return [
+    `bodies: ${bodies.join("; ") || "none"}`,
+    ...(sketches.length ? [`sketches: ${sketches.join("; ")}`] : []),
+    ...(warnings.length ? [`warnings: ${warnings.join("; ")}`] : []),
+  ].join("\n");
 }
 
 export interface Proposal {

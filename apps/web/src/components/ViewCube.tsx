@@ -42,9 +42,11 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
   }, [viewport]);
 
   // Drag anywhere on the cube to orbit; a short click selects a view.
-  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const drag = useRef<{ x: number; y: number; moved: boolean; dir: V | null } | null>(null);
   const onDown = (e: React.PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY, moved: false };
+    // Remember which cell was pressed: pointer capture below would retarget the pointerup.
+    const raw = (e.target as HTMLElement).dataset["dir"];
+    drag.current = { x: e.clientX, y: e.clientY, moved: false, dir: raw ? (raw.split(",").map(Number) as V) : null };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onMove = (e: React.PointerEvent) => {
@@ -58,10 +60,10 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
     d.y = e.clientY;
     viewport.orbit(-dx * 0.012, -dy * 0.012);
   };
-  const onUp = (e: React.PointerEvent, dir: V | null) => {
+  const onUp = (e: React.PointerEvent) => {
     const d = drag.current;
     drag.current = null;
-    if (d && !d.moved && dir) viewport.viewFrom(dir);
+    if (d && !d.moved && d.dir) viewport.viewFrom(d.dir);
     e.stopPropagation();
   };
 
@@ -74,7 +76,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
 
   return (
     <div className="viewcube" onPointerMove={onMove}>
-      <div className="cube" onPointerDown={onDown} onPointerUp={(e) => onUp(e, null)}>
+      <div className="cube" onPointerDown={onDown} onPointerUp={onUp}>
         {FACES.map((f, i) => (
           <div key={f.label} ref={(el) => void (refs.current[i] = el)} className="face">
             <span className="face-label">{f.label}</span>
@@ -89,7 +91,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
                     style={{ gridRow: row + 1, gridColumn: col + 1 }}
                     onPointerEnter={() => setHot(k)}
                     onPointerLeave={() => setHot((h) => (h === k ? null : h))}
-                    onPointerUp={(e) => onUp(e, dir)}
+                    data-dir={dir.join(",")}
                     title={row === 1 && col === 1 ? `${f.label.toLowerCase()} view` : "view from here"}
                   />
                 );

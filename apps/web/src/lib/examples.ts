@@ -90,7 +90,7 @@ const box: OpencadDocument = {
     { id: "sk1", op: "sketch", name: "Footprint", plane: { ref: "origin.XY" }, ...boxRect },
     { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "height", mode: "new_body" },
     { id: "fi1", op: "fillet", name: "Round corners", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }, { edge: ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"] }, { edge: ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"] }, { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l4]"] }], radius: "round" },
-    { id: "fi2", op: "fillet", name: "Bottom edge", edges: { select: "edges", of: "ex1", where: { face: "start_cap" } }, radius: "2 mm" },
+    { id: "fi2", op: "fillet", name: "Bottom edge", edges: { select: "edges", of: "ex1", where: { face: "start_cap" } }, radius: "wall + 1 mm" },
     { id: "sh1", op: "shell", name: "Hollow", faces: [{ face: "ex1.end_cap" }], thickness: "wall" },
   ],
   rollback: null,
