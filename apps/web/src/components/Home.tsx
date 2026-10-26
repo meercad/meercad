@@ -1,6 +1,6 @@
 import { Box, FileUp, Plus, Trash } from "lucide-react";
 import { useEffect } from "react";
-import { deleteProject } from "../lib/persistence";
+import { deleteProject, desktop } from "../lib/persistence";
 import { newProject, openProject, refreshProjects, useApp } from "../store";
 import { EXAMPLES } from "../lib/examples";
 import { importFile } from "./io";
@@ -18,7 +18,7 @@ export function Home() {
   };
   return (
     <div className="home">
-      <div className="home-top">
+      <div className={`home-top ${desktop ? "desktop" : ""}`}>
         <span className="logo">
           <Logo /> opencad
         </span>
@@ -36,7 +36,18 @@ export function Home() {
       </div>
       <div className="home-main">
         <h1>Your projects</h1>
-        <p className="sub">Stored only in this browser. Use Share or Export to move them elsewhere.</p>
+        <p className="sub">
+          {desktop ? (
+            <>
+              Saved as open <span className="mono">.ocad</span> files in your Documents/opencad folder.{" "}
+              <button className="btn" style={{ height: 24, marginLeft: 6 }} onClick={() => void desktop!.projects.reveal()}>
+                Show folder
+              </button>
+            </>
+          ) : (
+            "Stored only in this browser. Use Share or Export to move them elsewhere."
+          )}
+        </p>
         <div className="grid">
           <button className="card new" onClick={() => void newProject()}>
             <div className="thumb">

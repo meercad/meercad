@@ -309,3 +309,7 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .mcp-dot[data-status="off"] { display: none; }
 .mcp-dot[data-status="connecting"] { background: var(--warn); }
 .mcp-dot[data-status="connected"] { background: var(--ok); }
+
+/* desktop (macOS hidden-inset title bar) */
+.topbar.desktop, .home-top.desktop { padding-left: 84px; -webkit-app-region: drag; }
+.topbar.desktop button, .topbar.desktop input, .home-top.desktop button { -webkit-app-region: no-drag; }

@@ -2,3 +2,8 @@ packages:
   - apps/*
   - packages/*
   - tests
+
+# Packages allowed to run install scripts (download their native binaries).
+allowBuilds:
+  electron: true
+  esbuild: true

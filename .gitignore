@@ -7,3 +7,6 @@ coverage/
 test-results/
 .claude/settings.local.json
 packages/mcp/dist/
+apps/desktop/release/
+apps/desktop/dist/
+*.tgz

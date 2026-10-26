@@ -3,21 +3,18 @@ import { useEffect, useState } from "react";
 import { bridgeStatus, onBridgeStatus, setBridgeEnabled } from "../lib/mcpBridge";
 import { toast } from "../store";
 
-declare global {
-  interface Window {
-    opencadDesktop?: { mcpCommand?: { command: string; args: string[] } } & Record<string, unknown>;
-  }
-}
+import { desktop } from "../lib/persistence";
 
 /** Toolbar button showing the MCP bridge state, with setup instructions for Claude. */
 export function McpButton() {
   const [status, setStatus] = useState(bridgeStatus());
   const [open, setOpen] = useState(false);
+  const [cmd, setCmd] = useState<{ command: string; args: string[]; env?: Record<string, string> }>({ command: "node", args: ["<path to opencad>/packages/mcp/dist/server.js"] });
   useEffect(() => {
     const off = onBridgeStatus(setStatus);
+    void desktop?.info().then((i) => setCmd(i.mcpCommand));
     return () => void off();
   }, []);
-  const cmd = window.opencadDesktop?.mcpCommand ?? { command: "node", args: ["<path to opencad>/packages/mcp/dist/server.js"] };
   const config = JSON.stringify({ mcpServers: { opencad: cmd } }, null, 2);
   return (
     <>
@@ -58,7 +55,7 @@ export function McpButton() {
                   <Copy /> Copy configuration
                 </button>
                 <span className="muted" style={{ fontSize: 12 }}>
-                  Claude Code: <span className="mono">claude mcp add opencad -- {[cmd.command, ...cmd.args].join(" ")}</span>
+                  Claude Code: <span className="mono">claude mcp add opencad {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
                 </span>
               </div>
               {status === "connected" ? (

@@ -13,8 +13,10 @@ import { TopBar } from "./components/TopBar";
 import { ViewportView } from "./components/ViewportView";
 import { importFile } from "./components/io";
 import { initBridge } from "./lib/mcpBridge";
+import { desktop } from "./lib/persistence";
+import { saveFile } from "./components/io";
 import { FEATURES } from "./lib/features";
-import { cancelDialog, commitDialog, editFeature, getViewport, newProject, openProject, redo, startFeature, toast, undo, useApp } from "./store";
+import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, toast, undo, useApp } from "./store";
 
 try {
   const theme = localStorage.getItem("opencad.theme");
@@ -37,8 +39,8 @@ async function route(): Promise<void> {
     }
     return;
   }
-  const m = /^#\/p\/(\w+)/.exec(hash);
-  if (m) await openProject(m[1]!);
+  const m = /^#\/p\/(.+)$/.exec(hash);
+  if (m) await openProject(decodeURIComponent(m[1]!));
 }
 
 export function App() {
@@ -48,6 +50,20 @@ export function App() {
   useEffect(() => {
     void route();
     initBridge();
+    if (!desktop) return;
+    document.documentElement.classList.add("is-desktop");
+    const offMenu = desktop.on("menu", (cmd) => {
+      if (cmd === "new") void newProject();
+      else if (cmd === "import") void importFile();
+      else if (cmd === "home") goHome();
+      else if (cmd === "save-as" && useApp.getState().project) saveFile();
+      else if (cmd === "shortcuts") setHelp((h) => !h);
+    });
+    const offOpen = desktop.on("open-project", (id) => void openProject(id));
+    return () => {
+      offMenu();
+      offOpen();
+    };
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

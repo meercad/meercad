@@ -1,4 +1,7 @@
-/** Local-first project storage in IndexedDB. Nothing leaves the browser. */
+/**
+ * Local-first project storage. In the desktop app projects are plain .ocad files in
+ * ~/Documents/opencad (open JSON format); in the browser they live in IndexedDB.
+ */
 import type { OpencadDocument } from "@opencad/schema";
 
 export interface ProjectMeta {
@@ -10,6 +13,26 @@ export interface ProjectMeta {
 export interface Project extends ProjectMeta {
   doc: OpencadDocument;
 }
+
+interface DesktopApi {
+  isDesktop: true;
+  info(): Promise<{ version: string; projectsDir: string; mcpCommand: { command: string; args: string[]; env?: Record<string, string> } }>;
+  projects: {
+    list(): Promise<ProjectMeta[]>;
+    load(id: string): Promise<Project>;
+    save(p: { id: string; doc: OpencadDocument; thumbnail?: string }): Promise<void>;
+    create(p: { name: string; doc: OpencadDocument }): Promise<ProjectMeta>;
+    rename(p: { id: string; name: string }): Promise<{ id: string; name: string }>;
+    delete(id: string): Promise<void>;
+    reveal(id?: string): Promise<void>;
+  };
+  saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
+  on(channel: "menu" | "open-project", fn: (arg: string) => void): () => void;
+}
+
+export const desktop: DesktopApi | undefined = (window as unknown as { opencadDesktop?: DesktopApi }).opencadDesktop;
+
+// ---------------------------------------------------------------- IndexedDB (browser)
 
 const DB = "opencad";
 const STORE = "projects";
@@ -33,7 +56,12 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
   });
 }
 
+const newId = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+// ---------------------------------------------------------------- API
+
 export async function listProjects(): Promise<ProjectMeta[]> {
+  if (desktop) return desktop.projects.list();
   try {
     const all = await tx<Project[]>("readonly", (s) => s.getAll() as IDBRequest<Project[]>);
     return all.map(({ id, name, updatedAt, thumbnail }) => ({ id, name, updatedAt, ...(thumbnail ? { thumbnail } : {}) })).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -43,17 +71,34 @@ export async function listProjects(): Promise<ProjectMeta[]> {
 }
 
 export async function loadProject(id: string): Promise<Project | undefined> {
+  if (desktop) return desktop.projects.load(id);
   return tx<Project | undefined>("readonly", (s) => s.get(id) as IDBRequest<Project | undefined>);
 }
 
+export async function createProject(name: string, doc: OpencadDocument): Promise<ProjectMeta> {
+  if (desktop) return desktop.projects.create({ name, doc });
+  const meta = { id: newId(), name, updatedAt: Date.now() };
+  await tx("readwrite", (s) => s.put({ ...meta, doc }));
+  return meta;
+}
+
 export async function saveProject(p: Project): Promise<void> {
+  if (desktop) return desktop.projects.save({ id: p.id, doc: p.doc, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
   await tx("readwrite", (s) => s.put(p));
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  await tx("readwrite", (s) => s.delete(id));
+/** Renames a project; in the desktop app this renames the file, so the id changes. */
+export async function renameProjectFile(id: string, name: string): Promise<ProjectMeta> {
+  if (desktop) {
+    const r = await desktop.projects.rename({ id, name });
+    return { ...r, updatedAt: Date.now() };
+  }
+  const p = await loadProject(id);
+  if (p) await saveProject({ ...p, name });
+  return { id, name, updatedAt: Date.now() };
 }
 
-export function newProjectId(): string {
-  return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+export async function deleteProject(id: string): Promise<void> {
+  if (desktop) return desktop.projects.delete(id);
+  await tx("readwrite", (s) => s.delete(id));
 }

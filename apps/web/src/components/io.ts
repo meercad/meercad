@@ -2,9 +2,26 @@
 import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@opencad/io";
 import { nextFeatureId } from "@opencad/model";
 import { validateDocument, type SketchConstraint, type SketchEntity } from "@opencad/schema";
+import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, kernel, newProject, openSketch, toast, useApp } from "../store";
 
+const FILTERS: Record<string, { name: string; extensions: string[] }> = {
+  stl: { name: "STL mesh", extensions: ["stl"] },
+  "3mf": { name: "3MF package", extensions: ["3mf"] },
+  step: { name: "STEP model", extensions: ["step", "stp"] },
+  dxf: { name: "DXF drawing", extensions: ["dxf"] },
+  svg: { name: "SVG drawing", extensions: ["svg"] },
+  ocad: { name: "opencad part", extensions: ["ocad"] },
+};
+
+/** Saves a file: a native save dialog on desktop, a browser download otherwise. */
 export function download(name: string, data: BlobPart, type: string): void {
+  if (desktop) {
+    const ext = name.split(".").pop() ?? "";
+    const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+    void desktop.saveFile({ name, data: payload, ...(FILTERS[ext] ? { filters: [FILTERS[ext]!] } : {}) }).then((path) => path && toast(`Saved ${path}`));
+    return;
+  }
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement("a");
   a.href = url;

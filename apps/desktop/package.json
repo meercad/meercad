@@ -1,0 +1,84 @@
+{
+  "name": "opencad-desktop",
+  "productName": "opencad",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Free, open-source parametric CAD",
+  "author": "opencad contributors",
+  "license": "AGPL-3.0-only",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build:main": "node build.mjs",
+    "dev": "node build.mjs && electron . --dev",
+    "start": "node build.mjs && electron .",
+    "package": "pnpm --filter @opencad/web build && pnpm --filter @opencad/mcp build && node build.mjs && electron-builder --mac --dir",
+    "dist": "pnpm --filter @opencad/web build && pnpm --filter @opencad/mcp build && node build.mjs && electron-builder --mac --publish never",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "build": {
+    "appId": "dev.opencad.app",
+    "productName": "opencad",
+    "copyright": "opencad contributors",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      },
+      {
+        "from": "../../packages/mcp/dist/server.js",
+        "to": "mcp/server.js"
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "ocad",
+        "name": "opencad part",
+        "description": "opencad parametric part",
+        "role": "Editor",
+        "mimeType": "application/vnd.opencad+json"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "opencad-${version}-${arch}.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "icon": "build/icon.png",
+      "identity": "-",
+      "notarize": false
+    },
+    "dmg": {
+      "title": "opencad ${version}"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2"
+  }
+}

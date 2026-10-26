@@ -1,42 +1,56 @@
 # opencad (working title)
 
-Free, open-source, parametric CAD in the browser — local-first, no account, with a BYOK AI copilot.
-See [docs/PLAN.md](docs/PLAN.md) for vision, scope and roadmap.
+Free, open-source parametric CAD for makers — runs locally on your Mac, no account, no cloud.
+Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/patterns/mirror/booleans, direct
+push/pull editing, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model for you.
 
-**Status: Phase 0 spike.** Rectangle sketch → extrude → fillet, persistent edge references,
-incremental rebuild in a worker, STL export, share links, AI copilot loop.
+## Download (macOS)
+
+Grab the latest `.dmg` from the [Releases](../../releases) page (`arm64` = Apple Silicon, `x64` = Intel),
+drag **opencad** to Applications. Builds are not notarized yet: on first start choose
+**System Settings → Privacy & Security → Open Anyway**, or run
+`xattr -dr com.apple.quarantine /Applications/opencad.app`.
+
+Every push to `main` publishes a fresh build as the **latest** pre-release; tags `v*` create versioned releases.
+
+## Your files
+
+Projects are plain `.ocad` files in `~/Documents/opencad` — human-readable JSON (see
+[docs/FORMAT.md](docs/FORMAT.md)) that you can version with git, edit by hand or generate with scripts.
+Exchange with other CAD tools via STEP; 3D printing via STL/3MF; laser cutting via DXF/SVG.
+
+## Let Claude drive it (MCP)
+
+Click the plug icon in the top bar, enable *Allow assistants to control opencad* and copy the shown
+configuration into Claude Desktop (Settings → Developer → Edit Config) or run the shown
+`claude mcp add …` command for Claude Code. Tools: `get_guide`, `get_model`, `get_sketch`,
+`apply_ops`, `preview_ops`, `undo`/`redo`, project management, `render_view`, `set_view`,
+`measure`, `export`, `status`. The bridge only listens on `127.0.0.1`.
 
 ## Develop
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173
-pnpm test         # unit + Phase 0 acceptance tests (real OCCT kernel in Node)
-pnpm typecheck
-pnpm build        # static site in apps/web/dist (deploy with public/_headers for COOP/COEP)
+pnpm dev                                   # web app at http://localhost:5173
+pnpm --filter opencad-desktop dev          # desktop shell against the dev server
+pnpm --filter opencad-desktop run dist     # build the .dmg locally
+pnpm test && pnpm typecheck
 ```
-
-Live copilot test (costs API credits): `OPENCAD_LIVE_AI=1 ANTHROPIC_API_KEY=… pnpm test tests/acceptance/ai.test.ts`
 
 ## Layout
 
 | Path | Contents | License |
 |---|---|---|
 | `packages/schema` | Document + Operations-API types and JSON Schema, validation | MIT |
-| `packages/naming` | Persistent references: selector resolution, tag propagation (kernel-agnostic) | MIT |
-| `packages/io` | STL writer/reader, share-link encoding | MIT |
-| `packages/model` | Expressions/params, document store (undo/redo), incremental rebuild engine | AGPL-3.0 |
-| `packages/sketch` | Sketch evaluation (Phase 0: rectangles; PlaneGCS in Phase 1) | AGPL-3.0 |
-| `packages/kernel` | OCCT (WASM) backend, tessellation, worker protocol + client | AGPL-3.0 |
-| `packages/viewport` | Three.js rendering and edge/face picking | AGPL-3.0 |
-| `packages/ai` | BYOK copilot: tool loop with sandbox rebuild | AGPL-3.0 |
-| `apps/web` | The app (Vite, vanilla TS for now) | AGPL-3.0 |
-| `tests/` | Acceptance tests and reference model corpus | — |
+| `packages/naming` | Persistent references: selector resolution, tag propagation | MIT |
+| `packages/io` | STL/3MF/DXF/SVG writers & readers, share links | MIT |
+| `packages/sketch` | PlaneGCS constraint solving, region detection | AGPL-3.0 |
+| `packages/model` | Expressions, document store (undo/redo), incremental rebuild | AGPL-3.0 |
+| `packages/kernel` | OpenCascade (WASM) modelling, tessellation, worker | AGPL-3.0 |
+| `packages/viewport` | Three.js rendering, picking, drag handles | AGPL-3.0 |
+| `packages/ai` | BYOK copilot loop and the modelling guide | AGPL-3.0 |
+| `packages/mcp` | MCP server bridging assistants to the app | AGPL-3.0 |
+| `apps/web` | The app (React) | AGPL-3.0 |
+| `apps/desktop` | Electron shell for macOS | AGPL-3.0 |
 
-## How references survive edits
-
-Every face is tagged by the feature that created it (`ex1.end_cap`, `ex1.side[sk1.r1.top]`); fillets
-carry tags forward through OCCT's history (`Modified`/`Generated`) and name their own faces
-(`fi1.round[ex1.end_cap|ex1.side[sk1.r1.top]]`). Features reference edges only through selectors such as
-`{ "edge": ["ex1.end_cap", "ex1.side[sk1.r1.top]"] }`. A selector that no longer matches exactly is an
-error on the feature — never a silent re-match.
+See [docs/PLAN.md](docs/PLAN.md) for the roadmap.

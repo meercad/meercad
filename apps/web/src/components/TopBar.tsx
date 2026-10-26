@@ -2,6 +2,7 @@ import { ChevronDown, Download, FileDown, House, Moon, Redo2, Share2, Sparkles, 
 import { useEffect, useRef, useState } from "react";
 import { goHome, redo, renameProject, undo, useApp } from "../store";
 import { exportMesh, exportSketch, exportStep, saveFile, shareLink } from "./io";
+import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
 import { showMenu } from "./Menu";
 
@@ -52,12 +53,12 @@ export function TopBar() {
         { label: `${s.id} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
       ]),
       ...(sketches.length ? (["sep"] as const) : []),
-      { label: "opencad file (.ocad)", icon: <Download />, onClick: saveFile },
+      { label: "opencad file (.ocad)", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
     ]);
   };
 
   return (
-    <header className="topbar">
+    <header className={`topbar ${desktop ? "desktop" : ""}`}>
       <button className="logo" onClick={goHome} title="All projects">
         <Logo />
         opencad
@@ -71,7 +72,9 @@ export function TopBar() {
         onBlur={() => renameProject(name)}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
-      <span className="save-state">{saveState === "saved" ? "Saved in this browser" : saveState === "saving" ? "Saving…" : "Unsaved changes"}</span>
+      <span className="save-state" title={desktop ? "Projects are .ocad files in Documents/opencad" : "Projects are stored in this browser"}>
+        {saveState === "saved" ? (desktop ? "Saved" : "Saved in this browser") : saveState === "saving" ? "Saving…" : "Unsaved changes"}
+      </span>
       <div className="spacer" />
       <button className="icon-btn" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
         <Undo2 />
@@ -90,9 +93,11 @@ export function TopBar() {
       <button className="btn" ref={exportBtn} onClick={openExport}>
         <Download /> <span className="btn-label">Export</span> <ChevronDown />
       </button>
-      <button className="btn" onClick={() => void shareLink()} title="Copy a link that contains the whole model">
-        <Share2 /> <span className="btn-label">Share</span>
-      </button>
+      {desktop ? null : (
+        <button className="btn" onClick={() => void shareLink()} title="Copy a link that contains the whole model">
+          <Share2 /> <span className="btn-label">Share</span>
+        </button>
+      )}
       <button className={`btn ${copilot ? "primary" : ""}`} onClick={() => useApp.setState((s) => ({ copilotOpen: !s.copilotOpen }))} title="AI copilot (bring your own key)">
         <Sparkles /> <span className="btn-label">Copilot</span>
       </button>

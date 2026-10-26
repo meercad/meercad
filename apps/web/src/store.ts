@@ -6,7 +6,7 @@ import { emptyDocument, type DocOp, type Feature, type FeatureOp, type OpencadDo
 import { planeSpecForPick } from "./lib/topology";
 import type { Pick, Viewport } from "@opencad/viewport";
 import { draftFeature, draftProblem } from "./lib/features";
-import { listProjects, loadProject, newProjectId, saveProject, type ProjectMeta } from "./lib/persistence";
+import { createProject, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
 
 export interface DialogState {
@@ -342,14 +342,14 @@ export async function openProject(id: string): Promise<void> {
     return;
   }
   loadDoc(p.doc, { id: p.id, name: p.name, updatedAt: p.updatedAt });
-  history.replaceState(null, "", `#/p/${p.id}`);
+  history.replaceState(null, "", `#/p/${encodeURIComponent(p.id)}`);
 }
 
 export async function newProject(doc: OpencadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
-  const meta = { id: newProjectId(), name, updatedAt: Date.now() };
-  await saveProject({ ...meta, doc });
+  await flushSave();
+  const meta = await createProject(name, doc);
   loadDoc(doc, meta);
-  history.replaceState(null, "", `#/p/${meta.id}`);
+  history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
 }
 
 function loadDoc(doc: OpencadDocument, meta: ProjectMeta): void {
@@ -379,11 +379,17 @@ export function goHome(): void {
   history.replaceState(null, "", "#/");
 }
 
-export function renameProject(name: string): void {
+export async function renameProject(name: string): Promise<void> {
   const p = get().project;
-  if (!p || !name.trim()) return;
-  set({ project: { ...p, name: name.trim() } });
-  scheduleSave();
+  if (!p || !name.trim() || name.trim() === p.name) return;
+  await flushSave();
+  try {
+    const meta = await renameProjectFile(p.id, name.trim());
+    set({ project: { ...p, ...meta } });
+    history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
+  } catch (e) {
+    toast(`Could not rename: ${e instanceof Error ? e.message : String(e)}`, "error");
+  }
 }
 
 let saveTimer: number | undefined;

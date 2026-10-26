@@ -51,7 +51,7 @@ export function initBridge(): void {
   } catch {
     on = false;
   }
-  if (on || (window as { opencadDesktop?: unknown }).opencadDesktop) setBridgeEnabled(true);
+  if (on) setBridgeEnabled(true);
 }
 
 function connect(): void {
