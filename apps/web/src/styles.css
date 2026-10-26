@@ -528,7 +528,7 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .dialog, .measure-card, .sketch-hud { top: var(--top); left: var(--left); }
 .hint-banner, .ai-activity { top: var(--top); }
 .status-pill { left: var(--left); }
-.update-banner { top: var(--top); }
+.update-banner { top: auto; bottom: 64px; max-height: calc(100vh - 140px); overflow-y: auto; }
 .topbar .save-state { display: none; }
 @media (max-width: 1180px) { .topbar .doc-name { max-width: 120px; } }
 
@@ -684,3 +684,5 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 ul.update-notes { margin: 6px 0 2px; padding-left: 18px; color: var(--text-2); }
 ul.update-notes li { margin: 1px 0; }
 .update-hint { font-size: 12px; margin-top: 4px; }
+/* layout defaults for elements rendered outside .app (banners, overlays) */
+:root { --top: 88px; --left: 14px; --rail: 84px; }
