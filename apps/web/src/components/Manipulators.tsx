@@ -9,7 +9,7 @@ import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { evaluate, nextFeatureId } from "@leocad/model";
 import { asArray, type EdgeSelector, type Expr, type Feature } from "@leocad/schema";
 import type { Handle, Pick, Viewport } from "@leocad/viewport";
-import { edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
+import { cylinderAnchor, edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
 import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
 import { InlineInput } from "./InlineValues";
@@ -125,7 +125,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       return moveHandles(c, [0, 0, 0], (i, v) => updateDraft((g) => ({ ...g, translate: [0, 1, 2].map((j) => (j === i ? v : 0)) as [Expr, Expr, Expr] }) as Feature), (v) => finish(v), () => startDraft({ id: nextFeatureId(currentDoc(), "transform"), op: "transform", bodies: [bodyId], translate: [0, 0, 0] }));
     }
     if (sel.length === 1 && sel[0]!.kind === "face") {
-      const hole = holeHandle(out, sel[0]!.tags);
+      const hole = holeHandle(out, sel[0]! as Extract<Pick, { kind: "face" }>);
       if (hole) return [hole];
     }
     if (sel.length === 1 && sel[0]!.kind === "face" && sel[0]!.normal) {
@@ -205,9 +205,9 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
    * dragging it changes the circle's diameter/radius dimension, the variable behind it, or the
    * circle itself when it has no dimension.
    */
-  function holeHandle(out: NonNullable<typeof base>, tags: string[] | undefined): Handle | null {
+  function holeHandle(out: NonNullable<typeof base>, pick: Extract<Pick, { kind: "face" }>): Handle | null {
     holeLinks.delete("hole");
-    for (const tag of tags ?? []) {
+    for (const tag of pick.tags ?? []) {
       const m = /^[\w-]+\.side\[([\w-]+)\.([\w-]+)\]/.exec(tag);
       if (!m) continue;
       const [, sketchId, curveId] = m as unknown as [string, string, string];
@@ -217,7 +217,11 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const curve = view?.curves.find((c) => c.id === curveId);
       if (!sk || !view || curve?.kind !== "circle") continue;
       const { origin: o, u, v } = view.frame;
-      const center = [0, 1, 2].map((i) => o[i]! + u[i]! * curve.center[0] + v[i]! * curve.center[1]) as [number, number, number];
+      // Measure the selected wall itself: pattern and mirror copies sit elsewhere than the sketch circle.
+      const mesh = out.meshes.find((x) => x.bodyId === pick.bodyId);
+      const cyl = mesh ? cylinderAnchor(mesh, pick.face, view.frame.normal, u) : null;
+      const center = cyl?.top ?? ([0, 1, 2].map((i) => o[i]! + u[i]! * curve.center[0] + v[i]! * curve.center[1]) as [number, number, number]);
+      const radial = cyl?.dir ?? u;
       const dim = sk.constraints.find((c) => (c.type === "radius" || c.type === "diameter") && c.curve === curveId) as
         | { id: string; type: "radius" | "diameter"; value: Expr }
         | undefined;
@@ -259,7 +263,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       return {
         id: "hole",
         origin: center,
-        dir: u,
+        dir: radial,
         value: curve.radius,
         min: 0.05,
         onStart: () => void write(curve.radius, false),

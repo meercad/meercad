@@ -16,6 +16,12 @@ export function McpButton() {
     void desktop?.info().then((i) => setCmd(i.mcpCommand));
     return () => void off();
   }, []);
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [open]);
   const config = JSON.stringify({ mcpServers: { leocad: cmd } }, null, 2);
   return (
     <>

@@ -81,3 +81,55 @@ export function profileAnchor(out: RebuildOutput, profile: ProfileRef): { origin
   const r = regions.reduce((a, b) => (b.area > a.area ? b : a));
   return { origin: toWorld(sk.frame, r.sample), normal: sk.frame.normal };
 }
+
+/**
+ * Axis and rim of a cylindrical face (hole wall or boss), measured on the tessellation so it is
+ * right for pattern and mirror copies too. `prefer` orients the axis (e.g. the sketch normal) and
+ * picks the radial direction closest to `radial`.
+ */
+export function cylinderAnchor(m: BodyMesh, face: number, prefer: Vec3, radial: Vec3): { top: Vec3; dir: Vec3; radius: number } | null {
+  const pts: Vec3[] = [];
+  const nrm: Vec3[] = [];
+  for (let g = 0; g < m.faceRanges.length; g += 3) {
+    if (m.faceRanges[g + 2] !== face) continue;
+    for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
+      const i = m.indices[t]! * 3;
+      pts.push([m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!]);
+      nrm.push([m.normals[i]!, m.normals[i + 1]!, m.normals[i + 2]!]);
+    }
+  }
+  if (pts.length < 6) return null;
+  // On a cylinder every normal is perpendicular to the axis: the axis is the cross of two of them.
+  let axis: Vec3 = [0, 0, 0];
+  let best = 0;
+  const step = Math.max(1, Math.floor(nrm.length / 24));
+  for (let i = 0; i < nrm.length; i += step) {
+    for (let j = i + step; j < nrm.length; j += step) {
+      const a = nrm[i]!, b = nrm[j]!;
+      const c: Vec3 = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+      const l = Math.hypot(...c);
+      if (l > best) {
+        best = l;
+        axis = c;
+      }
+    }
+  }
+  if (best < 0.2) return null;
+  axis = norm(axis);
+  if (axis[0] * prefer[0] + axis[1] * prefer[1] + axis[2] * prefer[2] < 0) axis = [-axis[0], -axis[1], -axis[2]];
+  const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  // Axis point: mean of the points with their axial component removed (exact for full cylinders).
+  const c = pts.reduce<Vec3>((s, p) => [s[0] + p[0] / pts.length, s[1] + p[1] / pts.length, s[2] + p[2] / pts.length], [0, 0, 0]);
+  let tMax = -Infinity;
+  let r = 0;
+  for (const p of pts) {
+    const d: Vec3 = [p[0] - c[0], p[1] - c[1], p[2] - c[2]];
+    const t = dot(d, axis);
+    tMax = Math.max(tMax, t);
+    r += Math.hypot(d[0] - axis[0] * t, d[1] - axis[1] * t, d[2] - axis[2] * t) / pts.length;
+  }
+  const along = dot(radial, axis);
+  let dir: Vec3 = [radial[0] - axis[0] * along, radial[1] - axis[1] * along, radial[2] - axis[2] * along];
+  if (Math.hypot(...dir) < 1e-6) dir = Math.abs(axis[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+  return { top: [c[0] + axis[0] * tMax, c[1] + axis[1] * tMax, c[2] + axis[2] * tMax], dir: norm(dir), radius: r };
+}
