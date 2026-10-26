@@ -1,5 +1,5 @@
 /**
- * The tool rail on the left of the viewport. Like Shapr3D's main menu, tools sit in a few groups that
+ * The tool rail on the left of the viewport. Tools sit in a few groups that
  * open as a flyout; single tools are direct buttons. Every entry shows its shortcut.
  */
 import {

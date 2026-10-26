@@ -125,7 +125,7 @@ export function ViewportView() {
     const onKey = (e: KeyboardEvent) => {
       if (!boxRef.current) return;
       const k = e.key.toLowerCase();
-      // Shapr3D: while box-selecting, F = faces only, E = edges only, Tab cycles.
+      // While box-selecting, F = faces only, E = edges only, Tab cycles.
       if (k === "f" || k === "e" || k === "tab") {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -171,7 +171,7 @@ export function ViewportView() {
     const onDbl = (e: MouseEvent) => {
       if (useApp.getState().sketchId || useApp.getState().dialog) return;
       const pick = vp.pick(e.clientX, e.clientY, DEFAULT_KINDS);
-      // Shapr3D: double-clicking a face selects its whole part; other entities open their feature.
+      // Double-clicking a face selects its whole part; other entities open their feature.
       if (pick?.kind === "face") {
         const m = useApp.getState().output?.meshes.find((x) => x.bodyId === pick.bodyId);
         if (m) {
@@ -220,7 +220,7 @@ export function ViewportView() {
     }
     if (s.dialog) {
       if (pick && s.dialog.field) dialogPick?.(pick, additive);
-      // Clicking empty space accepts the tool (Shapr3D behaviour) unless a selection field is waiting.
+      // Clicking empty space accepts the tool unless a selection field is waiting.
       else if (!pick && !s.dialog.field) commitDialog();
       return;
     }

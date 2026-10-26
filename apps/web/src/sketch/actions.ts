@@ -75,7 +75,7 @@ export function applyConstraint(type: string): void {
     return;
   }
   if (type === "hv") {
-    // Shapr3D-style: snap each line to whichever axis it is closer to.
+    // Snap each line to whichever axis it is closer to.
     const solvedAt = (pid: string): [number, number] => {
       const e = sk.entities.find((x) => x.id === pid);
       return e?.type === "point" ? [e.x, e.y] : [0, 0];

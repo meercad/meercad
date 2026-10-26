@@ -9,7 +9,7 @@
 
 Ein kostenloser, quelloffener, parametrischer CAD-Dienst im Browser — für Maker, Laser- und 3D-Druck-Nutzer. Ohne Installation, ohne Account, ohne Abo. Mit eingebautem AI-Copilot.
 
-**Abgrenzung:** Wir bauen *nicht* Fusion 360 nach. Wir bauen den Teil, den 80 % der Maker täglich nutzen — mit besserer UX als FreeCAD und ohne Lock-in.
+**Abgrenzung:** Wir bauen keine Profi-Suite mit tausend Funktionen. Wir bauen den Teil, den 80 % der Maker täglich nutzen — mit einer UX, die Spaß macht, und ohne Lock-in.
 
 ### Leitprinzipien
 
@@ -93,7 +93,6 @@ Ein kostenloser, quelloffener, parametrischer CAD-Dienst im Browser — für Mak
 - **build123d, CadQuery** — Feature-API und Selektor-Design
 - **SolveSpace, Dune 3D** — Skizzier-UX und Constraint-Handling
 - **FreeCAD (TNP-Lösung ab 1.0)** — Lehrstück zu persistenten Referenzen
-- **Onshape FeatureScript** — Referenz für eine Feature-Sprache
 
 ---
 

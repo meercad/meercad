@@ -1,5 +1,5 @@
 /**
- * Direct manipulation (Shapr3D-style): drag arrows on the selection to push/pull faces, extrude
+ * Direct manipulation: drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
 import { ArrowUpFromLine, EyeOff, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
@@ -11,7 +11,7 @@ import { asArray, type EdgeSelector, type Expr, type Feature } from "@leocad/sch
 import type { Handle, Pick, Viewport } from "@leocad/viewport";
 import { edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
-import { cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
+import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
 import { InlineInput } from "./InlineValues";
 import { Kbd } from "./Kbd";
 
@@ -36,7 +36,15 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 
   useEffect(() => {
     const label = (id: string, v: number) =>
-      id === "edge" ? (v >= 0 ? `Fillet R ${+v.toFixed(3)} mm` : `Chamfer ${+(-v).toFixed(3)} mm`) : id === "fillet" ? `R ${+v.toFixed(3)} mm` : `${+v.toFixed(3)} mm`;
+      id === "edge"
+        ? v >= 0
+          ? `Fillet R ${+v.toFixed(3)} mm`
+          : `Chamfer ${+(-v).toFixed(3)} mm`
+        : id === "fillet"
+          ? `R ${+v.toFixed(3)} mm`
+          : id === "hole"
+            ? `Ø ${+(2 * v).toFixed(3)} mm`
+            : `${+v.toFixed(3)} mm`;
     viewport.onHandleDrag = (h, v, screen) => setTip(h && screen ? { x: screen[0], y: screen[1], text: label(h.id, v) } : null);
     return () => {
       viewport.onHandleDrag = null;
@@ -113,6 +121,10 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       if (!c) return [];
       return moveHandles(c, [0, 0, 0], (i, v) => updateDraft((g) => ({ ...g, translate: [0, 1, 2].map((j) => (j === i ? v : 0)) as [Expr, Expr, Expr] }) as Feature), (v) => finish(v), () => startDraft({ id: nextFeatureId(currentDoc(), "transform"), op: "transform", bodies: [bodyId], translate: [0, 0, 0] }));
     }
+    if (sel.length === 1 && sel[0]!.kind === "face") {
+      const hole = holeHandle(out, sel[0]!.tags);
+      if (hole) return [hole];
+    }
     if (sel.length === 1 && sel[0]!.kind === "face" && sel[0]!.normal) {
       const p = sel[0]!;
       const m = out.meshes.find((x) => x.bodyId === p.bodyId);
@@ -183,6 +195,57 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       ];
     }
     return [];
+  }
+
+  /**
+   * The round wall of a hole or boss (a face extruded from a sketch circle) gets a radial arrow:
+   * dragging it changes the circle's diameter/radius dimension, the variable behind it, or the
+   * circle itself when it has no dimension.
+   */
+  function holeHandle(out: NonNullable<typeof base>, tags: string[] | undefined): Handle | null {
+    for (const tag of tags ?? []) {
+      const m = /^[\w-]+\.side\[([\w-]+)\.([\w-]+)\]/.exec(tag);
+      if (!m) continue;
+      const [, sketchId, curveId] = m as unknown as [string, string, string];
+      const doc = currentDoc();
+      const sk = doc.features.find((f): f is Extract<Feature, { op: "sketch" }> => f.id === sketchId && f.op === "sketch");
+      const view = out.report.sketches.find((s) => s.id === sketchId);
+      const curve = view?.curves.find((c) => c.id === curveId);
+      if (!sk || !view || curve?.kind !== "circle") continue;
+      const { origin: o, u, v } = view.frame;
+      const center = [0, 1, 2].map((i) => o[i]! + u[i]! * curve.center[0] + v[i]! * curve.center[1]) as [number, number, number];
+      const dim = sk.constraints.find((c) => (c.type === "radius" || c.type === "diameter") && c.curve === curveId) as
+        | { id: string; type: "radius" | "diameter"; value: Expr }
+        | undefined;
+      const params = doc.params;
+      const write = (r: number, quiet: boolean) => {
+        const run = quiet ? applyQuiet : apply;
+        const value = +(dim?.type === "diameter" ? 2 * r : r).toFixed(3);
+        if (dim && typeof dim.value === "string" && dim.value in params) {
+          const old = params[dim.value];
+          return run({ type: "set_param", name: dim.value, expr: typeof old === "string" && /mm\b/.test(old) ? `${value} mm` : value });
+        }
+        const latest = currentDoc().features.find((f) => f.id === sketchId) as typeof sk;
+        return run({
+          type: "edit_feature",
+          id: sketchId,
+          patch: dim
+            ? { constraints: latest.constraints.map((c) => (c.id === dim.id ? ({ ...c, value } as typeof c) : c)) }
+            : { entities: latest.entities.map((e) => (e.id === curveId && e.type === "circle" ? { ...e, radius: +r.toFixed(3) } : e)) },
+        });
+      };
+      return {
+        id: "hole",
+        origin: center,
+        dir: u,
+        value: curve.radius,
+        min: 0.05,
+        onStart: () => void write(curve.radius, false),
+        onDrag: (r) => void write(r, true),
+        onEnd: () => undefined,
+      };
+    }
+    return null;
   }
 
   function moveHandles(origin: [number, number, number], t: [number, number, number], drag: (axis: number, v: number) => void, end: (v: number) => void, start?: () => void): Handle[] {
@@ -274,7 +337,7 @@ function QuickActions({ viewport, selection }: { viewport: Viewport; selection: 
   );
 }
 
-/** The value at each drag arrow; click it to type an exact value (like Shapr3D's dimension labels). */
+/** The value at each drag arrow; click it to type an exact value. */
 function HandleLabels({ viewport }: { viewport: Viewport }) {
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const [typing, setTyping] = useState<string | null>(null);
@@ -290,16 +353,19 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
       {handles.map((h) => {
         const s = viewport.handleTipScreen(h.id);
         if (!s) return null;
-        const text = h.id === "edge" ? "drag: out = fillet, in = chamfer" : `${+h.value.toFixed(3)} mm`;
+        // Hole handles carry the radius but show and take the diameter.
+        const scale = h.id === "hole" ? 2 : 1;
+        const shown = +(h.value * scale).toFixed(3);
+        const text = h.id === "edge" ? "drag: out = fillet, in = chamfer" : `${h.id === "hole" ? "Ø " : ""}${shown} mm`;
         return (
           <div key={h.id} className="value-chip handle-chip" style={{ left: s[0] + 16, top: s[1] - 16 }} onPointerDown={(e) => e.stopPropagation()}>
             {typing === h.id ? (
               <InlineInput
-                value={+h.value.toFixed(3)}
+                value={shown}
                 onDone={(v) => {
                   setTyping(null);
                   if (v === null) return;
-                  const n = num(v, NaN);
+                  const n = num(v, NaN) / scale;
                   if (!Number.isFinite(n)) return;
                   h.onStart?.();
                   h.onDrag(n);

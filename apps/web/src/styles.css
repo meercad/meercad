@@ -534,7 +534,7 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 
 .view-controls .mode-btn { width: auto; padding: 0 8px; gap: 5px; font-size: 11.5px; }
 
-/* sketch constraint palette (right side, like Shapr3D) */
+/* sketch constraint palette (right side) */
 .constraint-palette { position: absolute; top: calc(var(--top) + 178px); right: 14px; width: 172px; max-height: calc(100% - var(--top) - 250px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 6px; border-radius: 16px; z-index: 4;
   background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); }
 .constraint-palette .palette-title { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 4px 8px 6px; }
@@ -577,7 +577,7 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .ask-actions .btn.danger .kbd, .ask-actions .btn.primary .kbd { background: rgb(255 255 255 / 0.2); color: inherit; border-color: transparent; }
 @keyframes ask-pop { from { opacity: 0; transform: scale(0.94) translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } }
-/* tool rail (left, grouped like Shapr3D's main menu) */
+/* tool rail (left, grouped tools with flyouts) */
 .app { --rail: 84px; }
 .toolbar.rail { position: absolute; top: var(--top); left: var(--left); width: 72px; max-width: none; max-height: calc(100% - var(--top) - 64px); overflow: visible; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 6px; border-radius: 20px; z-index: 12;
   background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); }
