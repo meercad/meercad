@@ -86,7 +86,7 @@ export function Home() {
           {EXAMPLES.map((ex) => (
             <button className="card" key={ex.name} onClick={() => void newProject(structuredClone(ex.doc), ex.name)}>
               <div className="thumb">
-                <Box size={32} />
+                <img src={ex.thumbnail} alt="" />
               </div>
               <div className="meta">
                 <div style={{ minWidth: 0 }}>

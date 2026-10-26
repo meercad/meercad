@@ -3,6 +3,7 @@
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
 import { ArrowUpFromLine, EyeOff, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
+import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { evaluate, nextFeatureId } from "@leocad/model";
@@ -233,31 +234,32 @@ function QuickActions({ viewport, selection }: { viewport: Viewport; selection: 
   if (!screen) return null;
   const meshes = useApp.getState().output?.meshes ?? [];
   const kinds = new Set(selection.map((p) => p.kind));
-  const actions: { icon: ReactNode; label: string; kbd?: string; run: () => void }[] = [];
+  const actions: { icon: ReactNode; label: string; kbd?: string | undefined; run: () => void }[] = [];
+  usePrefs((s) => s.keys);
   const partIds = new Set(selection.map((p) => (p.kind === "face" ? p.bodyId : "")));
   const wholePart = selection.length > 1 && partIds.size === 1 && !partIds.has("") && meshes.find((m) => m.bodyId === [...partIds][0])?.faceTags.length === selection.length;
   if (wholePart) {
-    actions.push({ icon: <Move3d />, label: "Move", kbd: "M", run: () => startFeature("transform") });
-    actions.push({ icon: <SquareSplitHorizontal />, label: "Mirror", kbd: "I", run: () => startFeature("mirror") });
-    actions.push({ icon: <Grid3x3 />, label: "Pattern", kbd: "L", run: () => startFeature("linear_pattern") });
+    actions.push({ icon: <Move3d />, label: "Move", kbd: keyFor("transform"), run: () => startFeature("transform") });
+    actions.push({ icon: <SquareSplitHorizontal />, label: "Mirror", kbd: keyFor("mirror"), run: () => startFeature("mirror") });
+    actions.push({ icon: <Grid3x3 />, label: "Pattern", kbd: keyFor("linear_pattern"), run: () => startFeature("linear_pattern") });
     actions.push({ icon: <EyeOff />, label: "Hide", run: () => toggleHidden([...partIds][0]!) });
   } else if (kinds.size === 1 && kinds.has("face")) {
     const plane = planeSpecForPick(last, meshes);
-    if (plane && selection.length === 1) actions.push({ icon: <Pencil />, label: "Sketch", kbd: "S", run: () => startSketch(plane) });
+    if (plane && selection.length === 1) actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch(plane) });
     if (selection.length === 1 && last.kind === "face" && last.normal) actions.push({ icon: <ArrowUpFromLine />, label: "Push/Pull", kbd: "drag", run: () => startFeature("extrude") });
-    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: "F", run: () => startFeature("fillet") });
-    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: "C", run: () => startFeature("chamfer") });
-    actions.push({ icon: <Shell />, label: "Shell", kbd: "H", run: () => startFeature("shell") });
+    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: keyFor("fillet"), run: () => startFeature("fillet") });
+    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
+    actions.push({ icon: <Shell />, label: "Shell", kbd: keyFor("shell"), run: () => startFeature("shell") });
   } else if (kinds.size === 1 && kinds.has("edge")) {
-    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: "F", run: () => startFeature("fillet") });
-    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: "C", run: () => startFeature("chamfer") });
+    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: keyFor("fillet"), run: () => startFeature("fillet") });
+    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
   } else if (kinds.has("region") || kinds.has("sketch_curve")) {
-    actions.push({ icon: <ArrowUpFromLine />, label: "Extrude", kbd: "E", run: () => startFeature("extrude") });
-    actions.push({ icon: <Rotate3d />, label: "Revolve", kbd: "R", run: () => startFeature("revolve") });
+    actions.push({ icon: <ArrowUpFromLine />, label: "Extrude", kbd: keyFor("extrude"), run: () => startFeature("extrude") });
+    actions.push({ icon: <Rotate3d />, label: "Revolve", kbd: keyFor("revolve"), run: () => startFeature("revolve") });
   } else if (kinds.has("plane") && selection.length === 1 && last.kind === "plane") {
-    actions.push({ icon: <Pencil />, label: "Sketch", kbd: "S", run: () => startSketch({ ref: last.planeId }) });
+    actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch({ ref: last.planeId }) });
   }
-  if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: "Shift+M", run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
+  if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: keyFor("measure"), run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
   if (!actions.length) return null;
   return (
     <div className="quick-actions" style={{ left: screen[0] + 18, top: screen[1] + 18 }} onPointerDown={(e) => e.stopPropagation()}>

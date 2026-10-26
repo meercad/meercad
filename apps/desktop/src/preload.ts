@@ -14,6 +14,12 @@ const api = {
     delete: (id: string) => ipcRenderer.invoke("projects:delete", id),
     reveal: (id?: string) => ipcRenderer.invoke("projects:reveal", id),
   },
+  storage: {
+    status: () => ipcRenderer.invoke("storage:status"),
+    choose: () => ipcRenderer.invoke("storage:choose"),
+    count: () => ipcRenderer.invoke("storage:count"),
+    set: (p: { dir: string; move: boolean }) => ipcRenderer.invoke("storage:set", p),
+  },
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
   updates: {
     check: () => ipcRenderer.invoke("update:check"),

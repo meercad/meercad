@@ -56,7 +56,6 @@ export function TopBar() {
   const openMore = () => {
     const r = moreBtn.current!.getBoundingClientRect();
     showMenu(r.right - 240, r.bottom + 6, [
-      { label: "All projects", icon: <House />, onClick: goHome },
       { label: "Settings…", icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("leocad:settings")) },
       { label: "Help & guides", icon: <CircleHelp />, onClick: () => window.dispatchEvent(new Event("leocad:help")) },
       { label: "Keyboard shortcuts", icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) },
@@ -68,6 +67,9 @@ export function TopBar() {
     <header className={`topbar ${desktop ? "desktop" : ""}`}>
       <button className={`icon-btn side-toggle ${sideOpen ? "active" : ""}`} onClick={() => toggleSide()} title={`${sideOpen ? "Hide" : "Show"} history, parts and variables (⌘⌥H)`}>
         <PanelLeft />
+      </button>
+      <button className="icon-btn" onClick={goHome} title="All projects">
+        <House />
       </button>
       <button className="logo" onClick={goHome} title={`All projects — ${saveState === "saved" ? "saved" : saveState === "saving" ? "saving…" : "unsaved changes"}`}>
         <Logo />

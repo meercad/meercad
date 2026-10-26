@@ -6,6 +6,8 @@ import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
 import { MenuHost } from "./components/Menu";
 import { AskHost } from "./components/Ask";
+import { Settings } from "./components/Settings";
+import { FirstRun } from "./components/FirstRun";
 import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Tour, tourDone } from "./components/Tour";
@@ -18,7 +20,8 @@ import { importFile } from "./components/io";
 import { initBridge } from "./lib/mcpBridge";
 import { desktop } from "./lib/persistence";
 import { saveFile } from "./components/io";
-import { FEATURES } from "./lib/features";
+import { actionFor, MODEL_ACTIONS, type ModelAction } from "./lib/keymap";
+import type { FeatureOp } from "@leocad/schema";
 import { toggleSide } from "./store";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
@@ -32,8 +35,32 @@ try {
   // default theme
 }
 
-/** Shapr3D view numbering: 1 reset/iso, 2 front, 3 back, 4 top, 5 bottom, 6 right, 7 left. */
-const VIEW_KEYS: Record<string, StandardView> = { "1": "iso", "2": "front", "3": "back", "4": "top", "5": "bottom", "6": "right", "7": "left" };
+/** Runs a keyboard action from the active shortcut preset (see lib/keymap). */
+function runModelAction(action: ModelAction): void {
+  const s = useApp.getState();
+  const vp = getViewport();
+  const hovered = vp?.hovered ?? null;
+  if (action.startsWith("view.")) return vp?.setView(action.slice(5) as StandardView);
+  switch (action) {
+    case "palette":
+      return void window.dispatchEvent(new Event("leocad:palette"));
+    case "fit":
+      return vp?.fit();
+    case "normal":
+      if (hovered?.kind === "face" && hovered.normal) vp?.viewFrom(hovered.normal);
+      return;
+    case "measure":
+      return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
+    case "sketch":
+      if (hovered && (hovered.kind === "plane" || (hovered.kind === "face" && hovered.normal))) {
+        const spec = planeSpecForPick(hovered, s.output?.meshes ?? []);
+        if (spec) return startSketch(spec);
+      }
+      return startFeature("sketch");
+    default:
+      return startFeature(action as FeatureOp);
+  }
+}
 
 async function route(): Promise<void> {
   const hash = location.hash;
@@ -50,7 +77,11 @@ async function route(): Promise<void> {
     return;
   }
   const m = /^#\/p\/(.+)$/.exec(hash);
-  if (m) await openProject(decodeURIComponent(m[1]!));
+  const s = useApp.getState();
+  if (m) {
+    const id = decodeURIComponent(m[1]!);
+    if (s.screen !== "editor" || s.project?.id !== id) await openProject(id);
+  } else if (s.screen === "editor") goHome();
 }
 
 export function App() {
@@ -67,6 +98,12 @@ export function App() {
     const open = () => setGuide((g) => !g);
     window.addEventListener("leocad:help", open);
     return () => window.removeEventListener("leocad:help", open);
+  }, []);
+  useEffect(() => {
+    // Back/forward and pasted links move between projects and home.
+    const onHash = () => void route();
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
   useEffect(() => {
     void route();
@@ -121,12 +158,12 @@ export function App() {
         } else if (k === "o") {
           e.preventDefault();
           void importFile();
-        } else if (VIEW_KEYS[k]) {
-          e.preventDefault();
-          getViewport()?.setView(VIEW_KEYS[k]!);
-        } else if (k === "f") {
-          e.preventDefault();
-          window.dispatchEvent(new Event("leocad:palette"));
+        } else {
+          const action = actionFor(e, MODEL_ACTIONS);
+          if (action) {
+            e.preventDefault();
+            runModelAction(action);
+          }
         }
         return;
       }
@@ -145,23 +182,11 @@ export function App() {
         return;
       }
       if (e.key === "Enter" && s.selectedFeature) return editFeature(s.selectedFeature);
-      const k = e.key.toLowerCase();
-      if (k === "x") return window.dispatchEvent(new Event("leocad:palette"));
-      const hovered = getViewport()?.hovered ?? null;
-      if (e.key === " " && hovered?.kind === "face" && hovered.normal) {
+      const action = actionFor(e, MODEL_ACTIONS);
+      if (action) {
         e.preventDefault();
-        return getViewport()?.viewFrom(hovered.normal);
+        runModelAction(action);
       }
-      if (k === "s" && hovered && (hovered.kind === "plane" || (hovered.kind === "face" && hovered.normal))) {
-        const spec = planeSpecForPick(hovered, s.output?.meshes ?? []);
-        if (spec) return startSketch(spec);
-      }
-      if (k === "m" && e.shiftKey) return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
-      if (k === "z") return getViewport()?.fit();
-      for (const [op, meta] of Object.entries(FEATURES)) {
-        if (meta.shortcut?.toLowerCase() === k) return startFeature(op as keyof typeof FEATURES);
-      }
-      if (VIEW_KEYS[k]) getViewport()?.setView(VIEW_KEYS[k]!);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -203,6 +228,8 @@ export function App() {
       {tour && screen === "editor" ? <Tour onClose={() => setTour(false)} /> : null}
       <UpdateBanner />
       <Toasts />
+      <Settings onShortcuts={() => setHelp(true)} />
+      {desktop ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />
     </>

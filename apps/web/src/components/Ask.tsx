@@ -23,8 +23,8 @@ function ask(r: Omit<Request, "resolve">): Promise<string | null> {
   });
 }
 
-export async function askConfirm(o: { title: string; message?: string; confirmLabel?: string; danger?: boolean }): Promise<boolean> {
-  const r = await ask({ title: o.title, ...(o.message ? { message: o.message } : {}), confirmLabel: o.confirmLabel ?? "OK", cancelLabel: "Cancel", danger: o.danger ?? false });
+export async function askConfirm(o: { title: string; message?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean }): Promise<boolean> {
+  const r = await ask({ title: o.title, ...(o.message ? { message: o.message } : {}), confirmLabel: o.confirmLabel ?? "OK", cancelLabel: o.cancelLabel ?? "Cancel", danger: o.danger ?? false });
   return r !== null;
 }
 

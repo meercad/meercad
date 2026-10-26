@@ -1,13 +1,13 @@
 /**
  * leocad desktop shell. Serves the web app from an app:// origin (with the cross-origin isolation
- * headers it needs), stores projects as plain .leocad files in ~/Documents/leocad and exposes a
- * small, explicit file API to the renderer.
+ * headers it needs), stores projects as plain .leocad files in a folder the user picks on first
+ * launch (default ~/Documents/leocad) and exposes a small, explicit file API to the renderer.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, type MenuItemConstructorOptions } from "electron";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, extname, join, normalize, sep } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join, normalize, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { canSelfUpdate, checkForUpdate, installUpdate, type UpdateInfo } from "./updater";
 
@@ -15,7 +15,22 @@ const DEV = process.argv.includes("--dev");
 const DEV_URL = "http://localhost:5173";
 const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dirname, "../../web/dist");
 const mcpServer = app.isPackaged ? join(process.resourcesPath, "mcp", "server.js") : join(__dirname, "../../../packages/mcp/dist/server.js");
-const projectsDir = () => process.env["LEOCAD_PROJECTS_DIR"] ?? join(app.getPath("documents"), "leocad");
+const settingsPath = () => join(app.getPath("userData"), "settings.json");
+const defaultProjectsDir = () => join(app.getPath("documents"), "leocad");
+
+/** App-level settings that must live outside the projects folder (it is one of them). */
+interface Settings {
+  projectsDir?: string;
+}
+function readSettings(): Settings {
+  try {
+    return JSON.parse(readFileSync(settingsPath(), "utf8")) as Settings;
+  } catch {
+    return {};
+  }
+}
+let settings: Settings = {};
+const projectsDir = () => process.env["LEOCAD_PROJECTS_DIR"] ?? settings.projectsDir ?? defaultProjectsDir();
 const thumbsDir = () => join(app.getPath("userData"), "thumbnails");
 
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
@@ -122,6 +137,60 @@ ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | str
   if (r.canceled || !r.filePath) return null;
   await writeFile(r.filePath, typeof p.data === "string" ? p.data : Buffer.from(p.data));
   return r.filePath;
+});
+ipcMain.handle("storage:status", () => ({
+  dir: projectsDir(),
+  defaultDir: defaultProjectsDir(),
+  chosen: Boolean(process.env["LEOCAD_PROJECTS_DIR"] ?? settings.projectsDir),
+}));
+ipcMain.handle("storage:choose", async (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const r = await dialog.showOpenDialog(win!, {
+    title: "Choose a folder for your leocad projects",
+    buttonLabel: "Use this folder",
+    defaultPath: projectsDir(),
+    properties: ["openDirectory", "createDirectory"],
+  });
+  return r.canceled ? null : (r.filePaths[0] ?? null);
+});
+/** All .leocad files below a folder, as paths relative to it. */
+async function projectFiles(root: string, rel = ""): Promise<string[]> {
+  if (!existsSync(join(root, rel))) return [];
+  const out: string[] = [];
+  for (const entry of await readdir(join(root, rel), { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    const r = rel ? join(rel, entry.name) : entry.name;
+    if (entry.isDirectory()) out.push(...(await projectFiles(root, r)));
+    else if (entry.name.endsWith(".leocad")) out.push(r);
+  }
+  return out;
+}
+ipcMain.handle("storage:count", async () => (await projectFiles(projectsDir())).length);
+/** Switches the projects folder, optionally moving the existing projects (and their subfolders) along. */
+ipcMain.handle("storage:set", async (_e, p: { dir: string; move: boolean }) => {
+  const from = projectsDir();
+  await mkdir(p.dir, { recursive: true });
+  let moved = 0;
+  let skipped = 0;
+  if (p.move && normalize(from) !== normalize(p.dir)) {
+    if (normalize(p.dir).startsWith(normalize(from) + sep)) throw new Error("The new folder is inside the current one; pick a folder outside it.");
+    for (const rel of await projectFiles(from)) {
+      const target = join(p.dir, rel);
+      // Never overwrite a project that already exists in the new folder.
+      if (existsSync(target)) {
+        skipped++;
+        continue;
+      }
+      await mkdir(dirname(target), { recursive: true });
+      await copyFile(join(from, rel), target);
+      await rm(join(from, rel));
+      moved++;
+    }
+  }
+  settings = { ...settings, projectsDir: p.dir };
+  await mkdir(app.getPath("userData"), { recursive: true });
+  await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`);
+  return { dir: p.dir, moved, skipped };
 });
 ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
@@ -268,6 +337,7 @@ else {
     mainWindow?.focus();
   });
   void app.whenReady().then(() => {
+    settings = readSettings();
     serveApp();
     buildMenu();
     mainWindow = createWindow();

@@ -1,9 +1,22 @@
 import { Keyboard, X } from "lucide-react";
 import { FEATURES, TOOLBAR } from "../lib/features";
+import { keymapFor, MOUSE_SCHEMES, usePrefs, type Action, type Keymap } from "../lib/keymap";
 import { Kbd } from "./Kbd";
 
-const SECTIONS: { title: string; rows: [string, string][] }[] = [
-  { title: "Modeling", rows: [...TOOLBAR.filter((op) => FEATURES[op].shortcut).map((op) => [FEATURES[op].label, FEATURES[op].shortcut!] as [string, string]), ["Measure", "Shift+M"], ["Command search", "X"], ["Import file", "Mod+O"]] },
+/** "L / R / Shift+R" for several actions; unbound ones show as "–". */
+const keys = (map: Keymap, ...actions: Action[]) => actions.map((a) => map[a][0] ?? "–").join(" / ");
+
+function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: string; rows: [string, string][] }[] {
+  return [
+  {
+    title: "Modeling",
+    rows: [
+      ...TOOLBAR.filter((op) => map[op as Action][0]).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
+      ["Measure", keys(map, "measure")],
+      ["Command search", keys(map, "palette")],
+      ["Import file", "Mod+O"],
+    ],
+  },
   {
     title: "Direct editing",
     rows: [
@@ -18,24 +31,24 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
   {
     title: "View",
     rows: [
-      ["Rotate", "right-drag"],
-      ["Pan", "middle-drag / Shift+right-drag"],
-      ["Zoom", "wheel"],
-      ["Fit all", "Z"],
-      ["Zoom to hovered face", "Space"],
-      ["Iso / Front / Back", "Mod+1 / Mod+2 / Mod+3"],
-      ["Top / Bottom", "Mod+4 / Mod+5"],
-      ["Right / Left", "Mod+6 / Mod+7"],
+      ["Rotate", mouse.orbit],
+      ["Pan", mouse.pan],
+      ["Zoom", mouse.zoom],
+      ["Fit all", keys(map, "fit")],
+      ["Look at hovered face", keys(map, "normal")],
+      ["Iso / Front / Back", keys(map, "view.iso", "view.front", "view.back")],
+      ["Top / Bottom", keys(map, "view.top", "view.bottom")],
+      ["Right / Left", keys(map, "view.right", "view.left")],
     ],
   },
   {
     title: "Sketch",
     rows: [
-      ["Sketch on hovered face", "S"],
-      ["Line / Rectangle / Center rectangle", "L / R / Shift+R"],
-      ["Circle / Arc / Polygon / Point", "C / A / G / P"],
-      ["Trim / Dimension / Use model edges", "T / D / U"],
-      ["Construction toggle", "X"],
+      ["Sketch on hovered face", keys(map, "sketch")],
+      ["Line / Rectangle / Center rectangle", keys(map, "sketch.line", "sketch.rect", "sketch.rect_center")],
+      ["Circle / Arc / Polygon / Point", keys(map, "sketch.circle", "sketch.arc", "sketch.polygon", "sketch.point")],
+      ["Trim / Dimension / Project edges", keys(map, "sketch.trim", "sketch.dimension", "sketch.project")],
+      ["Construction toggle", keys(map, "sketch.construction")],
       ["Horizontal or vertical (nearest)", "Shift+V"],
       ["Coincident / Concentric", "Shift+N / Shift+C"],
       ["Parallel / Perpendicular", "Shift+A / Shift+P"],
@@ -53,11 +66,15 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
       ["Cancel / clear selection", "Esc"],
       ["Delete", "Del"],
       ["Show this help", "?"],
+      ["Settings", "Mod+,"],
     ],
   },
-];
+  ];
+}
 
 export function ShortcutHelp({ onClose }: { onClose: () => void }) {
+  const prefs = usePrefs();
+  const SECTIONS = sections(keymapFor(prefs.keys), MOUSE_SCHEMES.find((m) => m.id === prefs.mouse)!);
   return (
     <div className="modal-backdrop" onPointerDown={onClose}>
       <div className="modal" onPointerDown={(e) => e.stopPropagation()} role="dialog" aria-label="Keyboard shortcuts">

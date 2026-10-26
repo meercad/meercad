@@ -139,8 +139,8 @@ const flange: LeocadDocument = {
   rollback: null,
 };
 
-export const EXAMPLES: { name: string; description: string; doc: LeocadDocument }[] = [
-  { name: "Mounting plate", description: "Holes, countersinks, rounded corners", doc: bracket },
-  { name: "Project box", description: "Shelled enclosure with fillets", doc: box },
-  { name: "Flange", description: "Circular bolt pattern", doc: flange },
+export const EXAMPLES: { name: string; description: string; thumbnail: string; doc: LeocadDocument }[] = [
+  { name: "Mounting plate", description: "Holes, countersinks, rounded corners", thumbnail: "/examples/mounting-plate.png", doc: bracket },
+  { name: "Project box", description: "Shelled enclosure with fillets", thumbnail: "/examples/project-box.png", doc: box },
+  { name: "Flange", description: "Circular bolt pattern", thumbnail: "/examples/flange.png", doc: flange },
 ];

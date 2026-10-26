@@ -1,5 +1,6 @@
 import { Box, Copy, Eye, EyeOff, Focus, Grid2x2, Layers, Pencil, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { navigationFor, usePrefs } from "../lib/keymap";
 import type { FeatureOp } from "@leocad/schema";
 import { samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@leocad/viewport";
 import { FEATURES } from "../lib/features";
@@ -64,7 +65,11 @@ export function ViewportView() {
     const v = new Viewport(host.current!);
     setVp(v);
     setViewport(v);
+    const applyNav = () => v.setNavigation(navigationFor(usePrefs.getState().mouse), usePrefs.getState().invertZoom);
+    applyNav();
+    const offPrefs = usePrefs.subscribe(applyNav);
     return () => {
+      offPrefs();
       setViewport(null);
       v.dispose();
     };

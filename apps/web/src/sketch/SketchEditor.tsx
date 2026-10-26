@@ -12,6 +12,7 @@ import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
 import { Kbd } from "../components/Kbd";
+import { actionFor, SKETCH_ACTIONS } from "../lib/keymap";
 import { activeSketch, applyConstraint, CONSTRAINT_TOOLS, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
 import { GLYPH } from "./icons";
 import { getSolver } from "./solver";
@@ -740,12 +741,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         }
         return;
       }
-      // Constraints use Shift + letter (Shapr3D layout); plain letters pick tools.
+      // Tools follow the active shortcut preset; constraints use Shift + letter.
+      const action = actionFor(e, SKETCH_ACTIONS);
+      if (action === "sketch.construction") return toggleConstruction();
+      if (action) return setTool(action.slice(7) as SketchTool);
       const cmap: Record<string, string> = { a: "parallel", c: "concentric", e: "equal", v: "hv", n: "coincident", l: "fix", m: "midpoint", p: "perpendicular", s: "symmetric", t: "tangent" };
       if (e.shiftKey && cmap[k]) return applyConstraint(cmap[k]!);
-      const tools: Record<string, SketchTool> = { l: "line", r: e.shiftKey ? "rect_center" : "rect", c: "circle", a: "arc", p: "point", d: "dimension", u: "project", g: "polygon", t: "trim" };
-      if (tools[k]) return setTool(tools[k]!);
-      if (k === "x") return toggleConstruction();
       if (e.key === "Escape") {
         if (ts.points.length || ts.dimFirst) {
           ts.points = [];

@@ -8,6 +8,7 @@ import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch
 import { closeSketch, getViewport, goHome, newProject, redo, startFeature, undo, useApp } from "../store";
 import { exportMesh, exportStep, importFile, saveFile } from "./io";
 import { Kbd } from "./Kbd";
+import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleTheme } from "./TopBar";
 import { desktop } from "../lib/persistence";
 
@@ -18,18 +19,22 @@ interface Command {
   run: () => void;
 }
 
-const SKETCH_TOOLS: [SketchTool, string, string][] = [
-  ["line", "Line", "L"],
-  ["rect", "Rectangle", "R"],
-  ["rect_center", "Center rectangle", "Shift+R"],
-  ["circle", "Circle", "C"],
-  ["arc", "Arc", "A"],
-  ["polygon", "Polygon", "G"],
-  ["point", "Point", "P"],
-  ["trim", "Trim", "T"],
-  ["dimension", "Dimension", "D"],
-  ["project", "Use model edges", "U"],
+const SKETCH_TOOLS: [Exclude<SketchTool, "select">, string][] = [
+  ["line", "Line"],
+  ["rect", "Rectangle"],
+  ["rect_center", "Center rectangle"],
+  ["circle", "Circle"],
+  ["arc", "Arc"],
+  ["polygon", "Polygon"],
+  ["point", "Point"],
+  ["trim", "Trim"],
+  ["dimension", "Dimension"],
+  ["project", "Project model edges"],
 ];
+const kbd = (a: Action) => {
+  const k = keyFor(a);
+  return k ? { kbd: k } : {};
+};
 
 /** Subsequence match with a score favouring word starts and contiguous runs. */
 function score(q: string, text: string): number {
@@ -55,6 +60,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
   const input = useRef<HTMLInputElement>(null);
   const sketchId = useApp((s) => s.sketchId);
   const screen = useApp((s) => s.screen);
+  const keys = usePrefs((s) => s.keys);
 
   useEffect(() => {
     const toggle = () => {
@@ -73,25 +79,25 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
     const vp = () => getViewport();
     const list: Command[] = [];
     if (screen === "editor" && sketchId) {
-      for (const [tool, label, kbd] of SKETCH_TOOLS) list.push({ group: "Sketch", label, kbd, run: () => setTool(tool) });
+      for (const [tool, label] of SKETCH_TOOLS) list.push({ group: "Sketch", label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
       for (const c of CONSTRAINT_TOOLS) list.push({ group: "Constraint", label: c.label, ...(c.key ? { kbd: c.key } : {}), run: () => applyConstraint(c.type) });
-      list.push({ group: "Sketch", label: "Toggle construction", kbd: "X", run: toggleConstruction }, { group: "Sketch", label: "Finish sketch", kbd: "↵", run: closeSketch });
+      list.push({ group: "Sketch", label: "Toggle construction", ...kbd("sketch.construction"), run: toggleConstruction }, { group: "Sketch", label: "Finish sketch", kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {
-      for (const op of TOOLBAR) list.push({ group: "Modeling", label: FEATURES[op].label, ...(FEATURES[op].shortcut ? { kbd: FEATURES[op].shortcut } : {}), run: () => startFeature(op as FeatureOp) });
-      list.push({ group: "Modeling", label: "Measure", kbd: "Shift+M", run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
+      for (const op of TOOLBAR) list.push({ group: "Modeling", label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
+      list.push({ group: "Modeling", label: "Measure", ...kbd("measure"), run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
     }
     if (screen === "editor") {
       list.push(
         { group: "Edit", label: "Undo", kbd: "Mod+Z", run: undo },
         { group: "Edit", label: "Redo", kbd: "Shift+Mod+Z", run: redo },
-        { group: "View", label: "Fit all", kbd: "Z", run: () => vp()?.fit() },
-        { group: "View", label: "Isometric view", kbd: "Mod+1", run: () => vp()?.setView("iso") },
-        { group: "View", label: "Front view", kbd: "Mod+2", run: () => vp()?.setView("front") },
-        { group: "View", label: "Back view", kbd: "Mod+3", run: () => vp()?.setView("back") },
-        { group: "View", label: "Top view", kbd: "Mod+4", run: () => vp()?.setView("top") },
-        { group: "View", label: "Bottom view", kbd: "Mod+5", run: () => vp()?.setView("bottom") },
-        { group: "View", label: "Right view", kbd: "Mod+6", run: () => vp()?.setView("right") },
-        { group: "View", label: "Left view", kbd: "Mod+7", run: () => vp()?.setView("left") },
+        { group: "View", label: "Fit all", ...kbd("fit"), run: () => vp()?.fit() },
+        { group: "View", label: "Isometric view", ...kbd("view.iso"), run: () => vp()?.setView("iso") },
+        { group: "View", label: "Front view", ...kbd("view.front"), run: () => vp()?.setView("front") },
+        { group: "View", label: "Back view", ...kbd("view.back"), run: () => vp()?.setView("back") },
+        { group: "View", label: "Top view", ...kbd("view.top"), run: () => vp()?.setView("top") },
+        { group: "View", label: "Bottom view", ...kbd("view.bottom"), run: () => vp()?.setView("bottom") },
+        { group: "View", label: "Right view", ...kbd("view.right"), run: () => vp()?.setView("right") },
+        { group: "View", label: "Left view", ...kbd("view.left"), run: () => vp()?.setView("left") },
         { group: "View", label: "Toggle orthographic", run: () => vp()?.setProjection(vp()?.projection === "orthographic" ? "perspective" : "orthographic") },
         { group: "View", label: "Toggle planes", run: () => useApp.setState((s) => ({ showPlanes: !s.showPlanes })) },
         { group: "File", label: "Export STL", run: () => exportMesh("stl") },
@@ -107,11 +113,12 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       { group: "Help", label: "Help & guides", run: onHelp },
       { group: "Help", label: "Keyboard shortcuts", kbd: "?", run: onShortcuts },
       { group: "Help", label: "Introduction tour", run: onTour },
+      { group: "Help", label: "Settings", kbd: "Mod+,", run: () => window.dispatchEvent(new Event("leocad:settings")) },
       { group: "Help", label: "Toggle dark mode", run: toggleTheme },
       ...(desktop ? [{ group: "Help", label: "Check for updates", run: () => void desktop!.updates.check() }] : []),
     );
     return list;
-  }, [sketchId, screen, onHelp, onShortcuts, onTour]);
+  }, [sketchId, screen, keys, onHelp, onShortcuts, onTour]);
 
   const results = commands
     .map((c) => ({ c, s: Math.max(score(q, c.label), score(q, `${c.group} ${c.label}`) - 2) }))

@@ -1,6 +1,6 @@
 /**
- * Local-first project storage. In the desktop app projects are plain .leocad files in
- * ~/Documents/leocad (open JSON format); in the browser they live in IndexedDB.
+ * Local-first project storage. In the desktop app projects are plain .leocad files (open JSON
+ * format) in a folder the user picks on first launch; in the browser they live in IndexedDB.
  */
 import type { LeocadDocument } from "@leocad/schema";
 
@@ -25,6 +25,12 @@ interface DesktopApi {
     rename(p: { id: string; name: string }): Promise<{ id: string; name: string }>;
     delete(id: string): Promise<void>;
     reveal(id?: string): Promise<void>;
+  };
+  storage: {
+    status(): Promise<{ dir: string; defaultDir: string; chosen: boolean }>;
+    choose(): Promise<string | null>;
+    count(): Promise<number>;
+    set(p: { dir: string; move: boolean }): Promise<{ dir: string; moved: number; skipped: number }>;
   };
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
   updates: { check(): Promise<void>; install(): Promise<void> };

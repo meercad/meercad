@@ -27,6 +27,7 @@ import {
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import type { FeatureOp } from "@leocad/schema";
 import { FEATURES } from "../lib/features";
+import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleConstruction } from "../sketch/actions";
 import { setTool, useSketchUi, type SketchTool } from "../sketch/state";
 import { closeSketch, startFeature, useApp } from "../store";
@@ -55,13 +56,16 @@ type RailEntry = RailTool | RailGroup | "sep";
 
 const isGroup = (e: RailEntry): e is RailGroup => typeof e === "object" && "tools" in e;
 
-function feature(op: FeatureOp, activeOp: string | undefined): RailTool {
+const withKbd = (key: string | undefined) => (key ? { kbd: key } : {});
+
+function feature(op: FeatureOp & Action, activeOp: string | undefined): RailTool {
   const m = FEATURES[op];
-  return { id: op, icon: m.icon, label: m.label, hint: m.hint, active: activeOp === op, run: () => startFeature(op), ...(m.shortcut ? { kbd: m.shortcut } : {}) };
+  return { id: op, icon: m.icon, label: m.label, hint: m.hint, active: activeOp === op, run: () => startFeature(op), ...withKbd(keyFor(op)) };
 }
 
-function sketchTool(tool: SketchTool, icon: Icon, label: string, kbd: string, current: SketchTool): RailTool {
-  return { id: tool, icon, label, kbd, active: current === tool, run: () => setTool(tool) };
+function sketchTool(tool: SketchTool, icon: Icon, label: string, current: SketchTool): RailTool {
+  const kbd = tool === "select" ? "Esc" : keyFor(`sketch.${tool}`);
+  return { id: tool, icon, label, active: current === tool, run: () => setTool(tool), ...withKbd(kbd) };
 }
 
 function useEntries(): RailEntry[] {
@@ -69,31 +73,32 @@ function useEntries(): RailEntry[] {
   const activeOp = useApp((s) => s.dialog?.feature.op);
   const measure = useApp((s) => s.measure.active);
   const ui = useSketchUi();
+  usePrefs((s) => s.keys); // badges follow the shortcut preset
 
   if (sketchId) {
     const t = ui.tool;
     return [
-      sketchTool("select", MousePointer2, "Select", "Esc", t),
-      sketchTool("line", Slash, "Line", "L", t),
+      sketchTool("select", MousePointer2, "Select", t),
+      sketchTool("line", Slash, "Line", t),
       {
         id: "rects",
         icon: Square,
         label: "Rectangle",
-        tools: [sketchTool("rect", Square, "Corner rectangle", "R", t), sketchTool("rect_center", SquareDashed, "Center rectangle", "Shift+R", t)],
+        tools: [sketchTool("rect", Square, "Corner rectangle", t), sketchTool("rect_center", SquareDashed, "Center rectangle", t)],
       },
-      sketchTool("circle", Circle, "Circle", "C", t),
-      sketchTool("arc", Spline, "Arc", "A", t),
-      { id: "shapes", icon: Shapes, label: "More", tools: [sketchTool("polygon", Hexagon, "Polygon", "G", t), sketchTool("point", Dot, "Point", "P", t)] },
+      sketchTool("circle", Circle, "Circle", t),
+      sketchTool("arc", Spline, "Arc", t),
+      { id: "shapes", icon: Shapes, label: "More", tools: [sketchTool("polygon", Hexagon, "Polygon", t), sketchTool("point", Dot, "Point", t)] },
       "sep",
-      sketchTool("dimension", Ruler, "Dimension", "D", t),
-      sketchTool("trim", Scissors, "Trim", "T", t),
+      sketchTool("dimension", Ruler, "Dimension", t),
+      sketchTool("trim", Scissors, "Trim", t),
       {
         id: "sketch-tools",
         icon: Wrench,
         label: "Tools",
         tools: [
-          sketchTool("project", Waypoints, "Project model edges", "U", t),
-          { id: "construction", icon: Crosshair, label: "Construction geometry", kbd: "X", active: ui.construction, run: toggleConstruction },
+          sketchTool("project", Waypoints, "Project model edges", t),
+          { id: "construction", icon: Crosshair, label: "Construction geometry", ...withKbd(keyFor("sketch.construction")), active: ui.construction, run: toggleConstruction },
         ],
       },
       "sep",
@@ -117,7 +122,7 @@ function useEntries(): RailEntry[] {
       id: "measure",
       icon: Ruler,
       label: "Measure",
-      kbd: "Shift+M",
+      ...withKbd(keyFor("measure")),
       hint: "Distances, angles and radii",
       active: measure,
       run: () => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null })),

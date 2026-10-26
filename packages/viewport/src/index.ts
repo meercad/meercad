@@ -132,6 +132,16 @@ export interface ViewportEvents {
   onCameraChange?: () => void;
 }
 
+export interface NavBinding {
+  button: "middle" | "right";
+  mod?: "shift" | "ctrl" | "alt";
+}
+export interface Navigation {
+  orbit: NavBinding[];
+  pan: NavBinding[];
+  zoom: NavBinding[];
+}
+
 export class Viewport {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -199,18 +209,46 @@ export class Viewport {
     this.grid = new THREE.Group();
     this.buildGrid(200);
     this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay, this.handleGroup);
-    this.scene.add(axesHelper());
+    this.axes = axesHelper();
+    this.scene.add(this.axes);
 
-    // Shift+right-drag pans (for trackpads without a middle button).
-    this.renderer.domElement.addEventListener("pointerdown", (e) => {
-      this.controls.mouseButtons.RIGHT = e.shiftKey ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
-    }, { capture: true });
+    // Mouse buttons are assigned per press from the navigation preset (see setNavigation).
+    this.renderer.domElement.addEventListener("pointerdown", (e) => this.assignButtons(e), { capture: true });
     this.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
     this.resize();
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  // ---------------------------------------------------------------- navigation
+
+  private axes!: THREE.Group;
+  private navigation: Navigation = { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "shift" }], zoom: [] };
+
+  /** Which mouse button (plus modifier) orbits, pans and zooms. Left always selects. */
+  setNavigation(nav: Navigation, invertZoom = false): void {
+    this.navigation = nav;
+    this.controls.zoomSpeed = invertZoom ? -1 : 1;
+  }
+
+  private assignButtons(e: PointerEvent): void {
+    const button = e.button === 1 ? "middle" : e.button === 2 ? "right" : null;
+    if (!button) return;
+    const mod: NavBinding["mod"] = e.shiftKey ? "shift" : e.ctrlKey || e.metaKey ? "ctrl" : e.altKey ? "alt" : undefined;
+    const hit = (list: NavBinding[]) => list.some((b) => b.button === button && b.mod === mod);
+    // OrbitControls swaps rotate and pan itself while ctrl/meta/shift is held; pre-swap to cancel that.
+    const flipped = e.ctrlKey || e.metaKey || e.shiftKey;
+    const action = hit(this.navigation.orbit)
+      ? flipped ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
+      : hit(this.navigation.pan)
+        ? flipped ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN
+        : hit(this.navigation.zoom)
+          ? THREE.MOUSE.DOLLY
+          : (-1 as THREE.MOUSE);
+    if (button === "middle") this.controls.mouseButtons.MIDDLE = action;
+    else this.controls.mouseButtons.RIGHT = action;
   }
 
   // ---------------------------------------------------------------- scene
@@ -963,7 +1001,7 @@ export class Viewport {
 
   snapshot(width = 480, height = 360, clean = false): string {
     // Thumbnails leave out helpers so only the model is pictured.
-    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay];
+    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes];
     const shown = helpers.map((h) => h.visible);
     if (clean) helpers.forEach((h) => (h.visible = false));
     const prev = this.renderer.getSize(new THREE.Vector2());
@@ -975,8 +1013,25 @@ export class Viewport {
     this.ortho.left = this.ortho.bottom * aspect;
     this.ortho.right = this.ortho.top * aspect;
     this.ortho.updateProjectionMatrix();
-    this.renderer.render(this.scene, this.camera);
+    // Clean shots frame the model tightly with the perspective camera, from the current direction.
+    const box = new THREE.Box3().setFromObject(this.bodiesGroup);
+    const cam = clean && !box.isEmpty() ? this.persp : this.camera;
+    const pose = { pos: this.persp.position.clone(), quat: this.persp.quaternion.clone() };
+    if (cam === this.persp && clean) {
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+      const fov = THREE.MathUtils.degToRad(this.persp.fov) / 2;
+      const dist = sphere.radius / Math.sin(Math.min(fov, Math.atan(Math.tan(fov) * aspect))) * 1.02;
+      this.persp.position.copy(sphere.center).addScaledVector(dir, dist);
+      this.persp.up.copy(this.camera.up);
+      this.persp.lookAt(sphere.center);
+      this.persp.updateMatrixWorld();
+    }
+    this.renderer.render(this.scene, cam);
     const url = this.renderer.domElement.toDataURL("image/png");
+    this.persp.position.copy(pose.pos);
+    this.persp.quaternion.copy(pose.quat);
+    this.persp.updateMatrixWorld();
     this.renderer.setSize(prev.x, prev.y, false);
     this.persp.aspect = saved.aspect;
     this.persp.updateProjectionMatrix();
