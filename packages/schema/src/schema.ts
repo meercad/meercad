@@ -90,10 +90,13 @@ export const definitions: Record<string, Json> = {
     obj({ line: str('Sketch line, e.g. "sk1.l3"') }, ["line"]),
     obj({ edge: ref("edgeSelector") }, ["edge"]),
   ),
-  profile: obj(
-    { sketch: id, regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })) },
-    ["sketch"],
-    'Sketch regions; "all" (default) takes regions at odd nesting depth, so circles inside a rectangle become holes.',
+  profile: oneOf(
+    obj(
+      { sketch: id, regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })) },
+      ["sketch"],
+      'Sketch regions; "all" (default) takes regions at odd nesting depth, so circles inside a rectangle become holes.',
+    ),
+    obj({ face: ref("faceSelector") }, ["face"], "A planar model face pushed/pulled along its normal."),
   ),
   patternSource: oneOf(obj({ features: arr(id, { minItems: 1 }) }, ["features"]), obj({ bodies: arr(id, { minItems: 1 }) }, ["bodies"])),
   mode: { enum: ["new_body", "join", "cut", "intersect"] },

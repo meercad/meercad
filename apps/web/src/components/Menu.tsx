@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Kbd } from "./Kbd";
 
 export interface MenuItem {
   label: string;
@@ -68,7 +69,7 @@ export function MenuHost() {
           >
             {it.icon}
             {it.label}
-            {it.kbd ? <kbd>{it.kbd}</kbd> : null}
+            {it.kbd ? <Kbd k={it.kbd} /> : null}
           </button>
         ),
       )}

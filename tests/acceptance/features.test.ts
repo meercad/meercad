@@ -172,3 +172,20 @@ describe("tools", () => {
     expect(a.rows.find((r) => r[0] === "Angle")?.[1]).toBe("90 °");
   });
 });
+
+describe("push/pull", () => {
+  it("pulls a face out (join) and pushes another in (cut)", async () => {
+    const { report, meshes } = (await newSession()).rebuild(
+      doc([
+        ...box,
+        { id: "ex2", op: "extrude", profile: { face: { face: "ex1.end_cap" } }, extent: "blind", distance: 5, mode: "join" },
+        { id: "ex3", op: "extrude", profile: { face: { face: "ex1.side[sk1.l2]" } }, extent: "blind", distance: 10, flip: true, mode: "cut" },
+      ]),
+    );
+    ok(report);
+    expect(report.bodies).toHaveLength(1);
+    expect(vol(report)).toBeCloseTo(30 * 20 * 15, 3);
+    expect(report.bodies[0]!.faces).toBe(6);
+    expect(meshes[0]!.faceTags.flat()).toContain("ex2.end_cap");
+  });
+});

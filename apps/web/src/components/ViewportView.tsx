@@ -9,6 +9,7 @@ import { dialogPick, editFeature, kernel, setViewport, startFeature, startSketch
 import { pickKindsFor } from "./FeatureDialog";
 import { toggleHidden } from "./FeatureTree";
 import { showMenu } from "./Menu";
+import { Manipulators } from "./Manipulators";
 import { ViewCube } from "./ViewCube";
 
 const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
@@ -53,7 +54,7 @@ export function ViewportView() {
     const r = output.report;
     let size = 60;
     for (const b of r.bodies) size = Math.max(size, ...b.bbox.max.map(Math.abs), ...b.bbox.min.map(Math.abs));
-    const consumed = new Set(doc.features.flatMap((f) => (f.op === "extrude" || f.op === "revolve" ? [f.profile.sketch] : [])));
+    const consumed = new Set(doc.features.flatMap((f) => (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile ? [f.profile.sketch] : []));
     const sketches: SketchView[] = r.sketches
       .filter((s) => !hidden.has(s.id) && (s.id === sketchId || !consumed.has(s.id) || dialog?.feature.op === "extrude" || dialog?.feature.op === "revolve" || hiddenOverride(s.id)))
       .map((s) => ({ id: s.id, frame: s.frame, curves: s.curves, regions: s.regions.map((g) => ({ key: g.key, polygons: g.polygons })) }));
@@ -67,7 +68,8 @@ export function ViewportView() {
   useEffect(() => {
     if (vp && scene) vp.setScene(scene);
   }, [vp, scene]);
-  useEffect(() => vp?.setPlanesVisible(showPlanes || pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, showPlanes, pickingPlane, dialog?.field]);
+  const hasBodies = !!output?.report.bodies.length;
+  useEffect(() => vp?.setPlanesVisible(showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, showPlanes, hasBodies, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setSketchesVisible(showSketches), [vp, showSketches]);
   useEffect(() => {
     if (!vp) return;
@@ -227,6 +229,7 @@ export function ViewportView() {
   return (
     <div className={`view ${dialog?.field || pickingPlane || measure.active ? "picking" : ""}`} ref={host}>
       {vp ? <ViewCube viewport={vp} /> : null}
+      {vp ? <Manipulators viewport={vp} /> : null}
       {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
       {hint ? <div className="hint-banner">{hint}</div> : null}
       {measure.active ? <MeasureCard /> : null}

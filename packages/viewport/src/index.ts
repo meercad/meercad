@@ -75,6 +75,20 @@ export interface SceneData {
   editingSketch?: string | null;
 }
 
+/** Draggable arrow along an axis (push/pull, fillet radius, extrude distance). */
+export interface Handle {
+  id: string;
+  origin: Vec3;
+  dir: Vec3;
+  /** Current value; the arrow tip sits at origin + dir * value (plus a fixed screen offset). */
+  value: number;
+  onStart?: () => void;
+  onDrag: (value: number) => void;
+  onEnd: (value: number) => void;
+  /** Smallest value allowed (e.g. 0 for radii). */
+  min?: number;
+}
+
 export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom" | "iso";
 
 const C = {
@@ -138,12 +152,19 @@ export class Viewport {
   private listeners = new Set<() => void>();
   private grid: THREE.GridHelper;
   private sceneData: SceneData | null = null;
+  private handles: Handle[] = [];
+  private handleGroup = new THREE.Group();
+  private activeHandle: { h: Handle; value: number } | null = null;
+  private hoverHandle: string | null = null;
+  /** Reports the value being dragged and its screen position (for a value tooltip). */
+  onHandleDrag: ((h: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     container.appendChild(this.renderer.domElement);
+    this.bindHandles();
     this.renderer.domElement.style.display = "block";
     this.renderer.domElement.style.touchAction = "none";
 
@@ -175,7 +196,7 @@ export class Viewport {
     gm.transparent = true;
     gm.opacity = 0.35;
     gm.depthWrite = false;
-    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay);
+    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay, this.handleGroup);
     this.scene.add(axesHelper());
 
     // Shift+right-drag pans (for trackpads without a middle button).
@@ -328,13 +349,13 @@ export class Viewport {
       const s = p.size;
       const fill = new THREE.Mesh(
         new THREE.PlaneGeometry(s, s),
-        new THREE.MeshBasicMaterial({ color: C.plane, transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: C.plane, transparent: true, opacity: 0.04, side: THREE.DoubleSide, depthWrite: false }),
       );
       fill.position.set(s / 2, s / 2, 0);
       fill.userData = { plane: p.id };
       const border = new THREE.LineLoop(
         new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(s, 0, 0), new THREE.Vector3(s, s, 0), new THREE.Vector3(0, s, 0)]),
-        new THREE.LineBasicMaterial({ color: C.plane, transparent: true, opacity: 0.6 }),
+        new THREE.LineBasicMaterial({ color: C.plane, transparent: true, opacity: 0.4 }),
       );
       border.userData = { plane: p.id };
       g.add(fill, border);
@@ -420,8 +441,155 @@ export class Viewport {
       if (plane === undefined || !(o instanceof THREE.Mesh)) return;
       const sel = this.selected.some((s) => s.kind === "plane" && s.planeId === plane);
       const hov = this.hover?.kind === "plane" && this.hover.planeId === plane;
-      (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.3 : hov ? 0.18 : 0.06;
+      (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.3 : hov ? 0.18 : 0.04;
     });
+  }
+
+  // ---------------------------------------------------------------- handles
+
+  setHandles(handles: Handle[]): void {
+    // While dragging, the grabbed handle keeps its own callbacks and position until release.
+    if (this.activeHandle) handles = [this.activeHandle.h, ...handles.filter((h) => h.id !== this.activeHandle!.h.id)];
+    this.handles = handles;
+    this.drawHandles();
+  }
+
+  private handleBase(h: Handle): number {
+    return this.pixelSize(h.origin) * 28;
+  }
+
+  private handleTip(h: Handle, value = h.value): THREE.Vector3 {
+    const d = new THREE.Vector3(...h.dir).normalize();
+    return new THREE.Vector3(...h.origin).addScaledVector(d, value + this.handleBase(h));
+  }
+
+  private drawHandles(): void {
+    disposeTree(this.handleGroup);
+    for (const h0 of this.handles) {
+      const h = this.activeHandle?.h.id === h0.id ? { ...h0, value: this.activeHandle.value } : h0;
+      const px = this.pixelSize(h.origin);
+      const d = new THREE.Vector3(...h.dir).normalize();
+      const o = new THREE.Vector3(...h.origin);
+      const tip = this.handleTip(h);
+      const hot = this.activeHandle?.h.id === h.id || this.hoverHandle === h.id;
+      const color = hot ? 0xff7a1a : 0x2f6fed;
+      const shaft = new THREE.Line(new THREE.BufferGeometry().setFromPoints([o, tip]), new THREE.LineBasicMaterial({ color, depthTest: false }));
+      shaft.renderOrder = 50;
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(px * 5.5, px * 16, 20), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+      cone.position.copy(tip);
+      const up = new THREE.Vector3(0, 1, 0);
+      cone.quaternion.setFromUnitVectors(up, h.value < 0 ? d.clone().negate() : d);
+      cone.renderOrder = 51;
+      const base = new THREE.Mesh(new THREE.SphereGeometry(px * 3.5, 12, 8), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+      base.position.copy(o);
+      base.renderOrder = 51;
+      this.handleGroup.add(shaft, cone, base);
+    }
+  }
+
+  private hitHandle(clientX: number, clientY: number): Handle | null {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    let best: Handle | null = null;
+    let bd = 16;
+    for (const h of this.handles) {
+      const tip = this.handleTip(h);
+      const s = this.worldToScreen([tip.x, tip.y, tip.z]);
+      if (!s) continue;
+      const dist = Math.hypot(s[0] + r.left - clientX, s[1] + r.top - clientY);
+      if (dist < bd) {
+        bd = dist;
+        best = h;
+      }
+    }
+    return best;
+  }
+
+  /** Axis parameter closest to the pointer ray. */
+  private axisParam(h: Handle, clientX: number, clientY: number): number | null {
+    this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+    const ray = this.raycaster.ray;
+    const d = new THREE.Vector3(...h.dir).normalize();
+    const w0 = ray.origin.clone().sub(new THREE.Vector3(...h.origin));
+    const b = d.dot(ray.direction);
+    const denom = 1 - b * b;
+    if (denom < 1e-6) return null;
+    return (w0.dot(d) - b * w0.dot(ray.direction)) / denom;
+  }
+
+  private snapStep(at: Vec3): number {
+    const px = this.pixelSize(at) * 6;
+    for (const s of [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100]) if (s >= px) return s;
+    return 100;
+  }
+
+  private bindHandles(): void {
+    const el = this.renderer.domElement;
+    let grab = 0;
+    el.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.button !== 0) return;
+        const h = this.hitHandle(e.clientX, e.clientY);
+        if (!h) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        const t = this.axisParam(h, e.clientX, e.clientY);
+        // Offset between where the arrow was grabbed and its value, so it does not jump.
+        grab = (t ?? 0) - (h.value + this.handleBase(h));
+        this.activeHandle = { h, value: h.value };
+        h.onStart?.();
+      },
+      { capture: true },
+    );
+    el.addEventListener(
+      "pointermove",
+      (e) => {
+        const a = this.activeHandle;
+        if (!a) {
+          const hit = this.hitHandle(e.clientX, e.clientY)?.id ?? null;
+          if (hit !== this.hoverHandle) {
+            this.hoverHandle = hit;
+            el.style.cursor = hit ? "grab" : "";
+            this.drawHandles();
+          }
+          if (hit) e.stopImmediatePropagation();
+          return;
+        }
+        e.stopImmediatePropagation();
+        const t = this.axisParam(a.h, e.clientX, e.clientY);
+        if (t === null) return;
+        const raw = t - grab - this.handleBase(a.h);
+        const step = this.snapStep(a.h.origin);
+        let v = Math.round(raw / step) * step;
+        if (a.h.min !== undefined) v = Math.max(a.h.min, v);
+        v = Math.round(v * 1000) / 1000;
+        if (v !== a.value) {
+          a.value = v;
+          a.h.onDrag(v);
+          this.drawHandles();
+        }
+        const tip = this.handleTip(a.h, v);
+        this.onHandleDrag?.(a.h, v, this.worldToScreen([tip.x, tip.y, tip.z]));
+      },
+      { capture: true },
+    );
+    const end = (e: PointerEvent) => {
+      const a = this.activeHandle;
+      if (!a) return;
+      e.stopImmediatePropagation();
+      this.activeHandle = null;
+      el.style.cursor = "";
+      this.onHandleDrag?.(null, a.value, null);
+      a.h.onEnd(a.value);
+      this.drawHandles();
+    };
+    el.addEventListener("pointerup", end, { capture: true });
+    el.addEventListener("pointercancel", end, { capture: true });
+  }
+
+  get draggingHandle(): boolean {
+    return !!this.activeHandle;
   }
 
   // ---------------------------------------------------------------- picking
@@ -597,6 +765,32 @@ export class Viewport {
     return (this.ortho.top - this.ortho.bottom) / size;
   }
 
+  /** Orbits the camera around the target (radians), e.g. when dragging the view cube. */
+  orbit(dAzimuth: number, dPolar: number): void {
+    this.anim = null;
+    const target = this.controls.target;
+    const offset = this.camera.position.clone().sub(target);
+    const up = this.camera.up.clone().normalize();
+    // Azimuth around the world Z axis, polar around the camera's right vector.
+    offset.applyAxisAngle(new THREE.Vector3(0, 0, 1), dAzimuth);
+    up.applyAxisAngle(new THREE.Vector3(0, 0, 1), dAzimuth);
+    const right = new THREE.Vector3().crossVectors(up, offset).normalize();
+    offset.applyAxisAngle(right, dPolar);
+    up.applyAxisAngle(right, dPolar);
+    this.camera.position.copy(target).add(offset);
+    this.camera.up.copy(up);
+    this.camera.lookAt(target);
+    this.controls.update();
+    this.emit();
+  }
+
+  /** Looks along -dir (camera placed at +dir), choosing a sensible up vector. */
+  viewFrom(dir: Vec3, animate = true): void {
+    const d = new THREE.Vector3(...dir).normalize();
+    const up = Math.abs(d.z) > 0.99 ? new THREE.Vector3(0, d.z > 0 ? 1 : -1, 0) : new THREE.Vector3(0, 0, 1);
+    this.lookFrom(d, up, animate);
+  }
+
   fit(animate = true): void {
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     this.lookFrom(dir.lengthSq() ? dir : new THREE.Vector3(...VIEWS.iso.dir), this.camera.up.clone(), animate);
@@ -608,6 +802,7 @@ export class Viewport {
   }
 
   private emit(): void {
+    if (this.handles.length) this.drawHandles();
     for (const fn of this.listeners) fn();
   }
 

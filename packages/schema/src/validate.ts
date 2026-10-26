@@ -144,7 +144,7 @@ export function validateDocument(input: unknown): Validation<OpencadDocument> {
         break;
       case "extrude":
       case "revolve":
-        earlier(f.profile.sketch, at, "profile", ["sketch"]);
+        if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
         if (f.op === "extrude" && f.extent === "two_sided" && f.distance2 === undefined) errors.push(`${at}: two_sided extrude needs distance2`);
         if (f.op === "revolve" && "line" in f.axis) earlier(f.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
         for (const t of f.targets ?? []) earlier(t, at, "target body");

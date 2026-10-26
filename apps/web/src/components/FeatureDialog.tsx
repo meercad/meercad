@@ -6,6 +6,7 @@ import { FEATURES, featureName } from "../lib/features";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
+import { Kbd } from "./Kbd";
 
 type Of<O extends Feature["op"]> = Extract<Feature, { op: O }>;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -16,7 +17,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
   if (!d?.field) return new Set();
   const op = d.feature.op;
   const map: Record<string, PickKind[]> = {
-    profile: ["region", "sketch_curve"],
+    profile: op === "extrude" ? ["region", "sketch_curve", "face"] : ["region", "sketch_curve"],
     axis: ["sketch_curve", "edge"],
     direction: ["sketch_curve", "edge"],
     direction2: ["sketch_curve", "edge"],
@@ -54,8 +55,12 @@ function handlePick(p: Pick, d: DialogState): void {
     const g = structuredClone(cur) as Record<string, unknown> & Feature;
     switch (field) {
       case "profile": {
-        const prof = (g as Of<"extrude">).profile;
-        if (p.kind === "sketch_curve") (g as Of<"extrude">).profile = { sketch: p.sketchId };
+        const prof0 = (g as Of<"extrude">).profile;
+        const prof = "sketch" in prof0 ? prof0 : { sketch: "", regions: undefined };
+        if (p.kind === "face" && g.op === "extrude") {
+          const fs = faceSelectorForPick(p, meshes);
+          if (fs && p.normal) (g as Of<"extrude">).profile = { face: fs };
+        } else if (p.kind === "sketch_curve") (g as Of<"extrude">).profile = { sketch: p.sketchId };
         else if (p.kind === "region") {
           const allKeys = report?.sketches.find((s) => s.id === p.sketchId)?.regions.filter((r) => r.depth % 2 === 1).map((r) => r.key) ?? [];
           const current = prof.sketch === p.sketchId ? (Array.isArray(prof.regions) ? prof.regions : prof.regions === "all" || prof.regions === undefined ? allKeys : []) : [];
@@ -173,6 +178,9 @@ export function FeatureDialog() {
         ) : null}
       </div>
       <div className="dialog-foot">
+        <span className="muted" style={{ marginRight: "auto", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+          <Kbd k="↵" /> accept <Kbd k="Esc" /> cancel
+        </span>
         <button className="cancel-btn" onClick={cancelDialog} title="Cancel (Esc)">
           <X />
         </button>
@@ -294,12 +302,12 @@ function Body({ d }: { d: DialogState }) {
     case "extrude":
     case "revolve": {
       const prof = f.profile;
-      const regionChips = !prof.sketch ? [] : Array.isArray(prof.regions) ? prof.regions.map((k) => `${prof.sketch} · ${k.split("|")[0]}`) : [`All regions of ${prof.sketch}`];
+      const regionChips = "face" in prof ? [describeFaceSelector(prof.face)] : !prof.sketch ? [] : Array.isArray(prof.regions) ? prof.regions.map((k) => `${prof.sketch} · ${k.split("|")[0]}`) : [`All regions of ${prof.sketch}`];
       return (
         <>
           <Field label="Profile">
-            <SelBox field="profile" items={regionChips} placeholder="Pick sketch regions" onRemove={() => set({ profile: { sketch: "" } })} />
-            {!prof.sketch && sketches.length ? (
+            <SelBox field="profile" items={regionChips} placeholder={f.op === "extrude" ? "Pick sketch regions or a flat face" : "Pick sketch regions"} onRemove={() => set({ profile: { sketch: "" } })} />
+            {"sketch" in prof && !prof.sketch && sketches.length ? (
               <select className="field" value="" onChange={(e) => set({ profile: { sketch: e.target.value } })}>
                 <option value="">…or use a whole sketch</option>
                 {sketches.map((s) => (

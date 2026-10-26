@@ -15,7 +15,7 @@ import {
   type ResolvedSketch,
 } from "@opencad/model";
 import { parseStl } from "@opencad/io";
-import { asArray, type AxisRef, type BooleanFeature, type BooleanMode, type ImportFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef } from "@opencad/schema";
+import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef } from "@opencad/schema";
 import {
   findRegions,
   frameFromPlane,
@@ -194,7 +194,7 @@ function project(id: string, edges: Parameters<typeof resolveEdges>[0], construc
   });
 }
 
-function sketchRegions(profile: ProfileRef, ctx: Ctx) {
+function sketchRegions(profile: Extract<ProfileRef, { sketch: string }>, ctx: Ctx) {
   const sk = ctx.prev.sketches.get(profile.sketch);
   if (!sk) throw new FeatureError(`sketch "${profile.sketch}" is missing or failed`);
   const { regions, missing } = selectRegions(sk.regions, profile.regions);
@@ -248,7 +248,41 @@ function sweepTool(
   return tool!;
 }
 
+/** Push/pull: extrudes a planar model face along its outward normal. */
+function extrudeFace(f: ResolvedExtrude & { profile: { face: FaceSelector } }, ctx: Ctx): Omit<ModelState, "arena"> {
+  const refs = resolveFaces(f.profile.face, [...ctx.prev.bodies.values()]);
+  if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new FeatureError("push/pull needs exactly one face");
+  const body = ctx.prev.bodies.get(refs[0]!.body)!;
+  const fi = refs[0]!.faces[0]!;
+  const info = body.faceInfo[fi]!;
+  if (!info.planar || !info.normal) throw new FeatureError("push/pull works on flat faces");
+  const n = f.flip ? (info.normal.map((v) => -v) as Vec3) : info.normal;
+  const d = f.extent === "through_all" ? modelSize(ctx) : f.distance;
+  if (Math.abs(d) < 1e-6) throw new FeatureError("extrude distance must not be zero");
+  const face = body.faces[fi]!;
+  const prism = ctx.arena.track(new ctx.oc.BRepPrimAPI_MakePrism(face, ctx.g.vec([n[0] * d, n[1] * d, n[2] * d]), true, true));
+  if (!prism.IsDone()) throw new FeatureError("extrude failed");
+  const tool = new Body(ctx.oc, ctx.arena, f.id, ctx.arena.track(prism.Shape()));
+  const tags: string[][] = tool.faces.map(() => []);
+  const tag = (s: TopoDS_Shape, t: string) => tags[tool.faceIndex(s)]?.push(t);
+  tag(ctx.arena.track(prism.FirstShape()), `${f.id}.start_cap`);
+  tag(ctx.arena.track(prism.LastShape()), `${f.id}.end_cap`);
+  // Side faces are named after the model face on the other side of each boundary edge.
+  const ex = ctx.arena.track(new ctx.oc.TopExp_Explorer(face, "TopAbs_EDGE"));
+  for (let k = 0; ex.More(); ex.Next(), k++) {
+    const edge = ctx.arena.track(ex.Current());
+    const ei = body.edgeIndex(edge);
+    const other = (body.edgeFaces[ei] ?? []).find((x) => x !== fi);
+    const name = other !== undefined ? (body.faceTags[other]?.[0] ?? `e${k}`) : `e${k}`;
+    for (const s of listToArray(ctx.arena, prism.Generated(edge))) tag(s, `${f.id}.side[${name}]`);
+  }
+  tool.faceTags = tags.map((t, i) => (t.length ? t : [`${f.id}.face[${i}]`]));
+  const mode = f.mode === "new_body" ? "new_body" : f.mode;
+  return applyTool(ctx, f.id, tool, mode, f.targets ?? (mode === "new_body" ? undefined : [body.bodyId]));
+}
+
 function extrude(f: ResolvedExtrude, ctx: Ctx): Omit<ModelState, "arena"> {
+  if ("face" in f.profile) return extrudeFace(f as ResolvedExtrude & { profile: { face: FaceSelector } }, ctx);
   const { sk, regions } = sketchRegions(f.profile, ctx);
   const dir: Vec3 = f.flip ? [-sk.frame.normal[0], -sk.frame.normal[1], -sk.frame.normal[2]] : sk.frame.normal;
   let start = 0;
@@ -280,6 +314,7 @@ function extrude(f: ResolvedExtrude, ctx: Ctx): Omit<ModelState, "arena"> {
 }
 
 function revolve(f: ResolvedRevolve, ctx: Ctx): Omit<ModelState, "arena"> {
+  if ("face" in f.profile) throw new FeatureError("revolve needs a sketch profile");
   const { sk, regions } = sketchRegions(f.profile, ctx);
   const ax = axis(f.axis, ctx);
   const angle = Math.max(-360, Math.min(360, f.angle));

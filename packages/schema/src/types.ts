@@ -107,11 +107,11 @@ export interface PlaneFeature extends FeatureBase {
   angle?: Expr;
 }
 
-/** Sketch regions to use: `"all"` takes regions at odd nesting depth (rings around holes). */
-export interface ProfileRef {
-  sketch: string;
-  regions?: "all" | string[];
-}
+/**
+ * Profile of an extrude/revolve: sketch regions (`"all"` takes regions at odd nesting depth, so
+ * circles inside a rectangle become holes), or a planar model face (push/pull).
+ */
+export type ProfileRef = { sketch: string; regions?: "all" | string[] } | { face: FaceSelector };
 
 export type BooleanMode = "new_body" | "join" | "cut" | "intersect";
 

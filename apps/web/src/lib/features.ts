@@ -32,12 +32,12 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   revolve: { label: "Revolve", icon: Rotate3d, shortcut: "R", hint: "Revolve sketch regions around an axis" },
   fillet: { label: "Fillet", icon: SquareRoundCorner, shortcut: "F", hint: "Round edges" },
   chamfer: { label: "Chamfer", icon: Triangle, shortcut: "C", hint: "Bevel edges" },
-  shell: { label: "Shell", icon: Shell, hint: "Hollow a body, removing selected faces" },
-  linear_pattern: { label: "Linear pattern", icon: Grid3x3, hint: "Repeat features or bodies along a direction" },
-  circular_pattern: { label: "Circular pattern", icon: Orbit, hint: "Repeat features or bodies around an axis" },
-  mirror: { label: "Mirror", icon: SquareSplitHorizontal, hint: "Mirror features or bodies about a plane" },
-  boolean: { label: "Boolean", icon: Combine, hint: "Union, subtract or intersect bodies" },
-  plane: { label: "Plane", icon: Layers, hint: "Construction plane offset from a plane or face" },
+  shell: { shortcut: "H", label: "Shell", icon: Shell, hint: "Hollow a body, removing selected faces" },
+  linear_pattern: { shortcut: "L", label: "Linear pattern", icon: Grid3x3, hint: "Repeat features or bodies along a direction" },
+  circular_pattern: { shortcut: "O", label: "Circular pattern", icon: Orbit, hint: "Repeat features or bodies around an axis" },
+  mirror: { shortcut: "I", label: "Mirror", icon: SquareSplitHorizontal, hint: "Mirror features or bodies about a plane" },
+  boolean: { shortcut: "B", label: "Boolean", icon: Combine, hint: "Union, subtract or intersect bodies" },
+  plane: { shortcut: "N", label: "Plane", icon: Layers, hint: "Construction plane offset from a plane or face" },
   import: { label: "Import", icon: FileUp, hint: "Import STEP or STL" },
 };
 
@@ -50,7 +50,7 @@ export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "
 export function draftFeature(op: FeatureOp, doc: OpencadDocument): Feature {
   const id = nextFeatureId(doc, op);
   const lastSketch = [...doc.features].reverse().find((f) => f.op === "sketch");
-  const lastSketchUsed = lastSketch && doc.features.some((f) => (f.op === "extrude" || f.op === "revolve") && f.profile.sketch === lastSketch.id);
+  const lastSketchUsed = lastSketch && doc.features.some((f) => (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile && f.profile.sketch === lastSketch.id);
   const profile = lastSketch && !lastSketchUsed ? { sketch: lastSketch.id } : { sketch: "" };
   const noEdges: EdgeSelector[] = [];
   switch (op) {
@@ -86,7 +86,7 @@ export function draftProblem(f: Feature): string | null {
   switch (f.op) {
     case "extrude":
     case "revolve":
-      return f.profile.sketch ? null : "Select sketch regions to use as profile";
+      return "face" in f.profile || f.profile.sketch ? null : "Select sketch regions or a face as profile";
     case "fillet":
     case "chamfer":
       return (Array.isArray(f.edges) ? f.edges.length : 1) ? null : "Select edges";

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { decodeShareFragment } from "@opencad/io";
 import { validateDocument } from "@opencad/schema";
 import { CopilotPanel } from "./components/Copilot";
@@ -6,6 +6,7 @@ import { FeatureDialog } from "./components/FeatureDialog";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
 import { MenuHost } from "./components/Menu";
+import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Toasts } from "./components/Toasts";
 import { Toolbar } from "./components/Toolbar";
 import { TopBar } from "./components/TopBar";
@@ -42,7 +43,17 @@ async function route(): Promise<void> {
 export function App() {
   const screen = useApp((s) => s.screen);
   const copilot = useApp((s) => s.copilotOpen);
+  const [help, setHelp] = useState(false);
   useEffect(() => void route(), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (e.key === "?" && !typing) setHelp((h) => !h);
+      if (e.key === "Escape") setHelp(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -123,6 +134,7 @@ export function App() {
           <div className="right">{copilot ? <CopilotPanel /> : null}</div>
         </div>
       )}
+      {help ? <ShortcutHelp onClose={() => setHelp(false)} /> : null}
       <Toasts />
       <MenuHost />
     </>

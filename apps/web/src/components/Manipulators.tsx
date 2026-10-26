@@ -1,0 +1,221 @@
+/**
+ * Direct manipulation (Shapr3D-style): drag arrows on the selection to push/pull faces, extrude
+ * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
+ */
+import { ArrowUpFromLine, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, Triangle } from "lucide-react";
+import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import { evaluate, nextFeatureId } from "@opencad/model";
+import { asArray, type EdgeSelector, type Expr, type Feature } from "@opencad/schema";
+import type { Handle, Pick, Viewport } from "@opencad/viewport";
+import { edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
+import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
+import { cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
+import { Kbd } from "./Kbd";
+
+const num = (e: Expr | undefined, fallback = 0): number => {
+  if (e === undefined) return fallback;
+  try {
+    return evaluate(e, new Map(Object.entries(useApp.getState().baseOutput?.report.params ?? {})));
+  } catch {
+    return fallback;
+  }
+};
+
+export function Manipulators({ viewport }: { viewport: Viewport }) {
+  const dialog = useApp((s) => s.dialog);
+  const selection = useApp((s) => s.selection);
+  const base = useApp((s) => s.baseOutput);
+  const sketchId = useApp((s) => s.sketchId);
+  const measure = useApp((s) => s.measure.active);
+  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  /** Push/pull drafts follow the drag direction (out = add, in = remove). */
+  const autoMode = useRef(false);
+
+  useEffect(() => {
+    viewport.onHandleDrag = (h, v, screen) => setTip(h && screen ? { x: screen[0], y: screen[1], text: `${h.id === "fillet" ? "R " : ""}${+v.toFixed(3)} mm` } : null);
+    return () => {
+      viewport.onHandleDrag = null;
+    };
+  }, [viewport]);
+
+  useEffect(() => {
+    viewport.setHandles(sketchId || measure || !base ? [] : computeHandles());
+  });
+
+  function extrudePatch(v: number): Partial<Feature> {
+    const patch: Record<string, unknown> = { distance: Math.abs(v) || 0.001, flip: v < 0 ? true : undefined };
+    if (autoMode.current) patch["mode"] = v < 0 ? "cut" : base!.report.bodies.length ? "join" : "new_body";
+    return patch as Partial<Feature>;
+  }
+
+  function computeHandles(): Handle[] {
+    const out = base!;
+    const d = dialog;
+    if (d) {
+      const f = d.feature;
+      if (f.op === "extrude" && f.extent !== "through_all") {
+        const a = profileAnchor(out, f.profile);
+        if (!a) return [];
+        const value = num(f.distance, 10) * (f.flip ? -1 : 1);
+        return [
+          {
+            id: "extrude",
+            origin: a.origin,
+            dir: a.normal,
+            value,
+            onDrag: (v) => updateDraft(extrudePatch(v)),
+            onEnd: () => undefined,
+          },
+        ];
+      }
+      if ((f.op === "fillet" || f.op === "chamfer") && asArray(f.edges).length) {
+        const a = edgeSelectorAnchor(out, asArray(f.edges)[0] as EdgeSelector);
+        if (!a) return [];
+        return [
+          {
+            id: "fillet",
+            origin: a.origin,
+            dir: a.dir,
+            value: num(f.op === "fillet" ? f.radius : f.distance, 1),
+            min: 0.05,
+            onDrag: (v) => updateDraft(f.op === "fillet" ? { radius: v } : { distance: v }),
+            onEnd: () => undefined,
+          },
+        ];
+      }
+      if (f.op === "shell" && f.faces[0]) {
+        const a = faceSelectorAnchor(out, f.faces[0]);
+        if (!a) return [];
+        return [{ id: "shell", origin: a.origin, dir: a.normal.map((x) => -x) as typeof a.normal, value: num(f.thickness, 2), min: 0.05, onDrag: (v) => updateDraft({ thickness: v }), onEnd: () => undefined }];
+      }
+      return [];
+    }
+    const sel = selection;
+    if (sel.length === 1 && sel[0]!.kind === "face" && sel[0]!.normal) {
+      const p = sel[0]!;
+      const m = out.meshes.find((x) => x.bodyId === p.bodyId);
+      const a = m ? faceAnchor(m, p.face) : null;
+      const fs = faceSelectorForPick(p, out.meshes);
+      if (!a || !fs) return [];
+      return [
+        {
+          id: "extrude",
+          origin: a.origin,
+          dir: a.normal,
+          value: 0,
+          onStart: () => {
+            autoMode.current = true;
+            startDraft({ id: nextFeatureId(currentDoc(), "extrude"), op: "extrude", profile: { face: fs }, extent: "blind", distance: 0.001, mode: "join" });
+          },
+          onDrag: (v) => updateDraft(extrudePatch(v)),
+          onEnd: (v) => finish(v),
+        },
+      ];
+    }
+    if (sel.length === 1 && sel[0]!.kind === "region") {
+      const p = sel[0]!;
+      const sk = out.report.sketches.find((s) => s.id === p.sketchId);
+      if (!sk) return [];
+      const a = profileAnchor(out, { sketch: p.sketchId, regions: [p.key] });
+      if (!a) return [];
+      return [
+        {
+          id: "extrude",
+          origin: a.origin,
+          dir: a.normal,
+          value: 0,
+          onStart: () => {
+            autoMode.current = true;
+            startDraft({ id: nextFeatureId(currentDoc(), "extrude"), op: "extrude", profile: { sketch: p.sketchId, regions: [p.key] }, extent: "blind", distance: 0.001, mode: out.report.bodies.length ? "join" : "new_body" });
+          },
+          onDrag: (v) => updateDraft(extrudePatch(v)),
+          onEnd: (v) => finish(v),
+        },
+      ];
+    }
+    const edges = sel.filter((p) => p.kind === "edge");
+    if (edges.length && edges.length === sel.length) {
+      const first = edges[0]! as Extract<Pick, { kind: "edge" }>;
+      const m = out.meshes.find((x) => x.bodyId === first.bodyId);
+      const sels = edges.map((p) => edgeSelectorForPick(p, out.meshes)).filter((x): x is EdgeSelector => !!x);
+      const a = m ? edgeAnchor(m, first.edge) : null;
+      if (!a || !sels.length) return [];
+      return [
+        {
+          id: "fillet",
+          origin: a.origin,
+          dir: a.dir,
+          value: 0,
+          min: 0,
+          onStart: () => {
+            autoMode.current = false;
+            startDraft({ id: nextFeatureId(currentDoc(), "fillet"), op: "fillet", edges: sels, radius: 0.5 });
+          },
+          onDrag: (v) => updateDraft({ radius: Math.max(0.05, v) }),
+          onEnd: (v) => finish(v),
+        },
+      ];
+    }
+    return [];
+  }
+
+  function finish(v: number): void {
+    autoMode.current = false;
+    if (Math.abs(v) < 1e-6) return cancelDialog();
+    commitDialog();
+  }
+
+  return (
+    <>
+      {tip ? (
+        <div className="cursor-tip" style={{ left: tip.x, top: tip.y }}>
+          {tip.text}
+        </div>
+      ) : null}
+      {!dialog && !sketchId && !measure && selection.length ? <QuickActions viewport={viewport} selection={selection} /> : null}
+    </>
+  );
+}
+
+
+/** Floating action bar next to the selection, with the shortcut of every action. */
+function QuickActions({ viewport, selection }: { viewport: Viewport; selection: Pick[] }) {
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => viewport.onChange(tick), [viewport]);
+  const last = selection.at(-1)!;
+  const point = "point" in last ? last.point : null;
+  const screen = point ? viewport.worldToScreen(point) : null;
+  if (!screen) return null;
+  const meshes = useApp.getState().output?.meshes ?? [];
+  const kinds = new Set(selection.map((p) => p.kind));
+  const actions: { icon: ReactNode; label: string; kbd?: string; run: () => void }[] = [];
+  if (kinds.size === 1 && kinds.has("face")) {
+    const plane = planeSpecForPick(last, meshes);
+    if (plane && selection.length === 1) actions.push({ icon: <Pencil />, label: "Sketch", kbd: "S", run: () => startSketch(plane) });
+    if (selection.length === 1 && last.kind === "face" && last.normal) actions.push({ icon: <ArrowUpFromLine />, label: "Push/Pull", kbd: "drag", run: () => startFeature("extrude") });
+    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: "F", run: () => startFeature("fillet") });
+    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: "C", run: () => startFeature("chamfer") });
+    actions.push({ icon: <Shell />, label: "Shell", kbd: "H", run: () => startFeature("shell") });
+  } else if (kinds.size === 1 && kinds.has("edge")) {
+    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: "F", run: () => startFeature("fillet") });
+    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: "C", run: () => startFeature("chamfer") });
+  } else if (kinds.has("region") || kinds.has("sketch_curve")) {
+    actions.push({ icon: <ArrowUpFromLine />, label: "Extrude", kbd: "E", run: () => startFeature("extrude") });
+    actions.push({ icon: <Rotate3d />, label: "Revolve", kbd: "R", run: () => startFeature("revolve") });
+  } else if (kinds.has("plane") && selection.length === 1 && last.kind === "plane") {
+    actions.push({ icon: <Pencil />, label: "Sketch", kbd: "S", run: () => startSketch({ ref: last.planeId }) });
+  }
+  if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: "M", run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
+  if (!actions.length) return null;
+  return (
+    <div className="quick-actions" style={{ left: screen[0] + 18, top: screen[1] + 18 }} onPointerDown={(e) => e.stopPropagation()}>
+      {actions.map((a) => (
+        <button key={a.label} className="qa" onClick={a.run} title={`${a.label}${a.kbd ? ` (${a.kbd})` : ""}`}>
+          {a.icon}
+          <span>{a.label}</span>
+          {a.kbd ? <Kbd k={a.kbd} /> : null}
+        </button>
+      ))}
+    </div>
+  );
+}

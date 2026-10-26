@@ -30,6 +30,8 @@ interface State {
   canUndo: boolean;
   canRedo: boolean;
   output: RebuildOutput | null;
+  /** Last rebuild of the real document (without previews); handles anchor to it. */
+  baseOutput: RebuildOutput | null;
   /** True while the viewport shows a preview (dialog draft or copilot proposal). */
   previewing: boolean;
   previewError: string | null;
@@ -64,6 +66,7 @@ export const useApp = create<State>(() => ({
   canUndo: false,
   canRedo: false,
   output: null,
+  baseOutput: null,
   previewing: false,
   previewError: null,
   kernel: { ready: false, info: "Loading geometry kernel…" },
@@ -71,7 +74,7 @@ export const useApp = create<State>(() => ({
   sketchId: null,
   selection: [],
   hidden: new Set(),
-  showPlanes: true,
+  showPlanes: false,
   showSketches: true,
   measure: { active: false, picks: [], result: null },
   copilotOpen: false,
@@ -171,7 +174,7 @@ export function scheduleRebuild(): void {
     const { doc, preview, problem } = displayDoc();
     set({ previewError: problem });
     kernel.rebuild(doc).then(
-      (output) => set({ output, previewing: preview }),
+      (output) => set(preview ? { output, previewing: true } : { output, baseOutput: output, previewing: false }),
       (e: unknown) => {
         if (e instanceof SupersededError) return;
         const msg = e instanceof Error ? e.message : String(e);
@@ -205,6 +208,13 @@ export function editFeature(id: string): void {
   if (get().dialog) cancelDialog();
   if (f.op === "sketch") return openSketch(id);
   set({ dialog: { feature: structuredClone(f), isNew: false, field: null }, selection: [] });
+  scheduleRebuild();
+}
+
+/** Opens a dialog for an already-built draft (used by drag gestures). */
+export function startDraft(feature: Feature): void {
+  if (get().dialog) cancelDialog();
+  set({ dialog: { feature, isNew: true, field: null }, selection: [] });
   scheduleRebuild();
 }
 

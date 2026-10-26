@@ -83,7 +83,8 @@ button { cursor: pointer; }
 .doc-name { border: 1px solid transparent; background: transparent; padding: 4px 8px; border-radius: 6px; font-weight: 550; min-width: 80px; max-width: 320px; }
 .doc-name:hover { border-color: var(--border); }
 .doc-name:focus { border-color: var(--accent); background: var(--panel); outline: none; }
-.save-state { font-size: 11.5px; color: var(--muted); }
+.save-state { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 1100px) { .save-state { display: none; } .topbar .btn-label { display: none; } }
 .toolbar { grid-area: tools; display: flex; align-items: stretch; gap: 2px; padding: 4px 8px; background: var(--panel); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
 .toolbar .sep { width: 1px; background: var(--border); margin: 6px 6px; flex: none; }
 .tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 58px; padding: 5px 6px 4px; border: 1px solid transparent; border-radius: 7px; background: none; color: var(--text-2); font-size: 11px; white-space: nowrap; flex: none; }
@@ -162,11 +163,16 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .hint-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 7px 14px; border-radius: 999px; background: var(--text); color: var(--panel); font-size: 12.5px; box-shadow: var(--shadow); pointer-events: none; white-space: nowrap; }
 
 /* view cube */
-.viewcube { position: absolute; top: 14px; right: 14px; width: 84px; height: 84px; perspective: 400px; user-select: none; }
-.viewcube .cube { position: absolute; inset: 12px; transform-style: preserve-3d; }
-.viewcube .face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 650; letter-spacing: 0.04em; color: var(--text-2); background: color-mix(in srgb, var(--panel) 90%, transparent); border: 1px solid var(--border-strong); cursor: pointer; backface-visibility: hidden; }
-.viewcube .face:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-.viewcube .home { position: absolute; top: -6px; left: -6px; }
+.viewcube { position: absolute; top: 14px; right: 14px; width: 110px; height: 128px; user-select: none; z-index: 3; }
+.viewcube .cube { position: absolute; top: 10px; left: 20px; width: 70px; height: 70px; cursor: grab; }
+.viewcube .cube:active { cursor: grabbing; }
+.viewcube .face { position: absolute; inset: 0; display: grid; grid-template: 22% 1fr 22% / 22% 1fr 22%; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--border-strong); border-radius: 3px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--panel) 70%, transparent); }
+.viewcube .face-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--text-2); pointer-events: none; }
+.viewcube .cell { cursor: pointer; }
+.viewcube .cell.hot { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.viewcube .cell.center.hot { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.viewcube .cube-tools { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; gap: 2px; }
+.viewcube .cube-tools .icon-btn { background: color-mix(in srgb, var(--panel) 85%, transparent); }
 
 /* floating dialog */
 .dialog { position: absolute; top: 12px; left: 12px; width: 312px; max-height: calc(100% - 24px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); z-index: 5; }
@@ -270,9 +276,28 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .dof.bad i { background: var(--err); }
 .cursor-tip { position: absolute; transform: translate(14px, 14px); padding: 2px 6px; border-radius: 4px; background: var(--text); color: var(--panel); font: 11px var(--mono); pointer-events: none; white-space: nowrap; }
 
-@media (max-width: 860px) {
+@media (max-width: 640px) {
   .app { grid-template: "top" 44px "tools" auto "view" 1fr "side" 38vh / 1fr; }
   .side { border-right: none; border-top: 1px solid var(--border); }
   .right { display: none; }
   .dialog { width: calc(100% - 24px); }
 }
+
+/* shortcuts */
+.kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); border-bottom-width: 2px; background: var(--panel); font: 600 9.5px var(--mono); color: var(--text-2); line-height: 1; white-space: nowrap; }
+.tool { position: relative; }
+.tool .kbd { position: absolute; top: 2px; right: 3px; min-width: 13px; height: 13px; padding: 0 3px; font-size: 8.5px; border-bottom-width: 1px; opacity: 0.85; }
+.tool.primary .kbd { color: var(--accent); }
+.menu button .kbd { margin-left: auto; }
+.quick-actions { position: absolute; display: flex; gap: 2px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); z-index: 4; animation: pop 0.12s ease-out; }
+.quick-actions .qa { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 54px; padding: 5px 6px 4px; border: none; border-radius: 7px; background: none; color: var(--text-2); font-size: 10.5px; position: relative; }
+.quick-actions .qa:hover { background: var(--accent-soft); color: var(--accent); }
+.quick-actions .qa svg { width: 18px; height: 18px; color: var(--text); }
+.quick-actions .qa:hover svg { color: var(--accent); }
+.quick-actions .qa .kbd { font-size: 8.5px; height: 13px; min-width: 13px; }
+.modal-backdrop { position: fixed; inset: 0; background: rgb(10 14 20 / 0.35); display: flex; align-items: center; justify-content: center; z-index: 60; backdrop-filter: blur(2px); }
+.modal { width: min(860px, 94vw); max-height: 88vh; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+.help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 26px; padding: 14px 18px 20px; }
+.help-grid h4 { margin: 10px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.help-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 0; font-size: 12.5px; border-bottom: 1px dashed var(--border); }
+.dialog-foot .kbd { margin-left: 4px; }

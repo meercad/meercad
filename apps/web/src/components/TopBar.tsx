@@ -86,13 +86,13 @@ export function TopBar() {
         <House />
       </button>
       <button className="btn" ref={exportBtn} onClick={openExport}>
-        <Download /> Export <ChevronDown />
+        <Download /> <span className="btn-label">Export</span> <ChevronDown />
       </button>
       <button className="btn" onClick={() => void shareLink()} title="Copy a link that contains the whole model">
-        <Share2 /> Share
+        <Share2 /> <span className="btn-label">Share</span>
       </button>
       <button className={`btn ${copilot ? "primary" : ""}`} onClick={() => useApp.setState((s) => ({ copilotOpen: !s.copilotOpen }))} title="AI copilot (bring your own key)">
-        <Sparkles /> Copilot
+        <Sparkles /> <span className="btn-label">Copilot</span>
       </button>
     </header>
   );
