@@ -20,7 +20,13 @@ export interface Topology {
   /** Adjacent face indices per edge index (2 for manifold solid edges). */
   readonly edgeFaces: readonly (readonly number[])[];
   readonly faceInfo?: readonly FaceInfo[];
+  /** A representative point per edge / face (for `near` disambiguation). */
+  readonly edgePoints?: readonly Vec3[];
+  readonly facePoints?: readonly Vec3[];
 }
+
+type Vec3 = [number, number, number];
+const dist2 = (a: Vec3, b: Vec3) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 
 export class ResolveError extends Error {}
 
@@ -54,21 +60,23 @@ export function resolveEdges(selectors: readonly EdgeSelector[], bodies: readonl
     let count = 0;
     if ("edge" in sel) {
       const [a, b] = sel.edge;
+      const hits: { body: string; edge: number; d: number }[] = [];
       for (const topo of bodies) {
         const fa = new Set(facesMatching(topo, a));
         const fb = new Set(facesMatching(topo, b));
         topo.edgeFaces.forEach((faces, e) => {
-          const hit = faces.some((x) => fa.has(x)) && faces.some((y) => fb.has(y)) && new Set(faces).size > 1;
-          if (hit) {
-            add(topo.bodyId, e);
-            count++;
+          if (faces.some((x) => fa.has(x)) && faces.some((y) => fb.has(y)) && new Set(faces).size > 1) {
+            const p = topo.edgePoints?.[e];
+            hits.push({ body: topo.bodyId, edge: e, d: sel.near && p ? dist2(p, sel.near) : 0 });
           }
         });
       }
+      count = hits.length;
       if (count === 0) throw new ResolveError(`no edge between faces "${a}" and "${b}" (was one of them removed?)`);
-      if (count > 1 && !a.endsWith("[*]") && !b.endsWith("[*]")) {
-        throw new ResolveError(`edge between "${a}" and "${b}" is ambiguous (${count} edges match)`);
-      }
+      const wildcard = a.endsWith("[*]") || b.endsWith("[*]");
+      if (count > 1 && !wildcard && !sel.near) throw new ResolveError(`edge between "${a}" and "${b}" is ambiguous (${count} edges match)`);
+      const chosen = count > 1 && !wildcard ? [hits.reduce((x, y) => (y.d < x.d ? y : x))] : hits;
+      for (const h of chosen) add(h.body, h.edge);
     } else {
       const pattern = faceSelectorTag(sel.of, sel.where?.face);
       for (const topo of bodies) {
@@ -120,6 +128,19 @@ export function resolveFaces(sel: FaceSelector, bodies: readonly Topology[]): Fa
       if (faces.length) out.push({ body: topo.bodyId, faces });
     }
     if (!out.length) throw new ResolveError(`no face tagged "${sel.face}"`);
+    const near = sel.near;
+    if (near && out.reduce((n, r) => n + r.faces.length, 0) > 1) {
+      let best: { body: string; face: number; d: number } | null = null;
+      for (const r of out) {
+        const topo = bodies.find((t) => t.bodyId === r.body)!;
+        for (const f of r.faces) {
+          const p = topo.facePoints?.[f];
+          const d = p ? dist2(p, near) : Infinity;
+          if (!best || d < best.d) best = { body: r.body, face: f, d };
+        }
+      }
+      return [{ body: best!.body, faces: [best!.face] }];
+    }
     return out;
   }
   const pattern = sel.where?.tag ?? (sel.of !== undefined ? `${sel.of}.[*]` : undefined);
@@ -153,11 +174,35 @@ export function resolveFaces(sel: FaceSelector, bodies: readonly Topology[]): Fa
 }
 
 /** Stable, order-independent selector for an edge given its adjacent faces' tags. */
-export function edgeSelectorFor(tagsA: readonly string[], tagsB: readonly string[]): EdgeSelector | null {
+export function edgeSelectorFor(tagsA: readonly string[], tagsB: readonly string[], near?: Vec3): EdgeSelector | null {
   const a = tagsA[0];
   const b = tagsB[0];
   if (!a || !b || a === b) return null;
-  return { edge: a < b ? [a, b] : [b, a] };
+  return { edge: a < b ? [a, b] : [b, a], ...(near ? { near } : {}) };
+}
+
+/** Selector for edge `e` of a body; adds `near` only when the face pair alone is ambiguous. */
+export function selectorForEdge(topo: Topology, e: number, point?: Vec3): EdgeSelector | null {
+  const [fa, fb] = topo.edgeFaces[e] ?? [];
+  if (fa === undefined || fb === undefined) return null;
+  const sel = edgeSelectorFor(topo.faceTags[fa] ?? [], topo.faceTags[fb] ?? []);
+  if (!sel || !("edge" in sel)) return null;
+  try {
+    resolveEdges([sel], [topo]);
+    return sel;
+  } catch {
+    const p = point ?? topo.edgePoints?.[e];
+    return p ? { ...sel, near: p.map((v) => Math.round(v * 1000) / 1000) as Vec3 } : null;
+  }
+}
+
+/** Selector for face `f`; adds `near` only when its primary tag is shared. */
+export function selectorForFace(topo: Topology, f: number, point?: Vec3): FaceSelector | null {
+  const tag = topo.faceTags[f]?.[0];
+  if (!tag) return null;
+  const shared = topo.faceTags.filter((t) => t.includes(tag)).length > 1;
+  const p = point ?? topo.facePoints?.[f];
+  return shared && p ? { face: tag, near: p.map((v) => Math.round(v * 1000) / 1000) as Vec3 } : { face: tag };
 }
 
 export interface FaceHistory {

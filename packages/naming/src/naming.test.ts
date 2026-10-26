@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeSelectorFor, propagateTags, resolveEdges, resolveFaces, ResolveError, type Topology } from "./index.js";
+import { edgeSelectorFor, propagateTags, resolveEdges, resolveFaces, ResolveError, selectorForEdge, type Topology } from "./index.js";
 
 // Box: 0 bottom, 1 top, 2..5 sides (bottom,right,top,left). 12 edges.
 const sides = ["bottom", "right", "top", "left"];
@@ -55,5 +55,22 @@ describe("tags", () => {
     const r = propagateTags([["a"], ["b"], ["c"]], 4, { descendants: [[0], [], [1]], generated: [{ face: 2, tag: "fi1.round[x]" }] }, "fi1");
     expect(r.tags).toEqual([["a"], ["c"], ["fi1.round[x]"], ["fi1.face[3]"]]);
     expect(r.untagged).toEqual([3]);
+  });
+});
+
+describe("near disambiguation", () => {
+  // Two edges share the same face pair (e.g. a side face split by a slot).
+  const topo: Topology = {
+    bodyId: "b",
+    faceTags: [["a"], ["s"]],
+    edgeFaces: [[0, 1], [0, 1]],
+    edgePoints: [[0, 0, 0], [10, 0, 0]],
+    facePoints: [[0, 0, 0], [5, 5, 0]],
+  };
+  it("picks the nearest edge and only adds near when needed", () => {
+    expect(() => resolveEdges([{ edge: ["a", "s"] }], [topo])).toThrow(/ambiguous/);
+    expect(resolveEdges([{ edge: ["a", "s"], near: [9, 0, 0] }], [topo]).edges).toEqual([1]);
+    expect(selectorForEdge(topo, 1)).toEqual({ edge: ["a", "s"], near: [10, 0, 0] });
+    expect(selectorForEdge(box, 6)).toEqual({ edge: ["ex1.end_cap", "ex1.side[sk1.r1.top]"] });
   });
 });

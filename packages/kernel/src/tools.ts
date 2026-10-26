@@ -1,0 +1,110 @@
+/** Worker-side utilities on the last rebuilt state: STEP export and measuring. */
+
+import { Arena } from "./arena.js";
+import type { Body } from "./body.js";
+import type { OC } from "./occt.js";
+import type { ModelState } from "./state.js";
+
+export function exportStep(oc: OC, state: ModelState, bodyIds?: string[]): Uint8Array {
+  const arena = new Arena();
+  try {
+    const bodies = [...state.bodies.values()].filter((b) => !bodyIds || bodyIds.includes(b.bodyId));
+    if (!bodies.length) throw new Error("nothing to export");
+    const writer = arena.track(new oc.STEPControl_Writer());
+    const range = arena.track(new oc.Message_ProgressRange());
+    for (const b of bodies) writer.Transfer(b.shape, "STEPControl_AsIs", true, range);
+    const path = `/export-${Date.now()}.step`;
+    writer.Write(path);
+    const data = oc.FS.readFile(path) as Uint8Array;
+    oc.FS.unlink(path);
+    return data.slice();
+  } finally {
+    arena.dispose();
+  }
+}
+
+export interface PickRef {
+  bodyId: string;
+  kind: "face" | "edge";
+  index: number;
+}
+
+export interface Measurement {
+  rows: [string, string][];
+  /** Closest points for distance display. */
+  points?: [[number, number, number], [number, number, number]];
+}
+
+const f = (n: number, unit = "mm") => `${Math.abs(n) >= 100 ? n.toFixed(1) : n.toFixed(3).replace(/\.?0+$/, "")} ${unit}`;
+
+export function measure(oc: OC, state: ModelState, a: PickRef, b?: PickRef): Measurement {
+  const arena = new Arena();
+  try {
+    const shapeOf = (p: PickRef) => {
+      const body = state.bodies.get(p.bodyId);
+      const s = body && (p.kind === "face" ? body.faces[p.index] : body.edges[p.index]);
+      if (!body || !s) throw new Error("selection no longer exists");
+      return { body, s };
+    };
+    const describe = (p: PickRef, body: Body) => {
+      const rows: [string, string][] = [];
+      const s = p.kind === "face" ? body.faces[p.index]! : body.edges[p.index]!;
+      const props = arena.track(new oc.GProp_GProps());
+      if (p.kind === "face") {
+        oc.BRepGProp.SurfaceProperties(s, props, false, false);
+        rows.push(["Area", f(props.Mass(), "mm²")]);
+        const surf = arena.track(new oc.BRepAdaptor_Surface(body.faces[p.index]!, true));
+        if (surf.GetType() === "GeomAbs_Cylinder") rows.push(["Radius", f(arena.track(surf.Cylinder()).Radius())]);
+      } else {
+        oc.BRepGProp.LinearProperties(s, props, false, false);
+        rows.push(["Length", f(props.Mass())]);
+        const c = arena.track(new oc.BRepAdaptor_Curve(body.edges[p.index]!));
+        if (c.GetType() === "GeomAbs_Circle") {
+          const r = arena.track(c.Circle()).Radius();
+          rows.push(["Radius", f(r)], ["Diameter", f(2 * r)]);
+        }
+      }
+      return rows;
+    };
+    const A = shapeOf(a);
+    if (!b) return { rows: describe(a, A.body) };
+    const B = shapeOf(b);
+    const d = arena.track(new oc.BRepExtrema_DistShapeShape(A.s, B.s));
+    const rows: [string, string][] = [];
+    let points: Measurement["points"];
+    if (d.IsDone()) {
+      rows.push(["Distance", f(d.Value())]);
+      const p1 = arena.track(d.PointOnShape1(1));
+      const p2 = arena.track(d.PointOnShape2(1));
+      points = [[p1.X(), p1.Y(), p1.Z()], [p2.X(), p2.Y(), p2.Z()]];
+      const delta = [p2.X() - p1.X(), p2.Y() - p1.Y(), p2.Z() - p1.Z()];
+      rows.push(["ΔX / ΔY / ΔZ", delta.map((v) => (Math.round(v * 1000) / 1000).toString()).join(" / ")]);
+    }
+    const dirA = direction(oc, arena, a, A.body);
+    const dirB = direction(oc, arena, b, B.body);
+    if (dirA && dirB) {
+      const cos = Math.abs(dirA[0] * dirB[0] + dirA[1] * dirB[1] + dirA[2] * dirB[2]);
+      let angle = (Math.acos(Math.min(1, cos)) * 180) / Math.PI;
+      // A face normal against an edge direction: report the angle between face and edge.
+      if (a.kind !== b.kind) angle = 90 - angle;
+      rows.push(["Angle", f(angle, "°")]);
+    }
+    return { rows, ...(points ? { points } : {}) };
+  } finally {
+    arena.dispose();
+  }
+}
+
+function direction(oc: OC, arena: Arena, p: PickRef, body: Body): [number, number, number] | null {
+  if (p.kind === "face") {
+    const info = body.faceInfo[p.index];
+    return info?.planar && info.normal ? info.normal : null;
+  }
+  const c = arena.track(new oc.BRepAdaptor_Curve(body.edges[p.index]!));
+  if (c.GetType() !== "GeomAbs_Line") return null;
+  const a = arena.track(c.Value(c.FirstParameter()));
+  const b = arena.track(c.Value(c.LastParameter()));
+  const v: [number, number, number] = [b.X() - a.X(), b.Y() - a.Y(), b.Z() - a.Z()];
+  const l = Math.hypot(...v) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}

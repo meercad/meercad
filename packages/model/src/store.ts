@@ -1,4 +1,6 @@
 import { emptyDocument, validateDocument, validateOp, type DocOp, type Feature, type OpencadDocument } from "@opencad/schema";
+import { renameInExpr } from "./expr.js";
+import { mapFeatureExprs } from "./resolve.js";
 
 export class OpError extends Error {}
 
@@ -34,6 +36,20 @@ export function applyOp(doc: OpencadDocument, input: unknown): OpencadDocument {
       if (next.rollback === op.id) next.rollback = next.features[i - 1]?.id ?? null;
       break;
     }
+    case "move_feature": {
+      const i = indexOf(next, op.id);
+      const [f] = next.features.splice(i, 1);
+      const at = op.after === null ? 0 : indexOf(next, op.after) + 1;
+      next.features.splice(at, 0, f!);
+      break;
+    }
+    case "rename_param": {
+      if (!(op.name in next.params)) throw new OpError(`unknown parameter "${op.name}"`);
+      if (op.to in next.params) throw new OpError(`parameter "${op.to}" already exists`);
+      next.params = Object.fromEntries(Object.entries(next.params).map(([k, v]) => [k === op.name ? op.to : k, renameInExpr(v, op.name, op.to)]));
+      next.features = next.features.map((f) => mapFeatureExprs(f, (e) => renameInExpr(e, op.name, op.to)));
+      break;
+    }
     case "set_param":
       if (op.expr === null) delete next.params[op.name];
       else next.params[op.name] = op.expr;
@@ -62,11 +78,24 @@ function indexOf(doc: OpencadDocument, id: string): number {
 
 /** Next unused feature id for an op, e.g. "ex2". */
 export function nextFeatureId(doc: OpencadDocument, op: Feature["op"]): string {
-  const prefix = { sketch: "sk", extrude: "ex", fillet: "fi" }[op];
+  const prefix: Record<Feature["op"], string> = {
+    sketch: "sk",
+    plane: "pl",
+    extrude: "ex",
+    revolve: "rv",
+    fillet: "fi",
+    chamfer: "ch",
+    shell: "sh",
+    linear_pattern: "lp",
+    circular_pattern: "cp",
+    mirror: "mi",
+    boolean: "bo",
+    import: "im",
+  };
   const used = new Set(doc.features.map((f) => f.id));
   let n = 1;
-  while (used.has(`${prefix}${n}`)) n++;
-  return `${prefix}${n}`;
+  while (used.has(`${prefix[op]}${n}`)) n++;
+  return `${prefix[op]}${n}`;
 }
 
 type Listener = (doc: OpencadDocument) => void;

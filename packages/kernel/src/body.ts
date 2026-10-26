@@ -19,6 +19,7 @@ export class Body implements Topology {
   private readonly faceMap: ShapeIndex;
   private readonly edgeMap: ShapeIndex;
   private info: FaceInfo[] | null = null;
+  private samples: { faces: Vec3[]; edges: Vec3[] } | null = null;
 
   constructor(
     private readonly oc: OC,
@@ -53,13 +54,78 @@ export class Body implements Topology {
     return this.edgeMap.find(s);
   }
 
+  /** A point inside each face (triangle centroid) and on each edge (polyline midpoint). */
+  get facePoints(): Vec3[] {
+    return (this.samples ??= samplePoints(this.oc, this)).faces;
+  }
+
+  get edgePoints(): Vec3[] {
+    return (this.samples ??= samplePoints(this.oc, this)).edges;
+  }
+
   get faceInfo(): FaceInfo[] {
     if (!this.info) this.info = this.faces.map((f) => faceInfo(this.oc, this.arena, f));
     return this.info;
   }
 }
 
-const HASH_BOUND = 2147483647;
+export const HASH_BOUND = 2147483647;
+type Vec3 = [number, number, number];
+
+function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
+  const faceByHash = new Map<number, number>();
+  body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));
+  const edgeByHash = new Map<number, number>();
+  body.edges.forEach((e, i) => edgeByHash.set(oc.ReplicadShapeHasher.HashCode(e, HASH_BOUND), i));
+  const m = oc.ReplicadMeshExtractor.extract(body.shape, 0.1, 0.5, true);
+  const em = oc.ReplicadEdgeMeshExtractor.extract(body.shape, 0.1, 0.5);
+  try {
+    const buf = oc.wasmMemory.buffer;
+    const pos = new Float32Array(buf, m.getVerticesPtr(), m.getVerticesSize());
+    const tri = new Uint32Array(buf, m.getTrianglesPtr(), m.getTrianglesSize());
+    const groups = new Int32Array(buf, m.getFaceGroupsPtr(), m.getFaceGroupsSize());
+    const faces: Vec3[] = body.faces.map(() => [0, 0, 0]);
+    for (let g = 0; g < groups.length; g += 3) {
+      const fi = faceByHash.get(groups[g + 2]!);
+      if (fi === undefined || groups[g + 1]! < 3) continue;
+      // Centroid of the largest triangle: robust inside point even for thin faces.
+      let best = -1;
+      let bestArea = -1;
+      for (let t = groups[g]!; t < groups[g]! + groups[g + 1]!; t += 3) {
+        const [a, b, c] = [tri[t]! * 3, tri[t + 1]! * 3, tri[t + 2]! * 3];
+        const u = [pos[b]! - pos[a]!, pos[b + 1]! - pos[a + 1]!, pos[b + 2]! - pos[a + 2]!];
+        const v = [pos[c]! - pos[a]!, pos[c + 1]! - pos[a + 1]!, pos[c + 2]! - pos[a + 2]!];
+        const area = Math.hypot(u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!);
+        if (area > bestArea) {
+          bestArea = area;
+          best = t;
+        }
+      }
+      const [a, b, c] = [tri[best]! * 3, tri[best + 1]! * 3, tri[best + 2]! * 3];
+      faces[fi] = [0, 1, 2].map((k) => (pos[a + k]! + pos[b + k]! + pos[c + k]!) / 3) as Vec3;
+    }
+    const lines = new Float32Array(buf, em.getLinesPtr(), em.getLinesSize());
+    const eg = new Int32Array(buf, em.getEdgeGroupsPtr(), em.getEdgeGroupsSize());
+    const edges: Vec3[] = body.edges.map(() => [0, 0, 0]);
+    for (let g = 0; g < eg.length; g += 3) {
+      const ei = edgeByHash.get(eg[g + 2]!);
+      if (ei === undefined || eg[g + 1]! < 1) continue;
+      const count = eg[g + 1]!;
+      if (count % 2 === 0) {
+        const a = (eg[g]! + count / 2 - 1) * 3;
+        const b = (eg[g]! + count / 2) * 3;
+        edges[ei] = [0, 1, 2].map((k) => (lines[a + k]! + lines[b + k]!) / 2) as Vec3;
+      } else {
+        const a = (eg[g]! + (count - 1) / 2) * 3;
+        edges[ei] = [lines[a]!, lines[a + 1]!, lines[a + 2]!];
+      }
+    }
+    return { faces, edges };
+  } finally {
+    m.delete();
+    em.delete();
+  }
+}
 
 /** Index of distinct shapes with `IsSame` semantics (same TShape and location, any orientation). */
 class ShapeIndex {

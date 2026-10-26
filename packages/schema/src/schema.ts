@@ -1,207 +1,185 @@
 /**
- * JSON Schema (draft-07) for the opencad document format and the
- * Operations-API. Single source of truth for validation of untrusted input
- * and for AI tool definitions.
+ * JSON Schema (draft-07) for the opencad document format and the Operations-API.
+ * Single source of truth for validation of untrusted input and for AI tool definitions.
  */
 
-const id = { type: "string", pattern: "^[A-Za-z_][A-Za-z0-9_]*$", maxLength: 64 } as const;
-const expr = {
-  description: "Number in mm, or expression string using params, e.g. \"w\", \"wall * 2\", \"5 mm\".",
-  oneOf: [{ type: "number" }, { type: "string", minLength: 1, maxLength: 256 }],
-} as const;
-const faceTag = {
-  type: "string",
-  minLength: 1,
-  maxLength: 256,
-  description:
-    "Face tag, e.g. \"ex1.end_cap\", \"ex1.start_cap\", \"ex1.side[sk1.r1.top]\". Suffix [*] matches all tags with that prefix.",
-} as const;
-const common = { id, suppressed: { type: "boolean" } } as const;
+type Json = Record<string, unknown>;
 
-export const definitions = {
+const ID = "^[A-Za-z_][A-Za-z0-9_]*$";
+const id = { type: "string", pattern: ID, maxLength: 64 };
+const ref = (name: string) => ({ $ref: `#/definitions/${name}` });
+const str = (description?: string) => ({ type: "string", minLength: 1, maxLength: 512, ...(description ? { description } : {}) });
+const bool = { type: "boolean" };
+const num = { type: "number" };
+const vec3 = { type: "array", items: num, minItems: 3, maxItems: 3 };
+const vec2 = { type: "array", items: num, minItems: 2, maxItems: 2 };
+const arr = (items: Json, extra: Json = {}) => ({ type: "array", items, maxItems: 10000, ...extra });
+const obj = (properties: Json, required: string[], description?: string): Json => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false,
+  ...(description ? { description } : {}),
+});
+const oneOf = (...schemas: Json[]) => ({ oneOf: schemas });
+/** Discriminated union on `key` without oneOf's confusing error output. */
+const tagged = (key: string, variants: Record<string, Json>): Json => ({
+  type: "object",
+  required: [key],
+  properties: { [key]: { enum: Object.keys(variants) } },
+  allOf: Object.entries(variants).map(([k, s]) => ({ if: { properties: { [key]: { const: k } } }, then: s })),
+});
+
+const base = { id, name: { type: "string", maxLength: 128 }, suppressed: bool };
+const feature = (op: string, props: Json, required: string[]) =>
+  obj({ ...base, op: { const: op }, ...props }, ["id", "op", ...required]);
+
+const expr = {
+  description: 'Number (mm or degrees), or expression using params: "w", "wall * 2", "5 mm", "30 deg".',
+  oneOf: [{ type: "number" }, { type: "string", minLength: 1, maxLength: 256 }],
+};
+
+const constraintVariants: Record<string, Json> = {};
+const c = (type: string | string[], props: Json, required: string[]) => {
+  for (const t of [type].flat()) {
+    constraintVariants[t] = obj({ id, type: { const: t }, ...props }, ["id", "type", ...required]);
+  }
+};
+const label = vec2;
+c("coincident", { a: str(), b: str() }, ["a", "b"]);
+c(["horizontal", "vertical"], { line: str() }, ["line"]);
+c(["horizontal_points", "vertical_points"], { a: str(), b: str() }, ["a", "b"]);
+c(["parallel", "perpendicular", "collinear", "tangent", "equal"], { a: str(), b: str() }, ["a", "b"]);
+c("point_on", { point: str(), curve: str() }, ["point", "curve"]);
+c("midpoint", { point: str(), line: str() }, ["point", "line"]);
+c("symmetric", { a: str(), b: str(), axis: str() }, ["a", "b", "axis"]);
+c("fix", { point: str() }, ["point"]);
+c("distance", { a: str(), b: str(), value: ref("expr"), axis: { enum: ["x", "y"] }, label }, ["a", "b", "value"]);
+c("length", { line: str(), value: ref("expr"), label }, ["line", "value"]);
+c(["radius", "diameter"], { curve: str(), value: ref("expr"), label }, ["curve", "value"]);
+c("angle", { a: str(), b: str(), value: ref("expr"), label }, ["a", "b", "value"]);
+
+const construction = { construction: bool };
+
+export const definitions: Record<string, Json> = {
   expr,
-  faceTag,
-  edgeSelector: {
-    oneOf: [
+  faceTag: str('Face tag, e.g. "ex1.end_cap", "ex1.side[sk1.l1]". Suffix [*] matches by prefix.'),
+  faceSelector: oneOf(
+    obj({ face: ref("faceTag"), near: vec3 }, ["face"], "Faces with this tag; `near` picks the closest when several share it."),
+    obj(
       {
-        type: "object",
-        description: "The single edge shared by two tagged faces.",
-        properties: { edge: { type: "array", items: faceTag, minItems: 2, maxItems: 2 } },
-        required: ["edge"],
-        additionalProperties: false,
+        select: { const: "faces" },
+        of: id,
+        where: obj({ planar: bool, normal: { enum: ["+X", "-X", "+Y", "-Y", "+Z", "-Z"] }, tag: ref("faceTag") }, []),
+        pick: { enum: ["largest", "smallest"] },
       },
+      ["select"],
+    ),
+  ),
+  edgeSelector: oneOf(
+    obj({ edge: arr(ref("faceTag"), { minItems: 2, maxItems: 2 }), near: vec3 }, ["edge"], "The edge shared by two tagged faces."),
+    obj({ select: { const: "edges" }, of: id, where: obj({ face: ref("faceTag") }, []) }, ["select"], "All edges around faces matching where.face (relative to `of`)."),
+  ),
+  edges: oneOf(ref("edgeSelector"), arr(ref("edgeSelector"), { minItems: 1 })),
+  planeSpec: oneOf(
+    obj({ ref: str('"origin.XY", "origin.XZ", "origin.YZ" or a plane feature id') }, ["ref"]),
+    obj({ face: ref("faceSelector") }, ["face"]),
+  ),
+  axisRef: oneOf(
+    obj({ ref: { enum: ["origin.X", "origin.Y", "origin.Z"] } }, ["ref"]),
+    obj({ line: str('Sketch line, e.g. "sk1.l3"') }, ["line"]),
+    obj({ edge: ref("edgeSelector") }, ["edge"]),
+  ),
+  profile: obj(
+    { sketch: id, regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })) },
+    ["sketch"],
+    'Sketch regions; "all" (default) takes regions at odd nesting depth, so circles inside a rectangle become holes.',
+  ),
+  patternSource: oneOf(obj({ features: arr(id, { minItems: 1 }) }, ["features"]), obj({ bodies: arr(id, { minItems: 1 }) }, ["bodies"])),
+  mode: { enum: ["new_body", "join", "cut", "intersect"] },
+  entity: tagged("type", {
+    point: obj({ id, type: { const: "point" }, x: num, y: num, ...construction }, ["id", "type", "x", "y"]),
+    line: obj({ id, type: { const: "line" }, p1: id, p2: id, ...construction }, ["id", "type", "p1", "p2"]),
+    circle: obj({ id, type: { const: "circle" }, center: id, radius: { type: "number", exclusiveMinimum: 0 }, ...construction }, ["id", "type", "center", "radius"]),
+    arc: obj({ id, type: { const: "arc" }, center: id, start: id, end: id, ...construction }, ["id", "type", "center", "start", "end"]),
+    projection: obj({ id, type: { const: "projection" }, edges: arr(ref("edgeSelector"), { minItems: 1 }), ...construction }, ["id", "type", "edges"]),
+  }),
+  constraint: tagged("type", constraintVariants),
+  feature: tagged("op", {
+    sketch: feature("sketch", { plane: ref("planeSpec"), entities: arr(ref("entity")), constraints: arr(ref("constraint")) }, ["plane", "entities", "constraints"]),
+    plane: feature("plane", { base: ref("planeSpec"), offset: ref("expr"), angle: ref("expr") }, ["base", "offset"]),
+    extrude: feature(
+      "extrude",
       {
-        type: "object",
-        description:
-          "All edges bounding faces matching where.face. A tag without a dot is relative to `of` (feature id).",
-        properties: {
-          select: { const: "edges" },
-          of: id,
-          where: {
-            type: "object",
-            properties: { face: faceTag },
-            additionalProperties: false,
-          },
-        },
-        required: ["select"],
-        additionalProperties: false,
+        profile: ref("profile"),
+        extent: { enum: ["blind", "symmetric", "two_sided", "through_all"] },
+        distance: ref("expr"),
+        distance2: ref("expr"),
+        flip: bool,
+        mode: ref("mode"),
+        targets: arr(id),
       },
-    ],
-  },
-  sketch: {
-    type: "object",
-    properties: {
-      ...common,
-      op: { const: "sketch" },
-      plane: {
-        type: "object",
-        properties: { ref: { enum: ["origin.XY", "origin.XZ", "origin.YZ"] } },
-        required: ["ref"],
-        additionalProperties: false,
+      ["profile", "extent", "distance", "mode"],
+    ),
+    revolve: feature(
+      "revolve",
+      { profile: ref("profile"), axis: ref("axisRef"), angle: ref("expr"), symmetric: bool, mode: ref("mode"), targets: arr(id) },
+      ["profile", "axis", "angle", "mode"],
+    ),
+    fillet: feature("fillet", { edges: ref("edges"), radius: ref("expr") }, ["edges", "radius"]),
+    chamfer: feature("chamfer", { edges: ref("edges"), distance: ref("expr") }, ["edges", "distance"]),
+    shell: feature("shell", { faces: arr(ref("faceSelector")), thickness: ref("expr"), outward: bool }, ["faces", "thickness"]),
+    linear_pattern: feature(
+      "linear_pattern",
+      {
+        source: ref("patternSource"),
+        direction: ref("axisRef"),
+        count: ref("expr"),
+        spacing: ref("expr"),
+        direction2: ref("axisRef"),
+        count2: ref("expr"),
+        spacing2: ref("expr"),
       },
-      entities: {
-        type: "array",
-        maxItems: 1000,
-        items: {
-          type: "object",
-          description:
-            "Rectangle with lower-left corner and size [width, height]. Its edges are named bottom, right, top, left; its region is <sketch>.<entity>.region.",
-          properties: {
-            id,
-            type: { const: "rectangle" },
-            corner: { type: "array", items: { $ref: "#/definitions/expr" }, minItems: 2, maxItems: 2 },
-            size: { type: "array", items: { $ref: "#/definitions/expr" }, minItems: 2, maxItems: 2 },
-          },
-          required: ["id", "type", "corner", "size"],
-          additionalProperties: false,
-        },
-      },
-      constraints: {
-        type: "array",
-        maxItems: 1000,
-        items: { type: "object", properties: { type: { type: "string" } }, required: ["type"] },
-      },
-    },
-    required: ["id", "op", "plane", "entities"],
-    additionalProperties: false,
-  },
-  extrude: {
-    type: "object",
-    properties: {
-      ...common,
-      op: { const: "extrude" },
-      profile: {
-        type: "object",
-        properties: { ref: { type: "string", description: "e.g. \"sk1.r1.region\"" } },
-        required: ["ref"],
-        additionalProperties: false,
-      },
-      distance: { $ref: "#/definitions/expr" },
-      mode: { enum: ["new_body"] },
-    },
-    required: ["id", "op", "profile", "distance", "mode"],
-    additionalProperties: false,
-  },
-  fillet: {
-    type: "object",
-    properties: {
-      ...common,
-      op: { const: "fillet" },
-      edges: {
-        oneOf: [
-          { $ref: "#/definitions/edgeSelector" },
-          { type: "array", items: { $ref: "#/definitions/edgeSelector" }, minItems: 1 },
-        ],
-      },
-      radius: { $ref: "#/definitions/expr" },
-    },
-    required: ["id", "op", "edges", "radius"],
-    additionalProperties: false,
-  },
-  feature: {
-    type: "object",
-    required: ["op"],
-    properties: { op: { enum: ["sketch", "extrude", "fillet"] } },
-    allOf: [
-      { if: { properties: { op: { const: "sketch" } } }, then: { $ref: "#/definitions/sketch" } },
-      { if: { properties: { op: { const: "extrude" } } }, then: { $ref: "#/definitions/extrude" } },
-      { if: { properties: { op: { const: "fillet" } } }, then: { $ref: "#/definitions/fillet" } },
-    ],
-  },
-} as const;
+      ["source", "direction", "count", "spacing"],
+    ),
+    circular_pattern: feature("circular_pattern", { source: ref("patternSource"), axis: ref("axisRef"), count: ref("expr"), angle: ref("expr") }, ["source", "axis", "count"]),
+    mirror: feature("mirror", { source: ref("patternSource"), plane: ref("planeSpec") }, ["source", "plane"]),
+    boolean: feature(
+      "boolean",
+      { operation: { enum: ["union", "subtract", "intersect"] }, target: id, tools: arr(id, { minItems: 1 }), keepTools: bool },
+      ["operation", "target", "tools"],
+    ),
+    import: feature("import", { format: { enum: ["step", "stl"] }, fileName: { type: "string", maxLength: 256 }, data: { type: "string", maxLength: 64 * 1024 * 1024 } }, ["format", "fileName", "data"]),
+  }),
+};
 
 export const documentSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
   $id: "https://opencad.dev/schema/document.json",
-  type: "object",
-  properties: {
-    format: { const: "opencad/1" },
-    params: {
-      type: "object",
-      propertyNames: { pattern: "^[A-Za-z_][A-Za-z0-9_]*$" },
-      additionalProperties: { $ref: "#/definitions/expr" },
+  ...obj(
+    {
+      format: { const: "opencad/1" },
+      params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") },
+      features: arr(ref("feature")),
+      rollback: oneOf({ type: "null" }, id),
     },
-    features: { type: "array", maxItems: 10000, items: { $ref: "#/definitions/feature" } },
-    rollback: { oneOf: [{ type: "null" }, id] },
-  },
-  required: ["format", "params", "features", "rollback"],
-  additionalProperties: false,
+    ["format", "params", "features", "rollback"],
+  ),
   definitions,
-} as const;
+};
 
 export const docOpSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
   $id: "https://opencad.dev/schema/op.json",
-  type: "object",
-  required: ["type"],
-  properties: {
-    type: { enum: ["add_features", "edit_feature", "delete_feature", "set_param", "set_rollback", "replace"] },
-  },
-  allOf: [
-    {
-      if: { properties: { type: { const: "add_features" } } },
-      then: {
-        properties: {
-          type: true,
-          features: { type: "array", items: { $ref: "#/definitions/feature" }, minItems: 1 },
-          after: { oneOf: [{ type: "null" }, id] },
-        },
-        required: ["features"],
-        additionalProperties: false,
-      },
-    },
-    {
-      if: { properties: { type: { const: "edit_feature" } } },
-      then: {
-        properties: { type: true, id, patch: { type: "object" } },
-        required: ["id", "patch"],
-        additionalProperties: false,
-      },
-    },
-    {
-      if: { properties: { type: { const: "delete_feature" } } },
-      then: { properties: { type: true, id }, required: ["id"], additionalProperties: false },
-    },
-    {
-      if: { properties: { type: { const: "set_param" } } },
-      then: {
-        properties: {
-          type: true,
-          name: id,
-          expr: { oneOf: [{ type: "null" }, { $ref: "#/definitions/expr" }] },
-        },
-        required: ["name", "expr"],
-        additionalProperties: false,
-      },
-    },
-    {
-      if: { properties: { type: { const: "set_rollback" } } },
-      then: { properties: { type: true, id: { oneOf: [{ type: "null" }, id] } }, required: ["id"], additionalProperties: false },
-    },
-    {
-      if: { properties: { type: { const: "replace" } } },
-      then: { properties: { type: true, doc: { type: "object" } }, required: ["doc"], additionalProperties: false },
-    },
-  ],
+  ...tagged("type", {
+    add_features: obj({ type: true, features: arr(ref("feature"), { minItems: 1 }), after: oneOf({ type: "null" }, id) }, ["features"]),
+    edit_feature: obj({ type: true, id, patch: { type: "object" } }, ["id", "patch"]),
+    delete_feature: obj({ type: true, id }, ["id"]),
+    move_feature: obj({ type: true, id, after: oneOf({ type: "null" }, id) }, ["id", "after"]),
+    set_param: obj({ type: true, name: id, expr: oneOf({ type: "null" }, ref("expr")) }, ["name", "expr"]),
+    rename_param: obj({ type: true, name: id, to: id }, ["name", "to"]),
+    set_rollback: obj({ type: true, id: oneOf({ type: "null" }, id) }, ["id"]),
+    replace: obj({ type: true, doc: { type: "object" } }, ["doc"]),
+  }),
   definitions,
-} as const;
+};

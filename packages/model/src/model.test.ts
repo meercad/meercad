@@ -28,6 +28,18 @@ describe("expressions", () => {
 });
 
 describe("DocumentStore", () => {
+  it("renames params everywhere and moves features", () => {
+    const s = new DocumentStore(doc("h * 2"));
+    s.apply({ type: "set_param", name: "w", expr: "h + 1mm" });
+    s.apply({ type: "rename_param", name: "h", to: "height" });
+    expect(s.doc.params).toEqual({ height: "height * 2", w: "height + 1mm" });
+    expect(s.doc.features[1]).toMatchObject({ distance: "height" });
+    expect(() => s.apply({ type: "move_feature", id: "fi1", after: "sk1" })).toThrow(/later feature/);
+    s.apply({ type: "add_features", features: [{ id: "sk2", op: "sketch", plane: { ref: "origin.XZ" }, entities: [], constraints: [] }] });
+    s.apply({ type: "move_feature", id: "sk2", after: null });
+    expect(s.doc.features.map((f) => f.id)).toEqual(["sk2", "sk1", "ex1", "fi1"]);
+  });
+
   it("applies ops, supports undo/redo, rejects invalid ops atomically", () => {
     const s = new DocumentStore();
     s.apply({ type: "set_param", name: "h", expr: "10 mm" });
@@ -60,8 +72,8 @@ const doc = (h: number | string, r = 2): OpencadDocument => ({
   format: "opencad/1",
   params: { h },
   features: [
-    { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: [{ id: "r1", type: "rectangle", corner: [0, 0], size: [4, 2] }] },
-    { id: "ex1", op: "extrude", profile: { ref: "sk1.r1.region" }, distance: "h", mode: "new_body" },
+    { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: [], constraints: [] },
+    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "h", mode: "new_body" },
     { id: "fi1", op: "fillet", edges: { select: "edges", of: "ex1" }, radius: r },
   ],
   rollback: null,

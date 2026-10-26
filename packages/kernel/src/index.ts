@@ -1,8 +1,10 @@
 export { loadOcct, occtErrorMessage, type OC } from "./occt.js";
 export { Arena } from "./arena.js";
 export { Body } from "./body.js";
-export { OcctBackend, type ModelState } from "./backend.js";
+export { OcctBackend } from "./backend.js";
+export type { ModelState, SketchResult, ToolRecord } from "./state.js";
 export { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
-export { KernelSession, type RebuildReport } from "./session.js";
+export { KernelSession, type RebuildReport, type SketchView, type ReferenceView } from "./session.js";
+export { exportStep, measure, type PickRef, type Measurement } from "./tools.js";
 export type { WorkerRequest, WorkerResponse } from "./protocol.js";
 export { KernelClient, SupersededError, type RebuildOutput } from "./client.js";

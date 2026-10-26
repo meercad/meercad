@@ -1,11 +1,13 @@
 import type { OpencadDocument } from "@opencad/schema";
 import type { BodyMesh } from "./mesh.js";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
-import type { RebuildReport } from "./session.js";
+import type { RebuildReport, ReferenceView } from "./session.js";
+import type { Measurement, PickRef } from "./tools.js";
 
 export interface RebuildOutput {
   report: RebuildReport;
   meshes: BodyMesh[];
+  references: ReferenceView[];
 }
 
 export class SupersededError extends Error {
@@ -14,10 +16,13 @@ export class SupersededError extends Error {
   }
 }
 
+type Pending = { resolve: (r: WorkerResponse) => void; reject: (e: Error) => void };
+type Distribute<T> = T extends unknown ? Omit<T, "seq"> : never;
+
 /** Main-thread handle to the kernel worker. */
 export class KernelClient {
   private seq = 0;
-  private pending = new Map<number, { resolve: (r: RebuildOutput) => void; reject: (e: Error) => void }>();
+  private pending = new Map<number, Pending>();
   readonly ready: Promise<{ initMs: number }>;
 
   constructor(private readonly worker: Worker) {
@@ -40,25 +45,42 @@ export class KernelClient {
       const p = this.pending.get(msg.seq);
       if (!p) return;
       this.pending.delete(msg.seq);
-      if (msg.type === "rebuilt") p.resolve({ report: msg.report, meshes: msg.meshes });
-      else p.reject(msg.message === "superseded" ? new SupersededError() : new Error(msg.message));
+      if (msg.type === "failed") p.reject(msg.message === "superseded" ? new SupersededError() : new Error(msg.message));
+      else p.resolve(msg);
     });
   }
 
   /** Rebuilds the document. Older rebuilds still queued reject with SupersededError. */
-  rebuild(doc: OpencadDocument): Promise<RebuildOutput> {
-    return this.send({ type: "rebuild", seq: ++this.seq, doc });
+  async rebuild(doc: OpencadDocument): Promise<RebuildOutput> {
+    const r = await this.send({ type: "rebuild", doc });
+    if (r.type !== "rebuilt") throw new Error("unexpected response");
+    return { report: r.report, meshes: r.meshes, references: r.references };
   }
 
-  /** Rebuilds without touching the main session (for validating AI proposals). */
-  sandbox(doc: OpencadDocument): Promise<RebuildReport> {
-    return this.send({ type: "sandbox", seq: ++this.seq, doc }).then((r) => r.report);
+  /** Rebuilds without touching the main session (AI proposals, feature previews). */
+  async sandbox(doc: OpencadDocument): Promise<RebuildOutput> {
+    const r = await this.send({ type: "sandbox", doc });
+    if (r.type !== "rebuilt") throw new Error("unexpected response");
+    return { report: r.report, meshes: r.meshes, references: r.references };
   }
 
-  private send(req: WorkerRequest): Promise<RebuildOutput> {
+  async exportStep(bodies?: string[]): Promise<Uint8Array> {
+    const r = await this.send({ type: "export_step", ...(bodies ? { bodies } : {}) });
+    if (r.type !== "exported") throw new Error("unexpected response");
+    return r.data;
+  }
+
+  async measure(a: PickRef, b?: PickRef): Promise<Measurement> {
+    const r = await this.send({ type: "measure", a, ...(b ? { b } : {}) });
+    if (r.type !== "measured") throw new Error("unexpected response");
+    return r.result;
+  }
+
+  private send(req: Distribute<WorkerRequest>): Promise<WorkerResponse> {
     return new Promise((resolve, reject) => {
-      this.pending.set(req.seq, { resolve, reject });
-      this.worker.postMessage(req);
+      const seq = ++this.seq;
+      this.pending.set(seq, { resolve, reject });
+      this.worker.postMessage({ ...req, seq } as WorkerRequest);
     });
   }
 

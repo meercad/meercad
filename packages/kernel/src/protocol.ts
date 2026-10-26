@@ -1,14 +1,19 @@
 import type { OpencadDocument } from "@opencad/schema";
 import type { BodyMesh } from "./mesh.js";
-import type { RebuildReport } from "./session.js";
+import type { RebuildReport, ReferenceView } from "./session.js";
+import type { Measurement, PickRef } from "./tools.js";
 
 export type WorkerRequest =
   | { type: "rebuild"; seq: number; doc: OpencadDocument; mesh?: boolean }
-  /** Rebuild in a throw-away session (AI sandbox); never touches the main session's cache. */
-  | { type: "sandbox"; seq: number; doc: OpencadDocument };
+  /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
+  | { type: "sandbox"; seq: number; doc: OpencadDocument }
+  | { type: "export_step"; seq: number; bodies?: string[] }
+  | { type: "measure"; seq: number; a: PickRef; b?: PickRef };
 
 export type WorkerResponse =
   | { type: "ready"; initMs: number }
   | { type: "fatal"; message: string }
-  | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[] }
+  | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] }
+  | { type: "exported"; seq: number; data: Uint8Array }
+  | { type: "measured"; seq: number; result: Measurement }
   | { type: "failed"; seq: number; message: string };

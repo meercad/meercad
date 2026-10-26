@@ -55,3 +55,22 @@ export function meshVolume(vertices: Float32Array): number {
   }
   return v;
 }
+
+/** Parses binary or ASCII STL into an indexed mesh (vertices are not merged). */
+export function parseStl(data: Uint8Array): TriangleMesh {
+  const head = new TextDecoder().decode(data.subarray(0, Math.min(data.length, 512))).trimStart();
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const isBinary = data.byteLength >= 84 && data.byteLength === 84 + view.getUint32(80, true) * 50;
+  let vertices: Float32Array;
+  if (isBinary || !head.startsWith("solid")) {
+    vertices = readStl(data).vertices;
+  } else {
+    const text = new TextDecoder().decode(data);
+    const nums: number[] = [];
+    const re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
+    for (let m = re.exec(text); m; m = re.exec(text)) nums.push(Number(m[1]), Number(m[2]), Number(m[3]));
+    if (nums.length % 9 !== 0 || nums.some((n) => !Number.isFinite(n))) throw new Error("malformed ASCII STL");
+    vertices = Float32Array.from(nums);
+  }
+  return { positions: vertices, indices: Uint32Array.from({ length: vertices.length / 3 }, (_, i) => i) };
+}

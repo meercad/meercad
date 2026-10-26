@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { proposeWithClaude, type Sandbox } from "@opencad/ai";
-import { KernelSession } from "@opencad/kernel";
 import { emptyDocument } from "@opencad/schema";
-import { getOcct } from "./helpers.js";
+import { newSession, rect } from "./helpers.js";
 
 const sandbox: Sandbox = async (doc) => {
-  const s = new KernelSession(await getOcct());
+  const s = await newSession();
   try {
     return s.rebuild(doc, { mesh: false }).report;
   } finally {
@@ -27,8 +26,8 @@ const boxOps = (filletEdges: unknown) => [
   {
     type: "add_features",
     features: [
-      { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: [{ id: "r1", type: "rectangle", corner: [0, 0], size: ["w", "d"] }] },
-      { id: "ex1", op: "extrude", profile: { ref: "sk1.r1.region" }, distance: "h", mode: "new_body" },
+      { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("l", 0, 0, 40, 20), constraints: [] },
+      { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "h", mode: "new_body" },
       { id: "fi1", op: "fillet", edges: filletEdges, radius: "2 mm" },
     ],
   },

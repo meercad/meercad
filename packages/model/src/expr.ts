@@ -5,7 +5,8 @@
 
 import type { Expr } from "@opencad/schema";
 
-const UNITS: Record<string, number> = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8 };
+// Lengths normalise to mm, angles to degrees.
+const UNITS: Record<string, number> = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8, deg: 1, rad: 180 / Math.PI };
 const CONSTANTS: Record<string, number> = { pi: Math.PI };
 const FUNCTIONS: Record<string, (...a: number[]) => number> = {
   min: Math.min,
@@ -196,4 +197,15 @@ export function resolveParams(params: Readonly<Record<string, Expr>>): ParamReso
 
   for (const name of Object.keys(params)) visit(name);
   return { values, errors };
+}
+
+/** Rewrites references to parameter `from` as `to` in an expression. */
+export function renameInExpr(expr: Expr, from: string, to: string): Expr {
+  if (typeof expr === "number") return expr;
+  return expr.replace(/[A-Za-z_][A-Za-z0-9_]*/g, (m, offset: number) => {
+    if (m !== from) return m;
+    // A unit right after a number literal is not a parameter.
+    const before = expr.slice(0, offset).trimEnd();
+    return /[0-9.]$/.test(before) && m in UNITS ? m : to;
+  });
 }
