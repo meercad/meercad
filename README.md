@@ -12,6 +12,8 @@ drag **leocad** to Applications. Builds are not notarized yet: on first start ch
 `xattr -dr com.apple.quarantine /Applications/leocad.app`.
 
 Every push to `main` publishes a fresh build as the **latest** pre-release; tags `v*` create versioned releases.
+The app checks for new releases at start and hourly and offers **Update now** — it downloads the new
+version, replaces itself and restarts (also available via *leocad → Check for Updates…*).
 
 ## Your files
 
@@ -21,9 +23,10 @@ Exchange with other CAD tools via STEP; 3D printing via STL/3MF; laser cutting v
 
 ## Let Claude drive it (MCP)
 
-Click the plug icon in the top bar, enable *Allow assistants to control leocad* and copy the shown
-configuration into Claude Desktop (Settings → Developer → Edit Config) or run the shown
-`claude mcp add …` command for Claude Code. Tools: `get_guide`, `get_model`, `get_sketch`,
+The desktop app accepts assistant connections out of the box (switch it off via the plug icon).
+Click the plug icon to copy the configuration for Claude Desktop (Settings → Developer → Edit Config)
+or the `claude mcp add …` command for Claude Code; the assistant starts the MCP server itself and you
+watch it work live in the app — including previews of ideas before they are applied. Tools: `get_guide`, `get_model`, `get_sketch`,
 `apply_ops`, `preview_ops`, `undo`/`redo`, project management, `render_view`, `set_view`,
 `measure`, `export`, `status`. The bridge only listens on `127.0.0.1`.
 
