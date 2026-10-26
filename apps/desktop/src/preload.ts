@@ -19,7 +19,7 @@ const api = {
     check: () => ipcRenderer.invoke("update:check"),
     install: () => ipcRenderer.invoke("update:install"),
   },
-  on: (channel: "menu" | "open-project" | "update-available" | "update-progress" | "update-none" | "update-error", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "update-available" | "update-progress" | "update-none" | "update-error" | "error", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

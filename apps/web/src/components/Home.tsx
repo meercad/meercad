@@ -1,5 +1,6 @@
 import { Box, FileUp, Plus, Trash } from "lucide-react";
 import { useEffect } from "react";
+import { askConfirm } from "./Ask";
 import { deleteProject, desktop } from "../lib/persistence";
 import { newProject, openProject, refreshProjects, useApp } from "../store";
 import { EXAMPLES } from "../lib/examples";
@@ -68,9 +69,9 @@ export function Home() {
                 <button
                   className="icon-btn sm"
                   title="Delete project"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete "${p.name}"? This cannot be undone.`)) void deleteProject(p.id).then(refreshProjects);
+                    if (await askConfirm({ title: `Delete "${p.name}"?`, message: "The project file is removed. This cannot be undone.", confirmLabel: "Delete project", danger: true })) void deleteProject(p.id).then(refreshProjects);
                   }}
                 >
                   <Trash />

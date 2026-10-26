@@ -23,7 +23,7 @@ const STEPS: Step[] = [
     title: "Tools",
     body: (
       <>
-        Every tool shows its shortcut in the corner, e.g. <Kbd k="S" /> Sketch, <Kbd k="E" /> Extrude, <Kbd k="F" /> Fillet. <Kbd k="X" /> searches all commands, <Kbd k="?" /> lists every shortcut.
+        Tools live in this rail, grouped like in Shapr3D: hover a group to open it. Every tool shows its shortcut, e.g. <Kbd k="S" /> Sketch, <Kbd k="E" /> Extrude, <Kbd k="F" /> Fillet. <Kbd k="X" /> searches all commands, <Kbd k="?" /> lists every shortcut.
       </>
     ),
   },

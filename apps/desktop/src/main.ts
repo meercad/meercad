@@ -202,7 +202,7 @@ async function openExternalFile(file: string): Promise<void> {
     mainWindow.webContents.send("open-project", id);
     mainWindow.focus();
   } catch (e) {
-    dialog.showErrorBox("Could not open file", e instanceof Error ? e.message : String(e));
+    mainWindow.webContents.send("error", `Could not open ${basename(file)}: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

@@ -1,5 +1,6 @@
 /** File import/export and share links. */
 import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@leocad/io";
+import { showNotice } from "./Ask";
 import { nextFeatureId } from "@leocad/model";
 import { validateDocument, type SketchConstraint, type SketchEntity } from "@leocad/schema";
 import { desktop } from "../lib/persistence";
@@ -76,7 +77,7 @@ export async function shareLink(): Promise<void> {
     await navigator.clipboard.writeText(url);
     toast(`Link copied (${Math.round(url.length / 100) / 10} kB). The model lives in the link and never touches a server.`);
   } catch {
-    prompt("Copy this link:", url);
+    await showNotice({ title: "Share link", message: "Copy this link. The model lives in the link itself.", value: url });
   }
 }
 

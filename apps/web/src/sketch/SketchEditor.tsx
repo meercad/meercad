@@ -11,7 +11,8 @@ import { frameMatrix, THREE, type Viewport } from "@leocad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
-import { activeSketch, applyConstraint, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
+import { Kbd } from "../components/Kbd";
+import { activeSketch, applyConstraint, CONSTRAINT_TOOLS, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
 import { GLYPH } from "./icons";
 import { getSolver } from "./solver";
 import { sameSel, setSketchSelection, setTool, useSketchUi, type SketchSel, type SketchTool } from "./state";
@@ -831,6 +832,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             {tip.text}
           </div>
         ) : null}
+      </div>
+      <div className="constraint-palette">
+        <div className="palette-title">Constraints</div>
+        {CONSTRAINT_TOOLS.map((c) => (
+          <button key={c.type} onClick={() => applyConstraint(c.type)} title={`${c.label} — ${c.hint}`}>
+            <c.icon />
+            <span>{c.label}</span>
+            {c.key ? <Kbd k={c.key} /> : null}
+          </button>
+        ))}
       </div>
       <div className="sketch-hud">
         <div className="card2">

@@ -11,7 +11,7 @@ const FACES: { label: string; n: V; u: V; v: V }[] = [
   { label: "RIGHT", n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, -1] },
   { label: "LEFT", n: [-1, 0, 0], u: [0, -1, 0], v: [0, 0, -1] },
 ];
-const SIZE = 70;
+const SIZE = 86;
 
 /**
  * Orientation cube. Each face is split 3×3: the center looks at the face, border cells at the

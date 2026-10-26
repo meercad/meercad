@@ -1,5 +1,6 @@
 import { Box, Copy, Eye, EyeOff, FileDown, Layers, Pencil, Plus, SkipBack, SkipForward, Trash, X } from "lucide-react";
 import { useState } from "react";
+import { askConfirm, askText } from "./Ask";
 import { referencedNames } from "@leocad/model";
 import type { Feature } from "@leocad/schema";
 import { FEATURES, featureName } from "../lib/features";
@@ -55,8 +56,8 @@ function FeatureList() {
       {
         label: "Rename",
         icon: <Pencil />,
-        onClick: () => {
-          const name = prompt("Feature name", featureName(f));
+        onClick: async () => {
+          const name = await askText({ title: "Rename feature", label: "Name", value: featureName(f) });
           if (name !== null) apply({ type: "edit_feature", id: f.id, patch: { name: name.trim() || null } });
         },
       },
@@ -70,7 +71,7 @@ function FeatureList() {
           ]
         : []),
       "sep",
-      { label: "Delete", icon: <Trash />, danger: true, kbd: "⌫", onClick: () => deleteFeature(f) },
+      { label: "Delete", icon: <Trash />, danger: true, kbd: "⌫", onClick: () => void deleteFeature(f) },
     ]);
 
   return (
@@ -119,7 +120,7 @@ function FeatureList() {
                 onContextMenu={(e) => (e.preventDefault(), menu(f, e.clientX, e.clientY))}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") editFeature(f.id);
-                  if (e.key === "Delete" || e.key === "Backspace") deleteFeature(f);
+                  if (e.key === "Delete" || e.key === "Backspace") void deleteFeature(f);
                 }}
                 tabIndex={0}
                 title={st?.message ?? `${FEATURES[f.op].label}${st && !st.cached ? ` · ${st.ms.toFixed(1)} ms` : ""}`}
@@ -173,10 +174,10 @@ export function toggleHidden(id: string): void {
   });
 }
 
-export function deleteFeature(f: Feature): void {
+export async function deleteFeature(f: Feature): Promise<void> {
   const doc = useApp.getState().doc;
   const dependents = doc.features.filter((g) => g !== f && JSON.stringify(g).includes(`"${f.id}`) && doc.features.indexOf(g) > doc.features.indexOf(f));
-  if (dependents.length && !confirm(`${featureName(f)} is used by ${dependents.map(featureName).join(", ")}. Delete them too?`)) return;
+  if (dependents.length && !(await askConfirm({ title: `Delete ${featureName(f)}?`, message: `It is used by ${dependents.map(featureName).join(", ")}. Those will be deleted too.`, confirmLabel: `Delete ${dependents.length + 1} features`, danger: true }))) return;
   const ops = [...dependents].reverse().map((g) => ({ type: "delete_feature" as const, id: g.id }));
   if (apply(...ops, { type: "delete_feature", id: f.id })) toast(`Deleted ${featureName(f)}`);
 }
@@ -244,8 +245,8 @@ function Params() {
             <button
               className="icon-btn sm"
               title={used(name) ? "Still in use" : "Delete"}
-              onClick={() => {
-                if (used(name) && !confirm(`"${name}" is still used. Delete anyway?`)) return;
+              onClick={async () => {
+                if (used(name) && !(await askConfirm({ title: `Delete variable "${name}"?`, message: "It is still used by features or other variables; those will show an error until you fix them.", confirmLabel: "Delete", danger: true }))) return;
                 apply({ type: "set_param", name, expr: null });
               }}
             >

@@ -5,12 +5,14 @@ import { FeatureDialog } from "./components/FeatureDialog";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
 import { MenuHost } from "./components/Menu";
+import { AskHost } from "./components/Ask";
 import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Tour, tourDone } from "./components/Tour";
 import { Toasts } from "./components/Toasts";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { TopBar } from "./components/TopBar";
+import { Toolbar } from "./components/Toolbar";
 import { ViewportView } from "./components/ViewportView";
 import { importFile } from "./components/io";
 import { initBridge } from "./lib/mcpBridge";
@@ -79,9 +81,11 @@ export function App() {
       else if (cmd === "shortcuts") setHelp((h) => !h);
     });
     const offOpen = desktop.on("open-project", (id) => void openProject(id));
+    const offError = desktop.on("error", (msg) => toast(msg, "error"));
     return () => {
       offMenu();
       offOpen();
+      offError();
     };
   }, []);
   useEffect(() => {
@@ -137,7 +141,7 @@ export function App() {
       if (s.dialog) return;
       if ((e.key === "Delete" || e.key === "Backspace") && s.selectedFeature) {
         const f = s.doc.features.find((x) => x.id === s.selectedFeature);
-        if (f) deleteFeature(f);
+        if (f) void deleteFeature(f);
         return;
       }
       if (e.key === "Enter" && s.selectedFeature) return editFeature(s.selectedFeature);
@@ -189,6 +193,7 @@ export function App() {
           <div className="right">{guide ? <HelpPanel onClose={() => setGuide(false)} onTour={() => (setGuide(false), setTour(true))} onShortcuts={() => setHelp(true)} /> : null}</div>
           <div className="view-wrap" style={{ gridArea: "view", position: "relative", minWidth: 0, minHeight: 0, display: "flex" }}>
             <ViewportView />
+            <Toolbar />
             <FeatureDialog />
           </div>
         </div>
@@ -199,6 +204,7 @@ export function App() {
       <UpdateBanner />
       <Toasts />
       <MenuHost />
+      <AskHost />
     </>
   );
 }

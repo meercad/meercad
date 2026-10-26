@@ -533,3 +533,81 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 @media (max-width: 1180px) { .topbar .doc-name { max-width: 120px; } }
 
 .view-controls .mode-btn { width: auto; padding: 0 8px; gap: 5px; font-size: 11.5px; }
+
+/* sketch constraint palette (right side, like Shapr3D) */
+.constraint-palette { position: absolute; top: calc(var(--top) + 178px); right: 14px; width: 172px; max-height: calc(100% - var(--top) - 250px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 6px; border-radius: 16px; z-index: 4;
+  background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); }
+.constraint-palette .palette-title { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 4px 8px 6px; }
+.constraint-palette button { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border: none; background: none; border-radius: 9px; font-size: 12.5px; color: var(--text); text-align: left; }
+.constraint-palette button:hover { background: var(--glass-hover); color: var(--accent); }
+.constraint-palette button svg { width: 17px; height: 17px; flex: none; }
+.constraint-palette button span { flex: 1; }
+/* bigger, clearer view cube with breathing room below the bar */
+.viewcube { top: calc(var(--top) + 6px); right: 26px; width: 130px; height: 150px; }
+.viewcube .cube { top: 16px; left: 22px; width: 86px; height: 86px; }
+.viewcube .face { background: linear-gradient(180deg, rgb(255 255 255 / 0.96), rgb(236 239 247 / 0.96)) !important; border: 1.5px solid #9aa4b8 !important; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.8), 0 1px 3px rgb(30 27 75 / 0.12); border-radius: 7px; }
+.viewcube .face-label { font-size: 11px; font-weight: 750; color: #3b4458; }
+.viewcube .cell.hot { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+:root[data-theme="dark"] .viewcube .face { background: linear-gradient(180deg, rgb(58 62 80 / 0.96), rgb(40 43 58 / 0.96)) !important; border-color: #6b7591 !important; }
+:root[data-theme="dark"] .viewcube .face-label { color: #dfe4ef; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .viewcube .face { background: linear-gradient(180deg, rgb(58 62 80 / 0.96), rgb(40 43 58 / 0.96)) !important; border-color: #6b7591 !important; }
+  :root:not([data-theme="light"]) .viewcube .face-label { color: #dfe4ef; }
+}
+.topbar .doc-name { max-width: 170px; }
+.topbar .btn { height: 34px; }
+/* narrow windows: icon-only tools, names stay in the tooltips */
+@media (max-width: 1100px) {
+  .topbar .tool { min-width: 40px; height: 44px; }
+  .topbar .tool > span:not(.kbd) { display: none; }
+  .topbar .doc-name { max-width: 120px; }
+}
+/* in-app confirm / prompt */
+.ask-backdrop { z-index: 80; background: rgb(15 18 35 / 0.28); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: fade-in 0.12s ease-out; }
+.ask { width: min(420px, calc(100vw - 32px)); padding: 22px 22px 18px; border-radius: 22px; background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow), 0 24px 60px rgb(20 20 50 / 0.25); animation: ask-pop 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.ask h3 { margin: 0 0 6px; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.ask p { margin: 0 0 14px; color: var(--text-2); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.ask-field { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 16px; font-size: 12px; color: var(--muted); }
+.ask-field input { height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--glass-border); background: var(--panel); color: var(--text); font-size: 14px; outline: none; }
+.ask-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.ask-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.ask-actions .btn { height: 34px; padding: 0 14px; gap: 8px; }
+.ask-actions .btn .kbd { opacity: 0.7; }
+.ask-actions .btn.danger { background: var(--err); border-color: transparent; color: #fff; }
+.ask-actions .btn.danger .kbd, .ask-actions .btn.primary .kbd { background: rgb(255 255 255 / 0.2); color: inherit; border-color: transparent; }
+@keyframes ask-pop { from { opacity: 0; transform: scale(0.94) translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } }
+/* tool rail (left, grouped like Shapr3D's main menu) */
+.app { --rail: 84px; }
+.toolbar.rail { position: absolute; top: var(--top); left: var(--left); width: 72px; max-width: none; max-height: calc(100% - var(--top) - 64px); overflow: visible; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 6px; border-radius: 20px; z-index: 12;
+  background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); }
+.rail .sep { width: auto; height: 1px; margin: 4px 8px; background: var(--border); flex: none; }
+.rail .tool, .rail-group > .tool { position: relative; width: 100%; min-width: 0; height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0 2px; border: none; border-radius: 13px; background: none; color: var(--text); }
+.rail .tool svg { width: 21px; height: 21px; stroke-width: 1.7; }
+.rail .tool > span { font-size: 10.5px; line-height: 1.1; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.rail .tool:hover, .rail .tool.open { background: var(--glass-hover); }
+.rail .tool.active { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.rail .tool.active > span { color: var(--accent); }
+.rail .tool.primary { background: var(--accent); color: var(--accent-text); }
+.rail .tool.primary > span { color: var(--accent-text); font-weight: 600; }
+.rail .tool > .kbd { position: absolute; top: 3px; right: 3px; transform: scale(0.82); transform-origin: top right; }
+.rail .tool.primary > .kbd { background: rgb(255 255 255 / 0.22); color: inherit; border-color: transparent; }
+.rail-more { position: absolute; right: 5px; bottom: 5px; width: 0; height: 0; border-left: 5px solid transparent; border-bottom: 5px solid var(--muted); }
+.rail-group { position: relative; }
+.rail-flyout { position: absolute; left: calc(100% + 12px); top: -6px; min-width: 250px; padding: 6px; border-radius: 16px; display: flex; flex-direction: column; gap: 1px; z-index: 20;
+  background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow), 0 16px 40px rgb(20 20 50 / 0.16); animation: flyout-in 0.12s ease-out; }
+.rail-flyout::before { content: ""; position: absolute; left: -14px; top: 0; bottom: 0; width: 14px; } /* hover bridge */
+.rail-flyout-title { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 5px 10px 6px; }
+.rail-flyout button { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 4px 10px; border: none; background: none; border-radius: 11px; color: var(--text); text-align: left; }
+.rail-flyout button:hover { background: var(--glass-hover); }
+.rail-flyout button.active { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+.rail-flyout button svg { width: 20px; height: 20px; flex: none; stroke-width: 1.7; }
+.rail-flyout-label { flex: 1; display: flex; flex-direction: column; font-size: 13px; font-weight: 550; }
+.rail-flyout-label small { font-size: 11.5px; font-weight: 400; color: var(--text-2); margin-top: 1px; }
+@keyframes flyout-in { from { opacity: 0; transform: translateX(-4px); } }
+.dialog, .measure-card, .sketch-hud { left: calc(var(--left) + var(--rail)); }
+.topbar .spacer { flex: 1; }
+@media (max-height: 760px) {
+  .rail .tool, .rail-group > .tool { height: 44px; }
+  .rail .tool > span { display: none; }
+}

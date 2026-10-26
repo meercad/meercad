@@ -1,94 +1,221 @@
+/**
+ * The tool rail on the left of the viewport. Like Shapr3D's main menu, tools sit in a few groups that
+ * open as a flyout; single tools are direct buttons. Every entry shows its shortcut.
+ */
 import {
+  Box,
   Check,
-  Hexagon,
-  Keyboard,
-  Scissors,
   Circle,
-  CircleDot,
   Crosshair,
   Dot,
-  Equal,
-  Lock,
+  Hexagon,
+  Import,
   MousePointer2,
+  Move3d,
   Ruler,
+  Scissors,
+  Shapes,
   Slash,
   Spline,
   Square,
   SquareDashed,
-  Upload,
+  SquarePen,
   Waypoints,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
-import type { ComponentType, ReactNode, SVGProps } from "react";
-import { FEATURES, TOOLBAR } from "../lib/features";
-import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch/actions";
+import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
+import type { FeatureOp } from "@leocad/schema";
+import { FEATURES } from "../lib/features";
+import { toggleConstruction } from "../sketch/actions";
 import { setTool, useSketchUi, type SketchTool } from "../sketch/state";
 import { closeSketch, startFeature, useApp } from "../store";
 import { importFile } from "./io";
 import { Kbd } from "./Kbd";
 
-function Tool({ icon: Icon, label, onClick, active, disabled, title, primary, kbd }: { icon: LucideIcon | ComponentType<SVGProps<SVGSVGElement>>; label: string; onClick: () => void; active?: boolean; disabled?: boolean; title?: string; primary?: boolean; kbd?: string }) {
-  return (
-    <button className={`tool ${active ? "active" : ""} ${primary ? "primary" : ""}`} onClick={onClick} disabled={disabled} title={title ?? label}>
-      <Icon />
-      <span>{label}</span>
-      {kbd ? <Kbd k={kbd} /> : null}
-    </button>
-  );
+type Icon = LucideIcon | ComponentType<SVGProps<SVGSVGElement>>;
+
+interface RailTool {
+  id: string;
+  icon: Icon;
+  label: string;
+  kbd?: string;
+  hint?: string;
+  active?: boolean;
+  primary?: boolean;
+  run: () => void;
+}
+interface RailGroup {
+  id: string;
+  icon: Icon;
+  label: string;
+  tools: RailTool[];
+}
+type RailEntry = RailTool | RailGroup | "sep";
+
+const isGroup = (e: RailEntry): e is RailGroup => typeof e === "object" && "tools" in e;
+
+function feature(op: FeatureOp, activeOp: string | undefined): RailTool {
+  const m = FEATURES[op];
+  return { id: op, icon: m.icon, label: m.label, hint: m.hint, active: activeOp === op, run: () => startFeature(op), ...(m.shortcut ? { kbd: m.shortcut } : {}) };
 }
 
-const SKETCH_TOOLS: { tool: SketchTool; icon: LucideIcon; label: string; key: string }[] = [
-  { tool: "select", icon: MousePointer2, label: "Select", key: "Esc" },
-  { tool: "line", icon: Slash, label: "Line", key: "L" },
-  { tool: "rect", icon: Square, label: "Rectangle", key: "R" },
-  { tool: "rect_center", icon: SquareDashed, label: "Center rect", key: "⇧R" },
-  { tool: "circle", icon: Circle, label: "Circle", key: "C" },
-  { tool: "arc", icon: Spline, label: "Arc", key: "A" },
-  { tool: "polygon", icon: Hexagon, label: "Polygon", key: "G" },
-  { tool: "point", icon: Dot, label: "Point", key: "P" },
-  { tool: "trim", icon: Scissors, label: "Trim", key: "T" },
-  { tool: "dimension", icon: Ruler, label: "Dimension", key: "D" },
-  { tool: "project", icon: Waypoints, label: "Use edges", key: "U" },
-];
+function sketchTool(tool: SketchTool, icon: Icon, label: string, kbd: string, current: SketchTool): RailTool {
+  return { id: tool, icon, label, kbd, active: current === tool, run: () => setTool(tool) };
+}
 
-export function Toolbar() {
+function useEntries(): RailEntry[] {
   const sketchId = useApp((s) => s.sketchId);
-  const dialog = useApp((s) => s.dialog);
+  const activeOp = useApp((s) => s.dialog?.feature.op);
   const measure = useApp((s) => s.measure.active);
   const ui = useSketchUi();
 
   if (sketchId) {
-    return (
-      <div className="toolbar">
-        {SKETCH_TOOLS.map((t) => (
-          <Tool key={t.tool} icon={t.icon} label={t.label} title={`${t.label} (${t.key})`} kbd={t.key} active={ui.tool === t.tool} onClick={() => setTool(t.tool)} />
-        ))}
-        <Tool icon={Crosshair} label="Construction" title="Toggle construction geometry (X)" kbd="X" active={ui.construction} onClick={toggleConstruction} />
-        <div className="sep" />
-        {CONSTRAINT_TOOLS.map((c) => (
-          <Tool key={c.type} icon={c.icon} label={c.label} title={`${c.label}${c.key ? ` (${c.key})` : ""} — ${c.hint}`} {...(c.key ? { kbd: c.key } : {})} onClick={() => applyConstraint(c.type)} />
-        ))}
-        <Tool icon={Check} label="Finish" title="Finish sketch (Enter)" kbd="↵" primary onClick={closeSketch} />
-      </div>
-    );
+    const t = ui.tool;
+    return [
+      sketchTool("select", MousePointer2, "Select", "Esc", t),
+      sketchTool("line", Slash, "Line", "L", t),
+      {
+        id: "rects",
+        icon: Square,
+        label: "Rectangle",
+        tools: [sketchTool("rect", Square, "Corner rectangle", "R", t), sketchTool("rect_center", SquareDashed, "Center rectangle", "Shift+R", t)],
+      },
+      sketchTool("circle", Circle, "Circle", "C", t),
+      sketchTool("arc", Spline, "Arc", "A", t),
+      { id: "shapes", icon: Shapes, label: "More", tools: [sketchTool("polygon", Hexagon, "Polygon", "G", t), sketchTool("point", Dot, "Point", "P", t)] },
+      "sep",
+      sketchTool("dimension", Ruler, "Dimension", "D", t),
+      sketchTool("trim", Scissors, "Trim", "T", t),
+      {
+        id: "sketch-tools",
+        icon: Wrench,
+        label: "Tools",
+        tools: [
+          sketchTool("project", Waypoints, "Project model edges", "U", t),
+          { id: "construction", icon: Crosshair, label: "Construction geometry", kbd: "X", active: ui.construction, run: toggleConstruction },
+        ],
+      },
+      "sep",
+      { id: "finish", icon: Check, label: "Finish", kbd: "↵", primary: true, run: closeSketch },
+    ];
   }
 
-  const groups: ReactNode[] = [];
-  TOOLBAR.forEach((op, i) => {
-    const m = FEATURES[op];
-    if (i === 1 || i === 3 || i === 6 || i === 9) groups.push(<div className="sep" key={`s${i}`} />);
-    groups.push(
-      <Tool key={op} icon={m.icon} label={m.label} title={`${m.label}${m.shortcut ? ` (${m.shortcut})` : ""} — ${m.hint}`} {...(m.shortcut ? { kbd: m.shortcut } : {})} active={dialog?.feature.op === op} onClick={() => startFeature(op)} />,
-    );
-  });
-  return (
-    <div className="toolbar">
-      {groups}
-      <div className="sep" />
-      <Tool icon={Ruler} label="Measure" title="Measure (Shift+M)" kbd="Shift+M" active={measure} onClick={() => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null }))} />
-      <Tool icon={Upload} label="Import" title="Import STEP, STL, DXF or SVG (⌘O)" kbd="Mod+O" onClick={() => importFile()} />
-    </div>
-  );
+  return [
+    feature("sketch", activeOp),
+    "sep",
+    { id: "create", icon: Box, label: "Create", tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("plane", activeOp)] },
+    { id: "modify", icon: SquarePen, label: "Modify", tools: [feature("fillet", activeOp), feature("chamfer", activeOp), feature("shell", activeOp), feature("boolean", activeOp)] },
+    {
+      id: "transform",
+      icon: Move3d,
+      label: "Transform",
+      tools: [feature("transform", activeOp), feature("linear_pattern", activeOp), feature("circular_pattern", activeOp), feature("mirror", activeOp)],
+    },
+    "sep",
+    {
+      id: "measure",
+      icon: Ruler,
+      label: "Measure",
+      kbd: "Shift+M",
+      hint: "Distances, angles and radii",
+      active: measure,
+      run: () => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null })),
+    },
+    { id: "import", icon: Import, label: "Import", kbd: "Mod+O", hint: "STEP, STL, DXF or SVG", run: () => void importFile() },
+  ];
 }
 
-export const CONSTRAINT_ICONS = { Equal, Lock, CircleDot };
+export function Toolbar() {
+  const entries = useEntries();
+  const [open, setOpen] = useState<string | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const closeTimer = useRef<number>(0);
+  const rail = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!rail.current?.contains(e.target as Node)) setOpen(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
+    window.addEventListener("pointerdown", away);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener("pointerdown", away);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  // Any tool started by shortcut closes an open flyout.
+  const entryKey = entries.map((e) => (typeof e === "object" ? e.id : e)).join();
+  useEffect(() => setOpen(null), [entryKey]);
+
+  const hover = (id: string | null) => {
+    window.clearTimeout(closeTimer.current);
+    if (pinned && id === null) return;
+    if (id === null) closeTimer.current = window.setTimeout(() => setOpen(null), 220);
+    else setOpen(id);
+  };
+  const run = (t: RailTool) => {
+    setOpen(null);
+    setPinned(false);
+    t.run();
+  };
+
+  return (
+    <nav className="toolbar rail" ref={rail} aria-label="Tools" onPointerLeave={() => hover(null)}>
+      {entries.map((e, i) => {
+        if (e === "sep") return <div className="sep" key={`sep${i}`} />;
+        if (!isGroup(e)) {
+          return (
+            <button
+              key={e.id}
+              className={`tool ${e.active ? "active" : ""} ${e.primary ? "primary" : ""}`}
+              title={`${e.label}${e.hint ? ` — ${e.hint}` : ""}`}
+              onPointerEnter={() => hover(null)}
+              onClick={() => run(e)}
+            >
+              <e.icon />
+              <span>{e.label}</span>
+              {e.kbd ? <Kbd k={e.kbd} /> : null}
+            </button>
+          );
+        }
+        const active = e.tools.find((t) => t.active);
+        const GroupIcon = active?.icon ?? e.icon;
+        return (
+          <div className="rail-group" key={e.id} onPointerEnter={() => hover(e.id)}>
+            <button
+              className={`tool group ${active ? "active" : ""} ${open === e.id ? "open" : ""}`}
+              aria-haspopup="menu"
+              aria-expanded={open === e.id}
+              onClick={() => {
+                setPinned(open !== e.id || !pinned);
+                setOpen(open === e.id && pinned ? null : e.id);
+              }}
+            >
+              <GroupIcon />
+              <span>{e.label}</span>
+              <i className="rail-more" />
+            </button>
+            {open === e.id ? (
+              <div className="rail-flyout" role="menu" aria-label={e.label}>
+                <div className="rail-flyout-title">{e.label}</div>
+                {e.tools.map((t) => (
+                  <button key={t.id} role="menuitem" className={t.active ? "active" : ""} onClick={() => run(t)} title={t.hint ?? t.label}>
+                    <t.icon />
+                    <span className="rail-flyout-label">
+                      {t.label}
+                      {t.hint ? <small>{t.hint}</small> : null}
+                    </span>
+                    {t.kbd ? <Kbd k={t.kbd} /> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}

@@ -1,8 +1,7 @@
-import { ChevronDown, CircleHelp, PanelLeft, Download, FileDown, House, Moon, Redo2, Share2, Sun, Undo2 } from "lucide-react";
+import { ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Keyboard, Moon, PanelLeft, Redo2, Settings, Share2, Undo2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { goHome, redo, renameProject, toggleSide, undo, useApp } from "../store";
-import { Toolbar } from "./Toolbar";
-import { exportMesh, exportSketch, exportStep, saveFile, shareLink } from "./io";
+import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
 import { showMenu } from "./Menu";
@@ -33,22 +32,35 @@ export function TopBar() {
   const canRedo = useApp((s) => s.canRedo);
   const sketches = useApp((s) => s.output?.report.sketches) ?? NONE;
   const [name, setName] = useState(project?.name ?? "");
-  const exportBtn = useRef<HTMLButtonElement>(null);
   useEffect(() => setName(project?.name ?? ""), [project?.name]);
 
-  const openExport = () => {
-    const r = exportBtn.current!.getBoundingClientRect();
-    showMenu(r.right - 220, r.bottom + 4, [
-      { label: "STL (3D printing)", icon: <FileDown />, onClick: () => exportMesh("stl") },
-      { label: "3MF (3D printing)", icon: <FileDown />, onClick: () => exportMesh("3mf") },
-      { label: "STEP (CAD exchange)", icon: <FileDown />, onClick: () => void exportStep() },
+  const fileBtn = useRef<HTMLButtonElement>(null);
+  const moreBtn = useRef<HTMLButtonElement>(null);
+  const openFile = () => {
+    const r = fileBtn.current!.getBoundingClientRect();
+    showMenu(r.right - 240, r.bottom + 6, [
+      { label: "Import STEP, STL, DXF, SVG…", icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
       "sep",
+      { label: "Export STL (3D printing)", icon: <FileDown />, onClick: () => exportMesh("stl") },
+      { label: "Export 3MF (3D printing)", icon: <FileDown />, onClick: () => exportMesh("3mf") },
+      { label: "Export STEP (CAD exchange)", icon: <FileDown />, onClick: () => void exportStep() },
       ...sketches.flatMap((s) => [
-        { label: `${s.id} as DXF (laser)`, icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
-        { label: `${s.id} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
+        { label: `Export ${s.id} as DXF (laser)`, icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
+        { label: `Export ${s.id} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
       ]),
-      ...(sketches.length ? (["sep"] as const) : []),
-      { label: "leocad file (.leocad)", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
+      "sep",
+      { label: "Save copy as .leocad…", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
+      ...(desktop ? [] : [{ label: "Copy share link", icon: <Share2 />, onClick: () => void shareLink() }]),
+    ]);
+  };
+  const openMore = () => {
+    const r = moreBtn.current!.getBoundingClientRect();
+    showMenu(r.right - 240, r.bottom + 6, [
+      { label: "All projects", icon: <House />, onClick: goHome },
+      { label: "Settings…", icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("leocad:settings")) },
+      { label: "Help & guides", icon: <CircleHelp />, onClick: () => window.dispatchEvent(new Event("leocad:help")) },
+      { label: "Keyboard shortcuts", icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) },
+      { label: "Toggle dark mode", icon: <Moon />, onClick: toggleTheme },
     ]);
   };
 
@@ -57,11 +69,9 @@ export function TopBar() {
       <button className={`icon-btn side-toggle ${sideOpen ? "active" : ""}`} onClick={() => toggleSide()} title={`${sideOpen ? "Hide" : "Show"} history, parts and variables (⌘⌥H)`}>
         <PanelLeft />
       </button>
-      <button className="logo" onClick={goHome} title="All projects">
+      <button className="logo" onClick={goHome} title={`All projects — ${saveState === "saved" ? "saved" : saveState === "saving" ? "saving…" : "unsaved changes"}`}>
         <Logo />
-        leocad
       </button>
-      <span className="muted">/</span>
       <input
         className="doc-name"
         value={name}
@@ -70,37 +80,22 @@ export function TopBar() {
         onBlur={() => renameProject(name)}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
-      <span className="save-state" title={desktop ? "Projects are .leocad files in Documents/leocad" : "Projects are stored in this browser"}>
-        {saveState === "saved" ? (desktop ? "Saved" : "Saved in this browser") : saveState === "saving" ? "Saving…" : "Unsaved changes"}
-      </span>
-      <Toolbar />
+      <span className="spacer" />
       <button className="icon-btn" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
         <Undo2 />
       </button>
       <button className="icon-btn" onClick={redo} disabled={!canRedo} title="Redo (⇧⌘Z)">
         <Redo2 />
       </button>
-      <button className="icon-btn" onClick={toggleTheme} title="Toggle dark mode">
-        <Sun className="light-only" />
-        <Moon style={{ display: "none" }} />
+      <button className="btn" ref={fileBtn} onClick={openFile} title="Import and export">
+        File <ChevronDown />
       </button>
       <span className="mcp-anchor">
         <McpButton />
       </span>
-      <button className="icon-btn" title="Help & guides" onClick={() => window.dispatchEvent(new Event("leocad:help"))}>
-        <CircleHelp />
+      <button className="icon-btn" ref={moreBtn} onClick={openMore} title="More: settings, help, projects">
+        <Ellipsis />
       </button>
-      <button className="icon-btn" onClick={goHome} title="Projects">
-        <House />
-      </button>
-      <button className="btn" ref={exportBtn} onClick={openExport}>
-        <Download /> <span className="btn-label">Export</span> <ChevronDown />
-      </button>
-      {desktop ? null : (
-        <button className="btn" onClick={() => void shareLink()} title="Copy a link that contains the whole model">
-          <Share2 /> <span className="btn-label">Share</span>
-        </button>
-      )}
     </header>
   );
 }
