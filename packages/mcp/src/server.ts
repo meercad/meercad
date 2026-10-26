@@ -24,10 +24,33 @@ let hello: BridgeHello | null = null;
 let seq = 0;
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
 
-const wss = new WebSocketServer({ host: "127.0.0.1", port, verifyClient: ({ origin }: { origin?: string }) => originAllowed(origin) });
-wss.on("listening", () => log(`waiting for the leocad app on ws://127.0.0.1:${port}`));
-wss.on("error", (e) => log(`bridge error: ${e.message}`));
-wss.on("connection", (ws) => {
+/** True while another process holds the bridge port; we keep retrying until it is free. */
+let portBusy = false;
+
+/**
+ * Several clients may start this server at once (e.g. a chat and a coding session); only one can own
+ * the port. The others retry, so whichever is left takes over when the owner exits.
+ */
+function startBridge(): void {
+  const wss = new WebSocketServer({ host: "127.0.0.1", port, verifyClient: ({ origin }: { origin?: string }) => originAllowed(origin) });
+  wss.on("listening", () => {
+    portBusy = false;
+    log(`waiting for the leocad app on ws://127.0.0.1:${port}`);
+  });
+  wss.on("error", (e: NodeJS.ErrnoException) => {
+    if (e.code === "EADDRINUSE") {
+      if (!portBusy) log(`port ${port} is in use by another leocad MCP server; retrying`);
+      portBusy = true;
+      wss.close();
+      setTimeout(startBridge, 2000).unref();
+      return;
+    }
+    log(`bridge error: ${e.message}`);
+  });
+  wss.on("connection", onConnection);
+}
+
+function onConnection(ws: WebSocket): void {
   app?.close(4000, "replaced by a newer connection");
   app = ws;
   ws.on("message", (raw) => {
@@ -60,7 +83,9 @@ wss.on("connection", (ws) => {
       }
     }
   });
-});
+}
+
+startBridge();
 
 function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
   if (!app || app.readyState !== app.OPEN) {
@@ -200,7 +225,13 @@ server.registerTool(
   "status",
   { title: "Connection status", description: "Whether the leocad app is connected, which project is open, and the available projects.", annotations: { readOnlyHint: true } },
   async () => {
-    if (!app) return text({ connected: false, hint: `Open leocad and enable 'Allow assistants to control leocad' (plug icon). Listening on ws://127.0.0.1:${port}.` });
+    if (!app)
+      return text({
+        connected: false,
+        hint: portBusy
+          ? `Another leocad MCP server (e.g. from a different chat or session) is using port ${port}, so the app talks to that one. Close that session or restart this one; this server takes over as soon as the port is free.`
+          : `Open leocad and enable 'Allow assistants to control leocad' (plug icon). Listening on ws://127.0.0.1:${port}.`,
+      });
     try {
       return text({ connected: true, ...(await call<Record<string, unknown>>("get_status")) });
     } catch {
@@ -210,4 +241,11 @@ server.registerTool(
 );
 
 await server.connect(new StdioServerTransport());
+// When the client goes away (stdin closes), exit so no orphan keeps the bridge port.
+const quit = () => {
+  log("client disconnected, exiting");
+  process.exit(0);
+};
+process.stdin.on("end", quit);
+process.stdin.on("close", quit);
 log("MCP server ready on stdio");
