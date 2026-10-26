@@ -4,6 +4,8 @@ import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Measurement, PickRef } from "./tools.js";
 
+export type { Measurement, PickRef } from "./tools.js";
+
 export interface RebuildOutput {
   report: RebuildReport;
   meshes: BodyMesh[];

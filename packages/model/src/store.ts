@@ -132,6 +132,16 @@ export class DocumentStore {
     return next;
   }
 
+  /** Applies ops but replaces the current undo step instead of adding one (continuous edits). */
+  amend(...ops: DocOp[]): OpencadDocument {
+    if (this.position === 0) return this.apply(...ops);
+    const next = ops.reduce<OpencadDocument>((d, op) => applyOp(d, op), this.doc);
+    this.history.length = this.position + 1;
+    this.history[this.position] = next;
+    this.emit();
+    return next;
+  }
+
   undo(): void {
     if (!this.canUndo) return;
     this.position--;
