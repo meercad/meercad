@@ -261,6 +261,24 @@ ipcMain.handle("storage:set", async (_e, p: { dir: string; move: boolean }) => {
   await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`);
   return { dir: p.dir, moved, skipped };
 });
+/** Adds leocad to Claude Desktop's MCP configuration (keeps everything else, backs the file up first). */
+ipcMain.handle("mcp:install-claude-desktop", async () => {
+  const file = join(app.getPath("appData"), "Claude", "claude_desktop_config.json");
+  let config: { mcpServers?: Record<string, unknown> } = {};
+  if (existsSync(file)) {
+    const raw = await readFile(file, "utf8");
+    try {
+      config = JSON.parse(raw) as typeof config;
+    } catch {
+      throw new Error(`${file} is not valid JSON; fix or remove it first`);
+    }
+    await writeFile(`${file}.bak`, raw);
+  }
+  config.mcpServers = { ...config.mcpServers, leocad: { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } } };
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+  return file;
+});
 ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
   projectsDir: projectsDir(),

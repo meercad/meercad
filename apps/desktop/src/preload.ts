@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer } from "electron";
 const api = {
   isDesktop: true,
   info: () => ipcRenderer.invoke("app:info"),
+  installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),
     load: (id: string) => ipcRenderer.invoke("projects:load", id),

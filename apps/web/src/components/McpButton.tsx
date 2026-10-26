@@ -1,5 +1,6 @@
 import { Check, Copy, Plug, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { bridgeStatus, onBridgeStatus, setBridgeEnabled } from "../lib/mcpBridge";
 import { toast } from "../store";
 
@@ -22,7 +23,7 @@ export function McpButton() {
         <Plug />
         <span className="mcp-dot" data-status={status} />
       </button>
-      {open ? (
+      {open ? createPortal(
         <div className="modal-backdrop" onPointerDown={() => setOpen(false)}>
           <div className="modal" style={{ width: "min(620px, 94vw)" }} onPointerDown={(e) => e.stopPropagation()}>
             <div className="dialog-head">
@@ -41,8 +42,26 @@ export function McpButton() {
                 Allow assistants to control leocad
                 <span className="muted">— {status === "connected" ? "connected" : status === "connecting" ? "waiting for an assistant…" : "off"}</span>
               </label>
+              {desktop ? (
+                <div className="row">
+                  <button
+                    className="btn primary"
+                    onClick={() =>
+                      void desktop!.installClaudeDesktop().then(
+                        (file) => toast(`Added to Claude Desktop (${file}). Restart Claude Desktop to connect.`),
+                        (e: unknown) => toast(`Could not update the Claude Desktop config: ${e instanceof Error ? e.message : String(e)}`, "error"),
+                      )
+                    }
+                  >
+                    <Plug /> Add to Claude Desktop
+                  </button>
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    Writes the entry below into Claude Desktop's config; other servers stay untouched.
+                  </span>
+                </div>
+              ) : null}
               <div className="fld">
-                <label>Add this to your MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)</label>
+                <label>{desktop ? "Or add this" : "Add this"} to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)</label>
                 <pre className="mono" style={{ margin: 0, padding: 10, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, whiteSpace: "pre-wrap" }}>{config}</pre>
               </div>
               <div className="row">
@@ -65,7 +84,8 @@ export function McpButton() {
               ) : null}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
