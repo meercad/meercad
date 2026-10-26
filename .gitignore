@@ -6,3 +6,4 @@ coverage/
 .DS_Store
 test-results/
 .claude/settings.local.json
+packages/mcp/dist/

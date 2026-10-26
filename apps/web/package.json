@@ -14,6 +14,7 @@
     "@opencad/ai": "workspace:*",
     "@opencad/io": "workspace:*",
     "@opencad/kernel": "workspace:*",
+    "@opencad/mcp": "workspace:*",
     "@opencad/model": "workspace:*",
     "@opencad/naming": "workspace:*",
     "@opencad/schema": "workspace:*",

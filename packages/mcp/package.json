@@ -1,0 +1,29 @@
+{
+  "name": "@opencad/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "MCP server that lets Claude and other assistants drive a running opencad app",
+  "bin": {
+    "opencad-mcp": "./dist/server.js"
+  },
+  "exports": {
+    ".": "./src/protocol.ts"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@opencad/ai": "workspace:*",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2"
+  }
+}

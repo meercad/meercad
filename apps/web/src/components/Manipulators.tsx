@@ -32,7 +32,9 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
   const autoMode = useRef(false);
 
   useEffect(() => {
-    viewport.onHandleDrag = (h, v, screen) => setTip(h && screen ? { x: screen[0], y: screen[1], text: `${h.id === "fillet" ? "R " : ""}${+v.toFixed(3)} mm` } : null);
+    const label = (id: string, v: number) =>
+      id === "edge" ? (v >= 0 ? `Fillet R ${+v.toFixed(3)} mm` : `Chamfer ${+(-v).toFixed(3)} mm`) : id === "fillet" ? `R ${+v.toFixed(3)} mm` : `${+v.toFixed(3)} mm`;
+    viewport.onHandleDrag = (h, v, screen) => setTip(h && screen ? { x: screen[0], y: screen[1], text: label(h.id, v) } : null);
     return () => {
       viewport.onHandleDrag = null;
     };
@@ -140,18 +142,22 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const sels = edges.map((p) => edgeSelectorForPick(p, out.meshes)).filter((x): x is EdgeSelector => !!x);
       const a = m ? edgeAnchor(m, first.edge) : null;
       if (!a || !sels.length) return [];
+      // Out along the bisector rounds the edge, in towards the material bevels it.
+      const ids = { fillet: nextFeatureId(currentDoc(), "fillet"), chamfer: nextFeatureId(currentDoc(), "chamfer") };
       return [
         {
-          id: "fillet",
+          id: "edge",
           origin: a.origin,
           dir: a.dir,
           value: 0,
-          min: 0,
           onStart: () => {
             autoMode.current = false;
-            startDraft({ id: nextFeatureId(currentDoc(), "fillet"), op: "fillet", edges: sels, radius: 0.5 });
+            startDraft({ id: ids.fillet, op: "fillet", edges: sels, radius: 0.05 });
           },
-          onDrag: (v) => updateDraft({ radius: Math.max(0.05, v) }),
+          onDrag: (v) =>
+            updateDraft(() =>
+              v >= 0 ? { id: ids.fillet, op: "fillet", edges: sels, radius: Math.max(0.05, v) } : { id: ids.chamfer, op: "chamfer", edges: sels, distance: Math.max(0.05, -v) },
+            ),
           onEnd: (v) => finish(v),
         },
       ];

@@ -2,6 +2,7 @@ import { ChevronDown, Download, FileDown, House, Moon, Redo2, Share2, Sparkles, 
 import { useEffect, useRef, useState } from "react";
 import { goHome, redo, renameProject, undo, useApp } from "../store";
 import { exportMesh, exportSketch, exportStep, saveFile, shareLink } from "./io";
+import { McpButton } from "./McpButton";
 import { showMenu } from "./Menu";
 
 const NONE: never[] = [];
@@ -82,6 +83,7 @@ export function TopBar() {
         <Sun className="light-only" />
         <Moon style={{ display: "none" }} />
       </button>
+      <McpButton />
       <button className="icon-btn" onClick={goHome} title="Projects">
         <House />
       </button>

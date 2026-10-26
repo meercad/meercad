@@ -12,6 +12,7 @@ import { Toolbar } from "./components/Toolbar";
 import { TopBar } from "./components/TopBar";
 import { ViewportView } from "./components/ViewportView";
 import { importFile } from "./components/io";
+import { initBridge } from "./lib/mcpBridge";
 import { FEATURES } from "./lib/features";
 import { cancelDialog, commitDialog, editFeature, getViewport, newProject, openProject, redo, startFeature, toast, undo, useApp } from "./store";
 
@@ -44,7 +45,10 @@ export function App() {
   const screen = useApp((s) => s.screen);
   const copilot = useApp((s) => s.copilotOpen);
   const [help, setHelp] = useState(false);
-  useEffect(() => void route(), []);
+  useEffect(() => {
+    void route();
+    initBridge();
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;

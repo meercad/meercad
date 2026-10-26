@@ -165,6 +165,19 @@ function displayDoc(): { doc: OpencadDocument; preview: boolean; problem: string
   return { doc, preview: true, problem: null };
 }
 
+/** Rebuilds the real document now and resolves with the result (for scripted callers like MCP). */
+export async function rebuildNow(): Promise<RebuildOutput> {
+  for (;;) {
+    try {
+      const output = await kernel.rebuild(docStore.doc);
+      if (!get().dialog && !get().proposalDoc) set({ output, baseOutput: output, previewing: false });
+      return output;
+    } catch (e) {
+      if (!(e instanceof SupersededError)) throw e;
+    }
+  }
+}
+
 let rebuildQueued = false;
 export function scheduleRebuild(): void {
   if (rebuildQueued) return;
@@ -357,6 +370,8 @@ function loadDoc(doc: OpencadDocument, meta: ProjectMeta): void {
   syncDoc();
   set({ saveState: "saved" });
 }
+
+export const undoAvailable = () => docStore.canUndo;
 
 export function goHome(): void {
   void flushSave().then(refreshProjects);
