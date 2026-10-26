@@ -35,6 +35,18 @@
       {
         "from": "../../packages/mcp/dist/server.js",
         "to": "mcp/server.js"
+      },
+      {
+        "from": "../../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../../THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "../../licenses",
+        "to": "licenses"
       }
     ],
     "fileAssociations": [

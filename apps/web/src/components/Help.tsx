@@ -117,6 +117,22 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
     ],
   },
   {
+    section: "About",
+    guides: [
+      {
+        title: "Open source and licenses",
+        body: (
+          <ul>
+            <li>leocad is free software under the GNU AGPL-3.0; its file-format, I/O and naming libraries are MIT licensed.</li>
+            <li>Geometry by <b>Open CASCADE Technology</b> and sketch solving by <b>PlaneGCS</b> (FreeCAD), both LGPL-2.1, used unmodified as replaceable WebAssembly modules.</li>
+            <li>Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages — the full list is in THIRD_PARTY_NOTICES.md next to the app.</li>
+            <li>Your models belong to you: projects are plain files on your computer; nothing is uploaded.</li>
+          </ul>
+        ),
+      },
+    ],
+  },
+  {
     section: "AI assistants",
     guides: [
       {

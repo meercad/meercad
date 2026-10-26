@@ -28,6 +28,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - name: License check (fails on GPL/AGPL/non-commercial dependencies)
+        run: node scripts/third-party-licenses.mjs
 
   mac:
     needs: test
