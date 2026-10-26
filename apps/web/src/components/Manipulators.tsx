@@ -10,6 +10,7 @@ import type { Handle, Pick, Viewport } from "@leocad/viewport";
 import { edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
 import { cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
+import { InlineInput } from "./InlineValues";
 import { Kbd } from "./Kbd";
 
 const num = (e: Expr | undefined, fallback = 0): number => {
@@ -173,6 +174,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 
   return (
     <>
+      <HandleLabels viewport={viewport} />
       {tip ? (
         <div className="cursor-tip" style={{ left: tip.x, top: tip.y }}>
           {tip.text}
@@ -222,6 +224,50 @@ function QuickActions({ viewport, selection }: { viewport: Viewport; selection: 
           {a.kbd ? <Kbd k={a.kbd} /> : null}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** The value at each drag arrow; click it to type an exact value (like Shapr3D's dimension labels). */
+function HandleLabels({ viewport }: { viewport: Viewport }) {
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  const [typing, setTyping] = useState<string | null>(null);
+  useEffect(() => viewport.onChange(tick), [viewport]);
+  useEffect(() => {
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
+  }, []);
+  const handles = (viewport as unknown as { handles: Handle[] }).handles ?? [];
+  if (viewport.draggingHandle) return null;
+  return (
+    <div className="overlay-layer">
+      {handles.map((h) => {
+        const s = viewport.handleTipScreen(h.id);
+        if (!s) return null;
+        const text = h.id === "edge" ? "drag: out = fillet, in = chamfer" : `${+h.value.toFixed(3)} mm`;
+        return (
+          <div key={h.id} className="value-chip handle-chip" style={{ left: s[0] + 16, top: s[1] - 16 }} onPointerDown={(e) => e.stopPropagation()}>
+            {typing === h.id ? (
+              <InlineInput
+                value={+h.value.toFixed(3)}
+                onDone={(v) => {
+                  setTyping(null);
+                  if (v === null) return;
+                  const n = num(v, NaN);
+                  if (!Number.isFinite(n)) return;
+                  h.onStart?.();
+                  h.onDrag(n);
+                  h.onEnd(n);
+                }}
+              />
+            ) : (
+              <button onClick={() => setTyping(h.id)} title="Click to type a value">
+                {text}
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

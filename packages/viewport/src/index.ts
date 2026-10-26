@@ -152,7 +152,7 @@ export class Viewport {
   private listeners = new Set<() => void>();
   private grid: THREE.GridHelper;
   private sceneData: SceneData | null = null;
-  private handles: Handle[] = [];
+  handles: Handle[] = [];
   private handleGroup = new THREE.Group();
   private activeHandle: { h: Handle; value: number } | null = null;
   private hoverHandle: string | null = null;
@@ -590,6 +590,14 @@ export class Viewport {
     };
     el.addEventListener("pointerup", end, { capture: true });
     el.addEventListener("pointercancel", end, { capture: true });
+  }
+
+  /** Screen position (canvas CSS px) of a handle's arrow tip, for value labels. */
+  handleTipScreen(id: string): Vec2 | null {
+    const h = this.activeHandle?.h.id === id ? { ...this.activeHandle.h, value: this.activeHandle.value } : this.handles.find((x) => x.id === id);
+    if (!h) return null;
+    const tip = this.handleTip(h);
+    return this.worldToScreen([tip.x, tip.y, tip.z]);
   }
 
   get draggingHandle(): boolean {

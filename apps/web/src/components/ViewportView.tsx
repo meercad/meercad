@@ -9,6 +9,7 @@ import { commitDialog, dialogPick, editFeature, kernel, scheduleRebuild, setView
 import { pickKindsFor } from "./FeatureDialog";
 import { toggleHidden } from "./FeatureTree";
 import { showMenu } from "./Menu";
+import { InlineValues } from "./InlineValues";
 import { Manipulators } from "./Manipulators";
 import { ViewCube } from "./ViewCube";
 
@@ -232,6 +233,7 @@ export function ViewportView() {
     <div className={`view ${dialog?.field || pickingPlane || measure.active ? "picking" : ""}`} ref={host}>
       {vp ? <ViewCube viewport={vp} /> : null}
       {vp ? <Manipulators viewport={vp} /> : null}
+      {vp ? <InlineValues viewport={vp} /> : null}
       {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
       {hint ? <div className="hint-banner">{hint}</div> : null}
       <AiActivity />
