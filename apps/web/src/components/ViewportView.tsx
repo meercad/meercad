@@ -37,6 +37,9 @@ export function ViewportView() {
   const kernelState = useApp((s) => s.kernel);
   const previewing = useApp((s) => s.previewing);
   const [ortho, setOrtho] = useState(false);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number; filter: "all" | "face" | "edge" } | null>(null);
+  const boxRef = useRef(box);
+  boxRef.current = box;
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -94,15 +97,49 @@ export function ViewportView() {
   useEffect(() => {
     if (!vp) return;
     const el = vp.canvas;
-    let down: { x: number; y: number; button: number } | null = null;
+    let down: { x: number; y: number; button: number; empty: boolean } | null = null;
+    let filter: "all" | "face" | "edge" = "all";
+    const onKey = (e: KeyboardEvent) => {
+      if (!boxRef.current) return;
+      const k = e.key.toLowerCase();
+      // Shapr3D: while box-selecting, F = faces only, E = edges only, Tab cycles.
+      if (k === "f" || k === "e" || k === "tab") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        filter = k === "f" ? "face" : k === "e" ? "edge" : filter === "all" ? "face" : filter === "face" ? "edge" : "all";
+        setBox((b) => (b ? { ...b, filter } : b));
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
     const onMove = (e: PointerEvent) => {
-      if (useApp.getState().sketchId || e.buttons) return;
+      if (useApp.getState().sketchId) return;
+      const d = down;
+      if (d && d.button === 0 && d.empty && e.buttons === 1 && !useApp.getState().dialog && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) {
+        const r = el.getBoundingClientRect();
+        setBox({ x0: d.x - r.left, y0: d.y - r.top, x1: e.clientX - r.left, y1: e.clientY - r.top, filter });
+        return;
+      }
+      if (e.buttons) return;
       vp.setHover(vp.pick(e.clientX, e.clientY, kinds()));
     };
-    const onDown = (e: PointerEvent) => (down = { x: e.clientX, y: e.clientY, button: e.button });
+    const onDown = (e: PointerEvent) => {
+      filter = "all";
+      down = { x: e.clientX, y: e.clientY, button: e.button, empty: e.button === 0 && !vp.pick(e.clientX, e.clientY, kinds()) };
+    };
     const onUp = (e: PointerEvent) => {
       const d = down;
       down = null;
+      const b = boxRef.current;
+      if (b) {
+        setBox(null);
+        const r = el.getBoundingClientRect();
+        const enclosed = b.x1 >= b.x0;
+        const ks = new Set<"face" | "edge">(b.filter === "all" ? ["face", "edge"] : [b.filter]);
+        const picks = vp.boxSelect(b.x0 + r.left, b.y0 + r.top, b.x1 + r.left, b.y1 + r.top, enclosed, ks);
+        const cur = useApp.getState().selection;
+        useApp.setState({ selection: e.shiftKey ? [...cur, ...picks.filter((p) => !cur.some((c) => samePick(c, p)))] : picks, selectedFeature: null });
+        return;
+      }
       if (!d || useApp.getState().sketchId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
       const pick = vp.pick(e.clientX, e.clientY, kinds());
       if (d.button === 2) return contextMenu(pick, e.clientX, e.clientY);
@@ -123,6 +160,7 @@ export function ViewportView() {
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("dblclick", onDbl);
+      window.removeEventListener("keydown", onKey, true);
     };
   }, [vp]);
 
@@ -237,6 +275,14 @@ export function ViewportView() {
       {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
       {hint ? <div className="hint-banner">{hint}</div> : null}
       <AiActivity />
+      {box ? (
+        <div
+          className={`select-box ${box.x1 >= box.x0 ? "enclosed" : "crossing"}`}
+          style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0) }}
+        >
+          <span>{box.filter === "all" ? "Faces + edges" : box.filter === "face" ? "Faces" : "Edges"} · {box.x1 >= box.x0 ? "inside" : "touching"} · F/E/Tab</span>
+        </div>
+      ) : null}
       {measure.active ? <MeasureCard /> : null}
       <div className="status-pill" title={kernelState.error ?? ""}>
         <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />

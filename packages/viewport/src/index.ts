@@ -667,6 +667,61 @@ export class Viewport {
     return null;
   }
 
+  /**
+   * Box selection in screen space (client px). `enclosed` keeps only entities fully inside,
+   * otherwise anything touching the box is taken.
+   */
+  boxSelect(x0: number, y0: number, x1: number, y1: number, enclosed: boolean, kinds: ReadonlySet<"face" | "edge">): Pick[] {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const [ax, bx] = [Math.min(x0, x1) - r.left, Math.max(x0, x1) - r.left];
+    const [ay, by] = [Math.min(y0, y1) - r.top, Math.max(y0, y1) - r.top];
+    const v = new THREE.Vector3();
+    const inside = (x: number, y: number, z: number) => {
+      v.set(x, y, z).project(this.camera);
+      if (v.z > 1) return false;
+      const sx = ((v.x + 1) / 2) * r.width;
+      const sy = ((1 - v.y) / 2) * r.height;
+      return sx >= ax && sx <= bx && sy >= ay && sy <= by;
+    };
+    const test = (pts: number[]) => {
+      let any = false;
+      let all = true;
+      for (let i = 0; i < pts.length; i += 3) {
+        const ok = inside(pts[i]!, pts[i + 1]!, pts[i + 2]!);
+        any ||= ok;
+        all &&= ok;
+        if (!enclosed && any) return true;
+        if (enclosed && !all) return false;
+      }
+      return enclosed ? all && pts.length > 0 : any;
+    };
+    const out: Pick[] = [];
+    for (const b of this.bodies) {
+      const m = b.mesh;
+      if (kinds.has("face")) {
+        for (let g = 0; g < m.faceRanges.length; g += 3) {
+          const [start, count, face] = [m.faceRanges[g]!, m.faceRanges[g + 1]!, m.faceRanges[g + 2]!];
+          if (face < 0) continue;
+          const pts: number[] = [];
+          for (let k = start; k < start + count; k++) {
+            const i = m.indices[k]! * 3;
+            pts.push(m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!);
+          }
+          if (test(pts)) out.push({ kind: "face", bodyId: m.bodyId, face, tags: m.faceTags[face] ?? [], point: [pts[0]!, pts[1]!, pts[2]!], normal: null });
+        }
+      }
+      if (kinds.has("edge")) {
+        for (let g = 0; g < m.edgeRanges.length; g += 3) {
+          const [start, count, edge] = [m.edgeRanges[g]!, m.edgeRanges[g + 1]!, m.edgeRanges[g + 2]!];
+          if (edge < 0) continue;
+          const pts = Array.from(m.edgeLines.subarray(start * 3, (start + count) * 3));
+          if (test(pts)) out.push({ kind: "edge", bodyId: m.bodyId, edge, point: [pts[0]!, pts[1]!, pts[2]!] });
+        }
+      }
+    }
+    return out;
+  }
+
   /** Intersects the pointer ray with a sketch plane; returns sketch coordinates. */
   rayToPlane(clientX: number, clientY: number, f: Frame): Vec2 | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
