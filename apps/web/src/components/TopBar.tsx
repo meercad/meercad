@@ -10,7 +10,7 @@ const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
 
 export function Logo() {
-  return <img src="/logo.svg" alt="" width={24} height={24} style={{ borderRadius: 6 }} />;
+  return <img src="/logo.png" alt="" width={28} height={28} />;
 }
 
 export function toggleTheme(): void {
