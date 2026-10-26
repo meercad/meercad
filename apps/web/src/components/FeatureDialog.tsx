@@ -103,7 +103,7 @@ function handlePick(p: Pick, d: DialogState): void {
       }
       case "bodies": {
         const b = bodyOf(p);
-        if (b) (g as Of<"transform">).bodies = toggle((g as Of<"transform">).bodies, b);
+        if (b) (g as Of<"transform" | "delete">).bodies = toggle((g as Of<"transform" | "delete">).bodies, b);
         break;
       }
       case "tools": {
@@ -152,9 +152,9 @@ export function FeatureDialog() {
     let pre = useApp.getState().selection;
     // A whole selected part becomes a body selection for move/mirror/pattern.
     const f0 = d.feature;
-    if (pre.length > 1 && (f0.op === "transform" || f0.op === "mirror" || f0.op === "linear_pattern" || f0.op === "circular_pattern")) {
+    if (pre.length > 1 && (f0.op === "transform" || f0.op === "delete" || f0.op === "mirror" || f0.op === "linear_pattern" || f0.op === "circular_pattern")) {
       const ids = [...new Set(pre.flatMap((p) => (p.kind === "face" ? [p.bodyId] : [])))];
-      if (f0.op === "transform") updateDraft({ bodies: ids } as Partial<Feature>);
+      if (f0.op === "transform" || f0.op === "delete") updateDraft({ bodies: ids } as Partial<Feature>);
       else updateDraft({ source: { bodies: ids } } as Partial<Feature>);
       pre = [];
       useApp.setState({ selection: [] });
@@ -500,6 +500,12 @@ function Body({ d }: { d: DialogState }) {
             <input type="checkbox" checked={!!f.keepTools} onChange={(e) => set({ keepTools: e.target.checked || undefined })} /> Keep tools
           </label>
         </>
+      );
+    case "delete":
+      return (
+        <Field label="Parts">
+          <SelBox field="bodies" items={f.bodies.map((b) => `Part ${b}`)} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
+        </Field>
       );
     case "transform": {
       const t = f.translate ?? [0, 0, 0];

@@ -1,5 +1,6 @@
 import { Box, Copy, Eye, EyeOff, Focus, Grid2x2, Layers, Pencil, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, usePrefs } from "../lib/keymap";
 import type { FeatureOp } from "@leocad/schema";
 import { samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@leocad/viewport";
@@ -8,7 +9,7 @@ import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
 import { commitDialog, dialogPick, editFeature, kernel, scheduleRebuild, setViewport, startFeature, startSketch, toast, useApp } from "../store";
 import { pickKindsFor } from "./FeatureDialog";
-import { toggleHidden } from "./FeatureTree";
+import { deleteFeature, toggleHidden } from "./FeatureTree";
 import { showMenu } from "./Menu";
 import { InlineValues } from "./InlineValues";
 import { Manipulators } from "./Manipulators";
@@ -261,6 +262,9 @@ export function ViewportView() {
         { label: `Hide part ${pick.bodyId}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         ...common,
+        "sep",
+        { label: useApp.getState().selection.length > 1 ? "Delete selection" : "Delete face", icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
+        { label: `Delete part ${pick.bodyId}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
       ]);
     if (pick.kind === "edge") return showMenu(x, y, [item("fillet"), item("chamfer"), "sep", ...common]);
     if (pick.kind === "region" || pick.kind === "sketch_curve")
@@ -275,7 +279,10 @@ export function ViewportView() {
       return showMenu(x, y, [
         { label: `New sketch on ${PLANE_LABELS[pick.planeId] ?? pick.planeId}`, icon: <Pencil />, onClick: () => startSketch({ ref: pick.planeId }) },
         item("plane", "Offset plane"),
-        ...(pick.planeId.startsWith("origin.") ? [] : [{ label: "Delete plane", icon: <Trash />, danger: true, onClick: () => editFeature(pick.planeId) }]),
+        ...(pick.planeId.startsWith("origin.") ? [] : [{ label: "Delete plane", icon: <Trash />, danger: true, onClick: () => {
+          const f = useApp.getState().doc.features.find((x) => x.id === pick.planeId);
+          if (f) void deleteFeature(f);
+        } }]),
       ]);
   };
 

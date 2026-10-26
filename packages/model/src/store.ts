@@ -91,6 +91,7 @@ export function nextFeatureId(doc: LeocadDocument, op: Feature["op"]): string {
     mirror: "mi",
     boolean: "bo",
     transform: "mv",
+    delete: "del",
     import: "im",
   };
   const used = new Set(doc.features.map((f) => f.id));

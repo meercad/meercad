@@ -27,6 +27,7 @@ import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProjec
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@leocad/viewport";
 import { CommandPalette } from "./components/CommandPalette";
+import { deleteModelSelection } from "./lib/deletion";
 
 try {
   const theme = localStorage.getItem("leocad.theme");
@@ -197,9 +198,8 @@ export function App() {
       }
       if (e.key === "Enter" && s.dialog) return void commitDialog();
       if (s.dialog) return;
-      if ((e.key === "Delete" || e.key === "Backspace") && s.selectedFeature) {
-        const f = s.doc.features.find((x) => x.id === s.selectedFeature);
-        if (f) void deleteFeature(f);
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (s.selection.length || s.selectedFeature) void deleteModelSelection();
         return;
       }
       if (e.key === "Enter" && s.selectedFeature) return editFeature(s.selectedFeature);

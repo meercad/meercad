@@ -15,8 +15,7 @@ import {
   Triangle,
   Orbit,
   Move3d,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, Trash2 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, LeocadDocument } from "@leocad/schema";
 import { nextFeatureId } from "@leocad/model";
 
@@ -40,6 +39,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   transform: { shortcut: "M", label: "Move", icon: Move3d, hint: "Move, rotate or copy parts" },
   boolean: { shortcut: "B", label: "Boolean", icon: Combine, hint: "Union, subtract or intersect bodies" },
   plane: { shortcut: "N", label: "Plane", icon: Layers, hint: "Construction plane offset from a plane or face" },
+  delete: { label: "Delete part", icon: Trash2, hint: "Remove parts from the model" },
   import: { label: "Import", icon: FileUp, hint: "Import STEP or STL" },
 };
 
@@ -78,6 +78,8 @@ export function draftFeature(op: FeatureOp, doc: LeocadDocument): Feature {
       return { id, op, operation: "union", target: "", tools: [] };
     case "transform":
       return { id, op, bodies: [], translate: [0, 0, 0] };
+    case "delete":
+      return { id, op, bodies: [] };
     case "plane":
       return { id, op, base: { ref: "origin.XY" }, offset: 20 };
     case "import":
@@ -104,6 +106,8 @@ export function draftProblem(f: Feature): string | null {
       return !f.target ? "Select the target body" : f.tools.length ? null : "Select tool bodies";
     case "transform":
       return f.bodies.length ? null : "Select parts to move";
+    case "delete":
+      return f.bodies.length ? null : "Select parts to delete";
     case "import":
       return f.data ? null : "Choose a file";
     default:

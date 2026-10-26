@@ -162,6 +162,7 @@ export function validateDocument(input: unknown): Validation<LeocadDocument> {
         break;
       }
       case "transform":
+      case "delete":
         for (const b of f.bodies) earlier(b.split("_")[0]!, at, "body");
         break;
       case "boolean":

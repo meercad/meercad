@@ -100,6 +100,11 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return booleanFeature(f, ctx);
       case "transform":
         return transformFeature(f, ctx);
+      case "delete": {
+        const bodies = new Map(ctx.prev.bodies);
+        for (const id of f.bodies) if (!bodies.delete(id)) throw new FeatureError(`body "${id}" not found`);
+        return { ...ctx.prev, bodies };
+      }
       case "import":
         return importFeature(f, ctx);
     }

@@ -204,6 +204,12 @@ export interface TransformFeature extends FeatureBase {
   copy?: boolean;
 }
 
+/** Removes parts from the model from this point on (earlier features still see them). */
+export interface DeleteFeature extends FeatureBase {
+  op: "delete";
+  bodies: string[];
+}
+
 export interface ImportFeature extends FeatureBase {
   op: "import";
   format: "step" | "stl";
@@ -225,6 +231,7 @@ export type Feature =
   | MirrorFeature
   | BooleanFeature
   | TransformFeature
+  | DeleteFeature
   | ImportFeature;
 export type FeatureOp = Feature["op"];
 

@@ -60,6 +60,7 @@ Features
 - fillet {edges, radius}; chamfer {edges, distance}; shell {faces:[face selectors to remove], thickness, outward?}
 - linear_pattern {source:{features:[extrude/revolve ids]}|{bodies:[ids]}, direction:<axis>, count, spacing, direction2?, count2?, spacing2?}; circular_pattern {source, axis, count, angle? (total, default 360)}; mirror {source, plane:<plane spec>}
 - boolean {operation:"union"|"subtract"|"intersect", target:<body id>, tools:[body ids], keepTools?}; plane {base:<plane spec>, offset, angle?}
+- transform {bodies:[body ids], translate?:[x,y,z], rotate?:{axis, angle}, copy?}; delete {bodies:[body ids]} removes parts from that point on (prefer this over deleting the features that made them)
 - Body ids are the id of the feature that created the body (e.g. "ex1").
 
 Face tags (how geometry is referenced; never use indices)

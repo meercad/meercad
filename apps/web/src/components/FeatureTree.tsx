@@ -1,5 +1,6 @@
 import { Box, Copy, Eye, EyeOff, FileDown, Layers, Pencil, Plus, SkipBack, SkipForward, Trash, X } from "lucide-react";
 import { useState } from "react";
+import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
 import { referencedNames } from "@leocad/model";
 import type { Feature } from "@leocad/schema";
@@ -200,6 +201,9 @@ function Bodies() {
             <span className="actions" style={{ display: "flex" }}>
               <button className="icon-btn sm" title={hidden.has(b.id) ? "Show" : "Hide"} onClick={() => toggleHidden(b.id)}>
                 {hidden.has(b.id) ? <EyeOff /> : <Eye />}
+              </button>
+              <button className="icon-btn sm" title="Delete part" onClick={() => deleteBodies([b.id])}>
+                <Trash />
               </button>
             </span>
           </li>

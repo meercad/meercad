@@ -678,3 +678,6 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 .tab-new { flex: none; }
 .home-top .tabs { flex: 1; }
 .home-tab { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 11px; font-size: 13px; font-weight: 650; background: var(--panel); box-shadow: 0 1px 3px rgb(20 20 50 / 0.12), inset 0 0 0 1px var(--glass-border); flex: none; }
+/* toasts: dark, nearly opaque pill so the text reads on any background and in both themes */
+.toasts .toast { background: rgb(24 26 38 / 0.94) !important; color: #fff; border: 1px solid rgb(255 255 255 / 0.12) !important; font-size: 13px; font-weight: 500; padding: 9px 16px; border-radius: 12px; box-shadow: 0 10px 30px rgb(10 12 30 / 0.28) !important; }
+.toasts .toast.error { background: rgb(190 36 48 / 0.96) !important; }

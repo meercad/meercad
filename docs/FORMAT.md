@@ -20,7 +20,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 
 - **params** — named values; any numeric field may be an expression (`"wall * 2"`, `"5 mm"`, `"30 deg"`).
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
-  `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `import`.
+  `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.
 - **References** never use indices. Faces carry *tags* from the feature that made them
   (`ex1.end_cap`, `ex1.side[sk1.l3]`, `fi1.round[a|b]`) and later features select by tag, so edits
   upstream don't silently re-target downstream features.

@@ -162,6 +162,7 @@ export const definitions: Record<string, Json> = {
       },
       ["bodies"],
     ),
+    delete: feature("delete", { bodies: arr(id, { minItems: 1 }) }, ["bodies"]),
     import: feature("import", { format: { enum: ["step", "stl"] }, fileName: { type: "string", maxLength: 256 }, data: { type: "string", maxLength: 64 * 1024 * 1024 } }, ["format", "fileName", "data"]),
   }),
 };

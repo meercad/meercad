@@ -121,6 +121,19 @@ describe("modelling features", () => {
     expect(report.bodies[0]!.faces).toBe(6);
   });
 
+  it("deletes a part from that point on", async () => {
+    const session = await newSession();
+    const parts: Feature[] = [...box, { id: "mi1", op: "mirror", source: { bodies: ["ex1"] }, plane: { ref: "origin.YZ" } }];
+    const before = session.rebuild(doc(parts)).report;
+    ok(before);
+    expect(before.bodies).toHaveLength(2);
+    const after = session.rebuild(doc([...parts, { id: "del1", op: "delete", bodies: ["mi1_1"] }])).report;
+    ok(after);
+    expect(after.bodies.map((b) => b.id)).toEqual(["ex1"]);
+    const missing = session.rebuild(doc([...parts, { id: "del1", op: "delete", bodies: ["nope"] }])).report;
+    expect(missing.features.find((f) => f.id === "del1")?.status).toBe("error");
+  });
+
   it("uses offset planes and projected edges", async () => {
     const { report } = (await newSession()).rebuild(
       doc([
