@@ -640,3 +640,16 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 .first-run-card img { width: 52px; height: 52px; margin-bottom: 10px; }
 .first-run-card code { display: block; margin: 0 0 18px; }
 .first-run-card .btn svg { width: 15px; height: 15px; }
+/* project folders */
+.home-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.home-head .btn svg { width: 15px; height: 15px; }
+.crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin: 0; }
+.crumbs > span { display: inline-flex; align-items: center; }
+.crumb { border: none; background: none; padding: 2px 6px; border-radius: 8px; font: inherit; color: var(--text-2); }
+.crumb:hover { background: var(--glass-hover); color: var(--text); }
+.crumb.current { color: var(--text); }
+.crumb-sep { width: 18px; height: 18px; color: var(--muted); }
+.card.folder .thumb { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel)); }
+.card.folder .thumb svg { width: 46px; height: 46px; color: var(--accent); stroke-width: 1.4; }
+.card.folder.drop { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card[draggable="true"] { cursor: default; }

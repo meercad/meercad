@@ -6,7 +6,7 @@ import { emptyDocument, type DocOp, type Feature, type FeatureOp, type LeocadDoc
 import { planeSpecForPick } from "./lib/topology";
 import type { Pick, Viewport } from "@leocad/viewport";
 import { draftFeature, draftProblem } from "./lib/features";
-import { createProject, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
+import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
 
 export interface DialogState {
@@ -25,6 +25,9 @@ export interface Toast {
 interface State {
   screen: "home" | "editor";
   projects: ProjectMeta[];
+  /** All project folders, and the one the project overview is showing. */
+  folders: string[];
+  folder: string;
   project: ProjectMeta | null;
   doc: LeocadDocument;
   canUndo: boolean;
@@ -64,6 +67,8 @@ export const getViewport = () => viewportRef;
 export const useApp = create<State>(() => ({
   screen: "home",
   projects: [],
+  folders: [],
+  folder: "",
   project: null,
   doc: emptyDocument(),
   canUndo: false,
@@ -356,7 +361,8 @@ export function closeSketch(): void {
 // ---------------------------------------------------------------- projects
 
 export async function refreshProjects(): Promise<void> {
-  set({ projects: await listProjects() });
+  const [projects, folders] = await Promise.all([listProjects(), listFolders()]);
+  set({ projects, folders, folder: folders.includes(get().folder) ? get().folder : "" });
 }
 
 export async function openProject(id: string): Promise<void> {
@@ -365,13 +371,14 @@ export async function openProject(id: string): Promise<void> {
     toast("Project not found", "error");
     return;
   }
-  loadDoc(p.doc, { id: p.id, name: p.name, updatedAt: p.updatedAt });
+  loadDoc(p.doc, { id: p.id, name: p.name, folder: p.folder ?? "", updatedAt: p.updatedAt });
   history.replaceState(null, "", `#/p/${encodeURIComponent(p.id)}`);
 }
 
 export async function newProject(doc: LeocadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
   await flushSave();
-  const meta = await createProject(name, doc);
+  // New parts land next to the open project, or in the folder the overview shows.
+  const meta = await createProject(name, doc, get().project?.folder ?? get().folder);
   loadDoc(doc, meta);
   history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
 }

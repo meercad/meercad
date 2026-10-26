@@ -6,8 +6,8 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, type MenuItemConstructorOptions } from "electron";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, normalize, sep } from "node:path";
+import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { canSelfUpdate, checkForUpdate, installUpdate, type UpdateInfo } from "./updater";
 
@@ -63,47 +63,81 @@ function serveApp(): void {
 
 // ---------------------------------------------------------------- project files
 
-/** Project ids are file names without the extension; reject anything that could escape the folder. */
-function projectPath(id: string): string {
-  if (!/^[^/\\:*?"<>|]{1,120}$/.test(id) || id.startsWith(".")) throw new Error(`invalid project name "${id}"`);
-  return join(projectsDir(), `${id}.leocad`);
+/**
+ * Project ids are paths relative to the projects folder without the extension ("Clients/bracket"),
+ * so folders in the app are real folders on disk. Anything that could escape the folder is rejected.
+ */
+const SEGMENT = /^[^/\\:*?"<>|]{1,120}$/;
+function checkRel(rel: string, what: string): string[] {
+  const parts = rel.split("/");
+  if (parts.some((p) => !SEGMENT.test(p) || p.startsWith(".") || p.trim() !== p || !p)) throw new Error(`invalid ${what} "${rel}"`);
+  return parts;
 }
+const projectPath = (id: string) => `${join(projectsDir(), ...checkRel(id, "project name"))}.leocad`;
+const folderPath = (folder: string) => (folder ? join(projectsDir(), ...checkRel(folder, "folder name")) : projectsDir());
+const joinId = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
+const folderOf = (id: string) => (id.includes("/") ? id.slice(0, id.lastIndexOf("/")) : "");
+const nameOf = (id: string) => id.slice(id.lastIndexOf("/") + 1);
+const toId = (rel: string) => rel.split(sep).join("/").replace(/\.leocad$/, "");
 
 const thumbPath = (id: string) => join(thumbsDir(), `${createHash("sha1").update(projectPath(id)).digest("hex")}.png`);
 
 async function listProjects() {
   await mkdir(projectsDir(), { recursive: true });
-  const files = (await readdir(projectsDir())).filter((f) => f.endsWith(".leocad"));
   const out = await Promise.all(
-    files.map(async (f) => {
-      const id = basename(f, ".leocad");
-      const st = await stat(join(projectsDir(), f));
+    (await projectFiles(projectsDir())).map(async (rel) => {
+      const id = toId(rel);
+      const st = await stat(join(projectsDir(), rel));
       let thumbnail: string | undefined;
       try {
         thumbnail = `data:image/png;base64,${(await readFile(thumbPath(id))).toString("base64")}`;
       } catch {
         thumbnail = undefined;
       }
-      return { id, name: id, updatedAt: st.mtimeMs, ...(thumbnail ? { thumbnail } : {}) };
+      return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, ...(thumbnail ? { thumbnail } : {}) };
     }),
   );
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-async function uniqueId(name: string): Promise<string> {
-  const base = name.replace(/[/\\:*?"<>|]+/g, "-").trim().slice(0, 100) || "Untitled part";
-  let id = base;
-  for (let n = 2; existsSync(projectPath(id)); n++) id = `${base} ${n}`;
+/** Every folder below the projects folder (including empty ones), as "a/b" paths. */
+async function listFolders(rel = ""): Promise<string[]> {
+  const out: string[] = [];
+  const dir = rel ? join(projectsDir(), ...rel.split("/")) : projectsDir();
+  if (!existsSync(dir)) return out;
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const r = rel ? `${rel}/${entry.name}` : entry.name;
+    out.push(r, ...(await listFolders(r)));
+  }
+  return out;
+}
+
+const safeName = (name: string, fallback: string) => name.replace(/[/\\:*?"<>|]+/g, "-").replace(/^\.+/, "").trim().slice(0, 100) || fallback;
+
+async function uniqueId(name: string, folder = ""): Promise<string> {
+  const base = safeName(name, "Untitled part");
+  let id = joinId(folder, base);
+  for (let n = 2; existsSync(projectPath(id)); n++) id = joinId(folder, `${base} ${n}`);
   return id;
 }
 
+/** Moves a project file (and its thumbnail) to a new id. */
+async function moveProject(from: string, to: string): Promise<void> {
+  if (from === to) return;
+  await mkdir(dirname(projectPath(to)), { recursive: true });
+  await rename(projectPath(from), projectPath(to));
+  if (existsSync(thumbPath(from))) await rename(thumbPath(from), thumbPath(to));
+}
+
 ipcMain.handle("projects:list", () => listProjects());
+ipcMain.handle("projects:folders", () => listFolders());
 ipcMain.handle("projects:load", async (_e, id: string) => {
   const st = await stat(projectPath(id));
-  return { id, name: id, updatedAt: st.mtimeMs, doc: JSON.parse(await readFile(projectPath(id), "utf8")) };
+  return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, doc: JSON.parse(await readFile(projectPath(id), "utf8")) };
 });
 ipcMain.handle("projects:save", async (_e, p: { id: string; doc: unknown; thumbnail?: string }) => {
-  await mkdir(projectsDir(), { recursive: true });
+  await mkdir(dirname(projectPath(p.id)), { recursive: true });
   // Write atomically so a crash never leaves a half-written project.
   const tmp = `${projectPath(p.id)}.tmp`;
   await writeFile(tmp, `${JSON.stringify(p.doc, null, 2)}\n`);
@@ -113,24 +147,55 @@ ipcMain.handle("projects:save", async (_e, p: { id: string; doc: unknown; thumbn
     await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
   }
 });
-ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown }) => {
-  const id = await uniqueId(p.name);
-  await mkdir(projectsDir(), { recursive: true });
+ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown; folder?: string }) => {
+  const id = await uniqueId(p.name, p.folder ?? "");
+  await mkdir(dirname(projectPath(id)), { recursive: true });
   await writeFile(projectPath(id), `${JSON.stringify(p.doc, null, 2)}\n`);
-  return { id, name: id, updatedAt: Date.now() };
+  return { id, name: nameOf(id), folder: folderOf(id), updatedAt: Date.now() };
 });
 ipcMain.handle("projects:rename", async (_e, p: { id: string; name: string }) => {
-  const id = await uniqueId(p.name);
-  await rename(projectPath(p.id), projectPath(id));
-  if (existsSync(thumbPath(p.id))) await rename(thumbPath(p.id), thumbPath(id));
-  return { id, name: id };
+  const id = await uniqueId(p.name, folderOf(p.id));
+  await moveProject(p.id, id);
+  return { id, name: nameOf(id), folder: folderOf(id) };
+});
+ipcMain.handle("projects:move", async (_e, p: { id: string; folder: string }) => {
+  if (folderOf(p.id) === p.folder) return { id: p.id, name: nameOf(p.id), folder: p.folder };
+  folderPath(p.folder);
+  const id = await uniqueId(nameOf(p.id), p.folder);
+  await moveProject(p.id, id);
+  return { id, name: nameOf(id), folder: folderOf(id) };
 });
 ipcMain.handle("projects:delete", async (_e, id: string) => {
   // Move to the Trash rather than deleting for good.
   await shell.trashItem(projectPath(id));
   await rm(thumbPath(id), { force: true });
 });
-ipcMain.handle("projects:reveal", (_e, id?: string) => (id ? shell.showItemInFolder(projectPath(id)) : shell.openPath(projectsDir())));
+ipcMain.handle("folders:create", async (_e, p: { parent: string; name: string }) => {
+  const base = safeName(p.name, "New folder");
+  let folder = joinId(p.parent, base);
+  for (let n = 2; existsSync(folderPath(folder)); n++) folder = joinId(p.parent, `${base} ${n}`);
+  await mkdir(folderPath(folder), { recursive: true });
+  return folder;
+});
+ipcMain.handle("folders:rename", async (_e, p: { folder: string; name: string }) => {
+  const target = joinId(folderOf(p.folder), safeName(p.name, nameOf(p.folder)));
+  if (target === p.folder) return target;
+  if (existsSync(folderPath(target))) throw new Error(`a folder named "${nameOf(target)}" already exists`);
+  // Thumbnails are keyed by file path; carry them over.
+  const inside = (await projectFiles(folderPath(p.folder))).map((rel) => toId(rel));
+  const thumbs = inside.map((rel) => [thumbPath(`${p.folder}/${rel}`), `${target}/${rel}`] as const);
+  await rename(folderPath(p.folder), folderPath(target));
+  for (const [from, id] of thumbs) if (existsSync(from)) await rename(from, thumbPath(id));
+  return target;
+});
+ipcMain.handle("folders:delete", async (_e, folder: string) => {
+  // Trash the folder with everything in it; the renderer confirms first.
+  for (const rel of await projectFiles(folderPath(folder))) await rm(thumbPath(`${folder}/${toId(rel)}`), { force: true });
+  await shell.trashItem(folderPath(folder));
+});
+ipcMain.handle("projects:reveal", (_e, p?: string | { folder: string }) =>
+  typeof p === "string" ? shell.showItemInFolder(projectPath(p)) : shell.openPath(folderPath(p?.folder ?? "")),
+);
 ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   const r = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath("downloads"), p.name), ...(p.filters ? { filters: p.filters } : {}) });
@@ -186,6 +251,10 @@ ipcMain.handle("storage:set", async (_e, p: { dir: string; move: boolean }) => {
       await rm(join(from, rel));
       moved++;
     }
+    // Carry the folder structure over (empty folders too) and tidy up folders left empty.
+    const folders = await listFolders();
+    for (const f of folders) await mkdir(join(p.dir, ...f.split("/")), { recursive: true });
+    for (const f of folders.reverse()) await rmdir(join(from, ...f.split("/"))).catch(() => undefined);
   }
   settings = { ...settings, projectsDir: p.dir };
   await mkdir(app.getPath("userData"), { recursive: true });
@@ -266,7 +335,7 @@ async function openExternalFile(file: string): Promise<void> {
   try {
     const doc = JSON.parse(await readFile(file, "utf8")) as unknown;
     const inProjects = normalize(file).startsWith(projectsDir() + sep);
-    const id = inProjects ? basename(file, ".leocad") : await uniqueId(basename(file, extname(file)));
+    const id = inProjects ? toId(relative(projectsDir(), file)) : await uniqueId(basename(file, extname(file)));
     if (!inProjects) await writeFile(projectPath(id), `${JSON.stringify(doc, null, 2)}\n`);
     mainWindow.webContents.send("open-project", id);
     mainWindow.focus();
