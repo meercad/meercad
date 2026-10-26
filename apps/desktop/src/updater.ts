@@ -4,7 +4,7 @@
  */
 import { app, BrowserWindow, net, shell } from "electron";
 import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, readFileSync } from "node:fs";
 import { access, constants, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -16,6 +16,32 @@ export interface UpdateInfo {
   url: string;
   page: string;
   notes: string;
+  /** Commit subjects between the running build and this one, newest first. */
+  changes: string[];
+}
+
+/** The commit this build was made from (written into package.json by the release pipeline). */
+export function buildSha(): string | null {
+  try {
+    const pkg = JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { buildSha?: string };
+    return pkg.buildSha ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const api = (path: string) => net.fetch(`https://api.github.com/repos/${REPO}/${path}`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "leocad" } });
+
+async function changesBetween(from: string | null, to: string): Promise<string[]> {
+  if (!from || !to || from === to) return [];
+  try {
+    const res = await api(`compare/${from}...${to}`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { commits?: { commit: { message: string } }[] };
+    return (data.commits ?? []).map((c) => c.commit.message.split("\n")[0]!).filter((m) => !/^Merge /.test(m)).reverse().slice(0, 12);
+  } catch {
+    return [];
+  }
 }
 
 const parse = (v: string) => v.split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
@@ -26,17 +52,22 @@ export function newer(a: string, b: string): boolean {
 }
 
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
-  const res = await net.fetch(`https://api.github.com/repos/${REPO}/releases?per_page=15`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "leocad" } });
+  const res = await api("releases?per_page=15");
   if (!res.ok) throw new Error(`update check failed (${res.status})`);
-  const releases = (await res.json()) as { html_url: string; body?: string; assets: { name: string; browser_download_url: string }[] }[];
+  const releases = (await res.json()) as { html_url: string; body?: string; target_commitish?: string; assets: { name: string; browser_download_url: string }[] }[];
+  let target = "";
   const arch = process.arch === "arm64" ? "arm64" : "x64";
   let best: UpdateInfo | null = null;
   for (const r of releases) {
     for (const a of r.assets) {
       const m = new RegExp(`^leocad-(\\d+\\.\\d+\\.\\d+)-${arch}\\.zip$`).exec(a.name);
-      if (m && newer(m[1]!, best?.version ?? app.getVersion())) best = { version: m[1]!, url: a.browser_download_url, page: r.html_url, notes: (r.body ?? "").slice(0, 2000) };
+      if (m && newer(m[1]!, best?.version ?? app.getVersion())) {
+        best = { version: m[1]!, url: a.browser_download_url, page: r.html_url, notes: (r.body ?? "").slice(0, 2000), changes: [] };
+        target = r.target_commitish ?? "";
+      }
     }
   }
+  if (best) best.changes = await changesBetween(buildSha(), target);
   return best;
 }
 
@@ -67,6 +98,8 @@ export async function installUpdate(info: UpdateInfo, win: BrowserWindow | null)
   const dir = await mkdtemp(join(tmpdir(), "leocad-update-"));
   const zip = join(dir, "update.zip");
   const res = await net.fetch(info.url);
+  // The rolling release is deleted and recreated while a new build is published.
+  if (res.status === 404) throw new Error("a newer build is being published right now — try again in a few minutes");
   if (!res.ok || !res.body) throw new Error(`download failed (${res.status})`);
   const total = Number(res.headers.get("content-length") ?? 0);
   let done = 0;

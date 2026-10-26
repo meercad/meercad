@@ -293,7 +293,7 @@ async function runUpdateCheck(manual = false): Promise<void> {
     const info = await checkForUpdate();
     if (info) {
       pendingUpdate = info;
-      mainWindow?.webContents.send("update-available", { version: info.version, notes: info.notes, page: info.page, canInstall: await canSelfUpdate() });
+      mainWindow?.webContents.send("update-available", { version: info.version, notes: info.notes, changes: info.changes, page: info.page, canInstall: await canSelfUpdate() });
     } else if (manual) mainWindow?.webContents.send("update-none", app.getVersion());
   } catch (e) {
     if (manual) mainWindow?.webContents.send("update-error", e instanceof Error ? e.message : String(e));
@@ -443,6 +443,13 @@ else {
       if (app.isPackaged) {
         setTimeout(() => void runUpdateCheck(), 5000);
         setInterval(() => void runUpdateCheck(), 60 * 60 * 1000);
+        // Also look again when the app comes back to the front after a while.
+        let lastCheck = Date.now();
+        app.on("browser-window-focus", () => {
+          if (Date.now() - lastCheck < 10 * 60 * 1000) return;
+          lastCheck = Date.now();
+          void runUpdateCheck();
+        });
       }
     });
     app.on("activate", () => {

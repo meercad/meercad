@@ -681,3 +681,6 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 /* toasts: dark, nearly opaque pill so the text reads on any background and in both themes */
 .toasts .toast { background: rgb(24 26 38 / 0.94) !important; color: #fff; border: 1px solid rgb(255 255 255 / 0.12) !important; font-size: 13px; font-weight: 500; padding: 9px 16px; border-radius: 12px; box-shadow: 0 10px 30px rgb(10 12 30 / 0.28) !important; }
 .toasts .toast.error { background: rgb(190 36 48 / 0.96) !important; }
+ul.update-notes { margin: 6px 0 2px; padding-left: 18px; color: var(--text-2); }
+ul.update-notes li { margin: 1px 0; }
+.update-hint { font-size: 12px; margin-top: 4px; }

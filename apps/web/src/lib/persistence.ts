@@ -45,7 +45,7 @@ interface DesktopApi {
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
   updates: { check(): Promise<void>; install(): Promise<void> };
   on(channel: "menu" | "open-project" | "update-none" | "update-error" | "error", fn: (arg: string) => void): () => void;
-  on(channel: "update-available", fn: (arg: { version: string; notes: string; page: string; canInstall: boolean }) => void): () => void;
+  on(channel: "update-available", fn: (arg: { version: string; notes: string; changes?: string[]; page: string; canInstall: boolean }) => void): () => void;
   on(channel: "update-progress", fn: (arg: number) => void): () => void;
 }
 
