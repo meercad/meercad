@@ -1,8 +1,22 @@
-# leocad (working title)
+<p align="center">
+  <img src="docs/brand/leocad-icon-256.png" alt="leocad" width="160" height="160">
+</p>
 
-Free, open-source parametric CAD for makers — runs locally on your Mac, no account, no cloud.
+<h1 align="center">leocad</h1>
+
+<p align="center">
+  <b>Free, open-source parametric CAD for makers</b><br>
+  Runs locally on your Mac — no account, no cloud.
+</p>
+
+<p align="center">
+  <a href="../../releases/latest">Download for macOS</a> ·
+  <a href="docs/FORMAT.md">File format</a> ·
+  <a href="#let-claude-drive-it-mcp">MCP</a>
+</p>
+
 Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/patterns/mirror/booleans, direct
-push/pull editing, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model for you.
+push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model for you.
 
 ## Download (macOS)
 
@@ -17,7 +31,8 @@ version, replaces itself and restarts (also available via *leocad → Check for 
 
 ## Your files
 
-Projects are plain `.leocad` files in `~/Documents/leocad` — human-readable JSON (see
+Projects are plain `.leocad` files in a folder you pick on first launch (default `~/Documents/leocad`,
+changeable in Settings). Folders you create in the app are real folders there. The files are human-readable JSON (see
 [docs/FORMAT.md](docs/FORMAT.md)) that you can version with git, edit by hand or generate with scripts.
 Exchange with other CAD tools via STEP; 3D printing via STL/3MF; laser cutting via DXF/SVG.
 
