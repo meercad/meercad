@@ -77,7 +77,8 @@ function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown>
       reject(new Error(`${method} timed out`));
     }, timeoutMs);
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-    app!.send(JSON.stringify({ id, method, params }));
+    const info = server.server.getClientVersion();
+    app!.send(JSON.stringify({ id, method, params, client: info?.title ?? info?.name ?? "Assistant" }));
   });
 }
 
@@ -123,9 +124,15 @@ server.registerTool(
 
 server.registerTool(
   "preview_ops",
-  { title: "Try changes", description: "Rebuilds the model with the ops applied in a sandbox without changing it. Use to check an idea before apply_ops.", inputSchema: { ops: z.array(op).min(1) }, annotations: { readOnlyHint: true } },
+  {
+    title: "Try changes",
+    description: "Shows the model with the ops applied as a live preview in the app (not saved) and returns the rebuild result. Use to try ideas; then apply_ops to keep them or clear_preview.",
+    inputSchema: { ops: z.array(op).min(1) },
+  },
   guard(async ({ ops }) => text(await call("preview_ops", { ops }))),
 );
+
+server.registerTool("clear_preview", { title: "Clear preview", description: "Removes a preview shown by preview_ops." }, guard(async () => text(await call("clear_preview"))));
 
 server.registerTool("undo", { title: "Undo", description: "Undoes the last change." }, guard(async () => text(await call("undo"))));
 server.registerTool("redo", { title: "Redo", description: "Redoes the last undone change." }, guard(async () => text(await call("redo"))));
@@ -133,7 +140,7 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id.", inputSchema: { id: z.string() } },
+  { title: "Open project", description: "Opens a saved project by id (see list_projects); the app switches to it so the user sees your work live.", inputSchema: { id: z.string() } },
   guard(async ({ id }) => text(await call("open_project", { id }))),
 );
 server.registerTool(
@@ -189,8 +196,17 @@ server.registerTool(
   guard(async ({ a, b }) => text(await call("measure", { a, b }))),
 );
 
-server.registerTool("status", { title: "Connection status", description: "Whether the opencad app is connected and which project is open.", annotations: { readOnlyHint: true } }, async () =>
-  text(app ? { connected: true, ...hello } : { connected: false, hint: `Open opencad and enable 'Connect AI assistants (MCP)'. Listening on ws://127.0.0.1:${port}.` }),
+server.registerTool(
+  "status",
+  { title: "Connection status", description: "Whether the opencad app is connected, which project is open, and the available projects.", annotations: { readOnlyHint: true } },
+  async () => {
+    if (!app) return text({ connected: false, hint: `Open opencad and enable 'Allow assistants to control opencad' (plug icon). Listening on ws://127.0.0.1:${port}.` });
+    try {
+      return text({ connected: true, ...(await call<Record<string, unknown>>("get_status")) });
+    } catch {
+      return text({ connected: true, ...hello });
+    }
+  },
 );
 
 await server.connect(new StdioServerTransport());

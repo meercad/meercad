@@ -5,7 +5,7 @@ import { samePick, Viewport, type Pick, type PickKind, type PlaneView, type Scen
 import { FEATURES } from "../lib/features";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
-import { dialogPick, editFeature, kernel, setViewport, startFeature, startSketch, toast, useApp } from "../store";
+import { dialogPick, editFeature, kernel, scheduleRebuild, setViewport, startFeature, startSketch, toast, useApp } from "../store";
 import { pickKindsFor } from "./FeatureDialog";
 import { toggleHidden } from "./FeatureTree";
 import { showMenu } from "./Menu";
@@ -232,6 +232,7 @@ export function ViewportView() {
       {vp ? <Manipulators viewport={vp} /> : null}
       {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
       {hint ? <div className="hint-banner">{hint}</div> : null}
+      <AiActivity />
       {measure.active ? <MeasureCard /> : null}
       <div className="status-pill" title={kernelState.error ?? ""}>
         <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />
@@ -293,6 +294,37 @@ function MeasureCard() {
           <span className="muted">{m.picks.length ? "Measuring…" : "Click a face or an edge. Shift-click to add a second one."}</span>
         )}
       </div>
+    </div>
+  );
+}
+
+function AiActivity() {
+  const activity = useApp((s) => s.aiActivity);
+  const previewing = useApp((s) => !!s.proposalDoc);
+  if (!activity && !previewing) return null;
+  return (
+    <div className="ai-activity">
+      <span className="pulse" />
+      {activity ? (
+        <span>
+          <b>{activity.client}</b> · {activity.tool.replace(/_/g, " ")}
+        </span>
+      ) : null}
+      {previewing ? (
+        <>
+          <span className="muted">Preview — not applied</span>
+          <button
+            className="btn"
+            style={{ height: 22, padding: "0 8px" }}
+            onClick={() => {
+              useApp.setState({ proposalDoc: null });
+              scheduleRebuild();
+            }}
+          >
+            Dismiss
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }

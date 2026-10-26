@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { decodeShareFragment } from "@opencad/io";
 import { validateDocument } from "@opencad/schema";
-import { CopilotPanel } from "./components/Copilot";
 import { FeatureDialog } from "./components/FeatureDialog";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
@@ -45,7 +44,6 @@ async function route(): Promise<void> {
 
 export function App() {
   const screen = useApp((s) => s.screen);
-  const copilot = useApp((s) => s.copilotOpen);
   const [help, setHelp] = useState(false);
   useEffect(() => {
     void route();
@@ -151,7 +149,6 @@ export function App() {
             <ViewportView />
             <FeatureDialog />
           </div>
-          <div className="right">{copilot ? <CopilotPanel /> : null}</div>
         </div>
       )}
       {help ? <ShortcutHelp onClose={() => setHelp(false)} /> : null}

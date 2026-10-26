@@ -313,3 +313,7 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 /* desktop (macOS hidden-inset title bar) */
 .topbar.desktop, .home-top.desktop { padding-left: 84px; -webkit-app-region: drag; }
 .topbar.desktop button, .topbar.desktop input, .home-top.desktop button { -webkit-app-region: no-drag; }
+
+.ai-activity { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); box-shadow: var(--shadow); font-size: 12.5px; z-index: 6; }
+.ai-activity .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; transform: scale(0.7); } }

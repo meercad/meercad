@@ -9,7 +9,7 @@ import { resolveEdges, resolveFaces } from "@opencad/naming";
 import { applyOp } from "@opencad/model";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type OpencadDocument } from "@opencad/schema";
 import { sketchCurves } from "../components/io";
-import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, undo, useApp } from "../store";
+import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import { meshTopology } from "./topology";
 
 type Status = "off" | "connecting" | "connected";
@@ -72,12 +72,20 @@ function connect(): void {
   ws.onerror = () => ws.close();
   ws.onmessage = async (e) => {
     const req = JSON.parse(String(e.data)) as BridgeRequest;
+    showActivity(req.client ?? "Assistant", req.method);
     try {
       ws.send(JSON.stringify({ id: req.id, result: await handle(req) }));
     } catch (err) {
       ws.send(JSON.stringify({ id: req.id, error: err instanceof Error ? err.message : String(err) }));
     }
   };
+}
+
+let activityTimer: number | undefined;
+function showActivity(client: string, tool: string): void {
+  useApp.setState({ aiActivity: { client, tool, at: Date.now() } });
+  clearTimeout(activityTimer);
+  activityTimer = window.setTimeout(() => useApp.setState({ aiActivity: null }), 4000);
 }
 
 function summary(out: RebuildOutput) {
@@ -114,8 +122,21 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       if (!sk) throw new Error(`sketch "${String(p["id"])}" not found`);
       return { ...sk, regions: sk.regions.map(({ key, depth, area, sample }) => ({ key, depth, area, sample })) };
     }
+    case "get_status": {
+      await refreshProjects();
+      return {
+        project: useApp.getState().project,
+        projects: useApp.getState().projects.map(({ id, name }) => ({ id, name })),
+        previewing: !!useApp.getState().proposalDoc,
+      };
+    }
+    case "clear_preview":
+      useApp.setState({ proposalDoc: null });
+      scheduleRebuild();
+      return "ok";
     case "apply_ops": {
       needProject();
+      useApp.setState({ proposalDoc: null });
       const ops = p["ops"] as DocOp[];
       // Validate first so a bad op returns a precise error instead of a toast.
       ops.reduce<OpencadDocument>((d, op) => applyOp(d, op), currentDoc());
@@ -125,10 +146,15 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "preview_ops": {
       needProject();
       const doc = (p["ops"] as DocOp[]).reduce<OpencadDocument>((d, op) => applyOp(d, op), currentDoc());
-      return summary(await kernel.sandbox(doc));
+      const result = summary(await kernel.sandbox(doc));
+      // Show it live; the document itself stays untouched.
+      useApp.setState({ proposalDoc: doc });
+      scheduleRebuild();
+      return result;
     }
     case "undo":
       needProject();
+      useApp.setState({ proposalDoc: null });
       undo();
       return summary(await rebuildNow());
     case "redo":

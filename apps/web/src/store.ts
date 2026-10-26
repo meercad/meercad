@@ -43,11 +43,12 @@ interface State {
   showPlanes: boolean;
   showSketches: boolean;
   measure: { active: boolean; picks: Pick[]; result: Measurement | null };
-  copilotOpen: boolean;
   proposalDoc: OpencadDocument | null;
   toasts: Toast[];
   saveState: "saved" | "saving" | "unsaved";
   selectedFeature: string | null;
+  /** What a connected assistant is doing right now (MCP). */
+  aiActivity: { client: string; tool: string; at: number } | null;
   /** Waiting for the user to click a plane/face to start a sketch. */
   pickingSketchPlane: boolean;
 }
@@ -77,12 +78,12 @@ export const useApp = create<State>(() => ({
   showPlanes: false,
   showSketches: true,
   measure: { active: false, picks: [], result: null },
-  copilotOpen: false,
   proposalDoc: null,
   toasts: [],
   saveState: "saved",
   selectedFeature: null,
   pickingSketchPlane: false,
+  aiActivity: null,
 }));
 
 const set = useApp.setState;

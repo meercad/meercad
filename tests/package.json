@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@opencad/ai": "workspace:*",
     "@opencad/io": "workspace:*",
     "@opencad/kernel": "workspace:*",
     "@opencad/model": "workspace:*",

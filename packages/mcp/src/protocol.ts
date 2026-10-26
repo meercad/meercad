@@ -15,12 +15,16 @@ export type BridgeMethod =
   | "render_view"
   | "set_view"
   | "export"
-  | "measure";
+  | "measure"
+  | "get_status"
+  | "clear_preview";
 
 export interface BridgeRequest {
   id: number;
   method: BridgeMethod;
   params: Record<string, unknown>;
+  /** Name of the assistant calling (from the MCP client info), shown in the app. */
+  client?: string;
 }
 
 export type BridgeResponse = { id: number; result: unknown } | { id: number; error: string };

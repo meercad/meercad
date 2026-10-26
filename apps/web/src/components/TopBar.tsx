@@ -1,4 +1,4 @@
-import { ChevronDown, Download, FileDown, House, Moon, Redo2, Share2, Sparkles, Sun, Undo2 } from "lucide-react";
+import { ChevronDown, Download, FileDown, House, Moon, Redo2, Share2, Sun, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { goHome, redo, renameProject, undo, useApp } from "../store";
 import { exportMesh, exportSketch, exportStep, saveFile, shareLink } from "./io";
@@ -35,7 +35,6 @@ export function TopBar() {
   const saveState = useApp((s) => s.saveState);
   const canUndo = useApp((s) => s.canUndo);
   const canRedo = useApp((s) => s.canRedo);
-  const copilot = useApp((s) => s.copilotOpen);
   const sketches = useApp((s) => s.output?.report.sketches) ?? NONE;
   const [name, setName] = useState(project?.name ?? "");
   const exportBtn = useRef<HTMLButtonElement>(null);
@@ -98,9 +97,6 @@ export function TopBar() {
           <Share2 /> <span className="btn-label">Share</span>
         </button>
       )}
-      <button className={`btn ${copilot ? "primary" : ""}`} onClick={() => useApp.setState((s) => ({ copilotOpen: !s.copilotOpen }))} title="AI copilot (bring your own key)">
-        <Sparkles /> <span className="btn-label">Copilot</span>
-      </button>
     </header>
   );
 }
