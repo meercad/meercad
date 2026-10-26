@@ -189,3 +189,33 @@ describe("push/pull", () => {
     expect(meshes[0]!.faceTags.flat()).toContain("ex2.end_cap");
   });
 });
+
+describe("tessellation", () => {
+  it("has usable normals where a chamfer runs into a fillet corner (cone apex)", async () => {
+    const d = doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 40, 30)),
+      { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 20, mode: "new_body" },
+      { id: "fi1", op: "fillet", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }], radius: 4 },
+      { id: "ch1", op: "chamfer", edges: { select: "edges", of: "ex1", where: { face: "end_cap" } }, distance: 4 },
+    ]);
+    const { report, meshes } = (await newSession()).rebuild(d);
+    ok(report);
+    const m = meshes[0]!;
+    // Every vertex normal must agree with the area-weighted normal of its own triangles.
+    const acc = new Float32Array(m.normals.length);
+    for (let t = 0; t < m.indices.length; t += 3) {
+      const [a, b, c] = [m.indices[t]! * 3, m.indices[t + 1]! * 3, m.indices[t + 2]! * 3];
+      const p = m.positions;
+      const u = [p[b]! - p[a]!, p[b + 1]! - p[a + 1]!, p[b + 2]! - p[a + 2]!];
+      const v = [p[c]! - p[a]!, p[c + 1]! - p[a + 1]!, p[c + 2]! - p[a + 2]!];
+      const n = [u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!];
+      for (const i of [a, b, c]) for (let k = 0; k < 3; k++) acc[i + k]! += n[k]!;
+    }
+    let bad = 0;
+    for (let i = 0; i < acc.length; i += 3) {
+      const l = Math.hypot(acc[i]!, acc[i + 1]!, acc[i + 2]!) || 1;
+      if ((m.normals[i]! * acc[i]! + m.normals[i + 1]! * acc[i + 1]! + m.normals[i + 2]! * acc[i + 2]!) / l < 0.8) bad++;
+    }
+    expect(bad).toBe(0);
+  });
+});

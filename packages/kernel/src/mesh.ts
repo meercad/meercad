@@ -48,6 +48,7 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"]): BodyMes
     const indices = new Uint32Array(buf, m.getTrianglesPtr(), m.getTrianglesSize()).slice();
     const faceRanges = new Int32Array(buf, m.getFaceGroupsPtr(), m.getFaceGroupsSize()).slice();
     for (let i = 2; i < faceRanges.length; i += 3) faceRanges[i] = faceByHash.get(faceRanges[i]!) ?? -1;
+    repairNormals(positions, normals, indices);
     const edgeLines = new Float32Array(buf, em.getLinesPtr(), em.getLinesSize()).slice();
     const edgeRanges = new Int32Array(buf, em.getEdgeGroupsPtr(), em.getEdgeGroupsSize()).slice();
     for (let i = 2; i < edgeRanges.length; i += 3) edgeRanges[i] = edgeByHash.get(edgeRanges[i]!) ?? -1;
@@ -87,4 +88,37 @@ export function summarizeBody(oc: OC, body: Body): BodySummary {
     surf.delete();
     box.delete();
   }
+}
+
+/**
+ * Replaces vertex normals that disagree with the surrounding triangles (e.g. at the apex of a cone
+ * where the surface normal is undefined) by the area-weighted triangle normal. Faces do not share
+ * vertices, so this never smooths across sharp edges.
+ */
+export function repairNormals(positions: Float32Array, normals: Float32Array, indices: Uint32Array): number {
+  const acc = new Float32Array(normals.length);
+  for (let t = 0; t < indices.length; t += 3) {
+    const [a, b, c] = [indices[t]! * 3, indices[t + 1]! * 3, indices[t + 2]! * 3];
+    const ux = positions[b]! - positions[a]!, uy = positions[b + 1]! - positions[a + 1]!, uz = positions[b + 2]! - positions[a + 2]!;
+    const vx = positions[c]! - positions[a]!, vy = positions[c + 1]! - positions[a + 1]!, vz = positions[c + 2]! - positions[a + 2]!;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const i of [a, b, c]) {
+      acc[i] += nx;
+      acc[i + 1] += ny;
+      acc[i + 2] += nz;
+    }
+  }
+  let fixed = 0;
+  for (let i = 0; i < normals.length; i += 3) {
+    const l = Math.hypot(acc[i]!, acc[i + 1]!, acc[i + 2]!);
+    if (!l) continue;
+    const [x, y, z] = [acc[i]! / l, acc[i + 1]! / l, acc[i + 2]! / l];
+    if (normals[i]! * x + normals[i + 1]! * y + normals[i + 2]! * z < 0.85) {
+      normals[i] = x;
+      normals[i + 1] = y;
+      normals[i + 2] = z;
+      fixed++;
+    }
+  }
+  return fixed;
 }
