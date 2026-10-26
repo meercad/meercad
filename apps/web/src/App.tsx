@@ -17,7 +17,10 @@ import { initBridge } from "./lib/mcpBridge";
 import { desktop } from "./lib/persistence";
 import { saveFile } from "./components/io";
 import { FEATURES } from "./lib/features";
-import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, toast, undo, useApp } from "./store";
+import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
+import { planeSpecForPick } from "./lib/topology";
+import type { StandardView } from "@leocad/viewport";
+import { CommandPalette } from "./components/CommandPalette";
 
 try {
   const theme = localStorage.getItem("leocad.theme");
@@ -25,6 +28,9 @@ try {
 } catch {
   // default theme
 }
+
+/** Shapr3D view numbering: 1 reset/iso, 2 front, 3 back, 4 top, 5 bottom, 6 right, 7 left. */
+const VIEW_KEYS: Record<string, StandardView> = { "1": "iso", "2": "front", "3": "back", "4": "top", "5": "bottom", "6": "right", "7": "left" };
 
 async function route(): Promise<void> {
   const hash = location.hash;
@@ -103,6 +109,12 @@ export function App() {
         } else if (k === "o") {
           e.preventDefault();
           void importFile();
+        } else if (VIEW_KEYS[k]) {
+          e.preventDefault();
+          getViewport()?.setView(VIEW_KEYS[k]!);
+        } else if (k === "f") {
+          e.preventDefault();
+          window.dispatchEvent(new Event("leocad:palette"));
         }
         return;
       }
@@ -122,13 +134,22 @@ export function App() {
       }
       if (e.key === "Enter" && s.selectedFeature) return editFeature(s.selectedFeature);
       const k = e.key.toLowerCase();
+      if (k === "x") return window.dispatchEvent(new Event("leocad:palette"));
+      const hovered = getViewport()?.hovered ?? null;
+      if (e.key === " " && hovered?.kind === "face" && hovered.normal) {
+        e.preventDefault();
+        return getViewport()?.viewFrom(hovered.normal);
+      }
+      if (k === "s" && hovered && (hovered.kind === "plane" || (hovered.kind === "face" && hovered.normal))) {
+        const spec = planeSpecForPick(hovered, s.output?.meshes ?? []);
+        if (spec) return startSketch(spec);
+      }
       if (k === "m") return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
       if (k === "z") return getViewport()?.fit();
       for (const [op, meta] of Object.entries(FEATURES)) {
         if (meta.shortcut?.toLowerCase() === k) return startFeature(op as keyof typeof FEATURES);
       }
-      const views: Record<string, Parameters<NonNullable<ReturnType<typeof getViewport>>["setView"]>[0]> = { "1": "front", "2": "back", "3": "left", "4": "right", "5": "top", "6": "bottom", "0": "iso" };
-      if (views[k]) getViewport()?.setView(views[k]!);
+      if (VIEW_KEYS[k]) getViewport()?.setView(VIEW_KEYS[k]!);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -166,6 +187,7 @@ export function App() {
         </div>
       )}
       {help ? <ShortcutHelp onClose={() => setHelp(false)} /> : null}
+      <CommandPalette onHelp={() => setGuide(true)} onShortcuts={() => setHelp(true)} onTour={() => setTour(true)} />
       {tour && screen === "editor" ? <Tour onClose={() => setTour(false)} /> : null}
       <Toasts />
       <MenuHost />

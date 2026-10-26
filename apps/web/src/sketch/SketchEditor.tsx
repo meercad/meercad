@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resolveFeature } from "@leocad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@leocad/schema";
-import { findRegions, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@leocad/sketch";
+import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@leocad/sketch";
 import { frameMatrix, THREE, type Viewport } from "@leocad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
@@ -27,7 +27,7 @@ interface Snap {
   curve?: string;
 }
 
-const COLORS = { under: 0x2266dd, full: 0x1f2937, construction: 0x8aa4c8, external: 0xa35cff, sel: 0xff7a1a, hover: 0x2e7dff, preview: 0x2e7dff, conflict: 0xd93f3f };
+const COLORS = { under: 0x2266dd, full: 0x16a34a, construction: 0x8aa4c8, external: 0xa35cff, sel: 0xff7a1a, hover: 0x2e7dff, preview: 0x2e7dff, conflict: 0xd93f3f };
 
 export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketchId: string }) {
   const doc = useApp((s) => s.doc);
@@ -311,6 +311,99 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     commit(bl.d);
   };
 
+  /** Regular polygon inscribed in a construction circle; equal sides keep it regular. */
+  const addPolygon = (c: Snap, v: Vec2, sides = 6) => {
+    if (!sketch) return;
+    const r = Math.hypot(v[0] - c.pos[0], v[1] - c.pos[1]);
+    if (r < px() * 2) return;
+    const bl = builder(sketch);
+    const center = bl.point(c);
+    const circle = bl.entity({ type: "circle", center, radius: r, construction: true }, "c");
+    const a0 = Math.atan2(v[1] - c.pos[1], v[0] - c.pos[0]);
+    const pts = Array.from({ length: sides }, (_, i) => {
+      const a = a0 + (i * 2 * Math.PI) / sides;
+      const id = bl.point({ pos: [c.pos[0] + r * Math.cos(a), c.pos[1] + r * Math.sin(a)] });
+      bl.constraint({ type: "point_on", point: id, curve: circle });
+      return id;
+    });
+    const lines = pts.map((p, i) => bl.entity({ type: "line", p1: p, p2: pts[(i + 1) % sides]!, ...cons }, "l"));
+    for (let i = 1; i < lines.length; i++) bl.constraint({ type: "equal", a: lines[0]!, b: lines[i]! });
+    commit(bl.d);
+  };
+
+  /** Removes the piece of a curve between the nearest intersections around the click. */
+  const trimAt = (p: Vec2) => {
+    if (!sketch || !shown) return;
+    const target = hitCurve(p, px() * 8);
+    if (!target || target.external) return;
+    const others = shown.curves.filter((c) => c.id !== target.id && !c.construction);
+    const hits = others.flatMap((o) => intersectionPoints(target, o).map((pt) => ({ pt, curve: o.id })));
+    const bl = builder({ entities: sketch.entities, constraints: sketch.constraints });
+    const d = bl.d;
+    const drop = (id: string) => {
+      d.entities = d.entities.filter((e) => e.id !== id);
+      d.constraints = d.constraints.filter((c) => !refsOf(c).includes(id));
+    };
+    const endpoint = (h: { pt: Vec2; curve: string }) => {
+      const existing = hitPoint(h.pt, px() * 2);
+      if (existing && existing !== "origin" && d.entities.some((e) => e.id === existing && e.type === "point")) return existing;
+      return bl.point({ pos: h.pt, curve: h.curve });
+    };
+    if (target.kind === "line") {
+      const len2 = (target.b[0] - target.a[0]) ** 2 + (target.b[1] - target.a[1]) ** 2 || 1;
+      const t = (q: Vec2) => ((q[0] - target.a[0]) * (target.b[0] - target.a[0]) + (q[1] - target.a[1]) * (target.b[1] - target.a[1])) / len2;
+      const tc = t(p);
+      const inner = hits.map((h) => ({ ...h, t: t(h.pt) })).filter((h) => h.t > 1e-6 && h.t < 1 - 1e-6);
+      const before = inner.filter((h) => h.t < tc).sort((a, b) => b.t - a.t)[0];
+      const after = inner.filter((h) => h.t > tc).sort((a, b) => a.t - b.t)[0];
+      const e = d.entities.find((x) => x.id === target.id);
+      if (e?.type !== "line") return;
+      if (!before && !after) drop(target.id);
+      else if (!before) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p1: endpoint(after!) } : x));
+      else if (!after) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p2: endpoint(before) } : x));
+      else {
+        const [m1, m2] = [endpoint(before), endpoint(after)];
+        d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p2: m1 } : x));
+        bl.entity({ type: "line", p1: m2, p2: e.p2, ...(e.construction ? { construction: true } : {}) }, "l");
+      }
+      // Length dimensions on a trimmed line no longer describe it.
+      d.constraints = d.constraints.filter((c) => !(c.type === "length" && c.line === target.id));
+    } else {
+      const ang = (q: Vec2) => Math.atan2(q[1] - target.center[1], q[0] - target.center[0]);
+      const norm = (a: number, from: number) => ((a - from) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+      const start = target.kind === "arc" ? target.a0 : ang(p);
+      const span = target.kind === "arc" ? norm(target.a1, target.a0) || 2 * Math.PI : 2 * Math.PI;
+      const ac = norm(ang(p), start);
+      const inner = hits.map((h) => ({ ...h, a: norm(ang(h.pt), start) })).filter((h) => h.a > 1e-6 && h.a < span - 1e-6);
+      const before = inner.filter((h) => h.a < ac).sort((x, y) => y.a - x.a)[0] ?? (target.kind === "circle" ? inner.sort((x, y) => y.a - x.a)[0] : undefined);
+      const after = inner.filter((h) => h.a > ac).sort((x, y) => x.a - y.a)[0] ?? (target.kind === "circle" ? inner.sort((x, y) => x.a - y.a)[0] : undefined);
+      const e = d.entities.find((x) => x.id === target.id);
+      if (!e || (e.type !== "circle" && e.type !== "arc")) return;
+      if (target.kind === "circle") {
+        if (!before || !after || before === after) drop(target.id);
+        // Keep the rest of the circle as an arc from the next intersection around to the previous one.
+        else {
+          drop(target.id);
+          bl.entity({ type: "arc", center: e.center, start: endpoint(after), end: endpoint(before), ...(e.construction ? { construction: true } : {}) }, "a");
+        }
+      } else if (e.type === "arc") {
+        if (!before && !after) drop(target.id);
+        else if (!before) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, start: endpoint(after!) } : x));
+        else if (!after) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, end: endpoint(before) } : x));
+        else {
+          const [m1, m2] = [endpoint(before), endpoint(after)];
+          d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, end: m1 } : x));
+          bl.entity({ type: "arc", center: e.center, start: m2, end: e.end, ...(e.construction ? { construction: true } : {}) }, "a");
+        }
+      }
+    }
+    // Drop points that no curve uses any more.
+    const used = new Set(d.entities.flatMap((x) => (x.type === "line" ? [x.p1, x.p2] : x.type === "circle" ? [x.center] : x.type === "arc" ? [x.center, x.start, x.end] : [])));
+    const orphan = sketch.entities.filter((x) => x.type === "point" && !used.has(x.id) && sketch.entities.some((c) => c.type !== "point" && refsOfEntity(c).includes(x.id)));
+    for (const o of orphan) drop(o.id);
+    commit(d);
+  };
+
   const addPoint = (s: Snap) => {
     if (!sketch) return;
     const bl = builder(sketch);
@@ -423,7 +516,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
       if (e.buttons) return;
       // Hover + tool previews
-      if (tool === "select" || tool === "dimension") setHover(targetAt(p));
+      if (tool === "select" || tool === "dimension" || tool === "trim") setHover(targetAt(p));
       else setHover(null);
       if (tool === "project") return;
       const s = tool === "select" || tool === "dimension" ? { pos: p } : snap(p);
@@ -449,6 +542,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           ts.sweep = next;
         }
         setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `R ${fmt(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))} mm` });
+      } else if (tool === "polygon" && ts.points.length) {
+        const c = ts.points[0]!.pos;
+        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `hexagon R ${fmt(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))} mm` });
       } else if ((tool === "rect" || tool === "rect_center") && ts.points.length) {
         const a = ts.points[0]!.pos;
         const k = tool === "rect_center" ? 2 : 1;
@@ -546,6 +642,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           return rerender();
         case "point":
           return addPoint(s);
+        case "polygon":
+          if (!ts.points.length) ts.points = [s];
+          else {
+            addPolygon(ts.points[0]!, s.pos);
+            ts.points = [];
+            setTip(null);
+          }
+          return rerender();
+        case "trim":
+          return trimAt(p);
         case "dimension": {
           const t = targetAt(p);
           if (!ts.dimFirst) {
@@ -633,11 +739,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         }
         return;
       }
-      const tools: Record<string, SketchTool> = { l: "line", r: e.shiftKey ? "rect_center" : "rect", c: "circle", a: "arc", p: "point", d: "dimension", u: "project", s: "select" };
+      // Constraints use Shift + letter (Shapr3D layout); plain letters pick tools.
+      const cmap: Record<string, string> = { a: "parallel", c: "concentric", e: "equal", v: "hv", n: "coincident", l: "fix", m: "midpoint", p: "perpendicular", s: "symmetric", t: "tangent" };
+      if (e.shiftKey && cmap[k]) return applyConstraint(cmap[k]!);
+      const tools: Record<string, SketchTool> = { l: "line", r: e.shiftKey ? "rect_center" : "rect", c: "circle", a: "arc", p: "point", d: "dimension", u: "project", g: "polygon", t: "trim" };
       if (tools[k]) return setTool(tools[k]!);
       if (k === "x") return toggleConstruction();
-      const cmap: Record<string, string> = { h: "horizontal", v: "vertical", i: "coincident", t: "tangent", e: "equal" };
-      if (cmap[k] && useSketchUi.getState().selection.length) return applyConstraint(cmap[k]!);
       if (e.key === "Escape") {
         if (ts.points.length || ts.dimFirst) {
           ts.points = [];
@@ -785,6 +892,10 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
       return n === 0 ? "Click the arc center" : n === 1 ? "Click the start point" : "Click the end point (move clockwise to flip)";
     case "point":
       return "Click to place a point";
+    case "polygon":
+      return n ? "Click a corner (hexagon; constraints keep it regular)" : "Click the center";
+    case "trim":
+      return "Click the piece of a curve to cut away up to its nearest intersections";
     case "dimension":
       return dimFirst ? "Click a second entity, or click empty space to place the dimension" : "Click a line, circle, arc or point";
     case "project":
@@ -890,6 +1001,10 @@ function projectOnCurve(c: SolvedCurve, p: Vec2): Vec2 {
   return [c.center[0] + c.radius * Math.cos(a), c.center[1] + c.radius * Math.sin(a)];
 }
 
+function refsOfEntity(e: SketchEntity): string[] {
+  return e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : [];
+}
+
 function refsOf(c: SketchConstraint): string[] {
   return Object.entries(c)
     .filter(([k, v]) => k !== "id" && k !== "type" && typeof v === "string")
@@ -942,6 +1057,11 @@ function previewObjects(tool: SketchTool, ts: { points: Snap[]; cursor: Vec2 | n
   if (tool === "rect") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
   if (tool === "rect_center") line([[2 * p0[0] - cur[0], 2 * p0[1] - cur[1]], [cur[0], 2 * p0[1] - cur[1]], cur, [2 * p0[0] - cur[0], cur[1]]], true);
   if (tool === "select") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
+  if (tool === "polygon") {
+    const r = Math.hypot(cur[0] - p0[0], cur[1] - p0[1]);
+    const a0 = Math.atan2(cur[1] - p0[1], cur[0] - p0[0]);
+    line(Array.from({ length: 6 }, (_, i) => [p0[0] + r * Math.cos(a0 + (i * Math.PI) / 3), p0[1] + r * Math.sin(a0 + (i * Math.PI) / 3)] as Vec2), true);
+  }
   if (tool === "circle" || (tool === "arc" && ts.points.length === 1)) {
     const r = Math.hypot(cur[0] - p0[0], cur[1] - p0[1]);
     line(Array.from({ length: 65 }, (_, i) => [p0[0] + r * Math.cos((i / 64) * 2 * Math.PI), p0[1] + r * Math.sin((i / 64) * 2 * Math.PI)] as Vec2));

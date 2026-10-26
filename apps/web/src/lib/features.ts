@@ -29,7 +29,7 @@ export interface FeatureMeta {
 export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   sketch: { label: "Sketch", icon: Pencil, shortcut: "S", hint: "Draw a constrained 2D sketch on a plane or face" },
   extrude: { label: "Extrude", icon: ArrowUpFromLine, shortcut: "E", hint: "Extrude sketch regions to add, cut or intersect" },
-  revolve: { label: "Revolve", icon: Rotate3d, shortcut: "R", hint: "Revolve sketch regions around an axis" },
+  revolve: { label: "Revolve", icon: Rotate3d, shortcut: "V", hint: "Revolve sketch regions around an axis" },
   fillet: { label: "Fillet", icon: SquareRoundCorner, shortcut: "F", hint: "Round edges" },
   chamfer: { label: "Chamfer", icon: Triangle, shortcut: "C", hint: "Bevel edges" },
   shell: { shortcut: "H", label: "Shell", icon: Shell, hint: "Hollow a body, removing selected faces" },

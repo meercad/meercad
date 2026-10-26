@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type SketchTool = "select" | "line" | "rect" | "rect_center" | "circle" | "arc" | "point" | "dimension" | "project";
+export type SketchTool = "select" | "line" | "rect" | "rect_center" | "circle" | "arc" | "polygon" | "point" | "trim" | "dimension" | "project";
 
 export type SketchSel = { kind: "point"; id: string } | { kind: "curve"; id: string } | { kind: "constraint"; id: string };
 

@@ -76,7 +76,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
 
   return (
     <div className="viewcube" onPointerMove={onMove}>
-      <div className="cube" onPointerDown={onDown} onPointerUp={onUp}>
+      <div className="cube" onPointerDown={onDown} onPointerUp={onUp} onDoubleClick={() => viewport.setView("iso")}>
         {FACES.map((f, i) => (
           <div key={f.label} ref={(el) => void (refs.current[i] = el)} className="face">
             <span className="face-label">{f.label}</span>

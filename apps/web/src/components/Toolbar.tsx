@@ -1,6 +1,8 @@
 import {
   Check,
+  Hexagon,
   Keyboard,
+  Scissors,
   Circle,
   CircleDot,
   Crosshair,
@@ -42,7 +44,9 @@ const SKETCH_TOOLS: { tool: SketchTool; icon: LucideIcon; label: string; key: st
   { tool: "rect_center", icon: SquareDashed, label: "Center rect", key: "⇧R" },
   { tool: "circle", icon: Circle, label: "Circle", key: "C" },
   { tool: "arc", icon: Spline, label: "Arc", key: "A" },
+  { tool: "polygon", icon: Hexagon, label: "Polygon", key: "G" },
   { tool: "point", icon: Dot, label: "Point", key: "P" },
+  { tool: "trim", icon: Scissors, label: "Trim", key: "T" },
   { tool: "dimension", icon: Ruler, label: "Dimension", key: "D" },
   { tool: "project", icon: Waypoints, label: "Use edges", key: "U" },
 ];

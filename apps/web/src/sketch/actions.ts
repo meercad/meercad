@@ -2,7 +2,7 @@
 import type { ComponentType, SVGProps } from "react";
 import type { ConstraintType, SketchConstraint, SketchEntity, SketchFeature } from "@leocad/schema";
 import { apply, applyQuiet, currentDoc, toast, useApp } from "../store";
-import { Coincident, Collinear, EqualIcon, Fix, Horizontal, Midpoint, Parallel, Perpendicular, Symmetric, Tangent, Vertical } from "./icons";
+import { Coincident, Collinear, Concentric, EqualIcon, Fix, Horizontal, Midpoint, Parallel, Perpendicular, Symmetric, Tangent, Vertical } from "./icons";
 import { setSketchSelection, useSketchUi, type SketchSel } from "./state";
 
 export function activeSketch(): SketchFeature | null {
@@ -39,17 +39,18 @@ export const setExternalKinds = (m: Map<string, string>) => (externalKinds = m);
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 export const CONSTRAINT_TOOLS: { type: string; icon: Icon; label: string; key?: string; hint: string }[] = [
-  { type: "coincident", icon: Coincident, label: "Coincident", key: "I", hint: "two points, or a point and a curve" },
-  { type: "horizontal", icon: Horizontal, label: "Horizontal", key: "H", hint: "lines or two points" },
-  { type: "vertical", icon: Vertical, label: "Vertical", key: "V", hint: "lines or two points" },
-  { type: "parallel", icon: Parallel, label: "Parallel", hint: "two lines" },
-  { type: "perpendicular", icon: Perpendicular, label: "Perpendicular", hint: "two lines" },
-  { type: "tangent", icon: Tangent, label: "Tangent", key: "T", hint: "a line and an arc/circle, or two arcs" },
-  { type: "equal", icon: EqualIcon, label: "Equal", key: "E", hint: "lines or circles/arcs" },
-  { type: "midpoint", icon: Midpoint, label: "Midpoint", hint: "a point and a line" },
+  { type: "coincident", icon: Coincident, label: "Coincident", key: "Shift+N", hint: "two points, or a point and a curve" },
+  { type: "hv", icon: Horizontal, label: "Horiz./Vert.", key: "Shift+V", hint: "lines or two points; picks the nearest axis" },
+  { type: "vertical", icon: Vertical, label: "Vertical", hint: "lines or two points" },
+  { type: "parallel", icon: Parallel, label: "Parallel", key: "Shift+A", hint: "two lines" },
+  { type: "perpendicular", icon: Perpendicular, label: "Perpendicular", key: "Shift+P", hint: "two lines" },
+  { type: "tangent", icon: Tangent, label: "Tangent", key: "Shift+T", hint: "a line and an arc/circle, or two arcs" },
+  { type: "equal", icon: EqualIcon, label: "Equal", key: "Shift+E", hint: "lines or circles/arcs" },
+  { type: "concentric", icon: Concentric, label: "Concentric", key: "Shift+C", hint: "two circles/arcs" },
+  { type: "midpoint", icon: Midpoint, label: "Midpoint", key: "Shift+M", hint: "a point and a line" },
   { type: "collinear", icon: Collinear, label: "Collinear", hint: "two lines" },
-  { type: "symmetric", icon: Symmetric, label: "Symmetric", hint: "two points and a line" },
-  { type: "fix", icon: Fix, label: "Fix", hint: "points or curves" },
+  { type: "symmetric", icon: Symmetric, label: "Symmetric", key: "Shift+S", hint: "two points and a line" },
+  { type: "fix", icon: Fix, label: "Lock", key: "Shift+L", hint: "points or curves" },
 ];
 
 /** Creates constraints of `type` from the current selection. */
@@ -67,6 +68,32 @@ export function applyConstraint(type: string): void {
   const id = () => freshId(sk, "c", taken);
   const need = (msg: string) => toast(`${CONSTRAINT_TOOLS.find((c) => c.type === type)?.label}: select ${msg}`, "error");
 
+  if (type === "concentric") {
+    if (rounds.length < 2) return need("two circles or arcs");
+    for (let i = 1; i < rounds.length; i++) out.push({ id: id(), type: "coincident", a: `${rounds[0]}.center`, b: `${rounds[i]}.center` });
+    if (writeSketch({ entities: sk.entities, constraints: [...sk.constraints, ...out] })) setSketchSelection([]);
+    return;
+  }
+  if (type === "hv") {
+    // Shapr3D-style: snap each line to whichever axis it is closer to.
+    const solvedAt = (pid: string): [number, number] => {
+      const e = sk.entities.find((x) => x.id === pid);
+      return e?.type === "point" ? [e.x, e.y] : [0, 0];
+    };
+    for (const l of lines) {
+      const e = sk.entities.find((x) => x.id === l);
+      if (e?.type !== "line") continue;
+      const [a, b] = [solvedAt(e.p1), solvedAt(e.p2)];
+      out.push({ id: id(), type: Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]) ? "horizontal" : "vertical", line: l });
+    }
+    if (!lines.length && pts.length === 2) {
+      const [a, b] = [solvedAt(pts[0]!), solvedAt(pts[1]!)];
+      out.push({ id: id(), type: Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]) ? "horizontal_points" : "vertical_points", a: pts[0]!, b: pts[1]! });
+    }
+    if (!out.length) return need("lines or two points");
+    if (writeSketch({ entities: sk.entities, constraints: [...sk.constraints, ...out] })) setSketchSelection([]);
+    return;
+  }
   switch (type as ConstraintType) {
     case "coincident":
       if (pts.length >= 2) for (let i = 1; i < pts.length; i++) out.push({ id: id(), type: "coincident", a: pts[0]!, b: pts[i]! });

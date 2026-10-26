@@ -5,7 +5,7 @@ import { samePick, Viewport, type Pick, type PickKind, type PlaneView, type Scen
 import { FEATURES } from "../lib/features";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
-import { dialogPick, editFeature, kernel, scheduleRebuild, setViewport, startFeature, startSketch, toast, useApp } from "../store";
+import { commitDialog, dialogPick, editFeature, kernel, scheduleRebuild, setViewport, startFeature, startSketch, toast, useApp } from "../store";
 import { pickKindsFor } from "./FeatureDialog";
 import { toggleHidden } from "./FeatureTree";
 import { showMenu } from "./Menu";
@@ -149,6 +149,8 @@ export function ViewportView() {
     }
     if (s.dialog) {
       if (pick && s.dialog.field) dialogPick?.(pick, additive);
+      // Clicking empty space accepts the tool (Shapr3D behaviour) unless a selection field is waiting.
+      else if (!pick && !s.dialog.field) commitDialog();
       return;
     }
     if (!pick) return useApp.setState({ selection: [], selectedFeature: null });

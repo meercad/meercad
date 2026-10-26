@@ -228,6 +228,10 @@ export class Viewport {
     }
   }
 
+  get hovered(): Pick | null {
+    return this.hover;
+  }
+
   setHover(p: Pick | null): void {
     if (samePick(p, this.hover)) return;
     this.hover = p;

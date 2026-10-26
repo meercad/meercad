@@ -103,9 +103,9 @@ export function repairNormals(positions: Float32Array, normals: Float32Array, in
     const vx = positions[c]! - positions[a]!, vy = positions[c + 1]! - positions[a + 1]!, vz = positions[c + 2]! - positions[a + 2]!;
     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     for (const i of [a, b, c]) {
-      acc[i] += nx;
-      acc[i + 1] += ny;
-      acc[i + 2] += nz;
+      acc[i]! += nx;
+      acc[i + 1]! += ny;
+      acc[i + 2]! += nz;
     }
   }
   let fixed = 0;

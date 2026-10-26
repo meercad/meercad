@@ -461,3 +461,11 @@ function circleCircle(c1: Exclude<SolvedCurve, { kind: "line" }>, c2: Exclude<So
 }
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+
+/** Intersection points of two solved curves (used by the sketch trim tool). */
+export function intersectionPoints(a: SolvedCurve, b: SolvedCurve): Vec2[] {
+  const scale = Math.max(1, ...extentOf(a), ...extentOf(b));
+  return intersect(a, b, scale * 1e-9).map(([pa]) =>
+    a.kind === "line" ? lerp(a.a, a.b, pa) : arcPoint(a.center, a.radius, pa),
+  );
+}
