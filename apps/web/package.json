@@ -1,0 +1,26 @@
+{
+  "name": "@opencad/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@opencad/ai": "workspace:*",
+    "@opencad/io": "workspace:*",
+    "@opencad/kernel": "workspace:*",
+    "@opencad/model": "workspace:*",
+    "@opencad/naming": "workspace:*",
+    "@opencad/schema": "workspace:*",
+    "@opencad/viewport": "workspace:*",
+    "replicad-opencascadejs": "1.1.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5"
+  }
+}

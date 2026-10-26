@@ -1,0 +1,22 @@
+{
+  "name": "@opencad/kernel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker-entry.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@opencad/model": "workspace:*",
+    "@opencad/naming": "workspace:*",
+    "@opencad/schema": "workspace:*",
+    "@opencad/sketch": "workspace:*",
+    "replicad-opencascadejs": "1.1.0"
+  }
+}

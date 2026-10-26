@@ -1,0 +1,11 @@
+{
+  "name": "@opencad/viewport",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p ." },
+  "dependencies": { "three": "^0.186.1" },
+  "devDependencies": { "@types/three": "^0.186.0" }
+}

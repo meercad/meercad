@@ -1,0 +1,19 @@
+{
+  "name": "opencad",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @opencad/web dev",
+    "build": "pnpm --filter @opencad/web build",
+    "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
