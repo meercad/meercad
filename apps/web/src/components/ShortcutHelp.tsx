@@ -3,7 +3,7 @@ import { FEATURES, TOOLBAR } from "../lib/features";
 import { Kbd } from "./Kbd";
 
 const SECTIONS: { title: string; rows: [string, string][] }[] = [
-  { title: "Modeling", rows: [...TOOLBAR.filter((op) => FEATURES[op].shortcut).map((op) => [FEATURES[op].label, FEATURES[op].shortcut!] as [string, string]), ["Measure", "M"], ["Import file", "Mod+O"]] },
+  { title: "Modeling", rows: [...TOOLBAR.filter((op) => FEATURES[op].shortcut).map((op) => [FEATURES[op].label, FEATURES[op].shortcut!] as [string, string]), ["Measure", "M"], ["Command search", "X"], ["Import file", "Mod+O"]] },
   {
     title: "Direct editing",
     rows: [
@@ -22,20 +22,25 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
       ["Pan", "middle-drag / Shift+right-drag"],
       ["Zoom", "wheel"],
       ["Fit all", "Z"],
-      ["Front / Back / Left / Right", "1 / 2 / 3 / 4"],
-      ["Top / Bottom / Iso", "5 / 6 / 0"],
+      ["Zoom to hovered face", "Space"],
+      ["Iso / Front / Back", "Mod+1 / Mod+2 / Mod+3"],
+      ["Top / Bottom", "Mod+4 / Mod+5"],
+      ["Right / Left", "Mod+6 / Mod+7"],
     ],
   },
   {
     title: "Sketch",
     rows: [
+      ["Sketch on hovered face", "S"],
       ["Line / Rectangle / Center rectangle", "L / R / Shift+R"],
-      ["Circle / Arc / Point", "C / A / P"],
-      ["Dimension", "D"],
-      ["Use model edges", "U"],
+      ["Circle / Arc / Polygon / Point", "C / A / G / P"],
+      ["Trim / Dimension / Use model edges", "T / D / U"],
       ["Construction toggle", "X"],
-      ["Horizontal / Vertical", "H / V"],
-      ["Coincident / Tangent / Equal", "I / T / E"],
+      ["Horizontal or vertical (nearest)", "Shift+V"],
+      ["Coincident / Concentric", "Shift+N / Shift+C"],
+      ["Parallel / Perpendicular", "Shift+A / Shift+P"],
+      ["Tangent / Equal / Midpoint", "Shift+T / Shift+E / Shift+M"],
+      ["Symmetric / Lock", "Shift+S / Shift+L"],
       ["Select all", "Mod+A"],
       ["Finish sketch", "Enter"],
     ],
@@ -44,7 +49,7 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
     title: "General",
     rows: [
       ["Undo / Redo", "Mod+Z / Shift+Mod+Z"],
-      ["Confirm dialog", "Enter"],
+      ["Confirm tool", "Enter / click empty space"],
       ["Cancel / clear selection", "Esc"],
       ["Delete", "Del"],
       ["Show this help", "?"],

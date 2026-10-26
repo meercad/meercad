@@ -15,7 +15,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         title: "Your first part in 2 minutes",
         body: (
           <ol>
-            <li>Press <Kbd k="S" /> and click the <b>Top</b> plane (or hover <b>Origin</b> in the feature list).</li>
+            <li>Hover the grid's <b>Top</b> plane (or a flat face) and press <Kbd k="S" /> — or hover <b>Origin</b> in the feature list and pick a plane.</li>
             <li>Press <Kbd k="R" />, click a corner on the origin, click the opposite corner.</li>
             <li>Press <Kbd k="D" />, click the bottom line, click below it and type <span className="mono">40</span> <Kbd k="↵" />. Dimension the side the same way.</li>
             <li>Press <Kbd k="↵" /> to finish the sketch, click inside the rectangle and <b>drag the arrow</b> up — or press <Kbd k="E" /> and type a distance.</li>
@@ -29,7 +29,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         body: (
           <ul>
             <li><b>Rotate</b>: right-drag (or drag the view cube) · <b>Pan</b>: middle-drag or Shift + right-drag · <b>Zoom</b>: wheel, towards the cursor.</li>
-            <li>View cube: faces, edges and corners give standard views; arrows turn the view by 90°. Keys <Kbd k="1" />–<Kbd k="6" /> and <Kbd k="0" /> (iso), <Kbd k="Z" /> fits all.</li>
+            <li>View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. <Kbd k="Mod+1" />–<Kbd k="Mod+7" /> pick standard views, <Kbd k="Space" /> over a face looks straight at it, <Kbd k="Z" /> fits all.</li>
             <li>The box icon at the bottom right switches perspective / orthographic.</li>
           </ul>
         ),
@@ -43,7 +43,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         title: "Drawing and snapping",
         body: (
           <ul>
-            <li>Tools: <Kbd k="L" /> line (keeps chaining; double-click or Esc ends, clicking the start closes), <Kbd k="R" /> rectangle, <Kbd k="Shift+R" /> center rectangle, <Kbd k="C" /> circle, <Kbd k="A" /> arc (center, start, end), <Kbd k="P" /> point.</li>
+            <li>Tools: <Kbd k="L" /> line (keeps chaining; double-click or Esc ends, clicking the start closes), <Kbd k="R" /> rectangle, <Kbd k="Shift+R" /> center rectangle, <Kbd k="C" /> circle, <Kbd k="A" /> arc (center, start, end), <Kbd k="G" /> polygon, <Kbd k="P" /> point, <Kbd k="T" /> trim.</li>
             <li>The cursor snaps to existing points, onto curves and onto the axes — the tip next to the cursor tells you which. Nearly horizontal/vertical lines become exactly so.</li>
             <li><Kbd k="X" /> toggles construction geometry (dashed, ignored for profiles). <Kbd k="U" /> uses model edges as fixed references.</li>
             <li>Closed loops fill light blue — those are the profiles you can extrude.</li>
@@ -55,7 +55,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         body: (
           <ul>
             <li><Kbd k="D" />, then click a line (length), circle (diameter), arc (radius), two points (distance — place the label to the side for horizontal/vertical) or two lines (angle). Type a value or an expression like <span className="mono">width / 2</span>.</li>
-            <li>Double-click any dimension to change it. Select geometry and use the constraint buttons: <Kbd k="H" /> horizontal, <Kbd k="V" /> vertical, <Kbd k="I" /> coincident, <Kbd k="T" /> tangent, <Kbd k="E" /> equal, plus parallel, perpendicular, midpoint, symmetric and fix.</li>
+            <li>Double-click any dimension to change it. Select geometry and add constraints with <Kbd k="Shift" /> + letter: <Kbd k="Shift+V" /> horizontal/vertical, <Kbd k="Shift+N" /> coincident, <Kbd k="Shift+T" /> tangent, <Kbd k="Shift+E" /> equal, <Kbd k="Shift+A" /> parallel, <Kbd k="Shift+P" /> perpendicular, <Kbd k="Shift+C" /> concentric, <Kbd k="Shift+M" /> midpoint, <Kbd k="Shift+S" /> symmetric, <Kbd k="Shift+L" /> lock.</li>
             <li>The badge top-left shows the remaining degrees of freedom; “Fully defined” means nothing can move by accident.</li>
             <li>Drag points or lines to try shapes — the solver keeps all constraints.</li>
           </ul>
@@ -73,7 +73,8 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
             <li>Select a flat face → drag the arrow: out adds material, in cuts.</li>
             <li>Select a sketch region → drag to extrude it.</li>
             <li>Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer.</li>
-            <li>The quick-action bar next to your selection offers the matching tools with their shortcuts.</li>
+            <li>The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts.</li>
+            <li>Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it.</li>
           </ul>
         ),
       },
@@ -82,7 +83,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         body: (
           <ul>
             <li>Extrude <Kbd k="E" />: New / Add / Remove / Intersect, blind, symmetric, two directions or through all.</li>
-            <li>Revolve <Kbd k="R" /> around an axis, line or edge. Fillet <Kbd k="F" />, Chamfer <Kbd k="C" />, Shell <Kbd k="H" />.</li>
+            <li>Revolve <Kbd k="V" /> around an axis, line or edge. Fillet <Kbd k="F" />, Chamfer <Kbd k="C" />, Shell <Kbd k="H" />.</li>
             <li>Patterns <Kbd k="L" /> / <Kbd k="O" /> and Mirror <Kbd k="I" /> copy extrudes/revolves or whole parts. Boolean <Kbd k="B" /> combines parts. Plane <Kbd k="N" /> adds offset construction planes.</li>
             <li>Dialogs preview live; <Kbd k="↵" /> accepts, <Kbd k="Esc" /> cancels. Drag the arrows in the viewport to set distances.</li>
           </ul>
