@@ -67,7 +67,8 @@ jobs:
             if [ -z "${!v}" ]; then unset "$v"; fi
           done
           EXTRA=""
-          if [ -n "$CSC_LINK" ]; then EXTRA="-c.mac.identity=null -c.mac.hardenedRuntime=true"; fi
+          # With a Developer ID certificate, drop the ad-hoc identity so electron-builder signs with it.
+          if [ -n "$CSC_LINK" ]; then npm pkg delete build.mac.identity; EXTRA="-c.mac.hardenedRuntime=true"; fi
           if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ]; then EXTRA="$EXTRA -c.mac.notarize=true"; fi
           pnpm --filter @leocad/web build
           pnpm --filter @leocad/mcp build
