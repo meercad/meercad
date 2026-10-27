@@ -4,7 +4,8 @@ import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Measurement, PickRef } from "./tools.js";
 
 export type WorkerRequest =
-  | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean }
+  /** `props: false` skips volume and surface area (previews while dragging). */
+  | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean; props?: boolean }
   /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
   | { type: "sandbox"; seq: number; doc: MeercadDocument }
   | { type: "export_step"; seq: number; bodies?: string[] }

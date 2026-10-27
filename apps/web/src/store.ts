@@ -306,7 +306,8 @@ export function scheduleRebuild(): void {
     set({ previewError: problem, building: true });
     const t0 = performance.now();
     rebuildsPending++;
-    kernel.rebuild(doc).then(
+    // Previews skip volume and area: the feature tree shows those of the committed model.
+    kernel.rebuild(doc, preview ? { props: false } : {}).then(
       (output) => {
         rebuildsPending--;
         lastRebuildMs = performance.now() - t0;

@@ -368,7 +368,11 @@ export class Viewport {
 
   // ---------------------------------------------------------------- scene
 
+  /** How long the last setScene took (ms), for diagnostics. */
+  lastSceneMs = 0;
+
   setScene(data: SceneData): void {
+    const t0 = performance.now();
     this.sceneData = data;
     this.rebuildBodies(data);
     this.rebuildSketches(data);
@@ -387,6 +391,7 @@ export class Viewport {
       this.framed = true;
       this.fit(false);
     }
+    this.lastSceneMs = performance.now() - t0;
   }
 
   get hovered(): Pick | null {
@@ -451,24 +456,29 @@ export class Viewport {
 
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute("position", new THREE.BufferAttribute(mesh.edgeLines, 3));
-    const segIndex: number[] = [];
-    const segEdge: number[] = [];
+    // Typed arrays sized up front: thread and fillet edges run to many thousand segments.
+    let segs = 0;
+    for (let i = 0; i < mesh.edgeRanges.length; i += 3) segs += Math.max(0, mesh.edgeRanges[i + 1]! - 1);
+    const segIndex = new Uint32Array(segs * 2);
+    const segEdge = new Int32Array(segs);
+    let n = 0;
     for (let i = 0; i < mesh.edgeRanges.length; i += 3) {
       const start = mesh.edgeRanges[i]!;
       const count = mesh.edgeRanges[i + 1]!;
       for (let k = start; k < start + count - 1; k++) {
-        segIndex.push(k, k + 1);
-        segEdge.push(mesh.edgeRanges[i + 2]!);
+        segIndex[n * 2] = k;
+        segIndex[n * 2 + 1] = k + 1;
+        segEdge[n++] = mesh.edgeRanges[i + 2]!;
       }
     }
-    lineGeo.setIndex(segIndex);
+    lineGeo.setIndex(new THREE.BufferAttribute(segIndex, 1));
     lineGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(mesh.edgeLines.length), 3));
     lineGeo.computeBoundingSphere();
     const edges = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: ghost, opacity: ghost ? 0.35 : 1 }));
     edges.userData = { body: mesh.bodyId };
     const group = new THREE.Group();
     group.add(faces, edges);
-    return { mesh, group, faces, edges, triFace, segEdge: Int32Array.from(segEdge) };
+    return { mesh, group, faces, edges, triFace, segEdge };
   }
 
   private rebuildSketches(data: SceneData): void {

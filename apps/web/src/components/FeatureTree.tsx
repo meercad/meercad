@@ -423,7 +423,7 @@ function Bodies() {
       >
         <Box className="ficon" />
         <span className="tree-label">
-          {id} <span className="muted">· {fmt(b.volume)}</span>
+          {id} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
         </span>
         <span className="actions" style={{ display: "flex" }}>
           <button className="icon-btn sm" title={hidden.has(id) ? "Show" : "Hide"} onClick={() => toggleHidden(id)}>

@@ -24,6 +24,8 @@ type Distribute<T> = T extends unknown ? Omit<T, "seq"> : never;
 /** Main-thread handle to the kernel worker. */
 export class KernelClient {
   private seq = 0;
+  /** When the latest message from the worker arrived (ms since the epoch). */
+  private lastReceived = 0;
   private pending = new Map<number, Pending>();
   readonly ready: Promise<{ initMs: number }>;
 
@@ -35,6 +37,7 @@ export class KernelClient {
       onFatal = rej;
     });
     worker.addEventListener("message", (e: MessageEvent<WorkerResponse>) => {
+      this.lastReceived = performance.timeOrigin + performance.now();
       const msg = e.data;
       if (msg.type === "ready") return onReady({ initMs: msg.initMs });
       if (msg.type === "fatal") {
@@ -52,10 +55,15 @@ export class KernelClient {
     });
   }
 
-  /** Rebuilds the document. Older rebuilds still queued reject with SupersededError. */
-  async rebuild(doc: MeercadDocument): Promise<RebuildOutput> {
-    const r = await this.send({ type: "rebuild", doc });
+  /**
+   * Rebuilds the document. Older rebuilds still queued reject with SupersededError. `props: false`
+   * leaves out volume and surface area (NaN), which are slow to integrate on curved parts.
+   */
+  async rebuild(doc: MeercadDocument, opts: { props?: boolean } = {}): Promise<RebuildOutput> {
+    const sent = performance.timeOrigin + performance.now();
+    const r = await this.send({ type: "rebuild", doc, ...(opts.props === false ? { props: false } : {}) });
     if (r.type !== "rebuilt") throw new Error("unexpected response");
+    if (r.report.timing) r.report.timing = { ...r.report.timing, sent, received: this.lastReceived };
     return { report: r.report, meshes: r.meshes, references: r.references };
   }
 

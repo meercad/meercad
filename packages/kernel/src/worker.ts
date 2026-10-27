@@ -19,13 +19,17 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
   let session: KernelSession | null = null;
   const queue: WorkerRequest[] = [];
   let busy = false;
+  const now = () => performance.timeOrigin + performance.now();
+  const received = new Map<number, number>();
 
   scope.addEventListener("message", (e) => {
     const req = e.data;
+    if ("seq" in req) received.set(req.seq, now());
     if (req.type === "rebuild" || req.type === "sandbox") {
       const i = queue.findIndex((q) => q.type === req.type);
       if (i >= 0) {
         scope.postMessage({ type: "failed", seq: queue[i]!.seq, message: "superseded" });
+        received.delete(queue[i]!.seq);
         queue.splice(i, 1);
       }
     }
@@ -41,6 +45,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
     try {
       if (req) handle(req);
     } finally {
+      if (req) received.delete(req.seq);
       busy = false;
       if (queue.length) void pump();
     }
@@ -50,7 +55,9 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
     try {
       switch (req.type) {
         case "rebuild": {
-          const r = session!.rebuild(req.doc, { mesh: req.mesh !== false });
+          const start = now();
+          const r = session!.rebuild(req.doc, { mesh: req.mesh !== false, props: req.props !== false });
+          r.report.timing = { recv: received.get(req.seq) ?? start, start, post: now() };
           scope.postMessage({ type: "rebuilt", seq: req.seq, ...r });
           break;
         }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { currentDoc, kernel, useApp } from "../store";
+import { currentDoc, getViewport, kernel, useApp } from "../store";
 
 /** Open the app with `?debug` to show it. */
 export const debugHud = new URLSearchParams(location.search).has("debug");
@@ -7,8 +7,9 @@ export const debugHud = new URLSearchParams(location.search).has("debug");
 type Counts = { moves: number; pen: number; touch: number; frames: number; requests: number; results: number; superseded: number; rebuildMs: number[] };
 const zero = (): Counts => ({ moves: 0, pen: 0, touch: 0, frames: 0, requests: 0, results: 0, superseded: 0, rebuildMs: [] });
 
-// Round trip, worker rebuild and meshing times of the latest results.
-type Timing = { trip: number; rebuild: number; mesh: number };
+// Where the time of the latest results went: to the worker, waiting there, kernel, meshing, back,
+// and until the viewport had the new scene.
+type Timing = { trip: number; toWorker: number; queued: number; rebuild: number; mesh: number; back: number; scene: number };
 const recent: Timing[] = [];
 
 /**
@@ -46,18 +47,34 @@ export function DebugHud() {
       upAt = performance.now();
     };
     const original = kernel.rebuild.bind(kernel);
-    kernel.rebuild = (doc) => {
+    kernel.rebuild = (doc, opts) => {
       const t0 = performance.now();
       both((c) => c.requests++);
-      return original(doc).then(
+      return original(doc, opts).then(
         (r) => {
           const trip = performance.now() - t0;
           both((c) => {
             c.results++;
             c.rebuildMs.push(trip);
           });
-          recent.unshift({ trip, rebuild: r.report.rebuildMs, mesh: r.report.meshMs });
+          const t = r.report.timing;
+          const entry: Timing = {
+            trip,
+            toWorker: t?.recv && t.sent ? t.recv - t.sent : NaN,
+            queued: t?.start && t.recv ? t.start - t.recv : NaN,
+            rebuild: r.report.rebuildMs,
+            mesh: r.report.meshMs,
+            back: t?.received && t.post ? t.received - t.post : NaN,
+            scene: NaN,
+          };
+          recent.unshift(entry);
           recent.length = Math.min(recent.length, 4);
+          // The viewport gets the scene once React has rendered the new output.
+          const tr = performance.now();
+          window.setTimeout(() => {
+            entry.scene = performance.now() - tr;
+            entry.trip = performance.now() - t0;
+          }, 0);
           if (!down && upAt) afterUpMs = Math.round(performance.now() - upAt);
           return r;
         },
@@ -97,12 +114,13 @@ export function DebugHud() {
   const lines = [
     `per second: moves ${sec.moves} (pen ${sec.pen}, touch ${sec.touch}) · frames ${sec.frames} · rebuilds ${sec.requests} → ${sec.results} done, ${sec.superseded} skipped · ${avg(sec.rebuildMs)} ms`,
     `${view.down ? "pressing" : "last press"}: moves ${press.moves} · frames ${press.frames} · rebuilds ${press.requests} → ${press.results} done, ${press.superseded} skipped · ${avg(press.rebuildMs)} ms${view.afterUpMs !== null ? ` · last result ${view.afterUpMs} ms after release` : ""} · ${previewing ? "preview" : "model"}`,
-    `last results: ${recent.map((t) => `${Math.round(t.trip)} ms (kernel ${Math.round(t.rebuild)} + mesh ${Math.round(t.mesh)})`).join(" · ") || "none"}`,
+    `last results: ${recent.map((t) => `${Math.round(t.trip)} ms = to worker ${Math.round(t.toWorker)} + queued ${Math.round(t.queued)} + kernel ${Math.round(t.rebuild)} + mesh ${Math.round(t.mesh)} + back ${Math.round(t.back)} + scene ${Math.round(t.scene)}`).join(" · ") || "none"}`,
+    `viewport setScene: ${Math.round(getViewport()?.lastSceneMs ?? NaN)} ms`,
     `bench: ${bench || "not run"}`,
   ];
   return (
     <div className="debug-hud">
-      {lines.slice(0, 3).map((l) => (
+      {lines.slice(0, 4).map((l) => (
         <div key={l.slice(0, 10)}>{l}</div>
       ))}
       <div className="debug-bench">

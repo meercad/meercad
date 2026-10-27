@@ -35,12 +35,27 @@ export interface RebuildReport {
   /** Tessellation and summaries (ms). */
   meshMs: number;
   firstRecomputed: number;
+  /** Wall-clock milestones (ms since the epoch, comparable across threads) for diagnostics. */
+  timing?: Partial<RebuildTiming>;
+}
+
+export interface RebuildTiming {
+  /** Main thread posted the request. */
+  sent: number;
+  /** Worker received it. */
+  recv: number;
+  /** Worker started on it (after anything queued before). */
+  start: number;
+  /** Worker posted the result. */
+  post: number;
+  /** Main thread received the result. */
+  received: number;
 }
 
 /** One open document in the kernel: incremental rebuild plus per-body tessellation cache. */
 export class KernelSession {
   private readonly engine: RebuildEngine<ModelState>;
-  private meshCache = new WeakMap<Body, { mesh: BodyMesh; summary: BodySummary }>();
+  private meshCache = new WeakMap<Body, { mesh: BodyMesh; summary: BodySummary; props: boolean }>();
   private last: ModelState | null = null;
 
   constructor(
@@ -50,18 +65,22 @@ export class KernelSession {
     this.engine = new RebuildEngine(new OcctBackend(oc, solver));
   }
 
-  rebuild(doc: MeercadDocument, opts: { mesh?: boolean } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
+  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
     const r = this.engine.rebuild(doc);
     this.last = r.state;
     const t = performance.now();
     const meshes: BodyMesh[] = [];
     const bodies: BodySummary[] = [];
     for (const body of r.state.bodies.values()) {
+      const props = opts.props !== false;
       let cached = this.meshCache.get(body);
       if (!cached) {
-        const summary = summarizeBody(this.oc, body);
-        cached = { summary, mesh: meshBody(this.oc, body, summary.bbox) };
+        const summary = summarizeBody(this.oc, body, props);
+        cached = { summary, mesh: meshBody(this.oc, body, summary.bbox), props };
         this.meshCache.set(body, cached);
+      } else if (props && !cached.props) {
+        cached.summary = summarizeBody(this.oc, body, true);
+        cached.props = true;
       }
       bodies.push(cached.summary);
       if (opts.mesh !== false) meshes.push(cached.mesh);
