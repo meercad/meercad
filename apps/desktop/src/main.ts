@@ -12,6 +12,14 @@ import { pathToFileURL } from "node:url";
 import { canSelfUpdate, checkForUpdate, installUpdate, type UpdateInfo } from "./updater";
 
 const DEV = process.argv.includes("--dev");
+/** "wip" for the local test build that lives next to the release (built by `pnpm wip`); it never self-updates. */
+const WIP = (() => {
+  try {
+    return (JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { leocadChannel?: string }).leocadChannel === "wip";
+  } catch {
+    return false;
+  }
+})();
 const DEV_URL = "http://localhost:5173";
 const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dirname, "../../web/dist");
 const mcpServer = app.isPackaged ? join(process.resourcesPath, "mcp", "server.js") : join(__dirname, "../../../packages/mcp/dist/server.js");
@@ -289,6 +297,10 @@ ipcMain.handle("app:info", () => ({
 
 let pendingUpdate: UpdateInfo | null = null;
 async function runUpdateCheck(manual = false): Promise<void> {
+  if (WIP) {
+    if (manual) mainWindow?.webContents.send("update-error", "This is the local WIP build. It is replaced by running pnpm wip in the repository.");
+    return;
+  }
   try {
     const info = await checkForUpdate();
     if (info) {
@@ -376,7 +388,7 @@ function buildMenu(): void {
         { role: "about" },
         { type: "separator" },
         { label: "Settings…", accelerator: "CmdOrCtrl+,", registerAccelerator: false, click: send("menu", "settings") },
-        { label: "Check for Updates…", click: () => void runUpdateCheck(true) },
+        ...(WIP ? [] : [{ label: "Check for Updates…", click: () => void runUpdateCheck(true) }]),
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -434,13 +446,22 @@ else {
   });
   void app.whenReady().then(() => {
     settings = readSettings();
+    // The WIP build starts on the same projects folder as the installed release.
+    if (WIP && !settings.projectsDir) {
+      try {
+        const release = JSON.parse(readFileSync(join(app.getPath("appData"), "leocad", "settings.json"), "utf8")) as Settings;
+        if (release.projectsDir) settings = { ...settings, projectsDir: release.projectsDir };
+      } catch {
+        // no release installed: the first-run folder picker asks
+      }
+    }
     serveApp();
     buildMenu();
     mainWindow = createWindow();
     mainWindow.webContents.once("did-finish-load", () => {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
       // Check shortly after start, then hourly.
-      if (app.isPackaged) {
+      if (app.isPackaged && !WIP) {
         setTimeout(() => void runUpdateCheck(), 5000);
         setInterval(() => void runUpdateCheck(), 60 * 60 * 1000);
         // Also look again when the app comes back to the front after a while.

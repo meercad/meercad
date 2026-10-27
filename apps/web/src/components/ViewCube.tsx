@@ -3,13 +3,20 @@ import { useEffect, useRef, useState } from "react";
 import { THREE, type Viewport } from "@leocad/viewport";
 
 type V = [number, number, number];
-const FACES: { label: string; n: V; u: V; v: V }[] = [
-  { label: "TOP", n: [0, 0, 1], u: [1, 0, 0], v: [0, -1, 0] },
-  { label: "BOTTOM", n: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0] },
-  { label: "FRONT", n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, -1] },
-  { label: "BACK", n: [0, 1, 0], u: [-1, 0, 0], v: [0, 0, -1] },
-  { label: "RIGHT", n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, -1] },
-  { label: "LEFT", n: [-1, 0, 0], u: [0, -1, 0], v: [0, 0, -1] },
+// Faces carry the colour of the axis they face (the same colours as the origin planes).
+const AXIS_COLORS = { x: "#e5484d", y: "#22a35a", z: "#3b82f6" };
+const FACES: { label: string; n: V; u: V; v: V; tint: string }[] = [
+  { label: "TOP", n: [0, 0, 1], u: [1, 0, 0], v: [0, -1, 0], tint: AXIS_COLORS.z },
+  { label: "BOTTOM", n: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0], tint: AXIS_COLORS.z },
+  { label: "FRONT", n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, -1], tint: AXIS_COLORS.y },
+  { label: "BACK", n: [0, 1, 0], u: [-1, 0, 0], v: [0, 0, -1], tint: AXIS_COLORS.y },
+  { label: "RIGHT", n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, -1], tint: AXIS_COLORS.x },
+  { label: "LEFT", n: [-1, 0, 0], u: [0, -1, 0], v: [0, 0, -1], tint: AXIS_COLORS.x },
+];
+const AXES: { name: "x" | "y" | "z"; dir: V }[] = [
+  { name: "x", dir: [1, 0, 0] },
+  { name: "y", dir: [0, 1, 0] },
+  { name: "z", dir: [0, 0, 1] },
 ];
 const SIZE = 86;
 
@@ -19,6 +26,7 @@ const SIZE = 86;
  */
 export function ViewCube({ viewport }: { viewport: Viewport }) {
   const refs = useRef<(HTMLDivElement | null)[]>([]);
+  const axisRefs = useRef<(SVGGElement | null)[]>([]);
   const [hot, setHot] = useState<string | null>(null);
   useEffect(() => {
     const half = SIZE / 2;
@@ -34,7 +42,28 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
         el.style.transform = `matrix3d(${m.map((x) => x.toFixed(5)).join(",")})`;
         el.style.visibility = n.z > 0.01 ? "visible" : "hidden";
         el.style.zIndex = String(Math.round(n.z * 100) + 100);
-        el.style.filter = `brightness(${(0.82 + 0.18 * n.z).toFixed(3)})`;
+        el.style.filter = `brightness(${(0.86 + 0.14 * n.z).toFixed(3)})`;
+      });
+      // Axis triad from the left-front-bottom corner, along the cube's edges and a little beyond.
+      const corner = new THREE.Vector3(-half, -half, -half).applyMatrix4(r);
+      AXES.forEach((a, i) => {
+        const g = axisRefs.current[i];
+        if (!g) return;
+        const end = new THREE.Vector3(...a.dir).multiplyScalar(SIZE + 20).add(new THREE.Vector3(-half, -half, -half)).applyMatrix4(r);
+        const [x1, y1, x2, y2] = [corner.x + half, -corner.y + half, end.x + half, -end.y + half];
+        const line = g.querySelector("line")!;
+        line.setAttribute("x1", x1.toFixed(1));
+        line.setAttribute("y1", y1.toFixed(1));
+        line.setAttribute("x2", x2.toFixed(1));
+        line.setAttribute("y2", y2.toFixed(1));
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.hypot(dx, dy) || 1;
+        const label = g.querySelector("text")!;
+        label.setAttribute("x", (x2 + (dx / len) * 7).toFixed(1));
+        label.setAttribute("y", (y2 + (dy / len) * 7).toFixed(1));
+        // An axis pointing at or away from the viewer collapses to a dot: hide its label.
+        g.style.opacity = len < 12 ? "0" : "1";
       });
     };
     update();
@@ -76,9 +105,17 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
 
   return (
     <div className="viewcube" onPointerMove={onMove}>
+      <svg className="cube-axes" viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden>
+        {AXES.map((a, i) => (
+          <g key={a.name} ref={(el) => void (axisRefs.current[i] = el)} style={{ color: AXIS_COLORS[a.name] }}>
+            <line />
+            <text>{a.name.toUpperCase()}</text>
+          </g>
+        ))}
+      </svg>
       <div className="cube" onPointerDown={onDown} onPointerUp={onUp} onDoubleClick={() => viewport.setView("iso")}>
         {FACES.map((f, i) => (
-          <div key={f.label} ref={(el) => void (refs.current[i] = el)} className="face">
+          <div key={f.label} ref={(el) => void (refs.current[i] = el)} className="face" style={{ "--tint": f.tint } as React.CSSProperties}>
             <span className="face-label">{f.label}</span>
             {[0, 1, 2].map((row) =>
               [0, 1, 2].map((col) => {

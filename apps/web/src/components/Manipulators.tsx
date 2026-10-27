@@ -36,6 +36,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   /** Push/pull drafts follow the drag direction (out = add, in = remove). */
   const autoMode = useRef(false);
+  /** Where a push/pull was grabbed, so the arrow stays at the clicked spot once its feature dialog opens. */
+  const grabbed = useRef<{ feature: string; origin: V3 } | null>(null);
 
   useEffect(() => {
     const label = (id: string, v: number) =>
@@ -76,7 +78,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         return [
           {
             id: "extrude",
-            origin: a.origin,
+            origin: grabbed.current?.feature === f.id ? grabbed.current.origin : a.origin,
             dir: a.normal,
             value,
             onDrag: (v) => updateDraft(extrudePatch(v)),
@@ -134,15 +136,18 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const a = m ? faceAnchor(m, p.face) : null;
       const fs = faceSelectorForPick(p, out.meshes);
       if (!a || !fs) return [];
+      const origin = onPlane(p.point, a.origin, a.normal);
       return [
         {
           id: "extrude",
-          origin: a.origin,
+          origin,
           dir: a.normal,
           value: 0,
           onStart: () => {
             autoMode.current = true;
-            startDraft({ id: nextFeatureId(currentDoc(), "extrude"), op: "extrude", profile: { face: fs }, extent: "blind", distance: 0.001, mode: "join" });
+            const id = nextFeatureId(currentDoc(), "extrude");
+            grabbed.current = { feature: id, origin };
+            startDraft({ id, op: "extrude", profile: { face: fs }, extent: "blind", distance: 0.001, mode: "join" });
           },
           onDrag: (v) => updateDraft(extrudePatch(v)),
           onEnd: (v) => finish(v),
@@ -155,15 +160,18 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       if (!sk) return [];
       const a = profileAnchor(out, { sketch: p.sketchId, regions: [p.key] });
       if (!a) return [];
+      const origin = onPlane(p.point, a.origin, a.normal);
       return [
         {
           id: "extrude",
-          origin: a.origin,
+          origin,
           dir: a.normal,
           value: 0,
           onStart: () => {
             autoMode.current = true;
-            startDraft({ id: nextFeatureId(currentDoc(), "extrude"), op: "extrude", profile: { sketch: p.sketchId, regions: [p.key] }, extent: "blind", distance: 0.001, mode: out.report.bodies.length ? "join" : "new_body" });
+            const id = nextFeatureId(currentDoc(), "extrude");
+            grabbed.current = { feature: id, origin };
+            startDraft({ id, op: "extrude", profile: { sketch: p.sketchId, regions: [p.key] }, extent: "blind", distance: 0.001, mode: out.report.bodies.length ? "join" : "new_body" });
           },
           onDrag: (v) => updateDraft(extrudePatch(v)),
           onEnd: (v) => finish(v),
@@ -284,6 +292,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
     return dirs.map((dir, i) => ({
       id: `move-${"xyz"[i]}`,
       color: colors[i]!,
+      // Three axis arrows already read as "move"; double heads would only clutter the gizmo.
+      twoWay: false,
       origin,
       dir,
       value: t[i]!,
@@ -417,4 +427,12 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
 function bodyCenter(out: { report: { bodies: { id: string; bbox: { min: number[]; max: number[] } }[] } }, id: string): [number, number, number] | null {
   const b = out.report.bodies.find((x) => x.id === id);
   return b ? ([0, 1, 2].map((i) => (b.bbox.min[i]! + b.bbox.max[i]!) / 2) as [number, number, number]) : null;
+}
+
+type V3 = [number, number, number];
+
+/** The clicked spot moved onto the face's plane (box-selected faces carry a corner instead of a click). */
+function onPlane(point: V3, origin: V3, n: V3): V3 {
+  const d = (point[0] - origin[0]) * n[0] + (point[1] - origin[1]) * n[1] + (point[2] - origin[2]) * n[2];
+  return [point[0] - n[0] * d, point[1] - n[1] * d, point[2] - n[2] * d];
 }

@@ -16,6 +16,8 @@ type Status = "off" | "connecting" | "connected";
 let socket: WebSocket | null = null;
 let retry: number | undefined;
 let wanted = false;
+/** When this window lost the connection to another leocad window recently. */
+let replaced: number[] = [];
 const listeners = new Set<(s: Status) => void>();
 let status: Status = "off";
 const setStatus = (s: Status) => {
@@ -65,10 +67,20 @@ function connect(): void {
     setStatus("connected");
     ws.send(JSON.stringify({ hello: "leocad", version: "0.1.0", project: useApp.getState().project?.name ?? null }));
   };
-  ws.onclose = () => {
+  ws.onclose = (e) => {
     socket = null;
     if (!wanted) return setStatus("off");
     setStatus("connecting");
+    // Another leocad window (e.g. the WIP build next to the release) took the connection: take it back
+    // only when this one is used again, instead of the two swapping it every few seconds.
+    if (e.code === 4000) {
+      const now = Date.now();
+      replaced = replaced.filter((t) => now - t < 30_000).concat(now);
+      // Older builds grab it back unconditionally; after a few swaps, wait for the next focus.
+      if (document.hasFocus() && replaced.length < 3) retry = window.setTimeout(connect, 2000);
+      else window.addEventListener("focus", () => connect(), { once: true });
+      return;
+    }
     retry = window.setTimeout(connect, 2000);
   };
   ws.onerror = () => ws.close();

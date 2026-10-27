@@ -91,6 +91,8 @@ export interface Handle {
   min?: number;
   /** Arrow colour (hex); defaults to the accent blue. */
   color?: number;
+  /** Draw a double arrow head (the value can go either way). Defaults to true when there is no `min`. */
+  twoWay?: boolean;
 }
 
 export type DisplayMode = "shaded_edges" | "shaded" | "wireframe" | "xray" | "hidden_line";
@@ -611,13 +613,23 @@ export class Viewport {
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(px * 1.6 * scale, px * 1.6 * scale, Math.max(len, px), 10), onTop(new THREE.MeshBasicMaterial({ color: col })));
         shaft.position.copy(o).addScaledVector(along, 0.5);
         shaft.quaternion.copy(q);
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(px * 7 * (scale === 1 ? 1 : 1.25), px * 20 * (scale === 1 ? 1 : 1.15), 24), onTop(new THREE.MeshBasicMaterial({ color: col })));
+        const pointing = h.value < 0 ? d.clone().negate() : d;
+        const head = () => new THREE.Mesh(new THREE.ConeGeometry(px * 7 * (scale === 1 ? 1 : 1.25), px * 20 * (scale === 1 ? 1 : 1.15), 24), onTop(new THREE.MeshBasicMaterial({ color: col })));
+        const cone = head();
         cone.position.copy(tip);
-        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), h.value < 0 ? d.clone().negate() : d);
+        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pointing);
         const base = new THREE.Mesh(new THREE.SphereGeometry(px * 4.5 * scale, 16, 12), onTop(new THREE.MeshBasicMaterial({ color: col })));
         base.position.copy(o);
-        for (const m of [shaft, cone, base]) m.renderOrder = order + (m === cone ? 2 : 0);
-        this.handleGroup.add(shaft, cone, base);
+        const parts = [shaft, cone, base];
+        // Either way: a second head just behind the tip, pointing back (⇕).
+        if (h.twoWay ?? h.min === undefined) {
+          const back = head();
+          back.position.copy(tip).addScaledVector(pointing, -px * 30);
+          back.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pointing.clone().negate());
+          parts.push(back);
+        }
+        for (const m of parts) m.renderOrder = order + (m === cone || m === parts[3] ? 2 : 0);
+        this.handleGroup.add(...parts);
       }
     }
   }
