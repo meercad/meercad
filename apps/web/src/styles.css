@@ -675,6 +675,8 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 /* shortcut badges can be switched off; the shortcut sheet and command search keep them */
 .hide-kbd .kbd { display: none !important; }
 .hide-kbd .modal .kbd, .hide-kbd .palette .kbd { display: inline-flex !important; }
+/* Touch screen without a keyboard: no shortcut hints at all (see lib/keyboard.ts). */
+html.no-keyboard .kbd, html.no-keyboard .hide-kbd .modal .kbd, html.no-keyboard .hide-kbd .palette .kbd { display: none !important; }
 /* tabs */
 .tabs { display: flex; align-items: center; gap: 3px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 0 4px; }
 .tabs::-webkit-scrollbar { display: none; }
