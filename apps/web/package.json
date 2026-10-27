@@ -9,6 +9,7 @@
     "dev:lan": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
+    "preview:lan": "vite preview --host",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {

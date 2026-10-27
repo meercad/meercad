@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "pnpm --filter @meercad/web dev",
     "dev:lan": "pnpm --filter @meercad/web dev:lan",
+    "ipad": "pnpm build && pnpm --filter @meercad/web preview:lan",
     "build": "pnpm --filter @meercad/web build",
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
     "test": "vitest run",

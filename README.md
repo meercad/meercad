@@ -57,11 +57,12 @@ pnpm test && pnpm typecheck
 ### Try it on an iPad
 
 ```bash
-pnpm dev:lan                               # also listens on your local network
+pnpm ipad                                  # production build, served on your local network
 ```
 
-Vite prints a `Network:` address such as `http://192.168.1.20:5173`. Open it in Safari on an iPad
-on the same Wi-Fi.
+Vite prints a `Network:` address such as `http://192.168.1.20:4173`. Open it in Safari on an iPad
+on the same Wi-Fi. Judge speed only on this build: `pnpm dev:lan` (port 5173) reloads on every
+change but runs React's much slower development mode and loads hundreds of separate modules.
 
 | Gesture | Does |
 | --- | --- |
