@@ -27,6 +27,7 @@ import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProjec
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@meercad/viewport";
 import { CommandPalette } from "./components/CommandPalette";
+import { DebugHud, debugHud } from "./components/DebugHud";
 import { deleteModelSelection } from "./lib/deletion";
 
 try {
@@ -253,6 +254,7 @@ export function App() {
       {desktop ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />
+      {debugHud ? <DebugHud /> : null}
     </>
   );
 }

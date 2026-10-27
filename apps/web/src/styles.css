@@ -823,3 +823,5 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
   .sketch-label { padding: 4px 8px; }
   .rollback-bar { height: 24px; }
 }
+
+.debug-hud { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 200; max-width: calc(100vw - 32px); padding: 6px 10px; border-radius: 10px; background: rgb(0 0 0 / 0.75); color: #fff; font: 11.5px/1.5 var(--mono); pointer-events: none; }
