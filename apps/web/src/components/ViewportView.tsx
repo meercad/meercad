@@ -14,6 +14,7 @@ import { showMenu } from "./Menu";
 import { InlineValues } from "./InlineValues";
 import { Manipulators } from "./Manipulators";
 import { ViewCube } from "./ViewCube";
+import { CUSTOM_PLANE_COLOR, PLANE_COLORS, PlaneChooser } from "./PlaneChooser";
 
 const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
   "origin.XY": { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
@@ -88,8 +89,8 @@ export function ViewportView() {
       .filter((s) => !hidden.has(s.id) && (s.id === sketchId || !consumed.has(s.id) || dialog?.feature.op === "extrude" || dialog?.feature.op === "revolve" || hiddenOverride(s.id)))
       .map((s) => ({ id: s.id, frame: s.frame, curves: s.curves, regions: s.regions.map((g) => ({ key: g.key, polygons: g.polygons })) }));
     const planes: PlaneView[] = [
-      ...Object.entries(ORIGIN_FRAMES).map(([id, frame]) => ({ id, label: PLANE_LABELS[id]!, frame, size: size * 0.6 })),
-      ...r.planes.map((p) => ({ id: p.id, label: p.id, frame: p.frame, size: size * 0.6 })),
+      ...Object.entries(ORIGIN_FRAMES).map(([id, frame]) => ({ id, label: PLANE_LABELS[id]!, frame, size: size * 0.6, color: PLANE_COLORS[id]! })),
+      ...r.planes.map((p) => ({ id: p.id, label: doc.features.find((f) => f.id === p.id)?.name ?? p.id, frame: p.frame, size: size * 0.6, color: CUSTOM_PLANE_COLOR })),
     ];
     return { bodies: output.meshes, sketches, planes, references: output.references, hiddenBodies: hidden, editingSketch: sketchId };
   }, [output, hidden, sketchId, doc.features, dialog?.feature.op]);
@@ -98,7 +99,8 @@ export function ViewportView() {
     if (vp && scene) vp.setScene(scene);
   }, [vp, scene]);
   const hasBodies = !!output?.report.bodies.length;
-  useEffect(() => vp?.setPlanesVisible(showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, showPlanes, hasBodies, pickingPlane, dialog?.field]);
+  useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
+  useEffect(() => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setSketchesVisible(showSketches), [vp, showSketches]);
   useEffect(() => {
     if (!vp) return;
@@ -300,7 +302,7 @@ export function ViewportView() {
   };
 
   const hint = pickingPlane
-    ? "Click a plane or a flat face to sketch on — Esc to cancel"
+    ? null
     : measure.active
       ? "Measure: click a face or edge, then a second one"
       : dialog?.field
@@ -314,6 +316,7 @@ export function ViewportView() {
       {vp ? <InlineValues viewport={vp} /> : null}
       {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
       {hint ? <div className="hint-banner">{hint}</div> : null}
+      {vp && pickingPlane && scene ? <PlaneChooser viewport={vp} planes={scene.planes} /> : null}
       <AiActivity />
       {box ? (
         <div

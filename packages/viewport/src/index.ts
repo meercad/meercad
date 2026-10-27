@@ -46,6 +46,8 @@ export interface PlaneView {
   label: string;
   frame: Frame;
   size: number;
+  /** Fill/border colour; defaults to a neutral blue. */
+  color?: number;
 }
 
 export interface ReferenceMeshView {
@@ -397,17 +399,18 @@ export class Viewport {
       g.matrixAutoUpdate = false;
       g.matrix.copy(frameMatrix(p.frame));
       const s = p.size;
+      const color = p.color ?? C.plane;
       const fill = new THREE.Mesh(
         new THREE.PlaneGeometry(s, s),
-        new THREE.MeshBasicMaterial({ color: C.plane, transparent: true, opacity: 0.04, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.04, side: THREE.DoubleSide, depthWrite: false }),
       );
       fill.position.set(s / 2, s / 2, 0);
       fill.userData = { plane: p.id };
       const border = new THREE.LineLoop(
         new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(s, 0, 0), new THREE.Vector3(s, s, 0), new THREE.Vector3(0, s, 0)]),
-        new THREE.LineBasicMaterial({ color: C.plane, transparent: true, opacity: 0.4 }),
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.4 }),
       );
-      border.userData = { plane: p.id };
+      border.userData = { plane: p.id, border: true };
       g.add(fill, border);
       g.userData = { plane: p.id };
       this.planeGroup.add(g);
@@ -488,6 +491,13 @@ export class Viewport {
   setPlanesVisible(v: boolean): void {
     this.planeGroup.visible = v;
   }
+  private planeEmphasis = false;
+  /** Stronger plane fills and borders, for when the user has to pick one. */
+  setPlaneEmphasis(on: boolean): void {
+    if (on === this.planeEmphasis) return;
+    this.planeEmphasis = on;
+    this.paint();
+  }
   setSketchesVisible(v: boolean): void {
     this.sketchGroup.visible = v;
   }
@@ -544,12 +554,15 @@ export class Viewport {
         mat.color.setHex(sel ? C.edgeSel.getHex() : hov ? C.edgeHover.getHex() : (mat.userData["base"] as number));
       }
     });
+    const strong = this.planeEmphasis;
     this.planeGroup.traverse((o) => {
-      const { plane } = o.userData as { plane?: string };
-      if (plane === undefined || !(o instanceof THREE.Mesh)) return;
+      const { plane, border } = o.userData as { plane?: string; border?: boolean };
+      if (plane === undefined || !(o instanceof THREE.Mesh || o instanceof THREE.Line)) return;
       const sel = this.selected.some((s) => s.kind === "plane" && s.planeId === plane);
       const hov = this.hover?.kind === "plane" && this.hover.planeId === plane;
-      (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.3 : hov ? 0.18 : 0.04;
+      const mat = o.material as THREE.Material;
+      if (border) mat.opacity = sel || hov ? 1 : strong ? 0.85 : 0.4;
+      else mat.opacity = sel ? 0.38 : hov ? (strong ? 0.4 : 0.18) : strong ? 0.13 : 0.04;
     });
   }
 

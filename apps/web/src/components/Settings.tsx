@@ -1,7 +1,7 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { FolderOpen, HardDrive, Keyboard, Mouse, Ruler, X } from "lucide-react";
+import { FolderOpen, Grid3x3, HardDrive, Keyboard, Mouse, Ruler, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
+import { GRID_STEPS, KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { desktop } from "../lib/persistence";
 import { changeProjectsFolder } from "../lib/storage";
 import { Kbd } from "./Kbd";
@@ -101,6 +101,32 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input type="checkbox" checked={prefs.showValues} onChange={(e) => setPrefs({ showValues: e.target.checked })} />
             Show dimensions and sizes (diameters, distances, drag values)
           </label>
+        </section>
+
+        <section>
+          <h3>
+            <Grid3x3 /> Sketching
+          </h3>
+          <label className="check">
+            <input type="checkbox" checked={prefs.snapGrid} onChange={(e) => setPrefs({ snapGrid: e.target.checked })} />
+            Snap to the grid
+          </label>
+          <label className="check">
+            Grid spacing
+            <select value={String(prefs.gridStep)} onChange={(e) => setPrefs({ gridStep: e.target.value === "auto" ? "auto" : Number(e.target.value) })}>
+              <option value="auto">Auto (follows the zoom)</option>
+              {GRID_STEPS.map((n) => (
+                <option key={n} value={n}>
+                  {n} mm
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={prefs.snapGeometry} onChange={(e) => setPrefs({ snapGeometry: e.target.checked })} />
+            Smart snaps: midpoints, crossings, curves and alignment with other points
+          </label>
+          <p className="muted">Endpoints always snap so lines connect. Hold Alt (⌥) while drawing to place a point freely.</p>
         </section>
 
         {desktop ? (

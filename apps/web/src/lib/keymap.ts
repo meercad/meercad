@@ -206,12 +206,21 @@ interface Prefs {
   showKeys: boolean;
   /** Dimension and size chips on the model. */
   showValues: boolean;
+  /** Sketch points snap to the grid. */
+  snapGrid: boolean;
+  /** Sketch points snap to existing geometry (ends, midpoints, crossings, alignments). */
+  snapGeometry: boolean;
+  /** Grid spacing in mm, or "auto" to follow the zoom. */
+  gridStep: GridStep;
 }
+
+export type GridStep = "auto" | number;
+export const GRID_STEPS: number[] = [0.1, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50];
 
 const STORAGE_KEY = "leocad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "leocad", mouse: "leocad", invertZoom: false, showKeys: true, showValues: true };
+  const fallback: Prefs = { keys: "leocad", mouse: "leocad", invertZoom: false, showKeys: true, showValues: true, snapGrid: true, snapGeometry: true, gridStep: "auto" };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -220,6 +229,9 @@ function load(): Prefs {
       invertZoom: raw.invertZoom === true,
       showKeys: raw.showKeys !== false,
       showValues: raw.showValues !== false,
+      snapGrid: raw.snapGrid !== false,
+      snapGeometry: raw.snapGeometry !== false,
+      gridStep: typeof raw.gridStep === "number" && raw.gridStep > 0 ? raw.gridStep : "auto",
     };
   } catch {
     return fallback;

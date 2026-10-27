@@ -397,7 +397,6 @@ export function startSketch(planeHint?: PlaneSpec): void {
   const plane = planeHint ?? (sel ? planeSpecForPick(sel, get().output?.meshes ?? []) : null);
   if (!plane) {
     set({ pickingSketchPlane: true, selection: [] });
-    toast("Select a plane or a flat face for the sketch");
     return;
   }
   set({ pickingSketchPlane: false });

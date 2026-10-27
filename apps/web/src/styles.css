@@ -686,3 +686,35 @@ ul.update-notes li { margin: 1px 0; }
 .update-hint { font-size: 12px; margin-top: 4px; }
 /* layout defaults for elements rendered outside .app (banners, overlays) */
 :root { --top: 88px; --left: 14px; --rail: 84px; }
+
+/* sketch plane chooser */
+.plane-tags { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.plane-tag { position: absolute; left: 0; top: 0; pointer-events: auto; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--plane); background: color-mix(in srgb, var(--panel) 88%, transparent); color: var(--plane); font-size: 12.5px; font-weight: 650; box-shadow: var(--shadow); cursor: pointer; }
+.plane-tag:hover { background: var(--plane); color: #fff; }
+.plane-bar { position: absolute; top: var(--top); left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 14px; border-radius: 999px; font-size: 12.5px; white-space: nowrap;
+  background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); }
+.plane-bar > span:first-child { font-weight: 650; margin-right: 2px; }
+.plane-bar button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.plane-bar button i { width: 10px; height: 10px; border-radius: 3px; background: var(--plane); }
+.plane-bar button:hover { border-color: var(--plane); background: color-mix(in srgb, var(--plane) 14%, var(--panel)); }
+.plane-bar .muted { margin: 0 4px; }
+.plane-bar .plane-bar-cancel { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
+
+/* sketch snapping switches */
+.snap-bar { display: flex; align-items: center; gap: 4px; padding: 5px !important; }
+.snap-bar button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
+.snap-bar button svg { width: 15px; height: 15px; }
+.snap-bar button:hover { background: var(--glass-hover); color: var(--text); }
+.snap-bar button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
+.snap-bar select { height: 26px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12px; padding: 0 4px; }
+.settings .check select { margin-left: 8px; height: 26px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12.5px; }
+
+/* exact values typed while drawing */
+.draw-entry { position: absolute; transform: translate(16px, 16px); z-index: 6; display: flex; flex-direction: column; gap: 4px; padding: 7px 8px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12px; }
+.draw-entry label { display: grid; grid-template-columns: 62px 74px 22px; align-items: center; gap: 6px; }
+.draw-entry label span { color: var(--muted); }
+.draw-entry input { height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg, var(--panel)); color: var(--text); font: 12px var(--mono); }
+.draw-entry input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.draw-entry label.bad input { border-color: var(--err); }
+.draw-entry em { font-style: normal; color: var(--muted); }
+.draw-entry small { color: var(--muted); font-size: 10.5px; }
