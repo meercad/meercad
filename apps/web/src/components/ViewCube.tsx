@@ -19,6 +19,7 @@ const AXES: { name: "x" | "y" | "z"; dir: V }[] = [
   { name: "z", dir: [0, 0, 1] },
 ];
 const SIZE = 86;
+const GAP_SCALE = 0.92;
 
 /**
  * Orientation cube. Each face is split 3×3: the center looks at the face, border cells at the
@@ -38,7 +39,9 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
         const tr = (v: V) => new THREE.Vector3(...v).applyMatrix4(r);
         const [u, v, n] = [tr(f.u), tr(f.v), tr(f.n)];
         // Camera space is y-up, CSS is y-down.
-        const m = [u.x, -u.y, u.z, 0, v.x, -v.y, v.z, 0, n.x, -n.y, n.z, 0, n.x * half, -n.y * half, n.z * half, 1];
+        // Faces are drawn slightly smaller than the cube, leaving a thin gap along every edge.
+        const k = GAP_SCALE;
+        const m = [u.x * k, -u.y * k, u.z * k, 0, v.x * k, -v.y * k, v.z * k, 0, n.x, -n.y, n.z, 0, n.x * half, -n.y * half, n.z * half, 1];
         el.style.transform = `matrix3d(${m.map((x) => x.toFixed(5)).join(",")})`;
         el.style.visibility = n.z > 0.01 ? "visible" : "hidden";
         el.style.zIndex = String(Math.round(n.z * 100) + 100);

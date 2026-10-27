@@ -284,6 +284,12 @@ export interface LeocadDocument {
   format: typeof FORMAT;
   /** Named user parameters, e.g. `{ wall: "2 mm", width: "wall * 10" }`. */
   params: Record<string, Expr>;
+  /** Parameters an assistant created (listed apart from the user's own). */
+  autoParams?: string[];
+  /** Order of parts in the parts list (body ids; parts not listed follow in model order). */
+  partOrder?: string[];
+  /** Named folders of parts in the parts list. */
+  partGroups?: { name: string; parts: string[] }[];
   features: Feature[];
   /** Id of the last feature that is evaluated, or null for all. */
   rollback: string | null;
@@ -295,7 +301,8 @@ export type DocOp =
   | { type: "edit_feature"; id: string; patch: Record<string, unknown> }
   | { type: "delete_feature"; id: string }
   | { type: "move_feature"; id: string; after: string | null }
-  | { type: "set_param"; name: string; expr: Expr | null }
+  /** `auto`: true marks it as created by an assistant, false as the user's own; omitted keeps it. */
+  | { type: "set_param"; name: string; expr: Expr | null; auto?: boolean }
   | { type: "rename_param"; name: string; to: string }
   | { type: "set_rollback"; id: string | null }
   | { type: "replace"; doc: LeocadDocument };

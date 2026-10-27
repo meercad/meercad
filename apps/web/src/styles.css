@@ -313,7 +313,9 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 
 /* desktop (macOS hidden-inset title bar) */
 .topbar.desktop, .home-top.desktop { padding-left: 84px; -webkit-app-region: drag; }
-.topbar.desktop button, .topbar.desktop input, .home-top.desktop button { -webkit-app-region: no-drag; }
+/* Everything clickable in the title bar must opt out of window dragging (tabs are divs, not buttons). */
+.topbar.desktop button, .topbar.desktop input, .topbar.desktop a, .topbar.desktop [role="tab"], .topbar.desktop [role="button"],
+.home-top.desktop button, .home-top.desktop input, .home-top.desktop a, .home-top.desktop [role="tab"], .home-top.desktop [role="button"] { -webkit-app-region: no-drag; }
 
 .ai-activity { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); box-shadow: var(--shadow); font-size: 12.5px; z-index: 6; }
 .ai-activity .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
@@ -506,7 +508,7 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 /* ======================================================================
    One bar: tools live in the top bar; the sidebar collapses
    ====================================================================== */
-.app { --left: 14px; --top: 88px; }
+.app { --left: 14px; --top: 80px; }
 .app.side-open { --left: 300px; }
 .topbar { height: 64px; gap: 6px; }
 .topbar .toolbar { position: static; flex: 1 1 auto; min-width: 0; width: auto; max-width: none; justify-content: center; padding: 0 6px; gap: 1px;
@@ -548,23 +550,22 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 /* view cube: soft faces tinted by the axis they face, a bevelled rim, and an axis triad */
 .viewcube .cube { filter: drop-shadow(0 6px 10px rgb(30 27 75 / 0.16)); }
 .viewcube .face {
-  --rim: color-mix(in srgb, var(--tint) 30%, #8f99ad);
-  background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 9%, #ffffff), color-mix(in srgb, var(--tint) 5%, #e9edf5)) !important;
-  border: 1px solid var(--rim) !important; border-radius: 9px;
-  box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--tint) 7%, rgb(255 255 255 / 0.75)), inset 0 1px 0 4px rgb(255 255 255 / 0.6);
+  background: color-mix(in srgb, color-mix(in srgb, var(--tint) 16%, #f7f9fc) 62%, transparent) !important;
+  border: none !important; border-radius: 0;
+  box-shadow: none;
 }
 .viewcube .face-label { font-size: 10.5px; font-weight: 750; letter-spacing: 0.07em; color: color-mix(in srgb, var(--tint) 55%, #2a3142); }
-.viewcube .cell { border-radius: 8px; transition: background 0.12s; }
+.viewcube .cell { border-radius: 0; transition: background 0.12s; }
 .viewcube .cell.hot { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .viewcube .cell.center.hot { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .viewcube .cube-axes { position: absolute; top: 16px; left: 22px; width: 86px; height: 86px; overflow: visible; pointer-events: none; z-index: 0; }
 .viewcube .cube-axes line { stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .viewcube .cube-axes text { fill: currentColor; font: 700 9.5px var(--font, system-ui); text-anchor: middle; dominant-baseline: central; }
 .viewcube .cube { z-index: 1; }
-:root[data-theme="dark"] .viewcube .face { --rim: color-mix(in srgb, var(--tint) 35%, #6b7591); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 14%, #3d4255), color-mix(in srgb, var(--tint) 8%, #2b2f3f)) !important; box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--tint) 10%, rgb(255 255 255 / 0.05)); }
+:root[data-theme="dark"] .viewcube .face { background: color-mix(in srgb, color-mix(in srgb, var(--tint) 22%, #34384a) 62%, transparent) !important; border: none !important; box-shadow: none; }
 :root[data-theme="dark"] .viewcube .face-label { color: color-mix(in srgb, var(--tint) 45%, #eef1f7); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .viewcube .face { --rim: color-mix(in srgb, var(--tint) 35%, #6b7591); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 14%, #3d4255), color-mix(in srgb, var(--tint) 8%, #2b2f3f)) !important; box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--tint) 10%, rgb(255 255 255 / 0.05)); }
+  :root:not([data-theme="light"]) .viewcube .face { background: color-mix(in srgb, color-mix(in srgb, var(--tint) 22%, #34384a) 62%, transparent) !important; border: none !important; box-shadow: none; }
   :root:not([data-theme="light"]) .viewcube .face-label { color: color-mix(in srgb, var(--tint) 45%, #eef1f7); }
 }
 .topbar .doc-name { max-width: 170px; }
@@ -698,7 +699,7 @@ ul.update-notes { margin: 6px 0 2px; padding-left: 18px; color: var(--text-2); }
 ul.update-notes li { margin: 1px 0; }
 .update-hint { font-size: 12px; margin-top: 4px; }
 /* layout defaults for elements rendered outside .app (banners, overlays) */
-:root { --top: 88px; --left: 14px; --rail: 84px; }
+:root { --top: 80px; --left: 14px; --rail: 84px; }
 
 /* sketch plane chooser */
 .plane-tags { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
@@ -731,3 +732,55 @@ ul.update-notes li { margin: 1px 0; }
 .draw-entry label.bad input { border-color: var(--err); }
 .draw-entry em { font-style: normal; color: var(--muted); }
 .draw-entry small { color: var(--muted); font-size: 10.5px; }
+
+/* collapsible sidebar sections */
+.section-head .section-toggle { margin-left: 0; display: inline-flex; align-items: center; gap: 4px; padding: 0; border: none; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.section-head .section-toggle:hover { color: var(--text); }
+.section-head .section-toggle svg { width: 13px; height: 13px; transition: transform 0.15s; }
+.section-head .section-toggle svg.open { transform: rotate(90deg); }
+.section-head .count { font-weight: 600; color: var(--muted); opacity: 0.7; letter-spacing: 0; }
+.section-head .section-actions { margin-left: auto; display: flex; gap: 2px; }
+.section-head .section-actions button { margin-left: 0; }
+.section-head.sub { padding: 8px 4px 4px; text-transform: none; letter-spacing: 0; font-size: 11.5px; font-weight: 600; }
+
+/* linking values of several features */
+.link-bar { margin: 6px 10px 4px; padding: 8px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.link-bar.muted { border-color: var(--border); background: none; }
+.link-bar-title { display: flex; align-items: center; gap: 6px; font-weight: 650; }
+.link-bar-title svg { width: 14px; height: 14px; color: var(--accent); }
+.link-row { text-align: left; padding: 5px 8px; border-radius: 7px; border: none; background: none; color: var(--text); font-size: 12px; }
+button.link-row { cursor: pointer; color: var(--accent); font-weight: 600; }
+button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* parts: folders and drag & drop */
+.tree .tree .tree-item.nested { padding-left: 30px; }
+.tree-item.group-row { cursor: pointer; font-weight: 600; }
+.tree-item.group-row .chev { width: 13px; height: 13px; transition: transform 0.15s; }
+.tree-item.group-row .chev.open { transform: rotate(90deg); }
+.tree-item.drop-into { background: color-mix(in srgb, var(--accent) 16%, transparent); outline: 1px dashed var(--accent); }
+.drop-end { height: 18px; list-style: none; }
+
+/* variables offered while editing a value on the model */
+.value-editor { position: relative; }
+.value-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 190px; z-index: 20; display: flex; flex-direction: column; padding: 4px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border-strong); box-shadow: var(--shadow); }
+.value-menu button { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 7px; border: none; border-radius: 6px; background: none; color: var(--text); font-size: 12px; cursor: pointer; text-align: left; }
+.value-menu button svg { width: 13px; height: 13px; color: var(--muted); flex: none; }
+.value-menu button .name { flex: 1; font-family: var(--mono); }
+.value-menu button .val { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.value-menu button:hover, .value-menu button.active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.value-menu button.new .name { font-family: inherit; color: var(--accent); font-weight: 600; }
+.value-menu-note { padding: 5px 7px; font-size: 11.5px; color: var(--muted); }
+.value-input.invalid { border-color: var(--err) !important; }
+.value-chip .value-menu button { height: 26px; border: none; border-radius: 6px; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; font: 500 12px var(--font, system-ui); }
+.value-chip .value-menu button:hover, .value-chip .value-menu button.active { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--text); }
+.param-search { display: flex; align-items: center; gap: 6px; margin: 2px 0 4px; padding: 0 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.param-search svg { width: 13px; height: 13px; color: var(--muted); flex: none; }
+.param-search input.field { flex: 1; border: none !important; background: none !important; box-shadow: none !important; height: 26px; padding: 0; font-size: 12px; }
+.value-menu-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; }
+.value-menu-item { display: flex; flex-direction: column; }
+.value-menu-group { padding: 6px 7px 2px; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.param-row.auto { grid-template-columns: minmax(56px, 0.8fr) 1.4fr 44px 22px 22px; }
+
+/* Home and editor share one title bar geometry, so switching between them doesn't jump. */
+.topbar, .home-top { height: 56px; padding: 0 10px 0 12px; }
+.topbar.desktop, .home-top.desktop { padding-left: 86px; }

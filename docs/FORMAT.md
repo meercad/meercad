@@ -19,6 +19,8 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 ```
 
 - **params** — named values; any numeric field may be an expression (`"wall * 2"`, `"5 mm"`, `"30 deg"`).
+  `autoParams` (optional) lists the ones an assistant created; the app shows them apart from your own.
+- **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.
 - **thread** — `{ "op": "thread", "face": { "face": "ex2.side[sk2.c1]" }, "size": "M8", "clearance": 0.15 }`

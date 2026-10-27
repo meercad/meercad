@@ -16,6 +16,7 @@ import { Kbd } from "../components/Kbd";
 import { actionFor, GRID_STEPS, setPrefs, SKETCH_ACTIONS, usePrefs, type GridStep } from "../lib/keymap";
 import { activeSketch, applyConstraint, CONSTRAINT_TOOLS, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
 import { GLYPH } from "./icons";
+import { ValueInput } from "../components/ValueInput";
 import { getSolver } from "./solver";
 import { sameSel, setSketchSelection, setTool, useSketchUi, type SketchSel, type SketchTool } from "./state";
 
@@ -1061,8 +1062,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         {labels.map((l) =>
           l.id === editing ? (
             <div key={l.id} className="sketch-label sel" data-x={l.at[0]} data-y={l.at[1]}>
-              <DimInput
+              <ValueInput
                 value={(sketch.constraints.find((c) => c.id === l.id) as { value: Expr }).value}
+                unit={sketch.constraints.find((c) => c.id === l.id)?.type === "angle" ? "deg" : "mm"}
+                suggest={sketch.constraints.find((c) => c.id === l.id)?.type ?? "dimension"}
                 onDone={(v) => {
                   setEditing(null);
                   if (v === null) return;
@@ -1174,24 +1177,6 @@ export function SnapBar() {
         <Magnet /> Smart snaps
       </button>
     </div>
-  );
-}
-
-function DimInput({ value, onDone }: { value: Expr; onDone: (v: Expr | null) => void }) {
-  const [text, setText] = useState(String(value));
-  return (
-    <input
-      autoFocus
-      value={text}
-      onFocus={(e) => e.target.select()}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => onDone(text.trim() ? parseExpr(text) : null)}
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") onDone(text.trim() ? parseExpr(text) : null);
-        if (e.key === "Escape") onDone(null);
-      }}
-    />
   );
 }
 

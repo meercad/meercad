@@ -179,6 +179,9 @@ export const documentSchema = {
     {
       format: { const: "leocad/1" },
       params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") },
+      autoParams: arr(id),
+      partOrder: arr({ type: "string", maxLength: 128 }),
+      partGroups: arr(obj({ name: { type: "string", minLength: 1, maxLength: 128 }, parts: arr({ type: "string", maxLength: 128 }) }, ["name", "parts"])),
       features: arr(ref("feature")),
       rollback: oneOf({ type: "null" }, id),
     },
@@ -195,7 +198,7 @@ export const docOpSchema = {
     edit_feature: obj({ type: true, id, patch: { type: "object" } }, ["id", "patch"]),
     delete_feature: obj({ type: true, id }, ["id"]),
     move_feature: obj({ type: true, id, after: oneOf({ type: "null" }, id) }, ["id", "after"]),
-    set_param: obj({ type: true, name: id, expr: oneOf({ type: "null" }, ref("expr")) }, ["name", "expr"]),
+    set_param: obj({ type: true, name: id, expr: oneOf({ type: "null" }, ref("expr")), auto: bool }, ["name", "expr"]),
     rename_param: obj({ type: true, name: id, to: id }, ["name", "to"]),
     set_rollback: obj({ type: true, id: oneOf({ type: "null" }, id) }, ["id"]),
     replace: obj({ type: true, doc: { type: "object" } }, ["doc"]),

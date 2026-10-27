@@ -178,6 +178,7 @@ export function validateDocument(input: unknown): Validation<LeocadDocument> {
     seen.set(f.id, f);
   }
   if (doc.rollback !== null && !seen.has(doc.rollback)) errors.push(`rollback: unknown feature "${doc.rollback}"`);
+  for (const n of doc.autoParams ?? []) if (!(n in doc.params)) errors.push(`autoParams: unknown parameter "${n}"`);
   return errors.length ? { ok: false, errors } : { ok: true, value: doc };
 }
 

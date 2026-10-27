@@ -151,7 +151,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "apply_ops": {
       needProject();
       useApp.setState({ proposalDoc: null });
-      const ops = p["ops"] as DocOp[];
+      // Variables an assistant creates are listed apart from the user's own.
+      const ops = (p["ops"] as DocOp[]).map((op) => (op.type === "set_param" && op.expr !== null && op.auto === undefined && !(op.name in currentDoc().params) ? { ...op, auto: true } : op));
       // Validate first so a bad op returns a precise error instead of a toast.
       ops.reduce<LeocadDocument>((d, op) => applyOp(d, op), currentDoc());
       if (!apply(...ops)) throw new Error("ops were rejected");

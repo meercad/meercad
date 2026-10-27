@@ -13,6 +13,7 @@ import { evaluate } from "@leocad/model";
 import { apply, toast, useApp } from "../store";
 import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";
+import { ValueInput, type ValueUnit } from "./ValueInput";
 
 type V3 = [number, number, number];
 
@@ -21,6 +22,9 @@ interface Item {
   at: V3;
   text: string;
   value: Expr;
+  unit: ValueUnit;
+  /** Name suggested when the value becomes a new variable. */
+  suggest: string;
   /** Can be detached from its variables (lengths only; angles are stored in other units). */
   unlinkable?: boolean;
   commit: (v: Expr) => void;
@@ -39,9 +43,12 @@ function faceCenterByTag(out: RebuildOutput, prefix: string): V3 | null {
 function featureItems(f: Feature, out: RebuildOutput): Item[] {
   const edit = (patch: Record<string, unknown>) => apply({ type: "edit_feature", id: f.id, patch });
   const item = (key: string, at: V3 | null, label: string, value: Expr, field: string, unit = " mm"): Item[] =>
-    at ? [{ key: `${f.id}.${key}`, at, text: `${label}${fmt(value, unit)}`, value, unlinkable: unit === " mm", commit: (v) => edit({ [field]: v }) }] : [];
+    at
+      ? [{ key: `${f.id}.${key}`, at, text: `${label}${fmt(value, unit)}`, value, unit: unit === " mm" ? "mm" : unit === "°" ? "deg" : "", suggest: `${f.op}_${field}`, unlinkable: unit === " mm", commit: (v) => edit({ [field]: v }) }]
+      : [];
   switch (f.op) {
     case "extrude": {
+      if (f.extent === "through_all") return [];
       const at = faceCenterByTag(out, `${f.id}.end_cap`) ?? profileAnchor(out, f.profile)?.origin ?? null;
       return item("distance", at, "↕ ", f.distance, "distance");
     }
@@ -69,8 +76,8 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
   }
 }
 
-/** Editable dimension labels of a sketch, placed on its plane. */
-function sketchItems(sk: SketchFeature, out: RebuildOutput): Item[] {
+/** Editable dimension labels of a sketch, placed on its plane (or only those of `only`, moved onto `onto`). */
+function sketchItems(sk: SketchFeature, out: RebuildOutput, only?: Set<string>, onto?: V3): Item[] {
   const view = out.report.sketches.find((s) => s.id === sk.id);
   if (!view) return [];
   const pts = new Map(view.points.map(([id, x, y]) => [id, [x, y] as Vec2]));
@@ -81,8 +88,14 @@ function sketchItems(sk: SketchFeature, out: RebuildOutput): Item[] {
     return [c.center[0] + c.radius * 0.7, c.center[1] + c.radius * 0.7];
   };
   const items: Item[] = [];
+  const equalPartners = new Set(
+    only ? sk.constraints.flatMap((c) => (c.type === "equal" && (only.has(c.a) || only.has(c.b)) ? [c.a, c.b] : [])) : [],
+  );
   for (const c of sk.constraints) {
     if (!("value" in c)) continue;
+    // Sizes set on an equal partner (e.g. one diameter driving several holes) belong to the shape too.
+    const sizedViaEqual = (c.type === "length" || c.type === "radius" || c.type === "diameter") && equalPartners.has(constraintRefs(c)[0]!);
+    if (only && !constraintRefs(c).some((r) => only.has(r)) && !sizedViaEqual) continue;
     let at: Vec2 | null = c.label ?? null;
     if (!at) {
       if (c.type === "length") at = mid(c.line);
@@ -96,9 +109,18 @@ function sketchItems(sk: SketchFeature, out: RebuildOutput): Item[] {
     }
     if (!at) continue;
     const prefix = c.type === "diameter" ? "⌀ " : c.type === "radius" ? "R " : "";
+    let world = toWorld(view.frame, at);
+    // Slide the label along the sketch normal to the selected face, so it sits on the model.
+    if (onto) {
+      const n = view.frame.normal;
+      const d = (onto[0] - world[0]) * n[0] + (onto[1] - world[1]) * n[1] + (onto[2] - world[2]) * n[2];
+      world = [world[0] + n[0] * d, world[1] + n[1] * d, world[2] + n[2] * d];
+    }
     items.push({
       key: `${sk.id}.${c.id}`,
-      at: toWorld(view.frame, at),
+      at: world,
+      unit: c.type === "angle" ? "deg" : "mm",
+      suggest: c.type === "diameter" ? "diameter" : c.type === "radius" ? "radius" : c.type === "angle" ? "angle" : c.type === "length" ? "length" : "distance",
       text: `${prefix}${fmt(c.value, c.type === "angle" ? "°" : "")}`,
       value: c.value,
       unlinkable: c.type !== "angle",
@@ -117,6 +139,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const [editing, setEditing] = useState<string | null>(null);
   const showValues = usePrefs((s) => s.showValues);
+  const selection = useApp((s) => s.selection);
   useEffect(() => viewport.onChange(tick), [viewport]);
   if (!out || sketchId || dialog || !selected || !showValues) return null;
   const f = doc.features.find((x) => x.id === selected);
@@ -125,7 +148,15 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   // Show the driving sketch's dimensions too, so the whole feature can be resized in place.
   const skId = f.op === "sketch" ? f.id : (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile ? f.profile.sketch : null;
   const sk = skId ? doc.features.find((x): x is SketchFeature => x.id === skId && x.op === "sketch") : undefined;
-  if (sk) items.push(...sketchItems(sk, out));
+  if (sk) {
+    // A picked face of the feature narrows this to the dimensions of the shape it came from.
+    const face = selection.length === 1 && selection[0]!.kind === "face" ? selection[0]! : null;
+    const curve = face?.kind === "face" ? face.tags.map((t) => new RegExp(`^${f.id}\\.side\\[${sk.id}\\.([\\w-]+?)(?::\\d+)?\\]$`).exec(t)?.[1]).find(Boolean) : undefined;
+    if (curve && face?.kind === "face") {
+      const m = out.meshes.find((x) => x.bodyId === face.bodyId);
+      items.push(...sketchItems(sk, out, shapeOf(sk, curve), (m && faceAnchor(m, face.face)?.origin) ?? face.point));
+    } else if (!face) items.push(...sketchItems(sk, out));
+  }
   return (
     <div className="overlay-layer">
       {items.map((it) => {
@@ -134,7 +165,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
         return (
           <div key={it.key} className="value-chip" style={{ left: s[0], top: s[1] }} onPointerDown={(e) => e.stopPropagation()}>
             {editing === it.key ? (
-              <InlineInput value={it.value} onDone={(v) => (setEditing(null), v !== null && v !== it.value && commitKeepingParams(it, v))} />
+              <ValueInput value={it.value} unit={it.unit} suggest={it.suggest} onDone={(v) => (setEditing(null), v !== null && v !== it.value && commitKeepingParams(it, v))} />
             ) : (
               <>
                 <button onClick={() => setEditing(it.key)} title="Click to edit">
@@ -152,6 +183,36 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
       })}
     </div>
   );
+}
+
+/** Entity ids of the shape a curve belongs to: everything connected to it through shared points. */
+function shapeOf(sk: SketchFeature, curve: string): Set<string> {
+  const pointsOf = (e: SketchFeature["entities"][number]): string[] =>
+    e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : [];
+  const ids = new Set([curve]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const e of sk.entities) {
+      const pts = pointsOf(e);
+      const touches = ids.has(e.id) || pts.some((p) => ids.has(p));
+      if (!touches) continue;
+      for (const id of [e.id, ...pts]) if (!ids.has(id)) (ids.add(id), (grew = true));
+    }
+    // Constraints like midpoint/point_on tie extra points (a rectangle's centre) to the shape.
+    for (const c of sk.constraints) {
+      if (c.type !== "midpoint" && c.type !== "point_on" && c.type !== "coincident" && c.type !== "symmetric") continue;
+      const refs = constraintRefs(c);
+      if (refs.some((r) => ids.has(r)) && refs.some((r) => !ids.has(r) && r !== "origin" && !r.startsWith("origin."))) for (const r of refs) if (r !== "origin" && !r.startsWith("origin.") && !ids.has(r)) (ids.add(r), (grew = true));
+    }
+  }
+  return ids;
+}
+
+/** Entity ids a constraint refers to ("l1.p1" counts as "l1"). */
+function constraintRefs(c: SketchConstraint): string[] {
+  return Object.entries(c)
+    .filter(([k, v]) => k !== "id" && k !== "type" && k !== "label" && typeof v === "string")
+    .map(([, v]) => (v as string).split(".")[0]!);
 }
 
 /**

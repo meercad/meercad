@@ -50,6 +50,20 @@ describe("DocumentStore", () => {
     s.redo();
     expect(s.doc.params).toEqual({ h: "10 mm" });
   });
+
+  it("keeps track of variables an assistant created", () => {
+    const s = new DocumentStore();
+    s.apply({ type: "set_param", name: "wall", expr: "2 mm", auto: true }, { type: "set_param", name: "mine", expr: 3 });
+    expect(s.doc.autoParams).toEqual(["wall"]);
+    s.apply({ type: "set_param", name: "wall", expr: "3 mm" });
+    expect(s.doc.autoParams).toEqual(["wall"]);
+    s.apply({ type: "rename_param", name: "wall", to: "thickness" });
+    expect(s.doc.autoParams).toEqual(["thickness"]);
+    s.apply({ type: "set_param", name: "thickness", expr: "3 mm", auto: false });
+    expect(s.doc.autoParams).toBeUndefined();
+    s.apply({ type: "set_param", name: "x", expr: 1, auto: true }, { type: "set_param", name: "x", expr: null });
+    expect(s.doc.autoParams).toBeUndefined();
+  });
 });
 
 /** Fake kernel: state is a list of executed feature ids; "boom" fillets fail. */

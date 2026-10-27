@@ -47,13 +47,20 @@ export function applyOp(doc: LeocadDocument, input: unknown): LeocadDocument {
       if (!(op.name in next.params)) throw new OpError(`unknown parameter "${op.name}"`);
       if (op.to in next.params) throw new OpError(`parameter "${op.to}" already exists`);
       next.params = Object.fromEntries(Object.entries(next.params).map(([k, v]) => [k === op.name ? op.to : k, renameInExpr(v, op.name, op.to)]));
+      if (next.autoParams) next.autoParams = next.autoParams.map((n) => (n === op.name ? op.to : n));
       next.features = next.features.map((f) => mapFeatureExprs(f, (e) => renameInExpr(e, op.name, op.to)));
       break;
     }
-    case "set_param":
+    case "set_param": {
       if (op.expr === null) delete next.params[op.name];
       else next.params[op.name] = op.expr;
+      const auto = new Set(next.autoParams ?? []);
+      if (op.expr === null || op.auto === false) auto.delete(op.name);
+      else if (op.auto) auto.add(op.name);
+      if (auto.size) next.autoParams = [...auto];
+      else delete next.autoParams;
       break;
+    }
     case "set_rollback":
       if (op.id !== null) indexOf(next, op.id);
       next.rollback = op.id;

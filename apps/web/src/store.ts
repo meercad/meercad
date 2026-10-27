@@ -58,6 +58,8 @@ interface State {
   toasts: Toast[];
   saveState: "saved" | "saving" | "unsaved";
   selectedFeature: string | null;
+  /** Features picked together in the list (⌘/Shift-click), e.g. to link their values. */
+  featureSelection: string[];
   /** History/parts/variables sidebar (collapsed by default). */
   sideOpen: boolean;
   /** What a connected assistant is doing right now (MCP). */
@@ -117,6 +119,7 @@ export const useApp = create<State>(() => ({
   toasts: [],
   saveState: "saved",
   selectedFeature: null,
+  featureSelection: [],
   pickingSketchPlane: false,
   aiActivity: null,
   sideOpen: (() => {
