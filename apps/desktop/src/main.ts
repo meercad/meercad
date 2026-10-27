@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, renameLegacyFiles } from "./legacy";
+import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
 import { canSelfUpdate, checkForUpdate, installUpdate, type UpdateInfo } from "./updater";
 
 const DEV = process.argv.includes("--dev");
@@ -467,6 +467,13 @@ else {
         } catch {
           // no release installed: the first-run folder picker asks
         }
+      }
+    }
+    if (!WIP && !process.env["MEERCAD_PROJECTS_DIR"]) {
+      const moved = await moveLegacyDefaultFolder(settings.projectsDir, defaultProjectsDir(), thumbsDir()).catch(() => null);
+      if (moved) {
+        settings = { ...settings, projectsDir: moved };
+        await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`).catch(() => undefined);
       }
     }
     await renameLegacyFiles(projectsDir(), thumbsDir()).catch(() => 0);

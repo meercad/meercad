@@ -22,6 +22,34 @@ export async function carryOverAppData(settingsPath: string, thumbsDir: string):
   if (existsSync(oldThumbs) && !existsSync(thumbsDir)) await cp(oldThumbs, thumbsDir, { recursive: true });
 }
 
+/**
+ * A projects folder still at the old default (~/Documents/leocad) moves to the new default, unless
+ * that already exists; thumbnails (named after each file's path) move with it. A folder the user
+ * picked themselves stays where it is. Returns the new folder, or null when nothing moved.
+ */
+export async function moveLegacyDefaultFolder(current: string | undefined, newDefault: string, thumbsDir: string): Promise<string | null> {
+  const oldDefault = join(app.getPath("documents"), "leocad");
+  if (!current || current !== oldDefault || !existsSync(oldDefault) || existsSync(newDefault)) return null;
+  const files = await projectFilesBelow(oldDefault);
+  await rename(oldDefault, newDefault);
+  for (const rel of files) {
+    const thumb = join(thumbsDir, thumbName(join(oldDefault, rel)));
+    if (existsSync(thumb)) await rename(thumb, join(thumbsDir, thumbName(join(newDefault, rel)))).catch(() => undefined);
+  }
+  return newDefault;
+}
+
+async function projectFilesBelow(root: string, rel = ""): Promise<string[]> {
+  const out: string[] = [];
+  for (const entry of await readdir(join(root, rel), { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    const r = rel ? join(rel, entry.name) : entry.name;
+    if (entry.isDirectory()) out.push(...(await projectFilesBelow(root, r)));
+    else if (entry.name.endsWith(".meercad") || entry.name.endsWith(LEGACY_EXT)) out.push(r);
+  }
+  return out;
+}
+
 /** Renames `.leocad` files below `root` to `.meercad`, keeping their thumbnails. Returns how many. */
 export async function renameLegacyFiles(root: string, thumbsDir: string): Promise<number> {
   if (!existsSync(root)) return 0;
