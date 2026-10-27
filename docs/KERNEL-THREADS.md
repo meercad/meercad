@@ -1,6 +1,6 @@
 # Multi-core geometry kernel: findings
 
-Status: on branch `claude/kernel-multicore` (based on `claude/gallant-swartz-2ebb6d`). Threads are on by default wherever the page is cross-origin isolated.
+Status: shipped. Threads are on by default wherever the page is cross-origin isolated (desktop app, `https`, localhost); `?threads=0` turns them off. The iPad app and plain-`http` network addresses run single-threaded.
 Measured 27.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores) and on the user's iPad (Safari, iPadOS 27, over an https tunnel).
 
 ## Summary
