@@ -19,6 +19,7 @@ const recent: Timing[] = [];
 
 export function DebugHud() {
   const [bench, setBench] = useState<string>("");
+  const [copied, setCopied] = useState(false);
   const [view, setView] = useState<{ sec: Counts; press: Counts; afterUpMs: number | null; down: boolean }>({ sec: zero(), press: zero(), afterUpMs: null, down: false });
   useEffect(() => {
     let sec = zero();
@@ -93,23 +94,40 @@ export function DebugHud() {
   const previewing = useApp((s) => s.previewing);
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
   const { sec, press } = view;
+  const lines = [
+    `per second: moves ${sec.moves} (pen ${sec.pen}, touch ${sec.touch}) · frames ${sec.frames} · rebuilds ${sec.requests} → ${sec.results} done, ${sec.superseded} skipped · ${avg(sec.rebuildMs)} ms`,
+    `${view.down ? "pressing" : "last press"}: moves ${press.moves} · frames ${press.frames} · rebuilds ${press.requests} → ${press.results} done, ${press.superseded} skipped · ${avg(press.rebuildMs)} ms${view.afterUpMs !== null ? ` · last result ${view.afterUpMs} ms after release` : ""} · ${previewing ? "preview" : "model"}`,
+    `last results: ${recent.map((t) => `${Math.round(t.trip)} ms (kernel ${Math.round(t.rebuild)} + mesh ${Math.round(t.mesh)})`).join(" · ") || "none"}`,
+    `bench: ${bench || "not run"}`,
+  ];
   return (
     <div className="debug-hud">
-      <div>
-        <b>per second</b> moves {sec.moves} (pen {sec.pen}, touch {sec.touch}) · frames {sec.frames} · rebuilds {sec.requests} → {sec.results} done, {sec.superseded} skipped · {avg(sec.rebuildMs)} ms
-      </div>
-      <div>
-        <b>{view.down ? "pressing" : "last press"}</b> moves {press.moves} · frames {press.frames} · rebuilds {press.requests} → {press.results} done, {press.superseded} skipped · {avg(press.rebuildMs)} ms
-        {view.afterUpMs !== null ? ` · last result ${view.afterUpMs} ms after release` : ""} · {previewing ? "preview" : "model"}
-      </div>
-      <div>
-        <b>last results</b> {recent.map((t) => `${Math.round(t.trip)} ms (kernel ${Math.round(t.rebuild)} + mesh ${Math.round(t.mesh)})`).join(" · ") || "none"}
-      </div>
+      {lines.slice(0, 3).map((l) => (
+        <div key={l.slice(0, 10)}>{l}</div>
+      ))}
       <div className="debug-bench">
-        <button onClick={() => void runBench(setBench)}>Bench</button> {bench}
+        <button onClick={() => void runBench(setBench)}>Bench</button>
+        <button onClick={() => (copyText([navigator.userAgent, ...lines].join("\n")), setCopied(true), window.setTimeout(() => setCopied(false), 1500))}>{copied ? "Copied" : "Copy"}</button> {bench}
       </div>
     </div>
   );
+}
+
+/** Copies text; plain http on the local network has no clipboard API, so it falls back to execCommand. */
+function copyText(text: string): void {
+  if (navigator.clipboard && isSecureContext) {
+    void navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  Object.assign(ta.style, { position: "fixed", top: "0", left: "0", opacity: "0", fontSize: "16px" });
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  document.execCommand("copy");
+  ta.remove();
 }
 
 /**
