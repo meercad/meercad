@@ -3,6 +3,7 @@ import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { goHome, redo, toggleSide, undo, useApp } from "../store";
 import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
+import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
 import { TabStrip } from "./Tabs";
@@ -81,9 +82,12 @@ export function TopBar() {
       <button className="btn" ref={fileBtn} onClick={openFile} title="Import and export">
         File <ChevronDown />
       </button>
-      <span className="mcp-anchor">
-        <McpButton />
-      </span>
+      {/* Assistants connect through the desktop app or a browser on a computer, not the iPad app. */}
+      {nativeApp ? null : (
+        <span className="mcp-anchor">
+          <McpButton />
+        </span>
+      )}
       <button className="icon-btn" ref={moreBtn} onClick={openMore} title="More: settings, help, projects">
         <Ellipsis />
       </button>

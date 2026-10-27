@@ -1,0 +1,22 @@
+{
+  "name": "meercad-ios",
+  "productName": "meerCAD",
+  "version": "0.1.0",
+  "private": true,
+  "description": "meerCAD for iPad: the web app in a native shell",
+  "license": "FSL-1.1-ALv2",
+  "scripts": {
+    "sync": "pnpm --filter @meercad/web build && cap sync ios",
+    "open": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

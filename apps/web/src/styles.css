@@ -829,3 +829,8 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
 .debug-hud { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 200; max-width: calc(100vw - 32px); padding: 6px 10px; border-radius: 10px; background: rgb(0 0 0 / 0.75); color: #fff; font: 11.5px/1.5 var(--mono); pointer-events: none; }
 .debug-hud .debug-bench { pointer-events: auto; }
 .debug-hud .debug-bench button { height: 28px; padding: 0 10px; margin-right: 6px; border-radius: 6px; border: 1px solid rgb(255 255 255 / 0.4); background: rgb(255 255 255 / 0.15); color: #fff; font: inherit; }
+
+/* iPad app: the web view runs under the status bar and home indicator; keep the UI inside the
+   safe area (the scene background still fills the edges). */
+html.native .app, html.native .home { position: fixed; top: env(safe-area-inset-top); right: env(safe-area-inset-right); bottom: env(safe-area-inset-bottom); left: env(safe-area-inset-left); width: auto; height: auto; }
+html.native, html.native body { overscroll-behavior: none; }

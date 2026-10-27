@@ -18,7 +18,9 @@ import { Toolbar } from "./components/Toolbar";
 import { ViewportView } from "./components/ViewportView";
 import { importFile } from "./components/io";
 import { initBridge } from "./lib/mcpBridge";
+import { nativeApp, onFileOpened, Pencil } from "./lib/native";
 import { desktop } from "./lib/persistence";
+import { setTool, useSketchUi, type SketchTool } from "./sketch/state";
 import { saveFile } from "./components/io";
 import { actionFor, MODEL_ACTIONS, type ModelAction } from "./lib/keymap";
 import type { FeatureOp } from "@meercad/schema";
@@ -129,6 +131,34 @@ export function App() {
       offMenu();
       offOpen();
       offError();
+    };
+  }, []);
+  // iPad app: .meercad files opened from the Files app, and Apple Pencil double-tap / squeeze,
+  // which switches a sketch between Select and the drawing tool used last.
+  useEffect(() => {
+    if (!nativeApp) return;
+    document.documentElement.classList.add("native");
+    const offOpen = onFileOpened((t) => {
+      if ("id" in t) return void openProject(t.id);
+      try {
+        const v = validateDocument(JSON.parse(t.text));
+        if (!v.ok) return toast(`Not a valid meerCAD file: ${v.errors[0]}`, "error");
+        void newProject(v.value, t.name);
+      } catch {
+        toast(`Could not read ${t.name}`, "error");
+      }
+    });
+    let lastTool: SketchTool = "line";
+    const pencil = Pencil.addListener("tap", () => {
+      if (!useApp.getState().sketchId) return;
+      const { tool } = useSketchUi.getState();
+      if (tool === "select") return setTool(lastTool);
+      lastTool = tool;
+      setTool("select");
+    });
+    return () => {
+      offOpen();
+      void pencil.then((s) => s.remove(), () => undefined);
     };
   }, []);
   // Tabs: the usual browser/editor keys.

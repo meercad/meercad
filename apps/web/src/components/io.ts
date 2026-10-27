@@ -3,6 +3,7 @@ import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, t
 import { showNotice } from "./Ask";
 import { nextFeatureId } from "@meercad/model";
 import { validateDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
+import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, kernel, newProject, openSketch, toast, useApp } from "../store";
 
@@ -15,8 +16,13 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   ocad: { name: "meerCAD part", extensions: ["meercad", "meerCAD"] },
 };
 
-/** Saves a file: a native save dialog on desktop, a browser download otherwise. */
+/** Saves a file: a native save dialog on desktop, the share sheet on iPad, a browser download otherwise. */
 export function download(name: string, data: BlobPart, type: string): void {
+  if (nativeApp) {
+    const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+    void shareFile(name, payload).catch((e: Error) => toast(`Could not share ${name}: ${e.message}`, "error"));
+    return;
+  }
   if (desktop) {
     const ext = name.split(".").pop() ?? "";
     const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);

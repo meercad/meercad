@@ -2,6 +2,7 @@ import { Box, ChevronRight, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, F
 import { useEffect, useState, type DragEvent } from "react";
 import { askConfirm, askText } from "./Ask";
 import { showMenu } from "./Menu";
+import { nativeApp } from "../lib/native";
 import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
 import { newProject, openProject, refreshProjects, toast, useApp } from "../store";
 import { EXAMPLES } from "../lib/examples";
@@ -75,7 +76,7 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
       onClick: async () => {
         const ok = await askConfirm({
           title: `Delete "${p.name}"?`,
-          message: desktop ? "The project file goes to the Trash." : "The project is removed from this browser. This cannot be undone.",
+          message: desktop ? "The project file goes to the Trash." : nativeApp ? "The project file is deleted. This cannot be undone." : "The project is removed from this browser. This cannot be undone.",
           confirmLabel: "Delete part",
           danger: true,
         });
@@ -155,6 +156,10 @@ export function Home() {
           {desktop ? (
             <>
               Saved as open <span className="mono">.meercad</span> files; folders here are real folders on disk. Drag a part onto a folder to move it.
+            </>
+          ) : nativeApp ? (
+            <>
+              Saved as open <span className="mono">.meercad</span> files, in the Files app under On My iPad › meerCAD. Drag a part onto a folder to move it.
             </>
           ) : (
             "Stored only in this browser. Use Share or Export to move them elsewhere. Drag a part onto a folder to move it."

@@ -83,6 +83,21 @@ down are ignored. Over plain `http` on the network the page is not cross-origin 
 modelling kernel does not need that. Copying a share link falls back to a dialog there because
 Safari only allows the clipboard on `https`.
 
+### iPad app
+
+`apps/ios` wraps the web app with Capacitor. Needs Xcode; signing uses the Apple account signed in
+to Xcode (Settings › Accounts).
+
+```bash
+pnpm ios                                   # builds the web app, syncs it into the Xcode project, opens Xcode
+```
+
+In Xcode pick your iPad (cable or same Wi-Fi) or a simulator and press Run. In the app, projects are
+`.meercad` files in the Files app under On My iPad › meerCAD, and tapping one there opens it in
+meerCAD. Exports open the share sheet. A double tap (Apple Pencil 2 and Pro) or squeeze (Pro) in a
+sketch switches between Select and the drawing tool used last. The kernel runs single-threaded in
+the app.
+
 ## Layout
 
 | Path | Contents | License |
