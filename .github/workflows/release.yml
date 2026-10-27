@@ -70,7 +70,10 @@ jobs:
           done
           EXTRA=""
           # With a Developer ID certificate, drop the ad-hoc identity so electron-builder signs with it.
-          if [ -n "$CSC_LINK" ]; then npm pkg delete build.mac.identity; EXTRA="-c.mac.hardenedRuntime=true"; fi
+          if [ -n "$CSC_LINK" ]; then
+            npm pkg delete build.mac.identity
+            EXTRA="-c.mac.hardenedRuntime=true -c.mac.entitlements=build/entitlements.mac.plist -c.mac.entitlementsInherit=build/entitlements.mac.plist"
+          fi
           if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ]; then EXTRA="$EXTRA -c.mac.notarize=true"; fi
           pnpm --filter @leocad/web build
           pnpm --filter @leocad/mcp build
@@ -78,8 +81,15 @@ jobs:
           npx electron-builder --mac --publish never $EXTRA
 
       - name: Release notes
+        env:
+          SIGNED: ${{ secrets.MAC_CERT_P12_BASE64 != '' && secrets.APPLE_ID != '' }}
         run: |
           CHANGES=$(git log -12 --no-merges --format='- %s')
+          if [ "$SIGNED" = "true" ]; then
+            FIRST_START="3. Start leocad — it is signed and notarized by Apple."
+          else
+            FIRST_START='3. First start: if macOS says the app cannot be verified, open **System Settings → Privacy & Security** and click **Open Anyway** — or run once in Terminal: `xattr -dr com.apple.quarantine /Applications/leocad.app`'
+          fi
           cat > notes.md <<NOTES
           **leocad ${{ steps.version.outputs.version }}** for macOS — built from ${GITHUB_SHA::7}.
 
@@ -89,8 +99,7 @@ jobs:
           ### Install
           1. Download the \`.dmg\` for your Mac: **arm64** = Apple Silicon (M1–M4), **x64** = Intel.
           2. Open it and drag **leocad** into Applications.
-          3. First start: if macOS says the app can't be verified, open **System Settings → Privacy & Security** and click **Open Anyway** — or run once in Terminal:
-             \`xattr -dr com.apple.quarantine /Applications/leocad.app\`
+          ${FIRST_START}
 
           Projects are saved as \`.leocad\` files in a folder you choose on first start (default \`~/Documents/leocad\`).
           NOTES

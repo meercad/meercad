@@ -11,3 +11,9 @@ apps/desktop/release/
 apps/desktop/release-wip/
 apps/desktop/dist/
 *.tgz
+
+# Signing material never belongs in the repo
+*.p12
+*.cer
+*.p8
+*.mobileprovision
