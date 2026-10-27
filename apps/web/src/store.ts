@@ -70,7 +70,20 @@ interface State {
   pickingSketchPlane: boolean;
 }
 
-export const kernel = new KernelClient(new KernelWorker());
+/**
+ * `?threads` (or localStorage "meercad.threads" = "1", for the desktop app) tries the multi-threaded
+ * OCCT build. It needs SharedArrayBuffer, which browsers only grant on cross-origin isolated pages
+ * served over https or from localhost (not a plain-http LAN address).
+ */
+const wantThreads = new URLSearchParams(location.search).has("threads") || threadsStored();
+function threadsStored(): boolean {
+  try {
+    return localStorage.getItem("meercad.threads") === "1";
+  } catch {
+    return false;
+  }
+}
+export const kernel = new KernelClient(new KernelWorker({ name: wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel" }));
 // Touch screens are tablets: meshing is a large share of every rebuild there, and the screen is
 // held close but small, so looser tolerances (about half the triangles) are hard to see.
 if (matchMedia("(pointer: coarse)").matches) void kernel.configure(2);
@@ -346,7 +359,10 @@ function fillBodyProps(output: RebuildOutput): void {
 }
 
 kernel.ready.then(
-  ({ initMs }) => set({ kernel: { ready: true, info: `Kernel ready (${initMs.toFixed(0)} ms)` } }),
+  ({ initMs, threads }) => {
+    const mode = threads ? `, ${navigator.hardwareConcurrency} threads` : !wantThreads ? "" : crossOriginIsolated ? ", single thread: threaded build failed to start" : ", single thread: page not cross-origin isolated";
+    set({ kernel: { ready: true, info: `Kernel ready (${initMs.toFixed(0)} ms${mode})` } });
+  },
   (e: Error) => set({ kernel: { ready: false, info: "Kernel failed", error: e.message } }),
 );
 

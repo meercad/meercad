@@ -12,8 +12,11 @@ interface WorkerScope {
 /**
  * Worker entry. Requests are handled in order; while OCCT is busy newer rebuild requests replace
  * queued ones (latest wins), so dragging a value never builds a backlog.
+ *
+ * `wasm.occtThreads` asks for the multi-threaded OCCT build (the page must be cross-origin
+ * isolated); if it fails to start, the worker falls back to the single-threaded `wasm.occt`.
  */
-export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; planegcs?: string } = {}): void {
+export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occtThreads?: string; planegcs?: string } = {}): void {
   let oc: OC | null = null;
   let solver: SketchSolver | null = null;
   let session: KernelSession | null = null;
@@ -93,12 +96,19 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
   }
 
   const t0 = performance.now();
-  Promise.all([loadOcct(wasm.occt), SketchSolver.create(wasm.planegcs)]).then(
+  let threads = wasm.occtThreads !== undefined;
+  const occt = threads
+    ? loadOcct(wasm.occtThreads, true).catch(() => {
+        threads = false;
+        return loadOcct(wasm.occt);
+      })
+    : loadOcct(wasm.occt);
+  Promise.all([occt, SketchSolver.create(wasm.planegcs)]).then(
     ([loaded, s]) => {
       oc = loaded;
       solver = s;
       session = new KernelSession(loaded, s);
-      scope.postMessage({ type: "ready", initMs: performance.now() - t0 });
+      scope.postMessage({ type: "ready", initMs: performance.now() - t0, threads });
       void pump();
     },
     (err: unknown) => scope.postMessage({ type: "fatal", message: `failed to load geometry kernel: ${String(err)}` }),

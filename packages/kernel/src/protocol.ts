@@ -16,7 +16,7 @@ export type WorkerRequest =
   | { type: "measure"; seq: number; a: PickRef; b?: PickRef };
 
 export type WorkerResponse =
-  | { type: "ready"; initMs: number }
+  | { type: "ready"; initMs: number; threads: boolean }
   | { type: "fatal"; message: string }
   | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] }
   | { type: "exported"; seq: number; data: Uint8Array }

@@ -109,13 +109,14 @@ export function DebugHud() {
     };
   }, []);
   const previewing = useApp((s) => s.previewing);
+  const kernelInfo = useApp((s) => s.kernel.info);
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
   const { sec, press } = view;
   const lines = [
     `per second: moves ${sec.moves} (pen ${sec.pen}, touch ${sec.touch}) · frames ${sec.frames} · rebuilds ${sec.requests} → ${sec.results} done, ${sec.superseded} skipped · ${avg(sec.rebuildMs)} ms`,
     `${view.down ? "pressing" : "last press"}: moves ${press.moves} · frames ${press.frames} · rebuilds ${press.requests} → ${press.results} done, ${press.superseded} skipped · ${avg(press.rebuildMs)} ms${view.afterUpMs !== null ? ` · last result ${view.afterUpMs} ms after release` : ""} · ${previewing ? "preview" : "model"}`,
     `last results: ${recent.map((t) => `${Math.round(t.trip)} ms = to worker ${Math.round(t.toWorker)} + queued ${Math.round(t.queued)} + kernel ${Math.round(t.rebuild)} + mesh ${Math.round(t.mesh)} + back ${Math.round(t.back)} + scene ${Math.round(t.scene)}`).join(" · ") || "none"}`,
-    `viewport setScene: ${Math.round(getViewport()?.lastSceneMs ?? NaN)} ms`,
+    `viewport setScene: ${Math.round(getViewport()?.lastSceneMs ?? NaN)} ms · ${kernelInfo}`,
     `bench: ${bench || "not run"}`,
   ];
   return (

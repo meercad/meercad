@@ -27,10 +27,10 @@ export class KernelClient {
   /** When the latest message from the worker arrived (ms since the epoch). */
   private lastReceived = 0;
   private pending = new Map<number, Pending>();
-  readonly ready: Promise<{ initMs: number }>;
+  readonly ready: Promise<{ initMs: number; threads: boolean }>;
 
   constructor(private readonly worker: Worker) {
-    let onReady!: (v: { initMs: number }) => void;
+    let onReady!: (v: { initMs: number; threads: boolean }) => void;
     let onFatal!: (e: Error) => void;
     this.ready = new Promise((res, rej) => {
       onReady = res;
@@ -39,7 +39,7 @@ export class KernelClient {
     worker.addEventListener("message", (e: MessageEvent<WorkerResponse>) => {
       this.lastReceived = performance.timeOrigin + performance.now();
       const msg = e.data;
-      if (msg.type === "ready") return onReady({ initMs: msg.initMs });
+      if (msg.type === "ready") return onReady({ initMs: msg.initMs, threads: msg.threads });
       if (msg.type === "fatal") {
         const err = new Error(msg.message);
         onFatal(err);
