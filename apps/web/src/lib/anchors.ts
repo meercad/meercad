@@ -133,3 +133,33 @@ export function cylinderAnchor(m: BodyMesh, face: number, prefer: Vec3, radial: 
   if (Math.hypot(...dir) < 1e-6) dir = Math.abs(axis[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
   return { top: [c[0] + axis[0] * tMax, c[1] + axis[1] * tMax, c[2] + axis[2] * tMax], dir: norm(dir), radius: r };
 }
+
+/** Whether a face is (part of) a cylinder: every normal perpendicular to one axis, and curved. */
+export function isCylinderFace(m: BodyMesh, face: number): boolean {
+  const nrm: Vec3[] = [];
+  for (let g = 0; g < m.faceRanges.length; g += 3) {
+    if (m.faceRanges[g + 2] !== face) continue;
+    for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
+      const i = m.indices[t]! * 3;
+      nrm.push([m.normals[i]!, m.normals[i + 1]!, m.normals[i + 2]!]);
+    }
+  }
+  if (nrm.length < 6) return false;
+  let axis: Vec3 = [0, 0, 0];
+  let best = 0;
+  const step = Math.max(1, Math.floor(nrm.length / 24));
+  for (let i = 0; i < nrm.length; i += step) {
+    for (let j = i + step; j < nrm.length; j += step) {
+      const a = nrm[i]!, b = nrm[j]!;
+      const c: Vec3 = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+      const l = Math.hypot(...c);
+      if (l > best) {
+        best = l;
+        axis = c;
+      }
+    }
+  }
+  if (best < 0.2) return false;
+  axis = norm(axis);
+  return nrm.every((n) => Math.abs(n[0] * axis[0] + n[1] * axis[1] + n[2] * axis[2]) < 0.05);
+}

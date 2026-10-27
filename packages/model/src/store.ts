@@ -86,6 +86,7 @@ export function nextFeatureId(doc: LeocadDocument, op: Feature["op"]): string {
     fillet: "fi",
     chamfer: "ch",
     shell: "sh",
+    thread: "th",
     linear_pattern: "lp",
     circular_pattern: "cp",
     mirror: "mi",

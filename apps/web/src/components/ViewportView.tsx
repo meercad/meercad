@@ -260,6 +260,7 @@ export function ViewportView() {
         item("fillet", "Fillet face edges"),
         item("chamfer", "Chamfer face edges"),
         item("shell", "Shell (remove this face)"),
+        ...(!pick.normal ? [item("thread", "Thread this hole or shaft")] : []),
         "sep",
         { label: `Hide part ${pick.bodyId}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },

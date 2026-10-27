@@ -36,6 +36,7 @@ import { Arena } from "./arena.js";
 import { Body, listToArray } from "./body.js";
 import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
+import { threadBody } from "./thread.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
 
@@ -92,6 +93,10 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return edgeTreatment(f, ctx);
       case "shell":
         return shell(f, ctx);
+      case "thread": {
+        const { body } = threadBody(ctx.oc, ctx.arena, ctx.prev.bodies, f);
+        return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+      }
       case "linear_pattern":
       case "circular_pattern":
       case "mirror":

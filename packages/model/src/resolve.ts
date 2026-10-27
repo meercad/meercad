@@ -11,6 +11,7 @@ import type {
   RevolveFeature,
   ShellFeature,
   SketchConstraint,
+  ThreadFeature,
   SketchFeature,
   TransformFeature,
 } from "@leocad/schema";
@@ -27,6 +28,7 @@ export type ResolvedRevolve = R<RevolveFeature, "angle">;
 export type ResolvedFillet = R<FilletFeature, "radius">;
 export type ResolvedChamfer = R<ChamferFeature, "distance">;
 export type ResolvedShell = R<ShellFeature, "thickness">;
+export type ResolvedThread = R<ThreadFeature, "pitch" | "length" | "clearance">;
 export type ResolvedLinearPattern = R<LinearPatternFeature, "count" | "spacing" | "count2" | "spacing2">;
 export type ResolvedCircularPattern = R<CircularPatternFeature, "count" | "angle">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
@@ -39,6 +41,7 @@ export type ResolvedFeature =
   | ResolvedFillet
   | ResolvedChamfer
   | ResolvedShell
+  | ResolvedThread
   | ResolvedLinearPattern
   | ResolvedCircularPattern
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" }>;
@@ -77,6 +80,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return { ...f, distance: ev("distance", f.distance) };
     case "shell":
       return { ...f, thickness: ev("thickness", f.thickness) };
+    case "thread":
+      return { ...f, pitch: opt("pitch", f.pitch), length: opt("length", f.length), clearance: opt("clearance", f.clearance) };
     case "linear_pattern":
       return { ...f, count: count("count", f.count)!, spacing: ev("spacing", f.spacing), count2: count("count2", f.count2), spacing2: opt("spacing2", f.spacing2) };
     case "circular_pattern":
@@ -104,6 +109,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     fillet: ["radius"],
     chamfer: ["distance"],
     shell: ["thickness"],
+    thread: ["pitch", "length", "clearance"],
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
   };

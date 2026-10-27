@@ -374,6 +374,7 @@ function firstField(op: FeatureOp): string | null {
       fillet: "edges",
       chamfer: "edges",
       shell: "faces",
+      thread: "face",
       linear_pattern: "source",
       circular_pattern: "source",
       mirror: "source",

@@ -153,6 +153,9 @@ export function validateDocument(input: unknown): Validation<LeocadDocument> {
       case "chamfer":
         edgeSelectors(f.edges, at);
         break;
+      case "thread":
+        if ("select" in f.face && f.face.of !== undefined) earlier(f.face.of, at, "selector");
+        break;
       case "linear_pattern":
       case "circular_pattern":
       case "mirror": {

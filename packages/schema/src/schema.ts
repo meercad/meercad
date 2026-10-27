@@ -132,6 +132,11 @@ export const definitions: Record<string, Json> = {
     fillet: feature("fillet", { edges: ref("edges"), radius: ref("expr") }, ["edges", "radius"]),
     chamfer: feature("chamfer", { edges: ref("edges"), distance: ref("expr") }, ["edges", "distance"]),
     shell: feature("shell", { faces: arr(ref("faceSelector")), thickness: ref("expr"), outward: bool }, ["faces", "thickness"]),
+    thread: feature(
+      "thread",
+      { face: ref("faceSelector"), size: { type: "string", pattern: "^M\\d+(\\.\\d+)?$", maxLength: 8 }, pitch: ref("expr"), length: ref("expr"), clearance: ref("expr"), leftHanded: bool },
+      ["face"],
+    ),
     linear_pattern: feature(
       "linear_pattern",
       {

@@ -16,7 +16,7 @@
   <a href="#let-claude-drive-it-mcp">MCP</a>
 </p>
 
-Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/patterns/mirror/booleans, direct
+Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/ISO threads/patterns/mirror/booleans, direct
 push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model for you.
 
 ## Install (macOS)

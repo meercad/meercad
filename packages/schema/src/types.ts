@@ -158,6 +158,24 @@ export interface ShellFeature extends FeatureBase {
   outward?: boolean;
 }
 
+/**
+ * ISO metric thread on a cylindrical face: a hole gets an internal thread, a shaft an external one.
+ * The thread is modelled (real geometry), sized to the standard whatever diameter was drawn.
+ */
+export interface ThreadFeature extends FeatureBase {
+  op: "thread";
+  face: FaceSelector;
+  /** Designation such as "M8"; omitted = picked from the cylinder's diameter. */
+  size?: string;
+  /** Pitch in mm; omitted = the standard coarse pitch of the size. */
+  pitch?: Expr;
+  /** Threaded length from the open end; omitted = the whole face. */
+  length?: Expr;
+  /** Extra room per side for printed fits: internal threads grow, external ones shrink. */
+  clearance?: Expr;
+  leftHanded?: boolean;
+}
+
 /** What a pattern or mirror copies: the geometry added/removed by features, or whole bodies. */
 export type PatternSource = { features: string[] } | { bodies: string[] };
 
@@ -226,6 +244,7 @@ export type Feature =
   | FilletFeature
   | ChamferFeature
   | ShellFeature
+  | ThreadFeature
   | LinearPatternFeature
   | CircularPatternFeature
   | MirrorFeature

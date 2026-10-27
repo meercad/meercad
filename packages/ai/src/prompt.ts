@@ -58,6 +58,7 @@ Features
 - extrude {profile, extent:"blind"|"symmetric"|"two_sided"|"through_all", distance, distance2?, flip?, mode:"new_body"|"join"|"cut"|"intersect", targets?}. Direction = plane normal (XY → +Z, XZ → -Y, YZ → +X); for sketches on a face the normal points out of the material, so cuts into a face need flip:true (or through_all with flip).
 - revolve {profile, axis:{ref:"origin.X|Y|Z"} | {line:"sk1.l3"} | {edge:<edge selector>}, angle, symmetric?, mode}
 - fillet {edges, radius}; chamfer {edges, distance}; shell {faces:[face selectors to remove], thickness, outward?}
+- thread {face:<cylindrical face selector>, size?:"M8", pitch?, length?, clearance?, leftHanded?}: modelled ISO metric thread; a hole gets an internal, a shaft an external thread. Without size it is picked from the diameter (holes may be drawn at the nominal or the tap drill size). length runs from the open end (default: whole face); clearance is per side for 3D-printed fits (0.1–0.2).
 - linear_pattern {source:{features:[extrude/revolve ids]}|{bodies:[ids]}, direction:<axis>, count, spacing, direction2?, count2?, spacing2?}; circular_pattern {source, axis, count, angle? (total, default 360)}; mirror {source, plane:<plane spec>}
 - boolean {operation:"union"|"subtract"|"intersect", target:<body id>, tools:[body ids], keepTools?}; plane {base:<plane spec>, offset, angle?}
 - transform {bodies:[body ids], translate?:[x,y,z], rotate?:{axis, angle}, copy?}; delete {bodies:[body ids]} removes parts from that point on (prefer this over deleting the features that made them)
@@ -65,7 +66,7 @@ Features
 
 Face tags (how geometry is referenced; never use indices)
 - extrude ex1 from sketch sk1: ex1.start_cap (on the sketch plane), ex1.end_cap, ex1.side[sk1.<curve id>] for each profile curve (split curves get ":0", ":1" suffixes). Push/pull sides: ex1.side[<tag of the neighbouring face>].
-- revolve rv1: rv1.side[sk1.<curve>], rv1.start_cap/end_cap when not 360°. fillet fi1: fi1.round[<tagA>|<tagB>]; chamfer: ch1.bevel[...]; shell sh1: sh1.inner[<tag>]. Pattern copies append "@<pattern id>.<n>". Faces merged by booleans carry all tags.
+- revolve rv1: rv1.side[sk1.<curve>], rv1.start_cap/end_cap when not 360°. fillet fi1: fi1.round[<tagA>|<tagB>]; chamfer: ch1.bevel[...]; shell sh1: sh1.inner[<tag>]; thread th1: th1.thread. Pattern copies append "@<pattern id>.<n>". Faces merged by booleans carry all tags.
 - Face selector: {face:"ex1.end_cap"} (add near:[x,y,z] if several faces share the tag) or {select:"faces", where:{planar, normal:"+Z", tag}, pick:"largest"}.
 - Edge selector: {edge:["ex1.end_cap","ex1.side[sk1.l3]"]} = the edge between two faces; {select:"edges", of:"ex1", where:{face:"end_cap"}} = all edges around a face ("top edges"); {select:"edges", of:"ex1"} = all edges of ex1; a tag ending in [*] matches by prefix, e.g. ["ex1.end_cap","ex1.side[*]"].
 

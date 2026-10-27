@@ -2,14 +2,14 @@
  * Direct manipulation: drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
-import { ArrowUpFromLine, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
+import { ArrowUpFromLine, Bolt, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { evaluate, nextFeatureId } from "@leocad/model";
 import { asArray, type EdgeSelector, type Expr, type Feature } from "@leocad/schema";
 import type { Handle, Pick, Viewport } from "@leocad/viewport";
-import { cylinderAnchor, edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
+import { cylinderAnchor, isCylinderFace, edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
 import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
 import { InlineInput } from "./InlineValues";
@@ -345,6 +345,8 @@ function QuickActions({ selection }: { selection: Pick[] }) {
     actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: keyFor("fillet"), run: () => startFeature("fillet") });
     actions.push({ icon: <Triangle />, label: "Chamfer", kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
     actions.push({ icon: <Shell />, label: "Shell", kbd: keyFor("shell"), run: () => startFeature("shell") });
+    const lastMesh = last.kind === "face" ? meshes.find((m) => m.bodyId === last.bodyId) : undefined;
+    if (selection.length === 1 && last.kind === "face" && lastMesh && isCylinderFace(lastMesh, last.face)) actions.push({ icon: <Bolt />, label: "Thread", kbd: keyFor("thread"), run: () => startFeature("thread") });
   } else if (kinds.size === 1 && kinds.has("edge")) {
     actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: keyFor("fillet"), run: () => startFeature("fillet") });
     actions.push({ icon: <Triangle />, label: "Chamfer", kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });

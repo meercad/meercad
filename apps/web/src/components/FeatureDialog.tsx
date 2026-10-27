@@ -2,6 +2,7 @@ import { ArrowLeftRight, Check, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@leocad/schema";
 import type { Pick, PickKind } from "@leocad/viewport";
+import { METRIC_THREADS, parseMetric } from "@leocad/model";
 import { FEATURES, featureName } from "../lib/features";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
@@ -23,6 +24,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     direction2: ["sketch_curve", "edge"],
     edges: ["edge", "face"],
     faces: ["face"],
+    face: ["face"],
     targets: ["face"],
     target: ["face"],
     tools: ["face"],
@@ -86,6 +88,11 @@ function handlePick(p: Pick, d: DialogState): void {
       case "faces": {
         const sel = faceSelectorForPick(p, meshes);
         if (sel) (g as Of<"shell">).faces = toggle((g as Of<"shell">).faces, sel);
+        break;
+      }
+      case "face": {
+        const sel = faceSelectorForPick(p, meshes);
+        if (sel) (g as Of<"thread">).face = sel;
         break;
       }
       case "targets": {
@@ -309,6 +316,64 @@ function SourceField({ value, onChange }: { value: PatternSource; onChange: (s: 
   );
 }
 
+/** Thread: face, ISO size and pitch, length, printing clearance, hand. */
+function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string, unknown>) => void }) {
+  const std = f.size ? METRIC_THREADS.find((t) => t.d === parseMetric(f.size!)) : undefined;
+  const pitches = std ? [std.pitch, ...std.fine] : [];
+  const custom = f.pitch !== undefined && !pitches.includes(f.pitch as number);
+  const hasFace = !("face" in f.face) || !!f.face.face;
+  return (
+    <>
+      <Field label="Hole wall or shaft">
+        <SelBox field="face" items={hasFace ? [describeFaceSelector(f.face)] : []} placeholder="Pick a round face" />
+      </Field>
+      <div className="row">
+        <Field label="Size">
+          <select className="field" value={f.size ?? ""} onChange={(e) => set({ size: e.target.value || undefined, pitch: undefined })}>
+            <option value="">Auto (from diameter)</option>
+            {METRIC_THREADS.map((t) => (
+              <option key={t.size} value={t.size}>
+                {t.size}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Pitch">
+          <select className="field" value={custom ? "custom" : f.pitch === undefined ? "" : String(f.pitch)} onChange={(e) => set({ pitch: e.target.value === "" ? undefined : e.target.value === "custom" ? (std?.pitch ?? 1) : Number(e.target.value) })}>
+            <option value="">{std ? `Coarse ${std.pitch} mm` : "Standard"}</option>
+            {pitches.slice(1).map((p) => (
+              <option key={p} value={p}>
+                Fine {p} mm
+              </option>
+            ))}
+            <option value="custom">Custom…</option>
+          </select>
+        </Field>
+      </div>
+      {custom ? (
+        <Field label="Custom pitch">
+          <ExprInput value={f.pitch} autoFocus onCommit={(pitch) => set({ pitch })} />
+        </Field>
+      ) : null}
+      <label className="checkbox">
+        <input type="checkbox" checked={f.length === undefined} onChange={(e) => set({ length: e.target.checked ? undefined : 10 })} /> Thread the whole face
+      </label>
+      {f.length !== undefined ? (
+        <Field label="Length from the open end">
+          <ExprInput value={f.length} onCommit={(length) => set({ length })} onLive={(length) => set({ length })} />
+        </Field>
+      ) : null}
+      <Field label="Clearance per side (3D printing)">
+        <ExprInput value={f.clearance} placeholder="0" onCommit={(clearance) => set({ clearance: clearance === 0 ? undefined : clearance })} />
+      </Field>
+      <label className="checkbox">
+        <input type="checkbox" checked={!!f.leftHanded} onChange={(e) => set({ leftHanded: e.target.checked || undefined })} /> Left-hand thread
+      </label>
+      <p className="muted small">Holes get an internal thread, shafts an external one. Draw holes at the nominal size or the tap drill size; about 0.1–0.2 mm clearance helps printed threads fit.</p>
+    </>
+  );
+}
+
 function Body({ d }: { d: DialogState }) {
   const f = d.feature;
   const set = (patch: Record<string, unknown>) => updateDraft(patch as Partial<Feature>);
@@ -423,6 +488,8 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "thread":
+      return <ThreadFields f={f} set={set} />;
     case "linear_pattern":
       return (
         <>
