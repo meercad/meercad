@@ -1,7 +1,7 @@
 # Multi-core geometry kernel: findings
 
 Status: prototype on branch `claude/kernel-multicore` (based on `claude/gallant-swartz-2ebb6d`), behind a flag.
-Measured 27.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores). No iPad numbers yet.
+Measured 27.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores) and on the user's iPad (Safari, iPadOS 27, over an https tunnel).
 
 ## Summary
 
@@ -13,19 +13,22 @@ Measured 27.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores). No
   parallel as soon as threads exist, with no code change on our side. Booleans get faster
   (about 1.8×) only when one boolean has many intersecting tools. On the example parts the kernel time
   (feature evaluation) stays the same: fillets, chamfers, shells and extrudes are single-threaded in OCCT.
-- **Expected effect on the iPad:** mesh 0.39 s → roughly 0.2–0.25 s, kernel 0.43 s unchanged. That makes
-  each rebuild about 20 % faster, if Safari on iPadOS gives the page several threads and lets it reserve
-  the shared memory (both still unverified, see risks).
+- **Measured on the iPad:** threads work (8 threads, the threaded build starts in 449 ms once cached).
+  On the user's part, mesh drops from about 10 to 6–8 ms and a whole rebuild from about 66 to 54 ms
+  (median). That is about 10–20 %, close to the run-to-run noise. The large speed-up the user noticed
+  compared with the earlier 0.43 s kernel + 0.39 s mesh comes from the base branch and the production
+  build, not from threads (see 2a).
 - **Incremental meshing (keeping the triangulation of unchanged faces)** saves 30–55 % of meshing time
   when the edited feature is the last one, and nothing when it is an earlier one. It works with or
   without threads, and has no platform requirements.
 
-**Recommendation:** ship the threaded build behind the flag and measure it on the iPad first. The code
-cost is small and the fallback is automatic. If the iPad confirms the gain, turn it on by default
-wherever the page is cross-origin isolated. Do the per-face mesh cache after that, as a separate step:
-it only helps when you edit the last feature, which is the common case while dragging a value.
-Neither change makes the kernel itself faster. For that, the next lever is to avoid rebuilding at all
-while dragging (preview stand-ins, as the push/pull stand-in already does).
+**Recommendation:** turn threads on by default wherever the page is cross-origin isolated. The iPad
+confirms a real but small gain (about 10–20 % per rebuild). The code cost is small, startup with a cached
+wasm is the same, and the fallback is automatic. Don't expect more from it: on the iPad, meshing is now
+only about 10 ms of a 65 ms rebuild. For the same reason, the per-face mesh cache is low priority. The time
+that is left is feature evaluation, which neither change touches. The next lever there is to avoid
+rebuilding at all while dragging (preview stand-ins, as the push/pull stand-in already does), or to
+profile which features dominate.
 
 ## 1. The multi-threaded build
 
@@ -89,6 +92,25 @@ Bench only re-evaluates the last feature, so on these small examples the kernel 
 meshing dominates. The mesh column also includes the copies out of wasm memory, `repairNormals` and the
 summary, which stay single-threaded. That is why the browser gain (1.6–1.9×) is smaller than in Node.
 
+### 2a. iPad (Safari, iPadOS 27, 8 threads)
+
+Same part, same feature (`ex6.distance`), production build over an https tunnel, `?debug` Bench, ms
+(round trip/kernel/mesh):
+
+| | runs | median |
+|---|---|---|
+| single | 66/55/10 · 97/77/16 · 72/61/10 · 60/48/11 · 51/41/9 | 66/55/10 |
+| threads | 54/44/9 · 80/68/10 · 70/61/8 · 50/43/6 · 46/38/6 | 54/44/8 |
+
+- Startup: single 405 ms, threads 449 ms with the wasm cached. The first visit with threads took 9.1 s,
+  almost all of it downloading the second 7 MB wasm through the tunnel (a cold load of the single
+  build costs the same).
+- Without threads, this part already rebuilds in about 65 ms. Earlier the iPad needed 0.43 s kernel +
+  0.39 s mesh. That improvement comes from the base branch (looser touch meshing, volume/area after
+  display) and from testing a production build instead of the dev server.
+- Feature evaluation dominates now, and threads do not touch it. The kernel column moving from 55 to
+  44 ms is mostly noise and warm-up; both runs get faster over the five rebuilds.
+
 ## 3. What the page needs
 
 SharedArrayBuffer only exists when `crossOriginIsolated` is true. That needs COOP `same-origin` +
@@ -144,11 +166,12 @@ arrays plus the new ones. Edge polylines would get the same treatment per edge.
 
 ## 5. Risks and open questions (iPad)
 
-- **`navigator.hardwareConcurrency` in iPadOS Safari** decides the pool size. WebKit caps it at 8 on
-  macOS; what an iPad reports needs checking on the device (the HUD shows the thread count).
-- **Reserving 4 GB of shared memory** may fail on iOS. If the threaded build fails to start, the worker
-  now falls back to the single build ("threaded build failed to start" in the HUD) instead of
-  reporting a fatal kernel error.
+- **Pool size:** iPadOS Safari reports 8 (`navigator.hardwareConcurrency`), the same cap as on macOS.
+- **Shared memory:** reserving 4 GB worked on the user's iPad. If the threaded build fails to start
+  elsewhere, the worker falls back to the single build ("threaded build failed to start" in the HUD)
+  instead of reporting a fatal kernel error.
+- **Download:** turning threads on by default means a first-time visitor downloads the multi wasm
+  instead of the single one (same size). Switching an existing user costs one extra 7 MB download.
 - **Nested workers** (pthreads inside the kernel worker) work in Safari 15.5+ and in all current Chromium versions.
 - **Dev server + WebKit:** under `vite dev`, WebKit blocks the pthread worker (COEP on a Vite dev-only
   module). Use the production build (`vite preview`) to test threads in Safari.
