@@ -1,6 +1,6 @@
 # Multi-core geometry kernel: findings
 
-Status: prototype on branch `claude/kernel-multicore` (based on `claude/gallant-swartz-2ebb6d`), behind a flag.
+Status: on branch `claude/kernel-multicore` (based on `claude/gallant-swartz-2ebb6d`). Threads are on by default wherever the page is cross-origin isolated.
 Measured 27.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores) and on the user's iPad (Safari, iPadOS 27, over an https tunnel).
 
 ## Summary
@@ -22,7 +22,7 @@ Measured 27.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores) and
   when the edited feature is the last one, and nothing when it is an earlier one. It works with or
   without threads, and has no platform requirements.
 
-**Recommendation:** turn threads on by default wherever the page is cross-origin isolated. The iPad
+**Recommendation (done on this branch):** threads on by default wherever the page is cross-origin isolated. The iPad
 confirms a real but small gain (about 10–20 % per rebuild). The code cost is small, startup with a cached
 wasm is the same, and the fallback is automatic. Don't expect more from it: on the iPad, meshing is now
 only about 10 ms of a 65 ms rebuild. For the same reason, the per-face mesh cache is low priority. The time
@@ -65,7 +65,7 @@ Node (same wasm, `tests/bench/threads.ts`), median of 5, ms. "extract" is our cu
   `BRepMesh_IncrementalMesh(shape, lin, false, ang, true)` ourselves does not help: the extractor
   re-meshes anyway (see 4).
 - **Booleans:** `BOPAlgo_Options.SetParallelMode(true)` is a global default that also applies to the
-  `new BRepAlgoAPI_Cut(a, b)` constructor form we use. The prototype sets it when the threaded build
+  `new BRepAlgoAPI_Cut(a, b)` constructor form we use. The kernel sets it when the threaded build
   loads. Plate cut by an N×N grid of cylinders (`tests/bench/boolean.ts`):
 
   | holes | single | multi, serial | multi, parallel |
@@ -116,17 +116,15 @@ Same part, same feature (`ex6.distance`), production build over an https tunnel,
 SharedArrayBuffer only exists when `crossOriginIsolated` is true. That needs COOP `same-origin` +
 COEP `require-corp`, which we already send, **and** a secure context (https, or `localhost`/`127.0.0.1`).
 
-- **iPad over the LAN (`http://192.168.x.x:4173`):** not a secure context, so no threads. The prototype
+- **iPad over the LAN (`http://192.168.x.x:4173`):** not a secure context, so no threads. The app
   then falls back to the single build and the HUD says "single thread: page not cross-origin isolated".
   To test threads on the iPad, serve over https: for example `tailscale serve` (real certificate, no
   setup on the iPad), a Cloudflare tunnel, or a local CA (mkcert) whose root is installed and trusted on
   the iPad. A plain self-signed certificate that you click through may not be enough for workers (untested).
-- **Production web (Cloudflare Pages, `_headers`):** https plus the headers already set. Works once the flag
-  defaults to on.
+- **Production web (Cloudflare Pages, `_headers`):** https plus the headers already set, so threads are on.
 - **Electron:** `app://` is registered as `secure: true` and `main.ts` sets COOP/COEP/CORP, so the desktop
-  app is cross-origin isolated already. The flag is `?threads`, which desktop users can't type, so the
-  prototype also reads `localStorage["meercad.threads"] = "1"` (set it in DevTools, then reload).
-  Chromium has no 8-thread cap, so desktop gets one thread per core.
+  app is cross-origin isolated and uses threads. Chromium has no 8-thread cap, so desktop gets one
+  thread per core.
 - **Capacitor iOS (WKWebView):** unverified. Capacitor serves the app from `capacitor://localhost`
   through a scheme handler, which does not send COOP/COEP by default. The handler (or a small plugin)
   would have to add them, and whether WKWebView then counts the custom scheme as a cross-origin isolated
@@ -175,18 +173,18 @@ arrays plus the new ones. Edge polylines would get the same treatment per edge.
 - **Nested workers** (pthreads inside the kernel worker) work in Safari 15.5+ and in all current Chromium versions.
 - **Dev server + WebKit:** under `vite dev`, WebKit blocks the pthread worker (COEP on a Vite dev-only
   module). Use the production build (`vite preview`) to test threads in Safari.
-- **Separate, existing issue:** `vite preview` answers revalidations with `304` without COOP/COEP headers.
-  WebKit then refuses to load the kernel worker after a reload ("Worker load was blocked by
-  Cross-Origin-Embedder-Policy"), with or without threads. This probably also affects `pnpm ipad` reloads
-  in Safari.
+- **Fixed: reload in Safari.** `vite preview` answered revalidations with a `304` that had no
+  COOP/COEP headers, and WebKit then refused to load the kernel worker after a reload ("Worker load was
+  blocked by Cross-Origin-Embedder-Policy"), with or without threads. A small plugin in
+  `apps/web/vite.config.ts` now sets the headers on every dev and preview response.
 
-## Prototype
+## Implementation
 
 - `loadOcct(wasmUrl, threads)` loads the multi build and turns on BOP parallel mode (`packages/kernel/src/occt.ts`).
 - The kernel worker takes `wasm.occtThreads`, falls back to the single build if that fails, and reports
   `threads` in its `ready` message.
-- The web app enables it with `?threads` or `localStorage["meercad.threads"] = "1"`, but only on a
-  cross-origin isolated page. The `?debug` HUD shows "Kernel ready (… ms, N threads)" or why it stayed
-  single-threaded.
+- The web app uses it whenever the page is cross-origin isolated. `?threads=0` or
+  `localStorage["meercad.threads"] = "0"` turns it off. The `?debug` HUD shows "Kernel ready (… ms, N threads)"
+  or why it stayed single-threaded (turned off, page not isolated, threaded build failed to start).
 - `tests/acceptance/threads.test.ts` checks that the multi build rebuilds the examples to the same bodies
   (faces, edges, volume, area). Benchmarks are in `tests/bench/` (run with `../node_modules/.bin/jiti` from `tests/`).

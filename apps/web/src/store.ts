@@ -71,14 +71,14 @@ interface State {
 }
 
 /**
- * `?threads` (or localStorage "meercad.threads" = "1", for the desktop app) tries the multi-threaded
- * OCCT build. It needs SharedArrayBuffer, which browsers only grant on cross-origin isolated pages
- * served over https or from localhost (not a plain-http LAN address).
+ * The kernel uses the multi-threaded OCCT build (parallel meshing and booleans) whenever the page is
+ * cross-origin isolated: SharedArrayBuffer only exists there, i.e. over https or from localhost, not
+ * on a plain-http LAN address. `?threads=0` or localStorage "meercad.threads" = "0" turns it off.
  */
-const wantThreads = new URLSearchParams(location.search).has("threads") || threadsStored();
-function threadsStored(): boolean {
+const wantThreads = new URLSearchParams(location.search).get("threads") !== "0" && !threadsOff();
+function threadsOff(): boolean {
   try {
-    return localStorage.getItem("meercad.threads") === "1";
+    return localStorage.getItem("meercad.threads") === "0";
   } catch {
     return false;
   }
@@ -360,7 +360,7 @@ function fillBodyProps(output: RebuildOutput): void {
 
 kernel.ready.then(
   ({ initMs, threads }) => {
-    const mode = threads ? `, ${navigator.hardwareConcurrency} threads` : !wantThreads ? "" : crossOriginIsolated ? ", single thread: threaded build failed to start" : ", single thread: page not cross-origin isolated";
+    const mode = threads ? `, ${navigator.hardwareConcurrency} threads` : !wantThreads ? ", single thread: turned off" : crossOriginIsolated ? ", single thread: threaded build failed to start" : ", single thread: page not cross-origin isolated";
     set({ kernel: { ready: true, info: `Kernel ready (${initMs.toFixed(0)} ms${mode})` } });
   },
   (e: Error) => set({ kernel: { ready: false, info: "Kernel failed", error: e.message } }),
