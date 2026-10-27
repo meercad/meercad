@@ -754,7 +754,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (tool === "project") return;
       const s: Snap = tool === "select" || tool === "dimension" || tool === "trim" ? { pos: p } : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
       ts.cursor = s.pos;
-      ts.snap = s;
+      // Tools that place points show where the next one will land.
+      ts.snap = POINT_TOOLS.has(tool) ? s : null;
       if (tool === "line" && ts.points.length) {
         const a = ts.points[0]!.pos;
         const len = Math.hypot(s.pos[0] - a[0], s.pos[1] - a[1]);
@@ -964,6 +965,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       el.removeEventListener("pointerleave", onLeave);
     };
   });
+
+  // Crosshair while drawing, so the dot (not the arrow tip) is what you aim with.
+  useEffect(() => {
+    viewport.canvas.style.cursor = POINT_TOOLS.has(ui.tool) ? "crosshair" : "";
+    return () => {
+      viewport.canvas.style.cursor = "";
+    };
+  }, [viewport, ui.tool]);
 
   // Reset in-progress tool state when switching tools.
   useEffect(() => {
@@ -1188,6 +1197,8 @@ function DimInput({ value, onDone }: { value: Expr; onDone: (v: Expr | null) => 
 
 // ---------------------------------------------------------------- helpers
 
+/** Tools whose clicks place points (they show a dot where the next point lands). */
+const POINT_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "polygon", "point"]);
 /** Tools that draw on press-drag-release as well as on two clicks. */
 const DRAG_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "polygon"]);
 /** Values that can be typed while drawing (start typing a number, Tab moves to the next field). */
@@ -1415,6 +1426,15 @@ function snapObjects(sn: Snap, unit: number): THREE.Object3D[] {
     out.push(o);
   };
   for (const [a, b] of sn.guides ?? []) add([a, b], "line", COLORS.guide, true);
+  // The landing point itself: a dot with a light halo so it reads on the grid, the model and lines.
+  const onGeometry = sn.kind && sn.kind !== "grid";
+  for (const [size, color] of [[13, 0xffffff], [8, onGeometry ? COLORS.snap : COLORS.preview]] as const) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([x, y, 0], 3));
+    const dot = new THREE.Points(g, new THREE.PointsMaterial({ size, color, sizeAttenuation: false, depthTest: false, map: dotTexture(), transparent: true, alphaTest: 0.5 }));
+    dot.renderOrder = size === 13 ? 46 : 47;
+    out.push(dot);
+  }
   switch (sn.kind) {
     case "point":
       add([[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]], "loop", COLORS.snap);
@@ -1428,9 +1448,6 @@ function snapObjects(sn: Snap, unit: number): THREE.Object3D[] {
     case "curve":
     case "align":
       add([[x, y - r], [x + r, y], [x, y + r], [x - r, y]], "loop", COLORS.snap);
-      break;
-    case "grid":
-      add([[x - r * 0.7, y], [x + r * 0.7, y], [x, y - r * 0.7], [x, y + r * 0.7]], "segments", COLORS.guide);
       break;
   }
   return out;
