@@ -3,7 +3,7 @@
  * until a hardware keyboard shows up: a key pressed outside a text field, a modifier or navigation
  * key, or a mouse or trackpad (which on an iPad comes with a keyboard case). Remembered per device.
  */
-const KEY = "leocad.keyboard";
+const KEY = "meercad.keyboard";
 const NAV_KEYS = new Set(["Escape", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
 export function installKeyboardDetection(): void {
