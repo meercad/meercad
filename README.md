@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="../../releases/latest">Download for macOS</a> ·
+  <a href="#install-macos">Install guide</a> ·
   <a href="docs/FORMAT.md">File format</a> ·
   <a href="#let-claude-drive-it-mcp">MCP</a>
 </p>
@@ -18,12 +19,21 @@
 Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/patterns/mirror/booleans, direct
 push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model for you.
 
-## Download (macOS)
+## Install (macOS)
 
-Grab the latest `.dmg` from the [Releases](../../releases) page (`arm64` = Apple Silicon, `x64` = Intel),
-drag **leocad** to Applications. Builds are not notarized yet: on first start choose
-**System Settings → Privacy & Security → Open Anyway**, or run
-`xattr -dr com.apple.quarantine /Applications/leocad.app`.
+1. Download the latest `.dmg` from the [Releases](../../releases) page (`arm64` = Apple Silicon, `x64` = Intel).
+2. Open it and drag **leocad** into **Applications**.
+3. Remove the quarantine flag once, then start leocad:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/leocad.app
+   ```
+
+> [!IMPORTANT]
+> leocad is not notarized by Apple yet. Without step 3, macOS refuses to open it ("leocad cannot be
+> opened" / "is damaged"). Alternatively, try to open it once, then choose
+> **System Settings → Privacy & Security → Open Anyway**. Only needed after the first download —
+> in-app updates keep working without it.
 
 Every push to `main` publishes a fresh build as the **latest** pre-release; tags `v*` create versioned releases.
 The app checks for new releases at start and hourly and offers **Update now** — it downloads the new
