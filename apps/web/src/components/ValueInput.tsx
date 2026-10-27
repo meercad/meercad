@@ -8,6 +8,7 @@ import { evaluate } from "@leocad/model";
 import type { Expr } from "@leocad/schema";
 import { apply, useApp } from "../store";
 import { parseExpr } from "./ExprInput";
+import { GROUP_LABEL, GROUP_ORDER, variableGroup } from "../lib/variables";
 
 export type ValueUnit = "mm" | "deg" | "";
 
@@ -57,11 +58,9 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
   const names = Object.keys(params)
     .filter((n) => (byName ? n.toLowerCase().includes(typed.toLowerCase()) : true))
     .sort((a, b) => (target === null || byName ? a.localeCompare(b) : Math.abs((values[a] ?? Infinity) - target) - Math.abs((values[b] ?? Infinity) - target)));
-  // Your own variables first, then the automatic ones, like in the Variables panel.
-  const isAuto = (n: string) => (auto ?? []).includes(n);
+  // Grouped like the Variables panel: your own, calculated, automatic.
   const options = [
-    ...names.filter((n) => !isAuto(n)).map((n) => ({ kind: "param" as const, name: n, group: "Your variables" })),
-    ...names.filter(isAuto).map((n) => ({ kind: "param" as const, name: n, group: "Automatic" })),
+    ...GROUP_ORDER.flatMap((g) => names.filter((n) => variableGroup(n, params, auto) === g).map((n) => ({ kind: "param" as const, name: n, group: GROUP_LABEL[g] }))),
     { kind: "new" as const, name: "", group: "" },
   ];
 

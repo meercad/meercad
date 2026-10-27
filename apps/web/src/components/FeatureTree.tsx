@@ -9,6 +9,7 @@ import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, useApp } from "../store";
 import { ExprInput, parseExpr } from "./ExprInput";
 import { freeParamName, withUnit, type ValueUnit } from "./ValueInput";
+import { variableGroup } from "../lib/variables";
 import { exportSketch } from "./io";
 import { showMenu } from "./Menu";
 
@@ -504,12 +505,15 @@ function Params() {
   const [open, toggle] = useSection("variables");
   const [ownOpen, toggleOwn] = useSection("variables.own");
   const [autoOpen, toggleAuto] = useSection("variables.auto", false);
+  const [calcOpen, toggleCalc] = useSection("variables.calc", false);
   const [query, setQuery] = useState("");
   const used = (name: string) => JSON.stringify(doc.features).match(new RegExp(`\\b${name}\\b`)) || Object.values(params).some((e) => referencedNames(e).includes(name));
   const q = query.trim().toLowerCase();
   const matches = (n: string) => !q || n.toLowerCase().includes(q) || String(params[n]).toLowerCase().includes(q);
-  const own = Object.keys(params).filter((n) => !auto.includes(n) && matches(n));
-  const automatic = Object.keys(params).filter((n) => auto.includes(n) && matches(n));
+  const groupOf = (n: string) => variableGroup(n, params, auto);
+  const own = Object.keys(params).filter((n) => groupOf(n) === "own" && matches(n));
+  const calculated = Object.keys(params).filter((n) => groupOf(n) === "calculated");
+  const automatic = Object.keys(params).filter((n) => groupOf(n) === "auto");
   const total = Object.keys(params).length;
 
   const row = (name: string, isAuto: boolean) => (
@@ -609,13 +613,22 @@ function Params() {
             </div>
           ) : null}
           {!own.length && !adding && (ownOpen || q) ? <div className="empty" style={{ padding: "2px 4px" }}>{q ? "No match" : <>Named values like <span className="mono">wall = 2 mm</span> can drive any dimension.</>}</div> : null}
-          {auto.length ? (
+          {calculated.length ? (
+            <>
+              <SectionHead open={calcOpen || !!q} onToggle={toggleCalc} sub>
+                <span title="Formulas of other variables; they follow automatically">Calculated</span> <span className="count">{calculated.filter(matches).length}</span>
+              </SectionHead>
+              {calcOpen || q ? calculated.filter(matches).map((n) => row(n, auto.includes(n))) : null}
+              {(calcOpen || q) && !calculated.some(matches) ? <div className="empty" style={{ padding: "2px 4px" }}>No match</div> : null}
+            </>
+          ) : null}
+          {automatic.length ? (
             <>
               <SectionHead open={autoOpen || !!q} onToggle={toggleAuto} sub>
-                <span title="Created by leocad (linking, new variable from a value) or by an assistant">Automatic</span> <span className="count">{automatic.length}</span>
+                <span title="Created by leocad (linking, new variable from a value) or by an assistant">Automatic</span> <span className="count">{automatic.filter(matches).length}</span>
               </SectionHead>
-              {autoOpen || q ? automatic.map((n) => row(n, true)) : null}
-              {(autoOpen || q) && !automatic.length ? <div className="empty" style={{ padding: "2px 4px" }}>No match</div> : null}
+              {autoOpen || q ? automatic.filter(matches).map((n) => row(n, true)) : null}
+              {(autoOpen || q) && !automatic.some(matches) ? <div className="empty" style={{ padding: "2px 4px" }}>No match</div> : null}
             </>
           ) : null}
         </div>

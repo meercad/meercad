@@ -141,6 +141,15 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const showValues = usePrefs((s) => s.showValues);
   const selection = useApp((s) => s.selection);
   useEffect(() => viewport.onChange(tick), [viewport]);
+  // Drag arrows are set up after this renders (by the manipulators); lay out again once they change.
+  const handleSig = useRef("");
+  useEffect(() => {
+    const sig = viewport.handles.map((h) => h.id).join();
+    if (sig !== handleSig.current) {
+      handleSig.current = sig;
+      tick();
+    }
+  });
   if (!out || sketchId || dialog || !selected || !showValues) return null;
   const f = doc.features.find((x) => x.id === selected);
   if (!f) return null;
@@ -159,9 +168,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   }
   return (
     <div className="overlay-layer">
-      {items.map((it) => {
-        const s = viewport.worldToScreen(it.at);
-        if (!s) return null;
+      {layoutChips(items, viewport).map(({ it, s }) => {
         return (
           <div key={it.key} className="value-chip" style={{ left: s[0], top: s[1] }} onPointerDown={(e) => e.stopPropagation()}>
             {editing === it.key ? (
@@ -183,6 +190,33 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
       })}
     </div>
   );
+}
+
+/**
+ * Screen positions for the chips, nudged up or down so none overlaps another chip or a drag
+ * arrow's value label (several dimensions often project onto the same spot).
+ */
+function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number, number] }[] {
+  type Box = { x: number; y: number; w: number; h: number };
+  const H = 26;
+  const overlaps = (a: Box, b: Box) => Math.abs(a.x - b.x) * 2 < a.w + b.w + 6 && Math.abs(a.y - b.y) * 2 < a.h + b.h + 4;
+  const placed: Box[] = [];
+  // Drag arrows keep their labels where they are; chips make room around them.
+  for (const h of viewport.handles) {
+    const t = viewport.handleTipScreen(h.id);
+    if (t) placed.push({ x: t[0] + 16, y: t[1] - 16, w: 90, h: H });
+  }
+  const out: { it: Item; s: [number, number] }[] = [];
+  for (const it of items) {
+    const s = viewport.worldToScreen(it.at);
+    if (!s) continue;
+    const w = it.text.length * 7.4 + 22 + (it.unlinkable && typeof it.value === "string" ? 26 : 0);
+    const steps = [0, 1, -1, 2, -2, 3, -3, 4, -4];
+    const box = steps.map((k) => ({ x: s[0], y: s[1] + k * (H + 4), w, h: H })).find((b) => !placed.some((p) => overlaps(b, p))) ?? { x: s[0], y: s[1], w, h: H };
+    placed.push(box);
+    out.push({ it, s: [box.x, box.y] });
+  }
+  return out;
 }
 
 /** Entity ids of the shape a curve belongs to: everything connected to it through shared points. */
