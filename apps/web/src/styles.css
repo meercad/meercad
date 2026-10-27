@@ -793,3 +793,33 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
 .spinner.sm { width: 11px; height: 11px; border-width: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes loading-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* Touch and Pencil: finger-sized targets, no text selection or callout on long press (it opens
+   the context menu instead), and 16px fields so Safari does not zoom in on focus. */
+@media (pointer: coarse) {
+  html { touch-action: manipulation; }
+  body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+  input.field, select.field, .ask-field input, .value-input, .tab-name-input, .draw-entry input, .param-search input.field { font-size: 16px; }
+  input.field, select.field { height: 40px; }
+  .icon-btn { height: 40px; min-width: 40px; }
+  .icon-btn.sm { height: 36px; min-width: 36px; }
+  .btn, .topbar .btn, .ask-actions .btn { height: 40px; }
+  .ok-btn, .cancel-btn { width: 48px; height: 40px; }
+  .rail-flyout button { min-height: 48px; }
+  .tab, .home-tab { height: 40px; }
+  .tab-close { width: 32px; height: 32px; }
+  .tree-item { height: 40px; }
+  .tree-item.selected .actions .icon-btn { height: 32px; min-width: 32px; }
+  .menu button { height: 42px; }
+  .segmented button, .seg button { height: 36px; }
+  .chip { height: 32px; }
+  .chip button { width: 28px; height: 28px; }
+  .checkbox input { width: 20px; height: 20px; }
+  .constraint-palette button, .value-menu button, .value-chip .value-menu button { height: 40px; }
+  .palette-list button { height: 44px; }
+  .snap-bar button, .snap-bar select, .plane-bar button { height: 36px; }
+  .value-chip button { height: 32px; padding: 0 12px; }
+  .glyph { min-width: 24px; height: 24px; }
+  .sketch-label { padding: 4px 8px; }
+  .rollback-bar { height: 24px; }
+}

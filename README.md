@@ -54,6 +54,21 @@ pnpm --filter meercad-desktop run dist     # build the .dmg locally
 pnpm test && pnpm typecheck
 ```
 
+### Try it on an iPad
+
+```bash
+pnpm dev:lan                               # also listens on your local network
+```
+
+Vite prints a `Network:` address such as `http://192.168.1.20:5173`. Open it in Safari on an iPad
+on the same Wi-Fi. Apple Pencil selects, draws and drags the arrows; on iPads that sense a hovering
+Pencil the snap dot shows before the tip touches. Fingers navigate: one finger orbits, two pan and
+pinch to zoom. A long press (finger or Pencil) opens the menus a right click opens on the Mac.
+Until a Pencil touches the screen a finger tap also selects and places points; after that fingers
+only navigate, so a resting palm does nothing. Over plain `http` on the network the page is not
+cross-origin isolated; the modelling kernel does not need that. Copying a share link falls back to
+a dialog there because Safari only allows the clipboard on `https`.
+
 ## Layout
 
 | Path | Contents | License |

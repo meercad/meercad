@@ -5,6 +5,7 @@ import { navigationFor, setPrefs, usePrefs } from "../lib/keymap";
 import type { FeatureOp } from "@meercad/schema";
 import { samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
 import { FEATURES } from "../lib/features";
+import { Press } from "../lib/gestures";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
 import { commitDialog, dialogPick, editFeature, kernel, scheduleRebuild, setViewport, startFeature, startSketch, toast, useApp } from "../store";
@@ -148,10 +149,19 @@ export function ViewportView() {
       }
     };
     window.addEventListener("keydown", onKey, true);
+    // Touch and pen: a long press opens the context menu, a double tap acts like a double click.
+    // Fingers otherwise navigate; once a pen was used they never select (the pen does).
+    const press = new Press((x, y) => {
+      if (useApp.getState().sketchId || boxRef.current) return;
+      down = null;
+      contextMenu(vp.pick(x, y, kinds()), x, y);
+    });
     const onMove = (e: PointerEvent) => {
-      if (useApp.getState().sketchId) return;
+      if (e.pointerType !== "mouse") press.move(e);
+      if (e.pointerType === "touch" || useApp.getState().sketchId) return;
       const d = down;
       if (d && d.button === 0 && d.empty && e.buttons === 1 && !useApp.getState().dialog && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) {
+        press.cancel();
         const r = el.getBoundingClientRect();
         setBox({ x0: d.x - r.left, y0: d.y - r.top, x1: e.clientX - r.left, y1: e.clientY - r.top, filter });
         return;
@@ -160,10 +170,20 @@ export function ViewportView() {
       vp.setHover(vp.pick(e.clientX, e.clientY, kinds()));
     };
     const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" && !useApp.getState().sketchId) press.down(e);
+      if (e.pointerType === "touch") return;
       filter = "all";
       down = { x: e.clientX, y: e.clientY, button: e.button, empty: e.button === 0 && !vp.pick(e.clientX, e.clientY, kinds()) };
     };
     const onUp = (e: PointerEvent) => {
+      const gesture = e.pointerType === "mouse" ? null : press.up(e);
+      if (e.pointerType === "touch") {
+        if (useApp.getState().sketchId || vp.penSeen) return;
+        if (gesture === "tap") onClick(vp.pick(e.clientX, e.clientY, kinds()), false);
+        if (gesture === "double") onDbl(e);
+        return;
+      }
+      if (gesture === "double" && e.pointerType === "pen") onDbl(e);
       const d = down;
       down = null;
       const b = boxRef.current;
@@ -197,16 +217,25 @@ export function ViewportView() {
       const fid = pick ? featureOfPick(pick) : null;
       if (fid) editFeature(fid);
     };
+    const onCancel = (e: PointerEvent) => {
+      press.up(e);
+      if (e.pointerType === "touch") return;
+      down = null;
+      setBox(null);
+    };
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerdown", onDown);
     el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onCancel);
     el.addEventListener("dblclick", onDbl);
     return () => {
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onCancel);
       el.removeEventListener("dblclick", onDbl);
       window.removeEventListener("keydown", onKey, true);
+      press.cancel();
     };
   }, [vp]);
 

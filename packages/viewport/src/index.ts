@@ -174,7 +174,7 @@ export class Viewport {
   private sceneData: SceneData | null = null;
   handles: Handle[] = [];
   private handleGroup = new THREE.Group();
-  private activeHandle: { h: Handle; value: number } | null = null;
+  private activeHandle: { h: Handle; value: number; pointer: number } | null = null;
   private hoverHandle: string | null = null;
   /** Reports the value being dragged and its screen position (for a value tooltip). */
   onHandleDrag: ((h: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
@@ -184,6 +184,7 @@ export class Viewport {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     container.appendChild(this.renderer.domElement);
+    this.bindPointerRoles();
     this.bindHandles();
     this.renderer.domElement.style.display = "block";
     this.renderer.domElement.style.touchAction = "none";
@@ -253,6 +254,63 @@ export class Viewport {
           : (-1 as THREE.MOUSE);
     if (button === "middle") this.controls.mouseButtons.MIDDLE = action;
     else this.controls.mouseButtons.RIGHT = action;
+  }
+
+  // ---------------------------------------------------------------- pen and touch
+
+  /** True once an Apple Pencil (or any pen) was used: from then on fingers only navigate. */
+  penSeen = false;
+  private penDown = new Set<number>();
+  private penUpAt = 0;
+  private touches = new Set<number>();
+  private rejected = new Set<number>();
+  private palmCancels = new WeakSet<Event>();
+
+  /** A pen is touching the screen (or just lifted), so finger contacts are a resting palm. */
+  get penActive(): boolean {
+    return this.penDown.size > 0 || performance.now() - this.penUpAt < 400;
+  }
+
+  /**
+   * Pen selects and draws like the left mouse button; fingers orbit (one) and pan/zoom (two) via
+   * OrbitControls. Palm rejection: touches that land while the pen is down never reach the canvas,
+   * and touches already navigating are cancelled when the pen comes down.
+   */
+  private bindPointerRoles(): void {
+    const el = this.renderer.domElement;
+    const filter = (e: PointerEvent) => {
+      if (e.target !== el) return;
+      if (e.pointerType === "pen") {
+        this.penSeen = true;
+        if (e.type === "pointerdown") {
+          this.penDown.add(e.pointerId);
+          // Cancel touches already navigating: they were the palm landing first.
+          for (const id of [...this.touches]) {
+            this.touches.delete(id);
+            this.rejected.add(id);
+            const cancel = new PointerEvent("pointercancel", { pointerId: id, pointerType: "touch", bubbles: true });
+            this.palmCancels.add(cancel);
+            el.dispatchEvent(cancel);
+          }
+        } else if (e.type === "pointerup" || e.type === "pointercancel") {
+          if (this.penDown.delete(e.pointerId)) this.penUpAt = performance.now();
+        }
+        return;
+      }
+      if (e.pointerType !== "touch" || this.palmCancels.has(e)) return;
+      if (e.type === "pointerdown") {
+        if (this.penActive) this.rejected.add(e.pointerId);
+        else this.touches.add(e.pointerId);
+      }
+      const rejected = this.rejected.has(e.pointerId);
+      if (e.type === "pointerup" || e.type === "pointercancel") {
+        this.touches.delete(e.pointerId);
+        this.rejected.delete(e.pointerId);
+      }
+      if (rejected) e.stopPropagation();
+    };
+    // Capturing on the container runs before every listener on the canvas, OrbitControls included.
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const) this.container.addEventListener(type, filter, { capture: true });
   }
 
   // ---------------------------------------------------------------- scene
@@ -634,12 +692,12 @@ export class Viewport {
     }
   }
 
-  private hitHandle(clientX: number, clientY: number): Handle | null {
+  private hitHandle(clientX: number, clientY: number, radius = 18): Handle | null {
     const r = this.renderer.domElement.getBoundingClientRect();
     const px = clientX - r.left;
     const py = clientY - r.top;
     let best: Handle | null = null;
-    let bd = 18;
+    let bd = radius;
     for (const h of this.handles) {
       const tip = this.handleTip(h);
       const a = this.worldToScreen(h.origin);
@@ -683,8 +741,8 @@ export class Viewport {
     el.addEventListener(
       "pointerdown",
       (e) => {
-        if (e.button !== 0) return;
-        const h = this.hitHandle(e.clientX, e.clientY);
+        if (e.button !== 0 || (e.pointerType === "touch" && this.penSeen)) return;
+        const h = this.hitHandle(e.clientX, e.clientY, e.pointerType === "touch" ? 30 : 18);
         if (!h) return;
         e.stopImmediatePropagation();
         e.preventDefault();
@@ -692,7 +750,7 @@ export class Viewport {
         const t = this.axisParam(h, e.clientX, e.clientY);
         // Offset between where the arrow was grabbed and its value, so it does not jump.
         grab = (t ?? 0) - (h.value + this.handleBase(h));
-        this.activeHandle = { h, value: h.value };
+        this.activeHandle = { h, value: h.value, pointer: e.pointerId };
         h.onStart?.();
       },
       { capture: true },
@@ -702,6 +760,8 @@ export class Viewport {
       (e) => {
         const a = this.activeHandle;
         if (!a) {
+          // Fingers do not hover; a finger orbiting across an arrow must not be swallowed.
+          if (e.pointerType === "touch") return;
           const hit = this.hitHandle(e.clientX, e.clientY)?.id ?? null;
           if (hit !== this.hoverHandle) {
             this.hoverHandle = hit;
@@ -711,6 +771,7 @@ export class Viewport {
           if (hit) e.stopImmediatePropagation();
           return;
         }
+        if (e.pointerId !== a.pointer) return;
         e.stopImmediatePropagation();
         const t = this.axisParam(a.h, e.clientX, e.clientY);
         if (t === null) return;
@@ -731,7 +792,7 @@ export class Viewport {
     );
     const end = (e: PointerEvent) => {
       const a = this.activeHandle;
-      if (!a) return;
+      if (!a || e.pointerId !== a.pointer) return;
       e.stopImmediatePropagation();
       this.activeHandle = null;
       el.style.cursor = "";
