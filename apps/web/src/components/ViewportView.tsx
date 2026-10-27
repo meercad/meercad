@@ -23,6 +23,7 @@ const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
 };
 
 const DEFAULT_KINDS = new Set<PickKind>(["edge", "face", "region", "sketch_curve", "plane"]);
+const EMPTY_SCENE: SceneData = { bodies: [], sketches: [], planes: [], references: [], hiddenBodies: new Set(), editingSketch: null };
 
 export function ViewportView() {
   const host = useRef<HTMLDivElement>(null);
@@ -63,6 +64,14 @@ export function ViewportView() {
   const boxRef = useRef(box);
   boxRef.current = box;
   const [busy, setBusy] = useState(false);
+  // Rebuilds that take a noticeable moment say so in the status line.
+  const building = useApp((s) => s.building);
+  const [slowBuild, setSlowBuild] = useState(false);
+  useEffect(() => {
+    if (!building) return setSlowBuild(false);
+    const t = setTimeout(() => setSlowBuild(true), 700);
+    return () => clearTimeout(t);
+  }, [building]);
 
   useEffect(() => {
     const v = new Viewport(host.current!);
@@ -96,7 +105,8 @@ export function ViewportView() {
   }, [output, hidden, sketchId, doc.features, dialog?.feature.op]);
 
   useEffect(() => {
-    if (vp && scene) vp.setScene(scene);
+    // No model yet (a project is opening): clear the view instead of showing the previous one.
+    if (vp) vp.setScene(scene ?? EMPTY_SCENE);
   }, [vp, scene]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
@@ -328,9 +338,10 @@ export function ViewportView() {
         </div>
       ) : null}
       {measure.active ? <MeasureCard /> : null}
+      <LoadingOverlay />
       <div className="status-pill" title={kernelState.error ?? ""}>
-        <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />
-        {kernelState.error ?? (!kernelState.ready ? kernelState.info : output ? `${output.report.bodies.length} part${output.report.bodies.length === 1 ? "" : "s"} · rebuild ${output.report.rebuildMs.toFixed(0)} ms${previewing ? " · preview" : ""}` : "Ready")}
+        {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
+        {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? "Rebuilding…" : output ? `${output.report.bodies.length} part${output.report.bodies.length === 1 ? "" : "s"} · rebuild ${output.report.rebuildMs.toFixed(0)} ms${previewing ? " · preview" : ""}` : "Ready")}
       </div>
       <div className="view-controls">
         <button className="icon-btn sm" title="Fit all (Z)" onClick={() => vp?.fit()}>
@@ -441,6 +452,23 @@ function AiActivity() {
           </button>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/** Centered while the geometry engine starts or a project's model is computed for the first time. */
+function LoadingOverlay() {
+  const kernelState = useApp((s) => s.kernel);
+  const hasOutput = useApp((s) => !!s.output);
+  const features = useApp((s) => s.doc.features.length);
+  const text = kernelState.error ? null : !kernelState.ready ? "Starting the geometry engine…" : !hasOutput && features ? `Building the model · ${features} feature${features === 1 ? "" : "s"}` : null;
+  if (!text) return null;
+  return (
+    <div className="loading-overlay" role="status" aria-live="polite">
+      <div className="loading-card">
+        <span className="spinner" aria-hidden />
+        {text}
+      </div>
     </div>
   );
 }

@@ -47,6 +47,8 @@ interface State {
   previewing: boolean;
   previewError: string | null;
   kernel: { ready: boolean; info: string; error?: string };
+  /** A rebuild of the model is running in the kernel. */
+  building: boolean;
   dialog: DialogState | null;
   sketchId: string | null;
   selection: Pick[];
@@ -108,6 +110,7 @@ export const useApp = create<State>(() => ({
   previewing: false,
   previewError: null,
   kernel: { ready: false, info: "Loading geometry kernel…" },
+  building: false,
   dialog: null,
   sketchId: null,
   selection: [],
@@ -223,13 +226,18 @@ function displayDoc(): { doc: MeercadDocument; preview: boolean; problem: string
 
 /** Rebuilds the real document now and resolves with the result (for scripted callers like MCP). */
 export async function rebuildNow(): Promise<RebuildOutput> {
+  set({ building: true });
   for (;;) {
     try {
       const output = await kernel.rebuild(docStore.doc);
       if (!get().dialog && !get().proposalDoc) set({ output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
+      set({ building: false });
       return output;
     } catch (e) {
-      if (!(e instanceof SupersededError)) throw e;
+      if (!(e instanceof SupersededError)) {
+        set({ building: false });
+        throw e;
+      }
     }
   }
 }
@@ -271,14 +279,16 @@ export function scheduleRebuild(): void {
   queueMicrotask(() => {
     rebuildQueued = false;
     const { doc, preview, problem } = displayDoc();
-    set({ previewError: problem });
+    set({ previewError: problem, building: true });
     kernel.rebuild(doc).then(
       (output) => {
-        set(preview ? { output, previewing: true } : { output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
+        set(preview ? { output, previewing: true, building: false } : { output, baseOutput: output, previewing: false, building: false, selection: remapSelection(get().selection, get().baseOutput, output) });
         if (!preview) scheduleThumbnail();
       },
       (e: unknown) => {
+        // A newer rebuild replaced this one; it clears the flag when it finishes.
         if (e instanceof SupersededError) return;
+        set({ building: false });
         const msg = e instanceof Error ? e.message : String(e);
         if (preview) set({ previewError: msg });
         else toast(`Rebuild failed: ${msg}`, "error");
