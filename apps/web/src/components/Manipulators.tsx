@@ -2,7 +2,8 @@
  * Direct manipulation: drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
-import { ArrowUpFromLine, Bolt, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
+import { ArrowUpFromLine, Bolt, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Trash, Triangle } from "lucide-react";
+import { deleteModelSelection } from "../lib/deletion";
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
@@ -357,6 +358,8 @@ function QuickActions({ selection }: { selection: Pick[] }) {
     actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch({ ref: last.planeId }) });
   }
   if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: keyFor("measure"), run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
+  // Without a keyboard there is no Delete key.
+  if ((kinds.has("face") || kinds.has("edge")) && matchMedia("(pointer: coarse)").matches) actions.push({ icon: <Trash />, label: "Delete", run: () => void deleteModelSelection() });
   if (!actions.length) return null;
   return (
     <div className="quick-actions docked" onPointerDown={(e) => e.stopPropagation()}>

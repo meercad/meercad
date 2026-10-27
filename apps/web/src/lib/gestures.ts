@@ -7,31 +7,41 @@ export const LONG_PRESS_MS = 500;
 const SLOP = 10;
 const DOUBLE_TAP_MS = 350;
 
-export type PressResult = "tap" | "double" | "long" | null;
+export type PressResult = "tap" | "double" | "long" | "long-drag" | null;
 
-/** Follows one finger or pen press at a time; a second finger (pinch, pan) cancels it. */
+/**
+ * Follows one finger or pen press at a time; a second finger (pinch, pan) cancels it. Held still
+ * for LONG_PRESS_MS it reports a long press; moving on after that reports a long-press drag
+ * (area selection).
+ */
 export class Press {
-  private cur: { id: number; x: number; y: number; t: number; timer: number; fired: boolean } | null = null;
+  private cur: { id: number; x: number; y: number; t: number; timer: number; fired: boolean; dragging: boolean } | null = null;
   private touches = new Set<number>();
   private lastTap: { x: number; y: number; t: number } | null = null;
 
-  constructor(private onLong: (x: number, y: number) => void) {}
+  constructor(
+    private onLong: (x: number, y: number, e: PointerEvent) => void,
+    private onLongDrag?: (x: number, y: number) => void,
+  ) {}
 
   down(e: PointerEvent): void {
     if (e.pointerType === "touch") this.touches.add(e.pointerId);
     this.cancel();
     if (this.touches.size > 1) return;
-    const c = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), timer: 0, fired: false };
+    const c = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), timer: 0, fired: false, dragging: false };
     c.timer = window.setTimeout(() => {
       c.fired = true;
-      this.onLong(c.x, c.y);
+      this.onLong(c.x, c.y, e);
     }, LONG_PRESS_MS);
     this.cur = c;
   }
 
   move(e: PointerEvent): void {
     const c = this.cur;
-    if (c && c.id === e.pointerId && !c.fired && Math.hypot(e.clientX - c.x, e.clientY - c.y) > SLOP) this.cancel();
+    if (!c || c.id !== e.pointerId || c.dragging || Math.hypot(e.clientX - c.x, e.clientY - c.y) <= SLOP) return;
+    if (!c.fired) return this.cancel();
+    c.dragging = true;
+    this.onLongDrag?.(c.x, c.y);
   }
 
   /** How the press ended: a tap, the second tap of a double tap, a long press, or a drag (null). */
@@ -42,7 +52,7 @@ export class Press {
     window.clearTimeout(c.timer);
     this.cur = null;
     if (e.type === "pointercancel") return null;
-    if (c.fired) return "long";
+    if (c.fired) return c.dragging ? "long-drag" : "long";
     const now = performance.now();
     const l = this.lastTap;
     if (l && now - l.t < DOUBLE_TAP_MS && Math.hypot(c.x - l.x, c.y - l.y) < SLOP * 2) {
@@ -56,6 +66,54 @@ export class Press {
   cancel(): void {
     if (this.cur) window.clearTimeout(this.cur.timer);
     this.cur = null;
+  }
+}
+
+export type MultiGesture = "tap2" | "tap3" | "swipe-left" | "swipe-right";
+
+/**
+ * Several-finger gestures: a quick two- or three-finger tap, and a three-finger swipe sideways
+ * (the iPad's own undo/redo gesture).
+ */
+export class MultiTouch {
+  private pts = new Map<number, { x0: number; y0: number; x: number; y: number }>();
+  private done: { dx: number; dy: number }[] = [];
+  private max = 0;
+  private t0 = 0;
+  private cancelled = false;
+
+  constructor(private on: (g: MultiGesture) => void) {}
+
+  down(e: PointerEvent): void {
+    if (e.pointerType !== "touch") return;
+    if (!this.pts.size) {
+      this.done = [];
+      this.max = 0;
+      this.t0 = performance.now();
+      this.cancelled = false;
+    }
+    this.pts.set(e.pointerId, { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
+    this.max = Math.max(this.max, this.pts.size);
+  }
+
+  move(e: PointerEvent): void {
+    const p = this.pts.get(e.pointerId);
+    if (p) Object.assign(p, { x: e.clientX, y: e.clientY });
+  }
+
+  up(e: PointerEvent): void {
+    const p = this.pts.get(e.pointerId);
+    if (!p) return;
+    this.pts.delete(e.pointerId);
+    if (e.type === "pointercancel") this.cancelled = true;
+    this.done.push({ dx: e.clientX - p.x0, dy: e.clientY - p.y0 });
+    if (this.pts.size || this.cancelled || this.max < 2) return;
+    const n = this.done.length;
+    const dx = this.done.reduce((a, d) => a + d.dx, 0) / n;
+    const dy = this.done.reduce((a, d) => a + d.dy, 0) / n;
+    const still = this.done.every((d) => Math.hypot(d.dx, d.dy) < SLOP * 2);
+    if (this.max === 3 && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) this.on(dx < 0 ? "swipe-left" : "swipe-right");
+    else if (still && performance.now() - this.t0 < 300) this.on(this.max === 2 ? "tap2" : "tap3");
   }
 }
 

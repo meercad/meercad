@@ -92,11 +92,18 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
     d.y = e.clientY;
     viewport.orbit(-dx * 0.012, -dy * 0.012);
   };
+  // Fingers and pens get no dblclick on iPad: two quick taps reset the view like a double click.
+  const lastTap = useRef(0);
   const onUp = (e: React.PointerEvent) => {
     const d = drag.current;
     drag.current = null;
-    if (d && !d.moved && d.dir) viewport.viewFrom(d.dir);
     e.stopPropagation();
+    if (!d || d.moved) return;
+    const now = performance.now();
+    const double = e.pointerType !== "mouse" && now - lastTap.current < 350;
+    lastTap.current = double ? 0 : now;
+    if (double) viewport.setView("iso");
+    else if (d.dir) viewport.viewFrom(d.dir);
   };
 
   const cellDir = (f: (typeof FACES)[number], row: number, col: number): V => {

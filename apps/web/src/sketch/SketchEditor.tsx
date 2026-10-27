@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
-import { frameMatrix, THREE, type Viewport } from "@meercad/viewport";
+import { frameMatrix, perFrame, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
@@ -686,6 +686,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     box: { a: Vec2; b: Vec2 } | null;
   }>({ down: null, dragState: null, box: null });
   const pressRef = useRef(new Press(() => {}));
+  // Moves are handled once per frame by whichever onMove the latest render installed.
+  const moveRef = useRef<(e: PointerEvent) => void>(() => {});
+  const moveFrame = useRef(perFrame((e: PointerEvent) => moveRef.current(e))).current;
   useEffect(() => {
     const el = viewport.canvas;
     // Gesture state lives in a ref: this effect re-subscribes on every render, which may happen mid-drag.
@@ -704,7 +707,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") press.move(e);
-      if (e.pointerType === "touch") return;
+      if (e.pointerType !== "touch") moveFrame(e);
+    };
+    moveRef.current = (e: PointerEvent) => {
       const p = toSketch(e);
       if (!p || !shown) return;
       const tool = useSketchUi.getState().tool;
@@ -796,6 +801,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
 
     const onDown = (e: PointerEvent) => {
+      moveFrame.flush();
       if (e.pointerType !== "mouse") press.down(e);
       if (e.pointerType !== "touch") start(e);
     };
@@ -817,6 +823,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
 
     const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") moveFrame.flush();
       const r = e.pointerType === "mouse" ? null : press.up(e);
       if (e.pointerType !== "touch") {
         finish(e);
@@ -973,6 +980,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
     const onCancel = (e: PointerEvent) => press.up(e);
     const onLeave = () => {
+      moveFrame.cancel();
       setTip(null);
       setHover(null);
       ts.snap = null;

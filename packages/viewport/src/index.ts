@@ -180,7 +180,7 @@ export class Viewport {
   onHandleDrag: ((h: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     container.appendChild(this.renderer.domElement);
@@ -258,7 +258,7 @@ export class Viewport {
 
   // ---------------------------------------------------------------- pen and touch
 
-  /** True once an Apple Pencil (or any pen) was used: from then on fingers only navigate. */
+  /** True once an Apple Pencil (or any pen) was used: from then on fingers no longer draw in sketches. */
   penSeen = false;
   private penDown = new Set<number>();
   private penUpAt = 0;
@@ -773,6 +773,13 @@ export class Viewport {
         }
         if (e.pointerId !== a.pointer) return;
         e.stopImmediatePropagation();
+        dragTo(e);
+      },
+      { capture: true },
+    );
+    const dragTo = perFrame((e: PointerEvent) => {
+        const a = this.activeHandle;
+        if (!a) return;
         const t = this.axisParam(a.h, e.clientX, e.clientY);
         if (t === null) return;
         const raw = t - grab - this.handleBase(a.h);
@@ -787,13 +794,12 @@ export class Viewport {
         }
         const tip = this.handleTip(a.h, v);
         this.onHandleDrag?.(a.h, v, this.worldToScreen([tip.x, tip.y, tip.z]));
-      },
-      { capture: true },
-    );
+    });
     const end = (e: PointerEvent) => {
       const a = this.activeHandle;
       if (!a || e.pointerId !== a.pointer) return;
       e.stopImmediatePropagation();
+      dragTo.flush();
       this.activeHandle = null;
       el.style.cursor = "";
       this.onHandleDrag?.(null, a.value, null);
@@ -1063,6 +1069,23 @@ export class Viewport {
     this.emit();
   }
 
+  /** Turns to face a surface head-on, centred on the touched point and keeping the distance. */
+  lookAtFace(point: Vec3, normal: Vec3): void {
+    const d = new THREE.Vector3(...normal).normalize();
+    const up = Math.abs(d.z) > 0.99 ? new THREE.Vector3(0, d.z > 0 ? 1 : -1, 0) : new THREE.Vector3(0, 0, 1);
+    const target = new THREE.Vector3(...point);
+    const dist = this.camera.position.distanceTo(this.controls.target);
+    this.anim = {
+      from: this.camera.position.clone(),
+      to: target.clone().addScaledVector(d, dist),
+      upFrom: this.camera.up.clone(),
+      upTo: up,
+      targetFrom: this.controls.target.clone(),
+      target,
+      t0: performance.now(),
+    };
+  }
+
   /** Looks along -dir (camera placed at +dir), choosing a sensible up vector. */
   viewFrom(dir: Vec3, animate = true): void {
     const d = new THREE.Vector3(...dir).normalize();
@@ -1080,10 +1103,12 @@ export class Viewport {
     return () => this.listeners.delete(fn);
   }
 
+  /** Overlays (handles, labels, view cube) follow the camera once per frame, however many
+   *  pointer events moved it in between. */
   private emit(): void {
-    if (this.handles.length) this.drawHandles();
-    for (const fn of this.listeners) fn();
+    this.changed = true;
   }
+  private changed = false;
 
   snapshot(width = 480, height = 360, clean = false): string {
     // Thumbnails leave out helpers so only the model is pictured.
@@ -1143,6 +1168,11 @@ export class Viewport {
       this.emit();
     }
     this.controls.update();
+    if (this.changed) {
+      this.changed = false;
+      if (this.handles.length) this.drawHandles();
+      for (const fn of this.listeners) fn();
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -1179,6 +1209,38 @@ export class Viewport {
 }
 
 // ---------------------------------------------------------------- helpers
+
+/**
+ * Wraps a pointermove handler so it runs at most once per frame, with the latest event. iPad
+ * Safari delivers Apple Pencil moves at up to 240 Hz instead of once per frame; handling every one
+ * builds a backlog that keeps the view updating long after the pen lifted. Call `flush()` before
+ * handling pointerdown/up so they see the final position.
+ */
+export function perFrame<E>(fn: (e: E) => void): ((e: E) => void) & { flush(): void; cancel(): void } {
+  let pending: E | null = null;
+  let raf = 0;
+  const run = () => {
+    raf = 0;
+    const e = pending;
+    pending = null;
+    if (e) fn(e);
+  };
+  const wrapped = (e: E) => {
+    pending = e;
+    if (!raf) raf = requestAnimationFrame(run);
+  };
+  return Object.assign(wrapped, {
+    flush: () => {
+      if (raf) cancelAnimationFrame(raf);
+      run();
+    },
+    cancel: () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      pending = null;
+    },
+  });
+}
 
 export function frameMatrix(f: Frame): THREE.Matrix4 {
   const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.v), new THREE.Vector3(...f.normal));

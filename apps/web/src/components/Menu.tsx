@@ -19,6 +19,10 @@ export function showMenu(x: number, y: number, items: MenuEntry[]): void {
   openMenu?.({ x, y, items });
 }
 
+export function closeMenu(): void {
+  openMenu?.(null);
+}
+
 export function MenuHost() {
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuEntry[] } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
