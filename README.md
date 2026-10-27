@@ -5,7 +5,7 @@
 <h1 align="center">meerCAD</h1>
 
 <p align="center">
-  <b>Free, open-source parametric CAD for makers</b><br>
+  <b>Free, source-available parametric CAD for makers</b><br>
   Runs locally on your Mac — no account, no cloud.
 </p>
 
@@ -61,13 +61,29 @@ pnpm test && pnpm typecheck
 | `packages/schema` | Document + Operations-API types and JSON Schema, validation | MIT |
 | `packages/naming` | Persistent references: selector resolution, tag propagation | MIT |
 | `packages/io` | STL/3MF/DXF/SVG writers & readers, share links | MIT |
-| `packages/sketch` | PlaneGCS constraint solving, region detection | AGPL-3.0 |
-| `packages/model` | Expressions, document store (undo/redo), incremental rebuild | AGPL-3.0 |
-| `packages/kernel` | OpenCascade (WASM) modelling, tessellation, worker | AGPL-3.0 |
-| `packages/viewport` | Three.js rendering, picking, drag handles | AGPL-3.0 |
-| `packages/ai` | BYOK copilot loop and the modelling guide | AGPL-3.0 |
-| `packages/mcp` | MCP server bridging assistants to the app | AGPL-3.0 |
-| `apps/web` | The app (React) | AGPL-3.0 |
-| `apps/desktop` | Electron shell for macOS | AGPL-3.0 |
+| `packages/sketch` | PlaneGCS constraint solving, region detection | FSL-1.1 |
+| `packages/model` | Expressions, document store (undo/redo), incremental rebuild | FSL-1.1 |
+| `packages/kernel` | OpenCascade (WASM) modelling, tessellation, worker | FSL-1.1 |
+| `packages/viewport` | Three.js rendering, picking, drag handles | FSL-1.1 |
+| `packages/ai` | BYOK copilot loop and the modelling guide | FSL-1.1 |
+| `packages/mcp` | MCP server bridging assistants to the app | FSL-1.1 |
+| `apps/web` | The app (React) | FSL-1.1 |
+| `apps/desktop` | Electron shell for macOS | FSL-1.1 |
 
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+
+## License
+
+meerCAD is free to use, for hobby and commercial work alike, and its source is open to read,
+modify and contribute to. It is licensed under the [Functional Source License 1.1](LICENSE)
+(FSL-1.1-ALv2): you may do anything with it except build a competing product or service from it.
+Two years after each release, that release automatically becomes available under the Apache
+License 2.0 as well.
+
+- The file-format, I/O and naming libraries (`packages/schema`, `packages/io`, `packages/naming`)
+  are MIT, so other tools can read and write `.meercad` files freely.
+- Versions published before 27 October 2026 (the leocad releases) remain under the GNU AGPL-3.0.
+- Third-party components keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- The name **meerCAD** and the meerkat logo are trademarks; see [TRADEMARKS.md](TRADEMARKS.md).
+
+Your models are yours: nothing in the license applies to what you design with meerCAD.
