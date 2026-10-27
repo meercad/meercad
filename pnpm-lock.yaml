@@ -35,28 +35,28 @@ importers:
 
   apps/web:
     dependencies:
-      '@leocad/io':
+      '@meercad/io':
         specifier: workspace:*
         version: link:../../packages/io
-      '@leocad/kernel':
+      '@meercad/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@leocad/mcp':
+      '@meercad/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
-      '@leocad/model':
+      '@meercad/model':
         specifier: workspace:*
         version: link:../../packages/model
-      '@leocad/naming':
+      '@meercad/naming':
         specifier: workspace:*
         version: link:../../packages/naming
-      '@leocad/schema':
+      '@meercad/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@leocad/sketch':
+      '@meercad/sketch':
         specifier: workspace:*
         version: link:../../packages/sketch
-      '@leocad/viewport':
+      '@meercad/viewport':
         specifier: workspace:*
         version: link:../../packages/viewport
       '@salusoft89/planegcs':
@@ -93,7 +93,7 @@ importers:
 
   packages/ai:
     dependencies:
-      '@leocad/schema':
+      '@meercad/schema':
         specifier: workspace:*
         version: link:../schema
 
@@ -105,19 +105,19 @@ importers:
 
   packages/kernel:
     dependencies:
-      '@leocad/io':
+      '@meercad/io':
         specifier: workspace:*
         version: link:../io
-      '@leocad/model':
+      '@meercad/model':
         specifier: workspace:*
         version: link:../model
-      '@leocad/naming':
+      '@meercad/naming':
         specifier: workspace:*
         version: link:../naming
-      '@leocad/schema':
+      '@meercad/schema':
         specifier: workspace:*
         version: link:../schema
-      '@leocad/sketch':
+      '@meercad/sketch':
         specifier: workspace:*
         version: link:../sketch
       replicad-opencascadejs:
@@ -136,7 +136,7 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@leocad/ai':
+      '@meercad/ai':
         specifier: workspace:*
         version: link:../ai
       '@types/ws':
@@ -148,13 +148,13 @@ importers:
 
   packages/model:
     dependencies:
-      '@leocad/schema':
+      '@meercad/schema':
         specifier: workspace:*
         version: link:../schema
 
   packages/naming:
     dependencies:
-      '@leocad/schema':
+      '@meercad/schema':
         specifier: workspace:*
         version: link:../schema
 
@@ -166,7 +166,7 @@ importers:
 
   packages/sketch:
     dependencies:
-      '@leocad/schema':
+      '@meercad/schema':
         specifier: workspace:*
         version: link:../schema
       '@salusoft89/planegcs':
@@ -185,19 +185,19 @@ importers:
 
   tests:
     dependencies:
-      '@leocad/io':
+      '@meercad/io':
         specifier: workspace:*
         version: link:../packages/io
-      '@leocad/kernel':
+      '@meercad/kernel':
         specifier: workspace:*
         version: link:../packages/kernel
-      '@leocad/model':
+      '@meercad/model':
         specifier: workspace:*
         version: link:../packages/model
-      '@leocad/schema':
+      '@meercad/schema':
         specifier: workspace:*
         version: link:../packages/schema
-      '@leocad/sketch':
+      '@meercad/sketch':
         specifier: workspace:*
         version: link:../packages/sketch
 

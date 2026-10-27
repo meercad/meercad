@@ -1,8 +1,8 @@
 /**
- * Local-first project storage. In the desktop app projects are plain .leocad files (open JSON
+ * Local-first project storage. In the desktop app projects are plain .meercad files (open JSON
  * format) in a folder the user picks on first launch; in the browser they live in IndexedDB.
  */
-import type { LeocadDocument } from "@leocad/schema";
+import type { MeercadDocument } from "@meercad/schema";
 
 export interface ProjectMeta {
   id: string;
@@ -13,7 +13,7 @@ export interface ProjectMeta {
   thumbnail?: string;
 }
 export interface Project extends ProjectMeta {
-  doc: LeocadDocument;
+  doc: MeercadDocument;
 }
 
 interface DesktopApi {
@@ -23,8 +23,8 @@ interface DesktopApi {
   projects: {
     list(): Promise<ProjectMeta[]>;
     load(id: string): Promise<Project>;
-    save(p: { id: string; doc: LeocadDocument; thumbnail?: string }): Promise<void>;
-    create(p: { name: string; doc: LeocadDocument; folder?: string }): Promise<ProjectMeta>;
+    save(p: { id: string; doc: MeercadDocument; thumbnail?: string }): Promise<void>;
+    create(p: { name: string; doc: MeercadDocument; folder?: string }): Promise<ProjectMeta>;
     rename(p: { id: string; name: string }): Promise<{ id: string; name: string; folder: string }>;
     move(p: { id: string; folder: string }): Promise<{ id: string; name: string; folder: string }>;
     folders(): Promise<string[]>;
@@ -49,20 +49,62 @@ interface DesktopApi {
   on(channel: "update-progress", fn: (arg: number) => void): () => void;
 }
 
-export const desktop: DesktopApi | undefined = (window as unknown as { leocadDesktop?: DesktopApi }).leocadDesktop;
+export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;
 
 // ---------------------------------------------------------------- IndexedDB (browser)
 
-const DB = "leocad";
+const DB = "meercad";
+/** Where projects lived before the app was renamed; copied over once. */
+const LEGACY_DB = "leocad";
 const STORE = "projects";
 
+let opened: Promise<IDBDatabase> | null = null;
 function open(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  return (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
+    let fresh = false;
     const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: "id" });
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB unavailable"));
-  });
+    req.onupgradeneeded = () => {
+      fresh = true;
+      req.result.createObjectStore(STORE, { keyPath: "id" });
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!fresh) return resolve(db);
+      void copyLegacyProjects(db).finally(() => resolve(db));
+    };
+    req.onerror = () => {
+      opened = null;
+      reject(req.error ?? new Error("IndexedDB unavailable"));
+    };
+  }));
+}
+
+/** Copies the projects of the old database into a freshly created one. */
+async function copyLegacyProjects(db: IDBDatabase): Promise<void> {
+  try {
+    const names = (await indexedDB.databases?.()) ?? [];
+    if (!names.some((d) => d.name === LEGACY_DB)) return;
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open(LEGACY_DB);
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    if (!legacy.objectStoreNames.contains(STORE)) return legacy.close();
+    const all = await new Promise<Project[]>((resolve, reject) => {
+      const r = legacy.transaction(STORE, "readonly").objectStore(STORE).getAll();
+      r.onsuccess = () => resolve(r.result as Project[]);
+      r.onerror = () => reject(r.error);
+    });
+    legacy.close();
+    await new Promise<void>((resolve, reject) => {
+      const t = db.transaction(STORE, "readwrite");
+      for (const p of all) t.objectStore(STORE).put(p);
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+  } catch {
+    // nothing to carry over
+  }
 }
 
 async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
@@ -78,7 +120,7 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
 const newId = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 // Browser: projects carry a folder field; empty folders are remembered separately.
-const FOLDERS_KEY = "leocad.folders";
+const FOLDERS_KEY = "meercad.folders";
 function storedFolders(): string[] {
   try {
     return JSON.parse(localStorage.getItem(FOLDERS_KEY) ?? "[]") as string[];
@@ -113,7 +155,7 @@ export async function loadProject(id: string): Promise<Project | undefined> {
   return tx<Project | undefined>("readonly", (s) => s.get(id) as IDBRequest<Project | undefined>);
 }
 
-export async function createProject(name: string, doc: LeocadDocument, folder = ""): Promise<ProjectMeta> {
+export async function createProject(name: string, doc: MeercadDocument, folder = ""): Promise<ProjectMeta> {
   if (desktop) return desktop.projects.create({ name, doc, folder });
   const meta = { id: newId(), name, folder, updatedAt: Date.now() };
   await tx("readwrite", (s) => s.put({ ...meta, doc }));

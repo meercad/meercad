@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { evaluate } from "@leocad/model";
-import type { Expr } from "@leocad/schema";
+import { evaluate } from "@meercad/model";
+import type { Expr } from "@meercad/schema";
 import { useApp } from "../store";
 
 const NUM = /^\s*-?\d+(\.\d+)?\s*$/;

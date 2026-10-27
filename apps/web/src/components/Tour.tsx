@@ -11,7 +11,7 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    title: "Welcome to leocad",
+    title: "Welcome to meerCAD",
     body: (
       <>
         A free, parametric CAD for makers. This short tour shows the basics — it takes about a minute. You can skip it now and restart it any time from <b>Help</b>.
@@ -83,7 +83,7 @@ const STEPS: Step[] = [
   },
 ];
 
-const KEY = "leocad.tourDone";
+const KEY = "meercad.tourDone";
 export const tourDone = () => {
   try {
     return localStorage.getItem(KEY) === "1";

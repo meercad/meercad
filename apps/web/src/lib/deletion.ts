@@ -4,12 +4,12 @@
  * its fillet/chamfer, a hole or boss drops its region from the extrude, and anything else offers to
  * delete the feature that made it.
  */
-import type { DocOp, EdgeSelector, Feature } from "@leocad/schema";
-import type { Pick } from "@leocad/viewport";
+import type { DocOp, EdgeSelector, Feature } from "@meercad/schema";
+import type { Pick } from "@meercad/viewport";
 import { askConfirm } from "../components/Ask";
 import { deleteFeature } from "../components/FeatureTree";
 import { apply, currentDoc, toast, useApp } from "../store";
-import { nextFeatureId } from "@leocad/model";
+import { nextFeatureId } from "@meercad/model";
 import { featureName } from "./features";
 
 type FacePick = Extract<Pick, { kind: "face" }>;

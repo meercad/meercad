@@ -3,7 +3,7 @@
  * and a bar with the three origin planes, so the choice never depends on hitting a faint fill.
  */
 import { useEffect, useRef } from "react";
-import type { PlaneView, Viewport } from "@leocad/viewport";
+import type { PlaneView, Viewport } from "@meercad/viewport";
 import { startSketch, useApp } from "../store";
 
 export const PLANE_COLORS: Record<string, number> = { "origin.XY": 0x3b82f6, "origin.XZ": 0x22a35a, "origin.YZ": 0xe5484d };

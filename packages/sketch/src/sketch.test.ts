@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { SketchEntity } from "@leocad/schema";
+import type { SketchEntity } from "@meercad/schema";
 import { findRegions, selectRegions, SketchSolver, type ResolvedConstraint, type SolvedCurve } from "./index.js";
 
 let solver: SketchSolver;

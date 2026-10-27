@@ -6,9 +6,9 @@ import { ArrowUpFromLine, Bolt, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
-import { evaluate, nextFeatureId } from "@leocad/model";
-import { asArray, type EdgeSelector, type Expr, type Feature } from "@leocad/schema";
-import type { Handle, Pick, Viewport } from "@leocad/viewport";
+import { evaluate, nextFeatureId } from "@meercad/model";
+import { asArray, type EdgeSelector, type Expr, type Feature } from "@meercad/schema";
+import type { Handle, Pick, Viewport } from "@meercad/viewport";
 import { cylinderAnchor, isCylinderFace, edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
 import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";

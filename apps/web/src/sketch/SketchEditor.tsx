@@ -5,10 +5,10 @@
  */
 import { Grid3x3, Magnet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { evaluate, resolveFeature } from "@leocad/model";
-import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@leocad/schema";
-import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@leocad/sketch";
-import { frameMatrix, THREE, type Viewport } from "@leocad/viewport";
+import { evaluate, resolveFeature } from "@meercad/model";
+import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
+import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
+import { frameMatrix, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";

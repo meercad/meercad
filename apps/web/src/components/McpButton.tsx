@@ -10,7 +10,7 @@ import { desktop } from "../lib/persistence";
 export function McpButton() {
   const [status, setStatus] = useState(bridgeStatus());
   const [open, setOpen] = useState(false);
-  const [cmd, setCmd] = useState<{ command: string; args: string[]; env?: Record<string, string> }>({ command: "node", args: ["<path to leocad>/packages/mcp/dist/server.js"] });
+  const [cmd, setCmd] = useState<{ command: string; args: string[]; env?: Record<string, string> }>({ command: "node", args: ["<path to meerCAD>/packages/mcp/dist/server.js"] });
   useEffect(() => {
     const off = onBridgeStatus(setStatus);
     void desktop?.info().then((i) => setCmd(i.mcpCommand));
@@ -22,7 +22,7 @@ export function McpButton() {
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [open]);
-  const config = JSON.stringify({ mcpServers: { leocad: cmd } }, null, 2);
+  const config = JSON.stringify({ mcpServers: { meercad: cmd } }, null, 2);
   return (
     <>
       <button className={`icon-btn ${status === "connected" ? "active" : ""}`} title={`AI assistants (MCP): ${status}`} onClick={() => setOpen(true)}>
@@ -45,7 +45,7 @@ export function McpButton() {
               </p>
               <label className="checkbox">
                 <input type="checkbox" checked={status !== "off"} onChange={(e) => setBridgeEnabled(e.target.checked)} />
-                Allow assistants to control leocad
+                Allow assistants to control meerCAD
                 <span className="muted">— {status === "connected" ? "connected" : status === "connecting" ? "waiting for an assistant…" : "off"}</span>
               </label>
               {desktop ? (
@@ -80,7 +80,7 @@ export function McpButton() {
                   <Copy /> Copy configuration
                 </button>
                 <span className="muted" style={{ fontSize: 12 }}>
-                  Claude Code: <span className="mono">claude mcp add leocad {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
+                  Claude Code: <span className="mono">claude mcp add meercad {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
                 </span>
               </div>
               {status === "connected" ? (

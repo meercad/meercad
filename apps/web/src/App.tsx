@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { decodeShareFragment } from "@leocad/io";
-import { validateDocument } from "@leocad/schema";
+import { decodeShareFragment } from "@meercad/io";
+import { validateDocument } from "@meercad/schema";
 import { FeatureDialog } from "./components/FeatureDialog";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
@@ -21,16 +21,16 @@ import { initBridge } from "./lib/mcpBridge";
 import { desktop } from "./lib/persistence";
 import { saveFile } from "./components/io";
 import { actionFor, MODEL_ACTIONS, type ModelAction } from "./lib/keymap";
-import type { FeatureOp } from "@leocad/schema";
+import type { FeatureOp } from "@meercad/schema";
 import { closeTab, cycleTab, reopenClosedTab, toggleSide } from "./store";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
-import type { StandardView } from "@leocad/viewport";
+import type { StandardView } from "@meercad/viewport";
 import { CommandPalette } from "./components/CommandPalette";
 import { deleteModelSelection } from "./lib/deletion";
 
 try {
-  const theme = localStorage.getItem("leocad.theme");
+  const theme = localStorage.getItem("meercad.theme");
   if (theme) document.documentElement.dataset["theme"] = theme;
 } catch {
   // default theme
@@ -44,7 +44,7 @@ function runModelAction(action: ModelAction): void {
   if (action.startsWith("view.")) return vp?.setView(action.slice(5) as StandardView);
   switch (action) {
     case "palette":
-      return void window.dispatchEvent(new Event("leocad:palette"));
+      return void window.dispatchEvent(new Event("meercad:palette"));
     case "fit":
       return vp?.fit();
     case "normal":
@@ -97,8 +97,8 @@ export function App() {
   }, [screen]);
   useEffect(() => {
     const open = () => setGuide((g) => !g);
-    window.addEventListener("leocad:help", open);
-    return () => window.removeEventListener("leocad:help", open);
+    window.addEventListener("meercad:help", open);
+    return () => window.removeEventListener("meercad:help", open);
   }, []);
   useEffect(() => {
     // Back/forward and pasted links move between projects and home.
@@ -117,7 +117,7 @@ export function App() {
       else if (cmd === "home") goHome();
       else if (cmd === "save-as" && useApp.getState().project) saveFile();
       else if (cmd === "shortcuts") setHelp((h) => !h);
-      else if (cmd === "settings") window.dispatchEvent(new Event("leocad:settings"));
+      else if (cmd === "settings") window.dispatchEvent(new Event("meercad:settings"));
       else if (cmd === "close-tab" && useApp.getState().project) closeTab(useApp.getState().project!.id);
       else if (cmd === "reopen-tab") reopenClosedTab();
       else if (cmd === "next-tab" || cmd === "prev-tab") cycleTab(cmd === "next-tab" ? 1 : -1);

@@ -1,24 +1,24 @@
 {
-  "name": "leocad-desktop",
-  "productName": "leocad",
+  "name": "meercad-desktop",
+  "productName": "meerCAD",
   "version": "0.1.0",
   "private": true,
   "description": "Free, open-source parametric CAD",
-  "author": "leocad contributors",
+  "author": "meerCAD contributors",
   "license": "AGPL-3.0-only",
   "main": "dist/main.cjs",
   "scripts": {
     "build:main": "node build.mjs",
     "dev": "node build.mjs && electron . --dev",
     "start": "node build.mjs && electron .",
-    "package": "pnpm --filter @leocad/web build && pnpm --filter @leocad/mcp build && node build.mjs && electron-builder --mac --dir",
-    "dist": "pnpm --filter @leocad/web build && pnpm --filter @leocad/mcp build && node build.mjs && electron-builder --mac --publish never",
+    "package": "pnpm --filter @meercad/web build && pnpm --filter @meercad/mcp build && node build.mjs && electron-builder --mac --dir",
+    "dist": "pnpm --filter @meercad/web build && pnpm --filter @meercad/mcp build && node build.mjs && electron-builder --mac --publish never",
     "typecheck": "tsc --noEmit -p ."
   },
   "build": {
-    "appId": "dev.leocad.app",
-    "productName": "leocad",
-    "copyright": "leocad contributors",
+    "appId": "dev.meercad.app",
+    "productName": "meerCAD",
+    "copyright": "meerCAD contributors",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -51,11 +51,17 @@
     ],
     "fileAssociations": [
       {
-        "ext": "leocad",
-        "name": "leocad part",
-        "description": "leocad parametric part",
+        "ext": "meercad",
+        "name": "meerCAD part",
+        "description": "meerCAD parametric part",
         "role": "Editor",
-        "mimeType": "application/vnd.leocad+json"
+        "mimeType": "application/vnd.meercad+json"
+      },
+      {
+        "ext": "leocad",
+        "name": "meerCAD part (older format)",
+        "description": "Part from an earlier version, opened and converted by meerCAD",
+        "role": "Editor"
       }
     ],
     "mac": {
@@ -76,7 +82,7 @@
           ]
         }
       ],
-      "artifactName": "leocad-${version}-${arch}.${ext}",
+      "artifactName": "meercad-${version}-${arch}.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "icon": "build/icon.png",
@@ -84,7 +90,7 @@
       "notarize": false
     },
     "dmg": {
-      "title": "leocad ${version}"
+      "title": "meerCAD ${version}"
     }
   },
   "devDependencies": {

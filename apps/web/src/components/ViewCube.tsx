@@ -1,6 +1,6 @@
 import { House, RotateCcw, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { THREE, type Viewport } from "@leocad/viewport";
+import { THREE, type Viewport } from "@meercad/viewport";
 
 type V = [number, number, number];
 // Faces carry the colour of the axis they face (the same colours as the origin planes).

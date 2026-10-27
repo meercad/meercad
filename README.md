@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/brand/leocad-icon-256.png" alt="leocad" width="160" height="160">
+  <img src="docs/brand/meercad-icon-256.png" alt="meerCAD" width="160" height="160">
 </p>
 
-<h1 align="center">leocad</h1>
+<h1 align="center">meerCAD</h1>
 
 <p align="center">
   <b>Free, open-source parametric CAD for makers</b><br>
@@ -22,15 +22,15 @@ push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so 
 ## Install (macOS)
 
 1. Download the latest `.dmg` from the [Releases](../../releases) page (`arm64` = Apple Silicon, `x64` = Intel).
-2. Open it and drag **leocad** into **Applications**, then start it. The app is signed and notarized by Apple.
+2. Open it and drag **meerCAD** into **Applications**, then start it. The app is signed and notarized by Apple.
 
 Every push to `main` publishes a fresh build as the **latest** pre-release; tags `v*` create versioned releases.
 The app checks for new releases at start and hourly and offers **Update now** — it downloads the new
-version, replaces itself and restarts (also available via *leocad → Check for Updates…*).
+version, replaces itself and restarts (also available via *meerCAD → Check for Updates…*).
 
 ## Your files
 
-Projects are plain `.leocad` files in a folder you pick on first launch (default `~/Documents/leocad`,
+Projects are plain `.meercad` files in a folder you pick on first launch (default `~/Documents/meerCAD`,
 changeable in Settings). Folders you create in the app are real folders there. The files are human-readable JSON (see
 [docs/FORMAT.md](docs/FORMAT.md)) that you can version with git, edit by hand or generate with scripts.
 Exchange with other CAD tools via STEP; 3D printing via STL/3MF; laser cutting via DXF/SVG.
@@ -49,8 +49,8 @@ watch it work live in the app — including previews of ideas before they are ap
 ```bash
 pnpm install
 pnpm dev                                   # web app at http://localhost:5173
-pnpm --filter leocad-desktop dev          # desktop shell against the dev server
-pnpm --filter leocad-desktop run dist     # build the .dmg locally
+pnpm --filter meercad-desktop dev          # desktop shell against the dev server
+pnpm --filter meercad-desktop run dist     # build the .dmg locally
 pnpm test && pnpm typecheck
 ```
 

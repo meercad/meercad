@@ -1,5 +1,5 @@
 /** Fully parametric starter models for the home screen. */
-import type { Expr, LeocadDocument, SketchConstraint, SketchEntity } from "@leocad/schema";
+import type { Expr, MeercadDocument, SketchConstraint, SketchEntity } from "@meercad/schema";
 
 /** Rectangle anchored at the origin with width/height dimensions. */
 function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: SketchEntity[]; constraints: SketchConstraint[] } {
@@ -29,8 +29,8 @@ function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: 
 }
 
 const plate = rect("width", "depth", true, 60, 40);
-const bracket: LeocadDocument = {
-  format: "leocad/1",
+const bracket: MeercadDocument = {
+  format: "meercad/1",
   params: { width: "60 mm", depth: "40 mm", thickness: "4 mm", hole: "4.5 mm", inset: "10 mm", corner: "5 mm" },
   features: [
     { id: "sk1", op: "sketch", name: "Plate outline", plane: { ref: "origin.XY" }, ...plate },
@@ -83,8 +83,8 @@ const bracket: LeocadDocument = {
 };
 
 const boxRect = rect("width", "length", true, 80, 50);
-const box: LeocadDocument = {
-  format: "leocad/1",
+const box: MeercadDocument = {
+  format: "meercad/1",
   params: { width: "80 mm", length: "50 mm", height: "30 mm", wall: "2 mm", round: "4 mm" },
   features: [
     { id: "sk1", op: "sketch", name: "Footprint", plane: { ref: "origin.XY" }, ...boxRect },
@@ -96,8 +96,8 @@ const box: LeocadDocument = {
   rollback: null,
 };
 
-const flange: LeocadDocument = {
-  format: "leocad/1",
+const flange: MeercadDocument = {
+  format: "meercad/1",
   params: { outer: "60 mm", bore: "20 mm", thickness: "8 mm", holes: 6, hole: "6 mm", pcd: "45 mm" },
   features: [
     {
@@ -139,7 +139,7 @@ const flange: LeocadDocument = {
   rollback: null,
 };
 
-export const EXAMPLES: { name: string; description: string; thumbnail: string; doc: LeocadDocument }[] = [
+export const EXAMPLES: { name: string; description: string; thumbnail: string; doc: MeercadDocument }[] = [
   { name: "Mounting plate", description: "Holes, countersinks, rounded corners", thumbnail: "/examples/mounting-plate.png", doc: bracket },
   { name: "Project box", description: "Shelled enclosure with fillets", thumbnail: "/examples/project-box.png", doc: box },
   { name: "Flange", description: "Circular bolt pattern", thumbnail: "/examples/flange.png", doc: flange },

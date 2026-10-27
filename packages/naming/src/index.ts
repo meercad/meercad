@@ -4,7 +4,7 @@
  * through modelling history.
  */
 
-import type { EdgeSelector, FaceSelector } from "@leocad/schema";
+import type { EdgeSelector, FaceSelector } from "@meercad/schema";
 
 export interface FaceInfo {
   planar: boolean;

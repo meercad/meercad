@@ -20,10 +20,10 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
       }
       if (e.key === "Escape") setOpen(false);
     };
-    window.addEventListener("leocad:settings", toggle);
+    window.addEventListener("meercad:settings", toggle);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("leocad:settings", toggle);
+      window.removeEventListener("meercad:settings", toggle);
       window.removeEventListener("keydown", onKey);
     };
   }, []);
@@ -134,7 +134,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <h3>
               <HardDrive /> Projects folder
             </h3>
-            <p className="muted">Projects are plain .leocad files. Folders you create in leocad are real folders here.</p>
+            <p className="muted">Projects are plain .meercad files. Folders you create in meerCAD are real folders here.</p>
             <div className="folder-row">
               <code title={dir ?? ""}>{dir ?? "…"}</code>
               <button className="btn" onClick={() => void desktop!.projects.reveal()}>

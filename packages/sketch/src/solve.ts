@@ -4,7 +4,7 @@
  */
 
 import { Algorithm, GcsWrapper, init_planegcs_module, SolveStatus, type SketchPrimitive } from "@salusoft89/planegcs";
-import type { SketchConstraint, SketchEntity } from "@leocad/schema";
+import type { SketchConstraint, SketchEntity } from "@meercad/schema";
 import { sweep, type SolvedCurve, type SolvedSketch, type Vec2 } from "./geometry.js";
 
 /** A sketch constraint whose expression has been evaluated (mm / degrees). */

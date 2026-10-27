@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LeocadDocument } from "@leocad/schema";
+import type { MeercadDocument } from "@meercad/schema";
 import { evaluate, resolveParams } from "./expr.js";
 import { FeatureError, RebuildEngine, type KernelBackend } from "./rebuild.js";
 import { DocumentStore, OpError } from "./store.js";
@@ -82,8 +82,8 @@ const fake = (): KernelBackend<string[]> & { runs: string[]; disposed: number } 
   return k;
 };
 
-const doc = (h: number | string, r = 2): LeocadDocument => ({
-  format: "leocad/1",
+const doc = (h: number | string, r = 2): MeercadDocument => ({
+  format: "meercad/1",
   params: { h },
   features: [
     { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: [], constraints: [] },

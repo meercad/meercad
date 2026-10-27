@@ -1,4 +1,4 @@
-import type { LeocadDocument } from "@leocad/schema";
+import type { MeercadDocument } from "@meercad/schema";
 import { resolveParams } from "./expr.js";
 import { hashString } from "./hash.js";
 import { resolveFeature, type ResolvedFeature } from "./resolve.js";
@@ -67,7 +67,7 @@ export class RebuildEngine<S> {
     this.root = backend.initialState();
   }
 
-  rebuild(doc: LeocadDocument): RebuildResult<S> {
+  rebuild(doc: MeercadDocument): RebuildResult<S> {
     const t0 = performance.now();
     const { values, errors } = resolveParams(doc.params);
     const statuses: FeatureStatus[] = [];

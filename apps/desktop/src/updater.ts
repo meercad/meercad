@@ -9,7 +9,7 @@ import { access, constants, mkdtemp, readdir, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const REPO = process.env["LEOCAD_UPDATE_REPO"] ?? "torbenberger/leocad";
+const REPO = process.env["MEERCAD_UPDATE_REPO"] ?? "torbenberger/meercad";
 
 export interface UpdateInfo {
   version: string;
@@ -30,7 +30,7 @@ export function buildSha(): string | null {
   }
 }
 
-const api = (path: string) => net.fetch(`https://api.github.com/repos/${REPO}/${path}`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "leocad" } });
+const api = (path: string) => net.fetch(`https://api.github.com/repos/${REPO}/${path}`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "meercad" } });
 
 async function changesBetween(from: string | null, to: string): Promise<string[]> {
   if (!from || !to || from === to) return [];
@@ -60,7 +60,7 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   let best: UpdateInfo | null = null;
   for (const r of releases) {
     for (const a of r.assets) {
-      const m = new RegExp(`^leocad-(\\d+\\.\\d+\\.\\d+)-${arch}\\.zip$`).exec(a.name);
+      const m = new RegExp(`^meercad-(\\d+\\.\\d+\\.\\d+)-${arch}\\.zip$`).exec(a.name);
       if (m && newer(m[1]!, best?.version ?? app.getVersion())) {
         best = { version: m[1]!, url: a.browser_download_url, page: r.html_url, notes: (r.body ?? "").slice(0, 2000), changes: [] };
         target = r.target_commitish ?? "";
@@ -95,7 +95,7 @@ export async function installUpdate(info: UpdateInfo, win: BrowserWindow | null)
     await shell.openExternal(info.page);
     return;
   }
-  const dir = await mkdtemp(join(tmpdir(), "leocad-update-"));
+  const dir = await mkdtemp(join(tmpdir(), "meercad-update-"));
   const zip = join(dir, "update.zip");
   const res = await net.fetch(info.url);
   // The rolling release is deleted and recreated while a new build is published.

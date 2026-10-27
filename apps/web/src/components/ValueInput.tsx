@@ -4,8 +4,8 @@
  */
 import { Plus, Variable } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { evaluate } from "@leocad/model";
-import type { Expr } from "@leocad/schema";
+import { evaluate } from "@meercad/model";
+import type { Expr } from "@meercad/schema";
 import { apply, useApp } from "../store";
 import { parseExpr } from "./ExprInput";
 import { GROUP_LABEL, GROUP_ORDER, variableGroup } from "../lib/variables";

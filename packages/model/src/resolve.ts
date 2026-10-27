@@ -14,7 +14,7 @@ import type {
   ThreadFeature,
   SketchFeature,
   TransformFeature,
-} from "@leocad/schema";
+} from "@meercad/schema";
 import { evaluate, ExprError } from "./expr.js";
 
 /** `T` with the expression fields `K` evaluated to numbers. */

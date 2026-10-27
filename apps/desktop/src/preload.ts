@@ -40,5 +40,5 @@ const api = {
   },
 };
 
-contextBridge.exposeInMainWorld("leocadDesktop", api);
+contextBridge.exposeInMainWorld("meercadDesktop", api);
 export type DesktopApi = typeof api;

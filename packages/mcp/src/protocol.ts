@@ -1,4 +1,4 @@
-/** Messages between the MCP server (WebSocket server) and the leocad app (WebSocket client). */
+/** Messages between the MCP server (WebSocket server) and the meerCAD app (WebSocket client). */
 
 export const DEFAULT_PORT = 47821;
 
@@ -31,7 +31,7 @@ export type BridgeResponse = { id: number; result: unknown } | { id: number; err
 
 /** First message the app sends after connecting. */
 export interface BridgeHello {
-  hello: "leocad";
+  hello: "meercad";
   version: string;
   project: string | null;
 }

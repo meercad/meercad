@@ -1,10 +1,10 @@
 /** Application state (zustand) and the document → kernel rebuild loop. */
 import { create } from "zustand";
-import { KernelClient, SupersededError, type Measurement, type RebuildOutput } from "@leocad/kernel/client";
-import { DocumentStore, OpError } from "@leocad/model";
-import { emptyDocument, type DocOp, type Feature, type FeatureOp, type LeocadDocument, type PlaneSpec } from "@leocad/schema";
+import { KernelClient, SupersededError, type Measurement, type RebuildOutput } from "@meercad/kernel/client";
+import { DocumentStore, OpError } from "@meercad/model";
+import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick } from "./lib/topology";
-import type { Pick, Viewport } from "@leocad/viewport";
+import type { Pick, Viewport } from "@meercad/viewport";
 import { draftFeature, draftProblem } from "./lib/features";
 import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
@@ -37,7 +37,7 @@ interface State {
   folders: string[];
   folder: string;
   project: ProjectMeta | null;
-  doc: LeocadDocument;
+  doc: MeercadDocument;
   canUndo: boolean;
   canRedo: boolean;
   output: RebuildOutput | null;
@@ -54,7 +54,7 @@ interface State {
   showPlanes: boolean;
   showSketches: boolean;
   measure: { active: boolean; picks: Pick[]; result: Measurement | null };
-  proposalDoc: LeocadDocument | null;
+  proposalDoc: MeercadDocument | null;
   toasts: Toast[];
   saveState: "saved" | "saving" | "unsaved";
   selectedFeature: string | null;
@@ -76,7 +76,7 @@ const closedTabs: string[] = [];
 
 function loadTabs(): Tab[] {
   try {
-    return (JSON.parse(localStorage.getItem("leocad.tabs") ?? "[]") as Tab[]).filter((t) => typeof t.id === "string");
+    return (JSON.parse(localStorage.getItem("meercad.tabs") ?? "[]") as Tab[]).filter((t) => typeof t.id === "string");
   } catch {
     return [];
   }
@@ -84,7 +84,7 @@ function loadTabs(): Tab[] {
 function setTabs(tabs: Tab[]): void {
   useApp.setState({ tabs });
   try {
-    localStorage.setItem("leocad.tabs", JSON.stringify(tabs));
+    localStorage.setItem("meercad.tabs", JSON.stringify(tabs));
   } catch {
     // tabs just won't be restored
   }
@@ -124,7 +124,7 @@ export const useApp = create<State>(() => ({
   aiActivity: null,
   sideOpen: (() => {
     try {
-      return localStorage.getItem("leocad.sideOpen") === "1";
+      return localStorage.getItem("meercad.sideOpen") === "1";
     } catch {
       return false;
     }
@@ -135,7 +135,7 @@ export function toggleSide(open?: boolean): void {
   const next = open ?? !useApp.getState().sideOpen;
   useApp.setState({ sideOpen: next });
   try {
-    localStorage.setItem("leocad.sideOpen", next ? "1" : "0");
+    localStorage.setItem("meercad.sideOpen", next ? "1" : "0");
   } catch {
     // preference not persisted
   }
@@ -202,7 +202,7 @@ export const currentDoc = () => docStore.doc;
 // ---------------------------------------------------------------- rebuild loop
 
 /** The document the viewport should show: proposal, draft preview or the real document. */
-function displayDoc(): { doc: LeocadDocument; preview: boolean; problem: string | null } {
+function displayDoc(): { doc: MeercadDocument; preview: boolean; problem: string | null } {
   const s = get();
   if (s.proposalDoc) return { doc: s.proposalDoc, preview: true, problem: null };
   const d = s.dialog;
@@ -450,7 +450,7 @@ export async function openProject(id: string): Promise<void> {
   history.replaceState(null, "", `#/p/${encodeURIComponent(p.id)}`);
 }
 
-export async function newProject(doc: LeocadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
+export async function newProject(doc: MeercadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
   await flushSave();
   // New parts land next to the open project, or in the folder the overview shows.
   const meta = await createProject(name, doc, get().project?.folder ?? get().folder);
@@ -458,7 +458,7 @@ export async function newProject(doc: LeocadDocument = emptyDocument(), name = "
   history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
 }
 
-function loadDoc(doc: LeocadDocument, meta: ProjectMeta, store?: DocumentStore): void {
+function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore): void {
   // Refresh the project's picture once per opening, after the first rebuild.
   thumbFor = null;
   const leaving = get().project;
@@ -555,12 +555,12 @@ export async function flushSave(withThumbnail = false): Promise<void> {
 
 window.addEventListener("beforeunload", () => void flushSave());
 
-export function replaceDocument(doc: LeocadDocument): void {
+export function replaceDocument(doc: MeercadDocument): void {
   apply({ type: "replace", doc });
 }
 
 // Debug handle for development and end-to-end checks.
-if (import.meta.env.DEV) Object.assign(window, { leocad: { useApp, apply, currentDoc, getViewport, kernel } });
+if (import.meta.env.DEV) Object.assign(window, { meercad: { useApp, apply, currentDoc, getViewport, kernel } });
 
 // ---------------------------------------------------------------- tabs
 

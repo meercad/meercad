@@ -20,7 +20,7 @@ export function toggleTheme(): void {
   const dark = root.dataset["theme"] ? root.dataset["theme"] === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset["theme"] = dark ? "light" : "dark";
   try {
-    localStorage.setItem("leocad.theme", root.dataset["theme"]);
+    localStorage.setItem("meercad.theme", root.dataset["theme"]);
   } catch {
     // theme just won't persist
   }
@@ -47,15 +47,15 @@ export function TopBar() {
         { label: `Export ${s.id} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
       ]),
       "sep",
-      { label: "Save copy as .leocad…", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
+      { label: "Save copy as .meercad…", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
       ...(desktop ? [] : [{ label: "Copy share link", icon: <Share2 />, onClick: () => void shareLink() }]),
     ]);
   };
   const openMore = () => {
     const r = moreBtn.current!.getBoundingClientRect();
     showMenu(r.right - 240, r.bottom + 6, [
-      { label: "Settings…", icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("leocad:settings")) },
-      { label: "Help & guides", icon: <CircleHelp />, onClick: () => window.dispatchEvent(new Event("leocad:help")) },
+      { label: "Settings…", icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("meercad:settings")) },
+      { label: "Help & guides", icon: <CircleHelp />, onClick: () => window.dispatchEvent(new Event("meercad:help")) },
       { label: "Keyboard shortcuts", icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) },
       { label: `${usePrefs.getState().showValues ? "Hide" : "Show"} dimensions on the model`, icon: <Ruler />, onClick: () => setPrefs({ showValues: !usePrefs.getState().showValues }) },
       { label: `${usePrefs.getState().showKeys ? "Hide" : "Show"} shortcut badges`, icon: <Keyboard />, onClick: () => setPrefs({ showKeys: !usePrefs.getState().showKeys }) },

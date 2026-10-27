@@ -3,7 +3,7 @@
  * preset in Settings changes both what keys do and what the UI shows.
  */
 import { create } from "zustand";
-import type { Navigation } from "@leocad/viewport";
+import type { Navigation } from "@meercad/viewport";
 import type { SketchTool } from "../sketch/state";
 
 export type ModelAction =
@@ -75,11 +75,11 @@ const BASE: Keymap = {
   "sketch.construction": ["X"],
 };
 
-export type KeyScheme = "leocad" | "fusion" | "onshape" | "solidworks" | "blender";
-export type MouseScheme = "leocad" | "fusion" | "onshape" | "solidworks" | "blender" | "trackpad";
+export type KeyScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blender";
+export type MouseScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blender" | "trackpad";
 
 export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Keymap }[] = [
-  { id: "leocad", label: "leocad", note: "Single letters for every tool, ⌘1–7 for views.", map: BASE },
+  { id: "meercad", label: "meerCAD", note: "Single letters for every tool, ⌘1–7 for views.", map: BASE },
   {
     id: "fusion",
     label: "Fusion 360",
@@ -151,8 +151,8 @@ export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Key
 
 export const MOUSE_SCHEMES: { id: MouseScheme; label: string; orbit: string; pan: string; zoom: string; nav: Navigation }[] = [
   {
-    id: "leocad",
-    label: "leocad",
+    id: "meercad",
+    label: "meerCAD",
     orbit: "Right drag",
     pan: "Middle drag or Shift + right drag",
     zoom: "Wheel",
@@ -219,10 +219,10 @@ interface Prefs {
 export type GridStep = "auto" | number;
 export const GRID_STEPS: number[] = [0.1, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50];
 
-const STORAGE_KEY = "leocad.prefs";
+const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "leocad", mouse: "leocad", invertZoom: false, showKeys: true, showValues: true, snapGrid: true, snapGeometry: true, gridStep: "auto" };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, snapGrid: true, snapGeometry: true, gridStep: "auto" };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {

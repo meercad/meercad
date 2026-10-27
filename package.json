@@ -1,12 +1,12 @@
 {
-  "name": "leocad",
+  "name": "meercad",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.28.0",
   "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "pnpm --filter @leocad/web dev",
-    "build": "pnpm --filter @leocad/web build",
+    "dev": "pnpm --filter @meercad/web dev",
+    "build": "pnpm --filter @meercad/web build",
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
     "test": "vitest run",
     "test:watch": "vitest",

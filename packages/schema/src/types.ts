@@ -1,9 +1,9 @@
 /**
- * TypeScript types for the leocad document format. The JSON Schema in `schema.ts` mirrors these
+ * TypeScript types for the meerCAD document format. The JSON Schema in `schema.ts` mirrors these
  * types and is what untrusted input (share links, files, AI tool calls) is validated against.
  */
 
-export const FORMAT = "leocad/1" as const;
+export const FORMAT = "meercad/1" as const;
 
 /** A number (mm, or degrees for angles) or an expression such as `"wall * 2"`, `"2 mm"`, `"45 deg"`. */
 export type Expr = number | string;
@@ -280,7 +280,7 @@ export type EdgeSelector =
   /** All edges bounding faces matching `where.face` (relative to `of` when it has no dot). */
   | { select: "edges"; of?: string; where?: { face?: FaceTag } };
 
-export interface LeocadDocument {
+export interface MeercadDocument {
   format: typeof FORMAT;
   /** Named user parameters, e.g. `{ wall: "2 mm", width: "wall * 10" }`. */
   params: Record<string, Expr>;
@@ -305,9 +305,9 @@ export type DocOp =
   | { type: "set_param"; name: string; expr: Expr | null; auto?: boolean }
   | { type: "rename_param"; name: string; to: string }
   | { type: "set_rollback"; id: string | null }
-  | { type: "replace"; doc: LeocadDocument };
+  | { type: "replace"; doc: MeercadDocument };
 
-export function emptyDocument(): LeocadDocument {
+export function emptyDocument(): MeercadDocument {
   return { format: FORMAT, params: {}, features: [], rollback: null };
 }
 

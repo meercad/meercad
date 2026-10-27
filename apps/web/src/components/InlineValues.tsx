@@ -3,13 +3,13 @@
  * sketch, and the value at every drag arrow. Click a value to type a new number or expression.
  */
 import { useEffect, useReducer, useRef, useState } from "react";
-import type { RebuildOutput } from "@leocad/kernel/client";
-import type { Expr, Feature, SketchConstraint, SketchFeature } from "@leocad/schema";
-import { toWorld, type Vec2 } from "@leocad/sketch";
-import type { Viewport } from "@leocad/viewport";
+import type { RebuildOutput } from "@meercad/kernel/client";
+import type { Expr, Feature, SketchConstraint, SketchFeature } from "@meercad/schema";
+import { toWorld, type Vec2 } from "@meercad/sketch";
+import type { Viewport } from "@meercad/viewport";
 import { faceAnchor, profileAnchor } from "../lib/anchors";
 import { Link2Off } from "lucide-react";
-import { evaluate } from "@leocad/model";
+import { evaluate } from "@meercad/model";
 import { apply, toast, useApp } from "../store";
 import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";

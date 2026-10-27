@@ -5,8 +5,8 @@
  * at the nominal size, a shaft is trimmed to (or grown to) the major diameter.
  */
 
-import { externalMinor, FeatureError, internalMinor, threadFor, type ResolvedThread } from "@leocad/model";
-import { resolveFaces } from "@leocad/naming";
+import { externalMinor, FeatureError, internalMinor, threadFor, type ResolvedThread } from "@meercad/model";
+import { resolveFaces } from "@meercad/naming";
 import type { TopoDS_Shape, TopoDS_Wire } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
 import { Body } from "./body.js";

@@ -109,7 +109,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         title: "Saving, export and import",
         body: (
           <ul>
-            <li>Projects save automatically as open <span className="mono">.leocad</span> files (readable JSON) — in the desktop app in Documents/leocad.</li>
+            <li>Projects save automatically as open <span className="mono">.meercad</span> files (readable JSON) — in the desktop app in Documents/meerCAD.</li>
             <li>Export: STL and 3MF for 3D printing, STEP for other CAD tools, DXF/SVG of a sketch for laser cutting.</li>
             <li>Import: drag STEP, STL, DXF, SVG or .ocad files into the window, or use Import <Kbd k="Mod+O" />.</li>
           </ul>
@@ -124,7 +124,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         title: "Open source and licenses",
         body: (
           <ul>
-            <li>leocad is free software under the GNU AGPL-3.0; its file-format, I/O and naming libraries are MIT licensed.</li>
+            <li>meerCAD is free software under the GNU AGPL-3.0; its file-format, I/O and naming libraries are MIT licensed.</li>
             <li>Geometry by <b>Open CASCADE Technology</b> and sketch solving by <b>PlaneGCS</b> (FreeCAD), both LGPL-2.1, used unmodified as replaceable WebAssembly modules.</li>
             <li>Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages — the full list is in THIRD_PARTY_NOTICES.md next to the app.</li>
             <li>Your models belong to you: projects are plain files on your computer; nothing is uploaded.</li>
@@ -140,7 +140,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         title: "Model with Claude via MCP",
         body: (
           <ol>
-            <li>Click the plug icon in the top bar and enable <b>Allow assistants to control leocad</b>.</li>
+            <li>Click the plug icon in the top bar and enable <b>Allow assistants to control meerCAD</b>.</li>
             <li>Copy the shown configuration into Claude Desktop (Settings → Developer → Edit Config) or run the <span className="mono">claude mcp add …</span> command for Claude Code.</li>
             <li>Ask for parts or changes, e.g. “make the plate 10 mm wider and add a third hole”. The assistant can pick and open projects, preview ideas and apply them — you see every step live and can undo.</li>
           </ol>

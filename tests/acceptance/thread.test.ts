@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { RebuildReport } from "@leocad/kernel";
-import type { Feature } from "@leocad/schema";
+import type { RebuildReport } from "@meercad/kernel";
+import type { Feature } from "@meercad/schema";
 import { circle, corpus, doc, newSession, rect, sketch } from "./helpers.js";
 
 const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
@@ -68,7 +68,7 @@ describe("thread", () => {
 
   it("threads countersunk holes and chamfered shafts (stopping at the chamfer)", async () => {
     const s = await newSession();
-    const plate = corpus("mounting-plate.leocad.json");
+    const plate = corpus("mounting-plate.meercad.json");
     const holes = s.rebuild({ ...plate, features: [...plate.features, { id: "th1", op: "thread", face: { face: "ex2.side[sk2.h2]" } }, { id: "th2", op: "thread", face: { face: "ex2.side[sk2.h1]" }, clearance: 0.1 }] }).report;
     ok(holes);
     const bolt = s.rebuild(doc([...shaft(8), { id: "ch1", op: "chamfer", edges: { edge: ["ex2.end_cap", "ex2.side[sk2.c1]"] }, distance: 1 }, { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" } }])).report;

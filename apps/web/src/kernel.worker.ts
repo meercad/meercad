@@ -1,4 +1,4 @@
-import { startKernelWorker } from "@leocad/kernel/worker";
+import { startKernelWorker } from "@meercad/kernel/worker";
 import gcsUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
 import occtUrl from "replicad-opencascadejs/wasm?url";
 

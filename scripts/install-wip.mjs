@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Builds the current working tree as "leocad WIP" and installs it to /Applications next to the
- * released leocad, so changes can be tried in the real desktop app before they are pushed.
+ * Builds the current working tree as "meerCAD WIP" and installs it to /Applications next to the
+ * released meerCAD, so changes can be tried in the real desktop app before they are pushed.
  *
  * The WIP app has its own app id (separate settings, window state and single-instance lock), starts
- * on the release's projects folder, never self-updates and does not claim .leocad files.
+ * on the release's projects folder, never self-updates and does not claim .meercad files.
  *
  *   pnpm wip            build, install and open
  *   pnpm wip --no-open  build and install only
@@ -17,8 +17,8 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktop = join(root, "apps/desktop");
-const APP_ID = "dev.leocad.app.wip";
-const NAME = "leocad WIP";
+const APP_ID = "dev.meercad.app.wip";
+const NAME = "meerCAD WIP";
 const target = `/Applications/${NAME}.app`;
 const arch = process.arch === "arm64" ? "arm64" : "x64";
 
@@ -29,8 +29,8 @@ const run = (cmd, args, cwd = root) => {
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
 console.log("› building web app, MCP server and desktop shell");
-run("pnpm", ["--filter", "@leocad/web", "build"]);
-run("pnpm", ["--filter", "@leocad/mcp", "build"]);
+run("pnpm", ["--filter", "@meercad/web", "build"]);
+run("pnpm", ["--filter", "@meercad/mcp", "build"]);
 run("node", ["build.mjs"], desktop);
 
 // The release config with the WIP identity on top.
@@ -42,11 +42,11 @@ const config = {
   productName: NAME,
   directories: { ...pkg.build.directories, output: "release-wip" },
   mac: { ...pkg.build.mac, icon: "build/icon-wip.png", target: [{ target: "dir", arch: [arch] }] },
-  extraMetadata: { productName: NAME, leocadChannel: "wip", buildSha: sha },
+  extraMetadata: { productName: NAME, meercadChannel: "wip", buildSha: sha },
 };
 delete config.fileAssociations;
 delete config.dmg;
-const configFile = join(mkdtempSync(join(tmpdir(), "leocad-wip-")), "electron-builder.json");
+const configFile = join(mkdtempSync(join(tmpdir(), "meercad-wip-")), "electron-builder.json");
 writeFileSync(configFile, JSON.stringify(config, null, 2));
 
 console.log(`› packaging ${NAME} (${arch}, ${sha})`);

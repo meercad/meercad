@@ -1,5 +1,5 @@
 {
-  "name": "@leocad/sketch",
+  "name": "@meercad/sketch",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@leocad/schema": "workspace:*",
+    "@meercad/schema": "workspace:*",
     "@salusoft89/planegcs": "1.3.0"
   }
 }

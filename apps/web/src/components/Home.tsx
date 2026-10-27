@@ -9,7 +9,7 @@ import { importFile } from "./io";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
 
-const DRAG_TYPE = "application/x-leocad-project";
+const DRAG_TYPE = "application/x-meercad-project";
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
 const parentOf = (f: string) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
 const fail = (what: string) => (e: unknown) => toast(`Could not ${what}: ${e instanceof Error ? e.message : String(e)}`, "error");
@@ -154,7 +154,7 @@ export function Home() {
         <p className="sub">
           {desktop ? (
             <>
-              Saved as open <span className="mono">.leocad</span> files; folders here are real folders on disk. Drag a part onto a folder to move it.
+              Saved as open <span className="mono">.meercad</span> files; folders here are real folders on disk. Drag a part onto a folder to move it.
             </>
           ) : (
             "Stored only in this browser. Use Share or Export to move them elsewhere. Drag a part onto a folder to move it."

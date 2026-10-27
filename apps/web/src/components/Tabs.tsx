@@ -3,7 +3,7 @@ import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { closeTab, moveTab, newProject, openProject, renameProject, useApp } from "../store";
 
-const DRAG_TYPE = "application/x-leocad-tab";
+const DRAG_TYPE = "application/x-meercad-tab";
 
 export function TabStrip() {
   const tabs = useApp((s) => s.tabs);

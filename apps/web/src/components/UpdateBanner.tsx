@@ -20,7 +20,7 @@ function changeList(u: Update): string[] {
 }
 
 
-/** Shown when a newer leocad release exists; installs it in place (desktop app only). */
+/** Shown when a newer meerCAD release exists; installs it in place (desktop app only). */
 export function UpdateBanner() {
   const [update, setUpdate] = useState<Update | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -29,9 +29,9 @@ export function UpdateBanner() {
     if (!desktop) return;
     void desktop.info().then(({ version }) => {
       try {
-        const before = localStorage.getItem("leocad.version");
-        if (before && before !== version) toast(`Updated to leocad ${version}`);
-        localStorage.setItem("leocad.version", version);
+        const before = localStorage.getItem("meercad.version");
+        if (before && before !== version) toast(`Updated to meerCAD ${version}`);
+        localStorage.setItem("meercad.version", version);
       } catch {
         // no confirmation without storage
       }
@@ -39,7 +39,7 @@ export function UpdateBanner() {
     const offs = [
       desktop.on("update-available", (u) => setUpdate(u)),
       desktop.on("update-progress", (p) => setProgress(p)),
-      desktop.on("update-none", (v) => toast(`leocad ${v} is up to date`)),
+      desktop.on("update-none", (v) => toast(`meerCAD ${v} is up to date`)),
       desktop.on("update-error", (m) => {
         setProgress(null);
         toast(`Update failed: ${m}`, "error");
@@ -53,7 +53,7 @@ export function UpdateBanner() {
     <div className="update-banner" role="status">
       <div className="row">
         <Sparkles size={16} style={{ color: "var(--accent)" }} />
-        <b>leocad {update.version} is available</b>
+        <b>meerCAD {update.version} is available</b>
         <span className="spacer" />
         {progress === null ? (
           <button className="icon-btn sm" onClick={() => setDismissed(update.version)} title="Later">
@@ -70,7 +70,7 @@ export function UpdateBanner() {
         </ul>
       ) : null}
       {!update.canInstall ? (
-        <div className="muted update-hint">To update in place, move leocad into your Applications folder and start it from there.</div>
+        <div className="muted update-hint">To update in place, move meerCAD into your Applications folder and start it from there.</div>
       ) : null}
       {progress !== null ? (
         <div className="update-progress">

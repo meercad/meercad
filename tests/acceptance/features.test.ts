@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { exportStep, measure, type RebuildReport } from "@leocad/kernel";
-import type { Feature } from "@leocad/schema";
+import { exportStep, measure, type RebuildReport } from "@meercad/kernel";
+import type { Feature } from "@meercad/schema";
 import { circle, corpus, doc, getOcct, newSession, rect, sketch } from "./helpers.js";
 
 const box: Feature[] = [
@@ -150,7 +150,7 @@ describe("modelling features", () => {
   });
 
   it("reports sketch conflicts as warnings and solver DOF", async () => {
-    const d = corpus("box-fillet.leocad.json");
+    const d = corpus("box-fillet.meercad.json");
     const sk = d.features[0] as Extract<Feature, { op: "sketch" }>;
     sk.constraints.push({ id: "c8", type: "length", line: "l3", value: 99 });
     const { report } = (await newSession()).rebuild(d);
@@ -162,7 +162,7 @@ describe("modelling features", () => {
 describe("tools", () => {
   it("exports STEP and re-imports it with the same volume", async () => {
     const s = await newSession();
-    s.rebuild(corpus("box-fillet.leocad.json"));
+    s.rebuild(corpus("box-fillet.meercad.json"));
     const step = exportStep(await getOcct(), s.state!);
     expect(new TextDecoder().decode(step.subarray(0, 20))).toContain("ISO-10303-21");
     let b64 = "";

@@ -1,8 +1,8 @@
 /** File import/export and share links. */
-import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@leocad/io";
+import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@meercad/io";
 import { showNotice } from "./Ask";
-import { nextFeatureId } from "@leocad/model";
-import { validateDocument, type SketchConstraint, type SketchEntity } from "@leocad/schema";
+import { nextFeatureId } from "@meercad/model";
+import { validateDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, kernel, newProject, openSketch, toast, useApp } from "../store";
 
@@ -12,7 +12,7 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   step: { name: "STEP model", extensions: ["step", "stp"] },
   dxf: { name: "DXF drawing", extensions: ["dxf"] },
   svg: { name: "SVG drawing", extensions: ["svg"] },
-  ocad: { name: "leocad part", extensions: ["leocad"] },
+  ocad: { name: "meerCAD part", extensions: ["meercad", "meerCAD"] },
 };
 
 /** Saves a file: a native save dialog on desktop, a browser download otherwise. */
@@ -82,7 +82,7 @@ export async function shareLink(): Promise<void> {
 }
 
 export function saveFile(): void {
-  download(`${baseName()}.leocad`, JSON.stringify(currentDoc(), null, 2), "application/json");
+  download(`${baseName()}.meercad`, JSON.stringify(currentDoc(), null, 2), "application/json");
 }
 
 function pickFile(accept: string): Promise<File | null> {
@@ -101,14 +101,14 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-/** Opens a file picker; STEP/STL become import features, DXF/SVG a new sketch, .leocad a project. */
+/** Opens a file picker; STEP/STL become import features, DXF/SVG a new sketch, .meercad a project. */
 export async function importFile(file?: File | null): Promise<void> {
-  file ??= await pickFile(".step,.stp,.stl,.dxf,.svg,.leocad,.json");
+  file ??= await pickFile(".step,.stp,.stl,.dxf,.svg,.meercad,.json");
   if (!file) return;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "leocad" || ext === "json") {
+  if (ext === "meercad" || ext === "json") {
     const v = validateDocument(JSON.parse(await file.text()));
-    if (!v.ok) return toast(`Not a valid leocad file: ${v.errors[0]}`, "error");
+    if (!v.ok) return toast(`Not a valid meerCAD file: ${v.errors[0]}`, "error");
     await flushSave();
     await newProject(v.value, file.name.replace(/\.\w+$/, ""));
     return;

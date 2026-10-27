@@ -1,10 +1,10 @@
 {
-  "name": "@leocad/naming",
+  "name": "@meercad/naming",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit -p ." },
-  "dependencies": { "@leocad/schema": "workspace:*" }
+  "dependencies": { "@meercad/schema": "workspace:*" }
 }

@@ -25,7 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
-import type { FeatureOp } from "@leocad/schema";
+import type { FeatureOp } from "@meercad/schema";
 import { FEATURES } from "../lib/features";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleConstruction } from "../sketch/actions";

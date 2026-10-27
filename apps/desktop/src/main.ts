@@ -1,7 +1,7 @@
 /**
- * leocad desktop shell. Serves the web app from an app:// origin (with the cross-origin isolation
- * headers it needs), stores projects as plain .leocad files in a folder the user picks on first
- * launch (default ~/Documents/leocad) and exposes a small, explicit file API to the renderer.
+ * meerCAD desktop shell. Serves the web app from an app:// origin (with the cross-origin isolation
+ * headers it needs), stores projects as plain .meercad files in a folder the user picks on first
+ * launch (default ~/Documents/meerCAD) and exposes a small, explicit file API to the renderer.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, type MenuItemConstructorOptions } from "electron";
 import { createHash } from "node:crypto";
@@ -9,13 +9,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, renameLegacyFiles } from "./legacy";
 import { canSelfUpdate, checkForUpdate, installUpdate, type UpdateInfo } from "./updater";
 
 const DEV = process.argv.includes("--dev");
 /** "wip" for the local test build that lives next to the release (built by `pnpm wip`); it never self-updates. */
 const WIP = (() => {
   try {
-    return (JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { leocadChannel?: string }).leocadChannel === "wip";
+    return (JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { meercadChannel?: string }).meercadChannel === "wip";
   } catch {
     return false;
   }
@@ -24,7 +25,7 @@ const DEV_URL = "http://localhost:5173";
 const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dirname, "../../web/dist");
 const mcpServer = app.isPackaged ? join(process.resourcesPath, "mcp", "server.js") : join(__dirname, "../../../packages/mcp/dist/server.js");
 const settingsPath = () => join(app.getPath("userData"), "settings.json");
-const defaultProjectsDir = () => join(app.getPath("documents"), "leocad");
+const defaultProjectsDir = () => join(app.getPath("documents"), "meerCAD");
 
 /** App-level settings that must live outside the projects folder (it is one of them). */
 interface Settings {
@@ -38,7 +39,7 @@ function readSettings(): Settings {
   }
 }
 let settings: Settings = {};
-const projectsDir = () => process.env["LEOCAD_PROJECTS_DIR"] ?? settings.projectsDir ?? defaultProjectsDir();
+const projectsDir = () => process.env["MEERCAD_PROJECTS_DIR"] ?? settings.projectsDir ?? defaultProjectsDir();
 const thumbsDir = () => join(app.getPath("userData"), "thumbnails");
 
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
@@ -81,12 +82,12 @@ function checkRel(rel: string, what: string): string[] {
   if (parts.some((p) => !SEGMENT.test(p) || p.startsWith(".") || p.trim() !== p || !p)) throw new Error(`invalid ${what} "${rel}"`);
   return parts;
 }
-const projectPath = (id: string) => `${join(projectsDir(), ...checkRel(id, "project name"))}.leocad`;
+const projectPath = (id: string) => `${join(projectsDir(), ...checkRel(id, "project name"))}.meercad`;
 const folderPath = (folder: string) => (folder ? join(projectsDir(), ...checkRel(folder, "folder name")) : projectsDir());
 const joinId = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
 const folderOf = (id: string) => (id.includes("/") ? id.slice(0, id.lastIndexOf("/")) : "");
 const nameOf = (id: string) => id.slice(id.lastIndexOf("/") + 1);
-const toId = (rel: string) => rel.split(sep).join("/").replace(/\.leocad$/, "");
+const toId = (rel: string) => rel.split(sep).join("/").replace(/\.meercad$/, "");
 
 const thumbPath = (id: string) => join(thumbsDir(), `${createHash("sha1").update(projectPath(id)).digest("hex")}.png`);
 
@@ -214,19 +215,19 @@ ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | str
 ipcMain.handle("storage:status", () => ({
   dir: projectsDir(),
   defaultDir: defaultProjectsDir(),
-  chosen: Boolean(process.env["LEOCAD_PROJECTS_DIR"] ?? settings.projectsDir),
+  chosen: Boolean(process.env["MEERCAD_PROJECTS_DIR"] ?? settings.projectsDir),
 }));
 ipcMain.handle("storage:choose", async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   const r = await dialog.showOpenDialog(win!, {
-    title: "Choose a folder for your leocad projects",
+    title: "Choose a folder for your meerCAD projects",
     buttonLabel: "Use this folder",
     defaultPath: projectsDir(),
     properties: ["openDirectory", "createDirectory"],
   });
   return r.canceled ? null : (r.filePaths[0] ?? null);
 });
-/** All .leocad files below a folder, as paths relative to it. */
+/** All .meercad files below a folder, as paths relative to it. */
 async function projectFiles(root: string, rel = ""): Promise<string[]> {
   if (!existsSync(join(root, rel))) return [];
   const out: string[] = [];
@@ -234,7 +235,7 @@ async function projectFiles(root: string, rel = ""): Promise<string[]> {
     if (entry.name.startsWith(".")) continue;
     const r = rel ? join(rel, entry.name) : entry.name;
     if (entry.isDirectory()) out.push(...(await projectFiles(root, r)));
-    else if (entry.name.endsWith(".leocad")) out.push(r);
+    else if (entry.name.endsWith(".meercad")) out.push(r);
   }
   return out;
 }
@@ -269,7 +270,7 @@ ipcMain.handle("storage:set", async (_e, p: { dir: string; move: boolean }) => {
   await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`);
   return { dir: p.dir, moved, skipped };
 });
-/** Adds leocad to Claude Desktop's MCP configuration (keeps everything else, backs the file up first). */
+/** Adds meerCAD to Claude Desktop's MCP configuration (keeps everything else, backs the file up first). */
 ipcMain.handle("mcp:install-claude-desktop", async () => {
   const file = join(app.getPath("appData"), "Claude", "claude_desktop_config.json");
   let config: { mcpServers?: Record<string, unknown> } = {};
@@ -282,11 +283,17 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
     }
     await writeFile(`${file}.bak`, raw);
   }
-  config.mcpServers = { ...config.mcpServers, leocad: { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } } };
+  const servers: Record<string, unknown> = { ...config.mcpServers, meercad: mcpEntry() };
+  // The entry from before the rename would start an app that no longer exists.
+  delete servers["leocad"];
+  config.mcpServers = servers;
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
   return file;
 });
+function mcpEntry() {
+  return { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
+}
 ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
   projectsDir: projectsDir(),
@@ -332,7 +339,7 @@ function createWindow(): BrowserWindow {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    title: "leocad",
+    title: "meerCAD",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 26, y: 29 },
     backgroundColor: "#eef0f8",
@@ -349,14 +356,14 @@ function createWindow(): BrowserWindow {
   win.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
   });
-  void win.loadURL(DEV ? DEV_URL : "app://leocad/");
+  void win.loadURL(DEV ? DEV_URL : "app://meercad/");
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });
   return win;
 }
 
-/** Imports an .leocad file opened from Finder into the projects folder and opens it. */
+/** Imports an .meercad file opened from Finder into the projects folder and opens it. */
 async function openExternalFile(file: string): Promise<void> {
   if (!mainWindow) {
     pendingOpen.push(file);
@@ -364,7 +371,7 @@ async function openExternalFile(file: string): Promise<void> {
   }
   try {
     const doc = JSON.parse(await readFile(file, "utf8")) as unknown;
-    const inProjects = normalize(file).startsWith(projectsDir() + sep);
+    const inProjects = normalize(file).startsWith(projectsDir() + sep) && extname(file) === ".meercad";
     const id = inProjects ? toId(relative(projectsDir(), file)) : await uniqueId(basename(file, extname(file)));
     if (!inProjects) await writeFile(projectPath(id), `${JSON.stringify(doc, null, 2)}\n`);
     mainWindow.webContents.send("open-project", id);
@@ -406,7 +413,7 @@ function buildMenu(): void {
         { label: "Open…", accelerator: "CmdOrCtrl+O", click: send("menu", "import") },
         { label: "All Projects", accelerator: "CmdOrCtrl+Shift+H", click: send("menu", "home") },
         { type: "separator" },
-        { label: "Save Copy As .leocad…", accelerator: "CmdOrCtrl+Shift+S", click: send("menu", "save-as") },
+        { label: "Save Copy As .meercad…", accelerator: "CmdOrCtrl+Shift+S", click: send("menu", "save-as") },
         { label: "Show Projects Folder", click: () => void shell.openPath(projectsDir()) },
         { type: "separator" },
         // Tab keys are handled in the page; the menu only lists them.
@@ -432,7 +439,7 @@ function buildMenu(): void {
       ],
     },
     { role: "windowMenu" },
-    { role: "help", submenu: [{ label: "leocad on GitHub", click: () => void shell.openExternal("https://github.com/") }] },
+    { role: "help", submenu: [{ label: "meerCAD on GitHub", click: () => void shell.openExternal("https://github.com/") }] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -440,21 +447,30 @@ function buildMenu(): void {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", (_e, argv) => {
-    const file = argv.find((a) => a.endsWith(".leocad"));
+    const file = argv.find((a) => a.endsWith(".meercad") || a.endsWith(LEGACY_EXT));
     if (file) void openExternalFile(file);
     mainWindow?.focus();
   });
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
+    // Coming from the app's earlier name: keep its projects folder, thumbnails and files.
+    if (!WIP) await carryOverAppData(settingsPath(), thumbsDir()).catch(() => undefined);
     settings = readSettings();
     // The WIP build starts on the same projects folder as the installed release.
     if (WIP && !settings.projectsDir) {
-      try {
-        const release = JSON.parse(readFileSync(join(app.getPath("appData"), "leocad", "settings.json"), "utf8")) as Settings;
-        if (release.projectsDir) settings = { ...settings, projectsDir: release.projectsDir };
-      } catch {
-        // no release installed: the first-run folder picker asks
+      for (const name of ["meerCAD", "leocad"]) {
+        try {
+          const release = JSON.parse(readFileSync(join(app.getPath("appData"), name, "settings.json"), "utf8")) as Settings;
+          if (release.projectsDir) {
+            settings = { ...settings, projectsDir: release.projectsDir };
+            break;
+          }
+        } catch {
+          // no release installed: the first-run folder picker asks
+        }
       }
     }
+    await renameLegacyFiles(projectsDir(), thumbsDir()).catch(() => 0);
+    if (app.isPackaged && !WIP) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
     serveApp();
     buildMenu();
     mainWindow = createWindow();

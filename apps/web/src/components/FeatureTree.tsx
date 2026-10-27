@@ -2,8 +2,8 @@ import { Bot, Box, ChevronRight, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
-import { evaluate, referencedNames } from "@leocad/model";
-import type { Feature } from "@leocad/schema";
+import { evaluate, referencedNames } from "@meercad/model";
+import type { Feature } from "@meercad/schema";
 import { FEATURES, featureName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, useApp } from "../store";
@@ -15,7 +15,7 @@ import { showMenu } from "./Menu";
 
 const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
-const SECTIONS_KEY = "leocad.sections";
+const SECTIONS_KEY = "meercad.sections";
 
 /** Open/closed state of a sidebar section, remembered across sessions. */
 function useSection(id: string, defaultOpen = true): [boolean, () => void] {
@@ -625,7 +625,7 @@ function Params() {
           {automatic.length ? (
             <>
               <SectionHead open={autoOpen || !!q} onToggle={toggleAuto} sub>
-                <span title="Created by leocad (linking, new variable from a value) or by an assistant">Automatic</span> <span className="count">{automatic.filter(matches).length}</span>
+                <span title="Created by meerCAD (linking, new variable from a value) or by an assistant">Automatic</span> <span className="count">{automatic.filter(matches).length}</span>
               </SectionHead>
               {autoOpen || q ? automatic.filter(matches).map((n) => row(n, true)) : null}
               {(autoOpen || q) && !automatic.some(matches) ? <div className="empty" style={{ padding: "2px 4px" }}>No match</div> : null}

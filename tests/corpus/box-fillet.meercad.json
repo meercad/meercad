@@ -1,5 +1,5 @@
 {
-  "format": "leocad/1",
+  "format": "meercad/1",
   "params": { "wall": "2 mm", "w": "40 mm", "d": "20 mm", "h": "10 mm" },
   "features": [
     {

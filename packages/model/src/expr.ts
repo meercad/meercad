@@ -3,7 +3,7 @@
  * Lengths are normalised to mm. Dimensional analysis is not done yet (Phase 1).
  */
 
-import type { Expr } from "@leocad/schema";
+import type { Expr } from "@meercad/schema";
 
 // Lengths normalise to mm, angles to degrees.
 const UNITS: Record<string, number> = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8, deg: 1, rad: 180 / Math.PI };

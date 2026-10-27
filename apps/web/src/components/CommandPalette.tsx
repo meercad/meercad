@@ -1,7 +1,7 @@
 /** Command search (X / ⌘F): every action with its shortcut, fuzzy-filtered. */
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FeatureOp } from "@leocad/schema";
+import type { FeatureOp } from "@meercad/schema";
 import { FEATURES, TOOLBAR } from "../lib/features";
 import { setTool, type SketchTool } from "../sketch/state";
 import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch/actions";
@@ -68,8 +68,8 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       setQ("");
       setI(0);
     };
-    window.addEventListener("leocad:palette", toggle);
-    return () => window.removeEventListener("leocad:palette", toggle);
+    window.addEventListener("meercad:palette", toggle);
+    return () => window.removeEventListener("meercad:palette", toggle);
   }, []);
   useEffect(() => {
     if (open) setTimeout(() => input.current?.focus(), 0);
@@ -103,7 +103,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: "File", label: "Export STL", run: () => exportMesh("stl") },
         { group: "File", label: "Export 3MF", run: () => exportMesh("3mf") },
         { group: "File", label: "Export STEP", run: () => void exportStep() },
-        { group: "File", label: "Save copy as .leocad", kbd: "Shift+Mod+S", run: saveFile },
+        { group: "File", label: "Save copy as .meercad", kbd: "Shift+Mod+S", run: saveFile },
         { group: "File", label: "All projects", run: goHome },
       );
     }
@@ -113,7 +113,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       { group: "Help", label: "Help & guides", run: onHelp },
       { group: "Help", label: "Keyboard shortcuts", kbd: "?", run: onShortcuts },
       { group: "Help", label: "Introduction tour", run: onTour },
-      { group: "Help", label: "Settings", kbd: "Mod+,", run: () => window.dispatchEvent(new Event("leocad:settings")) },
+      { group: "Help", label: "Settings", kbd: "Mod+,", run: () => window.dispatchEvent(new Event("meercad:settings")) },
       { group: "Help", label: "Toggle dark mode", run: toggleTheme },
       ...(desktop ? [{ group: "Help", label: "Check for updates", run: () => void desktop!.updates.check() }] : []),
     );

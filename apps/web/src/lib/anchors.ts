@@ -1,8 +1,8 @@
 /** Positions and directions on tessellated bodies for drag handles and floating UI. */
-import type { BodyMesh, RebuildOutput } from "@leocad/kernel";
-import { resolveEdges, resolveFaces } from "@leocad/naming";
-import type { EdgeSelector, FaceSelector, ProfileRef } from "@leocad/schema";
-import { toWorld } from "@leocad/sketch";
+import type { BodyMesh, RebuildOutput } from "@meercad/kernel";
+import { resolveEdges, resolveFaces } from "@meercad/naming";
+import type { EdgeSelector, FaceSelector, ProfileRef } from "@meercad/schema";
+import { toWorld } from "@meercad/sketch";
 import { meshTopology } from "./topology";
 
 type Vec3 = [number, number, number];

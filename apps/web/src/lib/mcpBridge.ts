@@ -1,13 +1,13 @@
 /**
- * Connects the app to a local leocad MCP server so assistants like Claude can drive it. The app is
+ * Connects the app to a local meerCAD MCP server so assistants like Claude can drive it. The app is
  * the WebSocket client; the server only listens on 127.0.0.1 and checks the page origin.
  */
-import { write3mf, writeDxf, writeStl, writeSvg } from "@leocad/io";
-import type { RebuildOutput } from "@leocad/kernel/client";
-import { DEFAULT_PORT, type BridgeRequest } from "@leocad/mcp";
-import { resolveEdges, resolveFaces } from "@leocad/naming";
-import { applyOp } from "@leocad/model";
-import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type LeocadDocument } from "@leocad/schema";
+import { write3mf, writeDxf, writeStl, writeSvg } from "@meercad/io";
+import type { RebuildOutput } from "@meercad/kernel/client";
+import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
+import { resolveEdges, resolveFaces } from "@meercad/naming";
+import { applyOp } from "@meercad/model";
+import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
 import { sketchCurves } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import { meshTopology } from "./topology";
@@ -16,7 +16,7 @@ type Status = "off" | "connecting" | "connected";
 let socket: WebSocket | null = null;
 let retry: number | undefined;
 let wanted = false;
-/** When this window lost the connection to another leocad window recently. */
+/** When this window lost the connection to another meerCAD window recently. */
 let replaced: number[] = [];
 const listeners = new Set<(s: Status) => void>();
 let status: Status = "off";
@@ -33,7 +33,7 @@ export const onBridgeStatus = (fn: (s: Status) => void) => {
 export function setBridgeEnabled(on: boolean): void {
   wanted = on;
   try {
-    localStorage.setItem("leocad.mcp", on ? "1" : "0");
+    localStorage.setItem("meercad.mcp", on ? "1" : "0");
   } catch {
     // preference not persisted
   }
@@ -49,12 +49,12 @@ export function setBridgeEnabled(on: boolean): void {
 export function initBridge(): void {
   let pref: string | null = null;
   try {
-    pref = localStorage.getItem("leocad.mcp");
+    pref = localStorage.getItem("meercad.mcp");
   } catch {
     pref = null;
   }
   // The desktop app is ready for assistants out of the box; the browser version asks first.
-  const desktop = !!(window as { leocadDesktop?: unknown }).leocadDesktop;
+  const desktop = !!(window as { meercadDesktop?: unknown }).meercadDesktop;
   if (pref === "1" || (desktop && pref !== "0")) setBridgeEnabled(true);
 }
 
@@ -65,13 +65,13 @@ function connect(): void {
   socket = ws;
   ws.onopen = () => {
     setStatus("connected");
-    ws.send(JSON.stringify({ hello: "leocad", version: "0.1.0", project: useApp.getState().project?.name ?? null }));
+    ws.send(JSON.stringify({ hello: "meercad", version: "0.1.0", project: useApp.getState().project?.name ?? null }));
   };
   ws.onclose = (e) => {
     socket = null;
     if (!wanted) return setStatus("off");
     setStatus("connecting");
-    // Another leocad window (e.g. the WIP build next to the release) took the connection: take it back
+    // Another meerCAD window (e.g. the WIP build next to the release) took the connection: take it back
     // only when this one is used again, instead of the two swapping it every few seconds.
     if (e.code === 4000) {
       const now = Date.now();
@@ -154,13 +154,13 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       // Variables an assistant creates are listed apart from the user's own.
       const ops = (p["ops"] as DocOp[]).map((op) => (op.type === "set_param" && op.expr !== null && op.auto === undefined && !(op.name in currentDoc().params) ? { ...op, auto: true } : op));
       // Validate first so a bad op returns a precise error instead of a toast.
-      ops.reduce<LeocadDocument>((d, op) => applyOp(d, op), currentDoc());
+      ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       if (!apply(...ops)) throw new Error("ops were rejected");
       return summary(await rebuildNow());
     }
     case "preview_ops": {
       needProject();
-      const doc = (p["ops"] as DocOp[]).reduce<LeocadDocument>((d, op) => applyOp(d, op), currentDoc());
+      const doc = (p["ops"] as DocOp[]).reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       const result = summary(await kernel.sandbox(doc));
       // Show it live; the document itself stays untouched.
       useApp.setState({ proposalDoc: doc });
@@ -209,7 +209,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       if (format === "stl") return { base64: toB64(writeStl(out.meshes)) };
       if (format === "3mf") return { base64: toB64(write3mf(out.meshes.map((m) => ({ ...m, name: m.bodyId })))) };
       if (format === "step") return { base64: toB64(await kernel.exportStep()) };
-      if (format === "leocad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
+      if (format === "meercad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
       const sketch = String(p["sketch"] ?? "");
       if (!sketch) throw new Error("dxf/svg export needs a sketch id");
       const curves = sketchCurves(sketch);

@@ -1,6 +1,6 @@
 /** Sketch editing operations shared by the toolbar, keyboard shortcuts and the editor. */
 import type { ComponentType, SVGProps } from "react";
-import type { ConstraintType, SketchConstraint, SketchEntity, SketchFeature } from "@leocad/schema";
+import type { ConstraintType, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import { apply, applyQuiet, currentDoc, toast, useApp } from "../store";
 import { Coincident, Collinear, Concentric, EqualIcon, Fix, Horizontal, Midpoint, Parallel, Perpendicular, Symmetric, Tangent, Vertical } from "./icons";
 import { setSketchSelection, useSketchUi, type SketchSel } from "./state";

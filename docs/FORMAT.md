@@ -1,13 +1,13 @@
-# The `.leocad` file format (`leocad/1`)
+# The `.meercad` file format (`meercad/1`)
 
-An `.leocad` file is UTF-8 JSON describing a part as a **parametric feature history** — not as
+An `.meercad` file is UTF-8 JSON describing a part as a **parametric feature history** — not as
 triangles or B-rep. Opening the file replays the history to rebuild the geometry, so every value
 stays editable. The authoritative JSON Schema is `documentSchema` in
 [`packages/schema/src/schema.ts`](../packages/schema/src/schema.ts) (MIT licensed, free to reuse).
 
 ```json
 {
-  "format": "leocad/1",
+  "format": "meercad/1",
   "params": { "width": "60 mm", "hole": "4.5 mm" },
   "features": [
     { "id": "sk1", "op": "sketch", "plane": { "ref": "origin.XY" }, "entities": [ … ], "constraints": [ … ] },

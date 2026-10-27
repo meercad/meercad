@@ -1,6 +1,6 @@
 import Ajv, { type ErrorObject } from "ajv";
 import { docOpSchema, documentSchema } from "./schema.js";
-import type { DocOp, EdgeSelector, Feature, LeocadDocument, PlaneSpec, SketchFeature } from "./types.js";
+import { FORMAT, type DocOp, type EdgeSelector, type Feature, type MeercadDocument, type PlaneSpec, type SketchFeature } from "./types.js";
 
 export type Validation<T> = { ok: true; value: T } | { ok: false; errors: string[] };
 
@@ -113,9 +113,14 @@ function checkSketch(sk: SketchFeature, at: string, errors: string[]): void {
 }
 
 /** Structural (JSON Schema) and referential validation of a document. Expressions are checked by the model. */
-export function validateDocument(input: unknown): Validation<LeocadDocument> {
+/** Formats written by earlier versions, read as the current one. */
+export const LEGACY_FORMATS: readonly string[] = ["leocad/1"];
+
+export function validateDocument(input: unknown): Validation<MeercadDocument> {
+  // Files from before the rename (leocad) are the same format under another name.
+  if (input && typeof input === "object" && LEGACY_FORMATS.includes((input as { format?: unknown }).format as string)) input = { ...input, format: FORMAT };
   if (!checkDocumentShape(input)) return { ok: false, errors: formatErrors(checkDocumentShape.errors) };
-  const doc = input as LeocadDocument;
+  const doc = input as MeercadDocument;
   const errors: string[] = [];
   const seen = new Map<string, Feature>();
   const earlier = (fid: string, at: string, what: string, ops?: string[]) => {

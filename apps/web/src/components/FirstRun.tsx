@@ -19,7 +19,7 @@ export function FirstRun() {
         <Logo />
         <h3>Where should your projects live?</h3>
         <p>
-          leocad saves every project as a .leocad file in a folder you choose, so your work stays yours even if you remove the app. Pick a folder you back up, or a synced one
+          meerCAD saves every project as a .meercad file in a folder you choose, so your work stays yours even if you remove the app. Pick a folder you back up, or a synced one
           like iCloud Drive.
         </p>
         <code>{status.defaultDir}</code>

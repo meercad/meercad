@@ -13,7 +13,7 @@ describe("STL", () => {
 
 describe("share links", () => {
   it("round-trips and stays URL-safe", async () => {
-    const doc = { format: "leocad/1", params: { w: "40 mm" }, features: [], rollback: null };
+    const doc = { format: "meercad/1", params: { w: "40 mm" }, features: [], rollback: null };
     const frag = await encodeShareFragment(doc);
     expect(frag).toMatch(/^m1\.[A-Za-z0-9_-]+$/);
     expect(await decodeShareFragment(`#${frag}`)).toEqual(doc);

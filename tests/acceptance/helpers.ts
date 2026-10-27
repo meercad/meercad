@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { KernelSession, loadOcct, type OC } from "@leocad/kernel";
-import type { Feature, LeocadDocument, PlaneSpec, SketchEntity, SketchFeature } from "@leocad/schema";
-import { SketchSolver } from "@leocad/sketch";
+import { KernelSession, loadOcct, type OC } from "@meercad/kernel";
+import type { Feature, MeercadDocument, PlaneSpec, SketchEntity, SketchFeature } from "@meercad/schema";
+import { SketchSolver } from "@meercad/sketch";
 
 let occt: Promise<OC> | null = null;
 let solver: Promise<SketchSolver> | null = null;
@@ -11,15 +11,15 @@ export async function newSession(): Promise<KernelSession> {
   return new KernelSession(await getOcct(), await getSolver());
 }
 
-export function corpus(name: string): LeocadDocument {
-  return JSON.parse(readFileSync(new URL(`../corpus/${name}`, import.meta.url), "utf8")) as LeocadDocument;
+export function corpus(name: string): MeercadDocument {
+  return JSON.parse(readFileSync(new URL(`../corpus/${name}`, import.meta.url), "utf8")) as MeercadDocument;
 }
 
-export function withParams(doc: LeocadDocument, params: Record<string, string | number>): LeocadDocument {
+export function withParams(doc: MeercadDocument, params: Record<string, string | number>): MeercadDocument {
   return { ...doc, params: { ...doc.params, ...params } };
 }
 
-export const doc = (features: Feature[], params: Record<string, string | number> = {}): LeocadDocument => ({ format: "leocad/1", params, features, rollback: null });
+export const doc = (features: Feature[], params: Record<string, string | number> = {}): MeercadDocument => ({ format: "meercad/1", params, features, rollback: null });
 
 /** Unconstrained sketch geometry helpers (coordinates are taken as drawn). */
 export function rect(prefix: string, x0: number, y0: number, w: number, h: number): SketchEntity[] {
