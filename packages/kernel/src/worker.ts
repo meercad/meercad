@@ -76,6 +76,13 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
           scope.postMessage({ type: "exported", seq: req.seq, data }, [data.buffer]);
           break;
         }
+        case "configure":
+          session!.meshCoarse = req.meshCoarse;
+          scope.postMessage({ type: "configured", seq: req.seq });
+          break;
+        case "props":
+          scope.postMessage({ type: "props", seq: req.seq, bodies: session!.bodyProps() });
+          break;
         case "measure":
           scope.postMessage({ type: "measured", seq: req.seq, result: measure(oc!, session!.state!, req.a, req.b) });
           break;

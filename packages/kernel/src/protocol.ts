@@ -1,5 +1,5 @@
 import type { MeercadDocument } from "@meercad/schema";
-import type { BodyMesh } from "./mesh.js";
+import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Measurement, PickRef } from "./tools.js";
 
@@ -9,6 +9,10 @@ export type WorkerRequest =
   /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
   | { type: "sandbox"; seq: number; doc: MeercadDocument }
   | { type: "export_step"; seq: number; bodies?: string[] }
+  /** Session settings: `meshCoarse` loosens tessellation (touch devices, where meshing is slow). */
+  | { type: "configure"; seq: number; meshCoarse: number }
+  /** Volume and surface area of the last rebuild's bodies, after a rebuild that skipped them. */
+  | { type: "props"; seq: number }
   | { type: "measure"; seq: number; a: PickRef; b?: PickRef };
 
 export type WorkerResponse =
@@ -17,4 +21,6 @@ export type WorkerResponse =
   | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] }
   | { type: "exported"; seq: number; data: Uint8Array }
   | { type: "measured"; seq: number; result: Measurement }
+  | { type: "configured"; seq: number }
+  | { type: "props"; seq: number; bodies: BodySummary[] }
   | { type: "failed"; seq: number; message: string };

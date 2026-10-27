@@ -71,6 +71,9 @@ interface State {
 }
 
 export const kernel = new KernelClient(new KernelWorker());
+// Touch screens are tablets: meshing is a large share of every rebuild there, and the screen is
+// held close but small, so looser tolerances (about half the triangles) are hard to see.
+if (matchMedia("(pointer: coarse)").matches) void kernel.configure(2);
 let docStore = new DocumentStore();
 /** Each open tab keeps its document and undo history in memory while it is in the background. */
 const tabStores = new Map<string, DocumentStore>();
@@ -306,13 +309,16 @@ export function scheduleRebuild(): void {
     set({ previewError: problem, building: true });
     const t0 = performance.now();
     rebuildsPending++;
-    // Previews skip volume and area: the feature tree shows those of the committed model.
-    kernel.rebuild(doc, preview ? { props: false } : {}).then(
+    // Volume and area (integrals over every face) follow once the new shape is on screen.
+    kernel.rebuild(doc, { props: false }).then(
       (output) => {
         rebuildsPending--;
         lastRebuildMs = performance.now() - t0;
         set(preview ? { output, previewing: true, building: false } : { output, baseOutput: output, previewing: false, building: false, selection: remapSelection(get().selection, get().baseOutput, output) });
-        if (!preview) scheduleThumbnail();
+        if (!preview) {
+          scheduleThumbnail();
+          fillBodyProps(output);
+        }
       },
       (e: unknown) => {
         rebuildsPending--;
@@ -325,6 +331,18 @@ export function scheduleRebuild(): void {
       },
     );
   });
+}
+
+/** Puts volume and area into a result that was built without them, unless a newer one replaced it. */
+function fillBodyProps(output: RebuildOutput): void {
+  void kernel.bodyProps().then(
+    (bodies) => {
+      if (get().output !== output) return;
+      const filled = { ...output, report: { ...output.report, bodies } };
+      set({ output: filled, ...(get().baseOutput === output ? { baseOutput: filled } : {}) });
+    },
+    () => undefined,
+  );
 }
 
 kernel.ready.then(

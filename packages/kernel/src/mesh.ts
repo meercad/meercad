@@ -28,10 +28,11 @@ export interface BodySummary {
 
 const HASH_BOUND = 2147483647;
 
-export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"]): BodyMesh {
+/** `coarse` > 1 loosens the tessellation tolerances by that factor (fewer triangles, faster). */
+export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse = 1): BodyMesh {
   const diag = Math.hypot(...bbox.max.map((v, i) => v - bbox.min[i]!));
-  const linear = Math.max(0.01, diag * 5e-4);
-  const angular = 0.25;
+  const linear = Math.max(0.01, diag * 5e-4) * coarse;
+  const angular = Math.min(0.4, 0.25 * coarse);
 
   const faceByHash = new Map<number, number>();
   body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));

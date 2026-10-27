@@ -57,6 +57,8 @@ export class KernelSession {
   private readonly engine: RebuildEngine<ModelState>;
   private meshCache = new WeakMap<Body, { mesh: BodyMesh; summary: BodySummary; props: boolean }>();
   private last: ModelState | null = null;
+  /** Tessellation tolerance factor (see meshBody); set before the first rebuild. */
+  meshCoarse = 1;
 
   constructor(
     private readonly oc: OC,
@@ -76,7 +78,7 @@ export class KernelSession {
       let cached = this.meshCache.get(body);
       if (!cached) {
         const summary = summarizeBody(this.oc, body, props);
-        cached = { summary, mesh: meshBody(this.oc, body, summary.bbox), props };
+        cached = { summary, mesh: meshBody(this.oc, body, summary.bbox, this.meshCoarse), props };
         this.meshCache.set(body, cached);
       } else if (props && !cached.props) {
         cached.summary = summarizeBody(this.oc, body, true);
@@ -108,6 +110,20 @@ export class KernelSession {
       meshes,
       references: [...r.state.references.values()].map((m) => ({ id: m.id, positions: m.positions, indices: m.indices })),
     };
+  }
+
+  /** Summaries with volume and area for the last rebuild's bodies, filling in what `props: false` skipped. */
+  bodyProps(): BodySummary[] {
+    const out: BodySummary[] = [];
+    for (const body of this.last?.bodies.values() ?? []) {
+      const cached = this.meshCache.get(body);
+      if (cached && !cached.props) {
+        cached.summary = summarizeBody(this.oc, body, true);
+        cached.props = true;
+      }
+      out.push(cached?.summary ?? summarizeBody(this.oc, body, true));
+    }
+    return out;
   }
 
   /** Bodies of the most recent rebuild (for exporters and measuring inside the worker). */

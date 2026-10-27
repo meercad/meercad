@@ -1,5 +1,5 @@
 import type { MeercadDocument } from "@meercad/schema";
-import type { BodyMesh } from "./mesh.js";
+import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Measurement, PickRef } from "./tools.js";
@@ -72,6 +72,18 @@ export class KernelClient {
     const r = await this.send({ type: "sandbox", doc });
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     return { report: r.report, meshes: r.meshes, references: r.references };
+  }
+
+  /** Loosens tessellation by `meshCoarse` for all later rebuilds. */
+  async configure(meshCoarse: number): Promise<void> {
+    await this.send({ type: "configure", meshCoarse });
+  }
+
+  /** Volume and surface area of the last rebuild's bodies (after `props: false` rebuilds). */
+  async bodyProps(): Promise<BodySummary[]> {
+    const r = await this.send({ type: "props" });
+    if (r.type !== "props") throw new Error("unexpected response");
+    return r.bodies;
   }
 
   async exportStep(bodies?: string[]): Promise<Uint8Array> {
