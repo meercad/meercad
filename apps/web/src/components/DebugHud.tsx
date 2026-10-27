@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { kernel, useApp } from "../store";
+import { currentDoc, kernel, useApp } from "../store";
 
 /** Open the app with `?debug` to show it. */
 export const debugHud = new URLSearchParams(location.search).has("debug");
@@ -7,12 +7,18 @@ export const debugHud = new URLSearchParams(location.search).has("debug");
 type Counts = { moves: number; pen: number; touch: number; frames: number; requests: number; results: number; superseded: number; rebuildMs: number[] };
 const zero = (): Counts => ({ moves: 0, pen: 0, touch: 0, frames: 0, requests: 0, results: 0, superseded: 0, rebuildMs: [] });
 
+// Round trip, worker rebuild and meshing times of the latest results.
+type Timing = { trip: number; rebuild: number; mesh: number };
+const recent: Timing[] = [];
+
 /**
  * Live counters for diagnosing input and rebuild timing on devices without developer tools
  * (iPad): pointer moves, animation frames, kernel requests and results per second, plus totals
  * for the last press-to-release.
  */
+
 export function DebugHud() {
+  const [bench, setBench] = useState<string>("");
   const [view, setView] = useState<{ sec: Counts; press: Counts; afterUpMs: number | null; down: boolean }>({ sec: zero(), press: zero(), afterUpMs: null, down: false });
   useEffect(() => {
     let sec = zero();
@@ -44,10 +50,13 @@ export function DebugHud() {
       both((c) => c.requests++);
       return original(doc).then(
         (r) => {
+          const trip = performance.now() - t0;
           both((c) => {
             c.results++;
-            c.rebuildMs.push(performance.now() - t0);
+            c.rebuildMs.push(trip);
           });
+          recent.unshift({ trip, rebuild: r.report.rebuildMs, mesh: r.report.meshMs });
+          recent.length = Math.min(recent.length, 4);
           if (!down && upAt) afterUpMs = Math.round(performance.now() - upAt);
           return r;
         },
@@ -93,6 +102,35 @@ export function DebugHud() {
         <b>{view.down ? "pressing" : "last press"}</b> moves {press.moves} · frames {press.frames} · rebuilds {press.requests} → {press.results} done, {press.superseded} skipped · {avg(press.rebuildMs)} ms
         {view.afterUpMs !== null ? ` · last result ${view.afterUpMs} ms after release` : ""} · {previewing ? "preview" : "model"}
       </div>
+      <div>
+        <b>last results</b> {recent.map((t) => `${Math.round(t.trip)} ms (kernel ${Math.round(t.rebuild)} + mesh ${Math.round(t.mesh)})`).join(" · ") || "none"}
+      </div>
+      <div className="debug-bench">
+        <button onClick={() => void runBench(setBench)}>Bench</button> {bench}
+      </div>
     </div>
   );
+}
+
+/**
+ * Rebuilds the open part five times with its last size value nudged, without any input going on,
+ * to tell a slow kernel apart from one starved while the pen moves.
+ */
+async function runBench(show: (s: string) => void): Promise<void> {
+  const doc = currentDoc();
+  const f = [...doc.features].reverse().find((x) => x.op === "extrude" || x.op === "fillet" || x.op === "chamfer" || x.op === "shell");
+  const key = f ? (["distance", "radius", "thickness"] as const).find((k) => k in f) : undefined;
+  if (!f || !key) return show("needs an extrude, fillet, chamfer or shell");
+  const base = parseFloat(String((f as unknown as Record<string, unknown>)[key])) || 2;
+  const out: string[] = [];
+  for (let i = 1; i <= 5; i++) {
+    const d = structuredClone(doc);
+    const g = d.features.find((x) => x.id === f.id) as unknown as Record<string, unknown>;
+    g[key] = +(base * (1 + i * 0.03)).toFixed(3);
+    const t = performance.now();
+    const r = await kernel.rebuild(d);
+    out.push(`${Math.round(performance.now() - t)}/${Math.round(r.report.rebuildMs)}/${Math.round(r.report.meshMs)}`);
+    show(`${f.id}.${key}: ${out.join("  ")} ms (round trip/kernel/mesh)`);
+  }
+  await kernel.rebuild(doc);
 }
