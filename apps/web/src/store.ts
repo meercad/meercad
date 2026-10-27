@@ -273,19 +273,48 @@ function remapSelection(selection: Pick[], before: RebuildOutput | null, after: 
 }
 
 let rebuildQueued = false;
+let rebuildsPending = 0;
+let lastRebuildMs = 0;
+let held: "off" | "on" | "wanted" = "off";
+
+/** Rebuilds still on their way from the kernel. */
+export const rebuilding = () => rebuildsPending > 0 || held === "wanted";
+
+/** The last rebuild took long enough (a big part on an iPad) that a drag should not wait on it. */
+export const rebuildIsSlow = () => lastRebuildMs > 150;
+
+/**
+ * While holding, rebuild requests are collected instead of sent: dragging on a slow device then
+ * computes only where the pen rests or lets go, instead of a stale value that delays the final one.
+ */
+export function holdRebuilds(on: boolean): void {
+  const wanted = held === "wanted";
+  held = on ? (wanted ? "wanted" : "on") : "off";
+  if (!on && wanted) scheduleRebuild();
+}
+
 export function scheduleRebuild(): void {
+  if (held !== "off") {
+    held = "wanted";
+    return;
+  }
   if (rebuildQueued) return;
   rebuildQueued = true;
   queueMicrotask(() => {
     rebuildQueued = false;
     const { doc, preview, problem } = displayDoc();
     set({ previewError: problem, building: true });
+    const t0 = performance.now();
+    rebuildsPending++;
     kernel.rebuild(doc).then(
       (output) => {
+        rebuildsPending--;
+        lastRebuildMs = performance.now() - t0;
         set(preview ? { output, previewing: true, building: false } : { output, baseOutput: output, previewing: false, building: false, selection: remapSelection(get().selection, get().baseOutput, output) });
         if (!preview) scheduleThumbnail();
       },
       (e: unknown) => {
+        rebuildsPending--;
         // A newer rebuild replaced this one; it clears the flag when it finishes.
         if (e instanceof SupersededError) return;
         set({ building: false });

@@ -256,6 +256,59 @@ export class Viewport {
     else this.controls.mouseButtons.RIGHT = action;
   }
 
+  // ---------------------------------------------------------------- ghost
+
+  private ghost: THREE.Mesh | null = null;
+
+  /**
+   * A see-through stand-in for an extrusion: `triangles` (the profile, world space) swept along
+   * `normal` by `distance` (negative: into the material, drawn as a cut). Instant, so a drag shows
+   * its result even while a slow rebuild is still running. `null` removes it.
+   */
+  setGhost(g: { triangles: Float32Array; normal: Vec3; distance: number } | null): void {
+    if (!g) {
+      if (this.ghost) disposeTree(this.ghost);
+      this.ghost?.removeFromParent();
+      this.ghost = null;
+      return;
+    }
+    const t = g.triangles;
+    const off = new THREE.Vector3(...g.normal).normalize().multiplyScalar(g.distance);
+    // Boundary edges belong to one triangle only; they become the side walls.
+    const key = (i: number) => `${t[i]!.toFixed(4)},${t[i + 1]!.toFixed(4)},${t[i + 2]!.toFixed(4)}`;
+    const edges = new Map<string, [number, number, number]>();
+    for (let tri = 0; tri < t.length; tri += 9) {
+      for (let k = 0; k < 3; k++) {
+        const a = tri + k * 3;
+        const b = tri + ((k + 1) % 3) * 3;
+        const [ka, kb] = [key(a), key(b)];
+        const [fwd, back] = [`${ka}|${kb}`, `${kb}|${ka}`];
+        if (edges.has(back) || edges.has(fwd)) edges.delete(back), edges.delete(fwd);
+        else edges.set(fwd, [a, b, 0]);
+      }
+    }
+    const pos: number[] = [];
+    const v = (i: number, o: boolean) => pos.push(t[i]! + (o ? off.x : 0), t[i + 1]! + (o ? off.y : 0), t[i + 2]! + (o ? off.z : 0));
+    for (let i = 0; i < t.length; i += 9) {
+      v(i, false), v(i + 3, false), v(i + 6, false);
+      v(i, true), v(i + 3, true), v(i + 6, true);
+    }
+    for (const [a, b] of edges.values()) {
+      v(a, false), v(b, false), v(b, true);
+      v(a, false), v(b, true), v(a, true);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    const cut = g.distance < 0;
+    const mat = new THREE.MeshBasicMaterial({ color: cut ? 0xe5484d : 0x6366f1, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+    if (this.ghost) disposeTree(this.ghost);
+    this.ghost?.removeFromParent();
+    this.ghost = new THREE.Mesh(geo, mat);
+    this.ghost.renderOrder = 5;
+    this.overlay.add(this.ghost);
+  }
+
   // ---------------------------------------------------------------- pen and touch
 
   /** True once an Apple Pencil (or any pen) was used: from then on fingers no longer draw in sketches. */

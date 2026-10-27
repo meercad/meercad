@@ -3,6 +3,7 @@ import type { BodyMesh, RebuildOutput } from "@meercad/kernel";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import type { EdgeSelector, FaceSelector, ProfileRef } from "@meercad/schema";
 import { toWorld } from "@meercad/sketch";
+import { THREE } from "@meercad/viewport";
 import { meshTopology } from "./topology";
 
 type Vec3 = [number, number, number];
@@ -162,4 +163,41 @@ export function isCylinderFace(m: BodyMesh, face: number): boolean {
   if (best < 0.2) return false;
   axis = norm(axis);
   return nrm.every((n) => Math.abs(n[0] * axis[0] + n[1] * axis[1] + n[2] * axis[2]) < 0.05);
+}
+
+/**
+ * The base of an extrusion as world-space triangles (9 numbers each): the tessellated face, or the
+ * sketch regions triangulated. Used for the stand-in shown while a slow rebuild catches up.
+ */
+export function profileTriangles(out: RebuildOutput, profile: ProfileRef): { triangles: Float32Array; normal: Vec3 } | null {
+  const tris: number[] = [];
+  if ("face" in profile) {
+    try {
+      const r = resolveFaces(profile.face, out.meshes.map(meshTopology))[0];
+      const m = r && out.meshes.find((x) => x.bodyId === r.body);
+      const face = r?.faces[0];
+      const a = m && face !== undefined ? faceAnchor(m, face) : null;
+      if (!m || !a) return null;
+      for (let g = 0; g < m.faceRanges.length; g += 3) {
+        if (m.faceRanges[g + 2] !== face) continue;
+        for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
+          const i = m.indices[t]! * 3;
+          tris.push(m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!);
+        }
+      }
+      return tris.length ? { triangles: new Float32Array(tris), normal: a.normal } : null;
+    } catch {
+      return null;
+    }
+  }
+  const sk = out.report.sketches.find((s) => s.id === profile.sketch);
+  if (!sk) return null;
+  const regions = Array.isArray(profile.regions) ? sk.regions.filter((r) => (profile.regions as string[]).includes(r.key)) : sk.regions.filter((r) => r.depth % 2 === 1);
+  for (const r of regions) {
+    const [outer, ...holes] = r.polygons.map((poly) => poly.map(([x, y]) => new THREE.Vector2(x, y)));
+    if (!outer) continue;
+    const all = [outer, ...holes].flat();
+    for (const tri of THREE.ShapeUtils.triangulateShape(outer, holes)) for (const k of tri) tris.push(...toWorld(sk.frame, [all[k]!.x, all[k]!.y]));
+  }
+  return tris.length ? { triangles: new Float32Array(tris), normal: sk.frame.normal } : null;
 }
