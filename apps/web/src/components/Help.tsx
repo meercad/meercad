@@ -34,6 +34,16 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
           </ul>
         ),
       },
+      {
+        title: "On the iPad",
+        body: (
+          <ul>
+            <li><b>Fingers navigate</b>: one finger rotates, two fingers pan and pinch to zoom. <b>The Apple Pencil works</b>: it selects, draws in sketches and drags the arrows.</li>
+            <li><b>Undo</b>: tap with two fingers or swipe three fingers left · <b>Redo</b>: tap with three fingers or swipe right — or use the arrows at the top right. A short note says what was undone.</li>
+            <li>Long-press for the menus a right-click opens on the Mac. Double-tap or squeeze the Pencil to switch a sketch between selecting and drawing.</li>
+          </ul>
+        ),
+      },
     ],
   },
   {

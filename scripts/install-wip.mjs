@@ -70,6 +70,8 @@ console.log(`› installing to ${target}`);
 run("rm", ["-rf", target]);
 run("ditto", [built, target]);
 spawnSync("xattr", ["-dr", "com.apple.quarantine", target], { stdio: "ignore" });
+// Drop the build copy so Spotlight and launchers only find the installed app.
+run("rm", ["-rf", outDir]);
 
 if (!process.argv.includes("--no-open")) run("open", [target]);
 console.log(`✓ ${NAME} ${sha} installed`);

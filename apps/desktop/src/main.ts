@@ -426,7 +426,20 @@ function buildMenu(): void {
         { label: "Close Window", accelerator: "CmdOrCtrl+Shift+W", role: "close" },
       ],
     },
-    { role: "editMenu" },
+    {
+      // Undo/Redo act on the model (or on the text field being typed in); the page handles the keys,
+      // so the shortcuts are shown here but not registered twice.
+      label: "Edit",
+      submenu: [
+        { label: "Undo", accelerator: "CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "undo") },
+        { label: "Redo", accelerator: "Shift+CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "redo") },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
     {
       label: "View",
       submenu: [

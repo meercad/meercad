@@ -31,6 +31,7 @@ export function TopBar() {
   const sideOpen = useApp((s) => s.sideOpen);
   const canUndo = useApp((s) => s.canUndo);
   const canRedo = useApp((s) => s.canRedo);
+  const inDialog = useApp((s) => !!s.dialog);
   const sketches = useApp((s) => s.output?.report.sketches) ?? NONE;
 
   const fileBtn = useRef<HTMLButtonElement>(null);
@@ -73,10 +74,10 @@ export function TopBar() {
         <House />
       </button>
       <TabStrip />
-      <button className="icon-btn" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
+      <button className="icon-btn" onClick={undo} disabled={!canUndo && !inDialog} title="Undo (⌘Z, or tap with two fingers)">
         <Undo2 />
       </button>
-      <button className="icon-btn" onClick={redo} disabled={!canRedo} title="Redo (⇧⌘Z)">
+      <button className="icon-btn" onClick={redo} disabled={!canRedo || inDialog} title="Redo (⇧⌘Z, or tap with three fingers)">
         <Redo2 />
       </button>
       <button className="btn" ref={fileBtn} onClick={openFile} title="Import and export">

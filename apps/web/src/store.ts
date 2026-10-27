@@ -5,7 +5,7 @@ import { DocumentStore, OpError } from "@meercad/model";
 import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick } from "./lib/topology";
 import type { Pick, Viewport } from "@meercad/viewport";
-import { draftFeature, draftProblem } from "./lib/features";
+import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
 
@@ -204,16 +204,40 @@ export function applyQuiet(...ops: DocOp[]): boolean {
   }
 }
 
+/** Undo; with a feature dialog open it discards that dialog's unsaved change first. */
 export function undo(): void {
-  if (get().dialog || !docStore.canUndo) return;
+  if (get().dialog) {
+    cancelDialog();
+    toast("Undone: unsaved change");
+    return;
+  }
+  if (!docStore.canUndo) return;
+  const before = docStore.doc;
   docStore.undo();
   syncDoc();
+  toast(`Undone: ${describeStep(docStore.doc, before)}`);
 }
 
 export function redo(): void {
   if (get().dialog || !docStore.canRedo) return;
+  const before = docStore.doc;
   docStore.redo();
   syncDoc();
+  toast(`Redone: ${describeStep(before, docStore.doc)}`);
+}
+
+/** A short name for what changed between two documents, for undo/redo feedback. */
+function describeStep(from: MeercadDocument, to: MeercadDocument): string {
+  const ids = (d: MeercadDocument) => new Set(d.features.map((f) => f.id));
+  const [a, b] = [ids(from), ids(to)];
+  const added = to.features.find((f) => !a.has(f.id));
+  if (added) return featureName(added);
+  const removed = from.features.find((f) => !b.has(f.id));
+  if (removed) return `delete ${featureName(removed)}`;
+  const changed = to.features.find((f, i) => JSON.stringify(f) !== JSON.stringify(from.features.find((g) => g.id === f.id)) || from.features[i]?.id !== f.id);
+  if (changed) return featureName(changed);
+  if (JSON.stringify(from.params) !== JSON.stringify(to.params)) return "variables";
+  return "change";
 }
 
 export const currentDoc = () => docStore.doc;

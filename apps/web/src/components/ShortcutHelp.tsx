@@ -62,6 +62,7 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
     title: "General",
     rows: [
       ["Undo / Redo", "Mod+Z / Shift+Mod+Z"],
+      ["Undo / Redo on the iPad", "2-finger tap or 3-finger swipe left / 3-finger tap or swipe right"],
       ["Confirm tool", "Enter / click empty space"],
       ["Cancel / clear selection", "Esc"],
       ["Delete", "Del"],

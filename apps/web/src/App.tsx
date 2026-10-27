@@ -124,6 +124,13 @@ export function App() {
       else if (cmd === "close-tab" && useApp.getState().project) closeTab(useApp.getState().project!.id);
       else if (cmd === "reopen-tab") reopenClosedTab();
       else if (cmd === "next-tab" || cmd === "prev-tab") cycleTab(cmd === "next-tab" ? 1 : -1);
+      else if (cmd === "undo" || cmd === "redo") {
+        // In a text field the menu undoes typing; everywhere else it undoes the model.
+        const el = document.activeElement;
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) document.execCommand(cmd);
+        else if (cmd === "undo") undo();
+        else redo();
+      }
     });
     const offOpen = desktop.on("open-project", (id) => void openProject(id));
     const offError = desktop.on("error", (msg) => toast(msg, "error"));
@@ -193,6 +200,12 @@ export function App() {
       const s = useApp.getState();
       if (s.screen !== "editor") return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+      // The desktop Edit menu no longer does text undo itself (its Undo acts on the model).
+      if ((e.metaKey || e.ctrlKey) && typing && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        document.execCommand(e.shiftKey ? "redo" : "undo");
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && !typing) {
         const k = e.key.toLowerCase();
         if (k === "z") {
