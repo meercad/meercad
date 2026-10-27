@@ -6,11 +6,17 @@
   "license": "FSL-1.1-ALv2",
   "scripts": {
     "dev": "vite",
+    "dev:lan": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
+    "preview:lan": "vite preview --host",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/share": "8.0.3",
     "@meercad/io": "workspace:*",
     "@meercad/kernel": "workspace:*",
     "@meercad/mcp": "workspace:*",

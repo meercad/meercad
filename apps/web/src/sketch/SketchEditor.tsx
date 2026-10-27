@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
-import { frameMatrix, THREE, type Viewport } from "@meercad/viewport";
+import { frameMatrix, perFrame, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
@@ -16,6 +16,7 @@ import { Kbd } from "../components/Kbd";
 import { actionFor, GRID_STEPS, setPrefs, SKETCH_ACTIONS, usePrefs, type GridStep } from "../lib/keymap";
 import { activeSketch, applyConstraint, CONSTRAINT_TOOLS, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
 import { GLYPH } from "./icons";
+import { Press } from "../lib/gestures";
 import { ValueInput } from "../components/ValueInput";
 import { getSolver } from "./solver";
 import { sameSel, setSketchSelection, setTool, useSketchUi, type SketchSel, type SketchTool } from "./state";
@@ -684,10 +685,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     dragState: { ids: string[]; start: Vec2; origin: Map<string, Vec2>; solved: SolvedSketch | null } | null;
     box: { a: Vec2; b: Vec2 } | null;
   }>({ down: null, dragState: null, box: null });
+  const pressRef = useRef(new Press(() => {}));
+  // Moves are handled once per frame by whichever onMove the latest render installed.
+  const moveRef = useRef<(e: PointerEvent) => void>(() => {});
+  const moveFrame = useRef(perFrame((e: PointerEvent) => moveRef.current(e))).current;
   useEffect(() => {
     const el = viewport.canvas;
     // Gesture state lives in a ref: this effect re-subscribes on every render, which may happen mid-drag.
     const g = gesture.current;
+    // Fingers navigate here. Before any pen was used, a still tap stands in for a click.
+    const press = pressRef.current;
 
     const targetAt = (p: Vec2): SketchSel | null => {
       const pt = hitPoint(p, px() * 9);
@@ -699,6 +706,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
 
     const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") press.move(e);
+      if (e.pointerType !== "touch") moveFrame(e);
+    };
+    moveRef.current = (e: PointerEvent) => {
       const p = toSketch(e);
       if (!p || !shown) return;
       const tool = useSketchUi.getState().tool;
@@ -790,6 +801,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
 
     const onDown = (e: PointerEvent) => {
+      moveFrame.flush();
+      if (e.pointerType !== "mouse") press.down(e);
+      if (e.pointerType !== "touch") start(e);
+    };
+
+    const start = (e: PointerEvent) => {
       if (e.button !== 0) return;
       const p = toSketch(e);
       if (!p) return;
@@ -801,10 +818,24 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         setEntry(null);
       }
       g.down = { x: e.clientX, y: e.clientY, p, target: targetAt(p), moved: false, started };
-      if (tool === "select" || started) el.setPointerCapture(e.pointerId);
+      // A finger tap is replayed after it lifted, when its pointer can no longer be captured.
+      if ((tool === "select" || started) && e.pointerType !== "touch") el.setPointerCapture(e.pointerId);
     };
 
     const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") moveFrame.flush();
+      const r = e.pointerType === "mouse" ? null : press.up(e);
+      if (e.pointerType !== "touch") {
+        finish(e);
+        if (r === "double") onDbl(e);
+      } else if (!viewport.penSeen && !g.down && (r === "tap" || r === "double")) {
+        start(e);
+        finish(e);
+        if (r === "double") onDbl(e);
+      }
+    };
+
+    const finish = (e: PointerEvent) => {
       if (e.button !== 0 || !g.down) return;
       const d = g.down;
       g.down = null;
@@ -947,7 +978,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         }
       }
     };
+    const onCancel = (e: PointerEvent) => press.up(e);
     const onLeave = () => {
+      moveFrame.cancel();
       setTip(null);
       setHover(null);
       ts.snap = null;
@@ -956,12 +989,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerdown", onDown);
     el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onCancel);
     el.addEventListener("dblclick", onDbl);
     el.addEventListener("pointerleave", onLeave);
     return () => {
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onCancel);
       el.removeEventListener("dblclick", onDbl);
       el.removeEventListener("pointerleave", onLeave);
     };

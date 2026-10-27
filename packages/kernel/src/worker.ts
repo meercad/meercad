@@ -12,20 +12,27 @@ interface WorkerScope {
 /**
  * Worker entry. Requests are handled in order; while OCCT is busy newer rebuild requests replace
  * queued ones (latest wins), so dragging a value never builds a backlog.
+ *
+ * `wasm.occtThreads` asks for the multi-threaded OCCT build (the page must be cross-origin
+ * isolated); if it fails to start, the worker falls back to the single-threaded `wasm.occt`.
  */
-export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; planegcs?: string } = {}): void {
+export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occtThreads?: string; planegcs?: string } = {}): void {
   let oc: OC | null = null;
   let solver: SketchSolver | null = null;
   let session: KernelSession | null = null;
   const queue: WorkerRequest[] = [];
   let busy = false;
+  const now = () => performance.timeOrigin + performance.now();
+  const received = new Map<number, number>();
 
   scope.addEventListener("message", (e) => {
     const req = e.data;
+    if ("seq" in req) received.set(req.seq, now());
     if (req.type === "rebuild" || req.type === "sandbox") {
       const i = queue.findIndex((q) => q.type === req.type);
       if (i >= 0) {
         scope.postMessage({ type: "failed", seq: queue[i]!.seq, message: "superseded" });
+        received.delete(queue[i]!.seq);
         queue.splice(i, 1);
       }
     }
@@ -41,6 +48,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
     try {
       if (req) handle(req);
     } finally {
+      if (req) received.delete(req.seq);
       busy = false;
       if (queue.length) void pump();
     }
@@ -50,7 +58,9 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
     try {
       switch (req.type) {
         case "rebuild": {
-          const r = session!.rebuild(req.doc, { mesh: req.mesh !== false });
+          const start = now();
+          const r = session!.rebuild(req.doc, { mesh: req.mesh !== false, props: req.props !== false });
+          r.report.timing = { recv: received.get(req.seq) ?? start, start, post: now() };
           scope.postMessage({ type: "rebuilt", seq: req.seq, ...r });
           break;
         }
@@ -69,6 +79,13 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
           scope.postMessage({ type: "exported", seq: req.seq, data }, [data.buffer]);
           break;
         }
+        case "configure":
+          session!.meshCoarse = req.meshCoarse;
+          scope.postMessage({ type: "configured", seq: req.seq });
+          break;
+        case "props":
+          scope.postMessage({ type: "props", seq: req.seq, bodies: session!.bodyProps() });
+          break;
         case "measure":
           scope.postMessage({ type: "measured", seq: req.seq, result: measure(oc!, session!.state!, req.a, req.b) });
           break;
@@ -79,12 +96,19 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; pla
   }
 
   const t0 = performance.now();
-  Promise.all([loadOcct(wasm.occt), SketchSolver.create(wasm.planegcs)]).then(
+  let threads = wasm.occtThreads !== undefined;
+  const occt = threads
+    ? loadOcct(wasm.occtThreads, true).catch(() => {
+        threads = false;
+        return loadOcct(wasm.occt);
+      })
+    : loadOcct(wasm.occt);
+  Promise.all([occt, SketchSolver.create(wasm.planegcs)]).then(
     ([loaded, s]) => {
       oc = loaded;
       solver = s;
       session = new KernelSession(loaded, s);
-      scope.postMessage({ type: "ready", initMs: performance.now() - t0 });
+      scope.postMessage({ type: "ready", initMs: performance.now() - t0, threads });
       void pump();
     },
     (err: unknown) => scope.postMessage({ type: "fatal", message: `failed to load geometry kernel: ${String(err)}` }),

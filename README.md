@@ -54,6 +54,50 @@ pnpm --filter meercad-desktop run dist     # build the .dmg locally
 pnpm test && pnpm typecheck
 ```
 
+### Try it on an iPad
+
+```bash
+pnpm ipad                                  # production build, served on your local network
+```
+
+Vite prints a `Network:` address such as `http://192.168.1.20:4173`. Open it in Safari on an iPad
+on the same Wi-Fi. Judge speed only on this build: `pnpm dev:lan` (port 5173) reloads on every
+change but runs React's much slower development mode and loads hundreds of separate modules.
+
+| Gesture | Does |
+| --- | --- |
+| Pencil or finger tap | Select; further taps add to the selection, a tap on empty space clears it |
+| Pencil double tap | Select the whole part |
+| Finger double tap on a face | Turn the view to look straight at it |
+| Hold (finger or Pencil) | Context menu, like a right click on the Mac |
+| Hold, then drag | Area selection (drag right: fully inside, drag left: touching) |
+| One finger drag | Orbit |
+| Two finger drag / pinch | Pan / zoom |
+| Three finger swipe left / right | Undo / redo (a two / three finger tap does the same) |
+| Double tap on the view cube | Back to the isometric view |
+
+The Pencil draws in sketches and drags the arrows; on iPads that sense a hovering Pencil the snap
+dot shows before the tip touches. Until a Pencil touches the screen a finger tap also places points
+in a sketch; after that only the Pencil draws. Fingers resting on the screen while the Pencil is
+down are ignored. Over plain `http` on the network the page is not cross-origin isolated; the
+modelling kernel does not need that. Copying a share link falls back to a dialog there because
+Safari only allows the clipboard on `https`.
+
+### iPad app
+
+`apps/ios` wraps the web app with Capacitor. Needs Xcode; signing uses the Apple account signed in
+to Xcode (Settings › Accounts).
+
+```bash
+pnpm ios                                   # builds the web app, syncs it into the Xcode project, opens Xcode
+```
+
+In Xcode pick your iPad (cable or same Wi-Fi) or a simulator and press Run. In the app, projects are
+`.meercad` files in the Files app under On My iPad › meerCAD, and tapping one there opens it in
+meerCAD. Exports open the share sheet. A double tap (Apple Pencil 2 and Pro) or squeeze (Pro) in a
+sketch switches between Select and the drawing tool used last. The kernel runs single-threaded in
+the app.
+
 ## Layout
 
 | Path | Contents | License |

@@ -2,16 +2,17 @@
  * Direct manipulation: drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
-import { ArrowUpFromLine, Bolt, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Triangle } from "lucide-react";
+import { ArrowUpFromLine, Bolt, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Trash, Triangle } from "lucide-react";
+import { deleteModelSelection } from "../lib/deletion";
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { evaluate, nextFeatureId } from "@meercad/model";
 import { asArray, type EdgeSelector, type Expr, type Feature } from "@meercad/schema";
 import type { Handle, Pick, Viewport } from "@meercad/viewport";
-import { cylinderAnchor, isCylinderFace, edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor } from "../lib/anchors";
+import { cylinderAnchor, isCylinderFace, edgeAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, profileAnchor, profileTriangles } from "../lib/anchors";
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
-import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
+import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, holdRebuilds, rebuildIsSlow, rebuilding, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
 import { InlineInput } from "./InlineValues";
 import { Kbd } from "./Kbd";
 
@@ -57,8 +58,56 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
   }, [viewport]);
 
   useEffect(() => {
-    viewport.setHandles(sketchId || measure || !base ? [] : computeHandles());
+    viewport.setHandles(sketchId || measure || !base ? [] : computeHandles().map(slowDrag));
   });
+
+  // The push/pull stand-in goes once the kernel has caught up with the last value.
+  const output = useApp((s) => s.output);
+  const previewError = useApp((s) => s.previewError);
+  useEffect(() => {
+    if (!slow.current && !rebuilding()) viewport.setGhost(null);
+  }, [viewport, output, previewError, dialog]);
+  useEffect(() => () => viewport.setGhost(null), [viewport]);
+
+  /**
+   * Where rebuilds are slow (a big part on an iPad), a drag does not feed the kernel every value:
+   * it rebuilds where the pen rests and on release, and a push/pull shows an instant stand-in.
+   */
+  const slow = useRef<{ timer: number; ghost: ReturnType<typeof profileTriangles> } | null>(null);
+  function slowDrag(h: Handle): Handle {
+    return {
+      ...h,
+      onStart: () => {
+        if (rebuildIsSlow()) {
+          holdRebuilds(true);
+          slow.current = { timer: 0, ghost: null };
+        }
+        h.onStart?.();
+      },
+      onDrag: (v) => {
+        h.onDrag(v);
+        const s = slow.current;
+        if (!s) return;
+        const { dialog: d, baseOutput: b } = useApp.getState();
+        if (h.id === "extrude" && d?.feature.op === "extrude" && b) {
+          s.ghost ??= profileTriangles(b, d.feature.profile);
+          if (s.ghost) viewport.setGhost({ ...s.ghost, distance: v });
+        }
+        window.clearTimeout(s.timer);
+        s.timer = window.setTimeout(() => {
+          holdRebuilds(false);
+          holdRebuilds(true);
+        }, 400);
+      },
+      onEnd: (v) => {
+        const s = slow.current;
+        slow.current = null;
+        if (s) window.clearTimeout(s.timer);
+        h.onEnd(v);
+        if (s) holdRebuilds(false);
+      },
+    };
+  }
 
   function extrudePatch(v: number): Partial<Feature> {
     const patch: Record<string, unknown> = { distance: Math.abs(v) || 0.001, flip: v < 0 ? true : undefined };
@@ -357,6 +406,8 @@ function QuickActions({ selection }: { selection: Pick[] }) {
     actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch({ ref: last.planeId }) });
   }
   if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: keyFor("measure"), run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
+  // Without a keyboard there is no Delete key.
+  if ((kinds.has("face") || kinds.has("edge")) && matchMedia("(pointer: coarse)").matches) actions.push({ icon: <Trash />, label: "Delete", run: () => void deleteModelSelection() });
   if (!actions.length) return null;
   return (
     <div className="quick-actions docked" onPointerDown={(e) => e.stopPropagation()}>

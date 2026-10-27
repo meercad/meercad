@@ -1,0 +1,10 @@
+{
+  "appId": "dev.meercad.app",
+  "appName": "meerCAD",
+  "webDir": "../web/dist",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}

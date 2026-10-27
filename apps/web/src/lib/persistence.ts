@@ -1,8 +1,10 @@
 /**
  * Local-first project storage. In the desktop app projects are plain .meercad files (open JSON
- * format) in a folder the user picks on first launch; in the browser they live in IndexedDB.
+ * format) in a folder the user picks on first launch, in the iPad app they are such files in the
+ * app's Documents (see native.ts); in the browser they live in IndexedDB.
  */
 import type { MeercadDocument } from "@meercad/schema";
+import { nativeFiles } from "./native";
 
 export interface ProjectMeta {
   id: string;
@@ -50,6 +52,13 @@ interface DesktopApi {
 }
 
 export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;
+
+/** Project files on disk: the desktop app's folder, or the iPad app's Documents. */
+export interface FileStore {
+  projects: Omit<DesktopApi["projects"], "reveal">;
+  folders: DesktopApi["folders"];
+}
+const files: FileStore | undefined = desktop ?? nativeFiles;
 
 // ---------------------------------------------------------------- IndexedDB (browser)
 
@@ -141,7 +150,7 @@ const inFolder = (folder: string | undefined, root: string) => !!folder && (fold
 // ---------------------------------------------------------------- API
 
 export async function listProjects(): Promise<ProjectMeta[]> {
-  if (desktop) return desktop.projects.list();
+  if (files) return files.projects.list();
   try {
     const all = await allProjects();
     return all.map(({ id, name, folder, updatedAt, thumbnail }) => ({ id, name, folder: folder ?? "", updatedAt, ...(thumbnail ? { thumbnail } : {}) })).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -151,26 +160,26 @@ export async function listProjects(): Promise<ProjectMeta[]> {
 }
 
 export async function loadProject(id: string): Promise<Project | undefined> {
-  if (desktop) return desktop.projects.load(id);
+  if (files) return files.projects.load(id);
   return tx<Project | undefined>("readonly", (s) => s.get(id) as IDBRequest<Project | undefined>);
 }
 
 export async function createProject(name: string, doc: MeercadDocument, folder = ""): Promise<ProjectMeta> {
-  if (desktop) return desktop.projects.create({ name, doc, folder });
+  if (files) return files.projects.create({ name, doc, folder });
   const meta = { id: newId(), name, folder, updatedAt: Date.now() };
   await tx("readwrite", (s) => s.put({ ...meta, doc }));
   return meta;
 }
 
 export async function saveProject(p: Project): Promise<void> {
-  if (desktop) return desktop.projects.save({ id: p.id, doc: p.doc, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
+  if (files) return files.projects.save({ id: p.id, doc: p.doc, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
   await tx("readwrite", (s) => s.put(p));
 }
 
 /** Renames a project; in the desktop app this renames the file, so the id changes. */
 export async function renameProjectFile(id: string, name: string): Promise<ProjectMeta> {
-  if (desktop) {
-    const r = await desktop.projects.rename({ id, name });
+  if (files) {
+    const r = await files.projects.rename({ id, name });
     return { ...r, updatedAt: Date.now() };
   }
   const p = await loadProject(id);
@@ -179,7 +188,7 @@ export async function renameProjectFile(id: string, name: string): Promise<Proje
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  if (desktop) return desktop.projects.delete(id);
+  if (files) return files.projects.delete(id);
   await tx("readwrite", (s) => s.delete(id));
 }
 
@@ -187,7 +196,7 @@ export async function deleteProject(id: string): Promise<void> {
 
 /** Every folder path, parents before children. */
 export async function listFolders(): Promise<string[]> {
-  if (desktop) return desktop.projects.folders();
+  if (files) return files.projects.folders();
   const set = new Set(storedFolders());
   for (const p of await allProjects().catch(() => [] as Project[])) {
     const parts = (p.folder ?? "").split("/").filter(Boolean);
@@ -197,7 +206,7 @@ export async function listFolders(): Promise<string[]> {
 }
 
 export async function createFolder(parent: string, name: string): Promise<string> {
-  if (desktop) return desktop.folders.create({ parent, name });
+  if (files) return files.folders.create({ parent, name });
   const base = name.replace(/\//g, "-").trim() || "New folder";
   const existing = await listFolders();
   let folder = parent ? `${parent}/${base}` : base;
@@ -207,7 +216,7 @@ export async function createFolder(parent: string, name: string): Promise<string
 }
 
 export async function renameFolder(folder: string, name: string): Promise<string> {
-  if (desktop) return desktop.folders.rename({ folder, name });
+  if (files) return files.folders.rename({ folder, name });
   const parent = folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : "";
   const target = (parent ? `${parent}/` : "") + (name.replace(/\//g, "-").trim() || folder);
   if ((await listFolders()).includes(target) && target !== folder) throw new Error(`a folder named "${name}" already exists`);
@@ -219,14 +228,14 @@ export async function renameFolder(folder: string, name: string): Promise<string
 
 /** Deletes a folder and every project inside it. */
 export async function deleteFolder(folder: string): Promise<void> {
-  if (desktop) return desktop.folders.delete(folder);
+  if (files) return files.folders.delete(folder);
   storeFolders(storedFolders().filter((f) => !inFolder(f, folder)));
   for (const p of await allProjects()) if (inFolder(p.folder, folder)) await tx("readwrite", (s) => s.delete(p.id));
 }
 
 /** Moves a project into a folder; in the desktop app the file moves, so the id changes. */
 export async function moveProject(id: string, folder: string): Promise<ProjectMeta> {
-  if (desktop) return { ...(await desktop.projects.move({ id, folder })), updatedAt: Date.now() };
+  if (files) return { ...(await files.projects.move({ id, folder })), updatedAt: Date.now() };
   const p = await loadProject(id);
   if (!p) throw new Error("project not found");
   await tx("readwrite", (s) => s.put({ ...p, folder }));

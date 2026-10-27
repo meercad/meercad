@@ -675,6 +675,8 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 /* shortcut badges can be switched off; the shortcut sheet and command search keep them */
 .hide-kbd .kbd { display: none !important; }
 .hide-kbd .modal .kbd, .hide-kbd .palette .kbd { display: inline-flex !important; }
+/* Touch screen without a keyboard: no shortcut hints at all (see lib/keyboard.ts). */
+html.no-keyboard .kbd, html.no-keyboard .hide-kbd .modal .kbd, html.no-keyboard .hide-kbd .palette .kbd { display: none !important; }
 /* tabs */
 .tabs { display: flex; align-items: center; gap: 3px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 0 4px; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -793,3 +795,42 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
 .spinner.sm { width: 11px; height: 11px; border-width: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes loading-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* Touch and Pencil: finger-sized targets, no text selection or callout on long press (it opens
+   the context menu instead), and 16px fields so Safari does not zoom in on focus. */
+@media (pointer: coarse) {
+  html { touch-action: manipulation; }
+  body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+  input.field, select.field, .ask-field input, .value-input, .tab-name-input, .draw-entry input, .param-search input.field { font-size: 16px; }
+  input.field, select.field { height: 40px; }
+  .icon-btn { height: 40px; min-width: 40px; }
+  .icon-btn.sm { height: 36px; min-width: 36px; }
+  .btn, .topbar .btn, .ask-actions .btn { height: 40px; }
+  .ok-btn, .cancel-btn { width: 48px; height: 40px; }
+  .rail-flyout button { min-height: 48px; }
+  .tab, .home-tab { height: 40px; }
+  .tab-close { width: 32px; height: 32px; }
+  .tree-item { height: 40px; }
+  .tree-item.selected .actions .icon-btn { height: 32px; min-width: 32px; }
+  .menu button { height: 42px; }
+  .segmented button, .seg button { height: 36px; }
+  .chip { height: 32px; }
+  .chip button { width: 28px; height: 28px; }
+  .checkbox input { width: 20px; height: 20px; }
+  .constraint-palette button, .value-menu button, .value-chip .value-menu button { height: 40px; }
+  .palette-list button { height: 44px; }
+  .snap-bar button, .snap-bar select, .plane-bar button { height: 36px; }
+  .value-chip button { height: 32px; padding: 0 12px; }
+  .glyph { min-width: 24px; height: 24px; }
+  .sketch-label { padding: 4px 8px; }
+  .rollback-bar { height: 24px; }
+}
+
+.debug-hud { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 200; max-width: calc(100vw - 32px); padding: 6px 10px; border-radius: 10px; background: rgb(0 0 0 / 0.75); color: #fff; font: 11.5px/1.5 var(--mono); pointer-events: none; }
+.debug-hud .debug-bench { pointer-events: auto; }
+.debug-hud .debug-bench button { height: 28px; padding: 0 10px; margin-right: 6px; border-radius: 6px; border: 1px solid rgb(255 255 255 / 0.4); background: rgb(255 255 255 / 0.15); color: #fff; font: inherit; }
+
+/* iPad app: the web view runs under the status bar and home indicator; keep the UI inside the
+   safe area (the scene background still fills the edges). */
+html.native .app, html.native .home { position: fixed; top: env(safe-area-inset-top); right: env(safe-area-inset-right); bottom: env(safe-area-inset-bottom); left: env(safe-area-inset-left); width: auto; height: auto; }
+html.native, html.native body { overscroll-behavior: none; }

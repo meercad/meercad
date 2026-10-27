@@ -174,16 +174,17 @@ export class Viewport {
   private sceneData: SceneData | null = null;
   handles: Handle[] = [];
   private handleGroup = new THREE.Group();
-  private activeHandle: { h: Handle; value: number } | null = null;
+  private activeHandle: { h: Handle; value: number; pointer: number } | null = null;
   private hoverHandle: string | null = null;
   /** Reports the value being dragged and its screen position (for a value tooltip). */
   onHandleDrag: ((h: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     container.appendChild(this.renderer.domElement);
+    this.bindPointerRoles();
     this.bindHandles();
     this.renderer.domElement.style.display = "block";
     this.renderer.domElement.style.touchAction = "none";
@@ -255,9 +256,123 @@ export class Viewport {
     else this.controls.mouseButtons.RIGHT = action;
   }
 
+  // ---------------------------------------------------------------- ghost
+
+  private ghost: THREE.Mesh | null = null;
+
+  /**
+   * A see-through stand-in for an extrusion: `triangles` (the profile, world space) swept along
+   * `normal` by `distance` (negative: into the material, drawn as a cut). Instant, so a drag shows
+   * its result even while a slow rebuild is still running. `null` removes it.
+   */
+  setGhost(g: { triangles: Float32Array; normal: Vec3; distance: number } | null): void {
+    if (!g) {
+      if (this.ghost) disposeTree(this.ghost);
+      this.ghost?.removeFromParent();
+      this.ghost = null;
+      return;
+    }
+    const t = g.triangles;
+    const off = new THREE.Vector3(...g.normal).normalize().multiplyScalar(g.distance);
+    // Boundary edges belong to one triangle only; they become the side walls.
+    const key = (i: number) => `${t[i]!.toFixed(4)},${t[i + 1]!.toFixed(4)},${t[i + 2]!.toFixed(4)}`;
+    const edges = new Map<string, [number, number, number]>();
+    for (let tri = 0; tri < t.length; tri += 9) {
+      for (let k = 0; k < 3; k++) {
+        const a = tri + k * 3;
+        const b = tri + ((k + 1) % 3) * 3;
+        const [ka, kb] = [key(a), key(b)];
+        const [fwd, back] = [`${ka}|${kb}`, `${kb}|${ka}`];
+        if (edges.has(back) || edges.has(fwd)) edges.delete(back), edges.delete(fwd);
+        else edges.set(fwd, [a, b, 0]);
+      }
+    }
+    const pos: number[] = [];
+    const v = (i: number, o: boolean) => pos.push(t[i]! + (o ? off.x : 0), t[i + 1]! + (o ? off.y : 0), t[i + 2]! + (o ? off.z : 0));
+    for (let i = 0; i < t.length; i += 9) {
+      v(i, false), v(i + 3, false), v(i + 6, false);
+      v(i, true), v(i + 3, true), v(i + 6, true);
+    }
+    for (const [a, b] of edges.values()) {
+      v(a, false), v(b, false), v(b, true);
+      v(a, false), v(b, true), v(a, true);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    const cut = g.distance < 0;
+    const mat = new THREE.MeshBasicMaterial({ color: cut ? 0xe5484d : 0x6366f1, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+    if (this.ghost) disposeTree(this.ghost);
+    this.ghost?.removeFromParent();
+    this.ghost = new THREE.Mesh(geo, mat);
+    this.ghost.renderOrder = 5;
+    this.overlay.add(this.ghost);
+  }
+
+  // ---------------------------------------------------------------- pen and touch
+
+  /** True once an Apple Pencil (or any pen) was used: from then on fingers no longer draw in sketches. */
+  penSeen = false;
+  private penDown = new Set<number>();
+  private penUpAt = 0;
+  private touches = new Set<number>();
+  private rejected = new Set<number>();
+  private palmCancels = new WeakSet<Event>();
+
+  /** A pen is touching the screen (or just lifted), so finger contacts are a resting palm. */
+  get penActive(): boolean {
+    return this.penDown.size > 0 || performance.now() - this.penUpAt < 400;
+  }
+
+  /**
+   * Pen selects and draws like the left mouse button; fingers orbit (one) and pan/zoom (two) via
+   * OrbitControls. Palm rejection: touches that land while the pen is down never reach the canvas,
+   * and touches already navigating are cancelled when the pen comes down.
+   */
+  private bindPointerRoles(): void {
+    const el = this.renderer.domElement;
+    const filter = (e: PointerEvent) => {
+      if (e.target !== el) return;
+      if (e.pointerType === "pen") {
+        this.penSeen = true;
+        if (e.type === "pointerdown") {
+          this.penDown.add(e.pointerId);
+          // Cancel touches already navigating: they were the palm landing first.
+          for (const id of [...this.touches]) {
+            this.touches.delete(id);
+            this.rejected.add(id);
+            const cancel = new PointerEvent("pointercancel", { pointerId: id, pointerType: "touch", bubbles: true });
+            this.palmCancels.add(cancel);
+            el.dispatchEvent(cancel);
+          }
+        } else if (e.type === "pointerup" || e.type === "pointercancel") {
+          if (this.penDown.delete(e.pointerId)) this.penUpAt = performance.now();
+        }
+        return;
+      }
+      if (e.pointerType !== "touch" || this.palmCancels.has(e)) return;
+      if (e.type === "pointerdown") {
+        if (this.penActive) this.rejected.add(e.pointerId);
+        else this.touches.add(e.pointerId);
+      }
+      const rejected = this.rejected.has(e.pointerId);
+      if (e.type === "pointerup" || e.type === "pointercancel") {
+        this.touches.delete(e.pointerId);
+        this.rejected.delete(e.pointerId);
+      }
+      if (rejected) e.stopPropagation();
+    };
+    // Capturing on the container runs before every listener on the canvas, OrbitControls included.
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const) this.container.addEventListener(type, filter, { capture: true });
+  }
+
   // ---------------------------------------------------------------- scene
 
+  /** How long the last setScene took (ms), for diagnostics. */
+  lastSceneMs = 0;
+
   setScene(data: SceneData): void {
+    const t0 = performance.now();
     this.sceneData = data;
     this.rebuildBodies(data);
     this.rebuildSketches(data);
@@ -276,6 +391,7 @@ export class Viewport {
       this.framed = true;
       this.fit(false);
     }
+    this.lastSceneMs = performance.now() - t0;
   }
 
   get hovered(): Pick | null {
@@ -340,24 +456,29 @@ export class Viewport {
 
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute("position", new THREE.BufferAttribute(mesh.edgeLines, 3));
-    const segIndex: number[] = [];
-    const segEdge: number[] = [];
+    // Typed arrays sized up front: thread and fillet edges run to many thousand segments.
+    let segs = 0;
+    for (let i = 0; i < mesh.edgeRanges.length; i += 3) segs += Math.max(0, mesh.edgeRanges[i + 1]! - 1);
+    const segIndex = new Uint32Array(segs * 2);
+    const segEdge = new Int32Array(segs);
+    let n = 0;
     for (let i = 0; i < mesh.edgeRanges.length; i += 3) {
       const start = mesh.edgeRanges[i]!;
       const count = mesh.edgeRanges[i + 1]!;
       for (let k = start; k < start + count - 1; k++) {
-        segIndex.push(k, k + 1);
-        segEdge.push(mesh.edgeRanges[i + 2]!);
+        segIndex[n * 2] = k;
+        segIndex[n * 2 + 1] = k + 1;
+        segEdge[n++] = mesh.edgeRanges[i + 2]!;
       }
     }
-    lineGeo.setIndex(segIndex);
+    lineGeo.setIndex(new THREE.BufferAttribute(segIndex, 1));
     lineGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(mesh.edgeLines.length), 3));
     lineGeo.computeBoundingSphere();
     const edges = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: ghost, opacity: ghost ? 0.35 : 1 }));
     edges.userData = { body: mesh.bodyId };
     const group = new THREE.Group();
     group.add(faces, edges);
-    return { mesh, group, faces, edges, triFace, segEdge: Int32Array.from(segEdge) };
+    return { mesh, group, faces, edges, triFace, segEdge };
   }
 
   private rebuildSketches(data: SceneData): void {
@@ -634,12 +755,12 @@ export class Viewport {
     }
   }
 
-  private hitHandle(clientX: number, clientY: number): Handle | null {
+  private hitHandle(clientX: number, clientY: number, radius = 18): Handle | null {
     const r = this.renderer.domElement.getBoundingClientRect();
     const px = clientX - r.left;
     const py = clientY - r.top;
     let best: Handle | null = null;
-    let bd = 18;
+    let bd = radius;
     for (const h of this.handles) {
       const tip = this.handleTip(h);
       const a = this.worldToScreen(h.origin);
@@ -683,8 +804,8 @@ export class Viewport {
     el.addEventListener(
       "pointerdown",
       (e) => {
-        if (e.button !== 0) return;
-        const h = this.hitHandle(e.clientX, e.clientY);
+        if (e.button !== 0 || (e.pointerType === "touch" && this.penSeen)) return;
+        const h = this.hitHandle(e.clientX, e.clientY, e.pointerType === "touch" ? 30 : 18);
         if (!h) return;
         e.stopImmediatePropagation();
         e.preventDefault();
@@ -692,7 +813,7 @@ export class Viewport {
         const t = this.axisParam(h, e.clientX, e.clientY);
         // Offset between where the arrow was grabbed and its value, so it does not jump.
         grab = (t ?? 0) - (h.value + this.handleBase(h));
-        this.activeHandle = { h, value: h.value };
+        this.activeHandle = { h, value: h.value, pointer: e.pointerId };
         h.onStart?.();
       },
       { capture: true },
@@ -702,6 +823,8 @@ export class Viewport {
       (e) => {
         const a = this.activeHandle;
         if (!a) {
+          // Fingers do not hover; a finger orbiting across an arrow must not be swallowed.
+          if (e.pointerType === "touch") return;
           const hit = this.hitHandle(e.clientX, e.clientY)?.id ?? null;
           if (hit !== this.hoverHandle) {
             this.hoverHandle = hit;
@@ -711,7 +834,15 @@ export class Viewport {
           if (hit) e.stopImmediatePropagation();
           return;
         }
+        if (e.pointerId !== a.pointer) return;
         e.stopImmediatePropagation();
+        dragTo(e);
+      },
+      { capture: true },
+    );
+    const dragTo = perFrame((e: PointerEvent) => {
+        const a = this.activeHandle;
+        if (!a) return;
         const t = this.axisParam(a.h, e.clientX, e.clientY);
         if (t === null) return;
         const raw = t - grab - this.handleBase(a.h);
@@ -726,13 +857,12 @@ export class Viewport {
         }
         const tip = this.handleTip(a.h, v);
         this.onHandleDrag?.(a.h, v, this.worldToScreen([tip.x, tip.y, tip.z]));
-      },
-      { capture: true },
-    );
+    });
     const end = (e: PointerEvent) => {
       const a = this.activeHandle;
-      if (!a) return;
+      if (!a || e.pointerId !== a.pointer) return;
       e.stopImmediatePropagation();
+      dragTo.flush();
       this.activeHandle = null;
       el.style.cursor = "";
       this.onHandleDrag?.(null, a.value, null);
@@ -1002,6 +1132,23 @@ export class Viewport {
     this.emit();
   }
 
+  /** Turns to face a surface head-on, centred on the touched point and keeping the distance. */
+  lookAtFace(point: Vec3, normal: Vec3): void {
+    const d = new THREE.Vector3(...normal).normalize();
+    const up = Math.abs(d.z) > 0.99 ? new THREE.Vector3(0, d.z > 0 ? 1 : -1, 0) : new THREE.Vector3(0, 0, 1);
+    const target = new THREE.Vector3(...point);
+    const dist = this.camera.position.distanceTo(this.controls.target);
+    this.anim = {
+      from: this.camera.position.clone(),
+      to: target.clone().addScaledVector(d, dist),
+      upFrom: this.camera.up.clone(),
+      upTo: up,
+      targetFrom: this.controls.target.clone(),
+      target,
+      t0: performance.now(),
+    };
+  }
+
   /** Looks along -dir (camera placed at +dir), choosing a sensible up vector. */
   viewFrom(dir: Vec3, animate = true): void {
     const d = new THREE.Vector3(...dir).normalize();
@@ -1019,10 +1166,12 @@ export class Viewport {
     return () => this.listeners.delete(fn);
   }
 
+  /** Overlays (handles, labels, view cube) follow the camera once per frame, however many
+   *  pointer events moved it in between. */
   private emit(): void {
-    if (this.handles.length) this.drawHandles();
-    for (const fn of this.listeners) fn();
+    this.changed = true;
   }
+  private changed = false;
 
   snapshot(width = 480, height = 360, clean = false): string {
     // Thumbnails leave out helpers so only the model is pictured.
@@ -1082,6 +1231,11 @@ export class Viewport {
       this.emit();
     }
     this.controls.update();
+    if (this.changed) {
+      this.changed = false;
+      if (this.handles.length) this.drawHandles();
+      for (const fn of this.listeners) fn();
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -1118,6 +1272,38 @@ export class Viewport {
 }
 
 // ---------------------------------------------------------------- helpers
+
+/**
+ * Wraps a pointermove handler so it runs at most once per frame, with the latest event. iPad
+ * Safari delivers Apple Pencil moves at up to 240 Hz instead of once per frame; handling every one
+ * builds a backlog that keeps the view updating long after the pen lifted. Call `flush()` before
+ * handling pointerdown/up so they see the final position.
+ */
+export function perFrame<E>(fn: (e: E) => void): ((e: E) => void) & { flush(): void; cancel(): void } {
+  let pending: E | null = null;
+  let raf = 0;
+  const run = () => {
+    raf = 0;
+    const e = pending;
+    pending = null;
+    if (e) fn(e);
+  };
+  const wrapped = (e: E) => {
+    pending = e;
+    if (!raf) raf = requestAnimationFrame(run);
+  };
+  return Object.assign(wrapped, {
+    flush: () => {
+      if (raf) cancelAnimationFrame(raf);
+      run();
+    },
+    cancel: () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      pending = null;
+    },
+  });
+}
 
 export function frameMatrix(f: Frame): THREE.Matrix4 {
   const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.v), new THREE.Vector3(...f.normal));

@@ -70,7 +70,23 @@ interface State {
   pickingSketchPlane: boolean;
 }
 
-export const kernel = new KernelClient(new KernelWorker());
+/**
+ * The kernel uses the multi-threaded OCCT build (parallel meshing and booleans) whenever the page is
+ * cross-origin isolated: SharedArrayBuffer only exists there, i.e. over https or from localhost, not
+ * on a plain-http LAN address. `?threads=0` or localStorage "meercad.threads" = "0" turns it off.
+ */
+const wantThreads = new URLSearchParams(location.search).get("threads") !== "0" && !threadsOff();
+function threadsOff(): boolean {
+  try {
+    return localStorage.getItem("meercad.threads") === "0";
+  } catch {
+    return false;
+  }
+}
+export const kernel = new KernelClient(new KernelWorker({ name: wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel" }));
+// Touch screens are tablets: meshing is a large share of every rebuild there, and the screen is
+// held close but small, so looser tolerances (about half the triangles) are hard to see.
+if (matchMedia("(pointer: coarse)").matches) void kernel.configure(2);
 let docStore = new DocumentStore();
 /** Each open tab keeps its document and undo history in memory while it is in the background. */
 const tabStores = new Map<string, DocumentStore>();
@@ -273,19 +289,52 @@ function remapSelection(selection: Pick[], before: RebuildOutput | null, after: 
 }
 
 let rebuildQueued = false;
+let rebuildsPending = 0;
+let lastRebuildMs = 0;
+let held: "off" | "on" | "wanted" = "off";
+
+/** Rebuilds still on their way from the kernel. */
+export const rebuilding = () => rebuildsPending > 0 || held === "wanted";
+
+/** The last rebuild took long enough (a big part on an iPad) that a drag should not wait on it. */
+export const rebuildIsSlow = () => lastRebuildMs > 150;
+
+/**
+ * While holding, rebuild requests are collected instead of sent: dragging on a slow device then
+ * computes only where the pen rests or lets go, instead of a stale value that delays the final one.
+ */
+export function holdRebuilds(on: boolean): void {
+  const wanted = held === "wanted";
+  held = on ? (wanted ? "wanted" : "on") : "off";
+  if (!on && wanted) scheduleRebuild();
+}
+
 export function scheduleRebuild(): void {
+  if (held !== "off") {
+    held = "wanted";
+    return;
+  }
   if (rebuildQueued) return;
   rebuildQueued = true;
   queueMicrotask(() => {
     rebuildQueued = false;
     const { doc, preview, problem } = displayDoc();
     set({ previewError: problem, building: true });
-    kernel.rebuild(doc).then(
+    const t0 = performance.now();
+    rebuildsPending++;
+    // Volume and area (integrals over every face) follow once the new shape is on screen.
+    kernel.rebuild(doc, { props: false }).then(
       (output) => {
+        rebuildsPending--;
+        lastRebuildMs = performance.now() - t0;
         set(preview ? { output, previewing: true, building: false } : { output, baseOutput: output, previewing: false, building: false, selection: remapSelection(get().selection, get().baseOutput, output) });
-        if (!preview) scheduleThumbnail();
+        if (!preview) {
+          scheduleThumbnail();
+          fillBodyProps(output);
+        }
       },
       (e: unknown) => {
+        rebuildsPending--;
         // A newer rebuild replaced this one; it clears the flag when it finishes.
         if (e instanceof SupersededError) return;
         set({ building: false });
@@ -297,8 +346,23 @@ export function scheduleRebuild(): void {
   });
 }
 
+/** Puts volume and area into a result that was built without them, unless a newer one replaced it. */
+function fillBodyProps(output: RebuildOutput): void {
+  void kernel.bodyProps().then(
+    (bodies) => {
+      if (get().output !== output) return;
+      const filled = { ...output, report: { ...output.report, bodies } };
+      set({ output: filled, ...(get().baseOutput === output ? { baseOutput: filled } : {}) });
+    },
+    () => undefined,
+  );
+}
+
 kernel.ready.then(
-  ({ initMs }) => set({ kernel: { ready: true, info: `Kernel ready (${initMs.toFixed(0)} ms)` } }),
+  ({ initMs, threads }) => {
+    const mode = threads ? `, ${navigator.hardwareConcurrency} threads` : !wantThreads ? ", single thread: turned off" : crossOriginIsolated ? ", single thread: threaded build failed to start" : ", single thread: page not cross-origin isolated";
+    set({ kernel: { ready: true, info: `Kernel ready (${initMs.toFixed(0)} ms${mode})` } });
+  },
   (e: Error) => set({ kernel: { ready: false, info: "Kernel failed", error: e.message } }),
 );
 

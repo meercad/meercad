@@ -28,10 +28,11 @@ export interface BodySummary {
 
 const HASH_BOUND = 2147483647;
 
-export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"]): BodyMesh {
+/** `coarse` > 1 loosens the tessellation tolerances by that factor (fewer triangles, faster). */
+export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse = 1): BodyMesh {
   const diag = Math.hypot(...bbox.max.map((v, i) => v - bbox.min[i]!));
-  const linear = Math.max(0.01, diag * 5e-4);
-  const angular = 0.25;
+  const linear = Math.max(0.01, diag * 5e-4) * coarse;
+  const angular = Math.min(0.4, 0.25 * coarse);
 
   const faceByHash = new Map<number, number>();
   body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));
@@ -69,20 +70,23 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"]): BodyMes
   }
 }
 
-export function summarizeBody(oc: OC, body: Body): BodySummary {
+/** Bounding box and counts; with `props`, also volume and surface area (integrals, slow on curved parts). */
+export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
   const vol = new oc.GProp_GProps();
   const surf = new oc.GProp_GProps();
   const box = new oc.Bnd_Box();
   try {
-    oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, false);
-    oc.BRepGProp.SurfaceProperties(body.shape, surf, false, false);
+    if (props) {
+      oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, false);
+      oc.BRepGProp.SurfaceProperties(body.shape, surf, false, false);
+    }
     oc.BRepBndLib.Add(body.shape, box, false);
     const lo = box.CornerMin();
     const hi = box.CornerMax();
     const bbox = { min: [lo.X(), lo.Y(), lo.Z()] as [number, number, number], max: [hi.X(), hi.Y(), hi.Z()] as [number, number, number] };
     lo.delete();
     hi.delete();
-    return { id: body.bodyId, volume: vol.Mass(), area: surf.Mass(), bbox, faces: body.faces.length, edges: body.edges.length };
+    return { id: body.bodyId, volume: props ? vol.Mass() : NaN, area: props ? surf.Mass() : NaN, bbox, faces: body.faces.length, edges: body.edges.length };
   } finally {
     vol.delete();
     surf.delete();
