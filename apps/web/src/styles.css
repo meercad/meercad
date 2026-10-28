@@ -871,12 +871,16 @@ html[data-compact] .topbar { top: 6px; left: 6px; right: 6px; height: 50px; padd
 .topbar.compact .doc-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar.compact .doc-switch svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
 
-/* tools: one row at the bottom that scrolls sideways; a soft fade at an edge shows there is more */
-html[data-compact] .toolbar.rail { top: auto; bottom: 6px; left: 6px; right: 6px; width: auto; max-height: none; display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 22px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
-html[data-compact] .toolbar.rail::-webkit-scrollbar { display: none; }
-html[data-compact] .toolbar.rail[data-more="right"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent); }
-html[data-compact] .toolbar.rail[data-more="left"] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent); }
-html[data-compact] .toolbar.rail[data-more="both"] { -webkit-mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent); }
+/* tools: one row at the bottom that scrolls sideways inside the bar; at an edge that hides more,
+   the tools fade into the bar's own background (the frame itself stays whole) */
+.rail-items { display: contents; }
+html[data-compact] .toolbar.rail { top: auto; bottom: 6px; left: 6px; right: 6px; width: auto; max-height: none; display: block; padding: 0; border-radius: 22px; overflow: hidden; }
+html[data-compact] .rail-items { display: flex; align-items: center; gap: 6px; padding: 6px 8px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+html[data-compact] .rail-items::-webkit-scrollbar { display: none; }
+html[data-compact] .toolbar.rail::before, html[data-compact] .toolbar.rail::after { content: ""; position: absolute; top: 0; bottom: 0; width: 36px; z-index: 2; pointer-events: none; opacity: 0; transition: opacity 0.18s; }
+html[data-compact] .toolbar.rail::before { left: 0; background: linear-gradient(to right, var(--glass-strong) 20%, transparent); }
+html[data-compact] .toolbar.rail::after { right: 0; background: linear-gradient(to left, var(--glass-strong) 20%, transparent); }
+html[data-compact] .toolbar.rail:is([data-more="left"], [data-more="both"])::before, html[data-compact] .toolbar.rail:is([data-more="right"], [data-more="both"])::after { opacity: 1; }
 html[data-compact] .rail .sep { display: block; width: 1px; height: 32px; margin: 0 2px; flex: none; }
 html[data-compact] .rail .tool, html[data-compact] .rail-group > .tool { width: 64px; min-width: 64px; height: 52px; flex: none; }
 html[data-compact] .rail-group { flex: none; }

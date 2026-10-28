@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
-import { frameMatrix, perFrame, THREE, type Viewport } from "@meercad/viewport";
+import { fatLine, frameMatrix, perFrame, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { featureName } from "../lib/features";
 import { usePhoneSheets } from "../lib/layout";
@@ -1528,10 +1528,7 @@ function curveObject(c: SolvedCurve, color: number, dashed: boolean): THREE.Obje
     pts.length = 0;
     for (let i = 0; i <= n; i++) pts.push(new THREE.Vector3(c.center[0] + c.radius * Math.cos(a0 + (sw * i) / n), c.center[1] + c.radius * Math.sin(a0 + (sw * i) / n), 0));
   }
-  const geo = new THREE.BufferGeometry().setFromPoints(pts);
-  const mat = dashed ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.2, depthTest: false }) : new THREE.LineBasicMaterial({ color, depthTest: false });
-  const line = new THREE.Line(geo, mat);
-  if (dashed) line.computeLineDistances();
+  const line = fatLine(pts, { color, width: dashed ? 1.75 : SKETCH_LINE_WIDTH, ...(dashed ? { dashed: { dash: 2, gap: 1.2 } } : {}) });
   line.renderOrder = 28;
   return line;
 }
@@ -1541,8 +1538,7 @@ function previewObjects(tool: SketchTool, ts: { points: Snap[]; cursor: Vec2 | n
   const cur = ts.cursor;
   if (!cur) return out;
   const line = (pts: Vec2[], loop = false) => {
-    const g = new THREE.BufferGeometry().setFromPoints(pts.map(([x, y]) => new THREE.Vector3(x, y, 0)));
-    const o = loop ? new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color: COLORS.preview, depthTest: false })) : new THREE.Line(g, new THREE.LineBasicMaterial({ color: COLORS.preview, depthTest: false }));
+    const o = fatLine(pts, { color: COLORS.preview, width: 2, loop });
     o.renderOrder = 40;
     out.push(o);
   };

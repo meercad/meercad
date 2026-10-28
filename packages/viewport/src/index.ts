@@ -5,6 +5,9 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -519,12 +522,8 @@ export class Viewport {
       g.matrixAutoUpdate = false;
       g.matrix.copy(frameMatrix(s.frame));
       for (const c of s.curves) {
-        const pts = curvePoints(c);
-        const geo = new THREE.BufferGeometry().setFromPoints(pts.map(([x, y]) => new THREE.Vector3(x, y, 0)));
         const color = c.external ? C.sketchExternal : c.construction ? C.sketchConstruction : C.sketch;
-        const mat = c.construction ? new THREE.LineDashedMaterial({ color, dashSize: 1.5, gapSize: 1, depthTest: false }) : new THREE.LineBasicMaterial({ color, depthTest: false });
-        const line = new THREE.Line(geo, mat);
-        if (c.construction) line.computeLineDistances();
+        const line = fatLine(curvePoints(c), { color, width: c.construction ? 1.5 : 2, ...(c.construction ? { dashed: { dash: 1.5, gap: 1 } } : {}) });
         line.renderOrder = 5;
         line.userData = { sketch: s.id, curve: c.id };
         g.add(line);
@@ -1625,3 +1624,23 @@ export function samePick(a: Pick | null, b: Pick | null): boolean {
 }
 
 export { THREE };
+
+/** Sketch lines are drawn this wide (screen pixels); plain WebGL lines are one pixel on Apple devices. */
+export const SKETCH_LINE_WIDTH = 2.5;
+
+/**
+ * A line of a given width in screen pixels through the points (sketch curves, previews, guides).
+ * `loop` closes it; `dashed` draws dashes in sketch units.
+ */
+export function fatLine(points: readonly (readonly [number, number] | THREE.Vector3)[], o: { color: number; width?: number; loop?: boolean; dashed?: { dash: number; gap: number }; depthTest?: boolean }): Line2 {
+  const flat: number[] = [];
+  const push = (p: readonly [number, number] | THREE.Vector3) => (p instanceof THREE.Vector3 ? flat.push(p.x, p.y, p.z) : flat.push(p[0], p[1], 0));
+  points.forEach(push);
+  if (o.loop && points.length) push(points[0]!);
+  const geo = new LineGeometry();
+  geo.setPositions(flat);
+  const mat = new LineMaterial({ color: o.color, linewidth: o.width ?? SKETCH_LINE_WIDTH, depthTest: o.depthTest ?? false, dashed: !!o.dashed, dashSize: o.dashed?.dash ?? 1, gapSize: o.dashed?.gap ?? 1, transparent: true });
+  const line = new Line2(geo, mat);
+  if (o.dashed) line.computeLineDistances();
+  return line;
+}

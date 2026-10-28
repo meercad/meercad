@@ -179,8 +179,9 @@ export function Toolbar() {
 
   // Phone: the bar scrolls sideways; mark which ends hide more tools, for the fades there.
   const [more, setMore] = useState<"left" | "right" | "both" | undefined>();
+  const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = rail.current;
+    const el = scroller.current;
     if (!el || !compact) return setMore(undefined);
     const update = () => {
       const left = el.scrollLeft > 4;
@@ -198,6 +199,7 @@ export function Toolbar() {
 
   return (
     <nav className="toolbar rail" ref={rail} aria-label="Tools" onPointerLeave={() => hover(null)} data-more={more}>
+      <div className="rail-items" ref={scroller}>
       {/* Phone: the panels that have no room on screen open from the bar. */}
       {compact ? (
         sketching ? (
@@ -270,6 +272,7 @@ export function Toolbar() {
           </div>
         );
       })}
+      </div>
     </nav>
   );
 }
