@@ -915,7 +915,8 @@ html[data-compact] .view-controls .bar-sep { width: auto; height: 1px; align-sel
 html[data-compact] .view-controls .mode-label { display: none; }
 html[data-compact] .view-controls .mode-btn { padding: 0; }
 html[data-compact] .status-pill { display: none; }
-html[data-compact] .toasts { bottom: calc(var(--bar) + 20px + env(safe-area-inset-bottom)); }
+html[data-compact] .toasts { bottom: calc(90px + env(safe-area-inset-bottom)); left: 12px; right: 12px; transform: none; }
+html[data-compact] .toast { max-width: 100%; }
 html[data-compact] .ai-activity { left: 8px; right: 8px; }
 
 /* overview */

@@ -31,12 +31,14 @@ const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n.toFixed(1));
 /** Scans an object and adds it to the open part (or a new project from the overview). */
 export async function scanObject(): Promise<void> {
   const caps = await capabilities();
+  console.info("scan capabilities", JSON.stringify(caps));
   if (!caps.scan) return toast(caps.reason || "This device cannot scan objects.", "error");
   let r: Awaited<ReturnType<ScanPlugin["scan"]>>;
   try {
     r = await Scan.scan();
   } catch (e) {
     const err = e as { code?: string; message?: string };
+    console.info("scan failed", err.code, err.message);
     if (err.code !== "cancelled") toast(err.message ?? "Scanning failed", "error");
     return;
   }

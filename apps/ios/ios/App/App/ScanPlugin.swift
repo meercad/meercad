@@ -1,3 +1,4 @@
+import ARKit
 import Capacitor
 import Foundation
 import RealityKit
@@ -26,8 +27,23 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
             guard #available(iOS 18, *) else {
                 return call.resolve(["scan": false, "reason": "Scanning needs iOS 18 or later (this is \(UIDevice.current.systemVersion))."])
             }
-            let supported = ObjectCaptureSession.isSupported
-            call.resolve(["scan": supported, "reason": supported ? "" : "This device does not support object capture (it needs a LiDAR scanner)."])
+            // Object capture says whether it runs here; the LiDAR checks are asked too, because the first
+            // answer has been seen wrong on new devices (an iPhone 18 Pro Max on iOS 27.0.1 said no).
+            let objectCapture = ObjectCaptureSession.isSupported
+            let lidar = ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
+            let sceneMesh = ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+            // Starting object capture where it says no ends the app, so only its own answer counts.
+            let scan = objectCapture
+            call.resolve([
+                "scan": scan,
+                "objectCapture": objectCapture,
+                "lidar": lidar,
+                "sceneMesh": sceneMesh,
+                "photogrammetry": PhotogrammetrySession.isSupported,
+                "reason": scan ? "" : lidar
+                    ? "This iPhone has LiDAR, but Apple's object capture reports it as unsupported on this iOS version (a known Apple issue on iPhone 18 Pro / Pro Max with iOS 27). Scanning will work once Apple fixes it."
+                    : "This device has no LiDAR scanner, which scanning needs.",
+            ])
         }
     }
 
