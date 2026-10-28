@@ -56,6 +56,7 @@ Sketches (op "sketch") sit on plane {ref: "origin.XY"|"origin.XZ"|"origin.YZ"|<p
 - Closed loops form regions. An extrude/revolve profile {sketch} uses all regions with the even-odd rule (circles inside a rectangle become holes); {sketch, regions:[keys]} picks regions explicitly; {face: <face selector>} pushes/pulls a model face (extrude only): a flat face moves along its normal, a curved one (hole wall, rounded edge) is offset along its surface; distance > 0 goes out of the material (join), flip:true goes in (cut).
 
 Features
+- import {format:"stl"|"step", fileName, data}: data is the file's contents as base64. STEP gives exact bodies; an STL becomes a solid made of flat faces (it must be a closed mesh, otherwise the feature reports an error). Through MCP, give "path" (a file on the user's computer) instead of data.
 - extrude {profile, extent:"blind"|"symmetric"|"two_sided"|"through_all", distance, distance2?, flip?, mode:"new_body"|"join"|"cut"|"intersect", targets?}. Direction = plane normal (XY → +Z, XZ → -Y, YZ → +X); for sketches on a face the normal points out of the material, so cuts into a face need flip:true (or through_all with flip).
 - revolve {profile, axis:{ref:"origin.X|Y|Z"} | {line:"sk1.l3"} | {edge:<edge selector>}, angle, symmetric?, mode}
 - fillet {edges, radius}; chamfer {edges, distance}; shell {faces:[face selectors to remove], thickness, outward?}

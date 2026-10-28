@@ -4,9 +4,10 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { WebSocketServer, type WebSocket } from "ws";
+import { readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, extname, resolve } from "node:path";
+import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { SYSTEM_PROMPT } from "@meercad/ai/prompt";
 import { DEFAULT_PORT, type BridgeHello, type BridgeMethod, type BridgeResponse } from "./protocol.js";
@@ -26,23 +27,30 @@ const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Err
 
 /** True while another process holds the bridge port; we keep retrying until it is free. */
 let portBusy = false;
+/** Set once this server handed the port to a newer one: from then on it only waits for it to free up. */
+let yielded = false;
+let bridge: WebSocketServer | null = null;
 
 /**
- * Several clients may start this server at once (e.g. a chat and a coding session); only one can own
- * the port. The others retry, so whichever is left takes over when the owner exits.
+ * Several clients may start this server (e.g. a chat and a coding session); only one can own the
+ * port. The newest wins: a server that finds the port taken asks the owner to step aside, and the
+ * app reconnects to it. A server that stepped aside only waits, and takes over again if the port
+ * frees up (so the two never trade it back and forth).
  */
 function startBridge(): void {
   const wss = new WebSocketServer({ host: "127.0.0.1", port, verifyClient: ({ origin }: { origin?: string }) => originAllowed(origin) });
   wss.on("listening", () => {
     portBusy = false;
+    bridge = wss;
     log(`waiting for the meerCAD app on ws://127.0.0.1:${port}`);
   });
   wss.on("error", (e: NodeJS.ErrnoException) => {
     if (e.code === "EADDRINUSE") {
-      if (!portBusy) log(`port ${port} is in use by another meerCAD MCP server; retrying`);
+      if (!portBusy) log(`port ${port} is in use by another meerCAD MCP server; ${yielded ? "waiting" : "asking it to hand over"}`);
+      if (!portBusy && !yielded) askForTakeover();
       portBusy = true;
       wss.close();
-      setTimeout(startBridge, 2000).unref();
+      setTimeout(startBridge, yielded ? 2000 : 500).unref();
       return;
     }
     log(`bridge error: ${e.message}`);
@@ -50,17 +58,39 @@ function startBridge(): void {
   wss.on("connection", onConnection);
 }
 
+/** Tells the server that owns the port that a newer one is here. */
+function askForTakeover(): void {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  ws.on("open", () => {
+    ws.send(JSON.stringify({ takeover: "meercad" }));
+    ws.close();
+  });
+  ws.on("error", () => undefined);
+}
+
+/** A newer server asked for the port: let the app go (it reconnects to the newcomer) and wait. */
+function handOver(): void {
+  log("a newer meerCAD MCP server took over; this one waits until it exits");
+  yielded = true;
+  app?.close(4001, "handed over to a newer assistant session");
+  const wss = bridge;
+  bridge = null;
+  wss?.close(() => setTimeout(startBridge, 2000).unref());
+  for (const c of wss?.clients ?? []) c.terminate();
+}
+
 function onConnection(ws: WebSocket): void {
-  app?.close(4000, "replaced by a newer connection");
-  app = ws;
   ws.on("message", (raw) => {
-    let msg: BridgeResponse | BridgeHello;
+    let msg: BridgeResponse | BridgeHello | { takeover: string };
     try {
       msg = JSON.parse(String(raw));
     } catch {
       return;
     }
+    if ("takeover" in msg) return handOver();
     if ("hello" in msg) {
+      if (app && app !== ws) app.close(4000, "replaced by a newer connection");
+      app = ws;
       hello = msg;
       log(`app connected (project: ${msg.project ?? "none"})`);
       return;
@@ -89,6 +119,7 @@ startBridge();
 
 function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
   if (!app || app.readyState !== app.OPEN) {
+    if (yielded && portBusy) return Promise.reject(new Error("A newer assistant session is connected to meerCAD now. Use that session, or close it and try again here."));
     return Promise.reject(
       new Error(
         "The meerCAD app is not connected. Open meerCAD and enable 'Connect AI assistants (MCP)' in the toolbar menu, then try again.",
@@ -118,6 +149,32 @@ const guard =
     }
   };
 
+/**
+ * Import features may name a local file in `path` instead of carrying it as base64 in `data`: this
+ * server runs on the user's computer, so it reads the file and fills in `data`, `fileName` and
+ * `format` (from the extension) before the ops reach the app.
+ */
+async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  const inline = async (f: Record<string, unknown>) => {
+    if (f["op"] !== "import" || typeof f["path"] !== "string") return f;
+    const path = resolve(f["path"].replace(/^~(?=\/|$)/, homedir()));
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(path);
+    } catch {
+      throw new Error(`import ${String(f["id"] ?? "")}: cannot read the file "${path}"`);
+    }
+    const ext = extname(path).toLowerCase();
+    const format = f["format"] ?? (ext === ".stl" ? "stl" : ext === ".step" || ext === ".stp" ? "step" : undefined);
+    if (!format) throw new Error(`import ${String(f["id"] ?? "")}: unknown file type "${ext}" (use .stl, .step or .stp, or set format)`);
+    const { path: _path, ...rest } = f;
+    return { ...rest, format, fileName: f["fileName"] ?? basename(path), data: bytes.toString("base64") };
+  };
+  return Promise.all(
+    ops.map(async (o) => (o["type"] === "add_features" && Array.isArray(o["features"]) ? { ...o, features: await Promise.all((o["features"] as Record<string, unknown>[]).map(inline)) } : o)),
+  );
+}
+
 const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas)." });
 
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
@@ -141,10 +198,10 @@ server.registerTool(
   "apply_ops",
   {
     title: "Change the model",
-    description: "Applies Operations-API ops atomically as one undo step (add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback, replace) and returns the rebuild result. Rejected ops leave the model unchanged.",
+    description: "Applies Operations-API ops atomically as one undo step (add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback, replace) and returns the rebuild result. Rejected ops leave the model unchanged. An import feature may give `path` (a file on this computer) instead of base64 `data`.",
     inputSchema: { ops: z.array(op).min(1) },
   },
-  guard(async ({ ops }) => text(await call("apply_ops", { ops }))),
+  guard(async ({ ops }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops) }))),
 );
 
 server.registerTool(
@@ -154,7 +211,7 @@ server.registerTool(
     description: "Shows the model with the ops applied as a live preview in the app (not saved) and returns the rebuild result. Use to try ideas; then apply_ops to keep them or clear_preview.",
     inputSchema: { ops: z.array(op).min(1) },
   },
-  guard(async ({ ops }) => text(await call("preview_ops", { ops }))),
+  guard(async ({ ops }) => text(await call("preview_ops", { ops: await inlineImportFiles(ops) }))),
 );
 
 server.registerTool("clear_preview", { title: "Clear preview", description: "Removes a preview shown by preview_ops." }, guard(async () => text(await call("clear_preview"))));
