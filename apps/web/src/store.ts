@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { KernelClient, SupersededError, type Measurement, type RebuildOutput } from "@meercad/kernel/client";
 import { DocumentStore, OpError } from "@meercad/model";
 import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
-import { planeSpecForPick } from "./lib/topology";
+import { planeSpecForPick, setFeatureLabels } from "./lib/topology";
 import { usePrefs } from "./lib/keymap";
 import { FACE_TOOLS, MESH_HINT, meshBodyIds } from "./lib/meshParts";
 import { setUnitSource } from "./lib/units";
@@ -580,6 +580,10 @@ export async function openProject(id: string): Promise<void> {
  * millimetres underneath and values with a unit keep it. Undoable like any edit.
  */
 setUnitSource(() => get().doc.units ?? "mm");
+setFeatureLabels((id) => {
+  const f = get().doc.features.find((x) => x.id === id);
+  return f ? featureName(f) : id;
+});
 /** The open design's length unit, for components that re-render when it changes. */
 export const useDocUnit = (): LengthUnit => useApp((s) => s.doc.units ?? "mm");
 

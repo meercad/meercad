@@ -1,4 +1,4 @@
-import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Pencil, PencilLine, Ruler, Scan, Trash } from "lucide-react";
+import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Pencil, PencilLine, Ruler, Scan, SlidersHorizontal, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
@@ -513,8 +513,40 @@ export function ViewportView() {
         <button className="icon-btn sm" title={withKey("Fit all", fitKey)} onClick={() => vp?.fit()}>
           <Scan />
         </button>
+        {/* Phone: the less used view switches share one menu, so the column stays short. */}
         <button
-          className={`icon-btn sm ${ortho ? "active" : ""}`}
+          className="icon-btn sm phone-only"
+          title="View options"
+          onClick={(e) => {
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const check = (on: boolean) => (on ? "✓ " : "   ");
+            const modes: [DisplayMode, string][] = [
+              ["shaded_edges", "Shaded with edges"],
+              ["shaded", "Shaded"],
+              ["hidden_line", "Hidden lines removed"],
+              ["xray", "X-ray"],
+              ["wireframe", "Wireframe"],
+            ];
+            showMenu(r.left - 220, r.top, [
+              ...modes.map(([m, label]) => ({ label: `${check(vp?.mode === m)}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })),
+              "sep" as const,
+              {
+                label: `${check(ortho)}Orthographic`,
+                onClick: () => {
+                  vp?.setProjection(ortho ? "perspective" : "orthographic");
+                  setOrtho(!ortho);
+                },
+              },
+              { label: `${check(showPlanes)}Planes`, onClick: () => useApp.setState({ showPlanes: !showPlanes }) },
+              { label: `${check(showSketches)}Sketches`, onClick: () => useApp.setState({ showSketches: !showSketches }) },
+              { label: `${check(showValues)}Dimensions on the model`, onClick: () => setPrefs({ showValues: !showValues }) },
+            ]);
+          }}
+        >
+          <SlidersHorizontal />
+        </button>
+        <button
+          className={`icon-btn sm phone-hide ${ortho ? "active" : ""}`}
           title={ortho ? "Orthographic (click for perspective)" : "Perspective (click for orthographic)"}
           onClick={() => {
             vp?.setProjection(ortho ? "perspective" : "orthographic");
@@ -524,7 +556,7 @@ export function ViewportView() {
           <Box />
         </button>
         <button
-          className="icon-btn sm mode-btn"
+          className="icon-btn sm mode-btn phone-hide"
           title="Display mode"
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -540,13 +572,13 @@ export function ViewportView() {
         >
           <Box /> <span className="mode-label">{MODE_LABEL[mode]}</span>
         </button>
-        <button className={`icon-btn sm ${showPlanes ? "active" : ""}`} title="Planes" onClick={() => useApp.setState({ showPlanes: !showPlanes })}>
+        <button className={`icon-btn sm phone-hide ${showPlanes ? "active" : ""}`} title="Planes" onClick={() => useApp.setState({ showPlanes: !showPlanes })}>
           <Layers />
         </button>
-        <button className={`icon-btn sm ${showSketches ? "active" : ""}`} title="Sketches" onClick={() => useApp.setState({ showSketches: !showSketches })}>
+        <button className={`icon-btn sm phone-hide ${showSketches ? "active" : ""}`} title="Sketches" onClick={() => useApp.setState({ showSketches: !showSketches })}>
           <PencilLine />
         </button>
-        <button className={`icon-btn sm ${showValues ? "active" : ""}`} title={`${showValues ? "Hide" : "Show"} dimensions on the model`} onClick={() => setPrefs({ showValues: !showValues })}>
+        <button className={`icon-btn sm phone-hide ${showValues ? "active" : ""}`} title={`${showValues ? "Hide" : "Show"} dimensions on the model`} onClick={() => setPrefs({ showValues: !showValues })}>
           <Ruler />
         </button>
       </div>

@@ -799,7 +799,7 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
 /* Touch and Pencil: finger-sized targets, no text selection or callout on long press (it opens
    the context menu instead), and 16px fields so Safari does not zoom in on focus. */
 @media (pointer: coarse) {
-  html { touch-action: manipulation; }
+  html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
   input.field, select.field, .ask-field input, .value-input, .tab-name-input, .draw-entry input, .param-search input.field { font-size: 16px; }
@@ -863,7 +863,8 @@ button.link { border: 0; padding: 0; background: none; color: var(--accent); fon
    bar at the bottom, panels and dialogs as sheets from below so the model stays in view above.
    ====================================================================== */
 .sheet-grip { display: none; }
-html[data-compact] .app { --top: 64px; --left: 8px; --rail: 0px; --bar: 66px; }
+html[data-compact] .app { --top: 64px; --left: 8px; --rail: 0px; --bar: 62px; }
+html[data-compact] .app.sketching { --bar: 114px; }
 html[data-compact] .topbar { top: 6px; left: 6px; right: 6px; height: 50px; padding: 0 4px; gap: 2px; border-radius: 18px; }
 .topbar.compact .spacer { flex: 1; }
 .topbar.compact .doc-switch { display: flex; align-items: center; gap: 4px; min-width: 0; height: 40px; padding: 0 8px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; font-size: 15px; font-weight: 620; }
@@ -871,13 +872,12 @@ html[data-compact] .topbar { top: 6px; left: 6px; right: 6px; height: 50px; padd
 .topbar.compact .doc-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar.compact .doc-switch svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
 
-/* tools: one row at the bottom, scrolling sideways when they do not fit */
-html[data-compact] .toolbar.rail { top: auto; bottom: 6px; left: 6px; right: 6px; width: auto; max-height: none; flex-direction: row; align-items: center; gap: 2px; padding: 5px; border-radius: 20px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-html[data-compact] .toolbar.rail::-webkit-scrollbar { display: none; }
-html[data-compact] .rail .tool, html[data-compact] .rail-group > .tool { width: 58px; min-width: 58px; height: 54px; flex: none; }
-html[data-compact] .rail-group { flex: none; }
-html[data-compact] .rail .tool > span { display: block; font-size: 10px; }
-html[data-compact] .rail .sep { width: 1px; height: 34px; margin: 0 3px; flex: none; }
+/* tools: a grid of six columns at the bottom (two rows while sketching), nothing scrolls out of view */
+html[data-compact] .toolbar.rail { top: auto; bottom: 6px; left: 6px; right: 6px; width: auto; max-height: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 5px; border-radius: 20px; overflow: visible; }
+html[data-compact] .rail .sep { display: none; }
+html[data-compact] .rail .tool, html[data-compact] .rail-group > .tool { width: 100%; min-width: 0; height: 50px; }
+html[data-compact] .rail-group { min-width: 0; }
+html[data-compact] .rail .tool > span { display: block; font-size: 10px; max-width: 100%; }
 html[data-compact] .kbd { display: none !important; }
 html[data-compact] .app.has-sheet .toolbar.rail { display: none; }
 
@@ -925,10 +925,13 @@ html[data-compact] .app.has-sheet .view-controls, html[data-compact] .app.side-o
 html[data-compact] .plane-bar { left: 6px; right: 6px; transform: none; justify-content: center; flex-wrap: wrap; padding: 6px 8px; border-radius: 20px; white-space: normal; }
 html[data-compact] .plane-bar > span:first-child { width: 100%; text-align: center; }
 html[data-compact] .plane-bar .muted { width: 100%; text-align: center; font-size: 11.5px; }
-/* the primary action (Finish sketch) stays in reach at the right end of the bar */
-html[data-compact] .rail .tool.primary { position: sticky; right: 0; z-index: 1; box-shadow: -10px 0 12px -6px var(--glass-strong); }
 /* help panel and modals use the whole width */
 html[data-compact] .app > .right { left: 6px; right: 6px; top: var(--top); bottom: 6px; z-index: 30; }
 html[data-compact] .app > .right .panel-right { width: auto; height: 100%; border-radius: 20px; }
 html[data-compact] .modal { max-width: calc(100vw - 16px); max-height: calc(100% - 24px); overflow-y: auto; }
 .menu { max-height: calc(100vh - 16px); overflow-y: auto; }
+.phone-only { display: none !important; }
+html[data-compact] .phone-only { display: inline-flex !important; }
+html[data-compact] .phone-hide { display: none !important; }
+html[data-compact] .view-controls .grid-snap span { display: none; }
+html[data-compact] .view-controls .grid-snap { padding: 0; width: 36px; }

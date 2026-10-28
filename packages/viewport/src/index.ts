@@ -1002,6 +1002,11 @@ export class Viewport {
       this.onHandleDrag?.(null, a.value, null);
       a.h.onEnd(a.value);
       this.drawHandles();
+      if (this.pendingInset !== null) {
+        const px = this.pendingInset;
+        this.pendingInset = null;
+        this.setBottomInset(px);
+      }
     };
     el.addEventListener("pointerup", end, { capture: true });
     el.addEventListener("pointercancel", end, { capture: true });
@@ -1415,7 +1420,13 @@ export class Viewport {
 
   /** Height in px of a panel covering the bottom of the view (phone sheets): the picture centres in the space above it. */
   private bottomInset = 0;
+  /** Inset asked for while an arrow is being dragged: the picture must not move under the finger. */
+  private pendingInset: number | null = null;
   setBottomInset(px: number): void {
+    if (this.activeHandle) {
+      this.pendingInset = px;
+      return;
+    }
     if (Math.abs(px - this.bottomInset) < 1) return;
     this.bottomInset = px;
     this.applyInset();

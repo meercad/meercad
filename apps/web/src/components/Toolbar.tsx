@@ -137,12 +137,13 @@ function useEntries(): RailEntry[] {
 }
 
 export function Toolbar() {
-  const entries = useEntries();
+  const compact = useCompact();
+  // Phone: import is in the "⋯" menu, so all tools fit the bar without scrolling.
+  const entries = useEntries().filter((e) => !(compact && typeof e === "object" && e.id === "import"));
   const [open, setOpen] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
   const closeTimer = useRef<number>(0);
   const rail = useRef<HTMLDivElement>(null);
-  const compact = useCompact();
   const sideOpen = useApp((s) => s.sideOpen);
   const sketching = useApp((s) => !!s.sketchId);
   const constraints = usePhoneSheets((s) => s.constraints);

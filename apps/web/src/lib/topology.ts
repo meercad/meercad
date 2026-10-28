@@ -67,27 +67,44 @@ export function axisForPick(p: Pick, meshes: readonly BodyMesh[]): AxisRef | nul
   return null;
 }
 
-const short = (tag: string) => tag.replace(/\[([^\]]*)\]/g, (_, inner: string) => `[${inner.split(".").pop()}]`);
+let featureLabel: (id: string) => string = (id) => id;
+/** Where feature names come from (set once by the store), so chips read "Extrude 1", not "ex1". */
+export function setFeatureLabels(fn: (id: string) => string): void {
+  featureLabel = fn;
+}
+
+const KIND: Record<string, string> = { end_cap: "end face", start_cap: "start face", side: "side" };
+/** A face tag in words: "ex1.end_cap" → "Extrude 1 · end face", "ex1.side[sk1.l2]" → "Extrude 1 · side l2". */
+function short(tag: string): string {
+  const m = /^([^.[]+)\.([^[]+)(?:\[(.*)\])?$/.exec(tag);
+  if (!m) return tag;
+  const [, fid, kind, ref] = m;
+  const what = KIND[kind!] ?? kind!.replace(/_/g, " ");
+  return `${featureLabel(fid!)} · ${what}${ref ? ` ${ref.split(".").pop()}` : ""}`;
+}
 
 export function describeEdgeSelector(s: EdgeSelector): string {
-  if ("edge" in s) return `Edge ${short(s.edge[0])} ∩ ${short(s.edge[1])}`;
+  if ("edge" in s) return `Edge: ${short(s.edge[0])} / ${short(s.edge[1])}`;
   if (s.where?.face) return `Edges of ${short(s.where.face)}`;
-  return `All edges of ${s.of ?? "?"}`;
+  return `All edges of ${s.of ? featureLabel(s.of) : "?"}`;
 }
 
 export function describeFaceSelector(s: FaceSelector): string {
-  if ("face" in s) return `Face ${short(s.face)}`;
+  if ("face" in s) return short(s.face);
   return `Faces ${s.where?.normal ?? ""} ${s.pick ?? ""}`.trim();
 }
 
 export function describePlane(p: PlaneSpec): string {
-  if ("ref" in p) return p.ref.startsWith("origin.") ? `${PLANE_LABELS[p.ref] ?? p.ref} plane` : `Plane ${p.ref}`;
+  if ("ref" in p) return p.ref.startsWith("origin.") ? `${PLANE_LABELS[p.ref] ?? p.ref} plane` : featureLabel(p.ref);
   return describeFaceSelector(p.face);
 }
 
 export function describeAxis(a: AxisRef): string {
   if ("ref" in a) return `${a.ref.slice(7)} axis`;
-  if ("line" in a) return `Line ${a.line}`;
+  if ("line" in a) {
+    const [sk, line] = a.line.split(".");
+    return `${featureLabel(sk!)} · line ${line ?? ""}`.trim();
+  }
   return describeEdgeSelector(a.edge);
 }
 
