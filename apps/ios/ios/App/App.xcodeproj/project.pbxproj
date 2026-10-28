@@ -17,8 +17,8 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A11CE0000000000000000001 /* PencilPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000002 /* PencilPlugin.swift */; };
-		A11CE0000000000000000005 /* CrossOriginIsolation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000006 /* CrossOriginIsolation.swift */; };
 		A11CE0000000000000000003 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000004 /* PrivacyInfo.xcprivacy */; };
+		A11CE0000000000000000005 /* CrossOriginIsolation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000006 /* CrossOriginIsolation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,10 +32,10 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		A11CE0000000000000000002 /* PencilPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilPlugin.swift; sourceTree = "<group>"; };
-		A11CE0000000000000000006 /* CrossOriginIsolation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossOriginIsolation.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		A11CE0000000000000000002 /* PencilPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilPlugin.swift; sourceTree = "<group>"; };
 		A11CE0000000000000000004 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A11CE0000000000000000006 /* CrossOriginIsolation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossOriginIsolation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -313,6 +313,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7H7Q8H83P8;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -335,6 +336,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7H7Q8H83P8;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
