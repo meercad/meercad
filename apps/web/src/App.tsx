@@ -31,6 +31,7 @@ import type { StandardView } from "@meercad/viewport";
 import { CommandPalette } from "./components/CommandPalette";
 import { DebugHud, debugHud } from "./components/DebugHud";
 import { deleteModelSelection } from "./lib/deletion";
+import { AboutDialog } from "./components/AboutDialog";
 
 try {
   const theme = localStorage.getItem("meercad.theme");
@@ -294,6 +295,7 @@ export function App() {
       <UpdateBanner />
       <Toasts />
       <Settings onShortcuts={() => setHelp(true)} />
+      <AboutDialog />
       {desktop ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />

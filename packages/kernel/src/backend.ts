@@ -15,7 +15,6 @@ import {
   type ResolvedSketch,
   type ResolvedTransform,
 } from "@meercad/model";
-import { parseStl } from "@meercad/io";
 import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import {
   findRegions,
@@ -674,12 +673,18 @@ function moveBodies(ctx: Ctx, f: ResolvedTransform, bodies: Map<string, Body>, t
 }
 
 function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
-  const bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
-  if (f.format === "stl") {
-    const mesh = parseStl(bytes);
-    return { ...ctx.prev, references: new Map(ctx.prev.references).set(f.id, { id: f.id, ...mesh }) };
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
+  } catch {
+    throw new FeatureError(`import "${f.fileName}": data must be the file's contents encoded as base64`, "through MCP, pass the file's path in `path` instead of `data`");
   }
   const { oc, arena } = ctx;
+  if (f.format === "stl") {
+    const body = new Body(oc, arena, f.id, stlSolid(ctx, f, bytes));
+    body.faceTags = body.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+    return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body) };
+  }
   const path = `/import-${f.id}.step`;
   oc.FS.writeFile(path, bytes);
   try {
@@ -694,6 +699,54 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   } finally {
     oc.FS.unlink(path);
   }
+}
+
+/**
+ * A closed STL mesh as a solid: OCCT reads one face per triangle with shared edges; those form a
+ * shell and then a solid (sewn first if the mesh has tiny gaps). Flat areas are merged into single
+ * faces so they can be sketched on and pushed/pulled. An open mesh is reported, not dropped silently.
+ */
+function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
+  const path = `/import-${f.id}.stl`;
+  oc.FS.writeFile(path, bytes);
+  let faces: TopoDS_Shape;
+  try {
+    faces = arena.track(new oc.TopoDS_Shape());
+    if (!arena.track(new oc.StlAPI_Reader()).Read(faces, path)) throw new FeatureError(`could not read STL file "${f.fileName}"`);
+  } finally {
+    oc.FS.unlink(path);
+  }
+  const triangles = (s: TopoDS_Shape) => {
+    let n = 0;
+    for (const e = arena.track(new oc.TopExp_Explorer(s, "TopAbs_FACE")); e.More(); e.Next()) n++;
+    return n;
+  };
+  const count = triangles(faces);
+  if (!count) throw new FeatureError(`STL file "${f.fileName}" contains no triangles`);
+  const toSolid = (shape: TopoDS_Shape): TopoDS_Shape | null => {
+    const builder = arena.track(new oc.TopoDS_Builder());
+    const shell = arena.track(new oc.TopoDS_Shell());
+    builder.MakeShell(shell);
+    for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE")); e.More(); e.Next()) builder.Add(shell, arena.track(e.Current()));
+    const solid = arena.track(oc.TopoDS.Solid(arena.track(arena.track(new oc.BRepBuilderAPI_MakeSolid(shell)).Solid())));
+    oc.BRepLib.OrientClosedSolid(solid);
+    if (!arena.track(new oc.BRepCheck_Analyzer(solid, true, false)).IsValid()) return null;
+    const props = arena.track(new oc.GProp_GProps());
+    oc.BRepGProp.VolumeProperties(solid, props, false, false, false);
+    return props.Mass() > 0 ? solid : null;
+  };
+  let solid = toSolid(faces);
+  if (!solid) {
+    // Small gaps between triangles: sew them shut, then try again.
+    const sew = arena.track(new oc.BRepBuilderAPI_Sewing(1e-3, true, true, true, false));
+    sew.Load(faces);
+    sew.Perform(arena.track(new oc.Message_ProgressRange()));
+    solid = toSolid(arena.track(sew.SewedShape()));
+  }
+  if (!solid) throw new FeatureError(`STL file "${f.fileName}" is not a closed solid (${count} triangles)`, "repair the mesh so it has no holes, e.g. in your slicer or mesh tool, and import it again");
+  const u = arena.track(new oc.ShapeUpgrade_UnifySameDomain(solid, true, true, false));
+  u.Build();
+  return arena.track(u.Shape());
 }
 
 function unifyIfNeeded(ctx: Ctx, body: Body): Body {

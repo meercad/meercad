@@ -13,6 +13,12 @@ import type { FileStore, Project, ProjectMeta } from "./persistence";
 
 export const nativeApp = Capacitor.isNativePlatform();
 
+/** The installed app's version, e.g. "1.0 (3)". */
+export async function appVersion(): Promise<string> {
+  const info = await App.getInfo();
+  return info.build && info.build !== info.version ? `${info.version} (${info.build})` : info.version;
+}
+
 const DOCS = Directory.Documents;
 const LIB = Directory.Library;
 const EXT = ".meercad";
