@@ -12,9 +12,23 @@ import type { OC } from "./occt.js";
 
 export type BoolOp = "fuse" | "cut" | "common";
 
-export function booleanBodies(oc: OC, arena: Arena, target: Body, tool: Body, op: BoolOp, resultId = target.bodyId): Body {
+/** `target` combined with one tool, or with several in one OCCT call (e.g. all copies of a pattern). */
+export function booleanBodies(oc: OC, arena: Arena, target: Body, tool: Body | readonly Body[], op: BoolOp, resultId = target.bodyId): Body {
+  const tools = Array.isArray(tool) ? tool : [tool as Body];
   const Algo = op === "fuse" ? oc.BRepAlgoAPI_Fuse : op === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
-  const algo = arena.track(new Algo(target.shape, tool.shape));
+  let algo: InstanceType<typeof Algo>;
+  if (tools.length === 1) algo = arena.track(new Algo(target.shape, tools[0]!.shape));
+  else {
+    algo = arena.track(new Algo());
+    const list = (shapes: TopoDS_Shape[]) => {
+      const l = arena.track(new oc.NCollection_List_TopoDS_Shape());
+      for (const s of shapes) l.Append(s);
+      return l;
+    };
+    algo.SetArguments(list([target.shape]));
+    algo.SetTools(list(tools.map((t) => t.shape)));
+    algo.Build(arena.track(new oc.Message_ProgressRange()));
+  }
   if (!algo.IsDone() || algo.HasErrors()) throw new FeatureError(`boolean ${op} failed`);
   const raw = arena.track(algo.Shape());
   if (isEmpty(oc, arena, raw)) {
@@ -29,7 +43,13 @@ export function booleanBodies(oc: OC, arena: Arena, target: Body, tool: Body, op
       const same = pre.faceIndex(face);
       return same >= 0 ? [same] : [];
     });
-  const { tags } = propagateTags([...target.faceTags, ...tool.faceTags], pre.faces.length, { descendants: [...descend(target), ...descend(tool)], generated: [] }, `${resultId}.face`);
+  const inputs = [target, ...tools];
+  const { tags } = propagateTags(
+    inputs.flatMap((b) => b.faceTags),
+    pre.faces.length,
+    { descendants: inputs.flatMap(descend), generated: [] },
+    `${resultId}.face`,
+  );
   pre.faceTags = tags;
   return unify(oc, arena, pre);
 }

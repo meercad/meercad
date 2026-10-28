@@ -106,6 +106,27 @@ describe("modelling features", () => {
     expect(vol(r)).toBeCloseTo(Math.PI * 400 * 5 - 6 * Math.PI * 4 * 5, 2);
   });
 
+  it("tags every copy of a cut or joined pattern, and resolves a copy's face later", async () => {
+    const s = await newSession();
+    const pattern = (mode: "cut" | "join"): Feature[] => [
+      ...box,
+      sketch("sk2", { face: { face: "ex1.end_cap" } }, circle("c1", 5, 10, 2)),
+      { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 4, flip: mode === "cut", mode },
+      { id: "lp1", op: "linear_pattern", source: { features: ["ex2"] }, direction: { ref: "origin.X" }, count: 4, spacing: 10 },
+    ];
+    for (const mode of ["cut", "join"] as const) {
+      const { report, meshes } = s.rebuild(doc(pattern(mode)));
+      ok(report);
+      expect(report.bodies, mode).toHaveLength(1);
+      expect(vol(report), mode).toBeCloseTo(8000 + (mode === "cut" ? -1 : 1) * 4 * Math.PI * 4 * 4, 2);
+      const tags = meshes[0]!.faceTags.flat();
+      for (const k of [1, 2, 3]) expect(tags, mode).toContain(`ex2.side[sk2.c1]@lp1.${k}`);
+    }
+    // A later feature picks one copy's wall by its tag.
+    const { report } = s.rebuild(doc([...pattern("join"), { id: "fi1", op: "fillet", edges: { select: "edges", where: { face: "ex2.end_cap@lp1.2" } }, radius: 0.5 }]));
+    ok(report);
+  });
+
   it("mirrors and patterns bodies, then unions them", async () => {
     const { report } = (await newSession()).rebuild(
       doc([

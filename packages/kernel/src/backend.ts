@@ -581,8 +581,13 @@ function replicate(ctx: Ctx, featureId: string, source: PatternSource, transform
     for (const sid of source.features) {
       const rec = ctx.prev.tools.get(sid);
       if (!rec) throw new FeatureError(`feature "${sid}" cannot be patterned (only extrude and revolve)`);
-      transforms.forEach((t, k) => {
-        const copy = transformBody(ctx, rec.body, t, `${featureId}_${k + 1}`, `@${featureId}.${k + 1}`);
+      const copies = transforms.map((t, k) => transformBody(ctx, rec.body, t, `${featureId}_${k + 1}`, `@${featureId}.${k + 1}`));
+      const batched = applyCopies({ ...ctx, prev: { ...state, arena: ctx.arena } }, copies, rec.mode);
+      if (batched) {
+        state = batched;
+        continue;
+      }
+      copies.forEach((copy, k) => {
         const newId = source.features.length > 1 ? `${featureId}_${sid}_${k + 1}` : `${featureId}_${k + 1}`;
         step((c) => {
           const r = applyTool(c, `${featureId}#${sid}#${k}`, copy, rec.mode, undefined, newId);
@@ -602,6 +607,33 @@ function replicate(ctx: Ctx, featureId: string, source: PatternSource, transform
     }
   }
   return state;
+}
+
+/**
+ * All pattern copies cut from (or joined to) the model in one boolean per target body, instead of one
+ * boolean, unify and re-tag per copy. Returns null when the copies don't map onto the bodies that
+ * simply (a copy touching nothing, a join bridging bodies, intersect), and the caller goes copy by copy.
+ */
+function applyCopies(ctx: Ctx, copies: Body[], mode: BooleanMode): Omit<ModelState, "arena"> | null {
+  if (mode !== "cut" && mode !== "join") return null;
+  const bodies = [...ctx.prev.bodies.values()];
+  const boxes = bodies.map((b) => bounds(ctx.oc, ctx.arena, b.shape));
+  const groups = new Map<Body, Body[]>();
+  for (const copy of copies) {
+    const tb = bounds(ctx.oc, ctx.arena, copy.shape);
+    const hit = bodies.filter((_, i) => boundsOverlap(boxes[i]!, tb));
+    if (!hit.length || (mode === "join" && hit.length > 1)) return null;
+    for (const b of hit) groups.set(b, [...(groups.get(b) ?? []), copy]);
+  }
+  if (mode === "join" && groups.size > 1) return null;
+  const next = new Map(ctx.prev.bodies);
+  try {
+    for (const [target, tools] of groups) next.set(target.bodyId, booleanBodies(ctx.oc, ctx.arena, target, tools, mode === "cut" ? "cut" : "fuse"));
+  } catch (e) {
+    if (e instanceof FeatureError) return null;
+    throw e;
+  }
+  return { ...ctx.prev, bodies: next };
 }
 
 function booleanFeature(f: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> {

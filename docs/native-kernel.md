@@ -162,16 +162,38 @@ mesh 336 → 108 ms. iPadOS reports 8 threads. Effort: 0.5–2 days including th
 
 ### D. Faster feature code (all platforms)
 
-- **Patterns: one boolean with all copies as tools** (`BRepAlgoAPI_Cut` with `SetArguments`/`SetTools`)
-  instead of one boolean + unify + re-tag per copy. Measured on the Pi case's 40 vent cuts, operands
-  replayed: sequential 190 ms, one call 85 ms, single-threaded; 208 vs 62 ms threaded. Volume is
-  identical (11722.15 mm³). The feature also does one round of tag bookkeeping instead of 40. We
-  estimate the linear patterns at about 650 → 150 ms.
-- **Thread: don't throw away a groove.** `threadBody` (`thread.ts`) tries the thread starts in turn and keeps the
-  first one that removes material. On the Pi case the first try misses, which wastes a sweep, a
-  `common` (145 ms) and a cut against the whole 259-face body (445 ms), about 40 % of the feature. Pick
-  the start geometrically before cutting, or cut the groove against a local cylinder first. Together
-  that saves 0.6–1 s of the 1.5 s.
+**Done** (branch `claude/faster-patterns-thread`). Measured with `bench/corpus.ts` on the same Mac,
+median of 7 cold rebuilds, Node WASM:
+
+| Pi 4 case | single before | single after | threads before | threads after |
+|---|---|---|---|---|
+| rebuild | 2927 ms | 1590 ms | 1970 ms | 1111 ms |
+| thread (th1) | 1620 ms | 887 ms | 666 ms | 418 ms |
+| linear_pattern (3 features) | 747 ms | 161 ms | 727 ms | 136 ms |
+
+The Flange example's circular pattern went from 37 to 8 ms. (Baseline differs a little from the
+2684/1865 ms above: other work was running on the machine; before and after were measured back to back.)
+`bench/snapshot.ts` writes every corpus part's bodies (faces, volume, sorted face tags); the files
+before and after are identical, so all corpus bodies and all face tags are unchanged.
+
+- **Patterns: one boolean with all copies as tools.** `replicate` (`backend.ts`) now hands all copies
+  of a cut or join feature to `applyCopies`: one `BRepAlgoAPI_Cut`/`Fuse` per target body
+  (`SetArguments`/`SetTools`), then one unify and re-tag. `booleanBodies` takes several tools and feeds
+  the history of every tool into `propagateTags`, so the patterned faces keep their `@feature.k` tags.
+  Copies that don't map simply onto bodies (a copy touching nothing, a joined copy bridging bodies,
+  intersect, a boolean that fails) go copy by copy as before.
+- **Thread: pick the start that works.** OCCT misses the groove/cylinder intersection depending on
+  where the helix starts relative to the cylinder seam. A sweep over 160 threads (M3–M8 holes and
+  shafts, 8 lengths, both hands, both axis directions) showed the old order was backwards for holes:
+  52 of the 134 threads that work needed a second groove. The rule is now: start a quarter turn ahead
+  of the seam in the helix's own sense, unless the groove's far end would land 170–320° (holes) or
+  170–250° (shafts) past the seam; then start behind it. Only 4 of 134 need the second try now, the
+  Pi case's hole is not one of them, and all 160 cases give the same result (status, volume, faces) as
+  before. The other start is still tried as a fallback.
+- **Not done: cut against a local cylinder first.** A probe cut of the groove against a small ring of
+  the face's radius reproduces the miss, but costs as much as the cut against the whole body (≈ 450 ms):
+  the time is in the helical-groove/cylinder intersection, not in the body's other faces.
+- The remaining thread time on the Pi case is one sweep + `common` (≈ 180 ms) and one cut (≈ 550 ms).
 - Incremental meshing (keep triangles of unchanged faces) is already sketched in `KERNEL-THREADS.md`, section 4.
 
 These are ordinary changes in `packages/kernel/src`, need no new build tooling and help the web
@@ -182,9 +204,8 @@ version too.
 1. **Don't build a native kernel now.** Measured on the operations that dominate real parts, it gains
    nothing on the Mac and little on the iPad. In return it would need a C++ port of the backend (or a
    slower binding layer), two native build pipelines and LGPL bookkeeping for static linking.
-2. **Do D first:** multi-tool pattern booleans and the thread-start fix. For the Pi case we estimate
-   about 2.7 s → 1.2–1.6 s single-threaded, on every platform. Estimated 2–4 days with tests (the tags of
-   patterned faces must stay stable: `tests/acceptance` covers patterns and threads).
+2. **Do D first:** multi-tool pattern booleans and the thread-start fix. Done: on the Pi case
+   2.9 → 1.6 s single-threaded and 2.0 → 1.1 s threaded, on every platform, with unchanged bodies and face tags.
 3. **Then C:** COOP/COEP in the Capacitor scheme handler, tested on the iPad. If WebKit refuses
    isolation there, native threads on the iPad (B, iPad only) become the fallback worth reconsidering.
 4. Revisit native only if a later profile shows OCCT-internal hot spots where native has a measured
@@ -203,7 +224,7 @@ repeated, for example after D, or with a newer OCCT.
 | A. Node-side WASM kernel (Mac) | none | 1–2 days | low |
 | B. Native OCCT, Mac + iPad | ≈ 0–10 % per thread count; iPad threads | 3–5 weeks + upkeep | high: two kernels, native CI, licence |
 | C. iPad threads via COOP/COEP | ≈ 1.4× rebuild, 3× mesh (iPad only) | 0.5–2 days | medium: WebKit may refuse isolation on a custom scheme |
-| D. Pattern + thread algorithms | ≈ 1.7–2.2× rebuild (estimate), everywhere | 2–4 days | low–medium: stable face tags |
+| D. Pattern + thread algorithms | 1.8× rebuild (measured), everywhere | done | low: bodies and face tags unchanged |
 
 ## Reproducing
 
@@ -211,6 +232,7 @@ From `tests/`:
 
 ```
 ../node_modules/.bin/jiti bench/corpus.ts single|multi [stepDir]
+../node_modules/.bin/jiti bench/snapshot.ts <out.json>     # bodies + face tags, diff before/after a change
 ../node_modules/.bin/jiti bench/native/record.ts "<part>.meercad" <recordDir>
 ../node_modules/.bin/jiti bench/native/replay.ts <recordDir> single|multi
 brew install opencascade && bench/native/build.sh        # prints the binary path
