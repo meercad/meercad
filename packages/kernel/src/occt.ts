@@ -11,10 +11,23 @@ export type OC = OpenCascadeInstance;
  * meshing (BRepMesh) then runs in parallel. Booleans are switched to parallel mode as well.
  */
 export async function loadOcct(wasmUrl?: string, threads = false): Promise<OC> {
+  if (threads) exposeSharedArrayBuffer();
   const { default: init } = threads ? await import("replicad-opencascadejs/multi") : await import("replicad-opencascadejs");
   const oc = await init(wasmUrl ? { locateFile: () => wasmUrl } : {});
   if (threads) oc.BOPAlgo_Options.SetParallelMode(true);
   return oc;
+}
+
+/**
+ * In the iPad app (a cross-origin isolated `capacitor://` page) WebKit leaves out the global
+ * `SharedArrayBuffer` constructor, although shared wasm memory and Atomics work. The pthreads build
+ * refuses to start a thread without that global, and OCCT then waits forever for its thread pool.
+ * The constructor is reachable through a shared memory's buffer, so put it back.
+ */
+function exposeSharedArrayBuffer(): void {
+  const scope = globalThis as { SharedArrayBuffer?: unknown };
+  if (scope.SharedArrayBuffer) return;
+  scope.SharedArrayBuffer = new WebAssembly.Memory({ initial: 0, maximum: 0, shared: true }).buffer.constructor;
 }
 
 /** Converts whatever OCCT threw (C++ exceptions arrive as WebAssembly.Exception) into a message. */

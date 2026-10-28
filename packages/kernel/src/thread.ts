@@ -101,15 +101,23 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
 
   // Seams: OCCT can miss the groove/cylinder intersection (the cut then silently removes nothing)
   // depending on where the helix starts relative to the cylinders' seam. A quarter turn from the
-  // seam works, on a side that depends on the thread; the other side is tried if the cut misses.
-  // Our helper cylinders share the face's seam direction.
+  // seam works, normally the one ahead of the seam in the helix's own sense; the one behind it when
+  // the groove's far end would land past the opposite side (170–320° for holes, 170–250° for shafts,
+  // measured over M3–M8 holes and shafts of many lengths, both axis directions and both hands).
+  // The other start is still tried if the cut misses. Our helper cylinders share the face's seam direction.
   // The face's seam sits at its first u parameter, which need not be the surface's x direction.
   const xd = arena.track(pos.XDirection());
   const yd = arena.track(pos.YDirection());
   const u0 = surf.FirstUParameter();
   const xdir: V = add([xd.X() * Math.cos(u0), xd.Y() * Math.cos(u0), xd.Z() * Math.cos(u0)], [yd.X(), yd.Y(), yd.Z()], Math.sin(u0));
   const cross = (p: V, q: V): V => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
-  const starts = internal !== !!f.leftHanded ? [cross(xdir, a), cross(a, xdir)] : [cross(a, xdir), cross(xdir, a)];
+  const ahead = f.leftHanded ? cross(xdir, a) : cross(a, xdir);
+  const behind = f.leftHanded ? cross(a, xdir) : cross(xdir, a);
+  // Where the far end of the groove from the start ahead of the seam lands, in degrees from the seam.
+  const turns = (zHi - zLo) / P;
+  const endAngle = (90 + 360 * (turns - Math.floor(turns))) % 360;
+  const fromBehind = endAngle >= 170 && endAngle < (internal ? 320 : 250);
+  const starts = fromBehind ? [behind, ahead] : [ahead, behind];
   const tag = `${f.id}.thread`;
   const tagged = (s: TopoDS_Shape) => {
     const b = new Body(oc, arena, input.bodyId, s);
