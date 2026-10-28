@@ -163,7 +163,6 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .status-pill { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 10px; align-items: center; padding: 5px 10px; font-size: 11.5px; color: var(--text-2); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-sm); max-width: calc(100% - 300px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
 .status-pill .dot.busy { background: var(--warn); }
-.hint-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 7px 14px; border-radius: 999px; background: var(--text); color: var(--panel); font-size: 12.5px; box-shadow: var(--shadow); pointer-events: none; white-space: nowrap; }
 
 /* view cube */
 .viewcube { position: absolute; top: 14px; right: 14px; width: 110px; height: 128px; user-select: none; z-index: 3; }
@@ -429,7 +428,7 @@ body { background: var(--scene); }
 .measure-card { top: 146px; left: 300px; border-radius: var(--radius-lg); }
 .sketch-hud { top: 146px; left: 300px; }
 .sketch-hud .card2 { border-radius: 14px; }
-.hint-banner, .ai-activity { top: 146px; }
+.ai-activity { top: 146px; }
 .status-pill { left: 300px; bottom: 14px; border-radius: 12px; }
 .view-controls { right: 14px; bottom: 14px; border-radius: 14px; }
 .quick-actions { border-radius: 14px; }
@@ -532,7 +531,7 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .app > .right { top: var(--top); }
 .viewcube { top: var(--top); }
 .dialog, .measure-card, .sketch-hud { top: var(--top); left: var(--left); }
-.hint-banner, .ai-activity { top: var(--top); }
+.ai-activity { top: var(--top); }
 .status-pill { left: var(--left); }
 .update-banner { top: auto; bottom: 64px; max-height: calc(100vh - 140px); overflow-y: auto; }
 .topbar .save-state { display: none; }
@@ -663,7 +662,7 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 .first-run-card code { display: block; margin: 0 0 18px; }
 .first-run-card .btn svg { width: 15px; height: 15px; }
 /* project folders */
-.home-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.home-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .home-head .btn svg { width: 15px; height: 15px; }
 .crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin: 0; }
 .crumbs > span { display: inline-flex; align-items: center; }
@@ -688,7 +687,7 @@ html.no-keyboard .kbd, html.no-keyboard .hide-kbd .modal .kbd, html.no-keyboard 
 /* tabs */
 .tabs { display: flex; align-items: center; gap: 3px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 0 4px; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab { position: relative; display: flex; align-items: center; gap: 6px; height: 34px; min-width: 0; max-width: 220px; flex: 0 1 auto; padding: 0 6px 0 12px; border-radius: 11px; color: var(--text-2); font-size: 13px; font-weight: 550; cursor: default; user-select: none; }
+.tab { position: relative; display: flex; align-items: center; gap: 6px; height: 34px; min-width: 96px; max-width: 220px; flex: 0 1 auto; padding: 0 6px 0 12px; border-radius: 11px; color: var(--text-2); font-size: 13px; font-weight: 550; cursor: default; user-select: none; }
 .tab:hover { background: var(--glass-hover); color: var(--text); }
 .tab.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgb(20 20 50 / 0.12), inset 0 0 0 1px var(--glass-border); }
 .tab.drop-before::before { content: ""; position: absolute; left: -3px; top: 6px; bottom: 6px; width: 2px; border-radius: 1px; background: var(--accent); }

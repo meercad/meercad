@@ -121,7 +121,7 @@ export const nativeFiles: FileStore | undefined = nativeApp
             (await projectIds()).map(async (id) => {
               const st = await Filesystem.stat({ path: projectPath(id), directory: DOCS });
               const thumbnail = await readThumb(id);
-              return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, ...(thumbnail ? { thumbnail } : {}) };
+              return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, ...(st.ctime ? { createdAt: st.ctime } : {}), ...(thumbnail ? { thumbnail } : {}) };
             }),
           );
           return out.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -137,10 +137,13 @@ export const nativeFiles: FileStore | undefined = nativeApp
             await Filesystem.writeFile({ path: thumbPath(p.id), directory: LIB, data: p.thumbnail.slice(22), recursive: true });
           }
         },
+        async thumbnail(p: { id: string; thumbnail: string }): Promise<void> {
+          if (p.thumbnail.startsWith("data:image/png;base64,")) await Filesystem.writeFile({ path: thumbPath(p.id), directory: LIB, data: p.thumbnail.slice(22), recursive: true });
+        },
         async create(p: { name: string; doc: MeercadDocument; folder?: string }): Promise<ProjectMeta> {
           const id = await uniqueId(p.name, p.folder ?? "");
           await writeDoc(id, p.doc);
-          return { id, name: nameOf(id), folder: folderOf(id), updatedAt: Date.now() };
+          return { id, name: nameOf(id), folder: folderOf(id), updatedAt: Date.now(), createdAt: Date.now() };
         },
         async rename(p: { id: string; name: string }) {
           const id = await uniqueId(p.name, folderOf(p.id));

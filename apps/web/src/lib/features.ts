@@ -124,3 +124,20 @@ export function draftProblem(f: Feature): string | null {
 export function featureName(f: Feature): string {
   return f.name ?? `${FEATURES[f.op].label} ${f.id.replace(/^\D+/, "")}`;
 }
+
+/**
+ * A part's name: the feature that made it ("Extrude 1"), with the copy number for pattern and
+ * copy results ("Linear pattern 3 (2)"). Part ids are the making feature's id plus "_…" for copies.
+ */
+export function partName(id: string, features: readonly Feature[]): string {
+  let best: Feature | undefined;
+  for (const f of features)
+    if ((id === f.id || id.startsWith(`${f.id}_`)) && f.id.length > (best?.id.length ?? 0)) best = f;
+  if (!best) return id;
+  const rest = id.slice(best.id.length + 1);
+  if (!rest) return featureName(best);
+  if (/^\d+$/.test(rest)) return `${featureName(best)} (${rest})`;
+  // Copies of several parts carry the copied part's id: "lp1_ex2_3".
+  const [, of, n] = /^(.*?)(?:_(\d+))?$/.exec(rest)!;
+  return `${featureName(best)} (${partName(of!, features)}${n ? ` ${n}` : ""})`;
+}

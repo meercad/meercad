@@ -9,6 +9,7 @@ import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meerc
 import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
 import { frameMatrix, perFrame, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
+import { featureName } from "../lib/features";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
 import { Kbd } from "../components/Kbd";
@@ -1072,7 +1073,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const needed = ENTRY_AFTER_TWO.has(useSketchUi.getState().tool) ? 2 : 1;
       if (fields && ts.points.length >= needed && !e.altKey && (/^[0-9.]$/.test(e.key) || e.key === "Tab")) {
         e.preventDefault();
-        setEntry({ fields: fields.map((_, i) => (i === 0 && e.key !== "Tab" ? e.key : "")), active: 0 });
+        // Keys typed quickly can arrive before the fields have focus: they go on into the open fields.
+        setEntry((cur) => {
+          if (!cur) return { fields: fields.map((_, i) => (i === 0 && e.key !== "Tab" ? e.key : "")), active: 0 };
+          if (e.key === "Tab") return { ...cur, active: (cur.active + (e.shiftKey ? fields.length - 1 : 1)) % fields.length };
+          return { ...cur, fields: cur.fields.map((f, i) => (i === cur.active ? f + e.key : f)) };
+        });
         return;
       }
       // Tools follow the active shortcut preset; constraints use Shift + letter.
@@ -1260,7 +1266,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       <div className="sketch-hud">
         <div className="card2">
           <div className="row" style={{ gap: 10 }}>
-            <b>{sketch.name ?? sketch.id}</b>
+            <b>{featureName(sketch)}</b>
             <span className={`dof ${diag && !diag.ok ? "bad" : diag?.dof === 0 ? "full" : ""}`}>
               <i />
               {!diag ? "Solving…" : !diag.ok ? "Over-constrained" : diag.dof === 0 ? "Fully defined" : `${diag.dof} DOF left`}

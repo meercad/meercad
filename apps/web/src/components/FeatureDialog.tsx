@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
 import { METRIC_THREADS, parseMetric } from "@meercad/model";
-import { FEATURES, featureName } from "../lib/features";
+import { FEATURES, featureName, partName } from "../lib/features";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
@@ -298,7 +298,7 @@ function SourceField({ value, onChange }: { value: PatternSource; onChange: (s: 
       <Seg value={kind} options={[["features", "Features"], ["bodies", "Parts"]]} onChange={(k) => onChange(k === "features" ? { features: [] } : { bodies: [] })} />
       <SelBox
         field="source"
-        items={items.map((id) => (kind === "features" ? featureName(features.find((f) => f.id === id) ?? ({ id, op: "extrude" } as Feature)) : `Part ${id}`))}
+        items={items.map((id) => (kind === "features" ? featureName(features.find((f) => f.id === id) ?? ({ id, op: "extrude" } as Feature)) : partName(id, features)))}
         placeholder={kind === "features" ? "Pick faces of extrudes/revolves" : "Pick parts"}
         onRemove={(i) => onChange(kind === "features" ? { features: items.filter((_, j) => j !== i) } : { bodies: items.filter((_, j) => j !== i) })}
       />
@@ -383,7 +383,9 @@ function Body({ d }: { d: DialogState }) {
     case "extrude":
     case "revolve": {
       const prof = f.profile;
-      const regionChips = "face" in prof ? [describeFaceSelector(prof.face)] : !prof.sketch ? [] : Array.isArray(prof.regions) ? prof.regions.map((k) => `${prof.sketch} · ${k.split("|")[0]}`) : [`All regions of ${prof.sketch}`];
+      const sk = "face" in prof ? undefined : sketches.find((x) => x.id === prof.sketch);
+      const skName = sk ? featureName(sk) : "sketch" in prof ? prof.sketch : "";
+      const regionChips = "face" in prof ? [describeFaceSelector(prof.face)] : !prof.sketch ? [] : Array.isArray(prof.regions) ? prof.regions.map((k) => `${skName} · ${k.split("|")[0]}`) : [`All regions of ${skName}`];
       return (
         <>
           <Field label="Profile">
@@ -450,7 +452,7 @@ function Body({ d }: { d: DialogState }) {
           )}
           {f.mode !== "new_body" ? (
             <Field label="Merge scope (optional)">
-              <SelBox field="targets" items={(f.targets ?? []).map((t) => `Part ${t}`)} placeholder="All touching parts" onRemove={(i) => set({ targets: (f.targets ?? []).filter((_, j) => j !== i) })} />
+              <SelBox field="targets" items={(f.targets ?? []).map((t) => partName(t, features))} placeholder="All touching parts" onRemove={(i) => set({ targets: (f.targets ?? []).filter((_, j) => j !== i) })} />
             </Field>
           ) : null}
         </>
@@ -558,10 +560,10 @@ function Body({ d }: { d: DialogState }) {
         <>
           <Seg value={f.operation} options={[["union", "Union"], ["subtract", "Subtract"], ["intersect", "Intersect"]]} onChange={(operation) => set({ operation })} />
           <Field label="Target part">
-            <SelBox field="target" items={f.target ? [`Part ${f.target}`] : []} placeholder="Pick the part to keep" />
+            <SelBox field="target" items={f.target ? [partName(f.target, features)] : []} placeholder="Pick the part to keep" />
           </Field>
           <Field label="Tool parts">
-            <SelBox field="tools" items={f.tools.map((t) => `Part ${t}`)} placeholder="Pick tool parts" onRemove={(i) => set({ tools: f.tools.filter((_, j) => j !== i) })} />
+            <SelBox field="tools" items={f.tools.map((t) => partName(t, features))} placeholder="Pick tool parts" onRemove={(i) => set({ tools: f.tools.filter((_, j) => j !== i) })} />
           </Field>
           <label className="checkbox">
             <input type="checkbox" checked={!!f.keepTools} onChange={(e) => set({ keepTools: e.target.checked || undefined })} /> Keep tools
@@ -571,7 +573,7 @@ function Body({ d }: { d: DialogState }) {
     case "delete":
       return (
         <Field label="Parts">
-          <SelBox field="bodies" items={f.bodies.map((b) => `Part ${b}`)} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
+          <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
         </Field>
       );
     case "transform": {
@@ -580,7 +582,7 @@ function Body({ d }: { d: DialogState }) {
       return (
         <>
           <Field label="Parts">
-            <SelBox field="bodies" items={f.bodies.map((b) => `Part ${b}`)} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
+            <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
           </Field>
           <Field label="Move by (X / Y / Z)">
             <div className="row">

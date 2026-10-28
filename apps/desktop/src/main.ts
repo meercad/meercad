@@ -103,7 +103,7 @@ async function listProjects() {
       } catch {
         thumbnail = undefined;
       }
-      return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, ...(thumbnail ? { thumbnail } : {}) };
+      return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, createdAt: st.birthtimeMs, ...(thumbnail ? { thumbnail } : {}) };
     }),
   );
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -156,11 +156,16 @@ ipcMain.handle("projects:save", async (_e, p: { id: string; doc: unknown; thumbn
     await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
   }
 });
+ipcMain.handle("projects:thumbnail", async (_e, p: { id: string; thumbnail: string }) => {
+  if (!p.thumbnail.startsWith("data:image/png;base64,") || !existsSync(projectPath(p.id))) return;
+  await mkdir(thumbsDir(), { recursive: true });
+  await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
+});
 ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown; folder?: string }) => {
   const id = await uniqueId(p.name, p.folder ?? "");
   await mkdir(dirname(projectPath(id)), { recursive: true });
   await writeFile(projectPath(id), `${JSON.stringify(p.doc, null, 2)}\n`);
-  return { id, name: nameOf(id), folder: folderOf(id), updatedAt: Date.now() };
+  return { id, name: nameOf(id), folder: folderOf(id), updatedAt: Date.now(), createdAt: Date.now() };
 });
 ipcMain.handle("projects:rename", async (_e, p: { id: string; name: string }) => {
   const id = await uniqueId(p.name, folderOf(p.id));

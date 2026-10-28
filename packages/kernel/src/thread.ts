@@ -117,7 +117,12 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
   const turns = (zHi - zLo) / P;
   const endAngle = (90 + 360 * (turns - Math.floor(turns))) % 360;
   const fromBehind = endAngle >= 170 && endAngle < (internal ? 320 : 250);
-  const starts = fromBehind ? [behind, ahead] : [ahead, behind];
+  // Further starts in between (never on the seam itself) for the shapes where both of those miss.
+  const turned = (deg: number): V => {
+    const r = (deg * Math.PI) / 180;
+    return add([xdir[0] * Math.cos(r), xdir[1] * Math.cos(r), xdir[2] * Math.cos(r)], ahead, Math.sin(r));
+  };
+  const starts = [...(fromBehind ? [behind, ahead] : [ahead, behind]), ...[45, 135, 225, 315].map(turned)];
   const tag = `${f.id}.thread`;
   const tagged = (s: TopoDS_Shape) => {
     const b = new Body(oc, arena, input.bodyId, s);

@@ -1,6 +1,8 @@
 import { House, RotateCcw, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { THREE, type Viewport } from "@meercad/viewport";
+import { useKey } from "../lib/keymap";
+import { withKey } from "./Kbd";
 
 type V = [number, number, number];
 // Faces carry the colour of the axis they face (the same colours as the origin planes).
@@ -32,6 +34,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
   const refs = useRef<(HTMLDivElement | null)[]>([]);
   const axisRefs = useRef<(SVGGElement | null)[]>([]);
   const [hot, setHot] = useState<string | null>(null);
+  const isoKey = useKey("view.iso");
   useEffect(() => {
     const half = SIZE / 2;
     const update = () => {
@@ -151,7 +154,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
         ))}
       </div>
       <div className="cube-tools">
-        <button className="icon-btn sm" title="Isometric view (0)" onClick={() => viewport.setView("iso")}>
+        <button className="icon-btn sm" title={withKey("Isometric view", isoKey)} onClick={() => viewport.setView("iso")}>
           <House />
         </button>
         <button className="icon-btn sm" title="Rotate view 90° left" onClick={() => viewport.orbit(Math.PI / 2, 0)}>

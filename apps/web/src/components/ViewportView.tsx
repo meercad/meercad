@@ -1,10 +1,11 @@
 import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Pencil, PencilLine, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
-import { navigationFor, setPrefs, usePrefs } from "../lib/keymap";
+import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
+import { withKey } from "./Kbd";
 import type { FeatureOp } from "@meercad/schema";
 import { perFrame, samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
-import { FEATURES } from "../lib/features";
+import { FEATURES, partName } from "../lib/features";
 import { MultiTouch, Press } from "../lib/gestures";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
@@ -36,6 +37,7 @@ const EMPTY_SCENE: SceneData = { bodies: [], sketches: [], planes: [], reference
 export function ViewportView() {
   const host = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState<Viewport | null>(null);
+  const fitKey = useKey("fit");
   const output = useApp((s) => s.output);
   const hidden = useApp((s) => s.hidden);
   const showPlanes = useApp((s) => s.showPlanes);
@@ -139,6 +141,7 @@ export function ViewportView() {
     // Mesh parts light up as a whole on hover and selection.
     vp.setWholeBodies(meshBodyIds(st.doc.features, st.output?.meshes ?? []));
     vp.setScene(scene ?? EMPTY_SCENE);
+    if (!scene) vp.resetFraming();
   }, [vp, scene]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
@@ -391,7 +394,7 @@ export function ViewportView() {
     ];
     if (!pick)
       return showMenu(x, y, [
-        { label: "Fit view", icon: <Focus />, kbd: "Z", onClick: () => vp?.fit() },
+        { label: "Fit view", icon: <Focus />, kbd: fitKey, onClick: () => vp?.fit() },
         { label: s.showPlanes ? "Hide planes" : "Show planes", icon: <Layers />, onClick: () => useApp.setState({ showPlanes: !s.showPlanes }) },
         { label: "Show all parts", icon: <Eye />, onClick: () => useApp.setState({ hidden: new Set() }) },
       ]);
@@ -399,12 +402,12 @@ export function ViewportView() {
       const m = s.output?.meshes.find((b) => b.bodyId === pick.bodyId);
       if (m) useApp.setState({ selection: m.faceTags.map((tags, face) => ({ kind: "face" as const, bodyId: m.bodyId, face, tags, point: pick.point, normal: null })) });
       return showMenu(x, y, [
-        { label: `Move part ${pick.bodyId}`, icon: <Move3d />, onClick: () => startFeature("transform") },
+        { label: `Move ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Move3d />, onClick: () => startFeature("transform") },
         { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
-        { label: `Hide part ${pick.bodyId}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: `Hide ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         ...common,
         "sep",
-        { label: `Delete part ${pick.bodyId}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
+        { label: `Delete ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
       ]);
     }
     if (pick.kind === "face")
@@ -416,12 +419,12 @@ export function ViewportView() {
         item("shell", "Shell (remove this face)"),
         ...(!pick.normal ? [item("thread", "Thread this hole or shaft")] : []),
         "sep",
-        { label: `Hide part ${pick.bodyId}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: `Hide ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         ...common,
         "sep",
         { label: useApp.getState().selection.length > 1 ? "Delete selection" : "Delete face", icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
-        { label: `Delete part ${pick.bodyId}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
+        { label: `Delete ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
       ]);
     if (pick.kind === "edge") return showMenu(x, y, [item("fillet"), item("chamfer"), "sep", ...common]);
     if (pick.kind === "region" || pick.kind === "sketch_curve")
@@ -456,21 +459,12 @@ export function ViewportView() {
     return null;
   };
 
-  const hint = pickingPlane
-    ? null
-    : measure.active
-      ? "Measure: click a face or edge, then a second one"
-      : dialog?.field
-        ? null
-        : null;
-
   return (
     <div className={`view ${dialog?.field || pickingPlane || measure.active ? "picking" : ""}`} ref={host}>
       {vp ? <ViewCube viewport={vp} /> : null}
       {vp ? <Manipulators viewport={vp} /> : null}
       {vp ? <InlineValues viewport={vp} /> : null}
       {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
-      {hint ? <div className="hint-banner">{hint}</div> : null}
       {vp && pickingPlane && scene ? <PlaneChooser viewport={vp} planes={scene.planes} /> : null}
       <AiActivity />
       {box ? (
@@ -490,7 +484,7 @@ export function ViewportView() {
       <div className="view-controls">
         <SnapControls viewport={vp} />
         <span className="bar-sep" aria-hidden />
-        <button className="icon-btn sm" title="Fit all (Z)" onClick={() => vp?.fit()}>
+        <button className="icon-btn sm" title={withKey("Fit all", fitKey)} onClick={() => vp?.fit()}>
           <Scan />
         </button>
         <button

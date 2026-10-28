@@ -12,6 +12,8 @@ export interface ProjectMeta {
   /** Folder path like "Clients/Acme"; "" is the top level. */
   folder?: string;
   updatedAt: number;
+  /** When the project was created (the file's birth time); older browser projects lack it. */
+  createdAt?: number;
   thumbnail?: string;
 }
 export interface Project extends ProjectMeta {
@@ -26,6 +28,8 @@ interface DesktopApi {
     list(): Promise<ProjectMeta[]>;
     load(id: string): Promise<Project>;
     save(p: { id: string; doc: MeercadDocument; thumbnail?: string }): Promise<void>;
+    /** Stores a project's picture without touching its file. */
+    thumbnail(p: { id: string; thumbnail: string }): Promise<void>;
     create(p: { name: string; doc: MeercadDocument; folder?: string }): Promise<ProjectMeta>;
     rename(p: { id: string; name: string }): Promise<{ id: string; name: string; folder: string }>;
     move(p: { id: string; folder: string }): Promise<{ id: string; name: string; folder: string }>;
@@ -153,7 +157,9 @@ export async function listProjects(): Promise<ProjectMeta[]> {
   if (files) return files.projects.list();
   try {
     const all = await allProjects();
-    return all.map(({ id, name, folder, updatedAt, thumbnail }) => ({ id, name, folder: folder ?? "", updatedAt, ...(thumbnail ? { thumbnail } : {}) })).sort((a, b) => b.updatedAt - a.updatedAt);
+    return all
+      .map(({ id, name, folder, updatedAt, createdAt, thumbnail }) => ({ id, name, folder: folder ?? "", updatedAt, ...(createdAt ? { createdAt } : {}), ...(thumbnail ? { thumbnail } : {}) }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
   }
@@ -166,7 +172,7 @@ export async function loadProject(id: string): Promise<Project | undefined> {
 
 export async function createProject(name: string, doc: MeercadDocument, folder = ""): Promise<ProjectMeta> {
   if (files) return files.projects.create({ name, doc, folder });
-  const meta = { id: newId(), name, folder, updatedAt: Date.now() };
+  const meta = { id: newId(), name, folder, updatedAt: Date.now(), createdAt: Date.now() };
   await tx("readwrite", (s) => s.put({ ...meta, doc }));
   return meta;
 }
@@ -174,6 +180,13 @@ export async function createProject(name: string, doc: MeercadDocument, folder =
 export async function saveProject(p: Project): Promise<void> {
   if (files) return files.projects.save({ id: p.id, doc: p.doc, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
   await tx("readwrite", (s) => s.put(p));
+}
+
+/** Stores a picture for a project that has none, leaving the project itself (and its date) alone. */
+export async function saveThumbnail(id: string, thumbnail: string): Promise<void> {
+  if (files) return files.projects.thumbnail({ id, thumbnail });
+  const p = await loadProject(id);
+  if (p) await tx("readwrite", (s) => s.put({ ...p, thumbnail }));
 }
 
 /** Renames a project; in the desktop app this renames the file, so the id changes. */

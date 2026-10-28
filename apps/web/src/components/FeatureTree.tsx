@@ -4,7 +4,7 @@ import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
 import { evaluate, referencedNames } from "@meercad/model";
 import type { Feature } from "@meercad/schema";
-import { FEATURES, featureName } from "../lib/features";
+import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, useApp } from "../store";
 import { ExprInput, parseExpr } from "./ExprInput";
@@ -425,7 +425,7 @@ function Bodies() {
       >
         <Box className="ficon" />
         <span className="tree-label">
-          {id} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
+          {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
           {meshParts.has(id) ? (
             <span className="part-badge" title={MESH_HINT}>
               Mesh

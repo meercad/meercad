@@ -10,6 +10,7 @@ const api = {
     list: () => ipcRenderer.invoke("projects:list"),
     load: (id: string) => ipcRenderer.invoke("projects:load", id),
     save: (p: { id: string; doc: unknown; thumbnail?: string }) => ipcRenderer.invoke("projects:save", p),
+    thumbnail: (p: { id: string; thumbnail: string }) => ipcRenderer.invoke("projects:thumbnail", p),
     create: (p: { name: string; doc: unknown; folder?: string }) => ipcRenderer.invoke("projects:create", p),
     move: (p: { id: string; folder: string }) => ipcRenderer.invoke("projects:move", p),
     folders: () => ipcRenderer.invoke("projects:folders"),

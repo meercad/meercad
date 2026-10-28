@@ -1,6 +1,6 @@
 /** Open projects as tabs: click to switch, double-click the active one to rename, drag to reorder. */
 import { Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { closeTab, moveTab, newProject, openProject, renameProject, useApp } from "../store";
 
 const DRAG_TYPE = "application/x-meercad-tab";
@@ -11,9 +11,14 @@ export function TabStrip() {
   const saveState = useApp((s) => s.saveState);
   const [editing, setEditing] = useState(false);
   const [dropBefore, setDropBefore] = useState<string | null>(null);
+  const strip = useRef<HTMLDivElement>(null);
+  // With more tabs than fit, the strip scrolls: keep the open one in view.
+  useEffect(() => {
+    strip.current?.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeId, tabs.length]);
 
   return (
-    <div className="tabs" role="tablist" aria-label="Open projects">
+    <div className="tabs" role="tablist" aria-label="Open projects" ref={strip}>
       {tabs.map((t) => {
         const active = t.id === activeId;
         return (

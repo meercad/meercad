@@ -1,4 +1,4 @@
-import { Box, ChevronRight, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, Pencil, Plus, Trash } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, Pencil, Plus, Trash } from "lucide-react";
 import { useEffect, useState, type DragEvent } from "react";
 import { askConfirm, askText } from "./Ask";
 import { showMenu } from "./Menu";
@@ -9,11 +9,37 @@ import { EXAMPLES } from "../lib/examples";
 import { importFile } from "./io";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
+import { fillMissingThumbnails } from "../lib/thumbnails";
 
 const DRAG_TYPE = "application/x-meercad-project";
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
 const parentOf = (f: string) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
 const fail = (what: string) => (e: unknown) => toast(`Could not ${what}: ${e instanceof Error ? e.message : String(e)}`, "error");
+
+type SortKey = "edited" | "created" | "name";
+interface Sort {
+  key: SortKey;
+  /** Newest or A first. */
+  asc: boolean;
+}
+const SORT_KEY = "meercad.sort";
+const SORT_LABELS: Record<SortKey, string> = { edited: "Last edited", created: "Created", name: "Name" };
+function loadSort(): Sort {
+  try {
+    const s = JSON.parse(localStorage.getItem(SORT_KEY) ?? "null") as Sort | null;
+    if (s && s.key in SORT_LABELS) return s;
+  } catch {
+    // default below
+  }
+  return { key: "edited", asc: false };
+}
+const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+/** Projects in the chosen order; names break ties so the order never jumps. */
+function sortProjects(list: ProjectMeta[], s: Sort): ProjectMeta[] {
+  const value = (p: ProjectMeta) => (s.key === "created" ? (p.createdAt ?? p.updatedAt) : p.updatedAt);
+  const cmp = (a: ProjectMeta, b: ProjectMeta) => (s.key === "name" ? byName(a.name, b.name) : value(a) - value(b)) || byName(a.name, b.name);
+  return [...list].sort((a, b) => (s.asc ? cmp(a, b) : -cmp(a, b)));
+}
 
 async function moveTo(id: string, folder: string): Promise<void> {
   await moveProject(id, folder).then(refreshProjects, fail("move the part"));
@@ -91,9 +117,24 @@ export function Home() {
   const folders = useApp((s) => s.folders);
   const folder = useApp((s) => s.folder);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [sort, setSort] = useState(loadSort);
   useEffect(() => void refreshProjects(), []);
-  const subfolders = folders.filter((f) => parentOf(f) === folder);
-  const here = projects.filter((p) => (p.folder ?? "") === folder);
+  // Files added from outside (or never opened here) get their picture while the overview is open.
+  useEffect(() => void fillMissingThumbnails(), [projects]);
+  const changeSort = (s: Sort) => {
+    setSort(s);
+    try {
+      localStorage.setItem(SORT_KEY, JSON.stringify(s));
+    } catch {
+      // the order just isn't remembered
+    }
+  };
+  const subfolders = folders.filter((f) => parentOf(f) === folder).sort((a, b) => (sort.key === "name" && !sort.asc ? -byName(a, b) : byName(a, b)));
+  const here = sortProjects(
+    projects.filter((p) => (p.folder ?? "") === folder),
+    sort,
+  );
+  const dirLabel = sort.key === "name" ? (sort.asc ? "A to Z" : "Z to A") : sort.asc ? "Oldest first" : "Newest first";
   const crumbs = [{ path: "", label: "Your projects" }, ...folder.split("/").filter(Boolean).map((label, i, all) => ({ path: all.slice(0, i + 1).join("/"), label }))];
   const dropOn = async (e: DragEvent, target: string) => {
     e.preventDefault();
@@ -143,6 +184,23 @@ export function Home() {
             ))}
           </h1>
           <span className="spacer" />
+          <button
+            className="btn"
+            title="Sort parts"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              showMenu(
+                r.left,
+                r.bottom + 4,
+                (Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({ label: SORT_LABELS[k], icon: k === sort.key ? <Check /> : <span />, onClick: () => changeSort({ key: k, asc: k === "name" }) })),
+              );
+            }}
+          >
+            <ArrowUpDown /> {SORT_LABELS[sort.key]}
+          </button>
+          <button className="btn" onClick={() => changeSort({ ...sort, asc: !sort.asc })} title={`${dirLabel} — click to reverse`} aria-label={`Order: ${dirLabel}`}>
+            {sort.asc ? <ArrowUp /> : <ArrowDown />} {dirLabel}
+          </button>
           <button className="btn" onClick={() => void addFolder()}>
             <FolderPlus /> New folder
           </button>
@@ -230,7 +288,7 @@ export function Home() {
               <div className="meta">
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <b>{p.name}</b>
-                  <small>{ago(p.updatedAt)}</small>
+                  <small>{sort.key === "created" && p.createdAt ? `Created ${ago(p.createdAt)}` : ago(p.updatedAt)}</small>
                 </div>
                 <button className="icon-btn sm" title="Part actions" onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}>
                   <Ellipsis />

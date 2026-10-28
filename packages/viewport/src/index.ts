@@ -395,6 +395,12 @@ export class Viewport {
     this.lastSceneMs = performance.now() - t0;
   }
 
+  /** Back to the starting view for the next model shown (a project is opening). */
+  resetFraming(): void {
+    this.framed = false;
+    this.setView("iso", false);
+  }
+
   get hovered(): Pick | null {
     return this.hover;
   }
@@ -1532,7 +1538,8 @@ function disposeTree(g: THREE.Object3D): void {
 function axesHelper(): THREE.Group {
   const g = new THREE.Group();
   const mk = (to: Vec3, color: number) => {
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(...to)]), new THREE.LineBasicMaterial({ color, depthTest: false }));
+    // Hidden by parts in front of them, so they do not show through the model like scratches.
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(...to)]), new THREE.LineBasicMaterial({ color }));
     line.renderOrder = 10;
     g.add(line);
   };

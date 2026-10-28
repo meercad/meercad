@@ -138,7 +138,10 @@ export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
       oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, false);
       oc.BRepGProp.SurfaceProperties(body.shape, surf, false, false);
     }
-    oc.BRepBndLib.Add(body.shape, box, false);
+    // The plain box can be millimetres too big around threads and other spline faces; mesh parts
+    // (thousands of flat triangles) keep the quick one, which is exact for them.
+    if (body.sourceMesh) oc.BRepBndLib.Add(body.shape, box, false);
+    else oc.BRepBndLib.AddOptimal(body.shape, box, false, false);
     const lo = box.CornerMin();
     const hi = box.CornerMax();
     const bbox = { min: [lo.X(), lo.Y(), lo.Z()] as [number, number, number], max: [hi.X(), hi.Y(), hi.Z()] as [number, number, number] };
