@@ -4,6 +4,9 @@ import { KernelClient, SupersededError, type Measurement, type RebuildOutput } f
 import { DocumentStore, OpError } from "@meercad/model";
 import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick } from "./lib/topology";
+import { usePrefs } from "./lib/keymap";
+import { setUnitSource } from "./lib/units";
+import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
@@ -548,8 +551,26 @@ export async function openProject(id: string): Promise<void> {
   history.replaceState(null, "", `#/p/${encodeURIComponent(p.id)}`);
 }
 
+/**
+ * Switches the unit this design shows and takes lengths in. Nothing changes size: plain values are
+ * millimetres underneath and values with a unit keep it. Undoable like any edit.
+ */
+setUnitSource(() => get().doc.units ?? "mm");
+/** The open design's length unit, for components that re-render when it changes. */
+export const useDocUnit = (): LengthUnit => useApp((s) => s.doc.units ?? "mm");
+
+export function setDesignUnits(units: "mm" | "in"): void {
+  const doc = docStore.doc;
+  if ((doc.units ?? "mm") === units) return;
+  const { units: _old, ...rest } = doc;
+  if (!apply({ type: "replace", doc: units === "in" ? { ...rest, units } : rest })) return;
+  toast(units === "in" ? "This design now uses inches" : "This design now uses millimetres");
+}
+
 export async function newProject(doc: MeercadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
   await flushSave();
+  // A blank design starts in the measuring system chosen in Settings.
+  if (!doc.features.length && !Object.keys(doc.params).length && !doc.units && usePrefs.getState().units === "imperial") doc = { ...doc, units: "in" };
   // New parts land next to the open project, or in the folder the overview shows.
   const meta = await createProject(name, doc, get().project?.folder ?? get().folder);
   loadDoc(doc, meta);

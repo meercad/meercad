@@ -9,6 +9,7 @@ import type { Expr } from "@meercad/schema";
 import { apply, useApp } from "../store";
 import { parseExpr } from "./ExprInput";
 import { GROUP_LABEL, GROUP_ORDER, variableGroup } from "../lib/variables";
+import { docUnit, inUnit, lengthExpr, lengthText, lengthValue } from "../lib/units";
 
 export type ValueUnit = "mm" | "deg" | "";
 
@@ -24,14 +25,20 @@ export function freeParamName(base: string): string {
   return `${clean}${i}`;
 }
 
-/** Stores a number as a variable value, with its unit so the variable reads naturally. */
-export const withUnit = (n: number, unit: ValueUnit): Expr => (unit === "mm" ? `${+n.toFixed(4)} mm` : unit === "deg" ? `${+n.toFixed(4)} deg` : +n.toFixed(4));
+/** Stores a number (mm for lengths) as a variable value, with its unit so the variable reads naturally. */
+export const withUnit = (n: number, unit: ValueUnit): Expr => {
+  if (unit === "mm") return docUnit() === "mm" ? `${+n.toFixed(4)} mm` : lengthValue(n);
+  return unit === "deg" ? `${+n.toFixed(4)} deg` : +n.toFixed(4);
+};
+/** What typed text means for a value of this unit (plain numbers are in the design's unit for lengths). */
+export const parseValue = (t: string, unit: ValueUnit): Expr => (unit === "mm" ? lengthExpr(t) : parseExpr(t));
 
 export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Expr; unit?: ValueUnit; suggest: string; onDone: (v: Expr | null) => void }) {
   const params = useApp((s) => s.doc.params);
   const auto = useApp((s) => s.doc.autoParams);
   const values = useApp((s) => s.output?.report.params) ?? {};
-  const [text, setText] = useState(String(value));
+  const initial = unit === "mm" ? lengthText(value) : String(value);
+  const [text, setText] = useState(initial);
   const [active, setActive] = useState(-1);
   const [naming, setNaming] = useState<string | null>(null);
   const done = useRef(false);
@@ -45,7 +52,7 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
   const scope = new Map(Object.entries(values));
   const current = (): number | null => {
     try {
-      return evaluate(text.trim() ? parseExpr(text) : value, scope);
+      return evaluate(text.trim() ? parseValue(text, unit) : value, scope);
     } catch {
       return null;
     }
@@ -53,6 +60,8 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
 
   // Variables: filtered by name while typing letters, otherwise closest value first.
   const typed = text.trim();
+  // Left as shown: no change (the shown value may be rounded, e.g. converted to inches).
+  const typedValue = (): Expr | null => (!typed || typed === initial.trim() ? null : parseValue(typed, unit));
   const byName = typed && !NUM.test(typed) && /^[A-Za-z_]\w*$/.test(typed);
   const target = current();
   const names = Object.keys(params)
@@ -67,11 +76,11 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
   const createVariable = (name: string) => {
     const n = current();
     if (n === null || !/^[A-Za-z_]\w*$/.test(name) || name in params) return;
-    if (apply({ type: "set_param", name, expr: NUM.test(typed) || !typed ? withUnit(n, unit) : parseExpr(typed), auto: true })) finish(name);
+    if (apply({ type: "set_param", name, expr: NUM.test(typed) || !typed ? withUnit(n, unit) : parseValue(typed, unit), auto: true })) finish(name);
   };
   const pick = (i: number) => {
     const o = options[i];
-    if (!o) return finish(typed ? parseExpr(typed) : null);
+    if (!o) return finish(typedValue());
     if (o.kind === "param") return finish(o.name);
     setNaming(freeParamName(suggest));
   };
@@ -114,7 +123,7 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
           setText(e.target.value);
           setActive(-1);
         }}
-        onBlur={() => finish(typed ? parseExpr(text) : null)}
+        onBlur={() => finish(typedValue())}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "ArrowDown") (e.preventDefault(), setActive((a) => Math.min(options.length - 1, a + 1)));
@@ -132,7 +141,7 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
             <button className={i === active ? "active" : ""} onClick={() => pick(i)} title={`Use the variable ${o.name}`}>
               <Variable />
               <span className="name">{o.name}</span>
-              <span className="val">{values[o.name] !== undefined ? +values[o.name]!.toFixed(3) : "?"}</span>
+              <span className="val">{values[o.name] !== undefined ? (unit === "mm" ? inUnit(values[o.name]!) : +values[o.name]!.toFixed(3)) : "?"}</span>
             </button>
             </div>
           ) : (

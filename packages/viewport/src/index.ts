@@ -213,7 +213,7 @@ export class Viewport {
     }
 
     this.grid = new THREE.Group();
-    this.buildGrid(200);
+    this.grid.add(this.gridMesh);
     this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay, this.handleGroup);
     this.axes = axesHelper();
     this.scene.add(this.axes);
@@ -386,11 +386,6 @@ export class Viewport {
     if (this.hover && !this.pickStillValid(this.hover)) this.hover = null;
     this.paint();
     this.applyDisplayMode();
-    const box = new THREE.Box3().setFromObject(this.bodiesGroup);
-    if (!box.isEmpty()) {
-      const extent = Math.max(50, ...box.min.toArray().map(Math.abs), ...box.max.toArray().map(Math.abs)) * 1.6;
-      if (extent > this.gridExtent * 1.5 || extent < this.gridExtent / 3) this.buildGrid(extent);
-    }
     if (!this.framed && (data.bodies.length || data.sketches.length)) {
       this.framed = true;
       this.fit(false);
@@ -557,33 +552,122 @@ export class Viewport {
     }
   }
 
-  /** Two-level grid (minor and major lines) sized to the model, with theme-aware contrast. */
-  private buildGrid(extent: number): void {
-    disposeTree(this.grid);
-    const nice = [1, 2, 5, 10, 20, 50, 100, 200, 500];
-    const minor = nice.find((n) => (extent * 2) / n <= 80) ?? 500;
-    const major = minor * 10;
-    const size = Math.ceil((extent * 2) / major) * major;
-    const mk = (step: number, color: number, opacity: number) => {
-      const g = new THREE.GridHelper(size, Math.round(size / step), color, color);
-      g.rotation.x = Math.PI / 2;
-      const m = g.material as THREE.Material;
-      m.transparent = true;
-      m.opacity = opacity;
-      m.depthWrite = false;
-      return g;
-    };
-    const [minorC, majorC] = this.dark ? [0x3a4256, 0x56607a] : [0xc3cad6, 0x98a3b5];
-    this.grid.add(mk(minor, minorC, this.dark ? 0.55 : 0.6), mk(major, majorC, this.dark ? 0.8 : 0.85));
-    this.gridExtent = extent;
+  /**
+   * Grid spacings (fine, minor, major) in mm for a zoom level, from world units per pixel. The app
+   * sets this so the grid matches the design's unit and the sketch snapping; the default is metric.
+   */
+  gridSteps: (pixel: number) => { minor: number; major: number; snap: number } = (pixel) => {
+    const levels = [0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000];
+    const minor = levels.find((n) => n / pixel >= 12) ?? 50000;
+    return { minor, major: minor * 10, snap: minor };
+  };
+  /** Step the grid currently offers for snapping, in mm. */
+  gridSpacing = 1;
+
+  /** Plane the grid lies in: the ground (XY) by default, the sketch plane while sketching. */
+  private gridFrame: Frame | null = null;
+  setGridFrame(frame: Frame | null): void {
+    this.gridFrame = frame;
+    // While sketching the grid is drawn over the model, like the sketch itself.
+    const mat = this.gridMesh.material as THREE.ShaderMaterial;
+    mat.depthTest = !frame;
+    this.gridMesh.renderOrder = frame ? 0 : -1;
+    this.changed = true;
   }
-  private gridExtent = 200;
+
+  /** Redraws what depends on settings outside the viewport (grid spacing, unit) on the next frame. */
+  invalidate(): void {
+    this.changed = true;
+  }
+
+  /**
+   * Endless ground grid: one plane under the view whose shader draws minor and major lines with
+   * screen-space anti-aliasing. The next finer level fades in as you zoom, and lines fade out with
+   * distance, so it reaches the horizon without moiré or hard edges.
+   */
+  private gridMesh = (() => {
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      extensions: { derivatives: true } as never,
+      uniforms: {
+        uMinor: { value: 1 },
+        uMajor: { value: 10 },
+        uCenter: { value: new THREE.Vector2() },
+        uSize: { value: 1000 },
+        uFade: { value: 500 },
+        uColor: { value: new THREE.Color(0x98a3b5) },
+        uOpacity: { value: 0.6 },
+      },
+      // Coordinates are in the grid's plane, so lines stay put however the plane is oriented.
+      vertexShader: `
+        uniform vec2 uCenter;
+        uniform float uSize;
+        varying vec2 vPlane;
+        void main() {
+          vPlane = uCenter + position.xy * uSize;
+          gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        uniform float uMinor, uMajor, uFade, uOpacity;
+        uniform vec2 uCenter;
+        uniform vec3 uColor;
+        varying vec2 vPlane;
+        float lines(vec2 p, float s, float width) {
+          vec2 c = p / s;
+          vec2 w = fwidth(c);
+          vec2 g = abs(fract(c - 0.5) - 0.5) / (w * width);
+          return 1.0 - min(min(g.x, g.y), 1.0);
+        }
+        void main() {
+          float px = length(fwidth(vPlane)) * 0.7071;
+          // Both levels stay clearly visible; lines only fade where perspective crowds them (far away).
+          float minorA = smoothstep(5.0, 12.0, uMinor / px) * 0.55;
+          float majorA = smoothstep(4.0, 10.0, uMajor / px) * 0.95;
+          float a = max(lines(vPlane, uMinor, 1.0) * minorA, lines(vPlane, uMajor, 1.25) * majorA);
+          a *= 1.0 - smoothstep(uFade * 0.35, uFade, distance(vPlane, uCenter));
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(uColor, a * uOpacity);
+        }`,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = -1;
+    return mesh;
+  })();
+
+  /** Moves and sizes the grid plane with the view, and picks its spacings for the zoom. */
+  private updateGrid(): void {
+    const f = this.gridFrame ?? { origin: [0, 0, 0] as Vec3, u: [1, 0, 0] as Vec3, v: [0, 1, 0] as Vec3, normal: [0, 0, 1] as Vec3 };
+    const target = this.controls.target;
+    // The view centre, dropped onto the grid plane, in plane coordinates.
+    const d = target.clone().sub(new THREE.Vector3(...f.origin));
+    const cx = d.dot(new THREE.Vector3(...f.u));
+    const cy = d.dot(new THREE.Vector3(...f.v));
+    const onPlane = new THREE.Vector3(...f.origin).addScaledVector(new THREE.Vector3(...f.u), cx).addScaledVector(new THREE.Vector3(...f.v), cy);
+    const pixel = this.pixelSize([onPlane.x, onPlane.y, onPlane.z]);
+    const steps = this.gridSteps(pixel);
+    this.gridSpacing = steps.snap;
+    const reach = this.camera instanceof THREE.OrthographicCamera ? pixel * Math.max(this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight) * 2 : this.camera.position.distanceTo(onPlane) * 6;
+    const u = (this.gridMesh.material as THREE.ShaderMaterial).uniforms;
+    u["uMinor"]!.value = steps.minor;
+    u["uMajor"]!.value = steps.major;
+    u["uFade"]!.value = reach;
+    u["uSize"]!.value = reach * 2;
+    (u["uCenter"]!.value as THREE.Vector2).set(cx, cy);
+    u["uColor"]!.value = new THREE.Color(this.dark ? 0x6b7590 : 0x8a95a8);
+    u["uOpacity"]!.value = this.dark ? 0.6 : 0.55;
+    const m = frameMatrix(f).multiply(new THREE.Matrix4().makeTranslation(cx, cy, 0)).multiply(new THREE.Matrix4().makeScale(reach * 2, reach * 2, 1));
+    this.gridMesh.matrixAutoUpdate = false;
+    this.gridMesh.matrix.copy(m);
+    this.gridMesh.matrixWorldNeedsUpdate = true;
+  }
 
   /** Light/dark scene colours (grid contrast). */
   setDark(dark: boolean): void {
     if (dark === this.dark) return;
     this.dark = dark;
-    this.buildGrid(this.gridExtent);
+    this.changed = true;
   }
 
   get mode(): DisplayMode {
@@ -800,7 +884,11 @@ export class Viewport {
     return (w0.dot(d) - b * w0.dot(ray.direction)) / denom;
   }
 
+  /** Step drag handles snap to, from world units per screen pixel; unset: a round step for the zoom. */
+  handleStep: ((pixel: number) => number) | null = null;
+
   private snapStep(at: Vec3): number {
+    if (this.handleStep) return this.handleStep(this.pixelSize(at));
     const px = this.pixelSize(at) * 6;
     for (const s of [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100]) if (s >= px) return s;
     return 100;
@@ -1209,7 +1297,7 @@ export class Viewport {
   private emit(): void {
     this.changed = true;
   }
-  private changed = false;
+  private changed = true;
 
   snapshot(width = 480, height = 360, clean = false): string {
     // Thumbnails leave out helpers so only the model is pictured.
@@ -1271,6 +1359,7 @@ export class Viewport {
     this.controls.update();
     if (this.changed) {
       this.changed = false;
+      this.updateGrid();
       if (this.handles.length) this.drawHandles();
       for (const fn of this.listeners) fn();
     }

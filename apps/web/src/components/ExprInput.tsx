@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { evaluate } from "@meercad/model";
 import type { Expr } from "@meercad/schema";
-import { useApp } from "../store";
+import { useApp, useDocUnit } from "../store";
+import { inUnit, lengthExpr, lengthText } from "../lib/units";
 
 const NUM = /^\s*-?\d+(\.\d+)?\s*$/;
 export const parseExpr = (s: string): Expr => (NUM.test(s) ? Number(s) : s.trim());
@@ -16,31 +17,41 @@ interface Props {
   placeholder?: string;
   className?: string;
   integer?: boolean;
+  /** No evaluated value or unit beside the text (when it is shown elsewhere). */
+  quiet?: boolean;
 }
 
-/** Expression field: accepts numbers, units and parameter names; shows the evaluated value. */
-export function ExprInput({ value, onCommit, onLive, unit = "mm", autoFocus, placeholder, className, integer }: Props) {
+/**
+ * Expression field: accepts numbers, units and parameter names; shows the evaluated value. Lengths
+ * (`unit` "mm") are shown and typed in the design's unit.
+ */
+export function ExprInput({ value, onCommit, onLive, unit = "mm", autoFocus, placeholder, className, integer, quiet }: Props) {
   const params = useApp((s) => s.output?.report.params);
-  const [text, setText] = useState(value === undefined ? "" : String(value));
+  const du = useDocUnit();
+  const length = unit === "mm";
+  const shown = length ? lengthText(value, du) : value === undefined ? "" : String(value);
+  const parse = (t: string): Expr => (length ? lengthExpr(t, du) : parseExpr(t));
+  const [text, setText] = useState(shown);
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (document.activeElement !== ref.current) setText(value === undefined ? "" : String(value));
-  }, [value]);
+    if (document.activeElement !== ref.current) setText(shown);
+  }, [shown]);
 
   let computed: string | null = null;
   let error = false;
   if (text.trim()) {
     try {
-      const v = evaluate(parseExpr(text), new Map(Object.entries(params ?? {})));
-      computed = NUM.test(text) ? null : `= ${Math.round(v * 1000) / 1000}`;
+      const v = evaluate(parse(text), new Map(Object.entries(params ?? {})));
+      computed = NUM.test(text) ? null : `= ${length ? `${inUnit(v, du)} ${du}` : Math.round(v * 1000) / 1000}`;
     } catch {
       error = true;
     }
   }
 
   const commit = (t = text) => {
-    if (!t.trim() || error) return setText(value === undefined ? "" : String(value));
-    const e = parseExpr(t);
+    if (!t.trim() || error) return setText(shown);
+    if (t.trim() === shown) return;
+    const e = parse(t);
     if (e !== value) onCommit(e);
   };
 
@@ -57,8 +68,8 @@ export function ExprInput({ value, onCommit, onLive, unit = "mm", autoFocus, pla
           setText(e.target.value);
           if (onLive && e.target.value.trim()) {
             try {
-              evaluate(parseExpr(e.target.value), new Map(Object.entries(params ?? {})));
-              onLive(parseExpr(e.target.value));
+              evaluate(parse(e.target.value), new Map(Object.entries(params ?? {})));
+              onLive(parse(e.target.value));
             } catch {
               // incomplete expression while typing
             }
@@ -71,22 +82,25 @@ export function ExprInput({ value, onCommit, onLive, unit = "mm", autoFocus, pla
             (e.target as HTMLInputElement).blur();
           }
           if (e.key === "Escape") {
-            setText(value === undefined ? "" : String(value));
+            setText(shown);
             (e.target as HTMLInputElement).blur();
           }
-          const m = /^\s*(-?\d+(?:\.\d+)?)\s*(mm|deg|°)?\s*$/.exec(text);
+          const m = /^\s*(-?\d+(?:\.\d+)?)\s*(mm|in|deg|°)?\s*$/.exec(text);
           if ((e.key === "ArrowUp" || e.key === "ArrowDown") && m) {
             e.preventDefault();
-            const step = (integer ? 1 : e.shiftKey ? 10 : e.altKey ? 0.1 : 1) * (e.key === "ArrowUp" ? 1 : -1);
-            const n = Math.round((parseFloat(m[1]!) + step) * 1000) / 1000;
+            // Inch values step in 1/8 in (Shift: 1 in, Alt: 1/64 in).
+            const inch = length && du === "in" && (!m[2] || m[2] === "in");
+            const base = integer ? 1 : inch ? (e.shiftKey ? 1 : e.altKey ? 1 / 64 : 1 / 8) : e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
+            const step = base * (e.key === "ArrowUp" ? 1 : -1);
+            const n = Math.round((parseFloat(m[1]!) + step) * 10000) / 10000;
             const next = m[2] ? `${n} ${m[2]}` : String(n);
             setText(next);
-            const ex = parseExpr(next);
+            const ex = parse(next);
             (onLive ?? onCommit)(ex);
           }
         }}
       />
-      {computed && !error ? <span className="computed">{computed}</span> : unit && NUM.test(text) ? <span className="computed">{unit === "deg" ? "°" : unit}</span> : null}
+      {quiet ? null : computed && !error ? <span className="computed">{computed}</span> : unit && NUM.test(text) ? <span className="computed">{unit === "deg" ? "°" : length ? du : unit}</span> : null}
     </div>
   );
 }

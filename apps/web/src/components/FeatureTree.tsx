@@ -12,6 +12,7 @@ import { freeParamName, withUnit, type ValueUnit } from "./ValueInput";
 import { variableGroup } from "../lib/variables";
 import { exportSketch } from "./io";
 import { showMenu } from "./Menu";
+import { docUnit, fmtLen, fmtVolume, inUnit, isLengthParam } from "../lib/units";
 
 const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
@@ -290,8 +291,7 @@ function LinkBar({ ids }: { ids: string[] }) {
             </div>
           ) : r.same ? (
             <button key={r.field} className="link-row" onClick={() => void link(r)}>
-              Link {r.label} ({+r.value.toFixed(3)}
-              {r.unit === "deg" ? "°" : r.unit === "mm" ? " mm" : ""}) with a variable…
+              Link {r.label} ({r.unit === "mm" ? fmtLen(r.value) : `${+r.value.toFixed(3)}${r.unit === "deg" ? "°" : ""}`}) with a variable…
             </button>
           ) : (
             <div key={r.field} className="link-row muted">
@@ -335,7 +335,7 @@ function Bodies() {
   const [over, setOver] = useState<string | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
   if (!bodies.length) return null;
-  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)} cm³` : `${n.toFixed(0)} mm³`);
+  const fmt = (n: number) => fmtVolume(n);
   const ids = bodies.map((b) => b.id);
   const order = [...(doc.partOrder ?? []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(doc.partOrder ?? []).includes(id))];
   const groups = (doc.partGroups ?? []).map((g) => ({ ...g, parts: order.filter((id) => g.parts.includes(id)) }));
@@ -404,7 +404,7 @@ function Bodies() {
       <li
         key={id}
         className={`tree-item ${hidden.has(id) ? "dim" : ""} ${nested ? "nested" : ""} ${over === id ? "drop-before" : ""}`}
-        title={`${b.faces} faces · ${b.bbox.max.map((v, i) => (v - b.bbox.min[i]!).toFixed(1)).join(" × ")} mm — drag to reorder or onto a group`}
+        title={`${b.faces} faces · ${b.bbox.max.map((v, i) => inUnit(v - b.bbox.min[i]!)).join(" × ")} ${docUnit()} — drag to reorder or onto a group`}
         draggable
         onDragStart={() => setDrag(id)}
         onDragEnd={() => (setDrag(null), setOver(null))}
@@ -500,6 +500,7 @@ function Params() {
   const auto = useApp((s) => s.doc.autoParams) ?? NONE;
   const doc = useApp((s) => s.doc);
   const values = useApp((s) => s.output?.report.params) ?? EMPTY;
+  const unit = useApp((s) => s.doc.units ?? "mm");
   const errors = useApp((s) => s.output?.report.paramErrors) ?? EMPTY;
   const [adding, setAdding] = useState<{ name: string; expr: string } | null>(null);
   const [open, toggle] = useSection("variables");
@@ -540,9 +541,10 @@ function Params() {
         }}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
-      <ExprInput value={params[name]} unit="" onCommit={(v) => apply({ type: "set_param", name, expr: v })} />
-      <span className="val" title={errors[name] ?? ""} style={errors[name] ? { color: "var(--err)" } : undefined}>
-        {errors[name] ? "error" : values[name] !== undefined ? +values[name]!.toFixed(3) : ""}
+      {/* A length variable in an inch design shows its result and takes plain numbers in inches. */}
+      <ExprInput value={params[name]} unit={unit === "in" && isLengthParam(name, params) ? "mm" : ""} quiet onCommit={(v) => apply({ type: "set_param", name, expr: v })} />
+      <span className="val" title={errors[name] ?? (unit === "in" && isLengthParam(name, params) ? "in inches" : "")} style={errors[name] ? { color: "var(--err)" } : undefined}>
+        {errors[name] ? "error" : values[name] === undefined ? "" : unit === "in" && isLengthParam(name, params) ? inUnit(values[name]!, "in") : +values[name]!.toFixed(3)}
       </span>
       {isAuto ? (
         <button className="icon-btn sm" title="Move to my variables" onClick={() => apply({ type: "set_param", name, expr: params[name]!, auto: false })}>
@@ -568,7 +570,7 @@ function Params() {
         open={open}
         onToggle={toggle}
         actions={
-          <button className="icon-btn sm" title="Add variable" onClick={() => (open || toggle(), setAdding({ name: suggestName(params), expr: "10 mm" }))}>
+          <button className="icon-btn sm" title="Add variable" onClick={() => (open || toggle(), setAdding({ name: suggestName(params), expr: docUnit() === "in" ? "0.5 in" : "10 mm" }))}>
             <Plus />
           </button>
         }

@@ -1,4 +1,4 @@
-import { Box, Copy, Eye, EyeOff, Focus, Grid2x2, Layers, Pencil, Ruler, Scan, Trash } from "lucide-react";
+import { Box, Copy, Eye, EyeOff, Focus, Layers, Pencil, PencilLine, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, usePrefs } from "../lib/keymap";
@@ -15,6 +15,9 @@ import { closeMenu, showMenu } from "./Menu";
 import { InlineValues } from "./InlineValues";
 import { Manipulators } from "./Manipulators";
 import { ViewCube } from "./ViewCube";
+import { SnapControls } from "./SnapControls";
+import { gridLevels } from "../lib/grid";
+import { convertMmText, docUnit } from "../lib/units";
 import { CUSTOM_PLANE_COLOR, PLANE_COLORS, PlaneChooser } from "./PlaneChooser";
 
 const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
@@ -78,7 +81,19 @@ export function ViewportView() {
     const v = new Viewport(host.current!);
     setVp(v);
     setViewport(v);
-    const applyNav = () => v.setNavigation(navigationFor(usePrefs.getState().mouse), usePrefs.getState().invertZoom);
+    const applyNav = () => {
+      const p = usePrefs.getState();
+      v.setNavigation(navigationFor(p.mouse), p.invertZoom);
+      // The grid button shows the grid and snaps to it; off, it is hidden and nothing snaps to it.
+      v.setGridVisible(p.snapGrid);
+      v.invalidate();
+    };
+    // The grid follows the zoom in the design's unit; drag arrows step by it, or freely when off.
+    v.gridSteps = (pixel) => gridLevels(pixel, docUnit());
+    v.handleStep = (pixel) => {
+      const p = usePrefs.getState();
+      return p.snapGrid ? gridLevels(pixel, docUnit()).snap : 0.01;
+    };
     applyNav();
     const offPrefs = usePrefs.subscribe(applyNav);
     return () => {
@@ -87,6 +102,10 @@ export function ViewportView() {
       v.dispose();
     };
   }, []);
+
+  // The grid is laid out in the design's unit.
+  const designUnits = useApp((s) => s.doc.units);
+  useEffect(() => vp?.invalidate(), [vp, designUnits]);
 
   // Scene
   const scene = useMemo<SceneData | null>(() => {
@@ -435,6 +454,8 @@ export function ViewportView() {
         {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? "Rebuilding…" : output ? `${output.report.bodies.length} part${output.report.bodies.length === 1 ? "" : "s"} · rebuild ${output.report.rebuildMs.toFixed(0)} ms${previewing ? " · preview" : ""}` : "Ready")}
       </div>
       <div className="view-controls">
+        <SnapControls viewport={vp} />
+        <span className="bar-sep" aria-hidden />
         <button className="icon-btn sm" title="Fit all (Z)" onClick={() => vp?.fit()}>
           <Scan />
         </button>
@@ -469,7 +490,7 @@ export function ViewportView() {
           <Layers />
         </button>
         <button className={`icon-btn sm ${showSketches ? "active" : ""}`} title="Sketches" onClick={() => useApp.setState({ showSketches: !showSketches })}>
-          <Grid2x2 />
+          <PencilLine />
         </button>
         <button className={`icon-btn sm ${showValues ? "active" : ""}`} title={`${showValues ? "Hide" : "Show"} dimensions on the model`} onClick={() => setPrefs({ showValues: !showValues })}>
           <Ruler />
@@ -503,7 +524,7 @@ function MeasureCard() {
               {m.result.rows.map(([k, v]) => (
                 <tr key={k}>
                   <td className="muted">{k}</td>
-                  <td>{v}</td>
+                  <td>{convertMmText(v)}</td>
                 </tr>
               ))}
             </tbody>

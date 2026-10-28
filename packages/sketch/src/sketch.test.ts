@@ -87,6 +87,28 @@ describe("SketchSolver", () => {
   });
 });
 
+describe("arc angle", () => {
+  it("sets how far an arc sweeps, keeping its start", () => {
+    const s = solver.solve({
+      entities: [
+        { id: "c", type: "point", x: 0, y: 0 },
+        { id: "s", type: "point", x: 10, y: 0 },
+        { id: "e", type: "point", x: 0, y: 10 },
+        { id: "a1", type: "arc", center: "c", start: "s", end: "e" },
+      ],
+      constraints: [
+        { id: "f", type: "fix", point: "c" },
+        { id: "f2", type: "fix", point: "s" },
+        { id: "sw", type: "arc_angle", curve: "a1", value: 135 },
+      ],
+    });
+    expect(s.diagnostics.ok).toBe(true);
+    const e = s.points.get("e")!;
+    expect((Math.atan2(e[1], e[0]) * 180) / Math.PI).toBeCloseTo(135, 3);
+    expect(Math.hypot(e[0], e[1])).toBeCloseTo(10, 3);
+  });
+});
+
 describe("findRegions", () => {
   it("finds a rectangle region with semantic key", () => {
     const r = findRegions(box(0, 0, 40, 20));

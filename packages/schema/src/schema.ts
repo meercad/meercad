@@ -58,6 +58,7 @@ c("distance", { a: str(), b: str(), value: ref("expr"), axis: { enum: ["x", "y"]
 c("length", { line: str(), value: ref("expr"), label }, ["line", "value"]);
 c(["radius", "diameter"], { curve: str(), value: ref("expr"), label }, ["curve", "value"]);
 c("angle", { a: str(), b: str(), value: ref("expr"), label }, ["a", "b", "value"]);
+c("arc_angle", { curve: str(), value: ref("expr"), label }, ["curve", "value"]);
 
 const construction = { construction: bool };
 
@@ -182,6 +183,7 @@ export const documentSchema = {
       autoParams: arr(id),
       partOrder: arr({ type: "string", maxLength: 128 }),
       partGroups: arr(obj({ name: { type: "string", minLength: 1, maxLength: 128 }, parts: arr({ type: "string", maxLength: 128 }) }, ["name", "parts"])),
+      units: { enum: ["mm", "in"] },
       features: arr(ref("feature")),
       rollback: oneOf({ type: "null" }, id),
     },

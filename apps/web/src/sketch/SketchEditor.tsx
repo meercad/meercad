@@ -3,7 +3,6 @@
  * solved sketch on its plane, turns pointer input into entities and constraints, and drags points
  * with PlaneGCS temporary constraints.
  */
-import { Grid3x3, Magnet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
@@ -13,7 +12,9 @@ import { parseExpr } from "../components/ExprInput";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
 import { Kbd } from "../components/Kbd";
-import { actionFor, GRID_STEPS, setPrefs, SKETCH_ACTIONS, usePrefs, type GridStep } from "../lib/keymap";
+import { docUnit, fmtLen, inUnit, lengthExpr } from "../lib/units";
+import { InlineInput } from "../components/InlineValues";
+import { actionFor, SKETCH_ACTIONS, usePrefs } from "../lib/keymap";
 import { activeSketch, applyConstraint, CONSTRAINT_TOOLS, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
 import { GLYPH } from "./icons";
 import { Press } from "../lib/gestures";
@@ -35,22 +36,12 @@ interface Snap {
   /** Line whose midpoint this is. */
   mid?: string;
   /** What the cursor locked onto, for the marker. */
-  kind?: "point" | "mid" | "cross" | "curve" | "align" | "grid";
+  kind?: "point" | "mid" | "cross" | "curve" | "align" | "grid" | "center" | "edge";
   /** Dashed alignment guides, in sketch coordinates. */
   guides?: [Vec2, Vec2][];
 }
 
 const COLORS = { under: 0x2266dd, full: 0x16a34a, construction: 0x8aa4c8, external: 0xa35cff, sel: 0xff7a1a, hover: 0x2e7dff, preview: 0x1a5fd6, conflict: 0xd93f3f, snap: 0xf08c00, guide: 0x8a94a6 };
-
-/** Grid spacing that keeps lines at least `minPx` apart on screen. */
-function autoStep(pixel: number, minPx = 14): number {
-  const nice = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
-  return nice.find((n) => n >= pixel * minPx) ?? 1000;
-}
-/** Grid spacing from the preference (fixed, or following the zoom). */
-export function gridStepFor(step: GridStep, pixel: number): number {
-  return step === "auto" ? autoStep(pixel) : step;
-}
 
 export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketchId: string }) {
   const doc = useApp((s) => s.doc);
@@ -67,7 +58,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const [editing, setEditing] = useState<string | null>(null);
   const layer = useRef<HTMLDivElement>(null);
   const toolState = useRef<{ points: Snap[]; cursor: Vec2 | null; snap: Snap | null; sweep: number; dimFirst: SketchSel | null }>({ points: [], cursor: null, snap: null, sweep: 0, dimFirst: null });
-  const prefs = usePrefs();
+  usePrefs(); // re-render when snapping settings change
   const [, force] = useState(0);
   const rerender = () => force((n) => n + 1);
 
@@ -145,71 +136,27 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   }, [viewport, group]);
 
   // Grid on the sketch plane (the world grid only lies on XY), rebuilt as the camera moves.
-  const gridGroup = useMemo(() => new THREE.Group(), []);
+  // The viewport draws the grid in the sketch plane (endless, following the zoom); the sketch adds its axes.
+  const axesGroup = useMemo(() => new THREE.Group(), []);
   useEffect(() => {
     if (!frame) return;
-    viewport.overlay.add(gridGroup);
-    viewport.setGridVisible(false);
-    let raf = 0;
-    const build = () => {
-      raf = 0;
-      disposeGroup(gridGroup);
-      gridGroup.matrixAutoUpdate = false;
-      gridGroup.matrix.copy(frameMatrix(frame));
-      const canvas = viewport.canvas.getBoundingClientRect();
-      const corners = [
-        [canvas.left, canvas.top],
-        [canvas.right, canvas.top],
-        [canvas.left, canvas.bottom],
-        [canvas.right, canvas.bottom],
-        [(canvas.left + canvas.right) / 2, (canvas.top + canvas.bottom) / 2],
-      ]
-        .map(([cx, cy]) => viewport.rayToPlane(cx!, cy!, frame))
-        .filter((q): q is Vec2 => !!q);
-      if (!corners.length) return;
-      const unit = viewport.pixelSize(frame.origin);
-      const step = gridStepFor(prefs.gridStep, unit);
-      // Keep the line count sane when a fixed step is tiny for the zoom level.
-      const drawStep = step / unit < 6 ? step * Math.ceil((6 * unit) / step) : step;
-      const majorEvery = /2\.?5$/.test(String(step)) ? 4 : 10;
-      const span = Math.min(unit * Math.max(canvas.width, canvas.height) * 2, drawStep * 600);
-      const cx = corners.reduce((a, q) => a + q[0], 0) / corners.length;
-      const cy = corners.reduce((a, q) => a + q[1], 0) / corners.length;
-      const x0 = Math.floor((cx - span) / drawStep) * drawStep;
-      const x1 = Math.ceil((cx + span) / drawStep) * drawStep;
-      const y0 = Math.floor((cy - span) / drawStep) * drawStep;
-      const y1 = Math.ceil((cy + span) / drawStep) * drawStep;
-      const dark = document.documentElement.dataset["theme"] === "dark" || (!document.documentElement.dataset["theme"] && matchMedia("(prefers-color-scheme: dark)").matches);
-      const minor: number[] = [];
-      const major: number[] = [];
-      const isMajor = (v: number) => Math.abs(v / (step * majorEvery) - Math.round(v / (step * majorEvery))) < 1e-6;
-      for (let x = x0; x <= x1 + 1e-9; x += drawStep) (isMajor(x) ? major : minor).push(x, y0, 0, x, y1, 0);
-      for (let y = y0; y <= y1 + 1e-9; y += drawStep) (isMajor(y) ? major : minor).push(x0, y, 0, x1, y, 0);
-      const lines = (pos: number[], color: number, opacity: number, order: number) => {
-        const g = new THREE.BufferGeometry();
-        g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-        const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false, depthWrite: false }));
-        l.renderOrder = order;
-        gridGroup.add(l);
-      };
-      const base = dark ? 0x8a96b0 : 0x7c8799;
-      lines(minor, base, dark ? 0.16 : 0.18, 1);
-      lines(major, base, dark ? 0.32 : 0.36, 2);
-      lines([x0, 0, 0, x1, 0, 0, 0, y0, 0, 0, y1, 0], dark ? 0xa8b3c8 : 0x5d6878, 0.7, 3);
-    };
-    const schedule = () => {
-      if (!raf) raf = requestAnimationFrame(build);
-    };
-    build();
-    const off = viewport.onChange(schedule);
+    viewport.setGridFrame(frame);
+    viewport.overlay.add(axesGroup);
+    axesGroup.matrixAutoUpdate = false;
+    axesGroup.matrix.copy(frameMatrix(frame));
+    const dark = document.documentElement.dataset["theme"] === "dark" || (!document.documentElement.dataset["theme"] && matchMedia("(prefers-color-scheme: dark)").matches);
+    const far = 1e5;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([-far, 0, 0, far, 0, 0, 0, -far, 0, 0, far, 0], 3));
+    const axes = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: dark ? 0xa8b3c8 : 0x5d6878, transparent: true, opacity: 0.7, depthTest: false, depthWrite: false }));
+    axes.renderOrder = 3;
+    axesGroup.add(axes);
     return () => {
-      off();
-      cancelAnimationFrame(raf);
-      viewport.overlay.remove(gridGroup);
-      disposeGroup(gridGroup);
-      viewport.setGridVisible(true);
+      viewport.setGridFrame(null);
+      viewport.overlay.remove(axesGroup);
+      disposeGroup(axesGroup);
     };
-  }, [viewport, frame, gridGroup, prefs.gridStep]);
+  }, [viewport, frame, axesGroup]);
 
   const ts = toolState.current;
   useEffect(() => {
@@ -311,6 +258,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       for (let j = i + 1; j < curves.length; j++) for (const pt of intersectionPoints(curves[i]!, curves[j]!)) crosses.push({ pt, a: curves[i]!.id, b: curves[j]!.id });
     return { mids, crosses };
   }, [shown]);
+  // Model edges in the sketch plane (outline and holes of the face sketched on).
+  const modelEdges = useMemo(() => {
+    if (!frame || !output) return [];
+    const size = Math.max(1, ...output.report.bodies.map((b) => Math.hypot(...b.bbox.max.map((v, i) => v - b.bbox.min[i]!))));
+    return planeEdges(output.meshes, frame, size * 1e-5 + 1e-4);
+  }, [output, frame]);
 
   /**
    * Where the cursor lands: existing points, then (with smart snaps) midpoints, crossings, curves and
@@ -319,7 +272,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
    */
   const snap = (p: Vec2, exclude?: Set<string>, from?: Vec2, free = false): Snap => {
     if (free || !shown) return { pos: p };
-    const { snapGrid, snapGeometry, gridStep } = usePrefs.getState();
+    const { snapGrid, snapGeometry } = usePrefs.getState();
     const unit = px();
     const tol = unit * 10;
     const near = (q: Vec2) => Math.hypot(q[0] - p[0], q[1] - p[1]);
@@ -332,8 +285,23 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (cross) return { pos: cross.pt, curve: cross.a, curve2: cross.b, kind: "cross" };
       const c = hitCurve(p, unit * 7, exclude);
       if (c) return { pos: projectOnCurve(c, p), curve: c.id, kind: "curve" };
+      // The model's own edges in this plane: corners and circle centres, then anywhere on an edge.
+      let corner: { pos: Vec2; d: number; kind: "point" | "center" } | null = null;
+      for (const e of modelEdges) {
+        const ends = e.center ? [] : [e.pts[0]!, e.pts[e.pts.length - 1]!];
+        for (const q of ends) if (near(q) < tol && (!corner || near(q) < corner.d)) corner = { pos: q, d: near(q), kind: "point" };
+        if (e.center && near(e.center) < tol && (!corner || near(e.center) < corner.d)) corner = { pos: e.center, d: near(e.center), kind: "center" };
+      }
+      if (corner) return { pos: corner.pos, kind: corner.kind };
+      let onEdge: { pos: Vec2; dist: number } | null = null;
+      for (const e of modelEdges) {
+        const h = nearestOnPolyline(e.pts, p);
+        if (h.dist < unit * 7 && (!onEdge || h.dist < onEdge.dist)) onEdge = h;
+      }
+      if (onEdge) return { pos: onEdge.pos, kind: "edge" };
     }
-    const step = gridStepFor(gridStep, unit);
+    // The same step the grid shows (the viewport lays it out in this sketch's plane).
+    const step = viewport.gridSpacing;
     const toGrid = (v: number) => (snapGrid ? Math.round(v / step) * step : v);
     // The origin axes are real references: a point placed on them gets constrained there.
     const axisTol = unit * 6;
@@ -343,7 +311,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     let ay: { v: number; from: Vec2 } | null = null;
     if (snapGeometry) {
       const alignTol = unit * 8;
-      const candidates: Vec2[] = [...(from ? [from] : []), ...pointEntries(sketch, shown).filter(([id]) => !exclude?.has(id) && id !== "origin").map(([, q]) => q)];
+      const modelPoints = modelEdges.flatMap((e) => (e.center ? [e.center] : [e.pts[0]!, e.pts[e.pts.length - 1]!]));
+      const candidates: Vec2[] = [...(from ? [from] : []), ...pointEntries(sketch, shown).filter(([id]) => !exclude?.has(id) && id !== "origin").map(([, q]) => q), ...modelPoints];
       for (const q of candidates) {
         const dx = Math.abs(q[0] - p[0]);
         const dy = Math.abs(q[1] - p[1]);
@@ -401,6 +370,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const p1 = bl.point(a);
     const p2 = bl.point(b);
     const l = bl.entity({ type: "line", p1, p2, ...cons }, "l");
+    setLastShape({ kind: "line", id: l });
     if (length !== undefined) bl.constraint({ type: "length", line: l, value: length });
     const ang = Math.abs(Math.atan2(b.pos[1] - a.pos[1], b.pos[0] - a.pos[0]));
     const tolA = (3 * Math.PI) / 180;
@@ -440,11 +410,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const bl = builder(sketch);
     const center = bl.point(c);
     const id = bl.entity({ type: "circle", center, radius: r, ...cons }, "c");
+    setLastShape({ kind: "circle", id });
     if (diameter !== undefined) bl.constraint({ type: "diameter", curve: id, value: diameter });
     commit(bl.d);
   };
 
-  const addArc = (c: Snap, s: Snap, e: Snap, ccw: boolean) => {
+  const addArc = (c: Snap, s: Snap, e: Snap, ccw: boolean, angle?: Expr) => {
     if (!sketch) return;
     const r = Math.hypot(s.pos[0] - c.pos[0], s.pos[1] - c.pos[1]);
     if (r < px() * 2) return;
@@ -454,8 +425,27 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const endOnCircle: Snap = { ...e, pos: [c.pos[0] + r * Math.cos(a), c.pos[1] + r * Math.sin(a)] };
     const start = bl.point(ccw ? s : endOnCircle);
     const end = bl.point(ccw ? endOnCircle : s);
-    bl.entity({ type: "arc", center, start, end, ...cons }, "a");
+    const id = bl.entity({ type: "arc", center, start, end, ...cons }, "a");
+    if (angle !== undefined) bl.constraint({ type: "arc_angle", curve: id, value: angle });
     commit(bl.d);
+    setLastShape({ kind: "arc", id });
+  };
+
+  /** Arc through its two ends and a third point that sets bulge and radius; typed values become dimensions. */
+  const add3PointArc = (a: Snap, b: Snap, m: Vec2, dims: { radius?: Expr | undefined; angle?: Expr | undefined } = {}) => {
+    if (!sketch) return;
+    const g = arcThrough(a.pos, b.pos, m);
+    if (!g || g.radius < px() * 2) return;
+    const bl = builder(sketch);
+    const center = bl.point({ pos: g.center });
+    const [sa, sb] = g.swapped ? [b, a] : [a, b];
+    const start = bl.point(sa);
+    const end = bl.point(sb);
+    const id = bl.entity({ type: "arc", center, start, end, ...cons }, "a");
+    if (dims.radius !== undefined) bl.constraint({ type: "radius", curve: id, value: dims.radius });
+    if (dims.angle !== undefined) bl.constraint({ type: "arc_angle", curve: id, value: dims.angle });
+    commit(bl.d);
+    setLastShape({ kind: "arc", id });
   };
 
   /** Regular polygon inscribed in a construction circle; equal sides keep it regular. */
@@ -571,7 +561,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const curve = shown.curves.find((x) => x.id === a.id)!;
       if (k === "line" && curve.kind === "line") c = { type: "length", line: a.id, value: round(Math.hypot(curve.b[0] - curve.a[0], curve.b[1] - curve.a[1])), label };
       else if (curve.kind === "circle") c = { type: "diameter", curve: a.id, value: round(curve.radius * 2), label };
-      else if (curve.kind === "arc") c = { type: "radius", curve: a.id, value: round(curve.radius), label };
+      else if (curve.kind === "arc") {
+        // Placed inside the arc, near its centre: the angle it sweeps; further out: its radius.
+        const inside = Math.hypot(at[0] - curve.center[0], at[1] - curve.center[1]) < curve.radius * 0.6;
+        c = inside ? { type: "arc_angle", curve: a.id, value: round((sweepOf(curve.a0, curve.a1) * 180) / Math.PI), label } : { type: "radius", curve: a.id, value: round(curve.radius), label };
+      }
     } else if (a.kind === "point" && b?.kind === "point") {
       const pa = P(a.id);
       const pb = P(b.id);
@@ -618,16 +612,21 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
   // ---------------------------------------------------------------- typed values while drawing
   const [entry, setEntry] = useState<{ fields: string[]; active: number } | null>(null);
+  /** The shape just drawn: its size and angle show as chips that can be tapped to fix them. */
+  const [lastShape, setLastShape] = useState<{ kind: "line" | "arc" | "circle"; id: string } | null>(null);
+  const [typingQuick, setTypingQuick] = useState<string | null>(null);
   const entryInputs = useRef<(HTMLInputElement | null)[]>([]);
   const cursorScreen = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   useEffect(() => {
     if (entry) entryInputs.current[entry.active]?.focus();
   }, [entry?.active, !!entry]);
   const scope = () => new Map(Object.entries(params ?? {}));
-  const valueOf = (text: string | undefined): number | null => {
+  /** Typed lengths are in the design's unit; angles in degrees. */
+  const entryExpr = (text: string, angle = false): Expr => (angle ? parseExpr(text) : lengthExpr(text));
+  const valueOf = (text: string | undefined, angle = false): number | null => {
     if (!text?.trim()) return null;
     try {
-      const v = evaluate(parseExpr(text), scope());
+      const v = evaluate(entryExpr(text, angle), scope());
       return Number.isFinite(v) ? v : null;
     } catch {
       return null;
@@ -639,7 +638,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const a = ts.points[0]!.pos;
     const cur = ts.cursor && Math.hypot(ts.cursor[0] - a[0], ts.cursor[1] - a[1]) > 1e-9 ? ts.cursor : ([a[0] + 1, a[1]] as Vec2);
     const toward = Math.atan2(cur[1] - a[1], cur[0] - a[0]);
-    const [f0, f1] = [valueOf(entry.fields[0]), valueOf(entry.fields[1])];
+    const [f0, f1] = [valueOf(entry.fields[0], isAngleField(ui.tool, 0)), valueOf(entry.fields[1], isAngleField(ui.tool, 1))];
     switch (ui.tool) {
       case "line": {
         if (f0 === null || f0 <= 0) return null;
@@ -656,6 +655,19 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
       case "circle":
         return f0 === null || f0 <= 0 ? null : [a[0] + (f0 / 2) * Math.cos(toward), a[1] + (f0 / 2) * Math.sin(toward)];
+      case "arc": {
+        // Two ends placed: radius and/or angle give the arc's middle, on the cursor's side.
+        const b = ts.points[1]?.pos;
+        if (!b || (f0 === null && f1 === null)) return null;
+        return arcMidFor(a, b, ts.cursor ?? b, f0 !== null && f0 > 0 ? f0 : null, f1);
+      }
+      case "arc_center": {
+        const st = ts.points[1]?.pos;
+        if (!st || f0 === null || f0 <= 0 || f0 >= 360) return null;
+        const r = Math.hypot(st[0] - a[0], st[1] - a[1]);
+        const end = Math.atan2(st[1] - a[1], st[0] - a[0]) + (ts.sweep >= 0 ? 1 : -1) * ((f0 * Math.PI) / 180);
+        return [a[0] + r * Math.cos(end), a[1] + r * Math.sin(end)];
+      }
       default:
         return null;
     }
@@ -663,7 +675,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const finishEntry = () => {
     const target = entryTarget();
     if (!entry || !target || !ts.points.length) return setEntry(null);
-    const expr = (i: number) => (entry.fields[i]?.trim() ? parseExpr(entry.fields[i]!) : undefined);
+    const expr = (i: number) => (entry.fields[i]?.trim() ? entryExpr(entry.fields[i]!, isAngleField(ui.tool, i)) : undefined);
     const s: Snap = { pos: target };
     if (ui.tool === "line") lineTo(s, expr(0));
     else if (ui.tool === "rect" || ui.tool === "rect_center") {
@@ -672,6 +684,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     } else if (ui.tool === "circle") {
       const c = ts.points[0]!;
       addCircle(c, Math.hypot(target[0] - c.pos[0], target[1] - c.pos[1]), expr(0));
+      ts.points = [];
+    } else if (ui.tool === "arc") {
+      add3PointArc(ts.points[0]!, ts.points[1]!, target, { radius: expr(0), angle: expr(1) });
+      ts.points = [];
+    } else if (ui.tool === "arc_center") {
+      addArc(ts.points[0]!, ts.points[1]!, s, ts.sweep >= 0, expr(0));
       ts.points = [];
     }
     setEntry(null);
@@ -772,10 +790,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         const a = ts.points[0]!.pos;
         const len = Math.hypot(s.pos[0] - a[0], s.pos[1] - a[1]);
         const ang = (Math.atan2(s.pos[1] - a[1], s.pos[0] - a[0]) * 180) / Math.PI;
-        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `${fmt(len)} mm  ${fmt(((ang % 360) + 360) % 360)}°` });
-      } else if ((tool === "circle" || tool === "arc") && ts.points.length) {
+        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `${fmtLen(len)}  ${fmt(((ang % 360) + 360) % 360)}°` });
+      } else if (tool === "arc" && ts.points.length === 2) {
+        const g = arcThrough(ts.points[0]!.pos, ts.points[1]!.pos, s.pos);
+        setTip(g ? { x: e.clientX - r.left, y: e.clientY - r.top, text: `R ${fmtLen(g.radius)}  ∠ ${fmt((g.sweep * 180) / Math.PI)}°` } : null);
+      } else if (tool === "arc" && ts.points.length === 1) {
+        const a = ts.points[0]!.pos;
+        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: fmtLen(Math.hypot(s.pos[0] - a[0], s.pos[1] - a[1])) });
+      } else if ((tool === "circle" || tool === "arc_center") && ts.points.length) {
         const c = ts.points[0]!.pos;
-        if (tool === "arc" && ts.points.length === 2) {
+        if (tool === "arc_center" && ts.points.length === 2) {
           const s0 = ts.points[1]!.pos;
           const a0 = Math.atan2(s0[1] - c[1], s0[0] - c[0]);
           const a1 = Math.atan2(s.pos[1] - c[1], s.pos[0] - c[0]);
@@ -788,14 +812,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           if (Math.abs(next) > 2 * Math.PI) next = prev;
           ts.sweep = next;
         }
-        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `R ${fmt(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))} mm` });
+        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `R ${fmtLen(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))}` });
       } else if (tool === "polygon" && ts.points.length) {
         const c = ts.points[0]!.pos;
-        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `hexagon R ${fmt(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))} mm` });
+        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `hexagon R ${fmtLen(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))}` });
       } else if ((tool === "rect" || tool === "rect_center") && ts.points.length) {
         const a = ts.points[0]!.pos;
         const k = tool === "rect_center" ? 2 : 1;
-        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `${fmt(Math.abs(s.pos[0] - a[0]) * k)} × ${fmt(Math.abs(s.pos[1] - a[1]) * k)} mm` });
+        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `${inUnit(Math.abs(s.pos[0] - a[0]) * k)} × ${fmtLen(Math.abs(s.pos[1] - a[1]) * k)}` });
       } else setTip(s.kind && s.kind !== "grid" ? { x: e.clientX - r.left, y: e.clientY - r.top, text: SNAP_LABEL[s.kind] } : null);
       rerender();
     };
@@ -907,12 +931,23 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             setTip(null);
           }
           return rerender();
-        case "arc":
+        case "arc_center":
           if (ts.points.length < 2) {
             ts.points = [...ts.points, s];
             ts.sweep = 0;
           } else {
             addArc(ts.points[0]!, ts.points[1]!, s, ts.sweep >= 0);
+            ts.points = [];
+            setTip(null);
+          }
+          return rerender();
+        case "arc":
+          // Start, end (clicked or dragged out), then a third click sets how far it bulges.
+          if (ts.points.length < 2) {
+            const last = ts.points[ts.points.length - 1];
+            if (!last || Math.hypot(s.pos[0] - last.pos[0], s.pos[1] - last.pos[1]) > px() * 2) ts.points = [...ts.points, s];
+          } else {
+            add3PointArc(ts.points[0]!, ts.points[1]!, s.pos);
             ts.points = [];
             setTip(null);
           }
@@ -1016,6 +1051,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     ts.dimFirst = null;
     setTip(null);
     setEntry(null);
+    setLastShape(null);
     rerender();
   }, [ui.tool]);
 
@@ -1033,7 +1069,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
       // Typing a number while drawing opens exact-value fields at the cursor.
       const fields = ENTRY_FIELDS[useSketchUi.getState().tool];
-      if (fields && ts.points.length && !e.altKey && (/^[0-9.]$/.test(e.key) || e.key === "Tab")) {
+      const needed = ENTRY_AFTER_TWO.has(useSketchUi.getState().tool) ? 2 : 1;
+      if (fields && ts.points.length >= needed && !e.altKey && (/^[0-9.]$/.test(e.key) || e.key === "Tab")) {
         e.preventDefault();
         setEntry({ fields: fields.map((_, i) => (i === 0 && e.key !== "Tab" ? e.key : "")), active: 0 });
         return;
@@ -1087,6 +1124,34 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     return () => cancelAnimationFrame(raf);
   }, [frame, viewport]);
 
+  // Chips with the new shape's size and angle; tapping one fixes that value as a dimension.
+  const quick: { key: string; at: Vec2; text: string; value: number; length: boolean; make: (v: Expr) => NewConstraint }[] = [];
+  const lastCurve = lastShape && shown?.curves.find((c) => c.id === lastShape.id);
+  if (sketch && lastCurve) {
+    const has = (t: string[]) => sketch.constraints.some((c) => t.includes(c.type) && ("line" in c ? c.line : "curve" in c ? c.curve : "a" in c ? c.a : "") === lastCurve.id);
+    const id = lastCurve.id;
+    if (lastCurve.kind === "line") {
+      const [a, b] = [lastCurve.a, lastCurve.b];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const deg = ((((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI) % 180) + 180) % 180;
+      if (!has(["length"])) quick.push({ key: "len", at: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], text: fmtLen(len), value: len, length: true, make: (v) => ({ type: "length", line: id, value: v }) });
+      if (!has(["horizontal", "vertical", "angle"])) quick.push({ key: "ang", at: a, text: `∠ ${fmt(deg)}°`, value: +deg.toFixed(2), length: false, make: (v) => ({ type: "angle", a: id, b: "origin.x", value: v }) });
+    } else if (lastCurve.kind === "circle") {
+      if (!has(["radius", "diameter"])) quick.push({ key: "dia", at: [lastCurve.center[0], lastCurve.center[1] + lastCurve.radius], text: `⌀ ${fmtLen(lastCurve.radius * 2)}`, value: lastCurve.radius * 2, length: true, make: (v) => ({ type: "diameter", curve: id, value: v }) });
+    } else {
+      const mid = lastCurve.a0 + sweepOf(lastCurve.a0, lastCurve.a1) / 2;
+      const sw = (sweepOf(lastCurve.a0, lastCurve.a1) * 180) / Math.PI;
+      if (!has(["radius", "diameter"])) quick.push({ key: "rad", at: [lastCurve.center[0] + lastCurve.radius * Math.cos(mid), lastCurve.center[1] + lastCurve.radius * Math.sin(mid)], text: `R ${fmtLen(lastCurve.radius)}`, value: lastCurve.radius, length: true, make: (v) => ({ type: "radius", curve: id, value: v }) });
+      if (!has(["arc_angle"])) quick.push({ key: "sweep", at: lastCurve.center, text: `∠ ${fmt(sw)}°`, value: +sw.toFixed(2), length: false, make: (v) => ({ type: "arc_angle", curve: id, value: v }) });
+    }
+  }
+  const addQuickDim = (make: (v: Expr) => NewConstraint, v: Expr) => {
+    if (!sketch) return;
+    const bl = builder(sketch);
+    bl.constraint(make(v));
+    commit(bl.d);
+  };
+
   if (!sketch) return null;
   const diag = shown?.diagnostics;
   const conflicting = new Set([...(diag?.conflicting ?? []), ...resolvedConstraints.bad]);
@@ -1094,12 +1159,30 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   return (
     <>
       <div className="overlay-layer" ref={layer}>
+        {quick.map((q) => (
+          <div key={`${lastShape?.id}.${q.key}`} className={`value-chip quick-dim ${q.key}`} data-x={q.at[0]} data-y={q.at[1]} onPointerDown={(e) => e.stopPropagation()}>
+            {typingQuick === q.key ? (
+              <InlineInput
+                value={q.value}
+                length={q.length}
+                onDone={(v) => {
+                  setTypingQuick(null);
+                  if (v !== null) addQuickDim(q.make, v);
+                }}
+              />
+            ) : (
+              <button onClick={() => setTypingQuick(q.key)} title="Tap to set this value exactly">
+                {q.text}
+              </button>
+            )}
+          </div>
+        ))}
         {labels.map((l) =>
           l.id === editing ? (
             <div key={l.id} className="sketch-label sel" data-x={l.at[0]} data-y={l.at[1]}>
               <ValueInput
                 value={(sketch.constraints.find((c) => c.id === l.id) as { value: Expr }).value}
-                unit={sketch.constraints.find((c) => c.id === l.id)?.type === "angle" ? "deg" : "mm"}
+                unit={["angle", "arc_angle"].includes(sketch.constraints.find((c) => c.id === l.id)?.type ?? "") ? "deg" : "mm"}
                 suggest={sketch.constraints.find((c) => c.id === l.id)?.type ?? "dimension"}
                 onDone={(v) => {
                   setEditing(null);
@@ -1136,7 +1219,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         {entry && ENTRY_FIELDS[ui.tool] ? (
           <div className="draw-entry" style={{ left: cursorScreen.current.x, top: cursorScreen.current.y }} onPointerDown={(e) => e.stopPropagation()}>
             {ENTRY_FIELDS[ui.tool]!.map((label, i) => (
-              <label key={label} className={valueOf(entry.fields[i]) === null && entry.fields[i]?.trim() ? "bad" : ""}>
+              <label key={label} className={valueOf(entry.fields[i], isAngleField(ui.tool, i)) === null && entry.fields[i]?.trim() ? "bad" : ""}>
                 <span>{label}</span>
                 <input
                   ref={(el) => {
@@ -1157,7 +1240,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                     }
                   }}
                 />
-                {label === "Angle °" ? null : <em>mm</em>}
+                {label === "Angle °" ? null : <em>{docUnit()}</em>}
               </label>
             ))}
             <small>Enter to place · Tab next · Esc back to the mouse</small>
@@ -1186,45 +1269,58 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           {diag?.message ? <div className="muted" style={{ marginTop: 4, color: "var(--err)" }}>{diag.message}</div> : null}
           <div className="muted" style={{ marginTop: 4, maxWidth: 280 }}>{toolHint(ui.tool, ts.points.length, !!ts.dimFirst)}</div>
         </div>
-        <SnapBar />
       </div>
     </>
-  );
-}
-
-/** Quick snapping switches while sketching (the same settings live in Settings). */
-export function SnapBar() {
-  const { snapGrid, snapGeometry, gridStep } = usePrefs();
-  return (
-    <div className="card2 snap-bar" title="Hold Alt (⌥) while drawing to place freely">
-      <button className={snapGrid ? "on" : ""} aria-pressed={snapGrid} onClick={() => setPrefs({ snapGrid: !snapGrid })} title="Snap to the grid">
-        <Grid3x3 /> Grid
-      </button>
-      <select aria-label="Grid spacing" value={String(gridStep)} onChange={(e) => setPrefs({ gridStep: e.target.value === "auto" ? "auto" : Number(e.target.value) })}>
-        <option value="auto">Auto</option>
-        {GRID_STEPS.map((n) => (
-          <option key={n} value={n}>
-            {n} mm
-          </option>
-        ))}
-      </select>
-      <button className={snapGeometry ? "on" : ""} aria-pressed={snapGeometry} onClick={() => setPrefs({ snapGeometry: !snapGeometry })} title="Snap to midpoints, crossings, curves and alignments with other points">
-        <Magnet /> Smart snaps
-      </button>
-    </div>
   );
 }
 
 // ---------------------------------------------------------------- helpers
 
 /** Tools whose clicks place points (they show a dot where the next point lands). */
-const POINT_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "polygon", "point"]);
+const POINT_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "arc_center", "polygon", "point"]);
 /** Tools that draw on press-drag-release as well as on two clicks. */
-const DRAG_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "polygon"]);
+const DRAG_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "polygon"]);
 /** Values that can be typed while drawing (start typing a number, Tab moves to the next field). */
-const ENTRY_FIELDS: Partial<Record<SketchTool, string[]>> = { line: ["Length", "Angle °"], rect: ["Width", "Height"], rect_center: ["Width", "Height"], circle: ["Diameter"] };
+const ENTRY_FIELDS: Partial<Record<SketchTool, string[]>> = { line: ["Length", "Angle °"], rect: ["Width", "Height"], rect_center: ["Width", "Height"], circle: ["Diameter"], arc: ["Radius", "Angle °"], arc_center: ["Angle °"] };
+/** Counter-clockwise sweep from a0 to a1, in (0, 2π]. */
+const sweepOf = (a0: number, a1: number) => (((a1 - a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 2 * Math.PI;
+/** Tools whose typed values only apply once two points are placed (an arc's ends, or centre and start). */
+const ENTRY_AFTER_TWO = new Set<SketchTool>(["arc", "arc_center"]);
+const isAngleField = (tool: SketchTool, i: number) => ENTRY_FIELDS[tool]?.[i] === "Angle °";
 
-const SNAP_LABEL: Record<NonNullable<Snap["kind"]>, string> = { point: "Endpoint", mid: "Midpoint", cross: "Intersection", curve: "On curve", align: "Aligned", grid: "" };
+/** The circle through an arc's two ends and a third point on it; start→end runs counter-clockwise through `m`. */
+function arcThrough(a: Vec2, b: Vec2, m: Vec2): { center: Vec2; radius: number; start: Vec2; end: Vec2; sweep: number; swapped: boolean } | null {
+  const d = 2 * (a[0] * (b[1] - m[1]) + b[0] * (m[1] - a[1]) + m[0] * (a[1] - b[1]));
+  if (Math.abs(d) < 1e-9 * Math.max(1, Math.hypot(b[0] - a[0], b[1] - a[1]) ** 2)) return null;
+  const sq = (p: Vec2) => p[0] * p[0] + p[1] * p[1];
+  const center: Vec2 = [(sq(a) * (b[1] - m[1]) + sq(b) * (m[1] - a[1]) + sq(m) * (a[1] - b[1])) / d, (sq(a) * (m[0] - b[0]) + sq(b) * (a[0] - m[0]) + sq(m) * (b[0] - a[0])) / d];
+  const ang = (p: Vec2) => Math.atan2(p[1] - center[1], p[0] - center[0]);
+  const ccw = (from: number, to: number) => (((to - from) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  // m between a and b going counter-clockwise: the arc runs a→b, otherwise b→a.
+  const swapped = ccw(ang(a), ang(m)) > ccw(ang(a), ang(b));
+  const [start, end] = swapped ? [b, a] : [a, b];
+  return { center, radius: Math.hypot(a[0] - center[0], a[1] - center[1]), start, end, sweep: ccw(ang(start), ang(end)), swapped };
+}
+
+/** The point on the arc's middle for a chord a→b, a radius and/or sweep angle (degrees), bulging to `side`'s side. */
+function arcMidFor(a: Vec2, b: Vec2, side: Vec2, radius: number | null, angleDeg: number | null): Vec2 | null {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (L < 1e-9) return null;
+  let theta = angleDeg !== null ? (angleDeg * Math.PI) / 180 : null;
+  let r = radius;
+  if (theta !== null && (theta <= 0 || theta >= 2 * Math.PI)) return null;
+  if (r === null && theta !== null) r = L / (2 * Math.sin(theta / 2));
+  if (r === null || r < L / 2 - 1e-9) return null;
+  theta ??= 2 * Math.asin(Math.min(1, L / (2 * r)));
+  const mid: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  let n: Vec2 = [-(b[1] - a[1]) / L, (b[0] - a[0]) / L];
+  if ((side[0] - mid[0]) * n[0] + (side[1] - mid[1]) * n[1] < 0) n = [-n[0], -n[1]];
+  // Sagitta: how far the arc's middle stands off the chord (more than r for a major arc).
+  const h = r - r * Math.cos(theta / 2);
+  return [mid[0] + n[0] * h, mid[1] + n[1] * h];
+}
+
+const SNAP_LABEL: Record<NonNullable<Snap["kind"]>, string> = { point: "Endpoint", mid: "Midpoint", cross: "Intersection", curve: "On curve", align: "Aligned", grid: "", center: "Center", edge: "On edge" };
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const fmt = (n: number) => (Math.abs(n) >= 100 ? n.toFixed(1) : n.toFixed(2)).replace(/\.?0+$/, "");
@@ -1246,7 +1342,9 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
     case "circle":
       return n ? "Click to set the size, or type the diameter" : "Click the center, or drag the circle out";
     case "arc":
-      return n === 0 ? "Click the arc center" : n === 1 ? "Click the start point" : "Click the end point (move clockwise to flip)";
+      return n === 0 ? "Click where the arc starts, or drag to its end" : n === 1 ? "Click where the arc ends" : "Move to bend the arc and click · type the radius (Tab for the angle)";
+    case "arc_center":
+      return n === 0 ? "Click the arc center" : n === 1 ? "Click the start point" : "Click the end point (move clockwise to flip) · type the angle";
     case "point":
       return "Click to place a point";
     case "polygon":
@@ -1254,7 +1352,7 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
     case "trim":
       return "Click the piece of a curve to cut away up to its nearest intersections";
     case "dimension":
-      return dimFirst ? "Click a second entity, or click empty space to place the dimension" : "Click a line, circle, arc or point";
+      return dimFirst ? "Click a second entity, or click empty space to place the dimension (an arc: near its centre for the angle)" : "Click a line, circle, arc or point";
     case "project":
       return "Click model edges to use them as fixed reference geometry";
     default:
@@ -1419,11 +1517,20 @@ function previewObjects(tool: SketchTool, ts: { points: Snap[]; cursor: Vec2 | n
     const a0 = Math.atan2(cur[1] - p0[1], cur[0] - p0[0]);
     line(Array.from({ length: 6 }, (_, i) => [p0[0] + r * Math.cos(a0 + (i * Math.PI) / 3), p0[1] + r * Math.sin(a0 + (i * Math.PI) / 3)] as Vec2), true);
   }
-  if (tool === "circle" || (tool === "arc" && ts.points.length === 1)) {
+  if (tool === "arc" && ts.points.length === 1) line([p0, cur]);
+  if (tool === "arc" && ts.points.length === 2) {
+    const g = arcThrough(p0, ts.points[1]!.pos, cur);
+    if (!g) line([p0, ts.points[1]!.pos]);
+    else {
+      const a0 = Math.atan2(g.start[1] - g.center[1], g.start[0] - g.center[0]);
+      line(Array.from({ length: 65 }, (_, i) => [g.center[0] + g.radius * Math.cos(a0 + (g.sweep * i) / 64), g.center[1] + g.radius * Math.sin(a0 + (g.sweep * i) / 64)] as Vec2));
+    }
+  }
+  if (tool === "circle" || (tool === "arc_center" && ts.points.length === 1)) {
     const r = Math.hypot(cur[0] - p0[0], cur[1] - p0[1]);
     line(Array.from({ length: 65 }, (_, i) => [p0[0] + r * Math.cos((i / 64) * 2 * Math.PI), p0[1] + r * Math.sin((i / 64) * 2 * Math.PI)] as Vec2));
   }
-  if (tool === "arc" && ts.points.length === 2) {
+  if (tool === "arc_center" && ts.points.length === 2) {
     const s = ts.points[1]!.pos;
     const r = Math.hypot(s[0] - p0[0], s[1] - p0[1]);
     const a0 = Math.atan2(s[1] - p0[1], s[0] - p0[0]);
@@ -1466,11 +1573,75 @@ function snapObjects(sn: Snap, unit: number): THREE.Object3D[] {
       add([[x - r, y - r], [x + r, y + r], [x - r, y + r], [x + r, y - r]], "segments", COLORS.snap);
       break;
     case "curve":
+    case "edge":
     case "align":
       add([[x, y - r], [x + r, y], [x, y + r], [x - r, y]], "loop", COLORS.snap);
       break;
+    case "center": {
+      const ring: Vec2[] = Array.from({ length: 20 }, (_, i) => [x + r * Math.cos((i / 20) * 2 * Math.PI), y + r * Math.sin((i / 20) * 2 * Math.PI)]);
+      add(ring, "loop", COLORS.snap);
+      add([[x - r * 1.6, y], [x + r * 1.6, y], [x, y - r * 1.6], [x, y + r * 1.6]], "segments", COLORS.snap);
+      break;
+    }
   }
   return out;
+}
+
+/** A model edge lying in the sketch plane, as a polyline in sketch coordinates. */
+interface ModelEdge {
+  pts: Vec2[];
+  /** Centre of a round edge (circle or arc), for snapping to it. */
+  center?: Vec2;
+}
+
+/**
+ * Edges of the model that lie in the sketch plane (a face's outline and holes when sketching on it),
+ * so the magnet can snap to them like to sketch lines. Round ones get their centre.
+ */
+function planeEdges(meshes: readonly { edgeLines: Float32Array; edgeRanges: Int32Array }[], frame: { origin: number[]; u: number[]; v: number[]; normal: number[] }, tol: number): ModelEdge[] {
+  const out: ModelEdge[] = [];
+  const [o, u, v, n] = [frame.origin, frame.u, frame.v, frame.normal];
+  for (const m of meshes) {
+    for (let g = 0; g < m.edgeRanges.length; g += 3) {
+      const [start, count] = [m.edgeRanges[g]!, m.edgeRanges[g + 1]!];
+      const pts: Vec2[] = [];
+      let flat = true;
+      for (let k = start; k < start + count && flat; k++) {
+        const d = [0, 1, 2].map((i) => m.edgeLines[k * 3 + i]! - o[i]!);
+        if (Math.abs(d[0]! * n[0]! + d[1]! * n[1]! + d[2]! * n[2]!) > tol) flat = false;
+        pts.push([d[0]! * u[0]! + d[1]! * u[1]! + d[2]! * u[2]!, d[0]! * v[0]! + d[1]! * v[1]! + d[2]! * v[2]!]);
+      }
+      if (!flat || pts.length < 2) continue;
+      out.push({ pts, ...(roundCenter(pts) ? { center: roundCenter(pts)! } : {}) });
+    }
+  }
+  return out;
+}
+
+/** Centre of a polyline that follows a circle or arc (every point equally far from it), or null. */
+function roundCenter(pts: Vec2[]): Vec2 | null {
+  if (pts.length < 6) return null;
+  const [a, b, c] = [pts[0]!, pts[Math.floor(pts.length / 3)]!, pts[Math.floor((2 * pts.length) / 3)]!];
+  const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+  if (Math.abs(d) < 1e-12) return null;
+  const sq = (p: Vec2) => p[0] * p[0] + p[1] * p[1];
+  const center: Vec2 = [(sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d, (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d];
+  const r = Math.hypot(a[0] - center[0], a[1] - center[1]);
+  return pts.every((p) => Math.abs(Math.hypot(p[0] - center[0], p[1] - center[1]) - r) < r * 0.01 + 1e-4) ? center : null;
+}
+
+/** Closest point on a polyline and how far it is. */
+function nearestOnPolyline(pts: Vec2[], p: Vec2): { pos: Vec2; dist: number } {
+  let best = { pos: pts[0]!, dist: Infinity };
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [a, b] = [pts[i]!, pts[i + 1]!];
+    const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    const q: Vec2 = [a[0] + dx * t, a[1] + dy * t];
+    const dist = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    if (dist < best.dist) best = { pos: q, dist };
+  }
+  return best;
 }
 
 interface Label {
@@ -1502,7 +1673,8 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
     used.set(key, n + 1);
     return [p[0] + n * size * 0.04, p[1] - size * 0.03];
   };
-  const valueText = (v: Expr, unit: string) => (typeof v === "number" ? `${fmt(v)}${unit}` : `${v}`);
+  // Lengths in an inch design are converted and say so; mm designs keep the bare number.
+  const valueText = (v: Expr, unit: string) => (typeof v !== "number" ? `${v}` : unit === "" && docUnit() === "in" ? fmtLen(v) : `${fmt(v)}${unit}`);
   for (const c of sk.constraints) {
     if ("value" in c) {
       let at: Vec2 | null = c.label ?? null;
@@ -1510,6 +1682,12 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
         if (c.type === "length") at = mid(c.line);
         else if (c.type === "radius" || c.type === "diameter") at = mid(c.curve);
         else if (c.type === "angle") at = mid(c.a);
+        else if (c.type === "arc_angle") {
+          // Inside the arc, halfway between its centre and its middle.
+          const cv = curve(c.curve);
+          const m = mid(c.curve);
+          at = cv && cv.kind !== "line" && m ? [(cv.center[0] + m[0]) / 2, (cv.center[1] + m[1]) / 2] : m;
+        }
         else if (c.type === "distance") {
           const a = P(c.a);
           const b = P(c.b) ?? mid(c.b);
@@ -1517,8 +1695,8 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
         }
       }
       if (!at) continue;
-      const unit = c.type === "angle" ? "°" : "";
-      const prefix = c.type === "diameter" ? "⌀" : c.type === "radius" ? "R" : "";
+      const unit = c.type === "angle" || c.type === "arc_angle" ? "°" : "";
+      const prefix = c.type === "diameter" ? "⌀" : c.type === "radius" ? "R" : c.type === "arc_angle" ? "∠" : "";
       out.push({ id: c.id, at, text: `${prefix}${valueText(c.value, unit)}`, title: `${c.type} ${c.id} — double-click to edit, Del to remove`, dimension: true });
       continue;
     }
@@ -1581,6 +1759,13 @@ function dimensionGeometry(c: SketchConstraint, s: SolvedSketch): Vec2[] | null 
     const ang = Math.atan2(L[1] - cv.center[1], L[0] - cv.center[0]);
     const onCurve: Vec2 = [cv.center[0] + cv.radius * Math.cos(ang), cv.center[1] + cv.radius * Math.sin(ang)];
     return c.type === "diameter" ? [[cv.center[0] - cv.radius * Math.cos(ang), cv.center[1] - cv.radius * Math.sin(ang)], L] : [cv.center, L].concat([onCurve, L]) as Vec2[];
+  }
+  if (c.type === "arc_angle") {
+    // Spokes from the centre to both ends show what the angle measures.
+    const cv = s.curves.find((x) => x.id === c.curve);
+    if (!cv || cv.kind !== "arc") return null;
+    const end = (a: number): Vec2 => [cv.center[0] + cv.radius * Math.cos(a), cv.center[1] + cv.radius * Math.sin(a)];
+    return [cv.center, end(cv.a0), cv.center, end(cv.a1)];
   }
   return null;
 }

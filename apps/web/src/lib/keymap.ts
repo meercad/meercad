@@ -67,6 +67,7 @@ const BASE: Keymap = {
   "sketch.rect_center": ["Shift+R"],
   "sketch.circle": ["C"],
   "sketch.arc": ["A"],
+  "sketch.arc_center": ["Shift+A"],
   "sketch.polygon": ["G"],
   "sketch.point": ["P"],
   "sketch.trim": ["T"],
@@ -208,21 +209,19 @@ interface Prefs {
   showKeys: boolean;
   /** Dimension and size chips on the model. */
   showValues: boolean;
-  /** Sketch points snap to the grid. */
+  /** Sketch points and drag handles snap to round values (the grid). */
   snapGrid: boolean;
-  /** Sketch points snap to existing geometry (ends, midpoints, crossings, alignments). */
+  /** Sketch points snap to existing geometry (ends, midpoints, crossings, alignments): the magnet. */
   snapGeometry: boolean;
-  /** Grid spacing in mm, or "auto" to follow the zoom. */
-  gridStep: GridStep;
+  /** Measuring system new designs start in (metric: mm, imperial: inches). */
+  units: "metric" | "imperial";
 }
 
-export type GridStep = "auto" | number;
-export const GRID_STEPS: number[] = [0.1, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50];
 
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, snapGrid: true, snapGeometry: true, gridStep: "auto" };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, snapGrid: true, snapGeometry: true, units: "metric" };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -233,7 +232,7 @@ function load(): Prefs {
       showValues: raw.showValues !== false,
       snapGrid: raw.snapGrid !== false,
       snapGeometry: raw.snapGeometry !== false,
-      gridStep: typeof raw.gridStep === "number" && raw.gridStep > 0 ? raw.gridStep : "auto",
+      units: raw.units === "imperial" ? "imperial" : "metric",
     };
   } catch {
     return fallback;
@@ -302,6 +301,6 @@ export const MODEL_ACTIONS: readonly ModelAction[] = [
   "measure", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
 ];
 export const SKETCH_ACTIONS: readonly SketchAction[] = [
-  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.polygon", "sketch.point", "sketch.trim",
+  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.point", "sketch.trim",
   "sketch.dimension", "sketch.project", "sketch.construction",
 ];

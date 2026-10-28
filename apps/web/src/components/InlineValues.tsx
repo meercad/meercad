@@ -14,6 +14,7 @@ import { apply, toast, useApp } from "../store";
 import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";
 import { ValueInput, type ValueUnit } from "./ValueInput";
+import { docUnit, fmtLen, lengthExpr, lengthText } from "../lib/units";
 
 type V3 = [number, number, number];
 
@@ -30,7 +31,13 @@ interface Item {
   commit: (v: Expr) => void;
 }
 
-const fmt = (e: Expr, unit = " mm") => (typeof e === "number" ? `${+e.toFixed(3)}${unit}` : String(e));
+/** Label text: lengths (" mm") in the design's unit; sketch dimensions ("") without a unit in mm designs. */
+const fmt = (e: Expr, unit = " mm") => {
+  if (typeof e !== "number") return String(e);
+  if (unit === " mm") return fmtLen(e);
+  if (unit === "" && docUnit() === "in") return fmtLen(e);
+  return `${+e.toFixed(3)}${unit}`;
+};
 
 function faceCenterByTag(out: RebuildOutput, prefix: string): V3 | null {
   for (const m of out.meshes) {
@@ -101,6 +108,7 @@ function sketchItems(sk: SketchFeature, out: RebuildOutput, only?: Set<string>, 
       if (c.type === "length") at = mid(c.line);
       else if (c.type === "radius" || c.type === "diameter") at = mid(c.curve);
       else if (c.type === "angle") at = mid(c.a);
+      else if (c.type === "arc_angle") at = mid(c.curve);
       else if (c.type === "distance") {
         const a = pts.get(c.a);
         const b = pts.get(c.b) ?? mid(c.b);
@@ -119,11 +127,11 @@ function sketchItems(sk: SketchFeature, out: RebuildOutput, only?: Set<string>, 
     items.push({
       key: `${sk.id}.${c.id}`,
       at: world,
-      unit: c.type === "angle" ? "deg" : "mm",
-      suggest: c.type === "diameter" ? "diameter" : c.type === "radius" ? "radius" : c.type === "angle" ? "angle" : c.type === "length" ? "length" : "distance",
-      text: `${prefix}${fmt(c.value, c.type === "angle" ? "°" : "")}`,
+      unit: c.type === "angle" || c.type === "arc_angle" ? "deg" : "mm",
+      suggest: c.type === "diameter" ? "diameter" : c.type === "radius" ? "radius" : c.type === "angle" || c.type === "arc_angle" ? "angle" : c.type === "length" ? "length" : "distance",
+      text: `${c.type === "arc_angle" ? "∠ " : prefix}${fmt(c.value, c.type === "angle" || c.type === "arc_angle" ? "°" : "")}`,
       value: c.value,
-      unlinkable: c.type !== "angle",
+      unlinkable: c.type !== "angle" && c.type !== "arc_angle",
       commit: (v) => apply({ type: "edit_feature", id: sk.id, patch: { constraints: sk.constraints.map((x) => (x.id === c.id ? ({ ...x, value: v } as SketchConstraint) : x)) } }),
     });
   }
@@ -271,17 +279,22 @@ function unlink(it: Item): void {
 
 function commitKeepingParams(it: Item, v: Expr): void {
   const params = useApp.getState().doc.params;
-  if (typeof it.value === "string" && it.value in params && typeof v === "number") {
+  // A plain value typed over a variable changes the variable, not the dimension's link to it.
+  const plain = typeof v === "number" || /^\s*-?\d+(\.\d+)?\s*(mm|in|deg)\s*$/.test(v);
+  if (typeof it.value === "string" && it.value in params && plain) {
     const old = params[it.value]!;
-    const unit = typeof old === "string" && /deg\b/.test(old) ? " deg" : typeof old === "string" && /mm\b/.test(old) ? " mm" : "";
+    const unit = typeof v === "number" ? (typeof old === "string" && /deg\b/.test(old) ? " deg" : typeof old === "string" && /mm\b/.test(old) ? " mm" : "") : "";
     apply({ type: "set_param", name: it.value, expr: unit ? `${v}${unit}` : v });
     return;
   }
   it.commit(v);
 }
 
-export function InlineInput({ value, onDone }: { value: Expr; onDone: (v: Expr | null) => void }) {
-  const [text, setText] = useState(String(value));
+/** Quick value field; a `length` is shown and typed in the design's unit. */
+export function InlineInput({ value, length, onDone }: { value: Expr; length?: boolean; onDone: (v: Expr | null) => void }) {
+  const initial = length ? lengthText(value) : String(value);
+  const [text, setText] = useState(initial);
+  const parse = (t: string): Expr | null => (!t.trim() || t.trim() === initial ? null : length ? lengthExpr(t) : parseExpr(t));
   const done = useRef(false);
   const finish = (v: Expr | null) => {
     if (done.current) return;
@@ -295,10 +308,10 @@ export function InlineInput({ value, onDone }: { value: Expr; onDone: (v: Expr |
       value={text}
       onFocus={(e) => e.target.select()}
       onChange={(e) => setText(e.target.value)}
-      onBlur={() => finish(text.trim() ? parseExpr(text) : null)}
+      onBlur={() => finish(parse(text))}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === "Enter") finish(text.trim() ? parseExpr(text) : null);
+        if (e.key === "Enter") finish(parse(text));
         if (e.key === "Escape") finish(null);
       }}
     />

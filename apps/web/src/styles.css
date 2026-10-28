@@ -489,6 +489,10 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .value-chip { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; z-index: 3; }
 .value-chip button { height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--glass-border); background: var(--glass-strong); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 4px 14px rgb(30 27 75 / 0.15); font: 600 11.5px var(--mono); color: var(--text); white-space: nowrap; }
 .value-chip button:hover { border-color: var(--accent); color: var(--accent); }
+/* the shape just drawn: dashed chips that become dimensions when tapped */
+.quick-dim { transform: translate(-50%, calc(-100% - 10px)); }
+.quick-dim.ang, .quick-dim.sweep { transform: translate(10px, 10px); }
+.quick-dim button { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
 .handle-chip { transform: translate(0, -50%); }
 .handle-chip button { color: var(--accent); }
 .value-input { width: 110px; height: 26px; padding: 0 9px; border-radius: 999px; border: 1.5px solid var(--accent); background: var(--glass-strong); font: 600 12px var(--mono); color: var(--text); outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -535,6 +539,9 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 @media (max-width: 1180px) { .topbar .doc-name { max-width: 120px; } }
 
 .view-controls .mode-btn { width: auto; padding: 0 8px; gap: 5px; font-size: 11.5px; }
+.view-controls .bar-sep { width: 1px; align-self: stretch; margin: 3px 2px; background: var(--border); }
+.snap-controls { position: relative; display: flex; gap: 4px; }
+.snap-controls .grid-snap { width: auto; padding: 0 8px; gap: 5px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
 /* sketch constraint palette (right side) */
 .constraint-palette { position: absolute; top: calc(var(--top) + 178px); right: 14px; width: 172px; max-height: calc(100% - var(--top) - 250px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 6px; border-radius: 16px; z-index: 4;
@@ -544,28 +551,29 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .constraint-palette button:hover { background: var(--glass-hover); color: var(--accent); }
 .constraint-palette button svg { width: 17px; height: 17px; flex: none; }
 .constraint-palette button span { flex: 1; }
-/* bigger, clearer view cube with breathing room below the bar */
-.viewcube { top: calc(var(--top) + 6px); right: 26px; width: 130px; height: 150px; }
-.viewcube .cube { top: 16px; left: 22px; width: 86px; height: 86px; }
+/* view cube sized so even a corner-on view stays clear of its buttons, which sit above the constraint list */
+.viewcube { top: calc(var(--top) + 6px); right: 20px; width: 132px; height: 168px; }
+.viewcube .cube { top: 31px; left: 31px; width: 70px; height: 70px; }
+.viewcube .cube-tools { top: 140px; bottom: auto; }
 /* view cube: soft faces tinted by the axis they face, a bevelled rim, and an axis triad */
 .viewcube .cube { filter: drop-shadow(0 6px 10px rgb(30 27 75 / 0.16)); }
 .viewcube .face {
-  background: color-mix(in srgb, color-mix(in srgb, var(--tint) 16%, #f7f9fc) 62%, transparent) !important;
+  background: color-mix(in srgb, color-mix(in srgb, var(--tint) 16%, #f7f9fc) 72%, transparent) !important;
   border: none !important; border-radius: 0;
   box-shadow: none;
 }
-.viewcube .face-label { font-size: 10.5px; font-weight: 750; letter-spacing: 0.07em; color: color-mix(in srgb, var(--tint) 55%, #2a3142); }
+.viewcube .face-label { font-size: 9.5px; font-weight: 750; letter-spacing: 0.06em; color: color-mix(in srgb, var(--tint) 60%, #1f2533); }
 .viewcube .cell { border-radius: 0; transition: background 0.12s; }
 .viewcube .cell.hot { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .viewcube .cell.center.hot { background: color-mix(in srgb, var(--accent) 16%, transparent); }
-.viewcube .cube-axes { position: absolute; top: 16px; left: 22px; width: 86px; height: 86px; overflow: visible; pointer-events: none; z-index: 0; }
+.viewcube .cube-axes { position: absolute; top: 31px; left: 31px; width: 70px; height: 70px; overflow: visible; pointer-events: none; z-index: 0; }
 .viewcube .cube-axes line { stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .viewcube .cube-axes text { fill: currentColor; font: 700 9.5px var(--font, system-ui); text-anchor: middle; dominant-baseline: central; }
 .viewcube .cube { z-index: 1; }
-:root[data-theme="dark"] .viewcube .face { background: color-mix(in srgb, color-mix(in srgb, var(--tint) 22%, #34384a) 62%, transparent) !important; border: none !important; box-shadow: none; }
+:root[data-theme="dark"] .viewcube .face { background: color-mix(in srgb, color-mix(in srgb, var(--tint) 22%, #34384a) 72%, transparent) !important; border: none !important; box-shadow: none; }
 :root[data-theme="dark"] .viewcube .face-label { color: color-mix(in srgb, var(--tint) 45%, #eef1f7); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .viewcube .face { background: color-mix(in srgb, color-mix(in srgb, var(--tint) 22%, #34384a) 62%, transparent) !important; border: none !important; box-shadow: none; }
+  :root:not([data-theme="light"]) .viewcube .face { background: color-mix(in srgb, color-mix(in srgb, var(--tint) 22%, #34384a) 72%, transparent) !important; border: none !important; box-shadow: none; }
   :root:not([data-theme="light"]) .viewcube .face-label { color: color-mix(in srgb, var(--tint) 45%, #eef1f7); }
 }
 .topbar .doc-name { max-width: 170px; }
@@ -717,12 +725,6 @@ ul.update-notes li { margin: 1px 0; }
 .plane-bar .plane-bar-cancel { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
 
 /* sketch snapping switches */
-.snap-bar { display: flex; align-items: center; gap: 4px; padding: 5px !important; }
-.snap-bar button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
-.snap-bar button svg { width: 15px; height: 15px; }
-.snap-bar button:hover { background: var(--glass-hover); color: var(--text); }
-.snap-bar button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
-.snap-bar select { height: 26px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12px; padding: 0 4px; }
 .settings .check select { margin-left: 8px; height: 26px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12.5px; }
 
 /* exact values typed while drawing */
@@ -819,7 +821,7 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
   .checkbox input { width: 20px; height: 20px; }
   .constraint-palette button, .value-menu button, .value-chip .value-menu button { height: 40px; }
   .palette-list button { height: 44px; }
-  .snap-bar button, .snap-bar select, .plane-bar button { height: 36px; }
+  .plane-bar button { height: 36px; }
   .value-chip button { height: 32px; padding: 0 12px; }
   .glyph { min-width: 24px; height: 24px; }
   .sketch-label { padding: 4px 8px; }

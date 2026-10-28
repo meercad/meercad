@@ -14,6 +14,7 @@ import { cylinderAnchor, isCylinderFace, edgeAnchor, edgeSelectorAnchor, faceAnc
 import { edgeSelectorForPick, faceSelectorForPick, planeSpecForPick } from "../lib/topology";
 import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, holdRebuilds, rebuildIsSlow, rebuilding, startDraft, startFeature, startSketch, updateDraft, useApp } from "../store";
 import { InlineInput } from "./InlineValues";
+import { docUnit, fmtLen, lengthValue } from "../lib/units";
 import { Kbd } from "./Kbd";
 
 const num = (e: Expr | undefined, fallback = 0): number => {
@@ -44,13 +45,13 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
     const label = (id: string, v: number) =>
       id === "edge"
         ? v >= 0
-          ? `Fillet R ${+v.toFixed(3)} mm`
-          : `Chamfer ${+(-v).toFixed(3)} mm`
+          ? `Fillet R ${fmtLen(v)}`
+          : `Chamfer ${fmtLen(-v)}`
         : id === "fillet"
-          ? `R ${+v.toFixed(3)} mm`
+          ? `R ${fmtLen(v)}`
           : id === "hole"
-            ? `Ø ${+(2 * v).toFixed(3)} mm`
-            : `${+v.toFixed(3)} mm`;
+            ? `Ø ${fmtLen(2 * v)}`
+            : fmtLen(v);
     viewport.onHandleDrag = (h, v, screen) => setTip(h && screen ? { x: screen[0], y: screen[1], text: label(h.id, v) } : null);
     return () => {
       viewport.onHandleDrag = null;
@@ -302,7 +303,9 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         const value = +(dim?.type === "diameter" ? 2 * r : r).toFixed(3);
         if (dim && typeof dim.value === "string" && dim.value in params) {
           const old = params[dim.value];
-          return run({ type: "set_param", name: dim.value, expr: typeof old === "string" && /mm\b/.test(old) ? `${value} mm` : value });
+          // An inch design writes inches; a mm design keeps the variable's "mm" (or a bare number).
+          const expr = docUnit() === "in" ? lengthValue(value, "in") : typeof old === "string" && /mm\b/.test(old) ? `${value} mm` : value;
+          return run({ type: "set_param", name: dim.value, expr });
         }
         const latest = currentDoc().features.find((f) => f.id === sketchId) as typeof sk;
         return run({
@@ -456,13 +459,14 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
         if (!s) return null;
         // Hole handles carry the radius but show and take the diameter.
         const scale = h.id === "hole" ? 2 : 1;
-        const shown = +(h.value * scale).toFixed(3);
-        const text = h.id === "edge" ? "drag: out = fillet, in = chamfer" : `${h.id === "hole" ? "Ø " : ""}${shown} mm`;
+        const shown = +(h.value * scale).toFixed(4);
+        const text = h.id === "edge" ? "drag: out = fillet, in = chamfer" : `${h.id === "hole" ? "Ø " : ""}${fmtLen(shown)}`;
         return (
           <div key={h.id} className="value-chip handle-chip" style={{ left: s[0] + 16, top: s[1] - 16 }} onPointerDown={(e) => e.stopPropagation()}>
             {typing === h.id ? (
               <InlineInput
                 value={shown}
+                length
                 onDone={(v) => {
                   setTyping(null);
                   if (v === null) return;

@@ -18,7 +18,10 @@ const AXES: { name: "x" | "y" | "z"; dir: V }[] = [
   { name: "y", dir: [0, 1, 0] },
   { name: "z", dir: [0, 0, 1] },
 ];
-const SIZE = 86;
+/** Cube edge in px. Its widest projection (a corner-on view) is √3 × this, which must clear the buttons below. */
+const SIZE = 70;
+/** How far the axis lines run past the cube. */
+const AXIS_OVERHANG = 8;
 const GAP_SCALE = 0.92;
 
 /**
@@ -52,7 +55,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
       AXES.forEach((a, i) => {
         const g = axisRefs.current[i];
         if (!g) return;
-        const end = new THREE.Vector3(...a.dir).multiplyScalar(SIZE + 20).add(new THREE.Vector3(-half, -half, -half)).applyMatrix4(r);
+        const end = new THREE.Vector3(...a.dir).multiplyScalar(SIZE + AXIS_OVERHANG).add(new THREE.Vector3(-half, -half, -half)).applyMatrix4(r);
         const [x1, y1, x2, y2] = [corner.x + half, -corner.y + half, end.x + half, -end.y + half];
         const line = g.querySelector("line")!;
         line.setAttribute("x1", x1.toFixed(1));

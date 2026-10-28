@@ -1,7 +1,7 @@
 import { ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Keyboard, Moon, PanelLeft, Redo2, Ruler, Settings, Share2, Undo2, Upload } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
-import { goHome, redo, toggleSide, undo, useApp } from "../store";
+import { goHome, redo, setDesignUnits, toggleSide, undo, useApp } from "../store";
 import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
@@ -33,6 +33,7 @@ export function TopBar() {
   const canRedo = useApp((s) => s.canRedo);
   const inDialog = useApp((s) => !!s.dialog);
   const sketches = useApp((s) => s.output?.report.sketches) ?? NONE;
+  const units = useApp((s) => s.doc.units ?? "mm");
 
   const fileBtn = useRef<HTMLButtonElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
@@ -48,6 +49,9 @@ export function TopBar() {
         { label: `Export ${s.id} as DXF (laser)`, icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
         { label: `Export ${s.id} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
       ]),
+      "sep",
+      { label: `${units === "mm" ? "✓ " : "   "}Millimetres (this design)`, icon: <Ruler />, onClick: () => setDesignUnits("mm") },
+      { label: `${units === "in" ? "✓ " : "   "}Inches (this design)`, icon: <Ruler />, onClick: () => setDesignUnits("in") },
       "sep",
       { label: "Save copy as .meercad…", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
       ...(desktop ? [] : [{ label: "Copy share link", icon: <Share2 />, onClick: () => void shareLink() }]),

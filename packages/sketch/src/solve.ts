@@ -304,6 +304,11 @@ function buildPrimitives(input: SolveInput, opts: SolveOptions): { prims: Prim[]
         add({ type: "l2l_angle_ll", l1_id: c.a, l2_id: c.b, angle: best });
         break;
       }
+      case "arc_angle": {
+        if (kind(c.curve) !== "arc") throw new SketchSolveError(`arc_angle ${c.id}: needs an arc`);
+        add({ type: "difference", param1: { o_id: c.curve, prop: "start_angle" }, param2: { o_id: c.curve, prop: "end_angle" }, difference: (c.value * Math.PI) / 180 });
+        break;
+      }
     }
   }
 

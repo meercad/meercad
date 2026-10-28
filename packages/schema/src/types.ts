@@ -79,7 +79,9 @@ export type SketchConstraint =
   | { id: string; type: "distance"; a: PointRef; b: PointRef | string; value: Expr; axis?: "x" | "y"; label?: [number, number] }
   | { id: string; type: "length"; line: string; value: Expr; label?: [number, number] }
   | { id: string; type: "radius" | "diameter"; curve: string; value: Expr; label?: [number, number] }
-  | { id: string; type: "angle"; a: string; b: string; value: Expr; label?: [number, number] };
+  | { id: string; type: "angle"; a: string; b: string; value: Expr; label?: [number, number] }
+  /** How far an arc sweeps from its start to its end (counter-clockwise), in degrees. */
+  | { id: string; type: "arc_angle"; curve: string; value: Expr; label?: [number, number] };
 
 export type ConstraintType = SketchConstraint["type"];
 
@@ -280,6 +282,8 @@ export type EdgeSelector =
   /** All edges bounding faces matching `where.face` (relative to `of` when it has no dot). */
   | { select: "edges"; of?: string; where?: { face?: FaceTag } };
 
+export type LengthUnit = "mm" | "in";
+
 export interface MeercadDocument {
   format: typeof FORMAT;
   /** Named user parameters, e.g. `{ wall: "2 mm", width: "wall * 10" }`. */
@@ -290,6 +294,11 @@ export interface MeercadDocument {
   partOrder?: string[];
   /** Named folders of parts in the parts list. */
   partGroups?: { name: string; parts: string[] }[];
+  /**
+   * Unit lengths are shown and typed in (default mm). Bare numbers in the file are always
+   * millimetres; an inch design stores typed values with their unit, e.g. "2 in".
+   */
+  units?: LengthUnit;
   features: Feature[];
   /** Id of the last feature that is evaluated, or null for all. */
   rollback: string | null;
