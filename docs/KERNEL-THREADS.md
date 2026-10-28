@@ -1,6 +1,6 @@
 # Multi-core geometry kernel: findings
 
-Status: shipped. Threads are on by default wherever the page is cross-origin isolated (desktop app, `https`, localhost); `?threads=0` turns them off. The iPad app and plain-`http` network addresses run single-threaded.
+Status: shipped. Threads are on by default wherever the page is cross-origin isolated (desktop app, iPad app, `https`, localhost); `?threads=0` turns them off. Plain-`http` network addresses run single-threaded.
 Measured 27.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores) and on the user's iPad (Safari, iPadOS 27, over an https tunnel).
 
 ## Summary
@@ -125,10 +125,36 @@ COEP `require-corp`, which we already send, **and** a secure context (https, or 
 - **Electron:** `app://` is registered as `secure: true` and `main.ts` sets COOP/COEP/CORP, so the desktop
   app is cross-origin isolated and uses threads. Chromium has no 8-thread cap, so desktop gets one
   thread per core.
-- **Capacitor iOS (WKWebView):** unverified. Capacitor serves the app from `capacitor://localhost`
-  through a scheme handler, which does not send COOP/COEP by default. The handler (or a small plugin)
-  would have to add them, and whether WKWebView then counts the custom scheme as a cross-origin isolated
-  secure context needs a test on a device. Until then, assume single-threaded in the Capacitor app.
+- **Capacitor iOS (WKWebView): works.** Capacitor serves the app from `capacitor://localhost` through
+  its own scheme handler, which sends no COOP/COEP. Capacitor creates that handler inside a `final`
+  `loadView`, so it can't be replaced by a subclass. Instead `AppViewController` returns an
+  `IsolatedWebViewConfiguration` from `webViewConfiguration(for:)`; that configuration wraps whichever
+  handler gets registered, and the wrapper passes every task on as a proxy that adds COOP `same-origin`,
+  COEP `require-corp` and CORP `same-origin` to each HTTP response
+  (`apps/ios/ios/App/App/CrossOriginIsolation.swift`). WebKit then treats the custom scheme as a
+  secure, cross-origin isolated context: `crossOriginIsolated` is true in the page, the kernel worker
+  and nested workers.
+- **WebKit quirk in the app:** even when isolated, the `capacitor://` page has no global
+  `SharedArrayBuffer` constructor (in the page and in workers), while shared `WebAssembly.Memory`,
+  `Atomics` and posting shared memory to nested workers all work. The pthreads build checks
+  `globalThis.SharedArrayBuffer` in `pthread_create` and returns `EAGAIN` without it. The kernel still
+  reported "8 threads", but OCCT's thread pool then waited forever and the first rebuild never finished.
+  `loadOcct` now puts the constructor back from a shared memory's buffer before it loads the threaded
+  build (a no-op wherever the global exists).
+
+  iOS Simulator (iPad Pro 11-inch M5, iOS 27, on the M3 Max; debug app, production web build), Project
+  box, `?debug` Bench on `sh1.thickness`, ms (round trip/kernel/mesh):
+
+  | | runs | median |
+  |---|---|---|
+  | single (`?threads=0`) | 58/6/51 · 48/5/43 · 49/4/43 · 45/4/41 · 47/4/42 | 48/4/43 |
+  | threads (8) | 33/6/26 · 23/5/17 · 21/5/15 · 19/4/14 · 18/5/13 | 21/5/15 |
+
+  Opening the part (first full build): single 543 ms (kernel 210, mesh 204), threads 219 ms (kernel 180,
+  mesh 32). Startup with threads 227–252 ms, single 215–313 ms. The simulator runs on the Mac's cores,
+  so these numbers show that threads work, not how fast a real iPad is.
+
+  Real iPad: not measured yet.
 
 ## 4. Incremental meshing
 

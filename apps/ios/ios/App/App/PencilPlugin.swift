@@ -1,5 +1,6 @@
 import Capacitor
 import UIKit
+import WebKit
 
 /// Apple Pencil hardware gestures for the web app: double-tap (Pencil 2 and Pro) and squeeze
 /// (Pencil Pro) arrive in JavaScript as a "tap" event with `kind` "tap" or "squeeze".
@@ -39,8 +40,25 @@ public class PencilPlugin: CAPPlugin, CAPBridgedPlugin, UIPencilInteractionDeleg
     }
 }
 
-/// The app's web view controller: registers the plugins that live in this app target.
+/// The app's web view controller: registers the plugins that live in this app target and makes the
+/// page cross-origin isolated (see `IsolatedWebViewConfiguration`).
 class AppViewController: CAPBridgeViewController {
+    override open func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
+        let base = super.webViewConfiguration(for: instanceConfiguration)
+        // Capacitor builds a plain configuration; copy its settings into the isolating subclass.
+        let config = IsolatedWebViewConfiguration()
+        config.websiteDataStore = base.websiteDataStore
+        config.allowsInlineMediaPlayback = base.allowsInlineMediaPlayback
+        config.suppressesIncrementalRendering = base.suppressesIncrementalRendering
+        config.allowsAirPlayForMediaPlayback = base.allowsAirPlayForMediaPlayback
+        config.mediaTypesRequiringUserActionForPlayback = base.mediaTypesRequiringUserActionForPlayback
+        config.limitsNavigationsToAppBoundDomains = base.limitsNavigationsToAppBoundDomains
+        config.preferences = base.preferences
+        config.applicationNameForUserAgent = base.applicationNameForUserAgent
+        config.defaultWebpagePreferences = base.defaultWebpagePreferences
+        return config
+    }
+
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(PencilPlugin())
     }
