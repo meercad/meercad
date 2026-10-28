@@ -94,7 +94,6 @@ export function App() {
   const screen = useApp((s) => s.screen);
   const sideOpen = useApp((s) => s.sideOpen);
   const sheet = useApp((s) => !!s.dialog || s.measure.active);
-  const sketching = useApp((s) => !!s.sketchId);
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);
@@ -281,7 +280,7 @@ export function App() {
       {screen === "home" ? (
         <Home />
       ) : (
-        <div className={`app ${sideOpen ? "side-open" : ""} ${sheet ? "has-sheet" : ""} ${sketching ? "sketching" : ""}`}>
+        <div className={`app ${sideOpen ? "side-open" : ""} ${sheet ? "has-sheet" : ""}`}>
           <TopBar />
           {sideOpen ? <SidePanel /> : null}
           <div className="right">{guide ? <HelpPanel onClose={() => setGuide(false)} onTour={() => (setGuide(false), setTour(true))} onShortcuts={() => setHelp(true)} /> : null}</div>

@@ -1301,6 +1301,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
               <i />
               {!diag ? "Solving…" : !diag.ok ? "Over-constrained" : diag.dof === 0 ? "Fully defined" : `${diag.dof} DOF left`}
             </span>
+            {/* Phone: finishing sits up here, where iOS puts "Done", not at the end of the scrolling bar. */}
+            <button className="btn primary phone-only sketch-done" onClick={closeSketch}>
+              Done
+            </button>
           </div>
           {diag?.message ? <div className="muted" style={{ marginTop: 4, color: "var(--err)" }}>{diag.message}</div> : null}
           <div className="muted" style={{ marginTop: 4, maxWidth: 280 }}>{toolHint(ui.tool, ts.points.length, !!ts.dimFirst)}</div>

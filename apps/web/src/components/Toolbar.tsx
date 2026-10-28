@@ -138,8 +138,8 @@ function useEntries(): RailEntry[] {
 
 export function Toolbar() {
   const compact = useCompact();
-  // Phone: import is in the "⋯" menu, so all tools fit the bar without scrolling.
-  const entries = useEntries().filter((e) => !(compact && typeof e === "object" && e.id === "import"));
+  // Phone: import is in the "⋯" menu and finishing a sketch in its header bar.
+  const entries = useEntries().filter((e) => !(compact && typeof e === "object" && (e.id === "import" || e.id === "finish")));
   const [open, setOpen] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
   const closeTimer = useRef<number>(0);
@@ -177,8 +177,27 @@ export function Toolbar() {
     t.run();
   };
 
+  // Phone: the bar scrolls sideways; mark which ends hide more tools, for the fades there.
+  const [more, setMore] = useState<"left" | "right" | "both" | undefined>();
+  useEffect(() => {
+    const el = rail.current;
+    if (!el || !compact) return setMore(undefined);
+    const update = () => {
+      const left = el.scrollLeft > 4;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      setMore(left && right ? "both" : left ? "left" : right ? "right" : undefined);
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [compact, entryKey]);
+
   return (
-    <nav className="toolbar rail" ref={rail} aria-label="Tools" onPointerLeave={() => hover(null)}>
+    <nav className="toolbar rail" ref={rail} aria-label="Tools" onPointerLeave={() => hover(null)} data-more={more}>
       {/* Phone: the panels that have no room on screen open from the bar. */}
       {compact ? (
         sketching ? (

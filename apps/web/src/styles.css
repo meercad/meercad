@@ -863,8 +863,7 @@ button.link { border: 0; padding: 0; background: none; color: var(--accent); fon
    bar at the bottom, panels and dialogs as sheets from below so the model stays in view above.
    ====================================================================== */
 .sheet-grip { display: none; }
-html[data-compact] .app { --top: 64px; --left: 8px; --rail: 0px; --bar: 62px; }
-html[data-compact] .app.sketching { --bar: 114px; }
+html[data-compact] .app { --top: 64px; --left: 8px; --rail: 0px; --bar: 66px; }
 html[data-compact] .topbar { top: 6px; left: 6px; right: 6px; height: 50px; padding: 0 4px; gap: 2px; border-radius: 18px; }
 .topbar.compact .spacer { flex: 1; }
 .topbar.compact .doc-switch { display: flex; align-items: center; gap: 4px; min-width: 0; height: 40px; padding: 0 8px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; font-size: 15px; font-weight: 620; }
@@ -872,12 +871,17 @@ html[data-compact] .topbar { top: 6px; left: 6px; right: 6px; height: 50px; padd
 .topbar.compact .doc-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar.compact .doc-switch svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
 
-/* tools: a grid of six columns at the bottom (two rows while sketching), nothing scrolls out of view */
-html[data-compact] .toolbar.rail { top: auto; bottom: 6px; left: 6px; right: 6px; width: auto; max-height: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 5px; border-radius: 20px; overflow: visible; }
-html[data-compact] .rail .sep { display: none; }
-html[data-compact] .rail .tool, html[data-compact] .rail-group > .tool { width: 100%; min-width: 0; height: 50px; }
-html[data-compact] .rail-group { min-width: 0; }
-html[data-compact] .rail .tool > span { display: block; font-size: 10px; max-width: 100%; }
+/* tools: one row at the bottom that scrolls sideways; a soft fade at an edge shows there is more */
+html[data-compact] .toolbar.rail { top: auto; bottom: 6px; left: 6px; right: 6px; width: auto; max-height: none; display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 22px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+html[data-compact] .toolbar.rail::-webkit-scrollbar { display: none; }
+html[data-compact] .toolbar.rail[data-more="right"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent); }
+html[data-compact] .toolbar.rail[data-more="left"] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent); }
+html[data-compact] .toolbar.rail[data-more="both"] { -webkit-mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent); }
+html[data-compact] .rail .sep { display: block; width: 1px; height: 32px; margin: 0 2px; flex: none; }
+html[data-compact] .rail .tool, html[data-compact] .rail-group > .tool { width: 64px; min-width: 64px; height: 52px; flex: none; }
+html[data-compact] .rail-group { flex: none; }
+html[data-compact] .rail .tool > span { display: block; font-size: 10.5px; }
+html[data-compact] .rail .tool.primary { width: 72px; min-width: 72px; }
 html[data-compact] .kbd { display: none !important; }
 html[data-compact] .app.has-sheet .toolbar.rail { display: none; }
 
@@ -901,7 +905,7 @@ html[data-compact] .constraint-palette.open .palette-title { grid-column: 1 / -1
 
 /* view: smaller cube top right, the view buttons in a column under it, no status line */
 html[data-compact] .viewcube { top: calc(var(--top) - 4px); right: 4px; transform: scale(0.78); transform-origin: top right; }
-html[data-compact] .view-controls { right: 8px; bottom: auto; top: calc(var(--top) + 132px); flex-direction: column; align-items: center; padding: 4px; }
+html[data-compact] .view-controls { right: 8px; bottom: auto; top: calc(var(--top) + 150px); flex-direction: column; align-items: center; padding: 4px; }
 html[data-compact] .view-controls .snap-controls { flex-direction: column; }
 html[data-compact] .view-controls .bar-sep { width: auto; height: 1px; align-self: stretch; margin: 2px 3px; }
 html[data-compact] .view-controls .mode-label { display: none; }
@@ -935,3 +939,5 @@ html[data-compact] .phone-only { display: inline-flex !important; }
 html[data-compact] .phone-hide { display: none !important; }
 html[data-compact] .view-controls .grid-snap span { display: none; }
 html[data-compact] .view-controls .grid-snap { padding: 0; width: 36px; }
+html[data-compact] .sketch-hud .card2 .row { align-items: center; }
+html[data-compact] .sketch-done { margin-left: auto; height: 34px; padding: 0 14px; }
