@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatStep, gridLevels } from "../apps/web/src/lib/grid";
+import { dragStep, formatStep, gridLevels } from "../apps/web/src/lib/grid";
 
 describe("grid", () => {
   it("writes spacings in the chosen unit, inches as ruler fractions", () => {
@@ -20,5 +20,13 @@ describe("grid", () => {
   it("uses ruler fractions with major lines on whole inches", () => {
     expect(gridLevels(0.1, "in")).toEqual({ minor: 25.4 / 16, major: 25.4, snap: 25.4 / 16 });
     expect(gridLevels(0.5, "in")).toEqual({ minor: 25.4 / 4, major: 25.4 * 12, snap: 25.4 / 4 });
+  });
+
+  it("moves drag arrows in fine steps, not the grid's", () => {
+    // 1 mm per pixel shows a 50 mm grid, but arrows move in 10 mm steps.
+    expect(gridLevels(1, "mm").snap).toBe(50);
+    expect(dragStep(1, "mm")).toBe(10);
+    expect(dragStep(0.05, "mm")).toBe(0.5);
+    expect(dragStep(0.05, "in")).toBeCloseTo(25.4 / 64);
   });
 });

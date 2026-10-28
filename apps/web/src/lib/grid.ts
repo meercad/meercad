@@ -27,6 +27,18 @@ export function gridLevels(pixel: number, unit: GridUnit): { minor: number; majo
   return { minor, major, snap: minor };
 }
 
+/** Steps drag arrows move in: much finer than the grid (about 6 px each), so values stay precise. */
+const DRAG: Record<GridUnit, number[]> = {
+  mm: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000],
+  in: [1 / 256, 1 / 128, 1 / 64, 1 / 32, 1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 6, 12, 24].map((n) => n * 25.4),
+};
+
+/** The step a drag arrow moves in at a zoom level (mm per screen pixel). */
+export function dragStep(pixel: number, unit: GridUnit): number {
+  const list = DRAG[unit];
+  return list.find((n) => n >= pixel * 6) ?? list[list.length - 1]!;
+}
+
 /** A spacing in mm written in the unit: "2.5 mm", "1/16 in". */
 export function formatStep(stepMm: number, unit: GridUnit): string {
   const v = stepMm / UNIT_MM[unit];

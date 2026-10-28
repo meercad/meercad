@@ -16,7 +16,7 @@ import { InlineValues } from "./InlineValues";
 import { Manipulators } from "./Manipulators";
 import { ViewCube } from "./ViewCube";
 import { SnapControls } from "./SnapControls";
-import { gridLevels } from "../lib/grid";
+import { dragStep, gridLevels } from "../lib/grid";
 import { convertMmText, docUnit } from "../lib/units";
 import { CUSTOM_PLANE_COLOR, PLANE_COLORS, PlaneChooser } from "./PlaneChooser";
 
@@ -88,11 +88,12 @@ export function ViewportView() {
       v.setGridVisible(p.snapGrid);
       v.invalidate();
     };
-    // The grid follows the zoom in the design's unit; drag arrows step by it, or freely when off.
+    // The grid follows the zoom in the design's unit. Drag arrows move in finer round steps (not the
+    // grid's), or freely with the grid off.
     v.gridSteps = (pixel) => gridLevels(pixel, docUnit());
     v.handleStep = (pixel) => {
       const p = usePrefs.getState();
-      return p.snapGrid ? gridLevels(pixel, docUnit()).snap : 0.01;
+      return p.snapGrid ? dragStep(pixel, docUnit()) : 0.01;
     };
     applyNav();
     const offPrefs = usePrefs.subscribe(applyNav);
