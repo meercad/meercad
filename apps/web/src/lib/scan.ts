@@ -3,28 +3,35 @@
  * plugin). The scan comes back as an STL in millimetres and is imported like any mesh, as a whole
  * part. Elsewhere (Mac, browser, devices without LiDAR) scanning is not offered.
  */
-import { registerPlugin } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Filesystem } from "@capacitor/filesystem";
 import { toast } from "../store";
 import { importFile } from "../components/io";
 import { nativeApp } from "./native";
 
 interface ScanPlugin {
-  capabilities(): Promise<{ scan: boolean }>;
+  capabilities(): Promise<{ scan: boolean; reason?: string }>;
   scan(): Promise<{ path: string; folder: string; triangles: number; size: [number, number, number]; photos: number; seconds: number }>;
 }
 const Scan = registerPlugin<ScanPlugin>("Scan");
 
-let available: Promise<boolean> | null = null;
-/** Whether this device can scan (asked once). */
+let available: Promise<{ scan: boolean; reason?: string }> | null = null;
+/** Whether this device can scan, and why not (asked once). */
+function capabilities(): Promise<{ scan: boolean; reason?: string }> {
+  return (available ??= Scan.capabilities().catch((e: { message?: string }) => ({ scan: false, reason: `The scanner did not answer: ${e.message ?? String(e)}` })));
+}
+
+/** Whether to offer scanning: in the iPhone/iPad app (a device that cannot scan says why on use). */
 export function canScan(): Promise<boolean> {
-  return (available ??= nativeApp ? Scan.capabilities().then((c) => c.scan, () => false) : Promise.resolve(false));
+  return Promise.resolve(nativeApp && Capacitor.getPlatform() === "ios");
 }
 
 const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n.toFixed(1));
 
 /** Scans an object and adds it to the open part (or a new project from the overview). */
 export async function scanObject(): Promise<void> {
+  const caps = await capabilities();
+  if (!caps.scan) return toast(caps.reason || "This device cannot scan objects.", "error");
   let r: Awaited<ReturnType<ScanPlugin["scan"]>>;
   try {
     r = await Scan.scan();

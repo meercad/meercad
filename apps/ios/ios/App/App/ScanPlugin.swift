@@ -23,9 +23,11 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func capabilities(_ call: CAPPluginCall) {
         Task { @MainActor in
-            var scan = false
-            if #available(iOS 18, *) { scan = ObjectCaptureSession.isSupported }
-            call.resolve(["scan": scan])
+            guard #available(iOS 18, *) else {
+                return call.resolve(["scan": false, "reason": "Scanning needs iOS 18 or later (this is \(UIDevice.current.systemVersion))."])
+            }
+            let supported = ObjectCaptureSession.isSupported
+            call.resolve(["scan": supported, "reason": supported ? "" : "This device does not support object capture (it needs a LiDAR scanner)."])
         }
     }
 
