@@ -1,6 +1,7 @@
 # Native geometry kernel: findings
 
-Status: investigated, **not built**. We don't recommend a native kernel for now (see Recommendation).
+Status: native kernel investigated and **not built** (see Recommendation). Options C (iPad threads)
+and D (faster patterns and threads) are done on this branch.
 Measured 28.10.2026 on an Apple M3 Max (12 performance + 4 efficiency cores), macOS 27, Node 24,
 Electron 45, Safari 27. Native OCCT is the Homebrew bottle `opencascade` 7.9.3 (Release build, clang).
 
@@ -206,8 +207,10 @@ version too.
    slower binding layer), two native build pipelines and LGPL bookkeeping for static linking.
 2. **Do D first:** multi-tool pattern booleans and the thread-start fix. Done: on the Pi case
    2.9 → 1.6 s single-threaded and 2.0 → 1.1 s threaded, on every platform, with unchanged bodies and face tags.
-3. **Then C:** COOP/COEP in the Capacitor scheme handler, tested on the iPad. If WebKit refuses
-   isolation there, native threads on the iPad (B, iPad only) become the fallback worth reconsidering.
+3. **Then C:** COOP/COEP in the Capacitor scheme handler. Done: WebKit accepts isolation on
+   `capacitor://`, and the iPad app runs the kernel on 8 threads (meshing about 1.6× faster, rebuilds
+   20–25 % faster on the user's parts; the first build after launch is slower). See
+   `KERNEL-THREADS.md`, section 3.
 4. Revisit native only if a later profile shows OCCT-internal hot spots where native has a measured
    edge, or if we need something WASM can't give (more than 4 GB of memory, OCCT modules missing
    from the replicad build). For custom C++ helpers, our own opencascade.js build with extra bindings is
