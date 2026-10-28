@@ -96,7 +96,7 @@ export const definitions: Record<string, Json> = {
       ["sketch"],
       'Sketch regions; "all" (default) takes regions at odd nesting depth, so circles inside a rectangle become holes.',
     ),
-    obj({ face: ref("faceSelector") }, ["face"], "A planar model face pushed/pulled along its normal."),
+    obj({ face: ref("faceSelector") }, ["face"], "A model face pushed/pulled: a flat face along its normal, a curved one offset along its surface."),
   ),
   patternSource: oneOf(obj({ features: arr(id, { minItems: 1 }) }, ["features"]), obj({ bodies: arr(id, { minItems: 1 }) }, ["bodies"])),
   mode: { enum: ["new_body", "join", "cut", "intersect"] },

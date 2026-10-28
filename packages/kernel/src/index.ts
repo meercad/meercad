@@ -5,6 +5,6 @@ export { OcctBackend } from "./backend.js";
 export type { ModelState, SketchResult, ToolRecord } from "./state.js";
 export { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
 export { KernelSession, type RebuildReport, type SketchView, type ReferenceView } from "./session.js";
-export { exportStep, measure, type PickRef, type Measurement } from "./tools.js";
+export { exportMeshes, exportStep, measure, type PickRef, type Measurement } from "./tools.js";
 export type { WorkerRequest, WorkerResponse } from "./protocol.js";
 export { KernelClient, SupersededError, type RebuildOutput } from "./client.js";

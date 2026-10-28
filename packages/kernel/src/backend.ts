@@ -261,18 +261,21 @@ function sweepTool(
   return tool!;
 }
 
-/** Push/pull: extrudes a planar model face along its outward normal. */
+/**
+ * Push/pull: extrudes a planar model face along its outward normal. A curved face is thickened
+ * along its surface instead (outward adds material, inward with `flip` cuts it away).
+ */
 function extrudeFace(f: ResolvedExtrude & { profile: { face: FaceSelector } }, ctx: Ctx): Omit<ModelState, "arena"> {
   const refs = resolveFaces(f.profile.face, [...ctx.prev.bodies.values()]);
   if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new FeatureError("push/pull needs exactly one face");
   const body = ctx.prev.bodies.get(refs[0]!.body)!;
   const fi = refs[0]!.faces[0]!;
   const info = body.faceInfo[fi]!;
-  if (!info.planar || !info.normal) throw new FeatureError("push/pull works on flat faces");
-  const n = f.flip ? (info.normal.map((v) => -v) as Vec3) : info.normal;
   const d = f.extent === "through_all" ? modelSize(ctx) : f.distance;
   if (Math.abs(d) < 1e-6) throw new FeatureError("extrude distance must not be zero");
   const face = body.faces[fi]!;
+  if (!info.planar || !info.normal) return thickenFace(f, ctx, body, face, f.flip ? -d : d);
+  const n = f.flip ? (info.normal.map((v) => -v) as Vec3) : info.normal;
   const prism = ctx.arena.track(new ctx.oc.BRepPrimAPI_MakePrism(face, ctx.g.vec([n[0] * d, n[1] * d, n[2] * d]), true, true));
   if (!prism.IsDone()) throw new FeatureError("extrude failed");
   const tool = new Body(ctx.oc, ctx.arena, f.id, ctx.arena.track(prism.Shape()));
@@ -292,6 +295,44 @@ function extrudeFace(f: ResolvedExtrude & { profile: { face: FaceSelector } }, c
   tool.faceTags = tags.map((t, i) => (t.length ? t : [`${f.id}.face[${i}]`]));
   const mode = f.mode === "new_body" ? "new_body" : f.mode;
   return applyTool(ctx, f.id, tool, mode, f.targets ?? (mode === "new_body" ? undefined : [body.bodyId]));
+}
+
+/** Curved push/pull: a slab between the face and its offset surface, joined to or cut from the part. */
+function thickenFace(f: ResolvedExtrude, ctx: Ctx, body: Body, face: TopoDS_Shape, offset: number): Omit<ModelState, "arena"> {
+  const { oc, arena } = ctx;
+  const volume = (s: TopoDS_Shape) => {
+    const props = arena.track(new oc.GProp_GProps());
+    oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    return Math.abs(props.Mass());
+  };
+  // OCCT offsets along the surface's own normal, which on some faces (a chamfer's cone) points into
+  // the material. A thin probe slab shows which way is out: it lies outside the part if so.
+  const probe = thicken(ctx, face, Math.min(0.05, Math.abs(offset) / 2));
+  const common = arena.track(new oc.BRepAlgoAPI_Common(body.shape, probe));
+  const inward = common.IsDone() && !common.HasErrors() && volume(arena.track(common.Shape())) > volume(probe) / 2;
+  const slab = thicken(ctx, face, inward ? -offset : offset);
+  const tool = new Body(oc, arena, f.id, slab);
+  tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+  const mode = f.mode === "new_body" ? "new_body" : f.mode;
+  return applyTool(ctx, f.id, tool, mode, f.targets ?? (mode === "new_body" ? undefined : [body.bodyId]));
+}
+
+/** The solid between a face and its offset by `offset` along the face's surface normal. */
+function thicken({ oc, arena }: Ctx, face: TopoDS_Shape, offset: number): TopoDS_Shape {
+  const mk = arena.track(new oc.BRepOffsetAPI_MakeThickSolid());
+  try {
+    mk.MakeThickSolidBySimple(face, offset);
+  } catch (e) {
+    throw new FeatureError(`push/pull failed on this curved face: ${occtErrorMessage(oc, e)}`, "try a smaller distance");
+  }
+  if (!mk.IsDone()) throw new FeatureError("push/pull failed on this curved face", "try a smaller distance");
+  // Thickening can yield an inside-out solid, and the slab shares its face with the part; booleans
+  // reject both (an empty result), so the solid is reoriented and copied onto fresh topology.
+  const solids = arena.track(new oc.TopExp_Explorer(arena.track(mk.Shape()), "TopAbs_SOLID"));
+  if (!solids.More()) throw new FeatureError("push/pull failed on this curved face", "try a smaller distance");
+  const solid = arena.track(oc.TopoDS.Solid(arena.track(solids.Current())));
+  oc.BRepLib.OrientClosedSolid(solid);
+  return arena.track(arena.track(new oc.BRepBuilderAPI_Transform(solid, arena.track(new oc.gp_Trsf()), true, false)).Shape());
 }
 
 function extrude(f: ResolvedExtrude, ctx: Ctx): Omit<ModelState, "arena"> {

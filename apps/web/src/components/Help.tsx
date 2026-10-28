@@ -80,7 +80,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         title: "Push, pull, round and bevel",
         body: (
           <ul>
-            <li>Select a flat face → drag the arrow: out adds material, in cuts.</li>
+            <li>Select any face, flat or round → drag the knob: out adds material, in cuts.</li>
             <li>Select a sketch region → drag to extrude it.</li>
             <li>Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer.</li>
             <li>The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts.</li>

@@ -2,6 +2,8 @@
 
 import { Arena } from "./arena.js";
 import type { Body } from "./body.js";
+import { bounds } from "./boolean.js";
+import { meshBody, type BodyMesh } from "./mesh.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
 
@@ -18,6 +20,23 @@ export function exportStep(oc: OC, state: ModelState, bodyIds?: string[]): Uint8
     const data = oc.FS.readFile(path) as Uint8Array;
     oc.FS.unlink(path);
     return data.slice();
+  } finally {
+    arena.dispose();
+  }
+}
+
+/** Print/CNC-quality triangles of the last rebuild's bodies, for STL and 3MF export. */
+export function exportMeshes(oc: OC, state: ModelState, bodyIds?: string[]): BodyMesh[] {
+  const arena = new Arena();
+  try {
+    const bodies = [...state.bodies.values()].filter((b) => !bodyIds || bodyIds.includes(b.bodyId));
+    if (!bodies.length) throw new Error("nothing to export");
+    return bodies.map((b) => {
+      const mesh = meshBody(oc, b, bounds(oc, arena, b.shape), 1, true);
+      // The fine triangulation stays on the shape otherwise, and later display meshes would reuse it.
+      oc.BRepTools.Clean(b.shape, true);
+      return mesh;
+    });
   } finally {
     arena.dispose();
   }

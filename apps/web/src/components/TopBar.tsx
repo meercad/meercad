@@ -41,8 +41,8 @@ export function TopBar() {
     showMenu(r.right - 240, r.bottom + 6, [
       { label: "Import STEP, STL, DXF, SVG…", icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
       "sep",
-      { label: "Export STL (3D printing)", icon: <FileDown />, onClick: () => exportMesh("stl") },
-      { label: "Export 3MF (3D printing)", icon: <FileDown />, onClick: () => exportMesh("3mf") },
+      { label: "Export STL (3D printing)", icon: <FileDown />, onClick: () => void exportMesh("stl") },
+      { label: "Export 3MF (3D printing)", icon: <FileDown />, onClick: () => void exportMesh("3mf") },
       { label: "Export STEP (CAD exchange)", icon: <FileDown />, onClick: () => void exportStep() },
       ...sketches.flatMap((s) => [
         { label: `Export ${s.id} as DXF (laser)`, icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },

@@ -109,7 +109,7 @@ export interface PlaneFeature extends FeatureBase {
 
 /**
  * Profile of an extrude/revolve: sketch regions (`"all"` takes regions at odd nesting depth, so
- * circles inside a rectangle become holes), or a planar model face (push/pull).
+ * circles inside a rectangle become holes), or a model face (push/pull; flat or curved).
  */
 export type ProfileRef = { sketch: string; regions?: "all" | string[] } | { face: FaceSelector };
 

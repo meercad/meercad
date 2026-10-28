@@ -204,10 +204,10 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     }
     case "export": {
       needProject();
-      const out = await rebuildNow();
+      await rebuildNow();
       const format = String(p["format"]);
-      if (format === "stl") return { base64: toB64(writeStl(out.meshes)) };
-      if (format === "3mf") return { base64: toB64(write3mf(out.meshes.map((m) => ({ ...m, name: m.bodyId })))) };
+      if (format === "stl") return { base64: toB64(writeStl(await kernel.exportMeshes())) };
+      if (format === "3mf") return { base64: toB64(write3mf((await kernel.exportMeshes()).map((m) => ({ ...m, name: m.bodyId })))) };
       if (format === "step") return { base64: toB64(await kernel.exportStep()) };
       if (format === "meercad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
       const sketch = String(p["sketch"] ?? "");

@@ -41,13 +41,18 @@ export function download(name: string, data: BlobPart, type: string): void {
 
 const baseName = () => (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
 
-export function exportMesh(format: "stl" | "3mf"): void {
-  const out = useApp.getState().output;
+/** STL/3MF from a print-quality tessellation (the on-screen one is far coarser). */
+export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   const hidden = useApp.getState().hidden;
-  const meshes = (out?.meshes ?? []).filter((m) => !hidden.has(m.bodyId));
-  if (!meshes.length) return toast("Nothing to export", "error");
-  if (format === "stl") download(`${baseName()}.stl`, writeStl(meshes) as BlobPart, "model/stl");
-  else download(`${baseName()}.3mf`, write3mf(meshes.map((m) => ({ ...m, name: m.bodyId }))) as BlobPart, "model/3mf");
+  const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
+  if (!ids?.length) return toast("Nothing to export", "error");
+  try {
+    const meshes = await kernel.exportMeshes(ids);
+    if (format === "stl") download(`${baseName()}.stl`, writeStl(meshes) as BlobPart, "model/stl");
+    else download(`${baseName()}.3mf`, write3mf(meshes.map((m) => ({ ...m, name: m.bodyId }))) as BlobPart, "model/3mf");
+  } catch (e) {
+    toast(`${format.toUpperCase()} export failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+  }
 }
 
 export async function exportStep(): Promise<void> {

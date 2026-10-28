@@ -28,11 +28,22 @@ export interface BodySummary {
 
 const HASH_BOUND = 2147483647;
 
-/** `coarse` > 1 loosens the tessellation tolerances by that factor (fewer triangles, faster). */
-export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse = 1): BodyMesh {
+/**
+ * Tolerances for STL/3MF export: a round face deviates at most ~0.01 mm (less on small parts)
+ * from the exact surface and no facet spans more than ~3°, well below what a printer or mill
+ * resolves. The model itself keeps exact circles; only exported triangles approximate them.
+ */
+export function exportTolerance(diag: number): { linear: number; angular: number } {
+  return { linear: Math.min(0.01, Math.max(0.001, diag * 1e-4)), angular: 0.05 };
+}
+
+/**
+ * Display tessellation: `coarse` > 1 loosens the tolerances by that factor (fewer triangles,
+ * faster). `exact` asks for print/CNC quality instead (see `exportTolerance`).
+ */
+export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse = 1, exact = false): BodyMesh {
   const diag = Math.hypot(...bbox.max.map((v, i) => v - bbox.min[i]!));
-  const linear = Math.max(0.01, diag * 5e-4) * coarse;
-  const angular = Math.min(0.4, 0.25 * coarse);
+  const { linear, angular } = exact ? exportTolerance(diag) : { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
 
   const faceByHash = new Map<number, number>();
   body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));
@@ -51,8 +62,16 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse =
     for (let i = 2; i < faceRanges.length; i += 3) faceRanges[i] = faceByHash.get(faceRanges[i]!) ?? -1;
     repairNormals(positions, normals, indices);
     const edgeLines = new Float32Array(buf, em.getLinesPtr(), em.getLinesSize()).slice();
-    const edgeRanges = new Int32Array(buf, em.getEdgeGroupsPtr(), em.getEdgeGroupsSize()).slice();
-    for (let i = 2; i < edgeRanges.length; i += 3) edgeRanges[i] = edgeByHash.get(edgeRanges[i]!) ?? -1;
+    const allRanges = new Int32Array(buf, em.getEdgeGroupsPtr(), em.getEdgeGroupsSize()).slice();
+    for (let i = 2; i < allRanges.length; i += 3) allRanges[i] = edgeByHash.get(allRanges[i]!) ?? -1;
+    // The seam of a round face (where a cylinder or cone closes on itself) is no real edge: not drawn.
+    const isSeam = (e: number) => {
+      const faces = body.edgeFaces[e];
+      return faces?.length === 1 && oc.BRep_Tool.IsClosed(body.edges[e]!, body.faces[faces[0]!]!);
+    };
+    const kept: number[] = [];
+    for (let i = 0; i < allRanges.length; i += 3) if (allRanges[i + 2]! < 0 || !isSeam(allRanges[i + 2]!)) kept.push(allRanges[i]!, allRanges[i + 1]!, allRanges[i + 2]!);
+    const edgeRanges = Int32Array.from(kept);
     return {
       bodyId: body.bodyId,
       positions,

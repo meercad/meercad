@@ -92,6 +92,13 @@ export class KernelClient {
     return r.data;
   }
 
+  /** Print/CNC-quality triangles for STL/3MF export. */
+  async exportMeshes(bodies?: string[]): Promise<BodyMesh[]> {
+    const r = await this.send({ type: "export_mesh", ...(bodies ? { bodies } : {}) });
+    if (r.type !== "exported_mesh") throw new Error("unexpected response");
+    return r.meshes;
+  }
+
   async measure(a: PickRef, b?: PickRef): Promise<Measurement> {
     const r = await this.send({ type: "measure", a, ...(b ? { b } : {}) });
     if (r.type !== "measured") throw new Error("unexpected response");

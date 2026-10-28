@@ -62,7 +62,7 @@ function handlePick(p: Pick, d: DialogState): void {
         const prof = "sketch" in prof0 ? prof0 : { sketch: "", regions: undefined };
         if (p.kind === "face" && g.op === "extrude") {
           const fs = faceSelectorForPick(p, meshes);
-          if (fs && p.normal) (g as Of<"extrude">).profile = { face: fs };
+          if (fs) (g as Of<"extrude">).profile = { face: fs };
         } else if (p.kind === "sketch_curve") (g as Of<"extrude">).profile = { sketch: p.sketchId };
         else if (p.kind === "region") {
           const allKeys = report?.sketches.find((s) => s.id === p.sketchId)?.regions.filter((r) => r.depth % 2 === 1).map((r) => r.key) ?? [];
@@ -387,7 +387,7 @@ function Body({ d }: { d: DialogState }) {
       return (
         <>
           <Field label="Profile">
-            <SelBox field="profile" items={regionChips} placeholder={f.op === "extrude" ? "Pick sketch regions or a flat face" : "Pick sketch regions"} onRemove={() => set({ profile: { sketch: "" } })} />
+            <SelBox field="profile" items={regionChips} placeholder={f.op === "extrude" ? "Pick sketch regions or a face" : "Pick sketch regions"} onRemove={() => set({ profile: { sketch: "" } })} />
             {"sketch" in prof && !prof.sketch && sketches.length ? (
               <select className="field" value="" onChange={(e) => set({ profile: { sketch: e.target.value } })}>
                 <option value="">…or use a whole sketch</option>

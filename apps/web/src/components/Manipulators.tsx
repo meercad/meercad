@@ -38,7 +38,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
   /** Push/pull drafts follow the drag direction (out = add, in = remove). */
   const autoMode = useRef(false);
   /** Where a push/pull was grabbed, so the arrow stays at the clicked spot once its feature dialog opens. */
-  const grabbed = useRef<{ feature: string; origin: V3 } | null>(null);
+  const grabbed = useRef<{ feature: string; origin: V3; dir: V3 } | null>(null);
 
   useEffect(() => {
     const label = (id: string, v: number) =>
@@ -124,11 +124,12 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         const a = profileAnchor(out, f.profile);
         if (!a) return [];
         const value = num(f.distance, 10) * (f.flip ? -1 : 1);
+        const g = grabbed.current?.feature === f.id ? grabbed.current : null;
         return [
           {
             id: "extrude",
-            origin: grabbed.current?.feature === f.id ? grabbed.current.origin : a.origin,
-            dir: a.normal,
+            origin: g?.origin ?? a.origin,
+            dir: g?.dir ?? a.normal,
             value,
             onDrag: (v) => updateDraft(extrudePatch(v)),
             onEnd: () => undefined,
@@ -179,23 +180,26 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const hole = holeHandle(out, sel[0]! as Extract<Pick, { kind: "face" }>);
       if (hole) return [hole];
     }
-    if (sel.length === 1 && sel[0]!.kind === "face" && sel[0]!.normal) {
+    if (sel.length === 1 && sel[0]!.kind === "face") {
       const p = sel[0]!;
       const m = out.meshes.find((x) => x.bodyId === p.bodyId);
       const a = m ? faceAnchor(m, p.face) : null;
       const fs = faceSelectorForPick(p, out.meshes);
       if (!a || !fs) return [];
-      const origin = onPlane(p.point, a.origin, a.normal);
+      // A flat face moves along its normal; a curved one grows or shrinks along the surface, so the
+      // arrow points straight out of it at the clicked spot.
+      const origin = p.normal ? onPlane(p.point, a.origin, a.normal) : p.point;
+      const dir = p.normal ? a.normal : (p.surface ?? a.normal);
       return [
         {
           id: "extrude",
           origin,
-          dir: a.normal,
+          dir,
           value: 0,
           onStart: () => {
             autoMode.current = true;
             const id = nextFeatureId(currentDoc(), "extrude");
-            grabbed.current = { feature: id, origin };
+            grabbed.current = { feature: id, origin, dir };
             startDraft({ id, op: "extrude", profile: { face: fs }, extent: "blind", distance: 0.001, mode: "join" });
           },
           onDrag: (v) => updateDraft(extrudePatch(v)),
@@ -219,7 +223,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           onStart: () => {
             autoMode.current = true;
             const id = nextFeatureId(currentDoc(), "extrude");
-            grabbed.current = { feature: id, origin };
+            grabbed.current = { feature: id, origin, dir: a.normal };
             startDraft({ id, op: "extrude", profile: { sketch: p.sketchId, regions: [p.key] }, extent: "blind", distance: 0.001, mode: out.report.bodies.length ? "join" : "new_body" });
           },
           onDrag: (v) => updateDraft(extrudePatch(v)),
@@ -279,9 +283,19 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const cyl = mesh ? cylinderAnchor(mesh, pick.face, view.frame.normal, u) : null;
       const center = cyl?.top ?? ([0, 1, 2].map((i) => o[i]! + u[i]! * curve.center[0] + v[i]! * curve.center[1]) as [number, number, number]);
       const radial = cyl?.dir ?? u;
-      const dim = sk.constraints.find((c) => (c.type === "radius" || c.type === "diameter") && c.curve === curveId) as
-        | { id: string; type: "radius" | "diameter"; value: Expr }
-        | undefined;
+      // A circle made Equal to another has no size of its own: the dimension on any circle in its
+      // Equal group drives it, so that is what the arrow changes.
+      const group = new Set([curveId]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const c of sk.constraints) {
+          if (c.type !== "equal" || !(group.has(c.a) || group.has(c.b)) || (group.has(c.a) && group.has(c.b))) continue;
+          group.add(c.a).add(c.b);
+          grew = true;
+        }
+      }
+      const dim = (sk.constraints.find((c) => (c.type === "radius" || c.type === "diameter") && c.curve === curveId) ??
+        sk.constraints.find((c) => (c.type === "radius" || c.type === "diameter") && group.has(c.curve))) as { id: string; type: "radius" | "diameter"; curve: string; value: Expr } | undefined;
       const params = doc.params;
       const write = (r: number, quiet: boolean) => {
         const run = quiet ? applyQuiet : apply;
@@ -296,7 +310,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           id: sketchId,
           patch: dim
             ? { constraints: latest.constraints.map((c) => (c.id === dim.id ? ({ ...c, value } as typeof c) : c)) }
-            : { entities: latest.entities.map((e) => (e.id === curveId && e.type === "circle" ? { ...e, radius: +r.toFixed(3) } : e)) },
+            : { entities: latest.entities.map((e) => (group.has(e.id) && e.type === "circle" ? { ...e, radius: +r.toFixed(3) } : e)) },
         });
       };
       const equal = sk.constraints.filter((c) => c.type === "equal" && (("a" in c && c.a === curveId) || ("b" in c && c.b === curveId)));
@@ -312,7 +326,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             patch: {
               constraints: latest.constraints
                 .filter((c) => !equal.some((e) => e.id === c.id))
-                .map((c) => (dim && c.id === dim.id ? ({ ...c, value: +(dim.type === "diameter" ? 2 * r : r).toFixed(3) } as typeof c) : c)),
+                // Only this circle's own dimension is frozen; one on another circle of the group stays as it is.
+                .map((c) => (dim && c.id === dim.id && dim.curve === curveId ? ({ ...c, value: +(dim.type === "diameter" ? 2 * r : r).toFixed(3) } as typeof c) : c)),
             },
           });
         },
@@ -390,7 +405,7 @@ function QuickActions({ selection }: { selection: Pick[] }) {
   } else if (kinds.size === 1 && kinds.has("face")) {
     const plane = planeSpecForPick(last, meshes);
     if (plane && selection.length === 1) actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch(plane) });
-    if (selection.length === 1 && last.kind === "face" && last.normal) actions.push({ icon: <ArrowUpFromLine />, label: "Push/Pull", kbd: "drag", run: () => startFeature("extrude") });
+    if (selection.length === 1 && last.kind === "face") actions.push({ icon: <ArrowUpFromLine />, label: "Push/Pull", kbd: "drag", run: () => startFeature("extrude") });
     actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: keyFor("fillet"), run: () => startFeature("fillet") });
     actions.push({ icon: <Triangle />, label: "Chamfer", kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
     actions.push({ icon: <Shell />, label: "Shell", kbd: keyFor("shell"), run: () => startFeature("shell") });

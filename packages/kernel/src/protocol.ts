@@ -9,6 +9,8 @@ export type WorkerRequest =
   /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
   | { type: "sandbox"; seq: number; doc: MeercadDocument }
   | { type: "export_step"; seq: number; bodies?: string[] }
+  /** Fine triangles for STL/3MF (the display meshes are too coarse to print or mill from). */
+  | { type: "export_mesh"; seq: number; bodies?: string[] }
   /** Session settings: `meshCoarse` loosens tessellation (touch devices, where meshing is slow). */
   | { type: "configure"; seq: number; meshCoarse: number }
   /** Volume and surface area of the last rebuild's bodies, after a rebuild that skipped them. */
@@ -20,6 +22,7 @@ export type WorkerResponse =
   | { type: "fatal"; message: string }
   | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] }
   | { type: "exported"; seq: number; data: Uint8Array }
+  | { type: "exported_mesh"; seq: number; meshes: BodyMesh[] }
   | { type: "measured"; seq: number; result: Measurement }
   | { type: "configured"; seq: number }
   | { type: "props"; seq: number; bodies: BodySummary[] }

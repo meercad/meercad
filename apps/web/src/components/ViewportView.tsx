@@ -357,6 +357,7 @@ export function ViewportView() {
     if (pick.kind === "face")
       return showMenu(x, y, [
         ...(pick.normal ? [{ label: "New sketch on face", icon: <Pencil />, kbd: "S", onClick: () => startSketch(planeSpecForPick(pick, s.output?.meshes ?? []) ?? undefined) }] : []),
+        item("extrude", "Push/pull face"),
         item("fillet", "Fillet face edges"),
         item("chamfer", "Chamfer face edges"),
         item("shell", "Shell (remove this face)"),

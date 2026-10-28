@@ -12,7 +12,10 @@ const norm = (v: Vec3): Vec3 => {
   return [v[0] / l, v[1] / l, v[2] / l];
 };
 
-/** Area-weighted centroid and average normal of a face's triangles. */
+/**
+ * Area-weighted centroid and average normal of a face's triangles. On a curved face that centroid
+ * may lie off the surface (inside a cylinder), so the vertex nearest to it and its normal are used.
+ */
 export function faceAnchor(m: BodyMesh, face: number): { origin: Vec3; normal: Vec3 } | null {
   let cx = 0, cy = 0, cz = 0, area = 0;
   const n: Vec3 = [0, 0, 0];
@@ -35,7 +38,19 @@ export function faceAnchor(m: BodyMesh, face: number): { origin: Vec3; normal: V
     }
   }
   if (!area) return null;
-  return { origin: [cx / area, cy / area, cz / area], normal: norm(n) };
+  const centroid: Vec3 = [cx / area, cy / area, cz / area];
+  if (Math.hypot(...n) / 2 > area * 0.999) return { origin: centroid, normal: norm(n) };
+  let best = -1;
+  let bd = Infinity;
+  for (let g = 0; g < m.faceRanges.length; g += 3) {
+    if (m.faceRanges[g + 2] !== face) continue;
+    for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
+      const i = m.indices[t]! * 3;
+      const dd = (m.positions[i]! - centroid[0]) ** 2 + (m.positions[i + 1]! - centroid[1]) ** 2 + (m.positions[i + 2]! - centroid[2]) ** 2;
+      if (dd < bd) (bd = dd), (best = i);
+    }
+  }
+  return { origin: [m.positions[best]!, m.positions[best + 1]!, m.positions[best + 2]!], normal: norm([m.normals[best]!, m.normals[best + 1]!, m.normals[best + 2]!]) };
 }
 
 export function faceSelectorAnchor(out: RebuildOutput, sel: FaceSelector) {
@@ -169,7 +184,7 @@ export function isCylinderFace(m: BodyMesh, face: number): boolean {
  * The base of an extrusion as world-space triangles (9 numbers each): the tessellated face, or the
  * sketch regions triangulated. Used for the stand-in shown while a slow rebuild catches up.
  */
-export function profileTriangles(out: RebuildOutput, profile: ProfileRef): { triangles: Float32Array; normal: Vec3 } | null {
+export function profileTriangles(out: RebuildOutput, profile: ProfileRef): { triangles: Float32Array; normal: Vec3; normals?: Float32Array } | null {
   const tris: number[] = [];
   if ("face" in profile) {
     try {
@@ -178,14 +193,17 @@ export function profileTriangles(out: RebuildOutput, profile: ProfileRef): { tri
       const face = r?.faces[0];
       const a = m && face !== undefined ? faceAnchor(m, face) : null;
       if (!m || !a) return null;
+      const nrm: number[] = [];
       for (let g = 0; g < m.faceRanges.length; g += 3) {
         if (m.faceRanges[g + 2] !== face) continue;
         for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
           const i = m.indices[t]! * 3;
           tris.push(m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!);
+          nrm.push(m.normals[i]!, m.normals[i + 1]!, m.normals[i + 2]!);
         }
       }
-      return tris.length ? { triangles: new Float32Array(tris), normal: a.normal } : null;
+      // A curved face grows along its surface: each vertex moves along its own normal.
+      return tris.length ? { triangles: new Float32Array(tris), normal: a.normal, normals: new Float32Array(nrm) } : null;
     } catch {
       return null;
     }

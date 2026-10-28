@@ -57,7 +57,8 @@ export interface ReferenceMeshView {
 }
 
 export type Pick =
-  | { kind: "face"; bodyId: string; face: number; tags: string[]; point: Vec3; normal: Vec3 | null }
+  /** `normal` only for flat faces; `surface` is the direction out of the material at `point`, on any face. */
+  | { kind: "face"; bodyId: string; face: number; tags: string[]; point: Vec3; normal: Vec3 | null; surface?: Vec3 }
   | { kind: "edge"; bodyId: string; edge: number; point: Vec3 }
   | { kind: "region"; sketchId: string; key: string; point: Vec3 }
   | { kind: "sketch_curve"; sketchId: string; curveId: string; point: Vec3 }
@@ -262,10 +263,11 @@ export class Viewport {
 
   /**
    * A see-through stand-in for an extrusion: `triangles` (the profile, world space) swept along
-   * `normal` by `distance` (negative: into the material, drawn as a cut). Instant, so a drag shows
-   * its result even while a slow rebuild is still running. `null` removes it.
+   * `normal` by `distance` (negative: into the material, drawn as a cut), or each vertex along its
+   * own entry in `normals` (a curved face). Instant, so a drag shows its result even while a slow
+   * rebuild is still running. `null` removes it.
    */
-  setGhost(g: { triangles: Float32Array; normal: Vec3; distance: number } | null): void {
+  setGhost(g: { triangles: Float32Array; normal: Vec3; normals?: Float32Array | undefined; distance: number } | null): void {
     if (!g) {
       if (this.ghost) disposeTree(this.ghost);
       this.ghost?.removeFromParent();
@@ -288,7 +290,9 @@ export class Viewport {
       }
     }
     const pos: number[] = [];
-    const v = (i: number, o: boolean) => pos.push(t[i]! + (o ? off.x : 0), t[i + 1]! + (o ? off.y : 0), t[i + 2]! + (o ? off.z : 0));
+    const n = g.normals;
+    const v = (i: number, o: boolean) =>
+      n ? pos.push(t[i]! + (o ? n[i]! * g.distance : 0), t[i + 1]! + (o ? n[i + 1]! * g.distance : 0), t[i + 2]! + (o ? n[i + 2]! * g.distance : 0)) : pos.push(t[i]! + (o ? off.x : 0), t[i + 1]! + (o ? off.y : 0), t[i + 2]! + (o ? off.z : 0));
     for (let i = 0; i < t.length; i += 9) {
       v(i, false), v(i + 3, false), v(i + 6, false);
       v(i, true), v(i + 3, true), v(i + 6, true);
@@ -709,10 +713,11 @@ export class Viewport {
 
   private drawHandles(): void {
     disposeTree(this.handleGroup);
-    const onTop = (m: THREE.Material) => {
+    const onTop = <M extends THREE.Material>(m: M, opacity = 1) => {
       m.depthTest = false;
       m.depthWrite = false;
       m.transparent = true;
+      m.opacity = opacity;
       return m;
     };
     for (const h0 of this.handles) {
@@ -724,34 +729,37 @@ export class Viewport {
       const hot = this.activeHandle?.h.id === h.id || this.hoverHandle === h.id;
       const color = hot ? 0xff7a1a : (h.color ?? 0x4f46e5);
       const along = tip.clone().sub(o);
-      const len = along.length();
       const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), along.lengthSq() ? along.clone().normalize() : d);
-      // Halo first (white, slightly larger), then the coloured arrow: readable on any surface.
-      for (const [scale, col, order] of [
-        [1.6, 0xffffff, 50],
-        [1, color, 51],
+      const parts: THREE.Object3D[] = [];
+      // A slim track from the grabbed spot to the knob, with a soft white edge so it reads on any surface.
+      for (const [r, col, opacity, order] of [
+        [2.4, 0xffffff, 0.7, 50],
+        [1, color, 0.9, 51],
       ] as const) {
-        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(px * 1.6 * scale, px * 1.6 * scale, Math.max(len, px), 10), onTop(new THREE.MeshBasicMaterial({ color: col })));
-        shaft.position.copy(o).addScaledVector(along, 0.5);
-        shaft.quaternion.copy(q);
-        const pointing = h.value < 0 ? d.clone().negate() : d;
-        const head = () => new THREE.Mesh(new THREE.ConeGeometry(px * 7 * (scale === 1 ? 1 : 1.25), px * 20 * (scale === 1 ? 1 : 1.15), 24), onTop(new THREE.MeshBasicMaterial({ color: col })));
-        const cone = head();
-        cone.position.copy(tip);
-        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pointing);
-        const base = new THREE.Mesh(new THREE.SphereGeometry(px * 4.5 * scale, 16, 12), onTop(new THREE.MeshBasicMaterial({ color: col })));
-        base.position.copy(o);
-        const parts = [shaft, cone, base];
-        // Either way: a second head just behind the tip, pointing back (⇕).
-        if (h.twoWay ?? h.min === undefined) {
-          const back = head();
-          back.position.copy(tip).addScaledVector(pointing, -px * 30);
-          back.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pointing.clone().negate());
-          parts.push(back);
-        }
-        for (const m of parts) m.renderOrder = order + (m === cone || m === parts[3] ? 2 : 0);
-        this.handleGroup.add(...parts);
+        const track = new THREE.Mesh(new THREE.CylinderGeometry(px * r, px * r, Math.max(along.length(), px), 12), onTop(new THREE.MeshBasicMaterial({ color: col }), opacity));
+        track.position.copy(o).addScaledVector(along, 0.5);
+        track.quaternion.copy(q);
+        track.renderOrder = order;
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(px * (r === 1 ? 3 : 4.6), 16, 12), onTop(new THREE.MeshBasicMaterial({ color: col }), r === 1 ? 1 : 0.9));
+        dot.position.copy(o);
+        dot.renderOrder = order;
+        parts.push(track, dot);
       }
+      // The knob: a round, screen-facing button with chevrons along the drag direction.
+      const pointing = h.value < 0 ? d.clone().negate() : d;
+      const tex = handleKnob(color, h.twoWay ?? h.min === undefined);
+      if (tex) {
+        const knob = new THREE.Sprite(onTop(new THREE.SpriteMaterial({ map: tex })));
+        const a = this.worldToScreen([tip.x, tip.y, tip.z]);
+        const ahead = tip.clone().addScaledVector(pointing, px * 20);
+        const b = this.worldToScreen([ahead.x, ahead.y, ahead.z]);
+        if (a && b && Math.hypot(b[0] - a[0], b[1] - a[1]) > 2) knob.material.rotation = Math.atan2(a[1] - b[1], b[0] - a[0]);
+        knob.position.copy(tip);
+        knob.scale.setScalar(px * (hot ? 36 : 32));
+        knob.renderOrder = 53;
+        parts.push(knob);
+      }
+      this.handleGroup.add(...parts);
     }
   }
 
@@ -901,6 +909,32 @@ export class Viewport {
     return (2 * d * Math.tan((this.persp.fov * Math.PI) / 360)) / h;
   }
 
+  private planar = new WeakMap<BodyObj, Map<number, boolean>>();
+  /** Whether a face is flat: every vertex normal of its triangles points the same way. */
+  private isPlanar(b: BodyObj, face: number): boolean {
+    let cache = this.planar.get(b);
+    if (!cache) this.planar.set(b, (cache = new Map()));
+    const known = cache.get(face);
+    if (known !== undefined) return known;
+    const { faceRanges: fr, indices, normals } = b.mesh;
+    let ref: [number, number, number] | null = null;
+    let flat = true;
+    for (let g = 0; g < fr.length && flat; g += 3) {
+      if (fr[g + 2] !== face) continue;
+      for (let t = fr[g]!; t < fr[g]! + fr[g + 1]!; t++) {
+        const i = indices[t]! * 3;
+        const n: [number, number, number] = [normals[i]!, normals[i + 1]!, normals[i + 2]!];
+        if (!ref) ref = n;
+        else if (n[0] * ref[0] + n[1] * ref[1] + n[2] * ref[2] < 0.9995) {
+          flat = false;
+          break;
+        }
+      }
+    }
+    cache.set(face, flat);
+    return flat;
+  }
+
   pick(clientX: number, clientY: number, kinds: ReadonlySet<PickKind>): Pick | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
     const px = this.pixelSize();
@@ -937,8 +971,12 @@ export class Viewport {
       const b = this.bodies.find((x) => x.faces === faceHit.object)!;
       const face = b.triFace[faceHit.faceIndex] ?? -1;
       if (face >= 0) {
-        const n = faceHit.face?.normal;
-        return { kind: "face", bodyId: b.mesh.bodyId, face, tags: b.mesh.faceTags[face] ?? [], point: v3(faceHit.point), normal: n ? [n.x, n.y, n.z] : null };
+        // Only flat faces have one normal (push/pull and sketching need it); curved ones get none.
+        // The interpolated vertex normal follows a curved face; the triangle's own normal is exact on a flat one.
+        const fn = faceHit.face?.normal;
+        const hn = faceHit.normal ?? fn;
+        const n: Vec3 | null = this.isPlanar(b, face) && fn ? [fn.x, fn.y, fn.z] : null;
+        return { kind: "face", bodyId: b.mesh.bodyId, face, tags: b.mesh.faceTags[face] ?? [], point: v3(faceHit.point), normal: n, surface: n ?? (hn ? [hn.x, hn.y, hn.z] : undefined) };
       }
     }
     if (kinds.has("plane") && this.planeGroup.visible) {
@@ -1321,6 +1359,55 @@ export function curvePoints(c: SketchCurveView): Vec2[] {
     pts.push([c.center[0] + c.radius * Math.cos(a), c.center[1] + c.radius * Math.sin(a)]);
   }
   return pts;
+}
+
+const knobs = new Map<string, THREE.Texture>();
+/**
+ * Texture of a handle knob: a filled disc with a white rim and soft shadow, and white chevrons
+ * pointing right (rotated to the drag direction when drawn); both ways when `twoWay`. Cached.
+ */
+function handleKnob(color: number, twoWay: boolean): THREE.Texture | null {
+  const key = `${color}:${twoWay}`;
+  const hit = knobs.get(key);
+  if (hit) return hit;
+  const S = 128;
+  const canvas = typeof document === "undefined" ? null : document.createElement("canvas");
+  const g = canvas?.getContext("2d");
+  if (!canvas || !g) return null;
+  canvas.width = canvas.height = S;
+  const c = S / 2;
+  g.shadowColor = "rgba(15, 23, 42, 0.35)";
+  g.shadowBlur = 10;
+  g.shadowOffsetY = 3;
+  g.fillStyle = "#ffffff";
+  g.beginPath();
+  g.arc(c, c, 50, 0, Math.PI * 2);
+  g.fill();
+  g.shadowColor = "transparent";
+  g.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+  g.beginPath();
+  g.arc(c, c, 44, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = "#ffffff";
+  g.lineWidth = 8;
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  const chevron = (x: number, dir: 1 | -1, h: number) => {
+    g.beginPath();
+    g.moveTo(x - (h / 2) * dir, c - h);
+    g.lineTo(x + (h / 2) * dir, c);
+    g.lineTo(x - (h / 2) * dir, c + h);
+    g.stroke();
+  };
+  if (twoWay) {
+    chevron(c + 19, 1, 12);
+    chevron(c - 19, -1, 12);
+  } else chevron(c + 4, 1, 15);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  knobs.set(key, tex);
+  return tex;
 }
 
 function disposeTree(g: THREE.Object3D): void {
