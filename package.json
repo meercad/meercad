@@ -13,7 +13,8 @@
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
     "test": "vitest run",
     "test:watch": "vitest",
-    "wip": "node scripts/install-wip.mjs"
+    "wip": "node scripts/install-wip.mjs",
+    "testflight": "node scripts/testflight.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
