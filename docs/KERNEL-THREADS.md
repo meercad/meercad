@@ -154,7 +154,27 @@ COEP `require-corp`, which we already send, **and** a secure context (https, or 
   mesh 32). Startup with threads 227–252 ms, single 215–313 ms. The simulator runs on the Mac's cores,
   so these numbers show that threads work, not how fast a real iPad is.
 
-  Real iPad: not measured yet.
+  **Real iPad** (iPad Pro 12.9" 6th gen, M2, iPadOS 27; debug app, production web build, over USB).
+  The same quirk shows there: `crossOriginIsolated` true, no `SharedArrayBuffer` global, 8 threads.
+  Three of the user's saved parts, `?debug` Bench three times per part and mode (15 rebuilds each),
+  ms (round trip/kernel/mesh):
+
+  | part (benched value) | single, median | threads, median |
+  |---|---|---|
+  | Mounting plate 6 (`ch1.distance`) | 22/5/17 | 17/5/11 |
+  | Mounting plate 7 (`ch1.distance`) | 22/5/17 | 18/6/10 |
+  | Mounting plate 8 (`ex4.distance`) | 36/15/20 | 30/18/12 |
+
+  - Meshing gets about 1.6× faster (17 → 10–11 ms, 20 → 12 ms); a whole rebuild about 20–25 % faster.
+    The kernel column does not change, as on the Mac.
+  - Startup: kernel ready in 96–110 ms single, 110–115 ms with threads.
+  - **The first build after launch is slower with threads:** opening a part right after the kernel is
+    ready took 337/386/623 ms with threads against 201/199/272 ms single (plates 6/7/8), almost all in
+    the kernel column. Likely cause (not verified): the 8 pthread workers are still instantiating the
+    22 MB wasm module in the background and take CPU from that first build. Later rebuilds don't show it.
+  - In a real session the gain is a few milliseconds per rebuild on these parts. It grows with parts
+    whose meshing is a larger share of the rebuild.
+
 
 ## 4. Incremental meshing
 
