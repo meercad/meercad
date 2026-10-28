@@ -19,6 +19,12 @@ export class Body implements Topology {
   private readonly faceMap: ShapeIndex;
   private readonly edgeMap: ShapeIndex;
   private info: FaceInfo[] | null = null;
+  /**
+   * For a body made from an imported mesh: its triangles (corner positions in triangle order, one
+   * face per triangle in the same order). Display and export use them directly instead of
+   * re-meshing thousands of triangle faces, which OCCT does slowly and with a lot of memory.
+   */
+  sourceMesh: Float32Array | null = null;
   private samples: { faces: Vec3[]; edges: Vec3[] } | null = null;
 
   constructor(
@@ -81,9 +87,9 @@ function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
   const em = oc.ReplicadEdgeMeshExtractor.extract(body.shape, 0.1, 0.5);
   try {
     const buf = oc.wasmMemory.buffer;
-    const pos = new Float32Array(buf, m.getVerticesPtr(), m.getVerticesSize());
-    const tri = new Uint32Array(buf, m.getTrianglesPtr(), m.getTrianglesSize());
-    const groups = new Int32Array(buf, m.getFaceGroupsPtr(), m.getFaceGroupsSize());
+    const pos = new Float32Array(buf, m.getVerticesPtr() >>> 0, m.getVerticesSize());
+    const tri = new Uint32Array(buf, m.getTrianglesPtr() >>> 0, m.getTrianglesSize());
+    const groups = new Int32Array(buf, m.getFaceGroupsPtr() >>> 0, m.getFaceGroupsSize());
     const faces: Vec3[] = body.faces.map(() => [0, 0, 0]);
     for (let g = 0; g < groups.length; g += 3) {
       const fi = faceByHash.get(groups[g + 2]!);
@@ -104,8 +110,8 @@ function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
       const [a, b, c] = [tri[best]! * 3, tri[best + 1]! * 3, tri[best + 2]! * 3];
       faces[fi] = [0, 1, 2].map((k) => (pos[a + k]! + pos[b + k]! + pos[c + k]!) / 3) as Vec3;
     }
-    const lines = new Float32Array(buf, em.getLinesPtr(), em.getLinesSize());
-    const eg = new Int32Array(buf, em.getEdgeGroupsPtr(), em.getEdgeGroupsSize());
+    const lines = new Float32Array(buf, em.getLinesPtr() >>> 0, em.getLinesSize());
+    const eg = new Int32Array(buf, em.getEdgeGroupsPtr() >>> 0, em.getEdgeGroupsSize());
     const edges: Vec3[] = body.edges.map(() => [0, 0, 0]);
     for (let g = 0; g < eg.length; g += 3) {
       const ei = edgeByHash.get(eg[g + 2]!);

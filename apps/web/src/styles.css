@@ -857,3 +857,4 @@ button.link { border: 0; padding: 0; background: none; color: var(--accent); fon
 .home-footer { margin: 40px 0 8px; font-size: 12px; color: var(--muted); }
 .home-footer button.link { color: var(--muted); text-decoration: none; }
 .home-footer button.link:hover { color: var(--accent); text-decoration: underline; }
+.part-badge { margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.03em; color: var(--muted); border: 1px solid var(--border); }

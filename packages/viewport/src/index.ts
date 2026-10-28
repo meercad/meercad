@@ -121,6 +121,8 @@ interface BodyObj {
   edges: THREE.LineSegments;
   triFace: Int32Array;
   segEdge: Int32Array;
+  /** What the colours were last painted for, so unchanged bodies are skipped. */
+  painted?: string;
 }
 
 const VIEWS: Record<StandardView, { dir: Vec3; up: Vec3 }> = {
@@ -400,6 +402,15 @@ export class Viewport {
   setHover(p: Pick | null): void {
     if (samePick(p, this.hover)) return;
     this.hover = p;
+    this.paint();
+  }
+
+  /** Bodies that highlight as a whole on hover and selection (imported meshes), never face by face. */
+  private wholeBodies = new Set<string>();
+  setWholeBodies(ids: Set<string>): void {
+    if (ids.size === this.wholeBodies.size && [...ids].every((id) => this.wholeBodies.has(id))) return;
+    this.wholeBodies = ids;
+    for (const b of this.bodies) b.painted = undefined;
     this.paint();
   }
 
@@ -719,22 +730,30 @@ export class Viewport {
   // ---------------------------------------------------------------- highlight
 
   private paint(): void {
+    // Selection as lookups (a whole selected mesh is thousands of faces; scanning the list per face
+    // would be quadratic), then only bodies whose highlight changed are recoloured.
+    const selFaces = new Map<string, Set<number>>();
+    const selEdges = new Map<string, Set<number>>();
+    for (const p of this.selected) {
+      if (p.kind === "face") (selFaces.get(p.bodyId) ?? selFaces.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.face);
+      else if (p.kind === "edge") (selEdges.get(p.bodyId) ?? selEdges.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.edge);
+    }
+    const h = this.hover && (this.hover.kind === "face" || this.hover.kind === "edge") ? this.hover : null;
     for (const b of this.bodies) {
-      const isSel = (k: "face" | "edge", i: number) => this.selected.some((s) => s.kind === k && s.bodyId === b.mesh.bodyId && (k === "face" ? (s as { face: number }).face : (s as { edge: number }).edge) === i);
-      const h = this.hover;
-      const isHover = (k: "face" | "edge", i: number) =>
-        !!h && h.kind === k && (h.kind === "face" || h.kind === "edge") && h.bodyId === b.mesh.bodyId && (h.kind === "face" ? h.face : h.edge) === i;
+      const id = b.mesh.bodyId;
+      const whole = this.wholeBodies.has(id);
+      const sf = selFaces.get(id) ?? new Set<number>();
+      const se = selEdges.get(id) ?? new Set<number>();
+      const hovered = h && h.bodyId === id ? h : null;
+      const key = whole
+        ? `whole|${sf.size || se.size ? 1 : 0}|${hovered ? 1 : 0}`
+        : `${[...sf].join(",")}|${[...se].join(",")}|${hovered ? `${hovered.kind}${hovered.kind === "face" ? hovered.face : hovered.edge}` : ""}`;
+      if (b.painted === key) continue;
+      b.painted = key;
       const fc = b.faces.geometry.getAttribute("color") as THREE.BufferAttribute;
       const idx = b.mesh.indices;
-      const colors = new Map<number, THREE.Color>();
-      const faceColor = (f: number) => {
-        let c = colors.get(f);
-        if (!c) {
-          c = isSel("face", f) ? C.faceSel : isHover("face", f) ? C.faceHover : C.face;
-          colors.set(f, c);
-        }
-        return c;
-      };
+      const wholeColor = sf.size || se.size ? C.faceSel : hovered ? C.faceHover : C.face;
+      const faceColor = (f: number) => (whole ? wholeColor : sf.has(f) ? C.faceSel : hovered?.kind === "face" && hovered.face === f ? C.faceHover : C.face);
       for (let t = 0; t < b.triFace.length; t++) {
         const c = faceColor(b.triFace[t]!);
         for (let k = 0; k < 3; k++) fc.setXYZ(idx[t * 3 + k]!, c.r, c.g, c.b);
@@ -742,11 +761,11 @@ export class Viewport {
       fc.needsUpdate = true;
       const ec = b.edges.geometry.getAttribute("color") as THREE.BufferAttribute;
       const segIdx = b.edges.geometry.getIndex()!;
-      for (let s = 0; s < b.segEdge.length; s++) {
-        const e = b.segEdge[s]!;
-        const c = isSel("edge", e) ? C.edgeSel : isHover("edge", e) ? C.edgeHover : C.edge;
-        ec.setXYZ(segIdx.getX(s * 2), c.r, c.g, c.b);
-        ec.setXYZ(segIdx.getX(s * 2 + 1), c.r, c.g, c.b);
+      for (let sg = 0; sg < b.segEdge.length; sg++) {
+        const e = b.segEdge[sg]!;
+        const c = se.has(e) ? C.edgeSel : hovered?.kind === "edge" && hovered.edge === e ? C.edgeHover : C.edge;
+        ec.setXYZ(segIdx.getX(sg * 2), c.r, c.g, c.b);
+        ec.setXYZ(segIdx.getX(sg * 2 + 1), c.r, c.g, c.b);
       }
       ec.needsUpdate = true;
     }

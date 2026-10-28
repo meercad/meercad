@@ -29,6 +29,43 @@ export interface BodySummary {
 const HASH_BOUND = 2147483647;
 
 /**
+ * An imported mesh's own triangles as a BodyMesh: triangle i is face i, normals are flat (facing out;
+ * a mesh wound the other way round is flipped) and no edges are drawn, as meshes are whole parts.
+ */
+function sourceMeshOf(body: Body, corners: Float32Array): BodyMesh {
+  const n = corners.length / 9;
+  let vol = 0;
+  for (let t = 0; t < corners.length; t += 9) {
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = corners.subarray(t, t + 9) as unknown as number[];
+    vol += ax! * (by! * cz! - bz! * cy!) - ay! * (bx! * cz! - bz! * cx!) + az! * (bx! * cy! - by! * cx!);
+  }
+  const order = vol < 0 ? [0, 6, 3] : [0, 3, 6];
+  const positions = new Float32Array(corners.length);
+  const normals = new Float32Array(corners.length);
+  for (let t = 0; t < corners.length; t += 9) {
+    for (let k = 0; k < 3; k++) positions.set(corners.subarray(t + order[k]!, t + order[k]! + 3), t + k * 3);
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = positions.subarray(t, t + 9) as unknown as number[];
+    const ux = bx! - ax!, uy = by! - ay!, uz = bz! - az!, vx = cx! - ax!, vy = cy! - ay!, vz = cz! - az!;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    for (let k = 0; k < 3; k++) normals.set([nx / len, ny / len, nz / len], t + k * 3);
+  }
+  const faceRanges = new Int32Array(n * 3);
+  for (let i = 0; i < n; i++) faceRanges.set([i * 3, 3, i], i * 3);
+  return {
+    bodyId: body.bodyId,
+    positions,
+    normals,
+    indices: Uint32Array.from({ length: n * 3 }, (_, i) => i),
+    faceRanges,
+    edgeLines: new Float32Array(),
+    edgeRanges: new Int32Array(),
+    faceTags: body.faceTags.map((t) => [...t]),
+    edgeFaces: body.edgeFaces.map((a) => [...a]),
+  };
+}
+
+/**
  * Tolerances for STL/3MF export: a round face deviates at most ~0.01 mm (less on small parts)
  * from the exact surface and no facet spans more than ~3°, well below what a printer or mill
  * resolves. The model itself keeps exact circles; only exported triangles approximate them.
@@ -42,6 +79,7 @@ export function exportTolerance(diag: number): { linear: number; angular: number
  * faster). `exact` asks for print/CNC quality instead (see `exportTolerance`).
  */
 export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse = 1, exact = false): BodyMesh {
+  if (body.sourceMesh) return sourceMeshOf(body, body.sourceMesh);
   const diag = Math.hypot(...bbox.max.map((v, i) => v - bbox.min[i]!));
   const { linear, angular } = exact ? exportTolerance(diag) : { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
 
@@ -53,16 +91,17 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse =
   const m = oc.ReplicadMeshExtractor.extract(body.shape, linear, angular, false);
   const em = oc.ReplicadEdgeMeshExtractor.extract(body.shape, linear, angular);
   try {
-    // Take buffer views only after both extractions: memory growth detaches earlier views.
+    // Take buffer views only after both extractions: memory growth detaches earlier views. Pointers
+    // past 2 GB arrive as negative int32 from embind, hence `>>> 0`.
     const buf = oc.wasmMemory.buffer;
-    const positions = new Float32Array(buf, m.getVerticesPtr(), m.getVerticesSize()).slice();
-    const normals = new Float32Array(buf, m.getNormalsPtr(), m.getNormalsSize()).slice();
-    const indices = new Uint32Array(buf, m.getTrianglesPtr(), m.getTrianglesSize()).slice();
-    const faceRanges = new Int32Array(buf, m.getFaceGroupsPtr(), m.getFaceGroupsSize()).slice();
+    const positions = new Float32Array(buf, m.getVerticesPtr() >>> 0, m.getVerticesSize()).slice();
+    const normals = new Float32Array(buf, m.getNormalsPtr() >>> 0, m.getNormalsSize()).slice();
+    const indices = new Uint32Array(buf, m.getTrianglesPtr() >>> 0, m.getTrianglesSize()).slice();
+    const faceRanges = new Int32Array(buf, m.getFaceGroupsPtr() >>> 0, m.getFaceGroupsSize()).slice();
     for (let i = 2; i < faceRanges.length; i += 3) faceRanges[i] = faceByHash.get(faceRanges[i]!) ?? -1;
     repairNormals(positions, normals, indices);
-    const edgeLines = new Float32Array(buf, em.getLinesPtr(), em.getLinesSize()).slice();
-    const allRanges = new Int32Array(buf, em.getEdgeGroupsPtr(), em.getEdgeGroupsSize()).slice();
+    const edgeLines = new Float32Array(buf, em.getLinesPtr() >>> 0, em.getLinesSize()).slice();
+    const allRanges = new Int32Array(buf, em.getEdgeGroupsPtr() >>> 0, em.getEdgeGroupsSize()).slice();
     for (let i = 2; i < allRanges.length; i += 3) allRanges[i] = edgeByHash.get(allRanges[i]!) ?? -1;
     // The seam of a round face (where a cylinder or cone closes on itself) is no real edge: not drawn.
     const isSeam = (e: number) => {

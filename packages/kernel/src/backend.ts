@@ -1,3 +1,4 @@
+import { parseStl } from "@meercad/io";
 import { propagateTags, resolveEdges, resolveFaces, ResolveError, selectorForEdge } from "@meercad/naming";
 import {
   FeatureError,
@@ -399,6 +400,19 @@ function transformBody(ctx: Ctx, body: Body, trsf: gp_Trsf, id: string, suffix =
     if (j >= 0) tags[j]!.push(...(body.faceTags[i] ?? []).map((tag) => tag + suffix));
   });
   out.faceTags = tags.map((tg, i) => (tg.length ? tg : [`${id}.face[${i}]`]));
+  // A moved or copied mesh keeps its triangles, moved the same way (as long as faces keep their order).
+  if (body.sourceMesh && body.faces.every((f, i) => out.faceIndex(t.map(f)) === i)) {
+    const src = body.sourceMesh;
+    const m = new Float32Array(src.length);
+    for (let i = 0; i < src.length; i += 3) {
+      const p = ctx.arena.track(new ctx.oc.gp_Pnt(src[i]!, src[i + 1]!, src[i + 2]!));
+      p.Transform(trsf);
+      m[i] = p.X();
+      m[i + 1] = p.Y();
+      m[i + 2] = p.Z();
+    }
+    out.sourceMesh = m;
+  }
   return out;
 }
 
@@ -683,6 +697,9 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   if (f.format === "stl") {
     const body = new Body(oc, arena, f.id, stlSolid(ctx, f, bytes));
     body.faceTags = body.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+    // One face per triangle, in file order: show and export the file's own triangles.
+    const corners = parseStl(bytes).positions;
+    if (corners.length === body.faces.length * 9) body.sourceMesh = corners;
     return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body) };
   }
   const path = `/import-${f.id}.step`;
@@ -703,8 +720,8 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
 
 /**
  * A closed STL mesh as a solid: OCCT reads one face per triangle with shared edges; those form a
- * shell and then a solid (sewn first if the mesh has tiny gaps). Flat areas are merged into single
- * faces so they can be sketched on and pushed/pulled. An open mesh is reported, not dropped silently.
+ * shell and then a solid (sewn first if the mesh has tiny gaps), which booleans can work with. An
+ * open mesh is reported, not dropped silently.
  */
 function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
   const path = `/import-${f.id}.stl`;
@@ -744,9 +761,9 @@ function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): Topo
     solid = toSolid(arena.track(sew.SewedShape()));
   }
   if (!solid) throw new FeatureError(`STL file "${f.fileName}" is not a closed solid (${count} triangles)`, "repair the mesh so it has no holes, e.g. in your slicer or mesh tool, and import it again");
-  const u = arena.track(new oc.ShapeUpgrade_UnifySameDomain(solid, true, true, false));
-  u.Build();
-  return arena.track(u.Shape());
+  // Faces stay one per triangle: imported meshes are edited as whole parts, and keeping the file's
+  // triangles lets display and export skip OCCT's meshing.
+  return solid;
 }
 
 function unifyIfNeeded(ctx: Ctx, body: Body): Body {

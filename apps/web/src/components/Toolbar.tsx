@@ -128,7 +128,7 @@ function useEntries(): RailEntry[] {
       active: measure,
       run: () => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null })),
     },
-    { id: "import", icon: Import, label: "Import", kbd: "Mod+O", hint: "STEP, STL, DXF or SVG", run: () => void importFile() },
+    { id: "import", icon: Import, label: "Import", kbd: "Mod+O", hint: "STEP, STL, 3MF, OBJ, DXF or SVG", run: () => void importFile() },
   ];
 }
 

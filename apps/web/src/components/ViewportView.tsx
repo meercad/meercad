@@ -1,4 +1,4 @@
-import { Box, Copy, Eye, EyeOff, Focus, Layers, Pencil, PencilLine, Ruler, Scan, Trash } from "lucide-react";
+import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Pencil, PencilLine, Ruler, Scan, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, usePrefs } from "../lib/keymap";
@@ -18,6 +18,10 @@ import { ViewCube } from "./ViewCube";
 import { SnapControls } from "./SnapControls";
 import { dragStep, gridLevels } from "../lib/grid";
 import { convertMmText, docUnit } from "../lib/units";
+import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
+
+/** Dialog fields that take whole parts, so a click on a mesh part may fill them. */
+const PART_FIELDS = new Set(["targets", "target", "tools", "bodies", "source"]);
 import { CUSTOM_PLANE_COLOR, PLANE_COLORS, PlaneChooser } from "./PlaneChooser";
 
 const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
@@ -122,12 +126,19 @@ export function ViewportView() {
       ...Object.entries(ORIGIN_FRAMES).map(([id, frame]) => ({ id, label: PLANE_LABELS[id]!, frame, size: size * 0.6, color: PLANE_COLORS[id]! })),
       ...r.planes.map((p) => ({ id: p.id, label: doc.features.find((f) => f.id === p.id)?.name ?? p.id, frame: p.frame, size: size * 0.6, color: CUSTOM_PLANE_COLOR })),
     ];
-    return { bodies: output.meshes, sketches, planes, references: output.references, hiddenBodies: hidden, editingSketch: sketchId };
+    // Mesh parts show no edges: they would outline every triangle.
+    const meshParts = meshBodyIds(doc.features, output.meshes);
+    const bodies = output.meshes.map((m) => (meshParts.has(m.bodyId) && m.edgeRanges.length ? { ...m, edgeLines: new Float32Array(), edgeRanges: new Int32Array() } : m));
+    return { bodies, sketches, planes, references: output.references, hiddenBodies: hidden, editingSketch: sketchId };
   }, [output, hidden, sketchId, doc.features, dialog?.feature.op]);
 
   useEffect(() => {
     // No model yet (a project is opening): clear the view instead of showing the previous one.
-    if (vp) vp.setScene(scene ?? EMPTY_SCENE);
+    if (!vp) return;
+    const st = useApp.getState();
+    // Mesh parts light up as a whole on hover and selection.
+    vp.setWholeBodies(meshBodyIds(st.doc.features, st.output?.meshes ?? []));
+    vp.setScene(scene ?? EMPTY_SCENE);
   }, [vp, scene]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
@@ -230,7 +241,9 @@ export function ViewportView() {
       const r = el.getBoundingClientRect();
       const enclosed = b.x1 >= b.x0;
       const ks = new Set<"face" | "edge">(b.filter === "all" ? ["face", "edge"] : [b.filter]);
-      const picks = vp.boxSelect(b.x0 + r.left, b.y0 + r.top, b.x1 + r.left, b.y1 + r.top, enclosed, ks);
+      const meshParts = meshBodyIds(useApp.getState().doc.features, useApp.getState().output?.meshes ?? []);
+      // Box selection skips mesh parts' triangles (they are picked as whole parts).
+      const picks = vp.boxSelect(b.x0 + r.left, b.y0 + r.top, b.x1 + r.left, b.y1 + r.top, enclosed, ks).filter((p) => !((p.kind === "face" || p.kind === "edge") && meshParts.has(p.bodyId)));
       const cur = useApp.getState().selection;
       useApp.setState({ selection: additive ? [...cur, ...picks.filter((p) => !cur.some((c) => samePick(c, p)))] : picks, selectedFeature: null });
     };
@@ -342,13 +355,21 @@ export function ViewportView() {
         );
       return;
     }
+    // A mesh part is picked as a whole: its faces are thousands of triangles.
+    const onMesh = pick && (pick.kind === "face" || pick.kind === "edge") && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId);
     if (s.dialog) {
+      if (onMesh && s.dialog.field && !PART_FIELDS.has(s.dialog.field)) return toast(MESH_HINT);
       if (pick && s.dialog.field) dialogPick?.(pick, additive);
       // Clicking empty space accepts the tool unless a selection field is waiting.
       else if (!pick && !s.dialog.field) commitDialog();
       return;
     }
     if (!pick) return useApp.setState({ selection: [], selectedFeature: null });
+    if (onMesh) {
+      const m = s.output?.meshes.find((x) => x.bodyId === pick.bodyId);
+      if (m) useApp.setState({ selection: m.faceTags.map((tags, face) => ({ kind: "face" as const, bodyId: m.bodyId, face, tags, point: pick.point, normal: null })), selectedFeature: featureOfPick(pick) });
+      return;
+    }
     const i = s.selection.findIndex((x) => samePick(x, pick));
     const selection = additive ? (i >= 0 ? s.selection.filter((_, j) => j !== i) : [...s.selection, pick]) : [pick];
     useApp.setState({ selection, selectedFeature: featureOfPick(pick) });
@@ -374,6 +395,18 @@ export function ViewportView() {
         { label: s.showPlanes ? "Hide planes" : "Show planes", icon: <Layers />, onClick: () => useApp.setState({ showPlanes: !s.showPlanes }) },
         { label: "Show all parts", icon: <Eye />, onClick: () => useApp.setState({ hidden: new Set() }) },
       ]);
+    if (pick.kind === "face" && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId)) {
+      const m = s.output?.meshes.find((b) => b.bodyId === pick.bodyId);
+      if (m) useApp.setState({ selection: m.faceTags.map((tags, face) => ({ kind: "face" as const, bodyId: m.bodyId, face, tags, point: pick.point, normal: null })) });
+      return showMenu(x, y, [
+        { label: `Move part ${pick.bodyId}`, icon: <Move3d />, onClick: () => startFeature("transform") },
+        { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
+        { label: `Hide part ${pick.bodyId}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        ...common,
+        "sep",
+        { label: `Delete part ${pick.bodyId}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
+      ]);
+    }
     if (pick.kind === "face")
       return showMenu(x, y, [
         ...(pick.normal ? [{ label: "New sketch on face", icon: <Pencil />, kbd: "S", onClick: () => startSketch(planeSpecForPick(pick, s.output?.meshes ?? []) ?? undefined) }] : []),

@@ -1,11 +1,11 @@
 /** File import/export and share links. */
-import { encodeShareFragment, readDxf, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@meercad/io";
+import { encodeShareFragment, read3mf, readDxf, readObj, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@meercad/io";
 import { showNotice } from "./Ask";
 import { nextFeatureId } from "@meercad/model";
-import { validateDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
+import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
-import { apply, currentDoc, flushSave, kernel, newProject, openSketch, toast, useApp } from "../store";
+import { apply, currentDoc, flushSave, kernel, newProject, openSketch, rebuildNow, toast, useApp } from "../store";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   stl: { name: "STL mesh", extensions: ["stl"] },
@@ -113,34 +113,62 @@ function toBase64(bytes: Uint8Array): string {
 }
 
 /** Opens a file picker; STEP/STL become import features, DXF/SVG a new sketch, .meercad a project. */
+/** File types Import accepts: projects, CAD (STEP), meshes (STL, 3MF, OBJ) and 2D drawings (DXF, SVG). */
+export const IMPORT_TYPES = ".step,.stp,.stl,.3mf,.obj,.dxf,.svg,.meercad,.json";
+
+/**
+ * Imports a file. In an open design it is added to that design; on the project overview it starts
+ * a new design named after the file. Meshes become solid bodies; a failed import says why.
+ */
 export async function importFile(file?: File | null): Promise<void> {
-  file ??= await pickFile(".step,.stp,.stl,.dxf,.svg,.meercad,.json");
+  file ??= await pickFile(IMPORT_TYPES);
   if (!file) return;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const base = file.name.replace(/\.\w+$/, "");
   if (ext === "meercad" || ext === "json") {
     const v = validateDocument(JSON.parse(await file.text()));
     if (!v.ok) return toast(`Not a valid meerCAD file: ${v.errors[0]}`, "error");
     await flushSave();
-    await newProject(v.value, file.name.replace(/\.\w+$/, ""));
+    await newProject(v.value, base);
     return;
   }
-  if (ext === "step" || ext === "stp" || ext === "stl") {
-    if (file.size > 40 * 1024 * 1024) return toast("File is larger than 40 MB", "error");
-    const data = toBase64(new Uint8Array(await file.arrayBuffer()));
-    const id = nextFeatureId(currentDoc(), "import");
-    apply({ type: "add_features", features: [{ id, op: "import", format: ext === "stl" ? "stl" : "step", fileName: file.name, data }] });
-    return;
+  if (!["step", "stp", "stl", "3mf", "obj", "dxf", "svg"].includes(ext)) return toast(`Unsupported file type .${ext}`, "error");
+  if (file.size > 40 * 1024 * 1024) return toast("File is larger than 40 MB", "error");
+  // Build the features first, so a file that cannot be read starts no empty design.
+  let features: Feature[];
+  try {
+    features = await importFeatures(file, ext);
+  } catch (e) {
+    return toast(`Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`, "error");
   }
-  if (ext === "dxf" || ext === "svg") {
-    const text = await file.text();
-    const curves = ext === "dxf" ? readDxf(text) : readSvg(text);
-    if (!curves.length) return toast("No supported geometry found in the file", "error");
-    const { entities, constraints } = curvesToSketch(curves);
-    const id = nextFeatureId(currentDoc(), "sketch");
-    if (apply({ type: "add_features", features: [{ id, op: "sketch", name: file.name, plane: { ref: "origin.XY" }, entities, constraints }] })) openSketch(id);
-    return;
+  if (useApp.getState().screen !== "editor" || !useApp.getState().project) await newProject(emptyDocument(), base);
+  const doc = currentDoc();
+  let n = 0;
+  for (const f of features) f.id = nextFeatureId({ ...doc, features: [...doc.features, ...features.slice(0, n++)] }, f.op === "sketch" ? "sketch" : "import");
+  if (!apply({ type: "add_features", features })) return;
+  const sketch = features.find((f) => f.op === "sketch");
+  if (sketch) return openSketch(sketch.id);
+  toast(`Importing ${file.name}…`);
+  const out = await rebuildNow().catch(() => null);
+  const failed = out?.report.features.filter((r) => features.some((f) => f.id === r.id) && r.status === "error") ?? [];
+  if (failed.length) toast(`Import of ${file.name} failed: ${failed[0]!.message ?? "unknown error"}`, "error");
+}
+
+async function importFeatures(file: File, ext: string): Promise<Feature[]> {
+  const imp = (fileName: string, format: "step" | "stl", bytes: Uint8Array): Feature => ({ id: "", op: "import", format, fileName, data: toBase64(bytes) });
+  if (ext === "step" || ext === "stp") return [imp(file.name, "step", new Uint8Array(await file.arrayBuffer()))];
+  if (ext === "stl") return [imp(file.name, "stl", new Uint8Array(await file.arrayBuffer()))];
+  // 3MF and OBJ meshes go in as STL, one body per object on the build plate.
+  if (ext === "3mf") {
+    const meshes = read3mf(new Uint8Array(await file.arrayBuffer()));
+    return meshes.map((m) => imp(meshes.length > 1 ? `${file.name} › ${m.name}` : file.name, "stl", writeStl([m])));
   }
-  toast(`Unsupported file type .${ext}`, "error");
+  if (ext === "obj") return [imp(file.name, "stl", writeStl([readObj(await file.text())]))];
+  const text = await file.text();
+  const curves = ext === "dxf" ? readDxf(text) : readSvg(text);
+  if (!curves.length) throw new Error("no supported geometry found in the file");
+  const { entities, constraints } = curvesToSketch(curves);
+  return [{ id: "", op: "sketch", name: file.name, plane: { ref: "origin.XY" }, entities, constraints }];
 }
 
 /** Converts free curves to sketch entities, sharing points at coincident endpoints. */

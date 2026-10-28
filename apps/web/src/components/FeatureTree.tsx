@@ -13,6 +13,7 @@ import { variableGroup } from "../lib/variables";
 import { exportSketch } from "./io";
 import { showMenu } from "./Menu";
 import { docUnit, fmtLen, fmtVolume, inUnit, isLengthParam } from "../lib/units";
+import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
 
 const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
@@ -398,6 +399,7 @@ function Bodies() {
       setOver(null);
     },
   });
+  const meshParts = meshBodyIds(doc.features, useApp.getState().output?.meshes ?? []);
   const part = (id: string, nested: boolean) => {
     const b = bodies.find((x) => x.id === id)!;
     return (
@@ -424,6 +426,11 @@ function Bodies() {
         <Box className="ficon" />
         <span className="tree-label">
           {id} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
+          {meshParts.has(id) ? (
+            <span className="part-badge" title={MESH_HINT}>
+              Mesh
+            </span>
+          ) : null}
         </span>
         <span className="actions" style={{ display: "flex" }}>
           <button className="icon-btn sm" title={hidden.has(id) ? "Show" : "Hide"} onClick={() => toggleHidden(id)}>

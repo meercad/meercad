@@ -173,6 +173,9 @@ importers:
       '@meercad/ai':
         specifier: workspace:*
         version: link:../ai
+      '@meercad/io':
+        specifier: workspace:*
+        version: link:../io
       '@types/ws':
         specifier: ^8.18.2
         version: 8.18.2

@@ -27,9 +27,20 @@ describe("STL import", () => {
     expect(r.bodies).toHaveLength(1);
     expect(r.bodies[0]!.volume).toBeCloseTo(volume, -1);
     expect(r.bodies[0]!.bbox.min[0]).toBeCloseTo(100, 1);
-    // Flat sides become single faces; the hole wall stays a ring of narrow flat strips (an STL has no
-    // real curves), so far fewer faces than the export's thousands of triangles.
-    expect(r.bodies[0]!.faces).toBeLessThan(400);
+    // The mesh is shown with the file's own triangles, without meshing it again.
+    const m = s.rebuild(doc([{ id: "im1", op: "import", format: "stl", fileName: "plate.stl", data }])).meshes[0]!;
+    expect(m.indices.length / 3).toBe(r.bodies[0]!.faces);
+    expect(m.edgeRanges.length).toBe(0);
+  });
+
+  it("keeps its triangles when moved", async () => {
+    const { data } = await stlOf(part);
+    const s = await newSession();
+    const r = s.rebuild(doc([{ id: "im1", op: "import", format: "stl", fileName: "plate.stl", data }, { id: "mv1", op: "transform", bodies: ["im1"], translate: [0, 0, 50] }]));
+    expect(r.report.features.filter((f) => f.status !== "ok")).toEqual([]);
+    const zs = Array.from(r.meshes[0]!.positions).filter((_, i) => i % 3 === 2);
+    expect(Math.min(...zs)).toBeCloseTo(50, 3);
+    expect(r.meshes[0]!.indices.length / 3).toBe(r.report.bodies[0]!.faces);
   });
 
   it("can be cut like any other body", async () => {

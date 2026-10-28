@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@meercad/ai": "workspace:*",
+    "@meercad/io": "workspace:*",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2"
   }

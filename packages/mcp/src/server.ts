@@ -10,6 +10,7 @@ import { basename, extname, resolve } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { SYSTEM_PROMPT } from "@meercad/ai/prompt";
+import { read3mf, readObj, writeStl } from "@meercad/io";
 import { DEFAULT_PORT, type BridgeHello, type BridgeMethod, type BridgeResponse } from "./protocol.js";
 
 const port = Number(process.env["MEERCAD_MCP_PORT"] ?? DEFAULT_PORT);
@@ -152,11 +153,12 @@ const guard =
 /**
  * Import features may name a local file in `path` instead of carrying it as base64 in `data`: this
  * server runs on the user's computer, so it reads the file and fills in `data`, `fileName` and
- * `format` (from the extension) before the ops reach the app.
+ * `format` (from the extension) before the ops reach the app. 3MF and OBJ meshes go in as STL, one
+ * feature per object (ids get a suffix from the second one on).
  */
 async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
-  const inline = async (f: Record<string, unknown>) => {
-    if (f["op"] !== "import" || typeof f["path"] !== "string") return f;
+  const inline = async (f: Record<string, unknown>): Promise<Record<string, unknown>[]> => {
+    if (f["op"] !== "import" || typeof f["path"] !== "string") return [f];
     const path = resolve(f["path"].replace(/^~(?=\/|$)/, homedir()));
     let bytes: Buffer;
     try {
@@ -165,13 +167,18 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
       throw new Error(`import ${String(f["id"] ?? "")}: cannot read the file "${path}"`);
     }
     const ext = extname(path).toLowerCase();
-    const format = f["format"] ?? (ext === ".stl" ? "stl" : ext === ".step" || ext === ".stp" ? "step" : undefined);
-    if (!format) throw new Error(`import ${String(f["id"] ?? "")}: unknown file type "${ext}" (use .stl, .step or .stp, or set format)`);
     const { path: _path, ...rest } = f;
-    return { ...rest, format, fileName: f["fileName"] ?? basename(path), data: bytes.toString("base64") };
+    const name = (f["fileName"] as string | undefined) ?? basename(path);
+    if (ext === ".3mf" || ext === ".obj") {
+      const meshes = ext === ".3mf" ? read3mf(new Uint8Array(bytes)) : [{ ...readObj(bytes.toString("utf8")), name }];
+      return meshes.map((m, i) => ({ ...rest, id: i ? `${String(f["id"])}_${i + 1}` : f["id"], format: "stl", fileName: meshes.length > 1 ? `${name} › ${m.name}` : name, data: Buffer.from(writeStl([m])).toString("base64") }));
+    }
+    const format = f["format"] ?? (ext === ".stl" ? "stl" : ext === ".step" || ext === ".stp" ? "step" : undefined);
+    if (!format) throw new Error(`import ${String(f["id"] ?? "")}: unknown file type "${ext}" (use .step, .stp, .stl, .3mf or .obj, or set format)`);
+    return [{ ...rest, format, fileName: name, data: bytes.toString("base64") }];
   };
   return Promise.all(
-    ops.map(async (o) => (o["type"] === "add_features" && Array.isArray(o["features"]) ? { ...o, features: await Promise.all((o["features"] as Record<string, unknown>[]).map(inline)) } : o)),
+    ops.map(async (o) => (o["type"] === "add_features" && Array.isArray(o["features"]) ? { ...o, features: (await Promise.all((o["features"] as Record<string, unknown>[]).map(inline))).flat() } : o)),
   );
 }
 

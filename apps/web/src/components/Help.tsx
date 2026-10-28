@@ -121,7 +121,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
           <ul>
             <li>Projects save automatically as open <span className="mono">.meercad</span> files (readable JSON) — in the desktop app in Documents/meerCAD.</li>
             <li>Export: STL and 3MF for 3D printing, STEP for other CAD tools, DXF/SVG of a sketch for laser cutting.</li>
-            <li>Import: drag STEP, STL, DXF, SVG or .ocad files into the window, or use Import <Kbd k="Mod+O" />.</li>
+            <li>Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import <Kbd k="Mod+O" />. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces.</li>
           </ul>
         ),
       },

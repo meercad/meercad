@@ -5,6 +5,7 @@ import { DocumentStore, OpError } from "@meercad/model";
 import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick } from "./lib/topology";
 import { usePrefs } from "./lib/keymap";
+import { FACE_TOOLS, MESH_HINT, meshBodyIds } from "./lib/meshParts";
 import { setUnitSource } from "./lib/units";
 import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
@@ -292,24 +293,33 @@ export async function rebuildNow(): Promise<RebuildOutput> {
  */
 function remapSelection(selection: Pick[], before: RebuildOutput | null, after: RebuildOutput): Pick[] {
   if (!selection.length) return selection;
+  // Per body, worked out once: unchanged faces keep their picks, else faces are found by their tags.
+  // (A whole selected mesh is thousands of picks, so nothing here may scan per pick.)
+  const bodies = new Map<string, { same: boolean; byTags: Map<string, number> | null; tags: string[][] } | null>();
+  const bodyInfo = (id: string) => {
+    if (bodies.has(id)) return bodies.get(id)!;
+    const m = after.meshes.find((x) => x.bodyId === id);
+    const old = before?.meshes.find((x) => x.bodyId === id);
+    const info = m ? { same: !!old && (old === m || (old.faceTags.length === m.faceTags.length && old.faceTags.every((t, i) => t.join() === m.faceTags[i]!.join()))), byTags: null, tags: m.faceTags } : null;
+    bodies.set(id, info);
+    return info;
+  };
   const out: Pick[] = [];
   for (const p of selection) {
     if (p.kind !== "face" && p.kind !== "edge") {
       out.push(p);
       continue;
     }
-    const m = after.meshes.find((x) => x.bodyId === p.bodyId);
-    if (!m) continue;
-    const old = before?.meshes.find((x) => x.bodyId === p.bodyId);
-    const same = old && old.faceTags.length === m.faceTags.length && old.faceTags.every((t, i) => t.join() === m.faceTags[i]!.join());
-    if (same) {
+    const info = bodyInfo(p.bodyId);
+    if (!info) continue;
+    if (info.same) {
       out.push(p);
       continue;
     }
     if (p.kind === "face") {
-      const key = p.tags.join();
-      const face = m.faceTags.findIndex((t) => t.join() === key);
-      if (face >= 0) out.push({ ...p, face, tags: m.faceTags[face]! });
+      info.byTags ??= new Map(info.tags.map((t, i) => [t.join(), i]));
+      const face = info.byTags.get(p.tags.join());
+      if (face !== undefined) out.push({ ...p, face, tags: info.tags[face]! });
     }
   }
   return out.length === selection.length && out.every((p, i) => p === selection[i]) ? selection : out;
@@ -395,9 +405,20 @@ kernel.ready.then(
 
 // ---------------------------------------------------------------- feature dialogs
 
+/** Whether the selection is on a part made from an imported mesh (edited only as a whole). */
+export function selectionOnMesh(): boolean {
+  const s = get();
+  const meshParts = meshBodyIds(docStore.doc.features, s.output?.meshes ?? []);
+  return s.selection.some((p) => (p.kind === "face" || p.kind === "edge") && meshParts.has(p.bodyId));
+}
+
 export function startFeature(op: FeatureOp): void {
   const s = get();
   if (s.dialog) cancelDialog();
+  if (FACE_TOOLS.has(op) && selectionOnMesh()) {
+    if (op === "sketch") set({ selection: [] });
+    else return toast(MESH_HINT);
+  }
   if (op === "sketch") return startSketch();
   const feature = draftFeature(op, docStore.doc);
   // Seed selections from what the user already picked.
