@@ -857,3 +857,78 @@ button.link { border: 0; padding: 0; background: none; color: var(--accent); fon
 .home-footer button.link { color: var(--muted); text-decoration: none; }
 .home-footer button.link:hover { color: var(--accent); text-decoration: underline; }
 .part-badge { margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.03em; color: var(--muted); border: 1px solid var(--border); }
+
+/* ======================================================================
+   Phone (html[data-compact], up to 600 px wide; see lib/layout.ts): a slim top bar, the tools in a
+   bar at the bottom, panels and dialogs as sheets from below so the model stays in view above.
+   ====================================================================== */
+.sheet-grip { display: none; }
+html[data-compact] .app { --top: 64px; --left: 8px; --rail: 0px; --bar: 66px; }
+html[data-compact] .topbar { top: 6px; left: 6px; right: 6px; height: 50px; padding: 0 4px; gap: 2px; border-radius: 18px; }
+.topbar.compact .spacer { flex: 1; }
+.topbar.compact .doc-switch { display: flex; align-items: center; gap: 4px; min-width: 0; height: 40px; padding: 0 8px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; font-size: 15px; font-weight: 620; }
+.topbar.compact .doc-switch:active { background: var(--glass-hover); }
+.topbar.compact .doc-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar.compact .doc-switch svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+
+/* tools: one row at the bottom, scrolling sideways when they do not fit */
+html[data-compact] .toolbar.rail { top: auto; bottom: 6px; left: 6px; right: 6px; width: auto; max-height: none; flex-direction: row; align-items: center; gap: 2px; padding: 5px; border-radius: 20px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+html[data-compact] .toolbar.rail::-webkit-scrollbar { display: none; }
+html[data-compact] .rail .tool, html[data-compact] .rail-group > .tool { width: 58px; min-width: 58px; height: 54px; flex: none; }
+html[data-compact] .rail-group { flex: none; }
+html[data-compact] .rail .tool > span { display: block; font-size: 10px; }
+html[data-compact] .rail .sep { width: 1px; height: 34px; margin: 0 3px; flex: none; }
+html[data-compact] .kbd { display: none !important; }
+html[data-compact] .app.has-sheet .toolbar.rail { display: none; }
+
+/* parts, history and variables: a sheet over the lower part of the model */
+html[data-compact] .side { top: auto; left: 6px; right: 6px; bottom: calc(var(--bar) + 12px); width: auto; height: auto; max-height: 52%; border-radius: 20px; animation: sheet-in 0.2s ease-out; }
+html[data-compact] .sheet-grip { display: flex; justify-content: center; align-items: center; width: 100%; height: 22px; flex: none; padding: 0; border: 0; background: none; }
+html[data-compact] .sheet-grip i { width: 40px; height: 5px; border-radius: 3px; background: var(--border-strong); }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(16px); } }
+
+/* feature dialogs and measuring: sheets at the bottom (the tool bar steps aside) */
+html[data-compact] .dialog, html[data-compact] .measure-card { top: auto; left: 6px; right: 6px; bottom: 6px; width: auto; max-height: 48%; border-radius: 20px; animation: sheet-in 0.2s ease-out; }
+html[data-compact] .dialog .dialog-body { overflow-y: auto; }
+
+/* sketching */
+html[data-compact] .sketch-hud { top: var(--top); left: 8px; right: 92px; }
+html[data-compact] .sketch-hud .card2 { padding: 6px 9px; }
+html[data-compact] .sketch-hud .card2 .muted, html[data-compact] .sketch-hud .card2 > div:not(.row) { display: none; }
+html[data-compact] .constraint-palette { display: none; }
+html[data-compact] .constraint-palette.open { display: grid; grid-template-columns: 1fr 1fr; top: auto; left: 6px; right: 6px; bottom: calc(var(--bar) + 12px); width: auto; max-height: 46%; border-radius: 20px; animation: sheet-in 0.2s ease-out; }
+html[data-compact] .constraint-palette.open .palette-title { grid-column: 1 / -1; }
+
+/* view: smaller cube top right, the view buttons in a column under it, no status line */
+html[data-compact] .viewcube { top: calc(var(--top) - 4px); right: 4px; transform: scale(0.78); transform-origin: top right; }
+html[data-compact] .view-controls { right: 8px; bottom: auto; top: calc(var(--top) + 132px); flex-direction: column; align-items: center; padding: 4px; }
+html[data-compact] .view-controls .snap-controls { flex-direction: column; }
+html[data-compact] .view-controls .bar-sep { width: auto; height: 1px; align-self: stretch; margin: 2px 3px; }
+html[data-compact] .view-controls .mode-label { display: none; }
+html[data-compact] .view-controls .mode-btn { padding: 0; }
+html[data-compact] .status-pill { display: none; }
+html[data-compact] .toasts { bottom: calc(var(--bar) + 20px + env(safe-area-inset-bottom)); }
+html[data-compact] .ai-activity { left: 8px; right: 8px; }
+
+/* overview */
+html[data-compact] .home-top { height: auto; min-height: 52px; margin: 6px; padding: 6px 8px; gap: 6px; flex-wrap: wrap; }
+html[data-compact] .home-top .tabs { display: none; }
+html[data-compact] .home-top .btn { padding: 0 10px; }
+html[data-compact] .home-main { padding: 14px 12px 40px; }
+html[data-compact] .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+html[data-compact] .card .meta { padding: 8px 9px; }
+html[data-compact] .card .meta b { font-size: 13px; }
+html[data-compact] .home-head { gap: 6px; }
+html[data-compact] .home-head .btn { padding: 0 9px; }
+html[data-compact] .key-hint { visibility: hidden; }
+html[data-compact] .app.has-sheet .view-controls, html[data-compact] .app.side-open .view-controls { display: none; }
+html[data-compact] .plane-bar { left: 6px; right: 6px; transform: none; justify-content: center; flex-wrap: wrap; padding: 6px 8px; border-radius: 20px; white-space: normal; }
+html[data-compact] .plane-bar > span:first-child { width: 100%; text-align: center; }
+html[data-compact] .plane-bar .muted { width: 100%; text-align: center; font-size: 11.5px; }
+/* the primary action (Finish sketch) stays in reach at the right end of the bar */
+html[data-compact] .rail .tool.primary { position: sticky; right: 0; z-index: 1; box-shadow: -10px 0 12px -6px var(--glass-strong); }
+/* help panel and modals use the whole width */
+html[data-compact] .app > .right { left: 6px; right: 6px; top: var(--top); bottom: 6px; z-index: 30; }
+html[data-compact] .app > .right .panel-right { width: auto; height: 100%; border-radius: 20px; }
+html[data-compact] .modal { max-width: calc(100vw - 16px); max-height: calc(100% - 24px); overflow-y: auto; }
+.menu { max-height: calc(100vh - 16px); overflow-y: auto; }

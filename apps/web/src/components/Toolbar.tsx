@@ -10,6 +10,8 @@ import {
   Dot,
   Hexagon,
   Import,
+  Layers,
+  Link2,
   MousePointer2,
   Move3d,
   Ruler,
@@ -31,9 +33,11 @@ import { FEATURES } from "../lib/features";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleConstruction } from "../sketch/actions";
 import { setTool, useSketchUi, type SketchTool } from "../sketch/state";
-import { closeSketch, startFeature, useApp } from "../store";
+import { closeSketch, startFeature, toggleSide, useApp } from "../store";
+import { useCompact, usePhoneSheets } from "../lib/layout";
 import { importFile } from "./io";
 import { Kbd } from "./Kbd";
+import { showMenu } from "./Menu";
 
 type Icon = LucideIcon | ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -138,6 +142,10 @@ export function Toolbar() {
   const [pinned, setPinned] = useState(false);
   const closeTimer = useRef<number>(0);
   const rail = useRef<HTMLDivElement>(null);
+  const compact = useCompact();
+  const sideOpen = useApp((s) => s.sideOpen);
+  const sketching = useApp((s) => !!s.sketchId);
+  const constraints = usePhoneSheets((s) => s.constraints);
 
   useEffect(() => {
     if (!open) return;
@@ -170,6 +178,21 @@ export function Toolbar() {
 
   return (
     <nav className="toolbar rail" ref={rail} aria-label="Tools" onPointerLeave={() => hover(null)}>
+      {/* Phone: the panels that have no room on screen open from the bar. */}
+      {compact ? (
+        sketching ? (
+          <button className={`tool ${constraints ? "active" : ""}`} onClick={() => usePhoneSheets.setState({ constraints: !constraints })}>
+            <Link2 />
+            <span>Constrain</span>
+          </button>
+        ) : (
+          <button className={`tool ${sideOpen ? "active" : ""}`} onClick={() => toggleSide()}>
+            <Layers />
+            <span>Parts</span>
+          </button>
+        )
+      ) : null}
+      {compact ? <div className="sep" /> : null}
       {entries.map((e, i) => {
         if (e === "sep") return <div className="sep" key={`sep${i}`} />;
         if (!isGroup(e)) {
@@ -190,12 +213,17 @@ export function Toolbar() {
         const active = e.tools.find((t) => t.active);
         const GroupIcon = active?.icon ?? e.icon;
         return (
-          <div className="rail-group" key={e.id} onPointerEnter={() => hover(e.id)}>
+          <div className="rail-group" key={e.id} onPointerEnter={() => !compact && hover(e.id)}>
             <button
               className={`tool group ${active ? "active" : ""} ${open === e.id ? "open" : ""}`}
               aria-haspopup="menu"
               aria-expanded={open === e.id}
-              onClick={() => {
+              onClick={(ev) => {
+                // Phone: the group opens as a menu above the bar (the bar scrolls sideways and would clip a flyout).
+                if (compact) {
+                  const r = ev.currentTarget.getBoundingClientRect();
+                  return showMenu(r.left, r.top - 8, e.tools.map((t) => ({ label: t.label, icon: <t.icon />, onClick: () => run(t) })), { above: true });
+                }
                 setPinned(open !== e.id || !pinned);
                 setOpen(open === e.id && pinned ? null : e.id);
               }}

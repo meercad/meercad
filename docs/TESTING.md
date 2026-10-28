@@ -156,9 +156,22 @@ the history, then check the result as above)
 - Export STL, 3MF and STEP; open the files in a slicer: watertight, right size, smooth curves.
 - Share link opens the same design.
 
+**Phone layout** (iPhone, or a browser window up to 600 px wide; `html[data-compact]`)
+- Top bar: Home, project name (tap: open projects, new part, rename, close), undo, redo, "⋯" with the
+  File items first. Nothing is cut off at 375 and 440 px width.
+- Tools in a bar at the bottom; groups open a menu above the bar; "Finish" stays visible in sketches.
+- "Parts" opens history, parts and variables as a sheet; the grip closes it. Dialogs and measuring are
+  sheets at the bottom, the tool bar steps aside, and the model moves up into the free space.
+- Sketching: "Constrain" opens the constraint sheet; one finger draws and drags points, two fingers pan
+  and zoom (until a Pencil is used, then fingers only navigate).
+- Turning the phone keeps the model framed the same width; new parts and fit frame the model in portrait.
+- The overview shows two columns of parts.
+
 **Apps**
 - Mac: projects folder, file names, thumbnails, update check, MCP connection.
 - iPad: everything above with touch and Pencil; no keyboard pops up unless a field is tapped.
+- iPhone (TestFlight build, `pnpm testflight`): the phone layout above in the real app, including the
+  safe areas around the notch and the home indicator.
 
 ### Known limits (not bugs)
 
@@ -190,6 +203,12 @@ Fixed:
   the overview now makes the missing ones.
 
 Added: sorting on the overview (last edited, created, name; either direction).
+
+### 2026-10-28 (iPhone)
+
+Added: phone layout (see the checklist), finger drawing in sketches without a Pencil, camera framing
+for portrait windows and when the phone turns, thumbnails always from the iso corner, the iOS app on
+iPhone and TestFlight uploads.
 
 Checked and fine: examples and variables, sketch → extrude → fillet by hand, the 16 test models from
 all sides, measure, undo/redo, inch designs.

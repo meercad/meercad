@@ -35,7 +35,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         ),
       },
       {
-        title: "On the iPad",
+        title: "On iPhone and iPad",
         body: (
           <ul>
             <li><b>Fingers navigate</b>: one finger rotates, two fingers pan and pinch to zoom. <b>The Apple Pencil works</b>: it selects, draws in sketches and drags the arrows.</li>

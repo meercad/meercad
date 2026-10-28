@@ -32,6 +32,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DebugHud, debugHud } from "./components/DebugHud";
 import { deleteModelSelection } from "./lib/deletion";
 import { AboutDialog } from "./components/AboutDialog";
+import { isCompact } from "./lib/layout";
 
 try {
   const theme = localStorage.getItem("meercad.theme");
@@ -92,12 +93,13 @@ async function route(): Promise<void> {
 export function App() {
   const screen = useApp((s) => s.screen);
   const sideOpen = useApp((s) => s.sideOpen);
+  const sheet = useApp((s) => !!s.dialog || s.measure.active);
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);
   // First time in the editor: offer the introduction tour.
   useEffect(() => {
-    if (screen === "editor" && !tourDone()) setTour(true);
+    if (screen === "editor" && !tourDone() && !isCompact()) setTour(true);
   }, [screen]);
   useEffect(() => {
     const open = () => setGuide((g) => !g);
@@ -278,7 +280,7 @@ export function App() {
       {screen === "home" ? (
         <Home />
       ) : (
-        <div className={`app ${sideOpen ? "side-open" : ""}`}>
+        <div className={`app ${sideOpen ? "side-open" : ""} ${sheet ? "has-sheet" : ""}`}>
           <TopBar />
           {sideOpen ? <SidePanel /> : null}
           <div className="right">{guide ? <HelpPanel onClose={() => setGuide(false)} onTour={() => (setGuide(false), setTour(true))} onShortcuts={() => setHelp(true)} /> : null}</div>

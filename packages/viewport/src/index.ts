@@ -154,7 +154,7 @@ export class Viewport {
   readonly scene = new THREE.Scene();
   /** Objects owned by tools (sketch editor, measure markers, manipulators). */
   readonly overlay = new THREE.Group();
-  private persp = new THREE.PerspectiveCamera(40, 1, 0.1, 100000);
+  private persp = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 100000);
   private ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -100000, 100000);
   private camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = this.persp;
   readonly controls: OrbitControls;
@@ -319,6 +319,16 @@ export class Viewport {
 
   /** True once an Apple Pencil (or any pen) was used: from then on fingers no longer draw in sketches. */
   penSeen = false;
+  /** Sketching without a Pencil: one finger draws, so it must not orbit the view. */
+  private fingerDraws = false;
+  setFingerDraws(on: boolean): void {
+    this.fingerDraws = on;
+    this.applyTouches();
+  }
+  private applyTouches(): void {
+    // An unknown action leaves OrbitControls idle for one finger; two fingers still pan and zoom.
+    this.controls.touches = { ONE: this.fingerDraws && !this.penSeen ? (-1 as THREE.TOUCH) : THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  }
   private penDown = new Set<number>();
   private penUpAt = 0;
   private touches = new Set<number>();
@@ -340,7 +350,10 @@ export class Viewport {
     const filter = (e: PointerEvent) => {
       if (e.target !== el) return;
       if (e.pointerType === "pen") {
-        this.penSeen = true;
+        if (!this.penSeen) {
+          this.penSeen = true;
+          this.applyTouches();
+        }
         if (e.type === "pointerdown") {
           this.penDown.add(e.pointerId);
           // Cancel touches already navigating: they were the palm landing first.
@@ -1233,7 +1246,9 @@ export class Viewport {
     if (!sk.isEmpty()) box.union(sk);
     const target = center && box.isEmpty() ? center : box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
     const size = box.isEmpty() ? 100 : Math.max(box.getSize(new THREE.Vector3()).length(), 10);
-    const dist = this.camera === this.ortho ? size * 4 : size * 1.4 / Math.tan((this.persp.fov * Math.PI) / 360) / 2;
+    // Fit the narrower of the two view angles, so tall (phone) windows frame the model too.
+    const half = Math.tan((this.persp.fov * Math.PI) / 360) * Math.min(1, this.persp.aspect);
+    const dist = this.camera === this.ortho ? size * 4 : (size * 1.4) / half / 2;
     const to = target.clone().add(dir.clone().normalize().multiplyScalar(dist));
     const zoomTo = this.camera === this.ortho ? this.orthoZoomFor(size * 1.3) : undefined;
     if (!animate) {
@@ -1261,7 +1276,7 @@ export class Viewport {
   }
 
   private orthoZoomFor(size: number): number {
-    return (this.ortho.top - this.ortho.bottom) / size;
+    return Math.min(this.ortho.top - this.ortho.bottom, this.ortho.right - this.ortho.left) / size;
   }
 
   /** Orbits the camera around the target (radians), e.g. when dragging the view cube. */
@@ -1330,25 +1345,30 @@ export class Viewport {
     const shown = helpers.map((h) => h.visible);
     if (clean) helpers.forEach((h) => (h.visible = false));
     const prev = this.renderer.getSize(new THREE.Vector2());
+    // Pictures are of the whole model, without the room kept free for a sheet.
+    this.persp.clearViewOffset();
+    this.ortho.clearViewOffset();
     this.renderer.setSize(width, height, false);
     const aspect = width / height;
-    const saved = { aspect: this.persp.aspect, l: this.ortho.left, r: this.ortho.right };
+    const saved = { aspect: this.persp.aspect, fov: this.persp.fov, l: this.ortho.left, r: this.ortho.right };
     this.persp.aspect = aspect;
+    this.persp.fov = fovFor(aspect);
     this.persp.updateProjectionMatrix();
     this.ortho.left = this.ortho.bottom * aspect;
     this.ortho.right = this.ortho.top * aspect;
     this.ortho.updateProjectionMatrix();
-    // Clean shots frame the model tightly with the perspective camera, from the current direction.
+    // Clean shots frame the model tightly with the perspective camera.
     const box = new THREE.Box3().setFromObject(this.bodiesGroup);
     const cam = clean && !box.isEmpty() ? this.persp : this.camera;
     const pose = { pos: this.persp.position.clone(), quat: this.persp.quaternion.clone() };
     if (cam === this.persp && clean) {
       const sphere = box.getBoundingSphere(new THREE.Sphere());
-      const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+      // Always from the standard iso corner, whatever view the user was in (a top view pictures a square).
+      const dir = new THREE.Vector3(...VIEWS.iso.dir).normalize();
       const fov = THREE.MathUtils.degToRad(this.persp.fov) / 2;
       const dist = sphere.radius / Math.sin(Math.min(fov, Math.atan(Math.tan(fov) * aspect))) * 1.02;
       this.persp.position.copy(sphere.center).addScaledVector(dir, dist);
-      this.persp.up.copy(this.camera.up);
+      this.persp.up.set(...VIEWS.iso.up);
       this.persp.lookAt(sphere.center);
       this.persp.updateMatrixWorld();
     }
@@ -1359,10 +1379,12 @@ export class Viewport {
     this.persp.updateMatrixWorld();
     this.renderer.setSize(prev.x, prev.y, false);
     this.persp.aspect = saved.aspect;
+    this.persp.fov = saved.fov;
     this.persp.updateProjectionMatrix();
     this.ortho.left = saved.l;
     this.ortho.right = saved.r;
     this.ortho.updateProjectionMatrix();
+    this.applyInset();
     if (clean) helpers.forEach((h, i) => (h.visible = shown[i]!));
     return url;
   }
@@ -1391,6 +1413,24 @@ export class Viewport {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /** Height in px of a panel covering the bottom of the view (phone sheets): the picture centres in the space above it. */
+  private bottomInset = 0;
+  setBottomInset(px: number): void {
+    if (Math.abs(px - this.bottomInset) < 1) return;
+    this.bottomInset = px;
+    this.applyInset();
+    this.emit();
+  }
+  private applyInset(): void {
+    const w = this.container.clientWidth || 1;
+    const h = this.container.clientHeight || 1;
+    const shift = Math.round(this.bottomInset / 2);
+    for (const cam of [this.persp, this.ortho]) {
+      if (shift) cam.setViewOffset(w, h, 0, shift, w, h);
+      else cam.clearViewOffset();
+    }
+  }
+
   private resize(): void {
     const w = this.container.clientWidth || 1;
     const h = this.container.clientHeight || 1;
@@ -1398,9 +1438,11 @@ export class Viewport {
     this.renderer.domElement.style.width = "100%";
     this.renderer.domElement.style.height = "100%";
     this.persp.aspect = w / h;
+    this.persp.fov = fovFor(w / h);
     this.persp.updateProjectionMatrix();
     const oh = this.ortho.top - this.ortho.bottom || 200;
     this.setOrthoSize(oh);
+    this.applyInset();
     this.emit();
   }
 
@@ -1548,6 +1590,11 @@ function axesHelper(): THREE.Group {
   mk([0, 0, 12], 0x3e63dd);
   return g;
 }
+
+/** Vertical field of view in landscape; portrait windows keep it as the horizontal one instead. */
+const BASE_FOV = 40;
+/** The vertical field of view for an aspect ratio: turning a phone keeps the model the same width. */
+const fovFor = (aspect: number) => (aspect >= 1 ? BASE_FOV : (2 * Math.atan(Math.tan((BASE_FOV * Math.PI) / 360) / aspect) * 180) / Math.PI);
 
 export function samePick(a: Pick | null, b: Pick | null): boolean {
   if (!a || !b) return a === b;

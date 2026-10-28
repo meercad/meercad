@@ -12,6 +12,7 @@ import type { Pick, Viewport } from "@meercad/viewport";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
+import { isCompact } from "./lib/layout";
 
 export interface DialogState {
   feature: Feature;
@@ -146,6 +147,8 @@ export const useApp = create<State>(() => ({
   pickingSketchPlane: false,
   aiActivity: null,
   sideOpen: (() => {
+    // On a phone the panel is a sheet over the model: it starts closed.
+    if (isCompact()) return false;
     try {
       return localStorage.getItem("meercad.sideOpen") === "1";
     } catch {

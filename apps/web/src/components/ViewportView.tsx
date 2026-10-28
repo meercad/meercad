@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
 import { withKey } from "./Kbd";
+import { isCompact, usePhoneSheets } from "../lib/layout";
 import type { FeatureOp } from "@meercad/schema";
 import { perFrame, samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
 import { FEATURES, partName } from "../lib/features";
@@ -143,10 +144,35 @@ export function ViewportView() {
     vp.setScene(scene ?? EMPTY_SCENE);
     if (!scene) vp.resetFraming();
   }, [vp, scene]);
+  // Phone: sheets cover the lower part of the view; the model centres in the space above them.
+  const sideOpen = useApp((s) => s.sideOpen);
+  const phoneConstraints = usePhoneSheets((s) => s.constraints);
+  useEffect(() => {
+    if (!vp) return;
+    const sheets = () => [...document.querySelectorAll<HTMLElement>(".dialog, .measure-card, .side, .constraint-palette.open")];
+    const update = () => {
+      if (!isCompact()) return vp.setBottomInset(0);
+      const box = vp.canvas.getBoundingClientRect();
+      const top = Math.min(box.bottom, ...sheets().map((el) => el.getBoundingClientRect().top));
+      vp.setBottomInset(Math.max(0, box.bottom - top));
+    };
+    const ro = new ResizeObserver(update);
+    sheets().forEach((el) => ro.observe(el));
+    update();
+    // Sheets slide in: measure again once they have arrived.
+    const t = window.setTimeout(update, 260);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(t);
+      window.removeEventListener("resize", update);
+    };
+  }, [vp, dialog, measure.active, sideOpen, sketchId, phoneConstraints]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setSketchesVisible(showSketches), [vp, showSketches]);
+  useEffect(() => vp?.setFingerDraws(!!sketchId), [vp, sketchId]);
   useEffect(() => {
     if (!vp) return;
     vp.setSelection(measure.active ? measure.picks : selection);
@@ -509,10 +535,10 @@ export function ViewportView() {
               ["xray", "X-ray"],
               ["wireframe", "Wireframe"],
             ];
-            showMenu(r.left, r.top - 200, modes.map(([m, label]) => ({ label: `${vp?.mode === m ? "✓ " : "   "}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })));
+            showMenu(r.left, r.top - 6, modes.map(([m, label]) => ({ label: `${vp?.mode === m ? "✓ " : "   "}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })), { above: true });
           }}
         >
-          <Box /> {MODE_LABEL[mode]}
+          <Box /> <span className="mode-label">{MODE_LABEL[mode]}</span>
         </button>
         <button className={`icon-btn sm ${showPlanes ? "active" : ""}`} title="Planes" onClick={() => useApp.setState({ showPlanes: !showPlanes })}>
           <Layers />

@@ -100,7 +100,7 @@ export function AboutDialog() {
             <details>
               <summary>Open CASCADE and PlaneGCS: GNU Lesser General Public License 2.1</summary>
               <p className="muted">
-                On the iPad the WebAssembly modules are part of the signed app and cannot be swapped there. The full source of meerCAD is public, so you can build the app yourself with your own build of either library.
+                On iPhone and iPad the WebAssembly modules are part of the signed app and cannot be swapped there. The full source of meerCAD is public, so you can build the app yourself with your own build of either library.
               </p>
               <pre className="licence-text">{lgpl}</pre>
             </details>

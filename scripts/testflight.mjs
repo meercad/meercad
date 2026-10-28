@@ -3,8 +3,9 @@
  * Builds the iOS app from the working tree and uploads it to App Store Connect for TestFlight, so a
  * new version reaches the iPhone and iPad wherever they are (no cable, no shared network).
  *
- * Signs with the team in the Xcode project (automatic signing) and authenticates with an App Store
- * Connect API key. The key never lives in the repo; set it up once on this Mac:
+ * Signs with the team in the Xcode project (automatic signing). Uploads with the Apple account signed
+ * in to Xcode, or, for unattended runs, with an App Store Connect API key that never lives in the
+ * repo; set it up once on this Mac:
  *
  *   ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8   the key file downloaded from App Store Connect
  *   ~/.appstoreconnect/meercad.json                      { "keyId": "<KEYID>", "issuerId": "<ISSUER>" }
@@ -47,10 +48,13 @@ if ((!keyId || !issuerId) && existsSync(configFile)) {
   issuerId ??= c.issuerId;
   keyPath ??= c.keyPath;
 }
-if (!keyId || !issuerId) fail(`no App Store Connect API key: put { "keyId", "issuerId" } in ${configFile} (see the top of this script)`);
-keyPath ??= join(ascDir, "private_keys", `AuthKey_${keyId}.p8`);
-if (!existsSync(keyPath)) fail(`API key file not found: ${keyPath}`);
-const auth = ["-allowProvisioningUpdates", "-authenticationKeyPath", keyPath, "-authenticationKeyID", keyId, "-authenticationKeyIssuerID", issuerId];
+// Without a key, Xcode signs and uploads with the Apple account it is signed in to (Settings → Accounts).
+let auth = ["-allowProvisioningUpdates"];
+if (keyId && issuerId) {
+  keyPath ??= join(ascDir, "private_keys", `AuthKey_${keyId}.p8`);
+  if (!existsSync(keyPath)) fail(`API key file not found: ${keyPath}`);
+  auth = [...auth, "-authenticationKeyPath", keyPath, "-authenticationKeyID", keyId, "-authenticationKeyIssuerID", issuerId];
+} else console.log("› no App Store Connect API key set up: using the Apple account signed in to Xcode");
 
 const team = /DEVELOPMENT_TEAM = (\w+);/.exec(readFileSync(join(project, "project.pbxproj"), "utf8"))?.[1];
 if (!team) fail("no DEVELOPMENT_TEAM in the Xcode project");

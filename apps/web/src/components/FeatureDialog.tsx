@@ -201,7 +201,7 @@ export function FeatureDialog() {
         ) : null}
       </div>
       <div className="dialog-foot">
-        <span className="muted" style={{ marginRight: "auto", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+        <span className="muted key-hint" style={{ marginRight: "auto", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
           <Kbd k="↵" /> accept <Kbd k="Esc" /> cancel
         </span>
         <button className="cancel-btn" onClick={cancelDialog} title="Cancel (Esc)">

@@ -217,7 +217,7 @@ export function Home() {
             </>
           ) : nativeApp ? (
             <>
-              Saved as open <span className="mono">.meercad</span> files, in the Files app under On My iPad › meerCAD. Drag a part onto a folder to move it.
+              Saved as open <span className="mono">.meercad</span> files, in the Files app under On My {/iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad"} › meerCAD. Drag a part onto a folder to move it.
             </>
           ) : (
             "Stored only in this browser. Use Share or Export to move them elsewhere. Drag a part onto a folder to move it."

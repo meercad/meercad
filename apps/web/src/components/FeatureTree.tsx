@@ -6,7 +6,7 @@ import { evaluate, referencedNames } from "@meercad/model";
 import type { Feature } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
-import { apply, editFeature, openSketch, startSketch, toast, useApp } from "../store";
+import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp } from "../store";
 import { ExprInput, parseExpr } from "./ExprInput";
 import { freeParamName, withUnit, type ValueUnit } from "./ValueInput";
 import { variableGroup } from "../lib/variables";
@@ -59,6 +59,9 @@ function SectionHead({ open, onToggle, children, actions, sub }: { open: boolean
 export function SidePanel() {
   return (
     <aside className="side">
+      <button className="sheet-grip" onClick={() => toggleSide(false)} aria-label="Close" title="Close">
+        <i />
+      </button>
       <div className="side-scroll">
         <FeatureList />
         <Bodies />

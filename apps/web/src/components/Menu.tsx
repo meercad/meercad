@@ -12,11 +12,12 @@ export interface MenuItem {
 }
 export type MenuEntry = MenuItem | "sep";
 
-let openMenu: ((m: { x: number; y: number; items: MenuEntry[] } | null) => void) | null = null;
+type OpenMenu = { x: number; y: number; items: MenuEntry[]; above?: boolean };
+let openMenu: ((m: OpenMenu | null) => void) | null = null;
 
-/** Opens a context menu at screen coordinates. */
-export function showMenu(x: number, y: number, items: MenuEntry[]): void {
-  openMenu?.({ x, y, items });
+/** Opens a context menu at screen coordinates; `above` puts its bottom edge at `y` (bars at the bottom). */
+export function showMenu(x: number, y: number, items: MenuEntry[], opts: { above?: boolean } = {}): void {
+  openMenu?.({ x, y, items, ...opts });
 }
 
 export function closeMenu(): void {
@@ -24,7 +25,7 @@ export function closeMenu(): void {
 }
 
 export function MenuHost() {
-  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuEntry[] } | null>(null);
+  const [menu, setMenu] = useState<OpenMenu | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
   useEffect(() => {
@@ -36,7 +37,8 @@ export function MenuHost() {
   useLayoutEffect(() => {
     if (!menu || !ref.current) return;
     const r = ref.current.getBoundingClientRect();
-    setPos({ left: Math.min(menu.x, innerWidth - r.width - 8), top: Math.min(menu.y, innerHeight - r.height - 8) });
+    const top = menu.above ? menu.y - r.height : menu.y;
+    setPos({ left: Math.max(8, Math.min(menu.x, innerWidth - r.width - 8)), top: Math.max(8, Math.min(top, innerHeight - r.height - 8)) });
   }, [menu]);
   useEffect(() => {
     if (!menu) return;

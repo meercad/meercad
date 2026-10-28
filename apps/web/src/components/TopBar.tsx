@@ -1,7 +1,11 @@
-import { ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Info, Keyboard, Moon, PanelLeft, Redo2, Ruler, Settings, Share2, Undo2, Upload } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Info, Keyboard, Moon, PanelLeft, Pencil, Plus, Redo2, Ruler, Settings, Share2, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
-import { goHome, redo, setDesignUnits, toggleSide, undo, useApp } from "../store";
+import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
+import { featureName } from "../lib/features";
+import { useCompact } from "../lib/layout";
+import { askText } from "./Ask";
+import type { MenuEntry } from "./Menu";
 import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
@@ -33,21 +37,28 @@ export function TopBar() {
   const canRedo = useApp((s) => s.canRedo);
   const inDialog = useApp((s) => !!s.dialog);
   const sketches = useApp((s) => s.output?.report.sketches) ?? NONE;
+  const features = useApp((s) => s.doc.features);
+  const project = useApp((s) => s.project);
+  const tabs = useApp((s) => s.tabs);
+  const compact = useCompact();
+  const nameBtn = useRef<HTMLButtonElement>(null);
   const units = useApp((s) => s.doc.units ?? "mm");
 
   const fileBtn = useRef<HTMLButtonElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
-  const openFile = () => {
-    const r = fileBtn.current!.getBoundingClientRect();
-    showMenu(r.right - 240, r.bottom + 6, [
+  const sketchName = (id: string) => {
+    const f = features.find((x) => x.id === id);
+    return f ? featureName(f) : id;
+  };
+  const fileItems = (): MenuEntry[] => [
       { label: "Import STEP, STL, 3MF, OBJ, DXF, SVG…", icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
       "sep",
       { label: "Export STL (3D printing)", icon: <FileDown />, onClick: () => void exportMesh("stl") },
       { label: "Export 3MF (3D printing)", icon: <FileDown />, onClick: () => void exportMesh("3mf") },
       { label: "Export STEP (CAD exchange)", icon: <FileDown />, onClick: () => void exportStep() },
       ...sketches.flatMap((s) => [
-        { label: `Export ${s.id} as DXF (laser)`, icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
-        { label: `Export ${s.id} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
+        { label: `Export ${sketchName(s.id)} as DXF (laser)`, icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
+        { label: `Export ${sketchName(s.id)} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
       ]),
       "sep",
       { label: `${units === "mm" ? "✓ " : "   "}Millimetres (this design)`, icon: <Ruler />, onClick: () => setDesignUnits("mm") },
@@ -55,21 +66,64 @@ export function TopBar() {
       "sep",
       { label: "Save copy as .meercad…", icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
       ...(desktop ? [] : [{ label: "Copy share link", icon: <Share2 />, onClick: () => void shareLink() }]),
-    ]);
+  ];
+  const openFile = () => {
+    const r = fileBtn.current!.getBoundingClientRect();
+    showMenu(r.right - 240, r.bottom + 6, fileItems());
   };
   const openMore = () => {
     const r = moreBtn.current!.getBoundingClientRect();
+    // The phone has no File button: its items come first here.
     showMenu(r.right - 240, r.bottom + 6, [
+      ...(compact ? [...fileItems(), "sep" as const] : []),
       { label: "Settings…", icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("meercad:settings")) },
       { label: "Help & guides", icon: <CircleHelp />, onClick: () => window.dispatchEvent(new Event("meercad:help")) },
-      { label: "Keyboard shortcuts", icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) },
+      ...(compact ? [] : [{ label: "Keyboard shortcuts", icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) }]),
       { label: `${usePrefs.getState().showValues ? "Hide" : "Show"} dimensions on the model`, icon: <Ruler />, onClick: () => setPrefs({ showValues: !usePrefs.getState().showValues }) },
-      { label: `${usePrefs.getState().showKeys ? "Hide" : "Show"} shortcut badges`, icon: <Keyboard />, onClick: () => setPrefs({ showKeys: !usePrefs.getState().showKeys }) },
+      ...(compact ? [] : [{ label: `${usePrefs.getState().showKeys ? "Hide" : "Show"} shortcut badges`, icon: <Keyboard />, onClick: () => setPrefs({ showKeys: !usePrefs.getState().showKeys }) }]),
       { label: "Toggle dark mode", icon: <Moon />, onClick: toggleTheme },
       "sep",
       { label: "About meerCAD, privacy & licences", icon: <Info />, onClick: () => window.dispatchEvent(new CustomEvent("meercad:about")) },
     ]);
   };
+
+  // Phone: the project name stands in for the tab strip and switches between open projects.
+  const openProjects = () => {
+    const r = nameBtn.current!.getBoundingClientRect();
+    showMenu(r.left, r.bottom + 6, [
+      ...tabs.map((t) => ({ label: t.name, icon: t.id === project?.id ? <Check /> : <span />, onClick: () => void openProject(t.id) })),
+      "sep",
+      { label: "New part", icon: <Plus />, onClick: () => void newProject() },
+      {
+        label: "Rename…",
+        icon: <Pencil />,
+        onClick: () => void askText({ title: "Rename part", label: "Name", value: project?.name ?? "", confirmLabel: "Rename" }).then((n) => (n?.trim() ? renameProject(n.trim()) : undefined)),
+      },
+      ...(project ? [{ label: "Close", icon: <X />, onClick: () => closeTab(project.id) }] : []),
+    ]);
+  };
+  if (compact)
+    return (
+      <header className="topbar compact">
+        <button className="icon-btn" onClick={goHome} title="All projects">
+          <House />
+        </button>
+        <button className="doc-switch" ref={nameBtn} onClick={openProjects} title="Open projects">
+          <span>{project?.name ?? "Untitled part"}</span>
+          <ChevronDown />
+        </button>
+        <span className="spacer" />
+        <button className="icon-btn" onClick={undo} disabled={!canUndo && !inDialog} title="Undo">
+          <Undo2 />
+        </button>
+        <button className="icon-btn" onClick={redo} disabled={!canRedo || inDialog} title="Redo">
+          <Redo2 />
+        </button>
+        <button className="icon-btn" ref={moreBtn} onClick={openMore} title="File, settings, help">
+          <Ellipsis />
+        </button>
+      </header>
+    );
 
   return (
     <header className={`topbar ${desktop ? "desktop" : ""}`}>

@@ -10,6 +10,7 @@ import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSo
 import { frameMatrix, perFrame, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { featureName } from "../lib/features";
+import { usePhoneSheets } from "../lib/layout";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
 import { Kbd } from "../components/Kbd";
@@ -613,6 +614,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
   // ---------------------------------------------------------------- typed values while drawing
   const [entry, setEntry] = useState<{ fields: string[]; active: number } | null>(null);
+  // On a phone the constraint list is a sheet opened from the tool bar.
+  const phoneConstraints = usePhoneSheets((s) => s.constraints);
+  useEffect(() => () => usePhoneSheets.setState({ constraints: false }), []);
   /** The shape just drawn: its size and angle show as chips that can be tapped to fix them. */
   const [lastShape, setLastShape] = useState<{ kind: "line" | "arc" | "circle"; id: string } | null>(null);
   const [typingQuick, setTypingQuick] = useState<string | null>(null);
@@ -724,9 +728,13 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       return null;
     };
 
+    // Without a Pencil (iPhone, or an iPad used by finger) one finger draws and drags like the pen;
+    // two fingers pan and zoom. Once a Pencil has been used, fingers only navigate.
+    const fingerDraws = () => !viewport.penSeen;
+    const touches = new Set<number>();
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") press.move(e);
-      if (e.pointerType !== "touch") moveFrame(e);
+      if (e.pointerType !== "touch" || (fingerDraws() && touches.size === 1)) moveFrame(e);
     };
     moveRef.current = (e: PointerEvent) => {
       const p = toSketch(e);
@@ -828,7 +836,23 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const onDown = (e: PointerEvent) => {
       moveFrame.flush();
       if (e.pointerType !== "mouse") press.down(e);
-      if (e.pointerType !== "touch") start(e);
+      if (e.pointerType === "touch") {
+        touches.add(e.pointerId);
+        if (!fingerDraws()) return;
+        // A second finger means navigating: drop what the first one started.
+        if (touches.size > 1) return dropGesture();
+      }
+      start(e);
+    };
+    const dropGesture = () => {
+      g.down = null;
+      g.box = null;
+      if (g.dragState) {
+        g.dragState = null;
+        setDrag(null);
+      }
+      ts.snap = null;
+      rerender();
     };
 
     const start = (e: PointerEvent) => {
@@ -844,17 +868,20 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
       g.down = { x: e.clientX, y: e.clientY, p, target: targetAt(p), moved: false, started };
       // A finger tap is replayed after it lifted, when its pointer can no longer be captured.
-      if ((tool === "select" || started) && e.pointerType !== "touch") el.setPointerCapture(e.pointerId);
+      if ((tool === "select" || started) && (e.pointerType !== "touch" || fingerDraws())) {
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          // the pointer is already gone (a tap replayed after it lifted)
+        }
+      }
     };
 
     const onUp = (e: PointerEvent) => {
       if (e.pointerType !== "touch") moveFrame.flush();
       const r = e.pointerType === "mouse" ? null : press.up(e);
-      if (e.pointerType !== "touch") {
-        finish(e);
-        if (r === "double") onDbl(e);
-      } else if (!viewport.penSeen && !g.down && (r === "tap" || r === "double")) {
-        start(e);
+      if (e.pointerType === "touch") touches.delete(e.pointerId);
+      if (e.pointerType !== "touch" || fingerDraws()) {
         finish(e);
         if (r === "double") onDbl(e);
       }
@@ -1014,7 +1041,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         }
       }
     };
-    const onCancel = (e: PointerEvent) => press.up(e);
+    const onCancel = (e: PointerEvent) => {
+      press.up(e);
+      touches.delete(e.pointerId);
+    };
     const onLeave = () => {
       moveFrame.cancel();
       setTip(null);
@@ -1253,7 +1283,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           </div>
         ) : null}
       </div>
-      <div className="constraint-palette">
+      <div className={`constraint-palette ${phoneConstraints ? "open" : ""}`}>
         <div className="palette-title">Constraints</div>
         {CONSTRAINT_TOOLS.map((c) => (
           <button key={c.type} onClick={() => applyConstraint(c.type)} title={`${c.label} — ${c.hint}`}>
