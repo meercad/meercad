@@ -5,6 +5,7 @@ import { useApp, useDocUnit } from "../store";
 import { inUnit, lengthExpr, lengthText } from "../lib/units";
 
 const NUM = /^\s*-?\d+(\.\d+)?\s*$/;
+const touchScreen = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
 export const parseExpr = (s: string): Expr => (NUM.test(s) ? Number(s) : s.trim());
 
 interface Props {
@@ -62,7 +63,8 @@ export function ExprInput({ value, onCommit, onLive, unit = "mm", autoFocus, pla
         className={`field expr ${error ? "invalid" : ""} ${className ?? ""}`}
         value={text}
         placeholder={placeholder}
-        autoFocus={autoFocus}
+        // On touch screens focusing pops up the keyboard (e.g. when a drag opens a dialog): tap to type.
+        autoFocus={autoFocus && !touchScreen}
         spellCheck={false}
         onChange={(e) => {
           setText(e.target.value);
