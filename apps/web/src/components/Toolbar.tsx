@@ -12,6 +12,7 @@ import {
   Import,
   Layers,
   Link2,
+  ScanLine,
   MousePointer2,
   Move3d,
   Ruler,
@@ -38,6 +39,14 @@ import { useCompact, usePhoneSheets } from "../lib/layout";
 import { importFile } from "./io";
 import { Kbd } from "./Kbd";
 import { showMenu } from "./Menu";
+import { canScan, scanObject } from "../lib/scan";
+
+/** Whether this device can scan objects (iPhone/iPad with LiDAR). */
+function useCanScan(): boolean {
+  const [ok, setOk] = useState(false);
+  useEffect(() => void canScan().then(setOk), []);
+  return ok;
+}
 
 type Icon = LucideIcon | ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -79,6 +88,7 @@ function useEntries(): RailEntry[] {
   const measure = useApp((s) => s.measure.active);
   const ui = useSketchUi();
   usePrefs((s) => s.keys); // badges follow the shortcut preset
+  const scan = useCanScan();
 
   if (sketchId) {
     const t = ui.tool;
@@ -132,6 +142,7 @@ function useEntries(): RailEntry[] {
       active: measure,
       run: () => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null })),
     },
+    ...(scan ? [{ id: "scan", icon: ScanLine, label: "Scan", hint: "Scan a real object with the camera", run: () => void scanObject() }] : []),
     { id: "import", icon: Import, label: "Import", kbd: "Mod+O", hint: "STEP, STL, 3MF, OBJ, DXF or SVG", run: () => void importFile() },
   ];
 }
