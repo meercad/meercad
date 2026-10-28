@@ -256,6 +256,22 @@ export function Home() {
             </button>
           ))}
         </div>
+        <footer className="home-footer">
+          {(
+            [
+              ["about", "About meerCAD"],
+              ["privacy", "Privacy"],
+              ["licenses", "Licences"],
+            ] as const
+          ).map(([tab, label], i) => (
+            <span key={tab}>
+              {i ? " · " : null}
+              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about", { detail: tab }))}>
+                {label}
+              </button>
+            </span>
+          ))}
+        </footer>
       </div>
     </div>
   );

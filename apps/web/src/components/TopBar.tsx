@@ -1,4 +1,4 @@
-import { ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Keyboard, Moon, PanelLeft, Redo2, Ruler, Settings, Share2, Undo2, Upload } from "lucide-react";
+import { ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Info, Keyboard, Moon, PanelLeft, Redo2, Ruler, Settings, Share2, Undo2, Upload } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { goHome, redo, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -66,6 +66,8 @@ export function TopBar() {
       { label: `${usePrefs.getState().showValues ? "Hide" : "Show"} dimensions on the model`, icon: <Ruler />, onClick: () => setPrefs({ showValues: !usePrefs.getState().showValues }) },
       { label: `${usePrefs.getState().showKeys ? "Hide" : "Show"} shortcut badges`, icon: <Keyboard />, onClick: () => setPrefs({ showKeys: !usePrefs.getState().showKeys }) },
       { label: "Toggle dark mode", icon: <Moon />, onClick: toggleTheme },
+      "sep",
+      { label: "About meerCAD, privacy & licences", icon: <Info />, onClick: () => window.dispatchEvent(new CustomEvent("meercad:about")) },
     ]);
   };
 

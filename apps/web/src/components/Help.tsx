@@ -135,9 +135,22 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         body: (
           <ul>
             <li>meerCAD is free to use, also commercially, and its source is public under the Functional Source License 1.1: anything goes except building a competing product from it. Each release also becomes Apache-2.0 two years after it ships. The file-format, I/O and naming libraries are MIT licensed.</li>
-            <li>Geometry by <b>Open CASCADE Technology</b> and sketch solving by <b>PlaneGCS</b> (FreeCAD), both LGPL-2.1, used unmodified as replaceable WebAssembly modules.</li>
-            <li>Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages — the full list is in THIRD_PARTY_NOTICES.md next to the app.</li>
-            <li>Your models belong to you: projects are plain files on your computer; nothing is uploaded.</li>
+            <li>Geometry by <b>Open CASCADE Technology</b> and sketch solving by <b>PlaneGCS</b> (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules.</li>
+            <li>Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages.</li>
+            <li>Your models belong to you: projects are plain files on your device; nothing is uploaded.</li>
+            <li>
+              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about", { detail: "licenses" }))}>
+                All licences
+              </button>{" "}
+              ·{" "}
+              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about", { detail: "privacy" }))}>
+                Privacy policy
+              </button>{" "}
+              ·{" "}
+              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about"))}>
+                No warranty
+              </button>
+            </li>
           </ul>
         ),
       },
