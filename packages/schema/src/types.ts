@@ -310,6 +310,20 @@ export interface SweepFeature extends FeatureBase {
 }
 
 /**
+ * Draft for cast and moulded parts: tilts side faces by an angle so the part comes out of its
+ * mould. The faces keep their line on the neutral plane (usually the parting face or the bottom)
+ * and lean inwards along the pull direction (the neutral plane's normal; `flip` reverses it).
+ */
+export interface DraftFeature extends FeatureBase {
+  op: "draft";
+  faces: FaceSelector[];
+  /** Draft angle in degrees, typically 1–5. */
+  angle: Expr;
+  neutral: PlaneSpec;
+  flip?: boolean;
+}
+
+/**
  * A stiffening rib from open lines in a sketch: each line is thickened across the sketch plane and
  * filled from the line to the part's walls (in the sketch plane, at right angles to the line), so
  * a line drawn across a corner or between two walls becomes a web joining them.
@@ -392,6 +406,7 @@ export type Feature =
   | LoftFeature
   | SplitFeature
   | RibFeature
+  | DraftFeature
   | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature

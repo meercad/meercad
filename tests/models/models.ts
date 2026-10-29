@@ -516,4 +516,22 @@ export const MODELS: TestModel[] = [
     ]),
     expect: { bodies: 1, volume: 60 * 40 * 5 + 5 * 40 * 35 + 2 * 0.5 * 25 * 30 * 4, size: [60, 40, 40] },
   },
+  {
+    file: "28 Gussform-Deckel mit Schräge",
+    name: "Moulded cap with draft",
+    look: "A 50 × 30 × 15 cap with 3° draft on all four sides: the bottom stays 50 × 30, the top is about 1.6 mm smaller on each side; the top edges are rounded with 2 mm.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("l", -25, -15, 50, 30)),
+      { id: "ex1", op: "extrude", name: "Cap", profile: { sketch: "sk1" }, extent: "blind", distance: 15, mode: "new_body" },
+      { id: "dr1", op: "draft", name: "Draft", faces: ["l1", "l2", "l3", "l4"].map((l) => ({ face: `ex1.side[sk1.${l}]` })), angle: 3, neutral: { ref: "origin.XY" } },
+      { id: "fi1", op: "fillet", name: "Top edges", edges: { select: "edges", of: "ex1", where: { face: "ex1.end_cap" } }, radius: 2 },
+    ]),
+    // Frustum of the draft minus a little for the rounds (checked as a range).
+    expect: (() => {
+      const d = 15 * Math.tan((3 * PI) / 180);
+      const top = (50 - 2 * d) * (30 - 2 * d);
+      const v = (15 / 3) * (1500 + top + Math.sqrt(1500 * top));
+      return { bodies: 1, volume: [v - 2 * (50 + 30) * 4 * (1 - PI / 4) - 50, v - 2 * (50 + 30) * 4 * (1 - PI / 4) + 50] as [number, number], size: [50, 30, 15] as [number, number, number] };
+    })(),
+  },
 ];

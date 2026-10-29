@@ -17,6 +17,7 @@ import {
   type ResolvedPlane,
   type ResolvedRevolve,
   type ResolvedRib,
+  type ResolvedDraft,
   type ResolvedShell,
   type ResolvedSketch,
   type ResolvedTransform,
@@ -104,6 +105,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return split(f, ctx);
       case "rib":
         return rib(f, ctx);
+      case "draft":
+        return draft(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -592,6 +595,42 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
   }
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/** Draft: the faces tilted about their line on the neutral plane, leaning in along the pull direction. */
+function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena, g } = ctx;
+  if (!(Math.abs(f.angle) > 0) || Math.abs(f.angle) >= 45) throw new FeatureError("the draft angle must be between 0 and 45 degrees");
+  if (!f.faces.length) throw new FeatureError("select the faces to draft");
+  const refs = f.faces.flatMap((s) => resolveFaces(s, [...ctx.prev.bodies.values()]));
+  const bodyIds = new Set(refs.map((r) => r.body));
+  if (bodyIds.size !== 1) throw new FeatureError("draft faces must belong to one part");
+  const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
+  const frame = planeFrame(f.neutral, ctx);
+  const pull: Vec3 = f.flip ? [-frame.normal[0], -frame.normal[1], -frame.normal[2]] : frame.normal;
+  const pln = arena.track(new oc.gp_Pln(arena.track(new oc.gp_Ax3(g.pnt(frame.origin), g.dir(frame.normal), g.dir(frame.u)))));
+  const mk = arena.track(new oc.BRepOffsetAPI_DraftAngle(input.shape));
+  for (const r of refs) {
+    for (const fi of r.faces) {
+      const face = oc.TopoDS.Face(input.faces[fi]!);
+      mk.Add(face, g.dir(pull), (f.angle * Math.PI) / 180, pln, true);
+      if (!mk.AddDone()) throw new FeatureError(`face ${input.faceTags[fi]?.[0] ?? fi} cannot be drafted`, "draft side faces that cross the neutral plane or stand on it; flat faces parallel to it cannot be drafted");
+    }
+  }
+  try {
+    mk.Build(arena.track(new oc.Message_ProgressRange()));
+  } catch (e) {
+    throw new FeatureError(`draft failed: ${occtErrorMessage(oc, e)}`, "try a smaller angle or fewer faces");
+  }
+  if (!mk.IsDone()) throw new FeatureError("draft failed", "try a smaller angle, or draft faces that meet the neutral plane");
+  const body = new Body(oc, arena, input.bodyId, arena.track(mk.Shape()));
+  const descendants = input.faces.map((face) => {
+    const same = body.faceIndex(face);
+    if (same >= 0) return [same];
+    return listToArray(arena, mk.Modified(face)).map((s) => body.faceIndex(s)).filter((i) => i >= 0);
+  });
+  body.faceTags = propagateTags(input.faceTags, body.faces.length, { descendants, generated: [] }, `${f.id}.face`).tags;
+  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
 }
 
 /**

@@ -38,6 +38,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     source: ["face"],
     plane: ["plane", "face"],
     base: ["plane", "face"],
+    neutral: ["plane", "face"],
     points: ["face"],
   };
   if (op === "linear_pattern" && d.field === "direction") return new Set(map["direction"]);
@@ -178,7 +179,8 @@ function handlePick(p: Pick, d: DialogState): void {
         break;
       }
       case "plane":
-      case "base": {
+      case "base":
+      case "neutral": {
         const spec = planeSpecForPick(p, meshes);
         if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
         // A hole goes where the face was tapped.
@@ -195,7 +197,7 @@ function handlePick(p: Pick, d: DialogState): void {
     return g as Feature;
   });
   // Single-valued fields advance to the next field automatically.
-  if (["axis", "direction", "plane", "base", "target"].includes(field)) {
+  if (["axis", "direction", "plane", "base", "neutral", "target"].includes(field)) {
     const next = f.op === "boolean" && field === "target" ? "tools" : f.op === "hole" && field === "plane" ? "points" : null;
     setDialogField(next);
   }
@@ -1007,6 +1009,29 @@ function Body({ d }: { d: DialogState }) {
           <label className="checkbox">
             <input type="checkbox" checked={!!f.keepTools} onChange={(e) => set({ keepTools: e.target.checked || undefined })} /> Keep tools
           </label>
+        </>
+      );
+    case "draft":
+      return (
+        <>
+          <Field label="Faces">
+            <SelBox field="faces" items={f.faces.map(describeFaceSelector)} placeholder="Pick side faces" onRemove={(i) => set({ faces: f.faces.filter((_, j) => j !== i) })} />
+          </Field>
+          <Field label="Angle">
+            <ExprInput value={f.angle} unit="deg" autoFocus onCommit={(angle) => set({ angle })} onLive={(angle) => set({ angle })} />
+          </Field>
+          <Field label="Neutral plane">
+            <div className="row">
+              <div style={{ flex: 1 }}>
+                <SelBox field="neutral" items={[describePlane(f.neutral)]} placeholder="Pick a plane or flat face" />
+              </div>
+              <button className={`icon-btn ${f.flip ? "active" : ""}`} title="Pull the other way" onClick={() => set({ flip: f.flip ? undefined : true })}>
+                <ArrowLeftRight />
+              </button>
+            </div>
+            <PlaneButtons value={f.neutral} onChange={(neutral) => set({ neutral })} />
+          </Field>
+          <p className="muted small">The faces keep their edge on the neutral plane (usually the bottom or the parting face) and lean inwards in the pull direction. 1–3° is typical for moulded parts.</p>
         </>
       );
     case "rib": {

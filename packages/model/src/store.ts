@@ -144,6 +144,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     loft: "lo",
     split: "sp",
     rib: "rb",
+    draft: "dr",
     sweep: "sw",
   };
   const used = new Set(doc.features.map((f) => f.id));

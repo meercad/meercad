@@ -8,6 +8,7 @@ import type {
   FilletFeature,
   GearFeature,
   HoleFeature,
+  DraftFeature,
   RibFeature,
   LinearPatternFeature,
   MeshConvertFeature,
@@ -46,6 +47,7 @@ export type ResolvedGear = R<
 };
 export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number };
 export type ResolvedRib = R<RibFeature, "thickness">;
+export type ResolvedDraft = R<DraftFeature, "angle">;
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
@@ -64,6 +66,7 @@ export type ResolvedFeature =
   | ResolvedMeshConvert
   | ResolvedHole
   | ResolvedRib
+  | ResolvedDraft
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" | "split" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
@@ -137,6 +140,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         depth: opt("depth", f.depth),
         allowance: opt("allowance", f.allowance),
       };
+    case "draft":
+      return { ...f, angle: ev("angle", f.angle) };
     case "rib":
       return { ...f, thickness: ev("thickness", f.thickness) };
     case "mesh_convert":
@@ -171,6 +176,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     mesh_convert: ["tolerance", "angle"],
     hole: ["diameter", "depth", "allowance"],
     rib: ["thickness"],
+    draft: ["angle"],
   };
   if (f.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
