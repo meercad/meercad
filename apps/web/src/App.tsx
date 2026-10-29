@@ -1,3 +1,5 @@
+import { MotionPanel } from "./components/MotionPanel";
+import { toggleJoints, useMotion } from "./lib/mechanism";
 import { useEffect, useState } from "react";
 import { decodeShareFragment } from "@meercad/io";
 import { validateDocument } from "@meercad/schema";
@@ -57,6 +59,8 @@ function runModelAction(action: ModelAction): void {
       return;
     case "measure":
       return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
+    case "joints":
+      return toggleJoints();
     case "sketch":
       if (hovered && (hovered.kind === "plane" || (hovered.kind === "face" && hovered.normal))) {
         const spec = planeSpecForPick(hovered, s.output?.meshes ?? []);
@@ -93,7 +97,8 @@ async function route(): Promise<void> {
 export function App() {
   const screen = useApp((s) => s.screen);
   const sideOpen = useApp((s) => s.sideOpen);
-  const sheet = useApp((s) => !!s.dialog || s.measure.active);
+  const motionOpen = useMotion((s) => s.open);
+  const sheet = useApp((s) => !!s.dialog || s.measure.active) || motionOpen;
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);
@@ -241,6 +246,8 @@ export function App() {
         if (s.dialog) return cancelDialog();
         if (s.pickingSketchPlane) return useApp.setState({ pickingSketchPlane: false });
         if (s.measure.active) return useApp.setState({ measure: { active: false, picks: [], result: null } });
+        if (useMotion.getState().draft) return useMotion.setState({ draft: null });
+        if (useMotion.getState().open) return toggleJoints();
         return useApp.setState({ selection: [], selectedFeature: null });
       }
       if (e.key === "Enter" && s.dialog) return void commitDialog();
@@ -288,6 +295,7 @@ export function App() {
             <ViewportView />
             <Toolbar />
             <FeatureDialog />
+            <MotionPanel />
           </div>
         </div>
       )}

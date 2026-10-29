@@ -22,6 +22,7 @@ export type ModelAction =
   | "boolean"
   | "plane"
   | "measure"
+  | "joints"
   | "palette"
   | "fit"
   | "normal"
@@ -54,6 +55,7 @@ const BASE: Keymap = {
   boolean: ["B"],
   plane: ["N"],
   measure: ["Shift+M"],
+  joints: ["J"],
   palette: ["X", "Mod+F"],
   fit: ["Z"],
   normal: ["Space"],
@@ -300,7 +302,7 @@ export function actionFor<A extends Action>(e: KeyboardEvent, actions: readonly 
 
 export const MODEL_ACTIONS: readonly ModelAction[] = [
   "sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane",
-  "measure", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
+  "measure", "joints", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
 ];
 export const SKETCH_ACTIONS: readonly SketchAction[] = [
   "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.point", "sketch.trim",

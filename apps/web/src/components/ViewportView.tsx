@@ -1,3 +1,4 @@
+import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Pencil, PencilLine, Ruler, Scan, SlidersHorizontal, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -145,6 +146,7 @@ export function ViewportView() {
     if (!scene) vp.resetFraming();
   }, [vp, scene]);
   // Phone: sheets cover the lower part of the view; the model centres in the space above them.
+  const motionOpen = useMotion((s) => s.open);
   const sideOpen = useApp((s) => s.sideOpen);
   const phoneConstraints = usePhoneSheets((s) => s.constraints);
   useEffect(() => {
@@ -167,7 +169,14 @@ export function ViewportView() {
       window.clearTimeout(t);
       window.removeEventListener("resize", update);
     };
-  }, [vp, dialog, measure.active, sideOpen, sketchId, phoneConstraints]);
+  }, [vp, dialog, measure.active, sideOpen, sketchId, phoneConstraints, motionOpen]);
+  // Moving parts: poses from the joint values; parts can be dragged while the joints panel is open.
+  const motionFree = useMotion((s) => s.free);
+  useEffect(() => {
+    if (!vp) return;
+    vp.partDrag = motionOpen && !dialog ? partDrag : null;
+    vp.setPoses(currentPoses());
+  }, [vp, motionOpen, motionFree, output, doc.mechanism, dialog]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, pickingPlane, dialog?.field]);
@@ -364,6 +373,7 @@ export function ViewportView() {
 
   const onClick = (pick: Pick | null, additive: boolean) => {
     const s = useApp.getState();
+    if (!s.dialog && jointPick(pick)) return;
     if (s.pickingSketchPlane) {
       if (!pick) return;
       const spec = planeSpecForPick(pick, s.output?.meshes ?? []);

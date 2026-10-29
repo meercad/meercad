@@ -48,10 +48,11 @@ number that must come out.
 | 15 | Parametric toothed wheel | expressions, circular pattern count from a variable, variants |
 | 16 | Enclosure with lid | fillet, shell, offset planes, 2-D pattern, two parts |
 | 17 | Spur gear with bore | gear from variables, bore, variants (teeth, module) |
-| 18 | Gear pair 1:2 | meshWith at an angle, D-shaft bore with allowance |
+| 18 | Gear pair 1:2 | meshWith at an angle, D-shaft bore with allowance, gear joints with a coupling |
 | 19 | Herringbone pair with chamfered teeth | herringbone, opposite hand of the mate, tooth chamfer |
 | 20 | Planetary gear set | ring gear, three planets, sun meshing with a planet |
 | 21 | Rack and pinion | rack, pinion placed on it |
+| 22 | Hinged lid | fixed and revolute joints on a pin's axis, limits |
 
 Each model states what must come out (parts, volume worked out by hand where possible, size) and what
 a person should see when looking at it (`look`). The test rebuilds each one, checks the numbers and

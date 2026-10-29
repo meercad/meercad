@@ -9,6 +9,8 @@ async function check(doc: MeercadDocument, want: Expectation) {
   const { report } = (await newSession()).rebuild(doc);
   expect(report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
   expect(report.bodies).toHaveLength(want.bodies);
+  // Every joint finds its axis.
+  expect(report.joints.filter((j) => j.error).map((j) => `${j.id}: ${j.error}`)).toEqual([]);
   const volume = report.bodies.reduce((s, b) => s + b.volume, 0);
   if (typeof want.volume === "number") expect(Math.abs(volume - want.volume) / want.volume, `volume ${volume} vs ${want.volume}`).toBeLessThan(0.005);
   else if (want.volume) {

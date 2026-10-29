@@ -301,10 +301,19 @@ export const MODELS: TestModel[] = [
     file: "18 Zahnradpaar",
     name: "Gear pair 1:2",
     look: "A 15-tooth pinion and a 30-tooth gear (module 1.5, 8 mm wide) 33.75 mm apart, 30° round from the pinion. Teeth sit in gaps with a hair of play; nothing touches.",
-    doc: doc([
-      gear("gr1", { name: "Pinion", module: 1.5, teeth: 15, width: 8, bore: { diameter: 5, shape: "d_flat", flat: 4.5, allowance: 0.15 } }),
-      gear("gr2", { name: "Gear", teeth: 30, width: 8, meshWith: { gear: "gr1", direction: 30 }, bore: { diameter: 8 } }),
-    ]),
+    doc: {
+      ...doc([
+        gear("gr1", { name: "Pinion", module: 1.5, teeth: 15, width: 8, bore: { diameter: 5, shape: "d_flat", flat: 4.5, allowance: 0.15 } }),
+        gear("gr2", { name: "Gear", teeth: 30, width: 8, meshWith: { gear: "gr1", direction: 30 }, bore: { diameter: 8 } }),
+      ]),
+      mechanism: {
+        joints: [
+          { id: "j1", name: "Pinion", type: "revolute", a: "gr1", b: "ground", anchor: { gear: "gr1" } },
+          { id: "j2", name: "Gear", type: "revolute", a: "gr2", b: "ground", anchor: { gear: "gr2" } },
+        ],
+        couplings: [{ id: "c1", driver: "j1", driven: "j2", ratio: -0.5 }],
+      },
+    },
     expect: { bodies: 2, volume: [(gearArea({ module: 1.5, teeth: 15 }) - PI * 2.65 ** 2 + gearArea({ module: 1.5, teeth: 30 }) - PI * 16) * 8, (gearArea({ module: 1.5, teeth: 15 }) - PI * 2.5 ** 2 + gearArea({ module: 1.5, teeth: 30 }) - PI * 16) * 8 + 1] },
   },
   {
@@ -346,5 +355,29 @@ export const MODELS: TestModel[] = [
       gear("gr2", { name: "Pinion", teeth: 16, width: 8, meshWith: { gear: "gr1" }, bore: { diameter: 5 } }),
     ]),
     expect: { bodies: 2, volume: (gearArea({ kind: "rack", module: 1.5, teeth: 20 }, 6) + gearArea({ module: 1.5, teeth: 16 }) - PI * 6.25) * 8 },
+  },
+  {
+    file: "22 Scharnier",
+    name: "Hinged lid",
+    look: "A 60 × 40 × 20 box and a 60 × 40 × 3 lid on top, joined by a Ø5 pin along the back edge. Joints panel: dragging the lid swings it up about the pin, from 0° to 110°, and no further.",
+    doc: {
+      ...doc([
+        sketch("sk1", { ref: "origin.XY" }, rect("l", -30, -20, 60, 40)),
+        { id: "ex1", op: "extrude", name: "Box", profile: { sketch: "sk1" }, extent: "blind", distance: 20, mode: "new_body" },
+        { id: "pl1", op: "plane", name: "Lid plane", base: { ref: "origin.XY" }, offset: 20 },
+        sketch("sk2", { ref: "pl1" }, rect("m", -30, -20, 60, 40)),
+        { id: "ex2", op: "extrude", name: "Lid", profile: { sketch: "sk2" }, extent: "blind", distance: 3, mode: "new_body" },
+        { id: "pl2", op: "plane", name: "Pin plane", base: { ref: "origin.YZ" }, offset: -30 },
+        sketch("sk3", { ref: "pl2" }, circle("c1", 20, 20, 2.5)),
+        { id: "ex3", op: "extrude", name: "Pin", profile: { sketch: "sk3" }, extent: "blind", distance: 60, mode: "new_body" },
+      ]),
+      mechanism: {
+        joints: [
+          { id: "j1", name: "Pin", type: "fixed", a: "ex3", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.c1]" } } },
+          { id: "j2", name: "Lid", type: "revolute", a: "ex2", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.c1]" } }, limits: [0, 110] },
+        ],
+      },
+    },
+    expect: { bodies: 3, volume: 60 * 40 * 20 + 60 * 40 * 3 + PI * 6.25 * 60, size: [60, 42.5, 23] },
   },
 ];

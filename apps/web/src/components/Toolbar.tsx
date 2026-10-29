@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import type { FeatureOp } from "@meercad/schema";
+import { toggleJoints, useMotion } from "../lib/mechanism";
 import { FEATURES } from "../lib/features";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleConstruction } from "../sketch/actions";
@@ -88,6 +89,7 @@ function useEntries(): RailEntry[] {
   const sketchId = useApp((s) => s.sketchId);
   const activeOp = useApp((s) => s.dialog?.feature.op);
   const measure = useApp((s) => s.measure.active);
+  const joints = useMotion((s) => s.open);
   const ui = useSketchUi();
   usePrefs((s) => s.keys); // badges follow the shortcut preset
   const scan = useCanScan();
@@ -135,6 +137,15 @@ function useEntries(): RailEntry[] {
       tools: [feature("transform", activeOp), feature("linear_pattern", activeOp), feature("circular_pattern", activeOp), feature("mirror", activeOp)],
     },
     "sep",
+    {
+      id: "joints",
+      icon: Link2,
+      label: "Joints",
+      ...withKbd(keyFor("joints")),
+      hint: "Joints: parts that turn or slide; drag them to try",
+      active: joints,
+      run: toggleJoints,
+    },
     {
       id: "measure",
       icon: Ruler,

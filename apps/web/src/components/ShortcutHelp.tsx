@@ -13,6 +13,7 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
     rows: [
       ...TOOLBAR.filter((op) => map[op as Action][0]).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
       ["Measure", keys(map, "measure")],
+      ["Joints", keys(map, "joints")],
       ["Command search", keys(map, "palette")],
       ["Import file", "Mod+O"],
     ],

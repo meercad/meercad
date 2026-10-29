@@ -69,6 +69,11 @@ export type Pick =
 
 export type PickKind = Pick["kind"];
 
+export interface Ray {
+  origin: Vec3;
+  dir: Vec3;
+}
+
 export interface SceneData {
   bodies: ViewMesh[];
   sketches: SketchView[];
@@ -192,6 +197,7 @@ export class Viewport {
     container.appendChild(this.renderer.domElement);
     this.bindPointerRoles();
     this.bindHandles();
+    this.bindPartDrag();
     this.renderer.domElement.style.display = "block";
     this.renderer.domElement.style.touchAction = "none";
 
@@ -456,6 +462,85 @@ export class Viewport {
     this.bodiesGroup.clear();
     this.bodies = data.bodies.filter((m) => !data.hiddenBodies?.has(m.bodyId)).map((m) => this.buildBody(m, !!data.ghostBodies?.has(m.bodyId)));
     for (const b of this.bodies) this.bodiesGroup.add(b.group);
+    this.applyPoses();
+  }
+
+  // ---------------------------------------------------------------- moving parts
+
+  private poses: ReadonlyMap<string, readonly number[]> = new Map();
+  /**
+   * Set while parts can be dragged (moving a mechanism): `start` decides on a press on a part whether
+   * it grabs that part; then `move` gets the pointer ray until `end`.
+   */
+  partDrag: { start(pick: Extract<Pick, { kind: "face" }>, ray: Ray): boolean; move(ray: Ray): void; end(): void } | null = null;
+  private activePart: number | null = null;
+
+  /** Shows parts moved from where they were modelled (column-major 4×4 matrices by body id). */
+  setPoses(poses: ReadonlyMap<string, readonly number[]>): void {
+    if (poses.size === 0 && this.poses.size === 0) return;
+    this.poses = poses;
+    this.applyPoses();
+  }
+
+  private applyPoses(): void {
+    for (const b of this.bodies) {
+      const m = this.poses.get(b.mesh.bodyId);
+      b.group.matrixAutoUpdate = false;
+      if (m) b.group.matrix.fromArray(m as number[]);
+      else b.group.matrix.identity();
+      b.group.updateMatrixWorld(true);
+    }
+    this.invalidate();
+  }
+
+  /** The pointer's ray into the scene. */
+  ray(clientX: number, clientY: number): Ray {
+    this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+    const { origin: o, direction: d } = this.raycaster.ray;
+    return { origin: [o.x, o.y, o.z], dir: [d.x, d.y, d.z] };
+  }
+
+  get draggingPart(): boolean {
+    return this.activePart !== null;
+  }
+
+  private bindPartDrag(): void {
+    const el = this.renderer.domElement;
+    el.addEventListener(
+      "pointerdown",
+      (e) => {
+        const drag = this.partDrag;
+        if (!drag || e.button !== 0 || this.activePart !== null || (e.pointerType === "touch" && !e.isPrimary)) return;
+        const pick = this.pick(e.clientX, e.clientY, new Set(["face"]));
+        if (pick?.kind !== "face" || !drag.start(pick, this.ray(e.clientX, e.clientY))) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        this.activePart = e.pointerId;
+        el.style.cursor = "grabbing";
+      },
+      { capture: true },
+    );
+    const moveTo = perFrame((e: PointerEvent) => this.partDrag?.move(this.ray(e.clientX, e.clientY)));
+    el.addEventListener(
+      "pointermove",
+      (e) => {
+        if (e.pointerId !== this.activePart) return;
+        e.stopImmediatePropagation();
+        moveTo(e);
+      },
+      { capture: true },
+    );
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== this.activePart) return;
+      e.stopImmediatePropagation();
+      moveTo.flush();
+      this.activePart = null;
+      el.style.cursor = "";
+      this.partDrag?.end();
+    };
+    el.addEventListener("pointerup", end, { capture: true });
+    el.addEventListener("pointercancel", end, { capture: true });
   }
 
   private buildBody(mesh: ViewMesh, ghost: boolean): BodyObj {
