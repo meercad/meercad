@@ -206,7 +206,7 @@ server.registerTool(
   "apply_ops",
   {
     title: "Change the model",
-    description: "Applies Operations-API ops atomically as one undo step (add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback, replace) and returns the rebuild result. Rejected ops leave the model unchanged. An import feature may give `path` (a file on this computer) instead of base64 `data`.",
+    description: "Applies Operations-API ops atomically as one undo step (add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback, replace; joints and couplings: set_joint, delete_joint, set_coupling, delete_coupling) and returns the rebuild result. Rejected ops leave the model unchanged. An import feature may give `path` (a file on this computer) instead of base64 `data`.",
     inputSchema: { ops: z.array(op).min(1) },
   },
   guard(async ({ ops }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops) }))),
@@ -239,17 +239,63 @@ server.registerTool(
   guard(async ({ name }) => text(await call("new_project", { name }))),
 );
 
+const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
+const shot = {
+  view: view.optional(),
+  direction: z.tuple([z.number(), z.number(), z.number()]).optional().describe("Look along this direction (camera towards model), e.g. [1,-1,-0.5] from front-left above; overrides view"),
+  focus: z.array(z.string()).optional().describe("Part ids to zoom onto"),
+  isolate: z.boolean().optional().describe("With focus: hide all other parts"),
+  section: z
+    .object({ plane: z.enum(["XY", "XZ", "YZ"]).optional(), normal: z.tuple([z.number(), z.number(), z.number()]).optional(), offset: z.number().optional() })
+    .optional()
+    .describe("Cut the model open: the side the normal points to is removed; the cut faces show red. offset moves the plane along its normal (mm)"),
+  highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts drawn orange, faces (selectors) drawn as selected (blue)"),
+};
+
 server.registerTool(
   "render_view",
   {
     title: "Look at the model",
-    description: "Renders the current model as a PNG from a standard view, for visual checks.",
-    inputSchema: { view: z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]).optional(), width: z.number().int().min(64).max(2048).optional(), height: z.number().int().min(64).max(2048).optional() },
+    description:
+      "Renders the model as a PNG to check the result: from a standard view or any direction, zoomed onto parts (focus, isolate), cut open by a plane (section, cut faces red) and with parts or faces highlighted. Moving parts show in their current pose (set_pose). Does not move the user's camera.",
+    inputSchema: { ...shot, width: z.number().int().min(64).max(2048).optional(), height: z.number().int().min(64).max(2048).optional() },
     annotations: { readOnlyHint: true },
   },
   guard(async (a) => {
     const r = await call<{ png: string }>("render_view", a);
     return { content: [{ type: "image", data: r.png, mimeType: "image/png" }] };
+  }),
+);
+
+server.registerTool(
+  "render_motion",
+  {
+    title: "Watch a motion",
+    description:
+      "Moves one joint from `from` to `to` (default: its limits, a full turn, or ±20 mm) and returns the poses as one contact-sheet PNG, each frame labelled with the joint value; frames where parts overlap get a red border naming them (collisions: false skips that check, faster). With `video.path` it also writes an animated GIF of the motion there (for people to watch). Takes the same picture options as render_view. The joints go back where they were.",
+    inputSchema: {
+      joint: z.string(),
+      from: z.number().optional(),
+      to: z.number().optional(),
+      frames: z.number().int().min(2).max(16).optional().describe("Frames on the sheet, default 9"),
+      collisions: z.boolean().optional(),
+      ...shot,
+      width: z.number().int().min(256).max(2400).optional().describe("Width of the whole sheet, default 1200"),
+      video: z.object({ path: z.string(), frames: z.number().int().min(4).max(120).optional(), width: z.number().int().min(64).max(1280).optional(), height: z.number().int().min(64).max(1280).optional() }).optional(),
+    },
+  },
+  guard(async ({ video, ...a }) => {
+    const r = await call<{ png: string; frames: unknown; gif?: string }>("render_motion", { ...a, ...(video ? { video: { frames: video.frames, width: video.width, height: video.height } } : {}) });
+    const content: ({ type: "image"; data: string; mimeType: string } | { type: "text"; text: string })[] = [{ type: "image", data: r.png, mimeType: "image/png" }];
+    let note = JSON.stringify({ frames: r.frames });
+    if (video && r.gif) {
+      const out = resolve(video.path);
+      const data = Buffer.from(r.gif, "base64");
+      await writeFile(out, data);
+      note += `\nwrote a ${data.length} byte GIF to ${out}`;
+    }
+    content.push({ type: "text", text: note });
+    return { content };
   }),
 );
 

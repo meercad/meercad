@@ -1,4 +1,7 @@
-import { Check, Cog, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
+import { Check, Cog, Film, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { download } from "./io";
+import { jointRange, renderMotionGif } from "../lib/render";
 import type { Joint } from "@meercad/schema";
 import { partName } from "../lib/features";
 import { checkClearance, currentMechanism, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, restPose, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
@@ -26,6 +29,20 @@ export function MotionPanel() {
   const draft = useMotion((s) => s.draft);
   const free = useMotion((s) => s.free);
   const playing = useMotion((s) => s.playing);
+  const [filming, setFilming] = useState<string | null>(null);
+  const film = async (id: string) => {
+    setFilming(id);
+    try {
+      const [from, to] = jointRange(id);
+      const gif = await renderMotionGif(id, from, to);
+      const project = useApp.getState().project?.name ?? "meerCAD";
+      download(`${project} ${id}.gif`, gif as BlobPart, "image/gif");
+    } catch (e) {
+      toast(`Could not make the video: ${(e as Error).message}`, "error");
+    } finally {
+      setFilming(null);
+    }
+  };
   const stuck = useMotion((s) => s.stuck);
   useMotion((s) => s.tick);
   const doc = useApp((s) => s.doc);
@@ -69,6 +86,11 @@ export function MotionPanel() {
                     <span className="muted small">
                       {name(j.a)} on {name(j.b)}
                     </span>
+                    {j.type !== "fixed" && !problems[j.id] ? (
+                      <button className={`icon-btn sm ${filming === j.id ? "active" : ""}`} title="Save a video (GIF) of this motion" disabled={!!filming} onClick={() => void film(j.id)}>
+                        <Film />
+                      </button>
+                    ) : null}
                     <button className="icon-btn sm" title="Edit" onClick={() => editJoint(j.id)}>
                       <Pencil />
                     </button>

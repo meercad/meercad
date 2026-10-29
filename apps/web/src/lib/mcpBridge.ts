@@ -10,7 +10,9 @@ import { applyOp } from "@meercad/model";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
 import { sketchCurves } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
+import type { StandardView } from "@meercad/viewport";
 import { checkMotion, clearanceNow, setPose } from "./mechanism";
+import { jointRange, renderMotionGif, renderMotionSheet, renderShot, type Shot } from "./render";
 import { meshTopology } from "./topology";
 
 type Status = "off" | "connecting" | "connected";
@@ -116,6 +118,23 @@ function summary(out: RebuildOutput) {
   };
 }
 
+/** Picture options from a tool call (render_view, render_motion). */
+function shotOf(p: Record<string, unknown>): Shot {
+  const planes: Record<string, [number, number, number]> = { XY: [0, 0, 1], XZ: [0, 1, 0], YZ: [1, 0, 0] };
+  const sec = p["section"] as { plane?: string; normal?: [number, number, number]; offset?: number } | undefined;
+  const normal = sec ? (sec.normal ?? planes[sec.plane ?? ""]) : undefined;
+  if (sec && !normal) throw new Error('section needs plane "XY", "XZ" or "YZ", or a normal');
+  return {
+    ...(p["width"] !== undefined ? { width: Number(p["width"]) } : {}),
+    ...(p["height"] !== undefined ? { height: Number(p["height"]) } : {}),
+    ...(typeof p["view"] === "string" ? { view: p["view"] as StandardView } : {}),
+    ...(Array.isArray(p["direction"]) ? { direction: p["direction"] as [number, number, number] } : {}),
+    ...(Array.isArray(p["focus"]) ? { focus: p["focus"] as string[], isolate: !!p["isolate"] } : {}),
+    ...(normal ? { section: { normal, offset: sec?.offset ?? 0 } } : {}),
+    ...(p["highlight"] ? { highlight: p["highlight"] as Shot["highlight"] & object } : {}),
+  };
+}
+
 function needProject(): void {
   if (!useApp.getState().project) throw new Error("No project is open. Call list_projects / open_project or new_project first.");
 }
@@ -191,12 +210,22 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "render_view": {
       needProject();
       await rebuildNow();
-      const vp = getViewport();
-      if (!vp) throw new Error("viewport not ready");
-      if (typeof p["view"] === "string") vp.setView(p["view"] as "iso", false);
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
-      const url = vp.snapshot(Number(p["width"] ?? 800), Number(p["height"] ?? 600));
+      // No waiting for an animation frame: they stop while the window is in the background,
+      // which is where it usually is while an assistant works.
+      const url = renderShot(shotOf(p));
       return { png: url.slice(url.indexOf(",") + 1) };
+    }
+    case "render_motion": {
+      needProject();
+      await rebuildNow();
+      const joint = String(p["joint"]);
+      const [lo, hi] = jointRange(joint);
+      const from = p["from"] === undefined ? lo : Number(p["from"]);
+      const to = p["to"] === undefined ? hi : Number(p["to"]);
+      const sheet = await renderMotionSheet(joint, from, to, p["frames"] === undefined ? 9 : Number(p["frames"]), shotOf(p), p["collisions"] !== false);
+      const video = p["video"] as { frames?: number; width?: number; height?: number } | undefined;
+      const gif = video ? await renderMotionGif(joint, from, to, video.frames ?? 36, { ...shotOf(p), width: video.width ?? 480, height: video.height ?? 360 }) : null;
+      return { png: sheet.png.slice(sheet.png.indexOf(",") + 1), frames: sheet.frames, ...(gif ? { gif: toB64(gif) } : {}) };
     }
     case "set_view": {
       const vp = getViewport();

@@ -1441,6 +1441,108 @@ export class Viewport {
   }
   private changed = true;
 
+  /** Bounding box of the shown parts in their current poses (or of `bodies` only). */
+  modelBox(bodies?: readonly string[]): { min: Vec3; max: Vec3 } | null {
+    const box = new THREE.Box3();
+    for (const b of this.bodies) if (!bodies || bodies.includes(b.mesh.bodyId)) box.expandByObject(b.group);
+    return box.isEmpty() ? null : { min: box.min.toArray() as Vec3, max: box.max.toArray() as Vec3 };
+  }
+
+  /**
+   * A picture for assistants and exports: the model framed from a standard view or any direction,
+   * optionally zoomed onto some parts (`focus`, `isolate` hides the rest), cut open by a plane
+   * (`section`: the cut shows red) and with parts or faces highlighted. Helpers (grid, planes,
+   * handles) are left out. `box` fixes the framing (frames of a motion).
+   */
+  render(o: {
+    width: number;
+    height: number;
+    view?: StandardView;
+    direction?: Vec3;
+    focus?: readonly string[];
+    isolate?: boolean;
+    section?: { normal: Vec3; offset: number };
+    bodyColors?: ReadonlyMap<string, string>;
+    faces?: Pick[];
+    box?: { min: Vec3; max: Vec3 };
+  }): string {
+    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.sketchGroup, this.refGroup];
+    const shown = helpers.map((h) => h.visible);
+    helpers.forEach((h) => (h.visible = false));
+    const hidden = o.isolate && o.focus ? this.bodies.filter((b) => !o.focus!.includes(b.mesh.bodyId)) : [];
+    for (const b of hidden) b.group.visible = false;
+    const savedColors = this.bodyColors;
+    const savedSel = this.selected;
+    if (o.bodyColors) this.setBodyColors(new Map([...[...savedColors].map(([id, c]): [string, string] => [id, `#${c.getHexString()}`]), ...o.bodyColors]));
+    if (o.faces) this.setSelection(o.faces);
+    // The cut: clip everything, and show the inside (back faces) in red where the plane opens it.
+    const caps: THREE.Mesh[] = [];
+    const plane = o.section ? new THREE.Plane(new THREE.Vector3(...o.section.normal).normalize(), -o.section.offset) : null;
+    if (plane) {
+      this.renderer.localClippingEnabled = true;
+      for (const b of this.bodies) {
+        (b.faces.material as THREE.Material).clippingPlanes = [plane];
+        (b.edges.material as THREE.Material).clippingPlanes = [plane];
+        const cap = new THREE.Mesh(b.faces.geometry, new THREE.MeshBasicMaterial({ color: 0xd94a4a, side: THREE.BackSide, clippingPlanes: [plane] }));
+        b.group.add(cap);
+        caps.push(cap);
+      }
+    }
+    const prev = this.renderer.getSize(new THREE.Vector2());
+    this.persp.clearViewOffset();
+    this.renderer.setSize(o.width, o.height, false);
+    const aspect = o.width / o.height;
+    const saved = { aspect: this.persp.aspect, fov: this.persp.fov, pos: this.persp.position.clone(), quat: this.persp.quaternion.clone(), up: this.persp.up.clone() };
+    this.persp.aspect = aspect;
+    this.persp.fov = fovFor(aspect);
+    this.persp.updateProjectionMatrix();
+    const b = o.box ?? this.modelBox(o.focus) ?? { min: [-50, -50, -50] as Vec3, max: [50, 50, 50] as Vec3 };
+    const sphere = new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)).getBoundingSphere(new THREE.Sphere());
+    const std = VIEWS[o.view ?? "iso"];
+    const dir = new THREE.Vector3(...(o.direction ?? std.dir)).normalize();
+    // Up: Z, unless looking along it.
+    const up = o.direction ? (Math.abs(dir.z) > 0.95 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(...std.up);
+    const fov = THREE.MathUtils.degToRad(this.persp.fov) / 2;
+    const dist = (Math.max(sphere.radius, 1e-3) / Math.sin(Math.min(fov, Math.atan(Math.tan(fov) * aspect)))) * 1.04;
+    this.persp.position.copy(sphere.center).addScaledVector(dir, dist);
+    this.persp.up.copy(up);
+    this.persp.lookAt(sphere.center);
+    this.persp.updateMatrixWorld();
+    this.renderer.render(this.scene, this.persp);
+    const url = this.renderer.domElement.toDataURL("image/png");
+    // Put everything back.
+    this.persp.position.copy(saved.pos);
+    this.persp.quaternion.copy(saved.quat);
+    this.persp.up.copy(saved.up);
+    this.persp.aspect = saved.aspect;
+    this.persp.fov = saved.fov;
+    this.persp.updateProjectionMatrix();
+    this.persp.updateMatrixWorld();
+    this.renderer.setSize(prev.x, prev.y, false);
+    this.applyInset();
+    for (const cap of caps) {
+      cap.removeFromParent();
+      (cap.material as THREE.Material).dispose();
+    }
+    if (plane) {
+      for (const body of this.bodies) {
+        (body.faces.material as THREE.Material).clippingPlanes = null;
+        (body.edges.material as THREE.Material).clippingPlanes = null;
+      }
+      this.renderer.localClippingEnabled = false;
+    }
+    if (o.faces) this.setSelection(savedSel);
+    if (o.bodyColors) {
+      this.bodyColors = savedColors;
+      for (const body of this.bodies) body.painted = undefined;
+      this.paint();
+    }
+    for (const h of hidden) h.group.visible = true;
+    helpers.forEach((h, i) => (h.visible = shown[i]!));
+    this.invalidate();
+    return url;
+  }
+
   snapshot(width = 480, height = 360, clean = false): string {
     // Thumbnails leave out helpers so only the model is pictured.
     const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes];

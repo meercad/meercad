@@ -406,7 +406,7 @@ export async function checkClearance(): Promise<void> {
 // ---------------------------------------------------------------- for assistants (MCP)
 
 /** Joints panel open and nothing in the way, so poses show and can be checked. */
-function openForCheck(): void {
+export function openForCheck(): void {
   if (useApp.getState().dialog) throw new Error("a tool dialog is open in the app; finish or cancel it first");
   if (!useMotion.getState().open) useMotion.setState({ open: true, draft: null });
 }
