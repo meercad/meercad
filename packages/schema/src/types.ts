@@ -282,6 +282,30 @@ export interface ImportFeature extends FeatureBase {
 }
 
 /**
+ * Holes for screws, threads and inserts, drilled into a flat face (or a plane) at points in its
+ * coordinates, against its normal. Sizes follow the standards for metric screws (see model/holes.ts).
+ */
+export interface HoleFeature extends FeatureBase {
+  op: "hole";
+  /** The face or plane the holes start on; they go in against its normal (`flip` reverses). */
+  plane: PlaneSpec;
+  /** Hole centres in the plane's coordinates. */
+  points: [Expr, Expr][];
+  /** simple: a plain bore of `diameter`; clearance/counterbore/countersink: for a screw of `size`; tapped: threaded; insert: for a heat-set insert. */
+  kind: "simple" | "clearance" | "counterbore" | "countersink" | "tapped" | "insert";
+  /** Screw size such as "M3" (all kinds but simple). */
+  size?: string;
+  diameter?: Expr;
+  /** Clearance hole series (ISO 273), default normal. */
+  fit?: "close" | "normal" | "loose";
+  /** Bore depth; omitted = through all (inserts: the insert's length + 1 mm). */
+  depth?: Expr;
+  /** Added to every diameter for printed parts, mm. */
+  allowance?: Expr;
+  flip?: boolean;
+}
+
+/**
  * Replaces a part made from an imported mesh by a solid with real faces: planes, cylinders, cones
  * and spheres recognised in the triangles become editable faces; triangles that match no surface
  * stay flat facets. The part keeps its id.
@@ -306,6 +330,7 @@ export type Feature =
   | ShellFeature
   | ThreadFeature
   | GearFeature
+  | HoleFeature
   | LinearPatternFeature
   | CircularPatternFeature
   | MirrorFeature

@@ -7,6 +7,7 @@ import type {
   Feature,
   FilletFeature,
   GearFeature,
+  HoleFeature,
   LinearPatternFeature,
   MeshConvertFeature,
   PlaneFeature,
@@ -42,6 +43,7 @@ export type ResolvedGear = R<
   bore?: { diameter: number; allowance?: number; shape?: "round" | "d_flat" | "hex"; flat?: number };
   hub?: { diameter: number; length: number; side?: "front" | "back" | "both" };
 };
+export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number };
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
@@ -58,6 +60,7 @@ export type ResolvedFeature =
   | ResolvedLinearPattern
   | ResolvedCircularPattern
   | ResolvedMeshConvert
+  | ResolvedHole
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
@@ -123,6 +126,14 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return { ...f, count: count("count", f.count)!, spacing: ev("spacing", f.spacing), count2: count("count2", f.count2), spacing2: opt("spacing2", f.spacing2) };
     case "circular_pattern":
       return { ...f, count: count("count", f.count)!, angle: opt("angle", f.angle) };
+    case "hole":
+      return {
+        ...f,
+        points: f.points.map(([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number]),
+        diameter: opt("diameter", f.diameter),
+        depth: opt("depth", f.depth),
+        allowance: opt("allowance", f.allowance),
+      };
     case "mesh_convert":
       return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
     case "transform": {
@@ -153,12 +164,14 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
     mesh_convert: ["tolerance", "angle"],
+    hole: ["diameter", "depth", "allowance"],
   };
   if (f.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
     const rot = g["rotate"] as { angle: Expr } | undefined;
     if (rot) rot.angle = fn(rot.angle);
   }
+  if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "gear") {
     if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
     const nested = (o: unknown, ks: string[]) => {

@@ -4,6 +4,7 @@ import {
   Bolt,
   Box,
   Cog,
+  CircleDot,
   Combine,
   Copy,
   FileUp,
@@ -37,6 +38,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   chamfer: { label: "Chamfer", icon: Triangle, shortcut: "C", hint: "Bevel edges" },
   shell: { shortcut: "H", label: "Shell", icon: Shell, hint: "Hollow a body, removing selected faces" },
   thread: { shortcut: "T", label: "Thread", icon: Bolt, hint: "ISO metric thread in a hole or on a shaft" },
+  hole: { shortcut: "Shift+H", label: "Hole", icon: CircleDot, hint: "Holes for screws (clearance, counterbore, countersink), threads and heat-set inserts" },
   gear: { shortcut: "G", label: "Gear", icon: Cog, hint: "Involute gear, ring gear or rack; adds the mating gear at the right distance" },
   linear_pattern: { shortcut: "L", label: "Linear pattern", icon: Grid3x3, hint: "Repeat features or bodies along a direction" },
   circular_pattern: { shortcut: "O", label: "Circular pattern", icon: Orbit, hint: "Repeat features or bodies around an axis" },
@@ -52,7 +54,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "hole", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -96,6 +98,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, format: "step", fileName: "", data: "" };
     case "mesh_convert":
       return { id, op, body: "" };
+    case "hole":
+      return { id, op, plane: { ref: "origin.XY" }, points: [], kind: "clearance", size: "M3" } as unknown as Feature;
   }
 }
 
@@ -126,6 +130,8 @@ export function draftProblem(f: Feature): string | null {
       return f.data ? null : "Choose a file";
     case "mesh_convert":
       return f.body ? null : "Select a mesh part";
+    case "hole":
+      return f.points.length ? null : "Tap a flat face where the hole goes";
     default:
       return null;
   }

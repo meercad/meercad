@@ -2,7 +2,8 @@ import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
-import { gearDims, METRIC_THREADS, parseMetric } from "@meercad/model";
+import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric } from "@meercad/model";
+import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { gearParams, pairInfo } from "../lib/gears";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
@@ -34,9 +35,16 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     source: ["face"],
     plane: ["plane", "face"],
     base: ["plane", "face"],
+    points: ["face"],
   };
   if (op === "linear_pattern" && d.field === "direction") return new Set(map["direction"]);
   return new Set(map[d.field] ?? []);
+}
+
+/** A tapped point in the coordinates of the face's plane (the same frame the kernel uses), rounded to 0.01 mm. */
+function holePoint(point: [number, number, number], normal: [number, number, number]): [number, number] {
+  const [u, v] = toSketch(frameFromPlane(point, normal), point);
+  return [Math.round(u * 100) / 100, Math.round(v * 100) / 100];
 }
 
 function featureOfFace(p: Pick, features: Feature[]): string | null {
@@ -140,6 +148,14 @@ function handlePick(p: Pick, d: DialogState): void {
       case "base": {
         const spec = planeSpecForPick(p, meshes);
         if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
+        // A hole goes where the face was tapped.
+        if (spec && g.op === "hole" && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
+        break;
+      }
+      case "points": {
+        // Points are the tap projected onto the hole's plane (u, v are the same on parallel faces).
+        if (g.op !== "hole" || p.kind !== "face" || !p.normal) break;
+        g.points = [...g.points, holePoint(p.point, p.normal)];
         break;
       }
     }
@@ -147,7 +163,7 @@ function handlePick(p: Pick, d: DialogState): void {
   });
   // Single-valued fields advance to the next field automatically.
   if (["axis", "direction", "plane", "base", "target"].includes(field)) {
-    const next = f.op === "boolean" && field === "target" ? "tools" : null;
+    const next = f.op === "boolean" && field === "target" ? "tools" : f.op === "hole" && field === "plane" ? "points" : null;
     setDialogField(next);
   }
 }
@@ -377,6 +393,106 @@ function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string,
         <input type="checkbox" checked={!!f.leftHanded} onChange={(e) => set({ leftHanded: e.target.checked || undefined })} /> Left-hand thread
       </label>
       <p className="muted small">Holes get an internal thread, shafts an external one. Draw holes at the nominal size or the tap drill size; about 0.1–0.2 mm clearance helps printed threads fit.</p>
+    </>
+  );
+}
+
+const HOLE_KINDS: [Of<"hole">["kind"], string][] = [
+  ["clearance", "Screw"],
+  ["counterbore", "Counterbore"],
+  ["countersink", "Countersink"],
+  ["tapped", "Thread"],
+  ["insert", "Insert"],
+  ["simple", "Plain"],
+];
+
+/** Hole: kind and size, where (a flat face, tapped points), depth, printing allowance. */
+function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unknown>) => void }) {
+  const sizes = f.kind === "insert" ? INSERT_SIZES : HOLE_SIZES;
+  const screw = f.kind === "clearance" || f.kind === "counterbore" || f.kind === "countersink";
+  return (
+    <>
+      <Field label="Hole">
+        <select className="field" value={f.kind} onChange={(e) => {
+          const kind = e.target.value as Of<"hole">["kind"];
+          set(kind === "simple" ? { kind, size: undefined, fit: undefined, diameter: f.diameter ?? 5 } : { kind, diameter: undefined, size: (kind === "insert" ? INSERT_SIZES : HOLE_SIZES).includes(f.size ?? "") ? f.size : "M3", ...(kind === "insert" ? { depth: undefined } : {}) });
+        }}>
+          {HOLE_KINDS.map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="row">
+        {f.kind === "simple" ? (
+          <Field label="Diameter">
+            <ExprInput value={f.diameter} autoFocus onCommit={(diameter) => set({ diameter })} onLive={(diameter) => set({ diameter })} />
+          </Field>
+        ) : (
+          <Field label={f.kind === "insert" ? "Insert" : "Screw"}>
+            <select className="field" value={f.size ?? "M3"} onChange={(e) => set({ size: e.target.value })}>
+              {sizes.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {screw ? (
+          <Field label="Fit">
+            <select className="field" value={f.fit ?? "normal"} onChange={(e) => set({ fit: e.target.value === "normal" ? undefined : e.target.value })}>
+              <option value="close">Close</option>
+              <option value="normal">Normal</option>
+              <option value="loose">Loose</option>
+            </select>
+          </Field>
+        ) : null}
+      </div>
+      <Field label="Face">
+        <SelBox field="plane" items={[describePlane(f.plane)]} placeholder="Tap a flat face where the hole goes" />
+      </Field>
+      <Field label={`Holes (${f.points.length})`}>
+        <SelBox field="points" items={f.points.length ? [`${f.points.length} point${f.points.length === 1 ? "" : "s"}: tap the face to add`] : []} placeholder="Tap the face to place holes" />
+        {f.points.map((pt, i) => (
+          <div className="row" key={i}>
+            {[0, 1].map((k) => (
+              <div key={k} style={{ flex: 1 }}>
+                <ExprInput value={pt[k]} onCommit={(v) => set({ points: f.points.map((q, j) => (j === i ? (k === 0 ? [v, q[1]] : [q[0], v]) : q)) })} />
+              </div>
+            ))}
+            <button className="icon-btn sm" title="Remove" onClick={() => set({ points: f.points.filter((_, j) => j !== i) })}>
+              <X />
+            </button>
+          </div>
+        ))}
+      </Field>
+      {f.kind !== "insert" ? (
+        <label className="checkbox">
+          <input type="checkbox" checked={f.depth === undefined} onChange={(e) => set({ depth: e.target.checked ? undefined : 10 })} /> Through all
+        </label>
+      ) : null}
+      {f.depth !== undefined || f.kind === "insert" ? (
+        <Field label="Depth">
+          <ExprInput value={f.depth} placeholder={f.kind === "insert" ? "insert length + 1" : ""} onCommit={(depth) => set({ depth })} onLive={(depth) => set({ depth })} />
+        </Field>
+      ) : null}
+      <div className="row">
+        <Field label="Allowance (printing)">
+          <ExprInput value={f.allowance} placeholder="0" onCommit={(allowance) => set({ allowance: allowance === 0 ? undefined : allowance })} />
+        </Field>
+        <button className={`icon-btn ${f.flip ? "active" : ""}`} title="Drill the other way" onClick={() => set({ flip: f.flip ? undefined : true })}>
+          <ArrowLeftRight />
+        </button>
+      </div>
+      <p className="muted small">
+        {f.kind === "insert"
+          ? "Sized for common heat-set inserts for plastic; check your inserts' recommended hole."
+          : f.kind === "tapped"
+            ? "Tap drill size with a modelled thread; printed threads often want 0.1–0.2 mm allowance."
+            : "Clearance holes follow ISO 273, counterbores fit socket head cap screws, countersinks 90° flat head screws."}
+      </p>
     </>
   );
 }
@@ -730,6 +846,8 @@ function Body({ d }: { d: DialogState }) {
       return <ThreadFields f={f} set={set} />;
     case "gear":
       return <GearFields f={f} set={set} />;
+    case "hole":
+      return <HoleFields f={f} set={set} />;
     case "linear_pattern":
       return (
         <>

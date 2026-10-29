@@ -431,4 +431,27 @@ export const MODELS: TestModel[] = [
     // Each link: bar plus round ends minus two holes, 3 mm thick.
     expect: { bodies: 4, volume: [[100, 10], [30, 8], [70, 8], [90, 8]].reduce((v, [l, w]) => v + (l! * w! + PI * (w! / 2) ** 2 - 2 * PI * 2.2 ** 2) * 3, 0) },
   },
+  {
+    file: "24 Lochplatte mit Normbohrungen",
+    name: "Mounting plate with standard holes",
+    look: "80 × 40 × 10 plate: two M4 counterbores for cap screws on the left, an M3 countersink in the middle, two M3 heat-set insert holes (Ø4, 6.7 deep) and an M5 tapped hole with a real thread on the right.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 80, 40)),
+      { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
+      { id: "ho1", op: "hole", name: "Cap screws", plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10], [10, 30]], kind: "counterbore", size: "M4" },
+      { id: "ho2", op: "hole", name: "Flat head", plane: { face: { face: "ex1.end_cap" } }, points: [[35, 20]], kind: "countersink", size: "M3" },
+      { id: "ho3", op: "hole", name: "Inserts", plane: { face: { face: "ex1.end_cap" } }, points: [[55, 10], [55, 30]], kind: "insert", size: "M3" },
+      { id: "ho4", op: "hole", name: "Tapped", plane: { face: { face: "ex1.end_cap" } }, points: [[70, 20]], kind: "tapped", size: "M5", depth: 8 },
+    ]),
+    // Plate minus the holes worked out by hand; the tapped hole lies between its tap drill and nominal size.
+    expect: (() => {
+      const cb = 2 * PI * (4 ** 2 * 4.4 + 2.25 ** 2 * 5.6);
+      const R = 7.12 / 2;
+      const h = R - 1.7;
+      const cs = (PI * h * (R * R + R * 1.7 + 1.7 * 1.7)) / 3 + PI * 1.7 ** 2 * (10 - h);
+      const ins = 2 * PI * 2 ** 2 * 6.7;
+      const rest = 80 * 40 * 10 - cb - cs - ins;
+      return { bodies: 1, volume: [rest - PI * 2.5 ** 2 * 8, rest - PI * 2.1 ** 2 * 8] as [number, number], size: [80, 40, 10] as [number, number, number] };
+    })(),
+  },
 ];

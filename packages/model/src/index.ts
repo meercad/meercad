@@ -3,6 +3,7 @@ export { hashString } from "./hash.js";
 export * from "./resolve.js";
 export * from "./threads.js";
 export * from "./gears.js";
+export * from "./holes.js";
 export * as motion from "./motion.js";
 export * as linkage from "./linkage.js";
 export * from "./rebuild.js";

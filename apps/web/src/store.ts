@@ -9,6 +9,7 @@ import { FACE_TOOLS, MESH_HINT, meshBodyIds } from "./lib/meshParts";
 import { setUnitSource } from "./lib/units";
 import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
+import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
@@ -440,6 +441,19 @@ export function editFeature(id: string): void {
   scheduleRebuild();
 }
 
+/** A hole dialog with its face and first hole where the face was tapped. */
+export function startHoleAt(pick: Pick): void {
+  if (pick.kind !== "face" || !pick.normal) return;
+  const plane = planeSpecForPick(pick, get().output?.meshes ?? []);
+  if (!plane) return;
+  // The right-click selected the face; the dialog would take that as a second tap.
+  set({ selection: [] });
+  startFeature("hole");
+  const [u, v] = toSketch(frameFromPlane(pick.point, pick.normal), pick.point);
+  updateDraft({ plane, points: [[Math.round(u * 100) / 100, Math.round(v * 100) / 100]] } as Partial<Feature>);
+  setDialogField("points");
+}
+
 /** Opens the dialog for a prepared draft, e.g. the mating gear of the one just added. */
 export function openDraft(feature: Feature): void {
   if (get().dialog) cancelDialog();
@@ -513,6 +527,7 @@ function firstField(op: FeatureOp): string | null {
       shell: "faces",
       thread: "face",
       gear: "plane",
+      hole: "plane",
       mesh_convert: "body",
       linear_pattern: "source",
       circular_pattern: "source",

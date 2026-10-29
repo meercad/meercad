@@ -1,6 +1,6 @@
 import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { partColors } from "../lib/partColors";
-import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, Shapes, SlidersHorizontal, Trash, Wand2 } from "lucide-react";
+import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, Shapes, SlidersHorizontal, Trash, Wand2 } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -13,7 +13,7 @@ import { FEATURES, partName } from "../lib/features";
 import { MultiTouch, Press } from "../lib/gestures";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
-import { commitDialog, dialogPick, editFeature, kernel, redo, scheduleRebuild, setViewport, startFeature, startSketch, toast, undo, useApp } from "../store";
+import { commitDialog, dialogPick, editFeature, startHoleAt, kernel, redo, scheduleRebuild, setViewport, startFeature, startSketch, toast, undo, useApp } from "../store";
 import { pickKindsFor } from "./FeatureDialog";
 import { deleteFeature, toggleHidden } from "./FeatureTree";
 import { closeMenu, showMenu } from "./Menu";
@@ -465,6 +465,7 @@ export function ViewportView() {
         item("chamfer", "Chamfer face edges"),
         item("shell", "Shell (remove this face)"),
         ...(!pick.normal ? [item("thread", "Thread this hole or shaft")] : []),
+        ...(pick.normal ? [{ label: "Hole here", icon: <CircleDot />, kbd: "Shift+H", onClick: () => startHoleAt(pick) }] : []),
         "sep",
         { label: `Hide ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },

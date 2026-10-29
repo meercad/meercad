@@ -11,6 +11,9 @@ import {
   type ResolvedFillet,
   type ResolvedLinearPattern,
   type ResolvedMeshConvert,
+  type ResolvedHole,
+  holeShape,
+  HoleError,
   type ResolvedPlane,
   type ResolvedRevolve,
   type ResolvedShell,
@@ -39,6 +42,7 @@ import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import { convertMesh } from "./meshconvert.js";
+import { holeTools } from "./hole.js";
 import { threadBody } from "./thread.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
@@ -124,6 +128,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return importFeature(f, ctx);
       case "mesh_convert":
         return meshConvertFeature(f, ctx);
+      case "hole":
+        return holeFeature(f, ctx);
     }
   }
 
@@ -785,6 +791,37 @@ function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): Topo
   // Faces stay one per triangle: imported meshes are edited as whole parts, and keeping the file's
   // triangles lets display and export skip OCCT's meshing.
   return solid;
+}
+
+/** Holes cut into the parts they meet; tapped ones get a modelled thread in their bore. */
+function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
+  if (!f.points.length) throw new FeatureError("place at least one hole");
+  let shape;
+  try {
+    shape = holeShape(f.kind, { size: f.size, diameter: f.diameter, fit: f.fit, depth: f.depth, allowance: f.allowance });
+  } catch (e) {
+    if (e instanceof HoleError) throw new FeatureError(e.message);
+    throw e;
+  }
+  const frame = planeFrame(f.plane, ctx);
+  const through = shape.depth === undefined;
+  const depth = shape.depth ?? modelSize(ctx);
+  const tool = holeTools(ctx.oc, ctx.arena, f.id, frame, f.points, shape, depth, !!f.flip);
+  let next = applyTool(ctx, f.id, tool, "cut");
+  if (shape.thread) {
+    // One thread per bore, found by its wall near the hole's centre line.
+    const a: Vec3 = f.flip ? frame.normal : [-frame.normal[0], -frame.normal[1], -frame.normal[2]];
+    const bodies = new Map(next.bodies);
+    for (const [u, v] of f.points) {
+      const c = toWorld(frame, [u, v]);
+      const t = through ? 0.5 : Math.min(depth / 2, 0.5);
+      const near: Vec3 = [c[0] + a[0] * t + frame.u[0] * shape.diameter / 2, c[1] + a[1] * t + frame.u[1] * shape.diameter / 2, c[2] + a[2] * t + frame.u[2] * shape.diameter / 2];
+      const { body } = threadBody(ctx.oc, ctx.arena, bodies, { id: f.id, op: "thread", face: { face: `${f.id}.wall`, near }, size: shape.thread.size, pitch: shape.thread.pitch } as Parameters<typeof threadBody>[3]);
+      bodies.set(body.bodyId, body);
+    }
+    next = { ...next, bodies };
+  }
+  return next;
 }
 
 /**
