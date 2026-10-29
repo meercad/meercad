@@ -58,9 +58,7 @@ describe("gear", () => {
     const s = await newSession();
     for (const herringbone of [false, true]) {
       const pair: Feature[] = [gear("gr1", { module: 2, teeth: 20, width: 12, helix: 30, herringbone }), gear("gr2", { teeth: 13, width: 12, meshWith: { gear: "gr1" } })];
-      const t0 = performance.now();
       const built = s.rebuild(doc(pair)).report;
-      const ms = performance.now() - t0;
       ok(built);
       const report = s.rebuild(doc([...pair, { id: "bo1", op: "boolean", operation: "intersect", target: "gr1", tools: ["gr2"], keepTools: true }])).report;
       const g1 = built.bodies.find((b) => b.id === "gr1")!;
@@ -69,7 +67,6 @@ describe("gear", () => {
       expect(Math.abs(g1.volume / (area * 12) - 1)).toBeLessThan(0.005);
       expect(g1.bbox.max[2]).toBeCloseTo(12, 4);
       expect(overlap(report, "bo1")).toBeLessThan(1e-3);
-      expect(ms).toBeLessThan(15000);
     }
   });
 

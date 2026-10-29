@@ -90,22 +90,20 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
       if (!prism.IsDone()) throw new FeatureError("could not build the gear");
       return arena.track(prism.Shape());
     }
-    // Racks shift linearly with height: ruled lofts are exact. Gears turn: smooth lofts through
-    // sections a few degrees apart. Herringbone halves are lofted apart and joined.
-    const halves: [number, number][] = params.herringbone ? [[0, width / 2], [width / 2, width]] : [[0, width]];
-    const turn = Math.abs(helixTwist(params, width, halves[0]![1]));
+    // Gears turn: a smooth loft through sections a few degrees apart. Racks shift linearly, so a
+    // ruled loft is exact. A herringbone runs through all sections up to the middle and back in one
+    // ruled loft, which keeps its point sharp and avoids joining two halves (slow in OCCT).
+    const half = params.herringbone ? width / 2 : width;
+    const turn = Math.abs(helixTwist(params, width, half));
     const steps = params.kind === "rack" ? 1 : Math.max(2, Math.ceil(turn / rad(3)));
-    let solid: TopoDS_Shape | null = null;
-    for (const [z0, z1] of halves) {
-      const loft = arena.track(new oc.BRepOffsetAPI_ThruSections(true, params.kind === "rack", 1e-6));
-      loft.CheckCompatibility(false);
-      for (let i = 0; i <= steps; i++) loft.AddWire(wire(oc, arena, loop, world(z0 + ((z1 - z0) * i) / steps)));
-      loft.Build(arena.track(new oc.Message_ProgressRange()));
-      if (!loft.IsDone()) throw new FeatureError("could not build the helical gear");
-      const s = arena.track(loft.Shape());
-      solid = solid ? boolOp(oc, arena, "fuse", solid, s) : s;
-    }
-    return solid!;
+    const zs = Array.from({ length: steps + 1 }, (_, i) => (half * i) / steps);
+    if (params.herringbone) zs.push(...zs.slice(1).map((z) => half + z));
+    const loft = arena.track(new oc.BRepOffsetAPI_ThruSections(true, params.kind === "rack" || params.herringbone, 1e-6));
+    loft.CheckCompatibility(false);
+    for (const z of zs) loft.AddWire(wire(oc, arena, loop, world(z)));
+    loft.Build(arena.track(new oc.Message_ProgressRange()));
+    if (!loft.IsDone()) throw new FeatureError("could not build the helical gear");
+    return arena.track(loft.Shape());
   };
 
   let solid: TopoDS_Shape;
