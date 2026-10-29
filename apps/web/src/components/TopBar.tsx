@@ -7,6 +7,7 @@ import { useCompact } from "../lib/layout";
 import { askText } from "./Ask";
 import type { MenuEntry } from "./Menu";
 import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
+import { openDrawing } from "./DrawingDialog";
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
@@ -56,6 +57,7 @@ export function TopBar() {
       { label: "Export STL (3D printing)", icon: <FileDown />, onClick: () => void exportMesh("stl") },
       { label: "Export 3MF (3D printing)", icon: <FileDown />, onClick: () => void exportMesh("3mf") },
       { label: "Export STEP (CAD exchange)", icon: <FileDown />, onClick: () => void exportStep() },
+      { label: "Technical drawing (PDF, DXF)…", icon: <FileDown />, onClick: openDrawing },
       ...sketches.flatMap((s) => [
         { label: `Export ${sketchName(s.id)} as DXF (laser)`, icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
         { label: `Export ${sketchName(s.id)} as SVG`, icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },

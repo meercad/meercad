@@ -967,3 +967,43 @@ html[data-compact] .view-controls .grid-snap span { display: none; }
 html[data-compact] .view-controls .grid-snap { padding: 0; width: 36px; }
 html[data-compact] .sketch-hud .card2 .row { align-items: center; }
 html[data-compact] .sketch-done { margin-left: auto; height: 34px; padding: 0 14px; }
+
+/* Technical drawing dialog: the sheet preview beside its settings. */
+.modal.drawing-dialog {
+  width: min(1100px, calc(100vw - 32px));
+  max-width: none;
+}
+.drawing-body {
+  display: flex;
+  gap: 16px;
+  padding: 0 16px 16px;
+  min-height: 0;
+}
+.drawing-preview {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2, #f4f4f6);
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 320px;
+}
+.drawing-preview img {
+  width: 100%;
+  height: auto;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+  background: #fff;
+}
+.drawing-side {
+  width: 240px;
+  flex: none;
+}
+@media (max-width: 720px) {
+  .drawing-body {
+    flex-direction: column;
+  }
+  .drawing-side {
+    width: auto;
+  }
+}

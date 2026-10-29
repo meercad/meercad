@@ -3,6 +3,7 @@ import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import { loadOcct, occtErrorMessage, type OC } from "./occt.js";
 import { KernelSession } from "./session.js";
 import { clearances, exportMeshes, exportStep, measure } from "./tools.js";
+import { drawingViews } from "./drawing.js";
 
 interface WorkerScope {
   postMessage(msg: WorkerResponse, transfer?: Transferable[]): void;
@@ -94,6 +95,20 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
         case "clearance":
           scope.postMessage({ type: "clearances", seq: req.seq, result: clearances(oc!, session!.state!, req.moving, req.poses, req.within) });
           break;
+        case "drawing": {
+          if (!req.doc) {
+            scope.postMessage({ type: "drawn", seq: req.seq, views: drawingViews(oc!, session!.state!, req.views, req.bodies) });
+            break;
+          }
+          const sandbox = new KernelSession(oc!, solver!);
+          try {
+            sandbox.rebuild(req.doc, { mesh: false, props: false });
+            scope.postMessage({ type: "drawn", seq: req.seq, views: drawingViews(oc!, sandbox.state!, req.views, req.bodies) });
+          } finally {
+            sandbox.dispose();
+          }
+          break;
+        }
         case "measure":
           scope.postMessage({ type: "measured", seq: req.seq, result: measure(oc!, session!.state!, req.a, req.b) });
           break;

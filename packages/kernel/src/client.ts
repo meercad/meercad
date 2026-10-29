@@ -3,6 +3,7 @@ import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Clearance, Measurement, PickRef } from "./tools.js";
+import type { DrawingView, ViewName } from "./drawing.js";
 
 export type { Measurement, PickRef } from "./tools.js";
 
@@ -103,6 +104,13 @@ export class KernelClient {
     const r = await this.send({ type: "clearance", moving, poses, ...(within !== undefined ? { within } : {}) });
     if (r.type !== "clearances") throw new Error("unexpected response");
     return r.result;
+  }
+
+  /** Views of the parts for a technical drawing, visible and hidden lines. */
+  async drawing(views: ViewName[], bodies?: string[], doc?: MeercadDocument): Promise<DrawingView[]> {
+    const r = await this.send({ type: "drawing", views, ...(bodies ? { bodies } : {}), ...(doc ? { doc } : {}) });
+    if (r.type !== "drawn") throw new Error("unexpected response");
+    return r.views;
   }
 
   async measure(a: PickRef, b?: PickRef): Promise<Measurement> {

@@ -2,6 +2,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Clearance, Measurement, PickRef } from "./tools.js";
+import type { DrawingView, ViewName } from "./drawing.js";
 
 export type WorkerRequest =
   /** `props: false` skips volume and surface area (previews while dragging). */
@@ -17,7 +18,10 @@ export type WorkerRequest =
   | { type: "props"; seq: number }
   | { type: "measure"; seq: number; a: PickRef; b?: PickRef }
   /** Gaps between parts in a pose of the mechanism (see tools.clearances). */
-  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number };
+  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number }
+  /** Views for a technical drawing, with hidden lines (see drawing.ts). */
+  /** `doc` builds the drawing from that document instead of the open one (threads simplified, see model/drawing). */
+  | { type: "drawing"; seq: number; views: ViewName[]; bodies?: string[]; doc?: MeercadDocument };
 
 export type WorkerResponse =
   | { type: "ready"; initMs: number; threads: boolean }
@@ -27,6 +31,7 @@ export type WorkerResponse =
   | { type: "exported_mesh"; seq: number; meshes: BodyMesh[] }
   | { type: "measured"; seq: number; result: Measurement }
   | { type: "clearances"; seq: number; result: Clearance[] }
+  | { type: "drawn"; seq: number; views: DrawingView[] }
   | { type: "configured"; seq: number }
   | { type: "props"; seq: number; bodies: BodySummary[] }
   | { type: "failed"; seq: number; message: string };

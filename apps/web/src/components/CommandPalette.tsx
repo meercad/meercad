@@ -7,6 +7,7 @@ import { setTool, type SketchTool } from "../sketch/state";
 import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch/actions";
 import { closeSketch, getViewport, goHome, newProject, redo, startFeature, undo, useApp } from "../store";
 import { exportMesh, exportStep, importFile, saveFile } from "./io";
+import { openDrawing } from "./DrawingDialog";
 import { Kbd } from "./Kbd";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleTheme } from "./TopBar";
@@ -108,6 +109,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: "File", label: "Export STL", run: () => void exportMesh("stl") },
         { group: "File", label: "Export 3MF", run: () => void exportMesh("3mf") },
         { group: "File", label: "Export STEP", run: () => void exportStep() },
+        { group: "File", label: "Technical drawing (PDF, SVG, DXF)", run: openDrawing },
         { group: "File", label: "Save copy as .meercad", kbd: "Shift+Mod+S", run: saveFile },
         { group: "File", label: "All projects", run: goHome },
       );

@@ -41,7 +41,7 @@ export function download(name: string, data: BlobPart, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-const baseName = () => (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
+export const baseName = () => (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
 
 /** STL/3MF from a print-quality tessellation (the on-screen one is far coarser). */
 export async function exportMesh(format: "stl" | "3mf"): Promise<void> {

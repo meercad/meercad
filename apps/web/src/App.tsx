@@ -34,6 +34,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DebugHud, debugHud } from "./components/DebugHud";
 import { deleteModelSelection } from "./lib/deletion";
 import { AboutDialog } from "./components/AboutDialog";
+import { DrawingDialog } from "./components/DrawingDialog";
 import { isCompact } from "./lib/layout";
 
 try {
@@ -306,6 +307,7 @@ export function App() {
       <Toasts />
       <Settings onShortcuts={() => setHelp(true)} />
       <AboutDialog />
+      <DrawingDialog />
       {desktop ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />
