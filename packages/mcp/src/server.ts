@@ -11,6 +11,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { SYSTEM_PROMPT } from "@meercad/ai/prompt";
 import { read3mf, readObj, writeStl } from "@meercad/io";
+import { gearCalc } from "./gearCalc.js";
 import { DEFAULT_PORT, type BridgeHello, type BridgeMethod, type BridgeResponse } from "./protocol.js";
 
 const port = Number(process.env["MEERCAD_MCP_PORT"] ?? DEFAULT_PORT);
@@ -283,6 +284,57 @@ server.registerTool(
     annotations: { readOnlyHint: true },
   },
   guard(async ({ a, b }) => text(await call("measure", { a, b }))),
+);
+
+server.registerTool(
+  "gear_calc",
+  {
+    title: "Gear sizes",
+    description:
+      "Sizes of an involute gear (pitch, tip and root diameters, span over k teeth, undercut warning) and, with teeth2, of a pair: centre distance and ratio. Use it to plan a drive before adding gear features. kind2 'internal' puts the second gear around the first (a ring gear), 'rack' makes it a rack.",
+    inputSchema: {
+      module: z.number().positive(),
+      teeth: z.number().int().min(4).max(1000),
+      teeth2: z.number().int().min(1).max(1000).optional(),
+      kind2: z.enum(["spur", "internal", "rack"]).optional(),
+      pressureAngle: z.number().min(10).max(35).optional(),
+      profileShift: z.number().optional(),
+      helix: z.number().gt(-45).lt(45).optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async (a) => text(gearCalc(a)),
+);
+
+server.registerTool(
+  "set_pose",
+  {
+    title: "Move a mechanism",
+    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached (limits and dead points stop a joint short).",
+    inputSchema: { values: z.record(z.string(), z.number()).describe("joint id → value") },
+  },
+  guard(async ({ values }) => text(await call("set_pose", { values }))),
+);
+
+server.registerTool(
+  "check_clearance",
+  {
+    title: "Check clearance",
+    description: "In the pose shown now: the gap between every moving part and the parts near it (mm), and the overlapping volume where they collide (mm³), with the wanted print-in-place gap (mechanism.clearance, default 0.3 mm).",
+    annotations: { readOnlyHint: true },
+  },
+  guard(async () => text(await call("check_clearance"))),
+);
+
+server.registerTool(
+  "check_motion",
+  {
+    title: "Check a motion",
+    description: "Moves one joint from `from` to `to` in `steps` (default 12) and checks the gaps at each: the first value where parts touch (faces against each other: fused when printed in place) or overlap (they collide), the smallest gap per pair of parts and where, and where the joint stopped if a limit or dead point held it. The joints go back where they were afterwards.",
+    inputSchema: { joint: z.string(), from: z.number(), to: z.number(), steps: z.number().int().min(1).max(90).optional() },
+    annotations: { readOnlyHint: true },
+  },
+  guard(async ({ joint, from, to, steps }) => text(await call("check_motion", { joint, from, to, steps }))),
 );
 
 server.registerTool(

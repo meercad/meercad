@@ -10,6 +10,7 @@ import { applyOp } from "@meercad/model";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
 import { sketchCurves } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
+import { checkMotion, clearanceNow, setPose } from "./mechanism";
 import { meshTopology } from "./topology";
 
 type Status = "off" | "connecting" | "connected";
@@ -110,6 +111,8 @@ function summary(out: RebuildOutput) {
     ...(Object.keys(r.paramErrors).length ? { paramErrors: r.paramErrors } : {}),
     bodies: r.bodies.map((b) => ({ id: b.id, volume: +b.volume.toFixed(3), area: +b.area.toFixed(3), faces: b.faces, bbox: { min: b.bbox.min.map((v) => +v.toFixed(3)), max: b.bbox.max.map((v) => +v.toFixed(3)) } })),
     sketches: r.sketches.map((s) => ({ id: s.id, dof: s.diagnostics.dof, ok: s.diagnostics.ok, regions: s.regions.map((g) => g.key) })),
+    ...(r.joints.length ? { joints: r.joints.map((j) => ({ id: j.id, ...(j.error ? { error: j.error } : { origin: j.origin.map((v) => +v.toFixed(3)), axis: j.axis.map((v) => +v.toFixed(4)) }) })) } : {}),
+    ...(r.gears.length ? { gears: r.gears.map((g) => ({ ...g, radius: Number.isFinite(g.radius) ? +g.radius.toFixed(4) : null, origin: g.origin.map((v) => +v.toFixed(3)), axis: g.axis.map((v) => +v.toFixed(4)) })) } : {}),
   };
 }
 
@@ -214,6 +217,21 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       if (!sketch) throw new Error("dxf/svg export needs a sketch id");
       const curves = sketchCurves(sketch);
       return { base64: toB64(format === "dxf" ? writeDxf(curves) : writeSvg(curves)) };
+    }
+    case "set_pose": {
+      needProject();
+      await rebuildNow();
+      return setPose(p["values"] as Record<string, number>);
+    }
+    case "check_clearance": {
+      needProject();
+      await rebuildNow();
+      return clearanceNow();
+    }
+    case "check_motion": {
+      needProject();
+      await rebuildNow();
+      return checkMotion(String(p["joint"]), Number(p["from"]), Number(p["to"]), p["steps"] === undefined ? undefined : Number(p["steps"]));
     }
     case "measure": {
       needProject();

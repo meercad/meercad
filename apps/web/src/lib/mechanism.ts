@@ -402,3 +402,78 @@ export async function checkClearance(): Promise<void> {
     useMotion.setState({ check: { running: false, free, results: [], error: (e as Error).message } });
   }
 }
+
+// ---------------------------------------------------------------- for assistants (MCP)
+
+/** Joints panel open and nothing in the way, so poses show and can be checked. */
+function openForCheck(): void {
+  if (useApp.getState().dialog) throw new Error("a tool dialog is open in the app; finish or cancel it first");
+  if (!useMotion.getState().open) useMotion.setState({ open: true, draft: null });
+}
+
+/** Sets joint values one after another (driven joints move their drivers); the parts move in the app. */
+export function setPose(values: Readonly<Record<string, number>>): { values: Record<string, number>; reached: boolean; problems: Record<string, string> } {
+  openForCheck();
+  stopPlaying();
+  const { mech, problems } = currentMechanism();
+  let reached = true;
+  for (const [id, v] of Object.entries(values)) {
+    if (!mech.joint(id)) throw new Error(`no joint "${id}"${problems[id] ? `: ${problems[id]}` : ""}`);
+    reached = setJointValue(id, v) && reached;
+  }
+  const now = jointValues();
+  // A limit or a dead point can stop a joint short of its value.
+  for (const [id, v] of Object.entries(values)) if (Math.abs((now[id] ?? 0) - v) > 1e-3) reached = false;
+  return { values: now, reached, problems };
+}
+
+/** Gaps between moving parts and what they come near, in the pose shown now. */
+export async function clearanceNow(): Promise<{ wanted: number; pairs: Clearance[] }> {
+  openForCheck();
+  const { mech } = currentMechanism();
+  const moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
+  if (!moving.length) throw new Error("no part moves: add joints first");
+  const want = wantedClearance();
+  const pairs = await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2));
+  return { wanted: want, pairs: pairs.map(({ points: _p, ...rest }) => rest).sort((x, y) => x.distance - y.distance) };
+}
+
+/**
+ * Moves one joint from `from` to `to` in steps and checks the gaps at each: the first pose where
+ * parts touch or overlap, and the smallest gap of every pair. The joints go back where they were.
+ */
+export async function checkMotion(joint: string, from: number, to: number, steps = 12): Promise<{
+  steps: number;
+  firstContact: { value: number; a: string; b: string; kind: "touch" | "overlap"; overlap: number } | null;
+  smallest: { a: string; b: string; distance: number; at: number }[];
+  stoppedAt: number | null;
+}> {
+  openForCheck();
+  const before = jointValues();
+  const free = { ...useMotion.getState().free };
+  const n = Math.max(1, Math.min(90, Math.round(steps)));
+  let firstContact: { value: number; a: string; b: string; kind: "touch" | "overlap"; overlap: number } | null = null;
+  let stoppedAt: number | null = null;
+  const smallest = new Map<string, { a: string; b: string; distance: number; at: number }>();
+  try {
+    for (let k = 0; k <= n; k++) {
+      const v = from + ((to - from) * k) / n;
+      if (!setJointValue(joint, v) || Math.abs((jointValues()[joint] ?? 0) - v) > 1e-3) {
+        stoppedAt = jointValues()[joint] ?? v;
+        break;
+      }
+      for (const c of (await clearanceNow()).pairs) {
+        const key = `${c.a}|${c.b}`;
+        const cur = smallest.get(key);
+        if (!cur || c.distance < cur.distance) smallest.set(key, { a: c.a, b: c.b, distance: c.distance, at: v });
+        if (!firstContact && (c.overlap > 1e-3 || c.distance < 1e-4)) firstContact = { value: v, a: c.a, b: c.b, kind: c.overlap > 1e-3 ? "overlap" : "touch", overlap: c.overlap };
+      }
+    }
+  } finally {
+    // Back to the pose before the check.
+    restPose();
+    useMotion.setState({ free });
+    for (const [id, v] of Object.entries(before)) if (v) setJointValue(id, v);
+  }
+  return { steps: n, firstContact, smallest: [...smallest.values()].sort((x, y) => x.distance - y.distance), stoppedAt };
+}

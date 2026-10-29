@@ -16,6 +16,9 @@ export type BridgeMethod =
   | "set_view"
   | "export"
   | "measure"
+  | "set_pose"
+  | "check_motion"
+  | "check_clearance"
   | "get_status"
   | "clear_preview";
 
