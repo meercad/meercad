@@ -6,7 +6,7 @@ import { write3mf, writeDxf, writeStl, writeSvg } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
-import { applyOp } from "@meercad/model";
+import { applyOp, massOf, massProperties, materialById } from "@meercad/model";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
 import { sketchCurves } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
@@ -107,11 +107,23 @@ function showActivity(client: string, tool: string): void {
 
 function summary(out: RebuildOutput) {
   const r = out.report;
+  const materials = useApp.getState().doc.partMaterials ?? {};
+  const mat = (id: string) => materialById(materials[id]);
+  const total = massProperties(r.bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(mat(b.id) ? { material: mat(b.id)! } : {}) })));
   return {
     features: r.features.map((f) => ({ id: f.id, status: f.status, ...(f.message ? { message: f.message } : {}), ...(f.hint ? { hint: f.hint } : {}) })),
     params: r.params,
     ...(Object.keys(r.paramErrors).length ? { paramErrors: r.paramErrors } : {}),
-    bodies: r.bodies.map((b) => ({ id: b.id, volume: +b.volume.toFixed(3), area: +b.area.toFixed(3), faces: b.faces, bbox: { min: b.bbox.min.map((v) => +v.toFixed(3)), max: b.bbox.max.map((v) => +v.toFixed(3)) } })),
+    bodies: r.bodies.map((b) => ({
+      id: b.id,
+      volume: +b.volume.toFixed(3),
+      area: +b.area.toFixed(3),
+      faces: b.faces,
+      bbox: { min: b.bbox.min.map((v) => +v.toFixed(3)), max: b.bbox.max.map((v) => +v.toFixed(3)) },
+      ...(b.centroid ? { centroid: b.centroid.map((v) => +v.toFixed(3)) } : {}),
+      ...(mat(b.id) && Number.isFinite(b.volume) ? { material: mat(b.id)!.id, massGrams: +massOf(b.volume, mat(b.id)!).toFixed(2) } : {}),
+    })),
+    ...(total.mass ? { mass: { grams: +total.mass.toFixed(2), centreOfGravity: total.center?.map((v) => +v.toFixed(3)), partsWithoutMaterial: total.missing } } : {}),
     sketches: r.sketches.map((s) => ({ id: s.id, dof: s.diagnostics.dof, ok: s.diagnostics.ok, regions: s.regions.map((g) => g.key) })),
     ...(r.joints.length ? { joints: r.joints.map((j) => ({ id: j.id, ...(j.error ? { error: j.error } : { origin: j.origin.map((v) => +v.toFixed(3)), axis: j.axis.map((v) => +v.toFixed(4)) }) })) } : {}),
     ...(r.gears.length ? { gears: r.gears.map((g) => ({ ...g, radius: Number.isFinite(g.radius) ? +g.radius.toFixed(4) : null, origin: g.origin.map((v) => +v.toFixed(3)), axis: g.axis.map((v) => +v.toFixed(4)) })) } : {}),

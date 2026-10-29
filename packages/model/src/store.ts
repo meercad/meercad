@@ -1,3 +1,4 @@
+import { MATERIALS, materialById } from "./materials.js";
 import { emptyDocument, validateDocument, validateOp, type DocOp, type Expr, type Feature, type MeercadDocument } from "@meercad/schema";
 import { renameInExpr } from "./expr.js";
 import { mapFeatureExprs } from "./resolve.js";
@@ -95,6 +96,15 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       const i = list.findIndex((c) => c.id === op.coupling.id);
       if (i >= 0) list[i] = structuredClone(op.coupling);
       else list.push(structuredClone(op.coupling));
+      break;
+    }
+    case "set_material": {
+      if (op.material !== null && !materialById(op.material)) throw new OpError(`unknown material "${op.material}": use one of ${MATERIALS.map((m) => m.id).join(", ")}`);
+      const picked = { ...(next.partMaterials ?? {}) };
+      if (op.material) picked[op.part] = op.material;
+      else delete picked[op.part];
+      if (Object.keys(picked).length) next.partMaterials = picked;
+      else delete next.partMaterials;
       break;
     }
     case "delete_coupling": {

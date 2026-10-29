@@ -21,6 +21,8 @@ export interface BodySummary {
   id: string;
   volume: number;
   area: number;
+  /** Centre of volume (with `props`). */
+  centroid?: [number, number, number];
   bbox: { min: [number, number, number]; max: [number, number, number] };
   faces: number;
   edges: number;
@@ -147,7 +149,13 @@ export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
     const bbox = { min: [lo.X(), lo.Y(), lo.Z()] as [number, number, number], max: [hi.X(), hi.Y(), hi.Z()] as [number, number, number] };
     lo.delete();
     hi.delete();
-    return { id: body.bodyId, volume: props ? vol.Mass() : NaN, area: props ? surf.Mass() : NaN, bbox, faces: body.faces.length, edges: body.edges.length };
+    let centroid: [number, number, number] | undefined;
+    if (props && vol.Mass() > 0) {
+      const c = vol.CentreOfMass();
+      centroid = [c.X(), c.Y(), c.Z()];
+      c.delete();
+    }
+    return { id: body.bodyId, volume: props ? vol.Mass() : NaN, area: props ? surf.Mass() : NaN, ...(centroid ? { centroid } : {}), bbox, faces: body.faces.length, edges: body.edges.length };
   } finally {
     vol.delete();
     surf.delete();

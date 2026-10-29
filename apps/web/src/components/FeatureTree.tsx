@@ -1,8 +1,8 @@
-import { Bot, ChevronRight, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, UserCheck, X } from "lucide-react";
+import { Bot, ChevronRight, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
-import { evaluate, referencedNames } from "@meercad/model";
+import { evaluate, formatMass, massOf, massProperties, materialById, MATERIALS, referencedNames } from "@meercad/model";
 import type { Feature } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
@@ -417,6 +417,24 @@ function Bodies() {
     if (!Object.keys(picked).length) delete next.partColors;
     apply({ type: "replace", doc: next });
   };
+  const setMaterial = (id: string, material: string | null) => {
+    const picked = { ...(doc.partMaterials ?? {}) };
+    if (material) picked[id] = material;
+    else delete picked[id];
+    const next = { ...doc, partMaterials: picked } as typeof doc;
+    if (!Object.keys(picked).length) delete next.partMaterials;
+    apply({ type: "replace", doc: next });
+  };
+  /** The material list as a second menu where the first one was. */
+  const pickMaterial = (id: string, x: number, y: number) =>
+    showMenu(x, y, [
+      ...MATERIALS.map((m) => ({ label: `${m.name} · ${m.density} g/cm³${doc.partMaterials?.[id] === m.id ? " ✓" : ""}`, icon: <Weight />, onClick: () => setMaterial(id, m.id) })),
+      ...(doc.partMaterials?.[id] ? ["sep" as const, { label: "No material", icon: <X />, onClick: () => setMaterial(id, null) }] : []),
+    ]);
+  const massText = (id: string, volume: number) => {
+    const m = materialById(doc.partMaterials?.[id]);
+    return m && Number.isFinite(volume) ? ` · ${formatMass(massOf(volume, m))} ${m.name}` : "";
+  };
   // The browser's own colour picker (works with mouse and touch alike).
   const pickColor = (id: string) => {
     const input = document.createElement("input");
@@ -445,6 +463,7 @@ function Bodies() {
             { label: hidden.has(id) ? "Show" : "Hide", icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
             ...(meshParts.has(id) ? [{ label: "Convert to editable body", icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: "Rebuild with features", icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }] : []),
             { label: "Colour…", icon: <Palette />, onClick: () => pickColor(id) },
+            { label: "Material…", icon: <Weight />, onClick: () => pickMaterial(id, e.clientX, e.clientY) },
             ...(doc.partColors?.[id] ? [{ label: "Automatic colour", icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
             "sep" as const,
             { label: "Delete part", icon: <Trash />, danger: true, onClick: () => deleteBodies([id]) },
@@ -454,7 +473,7 @@ function Bodies() {
       >
         <button className="part-swatch" title="Colour" style={{ background: colors.get(id) ?? PART_PALETTE[0] }} onClick={(e) => (e.stopPropagation(), pickColor(id))} />
         <span className="tree-label">
-          {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
+          {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}{massText(id, b.volume)}</span> : null}
           {meshParts.has(id) ? (
             <span className="part-badge" title={MESH_HINT}>
               Mesh
@@ -525,6 +544,22 @@ function Bodies() {
           })}
           {order.filter((id) => !grouped.has(id)).map((id) => part(id, false))}
           <li className={`drop-end ${over === "end" ? "drop-before" : ""}`} />
+          {(() => {
+            // Total mass and centre of gravity once parts have materials.
+            if (!doc.partMaterials) return null;
+            const total = massProperties(bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(materialById(doc.partMaterials?.[b.id]) ? { material: materialById(doc.partMaterials?.[b.id])! } : {}) })));
+            if (!total.mass) return null;
+            const c = total.center?.map((v) => v.toFixed(1)).join(", ");
+            return (
+              <li className="tree-item dim mass-total" title={total.missing ? `${total.missing} part(s) without a material are not counted` : "Solid material (100 % infill)"}>
+                <Weight className="ficon" />
+                <span className="tree-label">
+                  {formatMass(total.mass)} {c ? <span className="muted">· centre of gravity ({c})</span> : null}
+                  {total.missing ? <span className="muted"> · {total.missing} without material</span> : null}
+                </span>
+              </li>
+            );
+          })()}
         </ul>
       ) : null}
     </>

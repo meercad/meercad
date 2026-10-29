@@ -540,6 +540,8 @@ export interface MeercadDocument {
   partOrder?: string[];
   /** Colours the user gave parts ("#rrggbb" by body id); other parts are coloured automatically. */
   partColors?: Record<string, string>;
+  /** Materials of parts (material id from the list in model/materials, by body id): mass and weight. */
+  partMaterials?: Record<string, string>;
   /** Named folders of parts in the parts list. */
   partGroups?: { name: string; parts: string[] }[];
   /**
@@ -569,6 +571,8 @@ export type DocOp =
   | { type: "delete_joint"; id: string }
   | { type: "set_coupling"; coupling: Coupling }
   | { type: "delete_coupling"; id: string }
+  /** A part's material (an id from model/materials such as "petg"), or null for none. */
+  | { type: "set_material"; part: string; material: string | null }
   | { type: "replace"; doc: MeercadDocument };
 
 export function emptyDocument(): MeercadDocument {

@@ -9,3 +9,4 @@ export * as linkage from "./linkage.js";
 export * from "./rebuild.js";
 export { applyOp, nextFeatureId, DocumentStore, OpError } from "./store.js";
 export * from "./drawing.js";
+export * from "./materials.js";

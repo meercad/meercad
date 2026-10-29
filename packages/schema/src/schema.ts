@@ -281,6 +281,7 @@ export const documentSchema = {
       autoParams: arr(id),
       partOrder: arr({ type: "string", maxLength: 128 }),
       partColors: { type: "object", propertyNames: { maxLength: 128 }, additionalProperties: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" } },
+      partMaterials: { type: "object", propertyNames: { maxLength: 128 }, additionalProperties: { type: "string", pattern: "^[a-z0-9]{1,32}$" } },
       partGroups: arr(obj({ name: { type: "string", minLength: 1, maxLength: 128 }, parts: arr({ type: "string", maxLength: 128 }) }, ["name", "parts"])),
       units: { enum: ["mm", "in"] },
       features: arr(ref("feature")),
@@ -308,6 +309,7 @@ export const docOpSchema = {
     delete_joint: obj({ type: true, id }, ["id"]),
     set_coupling: obj({ type: true, coupling: ref("coupling") }, ["coupling"]),
     delete_coupling: obj({ type: true, id }, ["id"]),
+    set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, { type: "string", pattern: "^[a-z0-9]{1,32}$" }) }, ["part", "material"]),
   }),
   definitions,
 };
