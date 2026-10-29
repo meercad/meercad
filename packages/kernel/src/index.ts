@@ -6,6 +6,6 @@ export type { ModelState, SketchResult, ToolRecord } from "./state.js";
 export type { GearView, JointFrame } from "./joints.js";
 export { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
 export { KernelSession, type RebuildReport, type SketchView, type ReferenceView } from "./session.js";
-export { exportMeshes, exportStep, measure, type PickRef, type Measurement } from "./tools.js";
+export { clearances, exportMeshes, exportStep, measure, type Clearance, type PickRef, type Measurement } from "./tools.js";
 export type { WorkerRequest, WorkerResponse } from "./protocol.js";
 export { KernelClient, SupersededError, type RebuildOutput } from "./client.js";

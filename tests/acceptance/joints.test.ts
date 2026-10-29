@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { clearances } from "@meercad/kernel";
 import { applyOp, motion } from "@meercad/model";
 import { validateDocument, type Feature, type Joint, type MeercadDocument } from "@meercad/schema";
-import { circle, doc, newSession, rect, sketch } from "./helpers.js";
+import { circle, doc, getOcct, newSession, rect, sketch } from "./helpers.js";
 
 /** A 40 × 20 × 5 base and a 30 × 10 × 3 lever on top, pinned through a Ø5 hole at the origin. */
 const hinge: Feature[] = [
@@ -79,6 +80,29 @@ describe("joints", () => {
     expect(gm.values({ j1: 3600 })["j2"]).toBeCloseTo(-1800, 9);
     // Dragging the driven gear moves its driver.
     expect(gm.rootValueFor("j2", 90)).toEqual({ root: "j1", value: -180 });
+  });
+
+  it("measures the play between meshing gears, and finds teeth running into each other", async () => {
+    const s = await newSession();
+    const oc = await getOcct();
+    const gears: Feature[] = [
+      { id: "gr1", op: "gear", kind: "spur", module: 1.5, teeth: 15, width: 6, mode: "new_body" },
+      { id: "gr2", op: "gear", kind: "spur", teeth: 30, width: 6, meshWith: { gear: "gr1" }, mode: "new_body" },
+    ];
+    const r = s.rebuild(withJoints(gears, [{ id: "j1", type: "revolute", a: "gr1", b: "ground", anchor: { gear: "gr1" } }])).report;
+    const t0 = performance.now();
+    const rest = clearances(oc, s.state!, ["gr1"], {});
+    expect(rest).toHaveLength(1);
+    // A little play (part of the 0.15 mm backlash), nothing overlapping.
+    expect(rest[0]!.distance).toBeGreaterThan(0.01);
+    expect(rest[0]!.distance).toBeLessThan(0.2);
+    expect(rest[0]!.overlap).toBe(0);
+    // Turned half a tooth on its own (no coupling), the pinion's teeth run into the gear.
+    const m = new motion.Mechanism([{ id: "j1", type: "revolute", a: "gr1", b: "ground", origin: r.joints[0]!.origin, axis: r.joints[0]!.axis }]);
+    const hit = clearances(oc, s.state!, ["gr1"], Object.fromEntries(m.poses({ j1: 6 })));
+    expect(hit[0]!.distance).toBe(0);
+    expect(hit[0]!.overlap).toBeGreaterThan(0.5);
+    expect(performance.now() - t0).toBeLessThan(20000);
   });
 
   it("checks joints and couplings in the document", () => {

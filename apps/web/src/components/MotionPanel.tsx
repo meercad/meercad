@@ -1,7 +1,7 @@
-import { Check, Cog, Link2, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, Cog, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import type { Joint } from "@meercad/schema";
 import { partName } from "../lib/features";
-import { currentMechanism, deleteJoint, editJoint, jointsFromGears, saveJoint, setJointField, setJointValue, startJoint, updateJointDraft, useMotion, type JointField } from "../lib/mechanism";
+import { checkClearance, currentMechanism, deleteJoint, editJoint, jointsFromGears, playJoint, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
 import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
@@ -25,6 +25,7 @@ export function MotionPanel() {
   const open = useMotion((s) => s.open);
   const draft = useMotion((s) => s.draft);
   const free = useMotion((s) => s.free);
+  const playing = useMotion((s) => s.playing);
   const doc = useApp((s) => s.doc);
   useApp((s) => s.output);
   const dialog = useApp((s) => !!s.dialog);
@@ -78,7 +79,17 @@ export function MotionPanel() {
                     <span className="muted small">Held fixed</span>
                   ) : (
                     <div className="row joint-value">
-                      <input type="range" min={Math.max(lo, (v ?? 0) - 720)} max={Math.min(hi, (v ?? 0) + 720)} step={j.type === "revolute" ? 1 : 0.1} value={v ?? 0} onChange={(e) => setJointValue(j.id, Number(e.target.value))} />
+                      <button className={`icon-btn sm ${playing === j.id ? "active" : ""}`} title={playing === j.id ? "Stop" : "Play: move it back and forth"} onClick={() => (playing === j.id ? stopPlaying() : playJoint(j.id))}>
+                        {playing === j.id ? <Pause /> : <Play />}
+                      </button>
+                      <input
+                        type="range"
+                        min={Math.max(lo, (v ?? 0) - 720)}
+                        max={Math.min(hi, (v ?? 0) + 720)}
+                        step={j.type === "revolute" ? 1 : 0.1}
+                        value={v ?? 0}
+                        onChange={(e) => (stopPlaying(), setJointValue(j.id, Number(e.target.value)))}
+                      />
                       <span className="joint-num">
                         {(v ?? 0).toFixed(j.type === "revolute" ? 0 : 1)}
                         {unit}
@@ -111,6 +122,7 @@ export function MotionPanel() {
                 </button>
               ) : null}
             </div>
+            {joints.length ? <ClearanceResults /> : null}
             {gearsWithout ? (
               <button
                 className="btn"
@@ -126,6 +138,42 @@ export function MotionPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Gaps between moving parts in the pose shown: red when they overlap or touch, amber below the wanted print clearance. */
+function ClearanceResults() {
+  const check = useMotion((s) => s.check);
+  const free = useMotion((s) => s.free);
+  const features = useApp((s) => s.doc.features);
+  const want = wantedClearance();
+  const stale = check && !check.running && JSON.stringify(check.free) !== JSON.stringify(free);
+  const name = (id: string) => partName(id, features);
+  return (
+    <>
+      <button className="btn" onClick={() => void checkClearance()} disabled={check?.running}>
+        <ShieldCheck /> {check?.running ? "Checking…" : stale ? "Check again in this position" : "Check clearance"}
+      </button>
+      {check && !check.running ? (
+        <div className={`clearance-list ${stale ? "stale" : ""}`}>
+          {check.error ? <div className="callout err">{check.error}</div> : null}
+          {!check.error && !check.results.length ? <span className="muted small">No part comes near another.</span> : null}
+          {check.results.map((r) => {
+            const level = r.overlap > 1e-3 || r.distance < 1e-4 ? "bad" : r.distance < want ? "warn" : "ok";
+            return (
+              <div key={`${r.a}|${r.b}`} className={`clearance-row ${level}`}>
+                <span className="dot" />
+                <span className="pair">
+                  {name(r.a)} · {name(r.b)}
+                </span>
+                <b>{r.overlap > 1e-3 ? `overlap ${r.overlap.toFixed(r.overlap < 10 ? 2 : 0)} mm³` : r.distance < 1e-4 ? "touching" : `${r.distance.toFixed(2)} mm`}</b>
+              </div>
+            );
+          })}
+          {check.results.length ? <span className="muted small">Wanted for printing in place: at least {want} mm.</span> : null}
+        </div>
+      ) : null}
+    </>
   );
 }
 

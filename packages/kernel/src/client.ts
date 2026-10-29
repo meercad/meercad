@@ -2,7 +2,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
-import type { Measurement, PickRef } from "./tools.js";
+import type { Clearance, Measurement, PickRef } from "./tools.js";
 
 export type { Measurement, PickRef } from "./tools.js";
 
@@ -97,6 +97,12 @@ export class KernelClient {
     const r = await this.send({ type: "export_mesh", ...(bodies ? { bodies } : {}) });
     if (r.type !== "exported_mesh") throw new Error("unexpected response");
     return r.meshes;
+  }
+
+  async clearances(moving: string[], poses: Record<string, number[]>, within?: number): Promise<Clearance[]> {
+    const r = await this.send({ type: "clearance", moving, poses, ...(within !== undefined ? { within } : {}) });
+    if (r.type !== "clearances") throw new Error("unexpected response");
+    return r.result;
   }
 
   async measure(a: PickRef, b?: PickRef): Promise<Measurement> {

@@ -212,6 +212,15 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .joint-head .muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .joint-value input[type="range"] { flex: 1; }
 .joint-num { min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+.clearance-list { display: flex; flex-direction: column; gap: 4px; }
+.clearance-list.stale { opacity: 0.5; }
+.clearance-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.clearance-row .pair { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clearance-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.clearance-row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ok); }
+.clearance-row.warn .dot { background: var(--warn); }
+.clearance-row.bad .dot { background: var(--err); }
+.clearance-row.bad b { color: var(--err); }
 .gear-sizes { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 10px; border-radius: 7px; background: var(--panel-2); }
 .gear-sizes span { color: var(--text-2); }
 .gear-sizes b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }

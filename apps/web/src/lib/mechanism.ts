@@ -7,17 +7,29 @@ import { evaluate, motion } from "@meercad/model";
 import type { Coupling, Joint, JointAnchor } from "@meercad/schema";
 import type { Pick, Ray } from "@meercad/viewport";
 import { create } from "zustand";
-import { apply, currentDoc, toast, useApp } from "../store";
+import type { Clearance } from "@meercad/kernel";
+import { apply, currentDoc, kernel, toast, useApp } from "../store";
 import { edgeSelectorForPick, faceSelectorForPick } from "./topology";
 
 export type JointField = "a" | "b" | "anchor";
+
+export interface ClearanceCheck {
+  running: boolean;
+  /** Joint values the check ran for (results go stale when the parts move). */
+  free: Record<string, number>;
+  results: Clearance[];
+  error?: string;
+}
 
 export const useMotion = create<{
   open: boolean;
   /** Values of the joints nothing drives (degrees or mm). */
   free: Record<string, number>;
   draft: { joint: Joint; isNew: boolean; field: JointField | null } | null;
-}>(() => ({ open: false, free: {}, draft: null }));
+  /** Joint being played (driven back and forth or round), or null. */
+  playing: string | null;
+  check: ClearanceCheck | null;
+}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null }));
 
 /** The mechanism as it can move now, with a message per joint that cannot. */
 export function currentMechanism(): { mech: motion.Mechanism; problems: Record<string, string> } {
@@ -83,6 +95,7 @@ let drag: { joint: motion.MotionJoint; o: motion.V3; n: motion.V3; start: number
 export const partDrag = {
   start(pick: Extract<Pick, { kind: "face" }>, ray: Ray): boolean {
     if (useMotion.getState().draft) return false;
+    stopPlaying();
     const { mech } = currentMechanism();
     // A part held fixed to a moving part moves that part.
     let joint = mech.jointOf(pick.bodyId);
@@ -133,7 +146,8 @@ export function toggleJoints(): void {
     if (useApp.getState().dialog) return toast("Finish the open tool first");
     useApp.setState({ measure: { active: false, picks: [], result: null } });
   }
-  useMotion.setState({ open, draft: null, ...(open ? {} : { free: {} }) });
+  if (!open) stopPlaying();
+  useMotion.setState({ open, draft: null, ...(open ? {} : { free: {}, check: null }) });
 }
 
 export function startJoint(): void {
@@ -238,4 +252,72 @@ export function jointsFromGears(): number {
   if (!newJoints.length && !newCouplings.length) return 0;
   apply(...newJoints.map((joint) => ({ type: "set_joint" as const, joint })), ...newCouplings.map((coupling) => ({ type: "set_coupling" as const, coupling })));
   return newJoints.length;
+}
+
+// ---------------------------------------------------------------- playing
+
+let frame = 0;
+
+/** Drives a joint on its own: back and forth between its limits, or round and round when a turn has none. */
+export function playJoint(id: string): void {
+  stopPlaying();
+  const { mech } = currentMechanism();
+  const j = mech.joint(id);
+  const root = mech.rootOf(id);
+  if (!j || j.type === "fixed" || !root) return;
+  const [lo, hi] = mech.range(root);
+  const rootJoint = mech.joint(root)!;
+  const turning = rootJoint.type === "revolute";
+  const bounded = Number.isFinite(lo) && Number.isFinite(hi);
+  // Degrees or mm per second of the driving joint; sliders without limits swing ±20 mm.
+  const speed = turning ? 60 : 15;
+  const [a, b] = bounded ? [lo, hi] : turning ? [-Infinity, Infinity] : [-20, 20];
+  let dir = 1;
+  let last = performance.now();
+  useMotion.setState({ playing: id });
+  const step = (now: number) => {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    const cur = useMotion.getState().free[root] ?? 0;
+    let next = cur + dir * speed * dt;
+    if (next >= b) (next = b), (dir = -1);
+    if (next <= a) (next = a), (dir = 1);
+    useMotion.setState((s) => ({ free: { ...s.free, [root]: next } }));
+    frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+}
+
+export function stopPlaying(): void {
+  cancelAnimationFrame(frame);
+  if (useMotion.getState().playing) useMotion.setState({ playing: null });
+}
+
+// ---------------------------------------------------------------- clearance
+
+/** Smallest wanted gap between moving parts (print-in-place), mm. */
+export function wantedClearance(): number {
+  const c = currentDoc().mechanism?.clearance;
+  try {
+    return c === undefined ? 0.3 : evaluate(c, new Map(Object.entries(useApp.getState().output?.report.params ?? {})));
+  } catch {
+    return 0.3;
+  }
+}
+
+/** Gaps between moving parts and what they come near, in the pose shown now. */
+export async function checkClearance(): Promise<void> {
+  stopPlaying();
+  const { mech } = currentMechanism();
+  const free = { ...useMotion.getState().free };
+  const poses = mech.poses(mech.values(free));
+  const moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
+  if (!moving.length) return toast("No part moves yet: add a joint first");
+  useMotion.setState({ check: { running: true, free, results: [] } });
+  try {
+    const results = await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2));
+    useMotion.setState({ check: { running: false, free, results: results.sort((x, y) => x.distance - y.distance || y.overlap - x.overlap) } });
+  } catch (e) {
+    useMotion.setState({ check: { running: false, free, results: [], error: (e as Error).message } });
+  }
 }

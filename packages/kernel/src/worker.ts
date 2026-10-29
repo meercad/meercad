@@ -2,7 +2,7 @@ import { SketchSolver } from "@meercad/sketch";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import { loadOcct, occtErrorMessage, type OC } from "./occt.js";
 import { KernelSession } from "./session.js";
-import { exportMeshes, exportStep, measure } from "./tools.js";
+import { clearances, exportMeshes, exportStep, measure } from "./tools.js";
 
 interface WorkerScope {
   postMessage(msg: WorkerResponse, transfer?: Transferable[]): void;
@@ -90,6 +90,9 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
           break;
         case "props":
           scope.postMessage({ type: "props", seq: req.seq, bodies: session!.bodyProps() });
+          break;
+        case "clearance":
+          scope.postMessage({ type: "clearances", seq: req.seq, result: clearances(oc!, session!.state!, req.moving, req.poses, req.within) });
           break;
         case "measure":
           scope.postMessage({ type: "measured", seq: req.seq, result: measure(oc!, session!.state!, req.a, req.b) });

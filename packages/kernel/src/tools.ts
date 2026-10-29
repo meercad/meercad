@@ -1,8 +1,9 @@
 /** Worker-side utilities on the last rebuilt state: STEP export and measuring. */
 
+import type { TopoDS_Shape } from "replicad-opencascadejs";
 import { Arena } from "./arena.js";
 import type { Body } from "./body.js";
-import { bounds } from "./boolean.js";
+import { bounds, boundsOverlap } from "./boolean.js";
 import { meshBody, type BodyMesh } from "./mesh.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
@@ -126,4 +127,68 @@ function direction(oc: OC, arena: Arena, p: PickRef, body: Body): [number, numbe
   const v: [number, number, number] = [b.X() - a.X(), b.Y() - a.Y(), b.Z() - a.Z()];
   const l = Math.hypot(...v) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+/** How close two parts come in a pose: their gap, or how much of them overlaps (mm³). */
+export interface Clearance {
+  a: string;
+  b: string;
+  /** Smallest gap, mm (0 when they touch or overlap). */
+  distance: number;
+  /** Volume both occupy, mm³ (0 when apart). */
+  overlap: number;
+  /** Closest points, for showing where. */
+  points?: [[number, number, number], [number, number, number]];
+}
+
+/**
+ * Gaps between parts placed by `poses` (column-major 4×4 by body id; others at rest), for every
+ * pair where at least one part is in `moving` and their boxes come within `within` mm.
+ */
+export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2): Clearance[] {
+  const arena = new Arena();
+  try {
+    const placed = new Map<string, TopoDS_Shape>();
+    for (const [id, body] of state.bodies) {
+      const m = poses[id];
+      if (!m) {
+        placed.set(id, body.shape);
+        continue;
+      }
+      const t = arena.track(new oc.gp_Trsf());
+      t.SetValues(m[0]!, m[4]!, m[8]!, m[12]!, m[1]!, m[5]!, m[9]!, m[13]!, m[2]!, m[6]!, m[10]!, m[14]!);
+      placed.set(id, arena.track(body.shape.Moved(arena.track(new oc.TopLoc_Location(t)), false)));
+    }
+    const box = new Map([...placed].map(([id, s]) => [id, bounds(oc, arena, s)]));
+    const grow = (b: ReturnType<typeof bounds>) => ({ min: b.min.map((v) => v - within) as typeof b.min, max: b.max.map((v) => v + within) as typeof b.max });
+    const ids = [...placed.keys()];
+    const out: Clearance[] = [];
+    for (let i = 0; i < ids.length; i++)
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i]!;
+        const b = ids[j]!;
+        if (!moving.includes(a) && !moving.includes(b)) continue;
+        if (!boundsOverlap(grow(box.get(a)!), box.get(b)!)) continue;
+        const A = placed.get(a)!;
+        const B = placed.get(b)!;
+        const d = arena.track(new oc.BRepExtrema_DistShapeShape(A, B));
+        if (!d.IsDone()) continue;
+        const distance = d.Value();
+        const p1 = arena.track(d.PointOnShape1(1));
+        const p2 = arena.track(d.PointOnShape2(1));
+        let overlap = 0;
+        if (distance < 1e-6) {
+          const common = arena.track(new oc.BRepAlgoAPI_Common(A, B));
+          if (common.IsDone() && !common.HasErrors()) {
+            const props = arena.track(new oc.GProp_GProps());
+            oc.BRepGProp.VolumeProperties(arena.track(common.Shape()), props, false, false, false);
+            overlap = Math.abs(props.Mass());
+          }
+        }
+        out.push({ a, b, distance, overlap, points: [[p1.X(), p1.Y(), p1.Z()], [p2.X(), p2.Y(), p2.Z()]] });
+      }
+    return out;
+  } finally {
+    arena.dispose();
+  }
 }

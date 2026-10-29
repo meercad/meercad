@@ -1,7 +1,7 @@
 import type { MeercadDocument } from "@meercad/schema";
 import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
-import type { Measurement, PickRef } from "./tools.js";
+import type { Clearance, Measurement, PickRef } from "./tools.js";
 
 export type WorkerRequest =
   /** `props: false` skips volume and surface area (previews while dragging). */
@@ -15,7 +15,9 @@ export type WorkerRequest =
   | { type: "configure"; seq: number; meshCoarse: number }
   /** Volume and surface area of the last rebuild's bodies, after a rebuild that skipped them. */
   | { type: "props"; seq: number }
-  | { type: "measure"; seq: number; a: PickRef; b?: PickRef };
+  | { type: "measure"; seq: number; a: PickRef; b?: PickRef }
+  /** Gaps between parts in a pose of the mechanism (see tools.clearances). */
+  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number };
 
 export type WorkerResponse =
   | { type: "ready"; initMs: number; threads: boolean }
@@ -24,6 +26,7 @@ export type WorkerResponse =
   | { type: "exported"; seq: number; data: Uint8Array }
   | { type: "exported_mesh"; seq: number; meshes: BodyMesh[] }
   | { type: "measured"; seq: number; result: Measurement }
+  | { type: "clearances"; seq: number; result: Clearance[] }
   | { type: "configured"; seq: number }
   | { type: "props"; seq: number; bodies: BodySummary[] }
   | { type: "failed"; seq: number; message: string };
