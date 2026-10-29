@@ -271,6 +271,12 @@ enum MeshExport {
         for i in 0..<asset.count { collect(asset.object(at: i), into: &corners) }
         guard !corners.isEmpty else { throw ScanError.emptyModel }
         let holes = closeHoles(&corners)
+        let (count, size) = try writeSTL(corners, to: stl)
+        return (count, size, holes)
+    }
+
+    /// Triangle corners (millimetres) as a binary STL; returns the triangle count and the size in mm.
+    static func writeSTL(_ corners: [SIMD3<Float>], to stl: URL) throws -> (triangles: Int, size: [Double]) {
         var lo = SIMD3<Float>(repeating: .greatestFiniteMagnitude), hi = -lo
         for p in corners {
             lo = simd_min(lo, p)
@@ -296,7 +302,7 @@ enum MeshExport {
         }
         try data.write(to: stl)
         let size = hi - lo
-        return (count, [Double(size.x), Double(size.y), Double(size.z)].map { ($0 * 10).rounded() / 10 }, holes)
+        return (count, [Double(size.x), Double(size.y), Double(size.z)].map { ($0 * 10).rounded() / 10 })
     }
 
     /// A scan is open where the object stood or the camera did not see: every loop of open edges is
