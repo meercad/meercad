@@ -49,6 +49,7 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
       ["Line / Rectangle / Center rectangle", keys(map, "sketch.line", "sketch.rect", "sketch.rect_center")],
       ["Circle / Arc / Polygon / Point", keys(map, "sketch.circle", "sketch.arc", "sketch.polygon", "sketch.point")],
       ["Trim / Dimension / Project edges", keys(map, "sketch.trim", "sketch.dimension", "sketch.project")],
+      ["Round / Bevel a corner / Offset", keys(map, "sketch.fillet", "sketch.chamfer", "sketch.offset")],
       ["Construction toggle", keys(map, "sketch.construction")],
       ["Horizontal or vertical (nearest)", "Shift+V"],
       ["Coincident / Concentric", "Shift+N / Shift+C"],

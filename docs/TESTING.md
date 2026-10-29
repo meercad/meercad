@@ -60,6 +60,7 @@ number that must come out.
 | 27 | Angle bracket with ribs | two ribs from open lines filled to wall and base |
 | 28 | Moulded cap with draft | 3° draft on four sides from the bottom, rounded top edges |
 | 29 | Name plate with text | raised bold text centred on a face, engraved small text |
+| 30 | Tray from sketch tools | corners rounded in the sketch, pocket from an inward offset, a bevelled corner |
 
 Each model states what must come out (parts, volume worked out by hand where possible, size) and what
 a person should see when looking at it (`look`). The test rebuilds each one, checks the numbers and

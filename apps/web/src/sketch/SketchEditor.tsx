@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
-import { findRegions, intersectionPoints, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
+import { cornerEdit, findRegions, intersectionPoints, offsetCurves, SketchEditError, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
 import { fatLine, frameMatrix, perFrame, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { featureName } from "../lib/features";
@@ -543,6 +543,49 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     commit(d);
   };
 
+  /** Rounds or bevels the corner nearest the click (two lines meeting at a point). */
+  const cornerAt = (p: Vec2, kind: "fillet" | "chamfer") => {
+    if (!sketch || !shown) return;
+    // The nearest point where lines end (a corner on the origin is still a corner).
+    const ends = new Set(sketch.entities.flatMap((e) => (e.type === "line" && !e.construction ? [e.p1, e.p2] : [])));
+    let corner: string | null = null;
+    let best = px() * 12;
+    for (const id of ends) {
+      const q = shown.points.get(id);
+      const d = q ? Math.hypot(q[0] - p[0], q[1] - p[1]) : Infinity;
+      if (d < best) [corner, best] = [id, d];
+    }
+    if (!corner) return toast("Click the corner point where two lines meet", "info");
+    try {
+      commit(cornerEdit(sketch, shown.points, corner, ui.editSize, kind));
+    } catch (e) {
+      if (e instanceof SketchEditError) toast(`Cannot ${kind === "fillet" ? "round" : "bevel"} this corner: ${e.message}`, "error");
+      else throw e;
+    }
+  };
+
+  /** Offsets the chain of lines and arcs (or the circle) under the click by the tool's distance. */
+  const offsetAt = (p: Vec2) => {
+    if (!sketch || !shown) return;
+    const target = hitCurve(p, px() * 8);
+    if (!target || target.external) return;
+    const ends = (e: SketchEntity) => (e.type === "line" ? [e.p1, e.p2] : e.type === "arc" ? [e.start, e.end] : []);
+    const curves = sketch.entities.filter((e) => (e.type === "line" || e.type === "arc") && !e.construction);
+    const chain = new Set([target.id]);
+    // Everything joined end to end with the clicked curve.
+    for (let grew = true; grew; ) {
+      grew = false;
+      const pts = new Set(curves.filter((c) => chain.has(c.id)).flatMap(ends));
+      for (const c of curves) if (!chain.has(c.id) && ends(c).some((q) => pts.has(q))) chain.add(c.id), (grew = true);
+    }
+    try {
+      commit(offsetCurves(sketch, shown.points, [...chain], ui.editSize));
+    } catch (e) {
+      if (e instanceof SketchEditError) toast(`Cannot offset: ${e.message}`, "error");
+      else throw e;
+    }
+  };
+
   const addPoint = (s: Snap) => {
     if (!sketch) return;
     const bl = builder(sketch);
@@ -788,10 +831,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
       if (e.buttons && !g.down?.started) return;
       // Hover + tool previews
-      if (tool === "select" || tool === "dimension" || tool === "trim") setHover(targetAt(p));
+      if (tool === "select" || tool === "dimension" || EDIT_TOOLS.has(tool)) setHover(targetAt(p));
       else setHover(null);
       if (tool === "project") return;
-      const s: Snap = tool === "select" || tool === "dimension" || tool === "trim" ? { pos: p } : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
+      const s: Snap = tool === "select" || tool === "dimension" || EDIT_TOOLS.has(tool) ? { pos: p } : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
       ts.cursor = s.pos;
       // Tools that place points show where the next one will land.
       ts.snap = POINT_TOOLS.has(tool) ? s : null;
@@ -992,6 +1035,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           return rerender();
         case "trim":
           return trimAt(p);
+        case "fillet":
+        case "chamfer":
+          return cornerAt(p, tool);
+        case "offset":
+          return offsetAt(p);
         case "dimension": {
           const t = targetAt(p);
           if (!ts.dimFirst) {
@@ -1308,6 +1356,23 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           </div>
           {diag?.message ? <div className="muted" style={{ marginTop: 4, color: "var(--err)" }}>{diag.message}</div> : null}
           <div className="muted" style={{ marginTop: 4, maxWidth: 280 }}>{toolHint(ui.tool, ts.points.length, !!ts.dimFirst)}</div>
+          {EDIT_TOOLS.has(ui.tool) && ui.tool !== "trim" ? (
+            <label className="row" style={{ gap: 6, marginTop: 6 }}>
+              <span className="muted">{ui.tool === "fillet" ? "Radius" : ui.tool === "chamfer" ? "Distance" : "Offset"}</span>
+              <input
+                className="field"
+                type="number"
+                step="0.5"
+                style={{ width: 80 }}
+                value={ui.editSize}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v)) useSketchUi.setState({ editSize: v });
+                }}
+              />
+              <span className="muted">mm</span>
+            </label>
+          ) : null}
         </div>
       </div>
     </>
@@ -1317,6 +1382,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 // ---------------------------------------------------------------- helpers
 
 /** Tools whose clicks place points (they show a dot where the next point lands). */
+/** Tools that act on existing geometry under the cursor. */
+const EDIT_TOOLS = new Set<SketchTool>(["trim", "fillet", "chamfer", "offset"]);
 const POINT_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "arc_center", "polygon", "point"]);
 /** Tools that draw on press-drag-release as well as on two clicks. */
 const DRAG_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "polygon"]);
@@ -1391,6 +1458,12 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
       return n ? "Click a corner (hexagon; constraints keep it regular)" : "Click the center";
     case "trim":
       return "Click the piece of a curve to cut away up to its nearest intersections";
+    case "fillet":
+      return "Click a corner where two lines meet to round it with this radius";
+    case "chamfer":
+      return "Click a corner where two lines meet to bevel it by this distance along each line";
+    case "offset":
+      return "Click a line, arc or circle: its whole chain is copied at this distance (outwards for closed shapes, negative goes inwards)";
     case "dimension":
       return dimFirst ? "Click a second entity, or click empty space to place the dimension (an arc: near its centre for the angle)" : "Click a line, circle, arc or point";
     case "project":

@@ -226,7 +226,21 @@ function buildPrimitives(input: SolveInput, opts: SolveOptions): { prims: Prim[]
         if (ka === "line" && kb === "line") throw new SketchSolveError(`tangent ${c.id}: needs a circle or arc`);
         if (ka === "line" || kb === "line") {
           const [l, o, ko] = ka === "line" ? [c.a, c.b, kb] : [c.b, c.a, ka];
-          add(ko === "circle" ? { type: "tangent_lc", l_id: l, c_id: o } : { type: "tangent_la", l_id: l, a_id: o });
+          // A line ending where the arc ends (a rounded corner): tangent at that point. "Tangent to
+          // the circle" there would duplicate the point being on both, which the solver reports as
+          // redundant.
+          const lp = curvePoints.get(l) ?? {};
+          const ap = curvePoints.get(o) ?? {};
+          const shared = ko === "arc" ? [lp["p1"], lp["p2"]].find((q) => q && (q === ap["start"] || q === ap["end"])) : undefined;
+          if (shared) {
+            // The angle between the line's direction and the arc's (counter-clockwise) direction there: 0 or π.
+            const [a0, a1] = lineEnds(l);
+            const ctr = at(ap["center"]!);
+            const q = at(shared);
+            const along: Vec2 = [a1[0] - a0[0], a1[1] - a0[1]];
+            const arcDir: Vec2 = [-(q[1] - ctr[1]), q[0] - ctr[0]];
+            add({ type: "angle_via_point", crv1_id: l, crv2_id: o, p_id: shared, angle: along[0] * arcDir[0] + along[1] * arcDir[1] >= 0 ? 0 : Math.PI });
+          } else add(ko === "circle" ? { type: "tangent_lc", l_id: l, c_id: o } : { type: "tangent_la", l_id: l, a_id: o });
         } else if (ka === "circle" && kb === "circle") add({ type: "tangent_cc", c1_id: c.a, c2_id: c.b });
         else if (ka === "arc" && kb === "arc") add({ type: "tangent_aa", a1_id: c.a, a2_id: c.b });
         else add({ type: "tangent_ca", c_id: ka === "circle" ? c.a : c.b, a_id: ka === "arc" ? c.a : c.b });

@@ -29,6 +29,9 @@ const SKETCH_TOOLS: [Exclude<SketchTool, "select">, string][] = [
   ["polygon", "Polygon"],
   ["point", "Point"],
   ["trim", "Trim"],
+  ["fillet", "Round a corner"],
+  ["chamfer", "Bevel a corner"],
+  ["offset", "Offset curves"],
   ["dimension", "Dimension"],
   ["project", "Project model edges"],
 ];

@@ -7,6 +7,7 @@
 import { GEAR_DEFAULTS, gearShape, outlineArea, type GearParams } from "@meercad/model";
 import type { Feature, GearFeature, MeercadDocument, SketchEntity } from "@meercad/schema";
 import { circle, rect, sketch } from "../acceptance/helpers.js";
+import { cornerEdit, offsetCurves, type SketchData, type Vec2 } from "@meercad/sketch";
 
 export interface Expectation {
   bodies: number;
@@ -547,5 +548,33 @@ export const MODELS: TestModel[] = [
     ]),
     // The plate with its rounded corners; the raised letters add more than the engraving takes away.
     expect: { bodies: 1, volume: [80 * 30 * 4 - 4 * 16 * (1 - PI / 4) * 4, 80 * 30 * 4 - 4 * 16 * (1 - PI / 4) * 4 + 400] as [number, number], size: [80, 30, 5] },
+  },
+  {
+    file: "30 Schale mit Skizzen-Werkzeugen",
+    name: "Tray from sketch tools",
+    look: "A 60 × 40 × 5 plate whose corners are rounded with R5 in the sketch, with a 2 mm deep pocket inset 3 mm all round (its corners R2): the outline was offset inwards by the sketch's offset tool. One corner of a 20 × 10 tab on the side is bevelled 3 mm.",
+    doc: (() => {
+      const pts = (d: SketchData) => new Map(d.entities.flatMap((e) => (e.type === "point" ? [[e.id, [e.x, e.y] as Vec2]] : [])));
+      let outline: SketchData = { entities: rect("l", 0, 0, 60, 40), constraints: [] };
+      for (const corner of ["lp1", "lp2", "lp3", "lp4"]) outline = cornerEdit(outline, pts(outline), corner, 5, "fillet");
+      const curves = outline.entities.filter((e) => e.type === "line" || e.type === "arc").map((e) => e.id);
+      const both = offsetCurves(outline, pts(outline), curves, -3);
+      // The pocket's sketch keeps only the offset curves and their points.
+      const fresh = both.entities.filter((e) => !outline.entities.some((o) => o.id === e.id));
+      const keep = new Set([...fresh.map((e) => e.id), ...fresh.flatMap((e) => (e.type === "arc" ? [e.center] : []))]);
+      const pocket = both.entities.filter((e) => keep.has(e.id));
+      let tab: SketchData = { entities: rect("t", 60, 15, 20, 10), constraints: [] };
+      tab = cornerEdit(tab, pts(tab), "tp2", 3, "chamfer");
+      return doc([
+        sketch("sk1", { ref: "origin.XY" }, outline.entities, outline.constraints),
+        { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: 5, mode: "new_body" },
+        sketch("sk2", { face: { face: "ex1.end_cap" } }, pocket),
+        { id: "ex2", op: "extrude", name: "Pocket", profile: { sketch: "sk2" }, extent: "blind", distance: 2, flip: true, mode: "cut" },
+        sketch("sk3", { ref: "origin.XY" }, tab.entities, tab.constraints),
+        { id: "ex3", op: "extrude", name: "Tab", profile: { sketch: "sk3" }, extent: "blind", distance: 5, mode: "join" },
+      ]);
+    })(),
+    // Rounded rectangles: w · h − (4 − π) r²; the tab loses a 3 × 3 triangle.
+    expect: { bodies: 1, volume: (60 * 40 - (4 - PI) * 25) * 5 - (54 * 34 - (4 - PI) * 4) * 2 + (200 - 4.5) * 5, size: [80, 40, 5] },
   },
 ];
