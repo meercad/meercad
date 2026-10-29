@@ -24,6 +24,11 @@ struct VoxelField {
     let trunc: Float
     /// Everything below this height in the box counts as empty (cuts a slab off the bottom).
     var cutBelow: Float?
+    /// Only a thin shell behind the seen surfaces is material (about `trunc` thick), not everything
+    /// hidden behind them: for surfaces, where what lies behind can be far deeper than the part.
+    var shellOnly = false
+    /// Per cube, along how many of the three axes it lies between seen surfaces (see `limitToSeen`).
+    private var enclosed: [UInt8]?
     private var tsdf: [Float]
     private var weight: [UInt8]
     private var free: [UInt8]
@@ -137,22 +142,55 @@ struct VoxelField {
         if let cut = cutBelow, (Float(k) + 0.5) * voxel < cut { return 1 }
         let idx = (k * ny + j) * nx + i
         if weight[idx] > 0 { return tsdf[idx] }
+        if shellOnly { return 1 }
         // Seen empty from somewhere beats hidden from elsewhere; untouched space is empty.
         if free[idx] >= 2 { return 1 }
-        return behind[idx] > 0 ? -1 : 1
+        guard behind[idx] > 0 else { return 1 }
+        if let enclosed, enclosed[idx] < 2 { return 1 }
+        return -1
     }
 
-    /// Height in the box (metres) just below the lowest seen surface, for cutting off the unseen slab
-    /// under a scanned surface.
-    func lowestSurface() -> Float? {
-        // A layer counts once a fair number of cubes in it lie on a surface, so stray points do not.
-        let needed = max(20, nx * ny / 500)
-        for k in 0..<nz {
-            var n = 0
-            for idx in k * nx * ny..<(k + 1) * nx * ny where weight[idx] >= 3 && abs(tsdf[idx]) < 0.5 { n += 1 }
-            if n >= needed { return Float(k) * voxel }
+    /// Hidden space counts as material only where seen surfaces close it in: between two of them along
+    /// at least two of the three axes (the floor counts as one from below when `floorClosed`). Without
+    /// this, a side never looked at would be filled out to the box's wall.
+    mutating func limitToSeen(floorClosed: Bool) {
+        var count = [UInt8](repeating: 0, count: nx * ny * nz)
+        let nx = self.nx, ny = self.ny, nz = self.nz
+        weight.withUnsafeBufferPointer { weight in
+            tsdf.withUnsafeBufferPointer { tsdf in
+                count.withUnsafeMutableBufferPointer { count in
+                    let surface = { (idx: Int) in weight[idx] >= 2 && abs(tsdf[idx]) < 0.5 }
+                    // One line of cubes: `n` long, `stride` apart from `start`.
+                    func line(_ start: Int, _ stride: Int, _ n: Int, closedBelow: Bool) {
+                        var first = closedBelow ? 0 : -1, last = -1
+                        for t in 0..<n where surface(start + t * stride) {
+                            if first < 0 { first = t }
+                            last = t
+                        }
+                        guard first >= 0, last > first else { return }
+                        for t in first...last { count[start + t * stride] += 1 }
+                    }
+                    for k in 0..<nz { for j in 0..<ny { line((k * ny + j) * nx, 1, nx, closedBelow: false) } }
+                    for k in 0..<nz { for i in 0..<nx { line(k * ny * nx + i, nx, ny, closedBelow: false) } }
+                    for j in 0..<ny { for i in 0..<nx { line(j * nx + i, nx * ny, nz, closedBelow: floorClosed) } }
+                }
+            }
         }
-        return nil
+        enclosed = count
+    }
+
+    /// Height in the box (metres) just above the table or floor, if some of it came into the bottom of
+    /// the box: the highest layer in the lowest few centimetres where surface spreads over a large
+    /// share of the box (an object's foot covers far less).
+    func floorLayer() -> Float? {
+        let needed = nx * ny / 6
+        var top: Int?
+        for k in 0..<min(nz, Int((0.04 / voxel).rounded(.up))) {
+            var n = 0
+            for idx in k * nx * ny..<(k + 1) * nx * ny where weight[idx] >= 2 && abs(tsdf[idx]) < 0.5 { n += 1 }
+            if n >= needed { top = k }
+        }
+        return top.map { Float($0 + 2) * voxel }
     }
 
     /// The solids as triangle corners in millimetres, in the box's frame with z up: centred in x and y,
