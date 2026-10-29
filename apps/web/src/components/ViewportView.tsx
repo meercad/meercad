@@ -149,7 +149,7 @@ export function ViewportView() {
   const phoneConstraints = usePhoneSheets((s) => s.constraints);
   useEffect(() => {
     if (!vp) return;
-    const sheets = () => [...document.querySelectorAll<HTMLElement>(".dialog, .measure-card, .side, .constraint-palette.open")];
+    const sheets = () => [...document.querySelectorAll<HTMLElement>(".dialog, .measure-card, .side, .constraint-palette.open, .copilot")];
     const update = () => {
       if (!isCompact()) return vp.setBottomInset(0);
       const box = vp.canvas.getBoundingClientRect();

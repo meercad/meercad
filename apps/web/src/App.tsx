@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { decodeShareFragment } from "@meercad/io";
 import { validateDocument } from "@meercad/schema";
 import { FeatureDialog } from "./components/FeatureDialog";
+import { CopilotPanel } from "./components/Copilot";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
 import { MenuHost } from "./components/Menu";
@@ -288,6 +289,7 @@ export function App() {
             <ViewportView />
             <Toolbar />
             <FeatureDialog />
+            <CopilotPanel />
           </div>
         </div>
       )}
