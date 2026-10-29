@@ -8,7 +8,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import { create } from "zustand";
 import { apply, currentDoc, getViewport, newProject, rebuildNow, undo, useApp } from "../store";
 import { partName } from "./features";
-import { INSTRUCTIONS, TOOLS, planTool, type ModelInfo } from "./copilotTools";
+import { INSTRUCTIONS, TOOLS, describe, planTool, type ModelInfo } from "./copilotTools";
 import { nativeApp } from "./native";
 
 interface CopilotPlugin {
@@ -84,7 +84,8 @@ async function runTool(name: string, args: Record<string, unknown>): Promise<str
       return `Error: ${failed.map((f) => `${f.message ?? "failed"}${f.hint ? ` (${f.hint})` : ""}`).join("; ")}. The change was undone.`;
     }
     say({ role: "tool", text: plan.note });
-    return `Done: ${plan.note}.`;
+    // The current sizes come along, so "5 mm taller" next time starts from the right number.
+    return `Done: ${plan.note}.\nNow: ${describe(modelInfo())}`;
   } catch (e) {
     return `Error: ${e instanceof Error ? e.message : String(e)}`;
   }

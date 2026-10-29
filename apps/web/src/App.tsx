@@ -3,6 +3,7 @@ import { decodeShareFragment } from "@meercad/io";
 import { validateDocument } from "@meercad/schema";
 import { FeatureDialog } from "./components/FeatureDialog";
 import { CopilotPanel } from "./components/Copilot";
+import { useCopilot } from "./lib/copilot";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
 import { MenuHost } from "./components/Menu";
@@ -94,7 +95,9 @@ async function route(): Promise<void> {
 export function App() {
   const screen = useApp((s) => s.screen);
   const sideOpen = useApp((s) => s.sideOpen);
-  const sheet = useApp((s) => !!s.dialog || s.measure.active);
+  const copilot = useCopilot((s) => s.open);
+  // Phone: an open sheet takes the bottom, where the tool bar would sit on top of it.
+  const sheet = useApp((s) => !!s.dialog || s.measure.active) || copilot;
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);

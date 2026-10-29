@@ -7,8 +7,11 @@ import FoundationModels
 /// The web app describes its tools (name, description, parameters); they become real tools of a
 /// `LanguageModelSession`. When the model calls one, the call goes to the web app as a `toolCall`
 /// event, the web app runs it and answers with `toolResult`, and the model sees that result. The
-/// session lives on between questions, so the user can refer back ("make it taller"). Apple's larger
-/// model on Private Cloud Compute is used where it is available, the on-device model otherwise.
+/// session lives on between questions, so the user can refer back ("make it taller").
+///
+/// Only the on-device model is used for now: Apple's larger Private Cloud Compute model reports
+/// itself available but refuses third-party requests without further setup (seen on macOS 27:
+/// ModelManagerError 1046). Each step is written to Documents/copilot.log for looking into problems.
 @objc(CopilotPlugin)
 public class CopilotPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "CopilotPlugin"
@@ -30,10 +33,8 @@ public class CopilotPlugin: CAPPlugin, CAPBridgedPlugin {
             return call.resolve(["available": false, "reason": "The copilot needs iOS 26 or later."])
         }
         let local = SystemLanguageModel.default.availability
-        var cloud = false
-        if #available(iOS 27, *) { cloud = PrivateCloudComputeLanguageModel().isAvailable }
         var reason = ""
-        if case .unavailable(let why) = local, !cloud {
+        if case .unavailable(let why) = local {
             switch why {
             case .deviceNotEligible: reason = "This device does not support Apple Intelligence."
             case .appleIntelligenceNotEnabled: reason = "Turn on Apple Intelligence in Settings to use the copilot."
@@ -41,7 +42,8 @@ public class CopilotPlugin: CAPPlugin, CAPBridgedPlugin {
             @unknown default: reason = "Apple's language model is not available."
             }
         }
-        call.resolve(["available": cloud || local == .available, "onDevice": local == .available, "cloud": cloud, "reason": reason])
+        Self.log("availability \(local)")
+        call.resolve(["available": local == .available, "onDevice": local == .available, "cloud": false, "reason": reason])
     }
 
     @objc func reset(_ call: CAPPluginCall) {
@@ -60,16 +62,21 @@ public class CopilotPlugin: CAPPlugin, CAPBridgedPlugin {
         guard let prompt = call.getString("prompt"), !prompt.isEmpty else { return call.reject("no prompt") }
         let specs = call.getArray("tools", JSObject.self) ?? []
         let instructions = call.getString("instructions") ?? ""
+        Self.log("ask \(prompt.count) chars, \(specs.count) tools")
         Task {
             do {
                 let s = try self.currentSession(specs: specs, instructions: instructions)
+                Self.log("session ready (\(self.model))")
                 let response = try await s.respond(to: prompt)
+                Self.log("answer \(response.content.count) chars")
                 call.resolve(["text": response.content, "model": self.model])
             } catch let error as LanguageModelSession.GenerationError {
+                Self.log("generation error \(error)")
                 // A full context starts over on the next question.
                 if case .exceededContextWindowSize = error { self.session = nil }
                 call.reject(Self.message(for: error), "generation")
             } catch {
+                Self.log("error \(error)")
                 call.reject(error.localizedDescription)
             }
         }
@@ -79,14 +86,8 @@ public class CopilotPlugin: CAPPlugin, CAPBridgedPlugin {
     private func currentSession(specs: [JSObject], instructions: String) throws -> LanguageModelSession {
         if let s = session as? LanguageModelSession { return s }
         let tools: [any Tool] = try specs.map { try BridgeTool(spec: $0, plugin: self) }
-        let s: LanguageModelSession
-        if #available(iOS 27, *), PrivateCloudComputeLanguageModel().isAvailable {
-            s = LanguageModelSession(model: PrivateCloudComputeLanguageModel(), tools: tools, instructions: instructions)
-            model = "Private Cloud Compute"
-        } else {
-            s = LanguageModelSession(tools: tools, instructions: instructions)
-            model = "on device"
-        }
+        let s = LanguageModelSession(tools: tools, instructions: instructions)
+        model = "on device"
         session = s
         return s
     }
@@ -94,9 +95,30 @@ public class CopilotPlugin: CAPPlugin, CAPBridgedPlugin {
     /// Sends a tool call to the web app and waits for its answer.
     func runTool(_ name: String, _ arguments: String) async -> String {
         let id = UUID().uuidString
-        return await withCheckedContinuation { done in
+        Self.log("tool \(name) \(arguments)")
+        let result = await withCheckedContinuation { done in
             calls.start(id, done)
-            notifyListeners("toolCall", data: ["id": id, "name": name, "arguments": arguments])
+            // The model calls tools from its own threads; the bridge to the web view is used from the main one.
+            DispatchQueue.main.async {
+                self.notifyListeners("toolCall", data: ["id": id, "name": name, "arguments": arguments])
+            }
+        }
+        Self.log("tool result \(result.prefix(200))")
+        return result
+    }
+
+    /// Appends a line to Documents/copilot.log (kept small).
+    static func log(_ line: String) {
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("copilot.log")
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+        if size > 200_000 { try? FileManager.default.removeItem(at: url) }
+        let text = "\(ISO8601DateFormatter().string(from: Date())) \(line)\n"
+        if let h = try? FileHandle(forWritingTo: url) {
+            h.seekToEndOfFile()
+            h.write(Data(text.utf8))
+            try? h.close()
+        } else {
+            try? Data(text.utf8).write(to: url)
         }
     }
 

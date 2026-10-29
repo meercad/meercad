@@ -26,7 +26,7 @@ export interface ModelInfo {
 }
 
 /** Tells the model what it is and how the world is laid out. Short: the on-device model has little room. */
-export const INSTRUCTIONS = `You are the copilot in meerCAD, a CAD app for designing parts to 3D print. Change the model only with the tools. Lengths are millimetres. Z points up, the build plate is z = 0, x goes right, y goes back. Parts are named by ids like ex1; call describe_model to see them before changing an existing part. Do one step at a time and read each tool result. Reply briefly, in the user's language, saying what you did.`;
+export const INSTRUCTIONS = `You are the copilot in meerCAD, a CAD app for designing parts to 3D print. Change the model only with the tools. Lengths are millimetres. Z points up, the build plate is z = 0, x goes right, y goes back. Boxes and cylinders are centred on their x and y. Parts are named by ids like ex1; call describe_model for their sizes and positions before changing an existing part, and use those numbers (a box from x -20 to 20 has its middle at x 0; 5 mm taller than 15 is 20). Carry out every step the user asks for, one tool call after another, reading each result; do not stop to ask before the last one. Then reply briefly, saying what you did, always in the language of the user's latest message (German when they write German).`;
 
 const where: ToolParam[] = [
   { name: "x", type: "number", description: "Centre x in mm (default 0)", optional: true },
@@ -188,8 +188,9 @@ export function planTool(name: string, a: Args, doc: MeercadDocument, info: Mode
       return { text: describe(info) };
     case "add_box": {
       const w = num(a, "width"), d = num(a, "depth"), h = num(a, "height");
-      const r = solid(doc, a, "Box", rectangle("b", num(a, "x", 0), num(a, "y", 0), w, d), h);
-      return { ops: r.ops, note: `added box ${r.id} (${fmt(w)} x ${fmt(d)} x ${fmt(h)} mm)` };
+      const x = num(a, "x", 0), y = num(a, "y", 0), z = num(a, "z", 0);
+      const r = solid(doc, a, "Box", rectangle("b", x, y, w, d), h);
+      return { ops: r.ops, note: `added box ${r.id}: ${fmt(w)} x ${fmt(d)} x ${fmt(h)} mm, x ${fmt(x - w / 2)} to ${fmt(x + w / 2)}, y ${fmt(y - d / 2)} to ${fmt(y + d / 2)}, z ${fmt(z)} to ${fmt(z + h)}` };
     }
     case "add_cylinder": {
       const dia = num(a, "diameter"), h = num(a, "height");
@@ -198,7 +199,8 @@ export function planTool(name: string, a: Args, doc: MeercadDocument, info: Mode
         { id: "c1", type: "circle", center: "cc", radius: dia / 2 },
       ];
       const r = solid(doc, a, "Cylinder", entities, h);
-      return { ops: r.ops, note: `added cylinder ${r.id} (diameter ${fmt(dia)}, height ${fmt(h)} mm)` };
+      const z = num(a, "z", 0);
+      return { ops: r.ops, note: `added cylinder ${r.id}: diameter ${fmt(dia)} mm, centre x ${fmt(num(a, "x", 0))}, y ${fmt(num(a, "y", 0))}, z ${fmt(z)} to ${fmt(z + h)}` };
     }
     case "round_edges":
     case "chamfer_edges": {
@@ -249,7 +251,8 @@ export function planTool(name: string, a: Args, doc: MeercadDocument, info: Mode
       }
       if (a["height"] !== undefined) ops.push({ type: "edit_feature", id: ex.id, patch: { distance: mm(num(a, "height")) } });
       if (!ops.length) throw new Error("give the new width, depth, height or diameter");
-      return { ops, note: `resized ${p}` };
+      const changed = ["width", "depth", "height", "diameter"].filter((k) => a[k] !== undefined).map((k) => `${k} ${fmt(num(a, k))} mm`);
+      return { ops, note: `resized ${p}: ${changed.join(", ")}` };
     }
     case "move_part": {
       const p = str(a, "part");

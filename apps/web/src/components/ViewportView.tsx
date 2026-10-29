@@ -4,6 +4,7 @@ import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
 import { withKey } from "./Kbd";
 import { isCompact, usePhoneSheets } from "../lib/layout";
+import { useCopilot } from "../lib/copilot";
 import type { FeatureOp } from "@meercad/schema";
 import { perFrame, samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
 import { FEATURES, partName } from "../lib/features";
@@ -147,6 +148,7 @@ export function ViewportView() {
   // Phone: sheets cover the lower part of the view; the model centres in the space above them.
   const sideOpen = useApp((s) => s.sideOpen);
   const phoneConstraints = usePhoneSheets((s) => s.constraints);
+  const copilot = useCopilot((s) => s.open);
   useEffect(() => {
     if (!vp) return;
     const sheets = () => [...document.querySelectorAll<HTMLElement>(".dialog, .measure-card, .side, .constraint-palette.open, .copilot")];
@@ -167,7 +169,7 @@ export function ViewportView() {
       window.clearTimeout(t);
       window.removeEventListener("resize", update);
     };
-  }, [vp, dialog, measure.active, sideOpen, sketchId, phoneConstraints]);
+  }, [vp, dialog, measure.active, sideOpen, sketchId, phoneConstraints, copilot]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, pickingPlane, dialog?.field]);

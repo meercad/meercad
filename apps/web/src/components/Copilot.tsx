@@ -69,7 +69,7 @@ export function CopilotPanel() {
           send();
         }}
       >
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="What should I do?" enterKeyHint="send" disabled={busy} />
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="What should I do? (any language)" enterKeyHint="send" disabled={busy} />
         <button className="icon-btn" type="submit" disabled={busy || !text.trim()} title="Send">
           <ArrowUp />
         </button>
