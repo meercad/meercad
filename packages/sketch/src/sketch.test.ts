@@ -110,6 +110,21 @@ describe("arc angle", () => {
 });
 
 describe("findRegions", () => {
+  it("keeps an arc whole when it is a hair off its line's end", () => {
+    // A slanted slot with round ends exactly as the solver returned it: the arcs' radii are off by
+    // rounding, and splitting an arc at the near-miss left a sliver region without area.
+    const line = (id: string, a: [number, number], b: [number, number]): SolvedCurve => ({ id, kind: "line", a, b, construction: false }) as SolvedCurve;
+    const arc = (id: string, center: [number, number], radius: number, a0: number, a1: number): SolvedCurve => ({ id, kind: "arc", center, radius, a0, a1, construction: false }) as SolvedCurve;
+    const regions = findRegions([
+      line("l1", [-1.670493, 33.634481], [80.105334, 71.220571]),
+      arc("a1", [81.775827, 67.58609], 3.9999998753012465, -1.1399683488775014, 2.001624304712294),
+      line("l2", [83.44632, 63.951609], [1.670493, 26.365519]),
+      arc("a2", [0, 30], 3.999999875301249, 2.0016243047122932, 5.143216958302086),
+    ]);
+    expect(regions.map((x) => x.key)).toEqual(["a1+a2+l1+l2"]);
+    expect(regions[0]!.area).toBeCloseTo(90 * 8 + Math.PI * 16, 1);
+  });
+
   it("finds a rectangle region with semantic key", () => {
     const r = findRegions(box(0, 0, 40, 20));
     expect(r).toHaveLength(1);

@@ -194,17 +194,12 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
   const mech = doc.mechanism;
   if (mech) {
     const jointIds = new Set<string>();
-    const moving = new Set<string>();
     for (const j of mech.joints) {
       const at = `joint ${j.id}`;
       if (jointIds.has(j.id)) errors.push(`${at}: duplicate id`);
       jointIds.add(j.id);
       if (j.a === j.b) errors.push(`${at}: a part cannot be jointed to itself`);
       if (j.a === "ground") errors.push(`${at}: the moving part cannot be the ground`);
-      if (!j.suppressed) {
-        if (moving.has(j.a)) errors.push(`${at}: part "${j.a}" already moves in another joint (closed loops come later)`);
-        moving.add(j.a);
-      }
       if ("gear" in j.anchor) earlier(j.anchor.gear, at, "gear", ["gear"]);
     }
     for (const c of mech.couplings ?? []) {

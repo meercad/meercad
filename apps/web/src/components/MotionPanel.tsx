@@ -1,7 +1,7 @@
 import { Check, Cog, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import type { Joint } from "@meercad/schema";
 import { partName } from "../lib/features";
-import { checkClearance, currentMechanism, deleteJoint, editJoint, jointsFromGears, playJoint, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
+import { checkClearance, currentMechanism, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, restPose, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
 import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
@@ -26,13 +26,16 @@ export function MotionPanel() {
   const draft = useMotion((s) => s.draft);
   const free = useMotion((s) => s.free);
   const playing = useMotion((s) => s.playing);
+  const stuck = useMotion((s) => s.stuck);
+  useMotion((s) => s.tick);
   const doc = useApp((s) => s.doc);
   useApp((s) => s.output);
   const dialog = useApp((s) => !!s.dialog);
   if (!open || dialog) return null;
   const features = doc.features;
   const { mech, problems } = currentMechanism();
-  const values = mech.values(free);
+  void free;
+  const values = jointValues();
   const joints = doc.mechanism?.joints ?? [];
   const couplings = doc.mechanism?.couplings ?? [];
   const gearsWithout = (useApp.getState().output?.report.gears ?? []).filter((g) => !joints.some((j) => j.a === g.id)).length;
@@ -107,7 +110,8 @@ export function MotionPanel() {
                   {id}: {p}
                 </div>
               ))}
-            {mech.errors.map((e) => (
+            {stuck ? <div className="callout warn">It cannot move further this way: a dead point or a limit. Move it back, or drag another part.</div> : null}
+            {mech.errors.filter((e) => !e.includes("moves in two joints")).map((e) => (
               <div key={e} className="callout warn">
                 {e}
               </div>
@@ -117,7 +121,7 @@ export function MotionPanel() {
                 <Plus /> Add joint
               </button>
               {joints.length ? (
-                <button className="btn" onClick={() => useMotion.setState({ free: {} })} title="Back to where the parts were drawn">
+                <button className="btn" onClick={restPose} title="Back to where the parts were drawn">
                   <RotateCcw /> Rest position
                 </button>
               ) : null}
@@ -145,9 +149,10 @@ export function MotionPanel() {
 function ClearanceResults() {
   const check = useMotion((s) => s.check);
   const free = useMotion((s) => s.free);
+  const tick = useMotion((s) => s.tick);
   const features = useApp((s) => s.doc.features);
   const want = wantedClearance();
-  const stale = check && !check.running && JSON.stringify(check.free) !== JSON.stringify(free);
+  const stale = check && !check.running && JSON.stringify(check.free) !== JSON.stringify({ ...free, tick });
   const name = (id: string) => partName(id, features);
   return (
     <>

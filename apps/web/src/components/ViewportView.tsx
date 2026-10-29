@@ -177,11 +177,12 @@ export function ViewportView() {
   }, [vp, dialog, measure.active, sideOpen, sketchId, phoneConstraints, motionOpen]);
   // Moving parts: poses from the joint values; parts can be dragged while the joints panel is open.
   const motionFree = useMotion((s) => s.free);
+  const motionTick = useMotion((s) => s.tick);
   useEffect(() => {
     if (!vp) return;
     vp.partDrag = motionOpen && !dialog ? partDrag : null;
     vp.setPoses(currentPoses());
-  }, [vp, motionOpen, motionFree, output, doc.mechanism, dialog]);
+  }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, pickingPlane, dialog?.field]);

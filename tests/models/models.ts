@@ -48,6 +48,28 @@ function polygon(prefix: string, cx: number, cy: number, r: number, n: number): 
   }
   return [...pts, ...lines];
 }
+/** A flat link from p to q: a bar `w` wide with round ends and a hole of radius `r` at each end. */
+function link(prefix: string, p: [number, number], q: [number, number], w: number, r: number): SketchEntity[] {
+  const dx = q[0] - p[0];
+  const dy = q[1] - p[1];
+  const l = Math.hypot(dx, dy);
+  const [nx, ny] = [(-dy / l) * (w / 2), (dx / l) * (w / 2)];
+  const round = (v: number) => +v.toFixed(6);
+  return [
+    { id: `${prefix}p1`, type: "point", x: round(p[0] + nx), y: round(p[1] + ny) },
+    { id: `${prefix}p2`, type: "point", x: round(q[0] + nx), y: round(q[1] + ny) },
+    { id: `${prefix}p3`, type: "point", x: round(q[0] - nx), y: round(q[1] - ny) },
+    { id: `${prefix}p4`, type: "point", x: round(p[0] - nx), y: round(p[1] - ny) },
+    { id: `${prefix}cp`, type: "point", x: round(p[0]), y: round(p[1]) },
+    { id: `${prefix}cq`, type: "point", x: round(q[0]), y: round(q[1]) },
+    { id: `${prefix}l1`, type: "line", p1: `${prefix}p1`, p2: `${prefix}p2` },
+    { id: `${prefix}a1`, type: "arc", center: `${prefix}cq`, start: `${prefix}p3`, end: `${prefix}p2` },
+    { id: `${prefix}l2`, type: "line", p1: `${prefix}p3`, p2: `${prefix}p4` },
+    { id: `${prefix}a2`, type: "arc", center: `${prefix}cp`, start: `${prefix}p1`, end: `${prefix}p4` },
+    { id: `${prefix}h1`, type: "circle", center: `${prefix}cp`, radius: r },
+    { id: `${prefix}h2`, type: "circle", center: `${prefix}cq`, radius: r },
+  ];
+}
 /** A closed polyline through the points. */
 function polyline(prefix: string, points: [number, number][]): SketchEntity[] {
   return [
@@ -379,5 +401,34 @@ export const MODELS: TestModel[] = [
       },
     },
     expect: { bodies: 3, volume: 60 * 40 * 20 + 60 * 40 * 3 + PI * 6.25 * 60, size: [60, 42.5, 23] },
+  },
+  {
+    file: "23 Viergelenk",
+    name: "Four-bar linkage",
+    look: "Four flat links with round ends on pins: a 100 mm ground bar, a 30 mm crank standing up at its left end, a 90 mm coupler and a 70 mm rocker. Joints panel: playing the crank turns it round and round while the rocker swings back and forth; dragging the coupler moves the whole linkage.",
+    doc: {
+      ...doc([
+        sketch("sk1", { ref: "origin.XY" }, link("g", [0, 0], [100, 0], 10, 2.2)),
+        { id: "ex1", op: "extrude", name: "Ground", profile: { sketch: "sk1" }, extent: "blind", distance: 3, mode: "new_body" },
+        { id: "pl1", op: "plane", base: { ref: "origin.XY" }, offset: 3 },
+        sketch("sk2", { ref: "pl1" }, link("c", [0, 0], [0, 30], 8, 2.2)),
+        { id: "ex2", op: "extrude", name: "Crank", profile: { sketch: "sk2" }, extent: "blind", distance: 3, mode: "new_body" },
+        sketch("sk3", { ref: "pl1" }, link("r", [100, 0], [81.775827, 67.58609], 8, 2.2)),
+        { id: "ex3", op: "extrude", name: "Rocker", profile: { sketch: "sk3" }, extent: "blind", distance: 3, mode: "new_body" },
+        { id: "pl2", op: "plane", base: { ref: "origin.XY" }, offset: 6 },
+        sketch("sk4", { ref: "pl2" }, link("k", [0, 30], [81.775827, 67.58609], 8, 2.2)),
+        { id: "ex4", op: "extrude", name: "Coupler", profile: { sketch: "sk4" }, extent: "blind", distance: 3, mode: "new_body" },
+      ]),
+      mechanism: {
+        joints: [
+          { id: "j1", name: "Crank", type: "revolute", a: "ex2", b: "ex1", anchor: { axisOf: { face: "ex2.side[sk2.ch1]" } } },
+          { id: "j2", name: "Coupler on crank", type: "revolute", a: "ex4", b: "ex2", anchor: { axisOf: { face: "ex4.side[sk4.kh1]" } } },
+          { id: "j3", name: "Rocker", type: "revolute", a: "ex3", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.rh1]" } } },
+          { id: "j4", name: "Coupler on rocker", type: "revolute", a: "ex4", b: "ex3", anchor: { axisOf: { face: "ex4.side[sk4.kh2]" } } },
+        ],
+      },
+    },
+    // Each link: bar plus round ends minus two holes, 3 mm thick.
+    expect: { bodies: 4, volume: [[100, 10], [30, 8], [70, 8], [90, 8]].reduce((v, [l, w]) => v + (l! * w! + PI * (w! / 2) ** 2 - 2 * PI * 2.2 ** 2) * 3, 0) },
   },
 ];

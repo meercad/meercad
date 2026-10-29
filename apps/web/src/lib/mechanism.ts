@@ -3,7 +3,7 @@
  * the last rebuild), the joint values being shown (view state, not saved, no undo), dragging parts,
  * and the joint being drawn up in the joints panel.
  */
-import { evaluate, motion } from "@meercad/model";
+import { evaluate, linkage, motion } from "@meercad/model";
 import type { Coupling, Joint, JointAnchor } from "@meercad/schema";
 import type { Pick, Ray } from "@meercad/viewport";
 import { create } from "zustand";
@@ -29,7 +29,46 @@ export const useMotion = create<{
   /** Joint being played (driven back and forth or round), or null. */
   playing: string | null;
   check: ClearanceCheck | null;
-}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null }));
+  /** Bumped when a closed-loop linkage moves (its pose lives outside the store). */
+  tick: number;
+  /** Set when a linkage cannot move further (a dead point or a limit). */
+  stuck: boolean;
+}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null, tick: 0, stuck: false }));
+
+// ---------------------------------------------------------------- closed loops
+
+/** Pose of a linkage with closed loops, solved step by step from the last one. */
+let loop: { key: string; L: linkage.Linkage; poses: Map<string, motion.Mat4>; values: Record<string, number> } | null = null;
+
+/** The loop solver when some part hangs in more than one joint, else null. */
+function loopOf(mech: motion.Mechanism): NonNullable<typeof loop> | null {
+  if (!linkage.hasLoops(mech.joints)) return (loop = null);
+  const key = JSON.stringify([mech.joints, mech.couplings]);
+  if (loop?.key !== key) loop = { key, L: new linkage.Linkage(mech.joints, mech.couplings), poses: new Map(), values: {} };
+  return loop;
+}
+
+function moveLoop(l: NonNullable<typeof loop>, r: linkage.LinkageResult): boolean {
+  if (r.poses.size) {
+    l.poses = r.poses;
+    l.values = r.values;
+  }
+  useMotion.setState((s) => ({ tick: s.tick + 1, stuck: !r.ok }));
+  return r.ok;
+}
+
+/** Back to where the parts were drawn. */
+export function restPose(): void {
+  loop = null;
+  useMotion.setState((s) => ({ free: {}, tick: s.tick + 1, stuck: false }));
+}
+
+/** Every joint's value now (degrees or mm). */
+export function jointValues(): Record<string, number> {
+  const { mech } = currentMechanism();
+  const l = loopOf(mech);
+  return l ? { ...Object.fromEntries(mech.joints.map((j) => [j.id, 0])), ...l.values } : mech.values(useMotion.getState().free);
+}
 
 /** The mechanism as it can move now, with a message per joint that cannot. */
 export function currentMechanism(): { mech: motion.Mechanism; problems: Record<string, string> } {
@@ -75,20 +114,26 @@ export function currentPoses(): Map<string, number[]> {
   const m = useMotion.getState();
   if (!m.open) return new Map();
   const { mech } = currentMechanism();
+  const l = loopOf(mech);
+  if (l) return l.poses;
   return mech.poses(mech.values(m.free));
 }
 
-/** Sets a joint's value (a driven joint moves its driver instead). */
-export function setJointValue(id: string, value: number): void {
+/** Sets a joint's value (a driven joint moves its driver instead). False when it cannot get there. */
+export function setJointValue(id: string, value: number): boolean {
   const { mech } = currentMechanism();
+  const l = loopOf(mech);
+  if (l) return moveLoop(l, l.L.solve(l.poses, { [id]: value }));
   const r = mech.rootValueFor(id, value);
-  if (!r) return;
+  if (!r) return false;
   const [lo, hi] = mech.range(r.root);
   useMotion.setState((s) => ({ free: { ...s.free, [r.root]: Math.min(hi, Math.max(lo, r.value)) } }));
+  return true;
 }
 
 // ---------------------------------------------------------------- dragging
 
+let loopDrag: { part: string; local: motion.V3 } | null = null;
 let drag: { joint: motion.MotionJoint; o: motion.V3; n: motion.V3; start: number; grab: motion.V3; last: motion.V3; turned: number; t0: number } | null = null;
 
 /** Viewport hook: a press on a part that can move grabs it. */
@@ -97,6 +142,13 @@ export const partDrag = {
     if (useMotion.getState().draft) return false;
     stopPlaying();
     const { mech } = currentMechanism();
+    const l = loopOf(mech);
+    if (l) {
+      if (!l.L.parts.includes(pick.bodyId)) return false;
+      const pose = l.poses.get(pick.bodyId) ?? motion.IDENTITY;
+      loopDrag = { part: pick.bodyId, local: motion.transformPoint(linkage.inverse(pose), pick.point) };
+      return true;
+    }
     // A part held fixed to a moving part moves that part.
     let joint = mech.jointOf(pick.bodyId);
     for (let i = 0; joint?.type === "fixed" && i < 100; i++) joint = mech.jointOf(joint.b);
@@ -110,6 +162,11 @@ export const partDrag = {
     return true;
   },
   move(ray: Ray): void {
+    if (loopDrag) {
+      const l = loopOf(currentMechanism().mech);
+      if (l) moveLoop(l, l.L.solve(l.poses, {}, { ...loopDrag, ray }));
+      return;
+    }
     if (!drag) return;
     let value: number;
     if (drag.joint.type === "revolute") {
@@ -128,6 +185,7 @@ export const partDrag = {
   },
   end(): void {
     drag = null;
+    loopDrag = null;
   },
 };
 
@@ -146,7 +204,10 @@ export function toggleJoints(): void {
     if (useApp.getState().dialog) return toast("Finish the open tool first");
     useApp.setState({ measure: { active: false, picks: [], result: null } });
   }
-  if (!open) stopPlaying();
+  if (!open) {
+    stopPlaying();
+    restPose();
+  }
   useMotion.setState({ open, draft: null, ...(open ? {} : { free: {}, check: null }) });
 }
 
@@ -263,6 +324,26 @@ export function playJoint(id: string): void {
   stopPlaying();
   const { mech } = currentMechanism();
   const j = mech.joint(id);
+  const l = loopOf(mech);
+  if (l && j && j.type !== "fixed") {
+    // A linkage: push the joint on and turn back where it cannot go further.
+    const speed = j.type === "revolute" ? 60 : 15;
+    let dir = 1;
+    let last = performance.now();
+    useMotion.setState({ playing: id });
+    const step = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const cur = loopOf(currentMechanism().mech);
+      if (!cur) return stopPlaying();
+      const v = (cur.values[id] ?? 0) + dir * speed * dt;
+      const lim = j.limits;
+      if (!setJointValue(id, lim ? Math.min(lim[1], Math.max(lim[0], v)) : v) || (lim && (v >= lim[1] || v <= lim[0]))) dir = -dir;
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return;
+  }
   const root = mech.rootOf(id);
   if (!j || j.type === "fixed" || !root) return;
   const [lo, hi] = mech.range(root);
@@ -309,8 +390,8 @@ export function wantedClearance(): number {
 export async function checkClearance(): Promise<void> {
   stopPlaying();
   const { mech } = currentMechanism();
-  const free = { ...useMotion.getState().free };
-  const poses = mech.poses(mech.values(free));
+  const free = { ...useMotion.getState().free, tick: useMotion.getState().tick };
+  const poses = loopOf(mech)?.poses ?? mech.poses(mech.values(useMotion.getState().free));
   const moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
   if (!moving.length) return toast("No part moves yet: add a joint first");
   useMotion.setState({ check: { running: true, free, results: [] } });

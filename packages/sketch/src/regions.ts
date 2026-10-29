@@ -94,16 +94,27 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
     } else if (c.kind === "arc") {
       const start = c.a0;
       const span = sweep(c.a0, c.a1);
-      const rel = uniq(ps.map((a) => normAngle(a - start)).map((r) => (r > span + 1e-9 ? r - TAU : r)).filter((r) => r >= -1e-9 && r <= span + 1e-9), 1e-9);
+      // A crossing within `tol` of an end is that end: solved arcs are off their ends by rounding,
+      // and splitting there would leave a sliver piece (and a region without area).
+      const at = Math.max(1e-9, tol / c.radius);
+      const rel = uniq(
+        ps
+          .map((a) => normAngle(a - start))
+          .map((r) => (r > span + at ? r - TAU : r))
+          .filter((r) => r >= -at && r <= span + at)
+          .map((r) => (Math.abs(r) < at ? 0 : Math.abs(r - span) < at ? span : r)),
+        at,
+      );
       rel.sort((a, b) => a - b);
-      if (rel[0]! > 1e-9) rel.unshift(0);
-      if (rel.at(-1)! < span - 1e-9) rel.push(span);
+      if (rel[0]! > at) rel.unshift(0);
+      if (rel.at(-1)! < span - at) rel.push(span);
       const pieces: Piece[] = [];
       for (let k = 0; k + 1 < rel.length; k++) pieces.push({ kind: "arc", center: c.center, radius: c.radius, a0: start + rel[k]!, a1: start + rel[k + 1]! });
       pushPieces(c.id, pieces);
     } else {
-      let as = uniq(ps.map(normAngle).sort((a, b) => a - b), 1e-9);
-      if (as.length > 1 && as[0]! + TAU - as.at(-1)! < 1e-9) as = as.slice(0, -1);
+      const at = Math.max(1e-9, tol / c.radius);
+      let as = uniq(ps.map(normAngle).sort((a, b) => a - b), at);
+      if (as.length > 1 && as[0]! + TAU - as.at(-1)! < at) as = as.slice(0, -1);
       if (as.length === 0) {
         standalone.push(c);
         continue;

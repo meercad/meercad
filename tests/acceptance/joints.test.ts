@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { clearances } from "@meercad/kernel";
-import { applyOp, motion } from "@meercad/model";
+import { applyOp, linkage, motion } from "@meercad/model";
+import { MODELS } from "../models/models.js";
 import { validateDocument, type Feature, type Joint, type MeercadDocument } from "@meercad/schema";
 import { circle, doc, getOcct, newSession, rect, sketch } from "./helpers.js";
 
@@ -105,9 +106,28 @@ describe("joints", () => {
     expect(performance.now() - t0).toBeLessThan(20000);
   });
 
+  it("turns the four-bar test model's crank all the way round", async () => {
+    const s = await newSession();
+    const d = MODELS.find((m) => m.file.startsWith("23"))!.doc;
+    const r = s.rebuild(d).report;
+    const joints = d.mechanism!.joints.map((j, i) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis }));
+    expect(linkage.hasLoops(joints)).toBe(true);
+    const L = new linkage.Linkage(joints);
+    let poses = new Map<string, motion.Mat4>();
+    for (let a = 30; a <= 360; a += 30) {
+      const step = L.solve(poses, { j1: a });
+      expect(step.ok, `crank ${a}°`).toBe(true);
+      poses = step.poses;
+    }
+    // Back where it started, the rocker is too.
+    const rocker = L.value(poses, "j3");
+    expect(Math.abs(rocker - 360 * Math.round(rocker / 360))).toBeLessThan(1e-3);
+  });
+
   it("checks joints and couplings in the document", () => {
-    const d = withJoints(hinge, [pin, { ...pin, id: "j2" }]);
-    expect(validateDocument(d).ok).toBe(false);
+    // A part may hang in several joints (closed loops), but not on itself.
+    expect(validateDocument(withJoints(hinge, [pin, { ...pin, id: "j2", b: "ground" }])).ok).toBe(true);
+    expect(validateDocument(withJoints(hinge, [{ ...pin, b: "ex2" }])).ok).toBe(false);
     expect(validateDocument(withJoints(hinge, [pin], [{ id: "c1", driver: "j1", driven: "j9", ratio: 1 }])).ok).toBe(false);
     let next = applyOp(doc(hinge), { type: "set_joint", joint: pin });
     next = applyOp(next, { type: "set_joint", joint: { ...pin, id: "j2", a: "ex1", b: "ground", type: "fixed" } });

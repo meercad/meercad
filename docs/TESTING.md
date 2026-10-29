@@ -53,6 +53,7 @@ number that must come out.
 | 20 | Planetary gear set | ring gear, three planets, sun meshing with a planet |
 | 21 | Rack and pinion | rack, pinion placed on it |
 | 22 | Hinged lid | fixed and revolute joints on a pin's axis, limits |
+| 23 | Four-bar linkage | links with round ends, a closed loop of four revolute joints |
 
 Each model states what must come out (parts, volume worked out by hand where possible, size) and what
 a person should see when looking at it (`look`). The test rebuilds each one, checks the numbers and
