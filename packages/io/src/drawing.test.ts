@@ -38,6 +38,15 @@ describe("drawing sheets", () => {
     expect(s.fills.length).toBe(6);
   });
 
+  it("prints the parts list above the title block and keeps the views clear of it", () => {
+    const bom = [{ pos: 1, qty: 1, name: "Plate", material: "PETG" }, { pos: 2, qty: 4, name: "M4×16 ISO 4762", material: "Steel" }];
+    const s = layoutSheet(views, { title: { title: "Block" }, bom });
+    expect(s.texts.map((t) => t.text)).toEqual(expect.arrayContaining(["Pos", "Qty", "Plate", "4", "M4×16 ISO 4762", "Steel"]));
+    // Title block 32 high from y = 10, two rows and a header of 5.5 above it.
+    const lowest = Math.min(...s.lines.filter((l) => l.kind === "visible").flatMap((l) => l.pts.map((p) => p[1])));
+    expect(lowest).toBeGreaterThan(10 + 32 + 3 * 5.5);
+  });
+
   it("writes SVG, PDF and DXF", () => {
     const s = layoutSheet(views, { title: { title: "Größe Ø10 (Test)" } });
     const svg = writeSheetSvg(s);

@@ -5,4 +5,4 @@ export { encodeGif, type GifFrame } from "./gif.js";
 export { readObj } from "./obj.js";
 export { writeDxf, readDxf, writeSvg } from "./dxf.js";
 export type { Curve2 } from "./curves.js";
-export { layoutSheet, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type Sheet, type SheetView, type TitleBlock } from "./drawing.js";
+export { layoutSheet, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type Sheet, type SheetBomRow, type SheetView, type TitleBlock } from "./drawing.js";

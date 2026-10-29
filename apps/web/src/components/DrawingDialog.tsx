@@ -6,7 +6,8 @@
 import { FileDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { layoutSheet, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type SheetView } from "@meercad/io";
-import { drawingDocument } from "@meercad/model";
+import { billOfMaterials, bomCsv, drawingDocument } from "@meercad/model";
+import { partName } from "../lib/features";
 import { currentDoc, kernel, toast, useApp } from "../store";
 import { baseName, download } from "./io";
 
@@ -30,6 +31,8 @@ export function DrawingDialog() {
   const [drawnBy, setDrawnBy] = useState("");
   const [views, setViews] = useState<SheetView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [withBom, setWithBom] = useState(true);
+  const doc = useApp((s) => s.doc);
   const output = useApp((s) => s.output);
 
   useEffect(() => {
@@ -65,7 +68,8 @@ export function DrawingDialog() {
   }, [open, output, chosen.join(",")]);
 
   if (!open) return null;
-  const sheet = views ? layoutSheet(views, { paper, title: { title: title || "Untitled", material, drawnBy, date: new Date().toLocaleDateString("sv") } }) : null;
+  const bom = billOfMaterials(output?.report.bodies ?? [], (id) => partName(id, doc.features), doc.partMaterials ?? {});
+  const sheet = views ? layoutSheet(views, { paper, ...(withBom && bom.length > 1 ? { bom } : {}), title: { title: title || "Untitled", material, drawnBy, date: new Date().toLocaleDateString("sv") } }) : null;
   const svg = sheet ? writeSheetSvg(sheet) : null;
   const name = `${baseName()}-drawing`;
   const save = (format: "pdf" | "svg" | "dxf") => {
@@ -117,6 +121,11 @@ export function DrawingDialog() {
                 </label>
               ))}
             </div>
+            {bom.length > 1 ? (
+              <label className="checkbox">
+                <input type="checkbox" checked={withBom} onChange={(e) => setWithBom(e.target.checked)} /> Parts list on the sheet ({bom.length} lines)
+              </label>
+            ) : null}
             {sheet ? <p className="muted small">Scale {sheet.scaleLabel} · first-angle projection (ISO E) · dashed lines are hidden edges.</p> : null}
             <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
               <button className="btn primary" disabled={!sheet} onClick={() => save("pdf")}>
@@ -127,6 +136,9 @@ export function DrawingDialog() {
               </button>
               <button className="btn" disabled={!sheet} onClick={() => save("dxf")}>
                 DXF
+              </button>
+              <button className="btn" disabled={!bom.length} onClick={() => download(`${baseName()}-parts.csv`, bomCsv(bom), "text/csv")} title="Parts list for a spreadsheet">
+                Parts list CSV
               </button>
             </div>
           </div>

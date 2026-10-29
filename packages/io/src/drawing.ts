@@ -48,12 +48,22 @@ const GAP = 22;
 
 const fmt = (v: number) => (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2).replace(/0+$/, "").replace(/\.$/, ""));
 
-export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; title: TitleBlock; scale?: number }): Sheet {
+/** A line of the parts list printed above the title block. */
+export interface SheetBomRow {
+  pos: number;
+  qty: number;
+  name: string;
+  material?: string;
+}
+const BOM_ROW = 5.5;
+
+export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; title: TitleBlock; scale?: number; bom?: readonly SheetBomRow[] }): Sheet {
   const [W, H] = PAPER[o.paper ?? "A4"];
   const sheet: Sheet = { width: W, height: H, scale: 1, scaleLabel: "1:1", lines: [], fills: [], texts: [] };
   // Frame: 20 mm on the left for filing, 10 mm elsewhere; the views keep clear of the title block's strip.
   const fx0 = 20, fy0 = 10, fx1 = W - 10, fy1 = H - 10;
-  const area = { x0: fx0 + 4, y0: fy0 + TITLE_H + 4, x1: fx1 - 4, y1: fy1 - 4 };
+  const bomH = o.bom?.length ? (o.bom.length + 1) * BOM_ROW : 0;
+  const area = { x0: fx0 + 4, y0: fy0 + TITLE_H + bomH + 4, x1: fx1 - 4, y1: fy1 - 4 };
   const get = (n: SheetView["name"]) => views.find((v) => v.name === n);
   const front = get("front"), top = get("top"), left = get("left"), iso = get("iso");
   const w = (v?: SheetView) => (v ? v.max[0] - v.min[0] : 0);
@@ -96,6 +106,7 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   if (!pf && pl) dimension(sheet, [pl.min[0], pl.min[1]], [pl.max[0], pl.min[1]], -10, w(left), "h");
   frame(sheet, fx0, fy0, fx1, fy1);
   titleBlock(sheet, fx1, fy0, o.title, label);
+  if (o.bom?.length) bomTable(sheet, fx1, fy0 + TITLE_H, o.bom);
   return sheet;
 }
 
@@ -157,6 +168,20 @@ function titleBlock(s: Sheet, right: number, bottom: number, t: TitleBlock, scal
   field(3, 1, "Units", "mm");
   s.texts.push({ at: [x0 + 2, y0 + 23], text: t.title, size: 6, anchor: "start" });
   s.texts.push({ at: [x1 - 2, y0 + 20], text: "meerCAD", size: 2, anchor: "end" });
+}
+
+/** The parts list as a table on top of the title block, header at the bottom (ISO 7573). */
+function bomTable(s: Sheet, right: number, bottom: number, rows: readonly SheetBomRow[]): void {
+  const x0 = right - TITLE_W;
+  const cols = [x0, x0 + 12, x0 + 24, x0 + 130, right];
+  const top = bottom + (rows.length + 1) * BOM_ROW;
+  s.lines.push({ pts: [[x0, bottom], [x0, top], [right, top]], kind: "frame" });
+  for (let k = 1; k <= rows.length; k++) s.lines.push({ pts: [[x0, bottom + k * BOM_ROW], [right, bottom + k * BOM_ROW]], kind: "thin" });
+  for (const x of cols.slice(1, -1)) s.lines.push({ pts: [[x, bottom], [x, top]], kind: "thin" });
+  const row = (k: number, cells: string[], size: number) => cells.forEach((t, i) => s.texts.push({ at: [cols[i]! + 1.5, bottom + k * BOM_ROW + 1.6], text: t, size, anchor: "start" }));
+  row(0, ["Pos", "Qty", "Name", "Material"], 2.2);
+  // The first part sits right above the header, the last at the top.
+  rows.forEach((r, k) => row(k + 1, [String(r.pos), String(r.qty), r.name, r.material ?? ""], 2.8));
 }
 
 // ---------------------------------------------------------------- writers

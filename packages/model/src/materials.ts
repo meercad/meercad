@@ -60,3 +60,40 @@ export function massProperties(parts: readonly { volume: number; centroid?: [num
   }
   return { mass, center: mass > 0 ? (c.map((v) => v / mass) as [number, number, number]) : null, missing };
 }
+
+/** One line of a parts list (bill of materials): equal parts counted together. */
+export interface BomRow {
+  /** Position number, from 1. */
+  pos: number;
+  name: string;
+  qty: number;
+  material?: string;
+  /** Mass of one part, g (with a material). */
+  mass?: number;
+  /** Volume of one part, mm³. */
+  volume: number;
+}
+
+/**
+ * The parts list: parts with the same name (copies are named "Name (2)", "Name (3)") and material
+ * count as one line; lines keep the parts' order.
+ */
+export function billOfMaterials(parts: readonly { id: string; volume: number }[], name: (id: string) => string, materials: Readonly<Record<string, string>> = {}): BomRow[] {
+  const rows: BomRow[] = [];
+  for (const p of parts) {
+    const base = name(p.id).replace(/ \(\d+\)$/, "");
+    const m = materialById(materials[p.id]);
+    const row = rows.find((r) => r.name === base && r.material === m?.name && Math.abs(r.volume - p.volume) <= 1e-6 * Math.max(1, p.volume));
+    if (row) row.qty++;
+    else rows.push({ pos: rows.length + 1, name: base, qty: 1, ...(m ? { material: m.name, mass: massOf(p.volume, m) } : {}), volume: p.volume });
+  }
+  return rows;
+}
+
+/** The parts list as CSV (semicolons, which spreadsheets in most locales open directly). */
+export function bomCsv(rows: readonly BomRow[]): string {
+  const cell = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const lines = [["Pos", "Qty", "Name", "Material", "Mass each (g)", "Volume each (cm³)"].join(";")];
+  for (const r of rows) lines.push([String(r.pos), String(r.qty), cell(r.name), cell(r.material ?? ""), r.mass !== undefined ? r.mass.toFixed(2) : "", (r.volume / 1000).toFixed(3)].join(";"));
+  return lines.join("\n") + "\n";
+}
