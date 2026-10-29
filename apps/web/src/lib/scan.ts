@@ -11,6 +11,7 @@ import { nativeApp } from "./native";
 
 interface ScanPlugin {
   capabilities(): Promise<{ scan: boolean; reason?: string }>;
+  imported(o: { folder: string }): Promise<void>;
   scan(): Promise<{ path: string; folder: string; triangles: number; size: [number, number, number]; photos: number; seconds: number }>;
 }
 const Scan = registerPlugin<ScanPlugin>("Scan");
@@ -45,6 +46,8 @@ export async function scanObject(): Promise<void> {
   const data = await Filesystem.readFile({ path: `file://${r.path}` });
   const bytes = Uint8Array.from(atob(data.data as string), (c) => c.charCodeAt(0));
   const name = `Scan ${new Date().toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}.stl`;
-  await importFile(new File([bytes], name, { type: "model/stl" }));
-  toast(`Scan: ${r.size.map(fmt).join(" × ")} mm · ${r.triangles.toLocaleString()} triangles · ${r.photos} photos`);
+  // A scan that did not come in stays on the device and is offered again on the next Scan.
+  if (!(await importFile(new File([bytes], name, { type: "model/stl" })))) return;
+  void Scan.imported({ folder: r.folder }).catch(() => undefined);
+  toast(`Scan: ${r.size.map(fmt).join(" × ")} mm · ${r.triangles.toLocaleString()} triangles${r.photos ? ` · ${r.photos} photos` : ""}`);
 }

@@ -47,6 +47,10 @@ async function ensureDir(path: string, directory = DOCS): Promise<void> {
   await Filesystem.mkdir({ path, directory, recursive: true });
 }
 
+/** Where the Scan plugin keeps its captures (photos, meshes): not a project folder. */
+const SCANS = "Scans";
+const hidden = (folder: string, name: string) => name.startsWith(".") || (!folder && name === SCANS);
+
 /** All .meercad files below a folder, as ids ("Folder/Name"). */
 async function projectIds(folder = ""): Promise<string[]> {
   const out: string[] = [];
@@ -57,7 +61,7 @@ async function projectIds(folder = ""): Promise<string[]> {
     return out;
   }
   for (const e of entries) {
-    if (e.name.startsWith(".")) continue;
+    if (hidden(folder, e.name)) continue;
     const rel = joinId(folder, e.name);
     if (e.type === "directory") out.push(...(await projectIds(rel)));
     else if (e.name.endsWith(EXT)) out.push(rel.slice(0, -EXT.length));
@@ -74,7 +78,7 @@ async function folderList(folder = ""): Promise<string[]> {
     return out;
   }
   for (const e of entries) {
-    if (e.type !== "directory" || e.name.startsWith(".")) continue;
+    if (e.type !== "directory" || hidden(folder, e.name)) continue;
     const rel = joinId(folder, e.name);
     out.push(rel, ...(await folderList(rel)));
   }

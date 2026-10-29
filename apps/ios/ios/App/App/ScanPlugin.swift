@@ -1,6 +1,7 @@
 import ARKit
 import Capacitor
 import Foundation
+import ModelIO
 import RealityKit
 import SwiftUI
 import UIKit
@@ -20,7 +21,17 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "capabilities", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "scan", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "imported", returnType: CAPPluginReturnPromise),
     ]
+
+    /// The web app has the scan as a part: its photos can go, and it is no longer offered as unfinished.
+    @objc func imported(_ call: CAPPluginCall) {
+        guard let path = call.getString("folder") else { return call.reject("no folder") }
+        let folder = URL(fileURLWithPath: path, isDirectory: true)
+        try? FileManager.default.removeItem(at: folder.appendingPathComponent("Images"))
+        FileManager.default.createFile(atPath: folder.appendingPathComponent(scanImportedMarker).path, contents: nil)
+        call.resolve()
+    }
 
     @objc func capabilities(_ call: CAPPluginCall) {
         Task { @MainActor in
@@ -53,7 +64,8 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
                 return call.reject("Scanning needs an iPhone or iPad with LiDAR and iOS 18 or later.")
             }
             guard let self, let host = self.bridge?.viewController else { return call.reject("no view") }
-            let flow = ScanFlow()
+            // A capture whose model was never built (the app ended after it) is offered first.
+            let flow = ScanFlow(leftover: ScanFlow.leftover())
             let view = ScanView(flow: flow) { result in
                 host.dismiss(animated: true)
                 switch result {
@@ -67,6 +79,9 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 }
+
+/// Marks a scan folder whose mesh made it into a part.
+let scanImportedMarker = "imported"
 
 enum ScanError: LocalizedError {
     case cancelled, noModel, emptyModel, failed(String)
@@ -93,7 +108,7 @@ enum ScanError: LocalizedError {
 @available(iOS 18, *)
 @MainActor
 final class ScanFlow: ObservableObject {
-    enum Phase { case capturing, rebuilding, writing }
+    enum Phase { case leftover, capturing, rebuilding, writing }
     @Published var phase = Phase.capturing
     @Published var session: ObjectCaptureSession?
     @Published var progress: Double = 0
@@ -107,16 +122,47 @@ final class ScanFlow: ObservableObject {
     private var captureSeconds: Double = 0
     var log: [String: Any] = [:]
 
-    init() {
+    /// Photos from an earlier capture that never got its model, and when it was taken.
+    let leftoverPhotos: Int
+    let leftoverDate: Date?
+
+    init(leftover: URL? = nil) {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        folder = docs.appendingPathComponent("Scans/\(stamp)", isDirectory: true)
+        folder = leftover ?? docs.appendingPathComponent("Scans/\(stamp)", isDirectory: true)
         images = folder.appendingPathComponent("Images", isDirectory: true)
+        leftoverPhotos = leftover.map { Self.photos(in: $0.appendingPathComponent("Images")) } ?? 0
+        leftoverDate = leftover.flatMap { try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate }
         checkpoints = folder.appendingPathComponent("Checkpoints", isDirectory: true)
         for dir in [images, checkpoints] { try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
         log["device"] = UIDevice.current.model
         log["system"] = "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
         log["machine"] = Self.machine()
+        if leftover != nil {
+            phase = .leftover
+            log["resumed"] = true
+        }
+    }
+
+    /// The newest scan folder with photos or a model that never made it into a part, if any.
+    static func leftover() -> URL? {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let scans = docs.appendingPathComponent("Scans", isDirectory: true)
+        let folders = (try? FileManager.default.contentsOfDirectory(at: scans, includingPropertiesForKeys: nil)) ?? []
+        return folders.sorted { $0.lastPathComponent > $1.lastPathComponent }.first { dir in
+            let has = { (name: String) in FileManager.default.fileExists(atPath: dir.appendingPathComponent(name).path) }
+            return (photos(in: dir.appendingPathComponent("Images")) > 0 || has("scan.usdz")) && !has(scanImportedMarker)
+        }
+    }
+
+    private static func photos(in dir: URL) -> Int {
+        (try? FileManager.default.contentsOfDirectory(atPath: dir.path).count) ?? 0
+    }
+
+    /// Throws the unfinished scan away and starts a fresh capture in a new folder.
+    func discardLeftover() -> ScanFlow {
+        try? FileManager.default.removeItem(at: folder)
+        return ScanFlow()
     }
 
     func start() {
@@ -141,17 +187,39 @@ final class ScanFlow: ObservableObject {
         log["checkpointBytes"] = checkpointBytes
         log["captureSeconds"] = Int(captureSeconds)
 
+        let usdz = folder.appendingPathComponent("scan.usdz")
+        // A model built before the app ended is used as it is (the rebuild will not overwrite a file).
+        if !FileManager.default.fileExists(atPath: usdz.path) { try await build(usdz) }
+
+        phase = .writing
+        let stl = folder.appendingPathComponent("scan.stl")
+        let stats = try await Task.detached { try MeshExport.write(usdz: usdz, stl: stl) }.value
+        log["triangles"] = stats.triangles
+        log["sizeMm"] = stats.size
+        log["holesClosed"] = stats.holes
+        writeLog()
+        return ["path": stl.path, "folder": folder.path, "triangles": stats.triangles, "size": stats.size, "photos": photoCount, "seconds": Int(Date().timeIntervalSince(started))]
+    }
+
+    /// Builds the model from the photos into `usdz`.
+    private func build(_ usdz: URL) async throws {
         let t0 = Date()
         var config = PhotogrammetrySession.Configuration()
         config.checkpointDirectory = checkpoints
-        let usdz = folder.appendingPathComponent("scan.usdz")
         let rebuild = try PhotogrammetrySession(input: images, configuration: config)
         try rebuild.process(requests: [.modelFile(url: usdz, detail: .reduced)])
         var failure: Error?
-        for try await output in rebuild.outputs {
+        // The outputs never end on their own: stop at the request's end.
+        outputs: for try await output in rebuild.outputs {
             switch output {
             case .requestProgress(_, let fraction): progress = fraction
-            case .requestError(_, let error): failure = error
+            case .requestError(_, let error):
+                failure = error
+                break outputs
+            case .requestComplete, .processingComplete: break outputs
+            case .processingCancelled:
+                failure = ScanError.cancelled
+                break outputs
             default: break
             }
         }
@@ -165,16 +233,6 @@ final class ScanFlow: ObservableObject {
             writeLog()
             throw ScanError.noModel
         }
-
-        phase = .writing
-        let stl = folder.appendingPathComponent("scan.stl")
-        let stats = try await MeshExport.write(usdz: usdz, stl: stl)
-        log["triangles"] = stats.triangles
-        log["sizeMm"] = stats.size
-        writeLog()
-        // The photos are only needed for the rebuild; the checkpoints stay for a later finer one.
-        try? FileManager.default.removeItem(at: images)
-        return ["path": stl.path, "folder": folder.path, "triangles": stats.triangles, "size": stats.size, "photos": photoCount, "seconds": Int(Date().timeIntervalSince(started))]
     }
 
     func fail(_ error: Error) {
@@ -206,57 +264,104 @@ final class ScanFlow: ObservableObject {
 // MARK: - Mesh export
 
 /// The rebuilt USDZ as a binary STL in millimetres, turned from RealityKit's Y-up metres to meerCAD's Z-up.
-@available(iOS 18, *)
 enum MeshExport {
-    static func write(usdz: URL, stl: URL) async throws -> (triangles: Int, size: [Double]) {
-        let root = try await Entity(contentsOf: usdz)
+    static func write(usdz: URL, stl: URL) throws -> (triangles: Int, size: [Double], holes: Int) {
+        let asset = MDLAsset(url: usdz)
         var corners: [SIMD3<Float>] = []
-        collect(root, root: root, into: &corners)
+        for i in 0..<asset.count { collect(asset.object(at: i), into: &corners) }
         guard !corners.isEmpty else { throw ScanError.emptyModel }
+        let holes = closeHoles(&corners)
         var lo = SIMD3<Float>(repeating: .greatestFiniteMagnitude), hi = -lo
         for p in corners {
             lo = simd_min(lo, p)
             hi = simd_max(hi, p)
         }
+        let count = corners.count / 3
         var data = Data(count: 80)
-        var count = UInt32(corners.count / 3)
-        data.append(Data(bytes: &count, count: 4))
+        data.reserveCapacity(84 + count * 50)
+        withUnsafeBytes(of: UInt32(count).littleEndian) { data.append(contentsOf: $0) }
+        var record = [Float](repeating: 0, count: 12)
         for t in stride(from: 0, to: corners.count, by: 3) {
             let a = corners[t], b = corners[t + 1], c = corners[t + 2]
             var n = simd_cross(b - a, c - a)
             let len = simd_length(n)
-            n = len > 0 ? n / len : SIMD3<Float>(0, 0, 0)
-            for v in [n, a, b, c] {
-                var x = v.x, y = v.y, z = v.z
-                data.append(Data(bytes: &x, count: 4))
-                data.append(Data(bytes: &y, count: 4))
-                data.append(Data(bytes: &z, count: 4))
+            n = len > 0 ? n / len : .zero
+            for (k, v) in [n, a, b, c].enumerated() {
+                record[k * 3] = v.x
+                record[k * 3 + 1] = v.y
+                record[k * 3 + 2] = v.z
             }
-            var attr: UInt16 = 0
-            data.append(Data(bytes: &attr, count: 2))
+            record.withUnsafeBytes { data.append(contentsOf: $0) }
+            data.append(contentsOf: [0, 0])
         }
         try data.write(to: stl)
         let size = hi - lo
-        return (Int(count), [Double(size.x), Double(size.y), Double(size.z)].map { ($0 * 10).rounded() / 10 })
+        return (count, [Double(size.x), Double(size.y), Double(size.z)].map { ($0 * 10).rounded() / 10 }, holes)
     }
 
-    private static func collect(_ entity: Entity, root: Entity, into out: inout [SIMD3<Float>]) {
-        if let model = entity.components[ModelComponent.self] {
-            let matrix = entity.transformMatrix(relativeTo: root)
-            for m in model.mesh.contents.models {
-                for part in m.parts {
-                    let positions = Array(part.positions)
-                    let indices: [UInt32] = part.triangleIndices.map { Array($0) } ?? Array(0..<UInt32(positions.count))
-                    for i in indices {
-                        let p = positions[Int(i)]
-                        let w = matrix * SIMD4<Float>(p.x, p.y, p.z, 1)
-                        // Y up (RealityKit) → Z up (meerCAD), metres → millimetres.
-                        out.append(SIMD3<Float>(w.x, -w.z, w.y) * 1000)
+    /// A scan is open where the object stood or the camera did not see: every loop of open edges is
+    /// filled with a fan around its centre, so the mesh imports as a closed solid. Returns the loops filled.
+    static func closeHoles(_ corners: inout [SIMD3<Float>]) -> Int {
+        // Corners at the same spot (split by texture seams) are one vertex.
+        var ids: [SIMD3<Int32>: Int] = [:]
+        var points: [SIMD3<Float>] = []
+        let index = corners.map { p -> Int in
+            let key = SIMD3<Int32>((p * 1000).rounded(.toNearestOrAwayFromZero))
+            if let i = ids[key] { return i }
+            ids[key] = points.count
+            points.append(p)
+            return points.count - 1
+        }
+        struct Edge: Hashable { let a: Int, b: Int }
+        var edges = Set<Edge>()
+        for t in stride(from: 0, to: index.count, by: 3) {
+            for k in 0..<3 { edges.insert(Edge(a: index[t + k], b: index[t + (k + 1) % 3])) }
+        }
+        // An edge without its reverse borders a hole; walking them backwards keeps the fill facing out.
+        var next: [Int: Int] = [:]
+        for e in edges where !edges.contains(Edge(a: e.b, b: e.a)) { next[e.b] = e.a }
+        var loops = 0
+        while let start = next.keys.first {
+            var loop = [start]
+            var at = next.removeValue(forKey: start)!
+            while at != start, let n = next.removeValue(forKey: at), loop.count < 100_000 {
+                loop.append(at)
+                at = n
+            }
+            guard at == start, loop.count >= 3 else { continue }
+            let centre = loop.reduce(SIMD3<Float>.zero) { $0 + points[$1] } / Float(loop.count)
+            for (i, v) in loop.enumerated() {
+                corners += [points[v], points[loop[(i + 1) % loop.count]], centre]
+            }
+            loops += 1
+        }
+        return loops
+    }
+
+    private static func collect(_ object: MDLObject, into out: inout [SIMD3<Float>]) {
+        if let mesh = object as? MDLMesh, let attr = mesh.vertexAttributeData(forAttributeNamed: MDLVertexAttributePosition, as: .float3) {
+            let matrix = MDLTransform.globalTransform(with: object, atTime: 0)
+            let base = attr.dataStart
+            let position = { (i: Int) -> SIMD3<Float> in
+                let p = base.advanced(by: i * attr.stride).assumingMemoryBound(to: Float.self)
+                let w = matrix * SIMD4<Float>(p[0], p[1], p[2], 1)
+                // Y up (RealityKit) → Z up (meerCAD), metres → millimetres.
+                return SIMD3<Float>(w.x, -w.z, w.y) * 1000
+            }
+            for case let sub as MDLSubmesh in mesh.submeshes ?? [] where sub.geometryType == .triangles {
+                let map = sub.indexBuffer.map()
+                for k in 0..<sub.indexCount {
+                    let index: Int
+                    switch sub.indexType {
+                    case .uInt8: index = Int(map.bytes.load(fromByteOffset: k, as: UInt8.self))
+                    case .uInt16: index = Int(map.bytes.load(fromByteOffset: k * 2, as: UInt16.self))
+                    default: index = Int(map.bytes.load(fromByteOffset: k * 4, as: UInt32.self))
                     }
+                    out.append(position(index))
                 }
             }
         }
-        for child in entity.children { collect(child, root: root, into: &out) }
+        for child in object.children.objects { collect(child, into: &out) }
     }
 }
 
@@ -264,13 +369,28 @@ enum MeshExport {
 
 @available(iOS 18, *)
 struct ScanView: View {
+    @State var flow: ScanFlow
+    let done: (Result<[String: Any], Error>) -> Void
+
+    var body: some View {
+        // A new flow (after discarding leftover photos) gets a fresh view and session.
+        ScanFlowView(flow: flow, done: done, discard: { flow = flow.discardLeftover() })
+            .id(ObjectIdentifier(flow))
+    }
+}
+
+@available(iOS 18, *)
+struct ScanFlowView: View {
     @ObservedObject var flow: ScanFlow
     let done: (Result<[String: Any], Error>) -> Void
+    let discard: () -> Void
     @State private var finished = false
 
     var body: some View {
         ZStack {
             switch flow.phase {
+            case .leftover:
+                Leftover(photos: flow.leftoverPhotos, date: flow.leftoverDate, build: finishCapture, discard: discard, cancel: cancel)
             case .capturing:
                 if let session = flow.session {
                     CaptureScreen(session: session, flow: flow, cancel: cancel, failed: failCapture, finish: finishCapture)
@@ -283,7 +403,7 @@ struct ScanView: View {
                 Working(title: "Preparing the part", detail: nil, progress: nil)
             }
         }
-        .onAppear { if flow.session == nil { flow.start() } }
+        .onAppear { if flow.session == nil && flow.phase == .capturing { flow.start() } }
     }
 
     private func cancel() {
@@ -362,16 +482,28 @@ struct CaptureScreen: View {
         }
     }
 
+    /// iOS ends the app when asked to flip an object it judged not flippable (or outside a finished
+    /// ring), so turning over is only offered when it is allowed.
+    private var canFlip: Bool {
+        session.state == .capturing && session.userCompletedScanPass && !session.feedback.contains(.objectNotFlippable)
+    }
+
     /// After each ring: flip the object for the underside, go round once more, or stop.
     private var nextPass: some View {
         VStack(spacing: 10) {
-            hint("Ring complete. For a full model, turn the object over and scan its other side.")
-            Button("Turn over and continue") {
-                flow.passes += 1
-                flow.askNext = false
-                session.beginNewScanPassAfterFlip()
+            if canFlip {
+                hint("Ring complete. For a full model, turn the object over and scan its other side.")
+                Button("Turn over and continue") {
+                    print("scan: flip, feedback \(session.feedback), state \(session.state)")
+                    guard canFlip else { return }
+                    flow.passes += 1
+                    flow.askNext = false
+                    session.beginNewScanPassAfterFlip()
+                }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+            } else {
+                hint("Ring complete. This object cannot be turned over for scanning; go round once more higher or lower, or finish.")
             }
-            .buttonStyle(.borderedProminent).controlSize(.large)
             HStack {
                 Button("Another ring") {
                     flow.passes += 1
@@ -391,6 +523,30 @@ struct CaptureScreen: View {
 
     private func hint(_ text: String) -> some View {
         Text(text).font(.callout).multilineTextAlignment(.center).padding(10).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// An earlier capture whose model was never built: build it now or start over.
+@available(iOS 18, *)
+struct Leftover: View {
+    let photos: Int
+    let date: Date?
+    let build: () -> Void
+    let discard: () -> Void
+    let cancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "cube.transparent").font(.system(size: 44)).foregroundStyle(.secondary)
+            Text("Unfinished scan").font(.title2.bold())
+            let when = date.map { " from " + $0.formatted(date: .abbreviated, time: .shortened) } ?? ""
+            Text(photos > 0 ? "\(photos) photos\(when) were captured, but they never became a part." : "A scan\(when) was built, but never became a part.")
+                .multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Button(photos > 0 ? "Build the model" : "Add it as a part", action: build).buttonStyle(.borderedProminent).controlSize(.large)
+            Button("Discard and scan again", role: .destructive, action: discard).buttonStyle(.bordered)
+            Button("Cancel", action: cancel)
+        }
+        .padding(32)
     }
 }
 

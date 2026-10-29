@@ -120,38 +120,53 @@ export const IMPORT_TYPES = ".step,.stp,.stl,.3mf,.obj,.dxf,.svg,.meercad,.json"
  * Imports a file. In an open design it is added to that design; on the project overview it starts
  * a new design named after the file. Meshes become solid bodies; a failed import says why.
  */
-export async function importFile(file?: File | null): Promise<void> {
+/** Imports a file into the open design (or a new one); true when it came in without errors. */
+export async function importFile(file?: File | null): Promise<boolean> {
   file ??= await pickFile(IMPORT_TYPES);
-  if (!file) return;
+  if (!file) return false;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const base = file.name.replace(/\.\w+$/, "");
   if (ext === "meercad" || ext === "json") {
     const v = validateDocument(JSON.parse(await file.text()));
-    if (!v.ok) return toast(`Not a valid meerCAD file: ${v.errors[0]}`, "error");
+    if (!v.ok) {
+      toast(`Not a valid meerCAD file: ${v.errors[0]}`, "error");
+      return false;
+    }
     await flushSave();
     await newProject(v.value, base);
-    return;
+    return true;
   }
-  if (!["step", "stp", "stl", "3mf", "obj", "dxf", "svg"].includes(ext)) return toast(`Unsupported file type .${ext}`, "error");
-  if (file.size > 40 * 1024 * 1024) return toast("File is larger than 40 MB", "error");
+  if (!["step", "stp", "stl", "3mf", "obj", "dxf", "svg"].includes(ext)) {
+    toast(`Unsupported file type .${ext}`, "error");
+    return false;
+  }
+  if (file.size > 40 * 1024 * 1024) {
+    toast("File is larger than 40 MB", "error");
+    return false;
+  }
   // Build the features first, so a file that cannot be read starts no empty design.
   let features: Feature[];
   try {
     features = await importFeatures(file, ext);
   } catch (e) {
-    return toast(`Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`, "error");
+    toast(`Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`, "error");
+    return false;
   }
   if (useApp.getState().screen !== "editor" || !useApp.getState().project) await newProject(emptyDocument(), base);
   const doc = currentDoc();
   let n = 0;
   for (const f of features) f.id = nextFeatureId({ ...doc, features: [...doc.features, ...features.slice(0, n++)] }, f.op === "sketch" ? "sketch" : "import");
-  if (!apply({ type: "add_features", features })) return;
+  if (!apply({ type: "add_features", features })) return false;
   const sketch = features.find((f) => f.op === "sketch");
-  if (sketch) return openSketch(sketch.id);
+  if (sketch) {
+    openSketch(sketch.id);
+    return true;
+  }
   toast(`Importing ${file.name}…`);
   const out = await rebuildNow().catch(() => null);
   const failed = out?.report.features.filter((r) => features.some((f) => f.id === r.id) && r.status === "error") ?? [];
   if (failed.length) toast(`Import of ${file.name} failed: ${failed[0]!.message ?? "unknown error"}`, "error");
+  return !!out && !failed.length;
 }
 
 async function importFeatures(file: File, ext: string): Promise<Feature[]> {
