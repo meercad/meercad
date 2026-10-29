@@ -18,6 +18,7 @@ import {
   type ResolvedRevolve,
   type ResolvedRib,
   type ResolvedDraft,
+  type ResolvedText,
   type ResolvedShell,
   type ResolvedSketch,
   type ResolvedTransform,
@@ -45,6 +46,7 @@ import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import { convertMesh } from "./meshconvert.js";
 import { holeTools } from "./hole.js";
+import { nest, textLoops } from "./text.js";
 import { threadBody } from "./thread.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
@@ -107,6 +109,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return rib(f, ctx);
       case "draft":
         return draft(f, ctx);
+      case "text":
+        return textFeature(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -166,13 +170,20 @@ function planeFrame(spec: PlaneSpec, ctx: Ctx): PlaneFrame {
     return named;
   }
   const refs = resolveFaces(spec.face, [...ctx.prev.bodies.values()]);
-  const count = refs.reduce((n, r) => n + r.faces.length, 0);
-  if (count !== 1) throw new FeatureError(`face selector matches ${count} faces; pick exactly one`);
-  const body = ctx.prev.bodies.get(refs[0]!.body)!;
-  const fi = refs[0]!.faces[0]!;
-  const info = body.faceInfo[fi]!;
-  if (!info.planar || !info.normal) throw new FeatureError("the selected face is not planar");
-  return frameFromPlane(body.facePoints[fi]!, info.normal);
+  const faces = refs.flatMap((r) => r.faces.map((fi) => ({ body: ctx.prev.bodies.get(r.body)!, fi })));
+  if (!faces.length) throw new FeatureError("face selector matches no face");
+  const planes = faces.map(({ body, fi }) => ({ info: body.faceInfo[fi]!, point: body.facePoints[fi]! }));
+  if (planes.some((p) => !p.info.planar || !p.info.normal)) throw new FeatureError(faces.length === 1 ? "the selected face is not planar" : `face selector matches ${faces.length} faces; pick exactly one`);
+  // Pieces of one face (a top split by raised text or a rib) all lie in the same plane: that plane.
+  const [first, ...rest] = planes;
+  const n = first!.info.normal!;
+  const coplanar = rest.every((p) => {
+    const m = p.info.normal!;
+    const d = [0, 1, 2].reduce((acc, k) => acc + (p.point[k]! - first!.point[k]!) * n[k]!, 0);
+    return n[0] * m[0] + n[1] * m[1] + n[2] * m[2] > 1 - 1e-9 && Math.abs(d) < 1e-6;
+  });
+  if (!coplanar) throw new FeatureError(`face selector matches ${faces.length} faces; pick exactly one`);
+  return frameFromPlane(first!.point, n);
 }
 
 function axis(ref: AxisRef, ctx: Ctx): { origin: Vec3; dir: Vec3 } {
@@ -594,6 +605,66 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     tool = new Body(oc, arena, f.id, r.shape);
     tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
   }
+  return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/**
+ * Text: the font's outlines as faces on the plane, extruded along its normal (raised) or against it
+ * (engraved, from a hair above the surface so the cut opens it). Faces: tx1.top (the letters' tops
+ * or the engraving's floor) and tx1.side.
+ */
+function textFeature(f: ResolvedText, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena, g } = ctx;
+  if (!(f.size > 0)) throw new FeatureError("the text size must be greater than zero");
+  if (!(f.depth > 0)) throw new FeatureError("the text depth must be greater than zero");
+  if (!f.text.trim()) throw new FeatureError("the text is empty");
+  const { loops, missing } = textLoops(f.text, { font: f.font, size: f.size, align: f.align });
+  if (missing.length) ctx.warnings.push(`the font has no ${missing.map((c) => `"${c}"`).join(", ")}`);
+  if (!loops.length) throw new FeatureError("the text has no letters to draw");
+  const frame = planeFrame(f.plane, ctx);
+  const inward = f.mode === "cut" || f.mode === "intersect";
+  const sign = (inward ? -1 : 1) * (f.flip ? -1 : 1);
+  const lift = inward ? 0.01 : 0;
+  const n = frame.normal;
+  const rad = (f.angle * Math.PI) / 180;
+  const [c, s] = [Math.cos(rad), Math.sin(rad)];
+  const world = ([x, y]: [number, number]) => toWorld(frame, [f.position[0] + c * x - s * y, f.position[1] + s * x + c * y]).map((v, k) => v - sign * n[k]! * lift) as Vec3;
+  const wire = (loop: [number, number][]) => {
+    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const vs = loop.map((p) => g.vertex(world(p)));
+    vs.forEach((v, i) => mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())));
+    return arena.track(mw.Wire());
+  };
+  const depth = f.depth + lift;
+  const vec = g.vec([n[0] * sign * depth, n[1] * sign * depth, n[2] * sign * depth]);
+  const pln = arena.track(new oc.gp_Pln(arena.track(new oc.gp_Ax3(g.pnt(world([0, 0])), g.dir(n), g.dir(frame.u)))));
+  const solids: Body[] = [];
+  for (const shape of nest(loops)) {
+    const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(pln, wire(shape.outer), true));
+    for (const h of shape.holes) mf.Add(wire(h));
+    if (!mf.IsDone()) continue;
+    const prism = arena.track(new oc.BRepPrimAPI_MakePrism(arena.track(mf.Face()), vec, false, true));
+    if (!prism.IsDone()) continue;
+    const body = new Body(oc, arena, f.id, arena.track(prism.Shape()));
+    const top = body.faceIndex(arena.track(prism.LastShape()));
+    const bottom = body.faceIndex(arena.track(prism.FirstShape()));
+    body.faceTags = body.faces.map((_, i) => [i === top ? `${f.id}.top` : i === bottom ? `${f.id}.base` : `${f.id}.side`]);
+    solids.push(body);
+  }
+  if (!solids.length) throw new FeatureError("the text could not be built");
+  // Letters do not overlap: one compound holds them all.
+  const builder = arena.track(new oc.TopoDS_Builder());
+  const compound = arena.track(new oc.TopoDS_Compound());
+  builder.MakeCompound(compound);
+  for (const b of solids) builder.Add(compound, b.shape);
+  const tool = new Body(oc, arena, f.id, compound);
+  tool.faceTags = tool.faces.map((face) => {
+    for (const b of solids) {
+      const i = b.faceIndex(face);
+      if (i >= 0) return [...b.faceTags[i]!];
+    }
+    return [`${f.id}.side`];
+  });
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
 }
 

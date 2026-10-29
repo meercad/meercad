@@ -29,6 +29,8 @@ Electron additionally ships Chromium's licenses in `LICENSES.chromium.html` insi
 | @capacitor/synapse | 1.0.4 | ISC |
 | @electron-internal/extract-zip | 1.0.6 | MIT |
 | @electron/get | 5.1.0 | MIT |
+| @fontsource/roboto | 5.3.0 | OFL-1.1 |
+| @fontsource/roboto-mono | 5.3.0 | OFL-1.1 |
 | @hono/node-server | 2.1.5 | MIT |
 | @modelcontextprotocol/sdk | 1.32.2 | MIT |
 | @salusoft89/planegcs | 1.3.0 | LGPL-2.0-or-later |
@@ -99,6 +101,7 @@ Electron additionally ships Chromium's licenses in `LICENSES.chromium.html` insi
 | object-inspect | 1.13.4 | MIT |
 | on-finished | 2.4.2 | MIT |
 | once | 1.4.0 | ISC |
+| opentype.js | 1.3.4 | MIT |
 | parseurl | 1.3.3 | MIT |
 | path-key | 3.1.1 | MIT |
 | path-to-regexp | 8.4.2 | MIT |
@@ -126,8 +129,10 @@ Electron additionally ships Chromium's licenses in `LICENSES.chromium.html` insi
 | side-channel-map | 1.0.1 | MIT |
 | side-channel-weakmap | 1.0.2 | MIT |
 | statuses | 2.0.2 | MIT |
+| string.prototype.codepointat | 0.2.1 | MIT |
 | sumchecker | 3.0.1 | Apache-2.0 |
 | three | 0.186.1 | MIT |
+| tiny-inflate | 1.0.3 | MIT |
 | toidentifier | 1.0.1 | MIT |
 | tslib | 2.8.1 | 0BSD |
 | type-is | 2.1.0 | MIT |

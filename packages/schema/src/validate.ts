@@ -196,6 +196,10 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "draft":
         planeSpec(f.neutral, at);
         break;
+      case "text":
+        planeSpec(f.plane, at);
+        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        break;
       case "rib":
         earlier(f.sketch, at, "sketch", ["sketch"]);
         break;

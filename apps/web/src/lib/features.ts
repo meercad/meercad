@@ -7,6 +7,7 @@ import {
   Pyramid,
   Scissors,
   Slash,
+  Type,
   Spline,
   Cog,
   CircleDot,
@@ -45,6 +46,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   thread: { shortcut: "T", label: "Thread", icon: Bolt, hint: "ISO metric thread in a hole or on a shaft" },
   loft: { shortcut: "Shift+L", label: "Loft", icon: Cone, hint: "Solid through two or more profiles: funnels, round-to-square adapters" },
   sweep: { shortcut: "W", label: "Sweep", icon: Spline, hint: "Move a profile along a path of lines and arcs: pipes, ducts, handles" },
+  text: { shortcut: "Shift+T", label: "Text", icon: Type, hint: "Raised or engraved lettering on a face" },
   draft: { shortcut: "Shift+D", label: "Draft", icon: Pyramid, hint: "Tilt side faces by an angle so a cast or moulded part leaves its mould" },
   rib: { shortcut: "Shift+B", label: "Rib", icon: Slash, hint: "Stiffening web from an open sketch line to the walls it meets" },
   split: { shortcut: "Shift+K", label: "Split", icon: Scissors, hint: "Cut parts in two at a plane or flat face, e.g. for the printer's build volume" },
@@ -64,7 +66,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "fillet", "chamfer", "shell", "draft", "thread", "hole", "split", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "fillet", "chamfer", "shell", "draft", "thread", "hole", "split", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -112,6 +114,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, profiles: [], mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "loft" || f.op === "sweep" || f.op === "import") ? "join" : "new_body" };
     case "sweep":
       return { id, op, profile, path: { sketch: "" }, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "loft" || f.op === "sweep" || f.op === "import") ? "join" : "new_body" };
+    case "text":
+      return { id, op, plane: { ref: "origin.XY" }, text: "meerCAD", size: 8, depth: 1, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import") ? "join" : "new_body" };
     case "draft":
       return { id, op, faces: [], angle: 3, neutral: { ref: "origin.XY" } };
     case "rib":

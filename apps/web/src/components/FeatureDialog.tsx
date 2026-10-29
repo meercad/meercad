@@ -185,6 +185,8 @@ function handlePick(p: Pick, d: DialogState): void {
         if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
         // A hole goes where the face was tapped.
         if (spec && g.op === "hole" && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
+        // Text starts where the face was tapped.
+        if (spec && g.op === "text" && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         break;
       }
       case "points": {
@@ -1011,6 +1013,54 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "text": {
+      const pos = f.position ?? [0, 0];
+      return (
+        <>
+          <Field label="Text">
+            <textarea className="field" rows={2} value={f.text} autoFocus onChange={(e) => set({ text: e.target.value })} />
+          </Field>
+          <Field label="On">
+            <SelBox field="plane" items={[describePlane(f.plane)]} placeholder="Tap a flat face where the text starts" />
+          </Field>
+          <Field label="Result">
+            <Seg value={f.mode} options={[["join", "Raised"], ["cut", "Engraved"], ["new_body", "New part"]]} onChange={(mode) => set({ mode })} />
+          </Field>
+          <div className="row">
+            <Field label="Letter height">
+              <ExprInput value={f.size} onCommit={(size) => set({ size })} onLive={(size) => set({ size })} />
+            </Field>
+            <Field label={f.mode === "cut" ? "Depth" : "Height"}>
+              <ExprInput value={f.depth} onCommit={(depth) => set({ depth })} onLive={(depth) => set({ depth })} />
+            </Field>
+          </div>
+          <div className="row">
+            <Field label="Font">
+              <select className="field" value={f.font ?? "sans"} onChange={(e) => set({ font: e.target.value === "sans" ? undefined : e.target.value })}>
+                <option value="sans">Sans</option>
+                <option value="sans-bold">Sans bold</option>
+                <option value="mono">Mono</option>
+              </select>
+            </Field>
+            <Field label="Align">
+              <Seg value={f.align ?? "left"} options={[["left", "Left"], ["center", "Centre"], ["right", "Right"]]} onChange={(align) => set({ align: align === "left" ? undefined : align })} />
+            </Field>
+          </div>
+          <div className="row">
+            <Field label="Position x">
+              <ExprInput value={pos[0]} onCommit={(x) => set({ position: [x, pos[1]] })} />
+            </Field>
+            <Field label="Position y">
+              <ExprInput value={pos[1]} onCommit={(y) => set({ position: [pos[0], y] })} />
+            </Field>
+            <Field label="Angle">
+              <ExprInput value={f.angle ?? 0} unit="deg" onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })} />
+            </Field>
+          </div>
+          <p className="muted small">Letter height is the height of capitals. For printing, about 5 mm high and 0.6–1 mm deep reads well.</p>
+        </>
+      );
+    }
     case "draft":
       return (
         <>

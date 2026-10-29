@@ -310,6 +310,28 @@ export interface SweepFeature extends FeatureBase {
 }
 
 /**
+ * Text on a plane or a flat face, raised (`join`, embossed) or cut in (`cut`, engraved). The text
+ * starts at `position` in the plane's coordinates; `size` is the height of capital letters; new
+ * lines (\n) go downwards. Raised text grows along the plane's normal, engraved text goes against it
+ * (`flip` reverses either).
+ */
+export interface TextFeature extends FeatureBase {
+  op: "text";
+  plane: PlaneSpec;
+  text: string;
+  position?: [Expr, Expr];
+  size: Expr;
+  /** Rotation in the plane, degrees counter-clockwise. */
+  angle?: Expr;
+  font?: "sans" | "sans-bold" | "mono";
+  align?: "left" | "center" | "right";
+  depth: Expr;
+  mode: BooleanMode;
+  targets?: string[];
+  flip?: boolean;
+}
+
+/**
  * Draft for cast and moulded parts: tilts side faces by an angle so the part comes out of its
  * mould. The faces keep their line on the neutral plane (usually the parting face or the bottom)
  * and lean inwards along the pull direction (the neutral plane's normal; `flip` reverses it).
@@ -407,6 +429,7 @@ export type Feature =
   | SplitFeature
   | RibFeature
   | DraftFeature
+  | TextFeature
   | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature

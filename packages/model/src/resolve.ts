@@ -9,6 +9,7 @@ import type {
   GearFeature,
   HoleFeature,
   DraftFeature,
+  TextFeature,
   RibFeature,
   LinearPatternFeature,
   MeshConvertFeature,
@@ -48,6 +49,7 @@ export type ResolvedGear = R<
 export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number };
 export type ResolvedRib = R<RibFeature, "thickness">;
 export type ResolvedDraft = R<DraftFeature, "angle">;
+export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & { position: [number, number]; size: number; angle: number; depth: number };
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
@@ -67,6 +69,7 @@ export type ResolvedFeature =
   | ResolvedHole
   | ResolvedRib
   | ResolvedDraft
+  | ResolvedText
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" | "split" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
@@ -142,6 +145,14 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       };
     case "draft":
       return { ...f, angle: ev("angle", f.angle) };
+    case "text":
+      return {
+        ...f,
+        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
+        size: ev("size", f.size),
+        angle: opt("angle", f.angle) ?? 0,
+        depth: ev("depth", f.depth),
+      };
     case "rib":
       return { ...f, thickness: ev("thickness", f.thickness) };
     case "mesh_convert":
@@ -177,12 +188,14 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     hole: ["diameter", "depth", "allowance"],
     rib: ["thickness"],
     draft: ["angle"],
+    text: ["size", "angle", "depth"],
   };
   if (f.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
     const rot = g["rotate"] as { angle: Expr } | undefined;
     if (rot) rot.angle = fn(rot.angle);
   }
+  if (f.op === "text" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "gear") {
     if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);

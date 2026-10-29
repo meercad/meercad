@@ -534,4 +534,18 @@ export const MODELS: TestModel[] = [
       return { bodies: 1, volume: [v - 2 * (50 + 30) * 4 * (1 - PI / 4) - 50, v - 2 * (50 + 30) * 4 * (1 - PI / 4) + 50] as [number, number], size: [50, 30, 15] as [number, number, number] };
     })(),
   },
+  {
+    file: "29 Namensschild",
+    name: "Name plate with text",
+    look: "An 80 × 30 × 4 plate with rounded corners: \"meerCAD\" raised 1 mm in bold 8 mm letters, centred on the top; \"Testmodell 29\" engraved 0.6 mm deep in 4 mm letters below it.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("l", -40, -15, 80, 30)),
+      { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: 4, mode: "new_body" },
+      { id: "fi1", op: "fillet", name: "Corners", edges: ["l1|l2", "l2|l3", "l3|l4", "l4|l1"].map((p) => { const [a, b] = p.split("|"); return { edge: [`ex1.side[sk1.${a}]`, `ex1.side[sk1.${b}]`] as [string, string] }; }), radius: 4 },
+      { id: "tx1", op: "text", name: "Name", plane: { face: { face: "ex1.end_cap" } }, text: "meerCAD", font: "sans-bold", align: "center", position: [0, 0], size: 8, depth: 1, mode: "join" },
+      { id: "tx2", op: "text", name: "Label", plane: { face: { face: "ex1.end_cap" } }, text: "Testmodell 29", align: "center", position: [0, -10], size: 4, depth: 0.6, mode: "cut" },
+    ]),
+    // The plate with its rounded corners; the raised letters add more than the engraving takes away.
+    expect: { bodies: 1, volume: [80 * 30 * 4 - 4 * 16 * (1 - PI / 4) * 4, 80 * 30 * 4 - 4 * 16 * (1 - PI / 4) * 4 + 400] as [number, number], size: [80, 30, 5] },
+  },
 ];
