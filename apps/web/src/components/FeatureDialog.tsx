@@ -177,7 +177,7 @@ export function FeatureDialog() {
       setDialogPick(null);
     };
   }, [d?.feature.id]);
-  if (!d) return null;
+  if (!d || d.gesture) return null;
   const f = d.feature;
   const Icon = FEATURES[f.op].icon;
   const problem = previewError;

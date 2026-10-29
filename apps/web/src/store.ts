@@ -19,6 +19,8 @@ export interface DialogState {
   isNew: boolean;
   /** Selection field currently receiving viewport picks. */
   field: string | null;
+  /** Opened by dragging an arrow: no dialog is shown, only the value at the arrow, until the drag ends. */
+  gesture?: boolean;
 }
 
 export interface Toast {
@@ -441,7 +443,7 @@ export function editFeature(id: string): void {
 /** Opens a dialog for an already-built draft (used by drag gestures). */
 export function startDraft(feature: Feature): void {
   if (get().dialog) cancelDialog();
-  set({ dialog: { feature, isNew: true, field: null }, selection: [] });
+  set({ dialog: { feature, isNew: true, field: null, gesture: true }, selection: [] });
   scheduleRebuild();
 }
 

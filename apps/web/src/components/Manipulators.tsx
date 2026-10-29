@@ -373,7 +373,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
   function finish(v: number): void {
     autoMode.current = false;
     if (Math.abs(v) < 1e-6) return cancelDialog();
-    commitDialog();
+    // A draft that cannot be built stays open, now as a dialog, so its problem can be fixed.
+    if (!commitDialog()) useApp.setState((s) => (s.dialog ? { dialog: { ...s.dialog, gesture: false } } : {}));
   }
 
   return (

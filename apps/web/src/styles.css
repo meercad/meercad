@@ -276,7 +276,9 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .dof i { width: 8px; height: 8px; border-radius: 50%; background: var(--sketch); }
 .dof.full i { background: #16a34a; }
 .dof.bad i { background: var(--err); }
-.cursor-tip { position: absolute; transform: translate(14px, 14px); padding: 2px 6px; border-radius: 4px; background: var(--text); color: var(--panel); font: 11px var(--mono); pointer-events: none; white-space: nowrap; }
+.cursor-tip { position: absolute; z-index: 5; transform: translate(14px, 14px); padding: 3px 8px; border-radius: 6px; background: var(--text); color: var(--panel); font: 600 12px var(--mono); pointer-events: none; white-space: nowrap; box-shadow: 0 2px 8px rgb(0 0 0 / 0.25); }
+/* A finger covers the arrow head: the value sits above it. */
+@media (pointer: coarse) { .cursor-tip { transform: translate(-50%, calc(-100% - 44px)); padding: 5px 10px; font-size: 15px; border-radius: 8px; } }
 
 @media (max-width: 640px) {
   .app { grid-template: "top" 44px "tools" auto "view" minmax(0, 1fr) "side" 38vh / minmax(0, 1fr); }
