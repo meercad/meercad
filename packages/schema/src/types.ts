@@ -310,6 +310,20 @@ export interface SweepFeature extends FeatureBase {
 }
 
 /**
+ * Cuts parts in two at a plane or a flat face, e.g. a part too large for the printer. The piece on
+ * the side the plane's normal points to keeps the part's id, the other becomes a new part named after
+ * the step (`sp1`, or `sp1-<part>` when several parts are split). `keep` drops one side instead.
+ */
+export interface SplitFeature extends FeatureBase {
+  op: "split";
+  plane: PlaneSpec;
+  /** Parts to split; empty = every part the plane crosses. */
+  bodies: string[];
+  /** "both" (default), or only the piece in front of the plane (along its normal) or behind it. */
+  keep?: "both" | "front" | "back";
+}
+
+/**
  * Holes for screws, threads and inserts, drilled into a flat face (or a plane) at points in its
  * coordinates, against its normal. Sizes follow the standards for metric screws (see model/holes.ts).
  */
@@ -360,6 +374,7 @@ export type Feature =
   | GearFeature
   | HoleFeature
   | LoftFeature
+  | SplitFeature
   | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature

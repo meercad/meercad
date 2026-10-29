@@ -150,6 +150,7 @@ export const definitions: Record<string, Json> = {
       { profile: ref("profile"), axis: ref("axisRef"), angle: ref("expr"), symmetric: bool, mode: ref("mode"), targets: arr(id) },
       ["profile", "axis", "angle", "mode"],
     ),
+    split: feature("split", { plane: ref("planeSpec"), bodies: arr(id), keep: { enum: ["both", "front", "back"] } }, ["plane", "bodies"]),
     loft: feature(
       "loft",
       { profiles: arr(ref("profile"), { minItems: 2, maxItems: 50 }), ruled: bool, mode: ref("mode"), targets: arr(id) },

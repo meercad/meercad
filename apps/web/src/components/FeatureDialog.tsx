@@ -999,6 +999,22 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "split":
+      return (
+        <>
+          <Field label="Split at">
+            <SelBox field="plane" items={[describePlane(f.plane)]} placeholder="Pick a plane or flat face" />
+            <PlaneButtons value={f.plane} onChange={(plane) => set({ plane })} />
+          </Field>
+          <Field label="Parts">
+            <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder="All parts the plane crosses" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
+          </Field>
+          <Field label="Keep">
+            <Seg value={f.keep ?? "both"} options={[["both", "Both"], ["front", "Front"], ["back", "Back"]]} onChange={(keep) => set({ keep: keep === "both" ? undefined : keep })} />
+          </Field>
+          <p className="muted small">For a part larger than the printer: split at an offset plane, print both pieces. Front is the side the plane's arrow points to; that piece keeps the part's name.</p>
+        </>
+      );
     case "delete":
       return (
         <Field label="Parts">

@@ -142,6 +142,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     mesh_convert: "mc",
     hole: "ho",
     loft: "lo",
+    split: "sp",
     sweep: "sw",
   };
   const used = new Set(doc.features.map((f) => f.id));

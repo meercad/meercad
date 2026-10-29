@@ -193,6 +193,10 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "delete":
         for (const b of f.bodies) body(b, at);
         break;
+      case "split":
+        planeSpec(f.plane, at);
+        for (const b of f.bodies) body(b, at);
+        break;
       case "mesh_convert":
         body(f.body, at);
         break;

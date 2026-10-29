@@ -483,4 +483,16 @@ export const MODELS: TestModel[] = [
       return { bodies: 2, volume: [pipe + PI * 144 * 30 - hole, pipe + 1600 * 30 - hole] as [number, number] };
     })(),
   },
+  {
+    file: "26 Geteilter Balken",
+    name: "Bar split for the printer",
+    look: "A 300 × 40 × 20 bar with three Ø10 holes, split at x = 150 into two parts of 150 mm each (one fits a 256 mm printer bed). The right piece keeps the name, the left one is a new part.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, [...rect("l", 0, 0, 300, 40), ...circle("h1", 50, 20, 5), ...circle("h2", 150 - 40, 20, 5), ...circle("h3", 250, 20, 5)]),
+      { id: "ex1", op: "extrude", name: "Bar", profile: { sketch: "sk1" }, extent: "blind", distance: 20, mode: "new_body" },
+      { id: "pl1", op: "plane", name: "Middle", base: { ref: "origin.YZ" }, offset: 150 },
+      { id: "sp1", op: "split", name: "Split for printing", plane: { ref: "pl1" }, bodies: ["ex1"] },
+    ]),
+    expect: { bodies: 2, volume: 300 * 40 * 20 - 3 * PI * 25 * 20, size: [300, 40, 20] },
+  },
 ];

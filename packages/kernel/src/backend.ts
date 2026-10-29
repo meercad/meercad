@@ -20,7 +20,7 @@ import {
   type ResolvedSketch,
   type ResolvedTransform,
 } from "@meercad/model";
-import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type LoftFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef, type SweepFeature } from "@meercad/schema";
+import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type LoftFeature, type SplitFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef, type SweepFeature } from "@meercad/schema";
 import {
   findRegions,
   frameFromPlane,
@@ -99,6 +99,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return loft(f, ctx);
       case "sweep":
         return sweep(f, ctx);
+      case "split":
+        return split(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -587,6 +589,55 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
   }
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/**
+ * Parts cut in two at a plane: each kept piece is the part in common with a large box on that side.
+ * The new faces at the plane are tagged `<step>.cut`.
+ */
+function split(f: SplitFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena, g } = ctx;
+  const frame = planeFrame(f.plane, ctx);
+  const size = modelSize(ctx) * 2;
+  const n = frame.normal;
+  const box = (side: 1 | -1): Body => {
+    const corner: Vec3 = [0, 1, 2].map((k) => frame.origin[k]! - frame.u[k]! * size - frame.v[k]! * size + (side < 0 ? -n[k]! * size : 0)) as Vec3;
+    const ax = arena.track(new oc.gp_Ax2(g.pnt(corner), g.dir(n), g.dir(frame.u)));
+    const b = new Body(oc, arena, f.id, arena.track(arena.track(new oc.BRepPrimAPI_MakeBox(ax, 2 * size, 2 * size, size)).Shape()));
+    b.faceTags = b.faces.map(() => [`${f.id}.cut`]);
+    return b;
+  };
+  const front = box(1), back = box(-1);
+  const bodies = new Map(ctx.prev.bodies);
+  const chosen = f.bodies.length ? f.bodies : [...bodies.keys()];
+  const keep = f.keep ?? "both";
+  let crossed = 0;
+  for (const id of chosen) {
+    const body = bodies.get(id);
+    if (!body) throw new FeatureError(`part "${id}" not found`);
+    const piece = (side: Body, resultId: string) => {
+      try {
+        return booleanBodies(oc, arena, body, side, "common", resultId);
+      } catch (e) {
+        if (e instanceof FeatureError) return null;
+        throw e;
+      }
+    };
+    const otherId = chosen.length === 1 ? f.id : `${f.id}-${id}`;
+    const a = piece(front, id);
+    const b = piece(back, keep === "back" ? id : otherId);
+    // A part wholly on one side stays as it is.
+    if (!a || !b) {
+      if (f.bodies.length) ctx.warnings.push(`the plane does not cross part "${id}"`);
+      continue;
+    }
+    crossed++;
+    bodies.delete(id);
+    if (keep !== "back") bodies.set(id, a);
+    if (keep !== "front") bodies.set(b.bodyId, b);
+  }
+  if (!crossed) throw new FeatureError("the plane does not cross any part", "move the plane into the part, or pick another face");
+  return { ...ctx.prev, bodies };
 }
 
 /** Copy of a body under a transform; tags get `suffix` appended (for pattern instances). */

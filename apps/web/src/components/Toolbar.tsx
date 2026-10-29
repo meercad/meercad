@@ -129,7 +129,7 @@ function useEntries(): RailEntry[] {
     feature("sketch", activeOp),
     "sep",
     { id: "create", icon: Box, label: "Create", tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("loft", activeOp), feature("sweep", activeOp), feature("gear", activeOp), feature("plane", activeOp)] },
-    { id: "modify", icon: SquarePen, label: "Modify", tools: [feature("fillet", activeOp), feature("chamfer", activeOp), feature("shell", activeOp), feature("hole", activeOp), feature("thread", activeOp), feature("boolean", activeOp)] },
+    { id: "modify", icon: SquarePen, label: "Modify", tools: [feature("fillet", activeOp), feature("chamfer", activeOp), feature("shell", activeOp), feature("hole", activeOp), feature("thread", activeOp), feature("split", activeOp), feature("boolean", activeOp)] },
     {
       id: "transform",
       icon: Move3d,
