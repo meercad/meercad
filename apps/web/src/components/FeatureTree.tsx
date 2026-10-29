@@ -1,7 +1,8 @@
-import { Bot, ChevronRight, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, UserCheck, Weight, X } from "lucide-react";
+import { Bot, ChevronRight, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
+import { checkInterference } from "../lib/interference";
 import { evaluate, formatMass, massOf, massProperties, materialById, MATERIALS, referencedNames } from "@meercad/model";
 import type { Feature } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
@@ -497,9 +498,16 @@ function Bodies() {
         open={open}
         onToggle={toggle}
         actions={
-          <button className="icon-btn sm" title="New group" onClick={() => void newGroup()}>
-            <FolderPlus />
-          </button>
+          <>
+            {bodies.length > 1 ? (
+              <button className="icon-btn sm" title="Check whether parts overlap" onClick={() => void checkInterference()}>
+                <ShieldCheck />
+              </button>
+            ) : null}
+            <button className="icon-btn sm" title="New group" onClick={() => void newGroup()}>
+              <FolderPlus />
+            </button>
+          </>
         }
       >
         Parts <span className="count">{bodies.length}</span>

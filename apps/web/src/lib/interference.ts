@@ -1,0 +1,24 @@
+/**
+ * Interference check for the whole model: every part against every other, in the position they
+ * are modelled in. Parts that overlap are reported with the volume they share; parts that only
+ * touch are counted (stacked parts touch on purpose).
+ */
+import { kernel, toast, useApp } from "../store";
+import { partName } from "./features";
+
+export async function checkInterference(): Promise<void> {
+  const out = useApp.getState().output;
+  const ids = out?.report.bodies.map((b) => b.id) ?? [];
+  if (ids.length < 2) return toast("There is only one part: nothing can overlap", "info");
+  const pairs = await kernel.clearances(ids, {}, 0);
+  const features = useApp.getState().doc.features;
+  const name = (id: string) => partName(id, features);
+  const overlaps = pairs.filter((p) => p.overlap > 1e-3).sort((a, b) => b.overlap - a.overlap);
+  const touching = pairs.filter((p) => p.overlap <= 1e-3 && p.distance < 1e-4).length;
+  if (!overlaps.length) return toast(`No parts overlap${touching ? ` (${touching} pair${touching > 1 ? "s" : ""} touch)` : ""}`);
+  const list = overlaps
+    .slice(0, 4)
+    .map((p) => `${name(p.a)} · ${name(p.b)}: ${p.overlap.toFixed(p.overlap < 10 ? 2 : 0)} mm³`)
+    .join("; ");
+  toast(`${overlaps.length} overlap${overlaps.length > 1 ? "s" : ""}: ${list}${overlaps.length > 4 ? " …" : ""}`, "error");
+}
