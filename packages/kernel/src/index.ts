@@ -3,6 +3,7 @@ export { Arena } from "./arena.js";
 export { Body } from "./body.js";
 export { OcctBackend } from "./backend.js";
 export type { ModelState, SketchResult, ToolRecord } from "./state.js";
+export type { GearView, JointFrame } from "./joints.js";
 export { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
 export { KernelSession, type RebuildReport, type SketchView, type ReferenceView } from "./session.js";
 export { exportMeshes, exportStep, measure, type PickRef, type Measurement } from "./tools.js";

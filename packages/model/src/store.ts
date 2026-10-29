@@ -1,4 +1,4 @@
-import { emptyDocument, validateDocument, validateOp, type DocOp, type Feature, type MeercadDocument } from "@meercad/schema";
+import { emptyDocument, validateDocument, validateOp, type DocOp, type Expr, type Feature, type MeercadDocument } from "@meercad/schema";
 import { renameInExpr } from "./expr.js";
 import { mapFeatureExprs } from "./resolve.js";
 
@@ -49,6 +49,12 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       next.params = Object.fromEntries(Object.entries(next.params).map(([k, v]) => [k === op.name ? op.to : k, renameInExpr(v, op.name, op.to)]));
       if (next.autoParams) next.autoParams = next.autoParams.map((n) => (n === op.name ? op.to : n));
       next.features = next.features.map((f) => mapFeatureExprs(f, (e) => renameInExpr(e, op.name, op.to)));
+      if (next.mechanism) {
+        const ren = (e: Expr) => renameInExpr(e, op.name, op.to);
+        for (const j of next.mechanism.joints) if (j.limits) j.limits = [ren(j.limits[0]), ren(j.limits[1])];
+        for (const c of next.mechanism.couplings ?? []) c.ratio = ren(c.ratio);
+        if (next.mechanism.clearance !== undefined) next.mechanism.clearance = ren(next.mechanism.clearance);
+      }
       break;
     }
     case "set_param": {
@@ -67,6 +73,37 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       break;
     case "replace":
       return checked(op.doc);
+    case "set_joint": {
+      const m = (next.mechanism ??= { joints: [] });
+      const i = m.joints.findIndex((j) => j.id === op.joint.id);
+      if (i >= 0) m.joints[i] = structuredClone(op.joint);
+      else m.joints.push(structuredClone(op.joint));
+      break;
+    }
+    case "delete_joint": {
+      const m = next.mechanism;
+      if (!m?.joints.some((j) => j.id === op.id)) throw new OpError(`unknown joint "${op.id}"`);
+      m.joints = m.joints.filter((j) => j.id !== op.id);
+      // Couplings of a deleted joint go with it.
+      if (m.couplings) m.couplings = m.couplings.filter((c) => c.driver !== op.id && c.driven !== op.id);
+      if (!m.joints.length && !m.couplings?.length) delete next.mechanism;
+      break;
+    }
+    case "set_coupling": {
+      const m = (next.mechanism ??= { joints: [] });
+      const list = (m.couplings ??= []);
+      const i = list.findIndex((c) => c.id === op.coupling.id);
+      if (i >= 0) list[i] = structuredClone(op.coupling);
+      else list.push(structuredClone(op.coupling));
+      break;
+    }
+    case "delete_coupling": {
+      const m = next.mechanism;
+      if (!m?.couplings?.some((c) => c.id === op.id)) throw new OpError(`unknown coupling "${op.id}"`);
+      m.couplings = m.couplings.filter((c) => c.id !== op.id);
+      if (!m.couplings.length) delete m.couplings;
+      break;
+    }
   }
   return checked(next);
 }

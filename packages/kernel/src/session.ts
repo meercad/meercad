@@ -4,6 +4,7 @@ import type { PlaneFrame, SketchSolver, SolveDiagnostics, SolvedCurve, Vec2 } fr
 import { OcctBackend } from "./backend.js";
 import type { Body } from "./body.js";
 import { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
+import { gearViews, jointFrames, type GearView, type JointFrame } from "./joints.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
 
@@ -35,6 +36,10 @@ export interface RebuildReport {
   /** Tessellation and summaries (ms). */
   meshMs: number;
   firstRecomputed: number;
+  /** Axes of the document's joints. */
+  joints: JointFrame[];
+  /** Gears with their axes, for adding joints to them. */
+  gears: GearView[];
   /** Wall-clock milestones (ms since the epoch, comparable across threads) for diagnostics. */
   timing?: Partial<RebuildTiming>;
 }
@@ -106,6 +111,8 @@ export class KernelSession {
         rebuildMs: r.ms,
         meshMs: performance.now() - t,
         firstRecomputed: r.firstRecomputed,
+        joints: jointFrames(this.oc, r.state, doc.mechanism),
+        gears: gearViews(r.state, new Map(doc.features.flatMap((f) => (f.op === "gear" && f.meshWith ? [[f.id, f.meshWith.gear] as [string, string]] : [])))),
       },
       meshes,
       references: [...r.state.references.values()].map((m) => ({ id: m.id, positions: m.positions, indices: m.indices })),

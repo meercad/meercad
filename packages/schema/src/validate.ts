@@ -191,6 +191,28 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
     }
     seen.set(f.id, f);
   }
+  const mech = doc.mechanism;
+  if (mech) {
+    const jointIds = new Set<string>();
+    const moving = new Set<string>();
+    for (const j of mech.joints) {
+      const at = `joint ${j.id}`;
+      if (jointIds.has(j.id)) errors.push(`${at}: duplicate id`);
+      jointIds.add(j.id);
+      if (j.a === j.b) errors.push(`${at}: a part cannot be jointed to itself`);
+      if (j.a === "ground") errors.push(`${at}: the moving part cannot be the ground`);
+      if (!j.suppressed) {
+        if (moving.has(j.a)) errors.push(`${at}: part "${j.a}" already moves in another joint (closed loops come later)`);
+        moving.add(j.a);
+      }
+      if ("gear" in j.anchor) earlier(j.anchor.gear, at, "gear", ["gear"]);
+    }
+    for (const c of mech.couplings ?? []) {
+      const at = `coupling ${c.id}`;
+      for (const r of [c.driver, c.driven]) if (!jointIds.has(r)) errors.push(`${at}: unknown joint "${r}"`);
+      if (c.driver === c.driven) errors.push(`${at}: a joint cannot drive itself`);
+    }
+  }
   if (doc.rollback !== null && !seen.has(doc.rollback)) errors.push(`rollback: unknown feature "${doc.rollback}"`);
   for (const n of doc.autoParams ?? []) if (!(n in doc.params)) errors.push(`autoParams: unknown parameter "${n}"`);
   return errors.length ? { ok: false, errors } : { ok: true, value: doc };

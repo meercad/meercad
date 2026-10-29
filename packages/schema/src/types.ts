@@ -326,6 +326,55 @@ export type EdgeSelector =
   /** All edges bounding faces matching `where.face` (relative to `of` when it has no dot). */
   | { select: "edges"; of?: string; where?: { face?: FaceTag } };
 
+// ---------------------------------------------------------------- mechanism
+
+/** Where a joint's axis sits; resolved after every rebuild, so it follows parameter changes. */
+export type JointAnchor =
+  /** Round face (hole, shaft): its axis, through the middle of the face. */
+  | { axisOf: FaceSelector }
+  /** Straight edge: its direction through its middle; round edge: the circle's axis through its centre. */
+  | { edge: EdgeSelector }
+  /** An origin axis. */
+  | { axis: { ref: "origin.X" | "origin.Y" | "origin.Z" } }
+  /** A gear feature: its axis (a rack: the direction along its length). */
+  | { gear: string };
+
+/**
+ * A joint lets part `a` move relative to part `b` (or stay on the ground) from where it was
+ * modelled: revolute turns about the axis (degrees), slider moves along it (mm), fixed holds it.
+ */
+export interface Joint {
+  id: string;
+  name?: string;
+  type: "revolute" | "slider" | "fixed";
+  /** Moving part (body id). */
+  a: string;
+  /** Part it hangs on (body id), or "ground". */
+  b: string;
+  anchor: JointAnchor;
+  /** Lowest and highest value (degrees or mm); none = free. */
+  limits?: [Expr, Expr];
+  suppressed?: boolean;
+}
+
+/** Drives one joint from another: driven value = ratio × driver value (gears, racks, belts). */
+export interface Coupling {
+  id: string;
+  name?: string;
+  driver: string;
+  driven: string;
+  /** Unit of driven per unit of driver (deg/deg, or mm/deg for a rack). */
+  ratio: Expr;
+}
+
+/** Moving parts. The modelled position is the rest position; joints say how parts move from it. */
+export interface Mechanism {
+  joints: Joint[];
+  couplings?: Coupling[];
+  /** Smallest wanted gap between jointed parts for print-in-place, mm (default 0.3). */
+  clearance?: Expr;
+}
+
 export type LengthUnit = "mm" | "in";
 
 export interface MeercadDocument {
@@ -344,6 +393,8 @@ export interface MeercadDocument {
    */
   units?: LengthUnit;
   features: Feature[];
+  /** Joints between parts; moving them never changes the model. */
+  mechanism?: Mechanism;
   /** Id of the last feature that is evaluated, or null for all. */
   rollback: string | null;
 }
@@ -358,6 +409,11 @@ export type DocOp =
   | { type: "set_param"; name: string; expr: Expr | null; auto?: boolean }
   | { type: "rename_param"; name: string; to: string }
   | { type: "set_rollback"; id: string | null }
+  /** Adds a joint or replaces the one with the same id. */
+  | { type: "set_joint"; joint: Joint }
+  | { type: "delete_joint"; id: string }
+  | { type: "set_coupling"; coupling: Coupling }
+  | { type: "delete_coupling"; id: string }
   | { type: "replace"; doc: MeercadDocument };
 
 export function emptyDocument(): MeercadDocument {
