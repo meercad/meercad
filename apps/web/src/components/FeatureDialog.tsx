@@ -2,7 +2,7 @@ import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
-import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric } from "@meercad/model";
+import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_NAMES, STANDARD_SIZES } from "@meercad/model";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { gearParams, pairInfo } from "../lib/gears";
@@ -184,14 +184,14 @@ function handlePick(p: Pick, d: DialogState): void {
         const spec = planeSpecForPick(p, meshes);
         if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
         // A hole goes where the face was tapped.
-        if (spec && g.op === "hole" && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
+        if (spec && (g.op === "hole" || g.op === "standard_part") && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
         // Text starts where the face was tapped.
         if (spec && g.op === "text" && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         break;
       }
       case "points": {
         // Points are the tap projected onto the hole's plane (u, v are the same on parallel faces).
-        if (g.op !== "hole" || p.kind !== "face" || !p.normal) break;
+        if ((g.op !== "hole" && g.op !== "standard_part") || p.kind !== "face" || !p.normal) break;
         g.points = [...g.points, holePoint(p.point, p.normal)];
         break;
       }
@@ -200,7 +200,7 @@ function handlePick(p: Pick, d: DialogState): void {
   });
   // Single-valued fields advance to the next field automatically.
   if (["axis", "direction", "plane", "base", "neutral", "target"].includes(field)) {
-    const next = f.op === "boolean" && field === "target" ? "tools" : f.op === "hole" && field === "plane" ? "points" : null;
+    const next = f.op === "boolean" && field === "target" ? "tools" : (f.op === "hole" || f.op === "standard_part") && field === "plane" ? "points" : null;
     setDialogField(next);
   }
 }
@@ -1013,6 +1013,86 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "standard_part": {
+      const sizes = STANDARD_SIZES[f.kind];
+      return (
+        <>
+          <Field label="Part">
+            <select className="field" value={f.kind} onChange={(e) => {
+              const kind = e.target.value as Of<"standard_part">["kind"];
+              const list = STANDARD_SIZES[kind];
+              set({ kind, size: kind === "magnet" ? undefined : list.includes(f.size ?? "") ? f.size : kind === "bearing" ? "608" : "M3", length: kind === "socket_screw" ? (f.length ?? 10) : undefined, diameter: kind === "magnet" ? 6 : undefined, height: kind === "magnet" ? 3 : undefined });
+            }}>
+              {(Object.keys(STANDARD_NAMES) as Of<"standard_part">["kind"][]).map((k) => (
+                <option key={k} value={k}>
+                  {STANDARD_NAMES[k]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="row">
+            {sizes.length ? (
+              <Field label="Size">
+                <select className="field" value={f.size ?? ""} onChange={(e) => set({ size: e.target.value })}>
+                  {sizes.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+            {f.kind === "socket_screw" ? (
+              <Field label="Length">
+                <select className="field" value={String(f.length ?? 10)} onChange={(e) => set({ length: Number(e.target.value) })}>
+                  {SCREW_LENGTHS.map((l) => (
+                    <option key={l} value={l}>
+                      {l} mm
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+            {f.kind === "magnet" ? (
+              <>
+                <Field label="Diameter">
+                  <ExprInput value={f.diameter ?? 6} onCommit={(diameter) => set({ diameter })} />
+                </Field>
+                <Field label="Height">
+                  <ExprInput value={f.height ?? 3} onCommit={(height) => set({ height })} />
+                </Field>
+              </>
+            ) : null}
+          </div>
+          <Field label="Face">
+            <div className="row">
+              <div style={{ flex: 1 }}>
+                <SelBox field="plane" items={[describePlane(f.plane)]} placeholder="Tap a flat face where the part goes" />
+              </div>
+              <button className={`icon-btn ${f.flip ? "active" : ""}`} title="Turn the other way" onClick={() => set({ flip: f.flip ? undefined : true })}>
+                <ArrowLeftRight />
+              </button>
+            </div>
+          </Field>
+          <Field label={`Places (${f.points.length})`}>
+            <SelBox field="points" items={f.points.length ? [`${f.points.length} place${f.points.length === 1 ? "" : "s"}: tap the face to add`] : []} placeholder="Tap the face to place parts" />
+            {f.points.map((pt, i) => (
+              <div className="row" key={i}>
+                {[0, 1].map((k) => (
+                  <div key={k} style={{ flex: 1 }}>
+                    <ExprInput value={pt[k]} onCommit={(v) => set({ points: f.points.map((q, j) => (j === i ? (k === 0 ? [v, q[1]] : [q[0], v]) : q)) })} />
+                  </div>
+                ))}
+                <button className="icon-btn sm" title="Remove" onClick={() => set({ points: f.points.filter((_, j) => j !== i) })}>
+                  <X />
+                </button>
+              </div>
+            ))}
+          </Field>
+          <p className="muted small">{f.kind === "socket_screw" ? "The head sits on the face, the shank goes in: tap the centre of a hole." : "The part stands on the face; turn it to set it into a recess."} Each place is its own part.</p>
+        </>
+      );
+    }
     case "text": {
       const pos = f.position ?? [0, 0];
       return (

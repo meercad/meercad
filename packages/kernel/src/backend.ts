@@ -19,6 +19,9 @@ import {
   type ResolvedRib,
   type ResolvedDraft,
   type ResolvedText,
+  type ResolvedStandardPart,
+  standardShape,
+  StandardPartError,
   type ResolvedShell,
   type ResolvedSketch,
   type ResolvedTransform,
@@ -47,6 +50,7 @@ import { gearBody } from "./gear.js";
 import { convertMesh } from "./meshconvert.js";
 import { holeTools } from "./hole.js";
 import { nest, textLoops } from "./text.js";
+import { standardPartBody } from "./standardPart.js";
 import { threadBody } from "./thread.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
@@ -111,6 +115,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return draft(f, ctx);
       case "text":
         return textFeature(f, ctx);
+      case "standard_part":
+        return standardPartFeature(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -612,6 +618,25 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
 }
 
+/** Standard parts: one new part per point (ids np1, np1_2, …). */
+function standardPartFeature(f: ResolvedStandardPart, ctx: Ctx): Omit<ModelState, "arena"> {
+  if (!f.points.length) throw new FeatureError("place at least one part");
+  let shape;
+  try {
+    shape = standardShape(f.kind, { size: f.size, length: f.length, diameter: f.diameter, height: f.height });
+  } catch (e) {
+    if (e instanceof StandardPartError) throw new FeatureError(e.message);
+    throw e;
+  }
+  const frame = planeFrame(f.plane, ctx);
+  const bodies = new Map(ctx.prev.bodies);
+  f.points.forEach((p, k) => {
+    const id = k === 0 ? f.id : `${f.id}_${k + 1}`;
+    bodies.set(id, standardPartBody(ctx.oc, ctx.arena, id, frame, p, shape, !!f.flip));
+  });
+  return { ...ctx.prev, bodies };
+}
+
 /**
  * Text: the font's outlines as faces on the plane, extruded along its normal (raised) or against it
  * (engraved, from a hair above the surface so the cut opens it). Faces: tx1.top (the letters' tops
@@ -827,7 +852,7 @@ function split(f: SplitFeature, ctx: Ctx): Omit<ModelState, "arena"> {
         throw e;
       }
     };
-    const otherId = chosen.length === 1 ? f.id : `${f.id}-${id}`;
+    const otherId = chosen.length === 1 ? f.id : `${f.id}_${id}`;
     const a = piece(front, id);
     const b = piece(back, keep === "back" ? id : otherId);
     // A part wholly on one side stays as it is.

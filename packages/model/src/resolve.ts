@@ -10,6 +10,7 @@ import type {
   HoleFeature,
   DraftFeature,
   TextFeature,
+  StandardPartFeature,
   RibFeature,
   LinearPatternFeature,
   MeshConvertFeature,
@@ -49,6 +50,7 @@ export type ResolvedGear = R<
 export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number };
 export type ResolvedRib = R<RibFeature, "thickness">;
 export type ResolvedDraft = R<DraftFeature, "angle">;
+export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height"> & { points: [number, number][]; length?: number; diameter?: number; height?: number };
 export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & { position: [number, number]; size: number; angle: number; depth: number };
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
@@ -70,6 +72,7 @@ export type ResolvedFeature =
   | ResolvedRib
   | ResolvedDraft
   | ResolvedText
+  | ResolvedStandardPart
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" | "split" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
@@ -145,6 +148,14 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       };
     case "draft":
       return { ...f, angle: ev("angle", f.angle) };
+    case "standard_part":
+      return {
+        ...f,
+        points: f.points.map(([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number]),
+        length: opt("length", f.length),
+        diameter: opt("diameter", f.diameter),
+        height: opt("height", f.height),
+      };
     case "text":
       return {
         ...f,
@@ -189,6 +200,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     rib: ["thickness"],
     draft: ["angle"],
     text: ["size", "angle", "depth"],
+    standard_part: ["length", "diameter", "height"],
   };
   if (f.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
@@ -196,6 +208,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     if (rot) rot.angle = fn(rot.angle);
   }
   if (f.op === "text" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
+  if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "gear") {
     if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);

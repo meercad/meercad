@@ -62,6 +62,7 @@ number that must come out.
 | 29 | Name plate with text | raised bold text centred on a face, engraved small text |
 | 30 | Tray from sketch tools | corners rounded in the sketch, pocket from an inward offset, a bevelled corner |
 | 31 | Handle from splines | closed spline outline extruded with a hole, a rod swept along an open spline |
+| 32 | Plate with standard parts | M4 screws seated in counterbores, a 608 bearing |
 
 Each model states what must come out (parts, volume worked out by hand where possible, size) and what
 a person should see when looking at it (`look`). The test rebuilds each one, checks the numbers and

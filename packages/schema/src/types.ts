@@ -322,6 +322,27 @@ export interface SweepFeature extends FeatureBase {
 }
 
 /**
+ * Standard parts placed on a flat face (or a plane) at points in its coordinates: socket head cap
+ * screws (ISO 4762; the head stands on the face, the shank goes in), hex nuts (ISO 4032), washers
+ * (ISO 7089), ball bearings and round magnets (standing on the face). Each point gives its own
+ * part (ids sp1, sp1_2, …). `flip` turns them the other way.
+ */
+export interface StandardPartFeature extends FeatureBase {
+  op: "standard_part";
+  kind: "socket_screw" | "hex_nut" | "washer" | "bearing" | "magnet";
+  /** "M3" for screws, nuts and washers, "608" for bearings. */
+  size?: string;
+  /** Screw length under the head. */
+  length?: Expr;
+  /** Magnets. */
+  diameter?: Expr;
+  height?: Expr;
+  plane: PlaneSpec;
+  points: [Expr, Expr][];
+  flip?: boolean;
+}
+
+/**
  * Text on a plane or a flat face, raised (`join`, embossed) or cut in (`cut`, engraved). The text
  * starts at `position` in the plane's coordinates; `size` is the height of capital letters; new
  * lines (\n) go downwards. Raised text grows along the plane's normal, engraved text goes against it
@@ -376,7 +397,7 @@ export interface RibFeature extends FeatureBase {
 /**
  * Cuts parts in two at a plane or a flat face, e.g. a part too large for the printer. The piece on
  * the side the plane's normal points to keeps the part's id, the other becomes a new part named after
- * the step (`sp1`, or `sp1-<part>` when several parts are split). `keep` drops one side instead.
+ * the step (`sp1`, or `sp1_<part>` when several parts are split). `keep` drops one side instead.
  */
 export interface SplitFeature extends FeatureBase {
   op: "split";
@@ -442,6 +463,7 @@ export type Feature =
   | RibFeature
   | DraftFeature
   | TextFeature
+  | StandardPartFeature
   | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature

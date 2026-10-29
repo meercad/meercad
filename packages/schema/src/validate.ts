@@ -197,6 +197,10 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "draft":
         planeSpec(f.neutral, at);
         break;
+      case "standard_part":
+        planeSpec(f.plane, at);
+        if (f.kind !== "magnet" && !f.size) errors.push(`${at}: a ${f.kind} needs a size`);
+        break;
       case "text":
         planeSpec(f.plane, at);
         for (const t of f.targets ?? []) earlier(t, at, "target body");

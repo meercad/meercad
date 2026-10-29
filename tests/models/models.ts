@@ -83,6 +83,26 @@ const hexArea = (r: number) => ((3 * Math.sqrt(3)) / 2) * r * r;
 const acrossFlats = (s: number) => s / Math.sqrt(3);
 const edge = (a: string, b: string) => ({ edge: [a, b] as [string, string] });
 
+/** Model 24's mounting plate with standard holes (used again by model 32). */
+const HOLE_PLATE: Feature[] = [
+  sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 80, 40)),
+  { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
+  { id: "ho1", op: "hole", name: "Cap screws", plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10], [10, 30]], kind: "counterbore", size: "M4" },
+  { id: "ho2", op: "hole", name: "Flat head", plane: { face: { face: "ex1.end_cap" } }, points: [[35, 20]], kind: "countersink", size: "M3" },
+  { id: "ho3", op: "hole", name: "Inserts", plane: { face: { face: "ex1.end_cap" } }, points: [[55, 10], [55, 30]], kind: "insert", size: "M3" },
+  { id: "ho4", op: "hole", name: "Tapped", plane: { face: { face: "ex1.end_cap" } }, points: [[70, 20]], kind: "tapped", size: "M5", depth: 8 },
+];
+/** Plate minus the holes worked out by hand; the tapped hole lies between its tap drill and nominal size. */
+const HOLE_PLATE_VOLUME = ((): [number, number] => {
+  const cb = 2 * PI * (4 ** 2 * 4.4 + 2.25 ** 2 * 5.6);
+  const R = 7.12 / 2;
+  const h = R - 1.7;
+  const cs = (PI * h * (R * R + R * 1.7 + 1.7 * 1.7)) / 3 + PI * 1.7 ** 2 * (10 - h);
+  const ins = 2 * PI * 2 ** 2 * 6.7;
+  const rest = 80 * 40 * 10 - cb - cs - ins;
+  return [rest - PI * 2.5 ** 2 * 8, rest - PI * 2.1 ** 2 * 8];
+})();
+
 export const MODELS: TestModel[] = [
   {
     file: "01 Wuerfel",
@@ -436,24 +456,8 @@ export const MODELS: TestModel[] = [
     file: "24 Lochplatte mit Normbohrungen",
     name: "Mounting plate with standard holes",
     look: "80 × 40 × 10 plate: two M4 counterbores for cap screws on the left, an M3 countersink in the middle, two M3 heat-set insert holes (Ø4, 6.7 deep) and an M5 tapped hole with a real thread on the right.",
-    doc: doc([
-      sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 80, 40)),
-      { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-      { id: "ho1", op: "hole", name: "Cap screws", plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10], [10, 30]], kind: "counterbore", size: "M4" },
-      { id: "ho2", op: "hole", name: "Flat head", plane: { face: { face: "ex1.end_cap" } }, points: [[35, 20]], kind: "countersink", size: "M3" },
-      { id: "ho3", op: "hole", name: "Inserts", plane: { face: { face: "ex1.end_cap" } }, points: [[55, 10], [55, 30]], kind: "insert", size: "M3" },
-      { id: "ho4", op: "hole", name: "Tapped", plane: { face: { face: "ex1.end_cap" } }, points: [[70, 20]], kind: "tapped", size: "M5", depth: 8 },
-    ]),
-    // Plate minus the holes worked out by hand; the tapped hole lies between its tap drill and nominal size.
-    expect: (() => {
-      const cb = 2 * PI * (4 ** 2 * 4.4 + 2.25 ** 2 * 5.6);
-      const R = 7.12 / 2;
-      const h = R - 1.7;
-      const cs = (PI * h * (R * R + R * 1.7 + 1.7 * 1.7)) / 3 + PI * 1.7 ** 2 * (10 - h);
-      const ins = 2 * PI * 2 ** 2 * 6.7;
-      const rest = 80 * 40 * 10 - cb - cs - ins;
-      return { bodies: 1, volume: [rest - PI * 2.5 ** 2 * 8, rest - PI * 2.1 ** 2 * 8] as [number, number], size: [80, 40, 10] as [number, number, number] };
-    })(),
+    doc: doc(HOLE_PLATE),
+    expect: { bodies: 1, volume: HOLE_PLATE_VOLUME, size: [80, 40, 10] },
   },
   {
     file: "25 Trichter und Rohrbogen",
@@ -602,6 +606,24 @@ export const MODELS: TestModel[] = [
       const length = rod.slice(1).reduce((l, p, k) => l + Math.hypot(p[0] - rod[k]![0], p[1] - rod[k]![1]), 0);
       const v = (area - PI * 16) * 8 + PI * 9 * length;
       return { bodies: 2, volume: [v * 0.99, v * 1.01] as [number, number] };
+    })(),
+  },
+  {
+    file: "32 Platte mit Normteilen",
+    name: "Plate with standard parts",
+    look: "The 80 × 40 × 10 mounting plate of model 24 with two M4×12 socket head cap screws sitting in its counterbores (heads 4.4 mm deep, flush below the top), and a 608 ball bearing standing on the top face at the right.",
+    doc: doc([
+      ...HOLE_PLATE,
+      { id: "pl1", op: "plane", name: "Counterbore seats", base: { ref: "origin.XY" }, offset: 10 - 4.4 },
+      { id: "np1", op: "standard_part", kind: "socket_screw", size: "M4", length: 12, plane: { ref: "pl1" }, points: [[10, 10], [10, 30]] },
+      { id: "np2", op: "standard_part", kind: "bearing", size: "608", plane: { face: { face: "ex1.end_cap" } }, points: [[100, 20]] },
+    ]),
+    // The plate as in model 24; two screws (head Ø7 × 4 with a 3 mm socket 2 deep, shank Ø4 × 12); the bearing ring.
+    expect: (() => {
+      const plate = HOLE_PLATE_VOLUME;
+      const screw = PI * 3.5 ** 2 * 4 - (Math.sqrt(3) / 2) * 9 * 2 + PI * 4 * 12;
+      const bearing = PI * (11 ** 2 - 4 ** 2) * 7;
+      return { bodies: 4, volume: [plate[0] + 2 * screw + bearing, plate[1] + 2 * screw + bearing] as [number, number] };
     })(),
   },
 ];

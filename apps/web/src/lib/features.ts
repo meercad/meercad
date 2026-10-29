@@ -4,6 +4,7 @@ import {
   Bolt,
   Box,
   Cone,
+  Nut,
   Pyramid,
   Scissors,
   Slash,
@@ -27,7 +28,7 @@ import {
   Move3d,
   type LucideIcon, Trash2 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, MeercadDocument } from "@meercad/schema";
-import { nextFeatureId } from "@meercad/model";
+import { nextFeatureId, standardShape } from "@meercad/model";
 
 export interface FeatureMeta {
   label: string;
@@ -46,6 +47,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   thread: { shortcut: "T", label: "Thread", icon: Bolt, hint: "ISO metric thread in a hole or on a shaft" },
   loft: { shortcut: "Shift+L", label: "Loft", icon: Cone, hint: "Solid through two or more profiles: funnels, round-to-square adapters" },
   sweep: { shortcut: "W", label: "Sweep", icon: Spline, hint: "Move a profile along a path of lines and arcs: pipes, ducts, handles" },
+  standard_part: { shortcut: "Shift+P", label: "Standard part", icon: Nut, hint: "Screws, nuts, washers, bearings and magnets to standard sizes, placed on a face" },
   text: { shortcut: "Shift+T", label: "Text", icon: Type, hint: "Raised or engraved lettering on a face" },
   draft: { shortcut: "Shift+D", label: "Draft", icon: Pyramid, hint: "Tilt side faces by an angle so a cast or moulded part leaves its mould" },
   rib: { shortcut: "Shift+B", label: "Rib", icon: Slash, hint: "Stiffening web from an open sketch line to the walls it meets" },
@@ -66,7 +68,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "fillet", "chamfer", "shell", "draft", "thread", "hole", "split", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "fillet", "chamfer", "shell", "draft", "thread", "hole", "split", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -114,6 +116,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, profiles: [], mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "loft" || f.op === "sweep" || f.op === "import") ? "join" : "new_body" };
     case "sweep":
       return { id, op, profile, path: { sketch: "" }, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "loft" || f.op === "sweep" || f.op === "import") ? "join" : "new_body" };
+    case "standard_part":
+      return { id, op, kind: "socket_screw", size: "M3", length: 10, plane: { ref: "origin.XY" }, points: [] } as unknown as Feature;
     case "text":
       return { id, op, plane: { ref: "origin.XY" }, text: "meerCAD", size: 8, depth: 1, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import") ? "join" : "new_body" };
     case "draft":
@@ -154,6 +158,8 @@ export function draftProblem(f: Feature): string | null {
       return f.data ? null : "Choose a file";
     case "mesh_convert":
       return f.body ? null : "Select a mesh part";
+    case "standard_part":
+      return f.points.length ? null : "Tap a flat face where the part goes";
     case "draft":
       return f.faces.length ? null : "Pick the side faces to draft";
     case "rib":
@@ -170,6 +176,17 @@ export function draftProblem(f: Feature): string | null {
 }
 
 export function featureName(f: Feature): string {
+  if (!f.name && f.op === "standard_part") {
+    // A standard part is named by what it is, e.g. "M3×12 ISO 4762".
+    try {
+      const length = typeof f.length === "number" ? f.length : undefined;
+      const diameter = typeof f.diameter === "number" ? f.diameter : undefined;
+      const height = typeof f.height === "number" ? f.height : undefined;
+      return standardShape(f.kind, { size: f.size, length, diameter, height }).label;
+    } catch {
+      // Falls through to the generic name.
+    }
+  }
   return f.name ?? `${FEATURES[f.op].label} ${f.id.replace(/^\D+/, "")}`;
 }
 

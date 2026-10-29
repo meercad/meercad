@@ -151,6 +151,20 @@ export const definitions: Record<string, Json> = {
       { profile: ref("profile"), axis: ref("axisRef"), angle: ref("expr"), symmetric: bool, mode: ref("mode"), targets: arr(id) },
       ["profile", "axis", "angle", "mode"],
     ),
+    standard_part: feature(
+      "standard_part",
+      {
+        kind: { enum: ["socket_screw", "hex_nut", "washer", "bearing", "magnet"] },
+        size: { type: "string", maxLength: 16 },
+        length: ref("expr"),
+        diameter: ref("expr"),
+        height: ref("expr"),
+        plane: ref("planeSpec"),
+        points: arr(arr(ref("expr"), { minItems: 2, maxItems: 2 }), { minItems: 1, maxItems: 500 }),
+        flip: bool,
+      },
+      ["kind", "plane", "points"],
+    ),
     text: feature(
       "text",
       {
