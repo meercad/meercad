@@ -1,4 +1,4 @@
-import { Bot, ChevronRight, Palette, RotateCcw, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, UserCheck, X } from "lucide-react";
+import { Bot, ChevronRight, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, UserCheck, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -16,6 +16,7 @@ import { docUnit, fmtLen, fmtVolume, inUnit, isLengthParam } from "../lib/units"
 import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
 import { usePrefs } from "../lib/keymap";
 import { PART_PALETTE, partColors } from "../lib/partColors";
+import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 
 const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
@@ -442,6 +443,7 @@ function Bodies() {
             ...(grouped.has(id) ? [{ label: "Take out of group", icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).map((g) => ({ ...g, parts: g.parts.filter((x) => x !== id) }))) }] : []),
             "sep" as const,
             { label: hidden.has(id) ? "Show" : "Hide", icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
+            ...(meshParts.has(id) ? [{ label: "Convert to editable body", icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: "Rebuild with features", icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }] : []),
             { label: "Colour…", icon: <Palette />, onClick: () => pickColor(id) },
             ...(doc.partColors?.[id] ? [{ label: "Automatic colour", icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
             "sep" as const,

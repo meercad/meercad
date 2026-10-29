@@ -17,4 +17,4 @@ export function meshBodyIds(features: readonly Feature[], meshes: readonly { bod
 /** Feature tools that work on single faces or edges, which mesh parts do not offer. */
 export const FACE_TOOLS = new Set(["fillet", "chamfer", "shell", "thread", "extrude", "sketch", "plane"]);
 
-export const MESH_HINT = "Imported meshes are edited as whole parts: combine, cut, move or pattern them. Import a STEP file for editable faces.";
+export const MESH_HINT = "Imported meshes are edited as whole parts: combine, cut, move or pattern them. For editable faces, right-click or long-press the part: Convert to editable body, or Rebuild with features.";

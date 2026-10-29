@@ -281,6 +281,21 @@ export interface ImportFeature extends FeatureBase {
   data: string;
 }
 
+/**
+ * Replaces a part made from an imported mesh by a solid with real faces: planes, cylinders, cones
+ * and spheres recognised in the triangles become editable faces; triangles that match no surface
+ * stay flat facets. The part keeps its id.
+ */
+export interface MeshConvertFeature extends FeatureBase {
+  op: "mesh_convert";
+  /** The mesh part (the id of its import feature). */
+  body: string;
+  /** Largest distance (mm) between the mesh's vertices and a recognised surface; default from the part's size. */
+  tolerance?: Expr;
+  /** Angle (degrees) between neighbouring triangles above which they belong to different curved surfaces; default 30. */
+  angle?: Expr;
+}
+
 export type Feature =
   | SketchFeature
   | PlaneFeature
@@ -297,7 +312,8 @@ export type Feature =
   | BooleanFeature
   | TransformFeature
   | DeleteFeature
-  | ImportFeature;
+  | ImportFeature
+  | MeshConvertFeature;
 export type FeatureOp = Feature["op"];
 
 // ---------------------------------------------------------------- selectors

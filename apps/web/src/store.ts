@@ -513,6 +513,7 @@ function firstField(op: FeatureOp): string | null {
       shell: "faces",
       thread: "face",
       gear: "plane",
+      mesh_convert: "body",
       linear_pattern: "source",
       circular_pattern: "source",
       mirror: "source",

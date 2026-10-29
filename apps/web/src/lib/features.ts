@@ -16,6 +16,7 @@ import {
   SquareSplitHorizontal,
   Triangle,
   Orbit,
+  Shapes,
   Move3d,
   type LucideIcon, Trash2 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, MeercadDocument } from "@meercad/schema";
@@ -45,6 +46,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   plane: { shortcut: "N", label: "Plane", icon: Layers, hint: "Construction plane offset from a plane or face" },
   delete: { label: "Delete part", icon: Trash2, hint: "Remove parts from the model" },
   import: { label: "Import", icon: FileUp, hint: "Import STEP or STL" },
+  mesh_convert: { label: "Convert mesh", icon: Shapes, hint: "Turn an imported mesh into a body with editable faces" },
 };
 
 export const BODY_ICON = Box;
@@ -92,6 +94,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, base: { ref: "origin.XY" }, offset: 20 };
     case "import":
       return { id, op, format: "step", fileName: "", data: "" };
+    case "mesh_convert":
+      return { id, op, body: "" };
   }
 }
 
@@ -120,6 +124,8 @@ export function draftProblem(f: Feature): string | null {
       return f.bodies.length ? null : "Select parts to delete";
     case "import":
       return f.data ? null : "Choose a file";
+    case "mesh_convert":
+      return f.body ? null : "Select a mesh part";
     default:
       return null;
   }

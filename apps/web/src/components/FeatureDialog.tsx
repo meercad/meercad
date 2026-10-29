@@ -30,6 +30,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     target: ["face"],
     tools: ["face"],
     bodies: ["face", "edge"],
+    body: ["face", "edge"],
     source: ["face"],
     plane: ["plane", "face"],
     base: ["plane", "face"],
@@ -112,6 +113,11 @@ function handlePick(p: Pick, d: DialogState): void {
       case "bodies": {
         const b = bodyOf(p);
         if (b) (g as Of<"transform" | "delete">).bodies = toggle((g as Of<"transform" | "delete">).bodies, b);
+        break;
+      }
+      case "body": {
+        const b = bodyOf(p);
+        if (b) (g as Of<"mesh_convert">).body = b;
         break;
       }
       case "tools": {
@@ -807,6 +813,21 @@ function Body({ d }: { d: DialogState }) {
         <Field label="Parts">
           <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
         </Field>
+      );
+    case "mesh_convert":
+      return (
+        <>
+          <Field label="Mesh part">
+            <SelBox field="body" items={f.body ? [partName(f.body, features)] : []} placeholder="Pick a mesh part" onRemove={() => set({ body: "" })} />
+          </Field>
+          <Field label="Tolerance">
+            <ExprInput value={f.tolerance} placeholder="auto" onCommit={(tolerance) => set({ tolerance: tolerance === 0 ? undefined : tolerance })} />
+          </Field>
+          <Field label="Sharp edge angle">
+            <ExprInput value={f.angle ?? 30} unit="deg" onCommit={(angle) => set({ angle })} />
+          </Field>
+          <p className="muted small">Flat, round, conical and spherical areas of the mesh become real faces (within the tolerance; by default a small fraction of the part's size). Triangles that match no surface stay flat facets. Raise the tolerance for rough meshes.</p>
+        </>
       );
     case "transform": {
       const t = f.translate ?? [0, 0, 0];

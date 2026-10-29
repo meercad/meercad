@@ -10,6 +10,7 @@ import {
   type ResolvedFeature,
   type ResolvedFillet,
   type ResolvedLinearPattern,
+  type ResolvedMeshConvert,
   type ResolvedPlane,
   type ResolvedRevolve,
   type ResolvedShell,
@@ -37,6 +38,7 @@ import { Body, listToArray } from "./body.js";
 import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
+import { convertMesh } from "./meshconvert.js";
 import { threadBody } from "./thread.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
@@ -120,6 +122,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
       }
       case "import":
         return importFeature(f, ctx);
+      case "mesh_convert":
+        return meshConvertFeature(f, ctx);
     }
   }
 
@@ -666,10 +670,19 @@ function booleanFeature(f: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> 
   };
   let target = get(f.target);
   const op = f.operation === "union" ? "fuse" : f.operation === "subtract" ? "cut" : "common";
-  for (const t of f.tools) {
-    target = booleanBodies(ctx.oc, ctx.arena, target, get(t), op, f.target);
-    if (!f.keepTools) bodies.delete(t);
+  // Union and subtract with several tools in one OCCT call: much faster than one boolean per tool
+  // against an ever more complex result (intersect means something else with several tools).
+  let done = false;
+  if (op !== "common" && f.tools.length > 1) {
+    try {
+      target = booleanBodies(ctx.oc, ctx.arena, target, f.tools.map(get), op, f.target);
+      done = true;
+    } catch (e) {
+      if (!(e instanceof FeatureError)) throw e;
+    }
   }
+  if (!done) for (const t of f.tools) target = booleanBodies(ctx.oc, ctx.arena, target, get(t), op, f.target);
+  if (!f.keepTools) for (const t of f.tools) bodies.delete(t);
   bodies.set(f.target, target);
   return { ...ctx.prev, bodies };
 }
@@ -772,6 +785,58 @@ function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): Topo
   // Faces stay one per triangle: imported meshes are edited as whole parts, and keeping the file's
   // triangles lets display and export skip OCCT's meshing.
   return solid;
+}
+
+/**
+ * A mesh part as a solid with real faces (see `meshconvert.ts`). The part keeps its id; its faces
+ * are tagged by the kind of surface they were recognised as, e.g. `mc1.cylinder[2]`.
+ */
+function meshConvertFeature(f: ResolvedMeshConvert, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena } = ctx;
+  const input = ctx.prev.bodies.get(f.body);
+  if (!input) throw new FeatureError(`body "${f.body}" not found`);
+  const corners = input.sourceMesh ?? trianglesOf(ctx, input);
+  if (!corners) throw new FeatureError(`"${f.body}" is not a mesh part`, "convert the imported mesh before cutting or combining it");
+  if (f.tolerance !== undefined && !(f.tolerance > 0)) throw new FeatureError("tolerance must be greater than zero");
+  const r = convertMesh(oc, arena, corners, { tolerance: f.tolerance, sharpAngle: f.angle });
+  const body = new Body(oc, arena, input.bodyId, r.shape);
+  const counters: Record<string, number> = {};
+  const names = new Map<number, string>();
+  body.faceTags = body.faces.map((face, i) => {
+    const ri = r.regionOf(face);
+    if (ri < 0) return [`${f.id}.face[${i}]`];
+    let name = names.get(ri);
+    if (!name) {
+      const kind = r.fit.regions[ri]!.primitive?.kind ?? "facet";
+      name = `${f.id}.${kind}[${(counters[kind] = (counters[kind] ?? 0) + 1) - 1}]`;
+      names.set(ri, name);
+    }
+    return [name];
+  });
+  const parts = (["plane", "cylinder", "cone", "sphere"] as const).filter((k) => r.counts[k]).map((k) => `${r.counts[k]} ${k}${r.counts[k] === 1 ? "" : "s"}`);
+  if (r.counts.facet) ctx.warnings.push(`${r.counts.facet} triangles match no surface and stay flat facets (found ${parts.join(", ") || "no surfaces"})`);
+  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+}
+
+/** Triangle corners of a body whose faces are all triangles (a mesh part without its source mesh), else null. */
+function trianglesOf({ oc, arena }: Ctx, body: Body): Float32Array | null {
+  const out = new Float32Array(body.faces.length * 9);
+  for (let i = 0; i < body.faces.length; i++) {
+    const pts: Vec3[] = [];
+    for (const ex = arena.track(new oc.TopExp_Explorer(body.faces[i]!, "TopAbs_VERTEX")); ex.More(); ex.Next()) {
+      const v = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(ex.Current())))));
+      const q: Vec3 = [v.X(), v.Y(), v.Z()];
+      if (!pts.some((o) => Math.hypot(o[0] - q[0], o[1] - q[1], o[2] - q[2]) < 1e-9)) pts.push(q);
+    }
+    const n = body.faceInfo[i]?.normal;
+    if (pts.length !== 3 || !n) return null;
+    const [a, b, c] = pts as [Vec3, Vec3, Vec3];
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const cx = u[1]! * w[2]! - u[2]! * w[1]!, cy = u[2]! * w[0]! - u[0]! * w[2]!, cz = u[0]! * w[1]! - u[1]! * w[0]!;
+    out.set(cx * n[0] + cy * n[1] + cz * n[2] < 0 ? [...a, ...c, ...b] : [...a, ...b, ...c], i * 9);
+  }
+  return out;
 }
 
 function unifyIfNeeded(ctx: Ctx, body: Body): Body {

@@ -8,6 +8,7 @@ import type {
   FilletFeature,
   GearFeature,
   LinearPatternFeature,
+  MeshConvertFeature,
   PlaneFeature,
   RevolveFeature,
   ShellFeature,
@@ -41,6 +42,7 @@ export type ResolvedGear = R<
   bore?: { diameter: number; allowance?: number; shape?: "round" | "d_flat" | "hex"; flat?: number };
   hub?: { diameter: number; length: number; side?: "front" | "back" | "both" };
 };
+export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
   | ResolvedTransform
@@ -55,6 +57,7 @@ export type ResolvedFeature =
   | ResolvedGear
   | ResolvedLinearPattern
   | ResolvedCircularPattern
+  | ResolvedMeshConvert
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
@@ -120,6 +123,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return { ...f, count: count("count", f.count)!, spacing: ev("spacing", f.spacing), count2: count("count2", f.count2), spacing2: opt("spacing2", f.spacing2) };
     case "circular_pattern":
       return { ...f, count: count("count", f.count)!, angle: opt("angle", f.angle) };
+    case "mesh_convert":
+      return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
     case "transform": {
       const { translate, rotate, ...rest } = f;
       return {
@@ -147,6 +152,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     gear: ["module", "teeth", "width", "pressureAngle", "profileShift", "helix", "backlash", "clearance", "rotation", "rim", "chamfer"],
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
+    mesh_convert: ["tolerance", "angle"],
   };
   if (f.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);

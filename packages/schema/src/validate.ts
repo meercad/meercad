@@ -132,6 +132,8 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
     if ("ref" in p && !p.ref.startsWith("origin.")) earlier(p.ref, at, "plane", ["plane"]);
     if ("ref" in p && p.ref.startsWith("origin.") && !["origin.XY", "origin.XZ", "origin.YZ"].includes(p.ref)) errors.push(`${at}: unknown plane "${p.ref}"`);
   };
+  // A body id is a feature id, or a feature id with a copy suffix (pattern copies: "lp1_2").
+  const body = (b: string, at: string) => earlier(seen.has(b) ? b : b.split("_")[0]!, at, "body");
   const edgeSelectors = (edges: EdgeSelector | EdgeSelector[], at: string) => {
     for (const sel of asArray(edges)) if ("select" in sel && sel.of !== undefined) earlier(sel.of, at, "selector");
   };
@@ -180,10 +182,13 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       }
       case "transform":
       case "delete":
-        for (const b of f.bodies) earlier(b.split("_")[0]!, at, "body");
+        for (const b of f.bodies) body(b, at);
+        break;
+      case "mesh_convert":
+        body(f.body, at);
         break;
       case "boolean":
-        for (const b of [f.target, ...f.tools]) earlier(b.split("_")[0]!, at, "body");
+        for (const b of [f.target, ...f.tools]) body(b, at);
         if (f.tools.includes(f.target)) errors.push(`${at}: target cannot also be a tool`);
         break;
       default:

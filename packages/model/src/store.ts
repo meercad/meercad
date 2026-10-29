@@ -139,6 +139,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     transform: "mv",
     delete: "del",
     import: "im",
+    mesh_convert: "mc",
   };
   const used = new Set(doc.features.map((f) => f.id));
   let n = 1;

@@ -1,6 +1,7 @@
 import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { partColors } from "../lib/partColors";
-import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, SlidersHorizontal, Trash } from "lucide-react";
+import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, Shapes, SlidersHorizontal, Trash, Wand2 } from "lucide-react";
+import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
@@ -25,7 +26,7 @@ import { convertMmText, docUnit } from "../lib/units";
 import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
 
 /** Dialog fields that take whole parts, so a click on a mesh part may fill them. */
-const PART_FIELDS = new Set(["targets", "target", "tools", "bodies", "source"]);
+const PART_FIELDS = new Set(["targets", "target", "tools", "bodies", "source", "body"]);
 import { CUSTOM_PLANE_COLOR, PLANE_COLORS, PlaneChooser } from "./PlaneChooser";
 
 const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
@@ -447,6 +448,10 @@ export function ViewportView() {
         { label: `Move ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Move3d />, onClick: () => startFeature("transform") },
         { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         { label: `Hide ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        "sep",
+        { label: "Convert to editable body", icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
+        { label: "Rebuild with features", icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
+        "sep",
         ...common,
         "sep",
         { label: `Delete ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
