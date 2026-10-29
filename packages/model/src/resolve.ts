@@ -34,7 +34,7 @@ export type ResolvedLinearPattern = R<LinearPatternFeature, "count" | "spacing" 
 export type ResolvedCircularPattern = R<CircularPatternFeature, "count" | "angle">;
 export type ResolvedGear = R<
   Omit<GearFeature, "center" | "meshWith" | "bore" | "hub">,
-  "module" | "teeth" | "width" | "pressureAngle" | "profileShift" | "helix" | "backlash" | "clearance" | "rotation" | "rim"
+  "module" | "teeth" | "width" | "pressureAngle" | "profileShift" | "helix" | "backlash" | "clearance" | "rotation" | "rim" | "chamfer"
 > & {
   center?: [number, number];
   meshWith?: { gear: string; direction?: number };
@@ -109,6 +109,7 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         clearance: opt("clearance", f.clearance),
         rotation: opt("rotation", f.rotation),
         rim: opt("rim", f.rim),
+        chamfer: opt("chamfer", f.chamfer),
         ...(center ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] } : {}),
         ...(meshWith ? { meshWith: { gear: meshWith.gear, direction: opt("meshWith.direction", meshWith.direction) } } : {}),
         ...(bore ? { bore: { ...bore, diameter: ev("bore.diameter", bore.diameter), allowance: opt("bore.allowance", bore.allowance), flat: opt("bore.flat", bore.flat) } } : {}),
@@ -143,7 +144,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     chamfer: ["distance"],
     shell: ["thickness"],
     thread: ["pitch", "length", "clearance"],
-    gear: ["module", "teeth", "width", "pressureAngle", "profileShift", "helix", "backlash", "clearance", "rotation", "rim"],
+    gear: ["module", "teeth", "width", "pressureAngle", "profileShift", "helix", "backlash", "clearance", "rotation", "rim", "chamfer"],
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
   };

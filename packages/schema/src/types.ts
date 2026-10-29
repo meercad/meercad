@@ -210,6 +210,8 @@ export interface GearFeature extends FeatureBase {
   rotation?: Expr;
   /** Mesh with an earlier gear: `direction` (degrees) is the line from its centre to this one. */
   meshWith?: { gear: string; direction?: Expr };
+  /** 45° chamfer of the tooth tips at both ends, mm (spur and ring gears). */
+  chamfer?: Expr;
   /** Ring gear: outside diameter. Rack: height of its back below the teeth. */
   rim?: Expr;
   /** Bore through the gear; `allowance` is added for printed fits; `flat` = across the flat (d_flat). */

@@ -399,7 +399,7 @@ function GearFields({ f, set }: { f: Of<"gear">; set: (patch: Record<string, unk
       <Seg
         value={f.kind}
         options={[["spur", "Gear"], ["internal", "Ring gear"], ["rack", "Rack"]]}
-        onChange={(kind) => set({ kind, rim: undefined, ...(kind !== "spur" ? { bore: undefined, hub: undefined, profileShift: undefined } : {}) })}
+        onChange={(kind) => set({ kind, rim: undefined, ...(kind !== "spur" ? { bore: undefined, hub: undefined, profileShift: undefined } : {}), ...(kind === "rack" ? { chamfer: undefined } : {}) })}
       />
       {others.length ? (
         <Field label="Meshes with">
@@ -494,6 +494,18 @@ function GearFields({ f, set }: { f: Of<"gear">; set: (patch: Record<string, unk
           </Field>
         ) : null}
       </div>
+      {f.kind !== "rack" ? (
+        <>
+          <label className="checkbox">
+            <input type="checkbox" checked={f.chamfer !== undefined} onChange={(e) => set({ chamfer: e.target.checked ? Math.min(0.5, (p?.module ?? 1) / 2) : undefined })} /> Chamfer tooth ends
+          </label>
+          {f.chamfer !== undefined ? (
+            <Field label="Chamfer (45°)">
+              <ExprInput value={f.chamfer} onCommit={(chamfer) => set({ chamfer })} onLive={(chamfer) => set({ chamfer })} />
+            </Field>
+          ) : null}
+        </>
+      ) : null}
       {f.kind === "spur" ? (
         <>
           <label className="checkbox">

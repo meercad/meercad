@@ -106,6 +106,23 @@ describe("gear", () => {
     expect(overlap(rack, "bo1")).toBeLessThan(1e-3);
   });
 
+  it("chamfers the tooth tips at both ends", async () => {
+    const s = await newSession();
+    for (const g of [{}, { helix: 25, herringbone: true }, { kind: "internal" as const, rim: 100, teeth: 40 }]) {
+      const plain = s.rebuild(doc([gear("gr1", { module: 2, width: 10, ...g })])).report;
+      const { report, meshes } = s.rebuild(doc([gear("gr1", { module: 2, width: 10, chamfer: 0.6, ...g })]));
+      ok(report);
+      const removed = plain.bodies[0]!.volume - report.bodies[0]!.volume;
+      expect(removed).toBeGreaterThan(0);
+      // At most the tip ring that a 0.6 mm 45° chamfer can reach, at both ends.
+      expect(removed).toBeLessThan(2 * Math.PI * 2 * 45 * 0.6 * 0.6);
+      expect(meshes[0]!.faceTags.flat()).toContain("gr1.chamfer");
+      expect(report.bodies[0]!.bbox.max[2]).toBeCloseTo(10, 6);
+    }
+    const bad = s.rebuild(doc([gear("gr1", { module: 1, width: 10, chamfer: 2 })])).report;
+    expect(bad.features[0]!.message).toMatch(/at most the module/);
+  });
+
   it("cuts teeth into a part and explains bad input", async () => {
     const s = await newSession();
     const cut = s.rebuild(

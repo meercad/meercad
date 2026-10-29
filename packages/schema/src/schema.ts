@@ -155,6 +155,7 @@ export const definitions: Record<string, Json> = {
         center: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
         rotation: ref("expr"),
         meshWith: obj({ gear: id, direction: ref("expr") }, ["gear"]),
+        chamfer: ref("expr"),
         rim: ref("expr"),
         bore: obj({ diameter: ref("expr"), allowance: ref("expr"), shape: { enum: ["round", "d_flat", "hex"] }, flat: ref("expr") }, ["diameter"]),
         hub: obj({ diameter: ref("expr"), length: ref("expr"), side: { enum: ["front", "back", "both"] } }, ["diameter", "length"]),

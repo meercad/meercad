@@ -167,6 +167,7 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if (f.plane) planeSpec(f.plane, at);
         if (f.kind !== "spur" && f.bore) errors.push(`${at}: only spur gears take a bore`);
         if (f.kind !== "spur" && f.hub) errors.push(`${at}: only spur gears take a hub`);
+        if (f.kind === "rack" && f.chamfer !== undefined) errors.push(`${at}: racks have no tooth chamfer yet`);
         for (const t of f.targets ?? []) earlier(t, at, "target body");
         break;
       case "linear_pattern":

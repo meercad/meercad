@@ -4,7 +4,8 @@
  * and its size. `tests/acceptance/models.test.ts` rebuilds them all; with MEERCAD_MODELS_OUT set it
  * also writes them as .meercad files to look at in the app (docs/TESTING.md).
  */
-import type { Feature, MeercadDocument, SketchEntity } from "@meercad/schema";
+import { GEAR_DEFAULTS, gearShape, outlineArea, type GearParams } from "@meercad/model";
+import type { Feature, GearFeature, MeercadDocument, SketchEntity } from "@meercad/schema";
 import { circle, rect, sketch } from "../acceptance/helpers.js";
 
 export interface Expectation {
@@ -27,6 +28,13 @@ export interface TestModel {
 }
 
 const PI = Math.PI;
+const gear = (id: string, g: Partial<GearFeature>): GearFeature => ({ id, op: "gear", kind: "spur", teeth: 20, width: 10, mode: "new_body", ...g });
+/** Area of a gear's cross-section (outline minus a ring gear's toothed hole). */
+const gearArea = (g: Partial<GearParams>, rim?: number) => {
+  const shape = gearShape({ kind: "spur", module: 1, teeth: 20, herringbone: false, ...GEAR_DEFAULTS, ...g }, rim === undefined ? {} : { rim });
+  // A ring gear's outside is a true circle.
+  return shape.inner ? PI * (rim! / 2) ** 2 - outlineArea(shape.inner) : outlineArea(shape.outer);
+};
 const doc = (features: Feature[], params: Record<string, string | number> = {}): MeercadDocument => ({ format: "meercad/1", params, features, rollback: null });
 
 /** A regular polygon with a corner on +X. */
@@ -277,5 +285,66 @@ export const MODELS: TestModel[] = [
       },
     ]),
     expect: { bodies: 2, size: [80, 50, 42] },
+  },
+  {
+    file: "17 Stirnrad",
+    name: "Spur gear with bore",
+    look: "Involute spur gear, 20 teeth, module 2 (44 mm across the tips), 10 mm wide, Ø8 bore. Smooth curved flanks, flat tips, rounded-off roots.",
+    doc: doc([gear("gr1", { module: "m", teeth: "z", width: 10, bore: { diameter: 8 } })], { m: 2, z: 20 }),
+    expect: { bodies: 1, volume: (gearArea({ module: 2, teeth: 20 }) - PI * 16) * 10, size: [44, 44, 10] },
+    variants: [
+      { params: { z: 21 }, expect: { bodies: 1, volume: (gearArea({ module: 2, teeth: 21 }) - PI * 16) * 10 } },
+      { params: { m: "1.5 mm" }, expect: { bodies: 1, volume: (gearArea({ module: 1.5, teeth: 20 }) - PI * 16) * 10 } },
+    ],
+  },
+  {
+    file: "18 Zahnradpaar",
+    name: "Gear pair 1:2",
+    look: "A 15-tooth pinion and a 30-tooth gear (module 1.5, 8 mm wide) 33.75 mm apart, 30° round from the pinion. Teeth sit in gaps with a hair of play; nothing touches.",
+    doc: doc([
+      gear("gr1", { name: "Pinion", module: 1.5, teeth: 15, width: 8, bore: { diameter: 5, shape: "d_flat", flat: 4.5, allowance: 0.15 } }),
+      gear("gr2", { name: "Gear", teeth: 30, width: 8, meshWith: { gear: "gr1", direction: 30 }, bore: { diameter: 8 } }),
+    ]),
+    expect: { bodies: 2, volume: [(gearArea({ module: 1.5, teeth: 15 }) - PI * 2.65 ** 2 + gearArea({ module: 1.5, teeth: 30 }) - PI * 16) * 8, (gearArea({ module: 1.5, teeth: 15 }) - PI * 2.5 ** 2 + gearArea({ module: 1.5, teeth: 30 }) - PI * 16) * 8 + 1] },
+  },
+  {
+    file: "19 Pfeilradpaar",
+    name: "Herringbone pair with chamfered teeth",
+    look: "Two herringbone gears (20 and 13 teeth, module 2, 30°, 12 mm wide): the teeth form a V that points the same way on both, and the tooth tips are chamfered 0.6 mm at both faces.",
+    doc: doc([
+      gear("gr1", { module: 2, teeth: 20, width: 12, helix: 30, herringbone: true, chamfer: 0.6 }),
+      gear("gr2", { teeth: 13, width: 12, meshWith: { gear: "gr1" }, chamfer: 0.6 }),
+    ]),
+    expect: {
+      bodies: 2,
+      volume: [(gearArea({ module: 2, teeth: 20, helix: 30 }) + gearArea({ module: 2, teeth: 13, helix: -30 })) * 12 * 0.97, (gearArea({ module: 2, teeth: 20, helix: 30 }) + gearArea({ module: 2, teeth: 13, helix: -30 })) * 12],
+    },
+  },
+  {
+    file: "20 Planetengetriebe",
+    name: "Planetary gear set",
+    look: "Ring gear (60 teeth, module 1, Ø70) with three 18-tooth planets at 0°, 120° and 240° and a 24-tooth sun in the middle; every pair meshes, nothing overlaps.",
+    doc: doc([
+      gear("gr1", { name: "Ring", kind: "internal", module: 1, teeth: 60, width: 6, rim: 70 }),
+      gear("gr2", { name: "Planet 1", teeth: 18, width: 6, meshWith: { gear: "gr1", direction: 0 } }),
+      gear("gr3", { name: "Planet 2", teeth: 18, width: 6, meshWith: { gear: "gr1", direction: 120 } }),
+      gear("gr4", { name: "Planet 3", teeth: 18, width: 6, meshWith: { gear: "gr1", direction: 240 } }),
+      gear("gr5", { name: "Sun", teeth: 24, width: 6, meshWith: { gear: "gr2", direction: 180 }, bore: { diameter: 5 } }),
+    ]),
+    expect: {
+      bodies: 5,
+      volume: (gearArea({ kind: "internal", teeth: 60 }, 70) + 3 * gearArea({ teeth: 18 }) + gearArea({ teeth: 24 }) - PI * 6.25) * 6,
+      size: [70, 70, 6],
+    },
+  },
+  {
+    file: "21 Zahnstange mit Ritzel",
+    name: "Rack and pinion",
+    look: "A 94.2 mm rack (20 teeth, module 1.5, 6 mm back) with a 16-tooth pinion sitting on its middle; the pinion's teeth reach into the rack's gaps.",
+    doc: doc([
+      gear("gr1", { name: "Rack", kind: "rack", module: 1.5, teeth: 20, width: 8, rim: 6 }),
+      gear("gr2", { name: "Pinion", teeth: 16, width: 8, meshWith: { gear: "gr1" }, bore: { diameter: 5 } }),
+    ]),
+    expect: { bodies: 2, volume: (gearArea({ kind: "rack", module: 1.5, teeth: 20 }, 6) + gearArea({ module: 1.5, teeth: 16 }) - PI * 6.25) * 8 },
   },
 ];

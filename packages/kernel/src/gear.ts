@@ -3,7 +3,7 @@
  * here it becomes wires on the gear's plane, swept straight up (spur), lofted through turned
  * sections (helical, herringbone), and given a bore and hub. Faces are tagged by where they lie:
  * `gr1.flank`, `gr1.tip`, `gr1.root`, `gr1.start_cap`, `gr1.end_cap`, `gr1.bore`, `gr1.hub`,
- * `gr1.rim` (ring gears), `gr1.back` and `gr1.end` (racks).
+ * `gr1.chamfer`, `gr1.rim` (ring gears), `gr1.back` and `gr1.end` (racks).
  */
 
 import {
@@ -115,8 +115,47 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
     throw new FeatureError("could not build the gear", "try fewer teeth or a smaller helix angle");
   }
 
-  // Hub and bore (spur gears), along the axis through the centre.
   const axisAt = (z: number): Vec3 => lift(toWorld(frame, [cx, cy]), z);
+  // Tooth chamfer: keep what lies inside a cylinder at the tip circle with 45° chamfers at both
+  // ends (ring gears: outside a cone-ended hole at their inner tip circle).
+  const chamfer = f.chamfer ?? 0;
+  if (chamfer > 0) {
+    if (params.kind === "rack") throw new FeatureError("racks have no tooth chamfer yet");
+    if (chamfer > module) throw new FeatureError(`the tooth chamfer must be at most the module (${module} mm)`);
+    if (2 * chamfer >= width) throw new FeatureError("the tooth chamfer must be less than half the width");
+    const ra = dims.da / 2;
+    const e = 0.5;
+    const rz: Pt[] =
+      params.kind === "internal"
+        ? [
+            [ra + chamfer, -e],
+            [(f.rim ?? dims.df + 4 * module) / 2 + 1, -e],
+            [(f.rim ?? dims.df + 4 * module) / 2 + 1, width + e],
+            [ra + chamfer, width + e],
+            [ra + chamfer, width],
+            [ra - e, width - chamfer - e],
+            [ra - e, chamfer + e],
+            [ra + chamfer, 0],
+          ]
+        : [
+            [0, -e],
+            [ra - chamfer, -e],
+            [ra - chamfer, 0],
+            [ra + e, chamfer + e],
+            [ra + e, width - chamfer - e],
+            [ra - chamfer, width],
+            [ra - chamfer, width + e],
+            [0, width + e],
+          ];
+    const at = (r: number, z: number): Vec3 => lift(toWorld(frame, [cx + r, cy]), z);
+    const loop = rz.map((p, i) => ({ part: "flank" as const, pts: [p, rz[(i + 1) % rz.length]!] }));
+    const face = arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(wire(oc, arena, loop, ([r, z]) => at(r, z)), true)).Face());
+    const rev = arena.track(new oc.BRepPrimAPI_MakeRevol(face, arena.track(new oc.gp_Ax1(arena.track(new oc.gp_Pnt(...axisAt(0))), arena.track(new oc.gp_Dir(...n)))), 2 * Math.PI, false));
+    if (!rev.IsDone()) throw new FeatureError("could not chamfer the teeth");
+    solid = boolOp(oc, arena, "common", solid, arena.track(rev.Shape()));
+  }
+
+  // Hub and bore (spur gears), along the axis through the centre.
   const cylinder = (r: number, z0: number, z1: number) =>
     arena.track(arena.track(new oc.BRepPrimAPI_MakeCylinder(axis2(oc, arena, axisAt(z0), n, frame.u), r, z1 - z0)).Shape());
   let zLo = 0;
@@ -170,7 +209,7 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
   }
 
   const body = new Body(oc, arena, f.id, solid);
-  body.faceTags = tagFaces(body, f.id, params, dims, { frame, center: place.center, rotation: place.rotation, width, boreR, rim: f.rim });
+  body.faceTags = tagFaces(body, f.id, params, dims, { frame, center: place.center, rotation: place.rotation, width, boreR, rim: f.rim, chamfer });
   return { body, record: { params, center: place.center, rotation: place.rotation, width, frame } };
 }
 
@@ -179,7 +218,7 @@ function tagFaces(
   id: string,
   p: GearParams,
   dims: ReturnType<typeof gearDims>,
-  at: { frame: PlaneFrame; center: Pt; rotation: number; width: number; boreR: number; rim: number | undefined },
+  at: { frame: PlaneFrame; center: Pt; rotation: number; width: number; boreR: number; rim: number | undefined; chamfer: number },
 ): string[][] {
   const { frame, center, width } = at;
   const tol = Math.max(0.02 * p.module, 0.01);
@@ -214,6 +253,8 @@ function tagFaces(
     const rho = Math.hypot(u, v);
     if (at.boreR > 0 && rho < at.boreR + tol) return name("bore");
     if (w < -1e-6 || w > width + 1e-6) return name("hub");
+    // Chamfer cones: near an end, around the tip circle, not flat.
+    if (at.chamfer > 0 && !info.planar && (w < at.chamfer + tol || w > width - at.chamfer - tol) && Math.abs(rho - dims.da / 2) < at.chamfer + tol) return name("chamfer");
     if (p.kind === "internal" && Math.abs(rho - (at.rim ?? dims.df + 4 * m) / 2) < tol) return name("rim");
     if (Math.abs(rho - dims.da / 2) < tol) return name("tip");
     if (Math.abs(rho - dims.df / 2) < tol) return name("root");
@@ -256,8 +297,8 @@ function axis2(oc: OC, arena: Arena, origin: Vec3, dir: Vec3, xdir: Vec3) {
   return arena.track(new oc.gp_Ax2(arena.track(new oc.gp_Pnt(...origin)), arena.track(new oc.gp_Dir(...dir)), arena.track(new oc.gp_Dir(...xdir))));
 }
 
-function boolOp(oc: OC, arena: Arena, op: "fuse" | "cut", a: TopoDS_Shape, b: TopoDS_Shape): TopoDS_Shape {
-  const Algo = op === "fuse" ? oc.BRepAlgoAPI_Fuse : oc.BRepAlgoAPI_Cut;
+function boolOp(oc: OC, arena: Arena, op: "fuse" | "cut" | "common", a: TopoDS_Shape, b: TopoDS_Shape): TopoDS_Shape {
+  const Algo = op === "fuse" ? oc.BRepAlgoAPI_Fuse : op === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
   const algo = arena.track(new Algo(a, b));
   if (!algo.IsDone() || algo.HasErrors()) throw new FeatureError(`gear ${op} failed`);
   return arena.track(algo.Shape());
