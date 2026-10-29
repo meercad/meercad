@@ -18,7 +18,6 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A11CE0000000000000000001 /* PencilPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000002 /* PencilPlugin.swift */; };
 		A11CE00000000000000005A1 /* ScanPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005A2 /* ScanPlugin.swift */; };
-		A11CE00000000000000005A9 /* CopilotPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005AA /* CopilotPlugin.swift */; };
 		A11CE00000000000000005A7 /* MeshSimplify.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005A8 /* MeshSimplify.swift */; };
 		A11CE00000000000000005A5 /* LidarScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005A6 /* LidarScan.swift */; };
 		A11CE00000000000000005A3 /* VoxelField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005A4 /* VoxelField.swift */; };
@@ -40,7 +39,6 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		A11CE0000000000000000002 /* PencilPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilPlugin.swift; sourceTree = "<group>"; };
 		A11CE00000000000000005A2 /* ScanPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanPlugin.swift; sourceTree = "<group>"; };
-		A11CE00000000000000005AA /* CopilotPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotPlugin.swift; sourceTree = "<group>"; };
 		A11CE00000000000000005A8 /* MeshSimplify.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshSimplify.swift; sourceTree = "<group>"; };
 		A11CE00000000000000005A6 /* LidarScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LidarScan.swift; sourceTree = "<group>"; };
 		A11CE00000000000000005A4 /* VoxelField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxelField.swift; sourceTree = "<group>"; };
@@ -83,7 +81,6 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				A11CE0000000000000000002 /* PencilPlugin.swift */,
 				A11CE00000000000000005A2 /* ScanPlugin.swift */,
-				A11CE00000000000000005AA /* CopilotPlugin.swift */,
 				A11CE00000000000000005A8 /* MeshSimplify.swift */,
 				A11CE00000000000000005A6 /* LidarScan.swift */,
 				A11CE00000000000000005A4 /* VoxelField.swift */,
@@ -187,7 +184,6 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A11CE0000000000000000001 /* PencilPlugin.swift in Sources */,
 				A11CE00000000000000005A1 /* ScanPlugin.swift in Sources */,
-				A11CE00000000000000005A9 /* CopilotPlugin.swift in Sources */,
 				A11CE00000000000000005A7 /* MeshSimplify.swift in Sources */,
 				A11CE00000000000000005A5 /* LidarScan.swift in Sources */,
 				A11CE00000000000000005A3 /* VoxelField.swift in Sources */,

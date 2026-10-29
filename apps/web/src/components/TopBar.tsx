@@ -10,7 +10,6 @@ import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink }
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
-import { CopilotButton } from "./Copilot";
 import { TabStrip } from "./Tabs";
 import { showMenu } from "./Menu";
 
@@ -120,7 +119,6 @@ export function TopBar() {
         <button className="icon-btn" onClick={redo} disabled={!canRedo || inDialog} title="Redo">
           <Redo2 />
         </button>
-        <CopilotButton />
         <button className="icon-btn" ref={moreBtn} onClick={openMore} title="File, settings, help">
           <Ellipsis />
         </button>
@@ -151,7 +149,6 @@ export function TopBar() {
           <McpButton />
         </span>
       )}
-      <CopilotButton />
       <button className="icon-btn" ref={moreBtn} onClick={openMore} title="More: settings, help, projects">
         <Ellipsis />
       </button>
