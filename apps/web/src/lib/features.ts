@@ -3,6 +3,7 @@ import {
   ArrowUpFromLine,
   Bolt,
   Box,
+  Cog,
   Combine,
   Copy,
   FileUp,
@@ -35,6 +36,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   chamfer: { label: "Chamfer", icon: Triangle, shortcut: "C", hint: "Bevel edges" },
   shell: { shortcut: "H", label: "Shell", icon: Shell, hint: "Hollow a body, removing selected faces" },
   thread: { shortcut: "T", label: "Thread", icon: Bolt, hint: "ISO metric thread in a hole or on a shaft" },
+  gear: { shortcut: "G", label: "Gear", icon: Cog, hint: "Involute gear, ring gear or rack; adds the mating gear at the right distance" },
   linear_pattern: { shortcut: "L", label: "Linear pattern", icon: Grid3x3, hint: "Repeat features or bodies along a direction" },
   circular_pattern: { shortcut: "O", label: "Circular pattern", icon: Orbit, hint: "Repeat features or bodies around an axis" },
   mirror: { shortcut: "I", label: "Mirror", icon: SquareSplitHorizontal, hint: "Mirror features or bodies about a plane" },
@@ -48,7 +50,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -72,6 +74,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, faces: [], thickness: 2 };
     case "thread":
       return { id, op, face: { face: "" } };
+    case "gear":
+      return { id, op, kind: "spur", module: 1.5, teeth: 20, width: 8, plane: { ref: "origin.XY" }, mode: "new_body" };
     case "linear_pattern":
       return { id, op, source: { features: [] }, direction: { ref: "origin.X" }, count: 3, spacing: 20 };
     case "circular_pattern":

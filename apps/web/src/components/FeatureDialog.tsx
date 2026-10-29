@@ -1,11 +1,12 @@
-import { ArrowLeftRight, Check, X } from "lucide-react";
+import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
-import { METRIC_THREADS, parseMetric } from "@meercad/model";
-import { FEATURES, featureName, partName } from "../lib/features";
+import { gearDims, METRIC_THREADS, parseMetric } from "@meercad/model";
+import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
+import { gearParams, pairInfo } from "../lib/gears";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
-import { cancelDialog, commitDialog, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
+import { cancelDialog, commitDialog, openDraft, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
 import { Kbd } from "./Kbd";
 
@@ -374,6 +375,223 @@ function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string,
   );
 }
 
+const EMPTY_PARAMS: Record<string, number> = {};
+const mm = (v: number) => `${v.toFixed(2).replace(/\.?0+$/, "")} mm`;
+
+/** Gear: kind, size, placement or partner, helix, bore and hub, with the resulting sizes. */
+function GearFields({ f, set }: { f: Of<"gear">; set: (patch: Record<string, unknown>) => void }) {
+  const features = useApp((s) => s.doc.features);
+  const values = useApp((s) => s.output?.report.params) ?? EMPTY_PARAMS;
+  const others = features.filter((x): x is Of<"gear"> => x.op === "gear" && x.id !== f.id);
+  const p = gearParams(f, features, values);
+  const dims = p ? gearDims(p) : null;
+  const pair = pairInfo(f, features, values);
+  const meshing = !!f.meshWith;
+  const addMate = () => {
+    const teeth = typeof f.teeth === "number" ? f.teeth * 2 : 30;
+    if (!commitDialog()) return;
+    const mate = draftFeature("gear", useApp.getState().doc) as Of<"gear">;
+    // A ring gear or rack gets a gear; a gear gets a gear twice its size.
+    openDraft({ ...mate, module: undefined, plane: undefined, teeth: f.kind === "spur" ? teeth : 18, width: f.width, meshWith: { gear: f.id, direction: 0 } } as Feature);
+  };
+  return (
+    <>
+      <Seg
+        value={f.kind}
+        options={[["spur", "Gear"], ["internal", "Ring gear"], ["rack", "Rack"]]}
+        onChange={(kind) => set({ kind, rim: undefined, ...(kind !== "spur" ? { bore: undefined, hub: undefined, profileShift: undefined } : {}) })}
+      />
+      {others.length ? (
+        <Field label="Meshes with">
+          <select className="field" value={f.meshWith?.gear ?? ""} onChange={(e) => set(e.target.value ? { meshWith: { gear: e.target.value, direction: f.meshWith?.direction ?? 0 }, module: undefined, pressureAngle: undefined, helix: undefined, herringbone: undefined, plane: undefined, center: undefined, rotation: undefined } : { meshWith: undefined, module: p?.module ?? 1.5, plane: { ref: "origin.XY" } })}>
+            <option value="">Nothing (place freely)</option>
+            {others.map((g) => (
+              <option key={g.id} value={g.id}>
+                {featureName(g)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      <div className="row">
+        <Field label="Module">
+          {meshing ? <div className="field muted">{p ? mm(p.module) : "–"}</div> : <ExprInput value={f.module} autoFocus onCommit={(module) => set({ module })} onLive={(module) => set({ module })} />}
+        </Field>
+        <Field label="Teeth">
+          <ExprInput value={f.teeth} unit="" integer onCommit={(teeth) => set({ teeth })} onLive={(teeth) => set({ teeth })} />
+        </Field>
+        <Field label="Width">
+          <ExprInput value={f.width} onCommit={(width) => set({ width })} onLive={(width) => set({ width })} />
+        </Field>
+      </div>
+      {meshing ? (
+        f.kind === "spur" || f.kind === "internal" ? (
+          <Field label="Direction from the partner">
+            <ExprInput value={f.meshWith!.direction ?? 0} unit="deg" onCommit={(direction) => set({ meshWith: { ...f.meshWith!, direction } })} onLive={(direction) => set({ meshWith: { ...f.meshWith!, direction } })} />
+          </Field>
+        ) : null
+      ) : (
+        <>
+          <Field label="Plane">
+            <SelBox field="plane" items={[describePlane(f.plane ?? { ref: "origin.XY" })]} placeholder="Pick a plane or flat face" />
+            <PlaneButtons value={f.plane ?? { ref: "origin.XY" }} onChange={(plane) => set({ plane })} />
+          </Field>
+          <Field label="Centre (in the plane) and turn">
+            <div className="row">
+              {[0, 1].map((i) => (
+                <div key={i} style={{ flex: 1 }}>
+                  <ExprInput
+                    value={f.center?.[i] ?? 0}
+                    onCommit={(v) => set({ center: [0, 1].map((j) => (j === i ? v : (f.center?.[j] ?? 0))) })}
+                    onLive={(v) => set({ center: [0, 1].map((j) => (j === i ? v : (f.center?.[j] ?? 0))) })}
+                  />
+                </div>
+              ))}
+              <div style={{ flex: 1 }}>
+                <ExprInput value={f.rotation ?? 0} unit="deg" onCommit={(rotation) => set({ rotation: rotation === 0 ? undefined : rotation })} onLive={(rotation) => set({ rotation })} />
+              </div>
+            </div>
+          </Field>
+        </>
+      )}
+      {f.kind === "internal" ? (
+        <Field label="Outside diameter">
+          <ExprInput value={f.rim} placeholder={dims ? (dims.df + 4 * p!.module).toFixed(1) : ""} onCommit={(rim) => set({ rim })} />
+        </Field>
+      ) : f.kind === "rack" ? (
+        <Field label="Back below the teeth">
+          <ExprInput value={f.rim} placeholder={p ? String(2 * p.module) : ""} onCommit={(rim) => set({ rim })} />
+        </Field>
+      ) : null}
+      {!meshing ? (
+        <div className="row">
+          <Field label="Helix angle">
+            <ExprInput value={f.helix ?? 0} unit="deg" onCommit={(helix) => set({ helix: helix === 0 ? undefined : helix })} onLive={(helix) => set({ helix })} />
+          </Field>
+          <Field label="Pressure angle">
+            <select className="field" value={String(f.pressureAngle ?? 20)} onChange={(e) => set({ pressureAngle: e.target.value === "20" ? undefined : Number(e.target.value) })}>
+              {[14.5, 20, 25].map((a) => (
+                <option key={a} value={a}>
+                  {a}°
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      ) : null}
+      {!meshing && f.helix !== undefined && f.helix !== 0 ? (
+        <label className="checkbox">
+          <input type="checkbox" checked={!!f.herringbone} onChange={(e) => set({ herringbone: e.target.checked || undefined })} /> Herringbone (both hands, no side thrust)
+        </label>
+      ) : null}
+      <div className="row">
+        <Field label="Backlash (pair)">
+          <ExprInput value={f.backlash} placeholder="0.15" onCommit={(backlash) => set({ backlash })} />
+        </Field>
+        {f.kind === "spur" ? (
+          <Field label="Profile shift">
+            <ExprInput value={f.profileShift} unit="" placeholder="0" onCommit={(profileShift) => set({ profileShift: profileShift === 0 ? undefined : profileShift })} />
+          </Field>
+        ) : null}
+      </div>
+      {f.kind === "spur" ? (
+        <>
+          <label className="checkbox">
+            <input type="checkbox" checked={!!f.bore} onChange={(e) => set({ bore: e.target.checked ? { diameter: 5, allowance: 0.15 } : undefined })} /> Bore
+          </label>
+          {f.bore ? (
+            <>
+              <Seg value={f.bore.shape ?? "round"} options={[["round", "Round"], ["d_flat", "D shaft"], ["hex", "Hex"]]} onChange={(shape) => set({ bore: { ...f.bore!, shape: shape === "round" ? undefined : shape } })} />
+              <div className="row">
+                <Field label={f.bore.shape === "hex" ? "Across flats" : "Diameter"}>
+                  <ExprInput value={f.bore.diameter} onCommit={(diameter) => set({ bore: { ...f.bore!, diameter } })} onLive={(diameter) => set({ bore: { ...f.bore!, diameter } })} />
+                </Field>
+                {f.bore.shape === "d_flat" ? (
+                  <Field label="Across the flat">
+                    <ExprInput value={f.bore.flat} placeholder="0.9 × diameter" onCommit={(flat) => set({ bore: { ...f.bore!, flat } })} />
+                  </Field>
+                ) : null}
+                <Field label="Allowance">
+                  <ExprInput value={f.bore.allowance} placeholder="0" onCommit={(allowance) => set({ bore: { ...f.bore!, allowance } })} />
+                </Field>
+              </div>
+            </>
+          ) : null}
+          <label className="checkbox">
+            <input type="checkbox" checked={!!f.hub} onChange={(e) => set({ hub: e.target.checked ? { diameter: Math.max(8, (dims?.df ?? 20) / 2), length: 5 } : undefined })} /> Hub
+          </label>
+          {f.hub ? (
+            <div className="row">
+              <Field label="Diameter">
+                <ExprInput value={f.hub.diameter} onCommit={(diameter) => set({ hub: { ...f.hub!, diameter } })} onLive={(diameter) => set({ hub: { ...f.hub!, diameter } })} />
+              </Field>
+              <Field label="Length">
+                <ExprInput value={f.hub.length} onCommit={(length) => set({ hub: { ...f.hub!, length } })} onLive={(length) => set({ hub: { ...f.hub!, length } })} />
+              </Field>
+              <Field label="Side">
+                <select className="field" value={f.hub.side ?? "front"} onChange={(e) => set({ hub: { ...f.hub!, side: e.target.value === "front" ? undefined : e.target.value } })}>
+                  <option value="front">Top</option>
+                  <option value="back">Bottom</option>
+                  <option value="both">Both</option>
+                </select>
+              </Field>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      <Field label="Result">
+        <Seg value={f.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+      {dims && p ? (
+        <div className="gear-sizes small">
+          {p.kind !== "rack" ? (
+            <>
+              <span>Pitch Ø</span>
+              <b>{mm(dims.d)}</b>
+              <span>{p.kind === "internal" ? "Inner Ø" : "Outside Ø"}</span>
+              <b>{mm(dims.da)}</b>
+              <span>Root Ø</span>
+              <b>{mm(dims.df)}</b>
+            </>
+          ) : (
+            <>
+              <span>Length</span>
+              <b>{mm(p.teeth * dims.pitch)}</b>
+            </>
+          )}
+          {pair ? (
+            <>
+              {Number.isFinite(pair.distance) ? (
+                <>
+                  <span>Centre distance</span>
+                  <b>{mm(pair.distance)}</b>
+                </>
+              ) : null}
+              <span>Ratio</span>
+              <b>1 : {pair.ratio.toFixed(3).replace(/\.?0+$/, "")}</b>
+            </>
+          ) : null}
+          {dims.span ? (
+            <>
+              <span>Span over {dims.span.k} teeth</span>
+              <b>{mm(dims.span.w)}</b>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      {dims?.warnings.map((w) => (
+        <div key={w} className="callout warn">
+          {w}
+        </div>
+      ))}
+      {f.kind !== "rack" || meshing ? null : <p className="muted small">The rack runs along the plane's first axis, its pitch line through the centre.</p>}
+      <button className="btn" onClick={addMate} disabled={!p}>
+        <Cog /> Add mating gear
+      </button>
+    </>
+  );
+}
+
 function Body({ d }: { d: DialogState }) {
   const f = d.feature;
   const set = (patch: Record<string, unknown>) => updateDraft(patch as Partial<Feature>);
@@ -492,6 +710,8 @@ function Body({ d }: { d: DialogState }) {
       );
     case "thread":
       return <ThreadFields f={f} set={set} />;
+    case "gear":
+      return <GearFields f={f} set={set} />;
     case "linear_pattern":
       return (
         <>

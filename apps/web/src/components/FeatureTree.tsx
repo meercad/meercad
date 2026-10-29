@@ -247,6 +247,7 @@ const LINKABLE: Partial<Record<Feature["op"], { field: string; label: string; un
   plane: [{ field: "offset", label: "offset", unit: "mm" }],
   linear_pattern: [{ field: "count", label: "count", unit: "" }, { field: "spacing", label: "spacing", unit: "mm" }],
   circular_pattern: [{ field: "count", label: "count", unit: "" }, { field: "angle", label: "angle", unit: "deg" }],
+  gear: [{ field: "module", label: "module", unit: "mm" }, { field: "teeth", label: "teeth", unit: "" }, { field: "width", label: "width", unit: "mm" }],
   thread: [{ field: "pitch", label: "pitch", unit: "mm" }, { field: "length", label: "length", unit: "mm" }, { field: "clearance", label: "clearance", unit: "mm" }],
 };
 

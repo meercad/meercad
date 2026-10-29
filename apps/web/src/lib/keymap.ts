@@ -14,6 +14,7 @@ export type ModelAction =
   | "chamfer"
   | "shell"
   | "thread"
+  | "gear"
   | "transform"
   | "linear_pattern"
   | "circular_pattern"
@@ -45,6 +46,7 @@ const BASE: Keymap = {
   chamfer: ["C"],
   shell: ["H"],
   thread: ["T"],
+  gear: ["G"],
   transform: ["M"],
   linear_pattern: ["L"],
   circular_pattern: ["O"],
@@ -297,7 +299,7 @@ export function actionFor<A extends Action>(e: KeyboardEvent, actions: readonly 
 }
 
 export const MODEL_ACTIONS: readonly ModelAction[] = [
-  "sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane",
+  "sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane",
   "measure", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
 ];
 export const SKETCH_ACTIONS: readonly SketchAction[] = [

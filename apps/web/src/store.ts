@@ -440,6 +440,13 @@ export function editFeature(id: string): void {
   scheduleRebuild();
 }
 
+/** Opens the dialog for a prepared draft, e.g. the mating gear of the one just added. */
+export function openDraft(feature: Feature): void {
+  if (get().dialog) cancelDialog();
+  set({ dialog: { feature, isNew: true, field: null }, selection: [] });
+  scheduleRebuild();
+}
+
 /** Opens a dialog for an already-built draft (used by drag gestures). */
 export function startDraft(feature: Feature): void {
   if (get().dialog) cancelDialog();
@@ -505,6 +512,7 @@ function firstField(op: FeatureOp): string | null {
       chamfer: "edges",
       shell: "faces",
       thread: "face",
+      gear: "plane",
       linear_pattern: "source",
       circular_pattern: "source",
       mirror: "source",
