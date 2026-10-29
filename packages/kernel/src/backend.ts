@@ -20,6 +20,7 @@ import {
   type ResolvedDraft,
   type ResolvedText,
   type ResolvedStandardPart,
+  type ResolvedAlign,
   standardShape,
   StandardPartError,
   type ResolvedShell,
@@ -117,6 +118,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return textFeature(f, ctx);
       case "standard_part":
         return standardPartFeature(f, ctx);
+      case "align":
+        return alignFeature(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -616,6 +619,69 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
   }
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/** A flat face's plane (point, outward normal) or a round face's axis, and the part it belongs to. */
+function faceGeometry(sel: FaceSelector, round: boolean, ctx: Ctx, what: string): { body: string; origin: Vec3; dir: Vec3 } {
+  const refs = resolveFaces(sel, [...ctx.prev.bodies.values()]);
+  if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new FeatureError(`${what}: pick exactly one face`);
+  const body = ctx.prev.bodies.get(refs[0]!.body)!;
+  const fi = refs[0]!.faces[0]!;
+  if (!round) {
+    const info = body.faceInfo[fi]!;
+    if (!info.planar || !info.normal) throw new FeatureError(`${what}: the face must be flat`);
+    return { body: body.bodyId, origin: body.facePoints[fi]!, dir: info.normal };
+  }
+  const surf = ctx.arena.track(new ctx.oc.BRepAdaptor_Surface(body.faces[fi]!, true));
+  const type = surf.GetType();
+  const ax = type === "GeomAbs_Cylinder" ? ctx.arena.track(ctx.arena.track(surf.Cylinder()).Axis()) : null;
+  if (!ax) throw new FeatureError(`${what}: the face must be round (a hole, a shaft)`);
+  const p = ctx.arena.track(ax.Location());
+  const d = ctx.arena.track(ax.Direction());
+  return { body: body.bodyId, origin: [p.X(), p.Y(), p.Z()], dir: [d.X(), d.Y(), d.Z()] };
+}
+
+/** Rotation about `at` that turns direction `a` onto `b` (half a turn about `fallback` when they are opposite). */
+function turnOnto(ctx: Ctx, a: Vec3, b: Vec3, at: Vec3, fallback: Vec3): gp_Trsf {
+  const dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross: Vec3 = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const len = Math.hypot(...cross);
+  if (len < 1e-12) return dot > 0 ? ctx.arena.track(new ctx.oc.gp_Trsf()) : ctx.g.rotation(at, fallback, 180);
+  return ctx.g.rotation(at, [cross[0] / len, cross[1] / len, cross[2] / len], (Math.atan2(len, dot) * 180) / Math.PI);
+}
+
+/**
+ * Align: flat faces mate (normals opposed, the moving face in the target's plane, it keeps its place
+ * within that plane) or lie flush with `flip`; round faces get the same axis (the part keeps its
+ * place along it). Then `offset` along the target's normal or axis and `angle` about it.
+ */
+function alignFeature(f: ResolvedAlign, ctx: Ctx): Omit<ModelState, "arena"> {
+  const round = "axisOf" in f.from;
+  if (round !== "axisOf" in f.to) throw new FeatureError("align needs two flat faces or two round faces");
+  const from = faceGeometry("face" in f.from ? f.from.face : f.from.axisOf, round, ctx, "the face to move");
+  const to = faceGeometry("face" in f.to ? f.to.face : f.to.axisOf, round, ctx, "the target face");
+  const bodies = f.bodies?.length ? f.bodies : [from.body];
+  if (bodies.includes(to.body)) throw new FeatureError("the target face belongs to a part being moved", "pick a face on another part");
+  const n = to.dir;
+  const want: Vec3 = round ? (f.flip ? [-n[0], -n[1], -n[2]] : n) : f.flip ? n : [-n[0], -n[1], -n[2]];
+  // Any direction across the moving face, for half turns.
+  const across: Vec3 = Math.abs(from.dir[0]) < 0.9 ? unit([0, -from.dir[2], from.dir[1]]) : unit([-from.dir[2], 0, from.dir[0]]);
+  const rot = turnOnto(ctx, from.dir, want, from.origin, across);
+  // Where the face's point (or the axis point) ends up after turning: it stays put, being the centre.
+  const p = from.origin;
+  const d: Vec3 = [to.origin[0] - p[0], to.origin[1] - p[1], to.origin[2] - p[2]];
+  const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+  const off = f.offset ?? 0;
+  // Faces: move along the normal onto the plane. Axes: move across onto the line.
+  const move: Vec3 = round ? [d[0] - n[0] * along + n[0] * off, d[1] - n[1] * along + n[1] * off, d[2] - n[2] * along + n[2] * off] : [n[0] * (along + off), n[1] * (along + off), n[2] * (along + off)];
+  const combined = ctx.g.translation(move);
+  combined.Multiply(rot);
+  if (f.angle) {
+    const spin = ctx.g.rotation([p[0] + move[0], p[1] + move[1], p[2] + move[2]], n, f.angle);
+    spin.Multiply(combined);
+    return moveBodies(ctx, { id: f.id, bodies } as ResolvedTransform, new Map(ctx.prev.bodies), spin);
+  }
+  return moveBodies(ctx, { id: f.id, bodies } as ResolvedTransform, new Map(ctx.prev.bodies), combined);
 }
 
 /** Standard parts: one new part per point (ids np1, np1_2, …). */

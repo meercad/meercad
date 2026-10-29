@@ -142,7 +142,7 @@ function useEntries(): RailEntry[] {
       id: "transform",
       icon: Move3d,
       label: "Transform",
-      tools: [feature("transform", activeOp), feature("linear_pattern", activeOp), feature("circular_pattern", activeOp), feature("mirror", activeOp)],
+      tools: [feature("transform", activeOp), feature("align", activeOp), feature("linear_pattern", activeOp), feature("circular_pattern", activeOp), feature("mirror", activeOp)],
     },
     "sep",
     {

@@ -24,6 +24,8 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     profiles: ["region", "sketch_curve", "face"],
     path: ["sketch_curve"],
     curves: ["sketch_curve"],
+    from: ["face"],
+    to: ["face"],
     axis: ["sketch_curve", "edge"],
     direction: ["sketch_curve", "edge"],
     direction2: ["sketch_curve", "edge"],
@@ -97,6 +99,14 @@ function handlePick(p: Pick, d: DialogState): void {
           if (fs) item = { face: fs };
         }
         if (item) g.profiles = toggle(g.profiles, item);
+        break;
+      }
+      case "from":
+      case "to": {
+        // Flat faces mate; round ones line up by their axes.
+        if (g.op !== "align" || p.kind !== "face") break;
+        const fs = faceSelectorForPick(p, meshes);
+        if (fs) g[field] = p.normal ? { face: fs } : { axisOf: fs };
         break;
       }
       case "curves": {
@@ -199,8 +209,8 @@ function handlePick(p: Pick, d: DialogState): void {
     return g as Feature;
   });
   // Single-valued fields advance to the next field automatically.
-  if (["axis", "direction", "plane", "base", "neutral", "target"].includes(field)) {
-    const next = f.op === "boolean" && field === "target" ? "tools" : (f.op === "hole" || f.op === "standard_part") && field === "plane" ? "points" : null;
+  if (["axis", "direction", "plane", "base", "neutral", "target", "from", "to"].includes(field)) {
+    const next = f.op === "align" && field === "from" ? "to" : f.op === "boolean" && field === "target" ? "tools" : (f.op === "hole" || f.op === "standard_part") && field === "plane" ? "points" : null;
     setDialogField(next);
   }
 }
@@ -1013,6 +1023,35 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "align": {
+      const desc = (v: Of<"align">["from"]) => {
+        const sel = "face" in v ? v.face : v.axisOf;
+        if ("face" in sel && !sel.face) return [];
+        return [`${"axisOf" in v ? "Axis of " : ""}${describeFaceSelector(sel)}`];
+      };
+      return (
+        <>
+          <Field label="Face of the part to move">
+            <SelBox field="from" items={desc(f.from)} placeholder="Pick a flat face, or a round one for its axis" />
+          </Field>
+          <Field label="Onto">
+            <SelBox field="to" items={desc(f.to)} placeholder="Pick the face on the other part" />
+          </Field>
+          <div className="row">
+            <Field label="Gap">
+              <ExprInput value={f.offset ?? 0} onCommit={(offset) => set({ offset: offset === 0 ? undefined : offset })} onLive={(offset) => set({ offset })} />
+            </Field>
+            <Field label="Turn">
+              <ExprInput value={f.angle ?? 0} unit="deg" onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })} />
+            </Field>
+          </div>
+          <button className={`btn ${f.flip ? "primary" : ""}`} onClick={() => set({ flip: f.flip ? undefined : true })}>
+            <ArrowLeftRight /> {"axisOf" in f.from ? "Reverse direction" : "Flush instead of facing"}
+          </button>
+          <p className="muted small">Flat faces end up touching, facing each other; round faces (a shaft, a hole) share their axis. The part keeps its place along the other directions.</p>
+        </>
+      );
+    }
     case "standard_part": {
       const sizes = STANDARD_SIZES[f.kind];
       return (

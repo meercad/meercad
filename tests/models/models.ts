@@ -626,4 +626,22 @@ export const MODELS: TestModel[] = [
       return { bodies: 4, volume: [plate[0] + 2 * screw + bearing, plate[1] + 2 * screw + bearing] as [number, number] };
     })(),
   },
+  {
+    file: "33 Zusammenbau mit Ausrichten",
+    name: "Assembly by aligning",
+    look: "A 40 × 40 × 10 base with a Ø8 hole, a Ø8 × 30 pin standing in the hole (its end flush with the base's bottom, 20 mm sticking out) and a 10 × 10 × 5 block lying on the base's top, turned 45°. All three were modelled lying around and moved into place by align steps.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, [...rect("b", 0, 0, 40, 40), ...circle("h", 20, 20, 4)]),
+      { id: "ex1", op: "extrude", name: "Base", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
+      sketch("sk2", { ref: "origin.XY" }, rect("k", 60, 0, 10, 10)),
+      { id: "ex2", op: "extrude", name: "Block", profile: { sketch: "sk2" }, extent: "blind", distance: 5, mode: "new_body" },
+      { id: "pl1", op: "plane", name: "Pin plane", base: { ref: "origin.YZ" }, offset: 60 },
+      sketch("sk3", { ref: "pl1" }, circle("p", -30, 4, 4)),
+      { id: "ex3", op: "extrude", name: "Pin", profile: { sketch: "sk3" }, extent: "blind", distance: 30, mode: "new_body" },
+      { id: "al1", op: "align", name: "Pin into hole", from: { axisOf: { face: "ex3.side[sk3.p]" } }, to: { axisOf: { face: "ex1.side[sk1.h]" } } },
+      { id: "al2", op: "align", name: "Pin end flush", from: { face: { face: "ex3.start_cap" } }, to: { face: { face: "ex1.start_cap" } }, flip: true },
+      { id: "al3", op: "align", name: "Block on top", from: { face: { face: "ex2.start_cap" } }, to: { face: { face: "ex1.end_cap" } }, angle: 45 },
+    ]),
+    expect: { bodies: 3, volume: 40 * 40 * 10 - PI * 16 * 10 + PI * 16 * 30 + 500 },
+  },
 ];

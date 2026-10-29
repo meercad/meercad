@@ -279,6 +279,23 @@ export interface TransformFeature extends FeatureBase {
   copy?: boolean;
 }
 
+/**
+ * Moves a part so that one of its faces mates with a face of another part (flat faces: they touch,
+ * facing each other; `flip` makes them face the same way, flush) or so that a round face's axis
+ * lines up with another's (a shaft in a hole, a screw in its hole). `offset` leaves a gap along the
+ * target's normal or axis; `angle` turns the part about it afterwards.
+ */
+export interface AlignFeature extends FeatureBase {
+  op: "align";
+  /** Parts to move; default the part `from` belongs to. */
+  bodies?: string[];
+  from: { face: FaceSelector } | { axisOf: FaceSelector };
+  to: { face: FaceSelector } | { axisOf: FaceSelector };
+  offset?: Expr;
+  angle?: Expr;
+  flip?: boolean;
+}
+
 /** Removes parts from the model from this point on (earlier features still see them). */
 export interface DeleteFeature extends FeatureBase {
   op: "delete";
@@ -464,6 +481,7 @@ export type Feature =
   | DraftFeature
   | TextFeature
   | StandardPartFeature
+  | AlignFeature
   | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature

@@ -151,6 +151,18 @@ export const definitions: Record<string, Json> = {
       { profile: ref("profile"), axis: ref("axisRef"), angle: ref("expr"), symmetric: bool, mode: ref("mode"), targets: arr(id) },
       ["profile", "axis", "angle", "mode"],
     ),
+    align: feature(
+      "align",
+      {
+        bodies: arr(id),
+        from: oneOf(obj({ face: ref("faceSelector") }, ["face"]), obj({ axisOf: ref("faceSelector") }, ["axisOf"])),
+        to: oneOf(obj({ face: ref("faceSelector") }, ["face"]), obj({ axisOf: ref("faceSelector") }, ["axisOf"])),
+        offset: ref("expr"),
+        angle: ref("expr"),
+        flip: bool,
+      },
+      ["from", "to"],
+    ),
     standard_part: feature(
       "standard_part",
       {
