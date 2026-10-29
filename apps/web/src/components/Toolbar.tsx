@@ -13,6 +13,8 @@ import {
   Layers,
   Link2,
   ScanLine,
+  Orbit,
+  Mountain,
   MousePointer2,
   Move3d,
   Ruler,
@@ -142,7 +144,19 @@ function useEntries(): RailEntry[] {
       active: measure,
       run: () => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null })),
     },
-    ...(scan ? [{ id: "scan", icon: ScanLine, label: "Scan", hint: "Scan a real object with the camera", run: () => void scanObject() }] : []),
+    ...(scan
+      ? [
+          {
+            id: "scan",
+            icon: ScanLine,
+            label: "Scan",
+            tools: [
+              { id: "scan-object", icon: Orbit, label: "Scan object", hint: "Walk around an object; photos become a part", run: () => void scanObject("object") },
+              { id: "scan-surface", icon: Mountain, label: "Scan surface", hint: "Sweep over a surface with LiDAR, e.g. a recess a part must fit into", run: () => void scanObject("surface") },
+            ],
+          },
+        ]
+      : []),
     { id: "import", icon: Import, label: "Import", kbd: "Mod+O", hint: "STEP, STL, 3MF, OBJ, DXF or SVG", run: () => void importFile() },
   ];
 }

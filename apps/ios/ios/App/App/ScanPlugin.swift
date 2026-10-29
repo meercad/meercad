@@ -24,6 +24,25 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "imported", returnType: CAPPluginReturnPromise),
     ]
 
+    private func scanSurface(_ call: CAPPluginCall) {
+        Task { @MainActor [weak self] in
+            guard #available(iOS 17, *), ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) else {
+                return call.reject("Scanning a surface needs an iPhone or iPad with LiDAR and iOS 17 or later.")
+            }
+            guard let self, let host = self.bridge?.viewController else { return call.reject("no view") }
+            let view = SurfaceScanView(scanner: SurfaceScanner()) { result in
+                host.dismiss(animated: true)
+                switch result {
+                case .success(let r): call.resolve(r)
+                case .failure(let e): call.reject(e.localizedDescription, (e as? ScanError)?.code)
+                }
+            }
+            let controller = UIHostingController(rootView: view)
+            controller.modalPresentationStyle = .fullScreen
+            host.present(controller, animated: true)
+        }
+    }
+
     /// The web app has the scan as a part: its photos can go, and it is no longer offered as unfinished.
     @objc func imported(_ call: CAPPluginCall) {
         guard let path = call.getString("folder") else { return call.reject("no folder") }
@@ -47,6 +66,8 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
             let scan = objectCapture
             call.resolve([
                 "scan": scan,
+                // The surface scan needs only LiDAR depth.
+                "surface": lidar,
                 "objectCapture": objectCapture,
                 "lidar": lidar,
                 "sceneMesh": sceneMesh,
@@ -59,6 +80,7 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func scan(_ call: CAPPluginCall) {
+        if call.getString("mode") == "surface" { return scanSurface(call) }
         Task { @MainActor [weak self] in
             guard #available(iOS 18, *), ObjectCaptureSession.isSupported else {
                 return call.reject("Scanning needs an iPhone or iPad with LiDAR and iOS 18 or later.")
