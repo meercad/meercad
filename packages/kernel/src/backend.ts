@@ -36,6 +36,7 @@ import { Arena } from "./arena.js";
 import { Body, listToArray } from "./body.js";
 import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
+import { gearBody } from "./gear.js";
 import { threadBody } from "./thread.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
@@ -57,7 +58,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
   ) {}
 
   initialState(): ModelState {
-    return { bodies: new Map(), sketches: new Map(), planes: new Map(), tools: new Map(), references: new Map(), arena: new Arena() };
+    return { bodies: new Map(), sketches: new Map(), planes: new Map(), tools: new Map(), references: new Map(), gears: new Map(), arena: new Arena() };
   }
 
   dispose(state: ModelState): void {
@@ -96,6 +97,13 @@ export class OcctBackend implements KernelBackend<ModelState> {
       case "thread": {
         const { body } = threadBody(ctx.oc, ctx.arena, ctx.prev.bodies, f);
         return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+      }
+      case "gear": {
+        const partner = f.meshWith ? ctx.prev.gears.get(f.meshWith.gear) : undefined;
+        if (f.meshWith && !partner) throw new FeatureError(`gear "${f.meshWith.gear}" not found`);
+        const frame = partner ? partner.frame : planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
+        const { body, record } = gearBody(ctx.oc, ctx.arena, f, frame, partner);
+        return { ...applyTool(ctx, f.id, body, f.mode, f.targets), gears: new Map(ctx.prev.gears).set(f.id, record) };
       }
       case "linear_pattern":
       case "circular_pattern":

@@ -161,6 +161,14 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "thread":
         if ("select" in f.face && f.face.of !== undefined) earlier(f.face.of, at, "selector");
         break;
+      case "gear":
+        if (f.meshWith) earlier(f.meshWith.gear, at, "meshWith", ["gear"]);
+        else if (f.module === undefined) errors.push(`${at}: a gear needs a module (or meshWith)`);
+        if (f.plane) planeSpec(f.plane, at);
+        if (f.kind !== "spur" && f.bore) errors.push(`${at}: only spur gears take a bore`);
+        if (f.kind !== "spur" && f.hub) errors.push(`${at}: only spur gears take a hub`);
+        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        break;
       case "linear_pattern":
       case "circular_pattern":
       case "mirror": {

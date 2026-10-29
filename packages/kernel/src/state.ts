@@ -2,6 +2,7 @@ import type { BooleanMode } from "@meercad/schema";
 import type { PlaneFrame, Region, SolvedSketch } from "@meercad/sketch";
 import type { Arena } from "./arena.js";
 import type { Body } from "./body.js";
+import type { GearRecord } from "./gear.js";
 
 export interface SketchResult {
   id: string;
@@ -28,6 +29,8 @@ export interface ModelState {
   readonly planes: ReadonlyMap<string, PlaneFrame>;
   readonly tools: ReadonlyMap<string, ToolRecord>;
   readonly references: ReadonlyMap<string, ReferenceMesh>;
+  /** Gears by feature id, for gears that mesh with them. */
+  readonly gears: ReadonlyMap<string, GearRecord>;
   /** Objects created by the feature that produced this state. */
   readonly arena: Arena;
 }

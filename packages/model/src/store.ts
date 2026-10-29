@@ -94,6 +94,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     chamfer: "ch",
     shell: "sh",
     thread: "th",
+    gear: "gr",
     linear_pattern: "lp",
     circular_pattern: "cp",
     mirror: "mi",

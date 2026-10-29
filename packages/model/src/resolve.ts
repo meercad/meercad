@@ -6,6 +6,7 @@ import type {
   ExtrudeFeature,
   Feature,
   FilletFeature,
+  GearFeature,
   LinearPatternFeature,
   PlaneFeature,
   RevolveFeature,
@@ -31,6 +32,15 @@ export type ResolvedShell = R<ShellFeature, "thickness">;
 export type ResolvedThread = R<ThreadFeature, "pitch" | "length" | "clearance">;
 export type ResolvedLinearPattern = R<LinearPatternFeature, "count" | "spacing" | "count2" | "spacing2">;
 export type ResolvedCircularPattern = R<CircularPatternFeature, "count" | "angle">;
+export type ResolvedGear = R<
+  Omit<GearFeature, "center" | "meshWith" | "bore" | "hub">,
+  "module" | "teeth" | "width" | "pressureAngle" | "profileShift" | "helix" | "backlash" | "clearance" | "rotation" | "rim"
+> & {
+  center?: [number, number];
+  meshWith?: { gear: string; direction?: number };
+  bore?: { diameter: number; allowance?: number; shape?: "round" | "d_flat" | "hex"; flat?: number };
+  hub?: { diameter: number; length: number; side?: "front" | "back" | "both" };
+};
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
   | ResolvedTransform
@@ -42,6 +52,7 @@ export type ResolvedFeature =
   | ResolvedChamfer
   | ResolvedShell
   | ResolvedThread
+  | ResolvedGear
   | ResolvedLinearPattern
   | ResolvedCircularPattern
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" }>;
@@ -82,6 +93,28 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return { ...f, thickness: ev("thickness", f.thickness) };
     case "thread":
       return { ...f, pitch: opt("pitch", f.pitch), length: opt("length", f.length), clearance: opt("clearance", f.clearance) };
+    case "gear": {
+      const { center, meshWith, bore, hub, ...rest } = f;
+      const teeth = Math.round(ev("teeth", f.teeth));
+      if (teeth < (f.kind === "rack" ? 1 : 4) || teeth > 1000) throw new ExprError(`teeth: must be between ${f.kind === "rack" ? 1 : 4} and 1000`);
+      return {
+        ...rest,
+        module: opt("module", f.module),
+        teeth,
+        width: ev("width", f.width),
+        pressureAngle: opt("pressureAngle", f.pressureAngle),
+        profileShift: opt("profileShift", f.profileShift),
+        helix: opt("helix", f.helix),
+        backlash: opt("backlash", f.backlash),
+        clearance: opt("clearance", f.clearance),
+        rotation: opt("rotation", f.rotation),
+        rim: opt("rim", f.rim),
+        ...(center ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] } : {}),
+        ...(meshWith ? { meshWith: { gear: meshWith.gear, direction: opt("meshWith.direction", meshWith.direction) } } : {}),
+        ...(bore ? { bore: { ...bore, diameter: ev("bore.diameter", bore.diameter), allowance: opt("bore.allowance", bore.allowance), flat: opt("bore.flat", bore.flat) } } : {}),
+        ...(hub ? { hub: { ...hub, diameter: ev("hub.diameter", hub.diameter), length: ev("hub.length", hub.length) } } : {}),
+      };
+    }
     case "linear_pattern":
       return { ...f, count: count("count", f.count)!, spacing: ev("spacing", f.spacing), count2: count("count2", f.count2), spacing2: opt("spacing2", f.spacing2) };
     case "circular_pattern":
@@ -110,6 +143,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     chamfer: ["distance"],
     shell: ["thickness"],
     thread: ["pitch", "length", "clearance"],
+    gear: ["module", "teeth", "width", "pressureAngle", "profileShift", "helix", "backlash", "clearance", "rotation", "rim"],
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
   };
@@ -117,6 +151,16 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
     const rot = g["rotate"] as { angle: Expr } | undefined;
     if (rot) rot.angle = fn(rot.angle);
+  }
+  if (f.op === "gear") {
+    if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
+    const nested = (o: unknown, ks: string[]) => {
+      const r = o as Record<string, Expr> | undefined;
+      if (r) for (const k of ks) if (r[k] !== undefined) r[k] = fn(r[k]);
+    };
+    nested(g["meshWith"], ["direction"]);
+    nested(g["bore"], ["diameter", "allowance", "flat"]);
+    nested(g["hub"], ["diameter", "length"]);
   }
   for (const k of keys[f.op] ?? []) if (g[k] !== undefined) g[k] = fn(g[k] as Expr);
   if (f.op === "sketch") {

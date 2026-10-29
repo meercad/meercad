@@ -178,6 +178,47 @@ export interface ThreadFeature extends FeatureBase {
   leftHanded?: boolean;
 }
 
+/**
+ * Involute gear, ring gear or rack built from its parameters (ISO 21771 notation). It sits on a
+ * plane with its axis along the plane's normal; `meshWith` places it in mesh with an earlier gear.
+ */
+export interface GearFeature extends FeatureBase {
+  op: "gear";
+  kind: "spur" | "internal" | "rack";
+  /** Normal module, mm. Taken from the partner with `meshWith`. */
+  module?: Expr;
+  /** Number of teeth (rack: teeth along its length). */
+  teeth: Expr;
+  /** Face width along the axis. */
+  width: Expr;
+  /** Degrees, default 20. Taken from the partner with `meshWith`. */
+  pressureAngle?: Expr;
+  /** Profile shift coefficient x (spur gears), default 0. */
+  profileShift?: Expr;
+  /** Helix angle in degrees, + right hand, − left hand; default 0. With `meshWith`, follows the partner. */
+  helix?: Expr;
+  herringbone?: boolean;
+  /** Circumferential backlash of the pair, mm, default 0.15; each gear takes half. */
+  backlash?: Expr;
+  /** Tip clearance factor c*, default 0.25. */
+  clearance?: Expr;
+  /** Default origin.XY. Taken from the partner with `meshWith`. */
+  plane?: PlaneSpec;
+  /** Centre in plane coordinates (rack: middle of its pitch line). Ignored with `meshWith`. */
+  center?: [Expr, Expr];
+  /** Turn about the axis, degrees: where tooth 1 points (rack: direction of its length). */
+  rotation?: Expr;
+  /** Mesh with an earlier gear: `direction` (degrees) is the line from its centre to this one. */
+  meshWith?: { gear: string; direction?: Expr };
+  /** Ring gear: outside diameter. Rack: height of its back below the teeth. */
+  rim?: Expr;
+  /** Bore through the gear; `allowance` is added for printed fits; `flat` = across the flat (d_flat). */
+  bore?: { diameter: Expr; allowance?: Expr; shape?: "round" | "d_flat" | "hex"; flat?: Expr };
+  hub?: { diameter: Expr; length: Expr; side?: "front" | "back" | "both" };
+  mode: BooleanMode;
+  targets?: string[];
+}
+
 /** What a pattern or mirror copies: the geometry added/removed by features, or whole bodies. */
 export type PatternSource = { features: string[] } | { bodies: string[] };
 
@@ -247,6 +288,7 @@ export type Feature =
   | ChamferFeature
   | ShellFeature
   | ThreadFeature
+  | GearFeature
   | LinearPatternFeature
   | CircularPatternFeature
   | MirrorFeature
