@@ -3,6 +3,8 @@ import {
   ArrowUpFromLine,
   Bolt,
   Box,
+  Cone,
+  Spline,
   Cog,
   CircleDot,
   Combine,
@@ -38,6 +40,8 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   chamfer: { label: "Chamfer", icon: Triangle, shortcut: "C", hint: "Bevel edges" },
   shell: { shortcut: "H", label: "Shell", icon: Shell, hint: "Hollow a body, removing selected faces" },
   thread: { shortcut: "T", label: "Thread", icon: Bolt, hint: "ISO metric thread in a hole or on a shaft" },
+  loft: { shortcut: "Shift+L", label: "Loft", icon: Cone, hint: "Solid through two or more profiles: funnels, round-to-square adapters" },
+  sweep: { shortcut: "W", label: "Sweep", icon: Spline, hint: "Move a profile along a path of lines and arcs: pipes, ducts, handles" },
   hole: { shortcut: "Shift+H", label: "Hole", icon: CircleDot, hint: "Holes for screws (clearance, counterbore, countersink), threads and heat-set inserts" },
   gear: { shortcut: "G", label: "Gear", icon: Cog, hint: "Involute gear, ring gear or rack; adds the mating gear at the right distance" },
   linear_pattern: { shortcut: "L", label: "Linear pattern", icon: Grid3x3, hint: "Repeat features or bodies along a direction" },
@@ -54,13 +58,13 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "hole", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "fillet", "chamfer", "shell", "thread", "hole", "gear", "transform", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
   const id = nextFeatureId(doc, op);
   const lastSketch = [...doc.features].reverse().find((f) => f.op === "sketch");
-  const lastSketchUsed = lastSketch && doc.features.some((f) => (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile && f.profile.sketch === lastSketch.id);
+  const lastSketchUsed = lastSketch && sketchesUsed(doc.features).has(lastSketch.id);
   const profile = lastSketch && !lastSketchUsed ? { sketch: lastSketch.id } : { sketch: "" };
   const noEdges: EdgeSelector[] = [];
   switch (op) {
@@ -98,6 +102,10 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, format: "step", fileName: "", data: "" };
     case "mesh_convert":
       return { id, op, body: "" };
+    case "loft":
+      return { id, op, profiles: [], mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "loft" || f.op === "sweep" || f.op === "import") ? "join" : "new_body" };
+    case "sweep":
+      return { id, op, profile, path: { sketch: "" }, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "loft" || f.op === "sweep" || f.op === "import") ? "join" : "new_body" };
     case "hole":
       return { id, op, plane: { ref: "origin.XY" }, points: [], kind: "clearance", size: "M3" } as unknown as Feature;
   }
@@ -130,6 +138,10 @@ export function draftProblem(f: Feature): string | null {
       return f.data ? null : "Choose a file";
     case "mesh_convert":
       return f.body ? null : "Select a mesh part";
+    case "loft":
+      return f.profiles.length >= 2 ? null : "Pick at least two profiles in order: sketch regions or flat faces";
+    case "sweep":
+      return !("face" in f.profile) && !f.profile.sketch ? "Pick the profile: sketch regions" : f.path.sketch ? null : "Pick the path: lines and arcs of a sketch";
     case "hole":
       return f.points.length ? null : "Tap a flat face where the hole goes";
     default:
@@ -156,4 +168,16 @@ export function partName(id: string, features: readonly Feature[]): string {
   // Copies of several parts carry the copied part's id: "lp1_ex2_3".
   const [, of, n] = /^(.*?)(?:_(\d+))?$/.exec(rest)!;
   return `${featureName(best)} (${partName(of!, features)}${n ? ` ${n}` : ""})`;
+}
+
+/** Sketches that a feature builds on (they are hidden once used, like a consumed profile). */
+export function sketchesUsed(features: readonly Feature[]): Set<string> {
+  return new Set(
+    features.flatMap((f) => {
+      if (f.op === "extrude" || f.op === "revolve") return "sketch" in f.profile ? [f.profile.sketch] : [];
+      if (f.op === "loft") return f.profiles.flatMap((p) => ("sketch" in p ? [p.sketch] : []));
+      if (f.op === "sweep") return ["sketch" in f.profile ? f.profile.sketch : "", f.path.sketch].filter(Boolean);
+      return [];
+    }),
+  );
 }

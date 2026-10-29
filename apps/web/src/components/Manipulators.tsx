@@ -2,7 +2,7 @@
  * Direct manipulation: drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
-import { ArrowUpFromLine, Bolt, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, SquareRoundCorner, SquareSplitHorizontal, Trash, Triangle } from "lucide-react";
+import { ArrowUpFromLine, Bolt, Cone, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, Spline, SquareRoundCorner, SquareSplitHorizontal, Trash, Triangle } from "lucide-react";
 import { deleteModelSelection } from "../lib/deletion";
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
@@ -421,6 +421,8 @@ function QuickActions({ selection }: { selection: Pick[] }) {
   } else if (kinds.has("region") || kinds.has("sketch_curve")) {
     actions.push({ icon: <ArrowUpFromLine />, label: "Extrude", kbd: keyFor("extrude"), run: () => startFeature("extrude") });
     actions.push({ icon: <Rotate3d />, label: "Revolve", kbd: keyFor("revolve"), run: () => startFeature("revolve") });
+    actions.push({ icon: <Cone />, label: "Loft", kbd: keyFor("loft"), run: () => startFeature("loft") });
+    actions.push({ icon: <Spline />, label: "Sweep", kbd: keyFor("sweep"), run: () => startFeature("sweep") });
   } else if (kinds.has("plane") && selection.length === 1 && last.kind === "plane") {
     actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch({ ref: last.planeId }) });
   }

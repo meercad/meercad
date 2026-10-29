@@ -1,6 +1,6 @@
 import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec } from "@meercad/schema";
+import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
 import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric } from "@meercad/model";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
@@ -21,6 +21,8 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
   const op = d.feature.op;
   const map: Record<string, PickKind[]> = {
     profile: op === "extrude" ? ["region", "sketch_curve", "face"] : ["region", "sketch_curve"],
+    profiles: ["region", "sketch_curve", "face"],
+    path: ["sketch_curve"],
     axis: ["sketch_curve", "edge"],
     direction: ["sketch_curve", "edge"],
     direction2: ["sketch_curve", "edge"],
@@ -80,6 +82,27 @@ function handlePick(p: Pick, d: DialogState): void {
           const next = toggle(current, p.key);
           (g as Of<"extrude">).profile = next.length ? { sketch: p.sketchId, regions: next } : { sketch: "" };
         }
+        break;
+      }
+      case "profiles": {
+        // In the order picked; picking one again takes it out.
+        if (g.op !== "loft") break;
+        let item: ProfileRef | null = null;
+        if (p.kind === "region") item = { sketch: p.sketchId, regions: [p.key] };
+        else if (p.kind === "sketch_curve") item = { sketch: p.sketchId };
+        else if (p.kind === "face") {
+          const fs = faceSelectorForPick(p, meshes);
+          if (fs) item = { face: fs };
+        }
+        if (item) g.profiles = toggle(g.profiles, item);
+        break;
+      }
+      case "path": {
+        // Curves of one sketch; picking in another sketch starts over there.
+        if (g.op !== "sweep" || p.kind !== "sketch_curve") break;
+        const curves = g.path.sketch === p.sketchId ? (g.path.curves ?? []) : [];
+        const next = toggle(curves, p.curveId);
+        g.path = next.length ? { sketch: p.sketchId, curves: next } : { sketch: "" };
         break;
       }
       case "axis":
@@ -731,7 +754,57 @@ function Body({ d }: { d: DialogState }) {
   const set = (patch: Record<string, unknown>) => updateDraft(patch as Partial<Feature>);
   const features = useApp((s) => s.doc.features);
   const sketches = features.filter((x): x is Of<"sketch"> => x.op === "sketch");
+  const profileChip = (prof: ProfileRef) => {
+    if ("face" in prof) return describeFaceSelector(prof.face);
+    const sk = sketches.find((x) => x.id === prof.sketch);
+    const name = sk ? featureName(sk) : prof.sketch;
+    return Array.isArray(prof.regions) ? prof.regions.map((k) => `${name} · ${k.split("|")[0]}`).join(", ") : name;
+  };
   switch (f.op) {
+    case "loft":
+      return (
+        <>
+          <Field label="Profiles, in order">
+            <SelBox field="profiles" items={f.profiles.map((p, i) => `${i + 1}. ${profileChip(p)}`)} placeholder="Pick sketch regions or flat faces" onRemove={(i) => set({ profiles: f.profiles.filter((_, j) => j !== i) })} />
+          </Field>
+          <label className="checkbox">
+            <input type="checkbox" checked={!!f.ruled} onChange={(e) => set({ ruled: e.target.checked || undefined })} /> Straight sides between profiles
+          </label>
+          <Field label="Result">
+            <Seg value={f.mode} options={MODES} onChange={(mode) => set({ mode })} />
+          </Field>
+          <p className="muted small">Each profile is one closed region, on its own plane. Profiles that all have the same number of holes give a hollow loft.</p>
+        </>
+      );
+    case "sweep": {
+      const pathSk = sketches.find((x) => x.id === f.path.sketch);
+      const pathChips = !f.path.sketch ? [] : f.path.curves ? f.path.curves.map((c) => `${pathSk ? featureName(pathSk) : f.path.sketch} · ${c}`) : [`All lines of ${pathSk ? featureName(pathSk) : f.path.sketch}`];
+      const prof = f.profile;
+      return (
+        <>
+          <Field label="Profile">
+            <SelBox field="profile" items={"face" in prof || prof.sketch ? [profileChip(prof)] : []} placeholder="Pick sketch regions" onRemove={() => set({ profile: { sketch: "" } })} />
+          </Field>
+          <Field label="Path">
+            <SelBox field="path" items={pathChips} placeholder="Pick lines and arcs" onRemove={(i) => set({ path: f.path.curves && f.path.curves.length > 1 ? { sketch: f.path.sketch, curves: f.path.curves.filter((_, j) => j !== i) } : { sketch: "" } })} />
+            {sketches.length ? (
+              <select className="field" value="" onChange={(e) => set({ path: { sketch: e.target.value } })}>
+                <option value="">…or follow a whole sketch</option>
+                {sketches.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {featureName(s)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </Field>
+          <Field label="Result">
+            <Seg value={f.mode} options={MODES} onChange={(mode) => set({ mode })} />
+          </Field>
+          <p className="muted small">Draw the path in its own sketch, usually on a plane across the profile's, starting in the profile.</p>
+        </>
+      );
+    }
     case "extrude":
     case "revolve": {
       const prof = f.profile;

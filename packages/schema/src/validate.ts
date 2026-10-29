@@ -156,6 +156,15 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if (f.op === "revolve" && "line" in f.axis) earlier(f.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
         for (const t of f.targets ?? []) earlier(t, at, "target body");
         break;
+      case "loft":
+        for (const p of f.profiles) if ("sketch" in p) earlier(p.sketch, at, "profile", ["sketch"]);
+        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        break;
+      case "sweep":
+        if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
+        earlier(f.path.sketch, at, "path", ["sketch"]);
+        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        break;
       case "fillet":
       case "chamfer":
         edgeSelectors(f.edges, at);

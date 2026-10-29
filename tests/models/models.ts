@@ -454,4 +454,33 @@ export const MODELS: TestModel[] = [
       return { bodies: 1, volume: [rest - PI * 2.5 ** 2 * 8, rest - PI * 2.1 ** 2 * 8] as [number, number], size: [80, 40, 10] as [number, number, number] };
     })(),
   },
+  {
+    file: "25 Trichter und Rohrbogen",
+    name: "Funnel adapter and pipe bend",
+    look: "Left: a hollow funnel 30 high that goes from a 40 mm square at the bottom to a Ø24 circle at the top, with a round hole through it (Ø30 below, Ø20 above). Right: a pipe (Ø12 outside, Ø8 inside) that rises 30, bends a quarter turn with radius 20 and runs 20 along x.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, [...rect("a", -20, -20, 40, 40), ...circle("h1", 0, 0, 15)]),
+      { id: "pl1", op: "plane", name: "Funnel top", base: { ref: "origin.XY" }, offset: 30 },
+      sketch("sk2", { ref: "pl1" }, [...circle("c1", 0, 0, 12), ...circle("h2", 0, 0, 10)]),
+      { id: "lo1", op: "loft", name: "Funnel", profiles: [{ sketch: "sk1" }, { sketch: "sk2" }], mode: "new_body" },
+      sketch("sk3", { ref: "origin.XY" }, [...circle("p1", 70, 0, 6), ...circle("p2", 70, 0, 4)]),
+      sketch("sk4", { ref: "origin.XZ" }, [
+        { id: "q0", type: "point", x: 70, y: 0 },
+        { id: "q1", type: "point", x: 70, y: 30 },
+        { id: "q2", type: "point", x: 90, y: 50 },
+        { id: "q3", type: "point", x: 110, y: 50 },
+        { id: "qc", type: "point", x: 90, y: 30 },
+        { id: "l1", type: "line", p1: "q0", p2: "q1" },
+        { id: "a1", type: "arc", center: "qc", start: "q2", end: "q1" },
+        { id: "l2", type: "line", p1: "q2", p2: "q3" },
+      ]),
+      { id: "sw1", op: "sweep", name: "Pipe", profile: { sketch: "sk3" }, path: { sketch: "sk4" }, mode: "new_body" },
+    ]),
+    // Pipe: ring area times path length. Funnel: between a Ø24 cylinder and the 40 mm prism, minus the coned hole.
+    expect: (() => {
+      const pipe = PI * (36 - 16) * (30 + (PI / 2) * 20 + 20);
+      const hole = (PI * 30 * (15 ** 2 + 15 * 10 + 10 ** 2)) / 3;
+      return { bodies: 2, volume: [pipe + PI * 144 * 30 - hole, pipe + 1600 * 30 - hole] as [number, number] };
+    })(),
+  },
 ];

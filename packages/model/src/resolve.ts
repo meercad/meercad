@@ -61,7 +61,7 @@ export type ResolvedFeature =
   | ResolvedCircularPattern
   | ResolvedMeshConvert
   | ResolvedHole
-  | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" }>;
+  | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
 export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): ResolvedFeature {

@@ -150,6 +150,21 @@ export const definitions: Record<string, Json> = {
       { profile: ref("profile"), axis: ref("axisRef"), angle: ref("expr"), symmetric: bool, mode: ref("mode"), targets: arr(id) },
       ["profile", "axis", "angle", "mode"],
     ),
+    loft: feature(
+      "loft",
+      { profiles: arr(ref("profile"), { minItems: 2, maxItems: 50 }), ruled: bool, mode: ref("mode"), targets: arr(id) },
+      ["profiles", "mode"],
+    ),
+    sweep: feature(
+      "sweep",
+      {
+        profile: ref("profile"),
+        path: obj({ sketch: id, curves: arr({ type: "string", maxLength: 256 }, { minItems: 1 }) }, ["sketch"], "Lines and arcs of a sketch, chained end to end; all non-construction curves unless listed."),
+        mode: ref("mode"),
+        targets: arr(id),
+      },
+      ["profile", "path", "mode"],
+    ),
     fillet: feature("fillet", { edges: ref("edges"), radius: ref("expr") }, ["edges", "radius"]),
     chamfer: feature("chamfer", { edges: ref("edges"), distance: ref("expr") }, ["edges", "distance"]),
     shell: feature("shell", { faces: arr(ref("faceSelector")), thickness: ref("expr"), outward: bool }, ["faces", "thickness"]),

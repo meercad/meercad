@@ -20,7 +20,7 @@ describe("validateDocument", () => {
     const r = validateDocument({
       format: "meercad/1",
       params: {},
-      features: [{ id: "x", op: "loft" }, { id: "e", op: "extrude", profile: { sketch: "x" }, extent: "blind", distance: 1, mode: "new_body", color: "red" }],
+      features: [{ id: "x", op: "knurl" }, { id: "e", op: "extrude", profile: { sketch: "x" }, extent: "blind", distance: 1, mode: "new_body", color: "red" }],
       rollback: null,
     });
     expect(r.ok).toBe(false);

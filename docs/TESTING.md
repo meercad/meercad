@@ -55,6 +55,7 @@ number that must come out.
 | 22 | Hinged lid | fixed and revolute joints on a pin's axis, limits |
 | 23 | Four-bar linkage | links with round ends, a closed loop of four revolute joints |
 | 24 | Mounting plate with standard holes | hole tool: counterbore, countersink, heat-set inserts, tapped with thread |
+| 25 | Funnel adapter and pipe bend | hollow loft from square to round, sweep of a ring along lines and an arc |
 
 Each model states what must come out (parts, volume worked out by hand where possible, size) and what
 a person should see when looking at it (`look`). The test rebuilds each one, checks the numbers and

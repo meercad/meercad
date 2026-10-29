@@ -20,7 +20,7 @@ import {
   type ResolvedSketch,
   type ResolvedTransform,
 } from "@meercad/model";
-import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
+import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type LoftFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef, type SweepFeature } from "@meercad/schema";
 import {
   findRegions,
   frameFromPlane,
@@ -35,7 +35,7 @@ import {
   type SolvedCurve,
   type Vec3,
 } from "@meercad/sketch";
-import type { TopoDS_Shape, gp_Trsf } from "replicad-opencascadejs";
+import type { TopoDS_Edge, TopoDS_Face, TopoDS_Shape, TopoDS_Vertex, TopoDS_Wire, gp_Trsf } from "replicad-opencascadejs";
 import { Arena } from "./arena.js";
 import { Body, listToArray } from "./body.js";
 import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
@@ -95,6 +95,10 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return extrude(f, ctx);
       case "revolve":
         return revolve(f, ctx);
+      case "loft":
+        return loft(f, ctx);
+      case "sweep":
+        return sweep(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -405,6 +409,183 @@ function revolve(f: ResolvedRevolve, ctx: Ctx): Omit<ModelState, "arena"> {
     };
   });
   if (f.symmetric && !full) tool = transformBody(ctx, tool, ctx.g.rotation(ax.origin, ax.dir, -angle / 2), f.id);
+  return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/** One loft or sweep profile as a face: a single sketch region, or a flat model face. */
+function profileFace(p: ProfileRef, ctx: Ctx, what: string): TopoDS_Face {
+  if ("sketch" in p) {
+    const { sk, regions } = sketchRegions(p, ctx);
+    if (regions.length !== 1) throw new FeatureError(`${what}: sketch "${sk.id}" has ${regions.length} closed regions, pick one`);
+    return ctx.g.regionFaces(sk.frame, regions)[0]!.face;
+  }
+  const refs = resolveFaces(p.face, [...ctx.prev.bodies.values()]);
+  if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new FeatureError(`${what}: pick exactly one face`);
+  const body = ctx.prev.bodies.get(refs[0]!.body)!;
+  const fi = refs[0]!.faces[0]!;
+  if (!body.faceInfo[fi]?.planar) throw new FeatureError(`${what}: the face must be flat`);
+  return ctx.oc.TopoDS.Face(body.faces[fi]!);
+}
+
+/** The outer wire of a face and its holes. */
+function faceWires({ oc, arena }: Ctx, face: TopoDS_Face): { outer: TopoDS_Wire; holes: TopoDS_Wire[] } {
+  const outer = arena.track(oc.BRepTools.OuterWire(face));
+  const holes: TopoDS_Wire[] = [];
+  for (const e = arena.track(new oc.TopExp_Explorer(face, "TopAbs_WIRE")); e.More(); e.Next()) {
+    const w = arena.track(oc.TopoDS.Wire(arena.track(e.Current())));
+    if (!w.IsSame(outer)) holes.push(w);
+  }
+  return { outer, holes };
+}
+
+function centroid({ oc, arena }: Ctx, s: TopoDS_Shape): Vec3 {
+  const props = arena.track(new oc.GProp_GProps());
+  oc.BRepGProp.LinearProperties(s, props, false, false);
+  const c = arena.track(props.CentreOfMass());
+  return [c.X(), c.Y(), c.Z()];
+}
+
+/** A solid through wires in order; faces tagged start_cap, end_cap and side[k]. */
+function thruSections(ctx: Ctx, id: string, wires: TopoDS_Wire[], ruled: boolean): Body {
+  const { oc, arena } = ctx;
+  const loft = arena.track(new oc.BRepOffsetAPI_ThruSections(true, ruled, 1e-6));
+  for (const w of wires) loft.AddWire(w);
+  try {
+    loft.Build(arena.track(new oc.Message_ProgressRange()));
+  } catch (e) {
+    throw new FeatureError(`loft failed: ${occtErrorMessage(oc, e)}`, "profiles with very different shapes or crossing each other cannot be joined");
+  }
+  if (!loft.IsDone()) throw new FeatureError("loft failed: the profiles could not be joined", "check that the profiles lie on different planes and do not cross");
+  const body = new Body(oc, arena, id, arena.track(loft.Shape()));
+  const first = body.faceIndex(arena.track(loft.FirstShape()));
+  const last = body.faceIndex(arena.track(loft.LastShape()));
+  let k = 0;
+  body.faceTags = body.faces.map((_, i) => [i === first ? `${id}.start_cap` : i === last ? `${id}.end_cap` : `${id}.side[${k++}]`]);
+  return body;
+}
+
+/**
+ * Loft through the profiles in order. Profiles with the same number of holes give a hollow loft:
+ * the holes are lofted too (each paired with the nearest one, relative to its profile) and cut out.
+ */
+function loft(f: LoftFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+  if (f.profiles.length < 2) throw new FeatureError("a loft needs at least two profiles");
+  const wires = f.profiles.map((p, i) => faceWires(ctx, profileFace(p, ctx, `profile ${i + 1}`)));
+  let tool = thruSections(ctx, f.id, wires.map((w) => w.outer), !!f.ruled);
+  const holes = wires[0]!.holes.length;
+  if (wires.some((w) => w.holes.length !== holes)) throw new FeatureError("all profiles need the same number of holes for a hollow loft");
+  if (holes) {
+    const centres = wires.map((w) => ({ outer: centroid(ctx, w.outer), holes: w.holes.map((h) => centroid(ctx, h)) }));
+    const rel = (k: number, h: number): Vec3 => {
+      const c = centres[k]!;
+      return [c.holes[h]![0] - c.outer[0], c.holes[h]![1] - c.outer[1], c.holes[h]![2] - c.outer[2]];
+    };
+    const cuts: Body[] = [];
+    for (let h = 0; h < holes; h++) {
+      const chain = [wires[0]!.holes[h]!];
+      let prev = rel(0, h);
+      for (let k = 1; k < wires.length; k++) {
+        let best = 0;
+        let bestD = Infinity;
+        for (let j = 0; j < holes; j++) {
+          const r = rel(k, j);
+          const d = Math.hypot(r[0] - prev[0], r[1] - prev[1], r[2] - prev[2]);
+          if (d < bestD) [best, bestD] = [j, d];
+        }
+        chain.push(wires[k]!.holes[best]!);
+        prev = rel(k, best);
+      }
+      cuts.push(thruSections(ctx, f.id, chain, !!f.ruled));
+    }
+    tool = booleanBodies(ctx.oc, ctx.arena, tool, cuts, "cut", f.id);
+  }
+  return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/**
+ * The sweep path as a wire: the sketch's lines and arcs (non-construction, or the listed ones),
+ * chained end to end. One chain without branches, open or closed.
+ */
+function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
+  const { oc, arena, g } = ctx;
+  const sk = ctx.prev.sketches.get(f.path.sketch);
+  if (!sk) throw new FeatureError(`path sketch "${f.path.sketch}" is missing or failed`);
+  const wanted = f.path.curves;
+  const missing = wanted?.filter((id) => !sk.solved.curves.some((c) => c.id === id)) ?? [];
+  if (missing.length) throw new FeatureError(`path curve(s) no longer exist: ${missing.join(", ")}`);
+  const curves = sk.solved.curves.filter((c) => (wanted ? wanted.includes(c.id) : !c.construction && !c.external));
+  if (!curves.length) throw new FeatureError(`path sketch "${sk.id}" has no lines or arcs`);
+  if (curves.some((c) => c.kind === "circle") && curves.length > 1) throw new FeatureError("a circle can only be a path on its own");
+  // Shared vertices at shared ends, so the edges connect exactly.
+  const tol = 1e-6 * Math.max(1, ...curves.flatMap((c) => (c.kind === "line" ? [...c.a, ...c.b] : [...c.center, c.radius]).map(Math.abs)));
+  const verts: { p: [number, number]; v: TopoDS_Vertex; n: number }[] = [];
+  const vertex = (p: [number, number]) => {
+    let hit = verts.find((x) => Math.hypot(x.p[0] - p[0], x.p[1] - p[1]) < tol * 100);
+    if (!hit) verts.push((hit = { p, v: g.vertex(toWorld(sk.frame, p)), n: 0 }));
+    hit.n++;
+    return hit;
+  };
+  const edges: { edge: TopoDS_Edge; ends: [number, number] }[] = curves.map((c) => {
+    if (c.kind === "line") {
+      const a = vertex(c.a), b = vertex(c.b);
+      return { edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(a.v, b.v)).Edge()), ends: [verts.indexOf(a), verts.indexOf(b)] };
+    }
+    const circ = arena.track(new oc.gp_Circ(arena.track(new oc.gp_Ax2(g.pnt(toWorld(sk.frame, c.center)), g.dir(sk.frame.normal), g.dir(sk.frame.u))), c.radius));
+    if (c.kind === "circle") return { edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(circ)).Edge()), ends: [-1, -1] };
+    const at = (t: number): [number, number] => [c.center[0] + c.radius * Math.cos(t), c.center[1] + c.radius * Math.sin(t)];
+    const a = vertex(at(c.a0)), b = vertex(at(c.a1));
+    return { edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(circ, a.v, b.v)).Edge()), ends: [verts.indexOf(a), verts.indexOf(b)] };
+  });
+  if (verts.some((x) => x.n > 2)) throw new FeatureError("the path branches: it must be one chain of lines and arcs", "list the curves to follow in path.curves");
+  // Walk the chain from an open end (or anywhere when closed).
+  const order: number[] = [];
+  const used = new Set<number>();
+  let at = verts.findIndex((x) => x.n === 1);
+  let next = at < 0 ? 0 : edges.findIndex((e) => e.ends.includes(at));
+  if (at < 0) at = edges[0]!.ends[0];
+  while (next >= 0) {
+    order.push(next);
+    used.add(next);
+    const e = edges[next]!;
+    at = e.ends[0] === at ? e.ends[1] : e.ends[0];
+    next = edges.findIndex((x, i) => !used.has(i) && x.ends.includes(at));
+  }
+  if (order.length !== edges.length) throw new FeatureError("the path has gaps: its lines and arcs must join end to end");
+  const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+  for (const i of order) mw.Add(edges[i]!.edge);
+  if (!mw.IsDone()) throw new FeatureError("the path has gaps: its lines and arcs must join end to end");
+  return arena.track(mw.Wire());
+}
+
+/** The profile moved along the path, turning with it (corrected Frenet frame). */
+function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena } = ctx;
+  const spine = pathWire(f, ctx);
+  const make = (face: TopoDS_Shape) => {
+    let pipe;
+    try {
+      // OCCT's default frame for pipes is the corrected Frenet one.
+      pipe = arena.track(new oc.BRepOffsetAPI_MakePipe(spine, face));
+    } catch (e) {
+      throw new FeatureError(`sweep failed: ${occtErrorMessage(oc, e)}`, "a profile too large for a tight bend makes the sweep cross itself");
+    }
+    if (!pipe.IsDone()) throw new FeatureError("sweep failed", "a profile too large for a tight bend makes the sweep cross itself");
+    return {
+      shape: arena.track(pipe.Shape()),
+      first: arena.track(pipe.FirstShape()),
+      last: arena.track(pipe.LastShape()),
+      generated: (s: TopoDS_Shape) => listToArray(arena, pipe.Generated(s)),
+    };
+  };
+  let tool: Body;
+  if ("sketch" in f.profile) {
+    const { sk, regions } = sketchRegions(f.profile, ctx);
+    tool = sweepTool(ctx, f.id, ctx.g.regionFaces(sk.frame, regions), sk.id, make);
+  } else {
+    const r = make(profileFace(f.profile, ctx, "profile"));
+    tool = new Body(oc, arena, f.id, r.shape);
+    tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+  }
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
 }
 

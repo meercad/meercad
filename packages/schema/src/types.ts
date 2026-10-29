@@ -282,6 +282,34 @@ export interface ImportFeature extends FeatureBase {
 }
 
 /**
+ * A solid through two or more profiles, in order: a funnel, an adapter from round to square. Each
+ * profile is one closed sketch region (a whole sketch with one region, or a picked region) or a flat
+ * model face, so a loft can start on a part. Profiles with holes give a hollow loft when they all
+ * have the same number of holes.
+ */
+export interface LoftFeature extends FeatureBase {
+  op: "loft";
+  profiles: ProfileRef[];
+  /** Straight faces between the profiles instead of a smooth transition. */
+  ruled?: boolean;
+  mode: BooleanMode;
+  targets?: string[];
+}
+
+/**
+ * A sketch profile moved along a path: pipes, cable ducts, handles. The path is a chain of lines and
+ * arcs in a sketch (all its non-construction curves, or the listed ones), usually on a plane across
+ * the profile's, starting in the profile.
+ */
+export interface SweepFeature extends FeatureBase {
+  op: "sweep";
+  profile: ProfileRef;
+  path: { sketch: string; curves?: string[] };
+  mode: BooleanMode;
+  targets?: string[];
+}
+
+/**
  * Holes for screws, threads and inserts, drilled into a flat face (or a plane) at points in its
  * coordinates, against its normal. Sizes follow the standards for metric screws (see model/holes.ts).
  */
@@ -331,6 +359,8 @@ export type Feature =
   | ThreadFeature
   | GearFeature
   | HoleFeature
+  | LoftFeature
+  | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature
   | MirrorFeature

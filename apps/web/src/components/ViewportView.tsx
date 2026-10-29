@@ -9,7 +9,7 @@ import { withKey } from "./Kbd";
 import { isCompact, usePhoneSheets } from "../lib/layout";
 import type { FeatureOp } from "@meercad/schema";
 import { perFrame, samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
-import { FEATURES, partName } from "../lib/features";
+import { FEATURES, partName, sketchesUsed } from "../lib/features";
 import { MultiTouch, Press } from "../lib/gestures";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
@@ -128,9 +128,10 @@ export function ViewportView() {
     const r = output.report;
     let size = 60;
     for (const b of r.bodies) size = Math.max(size, ...b.bbox.max.map(Math.abs), ...b.bbox.min.map(Math.abs));
-    const consumed = new Set(doc.features.flatMap((f) => (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile ? [f.profile.sketch] : []));
+    const consumed = sketchesUsed(doc.features);
+    const picksSketches = ["extrude", "revolve", "loft", "sweep"].includes(dialog?.feature.op ?? "");
     const sketches: SketchView[] = r.sketches
-      .filter((s) => !hidden.has(s.id) && (s.id === sketchId || !consumed.has(s.id) || dialog?.feature.op === "extrude" || dialog?.feature.op === "revolve" || hiddenOverride(s.id)))
+      .filter((s) => !hidden.has(s.id) && (s.id === sketchId || !consumed.has(s.id) || picksSketches || hiddenOverride(s.id)))
       .map((s) => ({ id: s.id, frame: s.frame, curves: s.curves, regions: s.regions.map((g) => ({ key: g.key, polygons: g.polygons })) }));
     const planes: PlaneView[] = [
       ...Object.entries(ORIGIN_FRAMES).map(([id, frame]) => ({ id, label: PLANE_LABELS[id]!, frame, size: size * 0.6, color: PLANE_COLORS[id]! })),
