@@ -24,13 +24,14 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "imported", returnType: CAPPluginReturnPromise),
     ]
 
-    private func scanSurface(_ call: CAPPluginCall) {
+    /// Object or surface with the LiDAR sensor (see `LidarScanner`).
+    private func scanLidar(_ call: CAPPluginCall, surface: Bool) {
         Task { @MainActor [weak self] in
             guard #available(iOS 17, *), ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) else {
-                return call.reject("Scanning a surface needs an iPhone or iPad with LiDAR and iOS 17 or later.")
+                return call.reject("Scanning with LiDAR needs an iPhone or iPad with LiDAR and iOS 17 or later.")
             }
             guard let self, let host = self.bridge?.viewController else { return call.reject("no view") }
-            let view = SurfaceScanView(scanner: SurfaceScanner()) { result in
+            let view = LidarScanView(scanner: LidarScanner(mode: surface ? .surface : .object)) { result in
                 host.dismiss(animated: true)
                 switch result {
                 case .success(let r): call.resolve(r)
@@ -66,7 +67,7 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
             let scan = objectCapture
             call.resolve([
                 "scan": scan,
-                // The surface scan needs only LiDAR depth.
+                // The LiDAR scans need only depth.
                 "surface": lidar,
                 "objectCapture": objectCapture,
                 "lidar": lidar,
@@ -80,7 +81,7 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func scan(_ call: CAPPluginCall) {
-        if call.getString("mode") == "surface" { return scanSurface(call) }
+        if let mode = call.getString("mode"), mode == "surface" || mode == "lidar" { return scanLidar(call, surface: mode == "surface") }
         Task { @MainActor [weak self] in
             guard #available(iOS 18, *), ObjectCaptureSession.isSupported else {
                 return call.reject("Scanning needs an iPhone or iPad with LiDAR and iOS 18 or later.")

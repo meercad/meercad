@@ -151,8 +151,9 @@ function useEntries(): RailEntry[] {
             icon: ScanLine,
             label: "Scan",
             tools: [
-              { id: "scan-object", icon: Orbit, label: "Scan object", hint: "Walk around an object; photos become a part", run: () => void scanObject("object") },
-              { id: "scan-surface", icon: Mountain, label: "Scan surface", hint: "Sweep over a surface with LiDAR, e.g. a recess a part must fit into", run: () => void scanObject("surface") },
+              { id: "scan-object", icon: Orbit, label: "Object (photos)", hint: "Walk all around an object; fine detail, takes a few minutes", run: () => void scanObject("object") },
+              { id: "scan-lidar", icon: Box, label: "Object (LiDAR)", hint: "Sweep around an object with LiDAR; quick and coarser, reachable sides are enough", run: () => void scanObject("lidar") },
+              { id: "scan-surface", icon: Mountain, label: "Surface (LiDAR)", hint: "Sweep over a surface, e.g. a recess a part must fit into", run: () => void scanObject("surface") },
             ],
           },
         ]

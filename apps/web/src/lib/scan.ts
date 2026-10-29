@@ -1,8 +1,9 @@
 /**
- * Scanning the real world into a part, on iPhones and iPads with LiDAR (the app's native Scan
- * plugin): an object by walking around it (photos), or a surface by sweeping over it (LiDAR depth,
- * for parts that must fit onto or into something). The scan comes back as an STL in millimetres and
- * is imported like any mesh, as a whole part. Elsewhere (Mac, browser) scanning is not offered.
+ * Scanning the real world into parts, on iPhones and iPads with LiDAR (the app's native Scan
+ * plugin): an object from photos all around it (fine, takes a while), an object with LiDAR (quick,
+ * coarser, works from the reachable sides), or a surface with LiDAR (for parts that must fit onto or
+ * into something). The scan comes back as STL in millimetres, one file per separate piece, each
+ * imported like any mesh, as a whole part. Elsewhere (Mac, browser) scanning is not offered.
  */
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Filesystem } from "@capacitor/filesystem";
@@ -11,12 +12,12 @@ import { importFile } from "../components/io";
 import { nativeApp } from "./native";
 
 type Caps = { scan: boolean; surface?: boolean; reason?: string };
-export type ScanMode = "object" | "surface";
+export type ScanMode = "object" | "lidar" | "surface";
 
 interface ScanPlugin {
   capabilities(): Promise<Caps>;
   imported(o: { folder: string }): Promise<void>;
-  scan(o: { mode: ScanMode }): Promise<{ path: string; folder: string; triangles: number; size: [number, number, number]; photos: number; seconds: number }>;
+  scan(o: { mode: ScanMode }): Promise<{ path: string; paths?: string[]; folder: string; triangles: number; size: [number, number, number]; photos: number; seconds: number }>;
 }
 const Scan = registerPlugin<ScanPlugin>("Scan");
 
@@ -38,7 +39,7 @@ export async function scanObject(mode: ScanMode = "object"): Promise<void> {
   const caps = await capabilities();
   console.info("scan capabilities", JSON.stringify(caps));
   if (mode === "object" && !caps.scan) return toast(caps.reason || "This device cannot scan objects.", "error");
-  if (mode === "surface" && !caps.surface) return toast("Scanning a surface needs an iPhone or iPad with LiDAR.", "error");
+  if (mode !== "object" && !caps.surface) return toast("Scanning with LiDAR needs an iPhone or iPad with LiDAR.", "error");
   let r: Awaited<ReturnType<ScanPlugin["scan"]>>;
   try {
     r = await Scan.scan({ mode });
@@ -48,11 +49,16 @@ export async function scanObject(mode: ScanMode = "object"): Promise<void> {
     if (err.code !== "cancelled") toast(err.message ?? "Scanning failed", "error");
     return;
   }
-  const data = await Filesystem.readFile({ path: `file://${r.path}` });
-  const bytes = Uint8Array.from(atob(data.data as string), (c) => c.charCodeAt(0));
-  const name = `${mode === "surface" ? "Surface scan" : "Scan"} ${new Date().toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}.stl`;
-  // A scan that did not come in stays on the device and is offered again on the next Scan.
-  if (!(await importFile(new File([bytes], name, { type: "model/stl" })))) return;
+  const stamp = new Date().toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const label = { object: "Scan", lidar: "LiDAR scan", surface: "Surface scan" }[mode];
+  const paths = r.paths ?? [r.path];
+  for (const [k, path] of paths.entries()) {
+    const data = await Filesystem.readFile({ path: `file://${path}` });
+    const bytes = Uint8Array.from(atob(data.data as string), (c) => c.charCodeAt(0));
+    const name = `${label} ${stamp}${paths.length > 1 ? ` (${k + 1})` : ""}.stl`;
+    // A scan that did not come in stays on the device and is offered again on the next Scan.
+    if (!(await importFile(new File([bytes], name, { type: "model/stl" })))) return;
+  }
   void Scan.imported({ folder: r.folder }).catch(() => undefined);
   toast(`Scan: ${r.size.map(fmt).join(" × ")} mm · ${r.triangles.toLocaleString()} triangles${r.photos ? ` · ${r.photos} photos` : ""}`);
 }
