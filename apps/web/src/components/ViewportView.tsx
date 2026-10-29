@@ -129,7 +129,7 @@ export function ViewportView() {
     let size = 60;
     for (const b of r.bodies) size = Math.max(size, ...b.bbox.max.map(Math.abs), ...b.bbox.min.map(Math.abs));
     const consumed = sketchesUsed(doc.features);
-    const picksSketches = ["extrude", "revolve", "loft", "sweep"].includes(dialog?.feature.op ?? "");
+    const picksSketches = ["extrude", "revolve", "loft", "sweep", "rib"].includes(dialog?.feature.op ?? "");
     const sketches: SketchView[] = r.sketches
       .filter((s) => !hidden.has(s.id) && (s.id === sketchId || !consumed.has(s.id) || picksSketches || hiddenOverride(s.id)))
       .map((s) => ({ id: s.id, frame: s.frame, curves: s.curves, regions: s.regions.map((g) => ({ key: g.key, polygons: g.polygons })) }));

@@ -193,6 +193,9 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "delete":
         for (const b of f.bodies) body(b, at);
         break;
+      case "rib":
+        earlier(f.sketch, at, "sketch", ["sketch"]);
+        break;
       case "split":
         planeSpec(f.plane, at);
         for (const b of f.bodies) body(b, at);

@@ -310,6 +310,22 @@ export interface SweepFeature extends FeatureBase {
 }
 
 /**
+ * A stiffening rib from open lines in a sketch: each line is thickened across the sketch plane and
+ * filled from the line to the part's walls (in the sketch plane, at right angles to the line), so
+ * a line drawn across a corner or between two walls becomes a web joining them.
+ */
+export interface RibFeature extends FeatureBase {
+  op: "rib";
+  /** The sketch with the rib lines: all its non-construction lines, or the listed ones. */
+  sketch: string;
+  curves?: string[];
+  /** Rib thickness, centred on the sketch plane. */
+  thickness: Expr;
+  /** Fill towards the other side of the line. */
+  flip?: boolean;
+}
+
+/**
  * Cuts parts in two at a plane or a flat face, e.g. a part too large for the printer. The piece on
  * the side the plane's normal points to keeps the part's id, the other becomes a new part named after
  * the step (`sp1`, or `sp1-<part>` when several parts are split). `keep` drops one side instead.
@@ -375,6 +391,7 @@ export type Feature =
   | HoleFeature
   | LoftFeature
   | SplitFeature
+  | RibFeature
   | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature

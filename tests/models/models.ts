@@ -495,4 +495,25 @@ export const MODELS: TestModel[] = [
     ]),
     expect: { bodies: 2, volume: 300 * 40 * 20 - 3 * PI * 25 * 20, size: [300, 40, 20] },
   },
+  {
+    file: "27 Winkel mit Rippen",
+    name: "Angle bracket with ribs",
+    look: "An L-bracket (60 × 40 base, 5 thick; 40 high wall at the back) with two 4 mm triangular ribs in the corner, at y = 8 and y = 32, each running 25 up the wall and 30 along the base.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("b", 0, 0, 60, 40)),
+      { id: "ex1", op: "extrude", name: "Base", profile: { sketch: "sk1" }, extent: "blind", distance: 5, mode: "new_body" },
+      sketch("sk2", { ref: "origin.XY" }, rect("w", 0, 0, 5, 40)),
+      { id: "ex2", op: "extrude", name: "Wall", profile: { sketch: "sk2" }, extent: "blind", distance: 40, mode: "join" },
+      ...[8, 32].flatMap((y, k): Feature[] => [
+        { id: `pl${k + 1}`, op: "plane", name: `Rib plane ${k + 1}`, base: { ref: "origin.XZ" }, offset: -y },
+        sketch(`sk${k + 3}`, { ref: `pl${k + 1}` }, [
+          { id: `r${k}a`, type: "point", x: 5, y: 30 },
+          { id: `r${k}b`, type: "point", x: 35, y: 5 },
+          { id: `r${k}`, type: "line", p1: `r${k}a`, p2: `r${k}b` },
+        ]),
+        { id: `rb${k + 1}`, op: "rib", name: `Rib ${k + 1}`, sketch: `sk${k + 3}`, thickness: 4 },
+      ]),
+    ]),
+    expect: { bodies: 1, volume: 60 * 40 * 5 + 5 * 40 * 35 + 2 * 0.5 * 25 * 30 * 4, size: [60, 40, 40] },
+  },
 ];

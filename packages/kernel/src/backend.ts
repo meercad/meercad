@@ -16,6 +16,7 @@ import {
   HoleError,
   type ResolvedPlane,
   type ResolvedRevolve,
+  type ResolvedRib,
   type ResolvedShell,
   type ResolvedSketch,
   type ResolvedTransform,
@@ -101,6 +102,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return sweep(f, ctx);
       case "split":
         return split(f, ctx);
+      case "rib":
+        return rib(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -589,6 +592,93 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
   }
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/**
+ * Ribs: per sketch line, a slab of the rib's thickness reaching far beyond the line (along it, and
+ * to one side of it in the sketch plane), minus the parts. The piece that holds the line is the rib:
+ * it runs from the line to the walls it meets. Without `flip` the side is the one closed by walls
+ * (the smaller piece when both are).
+ */
+function rib(f: ResolvedRib, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena, g } = ctx;
+  if (!(f.thickness > 0)) throw new FeatureError("the rib's thickness must be greater than zero");
+  const sk = ctx.prev.sketches.get(f.sketch);
+  if (!sk) throw new FeatureError(`sketch "${f.sketch}" is missing or failed`);
+  const missing = f.curves?.filter((id) => !sk.solved.curves.some((c) => c.id === id)) ?? [];
+  if (missing.length) throw new FeatureError(`rib line(s) no longer exist: ${missing.join(", ")}`);
+  const lines = sk.solved.curves.filter((c): c is Extract<SolvedCurve, { kind: "line" }> => c.kind === "line" && (f.curves ? f.curves.includes(c.id) : !c.construction && !c.external));
+  if (!lines.length) throw new FeatureError(`sketch "${sk.id}" has no lines for a rib`, "draw an open line from wall to wall");
+  const parts = [...ctx.prev.bodies.values()];
+  if (!parts.length) throw new FeatureError("a rib needs a part to stand on");
+  const big = modelSize(ctx);
+  const n = sk.frame.normal;
+  const half = f.thickness / 2;
+  const add = (p: Vec3, d: Vec3, s: number): Vec3 => [p[0] + d[0] * s, p[1] + d[1] * s, p[2] + d[2] * s];
+  const solidsOf = (s: TopoDS_Shape) => {
+    const out: TopoDS_Shape[] = [];
+    for (const e = arena.track(new oc.TopExp_Explorer(s, "TopAbs_SOLID")); e.More(); e.Next()) out.push(arena.track(e.Current()));
+    return out;
+  };
+  const volume = (s: TopoDS_Shape) => {
+    const props = arena.track(new oc.GProp_GProps());
+    oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    return Math.abs(props.Mass());
+  };
+  // The line lies on the boundary of the piece that holds it, and away from every other piece.
+  const touches = (s: TopoDS_Shape, p: Vec3) => {
+    const d = arena.track(new oc.BRepExtrema_DistShapeShape(g.vertex(p), s));
+    return d.IsDone() && d.Value() < 1e-6 * big;
+  };
+  const quad = (pts: Vec3[]) => {
+    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const vs = pts.map((p) => g.vertex(p));
+    vs.forEach((v, i) => mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())));
+    return arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face());
+  };
+  // A piece closed in by walls stays within the parts' bounds; an open one runs out to the slab's end.
+  const pb = parts.map((p) => bounds(oc, arena, p.shape));
+  const lo = [0, 1, 2].map((k) => Math.min(...pb.map((b) => b.min[k]!)) - 1e-3);
+  const hi = [0, 1, 2].map((k) => Math.max(...pb.map((b) => b.max[k]!)) + 1e-3);
+  const within = (s: TopoDS_Shape) => {
+    const b = bounds(oc, arena, s);
+    return [0, 1, 2].every((k) => b.min[k]! >= lo[k]! - f.thickness && b.max[k]! <= hi[k]! + f.thickness);
+  };
+  const pieces: Body[] = [];
+  for (const line of lines) {
+    const a = toWorld(sk.frame, line.a), b = toWorld(sk.frame, line.b);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    if (len < 1e-6) continue;
+    const t: Vec3 = [(b[0] - a[0]) / len, (b[1] - a[1]) / len, (b[2] - a[2]) / len];
+    const side: Vec3 = [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]];
+    const mid = add(a, t, len / 2);
+    // The piece of one side's slab that holds the line, and whether walls close it.
+    const fill = (dir: 1 | -1) => {
+      const a0 = add(add(a, t, -big), n, -half), b0 = add(add(b, t, big), n, -half);
+      const face = quad([a0, b0, add(b0, side, dir * big), add(a0, side, dir * big)]);
+      const slab = arena.track(arena.track(new oc.BRepPrimAPI_MakePrism(face, g.vec([n[0] * f.thickness, n[1] * f.thickness, n[2] * f.thickness]), false, true)).Shape());
+      let rest: TopoDS_Shape = slab;
+      for (const part of parts) {
+        const cut = arena.track(new oc.BRepAlgoAPI_Cut(rest, part.shape));
+        if (cut.IsDone() && !cut.HasErrors()) rest = arena.track(cut.Shape());
+      }
+      const piece = solidsOf(rest).find((s) => touches(s, mid));
+      if (!piece) return null;
+      const v = volume(piece);
+      return { piece, v, closed: within(piece) };
+    };
+    const one = fill(1), other = fill(-1);
+    // The side closed by walls (the smaller piece when both are); `flip` takes the other side.
+    const otherFirst = !one?.closed || (!!other?.closed && other.v < one.v);
+    const pick = otherFirst !== !!f.flip ? other : one;
+    if (!pick?.closed) throw new FeatureError(`rib line ${line.id} does not meet a wall on that side`, "draw the line so that walls of the part close it in, or flip the rib");
+    const body = new Body(oc, arena, f.id, pick.piece);
+    body.faceTags = body.faces.map(() => [`${f.id}.face`]);
+    pieces.push(body);
+  }
+  if (!pieces.length) throw new FeatureError("the rib lines have no length");
+  const tool = pieces.length === 1 ? pieces[0]! : booleanBodies(oc, arena, pieces[0]!, pieces.slice(1), "fuse", f.id);
+  return applyTool(ctx, f.id, tool, "join");
 }
 
 /**

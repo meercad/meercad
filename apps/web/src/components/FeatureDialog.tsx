@@ -23,6 +23,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     profile: op === "extrude" ? ["region", "sketch_curve", "face"] : ["region", "sketch_curve"],
     profiles: ["region", "sketch_curve", "face"],
     path: ["sketch_curve"],
+    curves: ["sketch_curve"],
     axis: ["sketch_curve", "edge"],
     direction: ["sketch_curve", "edge"],
     direction2: ["sketch_curve", "edge"],
@@ -95,6 +96,15 @@ function handlePick(p: Pick, d: DialogState): void {
           if (fs) item = { face: fs };
         }
         if (item) g.profiles = toggle(g.profiles, item);
+        break;
+      }
+      case "curves": {
+        // Rib lines of one sketch; picking in another sketch starts over there.
+        if (g.op !== "rib" || p.kind !== "sketch_curve") break;
+        const curves = g.sketch === p.sketchId ? (g.curves ?? []) : [];
+        const next = toggle(curves, p.curveId);
+        g.sketch = next.length ? p.sketchId : "";
+        g.curves = next.length ? next : undefined;
         break;
       }
       case "path": {
@@ -999,6 +1009,38 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "rib": {
+      const sk = sketches.find((x) => x.id === f.sketch);
+      const name = sk ? featureName(sk) : f.sketch;
+      return (
+        <>
+          <Field label="Lines">
+            <SelBox field="curves" items={!f.sketch ? [] : f.curves ? f.curves.map((c) => `${name} · ${c}`) : [`All lines of ${name}`]} placeholder="Pick open lines in a sketch" onRemove={(i) => set(f.curves && f.curves.length > 1 ? { curves: f.curves.filter((_, j) => j !== i) } : { sketch: "", curves: undefined })} />
+            {sketches.length ? (
+              <select className="field" value="" onChange={(e) => set({ sketch: e.target.value, curves: undefined })}>
+                <option value="">…or all lines of a sketch</option>
+                {sketches.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {featureName(s)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </Field>
+          <Field label="Thickness">
+            <div className="row">
+              <div style={{ flex: 1 }}>
+                <ExprInput value={f.thickness} autoFocus onCommit={(thickness) => set({ thickness })} onLive={(thickness) => set({ thickness })} />
+              </div>
+              <button className={`icon-btn ${f.flip ? "active" : ""}`} title="Fill towards the other side" onClick={() => set({ flip: f.flip ? undefined : true })}>
+                <ArrowLeftRight />
+              </button>
+            </div>
+          </Field>
+          <p className="muted small">Draw the rib as an open line on a plane across the walls, e.g. from a wall to the floor. It fills from the line to the walls it meets, centred on the sketch plane.</p>
+        </>
+      );
+    }
     case "split":
       return (
         <>
