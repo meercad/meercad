@@ -27,6 +27,7 @@ const SKETCH_TOOLS: [Exclude<SketchTool, "select">, string][] = [
   ["arc", "3-point arc"],
   ["arc_center", "Center arc"],
   ["polygon", "Polygon"],
+  ["spline", "Spline"],
   ["point", "Point"],
   ["trim", "Trim"],
   ["fillet", "Round a corner"],

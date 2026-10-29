@@ -50,7 +50,8 @@ function checkSketch(sk: SketchFeature, at: string, errors: string[]): void {
   }
   const isPoint = (pid: string) => types.get(pid) === "point";
   for (const e of sk.entities) {
-    const refs = e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : [];
+    const refs = e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : e.type === "spline" ? e.points : [];
+    if (e.type === "spline" && e.closed && e.points.length < 3) errors.push(`${at}: closed spline ${e.id} needs at least 3 points`);
     for (const r of refs) if (!isPoint(r)) errors.push(`${at}: entity ${e.id} refers to missing point "${r}"`);
   }
   const { points, curves } = sketchSymbols(sk);

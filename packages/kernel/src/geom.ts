@@ -51,12 +51,49 @@ export class Geom {
     return this.arena.track(new this.oc.gp_Ax3(this.pnt(frame.origin), this.dir(frame.normal), this.dir(frame.u)));
   }
 
-  private wire(frame: PlaneFrame, loop: readonly LoopEdge[], named: { edge: TopoDS_Edge; name: string }[]) {
+  /** A smooth B-spline edge through sketch points (fitted closely), between two vertices. */
+  splineEdge(frame: PlaneFrame, pts: readonly [number, number][], v0: TopoDS_Vertex, v1: TopoDS_Vertex): TopoDS_Edge {
+    const oc = this.oc;
+    const arr = this.arena.track(new oc.NCollection_Array1_gp_Pnt(1, pts.length));
+    pts.forEach((p, k) => arr.SetValue(k + 1, this.pnt(toWorld(frame, p))));
+    const fit = this.arena.track(new oc.GeomAPI_PointsToBSpline(arr, 3, 8, "GeomAbs_C2" as never, 1e-6));
+    return this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(this.arena.track(fit.Curve()), v0, v1)).Edge());
+  }
+
+  private wire(frame: PlaneFrame, loop0: readonly LoopEdge[], named: { edge: TopoDS_Edge; name: string }[]) {
     const oc = this.oc;
     const mw = this.arena.track(new oc.BRepBuilderAPI_MakeWire());
+    // Splines arrive as runs of short lines ("s1~0", "s1~1", …): each run becomes one smooth edge.
+    // The loop is turned so that it does not start in the middle of a run.
+    const base = (e: LoopEdge) => (e.curve.includes("~") ? e.curve.split("~")[0]! : null);
+    const cut = loop0.findIndex((e, i) => base(e) === null || base(e) !== base(loop0[(i - 1 + loop0.length) % loop0.length]!));
+    const loop = cut > 0 ? [...loop0.slice(cut), ...loop0.slice(0, cut)] : [...loop0];
     // Shared vertices so consecutive edges connect without MakeWire rebuilding them.
     const starts = loop.map((e) => this.vertex(toWorld(frame, segStart(e))));
-    loop.forEach((e, i) => {
+    for (let i = 0; i < loop.length; ) {
+      const e = loop[i]!;
+      const b = base(e);
+      if (b !== null) {
+        let j = i;
+        while (j + 1 < loop.length && base(loop[j + 1]!) === b) j++;
+        const pts = loop.slice(i, j + 1).map(segStart);
+        const last = loop[j]!.seg;
+        pts.push(last.kind === "line" ? last.b : segStart(loop[(j + 1) % loop.length]!));
+        // A spline that is the whole loop goes in as two halves: an edge from a vertex back to itself
+        // needs an exactly closed curve, which a fitted one is not.
+        const halves: [number, number][] = i === 0 && j === loop.length - 1 ? [[0, Math.floor(pts.length / 2)], [Math.floor(pts.length / 2), pts.length - 1]] : [[0, pts.length - 1]];
+        // One vertex where the halves meet, shared by both.
+        const mid = halves.length > 1 ? this.vertex(toWorld(frame, pts[halves[0]![1]]!)) : null;
+        for (const [from, to] of halves) {
+          const v0 = from === 0 ? starts[i]! : mid!;
+          const v1 = to === pts.length - 1 ? starts[(j + 1) % loop.length]! : mid!;
+          const edge = this.splineEdge(frame, pts.slice(from, to + 1), v0, v1);
+          mw.Add(edge);
+          named.push({ edge, name: b });
+        }
+        i = j + 1;
+        continue;
+      }
       const v0 = starts[i]!;
       const v1 = starts[(i + 1) % loop.length]!;
       let edge: TopoDS_Edge;
@@ -79,7 +116,8 @@ export class Geom {
       }
       mw.Add(edge);
       named.push({ edge, name: e.name });
-    });
+      i++;
+    }
     if (!mw.IsDone()) throw new Error("profile loop is not closed");
     return this.arena.track(mw.Wire());
   }

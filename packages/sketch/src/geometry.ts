@@ -80,7 +80,48 @@ export type SolvedCurve =
       end: string;
       construction: boolean;
       external: boolean;
-    };
+    }
+  /** Smooth curve through the points `through` (ids `points`); `pts` samples it densely, ends included. */
+  | { id: string; kind: "spline"; pts: Vec2[]; through: Vec2[]; points: string[]; closed: boolean; construction: boolean; external: boolean };
+
+/** Samples per span between two through-points of a spline. */
+export const SPLINE_SAMPLES = 16;
+
+/**
+ * A centripetal Catmull-Rom spline through the points (no cusps or loops within a span, no
+ * overshoot), sampled SPLINE_SAMPLES times per span. Open ends repeat their end point's neighbour
+ * mirrored, so the curve leaves straight towards the next point.
+ */
+export function splinePoints(through: readonly Vec2[], closed = false): Vec2[] {
+  const n = through.length;
+  if (n < 2) return [...through];
+  if (n === 2 && !closed) return [through[0]!, through[1]!];
+  const at = (i: number): Vec2 => {
+    if (closed) return through[((i % n) + n) % n]!;
+    if (i < 0) return [2 * through[0]![0] - through[1]![0], 2 * through[0]![1] - through[1]![1]];
+    if (i >= n) return [2 * through[n - 1]![0] - through[n - 2]![0], 2 * through[n - 1]![1] - through[n - 2]![1]];
+    return through[i]!;
+  };
+  const out: Vec2[] = [through[0]!];
+  const spans = closed ? n : n - 1;
+  for (let i = 0; i < spans; i++) {
+    const [p0, p1, p2, p3] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
+    // Knot spacing by the square root of the chord lengths (centripetal).
+    const dt = (a: Vec2, b: Vec2) => Math.max(Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])), 1e-9);
+    const t0 = 0, t1 = t0 + dt(p0, p1), t2 = t1 + dt(p1, p2), t3 = t2 + dt(p2, p3);
+    for (let k = 1; k <= SPLINE_SAMPLES; k++) {
+      const t = t1 + ((t2 - t1) * k) / SPLINE_SAMPLES;
+      const lerp = (a: Vec2, b: Vec2, ta: number, tb: number): Vec2 => {
+        const w = (t - ta) / (tb - ta);
+        return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w];
+      };
+      const a1 = lerp(p0, p1, t0, t1), a2 = lerp(p1, p2, t1, t2), a3 = lerp(p2, p3, t2, t3);
+      const b1 = lerp(a1, a2, t0, t2), b2 = lerp(a2, a3, t1, t3);
+      out.push(k === SPLINE_SAMPLES ? (closed && i === spans - 1 ? through[0]! : p2) : lerp(b1, b2, t1, t2));
+    }
+  }
+  return out;
+}
 
 export interface SolveDiagnostics {
   /** Remaining degrees of freedom; 0 = fully constrained. */

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
-import { cornerEdit, findRegions, intersectionPoints, offsetCurves, SketchEditError, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
+import { cornerEdit, findRegions, splinePoints, intersectionPoints, offsetCurves, SketchEditError, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
 import { fatLine, frameMatrix, perFrame, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { featureName } from "../lib/features";
@@ -507,6 +507,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
       // Length dimensions on a trimmed line no longer describe it.
       d.constraints = d.constraints.filter((c) => !(c.type === "length" && c.line === target.id));
+    } else if (target.kind === "spline") {
+      return toast("Splines cannot be trimmed yet: move or delete their points instead", "info");
     } else {
       const ang = (q: Vec2) => Math.atan2(q[1] - target.center[1], q[0] - target.center[0]);
       const norm = (a: number, from: number) => ((a - from) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
@@ -541,6 +543,18 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const orphan = sketch.entities.filter((x) => x.type === "point" && !used.has(x.id) && sketch.entities.some((c) => c.type !== "point" && refsOfEntity(c).includes(x.id)));
     for (const o of orphan) drop(o.id);
     commit(d);
+  };
+
+  /** Ends the spline being drawn: a curve through the clicked points (at least two). */
+  const finishSpline = (closed = false) => {
+    const pts = ts.points;
+    ts.points = [];
+    setTip(null);
+    if (!sketch || pts.length < 2) return rerender();
+    const bl = builder(sketch);
+    const ids = pts.map((p) => bl.point(p, construction));
+    bl.entity({ type: "spline", points: ids, ...(closed ? { closed: true } : {}), ...(construction ? { construction: true } : {}) }, "s");
+    commit(bl.d);
   };
 
   /** Rounds or bevels the corner nearest the click (two lines meeting at a point). */
@@ -1025,6 +1039,15 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           return rerender();
         case "point":
           return addPoint(s);
+        case "spline": {
+          // Clicking the first point again closes the curve.
+          const first = ts.points[0];
+          const onFirst = first && ts.points.length >= 3 && (s.point ? s.point === first.point : Math.hypot(s.pos[0] - first.pos[0], s.pos[1] - first.pos[1]) < px() * 6);
+          if (onFirst) return finishSpline(true);
+          const last = ts.points[ts.points.length - 1];
+          if (!last || Math.hypot(s.pos[0] - last.pos[0], s.pos[1] - last.pos[1]) > px() * 2) ts.points = [...ts.points, s];
+          return rerender();
+        }
         case "polygon":
           if (!ts.points.length) ts.points = [s];
           else {
@@ -1080,6 +1103,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         setTip(null);
         rerender();
       }
+      if (tool === "spline") return finishSpline();
       const p = toSketch(e);
       if (tool === "select" && p) {
         const t = targetAt(p);
@@ -1165,6 +1189,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (action) return setTool(action.slice(7) as SketchTool);
       const cmap: Record<string, string> = { a: "parallel", c: "concentric", e: "equal", v: "hv", n: "coincident", l: "fix", m: "midpoint", p: "perpendicular", s: "symmetric", t: "tangent" };
       if (e.shiftKey && cmap[k]) return applyConstraint(cmap[k]!);
+      // Enter or Esc ends a spline being drawn (keeping it).
+      if ((e.key === "Enter" || e.key === "Escape") && useSketchUi.getState().tool === "spline" && ts.points.length >= 2) return finishSpline();
       if (e.key === "Escape") {
         if (ts.points.length || ts.dimFirst) {
           ts.points = [];
@@ -1220,6 +1246,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const deg = ((((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI) % 180) + 180) % 180;
       if (!has(["length"])) quick.push({ key: "len", at: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], text: fmtLen(len), value: len, length: true, make: (v) => ({ type: "length", line: id, value: v }) });
       if (!has(["horizontal", "vertical", "angle"])) quick.push({ key: "ang", at: a, text: `∠ ${fmt(deg)}°`, value: +deg.toFixed(2), length: false, make: (v) => ({ type: "angle", a: id, b: "origin.x", value: v }) });
+    } else if (lastCurve.kind === "spline") {
+      // A spline is shaped by its points; dimension those.
     } else if (lastCurve.kind === "circle") {
       if (!has(["radius", "diameter"])) quick.push({ key: "dia", at: [lastCurve.center[0], lastCurve.center[1] + lastCurve.radius], text: `⌀ ${fmtLen(lastCurve.radius * 2)}`, value: lastCurve.radius * 2, length: true, make: (v) => ({ type: "diameter", curve: id, value: v }) });
     } else {
@@ -1384,7 +1412,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 /** Tools whose clicks place points (they show a dot where the next point lands). */
 /** Tools that act on existing geometry under the cursor. */
 const EDIT_TOOLS = new Set<SketchTool>(["trim", "fillet", "chamfer", "offset"]);
-const POINT_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "arc_center", "polygon", "point"]);
+const POINT_TOOLS = new Set<SketchTool>(["spline", "line", "rect", "rect_center", "circle", "arc", "arc_center", "polygon", "point"]);
 /** Tools that draw on press-drag-release as well as on two clicks. */
 const DRAG_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "polygon"]);
 /** Values that can be typed while drawing (start typing a number, Tab moves to the next field). */
@@ -1456,6 +1484,8 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
       return "Click to place a point";
     case "polygon":
       return n ? "Click a corner (hexagon; constraints keep it regular)" : "Click the center";
+    case "spline":
+      return n ? "Click the next point · double-click, Enter or Esc finishes · click the first point to close" : "Click where the smooth curve starts";
     case "trim":
       return "Click the piece of a curve to cut away up to its nearest intersections";
     case "fillet":
@@ -1532,12 +1562,14 @@ function connectedCurves(sk: SketchFeature, start: string): string[] {
 
 function curveSamples(c: SolvedCurve): Vec2[] {
   if (c.kind === "line") return [c.a, c.b];
+  if (c.kind === "spline") return c.pts;
   const n = 16;
   const [a0, sw] = c.kind === "circle" ? [0, 2 * Math.PI] : [c.a0, ((c.a1 - c.a0 + 4 * Math.PI) % (2 * Math.PI)) || 2 * Math.PI];
   return Array.from({ length: n + 1 }, (_, i) => [c.center[0] + c.radius * Math.cos(a0 + (sw * i) / n), c.center[1] + c.radius * Math.sin(a0 + (sw * i) / n)] as Vec2);
 }
 
 function curveDistance(c: SolvedCurve, p: Vec2, infinite = false): number {
+  if (c.kind === "spline") return Math.min(...c.pts.slice(1).map((b, k) => segDistance(c.pts[k]!, b, p)));
   if (c.kind === "line") {
     const d: Vec2 = [c.b[0] - c.a[0], c.b[1] - c.a[1]];
     const l2 = d[0] * d[0] + d[1] * d[1] || 1;
@@ -1559,7 +1591,25 @@ function curveDistance(c: SolvedCurve, p: Vec2, infinite = false): number {
   return Math.abs(r - c.radius);
 }
 
+/** Distance from p to the segment a–b. */
+function segDistance(a: Vec2, b: Vec2, p: Vec2): number {
+  const d: Vec2 = [b[0] - a[0], b[1] - a[1]];
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1] || 1)));
+  return Math.hypot(a[0] + d[0] * t - p[0], a[1] + d[1] * t - p[1]);
+}
+
 function projectOnCurve(c: SolvedCurve, p: Vec2): Vec2 {
+  if (c.kind === "spline") {
+    // The nearest point on the nearest piece.
+    let best: Vec2 = c.pts[0]!;
+    let bd = Infinity;
+    for (let k = 1; k < c.pts.length; k++) {
+      const q = projectOnCurve({ id: "", kind: "line", a: c.pts[k - 1]!, b: c.pts[k]!, p1: "", p2: "", construction: false, external: false }, p);
+      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < bd) [best, bd] = [q, d];
+    }
+    return best;
+  }
   if (c.kind === "line") {
     const d: Vec2 = [c.b[0] - c.a[0], c.b[1] - c.a[1]];
     const t = Math.max(0, Math.min(1, ((p[0] - c.a[0]) * d[0] + (p[1] - c.a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1] || 1)));
@@ -1570,7 +1620,7 @@ function projectOnCurve(c: SolvedCurve, p: Vec2): Vec2 {
 }
 
 function refsOfEntity(e: SketchEntity): string[] {
-  return e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : [];
+  return e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : e.type === "spline" ? e.points : [];
 }
 
 function refsOf(c: SketchConstraint): string[] {
@@ -1595,7 +1645,7 @@ function dotTexture(): THREE.Texture {
 
 function curveObject(c: SolvedCurve, color: number, dashed: boolean): THREE.Object3D {
   const pts = curveSamples(c.kind === "line" ? c : { ...c }).map(([x, y]) => new THREE.Vector3(x, y, 0));
-  if (c.kind !== "line") {
+  if (c.kind === "circle" || c.kind === "arc") {
     const n = 96;
     const [a0, sw] = c.kind === "circle" ? [0, 2 * Math.PI] : [c.a0, ((c.a1 - c.a0 + 4 * Math.PI) % (2 * Math.PI)) || 2 * Math.PI];
     pts.length = 0;
@@ -1618,6 +1668,7 @@ function previewObjects(tool: SketchTool, ts: { points: Snap[]; cursor: Vec2 | n
   const p0 = ts.points[0]?.pos;
   if (!p0) return out;
   if (tool === "line") line([p0, cur]);
+  if (tool === "spline") line(splinePoints([...ts.points.map((p) => p.pos), cur]));
   if (tool === "rect") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
   if (tool === "rect_center") line([[2 * p0[0] - cur[0], 2 * p0[1] - cur[1]], [cur[0], 2 * p0[1] - cur[1]], cur, [2 * p0[0] - cur[0], cur[1]]], true);
   if (tool === "select") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
@@ -1771,11 +1822,12 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
     if (!c) return null;
     if (c.kind === "line") return [(c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2];
     if (c.kind === "circle") return [c.center[0], c.center[1] + c.radius];
+    if (c.kind === "spline") return c.pts[Math.floor(c.pts.length / 2)] ?? null;
     const m = (c.a0 + c.a1) / 2 + (c.a1 < c.a0 ? Math.PI : 0);
     return [c.center[0] + c.radius * Math.cos(m), c.center[1] + c.radius * Math.sin(m)];
   };
   // Glyphs sharing a spot are fanned out along x (in sketch units, scaled by the sketch size).
-  const size = Math.max(10, ...s.curves.map((c) => (c.kind === "line" ? Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1]) : c.radius * 2)));
+  const size = Math.max(10, ...s.curves.map((c) => (c.kind === "line" ? Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1]) : c.kind === "spline" ? 10 : c.radius * 2)));
   const used = new Map<string, number>();
   const offset = (p: Vec2, key: string): Vec2 => {
     const n = used.get(key) ?? 0;
@@ -1795,7 +1847,7 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
           // Inside the arc, halfway between its centre and its middle.
           const cv = curve(c.curve);
           const m = mid(c.curve);
-          at = cv && cv.kind !== "line" && m ? [(cv.center[0] + m[0]) / 2, (cv.center[1] + m[1]) / 2] : m;
+          at = cv && (cv.kind === "arc" || cv.kind === "circle") && m ? [(cv.center[0] + m[0]) / 2, (cv.center[1] + m[1]) / 2] : m;
         }
         else if (c.type === "distance") {
           const a = P(c.a);
@@ -1864,7 +1916,7 @@ function dimensionGeometry(c: SketchConstraint, s: SolvedSketch): Vec2[] | null 
   }
   if (c.type === "radius" || c.type === "diameter") {
     const cv = s.curves.find((x) => x.id === c.curve);
-    if (!cv || cv.kind === "line") return null;
+    if (!cv || cv.kind === "line" || cv.kind === "spline") return null;
     const ang = Math.atan2(L[1] - cv.center[1], L[0] - cv.center[0]);
     const onCurve: Vec2 = [cv.center[0] + cv.radius * Math.cos(ang), cv.center[1] + cv.radius * Math.sin(ang)];
     return c.type === "diameter" ? [[cv.center[0] - cv.radius * Math.cos(ang), cv.center[1] - cv.radius * Math.sin(ang)], L] : [cv.center, L].concat([onCurve, L]) as Vec2[];

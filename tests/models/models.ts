@@ -7,7 +7,7 @@
 import { GEAR_DEFAULTS, gearShape, outlineArea, type GearParams } from "@meercad/model";
 import type { Feature, GearFeature, MeercadDocument, SketchEntity } from "@meercad/schema";
 import { circle, rect, sketch } from "../acceptance/helpers.js";
-import { cornerEdit, offsetCurves, type SketchData, type Vec2 } from "@meercad/sketch";
+import { cornerEdit, offsetCurves, splinePoints, type SketchData, type Vec2 } from "@meercad/sketch";
 
 export interface Expectation {
   bodies: number;
@@ -576,5 +576,32 @@ export const MODELS: TestModel[] = [
     })(),
     // Rounded rectangles: w · h − (4 − π) r²; the tab loses a 3 × 3 triangle.
     expect: { bodies: 1, volume: (60 * 40 - (4 - PI) * 25) * 5 - (54 * 34 - (4 - PI) * 4) * 2 + (200 - 4.5) * 5, size: [80, 40, 5] },
+  },
+  {
+    file: "31 Griff mit Splines",
+    name: "Handle from splines",
+    look: "A flat 8 mm thick handle with a smooth, organic outline (a closed spline through six points, about 90 × 30) and a hanging hole; beside it a Ø6 rod that leaves the floor straight up and curves away along a spline.",
+    doc: (() => {
+      const outline: [number, number][] = [[0, 0], [40, -6], [90, 0], [92, 22], [45, 26], [2, 20]];
+      const path: [number, number][] = [[120, 0], [120, 20], [135, 40], [160, 45]];
+      const pts = (ps: [number, number][], p: string): SketchEntity[] => ps.map(([x, y], i) => ({ id: `${p}${i}`, type: "point", x, y }));
+      return doc([
+        sketch("sk1", { ref: "origin.XY" }, [...pts(outline, "o"), { id: "s1", type: "spline", points: outline.map((_, i) => `o${i}`), closed: true }, ...circle("h1", 80, 12, 4)]),
+        { id: "ex1", op: "extrude", name: "Handle", profile: { sketch: "sk1" }, extent: "blind", distance: 8, mode: "new_body" },
+        sketch("sk2", { ref: "origin.XY" }, circle("r", 120, 0, 3)),
+        sketch("sk3", { ref: "origin.XZ" }, [...pts(path, "p"), { id: "s2", type: "spline", points: path.map((_, i) => `p${i}`) }]),
+        { id: "sw1", op: "sweep", name: "Rod", profile: { sketch: "sk2" }, path: { sketch: "sk3" }, mode: "new_body" },
+      ]);
+    })(),
+    // The handle: the area inside the spline (from its samples) minus the hole, 8 thick; the rod: its
+    // cross-section times the path's length. Within 1 %.
+    expect: (() => {
+      const loop = splinePoints([[0, 0], [40, -6], [90, 0], [92, 22], [45, 26], [2, 20]], true);
+      const area = Math.abs(loop.reduce((a, p, i) => a + p[0] * loop[(i + 1) % loop.length]![1] - loop[(i + 1) % loop.length]![0] * p[1], 0)) / 2;
+      const rod = splinePoints([[120, 0], [120, 20], [135, 40], [160, 45]]);
+      const length = rod.slice(1).reduce((l, p, k) => l + Math.hypot(p[0] - rod[k]![0], p[1] - rod[k]![1]), 0);
+      const v = (area - PI * 16) * 8 + PI * 9 * length;
+      return { bodies: 2, volume: [v * 0.99, v * 1.01] as [number, number] };
+    })(),
   },
 ];

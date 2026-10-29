@@ -92,6 +92,7 @@ function sketchItems(sk: SketchFeature, out: RebuildOutput, only?: Set<string>, 
     const c = view.curves.find((x) => x.id === id);
     if (!c) return null;
     if (c.kind === "line") return [(c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2];
+    if (c.kind === "spline") return c.pts[Math.floor(c.pts.length / 2)] ?? null;
     return [c.center[0] + c.radius * 0.7, c.center[1] + c.radius * 0.7];
   };
   const items: Item[] = [];

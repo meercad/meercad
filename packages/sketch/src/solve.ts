@@ -5,7 +5,7 @@
 
 import { Algorithm, GcsWrapper, init_planegcs_module, SolveStatus, type SketchPrimitive } from "@salusoft89/planegcs";
 import type { SketchConstraint, SketchEntity } from "@meercad/schema";
-import { sweep, type SolvedCurve, type SolvedSketch, type Vec2 } from "./geometry.js";
+import { splinePoints, sweep, type SolvedCurve, type SolvedSketch, type Vec2 } from "./geometry.js";
 
 /** A sketch constraint whose expression has been evaluated (mm / degrees). */
 export type ResolvedConstraint = SketchConstraint extends infer C ? (C extends { value: unknown } ? Omit<C, "value"> & { value: number } : C) : never;
@@ -67,11 +67,15 @@ export class SketchSolver {
       } else if (e.type === "arc") {
         const a = values.get(e.id) as { radius: number; start_angle: number; end_angle: number } | undefined;
         if (a) curves.push({ id: e.id, kind: "arc", center: pt(e.center), radius: a.radius, a0: a.start_angle, a1: a.end_angle, c: e.center, start: e.start, end: e.end, construction, external: false });
+      } else if (e.type === "spline") {
+        const through = e.points.map(pt);
+        curves.push({ id: e.id, kind: "spline", pts: splinePoints(through, !!e.closed), through, points: e.points, closed: !!e.closed, construction, external: false });
       }
     }
     for (const x of input.external ?? []) curves.push(x);
     // Expose curve characteristic points under their reference names too ("l1.p1", "c1.center").
     for (const c of curves) {
+      if (c.kind === "spline") continue;
       if (c.kind === "line") {
         points.set(`${c.id}.p1`, c.a);
         points.set(`${c.id}.p2`, c.b);
@@ -148,6 +152,8 @@ function buildPrimitives(input: SolveInput, opts: SolveOptions): { prims: Prim[]
     }
   }
   for (const x of input.external ?? []) {
+    // Projected model edges are lines, circles and arcs only.
+    if (x.kind === "spline") continue;
     if (x.kind === "line") {
       points.push({ id: `${x.id}.p1`, type: "point", x: x.a[0], y: x.a[1], fixed: true }, { id: `${x.id}.p2`, type: "point", x: x.b[0], y: x.b[1], fixed: true });
       curves.push({ id: x.id, type: "line", p1_id: `${x.id}.p1`, p2_id: `${x.id}.p2` });

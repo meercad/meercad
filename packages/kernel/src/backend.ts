@@ -533,10 +533,10 @@ function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
   const missing = wanted?.filter((id) => !sk.solved.curves.some((c) => c.id === id)) ?? [];
   if (missing.length) throw new FeatureError(`path curve(s) no longer exist: ${missing.join(", ")}`);
   const curves = sk.solved.curves.filter((c) => (wanted ? wanted.includes(c.id) : !c.construction && !c.external));
-  if (!curves.length) throw new FeatureError(`path sketch "${sk.id}" has no lines or arcs`);
+  if (!curves.length) throw new FeatureError(`path sketch "${sk.id}" has no lines, arcs or splines`);
   if (curves.some((c) => c.kind === "circle") && curves.length > 1) throw new FeatureError("a circle can only be a path on its own");
   // Shared vertices at shared ends, so the edges connect exactly.
-  const tol = 1e-6 * Math.max(1, ...curves.flatMap((c) => (c.kind === "line" ? [...c.a, ...c.b] : [...c.center, c.radius]).map(Math.abs)));
+  const tol = 1e-6 * Math.max(1, ...curves.flatMap((c) => (c.kind === "line" ? [...c.a, ...c.b] : c.kind === "spline" ? c.pts.flat() : [...c.center, c.radius]).map(Math.abs)));
   const verts: { p: [number, number]; v: TopoDS_Vertex; n: number }[] = [];
   const vertex = (p: [number, number]) => {
     let hit = verts.find((x) => Math.hypot(x.p[0] - p[0], x.p[1] - p[1]) < tol * 100);
@@ -548,6 +548,10 @@ function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
     if (c.kind === "line") {
       const a = vertex(c.a), b = vertex(c.b);
       return { edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(a.v, b.v)).Edge()), ends: [verts.indexOf(a), verts.indexOf(b)] };
+    }
+    if (c.kind === "spline") {
+      const a = vertex(c.pts[0]!), b = vertex(c.pts[c.pts.length - 1]!);
+      return { edge: g.splineEdge(sk.frame, c.pts, a.v, b.v), ends: [verts.indexOf(a), verts.indexOf(b)] };
     }
     const circ = arena.track(new oc.gp_Circ(arena.track(new oc.gp_Ax2(g.pnt(toWorld(sk.frame, c.center)), g.dir(sk.frame.normal), g.dir(sk.frame.u))), c.radius));
     if (c.kind === "circle") return { edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(circ)).Edge()), ends: [-1, -1] };

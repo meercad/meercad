@@ -87,6 +87,7 @@ const BASE: Keymap = {
   "sketch.arc": ["A"],
   "sketch.arc_center": ["Shift+A"],
   "sketch.polygon": ["G"],
+  "sketch.spline": ["S"],
   "sketch.point": ["P"],
   "sketch.trim": ["T"],
   "sketch.fillet": ["Shift+F"],
@@ -325,6 +326,6 @@ export const MODEL_ACTIONS: readonly ModelAction[] = [
   "measure", "joints", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
 ];
 export const SKETCH_ACTIONS: readonly SketchAction[] = [
-  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.point", "sketch.trim", "sketch.fillet", "sketch.chamfer", "sketch.offset",
+  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.spline", "sketch.point", "sketch.trim", "sketch.fillet", "sketch.chamfer", "sketch.offset",
   "sketch.dimension", "sketch.project", "sketch.construction",
 ];

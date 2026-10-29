@@ -182,3 +182,17 @@ describe("offsetCurves", () => {
     expect(() => offsetCurves({ entities: es, constraints: [] }, positions(es), ["c1"], -6)).toThrow(/larger than a radius/);
   });
 });
+
+describe("splinePoints", () => {
+  it("passes through every point, smoothly between them", async () => {
+    const { splinePoints, SPLINE_SAMPLES } = await import("./index.js");
+    const through: Vec2[] = [[0, 0], [10, 10], [20, 0], [30, 10]];
+    const pts = splinePoints(through);
+    expect(pts).toHaveLength(3 * SPLINE_SAMPLES + 1);
+    through.forEach((p, i) => close(pts[i * SPLINE_SAMPLES]!, p));
+    // No overshoot far beyond the points (centripetal): stays within a small margin of their box.
+    for (const p of pts) expect(p[1]).toBeLessThan(12);
+    const loop = splinePoints(through, true);
+    close(loop[loop.length - 1]!, through[0]!);
+  });
+});

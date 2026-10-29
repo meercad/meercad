@@ -32,6 +32,7 @@ import {
   SquareRoundCorner,
   Triangle,
   CopyPlus,
+  Waves,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import type { FeatureOp } from "@meercad/schema";
@@ -110,6 +111,7 @@ function useEntries(): RailEntry[] {
       },
       sketchTool("circle", Circle, "Circle", t),
       { id: "arcs", icon: Spline, label: "Arc", tools: [sketchTool("arc", Spline, "3-point arc", t), sketchTool("arc_center", DraftingCompass, "Center arc", t)] },
+      sketchTool("spline", Waves, "Spline", t),
       { id: "shapes", icon: Shapes, label: "More", tools: [sketchTool("polygon", Hexagon, "Polygon", t), sketchTool("point", Dot, "Point", t)] },
       "sep",
       sketchTool("dimension", Ruler, "Dimension", t),

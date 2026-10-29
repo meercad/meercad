@@ -35,7 +35,8 @@ export interface ViewMesh {
 export type SketchCurveView =
   | { id: string; kind: "line"; a: Vec2; b: Vec2; construction: boolean; external: boolean }
   | { id: string; kind: "circle"; center: Vec2; radius: number; construction: boolean; external: boolean }
-  | { id: string; kind: "arc"; center: Vec2; radius: number; a0: number; a1: number; construction: boolean; external: boolean };
+  | { id: string; kind: "arc"; center: Vec2; radius: number; a0: number; a1: number; construction: boolean; external: boolean }
+  | { id: string; kind: "spline"; pts: Vec2[]; construction: boolean; external: boolean };
 
 export interface SketchView {
   id: string;
@@ -1717,6 +1718,7 @@ export function frameMatrix(f: Frame): THREE.Matrix4 {
 
 export function curvePoints(c: SketchCurveView): Vec2[] {
   if (c.kind === "line") return [c.a, c.b];
+  if (c.kind === "spline") return c.pts;
   const [a0, sweep] = c.kind === "circle" ? [0, 2 * Math.PI] : [c.a0, (((c.a1 - c.a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
   const n = Math.max(8, Math.ceil(sweep / (Math.PI / 48)));
   const pts: Vec2[] = [];

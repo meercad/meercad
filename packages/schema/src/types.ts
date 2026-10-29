@@ -53,6 +53,18 @@ export interface ArcEntity {
   end: string;
   construction?: boolean;
 }
+/**
+ * A smooth curve through points, in order (`closed` joins the last to the first). The points are
+ * ordinary sketch points, so they can be dimensioned and constrained; the curve is a centripetal
+ * Catmull-Rom spline through them (no overshoot, no loops), a smooth B-spline in the model.
+ */
+export interface SplineEntity {
+  id: string;
+  type: "spline";
+  points: string[];
+  closed?: boolean;
+  construction?: boolean;
+}
 /** Model edges projected into the sketch as fixed reference geometry. */
 export interface ProjectionEntity {
   id: string;
@@ -60,7 +72,7 @@ export interface ProjectionEntity {
   edges: EdgeSelector[];
   construction?: boolean;
 }
-export type SketchEntity = PointEntity | LineEntity | CircleEntity | ArcEntity | ProjectionEntity;
+export type SketchEntity = PointEntity | LineEntity | CircleEntity | ArcEntity | SplineEntity | ProjectionEntity;
 
 /** Point reference: a point entity id, "origin", or a curve's characteristic point like "l1.p1", "c1.center". */
 export type PointRef = string;

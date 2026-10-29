@@ -8,6 +8,21 @@
 
 import { arcPoint, sweep, type SolvedCurve, type Vec2 } from "./geometry.js";
 
+/** Lines, circles and arcs: what regions are built from (splines become short lines first). */
+type Basic = Exclude<SolvedCurve, { kind: "spline" }>;
+
+/**
+ * Splines as the short lines of their samples, named "<spline>~<n>" (the kernel joins consecutive
+ * pieces of one spline back into a smooth curve); other curves pass through.
+ */
+export function expandSplines(curves: readonly SolvedCurve[]): Basic[] {
+  return curves.flatMap((c): Basic[] =>
+    c.kind !== "spline"
+      ? [c]
+      : c.pts.slice(1).map((b, k) => ({ id: `${c.id}~${k}`, kind: "line", a: c.pts[k]!, b, p1: "", p2: "", construction: c.construction, external: c.external })),
+  );
+}
+
 export type LoopSegment =
   | { kind: "line"; a: Vec2; b: Vec2 }
   /** Arc from angle `from` to `to`; `ccw` gives the travel direction. */
@@ -53,7 +68,7 @@ interface Edge {
 const TAU = 2 * Math.PI;
 
 export function findRegions(curves: readonly SolvedCurve[]): Region[] {
-  const solid = curves.filter((c) => !c.construction);
+  const solid = expandSplines(curves).filter((c) => !c.construction);
   if (!solid.length) return [];
   const scale = Math.max(1, ...solid.flatMap(extentOf));
   const eps = scale * 1e-9;
@@ -79,7 +94,7 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
     return verts.length - 1;
   };
   const edges: Edge[] = [];
-  const standalone: SolvedCurve[] = [];
+  const standalone: Basic[] = [];
   for (const c of solid) {
     const ps = params.get(c.id)!;
     if (c.kind === "line") {
@@ -282,7 +297,7 @@ export function regionAt(regions: readonly Region[], p: Vec2): Region | undefine
 
 // ---------------------------------------------------------------- geometry
 
-function extentOf(c: SolvedCurve): number[] {
+function extentOf(c: Basic): number[] {
   if (c.kind === "line") return [...c.a, ...c.b].map(Math.abs);
   return [Math.abs(c.center[0]) + c.radius, Math.abs(c.center[1]) + c.radius];
 }
@@ -391,9 +406,9 @@ function interiorPoint(polys: Vec2[][]): Vec2 {
 }
 
 /** Intersection parameters (t for lines in [0,1], absolute angle for arcs/circles). */
-function intersect(c1: SolvedCurve, c2: SolvedCurve, eps: number): [number, number][] {
+function intersect(c1: Basic, c2: Basic, eps: number): [number, number][] {
   if (c1.kind === "line" && c2.kind === "line") return lineLine(c1.a, c1.b, c2.a, c2.b, eps);
-  if (c1.kind === "line") return lineCircle(c1.a, c1.b, c2 as Exclude<SolvedCurve, { kind: "line" }>, eps);
+  if (c1.kind === "line") return lineCircle(c1.a, c1.b, c2 as Exclude<Basic, { kind: "line" }>, eps);
   if (c2.kind === "line") return lineCircle(c2.a, c2.b, c1, eps).map(([t, a]) => [a, t]);
   return circleCircle(c1, c2, eps);
 }
@@ -413,7 +428,7 @@ function lineLine(a: Vec2, b: Vec2, c: Vec2, d: Vec2, eps: number): [number, num
   return [[clamp01(t), clamp01(u)]];
 }
 
-function onArc(c: Exclude<SolvedCurve, { kind: "line" }>, ang: number, eps: number): boolean {
+function onArc(c: Exclude<Basic, { kind: "line" }>, ang: number, eps: number): boolean {
   if (c.kind === "circle") return true;
   const rel = normAngle(ang - c.a0);
   const span = sweep(c.a0, c.a1);
@@ -421,7 +436,7 @@ function onArc(c: Exclude<SolvedCurve, { kind: "line" }>, ang: number, eps: numb
   return rel <= span + tolA || rel >= TAU - tolA;
 }
 
-function lineCircle(a: Vec2, b: Vec2, c: Exclude<SolvedCurve, { kind: "line" }>, eps: number): [number, number][] {
+function lineCircle(a: Vec2, b: Vec2, c: Exclude<Basic, { kind: "line" }>, eps: number): [number, number][] {
   const d: Vec2 = [b[0] - a[0], b[1] - a[1]];
   const f: Vec2 = [a[0] - c.center[0], a[1] - c.center[1]];
   const A = d[0] * d[0] + d[1] * d[1];
@@ -447,7 +462,7 @@ function lineCircle(a: Vec2, b: Vec2, c: Exclude<SolvedCurve, { kind: "line" }>,
   return out;
 }
 
-function circleCircle(c1: Exclude<SolvedCurve, { kind: "line" }>, c2: Exclude<SolvedCurve, { kind: "line" }>, eps: number): [number, number][] {
+function circleCircle(c1: Exclude<Basic, { kind: "line" }>, c2: Exclude<Basic, { kind: "line" }>, eps: number): [number, number][] {
   const dx = c2.center[0] - c1.center[0];
   const dy = c2.center[1] - c1.center[1];
   const d = Math.hypot(dx, dy);
@@ -475,8 +490,14 @@ const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
 /** Intersection points of two solved curves (used by the sketch trim tool). */
 export function intersectionPoints(a: SolvedCurve, b: SolvedCurve): Vec2[] {
-  const scale = Math.max(1, ...extentOf(a), ...extentOf(b));
-  return intersect(a, b, scale * 1e-9).map(([pa]) =>
-    a.kind === "line" ? lerp(a.a, a.b, pa) : arcPoint(a.center, a.radius, pa),
-  );
+  const out: Vec2[] = [];
+  // Splines meet others where their short lines do.
+  for (const x of expandSplines([a])) {
+    for (const y of expandSplines([b])) {
+      const scale = Math.max(1, ...extentOf(x), ...extentOf(y));
+      for (const [pa] of intersect(x, y, scale * 1e-9)) out.push(x.kind === "line" ? lerp(x.a, x.b, pa) : arcPoint(x.center, x.radius, pa));
+    }
+  }
+  // Neighbouring pieces of a spline meet at their shared sample point: keep it once.
+  return out.filter((p, i) => out.findIndex((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-9) === i);
 }

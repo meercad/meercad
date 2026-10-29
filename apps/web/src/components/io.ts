@@ -76,7 +76,12 @@ export function sketchCurves(sketchId: string): Curve2[] {
   const sk = useApp.getState().output?.report.sketches.find((s) => s.id === sketchId);
   return (sk?.curves ?? [])
     .filter((c) => !c.construction)
-    .map((c): Curve2 => (c.kind === "line" ? { kind: "line", a: c.a, b: c.b } : c.kind === "circle" ? { kind: "circle", center: c.center, radius: c.radius } : { kind: "arc", center: c.center, radius: c.radius, a0: c.a0, a1: c.a1 }));
+    // Splines go out as the fine polyline of their samples.
+    .flatMap((c): Curve2[] =>
+      c.kind === "spline"
+        ? c.pts.slice(1).map((b, k) => ({ kind: "line", a: c.pts[k]!, b }))
+        : [c.kind === "line" ? { kind: "line", a: c.a, b: c.b } : c.kind === "circle" ? { kind: "circle", center: c.center, radius: c.radius } : { kind: "arc", center: c.center, radius: c.radius, a0: c.a0, a1: c.a1 }],
+    );
 }
 
 export function exportSketch(sketchId: string, format: "dxf" | "svg"): void {

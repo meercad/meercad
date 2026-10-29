@@ -106,6 +106,7 @@ export const definitions: Record<string, Json> = {
     line: obj({ id, type: { const: "line" }, p1: id, p2: id, ...construction }, ["id", "type", "p1", "p2"]),
     circle: obj({ id, type: { const: "circle" }, center: id, radius: { type: "number", exclusiveMinimum: 0 }, ...construction }, ["id", "type", "center", "radius"]),
     arc: obj({ id, type: { const: "arc" }, center: id, start: id, end: id, ...construction }, ["id", "type", "center", "start", "end"]),
+    spline: obj({ id, type: { const: "spline" }, points: arr(id, { minItems: 2, maxItems: 500 }), closed: bool, ...construction }, ["id", "type", "points"], "Smooth curve through the points, in order."),
     projection: obj({ id, type: { const: "projection" }, edges: arr(ref("edgeSelector"), { minItems: 1 }), ...construction }, ["id", "type", "edges"]),
   }),
   constraint: tagged("type", constraintVariants),
