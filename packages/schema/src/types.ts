@@ -385,6 +385,8 @@ export interface MeercadDocument {
   autoParams?: string[];
   /** Order of parts in the parts list (body ids; parts not listed follow in model order). */
   partOrder?: string[];
+  /** Colours the user gave parts ("#rrggbb" by body id); other parts are coloured automatically. */
+  partColors?: Record<string, string>;
   /** Named folders of parts in the parts list. */
   partGroups?: { name: string; parts: string[] }[];
   /**

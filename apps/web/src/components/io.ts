@@ -1,6 +1,8 @@
 /** File import/export and share links. */
 import { encodeShareFragment, read3mf, readDxf, readObj, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@meercad/io";
 import { showNotice } from "./Ask";
+import { usePrefs } from "../lib/keymap";
+import { partColors } from "../lib/partColors";
 import { nextFeatureId } from "@meercad/model";
 import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
@@ -49,7 +51,10 @@ export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   try {
     const meshes = await kernel.exportMeshes(ids);
     if (format === "stl") download(`${baseName()}.stl`, writeStl(meshes) as BlobPart, "model/stl");
-    else download(`${baseName()}.3mf`, write3mf(meshes.map((m) => ({ ...m, name: m.bodyId }))) as BlobPart, "model/3mf");
+    else {
+      const colors = partColors(useApp.getState().doc, useApp.getState().output?.report.bodies.map((b) => b.id) ?? [], usePrefs.getState().colorParts);
+      download(`${baseName()}.3mf`, write3mf(meshes.map((m) => ({ ...m, name: m.bodyId, ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) }))) as BlobPart, "model/3mf");
+    }
   } catch (e) {
     toast(`${format.toUpperCase()} export failed: ${e instanceof Error ? e.message : String(e)}`, "error");
   }

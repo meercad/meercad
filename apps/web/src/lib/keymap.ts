@@ -213,6 +213,8 @@ interface Prefs {
   showKeys: boolean;
   /** Dimension and size chips on the model. */
   showValues: boolean;
+  /** Each part in its own colour when a design has several. */
+  colorParts: boolean;
   /** Sketch points and drag handles snap to round values (the grid). */
   snapGrid: boolean;
   /** Sketch points snap to existing geometry (ends, midpoints, crossings, alignments): the magnet. */
@@ -225,7 +227,7 @@ interface Prefs {
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, snapGrid: true, snapGeometry: true, units: "metric" };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric" };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -234,6 +236,7 @@ function load(): Prefs {
       invertZoom: raw.invertZoom === true,
       showKeys: raw.showKeys !== false,
       showValues: raw.showValues !== false,
+      colorParts: raw.colorParts !== false,
       snapGrid: raw.snapGrid !== false,
       snapGeometry: raw.snapGeometry !== false,
       units: raw.units === "imperial" ? "imperial" : "metric",

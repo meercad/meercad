@@ -1,4 +1,4 @@
-import { Bot, Box, ChevronRight, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, UserCheck, X } from "lucide-react";
+import { Bot, ChevronRight, Palette, RotateCcw, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, UserCheck, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -14,6 +14,8 @@ import { exportSketch } from "./io";
 import { showMenu } from "./Menu";
 import { docUnit, fmtLen, fmtVolume, inUnit, isLengthParam } from "../lib/units";
 import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
+import { usePrefs } from "../lib/keymap";
+import { PART_PALETTE, partColors } from "../lib/partColors";
 
 const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
@@ -339,6 +341,7 @@ function Bodies() {
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
+  const colorParts = usePrefs((s) => s.colorParts);
   if (!bodies.length) return null;
   const fmt = (n: number) => fmtVolume(n);
   const ids = bodies.map((b) => b.id);
@@ -404,6 +407,23 @@ function Bodies() {
     },
   });
   const meshParts = meshBodyIds(doc.features, useApp.getState().output?.meshes ?? []);
+  const colors = partColors(doc, ids, colorParts);
+  const setColor = (id: string, hex: string | null) => {
+    const picked = { ...(doc.partColors ?? {}) };
+    if (hex) picked[id] = hex;
+    else delete picked[id];
+    const next = { ...doc, partColors: picked } as typeof doc;
+    if (!Object.keys(picked).length) delete next.partColors;
+    apply({ type: "replace", doc: next });
+  };
+  // The browser's own colour picker (works with mouse and touch alike).
+  const pickColor = (id: string) => {
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = colors.get(id) ?? PART_PALETTE[0];
+    input.addEventListener("change", () => setColor(id, input.value));
+    input.click();
+  };
   const part = (id: string, nested: boolean) => {
     const b = bodies.find((x) => x.id === id)!;
     return (
@@ -422,12 +442,15 @@ function Bodies() {
             ...(grouped.has(id) ? [{ label: "Take out of group", icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).map((g) => ({ ...g, parts: g.parts.filter((x) => x !== id) }))) }] : []),
             "sep" as const,
             { label: hidden.has(id) ? "Show" : "Hide", icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
+            { label: "Colour…", icon: <Palette />, onClick: () => pickColor(id) },
+            ...(doc.partColors?.[id] ? [{ label: "Automatic colour", icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
+            "sep" as const,
             { label: "Delete part", icon: <Trash />, danger: true, onClick: () => deleteBodies([id]) },
           ]);
         }}
         {...dropProps(id)}
       >
-        <Box className="ficon" />
+        <button className="part-swatch" title="Colour" style={{ background: colors.get(id) ?? PART_PALETTE[0] }} onClick={(e) => (e.stopPropagation(), pickColor(id))} />
         <span className="tree-label">
           {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
           {meshParts.has(id) ? (

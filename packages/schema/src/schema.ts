@@ -228,6 +228,7 @@ export const documentSchema = {
       params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") },
       autoParams: arr(id),
       partOrder: arr({ type: "string", maxLength: 128 }),
+      partColors: { type: "object", propertyNames: { maxLength: 128 }, additionalProperties: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" } },
       partGroups: arr(obj({ name: { type: "string", minLength: 1, maxLength: 128 }, parts: arr({ type: "string", maxLength: 128 }) }, ["name", "parts"])),
       units: { enum: ["mm", "in"] },
       features: arr(ref("feature")),

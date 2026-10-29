@@ -1,8 +1,14 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import type { TriangleMesh } from "./stl.js";
 
-/** 3MF package with one object per mesh (units: mm). Duplicate vertices are merged. */
-export function write3mf(meshes: readonly (TriangleMesh & { name?: string })[]): Uint8Array {
+/**
+ * 3MF package with one object per mesh (units: mm). Duplicate vertices are merged. A mesh's
+ * `color` ("#rrggbb") becomes a base material with that display colour.
+ */
+export function write3mf(meshes: readonly (TriangleMesh & { name?: string; color?: string })[]): Uint8Array {
+  const colored = meshes.filter((m) => m.color);
+  const matId = meshes.length + 1;
+  const materials = colored.length ? `<basematerials id="${matId}">${colored.map((m, k) => `<base name="${escapeXml(m.name ?? `Color ${k + 1}`)}" displaycolor="${m.color!.toUpperCase()}FF"/>`).join("")}</basematerials>` : "";
   const objects = meshes
     .map((m, i) => {
       const map = new Map<string, number>();
@@ -24,11 +30,13 @@ export function write3mf(meshes: readonly (TriangleMesh & { name?: string })[]):
         const [a, b, c] = [remap[m.indices[t]!]!, remap[m.indices[t + 1]!]!, remap[m.indices[t + 2]!]!];
         if (a !== b && b !== c && a !== c) tris.push(`<triangle v1="${a}" v2="${b}" v3="${c}"/>`);
       }
-      return `<object id="${i + 1}" type="model" name="${escapeXml(m.name ?? `Body ${i + 1}`)}"><mesh><vertices>${verts.join("")}</vertices><triangles>${tris.join("")}</triangles></mesh></object>`;
+      const k = colored.indexOf(m);
+      const material = k >= 0 ? ` pid="${matId}" pindex="${k}"` : "";
+      return `<object id="${i + 1}" type="model" name="${escapeXml(m.name ?? `Body ${i + 1}`)}"${material}><mesh><vertices>${verts.join("")}</vertices><triangles>${tris.join("")}</triangles></mesh></object>`;
     })
     .join("");
   const items = meshes.map((_, i) => `<item objectid="${i + 1}"/>`).join("");
-  const model = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>${objects}</resources><build>${items}</build></model>`;
+  const model = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>${materials}${objects}</resources><build>${items}</build></model>`;
   return zipSync({
     "[Content_Types].xml": strToU8(
       `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,

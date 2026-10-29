@@ -50,6 +50,12 @@ describe("DXF / SVG / 3MF", () => {
     const model = strFromU8(zip["3D/3dmodel.model"]!);
     expect(model).toContain('unit="millimeter"');
     expect(model.match(/<vertex /g)).toHaveLength(3);
+    // A coloured mesh points at a base material with its display colour.
+    const tri = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), indices: new Uint32Array([0, 1, 2]) };
+    const coloured = strFromU8(unzipSync(write3mf([{ ...tri, name: "a" }, { ...tri, name: "b", color: "#e8c39e" }]))["3D/3dmodel.model"]!);
+    expect(coloured).toContain('<basematerials id="3"><base name="b" displaycolor="#E8C39EFF"/></basematerials>');
+    expect(coloured).toContain('<object id="2" type="model" name="b" pid="3" pindex="0">');
+    expect(coloured).toContain('<object id="1" type="model" name="a"><mesh>');
   });
 });
 

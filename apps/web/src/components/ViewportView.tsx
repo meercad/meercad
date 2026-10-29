@@ -1,5 +1,6 @@
 import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
-import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Pencil, PencilLine, Ruler, Scan, SlidersHorizontal, Trash } from "lucide-react";
+import { partColors } from "../lib/partColors";
+import { Box, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, SlidersHorizontal, Trash } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
@@ -45,12 +46,16 @@ export function ViewportView() {
   const showPlanes = useApp((s) => s.showPlanes);
   const showSketches = useApp((s) => s.showSketches);
   const showValues = usePrefs((s) => s.showValues);
+  const colorParts = usePrefs((s) => s.colorParts);
   const sketchId = useApp((s) => s.sketchId);
   const dialog = useApp((s) => s.dialog);
   const selection = useApp((s) => s.selection);
   const measure = useApp((s) => s.measure);
   const pickingPlane = useApp((s) => s.pickingSketchPlane);
   const doc = useApp((s) => s.doc);
+  useEffect(() => {
+    if (vp) vp.setBodyColors(partColors(doc, output?.report.bodies.map((b) => b.id) ?? [], colorParts));
+  }, [vp, doc, output, colorParts]);
   const kernelState = useApp((s) => s.kernel);
   const previewing = useApp((s) => s.previewing);
   const [ortho, setOrtho] = useState(false);
@@ -550,6 +555,7 @@ export function ViewportView() {
               { label: `${check(showPlanes)}Planes`, onClick: () => useApp.setState({ showPlanes: !showPlanes }) },
               { label: `${check(showSketches)}Sketches`, onClick: () => useApp.setState({ showSketches: !showSketches }) },
               { label: `${check(showValues)}Dimensions on the model`, onClick: () => setPrefs({ showValues: !showValues }) },
+              { label: `${check(colorParts)}A colour for each part`, onClick: () => setPrefs({ colorParts: !colorParts }) },
             ]);
           }}
         >
@@ -590,6 +596,9 @@ export function ViewportView() {
         </button>
         <button className={`icon-btn sm phone-hide ${showValues ? "active" : ""}`} title={`${showValues ? "Hide" : "Show"} dimensions on the model`} onClick={() => setPrefs({ showValues: !showValues })}>
           <Ruler />
+        </button>
+        <button className={`icon-btn sm phone-hide ${colorParts ? "active" : ""}`} title={colorParts ? "Parts in one colour" : "A colour for each part"} onClick={() => setPrefs({ colorParts: !colorParts })}>
+          <Palette />
         </button>
       </div>
     </div>

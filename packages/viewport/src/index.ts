@@ -832,6 +832,18 @@ export class Viewport {
 
   // ---------------------------------------------------------------- highlight
 
+  /** Base colours of parts ("#rrggbb" by body id); others use the default part colour. */
+  private bodyColors = new Map<string, THREE.Color>();
+  setBodyColors(colors: ReadonlyMap<string, string>): void {
+    const next = new Map([...colors].map(([id, hex]) => [id, new THREE.Color(hex)]));
+    const same = next.size === this.bodyColors.size && [...next].every(([id, c]) => this.bodyColors.get(id)?.equals(c));
+    if (same) return;
+    this.bodyColors = next;
+    for (const b of this.bodies) b.painted = undefined;
+    this.paint();
+    this.invalidate();
+  }
+
   private paint(): void {
     // Selection as lookups (a whole selected mesh is thousands of faces; scanning the list per face
     // would be quadratic), then only bodies whose highlight changed are recoloured.
@@ -855,8 +867,9 @@ export class Viewport {
       b.painted = key;
       const fc = b.faces.geometry.getAttribute("color") as THREE.BufferAttribute;
       const idx = b.mesh.indices;
-      const wholeColor = sf.size || se.size ? C.faceSel : hovered ? C.faceHover : C.face;
-      const faceColor = (f: number) => (whole ? wholeColor : sf.has(f) ? C.faceSel : hovered?.kind === "face" && hovered.face === f ? C.faceHover : C.face);
+      const base = this.bodyColors.get(id) ?? C.face;
+      const wholeColor = sf.size || se.size ? C.faceSel : hovered ? C.faceHover : base;
+      const faceColor = (f: number) => (whole ? wholeColor : sf.has(f) ? C.faceSel : hovered?.kind === "face" && hovered.face === f ? C.faceHover : base);
       for (let t = 0; t < b.triFace.length; t++) {
         const c = faceColor(b.triFace[t]!);
         for (let k = 0; k < 3; k++) fc.setXYZ(idx[t * 3 + k]!, c.r, c.g, c.b);
