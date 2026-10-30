@@ -185,6 +185,22 @@ export function ViewportView() {
     vp.partDrag = motionOpen && !dialog ? partDrag : null;
     vp.setPoses(currentPoses());
   }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog]);
+  // Joint symbols while the joints panel is open; the one being edited stands out.
+  const motionDraft = useMotion((s) => s.draft);
+  useEffect(() => {
+    if (!vp) return;
+    const joints = doc.mechanism?.joints ?? [];
+    const frames = output?.report.joints ?? [];
+    vp.setJointGlyphs(
+      motionOpen
+        ? joints.flatMap((j) => {
+            const f = frames.find((x) => x.id === j.id);
+            if (!f || f.error || j.suppressed) return [];
+            return [{ id: j.id, type: j.type, origin: f.origin, axis: f.axis, ...(j.b !== "ground" ? { parent: j.b } : {}), active: motionDraft?.joint.id === j.id }];
+          })
+        : [],
+    );
+  }, [vp, motionOpen, output, doc.mechanism, motionDraft?.joint.id]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, pickingPlane, dialog?.field]);

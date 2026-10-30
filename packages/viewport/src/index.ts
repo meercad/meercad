@@ -88,6 +88,17 @@ export interface SceneData {
 }
 
 /** Draggable arrow along an axis (push/pull, fillet radius, extrude distance). */
+/** A joint drawn in the scene: a ring about a revolute joint's axis, a double arrow along a slider. */
+export interface JointGlyph {
+  id: string;
+  type: "revolute" | "slider" | "fixed";
+  origin: Vec3;
+  axis: Vec3;
+  /** The part the joint hangs on: the glyph moves with it. */
+  parent?: string;
+  active?: boolean;
+}
+
 export interface Handle {
   id: string;
   origin: Vec3;
@@ -186,6 +197,7 @@ export class Viewport {
   private sceneData: SceneData | null = null;
   handles: Handle[] = [];
   private handleGroup = new THREE.Group();
+  private jointGroup = new THREE.Group();
   private activeHandle: { h: Handle; value: number; pointer: number } | null = null;
   private hoverHandle: string | null = null;
   /** Reports the value being dragged and its screen position (for a value tooltip). */
@@ -226,7 +238,7 @@ export class Viewport {
 
     this.grid = new THREE.Group();
     this.grid.add(this.gridMesh);
-    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay, this.handleGroup);
+    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay, this.handleGroup, this.jointGroup);
     this.axes = axesHelper();
     this.scene.add(this.axes);
 
@@ -491,7 +503,61 @@ export class Viewport {
       else b.group.matrix.identity();
       b.group.updateMatrixWorld(true);
     }
+    this.placeJoints();
     this.invalidate();
+  }
+
+  /** Shows joints as symbols (empty list hides them). */
+  setJointGlyphs(glyphs: JointGlyph[]): void {
+    disposeTree(this.jointGroup);
+    const box = this.modelBox();
+    const size = box ? Math.max(5, Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) * 0.08) : 8;
+    for (const j of glyphs) {
+      const g = new THREE.Group();
+      g.userData = { parent: j.parent };
+      const color = j.active ? 0xff7a1a : 0x4f46e5;
+      const o = new THREE.Vector3(...j.origin);
+      const a = new THREE.Vector3(...j.axis).normalize();
+      const u = new THREE.Vector3().crossVectors(a, Math.abs(a.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize();
+      const v = new THREE.Vector3().crossVectors(a, u);
+      const at = (cu: number, cv: number, ca = 0) => o.clone().addScaledVector(u, cu).addScaledVector(v, cv).addScaledVector(a, ca);
+      const line = (pts: THREE.Vector3[], width = 2.5) => g.add(Object.assign(fatLine(pts, { color, width }), { renderOrder: 60 }));
+      // The axis itself, dashed through the joint.
+      g.add(Object.assign(fatLine([at(0, 0, -1.6 * size), at(0, 0, 1.6 * size)], { color, width: 1.5, dashed: { dash: size * 0.2, gap: size * 0.12 } }), { renderOrder: 60 }));
+      if (j.type === "revolute") {
+        // Three quarters of a ring about the axis, ending in an arrow: it turns.
+        const r = size * 0.8;
+        const ring = Array.from({ length: 49 }, (_, k) => at(r * Math.cos((k / 48) * 1.5 * Math.PI), r * Math.sin((k / 48) * 1.5 * Math.PI)));
+        line(ring);
+        const end = 1.5 * Math.PI;
+        const tip = at(r * Math.cos(end), r * Math.sin(end));
+        const back = (s: number) => at(r * Math.cos(end - 0.35) + s * Math.cos(end - 0.35) * size * 0.18, r * Math.sin(end - 0.35) + s * Math.sin(end - 0.35) * size * 0.18);
+        line([back(1), tip, back(-1)]);
+      } else if (j.type === "slider") {
+        // A double arrow along the axis: it slides.
+        const L = size * 1.2;
+        line([at(0, 0, -L), at(0, 0, L)]);
+        for (const s of [1, -1]) line([at(size * 0.25, 0, s * (L - size * 0.35)), at(0, 0, s * L), at(-size * 0.25, 0, s * (L - size * 0.35))]);
+      } else {
+        // Fixed: a small square across the axis.
+        const q = size * 0.35;
+        line([at(-q, -q), at(q, -q), at(q, q), at(-q, q), at(-q, -q)]);
+      }
+      this.jointGroup.add(g);
+    }
+    this.placeJoints();
+    this.invalidate();
+  }
+
+  /** Joint symbols ride along with the part they hang on. */
+  private placeJoints(): void {
+    for (const g of this.jointGroup.children) {
+      const m = this.poses.get((g.userData as { parent?: string }).parent ?? "");
+      g.matrixAutoUpdate = false;
+      if (m) g.matrix.fromArray(m as number[]);
+      else g.matrix.identity();
+      g.updateMatrixWorld(true);
+    }
   }
 
   /** The pointer's ray into the scene. */
