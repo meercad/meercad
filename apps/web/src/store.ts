@@ -92,7 +92,9 @@ function threadsOff(): boolean {
     return false;
   }
 }
-export const kernel = new KernelClient(new KernelWorker({ name: wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel" }));
+// OCCT broke on a model (seen with large booleans in the multi-threaded build): carry on in a fresh,
+// single-threaded kernel, which builds the same models with more room.
+export const kernel = new KernelClient(new KernelWorker({ name: wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel" }), () => new KernelWorker({ name: "kernel" }));
 /** A second, single-threaded kernel for background work that must never hold up the editor. */
 export const spareKernel = () => new KernelClient(new KernelWorker({ name: "kernel-spare" }));
 // Touch screens are tablets: meshing is a large share of every rebuild there, and the screen is

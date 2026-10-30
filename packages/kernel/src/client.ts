@@ -20,41 +20,82 @@ export class SupersededError extends Error {
   }
 }
 
-type Pending = { resolve: (r: WorkerResponse) => void; reject: (e: Error) => void };
+type Pending = { req: WorkerRequest; retried: boolean; resolve: (r: WorkerResponse) => void; reject: (e: Error) => void };
 type Distribute<T> = T extends unknown ? Omit<T, "seq"> : never;
 
-/** Main-thread handle to the kernel worker. */
+/**
+ * Main-thread handle to the kernel worker. When OCCT breaks inside the worker (a WebAssembly runtime
+ * error, after which its memory cannot be trusted), `replace` gives a new worker: the open requests
+ * go to it once more, after the last document so exports and measuring still have a model. A
+ * request that breaks the new worker too fails with the error.
+ */
 export class KernelClient {
   private seq = 0;
   /** When the latest message from the worker arrived (ms since the epoch). */
   private lastReceived = 0;
   private pending = new Map<number, Pending>();
+  private lastRebuild: WorkerRequest | null = null;
+  private worker!: Worker;
   readonly ready: Promise<{ initMs: number; threads: boolean }>;
+  private onReady!: (v: { initMs: number; threads: boolean }) => void;
+  private onFatal!: (e: Error) => void;
 
-  constructor(private readonly worker: Worker) {
-    let onReady!: (v: { initMs: number; threads: boolean }) => void;
-    let onFatal!: (e: Error) => void;
+  constructor(
+    worker: Worker,
+    private readonly replace?: (crashed: { threads: boolean; message: string }) => Worker,
+  ) {
     this.ready = new Promise((res, rej) => {
-      onReady = res;
-      onFatal = rej;
+      this.onReady = res;
+      this.onFatal = rej;
     });
+    this.attach(worker);
+  }
+
+  private attach(worker: Worker): void {
+    this.worker = worker;
     worker.addEventListener("message", (e: MessageEvent<WorkerResponse>) => {
+      if (worker !== this.worker) return;
       this.lastReceived = performance.timeOrigin + performance.now();
       const msg = e.data;
-      if (msg.type === "ready") return onReady({ initMs: msg.initMs, threads: msg.threads });
+      if (msg.type === "ready") return this.onReady({ initMs: msg.initMs, threads: msg.threads });
       if (msg.type === "fatal") {
         const err = new Error(msg.message);
-        onFatal(err);
+        this.onFatal(err);
         for (const p of this.pending.values()) p.reject(err);
         this.pending.clear();
         return;
       }
+      if (msg.type === "crashed") return this.crashed(msg);
       const p = this.pending.get(msg.seq);
       if (!p) return;
       this.pending.delete(msg.seq);
       if (msg.type === "failed") p.reject(msg.message === "superseded" ? new SupersededError() : new Error(msg.message));
-      else p.resolve(msg);
+      else {
+        if (msg.type === "rebuilt" && p.req.type === "rebuild") this.lastRebuild = p.req;
+        p.resolve(msg);
+      }
     });
+  }
+
+  private crashed(msg: Extract<WorkerResponse, { type: "crashed" }>): void {
+    const culprit = this.pending.get(msg.seq);
+    if (!this.replace) {
+      for (const p of this.pending.values()) p.reject(new Error(msg.message));
+      this.pending.clear();
+      return;
+    }
+    console.warn(`geometry kernel broke (${msg.message}); starting a new one`);
+    this.worker.terminate();
+    this.attach(this.replace({ threads: msg.threads, message: msg.message }));
+    if (culprit?.retried) {
+      this.pending.delete(msg.seq);
+      culprit.reject(new Error(`the geometry kernel broke: ${msg.message}`));
+    }
+    if (culprit) culprit.retried = true;
+    // The new worker knows no model yet: the last one first, unless a newer rebuild is waiting.
+    const open = [...this.pending.entries()].sort(([a], [b]) => a - b);
+    if (this.lastRebuild && !open.some(([, p]) => p.req.type === "rebuild")) this.worker.postMessage({ ...this.lastRebuild, seq: ++this.seq });
+    for (const [, p] of open) this.worker.postMessage(p.req);
   }
 
   /**
@@ -122,9 +163,9 @@ export class KernelClient {
 
   private send(req: Distribute<WorkerRequest>): Promise<WorkerResponse> {
     return new Promise((resolve, reject) => {
-      const seq = ++this.seq;
-      this.pending.set(seq, { resolve, reject });
-      this.worker.postMessage({ ...req, seq } as WorkerRequest);
+      const full = { ...req, seq: ++this.seq } as WorkerRequest;
+      this.pending.set(full.seq, { req: full, retried: false, resolve, reject });
+      this.worker.postMessage(full);
     });
   }
 

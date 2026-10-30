@@ -30,8 +30,20 @@ function exposeSharedArrayBuffer(): void {
   scope.SharedArrayBuffer = new WebAssembly.Memory({ initial: 0, maximum: 0, shared: true }).buffer.constructor;
 }
 
+const crashes = new WeakMap<OC, string>();
+
+/**
+ * The WebAssembly runtime error (memory access out of bounds, null function) a module has thrown, if
+ * any. After one its memory can no longer be trusted, so it must be replaced, not used on.
+ */
+export function crashOf(oc: OC): string | undefined {
+  return crashes.get(oc);
+}
+
 /** Converts whatever OCCT threw (C++ exceptions arrive as WebAssembly.Exception) into a message. */
 export function occtErrorMessage(oc: OC, e: unknown): string {
+  const RuntimeError = (globalThis as { WebAssembly?: { RuntimeError?: new (...a: never[]) => Error } }).WebAssembly?.RuntimeError;
+  if (RuntimeError && e instanceof RuntimeError && !crashes.has(oc)) crashes.set(oc, e.message);
   const WasmException = (globalThis as { WebAssembly?: { Exception?: new (...a: never[]) => object } }).WebAssembly?.Exception;
   if (WasmException && e instanceof WasmException) {
     try {

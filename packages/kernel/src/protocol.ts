@@ -27,6 +27,8 @@ export type WorkerRequest =
 export type WorkerResponse =
   | { type: "ready"; initMs: number; threads: boolean }
   | { type: "fatal"; message: string }
+  /** OCCT broke (a WebAssembly runtime error) while handling `seq`: the worker must be replaced. */
+  | { type: "crashed"; seq: number; message: string; threads: boolean }
   | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] }
   | { type: "exported"; seq: number; data: Uint8Array }
   | { type: "exported_mesh"; seq: number; meshes: BodyMesh[] }
