@@ -6,7 +6,7 @@
 import { FileDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { layoutSheet, SHEET_LABELS, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type SheetLabels, type SheetView } from "@meercad/io";
-import { billOfMaterials, bomCsv, drawingDocument } from "@meercad/model";
+import { billOfMaterials, bomCsv, drawingDocument, materialById } from "@meercad/model";
 import { partName } from "../lib/features";
 import { currentDoc, kernel, toast, useApp } from "../store";
 import { baseName, download } from "./io";
@@ -55,7 +55,11 @@ export function DrawingDialog() {
 
   useEffect(() => {
     const show = () => {
-      setTitle((t) => t || baseName());
+      setTitle((cur) => cur || baseName());
+      // The parts' material when they all share one.
+      const ids = new Set(Object.values(useApp.getState().doc.partMaterials ?? {}));
+      const only = ids.size === 1 ? materialById([...ids][0]!) : undefined;
+      if (only) setMaterial((m) => m || t(only.name));
       setOpen(true);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
