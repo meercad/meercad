@@ -485,7 +485,7 @@ export class Viewport {
    * Set while parts can be dragged (moving a mechanism): `start` decides on a press on a part whether
    * it grabs that part; then `move` gets the pointer ray until `end`.
    */
-  partDrag: { start(pick: Extract<Pick, { kind: "face" }>, ray: Ray): boolean; move(ray: Ray): void; end(): void } | null = null;
+  partDrag: { start(pick: Extract<Pick, { kind: "face" }>, ray: Ray): boolean; startJoint?(id: string, ray: Ray): boolean; move(ray: Ray): void; end(): void } | null = null;
   private activePart: number | null = null;
 
   /** Shows parts moved from where they were modelled (column-major 4×4 matrices by body id). */
@@ -514,7 +514,9 @@ export class Viewport {
     const size = box ? Math.max(5, Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) * 0.08) : 8;
     for (const j of glyphs) {
       const g = new THREE.Group();
-      g.userData = { parent: j.parent };
+      // `grip`: points of the symbol to grab it by (fixed joints have none).
+      const grip: THREE.Vector3[] = [];
+      g.userData = { parent: j.parent, joint: j.id, grip };
       const color = j.active ? 0xff7a1a : 0x4f46e5;
       const o = new THREE.Vector3(...j.origin);
       const a = new THREE.Vector3(...j.axis).normalize();
@@ -533,11 +535,16 @@ export class Viewport {
         const tip = at(r * Math.cos(end), r * Math.sin(end));
         const back = (s: number) => at(r * Math.cos(end - 0.35) + s * Math.cos(end - 0.35) * size * 0.18, r * Math.sin(end - 0.35) + s * Math.sin(end - 0.35) * size * 0.18);
         line([back(1), tip, back(-1)]);
+        // A knob on the ring to turn it by.
+        g.add(knob(at(r * Math.cos(Math.PI * 0.75), r * Math.sin(Math.PI * 0.75)), size * 0.13, color));
+        grip.push(...ring);
       } else if (j.type === "slider") {
         // A double arrow along the axis: it slides.
         const L = size * 1.2;
         line([at(0, 0, -L), at(0, 0, L)]);
         for (const s of [1, -1]) line([at(size * 0.25, 0, s * (L - size * 0.35)), at(0, 0, s * L), at(-size * 0.25, 0, s * (L - size * 0.35))]);
+        g.add(knob(at(0, 0, 0), size * 0.13, color));
+        grip.push(...Array.from({ length: 13 }, (_, k) => at(0, 0, -L + (2 * L * k) / 12)));
       } else {
         // Fixed: a small square across the axis.
         const q = size * 0.35;
@@ -560,6 +567,26 @@ export class Viewport {
     }
   }
 
+  private jointHover = false;
+
+  /** The joint whose symbol is within `px` screen pixels of the point, or null. */
+  private jointAt(clientX: number, clientY: number, px: number): string | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const p = new THREE.Vector3();
+    let best: { id: string; d: number } | null = null;
+    for (const g of this.jointGroup.children) {
+      const { joint, grip } = g.userData as { joint?: string; grip?: THREE.Vector3[] };
+      if (!joint || !grip?.length) continue;
+      for (const q of grip) {
+        p.copy(q).applyMatrix4(g.matrixWorld).project(this.camera);
+        if (p.z > 1) continue;
+        const d = Math.hypot(rect.left + ((p.x + 1) / 2) * rect.width - clientX, rect.top + ((1 - p.y) / 2) * rect.height - clientY);
+        if (d <= px && (!best || d < best.d)) best = { id: joint, d };
+      }
+    }
+    return best?.id ?? null;
+  }
+
   /** The pointer's ray into the scene. */
   ray(clientX: number, clientY: number): Ray {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
@@ -578,8 +605,13 @@ export class Viewport {
       (e) => {
         const drag = this.partDrag;
         if (!drag || e.button !== 0 || this.activePart !== null || (e.pointerType === "touch" && !e.isPrimary)) return;
-        const pick = this.pick(e.clientX, e.clientY, new Set(["face"]));
-        if (pick?.kind !== "face" || !drag.start(pick, this.ray(e.clientX, e.clientY))) return;
+        const ray = this.ray(e.clientX, e.clientY);
+        // A joint symbol is a handle: it turns or slides its joint, before any part under it.
+        const grabbed = this.jointAt(e.clientX, e.clientY, e.pointerType === "touch" ? 22 : 10);
+        if (!(grabbed && drag.startJoint?.(grabbed, ray))) {
+          const pick = this.pick(e.clientX, e.clientY, new Set(["face"]));
+          if (pick?.kind !== "face" || !drag.start(pick, ray)) return;
+        }
         e.stopImmediatePropagation();
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
@@ -592,6 +624,12 @@ export class Viewport {
     el.addEventListener(
       "pointermove",
       (e) => {
+        if (this.activePart === null && this.partDrag && e.pointerType === "mouse" && !e.buttons) {
+          const over = this.jointAt(e.clientX, e.clientY, 10) !== null;
+          if (over) el.style.cursor = "grab";
+          else if (el.style.cursor === "grab" && this.jointHover) el.style.cursor = "";
+          this.jointHover = over;
+        }
         if (e.pointerId !== this.activePart) return;
         e.stopImmediatePropagation();
         moveTo(e);
@@ -1900,6 +1938,14 @@ export const SKETCH_LINE_WIDTH = 2.5;
  * A line of a given width in screen pixels through the points (sketch curves, previews, guides).
  * `loop` closes it; `dashed` draws dashes in sketch units.
  */
+/** A round knob drawn over the model: the part of a symbol to take hold of. */
+function knob(at: THREE.Vector3, radius: number, color: number): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true }));
+  m.position.copy(at);
+  m.renderOrder = 61;
+  return m;
+}
+
 export function fatLine(points: readonly (readonly [number, number] | THREE.Vector3)[], o: { color: number; width?: number; loop?: boolean; dashed?: { dash: number; gap: number }; depthTest?: boolean }): Line2 {
   const flat: number[] = [];
   const push = (p: readonly [number, number] | THREE.Vector3) => (p instanceof THREE.Vector3 ? flat.push(p.x, p.y, p.z) : flat.push(p[0], p[1], 0));

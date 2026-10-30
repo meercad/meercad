@@ -154,13 +154,16 @@ export const partDrag = {
     let joint = mech.jointOf(pick.bodyId);
     for (let i = 0; joint?.type === "fixed" && i < 100; i++) joint = mech.jointOf(joint.b);
     if (!joint || joint.type === "fixed") return false;
-    const values = mech.values(useMotion.getState().free);
-    const parent = mech.poses(values).get(joint.b) ?? motion.IDENTITY;
-    const o = motion.transformPoint(parent, joint.origin);
-    const n = motion.transformDir(parent, joint.axis);
-    const t0 = motion.rayLineParam(ray.origin, ray.dir, o, n) ?? 0;
-    drag = { joint, o, n, start: values[joint.id] ?? 0, grab: pick.point, last: pick.point, turned: 0, t0 };
-    return true;
+    return grabJoint(mech, joint, ray, pick.point);
+  },
+  /** A press on a joint's symbol: turns or slides that joint (in a linkage too). */
+  startJoint(id: string, ray: Ray): boolean {
+    if (useMotion.getState().draft) return false;
+    stopPlaying();
+    const { mech } = currentMechanism();
+    const joint = mech.joint(id);
+    if (!joint || joint.type === "fixed") return false;
+    return grabJoint(mech, joint, ray, null);
   },
   move(ray: Ray): void {
     if (loopDrag) {
@@ -189,6 +192,22 @@ export const partDrag = {
     loopDrag = null;
   },
 };
+
+/**
+ * Starts dragging `joint` from the point `grab` on the part; from its symbol (`grab` null), where the
+ * ray meets the plane across the axis.
+ */
+function grabJoint(mech: motion.Mechanism, joint: motion.MotionJoint, ray: Ray, grab: motion.V3 | null): boolean {
+  const l = loopOf(mech);
+  const values = l ? jointValues() : mech.values(useMotion.getState().free);
+  const parent = (l ? l.poses : mech.poses(values)).get(joint.b) ?? motion.IDENTITY;
+  const o = motion.transformPoint(parent, joint.origin);
+  const n = motion.transformDir(parent, joint.axis);
+  const t0 = motion.rayLineParam(ray.origin, ray.dir, o, n) ?? 0;
+  const from = grab ?? (joint.type === "revolute" ? motion.rayPlane(ray.origin, ray.dir, o, n) : null) ?? o;
+  drag = { joint, o, n, start: values[joint.id] ?? 0, grab: from, last: from, turned: 0, t0 };
+  return true;
+}
 
 // ---------------------------------------------------------------- editing joints
 
