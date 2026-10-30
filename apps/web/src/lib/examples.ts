@@ -144,8 +144,8 @@ const gearPair: MeercadDocument = {
   format: "meercad/1",
   params: { module: "1.5 mm", pinion: "15", wheel: "30", width: "8 mm", shaft: "5 mm" },
   features: [
-    { id: "gr1", op: "gear", name: "Pinion", kind: "spur", module: "module", teeth: "pinion", width: "width", bore: { diameter: "shaft", shape: "d_flat", flat: "shaft - 0.5 mm", allowance: "0.15 mm" }, chamfer: "0.5 mm", mode: "new_body" },
-    { id: "gr2", op: "gear", name: "Wheel", kind: "spur", teeth: "wheel", width: "width", meshWith: { gear: "gr1", direction: 30 }, bore: { diameter: "8 mm", allowance: "0.15 mm" }, chamfer: "0.5 mm", mode: "new_body" },
+    { id: "gr1", op: "gear", name: "Pinion", kind: "spur", module: "module", teeth: "pinion", width: "width", bore: { diameter: "shaft", shape: "d_flat", flat: "shaft - 0.5 mm", allowance: "0.15 mm" }, mode: "new_body" },
+    { id: "gr2", op: "gear", name: "Wheel", kind: "spur", teeth: "wheel", width: "width", meshWith: { gear: "gr1", direction: 30 }, bore: { diameter: "8 mm", allowance: "0.15 mm" }, mode: "new_body" },
   ],
   mechanism: {
     joints: [
