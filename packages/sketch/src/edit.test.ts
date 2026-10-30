@@ -196,3 +196,28 @@ describe("splinePoints", () => {
     close(loop[loop.length - 1]!, through[0]!);
   });
 });
+
+describe("patternCurves", () => {
+  it("repeats circles in a row and round a centre, sizes kept equal", async () => {
+    const { patternCurves } = await import("./index.js");
+    const es: SketchEntity[] = [{ id: "o", type: "point", x: 10, y: 0 }, { id: "c1", type: "circle", center: "o", radius: 2 }];
+    const row = patternCurves({ entities: es, constraints: [] }, positions(es), ["c1"], { kind: "linear", count: 4, dx: 15, dy: 0 });
+    const xs = row.entities.filter((e) => e.type === "point").map((e) => (e.type === "point" ? e.x : 0));
+    expect(xs).toEqual([10, 25, 40, 55]);
+    expect(row.constraints.filter((c) => c.type === "equal")).toHaveLength(3);
+    solve(row);
+    const ring = patternCurves({ entities: es, constraints: [] }, positions(es), ["c1"], { kind: "circular", count: 4, angle: 90, center: [0, 0] });
+    const pts = ring.entities.filter((e) => e.type === "point").map((e) => (e.type === "point" ? [Math.round(e.x * 1e6) / 1e6 + 0, Math.round(e.y * 1e6) / 1e6 + 0] : []));
+    expect(pts).toEqual([[10, 0], [0, 10], [-10, 0], [0, -10]]);
+  });
+
+  it("keeps shared corners shared in each copy", async () => {
+    const { patternCurves } = await import("./index.js");
+    const sk = { entities: rect(0, 0, 10, 5), constraints: [] };
+    const d = patternCurves(sk, positions(sk.entities), ["l1", "l2", "l3", "l4"], { kind: "linear", count: 3, dx: 0, dy: 10 });
+    // Two copies of a closed rectangle: 4 new points each (not 8).
+    expect(d.entities.filter((e) => e.type === "point")).toHaveLength(4 + 8);
+    expect(d.entities.filter((e) => e.type === "line")).toHaveLength(12);
+    expect(() => patternCurves(sk, positions(sk.entities), ["l1"], { kind: "linear", count: 1, dx: 1, dy: 0 })).toThrow(/count/);
+  });
+});

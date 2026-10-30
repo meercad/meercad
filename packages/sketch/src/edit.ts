@@ -217,3 +217,53 @@ export function offsetCurves(sk: SketchData, positions: ReadonlyMap<string, Vec2
   }
   return out;
 }
+
+/**
+ * Copies of curves in a row (`dx`, `dy` apart) or round a centre (`angle` apart, degrees), `count`
+ * in all including the originals. Each copy gets its own points; copied circles and arcs keep their
+ * radius (an equal constraint to the original), copied lines their length (equal).
+ */
+export function patternCurves(
+  sk: SketchData,
+  positions: ReadonlyMap<string, Vec2>,
+  curves: readonly string[],
+  o: { kind: "linear"; count: number; dx: number; dy: number } | { kind: "circular"; count: number; angle: number; center: Vec2 },
+): SketchData {
+  const picked = sk.entities.filter((e) => curves.includes(e.id) && (e.type === "line" || e.type === "arc" || e.type === "circle" || e.type === "spline"));
+  if (!picked.length) throw new SketchEditError("pick the curves to repeat");
+  if (!(o.count >= 2) || o.count > 200) throw new SketchEditError("the count must be between 2 and 200");
+  const out: SketchData = { entities: [...sk.entities], constraints: [...sk.constraints] };
+  const move = (p: Vec2, k: number): Vec2 => {
+    if (o.kind === "linear") return [p[0] + o.dx * k, p[1] + o.dy * k];
+    const a = (o.angle * k * Math.PI) / 180;
+    const [x, y] = [p[0] - o.center[0], p[1] - o.center[1]];
+    return [o.center[0] + x * Math.cos(a) - y * Math.sin(a), o.center[1] + x * Math.sin(a) + y * Math.cos(a)];
+  };
+  const pointsOf = (e: SketchEntity) => (e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : e.type === "spline" ? e.points : []);
+  for (let k = 1; k < o.count; k++) {
+    // Points shared by the picked curves stay shared in each copy.
+    const map = new Map<string, string>();
+    const copyPoint = (id: string) => {
+      const hit = map.get(id);
+      if (hit) return hit;
+      const p = positions.get(id);
+      if (!p) throw new SketchEditError(`point ${id} has no position`);
+      const nid = fresh(out, "p");
+      const q = move(p, k);
+      out.entities.push({ id: nid, type: "point", x: round(q[0]), y: round(q[1]) });
+      map.set(id, nid);
+      return nid;
+    };
+    for (const e of picked) {
+      const pts = pointsOf(e).map(copyPoint);
+      const id = fresh(out, e.type === "line" ? "l" : e.type === "circle" ? "c" : e.type === "arc" ? "a" : "s");
+      const construction = e.construction ? { construction: true } : {};
+      if (e.type === "line") out.entities.push({ id, type: "line", p1: pts[0]!, p2: pts[1]!, ...construction });
+      else if (e.type === "circle") out.entities.push({ id, type: "circle", center: pts[0]!, radius: e.radius, ...construction });
+      else if (e.type === "arc") out.entities.push({ id, type: "arc", center: pts[0]!, start: pts[1]!, end: pts[2]!, ...construction });
+      else if (e.type === "spline") out.entities.push({ id, type: "spline", points: pts, ...(e.closed ? { closed: true } : {}), ...construction });
+      if (e.type !== "spline") out.constraints.push({ id: fresh(out, "k"), type: "equal", a: id, b: e.id });
+    }
+  }
+  return out;
+}

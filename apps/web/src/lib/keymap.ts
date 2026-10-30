@@ -99,6 +99,7 @@ const BASE: Keymap = {
   "sketch.fillet": ["Shift+F"],
   "sketch.chamfer": ["Shift+B"],
   "sketch.offset": ["Shift+O"],
+  "sketch.pattern": ["Shift+G"],
   "sketch.dimension": ["D"],
   "sketch.project": ["U"],
   "sketch.construction": ["X"],
@@ -332,6 +333,6 @@ export const MODEL_ACTIONS: readonly ModelAction[] = [
   "measure", "joints", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
 ];
 export const SKETCH_ACTIONS: readonly SketchAction[] = [
-  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.spline", "sketch.point", "sketch.trim", "sketch.fillet", "sketch.chamfer", "sketch.offset",
+  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.spline", "sketch.point", "sketch.trim", "sketch.fillet", "sketch.chamfer", "sketch.offset", "sketch.pattern",
   "sketch.dimension", "sketch.project", "sketch.construction",
 ];

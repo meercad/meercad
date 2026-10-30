@@ -35,6 +35,7 @@ const SKETCH_TOOLS: [Exclude<SketchTool, "select">, string][] = [
   ["fillet", "Round a corner"],
   ["chamfer", "Bevel a corner"],
   ["offset", "Offset curves"],
+  ["pattern", "Repeat curves (pattern)"],
   ["dimension", "Dimension"],
   ["project", "Project model edges"],
 ];

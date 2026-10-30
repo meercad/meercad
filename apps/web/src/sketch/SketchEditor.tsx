@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
-import { cornerEdit, findRegions, splinePoints, intersectionPoints, offsetCurves, SketchEditError, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
+import { cornerEdit, findRegions, patternCurves, splinePoints, intersectionPoints, offsetCurves, SketchEditError, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
 import { fatLine, frameMatrix, perFrame, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { featureName } from "../lib/features";
@@ -557,6 +557,20 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     commit(bl.d);
   };
 
+  /** Repeats the selected curves as set in the pattern tool's panel. */
+  const repeatSelection = () => {
+    if (!sketch || !shown) return;
+    const ids = useSketchUi.getState().selection.filter((x) => x.kind === "curve").map((x) => x.id);
+    const o = useSketchUi.getState().pattern;
+    try {
+      commit(patternCurves(sketch, shown.points, ids, o.kind === "linear" ? { kind: "linear", count: o.count, dx: o.dx, dy: o.dy } : { kind: "circular", count: o.count, angle: o.angle, center: [0, 0] }));
+      setSketchSelection([]);
+    } catch (e) {
+      if (e instanceof SketchEditError) toast(`Cannot repeat: ${e.message}`, "error");
+      else throw e;
+    }
+  };
+
   /** Rounds or bevels the corner nearest the click (two lines meeting at a point). */
   const cornerAt = (p: Vec2, kind: "fillet" | "chamfer") => {
     if (!sketch || !shown) return;
@@ -845,10 +859,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
       if (e.buttons && !g.down?.started) return;
       // Hover + tool previews
-      if (tool === "select" || tool === "dimension" || EDIT_TOOLS.has(tool)) setHover(targetAt(p));
+      if (tool === "select" || tool === "pattern" || tool === "dimension" || EDIT_TOOLS.has(tool)) setHover(targetAt(p));
       else setHover(null);
       if (tool === "project") return;
-      const s: Snap = tool === "select" || tool === "dimension" || EDIT_TOOLS.has(tool) ? { pos: p } : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
+      const s: Snap = tool === "select" || tool === "pattern" || tool === "dimension" || EDIT_TOOLS.has(tool) ? { pos: p } : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
       ts.cursor = s.pos;
       // Tools that place points show where the next one will land.
       ts.snap = POINT_TOOLS.has(tool) ? s : null;
@@ -977,6 +991,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (d.started && !dragged) return rerender();
       const s = snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
       switch (tool) {
+        case "pattern":
         case "select": {
           const t = d.target;
           const cur = useSketchUi.getState().selection;
@@ -1384,6 +1399,31 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           </div>
           {diag?.message ? <div className="muted" style={{ marginTop: 4, color: "var(--err)" }}>{diag.message}</div> : null}
           <div className="muted" style={{ marginTop: 4, maxWidth: 280 }}>{toolHint(ui.tool, ts.points.length, !!ts.dimFirst)}</div>
+          {ui.tool === "pattern" ? (
+            <div className="col" style={{ gap: 6, marginTop: 6 }}>
+              <div className="segmented">
+                {(["linear", "circular"] as const).map((k) => (
+                  <button key={k} className={ui.pattern.kind === k ? "on" : ""} onClick={() => useSketchUi.setState({ pattern: { ...ui.pattern, kind: k } })}>
+                    {k === "linear" ? "Row" : "Round the origin"}
+                  </button>
+                ))}
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                {([["count", "Count"], ...(ui.pattern.kind === "linear" ? [["dx", "Step x"], ["dy", "Step y"]] : [["angle", "Angle"]])] as ["count" | "dx" | "dy" | "angle", string][]).map(([k, label]) => (
+                  <label key={k} className="col" style={{ gap: 2 }}>
+                    <span className="muted small">{label}</span>
+                    <input className="field" type="number" style={{ width: 64 }} value={ui.pattern[k]} onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (Number.isFinite(v)) useSketchUi.setState({ pattern: { ...ui.pattern, [k]: k === "count" ? Math.max(2, Math.round(v)) : v } });
+                    }} />
+                  </label>
+                ))}
+              </div>
+              <button className="btn primary" disabled={!ui.selection.some((x) => x.kind === "curve")} onClick={repeatSelection}>
+                Repeat selection
+              </button>
+            </div>
+          ) : null}
           {EDIT_TOOLS.has(ui.tool) && ui.tool !== "trim" ? (
             <label className="row" style={{ gap: 6, marginTop: 6 }}>
               <span className="muted">{ui.tool === "fillet" ? "Radius" : ui.tool === "chamfer" ? "Distance" : "Offset"}</span>
@@ -1492,6 +1532,8 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
       return "Click a corner where two lines meet to round it with this radius";
     case "chamfer":
       return "Click a corner where two lines meet to bevel it by this distance along each line";
+    case "pattern":
+      return "Select the curves to repeat (Shift adds), set the pattern, then Repeat selection";
     case "offset":
       return "Click a line, arc or circle: its whole chain is copied at this distance (outwards for closed shapes, negative goes inwards)";
     case "dimension":

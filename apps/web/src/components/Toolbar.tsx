@@ -33,6 +33,7 @@ import {
   Triangle,
   CopyPlus,
   Waves,
+  Grid3x3,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import type { FeatureOp } from "@meercad/schema";
@@ -124,6 +125,7 @@ function useEntries(): RailEntry[] {
           sketchTool("fillet", SquareRoundCorner, "Round a corner", t),
           sketchTool("chamfer", Triangle, "Bevel a corner", t),
           sketchTool("offset", CopyPlus, "Offset curves", t),
+          sketchTool("pattern", Grid3x3, "Repeat curves", t),
           sketchTool("project", Waypoints, "Project model edges", t),
           { id: "construction", icon: Crosshair, label: "Construction geometry", ...withKbd(keyFor("sketch.construction")), active: ui.construction, run: toggleConstruction },
         ],
