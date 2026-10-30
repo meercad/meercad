@@ -6,7 +6,7 @@ import { layoutSheet, write3mf, writeDxf, writeSheetDxf, writeSheetPdf, writeShe
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
-import { applyOp, billOfMaterials, drawingDocument, massOf, massProperties, materialById } from "@meercad/model";
+import { applyOp, billOfMaterials, designOf, drawingDocument, massOf, massProperties, materialById } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
@@ -165,7 +165,11 @@ async function handle(req: BridgeRequest): Promise<unknown> {
   switch (req.method) {
     case "get_model":
       needProject();
-      return { project: useApp.getState().project, document: currentDoc(), rebuild: summary(await rebuildNow()) };
+      {
+        // Versions are listed by name; their states would only fill the assistant's context.
+        const doc = currentDoc();
+        return { project: useApp.getState().project, document: designOf(doc), ...(doc.versions ? { versions: doc.versions.map((v) => ({ name: v.name, at: new Date(v.at).toISOString() })) } : {}), rebuild: summary(await rebuildNow()) };
+      }
     case "get_sketch": {
       needProject();
       const sk = (await rebuildNow()).report.sketches.find((s) => s.id === p["id"]);

@@ -12,3 +12,4 @@ export * from "./drawing.js";
 export * from "./materials.js";
 export * from "./standardParts.js";
 export { MeshCollider, meshesCollide, signedDistance } from "./collide.js";
+export { blobKey, designOf, versionChanges } from "./versions.js";

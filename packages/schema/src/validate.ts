@@ -247,6 +247,13 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
     }
   }
   if (doc.variant !== undefined && !doc.variants?.some((v) => v.name === doc.variant)) errors.push(`variant "${doc.variant}" is in use but not defined`);
+  if (doc.versions) {
+    const names = new Set<string>();
+    for (const v of doc.versions) {
+      if (names.has(v.name)) errors.push(`version "${v.name}": duplicate name`);
+      names.add(v.name);
+    }
+  }
   const mech = doc.mechanism;
   if (mech) {
     const jointIds = new Set<string>();

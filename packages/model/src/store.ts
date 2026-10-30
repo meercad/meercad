@@ -2,6 +2,7 @@ import { MATERIALS, materialById } from "./materials.js";
 import { emptyDocument, validateDocument, validateOp, type DocOp, type Expr, type Feature, type MeercadDocument } from "@meercad/schema";
 import { renameInExpr } from "./expr.js";
 import { mapFeatureExprs } from "./resolve.js";
+import { pruneBlobs, restored, snapshot } from "./versions.js";
 
 export class OpError extends Error {}
 
@@ -132,6 +133,37 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       if (op.name === null) delete next.variant;
       else if (!next.variants?.some((v) => v.name === op.name)) throw new OpError(`unknown variant "${op.name}"`);
       else next.variant = op.name;
+      break;
+    }
+    case "save_version": {
+      const blobs = { ...(next.blobs ?? {}) };
+      const v = snapshot(next, op.name, Date.now(), blobs);
+      next.versions = [...(next.versions ?? []).filter((x) => x.name !== op.name), v];
+      next.blobs = blobs;
+      pruneBlobs(next);
+      break;
+    }
+    case "restore_version": {
+      const v = next.versions?.find((x) => x.name === op.name);
+      if (!v) throw new OpError(`unknown version "${op.name}"`);
+      try {
+        return checked(restored(next, v));
+      } catch (e) {
+        throw e instanceof OpError ? new OpError(`version "${op.name}" cannot be restored: ${e.message}`) : new OpError(String((e as Error).message ?? e));
+      }
+    }
+    case "rename_version": {
+      const v = next.versions?.find((x) => x.name === op.name);
+      if (!v) throw new OpError(`unknown version "${op.name}"`);
+      if (op.to !== op.name && next.versions!.some((x) => x.name === op.to)) throw new OpError(`a version named "${op.to}" already exists`);
+      v.name = op.to;
+      break;
+    }
+    case "delete_version": {
+      if (!next.versions?.some((x) => x.name === op.name)) throw new OpError(`unknown version "${op.name}"`);
+      next.versions = next.versions.filter((x) => x.name !== op.name);
+      if (!next.versions.length) delete next.versions;
+      pruneBlobs(next);
       break;
     }
     case "delete_coupling": {

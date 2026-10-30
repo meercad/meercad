@@ -977,6 +977,13 @@ html[data-compact] .sketch-hud .card2 .row { align-items: center; }
 html[data-compact] .sketch-done { margin-left: auto; height: 34px; padding: 0 14px; }
 
 /* Technical drawing dialog: the sheet preview beside its settings. */
+.modal.versions-dialog { width: min(560px, calc(100vw - 32px)); }
+.version-list { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: min(60vh, 520px); overflow-y: auto; }
+.version-list li { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 10px; }
+.version-list li:hover { background: var(--glass-hover); }
+.version-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.version-main b, .version-main .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.version-actions { display: flex; gap: 2px; flex-shrink: 0; }
 .modal.drawing-dialog {
   width: min(1100px, calc(100vw - 32px));
   max-width: none;

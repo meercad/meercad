@@ -8,6 +8,7 @@ import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch
 import { closeSketch, getViewport, goHome, newProject, redo, startFeature, undo, useApp } from "../store";
 import { exportMesh, exportStep, importFile, saveFile } from "./io";
 import { openDrawing } from "./DrawingDialog";
+import { openVersions } from "./VersionsDialog";
 import { checkInterference } from "../lib/interference";
 import { Kbd } from "./Kbd";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
@@ -114,6 +115,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
         { group: G.file, label: t("Export STEP"), run: () => void exportStep() },
         { group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing },
+        { group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions },
         { group: G.modeling, label: t("Check whether parts overlap (interference)"), run: () => void checkInterference() },
         { group: G.file, label: t("Save copy as .meercad"), kbd: "Shift+Mod+S", run: saveFile },
         { group: G.file, label: t("All projects"), run: goHome },

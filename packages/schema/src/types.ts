@@ -632,8 +632,26 @@ export interface MeercadDocument {
   variants?: Variant[];
   /** Name of the variant in use; absent: the values in `params`. */
   variant?: string;
+  /** Named states of the design saved by the user, oldest first; restoring one makes it the design again. */
+  versions?: Version[];
+  /**
+   * Large file contents (imported files) the versions refer to by key ("blob:…"), each kept once
+   * however many versions share it.
+   */
+  blobs?: Record<string, string>;
   /** Id of the last feature that is evaluated, or null for all. */
   rollback: string | null;
+}
+
+/** A saved state of the design: everything but the file's own bookkeeping (format, versions, blobs). */
+export type VersionState = Omit<MeercadDocument, "format" | "versions" | "blobs">;
+
+export interface Version {
+  name: string;
+  /** When it was saved, in milliseconds since 1970. */
+  at: number;
+  /** The design as it was; imported files' contents are keys into the document's `blobs`. */
+  state: VersionState;
 }
 
 export interface Variant {
@@ -664,6 +682,12 @@ export type DocOp =
   | { type: "delete_variant"; name: string }
   /** Puts a variant in use, or null for the values in `params`. */
   | { type: "use_variant"; name: string | null }
+  /** Saves the design as it is now under a name (replacing a version of that name). */
+  | { type: "save_version"; name: string }
+  /** Makes a saved version the design again; the versions themselves stay. */
+  | { type: "restore_version"; name: string }
+  | { type: "rename_version"; name: string; to: string }
+  | { type: "delete_version"; name: string }
   | { type: "replace"; doc: MeercadDocument };
 
 export function emptyDocument(): MeercadDocument {

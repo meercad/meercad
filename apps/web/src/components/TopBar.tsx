@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, House, Info, Keyboard, Moon, PanelLeft, Pencil, Plus, Redo2, Ruler, Settings, Share2, Undo2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, History, House, Info, Keyboard, Moon, PanelLeft, Pencil, Plus, Redo2, Ruler, Settings, Share2, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -8,6 +8,7 @@ import { askText } from "./Ask";
 import type { MenuEntry } from "./Menu";
 import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
 import { openDrawing } from "./DrawingDialog";
+import { openVersions } from "./VersionsDialog";
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
@@ -67,6 +68,7 @@ export function TopBar() {
       { label: `${units === "mm" ? "✓ " : "   "}${t("Millimetres (this design)")}`, icon: <Ruler />, onClick: () => setDesignUnits("mm") },
       { label: `${units === "in" ? "✓ " : "   "}${t("Inches (this design)")}`, icon: <Ruler />, onClick: () => setDesignUnits("in") },
       "sep",
+      { label: t("Versions…"), icon: <History />, onClick: openVersions },
       { label: t("Save copy as .meercad…"), icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
       ...(desktop ? [] : [{ label: t("Copy share link"), icon: <Share2 />, onClick: () => void shareLink() }]),
   ];

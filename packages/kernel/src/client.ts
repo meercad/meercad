@@ -106,7 +106,7 @@ export class KernelClient {
    */
   async rebuild(doc: MeercadDocument, opts: { props?: boolean; onProgress?: RebuildProgress } = {}): Promise<RebuildOutput> {
     const sent = performance.timeOrigin + performance.now();
-    const r = await this.send({ type: "rebuild", doc, ...(opts.props === false ? { props: false } : {}) }, opts.onProgress);
+    const r = await this.send({ type: "rebuild", doc: design(doc), ...(opts.props === false ? { props: false } : {}) }, opts.onProgress);
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     if (r.report.timing) r.report.timing = { ...r.report.timing, sent, received: this.lastReceived };
     return { report: r.report, meshes: r.meshes, references: r.references };
@@ -114,7 +114,7 @@ export class KernelClient {
 
   /** Rebuilds without touching the main session (AI proposals, feature previews). */
   async sandbox(doc: MeercadDocument): Promise<RebuildOutput> {
-    const r = await this.send({ type: "sandbox", doc });
+    const r = await this.send({ type: "sandbox", doc: design(doc) });
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     return { report: r.report, meshes: r.meshes, references: r.references };
   }
@@ -152,7 +152,7 @@ export class KernelClient {
 
   /** Views of the parts for a technical drawing, visible and hidden lines. */
   async drawing(views: ViewName[], bodies?: string[], doc?: MeercadDocument): Promise<DrawingView[]> {
-    const r = await this.send({ type: "drawing", views, ...(bodies ? { bodies } : {}), ...(doc ? { doc } : {}) });
+    const r = await this.send({ type: "drawing", views, ...(bodies ? { bodies } : {}), ...(doc ? { doc: design(doc) } : {}) });
     if (r.type !== "drawn") throw new Error("unexpected response");
     return r.views;
   }
@@ -174,4 +174,11 @@ export class KernelClient {
   terminate(): void {
     this.worker.terminate();
   }
+}
+
+/** The document without its saved versions: the worker builds the design only, and need not be sent the versions' files. */
+function design(doc: MeercadDocument): MeercadDocument {
+  if (!doc.versions && !doc.blobs) return doc;
+  const { versions: _v, blobs: _b, ...rest } = doc;
+  return rest;
 }

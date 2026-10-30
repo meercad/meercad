@@ -302,6 +302,8 @@ export const definitions: Record<string, Json> = {
 
 /** A variant's name: shown in the variables list, e.g. "M8" or "Pipe 25 mm". */
 const VARIANT_NAME = { type: "string", minLength: 1, maxLength: 64 } as const;
+/** A version's name, e.g. "Before the fillets" or "Sent to the workshop". */
+const VERSION_NAME = { type: "string", minLength: 1, maxLength: 80 } as const;
 
 export const documentSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
@@ -320,6 +322,9 @@ export const documentSchema = {
       mechanism: obj({ joints: arr(ref("joint")), couplings: arr(ref("coupling")), clearance: ref("expr") }, ["joints"]),
       variants: arr(obj({ name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") } }, ["name", "params"])),
       variant: VARIANT_NAME,
+      // A version's state is checked when it is restored, as the whole document it then becomes.
+      versions: arr(obj({ name: VERSION_NAME, at: { type: "number" }, state: { type: "object" } }, ["name", "at", "state"])),
+      blobs: { type: "object", propertyNames: { pattern: "^blob:[0-9a-z:]{1,64}$" }, additionalProperties: { type: "string", maxLength: 64 * 1024 * 1024 } },
       rollback: oneOf({ type: "null" }, id),
     },
     ["format", "params", "features", "rollback"],
@@ -347,6 +352,10 @@ export const docOpSchema = {
     set_variant: obj({ type: true, name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") }, rename: VARIANT_NAME }, ["name", "params"]),
     delete_variant: obj({ type: true, name: VARIANT_NAME }, ["name"]),
     use_variant: obj({ type: true, name: oneOf({ type: "null" }, VARIANT_NAME) }, ["name"]),
+    save_version: obj({ type: true, name: VERSION_NAME }, ["name"]),
+    restore_version: obj({ type: true, name: VERSION_NAME }, ["name"]),
+    rename_version: obj({ type: true, name: VERSION_NAME, to: VERSION_NAME }, ["name", "to"]),
+    delete_version: obj({ type: true, name: VERSION_NAME }, ["name"]),
   }),
   definitions,
 };

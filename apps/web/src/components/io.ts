@@ -4,7 +4,7 @@ import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
-import { nextFeatureId } from "@meercad/model";
+import { designOf, nextFeatureId } from "@meercad/model";
 import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
@@ -109,7 +109,8 @@ export function exportSketch(sketchId: string, format: "dxf" | "svg"): void {
 }
 
 export async function shareLink(): Promise<void> {
-  const frag = await encodeShareFragment(currentDoc());
+  // The link carries the design only, not its saved versions.
+  const frag = await encodeShareFragment(designOf(currentDoc()));
   const url = `${location.origin}${location.pathname}#${frag}`;
   try {
     await navigator.clipboard.writeText(url);

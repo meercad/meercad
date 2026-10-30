@@ -24,6 +24,11 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   sizes: `"variants": [{ "name": "Pipe 25", "params": { "pipe": "25 mm" } }], "variant": "Pipe 25"`.
   The variant in use replaces the values of the parameters it lists; without `variant` the values in
   `params` apply.
+- **versions / blobs** (optional) — named states of the design the user saved:
+  `"versions": [{ "name": "Before the fillets", "at": 1793366400000, "state": { "params": …, "features": …, "rollback": null } }]`.
+  A state is the whole document without `format`, `versions` and `blobs`. Imported files' contents
+  (`import.data`) longer than 4 kB are stored once in `blobs` under a key (`"blob:…"`) that the
+  states use instead, however many versions share them.
 - **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.

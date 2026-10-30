@@ -36,6 +36,7 @@ import { DebugHud, debugHud } from "./components/DebugHud";
 import { deleteModelSelection } from "./lib/deletion";
 import { AboutDialog } from "./components/AboutDialog";
 import { DrawingDialog } from "./components/DrawingDialog";
+import { VersionsDialog } from "./components/VersionsDialog";
 import { isCompact } from "./lib/layout";
 import { t } from "./lib/i18n";
 
@@ -311,6 +312,7 @@ export function App() {
       <Settings onShortcuts={() => setHelp(true)} />
       <AboutDialog />
       <DrawingDialog />
+      <VersionsDialog />
       {desktop ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />
