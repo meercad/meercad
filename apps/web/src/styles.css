@@ -660,7 +660,9 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 }
 /* settings */
 .modal.settings { width: min(720px, calc(100vw - 32px)); padding: 6px 24px 24px; }
-.settings-head { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; padding: 14px 0 6px; }
+/* Sticky over scrolling content: an opaque header across the dialog's full width. */
+.settings-head { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 2; margin: 0 -24px; padding: 14px 24px 6px; background: var(--panel); }
+.modal.settings { background: var(--panel) !important; }
 .settings-head h2 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
 .settings section { padding: 14px 0 6px; border-top: 1px solid var(--border); margin-top: 8px; }
 .settings h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 14px; }
