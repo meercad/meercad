@@ -17,6 +17,7 @@ const VIEWS: [ViewName, string][] = [
   ["top", "From above"],
   ["left", "From the left"],
   ["iso", "Isometric"],
+  ["section", "Section A-A"],
 ];
 
 /** Opens the drawing dialog (from menus and the command palette). */

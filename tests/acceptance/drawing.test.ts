@@ -37,6 +37,19 @@ describe("drawing views", () => {
     expect(front!.visible.length).toBe(4);
   });
 
+  it("cuts the part in half for section A-A: the hole shows as a gap in the cut face", async () => {
+    const [sec] = await views(["section"]);
+    // Cut at y = 20, through the hole's middle: seen from the front, 60 × 20 like the front view.
+    expect(sec!.cutAt).toBeCloseTo(20, 6);
+    expect(size(sec!)).toEqual([60, 20]);
+    expect(sec!.hidden).toEqual([]);
+    // The cut face: the block's 60 × 20 section with the hole's 10 mm gap, i.e. edges at x = 15 and 25.
+    const xs = sec!.sections!.flat().flat().map((p) => Math.round(p[0] * 1000) / 1000);
+    expect(new Set(xs)).toEqual(new Set([0, 15, 25, 60]));
+    // From the front, the hole's walls are now visible lines.
+    expect(sec!.visible.some((l) => Math.abs(l[0]![0] - 15) < 1e-6 && Math.abs(l[l.length - 1]![0] - 15) < 1e-6)).toBe(true);
+  });
+
   it("draws an isometric view", async () => {
     const [iso] = await views(["iso"]);
     expect(iso!.visible.length).toBeGreaterThan(9);

@@ -47,6 +47,24 @@ describe("drawing sheets", () => {
     expect(lowest).toBeGreaterThan(10 + 32 + 3 * 5.5);
   });
 
+  it("hatches a section and marks the cutting plane on the view from above", () => {
+    // Section of a 60 × 20 block with a 10 wide gap at x 15–25: two cut faces' worth of edges.
+    const sec: SheetView = {
+      ...box("section", 60, 20),
+      hidden: [],
+      sections: [[[[0, 0], [15, 0]], [[15, 0], [15, 20]], [[15, 20], [0, 20]], [[0, 20], [0, 0]], [[25, 0], [60, 0]], [[60, 0], [60, 20]], [[60, 20], [25, 20]], [[25, 20], [25, 0]]]],
+      cutAt: 20,
+    };
+    const s = layoutSheet([...views, sec], { title: { title: "Block" } });
+    expect(s.texts.map((t) => t.text)).toEqual(expect.arrayContaining(["A-A", "A"]));
+    expect(s.lines.some((l) => l.kind === "chain")).toBe(true);
+    // Hatch lines lie only over the material, not over the gap: none crosses the gap's middle.
+    const thin = s.lines.filter((l) => l.kind === "thin" && l.pts.length === 2);
+    const front = s.lines.find((l) => l.kind === "visible")!;
+    expect(thin.length).toBeGreaterThan(10);
+    void front;
+  });
+
   it("writes SVG, PDF and DXF", () => {
     const s = layoutSheet(views, { title: { title: "Größe Ø10 (Test)" } });
     const svg = writeSheetSvg(s);

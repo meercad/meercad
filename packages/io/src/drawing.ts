@@ -9,11 +9,15 @@
 
 export type Pt = [number, number];
 export interface SheetView {
-  name: "front" | "back" | "top" | "bottom" | "left" | "right" | "iso";
+  name: "front" | "back" | "top" | "bottom" | "left" | "right" | "iso" | "section";
   visible: Pt[][];
   hidden: Pt[][];
   min: Pt;
   max: Pt;
+  /** Section view: cut faces as edges (any order), hatched on the sheet. */
+  sections?: Pt[][][];
+  /** Section view: the cutting plane's place across the top view (its y). */
+  cutAt?: number;
 }
 export type Paper = "A4" | "A3" | "A2";
 export interface TitleBlock {
@@ -24,7 +28,7 @@ export interface TitleBlock {
   /** Drawing or part number. */
   number?: string;
 }
-export type LineKind = "visible" | "hidden" | "thin" | "frame";
+export type LineKind = "visible" | "hidden" | "thin" | "frame" | "chain";
 export interface Sheet {
   width: number;
   height: number;
@@ -65,23 +69,35 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   const bomH = o.bom?.length ? (o.bom.length + 1) * BOM_ROW : 0;
   const area = { x0: fx0 + 4, y0: fy0 + TITLE_H + bomH + 4, x1: fx1 - 4, y1: fy1 - 4 };
   const get = (n: SheetView["name"]) => views.find((v) => v.name === n);
-  const front = get("front"), top = get("top"), left = get("left"), iso = get("iso");
+  const front = get("front"), top = get("top"), left = get("left"), iso = get("iso"), sec = get("section");
   const w = (v?: SheetView) => (v ? v.max[0] - v.min[0] : 0);
   const h = (v?: SheetView) => (v ? v.max[1] - v.min[1] : 0);
-  // Grid of two columns and two rows (model sizes), each cell padded for dimensions.
+  // Grid of two columns and two rows (model sizes), each cell padded for dimensions. A section goes
+  // in a third column beside the front view or in a third row below the view from above, whichever
+  // allows the larger scale; either way it lines up with the front view.
   const c0 = Math.max(w(front), w(top)), c1 = Math.max(w(left), w(iso));
   const r0 = Math.max(h(front), h(left)), r1 = Math.max(h(top), h(iso));
-  const cols = (c0 > 0 ? 1 : 0) + (c1 > 0 ? 1 : 0), rows = (r0 > 0 ? 1 : 0) + (r1 > 0 ? 1 : 0);
-  const availW = area.x1 - area.x0 - GAP * (cols + 1), availH = area.y1 - area.y0 - GAP * (rows + 1);
-  const fit = Math.min(availW / Math.max(c0 + c1, 1e-9), availH / Math.max(r0 + r1, 1e-9));
+  const fitFor = (cs: number[], rs: number[]) => {
+    const cols = cs.filter((c) => c > 0).length, rows = rs.filter((r) => r > 0).length;
+    const availW = area.x1 - area.x0 - GAP * (cols + 1), availH = area.y1 - area.y0 - GAP * (rows + 1);
+    return Math.min(availW / Math.max(cs.reduce((a, b) => a + b, 0), 1e-9), availH / Math.max(rs.reduce((a, b) => a + b, 0), 1e-9));
+  };
+  const beside = fitFor([c0, c1, w(sec)], [Math.max(r0, h(sec)), r1]);
+  const below = fitFor([Math.max(c0, w(sec)), c1], [r0, r1, h(sec)]);
+  const secBelow = !!sec && below > beside;
+  const fit = sec ? Math.max(beside, below) : fitFor([c0, c1], [r0, r1]);
   const [scale, label] = o.scale ? [o.scale, SCALES.find((s) => s[0] === o.scale)?.[1] ?? `${fmt(o.scale)}:1`] : (SCALES.find((s) => s[0] <= fit) ?? SCALES[SCALES.length - 1]!);
   sheet.scale = scale;
   sheet.scaleLabel = label;
+  const cc0 = secBelow ? Math.max(c0, w(sec)) : c0;
+  const rr0 = secBelow ? r0 : Math.max(r0, h(sec));
   // Cell centres: row 0 on top.
-  const x0 = area.x0 + GAP + (scale * c0) / 2;
-  const x1 = area.x0 + GAP + scale * c0 + (c0 > 0 ? GAP : 0) + (scale * c1) / 2;
-  const y0 = area.y1 - GAP - (scale * r0) / 2;
-  const y1 = area.y1 - GAP - scale * r0 - (r0 > 0 ? GAP : 0) - (scale * r1) / 2;
+  const x0 = area.x0 + GAP + (scale * cc0) / 2;
+  const x1 = area.x0 + GAP + scale * cc0 + (cc0 > 0 ? GAP : 0) + (scale * c1) / 2;
+  const x2 = area.x0 + GAP + scale * (cc0 + c1) + (cc0 > 0 ? GAP : 0) + (c1 > 0 ? GAP : 0) + (scale * w(sec)) / 2;
+  const y0 = area.y1 - GAP - (scale * rr0) / 2;
+  const y1 = area.y1 - GAP - scale * rr0 - (rr0 > 0 ? GAP : 0) - (scale * r1) / 2;
+  const y2 = area.y1 - GAP - scale * (rr0 + r1) - (rr0 > 0 ? GAP : 0) - (r1 > 0 ? GAP : 0) - (scale * h(sec)) / 2;
   // Views that share an axis share its offset, so they line up (projection lines).
   const mid = (v: SheetView, k: 0 | 1) => (v.min[k] + v.max[k]) / 2;
   const ox = front ? x0 - scale * mid(front, 0) : top ? x0 - scale * mid(top, 0) : x0;
@@ -97,6 +113,25 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   const pt = place(top, ox, top ? y1 - scale * mid(top, 1) : 0);
   const pl = place(left, left ? x1 - scale * mid(left, 0) : 0, oy);
   place(iso, iso ? x1 - scale * mid(iso, 0) : 0, iso ? y1 - scale * mid(iso, 1) : 0);
+  // Beside the front view it shares the height axis, below the top view the width axis.
+  const ps = place(sec, sec ? (secBelow ? ox : x2 - scale * mid(sec, 0)) : 0, sec ? (secBelow ? y2 - scale * mid(sec, 1) : oy) : 0);
+  if (ps && sec) {
+    const map = (p: Pt): Pt => [ps.min[0] + scale * (p[0] - sec.min[0]), ps.min[1] + scale * (p[1] - sec.min[1])];
+    for (const face of sec.sections ?? []) hatch(sheet, face.map((l) => l.map(map)));
+    sheet.texts.push({ at: [(ps.min[0] + ps.max[0]) / 2, ps.max[1] + 4], text: "A-A", size: 5, anchor: "middle" });
+    // The cutting plane across the view from above, with the viewing direction and its letter.
+    if (pt && top && sec.cutAt !== undefined) {
+      const y = pt.min[1] + scale * (sec.cutAt - top.min[1]);
+      const [xa, xb] = [pt.min[0] - 6, pt.max[0] + 6];
+      sheet.lines.push({ pts: [[xa, y], [xb, y]], kind: "chain" });
+      for (const x of [xa, xb]) {
+        sheet.lines.push({ pts: [[x, y], [x + (x === xa ? 5 : -5), y]], kind: "frame" });
+        sheet.lines.push({ pts: [[x, y], [x, y + 6]], kind: "thin" });
+        sheet.fills.push([[x, y + 8], [x - 0.9, y + 5], [x + 0.9, y + 5]]);
+        sheet.texts.push({ at: [x + (x === xa ? -2.5 : 2.5), y + 4], text: "A", size: 5, anchor: "middle" });
+      }
+    }
+  }
   // Overall dimensions: width under the front view, height to its left, depth to the left of the top view.
   if (pf) {
     dimension(sheet, [pf.min[0], pf.min[1]], [pf.max[0], pf.min[1]], -10, w(front), "h");
@@ -108,6 +143,27 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   titleBlock(sheet, fx1, fy0, o.title, label);
   if (o.bom?.length) bomTable(sheet, fx1, fy0 + TITLE_H, o.bom);
   return sheet;
+}
+
+/** 45° hatching, 2.5 mm apart, inside a cut face given by its edges (filled by parity). */
+function hatch(s: Sheet, edges: Pt[][]): void {
+  const segs = edges.flatMap((l) => l.slice(1).map((b, k) => [l[k]!, b] as const));
+  if (!segs.length) return;
+  const d = (p: Pt) => (p[0] - p[1]) / Math.SQRT2;
+  const along = (p: Pt) => (p[0] + p[1]) / Math.SQRT2;
+  const ds = segs.flatMap(([a, b]) => [d(a), d(b)]);
+  const [lo, hi] = [Math.min(...ds), Math.max(...ds)];
+  for (let c = Math.ceil(lo / 2.5) * 2.5 + 1e-7; c < hi; c += 2.5) {
+    const hits: Pt[] = [];
+    for (const [a, b] of segs) {
+      const [da, db] = [d(a) - c, d(b) - c];
+      if (da > 0 === db > 0) continue;
+      const t = da / (da - db);
+      hits.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+    hits.sort((p, q) => along(p) - along(q));
+    for (let i = 0; i + 1 < hits.length; i += 2) s.lines.push({ pts: [hits[i]!, hits[i + 1]!], kind: "thin" });
+  }
 }
 
 /** A dimension between two sheet points: extension lines, a line with arrows `off` mm away, the value. */
@@ -186,11 +242,12 @@ function bomTable(s: Sheet, right: number, bottom: number, rows: readonly SheetB
 
 // ---------------------------------------------------------------- writers
 
-const STYLE: Record<LineKind, { width: number; dash?: [number, number] }> = {
+const STYLE: Record<LineKind, { width: number; dash?: number[] }> = {
   visible: { width: 0.5 },
   hidden: { width: 0.35, dash: [3, 1.5] },
   thin: { width: 0.25 },
   frame: { width: 0.7 },
+  chain: { width: 0.25, dash: [8, 1.5, 1, 1.5] },
 };
 
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -222,7 +279,7 @@ export function writeSheetPdf(s: Sheet): Uint8Array {
   const ops: string[] = ["1 J 1 j"];
   for (const l of s.lines) {
     const st = STYLE[l.kind];
-    ops.push(`${n(st.width)} w ${st.dash ? `[${n(st.dash[0])} ${n(st.dash[1])}] 0 d` : "[] 0 d"}`);
+    ops.push(`${n(st.width)} w ${st.dash ? `[${st.dash.map(n).join(" ")}] 0 d` : "[] 0 d"}`);
     ops.push(l.pts.map((p, i) => `${n(p[0])} ${n(p[1])} ${i ? "l" : "m"}`).join(" ") + " S");
   }
   for (const f of s.fills) ops.push(f.map((p, i) => `${n(p[0])} ${n(p[1])} ${i ? "l" : "m"}`).join(" ") + " h f");
@@ -274,8 +331,8 @@ export function writeSheetDxf(s: Sheet): string {
   out.push(0, "TABLE", 2, "LTYPE", 70, 2);
   out.push(0, "LTYPE", 2, "CONTINUOUS", 70, 0, 3, "Solid", 72, 65, 73, 0, 40, 0);
   out.push(0, "LTYPE", 2, "DASHED", 70, 0, 3, "Dashed", 72, 65, 73, 2, 40, 4.5, 49, 3, 49, -1.5);
-  out.push(0, "ENDTAB", 0, "TABLE", 2, "LAYER", 70, 5);
-  for (const [name, lt] of [["VISIBLE", "CONTINUOUS"], ["HIDDEN", "DASHED"], ["THIN", "CONTINUOUS"], ["FRAME", "CONTINUOUS"], ["TEXT", "CONTINUOUS"]]) out.push(0, "LAYER", 2, name!, 70, 0, 62, 7, 6, lt!);
+  out.push(0, "ENDTAB", 0, "TABLE", 2, "LAYER", 70, 6);
+  for (const [name, lt] of [["VISIBLE", "CONTINUOUS"], ["HIDDEN", "DASHED"], ["THIN", "CONTINUOUS"], ["FRAME", "CONTINUOUS"], ["CHAIN", "DASHED"], ["TEXT", "CONTINUOUS"]]) out.push(0, "LAYER", 2, name!, 70, 0, 62, 7, 6, lt!);
   out.push(0, "ENDTAB", 0, "ENDSEC", 0, "SECTION", 2, "ENTITIES");
   const r = (v: number) => Number(v.toFixed(4));
   for (const l of s.lines) {

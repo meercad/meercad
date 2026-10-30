@@ -10,7 +10,8 @@ import { Arena } from "./arena.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
 
-export type ViewName = "front" | "back" | "top" | "bottom" | "left" | "right" | "iso";
+/** "section": the front view of the parts cut in half through the middle (section A-A). */
+export type ViewName = "front" | "back" | "top" | "bottom" | "left" | "right" | "iso" | "section";
 export type Polyline = [number, number][];
 
 export interface DrawingView {
@@ -20,6 +21,10 @@ export interface DrawingView {
   /** Bounds of the visible lines in the view's plane. */
   min: [number, number];
   max: [number, number];
+  /** Section views: the cut faces, each as its edges (in any order), for hatching. */
+  sections?: Polyline[][];
+  /** Section views: where the cutting plane lies (model y), for drawing it on the top view. */
+  cutAt?: number;
 }
 
 type V3 = [number, number, number];
@@ -32,6 +37,7 @@ const VIEWS: Record<ViewName, { eye: V3; right: V3 }> = {
   left: { eye: [-1, 0, 0], right: [0, -1, 0] },
   right: { eye: [1, 0, 0], right: [0, 1, 0] },
   iso: { eye: [1 / Math.sqrt(3), -1 / Math.sqrt(3), 1 / Math.sqrt(3)], right: [1 / Math.SQRT2, 1 / Math.SQRT2, 0] },
+  section: { eye: [0, -1, 0], right: [1, 0, 0] },
 };
 
 export function drawingViews(oc: OC, state: ModelState, names: readonly ViewName[], bodyIds?: string[]): DrawingView[] {
@@ -47,10 +53,52 @@ export function drawingViews(oc: OC, state: ModelState, names: readonly ViewName
     const compound = arena.track(new oc.TopoDS_Compound());
     builder.MakeCompound(compound);
     for (const b of bodies) builder.Add(compound, b.shape);
-    return names.map((name) => view(oc, arena, compound, name));
+    return names.map((name) => (name === "section" ? section(oc, arena, compound) : view(oc, arena, compound, name)));
   } finally {
     arena.dispose();
   }
+}
+
+/**
+ * Section A-A: the parts cut by the plane y = middle of their extent, the front half taken away, seen
+ * from the front. Cut faces come back as loops for hatching; hidden lines are not drawn in sections.
+ */
+function section(oc: OC, arena: Arena, shape: TopoDS_Shape): DrawingView {
+  const box = arena.track(new oc.Bnd_Box());
+  oc.BRepBndLib.Add(shape, box, false);
+  const lo = arena.track(box.CornerMin()), hi = arena.track(box.CornerMax());
+  const y = (lo.Y() + hi.Y()) / 2;
+  const pad = 10 + Math.max(hi.X() - lo.X(), hi.Y() - lo.Y(), hi.Z() - lo.Z());
+  const corner = arena.track(new oc.gp_Pnt(lo.X() - pad, y, lo.Z() - pad));
+  const keep = arena.track(arena.track(new oc.BRepPrimAPI_MakeBox(corner, hi.X() - lo.X() + 2 * pad, hi.Y() - y + pad, hi.Z() - lo.Z() + 2 * pad)).Shape());
+  const common = arena.track(new oc.BRepAlgoAPI_Common(shape, keep));
+  if (!common.IsDone() || common.HasErrors()) throw new Error("could not cut the parts for the section");
+  const cut = arena.track(common.Shape());
+  const v = view(oc, arena, cut, "section");
+  // Faces in the cutting plane, mapped like the front view: x to the right, z up.
+  const sections: Polyline[][] = [];
+  for (const e = arena.track(new oc.TopExp_Explorer(cut, "TopAbs_FACE")); e.More(); e.Next()) {
+    const face = oc.TopoDS.Face(arena.track(e.Current()));
+    const s = arena.track(new oc.BRepAdaptor_Surface(face, true));
+    if (s.GetType() !== "GeomAbs_Plane") continue;
+    const pl = arena.track(s.Plane());
+    const n = arena.track(arena.track(pl.Axis()).Direction());
+    const at = arena.track(pl.Location());
+    if (Math.abs(Math.abs(n.Y()) - 1) > 1e-6 || Math.abs(at.Y() - y) > 1e-6) continue;
+    // The face's edges in any order: hatching fills between them by parity, which needs no loops.
+    const loops: Polyline[] = [];
+    for (const ed = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE")); ed.More(); ed.Next()) {
+      const c = arena.track(new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(ed.Current()))));
+      const [t0, t1] = [c.FirstParameter(), c.LastParameter()];
+      const n = c.GetType() === "GeomAbs_Line" ? 1 : 32;
+      loops.push(Array.from({ length: n + 1 }, (_, i) => {
+        const p = arena.track(c.Value(t0 + ((t1 - t0) * i) / n));
+        return [p.X(), p.Z()] as [number, number];
+      }));
+    }
+    if (loops.length) sections.push(loops);
+  }
+  return { ...v, sections, cutAt: y };
 }
 
 function view(oc: OC, arena: Arena, shape: TopoDS_Shape, name: ViewName): DrawingView {
@@ -65,7 +113,7 @@ function view(oc: OC, arena: Arena, shape: TopoDS_Shape, name: ViewName): Drawin
   const lines = (s: TopoDS_Shape | null) => (s && !s.IsNull() ? polylines(oc, arena, s) : []);
   const visible = [...lines(arena.track(hlr.VCompound())), ...lines(arena.track(hlr.OutLineVCompound()))];
   // Edges at the back that lie exactly behind visible ones would only draw dashes over solid lines.
-  const hidden = [...lines(arena.track(hlr.HCompound())), ...lines(arena.track(hlr.OutLineHCompound()))].filter((h) => !covered(h, visible));
+  const hidden = name === "section" ? [] : [...lines(arena.track(hlr.HCompound())), ...lines(arena.track(hlr.OutLineHCompound()))].filter((h) => !covered(h, visible));
   const all = visible.flat();
   const min: [number, number] = all.length ? [Math.min(...all.map((p) => p[0])), Math.min(...all.map((p) => p[1]))] : [0, 0];
   const max: [number, number] = all.length ? [Math.max(...all.map((p) => p[0])), Math.max(...all.map((p) => p[1]))] : [0, 0];
