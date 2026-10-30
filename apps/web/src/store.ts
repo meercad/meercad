@@ -93,6 +93,8 @@ function threadsOff(): boolean {
   }
 }
 export const kernel = new KernelClient(new KernelWorker({ name: wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel" }));
+/** A second, single-threaded kernel for background work that must never hold up the editor. */
+export const spareKernel = () => new KernelClient(new KernelWorker({ name: "kernel-spare" }));
 // Touch screens are tablets: meshing is a large share of every rebuild there, and the screen is
 // held close but small, so looser tolerances (about half the triangles) are hard to see.
 if (matchMedia("(pointer: coarse)").matches) void kernel.configure(2);

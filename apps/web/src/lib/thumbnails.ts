@@ -1,34 +1,106 @@
 /**
  * Pictures for projects that have none: files put into the projects folder from outside (Finder,
  * iCloud, an assistant) or never opened here. While the overview is shown, each one is rebuilt and
- * pictured off screen, one at a time; opening a project stops it.
+ * pictured off screen, one at a time.
+ *
+ * They are built in a kernel of their own, so a project that takes minutes to rebuild never holds up
+ * the editor: opening a project, or a picture taking longer than LIMIT_MS, ends that kernel at once.
+ * A project that could not be pictured is not tried again until its file changes.
  */
-import { SupersededError } from "@meercad/kernel/client";
+import type { KernelClient, RebuildOutput } from "@meercad/kernel/client";
 import type { MeercadDocument } from "@meercad/schema";
 import { Viewport } from "@meercad/viewport";
-import { kernel, useApp } from "../store";
+import { spareKernel, useApp } from "../store";
 import { meshBodyIds } from "./meshParts";
-import { loadProject, saveThumbnail } from "./persistence";
+import { loadProject, saveThumbnail, type ProjectMeta } from "./persistence";
+
+const LIMIT_MS = 60_000;
+const FAILED_KEY = "meercad.no-picture";
+
+class Stopped extends Error {}
+
+let spare: KernelClient | null = null;
+let stop: ((e: Error) => void) | null = null;
+function endSpare(): void {
+  spare?.terminate();
+  spare = null;
+}
+// Leaving the overview ends the background kernel and whatever it was building.
+useApp.subscribe((s) => {
+  if (s.screen !== "home" && (spare || stop)) {
+    stop?.(new Stopped());
+    endSpare();
+  }
+});
+
+/** Rebuilds `doc` in the background kernel; rejects with Stopped on leaving the overview or after LIMIT_MS. */
+async function build(doc: MeercadDocument): Promise<RebuildOutput> {
+  if (useApp.getState().screen !== "home") throw new Stopped();
+  spare ??= spareKernel();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      spare.sandbox(doc),
+      new Promise<never>((_, reject) => {
+        stop = reject;
+        timer = setTimeout(() => {
+          endSpare();
+          reject(new Error(`took longer than ${LIMIT_MS / 1000} s`));
+        }, LIMIT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    stop = null;
+  }
+}
+
+/** Projects that could not be pictured, by id, with the file's time then. */
+function failed(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(FAILED_KEY) ?? "{}") as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+function markFailed(p: ProjectMeta): void {
+  try {
+    localStorage.setItem(FAILED_KEY, JSON.stringify({ ...failed(), [p.id]: p.updatedAt }));
+  } catch {
+    // Without storage it is tried again next time.
+  }
+}
+
+let busy = false;
+/** The examples' pictures first (quick), then the projects'; one run at a time. */
+export async function fillThumbnails(examples: readonly { name: string; thumbnail?: string; doc: MeercadDocument }[], done: () => void): Promise<void> {
+  if (busy) return;
+  busy = true;
+  try {
+    await fillExampleThumbnails(examples, done);
+    await fillMissingThumbnails();
+  } finally {
+    busy = false;
+  }
+}
 
 const tried = new Set<string>();
-let running = false;
 
-export async function fillMissingThumbnails(): Promise<void> {
-  if (running) return;
-  running = true;
+async function fillMissingThumbnails(): Promise<void> {
   let host: HTMLDivElement | null = null;
   let vp: Viewport | null = null;
   try {
     for (;;) {
       const s = useApp.getState();
       if (s.screen !== "home") return;
-      const next = s.projects.find((p) => !p.thumbnail && !tried.has(p.id));
+      const gaveUp = failed();
+      const next = s.projects.find((p) => !p.thumbnail && !tried.has(p.id) && gaveUp[p.id] !== p.updatedAt);
       if (!next) return;
       tried.add(next.id);
       try {
         const project = await loadProject(next.id);
         if (!project || useApp.getState().screen !== "home") continue;
-        const output = await kernel.sandbox(project.doc);
+        const output = await build(project.doc);
         if (!output.meshes.length || useApp.getState().screen !== "home") continue;
         if (!vp) {
           host = document.createElement("div");
@@ -45,15 +117,15 @@ export async function fillMissingThumbnails(): Promise<void> {
         await saveThumbnail(next.id, thumbnail);
         useApp.setState((st) => ({ projects: st.projects.map((p) => (p.id === next.id ? { ...p, thumbnail } : p)) }));
       } catch (e) {
-        // A project being opened takes over the kernel: stop. A broken file just stays without a picture.
-        if (e instanceof SupersededError) return;
+        // Opening a project stops the pictures. A broken or very slow file stays without one.
+        if (e instanceof Stopped) return;
+        markFailed(next);
         console.warn(`no picture for ${next.id}:`, e);
       }
     }
   } finally {
     vp?.dispose();
     host?.remove();
-    running = false;
   }
 }
 
@@ -83,18 +155,15 @@ export function exampleThumbnail(name: string, doc: MeercadDocument): string | n
   return null;
 }
 
-let examplesRunning = false;
 /** Makes the missing example pictures one by one; `done` is called after each. */
-export async function fillExampleThumbnails(examples: readonly { name: string; thumbnail?: string; doc: MeercadDocument }[], done: () => void): Promise<void> {
-  if (examplesRunning) return;
-  examplesRunning = true;
+async function fillExampleThumbnails(examples: readonly { name: string; thumbnail?: string; doc: MeercadDocument }[], done: () => void): Promise<void> {
   let host: HTMLDivElement | null = null;
   let vp: Viewport | null = null;
   try {
     for (const ex of examples) {
       if (ex.thumbnail || exampleThumbnail(ex.name, ex.doc) || useApp.getState().screen !== "home") continue;
       try {
-        const output = await kernel.sandbox(ex.doc);
+        const output = await build(ex.doc);
         if (!output.meshes.length || useApp.getState().screen !== "home") continue;
         if (!vp) {
           host = document.createElement("div");
@@ -114,13 +183,12 @@ export async function fillExampleThumbnails(examples: readonly { name: string; t
         }
         done();
       } catch (e) {
-        if (e instanceof SupersededError) return;
+        if (e instanceof Stopped) return;
         console.warn(`no picture for example ${ex.name}:`, e);
       }
     }
   } finally {
     vp?.dispose();
     host?.remove();
-    examplesRunning = false;
   }
 }

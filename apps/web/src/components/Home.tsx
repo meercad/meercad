@@ -9,7 +9,7 @@ import { EXAMPLES } from "../lib/examples";
 import { importFile } from "./io";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
-import { exampleThumbnail, fillExampleThumbnails, fillMissingThumbnails } from "../lib/thumbnails";
+import { exampleThumbnail, fillThumbnails } from "../lib/thumbnails";
 import { t, tn } from "../lib/i18n";
 
 const DRAG_TYPE = "application/x-meercad-project";
@@ -134,8 +134,7 @@ export function Home() {
   useEffect(() => void refreshProjects(), []);
   // Files added from outside (or never opened here) get their picture while the overview is open.
   const [, setShots] = useState(0);
-  // Projects first, then the examples' pictures.
-  useEffect(() => void fillMissingThumbnails().then(() => fillExampleThumbnails(EXAMPLES, () => setShots((n) => n + 1))), [projects]);
+  useEffect(() => void fillThumbnails(EXAMPLES, () => setShots((n) => n + 1)), [projects]);
   const changeSort = (s: Sort) => {
     setSort(s);
     try {
