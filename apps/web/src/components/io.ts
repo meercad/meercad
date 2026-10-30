@@ -5,12 +5,13 @@ import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
-import { designOf, nextFeatureId } from "@meercad/model";
+import { designOf, motion, nextFeatureId } from "@meercad/model";
 import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
 import { t } from "../lib/i18n";
+import { currentPoses } from "../lib/mechanism";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   stl: { name: t("STL mesh"), extensions: ["stl"] },
@@ -47,13 +48,22 @@ export function download(name: string, data: BlobPart, type: string): void {
 
 export const baseName = () => (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
 
+/** Parts moved in the joints panel, where they are shown: exports take them as they are seen. */
+function shownPoses(ids: readonly string[]): Map<string, number[]> {
+  const moved = new Map([...currentPoses()].filter(([id, m]) => ids.includes(id) && motion.isMoved(m)));
+  if (moved.size) toast(t("Exported as shown: moved parts are where they are now"), "info");
+  return moved;
+}
+
 /** STL/3MF from a print-quality tessellation (the on-screen one is far coarser). */
 export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   const hidden = useApp.getState().hidden;
   const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
   if (!ids?.length) return toast(t("Nothing to export"), "error");
   try {
-    download(`${baseName()}.${format}`, meshFile(format, await kernel.exportMeshes(ids)) as BlobPart, format === "stl" ? "model/stl" : "model/3mf");
+    const poses = shownPoses(ids);
+    const meshes = (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m));
+    download(`${baseName()}.${format}`, meshFile(format, meshes) as BlobPart, format === "stl" ? "model/stl" : "model/3mf");
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
   }
@@ -114,7 +124,8 @@ export async function exportStep(): Promise<void> {
   try {
     const hidden = useApp.getState().hidden;
     const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
-    const data = await kernel.exportStep(ids, stepParts());
+    const poses = shownPoses(ids ?? []);
+    const data = await kernel.exportStep(ids, stepParts().map((p) => (poses.has(p.id) ? { ...p, pose: poses.get(p.id)! } : p)));
     download(`${baseName()}.step`, data as BlobPart, "model/step");
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: "STEP", error: e instanceof Error ? e.message : String(e) }), "error");

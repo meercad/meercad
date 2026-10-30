@@ -51,4 +51,18 @@ describe("STEP with names and colours", () => {
     const { report } = back.rebuild(doc([{ id: "im1", op: "import", format: "step", fileName: "x.step", data, split: true } as Feature]));
     expect(report.bodies.map((b) => [b.id, Math.round(b.volume)])).toEqual([["im1", 1000], ["im1_2", 2000]]);
   });
+
+  it("writes moved parts where they are shown", async () => {
+    const s = await newSession();
+    s.rebuild(doc(two));
+    // ex1 turned a quarter about z through the origin: from x 0…10 to x −10…0.
+    const quarter = [0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    for (const parts of [[{ id: "ex1", name: "A", pose: quarter }, { id: "ex2", name: "B" }], [{ id: "ex1", name: "A", pose: quarter }]]) {
+      const data = Buffer.from(exportStep(await getOcct(), s.state!, ["ex1"], parts)).toString("base64");
+      const back = await newSession();
+      const { report } = back.rebuild(doc([{ id: "im1", op: "import", format: "step", fileName: "x.step", data } as Feature]));
+      expect(report.bodies[0]!.bbox.min[0]).toBeCloseTo(-10, 5);
+      expect(report.bodies[0]!.bbox.max[0]).toBeCloseTo(0, 5);
+    }
+  });
 });

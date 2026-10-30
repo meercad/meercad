@@ -8,8 +8,19 @@ import { meshBody, type BodyMesh } from "./mesh.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
 
-/** Names and colours ("#rrggbb") of parts for the STEP file, by body id. */
-export type StepPart = { id: string; name: string; color?: string };
+/**
+ * Names and colours ("#rrggbb") of parts for the STEP file, by body id, and where a moved part is
+ * shown (column-major 4×4 from its rest position).
+ */
+export type StepPart = { id: string; name: string; color?: string; pose?: number[] };
+
+/** The shape moved by a column-major 4×4 matrix. */
+function placed(oc: OC, arena: Arena, shape: TopoDS_Shape, m: readonly number[] | undefined): TopoDS_Shape {
+  if (!m) return shape;
+  const t = arena.track(new oc.gp_Trsf());
+  t.SetValues(m[0]!, m[4]!, m[8]!, m[12]!, m[1]!, m[5]!, m[9]!, m[13]!, m[2]!, m[6]!, m[10]!, m[14]!);
+  return arena.track(shape.Moved(arena.track(new oc.TopLoc_Location(t)), false));
+}
 
 export function exportStep(oc: OC, state: ModelState, bodyIds?: string[], parts?: readonly StepPart[]): Uint8Array {
   const arena = new Arena();
@@ -26,7 +37,7 @@ export function exportStep(oc: OC, state: ModelState, bodyIds?: string[], parts?
     }
     const writer = arena.track(new oc.STEPControl_Writer());
     const range = arena.track(new oc.Message_ProgressRange());
-    for (const b of bodies) writer.Transfer(b.shape, "STEPControl_AsIs", true, range);
+    for (const b of bodies) writer.Transfer(placed(oc, arena, b.shape, parts?.find((p) => p.id === b.bodyId)?.pose), "STEPControl_AsIs", true, range);
     const path = `/export-${Date.now()}.step`;
     writer.Write(path);
     const data = oc.FS.readFile(path) as Uint8Array;
@@ -49,8 +60,8 @@ function exportStepParts(oc: OC, arena: Arena, bodies: readonly Body[], parts: r
   const colors = arena.track(oc.XCAFDoc_DocumentTool.ColorTool(main));
   for (const b of bodies) {
     const label = arena.track(shapes.NewShape());
-    shapes.SetShape(label, b.shape);
     const p = parts.find((x) => x.id === b.bodyId);
+    shapes.SetShape(label, placed(oc, arena, b.shape, p?.pose));
     oc.TDataStd_Name.Set(label, arena.track(new oc.TCollection_ExtendedString(p?.name ?? b.bodyId, true)));
     const hex = p?.color && /^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : null;
     if (hex) {
@@ -194,20 +205,11 @@ export interface Clearance {
 export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2): Clearance[] {
   const arena = new Arena();
   try {
-    const placed = new Map<string, TopoDS_Shape>();
-    for (const [id, body] of state.bodies) {
-      const m = poses[id];
-      if (!m) {
-        placed.set(id, body.shape);
-        continue;
-      }
-      const t = arena.track(new oc.gp_Trsf());
-      t.SetValues(m[0]!, m[4]!, m[8]!, m[12]!, m[1]!, m[5]!, m[9]!, m[13]!, m[2]!, m[6]!, m[10]!, m[14]!);
-      placed.set(id, arena.track(body.shape.Moved(arena.track(new oc.TopLoc_Location(t)), false)));
-    }
-    const box = new Map([...placed].map(([id, s]) => [id, bounds(oc, arena, s)]));
+    const shapes = new Map<string, TopoDS_Shape>();
+    for (const [id, body] of state.bodies) shapes.set(id, placed(oc, arena, body.shape, poses[id]));
+    const box = new Map([...shapes].map(([id, s]) => [id, bounds(oc, arena, s)]));
     const grow = (b: ReturnType<typeof bounds>) => ({ min: b.min.map((v) => v - within) as typeof b.min, max: b.max.map((v) => v + within) as typeof b.max });
-    const ids = [...placed.keys()];
+    const ids = [...shapes.keys()];
     const out: Clearance[] = [];
     for (let i = 0; i < ids.length; i++)
       for (let j = i + 1; j < ids.length; j++) {
@@ -215,8 +217,8 @@ export function clearances(oc: OC, state: ModelState, moving: readonly string[],
         const b = ids[j]!;
         if (!moving.includes(a) && !moving.includes(b)) continue;
         if (!boundsOverlap(grow(box.get(a)!), box.get(b)!)) continue;
-        const A = placed.get(a)!;
-        const B = placed.get(b)!;
+        const A = shapes.get(a)!;
+        const B = shapes.get(b)!;
         const d = arena.track(new oc.BRepExtrema_DistShapeShape(A, B));
         if (!d.IsDone()) continue;
         const distance = d.Value();

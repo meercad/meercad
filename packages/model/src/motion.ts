@@ -83,6 +83,18 @@ export function transformDir(m: Mat4, d: V3): V3 {
   return [m[0]! * d[0] + m[4]! * d[1] + m[8]! * d[2], m[1]! * d[0] + m[5]! * d[1] + m[9]! * d[2], m[2]! * d[0] + m[6]! * d[1] + m[10]! * d[2]];
 }
 
+/** Whether a pose leaves the part where it was drawn. */
+export const isMoved = (m: Mat4) => m.some((v, i) => Math.abs(v - IDENTITY[i]!) > 1e-9);
+
+/** A triangle mesh moved by a pose (positions and normals; nothing else changes). */
+export function placeMesh<T extends { positions: Float32Array; normals: Float32Array }>(mesh: T, m: Mat4): T {
+  const positions = new Float32Array(mesh.positions.length);
+  const normals = new Float32Array(mesh.normals.length);
+  for (let i = 0; i + 2 < positions.length; i += 3) positions.set(transformPoint(m, [mesh.positions[i]!, mesh.positions[i + 1]!, mesh.positions[i + 2]!]), i);
+  for (let i = 0; i + 2 < normals.length; i += 3) normals.set(transformDir(m, [mesh.normals[i]!, mesh.normals[i + 1]!, mesh.normals[i + 2]!]), i);
+  return { ...mesh, positions, normals };
+}
+
 export class Mechanism {
   private readonly byPart = new Map<string, MotionJoint>();
   private readonly byId = new Map<string, MotionJoint>();
