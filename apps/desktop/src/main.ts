@@ -225,8 +225,8 @@ ipcMain.handle("storage:status", () => ({
 ipcMain.handle("storage:choose", async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   const r = await dialog.showOpenDialog(win!, {
-    title: "Choose a folder for your meerCAD projects",
-    buttonLabel: "Use this folder",
+    title: tr("Choose a folder for your meerCAD projects"),
+    buttonLabel: tr("Use this folder"),
     defaultPath: projectsDir(),
     properties: ["openDirectory", "createDirectory"],
   });
@@ -391,73 +391,126 @@ app.on("open-file", (e, file) => {
   void openExternalFile(file);
 });
 
+/** The web app's interface language (it says so when it starts); the menu bar follows it. */
+let lang: "en" | "de" = "en";
+const MENU_DE: Record<string, string> = {
+  "Settings…": "Einstellungen …",
+  "Check for Updates…": "Nach Updates suchen …",
+  File: "Ablage",
+  "New Part": "Neues Teil",
+  "Open…": "Öffnen …",
+  "All Projects": "Alle Projekte",
+  "Save Copy As .meercad…": "Kopie als .meercad sichern …",
+  "Show Projects Folder": "Projektordner zeigen",
+  "New Tab": "Neuer Tab",
+  "Close Tab": "Tab schließen",
+  "Reopen Closed Tab": "Geschlossenen Tab wieder öffnen",
+  "Show Next Tab": "Nächsten Tab zeigen",
+  "Show Previous Tab": "Vorherigen Tab zeigen",
+  "Close Window": "Fenster schließen",
+  Edit: "Bearbeiten",
+  Undo: "Rückgängig",
+  Redo: "Wiederholen",
+  View: "Darstellung",
+  "Keyboard Shortcuts": "Tastenkürzel",
+  "meerCAD on GitHub": "meerCAD auf GitHub",
+  "Choose a folder for your meerCAD projects": "Ordner für deine meerCAD-Projekte wählen",
+  "Use this folder": "Diesen Ordner verwenden",
+  // Standard items, which Electron names in English.
+  about: "Über meerCAD",
+  services: "Dienste",
+  hide: "meerCAD ausblenden",
+  hideOthers: "Andere ausblenden",
+  unhide: "Alle einblenden",
+  quit: "meerCAD beenden",
+  cut: "Ausschneiden",
+  copy: "Kopieren",
+  paste: "Einsetzen",
+  selectAll: "Alles auswählen",
+  reload: "Neu laden",
+  toggleDevTools: "Entwicklerwerkzeuge",
+  togglefullscreen: "Vollbild",
+  windowMenu: "Fenster",
+  help: "Hilfe",
+};
+const tr = (s: string) => (lang === "de" ? (MENU_DE[s] ?? s) : s);
+/** A standard menu item, named in German when the app is. */
+const role = (r: NonNullable<MenuItemConstructorOptions["role"]>, more: MenuItemConstructorOptions = {}): MenuItemConstructorOptions => ({ role: r, ...(lang === "de" && MENU_DE[r] ? { label: MENU_DE[r] } : {}), ...more });
+
+ipcMain.on("app:language", (_e, l: unknown) => {
+  if ((l === "en" || l === "de") && l !== lang) {
+    lang = l;
+    buildMenu();
+  }
+});
+
 function buildMenu(): void {
   const send = (channel: string, ...args: unknown[]) => () => mainWindow?.webContents.send(channel, ...args);
   const template: MenuItemConstructorOptions[] = [
     {
       label: app.name,
       submenu: [
-        { role: "about" },
+        role("about"),
         { type: "separator" },
-        { label: "Settings…", accelerator: "CmdOrCtrl+,", registerAccelerator: false, click: send("menu", "settings") },
-        ...(WIP ? [] : [{ label: "Check for Updates…", click: () => void runUpdateCheck(true) }]),
+        { label: tr("Settings…"), accelerator: "CmdOrCtrl+,", registerAccelerator: false, click: send("menu", "settings") },
+        ...(WIP ? [] : [{ label: tr("Check for Updates…"), click: () => void runUpdateCheck(true) }]),
         { type: "separator" },
-        { role: "services" },
+        role("services"),
         { type: "separator" },
-        { role: "hide" },
-        { role: "hideOthers" },
-        { role: "unhide" },
+        role("hide"),
+        role("hideOthers"),
+        role("unhide"),
         { type: "separator" },
-        { role: "quit" },
+        role("quit"),
       ],
     },
     {
-      label: "File",
+      label: tr("File"),
       submenu: [
-        { label: "New Part", accelerator: "CmdOrCtrl+N", click: send("menu", "new") },
-        { label: "Open…", accelerator: "CmdOrCtrl+O", click: send("menu", "import") },
-        { label: "All Projects", accelerator: "CmdOrCtrl+Shift+H", click: send("menu", "home") },
+        { label: tr("New Part"), accelerator: "CmdOrCtrl+N", click: send("menu", "new") },
+        { label: tr("Open…"), accelerator: "CmdOrCtrl+O", click: send("menu", "import") },
+        { label: tr("All Projects"), accelerator: "CmdOrCtrl+Shift+H", click: send("menu", "home") },
         { type: "separator" },
-        { label: "Save Copy As .meercad…", accelerator: "CmdOrCtrl+Shift+S", click: send("menu", "save-as") },
-        { label: "Show Projects Folder", click: () => void shell.openPath(projectsDir()) },
+        { label: tr("Save Copy As .meercad…"), accelerator: "CmdOrCtrl+Shift+S", click: send("menu", "save-as") },
+        { label: tr("Show Projects Folder"), click: () => void shell.openPath(projectsDir()) },
         { type: "separator" },
         // Tab keys are handled in the page; the menu only lists them.
-        { label: "New Tab", accelerator: "CmdOrCtrl+T", registerAccelerator: false, click: send("menu", "new") },
-        { label: "Close Tab", accelerator: "CmdOrCtrl+W", registerAccelerator: false, click: send("menu", "close-tab") },
-        { label: "Reopen Closed Tab", accelerator: "CmdOrCtrl+Shift+T", registerAccelerator: false, click: send("menu", "reopen-tab") },
-        { label: "Show Next Tab", accelerator: "Ctrl+Tab", registerAccelerator: false, click: send("menu", "next-tab") },
-        { label: "Show Previous Tab", accelerator: "Ctrl+Shift+Tab", registerAccelerator: false, click: send("menu", "prev-tab") },
+        { label: tr("New Tab"), accelerator: "CmdOrCtrl+T", registerAccelerator: false, click: send("menu", "new") },
+        { label: tr("Close Tab"), accelerator: "CmdOrCtrl+W", registerAccelerator: false, click: send("menu", "close-tab") },
+        { label: tr("Reopen Closed Tab"), accelerator: "CmdOrCtrl+Shift+T", registerAccelerator: false, click: send("menu", "reopen-tab") },
+        { label: tr("Show Next Tab"), accelerator: "Ctrl+Tab", registerAccelerator: false, click: send("menu", "next-tab") },
+        { label: tr("Show Previous Tab"), accelerator: "Ctrl+Shift+Tab", registerAccelerator: false, click: send("menu", "prev-tab") },
         { type: "separator" },
-        { label: "Close Window", accelerator: "CmdOrCtrl+Shift+W", role: "close" },
+        { label: tr("Close Window"), accelerator: "CmdOrCtrl+Shift+W", role: "close" },
       ],
     },
     {
       // Undo/Redo act on the model (or on the text field being typed in); the page handles the keys,
       // so the shortcuts are shown here but not registered twice.
-      label: "Edit",
+      label: tr("Edit"),
       submenu: [
-        { label: "Undo", accelerator: "CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "undo") },
-        { label: "Redo", accelerator: "Shift+CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "redo") },
+        { label: tr("Undo"), accelerator: "CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "undo") },
+        { label: tr("Redo"), accelerator: "Shift+CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "redo") },
         { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
+        role("cut"),
+        role("copy"),
+        role("paste"),
+        role("selectAll"),
       ],
     },
     {
-      label: "View",
+      label: tr("View"),
       submenu: [
-        { label: "Keyboard Shortcuts", accelerator: "CmdOrCtrl+/", click: send("menu", "shortcuts") },
+        { label: tr("Keyboard Shortcuts"), accelerator: "CmdOrCtrl+/", click: send("menu", "shortcuts") },
         { type: "separator" },
-        { role: "reload" },
-        { role: "toggleDevTools" },
+        role("reload"),
+        role("toggleDevTools"),
         { type: "separator" },
-        { role: "togglefullscreen" },
+        role("togglefullscreen"),
       ],
     },
-    { role: "windowMenu" },
-    { role: "help", submenu: [{ label: "meerCAD on GitHub", click: () => void shell.openExternal("https://github.com/") }] },
+    role("windowMenu"),
+    role("help", { submenu: [{ label: tr("meerCAD on GitHub"), click: () => void shell.openExternal("https://github.com/") }] }),
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

@@ -36,6 +36,8 @@ function resolve(): Lang {
 /** The interface language for this run. */
 export const lang: Lang = resolve();
 if (typeof document !== "undefined") document.documentElement.lang = lang;
+// The Mac app names its menu bar in the same language (older desktop builds lack the call).
+if (typeof window !== "undefined") (window as { meercadDesktop?: { setLanguage?: (l: Lang) => void } }).meercadDesktop?.setLanguage?.(lang);
 
 /** Saves the choice and restarts the interface in it. */
 export function setLang(choice: LangChoice): void {

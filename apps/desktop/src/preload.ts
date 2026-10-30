@@ -5,6 +5,8 @@ import { contextBridge, ipcRenderer } from "electron";
 const api = {
   isDesktop: true,
   info: () => ipcRenderer.invoke("app:info"),
+  /** The interface language, so the menu bar and system dialogs match it. */
+  setLanguage: (lang: string) => ipcRenderer.send("app:language", lang),
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),
