@@ -15,7 +15,6 @@ import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Tour, tourDone } from "./components/Tour";
 import { Toasts } from "./components/Toasts";
-import { UpdateBanner } from "./components/UpdateBanner";
 import { TopBar } from "./components/TopBar";
 import { Toolbar } from "./components/Toolbar";
 import { ViewportView } from "./components/ViewportView";
@@ -308,7 +307,6 @@ export function App() {
       {help ? <ShortcutHelp onClose={() => setHelp(false)} /> : null}
       <CommandPalette onHelp={() => setGuide(true)} onShortcuts={() => setHelp(true)} onTour={() => setTour(true)} />
       {tour && screen === "editor" ? <Tour onClose={() => setTour(false)} /> : null}
-      <UpdateBanner />
       <Tasks />
       <Toasts />
       <Settings onShortcuts={() => setHelp(true)} />

@@ -129,7 +129,6 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       { group: G.help, label: t("Introduction tour"), run: onTour },
       { group: G.help, label: t("Settings"), kbd: "Mod+,", run: () => window.dispatchEvent(new Event("meercad:settings")) },
       { group: G.help, label: t("Toggle dark mode"), run: toggleTheme },
-      ...(desktop ? [{ group: G.help, label: t("Check for updates"), run: () => void desktop!.updates.check() }] : []),
     );
     return list;
   }, [sketchId, screen, keys, onHelp, onShortcuts, onTour]);

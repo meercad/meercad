@@ -10,8 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="../../releases/latest">Download for macOS</a> ·
-  <a href="#install-macos">Install guide</a> ·
+  <a href="#install-macos">Install</a> ·
   <a href="docs/FORMAT.md">File format</a> ·
   <a href="#let-claude-drive-it-mcp">MCP</a>
 </p>
@@ -21,12 +20,10 @@ push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so 
 
 ## Install (macOS)
 
-1. Download the latest `.dmg` from the [Releases](../../releases) page (`arm64` = Apple Silicon, `x64` = Intel).
-2. Open it and drag **meerCAD** into **Applications**, then start it. The app is signed and notarized by Apple.
-
-Every push to `main` publishes a fresh build as the **latest** pre-release; tags `v*` create versioned releases.
-The app checks for new releases at start and hourly and offers **Update now** — it downloads the new
-version, replaces itself and restarts (also available via *meerCAD → Check for Updates…*).
+- **Try a change on this Mac:** `pnpm wip` builds the working tree and installs it as *meerCAD WIP*
+  in Applications, next to any installed meerCAD.
+- **Testers:** `pnpm testflight` uploads iPhone and iPad builds to TestFlight.
+- **Customers** get meerCAD from the App Store, which also delivers updates.
 
 ## Your files
 

@@ -187,7 +187,7 @@ the history, then check the result as above)
 - The overview shows two columns of parts.
 
 **Apps**
-- Mac: projects folder, file names, thumbnails, update check, MCP connection.
+- Mac: projects folder, file names, thumbnails, MCP connection.
 - iPad: everything above with touch and Pencil; no keyboard pops up unless a field is tapped.
 - iPhone (TestFlight build, `pnpm testflight`): the phone layout above in the real app, including the
   safe areas around the notch and the home indicator.

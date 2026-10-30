@@ -31,10 +31,8 @@ None of this data is sent to us or to anyone else.
 
 ## Network connections
 
-- **iPad:** the app makes no network connections of its own.
-- **macOS:** the app checks GitHub (api.github.com) for new versions and downloads updates from
-  there. Like any web request, this tells GitHub your IP address; GitHub's privacy statement applies.
-  No other information is sent.
+- **iPhone, iPad and Mac:** the app makes no network connections of its own. Updates come from the
+  App Store.
 - **Share links:** "Copy share link" puts the design into the link itself (after the `#`). It is not
   uploaded anywhere; whoever you send the link to can open the design.
 

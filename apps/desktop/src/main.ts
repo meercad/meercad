@@ -11,7 +11,6 @@ import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile 
 import { basename, dirname, extname, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
-import { canSelfUpdate, checkForUpdate, installUpdate, type UpdateInfo } from "./updater";
 
 const DEV = process.argv.includes("--dev");
 /** "wip" for the local test build that lives next to the release (built by `pnpm wip`); it never self-updates. */
@@ -336,34 +335,6 @@ ipcMain.handle("app:info", () => ({
   mcpCommand: { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } },
 }));
 
-// ---------------------------------------------------------------- updates
-
-let pendingUpdate: UpdateInfo | null = null;
-async function runUpdateCheck(manual = false): Promise<void> {
-  if (WIP) {
-    if (manual) mainWindow?.webContents.send("update-error", "This is the local WIP build. It is replaced by running pnpm wip in the repository.");
-    return;
-  }
-  try {
-    const info = await checkForUpdate();
-    if (info) {
-      pendingUpdate = info;
-      mainWindow?.webContents.send("update-available", { version: info.version, notes: info.notes, changes: info.changes, page: info.page, canInstall: await canSelfUpdate() });
-    } else if (manual) mainWindow?.webContents.send("update-none", app.getVersion());
-  } catch (e) {
-    if (manual) mainWindow?.webContents.send("update-error", e instanceof Error ? e.message : String(e));
-  }
-}
-ipcMain.handle("update:check", () => runUpdateCheck(true));
-ipcMain.handle("update:install", async () => {
-  if (!pendingUpdate) return;
-  try {
-    await installUpdate(pendingUpdate, mainWindow);
-  } catch (e) {
-    mainWindow?.webContents.send("update-error", e instanceof Error ? e.message : String(e));
-  }
-});
-
 // ---------------------------------------------------------------- windows
 
 let mainWindow: BrowserWindow | null = null;
@@ -426,7 +397,6 @@ app.on("open-file", (e, file) => {
 let lang: "en" | "de" = "en";
 const MENU_DE: Record<string, string> = {
   "Settings…": "Einstellungen …",
-  "Check for Updates…": "Nach Updates suchen …",
   File: "Ablage",
   "New Part": "Neues Teil",
   "Open…": "Öffnen …",
@@ -483,7 +453,6 @@ function buildMenu(): void {
         role("about"),
         { type: "separator" },
         { label: tr("Settings…"), accelerator: "CmdOrCtrl+,", registerAccelerator: false, click: send("menu", "settings") },
-        ...(WIP ? [] : [{ label: tr("Check for Updates…"), click: () => void runUpdateCheck(true) }]),
         { type: "separator" },
         role("services"),
         { type: "separator" },
@@ -584,18 +553,6 @@ else {
     watchProjects();
     mainWindow.webContents.once("did-finish-load", () => {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
-      // Check shortly after start, then hourly.
-      if (app.isPackaged && !WIP) {
-        setTimeout(() => void runUpdateCheck(), 5000);
-        setInterval(() => void runUpdateCheck(), 60 * 60 * 1000);
-        // Also look again when the app comes back to the front after a while.
-        let lastCheck = Date.now();
-        app.on("browser-window-focus", () => {
-          if (Date.now() - lastCheck < 10 * 60 * 1000) return;
-          lastCheck = Date.now();
-          void runUpdateCheck();
-        });
-      }
     });
     app.on("activate", () => {
       if (!BrowserWindow.getAllWindows().length) mainWindow = createWindow();

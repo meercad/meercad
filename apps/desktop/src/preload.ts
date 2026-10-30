@@ -32,11 +32,7 @@ const api = {
     set: (p: { dir: string; move: boolean }) => ipcRenderer.invoke("storage:set", p),
   },
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
-  updates: {
-    check: () => ipcRenderer.invoke("update:check"),
-    install: () => ipcRenderer.invoke("update:install"),
-  },
-  on: (channel: "menu" | "open-project" | "projects-changed" | "update-available" | "update-progress" | "update-none" | "update-error" | "error", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "projects-changed" | "error", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
