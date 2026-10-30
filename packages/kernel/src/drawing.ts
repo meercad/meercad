@@ -25,6 +25,8 @@ export interface DrawingView {
   sections?: Polyline[][];
   /** Section views: where the cutting plane lies (model y), for drawing it on the top view. */
   cutAt?: number;
+  /** Section views: which part each cut face belongs to (neighbouring parts are hatched the other way). */
+  sectionParts?: number[];
 }
 
 type V3 = [number, number, number];
@@ -71,13 +73,24 @@ function section(oc: OC, arena: Arena, shape: TopoDS_Shape): DrawingView {
   const pad = 10 + Math.max(hi.X() - lo.X(), hi.Y() - lo.Y(), hi.Z() - lo.Z());
   const corner = arena.track(new oc.gp_Pnt(lo.X() - pad, y, lo.Z() - pad));
   const keep = arena.track(arena.track(new oc.BRepPrimAPI_MakeBox(corner, hi.X() - lo.X() + 2 * pad, hi.Y() - y + pad, hi.Z() - lo.Z() + 2 * pad)).Shape());
-  const common = arena.track(new oc.BRepAlgoAPI_Common(shape, keep));
-  if (!common.IsDone() || common.HasErrors()) throw new Error("could not cut the parts for the section");
-  const cut = arena.track(common.Shape());
+  // Each part on its own: parts that overlap (a screw in its hole) would upset one boolean on all.
+  const builder = arena.track(new oc.TopoDS_Builder());
+  const cut = arena.track(new oc.TopoDS_Compound());
+  builder.MakeCompound(cut);
+  const pieces: TopoDS_Shape[] = [];
+  for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID")); e.More(); e.Next()) {
+    const common = arena.track(new oc.BRepAlgoAPI_Common(arena.track(e.Current()), keep));
+    if (!common.IsDone() || common.HasErrors()) continue;
+    const piece = arena.track(common.Shape());
+    pieces.push(piece);
+    builder.Add(cut, piece);
+  }
   const v = view(oc, arena, cut, "section");
   // Faces in the cutting plane, mapped like the front view: x to the right, z up.
   const sections: Polyline[][] = [];
-  for (const e = arena.track(new oc.TopExp_Explorer(cut, "TopAbs_FACE")); e.More(); e.Next()) {
+  const sectionParts: number[] = [];
+  pieces.forEach((piece, part) => {
+  for (const e = arena.track(new oc.TopExp_Explorer(piece, "TopAbs_FACE")); e.More(); e.Next()) {
     const face = oc.TopoDS.Face(arena.track(e.Current()));
     const s = arena.track(new oc.BRepAdaptor_Surface(face, true));
     if (s.GetType() !== "GeomAbs_Plane") continue;
@@ -96,9 +109,13 @@ function section(oc: OC, arena: Arena, shape: TopoDS_Shape): DrawingView {
         return [p.X(), p.Z()] as [number, number];
       }));
     }
-    if (loops.length) sections.push(loops);
+    if (loops.length) {
+      sections.push(loops);
+      sectionParts.push(part);
+    }
   }
-  return { ...v, sections, cutAt: y };
+  });
+  return { ...v, sections, sectionParts, cutAt: y };
 }
 
 function view(oc: OC, arena: Arena, shape: TopoDS_Shape, name: ViewName): DrawingView {

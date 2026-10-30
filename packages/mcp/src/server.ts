@@ -300,6 +300,37 @@ server.registerTool(
 );
 
 server.registerTool(
+  "export_drawing",
+  {
+    title: "Make a technical drawing",
+    description:
+      "Lays the parts out on a drawing sheet (ISO first-angle projection: front, from above, from the left, isometric, optionally section A-A through the middle), with hidden edges dashed, overall dimensions, a title block and a parts list (several parts), and returns a picture of the sheet. With `path` it also writes the sheet there as PDF (default), SVG or DXF for a workshop.",
+    inputSchema: {
+      views: z.array(z.enum(["front", "top", "left", "iso", "section"])).optional().describe("Default front, top, left, iso"),
+      paper: z.enum(["A4", "A3", "A2"]).optional(),
+      title: z.string().max(80).optional(),
+      material: z.string().max(40).optional(),
+      drawnBy: z.string().max(40).optional(),
+      number: z.string().max(40).optional(),
+      bom: z.boolean().optional().describe("Parts list on the sheet (default when there are several parts)"),
+      format: z.enum(["pdf", "svg", "dxf"]).optional(),
+      path: z.string().optional().describe("Where to write the file"),
+    },
+  },
+  guard(async ({ path, ...a }) => {
+    const r = await call<{ file: string; png: string; scale: string; paper: string; views: string[]; parts: unknown[] }>("drawing", a);
+    let note = JSON.stringify({ scale: r.scale, paper: r.paper, views: r.views, parts: r.parts });
+    if (path) {
+      const out = resolve(path);
+      const data = Buffer.from(r.file, "base64");
+      await writeFile(out, data);
+      note += `\nwrote ${data.length} bytes to ${out}`;
+    }
+    return { content: [{ type: "image", data: r.png, mimeType: "image/png" }, { type: "text", text: note }] };
+  }),
+);
+
+server.registerTool(
   "set_view",
   { title: "Move the camera", description: "Points the app's camera at a standard view (or fits everything).", inputSchema: { view: z.enum(["iso", "front", "back", "left", "right", "top", "bottom", "fit"]) } },
   guard(async ({ view }) => text(await call("set_view", { view }))),

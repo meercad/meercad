@@ -18,6 +18,8 @@ export interface SheetView {
   sections?: Pt[][][];
   /** Section view: the cutting plane's place across the top view (its y). */
   cutAt?: number;
+  /** Section view: the part of each cut face; parts are hatched alternately at 45° and 135°. */
+  sectionParts?: number[];
 }
 export type Paper = "A4" | "A3" | "A2";
 export interface TitleBlock {
@@ -117,7 +119,7 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   const ps = place(sec, sec ? (secBelow ? ox : x2 - scale * mid(sec, 0)) : 0, sec ? (secBelow ? y2 - scale * mid(sec, 1) : oy) : 0);
   if (ps && sec) {
     const map = (p: Pt): Pt => [ps.min[0] + scale * (p[0] - sec.min[0]), ps.min[1] + scale * (p[1] - sec.min[1])];
-    for (const face of sec.sections ?? []) hatch(sheet, face.map((l) => l.map(map)));
+    (sec.sections ?? []).forEach((face, i) => hatch(sheet, face.map((l) => l.map(map)), (sec.sectionParts?.[i] ?? 0) % 2 === 1));
     sheet.texts.push({ at: [(ps.min[0] + ps.max[0]) / 2, ps.max[1] + 4], text: "A-A", size: 5, anchor: "middle" });
     // The cutting plane across the view from above, with the viewing direction and its letter.
     if (pt && top && sec.cutAt !== undefined) {
@@ -145,12 +147,13 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   return sheet;
 }
 
-/** 45° hatching, 2.5 mm apart, inside a cut face given by its edges (filled by parity). */
-function hatch(s: Sheet, edges: Pt[][]): void {
+/** 45° hatching (135° with `other`), 2.5 mm apart, inside a cut face given by its edges (filled by parity). */
+function hatch(s: Sheet, edges: Pt[][], other = false): void {
   const segs = edges.flatMap((l) => l.slice(1).map((b, k) => [l[k]!, b] as const));
   if (!segs.length) return;
-  const d = (p: Pt) => (p[0] - p[1]) / Math.SQRT2;
-  const along = (p: Pt) => (p[0] + p[1]) / Math.SQRT2;
+  const k = other ? -1 : 1;
+  const d = (p: Pt) => (p[0] - k * p[1]) / Math.SQRT2;
+  const along = (p: Pt) => (k * p[0] + p[1]) / Math.SQRT2;
   const ds = segs.flatMap(([a, b]) => [d(a), d(b)]);
   const [lo, hi] = [Math.min(...ds), Math.max(...ds)];
   for (let c = Math.ceil(lo / 2.5) * 2.5 + 1e-7; c < hi; c += 2.5) {

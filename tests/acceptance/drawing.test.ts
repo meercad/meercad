@@ -50,6 +50,15 @@ describe("drawing views", () => {
     expect(sec!.visible.some((l) => Math.abs(l[0]![0] - 15) < 1e-6 && Math.abs(l[l.length - 1]![0] - 15) < 1e-6)).toBe(true);
   });
 
+  it("cuts several parts, also overlapping ones, for the section", async () => {
+    const s = await newSession();
+    s.rebuild(doc([...block, { id: "np1", op: "standard_part", kind: "socket_screw", size: "M8", length: 16, plane: { face: { face: "ex1.end_cap" } }, points: [[20, 20]] }]));
+    const [sec] = drawingViews(await getOcct(), s.state!, ["section"]);
+    // The block's cut face and the screw's, through its middle.
+    expect(sec!.sections!.length).toBeGreaterThanOrEqual(2);
+    expect(sec!.visible.length).toBeGreaterThan(4);
+  });
+
   it("draws an isometric view", async () => {
     const [iso] = await views(["iso"]);
     expect(iso!.visible.length).toBeGreaterThan(9);

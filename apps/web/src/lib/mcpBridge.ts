@@ -2,11 +2,13 @@
  * Connects the app to a local meerCAD MCP server so assistants like Claude can drive it. The app is
  * the WebSocket client; the server only listens on 127.0.0.1 and checks the page origin.
  */
-import { write3mf, writeDxf, writeStl, writeSvg } from "@meercad/io";
+import { layoutSheet, write3mf, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeStl, writeSvg, type Paper } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
-import { applyOp, massOf, massProperties, materialById } from "@meercad/model";
+import { applyOp, billOfMaterials, drawingDocument, massOf, massProperties, materialById } from "@meercad/model";
+import type { ViewName } from "@meercad/kernel/client";
+import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
 import { sketchCurves } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
@@ -238,6 +240,36 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const video = p["video"] as { frames?: number; width?: number; height?: number } | undefined;
       const gif = video ? await renderMotionGif(joint, from, to, video.frames ?? 36, { ...shotOf(p), width: video.width ?? 480, height: video.height ?? 360 }) : null;
       return { png: sheet.png.slice(sheet.png.indexOf(",") + 1), frames: sheet.frames, ...(gif ? { gif: toB64(gif) } : {}) };
+    }
+    case "drawing": {
+      needProject();
+      const out = await rebuildNow();
+      const doc = currentDoc();
+      const names = (p["views"] as ViewName[] | undefined) ?? ["front", "top", "left", "iso"];
+      const views = await kernel.drawing(names, undefined, drawingDocument(doc));
+      const bom = billOfMaterials(out.report.bodies, (id) => partName(id, doc.features), doc.partMaterials ?? {});
+      const sheet = layoutSheet(views, {
+        paper: (p["paper"] as Paper | undefined) ?? "A4",
+        title: { title: String(p["title"] ?? useApp.getState().project?.name ?? "Untitled"), material: p["material"] as string | undefined, drawnBy: p["drawnBy"] as string | undefined, number: p["number"] as string | undefined, date: new Date().toLocaleDateString("sv") },
+        ...(p["bom"] !== false && bom.length > 1 ? { bom } : {}),
+      });
+      const svg = writeSheetSvg(sheet);
+      const format = (p["format"] as string | undefined) ?? "pdf";
+      const file = format === "svg" ? toB64(svg) : format === "dxf" ? toB64(writeSheetDxf(sheet)) : toB64(writeSheetPdf(sheet));
+      // A picture of the sheet for checking it, drawn from its SVG.
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("could not draw the sheet"));
+        img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      });
+      const width = Number(p["width"] ?? 1400);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = Math.round((width * sheet.height) / sheet.width);
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const png = canvas.toDataURL("image/png");
+      return { file, png: png.slice(png.indexOf(",") + 1), scale: sheet.scaleLabel, paper: `${sheet.width} × ${sheet.height} mm`, views: views.map((v) => v.name), parts: bom.map((r) => ({ pos: r.pos, qty: r.qty, name: r.name, ...(r.material ? { material: r.material } : {}) })) };
     }
     case "set_view": {
       const vp = getViewport();

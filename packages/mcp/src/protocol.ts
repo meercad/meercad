@@ -20,6 +20,7 @@ export type BridgeMethod =
   | "check_motion"
   | "check_clearance"
   | "render_motion"
+  | "drawing"
   | "get_status"
   | "clear_preview";
 

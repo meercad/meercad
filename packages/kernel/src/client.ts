@@ -6,6 +6,7 @@ import type { Clearance, Measurement, PickRef } from "./tools.js";
 import type { DrawingView, ViewName } from "./drawing.js";
 
 export type { Measurement, PickRef } from "./tools.js";
+export type { DrawingView, ViewName } from "./drawing.js";
 
 export interface RebuildOutput {
   report: RebuildReport;
