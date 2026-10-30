@@ -109,3 +109,14 @@ describe("3MF for multi-colour printing", () => {
     expect(unzipSync(write3mf([{ ...tri, filament: "#c4cfdc" }, tri]))["Metadata/model_settings.config"]).toBeUndefined();
   });
 });
+
+describe("zip", () => {
+  it("packs files that unpack again", async () => {
+    const { unzipSync, strFromU8 } = await import("fflate");
+    const { writeZip } = await import("./zip.js");
+    const files = unzipSync(writeZip({ "a-Pipe 25.stl": new Uint8Array([1, 2, 3]), "b.txt": "hello" }));
+    expect(Object.keys(files)).toEqual(["a-Pipe 25.stl", "b.txt"]);
+    expect([...files["a-Pipe 25.stl"]!]).toEqual([1, 2, 3]);
+    expect(strFromU8(files["b.txt"]!)).toBe("hello");
+  });
+});

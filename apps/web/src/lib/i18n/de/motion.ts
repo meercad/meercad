@@ -72,6 +72,14 @@ export default {
   Untitled: "Unbenannt",
   "Drawing saved as {format} (scale {scale})": "Zeichnung als {format} gespeichert (Maßstab {scale})",
 
+  // All variants at once
+  "Export all {n} variants as {format} (zip)": "Alle {n} Varianten als {format} exportieren (Zip)",
+  "This design has no variants": "Dieser Entwurf hat keine Varianten",
+  "Exporting {n} variants": "{n} Varianten werden exportiert",
+  "variant “{name}” does not build: {error}": "Variante „{name}“ lässt sich nicht aufbauen: {error}",
+  "variants": "Varianten",
+  "Zip archive": "Zip-Archiv",
+
   // Versions
   "Versions": "Versionen",
   "Versions…": "Versionen …",

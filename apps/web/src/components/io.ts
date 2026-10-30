@@ -1,5 +1,6 @@
 /** File import/export and share links. */
-import { encodeShareFragment, read3mf, readDxf, readObj, write3mf, writeDxf, writeStl, writeSvg, type Curve2 } from "@meercad/io";
+import { encodeShareFragment, read3mf, readDxf, readObj, write3mf, writeDxf, writeStl, writeSvg, writeZip, type Curve2 } from "@meercad/io";
+import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
@@ -8,7 +9,7 @@ import { designOf, nextFeatureId } from "@meercad/model";
 import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
-import { apply, currentDoc, flushSave, kernel, newProject, openSketch, rebuildNow, startTask, toast, useApp } from "../store";
+import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
 import { t } from "../lib/i18n";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
@@ -18,6 +19,7 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   dxf: { name: t("DXF drawing"), extensions: ["dxf"] },
   svg: { name: t("SVG drawing"), extensions: ["svg"] },
   ocad: { name: t("meerCAD part"), extensions: ["meercad", "meerCAD"] },
+  zip: { name: t("Zip archive"), extensions: ["zip"] },
 };
 
 /** Saves a file: a native save dialog on desktop, the share sheet on iPad, a browser download otherwise. */
@@ -51,21 +53,52 @@ export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
   if (!ids?.length) return toast(t("Nothing to export"), "error");
   try {
-    const meshes = await kernel.exportMeshes(ids);
-    if (format === "stl") download(`${baseName()}.stl`, writeStl(meshes) as BlobPart, "model/stl");
-    else {
-      const colors = partColors(useApp.getState().doc, useApp.getState().output?.report.bodies.map((b) => b.id) ?? [], usePrefs.getState().colorParts);
-      // Colours the user picked also choose filaments for multi-colour printers.
-      const picked = useApp.getState().doc.partColors ?? {};
-      const names = useApp.getState().doc.features;
-      download(
-        `${baseName()}.3mf`,
-        write3mf(meshes.map((m) => ({ ...m, name: partName(m.bodyId, names), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}), ...(picked[m.bodyId] ? { filament: picked[m.bodyId]! } : {}) }))) as BlobPart,
-        "model/3mf",
-      );
-    }
+    download(`${baseName()}.${format}`, meshFile(format, await kernel.exportMeshes(ids)) as BlobPart, format === "stl" ? "model/stl" : "model/3mf");
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
+  }
+}
+
+/** Parts as an STL, or a 3MF with their names and colours. */
+function meshFile(format: "stl" | "3mf", meshes: BodyMesh[]): Uint8Array {
+  if (format === "stl") return writeStl(meshes);
+  const { doc } = useApp.getState();
+  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  // Colours the user picked also choose filaments for multi-colour printers.
+  const picked = doc.partColors ?? {};
+  return write3mf(meshes.map((m) => ({ ...m, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}), ...(picked[m.bodyId] ? { filament: picked[m.bodyId]! } : {}) })));
+}
+
+/**
+ * Every variant exported at once, one file each in a zip ("holder-Pipe 25.stl", …). The kernel
+ * builds each variant in turn; afterwards the design is built as it is again.
+ */
+export async function exportVariants(format: "stl" | "3mf" | "step"): Promise<void> {
+  const doc = currentDoc();
+  const variants = doc.variants ?? [];
+  if (!variants.length) return toast(t("This design has no variants"), "error");
+  const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, "-").trim();
+  const task = startTask(t("Exporting {n} variants", { n: variants.length }));
+  const files: Record<string, Uint8Array> = {};
+  holdRebuilds(true);
+  try {
+    for (const [k, v] of variants.entries()) {
+      task.update(k / variants.length);
+      const out = await kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
+      const failed = out.report.features.find((f) => f.status === "error");
+      if (failed) throw new Error(t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }));
+      const hidden = useApp.getState().hidden;
+      const ids = out.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
+      const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
+      files[file] = format === "step" ? await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id))) : meshFile(format, await kernel.exportMeshes(ids));
+    }
+    download(`${baseName()}-${t("variants")}.zip`, writeZip(files) as BlobPart, "application/zip");
+  } catch (e) {
+    toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
+  } finally {
+    task.done();
+    holdRebuilds(false);
+    scheduleRebuild();
   }
 }
 

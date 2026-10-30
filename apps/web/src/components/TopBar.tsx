@@ -6,7 +6,7 @@ import { featureName } from "../lib/features";
 import { useCompact } from "../lib/layout";
 import { askText } from "./Ask";
 import type { MenuEntry } from "./Menu";
-import { exportMesh, exportSketch, exportStep, importFile, saveFile, shareLink } from "./io";
+import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile, shareLink } from "./io";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
 import { nativeApp } from "../lib/native";
@@ -46,6 +46,7 @@ export function TopBar() {
   const compact = useCompact();
   const nameBtn = useRef<HTMLButtonElement>(null);
   const units = useApp((s) => s.doc.units ?? "mm");
+  const variants = useApp((s) => s.doc.variants?.length ?? 0);
 
   const fileBtn = useRef<HTMLButtonElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
@@ -59,6 +60,9 @@ export function TopBar() {
       { label: t("Export STL (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("stl") },
       { label: t("Export 3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
       { label: t("Export STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
+      ...(variants
+        ? (["stl", "3mf", "step"] as const).map((f) => ({ label: t("Export all {n} variants as {format} (zip)", { n: variants, format: f.toUpperCase() }), icon: <FileDown />, onClick: () => void exportVariants(f) }))
+        : []),
       { label: t("Technical drawing (PDF, DXF)…"), icon: <FileDown />, onClick: openDrawing },
       ...sketches.flatMap((s) => [
         { label: t("Export {name} as DXF (laser)", { name: sketchName(s.id) }), icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
