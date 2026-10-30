@@ -348,6 +348,8 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .tour-card { position: absolute; width: 340px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); animation: pop 0.15s ease-out; }
 .tour-body { color: var(--text-2); line-height: 1.5; }
 .tour-dots { display: flex; gap: 4px; }
+/* Own line under the dots, so longer labels (German) still fit the card. */
+.tour-buttons { justify-content: flex-end; flex-wrap: wrap; }
 .tour-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
 .tour-dots span.on { background: var(--accent); width: 16px; border-radius: 3px; }
 /* help */

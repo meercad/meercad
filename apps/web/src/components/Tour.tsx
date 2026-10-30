@@ -119,13 +119,12 @@ export function Tour({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="tour-body">{step.body}</div>
-        <div className="row">
-          <div className="tour-dots">
-            {STEPS.map((_, k) => (
-              <span key={k} className={k === i ? "on" : ""} />
-            ))}
-          </div>
-          <span className="spacer" />
+        <div className="tour-dots">
+          {STEPS.map((_, k) => (
+            <span key={k} className={k === i ? "on" : ""} />
+          ))}
+        </div>
+        <div className="row tour-buttons">
           <button className="btn" onClick={close}>
             {t("Skip")}
           </button>
