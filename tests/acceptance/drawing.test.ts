@@ -59,6 +59,19 @@ describe("drawing views", () => {
     expect(sec!.visible.length).toBeGreaterThan(4);
   });
 
+  it("finds the hole as a circle seen end-on from above", async () => {
+    const [top, front] = await views(["top", "front"]);
+    expect(top!.circles).toEqual([{ c: [expect.closeTo(20, 6), expect.closeTo(20, 6)], r: expect.closeTo(5, 6), hole: true }]);
+    expect(front!.circles).toEqual([]);
+  });
+
+  it("tells holes from bosses", async () => {
+    const s = await newSession();
+    s.rebuild(doc([...block, { id: "np1", op: "standard_part", kind: "magnet", diameter: 6, height: 3, plane: { face: { face: "ex1.end_cap" } }, points: [[45, 20]] }]));
+    const [top] = drawingViews(await getOcct(), s.state!, ["top"]);
+    expect(top!.circles!.map((c) => [Math.round(c.r * 100) / 100, c.hole]).sort()).toEqual([[3, false], [5, true]]);
+  });
+
   it("draws an isometric view", async () => {
     const [iso] = await views(["iso"]);
     expect(iso!.visible.length).toBeGreaterThan(9);

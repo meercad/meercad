@@ -20,6 +20,8 @@ export interface SheetView {
   cutAt?: number;
   /** Section view: the part of each cut face; parts are hatched alternately at 45° and 135°. */
   sectionParts?: number[];
+  /** Round faces seen end-on: centre lines for all, diameter callouts for holes. */
+  circles?: { c: Pt; r: number; hole?: boolean }[];
 }
 export type Paper = "A4" | "A3" | "A2";
 export interface TitleBlock {
@@ -109,6 +111,7 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
     const map = (p: Pt): Pt => [px + scale * p[0], py + scale * p[1]];
     for (const l of v.visible) sheet.lines.push({ pts: l.map(map), kind: "visible" });
     if (v.name !== "iso") for (const l of v.hidden) sheet.lines.push({ pts: l.map(map), kind: "hidden" });
+    if (v.circles?.length) holeMarks(sheet, v.circles.map((c) => ({ c: map(c.c), r: c.r * scale, d: c.r * 2, hole: c.hole !== false })));
     return { min: map(v.min), max: map(v.max), v };
   };
   const pf = place(front, ox, oy);
@@ -166,6 +169,43 @@ function hatch(s: Sheet, edges: Pt[][], other = false): void {
     }
     hits.sort((p, q) => along(p) - along(q));
     for (let i = 0; i + 1 < hits.length; i += 2) s.lines.push({ pts: [hits[i]!, hits[i + 1]!], kind: "thin" });
+  }
+}
+
+/**
+ * Centre lines through round features seen end-on (one cross per centre, past the largest circle)
+ * and a diameter callout per size, with a leader to its first circle: "2× Ø4.5".
+ */
+function holeMarks(s: Sheet, circles: { c: Pt; r: number; d: number; hole: boolean }[]): void {
+  const centres: { c: Pt; r: number }[] = [];
+  for (const k of circles) {
+    const hit = centres.find((x) => Math.hypot(x.c[0] - k.c[0], x.c[1] - k.c[1]) < 1e-3);
+    if (hit) hit.r = Math.max(hit.r, k.r);
+    else centres.push({ c: k.c, r: k.r });
+  }
+  for (const { c, r } of centres) {
+    const e = r + 2;
+    s.lines.push({ pts: [[c[0] - e, c[1]], [c[0] + e, c[1]]], kind: "chain" });
+    s.lines.push({ pts: [[c[0], c[1] - e], [c[0], c[1] + e]], kind: "chain" });
+  }
+  const sizes = new Map<string, { c: Pt; r: number }[]>();
+  for (const k of circles.filter((x) => x.hole)) {
+    const label = fmt(k.d);
+    sizes.set(label, [...(sizes.get(label) ?? []), k]);
+  }
+  let n = 0;
+  for (const [label, list] of sizes) {
+    const first = list[0]!;
+    // Up and to the right of the first circle, each size further out so the labels stay apart.
+    const a = Math.PI / 4;
+    const edge: Pt = [first.c[0] + first.r * Math.cos(a), first.c[1] + first.r * Math.sin(a)];
+    const reach = 7 + 7 * n++;
+    const knee: Pt = [edge[0] + reach * Math.cos(a), edge[1] + reach * Math.sin(a)];
+    const text = `${list.length > 1 ? `${list.length}× ` : ""}Ø${label}`;
+    const end: Pt = [knee[0] + text.length * 2, knee[1]];
+    s.lines.push({ pts: [edge, knee, end], kind: "thin" });
+    s.fills.push([edge, [edge[0] + 2.2 * Math.cos(a) - 0.5 * Math.sin(a), edge[1] + 2.2 * Math.sin(a) + 0.5 * Math.cos(a)], [edge[0] + 2.2 * Math.cos(a) + 0.5 * Math.sin(a), edge[1] + 2.2 * Math.sin(a) - 0.5 * Math.cos(a)]]);
+    s.texts.push({ at: [knee[0] + 0.5, knee[1] + 0.8], text, size: 3, anchor: "start" });
   }
 }
 

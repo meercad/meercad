@@ -27,6 +27,8 @@ export interface DrawingView {
   cutAt?: number;
   /** Section views: which part each cut face belongs to (neighbouring parts are hatched the other way). */
   sectionParts?: number[];
+  /** Round faces seen end-on: centre in the view's plane, radius, hole (bore) or boss, once each. */
+  circles?: { c: [number, number]; r: number; hole: boolean }[];
 }
 
 type V3 = [number, number, number];
@@ -134,7 +136,7 @@ function view(oc: OC, arena: Arena, shape: TopoDS_Shape, name: ViewName): Drawin
   const all = visible.flat();
   const min: [number, number] = all.length ? [Math.min(...all.map((p) => p[0])), Math.min(...all.map((p) => p[1]))] : [0, 0];
   const max: [number, number] = all.length ? [Math.max(...all.map((p) => p[0])), Math.max(...all.map((p) => p[1]))] : [0, 0];
-  return { name, visible, hidden, min, max };
+  return { name, visible, hidden, min, max, ...(name === "iso" ? {} : { circles: endOnCircles(oc, arena, shape, eye, right) }) };
 }
 
 /** The edges of a projected shape as polylines: straight edges by their ends, curves sampled finely. */
@@ -172,4 +174,32 @@ function covered(line: Polyline, visible: Polyline[]): boolean {
       return Math.hypot(a[0] + d[0] * t - p[0], a[1] + d[1] * t - p[1]) < 0.01;
     }),
   );
+}
+
+/**
+ * Round faces whose axis points along the view (they show as circles): centre in the view's plane,
+ * radius, and whether it is a hole (material outside: the face looks towards its axis) or a boss.
+ */
+function endOnCircles(oc: OC, arena: Arena, shape: TopoDS_Shape, eye: V3, right: V3): { c: [number, number]; r: number; hole: boolean }[] {
+  const up: V3 = [eye[1] * right[2] - eye[2] * right[1], eye[2] * right[0] - eye[0] * right[2], eye[0] * right[1] - eye[1] * right[0]];
+  const out: { c: [number, number]; r: number; hole: boolean }[] = [];
+  for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE")); e.More(); e.Next()) {
+    const face = oc.TopoDS.Face(arena.track(e.Current()));
+    const s = arena.track(new oc.BRepAdaptor_Surface(face, true));
+    if (s.GetType() !== "GeomAbs_Cylinder") continue;
+    const cyl = arena.track(s.Cylinder());
+    const ax = arena.track(cyl.Axis());
+    const d = arena.track(ax.Direction());
+    if (Math.abs(Math.abs(d.X() * eye[0] + d.Y() * eye[1] + d.Z() * eye[2]) - 1) > 1e-6) continue;
+    const p = arena.track(ax.Location());
+    const v: V3 = [p.X(), p.Y(), p.Z()];
+    const at: [number, number] = [v[0] * right[0] + v[1] * right[1] + v[2] * right[2], v[0] * up[0] + v[1] * up[1] + v[2] * up[2]];
+    const r = cyl.Radius();
+    // Faces look out of the material. A cylinder's own normal points away from its axis (towards it
+    // for a left-handed frame), and a reversed face flips it: looking towards the axis = a bore.
+    const outward = (arena.track(cyl.Position()).Direct() ? 1 : -1) * (String(face.Orientation()) === "TopAbs_REVERSED" || face.Orientation() === (oc.TopAbs_Orientation.TopAbs_REVERSED as unknown) ? -1 : 1);
+    const hole = outward < 0;
+    if (!out.some((o) => Math.hypot(o.c[0] - at[0], o.c[1] - at[1]) < 1e-6 && Math.abs(o.r - r) < 1e-6)) out.push({ c: at, r, hole });
+  }
+  return out;
 }

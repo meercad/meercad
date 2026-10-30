@@ -65,6 +65,15 @@ describe("drawing sheets", () => {
     void front;
   });
 
+  it("marks holes with centre lines and one diameter callout per size", () => {
+    const top: SheetView = { ...box("top", 60, 40), circles: [{ c: [10, 10], r: 2.25 }, { c: [50, 10], r: 2.25 }, { c: [30, 20], r: 5 }, { c: [30, 20], r: 3 }] };
+    const s = layoutSheet([box("front", 60, 20), top], { title: { title: "Plate" } });
+    const texts = s.texts.map((t) => t.text);
+    expect(texts).toEqual(expect.arrayContaining(["2× Ø4.5", "Ø10", "Ø6"]));
+    // One cross per centre: three centres, two chain lines each.
+    expect(s.lines.filter((l) => l.kind === "chain")).toHaveLength(6);
+  });
+
   it("writes SVG, PDF and DXF", () => {
     const s = layoutSheet(views, { title: { title: "Größe Ø10 (Test)" } });
     const svg = writeSheetSvg(s);
