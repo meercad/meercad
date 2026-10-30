@@ -50,6 +50,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       next.params = Object.fromEntries(Object.entries(next.params).map(([k, v]) => [k === op.name ? op.to : k, renameInExpr(v, op.name, op.to)]));
       if (next.autoParams) next.autoParams = next.autoParams.map((n) => (n === op.name ? op.to : n));
       next.features = next.features.map((f) => mapFeatureExprs(f, (e) => renameInExpr(e, op.name, op.to)));
+      for (const v of next.variants ?? []) v.params = Object.fromEntries(Object.entries(v.params).map(([k, e]) => [k === op.name ? op.to : k, renameInExpr(e, op.name, op.to)]));
       if (next.mechanism) {
         const ren = (e: Expr) => renameInExpr(e, op.name, op.to);
         for (const j of next.mechanism.joints) if (j.limits) j.limits = [ren(j.limits[0]), ren(j.limits[1])];
@@ -59,8 +60,10 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       break;
     }
     case "set_param": {
-      if (op.expr === null) delete next.params[op.name];
-      else next.params[op.name] = op.expr;
+      if (op.expr === null) {
+        delete next.params[op.name];
+        for (const v of next.variants ?? []) delete v.params[op.name];
+      } else next.params[op.name] = op.expr;
       const auto = new Set(next.autoParams ?? []);
       if (op.expr === null || op.auto === false) auto.delete(op.name);
       else if (op.auto) auto.add(op.name);
@@ -105,6 +108,30 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       else delete picked[op.part];
       if (Object.keys(picked).length) next.partMaterials = picked;
       else delete next.partMaterials;
+      break;
+    }
+    case "set_variant": {
+      const list = (next.variants ??= []);
+      const i = list.findIndex((v) => v.name === op.name);
+      const name = op.rename ?? op.name;
+      if (name !== op.name && list.some((v) => v.name === name)) throw new OpError(`a variant named "${name}" already exists`);
+      const v = { name, params: structuredClone(op.params) };
+      if (i >= 0) list[i] = v;
+      else list.push(v);
+      if (next.variant === op.name) next.variant = name;
+      break;
+    }
+    case "delete_variant": {
+      if (!next.variants?.some((v) => v.name === op.name)) throw new OpError(`unknown variant "${op.name}"`);
+      next.variants = next.variants.filter((v) => v.name !== op.name);
+      if (!next.variants.length) delete next.variants;
+      if (next.variant === op.name) delete next.variant;
+      break;
+    }
+    case "use_variant": {
+      if (op.name === null) delete next.variant;
+      else if (!next.variants?.some((v) => v.name === op.name)) throw new OpError(`unknown variant "${op.name}"`);
+      else next.variant = op.name;
       break;
     }
     case "delete_coupling": {

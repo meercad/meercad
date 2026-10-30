@@ -298,6 +298,9 @@ export const definitions: Record<string, Json> = {
   }),
 };
 
+/** A variant's name: shown in the variables list, e.g. "M8" or "Pipe 25 mm". */
+const VARIANT_NAME = { type: "string", minLength: 1, maxLength: 64 } as const;
+
 export const documentSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
   $id: "https://meercad.dev/schema/document.json",
@@ -313,6 +316,8 @@ export const documentSchema = {
       units: { enum: ["mm", "in"] },
       features: arr(ref("feature")),
       mechanism: obj({ joints: arr(ref("joint")), couplings: arr(ref("coupling")), clearance: ref("expr") }, ["joints"]),
+      variants: arr(obj({ name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") } }, ["name", "params"])),
+      variant: VARIANT_NAME,
       rollback: oneOf({ type: "null" }, id),
     },
     ["format", "params", "features", "rollback"],
@@ -337,6 +342,9 @@ export const docOpSchema = {
     set_coupling: obj({ type: true, coupling: ref("coupling") }, ["coupling"]),
     delete_coupling: obj({ type: true, id }, ["id"]),
     set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, { type: "string", pattern: "^[a-z0-9]{1,32}$" }) }, ["part", "material"]),
+    set_variant: obj({ type: true, name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") }, rename: VARIANT_NAME }, ["name", "params"]),
+    delete_variant: obj({ type: true, name: VARIANT_NAME }, ["name"]),
+    use_variant: obj({ type: true, name: oneOf({ type: "null" }, VARIANT_NAME) }, ["name"]),
   }),
   definitions,
 };

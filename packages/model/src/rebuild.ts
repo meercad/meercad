@@ -1,4 +1,4 @@
-import type { MeercadDocument } from "@meercad/schema";
+import type { Expr, MeercadDocument } from "@meercad/schema";
 import { resolveParams } from "./expr.js";
 import { hashString } from "./hash.js";
 import { resolveFeature, type ResolvedFeature } from "./resolve.js";
@@ -59,6 +59,13 @@ interface CacheEntry<S> {
  * Incremental rebuild: feature i is recomputed only if hash(previous key, resolved feature) changed.
  * Failed features pass the previous state through so later features can still be evaluated.
  */
+/** The document's parameters with the values of the variant in use put in. */
+export function effectiveParams(doc: Pick<MeercadDocument, "params" | "variants" | "variant">): Record<string, Expr> {
+  const v = doc.variant !== undefined ? doc.variants?.find((x) => x.name === doc.variant) : undefined;
+  if (!v) return doc.params;
+  return { ...doc.params, ...Object.fromEntries(Object.entries(v.params).filter(([k]) => k in doc.params)) };
+}
+
 export class RebuildEngine<S> {
   private cache: CacheEntry<S>[] = [];
   private readonly root: S;
@@ -70,7 +77,7 @@ export class RebuildEngine<S> {
   /** `onFeature` is told before each feature that has to be computed (not those taken from cache). */
   rebuild(doc: MeercadDocument, onFeature?: (index: number, total: number, id: string) => void): RebuildResult<S> {
     const t0 = performance.now();
-    const { values, errors } = resolveParams(doc.params);
+    const { values, errors } = resolveParams(effectiveParams(doc));
     const statuses: FeatureStatus[] = [];
     let state = this.root;
     let key = "root";

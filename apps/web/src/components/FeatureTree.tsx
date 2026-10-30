@@ -4,7 +4,7 @@ import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
 import { checkInterference } from "../lib/interference";
 import { evaluate, formatInertia, formatMass, massOf, massProperties, materialById, MATERIALS, referencedNames } from "@meercad/model";
-import type { Feature } from "@meercad/schema";
+import type { Expr, Feature } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp } from "../store";
@@ -595,6 +595,9 @@ function Params() {
   const [ownOpen, toggleOwn] = useSection("variables.own");
   const [autoOpen, toggleAuto] = useSection("variables.auto", false);
   const [calcOpen, toggleCalc] = useSection("variables.calc", false);
+  const [variantsOpen, toggleVariants] = useSection("variables.variants");
+  const variants = doc.variants ?? [];
+  const active = variants.find((v) => v.name === doc.variant);
   const [query, setQuery] = useState("");
   const used = (name: string) => JSON.stringify(doc.features).match(new RegExp(`\\b${name}\\b`)) || Object.values(params).some((e) => referencedNames(e).includes(name));
   const q = query.trim().toLowerCase();
@@ -605,9 +608,36 @@ function Params() {
   const automatic = Object.keys(params).filter((n) => groupOf(n) === "auto");
   const total = Object.keys(params).length;
 
+  // With a variant in use, its values show and are edited in place of the plain ones.
+  const fromVariant = (name: string) => !!active && name in active.params;
+  const shown = (name: string) => (fromVariant(name) ? active!.params[name]! : params[name]!);
+  const setValue = (name: string, v: Expr) => (fromVariant(name) ? apply({ type: "set_variant", name: active!.name, params: { ...active!.params, [name]: v } }) : apply({ type: "set_param", name, expr: v }));
+  const addVariant = async () => {
+    const name = await askText({ title: t("New variant"), label: t("Name"), value: t("Variant {n}", { n: variants.length + 1 }), confirmLabel: t("Add") });
+    if (!name?.trim()) return;
+    // It starts from the values now shown, of every variable that is not a formula of others.
+    const values = Object.fromEntries(Object.keys(params).filter((n) => groupOf(n) !== "calculated").map((n) => [n, shown(n)]));
+    apply({ type: "set_variant", name: name.trim(), params: values }, { type: "use_variant", name: name.trim() });
+  };
+  const variantMenu = (name: string, x: number, y: number) => {
+    const v = variants.find((x) => x.name === name)!;
+    showMenu(x, y, [
+      {
+        label: t("Rename…"),
+        icon: <Pencil />,
+        onClick: async () => {
+          const to = await askText({ title: t("Rename variant"), label: t("Name"), value: name, confirmLabel: t("Rename") });
+          if (to?.trim() && to.trim() !== name) apply({ type: "set_variant", name, params: v.params, rename: to.trim() });
+        },
+      },
+      { label: t("Delete"), icon: <Trash />, danger: true, onClick: () => apply({ type: "delete_variant", name }) },
+    ]);
+  };
+
   const row = (name: string, isAuto: boolean) => (
     <div
-      className={`param-row ${isAuto ? "auto" : ""}`}
+      className={`param-row ${isAuto ? "auto" : ""} ${fromVariant(name) ? "in-variant" : ""}`}
+      title={fromVariant(name) ? t("Value of variant {name}", { name: active!.name }) : undefined}
       key={name}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -630,7 +660,7 @@ function Params() {
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
       {/* A length variable in an inch design shows its result and takes plain numbers in inches. */}
-      <ExprInput value={params[name]} unit={unit === "in" && isLengthParam(name, params) ? "mm" : ""} quiet onCommit={(v) => apply({ type: "set_param", name, expr: v })} />
+      <ExprInput key={`${name}-${active?.name ?? ""}`} value={shown(name)} unit={unit === "in" && isLengthParam(name, params) ? "mm" : ""} quiet onCommit={(v) => setValue(name, v)} />
       <span className="val" title={errors[name] ?? (unit === "in" && isLengthParam(name, params) ? t("in inches") : "")} style={errors[name] ? { color: "var(--err)" } : undefined}>
         {errors[name] ? t("error") : values[name] === undefined ? "" : unit === "in" && isLengthParam(name, params) ? inUnit(values[name]!, "in") : +values[name]!.toFixed(3)}
       </span>
@@ -677,6 +707,48 @@ function Params() {
                 </button>
               ) : null}
             </div>
+          ) : null}
+          {total ? (
+            <>
+              <SectionHead
+                open={variantsOpen}
+                onToggle={toggleVariants}
+                sub
+                actions={
+                  <button className="icon-btn sm" title={t("Add variant")} onClick={() => void addVariant()}>
+                    <Plus />
+                  </button>
+                }
+              >
+                <span title={t("Named sets of values, e.g. one holder for three pipe sizes")}>{t("Variants")}</span> <span className="count">{variants.length}</span>
+              </SectionHead>
+              {variantsOpen ? (
+                variants.length ? (
+                  <div className="variant-chips" role="radiogroup" aria-label={t("Variants")}>
+                    <button role="radio" aria-checked={!active} className={`variant-chip ${!active ? "on" : ""}`} onClick={() => active && apply({ type: "use_variant", name: null })}>
+                      {t("Plain values")}
+                    </button>
+                    {variants.map((v) => (
+                      <button
+                        key={v.name}
+                        role="radio"
+                        aria-checked={active?.name === v.name}
+                        className={`variant-chip ${active?.name === v.name ? "on" : ""}`}
+                        onClick={() => active?.name !== v.name && apply({ type: "use_variant", name: v.name })}
+                        onDoubleClick={(e) => variantMenu(v.name, e.clientX, e.clientY)}
+                        onContextMenu={(e) => (e.preventDefault(), variantMenu(v.name, e.clientX, e.clientY))}
+                      >
+                        {v.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty" style={{ padding: "2px 4px" }}>
+                    {t("Save the values as a variant to switch between sizes of the same part.")}
+                  </div>
+                )
+              ) : null}
+            </>
           ) : null}
           <SectionHead open={ownOpen || !!q} onToggle={toggleOwn} sub>
             {t("Your variables")} <span className="count">{own.length}</span>

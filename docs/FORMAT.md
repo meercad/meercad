@@ -20,6 +20,10 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 
 - **params** — named values; any numeric field may be an expression (`"wall * 2"`, `"5 mm"`, `"30 deg"`).
   `autoParams` (optional) lists the ones an assistant created; the app shows them apart from your own.
+- **variants / variant** (optional) — named sets of parameter values, e.g. one holder for three pipe
+  sizes: `"variants": [{ "name": "Pipe 25", "params": { "pipe": "25 mm" } }], "variant": "Pipe 25"`.
+  The variant in use replaces the values of the parameters it lists; without `variant` the values in
+  `params` apply.
 - **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.

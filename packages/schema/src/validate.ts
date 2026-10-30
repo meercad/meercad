@@ -235,6 +235,15 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
     }
     seen.set(f.id, f);
   }
+  if (doc.variants) {
+    const names = new Set<string>();
+    for (const v of doc.variants) {
+      if (names.has(v.name)) errors.push(`variant "${v.name}": duplicate name`);
+      names.add(v.name);
+      for (const p of Object.keys(v.params)) if (!(p in doc.params)) errors.push(`variant "${v.name}": unknown parameter "${p}"`);
+    }
+  }
+  if (doc.variant !== undefined && !doc.variants?.some((v) => v.name === doc.variant)) errors.push(`variant "${doc.variant}" is in use but not defined`);
   const mech = doc.mechanism;
   if (mech) {
     const jointIds = new Set<string>();

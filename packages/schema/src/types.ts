@@ -608,8 +608,21 @@ export interface MeercadDocument {
   features: Feature[];
   /** Joints between parts; moving them never changes the model. */
   mechanism?: Mechanism;
+  /**
+   * Named sets of parameter values, e.g. one holder for three pipe sizes. The variant in use
+   * (`variant`) replaces the values of the parameters it lists; the others keep theirs.
+   */
+  variants?: Variant[];
+  /** Name of the variant in use; absent: the values in `params`. */
+  variant?: string;
   /** Id of the last feature that is evaluated, or null for all. */
   rollback: string | null;
+}
+
+export interface Variant {
+  name: string;
+  /** Values for some of the document's parameters. */
+  params: Record<string, Expr>;
 }
 
 /** Operations-API: the only way UI, AI, scripting and MCP change a document. */
@@ -629,6 +642,11 @@ export type DocOp =
   | { type: "delete_coupling"; id: string }
   /** A part's material (an id from model/materials such as "petg"), or null for none. */
   | { type: "set_material"; part: string; material: string | null }
+  /** Adds a variant or replaces the one with that name (`rename` gives it a new name). */
+  | { type: "set_variant"; name: string; params: Record<string, Expr>; rename?: string }
+  | { type: "delete_variant"; name: string }
+  /** Puts a variant in use, or null for the values in `params`. */
+  | { type: "use_variant"; name: string | null }
   | { type: "replace"; doc: MeercadDocument };
 
 export function emptyDocument(): MeercadDocument {
