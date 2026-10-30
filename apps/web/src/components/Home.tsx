@@ -9,7 +9,7 @@ import { EXAMPLES } from "../lib/examples";
 import { importFile } from "./io";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
-import { fillMissingThumbnails } from "../lib/thumbnails";
+import { exampleThumbnail, fillExampleThumbnails, fillMissingThumbnails } from "../lib/thumbnails";
 
 const DRAG_TYPE = "application/x-meercad-project";
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
@@ -120,7 +120,9 @@ export function Home() {
   const [sort, setSort] = useState(loadSort);
   useEffect(() => void refreshProjects(), []);
   // Files added from outside (or never opened here) get their picture while the overview is open.
-  useEffect(() => void fillMissingThumbnails(), [projects]);
+  const [, setShots] = useState(0);
+  // Projects first, then the examples' pictures.
+  useEffect(() => void fillMissingThumbnails().then(() => fillExampleThumbnails(EXAMPLES, () => setShots((n) => n + 1))), [projects]);
   const changeSort = (s: Sort) => {
     setSort(s);
     try {
@@ -303,7 +305,7 @@ export function Home() {
           {EXAMPLES.map((ex) => (
             <button className="card" key={ex.name} onClick={() => void newProject(structuredClone(ex.doc), ex.name)}>
               <div className="thumb">
-                <img src={ex.thumbnail} alt="" />
+                {ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc) ? <img src={ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)!} alt="" /> : <Box size={32} />}
               </div>
               <div className="meta">
                 <div style={{ minWidth: 0 }}>

@@ -139,8 +139,83 @@ const flange: MeercadDocument = {
   rollback: null,
 };
 
-export const EXAMPLES: { name: string; description: string; thumbnail: string; doc: MeercadDocument }[] = [
+/** Two meshing gears that turn together in the joints panel. */
+const gearPair: MeercadDocument = {
+  format: "meercad/1",
+  params: { module: "1.5 mm", pinion: "15", wheel: "30", width: "8 mm", shaft: "5 mm" },
+  features: [
+    { id: "gr1", op: "gear", name: "Pinion", kind: "spur", module: "module", teeth: "pinion", width: "width", bore: { diameter: "shaft", shape: "d_flat", flat: "shaft - 0.5 mm", allowance: "0.15 mm" }, chamfer: "0.5 mm", mode: "new_body" },
+    { id: "gr2", op: "gear", name: "Wheel", kind: "spur", teeth: "wheel", width: "width", meshWith: { gear: "gr1", direction: 30 }, bore: { diameter: "8 mm", allowance: "0.15 mm" }, chamfer: "0.5 mm", mode: "new_body" },
+  ],
+  mechanism: {
+    joints: [
+      { id: "j1", name: "Pinion", type: "revolute", a: "gr1", b: "ground", anchor: { gear: "gr1" } },
+      { id: "j2", name: "Wheel", type: "revolute", a: "gr2", b: "ground", anchor: { gear: "gr2" } },
+    ],
+    couplings: [{ id: "c1", driver: "j1", driven: "j2", ratio: "-pinion / wheel" }],
+  },
+  rollback: null,
+};
+
+/** A box with a lid on a pin: the lid swings open in the joints panel. */
+const hingeRect = rect("width", "depth", true, 60, 40);
+const hingedBox: MeercadDocument = {
+  format: "meercad/1",
+  params: { width: "60 mm", depth: "40 mm", height: "20 mm", lid: "3 mm", pin: "5 mm" },
+  features: [
+    { id: "sk1", op: "sketch", name: "Footprint", plane: { ref: "origin.XY" }, ...hingeRect },
+    { id: "ex1", op: "extrude", name: "Box", profile: { sketch: "sk1" }, extent: "blind", distance: "height", mode: "new_body" },
+    { id: "pl1", op: "plane", name: "Lid plane", base: { ref: "origin.XY" }, offset: "height" },
+    { id: "sk2", op: "sketch", name: "Lid outline", plane: { ref: "pl1" }, ...hingeRect },
+    { id: "ex2", op: "extrude", name: "Lid", profile: { sketch: "sk2" }, extent: "blind", distance: "lid", mode: "new_body" },
+    { id: "pl2", op: "plane", name: "Pin plane", base: { ref: "origin.YZ" }, offset: "-width / 2" },
+    {
+      id: "sk3",
+      op: "sketch",
+      name: "Pin",
+      plane: { ref: "pl2" },
+      entities: [
+        { id: "q", type: "point", x: 20, y: 20 },
+        { id: "c1", type: "circle", center: "q", radius: 2.5 },
+      ],
+      constraints: [
+        { id: "k1", type: "diameter", curve: "c1", value: "pin", label: [24, 24] },
+        { id: "k2", type: "distance", a: "origin", b: "q", axis: "x", value: "depth / 2", label: [10, -6] },
+        { id: "k3", type: "distance", a: "origin", b: "q", axis: "y", value: "height", label: [-6, 10] },
+      ],
+    },
+    { id: "ex3", op: "extrude", name: "Pin", profile: { sketch: "sk3" }, extent: "blind", distance: "width", mode: "new_body" },
+  ],
+  mechanism: {
+    joints: [
+      { id: "j1", name: "Pin", type: "fixed", a: "ex3", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.c1]" } } },
+      { id: "j2", name: "Lid", type: "revolute", a: "ex2", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.c1]" } }, limits: [0, 110] },
+    ],
+  },
+  rollback: null,
+};
+
+/** A name plate with raised and engraved text. */
+const plateRect = rect("width", "height", true, 80, 30);
+const namePlate: MeercadDocument = {
+  format: "meercad/1",
+  params: { width: "80 mm", height: "30 mm", thickness: "4 mm", letters: "8 mm" },
+  features: [
+    { id: "sk1", op: "sketch", name: "Outline", plane: { ref: "origin.XY" }, ...plateRect },
+    { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: "thickness", mode: "new_body" },
+    { id: "fi1", op: "fillet", name: "Corners", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }, { edge: ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"] }, { edge: ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"] }, { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l4]"] }], radius: "4 mm" },
+    { id: "tx1", op: "text", name: "Name", plane: { face: { face: "ex1.end_cap" } }, text: "meerCAD", font: "sans-bold", align: "center", position: [0, -2], size: "letters", depth: "1 mm", mode: "join" },
+    { id: "tx2", op: "text", name: "Label", plane: { face: { face: "ex1.end_cap" } }, text: "made with meerCAD", align: "center", position: [0, -10], size: "3.5 mm", depth: "0.6 mm", mode: "cut" },
+  ],
+  rollback: null,
+};
+
+/** `thumbnail`: a picture shipped with the app; examples without one are pictured on the home screen. */
+export const EXAMPLES: { name: string; description: string; thumbnail?: string; doc: MeercadDocument }[] = [
   { name: "Mounting plate", description: "Holes, countersinks, rounded corners", thumbnail: "/examples/mounting-plate.png", doc: bracket },
   { name: "Project box", description: "Shelled enclosure with fillets", thumbnail: "/examples/project-box.png", doc: box },
   { name: "Flange", description: "Circular bolt pattern", thumbnail: "/examples/flange.png", doc: flange },
+  { name: "Gear pair", description: "Meshing gears that turn together", doc: gearPair },
+  { name: "Hinged box", description: "Lid on a pin that swings open", doc: hingedBox },
+  { name: "Name plate", description: "Raised and engraved text", doc: namePlate },
 ];

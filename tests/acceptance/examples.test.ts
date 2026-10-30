@@ -9,7 +9,24 @@ describe("home-screen examples", () => {
     const { report } = (await newSession()).rebuild(ex.doc);
     expect(report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
     for (const s of report.sketches) expect(s.diagnostics.dof, `${s.id} DOF`).toBe(0);
-    expect(report.bodies).toHaveLength(1);
+    // Most are one part; the gear pair has two, the hinged box three (box, lid, pin).
+    expect(report.bodies).toHaveLength({ "Gear pair": 2, "Hinged box": 3 }[ex.name] ?? 1);
+  });
+
+  it("gear pair and hinged box follow their variables", async () => {
+    const s = await newSession();
+    const gears = EXAMPLES.find((e) => e.name === "Gear pair")!.doc;
+    for (const p of [{ pinion: "12", wheel: "40" }, { module: "2 mm" }] as Record<string, string>[]) {
+      const { report } = s.rebuild(withParams(gears, p));
+      expect(report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+    }
+    const box = EXAMPLES.find((e) => e.name === "Hinged box")!.doc;
+    const { report } = s.rebuild(withParams(box, { width: "80 mm", height: "30 mm" }));
+    expect(report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+    // The pin still lies along the back edge on top of the box.
+    const pin = report.bodies.find((b) => b.id === "ex3")!.bbox;
+    expect(pin.max[0] - pin.min[0]).toBeCloseTo(80, 3);
+    expect((pin.min[2] + pin.max[2]) / 2).toBeCloseTo(30, 3);
   });
 
   it("mounting plate survives parameter changes", async () => {
