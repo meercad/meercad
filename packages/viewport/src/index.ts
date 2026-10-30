@@ -810,6 +810,8 @@ export class Viewport {
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
+      // Seen from below (or a sketch plane from behind) the grid is there all the same.
+      side: THREE.DoubleSide,
       extensions: { derivatives: true } as never,
       uniforms: {
         uMinor: { value: 1 },
