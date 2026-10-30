@@ -11,4 +11,4 @@ export { applyOp, nextFeatureId, DocumentStore, OpError } from "./store.js";
 export * from "./drawing.js";
 export * from "./materials.js";
 export * from "./standardParts.js";
-export { MeshCollider, meshesCollide } from "./collide.js";
+export { MeshCollider, meshesCollide, signedDistance } from "./collide.js";

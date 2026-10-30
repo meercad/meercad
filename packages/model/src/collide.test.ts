@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MeshCollider, meshesCollide, trianglesCross } from "./collide.js";
+import { MeshCollider, meshesCollide, signedDistance, trianglesCross } from "./collide.js";
 import { rotationAbout, translation } from "./motion.js";
 
 /** An axis-aligned box as 12 triangles. */
@@ -70,5 +70,17 @@ describe("mesh collisions", () => {
     expect(meshesCollide(a, b, undefined, translation([19, 0, 0]))).toBe(true);
     expect(meshesCollide(a, b, undefined, translation([20.5, 0, 0]))).toBe(false);
     expect(performance.now() - t0).toBeLessThan(200);
+  });
+
+  it("measures the signed distance to a surface", () => {
+    const a = box(0, 0, 0, 10, 10, 10);
+    expect(signedDistance(a, [15, 5, 5])).toBeCloseTo(5, 9);
+    expect(signedDistance(a, [5, 5, 8])).toBeCloseTo(-2, 9);
+    // Off a corner: the straight distance to it.
+    expect(signedDistance(a, [13, 14, 10])).toBeCloseTo(5, 9);
+    const s = sphere(10, 60);
+    // The tessellated sphere lies slightly inside the true one.
+    expect(signedDistance(s, [0, 0, 12])).toBeCloseTo(2, 1);
+    expect(signedDistance(s, [3, 0, 0])).toBeCloseTo(-7, 1);
   });
 });

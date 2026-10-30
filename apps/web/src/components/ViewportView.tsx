@@ -1,6 +1,7 @@
 import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { partColors } from "../lib/partColors";
-import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, Shapes, SlidersHorizontal, Trash, Wand2 } from "lucide-react";
+import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
+import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -58,6 +59,9 @@ export function ViewportView() {
   const measure = useApp((s) => s.measure);
   const pickingPlane = useApp((s) => s.pickingSketchPlane);
   const doc = useApp((s) => s.doc);
+  // Deviation from a mesh as a colour map on the part.
+  const heat = useDeviation((s) => s.maps);
+  useEffect(() => vp?.setBodyHeat(heat), [vp, heat]);
   // Parts that run into each other while the joints panel is open show red.
   const hits = useMotion((s) => (s.open ? s.hits : NO_HITS));
   useEffect(() => {
@@ -494,6 +498,7 @@ export function ViewportView() {
         "sep",
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
+        ...deviationItems(pick.bodyId),
         ...common,
         "sep",
         { label: useApp.getState().selection.length > 1 ? t("Delete selection") : t("Delete face"), icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
@@ -550,6 +555,7 @@ export function ViewportView() {
       ) : null}
       {measure.active ? <MeasureCard /> : null}
       <LoadingOverlay />
+      <DeviationLegend />
       <div className="status-pill" title={kernelState.error ?? ""}>
         {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
         {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}` : t("Ready"))}
@@ -732,6 +738,51 @@ function LoadingOverlay() {
           ) : null}
         </span>
       </div>
+    </div>
+  );
+}
+
+/** "Deviation from <mesh>" for each mesh part in the model (a scan, the mesh a part was rebuilt from). */
+function deviationItems(body: string): { label: string; icon: React.ReactNode; onClick: () => void }[] {
+  const s = useApp.getState();
+  if (useDeviation.getState().body === body) return [{ label: t("Hide deviation"), icon: <ScanSearch />, onClick: hideDeviation }];
+  const meshes = [...meshBodyIds(s.doc.features, s.output?.meshes ?? [])].filter((id) => id !== body);
+  return meshes.map((mesh) => ({ label: t("Deviation from {mesh}", { mesh: partName(mesh, s.doc.features) }), icon: <ScanSearch />, onClick: () => showDeviation(body, mesh) }));
+}
+
+/** Scale and numbers of the deviation map. */
+function DeviationLegend() {
+  const { body, mesh, stats, error } = useDeviation();
+  const features = useApp((s) => s.doc.features);
+  if (!body || !mesh) return null;
+  const mm = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)} mm`;
+  return (
+    <div className="deviation-card" role="status">
+      <div className="row">
+        <ScanSearch className="ficon" />
+        <b>{t("Deviation from {mesh}", { mesh: partName(mesh, features) })}</b>
+        <span className="spacer" />
+        <button className="icon-btn sm" title={t("Close")} onClick={hideDeviation}>
+          <X />
+        </button>
+      </div>
+      {error || !stats ? (
+        <p className="muted small">{t("The part or the mesh is not in the model any more.")}</p>
+      ) : (
+        <>
+          <div className="deviation-scale" style={{ background: DEVIATION_GRADIENT }} />
+          <div className="deviation-ticks">
+            <span>{mm(-stats.range)}</span>
+            <span>0</span>
+            <span>{mm(stats.range)}</span>
+          </div>
+          <p className="muted small">{t("Blue: smaller than the mesh · red: bigger.")}</p>
+          <p className="small">
+            {t("{share} % within ±{tol} mm · from {min} to {max}", { share: Math.round(stats.within * 100), tol: stats.tolerance, min: mm(stats.min), max: mm(stats.max) })}
+          </p>
+          <p className="muted small">{t("Part {part}", { part: partName(body, features) })}</p>
+        </>
+      )}
     </div>
   );
 }

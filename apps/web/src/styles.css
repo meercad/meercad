@@ -1031,3 +1031,9 @@ html[data-compact] .sketch-done { margin-left: auto; height: 34px; padding: 0 14
 /* The first build's step and bar in the loading card. */
 .loading-step { display: block; margin-top: 4px; font-size: 12px; font-weight: 400; color: var(--text-2); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .loading-bar { margin-top: 8px; background: var(--panel-2); }
+/* Deviation from a mesh: scale and numbers. */
+.deviation-card { position: absolute; right: 14px; bottom: 60px; width: 270px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); box-shadow: var(--shadow); z-index: 4; font-size: 12.5px; }
+.deviation-card p { margin: 0; }
+.deviation-scale { height: 10px; border-radius: 5px; }
+.deviation-ticks { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--text-2); }
+html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width: auto; }

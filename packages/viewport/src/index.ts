@@ -471,9 +471,11 @@ export class Viewport {
       b.edges.geometry.dispose();
       (b.faces.material as THREE.Material).dispose();
       (b.edges.material as THREE.Material).dispose();
+      for (const o of b.group.children) if (o.userData["heat"]) disposeTree(o);
     }
     this.bodiesGroup.clear();
     this.bodies = data.bodies.filter((m) => !data.hiddenBodies?.has(m.bodyId)).map((m) => this.buildBody(m, !!data.ghostBodies?.has(m.bodyId)));
+    if (this.heat.size) this.attachHeat();
     for (const b of this.bodies) this.bodiesGroup.add(b.group);
     this.applyPoses();
   }
@@ -939,6 +941,38 @@ export class Viewport {
 
   /** Base colours of parts ("#rrggbb" by body id); others use the default part colour. */
   private bodyColors = new Map<string, THREE.Color>();
+  /**
+   * Value maps drawn over parts, such as the deviation from a scan: triangles (x, y, z per corner,
+   * no index) with a linear colour per corner, finer than the part's own mesh so a value stays where
+   * it belongs. They ride along with the part and sit just in front of its faces.
+   */
+  private heat: ReadonlyMap<string, { positions: Float32Array; colors: Float32Array }> = new Map();
+  setBodyHeat(heat: ReadonlyMap<string, { positions: Float32Array; colors: Float32Array }>): void {
+    if (heat.size === 0 && this.heat.size === 0) return;
+    this.heat = heat;
+    this.attachHeat();
+    this.invalidate();
+  }
+
+  private attachHeat(): void {
+    for (const b of this.bodies) {
+      for (const o of b.group.children.filter((c) => c.userData["heat"])) {
+        b.group.remove(o);
+        disposeTree(o);
+      }
+      const h = this.heat.get(b.mesh.bodyId);
+      if (!h) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(h.positions, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(h.colors, 3));
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.05, roughness: 0.6, side: THREE.DoubleSide }));
+      m.userData = { heat: true };
+      // Not pickable: picks keep landing on the part's own faces.
+      m.raycast = () => undefined;
+      b.group.add(m);
+    }
+  }
   setBodyColors(colors: ReadonlyMap<string, string>): void {
     const next = new Map([...colors].map(([id, hex]) => [id, new THREE.Color(hex)]));
     const same = next.size === this.bodyColors.size && [...next].every(([id, c]) => this.bodyColors.get(id)?.equals(c));

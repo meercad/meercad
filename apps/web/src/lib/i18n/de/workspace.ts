@@ -231,6 +231,13 @@ export default {
   "{feature} ({n} of {total})": "{feature} ({n} von {total})",
   Rebuilding: "Wird neu berechnet",
   "Reading {name}": "{name} wird gelesen",
+  "Hide deviation": "Abweichung ausblenden",
+  "Deviation from {mesh}": "Abweichung zu {mesh}",
+  "The part or the mesh is not in the model any more.": "Das Teil oder das Netz ist nicht mehr im Modell.",
+  "Blue: smaller than the mesh · red: bigger.": "Blau: kleiner als das Netz · Rot: größer.",
+  "{share} % within ±{tol} mm · from {min} to {max}": "{share} % innerhalb ±{tol} mm · von {min} bis {max}",
+  "Part {part}": "Teil {part}",
+  "Measuring the deviation": "Abweichung wird gemessen",
   // Measure results (row names from the kernel)
   Area: "Flächeninhalt",
   Radius: "Radius",

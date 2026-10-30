@@ -239,3 +239,91 @@ function crossAt(A: Float64Array, ao: number, B: Float64Array, bo: number): bool
   const tol = 1e-9 * Math.max(1, Math.abs(a0), Math.abs(a1));
   return a0 < b1 - tol && b0 < a1 - tol;
 }
+
+/**
+ * Distance from `p` to the nearest point of the mesh surface, signed by that triangle's side:
+ * positive outside (in front of its face), negative inside, for outward-facing meshes.
+ */
+export function signedDistance(c: MeshCollider, p: V3): number {
+  const px = p[0], py = p[1], pz = p[2];
+  let best = Infinity;
+  let sign = 1;
+  const T = c.tri;
+  const boxDist2 = (n: Node) => {
+    const dx = px < n.min[0] ? n.min[0] - px : px > n.max[0] ? px - n.max[0] : 0;
+    const dy = py < n.min[1] ? n.min[1] - py : py > n.max[1] ? py - n.max[1] : 0;
+    const dz = pz < n.min[2] ? n.min[2] - pz : pz > n.max[2] ? pz - n.max[2] : 0;
+    return dx * dx + dy * dy + dz * dz;
+  };
+  const stack: Node[] = [c.root];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (boxDist2(n) >= best) continue;
+    if (n.left) {
+      // Nearer child last, so it is searched first.
+      if (boxDist2(n.left) < boxDist2(n.right!)) stack.push(n.right!, n.left);
+      else stack.push(n.left, n.right!);
+      continue;
+    }
+    for (let i = n.start; i < n.start + n.count; i++) {
+      closestOnTriangle(T, i * 9, px, py, pz);
+      const dx = px - near[0]!, dy = py - near[1]!, dz = pz - near[2]!;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < best) {
+        best = d2;
+        const o = i * 9;
+        const ux = T[o + 3]! - T[o]!, uy = T[o + 4]! - T[o + 1]!, uz = T[o + 5]! - T[o + 2]!;
+        const vx = T[o + 6]! - T[o]!, vy = T[o + 7]! - T[o + 1]!, vz = T[o + 8]! - T[o + 2]!;
+        sign = (uy * vz - uz * vy) * dx + (uz * vx - ux * vz) * dy + (ux * vy - uy * vx) * dz < 0 ? -1 : 1;
+      }
+    }
+  }
+  return Math.sqrt(best) * sign;
+}
+
+const near = new Float64Array(3);
+const set = (x: number, y: number, z: number) => {
+  near[0] = x;
+  near[1] = y;
+  near[2] = z;
+};
+
+/** Closest point to p on the triangle at `o` in `T`, into `near` (Ericson, Real-Time Collision Detection 5.1.5). */
+function closestOnTriangle(T: Float64Array, o: number, px: number, py: number, pz: number): void {
+  const ax = T[o]!, ay = T[o + 1]!, az = T[o + 2]!;
+  const bx = T[o + 3]!, by = T[o + 4]!, bz = T[o + 5]!;
+  const cx = T[o + 6]!, cy = T[o + 7]!, cz = T[o + 8]!;
+  const abx = bx - ax, aby = by - ay, abz = bz - az;
+  const acx = cx - ax, acy = cy - ay, acz = cz - az;
+  const apx = px - ax, apy = py - ay, apz = pz - az;
+  const d1 = abx * apx + aby * apy + abz * apz;
+  const d2 = acx * apx + acy * apy + acz * apz;
+  if (d1 <= 0 && d2 <= 0) return set(ax, ay, az);
+  const bpx = px - bx, bpy = py - by, bpz = pz - bz;
+  const d3 = abx * bpx + aby * bpy + abz * bpz;
+  const d4 = acx * bpx + acy * bpy + acz * bpz;
+  if (d3 >= 0 && d4 <= d3) return set(bx, by, bz);
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    const v = d1 / (d1 - d3);
+    return set(ax + v * abx, ay + v * aby, az + v * abz);
+  }
+  const cpx = px - cx, cpy = py - cy, cpz = pz - cz;
+  const d5 = abx * cpx + aby * cpy + abz * cpz;
+  const d6 = acx * cpx + acy * cpy + acz * cpz;
+  if (d6 >= 0 && d5 <= d6) return set(cx, cy, cz);
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    const w = d2 / (d2 - d6);
+    return set(ax + w * acx, ay + w * acy, az + w * acz);
+  }
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    const w = (d4 - d3) / (d4 - d3 + (d5 - d6));
+    return set(bx + w * (cx - bx), by + w * (cy - by), bz + w * (cz - bz));
+  }
+  const denom = 1 / (va + vb + vc);
+  const v = vb * denom;
+  const w = vc * denom;
+  set(ax + abx * v + acx * w, ay + aby * v + acy * w, az + abz * v + acz * w);
+}
