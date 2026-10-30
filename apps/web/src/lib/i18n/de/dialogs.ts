@@ -90,6 +90,7 @@ export default {
   "mode::Add": "Vereinigen",
   "mode::Remove": "Abziehen",
   "Intersect": "Schnittmenge",
+  "mode::Intersect": "Schnitt",
   "Union": "Vereinigen",
   "Subtract": "Abziehen",
   "Result": "Ergebnis",

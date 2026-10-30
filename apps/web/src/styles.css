@@ -193,7 +193,7 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .fld-inline { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; }
 .fld-inline > label { font-size: 12px; color: var(--text-2); }
 .segmented { display: flex; padding: 2px; gap: 2px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; }
-.segmented button { flex: 1; height: 26px; border: none; border-radius: 5px; background: none; color: var(--text-2); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.segmented button { flex: 1 1 auto; white-space: nowrap; padding: 0 6px; height: 26px; border: none; border-radius: 5px; background: none; color: var(--text-2); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 .segmented button svg { width: 14px; height: 14px; }
 .segmented button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow-sm); font-weight: 560; }
 .selbox { min-height: 34px; border: 1px dashed var(--border-strong); border-radius: 7px; padding: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; cursor: pointer; background: var(--panel-2); }

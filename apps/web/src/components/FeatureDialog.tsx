@@ -337,7 +337,8 @@ const MODES: [BooleanMode, string][] = [
   ["new_body", t("mode::New")],
   ["join", t("mode::Add")],
   ["cut", t("mode::Remove")],
-  ["intersect", t("Intersect")],
+  // "Schnittmenge" does not fit beside the other three.
+  ["intersect", t("mode::Intersect")],
 ];
 
 function AxisButtons({ value, onChange, kind = "axis" }: { value: AxisRef; onChange: (a: AxisRef) => void; kind?: string }) {
