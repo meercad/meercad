@@ -42,13 +42,21 @@ export function formatMass(grams: number): string {
 }
 
 /**
- * Total mass and centre of gravity of parts. Each part: its volume, its centre of volume and its
- * material (parts without one are left out of the mass).
+ * Moments of inertia about the centre of gravity, axes parallel to X, Y, Z, in g·mm²: Ixx, Iyy,
+ * Izz and the products of inertia ∫xy, ∫xz, ∫yz dm.
  */
-export function massProperties(parts: readonly { volume: number; centroid?: [number, number, number]; material?: Material }[]): { mass: number; center: [number, number, number] | null; missing: number } {
+export type Inertia = [number, number, number, number, number, number];
+
+/**
+ * Total mass, centre of gravity and inertia of parts. Each part: its volume, its centre of volume,
+ * its volume's moments about that centre (from the kernel) and its material (parts without one are
+ * left out). Each part's inertia moves to the common centre by the parallel axis theorem.
+ */
+export function massProperties(parts: readonly { volume: number; centroid?: [number, number, number]; inertia?: readonly number[]; material?: Material }[]): { mass: number; center: [number, number, number] | null; inertia: Inertia | null; missing: number } {
   let mass = 0;
   const c: [number, number, number] = [0, 0, 0];
   let missing = 0;
+  const counted: { m: number; at?: [number, number, number]; own?: readonly number[] }[] = [];
   for (const p of parts) {
     if (!p.material || !Number.isFinite(p.volume)) {
       missing++;
@@ -57,8 +65,29 @@ export function massProperties(parts: readonly { volume: number; centroid?: [num
     const m = massOf(p.volume, p.material);
     mass += m;
     if (p.centroid) for (let k = 0; k < 3; k++) c[k]! += p.centroid[k]! * m;
+    // The kernel's moments are of the volume in mm⁵; mass per mm³ turns them into g·mm².
+    counted.push({ m, ...(p.centroid ? { at: p.centroid } : {}), ...(p.inertia && p.volume > 0 ? { own: p.inertia.map((v) => (v * m) / p.volume) } : {}) });
   }
-  return { mass, center: mass > 0 ? (c.map((v) => v / mass) as [number, number, number]) : null, missing };
+  const center = mass > 0 ? (c.map((v) => v / mass) as [number, number, number]) : null;
+  let inertia: Inertia | null = null;
+  if (center && counted.length && counted.every((p) => p.at && p.own)) {
+    inertia = [0, 0, 0, 0, 0, 0];
+    for (const p of counted) {
+      const [dx, dy, dz] = [p.at![0] - center[0], p.at![1] - center[1], p.at![2] - center[2]];
+      const shift = [dy * dy + dz * dz, dx * dx + dz * dz, dx * dx + dy * dy, dx * dy, dx * dz, dy * dz];
+      for (let k = 0; k < 6; k++) inertia[k]! += p.own![k]! + p.m * shift[k]!;
+    }
+  }
+  return { mass, center, inertia, missing };
+}
+
+/** Inertia for display: g·mm² for small parts, then kg·mm² and kg·m². */
+export function formatInertia(gmm2: number): string {
+  const a = Math.abs(gmm2);
+  const num = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
+  if (a >= 1e9) return `${num(gmm2 / 1e9)} kg·m²`;
+  if (a >= 1e5) return `${num(gmm2 / 1e3)} kg·mm²`;
+  return `${num(gmm2)} g·mm²`;
 }
 
 /** One line of a parts list (bill of materials): equal parts counted together. */

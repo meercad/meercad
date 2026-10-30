@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
 import { checkInterference } from "../lib/interference";
-import { evaluate, formatMass, massOf, massProperties, materialById, MATERIALS, referencedNames } from "@meercad/model";
+import { evaluate, formatInertia, formatMass, massOf, massProperties, materialById, MATERIALS, referencedNames } from "@meercad/model";
 import type { Feature } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
@@ -555,15 +555,22 @@ function Bodies() {
           {(() => {
             // Total mass and centre of gravity once parts have materials.
             if (!doc.partMaterials) return null;
-            const total = massProperties(bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(materialById(doc.partMaterials?.[b.id]) ? { material: materialById(doc.partMaterials?.[b.id])! } : {}) })));
+            const total = massProperties(bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(b.inertia ? { inertia: b.inertia } : {}), ...(materialById(doc.partMaterials?.[b.id]) ? { material: materialById(doc.partMaterials?.[b.id])! } : {}) })));
             if (!total.mass) return null;
             const c = total.center?.map((v) => v.toFixed(1)).join(", ");
+            const I = total.inertia;
+            const products = I ? `Products of inertia: Ixy ${formatInertia(I[3])}, Ixz ${formatInertia(I[4])}, Iyz ${formatInertia(I[5])}` : "";
             return (
-              <li className="tree-item dim mass-total" title={total.missing ? `${total.missing} part(s) without a material are not counted` : "Solid material (100 % infill)"}>
+              <li className="tree-item dim mass-total" title={[total.missing ? `${total.missing} part(s) without a material are not counted` : "Solid material (100 % infill)", products].filter(Boolean).join("\n")}>
                 <Weight className="ficon" />
                 <span className="tree-label">
                   {formatMass(total.mass)} {c ? <span className="muted">· centre of gravity ({c})</span> : null}
                   {total.missing ? <span className="muted"> · {total.missing} without material</span> : null}
+                  {I ? (
+                    <span className="muted mass-inertia">
+                      Inertia about it: Ixx {formatInertia(I[0])} · Iyy {formatInertia(I[1])} · Izz {formatInertia(I[2])}
+                    </span>
+                  ) : null}
                 </span>
               </li>
             );

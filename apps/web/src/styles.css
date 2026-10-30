@@ -1007,3 +1007,7 @@ html[data-compact] .sketch-done { margin-left: auto; height: 34px; padding: 0 14
     width: auto;
   }
 }
+
+/* Inertia under the total mass in the parts list. */
+.mass-total .tree-label { white-space: normal; }
+.mass-inertia { display: block; font-size: 11px; }

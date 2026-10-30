@@ -1,5 +1,6 @@
 import type { Body } from "./body.js";
 import type { OC } from "./occt.js";
+import type { GProp_GProps } from "replicad-opencascadejs";
 
 /** Tessellated body, made of plain typed arrays so it can be transferred from the worker. */
 export interface BodyMesh {
@@ -23,6 +24,11 @@ export interface BodySummary {
   area: number;
   /** Centre of volume (with `props`). */
   centroid?: [number, number, number];
+  /**
+   * Second moments of the volume about the centroid, axes parallel to X, Y, Z (mm⁵; times density
+   * gives the inertia): Ixx, Iyy, Izz and the products ∫xy, ∫xz, ∫yz (with `props`).
+   */
+  inertia?: [number, number, number, number, number, number];
   bbox: { min: [number, number, number]; max: [number, number, number] };
   faces: number;
   edges: number;
@@ -130,6 +136,27 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse =
   }
 }
 
+/**
+ * Moments about axes through the centroid: the matrix itself is not reachable from the bindings,
+ * so the products come from moments about the diagonals (I along (x+y)/√2 is (Ixx+Iyy)/2 − ∫xy).
+ */
+function momentsAbout(oc: OC, props: GProp_GProps, c: [number, number, number]): [number, number, number, number, number, number] {
+  const about = (d: [number, number, number]) => {
+    const p = new oc.gp_Pnt(...c);
+    const dir = new oc.gp_Dir(...d);
+    const ax = new oc.gp_Ax1(p, dir);
+    try {
+      return props.MomentOfInertia(ax);
+    } finally {
+      ax.delete();
+      dir.delete();
+      p.delete();
+    }
+  };
+  const [xx, yy, zz] = [about([1, 0, 0]), about([0, 1, 0]), about([0, 0, 1])];
+  return [xx, yy, zz, (xx + yy) / 2 - about([1, 1, 0]), (xx + zz) / 2 - about([1, 0, 1]), (yy + zz) / 2 - about([0, 1, 1])];
+}
+
 /** Bounding box and counts; with `props`, also volume and surface area (integrals, slow on curved parts). */
 export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
   const vol = new oc.GProp_GProps();
@@ -155,7 +182,8 @@ export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
       centroid = [c.X(), c.Y(), c.Z()];
       c.delete();
     }
-    return { id: body.bodyId, volume: props ? vol.Mass() : NaN, area: props ? surf.Mass() : NaN, ...(centroid ? { centroid } : {}), bbox, faces: body.faces.length, edges: body.edges.length };
+    const inertia = centroid ? momentsAbout(oc, vol, centroid) : undefined;
+    return { id: body.bodyId, volume: props ? vol.Mass() : NaN, area: props ? surf.Mass() : NaN, ...(centroid ? { centroid } : {}), ...(inertia ? { inertia } : {}), bbox, faces: body.faces.length, edges: body.edges.length };
   } finally {
     vol.delete();
     surf.delete();

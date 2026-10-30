@@ -111,7 +111,7 @@ function summary(out: RebuildOutput) {
   const r = out.report;
   const materials = useApp.getState().doc.partMaterials ?? {};
   const mat = (id: string) => materialById(materials[id]);
-  const total = massProperties(r.bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(mat(b.id) ? { material: mat(b.id)! } : {}) })));
+  const total = massProperties(r.bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(b.inertia ? { inertia: b.inertia } : {}), ...(mat(b.id) ? { material: mat(b.id)! } : {}) })));
   return {
     features: r.features.map((f) => ({ id: f.id, status: f.status, ...(f.message ? { message: f.message } : {}), ...(f.hint ? { hint: f.hint } : {}) })),
     params: r.params,
@@ -125,7 +125,7 @@ function summary(out: RebuildOutput) {
       ...(b.centroid ? { centroid: b.centroid.map((v) => +v.toFixed(3)) } : {}),
       ...(mat(b.id) && Number.isFinite(b.volume) ? { material: mat(b.id)!.id, massGrams: +massOf(b.volume, mat(b.id)!).toFixed(2) } : {}),
     })),
-    ...(total.mass ? { mass: { grams: +total.mass.toFixed(2), centreOfGravity: total.center?.map((v) => +v.toFixed(3)), partsWithoutMaterial: total.missing } } : {}),
+    ...(total.mass ? { mass: { grams: +total.mass.toFixed(2), centreOfGravity: total.center?.map((v) => +v.toFixed(3)), ...(total.inertia ? { inertiaGmm2: { about: "centre of gravity, axes parallel to X/Y/Z", Ixx: +total.inertia[0].toFixed(2), Iyy: +total.inertia[1].toFixed(2), Izz: +total.inertia[2].toFixed(2), Ixy: +total.inertia[3].toFixed(2), Ixz: +total.inertia[4].toFixed(2), Iyz: +total.inertia[5].toFixed(2) } } : {}), partsWithoutMaterial: total.missing } } : {}),
     sketches: r.sketches.map((s) => ({ id: s.id, dof: s.diagnostics.dof, ok: s.diagnostics.ok, regions: s.regions.map((g) => g.key) })),
     ...(r.joints.length ? { joints: r.joints.map((j) => ({ id: j.id, ...(j.error ? { error: j.error } : { origin: j.origin.map((v) => +v.toFixed(3)), axis: j.axis.map((v) => +v.toFixed(4)) }) })) } : {}),
     ...(r.gears.length ? { gears: r.gears.map((g) => ({ ...g, radius: Number.isFinite(g.radius) ? +g.radius.toFixed(4) : null, origin: g.origin.map((v) => +v.toFixed(3)), axis: g.axis.map((v) => +v.toFixed(4)) })) } : {}),
