@@ -59,7 +59,7 @@ export async function scanObject(mode: ScanMode = "object"): Promise<void> {
     const bytes = Uint8Array.from(atob(data.data as string), (c) => c.charCodeAt(0));
     const name = `${label} ${stamp}${paths.length > 1 ? ` (${k + 1})` : ""}.stl`;
     // A scan that did not come in stays on the device and is offered again on the next Scan.
-    if (!(await importFile(new File([bytes], name, { type: "model/stl" })))) return;
+    if (!(await importFile(new File([bytes], name, { type: "model/stl" }), { seeThrough: true }))) return;
   }
   void Scan.imported({ folder: r.folder }).catch(() => undefined);
   toast(t("Scan: {size} mm · {triangles} triangles", { size: r.size.map(fmt).join(" × "), triangles: r.triangles.toLocaleString() }) + (r.photos ? ` · ${tn(r.photos, "{n} photo", "{n} photos")}` : ""));

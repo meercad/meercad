@@ -2,7 +2,7 @@ import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { partColors } from "../lib/partColors";
 import { motion } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
-import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
+import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -17,7 +17,7 @@ import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
 import { commitDialog, dialogPick, editFeature, startHoleAt, kernel, redo, scheduleRebuild, setViewport, startFeature, startSketch, toast, undo, useApp } from "../store";
 import { pickKindsFor } from "./FeatureDialog";
-import { deleteFeature, toggleHidden } from "./FeatureTree";
+import { deleteFeature, toggleHidden, toggleSeeThrough } from "./FeatureTree";
 import { closeMenu, showMenu } from "./Menu";
 import { InlineValues } from "./InlineValues";
 import { Manipulators } from "./Manipulators";
@@ -157,8 +157,8 @@ export function ViewportView() {
     // Mesh parts show no edges: they would outline every triangle.
     const meshParts = meshBodyIds(doc.features, output.meshes);
     const bodies = output.meshes.map((m) => (meshParts.has(m.bodyId) && m.edgeRanges.length ? { ...m, edgeLines: new Float32Array(), edgeRanges: new Int32Array() } : m));
-    return { bodies, sketches, planes, references: output.references, hiddenBodies: hidden, editingSketch: sketchId };
-  }, [output, hidden, sketchId, doc.features, dialog?.feature.op]);
+    return { bodies, sketches, planes, references: output.references, hiddenBodies: hidden, ghostBodies: new Set(doc.seeThrough ?? []), editingSketch: sketchId };
+  }, [output, hidden, sketchId, doc.features, doc.seeThrough, dialog?.feature.op]);
 
   useEffect(() => {
     // No model yet (a project is opening): clear the view instead of showing the previous one.
@@ -490,6 +490,7 @@ export function ViewportView() {
         { label: t("Move {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <Move3d />, onClick: () => startFeature("transform") },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         "sep",
         { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
         { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
@@ -510,6 +511,7 @@ export function ViewportView() {
         ...(pick.normal ? [{ label: t("Hole here"), icon: <CircleDot />, kbd: "Shift+H", onClick: () => startHoleAt(pick) }] : []),
         "sep",
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         ...deviationItems(pick.bodyId),
         ...common,

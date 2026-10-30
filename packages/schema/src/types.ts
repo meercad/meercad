@@ -614,6 +614,8 @@ export interface MeercadDocument {
   partOrder?: string[];
   /** Colours the user gave parts ("#rrggbb" by body id); other parts are coloured automatically. */
   partColors?: Record<string, string>;
+  /** Parts drawn see-through, as a reference to model against (a scan, for instance). */
+  seeThrough?: string[];
   /** Materials of parts (material id from the list in model/materials, by body id): mass and weight. */
   partMaterials?: Record<string, string>;
   /** Named folders of parts in the parts list. */

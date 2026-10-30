@@ -11,6 +11,12 @@ describe("validateDocument", () => {
     expect(r.ok ? [] : r.errors).toEqual([]);
   });
 
+  it("keeps the parts drawn see-through", () => {
+    const r = validateDocument({ ...corpus("box-fillet.meercad.json"), seeThrough: ["ex1"] });
+    expect(r.ok ? r.value.seeThrough : r.errors).toEqual(["ex1"]);
+    expect(validateDocument({ ...corpus("box-fillet.meercad.json"), seeThrough: "ex1" }).ok).toBe(false);
+  });
+
   it("reads files saved before the rename (leocad/1) as the current format", () => {
     const r = validateDocument({ ...corpus("box-fillet.meercad.json"), format: "leocad/1" });
     expect(r.ok ? r.value.format : r.errors).toBe("meercad/1");

@@ -141,6 +141,8 @@ interface BodyObj {
   edges: THREE.LineSegments;
   triFace: Int32Array;
   segEdge: Int32Array;
+  /** Drawn see-through (a reference part). */
+  ghost: boolean;
   /** What the colours were last painted for, so unchanged bodies are skipped. */
   painted?: string;
 }
@@ -702,7 +704,7 @@ export class Viewport {
     edges.userData = { body: mesh.bodyId };
     const group = new THREE.Group();
     group.add(faces, edges);
-    return { mesh, group, faces, edges, triFace, segEdge };
+    return { mesh, group, faces, edges, triFace, segEdge, ghost };
   }
 
   private rebuildSketches(data: SceneData): void {
@@ -910,9 +912,9 @@ export class Viewport {
       const em = b.edges.material as THREE.LineBasicMaterial;
       b.faces.visible = m !== "wireframe";
       b.edges.visible = m !== "shaded";
-      fm.transparent = m === "xray";
-      fm.opacity = m === "xray" ? 0.22 : 1;
-      fm.depthWrite = m !== "xray";
+      fm.transparent = m === "xray" || b.ghost;
+      fm.opacity = m === "xray" ? 0.22 : b.ghost ? 0.25 : 1;
+      fm.depthWrite = m !== "xray" && !b.ghost;
       // Hidden-line: flat white faces that only occlude, plus visible edges.
       fm.emissive.setHex(m === "hidden_line" ? 0xffffff : 0x000000);
       fm.emissiveIntensity = m === "hidden_line" ? 1 : 0;

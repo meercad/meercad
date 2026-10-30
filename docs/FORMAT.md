@@ -30,6 +30,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   (`import.data`) longer than 4 kB are stored once in `blobs` under a key (`"blob:…"`) that the
   states use instead, however many versions share them.
 - **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders.
+- **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way).
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.
 - **thread** — `{ "op": "thread", "face": { "face": "ex2.side[sk2.c1]" }, "size": "M8", "clearance": 0.15 }`

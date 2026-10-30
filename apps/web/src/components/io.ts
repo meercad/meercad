@@ -5,8 +5,8 @@ import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
-import { designOf, motion, nextFeatureId } from "@meercad/model";
-import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
+import { applyOp, designOf, motion, nextFeatureId } from "@meercad/model";
+import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
@@ -47,6 +47,15 @@ export function download(name: string, data: BlobPart, type: string): void {
 }
 
 export const baseName = () => (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
+
+/** The document with parts drawn see-through (or not). */
+export function seeThroughDoc(doc: MeercadDocument, parts: readonly string[], on: boolean): MeercadDocument {
+  const set = new Set(doc.seeThrough ?? []);
+  for (const p of parts) on ? set.add(p) : set.delete(p);
+  const next: MeercadDocument = { ...doc, seeThrough: [...set] };
+  if (!set.size) delete next.seeThrough;
+  return next;
+}
 
 /** Parts moved in the joints panel, where they are shown: exports take them as they are seen. */
 function shownPoses(ids: readonly string[]): Map<string, number[]> {
@@ -193,7 +202,7 @@ export const IMPORT_TYPES = ".step,.stp,.stl,.3mf,.obj,.dxf,.svg,.meercad,.json"
  * a new design named after the file. Meshes become solid bodies; a failed import says why.
  */
 /** Imports a file into the open design (or a new one); true when it came in without errors. */
-export async function importFile(file?: File | null): Promise<boolean> {
+export async function importFile(file?: File | null, opts: { seeThrough?: boolean } = {}): Promise<boolean> {
   file ??= await pickFile(IMPORT_TYPES);
   if (!file) return false;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -231,7 +240,10 @@ export async function importFile(file?: File | null): Promise<boolean> {
   const doc = currentDoc();
   let n = 0;
   for (const f of features) f.id = nextFeatureId({ ...doc, features: [...doc.features, ...features.slice(0, n++)] }, f.op === "sketch" ? "sketch" : "import");
-  if (!apply({ type: "add_features", features })) return false;
+  const add = { type: "add_features" as const, features };
+  // A part to model against (a scan) comes in see-through, in the same step.
+  const meshes = opts.seeThrough ? features.filter((f) => f.op === "import").map((f) => f.id) : [];
+  if (!(meshes.length ? apply({ type: "replace", doc: seeThroughDoc(applyOp(doc, add), meshes, true) }) : apply(add))) return false;
   const sketch = features.find((f) => f.op === "sketch");
   if (sketch) {
     openSketch(sketch.id);

@@ -150,6 +150,8 @@ export default {
   "meerCAD part": "meerCAD-Teil",
   "Could not share {name}: {error}": "{name} ließ sich nicht teilen: {error}",
   "Saved {path}": "{path} gespeichert",
+  "Show see-through": "Durchsichtig zeigen",
+  "Show solid": "Undurchsichtig zeigen",
   "Exported as shown: moved parts are where they are now": "Exportiert wie angezeigt: Bewegte Teile stehen in ihrer aktuellen Stellung",
   "Nothing to export": "Nichts zu exportieren",
   "{format} export failed: {error}": "{format}-Export fehlgeschlagen: {error}",

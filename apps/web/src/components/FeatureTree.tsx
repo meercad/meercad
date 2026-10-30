@@ -1,4 +1,4 @@
-import { Bot, ChevronRight, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { Bot, ChevronRight, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -11,7 +11,7 @@ import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp 
 import { ExprInput, parseExpr } from "./ExprInput";
 import { freeParamName, withUnit, type ValueUnit } from "./ValueInput";
 import { variableGroup } from "../lib/variables";
-import { exportSketch } from "./io";
+import { exportSketch, seeThroughDoc } from "./io";
 import { showMenu } from "./Menu";
 import { docUnit, fmtLen, fmtVolume, inUnit, isLengthParam } from "../lib/units";
 import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
@@ -319,6 +319,12 @@ function LinkBar({ ids }: { ids: string[] }) {
 
 const exprs = (feats: Feature[], field: string) => feats.map((f) => (f as unknown as Record<string, unknown>)[field]);
 
+/** Draws a part see-through as a reference, or solid again (saved in the design). */
+export function toggleSeeThrough(id: string): void {
+  const doc = useApp.getState().doc;
+  apply({ type: "replace", doc: seeThroughDoc(doc, [id], !doc.seeThrough?.includes(id)) });
+}
+
 export function toggleHidden(id: string): void {
   useApp.setState((s) => {
     const hidden = new Set(s.hidden);
@@ -464,6 +470,7 @@ function Bodies() {
             ...(grouped.has(id) ? [{ label: t("Take out of group"), icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).map((g) => ({ ...g, parts: g.parts.filter((x) => x !== id) }))) }] : []),
             "sep" as const,
             { label: hidden.has(id) ? t("Show") : t("Hide"), icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
+            { label: doc.seeThrough?.includes(id) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(id) },
             ...(meshParts.has(id) ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
             { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id, e.clientX, e.clientY) },
