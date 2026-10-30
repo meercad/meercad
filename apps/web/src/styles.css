@@ -730,6 +730,9 @@ html.no-keyboard .kbd, html.no-keyboard .hide-kbd .modal .kbd, html.no-keyboard 
 ul.update-notes { margin: 6px 0 2px; padding-left: 18px; color: var(--text-2); }
 ul.update-notes li { margin: 1px 0; }
 .update-hint { font-size: 12px; margin-top: 4px; }
+/* Later and Download stay together on the right; the release page link moves above when they do not all fit. */
+.update-actions { flex-wrap: wrap; row-gap: 6px; }
+.update-main { display: flex; gap: 8px; margin-left: auto; }
 /* layout defaults for elements rendered outside .app (banners, overlays) */
 :root { --top: 80px; --left: 14px; --rail: 84px; }
 

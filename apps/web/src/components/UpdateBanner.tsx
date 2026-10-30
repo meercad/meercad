@@ -79,24 +79,25 @@ export function UpdateBanner() {
           <span>{progress < 1 ? t("Downloading… {pct}%", { pct: Math.round(progress * 100) }) : t("Installing and restarting…")}</span>
         </div>
       ) : (
-        <div className="row">
+        <div className="row update-actions">
           <button className="btn" onClick={() => window.open(update.page, "_blank")}>
             {t("Release page")}
           </button>
-          <span className="spacer" />
-          <button className="btn" onClick={() => setDismissed(update.version)}>
-            {t("Later")}
-          </button>
-          <button
-            className="btn primary"
-            onClick={() => {
-              if (!update.canInstall) return window.open(update.page, "_blank");
-              setProgress(0);
-              void desktop?.updates.install();
-            }}
-          >
-            <Download /> {update.canInstall ? t("Update now") : t("Download")}
-          </button>
+          <span className="update-main">
+            <button className="btn" onClick={() => setDismissed(update.version)}>
+              {t("Later")}
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => {
+                if (!update.canInstall) return window.open(update.page, "_blank");
+                setProgress(0);
+                void desktop?.updates.install();
+              }}
+            >
+              <Download /> {update.canInstall ? t("Update now") : t("Download")}
+            </button>
+          </span>
         </div>
       )}
     </div>
