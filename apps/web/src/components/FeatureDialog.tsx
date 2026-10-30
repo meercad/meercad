@@ -6,6 +6,7 @@ import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { gearParams, pairInfo } from "../lib/gears";
+import { joinedParts } from "../lib/mechanism";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, openDraft, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
@@ -165,7 +166,11 @@ function handlePick(p: Pick, d: DialogState): void {
       }
       case "bodies": {
         const b = bodyOf(p);
-        if (b) (g as Of<"transform" | "delete">).bodies = toggle((g as Of<"transform" | "delete">).bodies, b);
+        if (!b) break;
+        const cur = (g as Of<"transform" | "delete">).bodies;
+        // Moving a part takes the parts joined to it along, so the joints stay together.
+        if (g.op === "transform" && !g.copy && !cur.includes(b)) g.bodies = [...new Set([...cur, ...joinedParts(b, useApp.getState().doc.mechanism?.joints)])];
+        else (g as Of<"transform" | "delete">).bodies = toggle(cur, b);
         break;
       }
       case "body": {
@@ -231,7 +236,8 @@ export function FeatureDialog() {
     // A whole selected part becomes a body selection for move/mirror/pattern.
     const f0 = d.feature;
     if (pre.length > 1 && (f0.op === "transform" || f0.op === "delete" || f0.op === "mirror" || f0.op === "linear_pattern" || f0.op === "circular_pattern")) {
-      const ids = [...new Set(pre.flatMap((p) => (p.kind === "face" ? [p.bodyId] : [])))];
+      let ids = [...new Set(pre.flatMap((p) => (p.kind === "face" ? [p.bodyId] : [])))];
+      if (f0.op === "transform") ids = [...new Set(ids.flatMap((b) => joinedParts(b)))];
       if (f0.op === "transform" || f0.op === "delete") updateDraft({ bodies: ids } as Partial<Feature>);
       else updateDraft({ source: { bodies: ids } } as Partial<Feature>);
       pre = [];
@@ -1328,6 +1334,7 @@ function Body({ d }: { d: DialogState }) {
           <Field label={t("Parts")}>
             <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder={t("Pick parts")} onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
           </Field>
+          {!f.copy && f.bodies.some((b) => joinedParts(b).length > 1) ? <p className="muted small">{t("Parts joined to them come along, so their joints stay together.")}</p> : null}
           <Field label={t("Move by (X / Y / Z)")}>
             <div className="row">
               {[0, 1, 2].map((i) => (

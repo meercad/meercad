@@ -209,6 +209,26 @@ function grabJoint(mech: motion.Mechanism, joint: motion.MotionJoint, ray: Ray, 
   return true;
 }
 
+/**
+ * The part and every part joined to it, directly or through others (not through the ground). Moving
+ * one of them alone would pull its joints apart, so they move together.
+ */
+export function joinedParts(part: string, joints: readonly Joint[] = currentDoc().mechanism?.joints ?? []): string[] {
+  const group = new Set([part]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const j of joints) {
+      if (j.suppressed || j.b === "ground") continue;
+      for (const [x, y] of [[j.a, j.b], [j.b, j.a]] as const)
+        if (group.has(x) && !group.has(y)) {
+          group.add(y);
+          grew = true;
+        }
+    }
+  }
+  return [...group];
+}
+
 // ---------------------------------------------------------------- editing joints
 
 const nextId = (prefix: string, taken: string[]) => {

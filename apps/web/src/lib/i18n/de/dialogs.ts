@@ -329,6 +329,7 @@ export default {
   "Move by (X / Y / Z)": "Verschieben um (X / Y / Z)",
   "Rotate": "Drehen",
   "Keep original (copy)": "Original behalten (Kopie)",
+  "Parts joined to them come along, so their joints stay together.": "Per Gelenk verbundene Teile kommen mit, damit die Gelenke zusammenbleiben.",
   "Reference": "Bezug",
   "Offset": "Versatz",
   "Tilt": "Neigung",
