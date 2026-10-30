@@ -6,6 +6,83 @@ import RealityKit
 import SwiftUI
 import UIKit
 
+/// Texts of the scan screens in the web app's interface language (it passes `lang`; otherwise the
+/// device language). Kept here rather than in a strings catalog so the app follows the language
+/// chosen inside meerCAD, not only the system one.
+enum Loc {
+    static var lang: String = Locale.preferredLanguages.first?.hasPrefix("de") == true ? "de" : "en"
+    static func use(_ call: CAPPluginCall) {
+        if let l = call.getString("lang"), l == "de" || l == "en" { lang = l }
+    }
+    static let de: [String: String] = [
+        "A scan from {when} was built, but never became a part.": "Ein Scan vom {when} wurde berechnet, aber nie zu einem Teil.",
+        "A scan was built, but never became a part.": "Ein Scan wurde berechnet, aber nie zu einem Teil.",
+        "Add it as a part": "Als Teil einfügen",
+        "Another ring": "Noch eine Runde",
+        "Build the model": "Modell berechnen",
+        "Building the model failed: {e}": "Das Modell konnte nicht berechnet werden: {e}",
+        "Building the model": "Modell wird berechnet",
+        "Building the part…": "Teil wird erstellt …",
+        "Cancel": "Abbrechen",
+        "Continue": "Weiter",
+        "Corner {n} of 4: aim the cross on the table (or floor) around the object and tap.": "Ecke {n} von 4: Richte das Kreuz auf den Tisch (oder Boden) neben dem Objekt und tippe.",
+        "Discard and scan again": "Verwerfen und neu scannen",
+        "Done": "Fertig",
+        "Finishing the capture…": "Aufnahme wird abgeschlossen …",
+        "Fit the box around the object.": "Passe die Box um das Objekt an.",
+        "Go slowly all the way round the object, from above and from low at the sides, until the teal surface covers it everywhere (half a minute or more). Sides left out stay open.": "Geh langsam einmal ganz um das Objekt herum, von oben und tief von den Seiten, bis die türkise Fläche es überall bedeckt (eine halbe Minute oder länger). Ausgelassene Seiten bleiben offen.",
+        "Height": "Höhe",
+        "Keep a finger on the screen to record what is inside the circle, like painting. Let go to move on.": "Halte einen Finger auf dem Bildschirm, um aufzunehmen, was im Kreis ist, wie beim Malen. Lass los, um weiterzugehen.",
+        "Nothing found there. Aim from a hand's width or two away and tap again.": "Dort wurde nichts gefunden. Ziele aus ein bis zwei Handbreit Abstand und tippe noch einmal.",
+        "Paint slowly over the surface with the circle, also at a slant into corners and recesses.": "Male mit dem Kreis langsam über die Fläche, auch schräg in Ecken und Vertiefungen.",
+        "Pass {n}": "Runde {n}",
+        "Point at the surface for the corner.": "Richte das Kreuz für die Ecke auf die Fläche.",
+        "Point at the table or floor for the corner.": "Richte das Kreuz für die Ecke auf den Tisch oder Boden.",
+        "Point the phone at it.": "Richte das iPhone darauf.",
+        "Preparing the part": "Teil wird vorbereitet",
+        "Put the object on a plain, matt surface with room to walk around it. Good, even light helps.": "Stell das Objekt auf eine schlichte, matte Fläche, um die du herumgehen kannst. Gutes, gleichmäßiges Licht hilft.",
+        "Put the object on a table or the floor. Aim the cross at four corners on the table (or floor) around the object and tap for each.": "Stell das Objekt auf einen Tisch oder den Boden. Richte das Kreuz auf vier Ecken auf dem Tisch (oder Boden) um das Objekt und tippe jeweils.",
+        "Ring complete. For a full model, turn the object over and scan its other side.": "Runde fertig. Für ein vollständiges Modell dreh das Objekt um und scanne die andere Seite.",
+        "Ring complete. This object cannot be turned over for scanning; go round once more higher or lower, or finish.": "Runde fertig. Dieses Objekt lässt sich zum Scannen nicht umdrehen; geh noch einmal höher oder tiefer herum oder beende den Scan.",
+        "Scan cancelled": "Scan abgebrochen",
+        "Scanning needs an iPhone or iPad with LiDAR and iOS 18 or later.": "Zum Scannen brauchst du ein iPhone oder iPad mit LiDAR und iOS 18 oder neuer.",
+        "Scanning needs iOS 18 or later (this is {v}).": "Zum Scannen brauchst du iOS 18 oder neuer (hier ist {v}).",
+        "Scanning stopped: {e}": "Scan abgebrochen: {e}",
+        "Set corner": "Ecke setzen",
+        "Start over": "Neu beginnen",
+        "Start scanning": "Scan starten",
+        "That is as much as fits. Tap Done, or Start over.": "Mehr passt nicht. Tippe auf Fertig oder Neu beginnen.",
+        "That is more than 3 m across. Tap the corners again, closer around the object.": "Das ist breiter als 3 m. Setze die Ecken noch einmal, enger um das Objekt.",
+        "That is more than 2.5 m across. Record a smaller area.": "Das ist breiter als 2,5 m. Nimm eine kleinere Fläche auf.",
+        "The model came out empty.": "Das Modell ist leer.",
+        "The photos did not give a model. Scan again with the object filling more of the frame, from all sides.": "Aus den Fotos ist kein Modell entstanden. Scanne noch einmal, mit dem Objekt größer im Bild und von allen Seiten.",
+        "The table is not found yet. Show the table (or floor) for a moment, then tap again.": "Der Tisch ist noch nicht erkannt. Zeig kurz den Tisch (oder Boden) und tippe dann noch einmal.",
+        "This device has no LiDAR scanner, which scanning needs.": "Dieses Gerät hat keinen LiDAR-Scanner, den das Scannen braucht.",
+        "This iPhone has LiDAR, but Apple's object capture reports it as unsupported on this iOS version (a known Apple issue on iPhone 18 Pro / Pro Max with iOS 27). Scanning will work once Apple fixes it.": "Dieses iPhone hat LiDAR, aber Apples Objekterfassung meldet es in dieser iOS-Version als nicht unterstützt (ein bekannter Fehler von Apple beim iPhone 18 Pro / Pro Max mit iOS 27). Das Scannen geht, sobald Apple das behebt.",
+        "This takes a minute or two. Keep the app open.": "Das dauert ein bis zwei Minuten. Lass die App geöffnet.",
+        "Too little was recorded. Hold the button and sweep slowly over the surface.": "Es wurde zu wenig aufgenommen. Halte den Finger auf dem Bildschirm und fahre langsam über die Fläche.",
+        "Too little was seen. Sweep slowly over everything inside the box, from several sides.": "Es wurde zu wenig erfasst. Fahre langsam über alles in der Box, von mehreren Seiten.",
+        "Nothing was scanned.": "Es wurde nichts gescannt.",
+        "Turn over and continue": "Umdrehen und weiter",
+        "Undo corner": "Ecke zurücknehmen",
+        "Unfinished scan": "Unfertiger Scan",
+        "Walk slowly around the object, keeping it in the frame, until the ring is full.": "Geh langsam um das Objekt herum und halte es im Bild, bis der Ring voll ist.",
+        "{cm} cm away: a bit further back.": "{cm} cm entfernt: etwas weiter zurück.",
+        "{cm} cm away: closer gives more detail.": "{cm} cm entfernt: näher gibt mehr Details.",
+        "{cm} cm away: good.": "{cm} cm entfernt: gut.",
+        "{n} photos from {when} were captured, but they never became a part.": "{n} Fotos vom {when} wurden aufgenommen, aber nie zu einem Teil.",
+        "{n} photos were captured, but they never became a part.": "{n} Fotos wurden aufgenommen, aber nie zu einem Teil.",
+        "{w} × {d} cm, height {h} cm. Set the height so the whole object fits.": "{w} × {d} cm, Höhe {h} cm. Stell die Höhe so ein, dass das ganze Objekt hineinpasst.",
+    ]
+}
+
+/// A scan-screen text in the chosen language, with `{name}` placeholders filled in.
+func L(_ s: String, _ vars: [String: Any] = [:]) -> String {
+    var out = Loc.lang == "de" ? (Loc.de[s] ?? s) : s
+    for (k, v) in vars { out = out.replacingOccurrences(of: "{\(k)}", with: "\(v)") }
+    return out
+}
+
 /// 3D scanning for the web app, all on the device (iPhone/iPad with LiDAR, iOS 18+).
 ///
 /// `scan` walks the user around an object with RealityKit's guided object capture, then rebuilds a
@@ -54,9 +131,10 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func capabilities(_ call: CAPPluginCall) {
+        Loc.use(call)
         Task { @MainActor in
             guard #available(iOS 18, *) else {
-                return call.resolve(["scan": false, "reason": "Scanning needs iOS 18 or later (this is \(UIDevice.current.systemVersion))."])
+                return call.resolve(["scan": false, "reason": L("Scanning needs iOS 18 or later (this is {v}).", ["v": UIDevice.current.systemVersion])])
             }
             // Object capture says whether it runs here; the LiDAR checks are asked too, because the first
             // answer has been seen wrong on new devices (an iPhone 18 Pro Max on iOS 27.0.1 said no).
@@ -74,17 +152,18 @@ public class ScanPlugin: CAPPlugin, CAPBridgedPlugin {
                 "sceneMesh": sceneMesh,
                 "photogrammetry": PhotogrammetrySession.isSupported,
                 "reason": scan ? "" : lidar
-                    ? "This iPhone has LiDAR, but Apple's object capture reports it as unsupported on this iOS version (a known Apple issue on iPhone 18 Pro / Pro Max with iOS 27). Scanning will work once Apple fixes it."
-                    : "This device has no LiDAR scanner, which scanning needs.",
+                    ? L("This iPhone has LiDAR, but Apple's object capture reports it as unsupported on this iOS version (a known Apple issue on iPhone 18 Pro / Pro Max with iOS 27). Scanning will work once Apple fixes it.")
+                    : L("This device has no LiDAR scanner, which scanning needs."),
             ])
         }
     }
 
     @objc func scan(_ call: CAPPluginCall) {
+        Loc.use(call)
         if let mode = call.getString("mode"), mode == "surface" || mode == "lidar" { return scanLidar(call, surface: mode == "surface") }
         Task { @MainActor [weak self] in
             guard #available(iOS 18, *), ObjectCaptureSession.isSupported else {
-                return call.reject("Scanning needs an iPhone or iPad with LiDAR and iOS 18 or later.")
+                return call.reject(L("Scanning needs an iPhone or iPad with LiDAR and iOS 18 or later."))
             }
             guard let self, let host = self.bridge?.viewController else { return call.reject("no view") }
             // A capture whose model was never built (the app ended after it) is offered first.
@@ -117,9 +196,9 @@ enum ScanError: LocalizedError {
     }
     var errorDescription: String? {
         switch self {
-        case .cancelled: return "Scan cancelled"
-        case .noModel: return "The photos did not give a model. Scan again with the object filling more of the frame, from all sides."
-        case .emptyModel: return "The model came out empty."
+        case .cancelled: return L("Scan cancelled")
+        case .noModel: return L("The photos did not give a model. Scan again with the object filling more of the frame, from all sides.")
+        case .emptyModel: return L("The model came out empty.")
         case .failed(let m): return m
         }
     }
@@ -250,7 +329,7 @@ final class ScanFlow: ObservableObject {
         if let failure {
             log["error"] = "\(failure)"
             writeLog()
-            throw ScanError.failed("Building the model failed: \(failure.localizedDescription)")
+            throw ScanError.failed(L("Building the model failed: {e}", ["e": failure.localizedDescription]))
         }
         guard FileManager.default.fileExists(atPath: usdz.path) else {
             writeLog()
@@ -427,9 +506,9 @@ struct ScanFlowView: View {
                     ProgressView()
                 }
             case .rebuilding:
-                Working(title: "Building the model", detail: "This takes a minute or two. Keep the app open.", progress: flow.progress)
+                Working(title: L("Building the model"), detail: L("This takes a minute or two. Keep the app open."), progress: flow.progress)
             case .writing:
-                Working(title: "Preparing the part", detail: nil, progress: nil)
+                Working(title: L("Preparing the part"), detail: nil, progress: nil)
             }
         }
         .onAppear { if flow.session == nil && flow.phase == .capturing { flow.start() } }
@@ -447,7 +526,7 @@ struct ScanFlowView: View {
         guard !finished else { return }
         finished = true
         flow.fail(error)
-        done(.failure(ScanError.failed("Scanning stopped: \(error.localizedDescription)")))
+        done(.failure(ScanError.failed(L("Scanning stopped: {e}", ["e": error.localizedDescription]))))
     }
 
     private func finishCapture() {
@@ -473,9 +552,9 @@ struct CaptureScreen: View {
                 .ignoresSafeArea()
             VStack(spacing: 12) {
                 HStack {
-                    Button("Cancel", action: cancel).buttonStyle(.bordered)
+                    Button(L("Cancel"), action: cancel).buttonStyle(.bordered)
                     Spacer()
-                    if flow.passes > 0 { Text("Pass \(flow.passes + 1)").font(.footnote).padding(8).background(.ultraThinMaterial, in: Capsule()) }
+                    if flow.passes > 0 { Text(L("Pass {n}", ["n": flow.passes + 1])).font(.footnote).padding(8).background(.ultraThinMaterial, in: Capsule()) }
                 }
                 Spacer()
                 if flow.askNext { nextPass } else { controls }
@@ -497,15 +576,15 @@ struct CaptureScreen: View {
     @ViewBuilder private var controls: some View {
         switch session.state {
         case .ready:
-            hint("Put the object on a plain, matt surface with room to walk around it. Good, even light helps.")
-            Button("Continue") { _ = session.startDetecting() }.buttonStyle(.borderedProminent).controlSize(.large)
+            hint(L("Put the object on a plain, matt surface with room to walk around it. Good, even light helps."))
+            Button(L("Continue")) { _ = session.startDetecting() }.buttonStyle(.borderedProminent).controlSize(.large)
         case .detecting:
-            hint("Fit the box around the object.")
-            Button("Start scanning") { session.startCapturing() }.buttonStyle(.borderedProminent).controlSize(.large)
+            hint(L("Fit the box around the object."))
+            Button(L("Start scanning")) { session.startCapturing() }.buttonStyle(.borderedProminent).controlSize(.large)
         case .capturing:
-            hint("Walk slowly around the object, keeping it in the frame, until the ring is full.")
+            hint(L("Walk slowly around the object, keeping it in the frame, until the ring is full."))
         case .finishing:
-            ProgressView("Finishing the capture…").padding().background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            ProgressView(L("Finishing the capture…")).padding().background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         default:
             EmptyView()
         }
@@ -521,8 +600,8 @@ struct CaptureScreen: View {
     private var nextPass: some View {
         VStack(spacing: 10) {
             if canFlip {
-                hint("Ring complete. For a full model, turn the object over and scan its other side.")
-                Button("Turn over and continue") {
+                hint(L("Ring complete. For a full model, turn the object over and scan its other side."))
+                Button(L("Turn over and continue")) {
                     print("scan: flip, feedback \(session.feedback), state \(session.state)")
                     guard canFlip else { return }
                     flow.passes += 1
@@ -531,16 +610,16 @@ struct CaptureScreen: View {
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
             } else {
-                hint("Ring complete. This object cannot be turned over for scanning; go round once more higher or lower, or finish.")
+                hint(L("Ring complete. This object cannot be turned over for scanning; go round once more higher or lower, or finish."))
             }
             HStack {
-                Button("Another ring") {
+                Button(L("Another ring")) {
                     flow.passes += 1
                     flow.askNext = false
                     session.beginNewScanPass()
                 }
                 .buttonStyle(.bordered)
-                Button("Done") {
+                Button(L("Done")) {
                     flow.passes += 1
                     flow.askNext = false
                     session.finish()
@@ -567,13 +646,15 @@ struct Leftover: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "cube.transparent").font(.system(size: 44)).foregroundStyle(.secondary)
-            Text("Unfinished scan").font(.title2.bold())
-            let when = date.map { " from " + $0.formatted(date: .abbreviated, time: .shortened) } ?? ""
-            Text(photos > 0 ? "\(photos) photos\(when) were captured, but they never became a part." : "A scan\(when) was built, but never became a part.")
+            Text(L("Unfinished scan")).font(.title2.bold())
+            let when = date.map { $0.formatted(date: .abbreviated, time: .shortened) }
+            Text(photos > 0
+                ? when.map { L("{n} photos from {when} were captured, but they never became a part.", ["n": photos, "when": $0]) } ?? L("{n} photos were captured, but they never became a part.", ["n": photos])
+                : when.map { L("A scan from {when} was built, but never became a part.", ["when": $0]) } ?? L("A scan was built, but never became a part."))
                 .multilineTextAlignment(.center).foregroundStyle(.secondary)
-            Button(photos > 0 ? "Build the model" : "Add it as a part", action: build).buttonStyle(.borderedProminent).controlSize(.large)
-            Button("Discard and scan again", role: .destructive, action: discard).buttonStyle(.bordered)
-            Button("Cancel", action: cancel)
+            Button(photos > 0 ? L("Build the model") : L("Add it as a part"), action: build).buttonStyle(.borderedProminent).controlSize(.large)
+            Button(L("Discard and scan again"), role: .destructive, action: discard).buttonStyle(.bordered)
+            Button(L("Cancel"), action: cancel)
         }
         .padding(32)
     }

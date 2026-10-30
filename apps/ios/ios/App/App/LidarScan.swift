@@ -109,13 +109,13 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
         let screenRight = -SIMD3<Float>(cam.columns.1.x, cam.columns.1.y, cam.columns.1.z)
         if base != nil {
             guard let p = onBase(point) else {
-                message = mode == .object ? "Point at the table or floor for the corner." : "Point at the surface for the corner."
+                message = mode == .object ? L("Point at the table or floor for the corner.") : L("Point at the surface for the corner.")
                 return
             }
             corners.append(p)
         } else {
             guard let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .any).first else {
-                message = "Nothing found there. Aim from a hand's width or two away and tap again."
+                message = L("Nothing found there. Aim from a hand's width or two away and tap again.")
                 return
             }
             let t = hit.worldTransform
@@ -124,7 +124,7 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
             if simd_dot(n, camPos - at) < 0 { n = -n }
             if mode == .object {
                 guard let floor = floorHeight(below: at, normal: n, frame: frame) else {
-                    message = "The table is not found yet. Show the table (or floor) for a moment, then tap again."
+                    message = L("The table is not found yet. Show the table (or floor) for a moment, then tap again.")
                     return
                 }
                 at.y = floor
@@ -190,7 +190,7 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
         let lo = SIMD2(us.min()!, vs.min()!), hi = SIMD2(us.max()!, vs.max()!)
         let size = simd_max(hi - lo, SIMD2(repeating: 0.02))
         guard max(size.x, size.y) <= 3 else {
-            message = "That is more than 3 m across. Tap the corners again, closer around the object."
+            message = L("That is more than 3 m across. Tap the corners again, closer around the object.")
             corners = []
             self.base = nil
             showDots()
@@ -300,7 +300,7 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
                     do { store.field = try Self.surfaceField(store.frames) } catch { return done.resume(throwing: error) }
                     store.frames = []
                 }
-                guard var field = store.field else { return done.resume(throwing: ScanError.failed("Nothing was scanned.")) }
+                guard var field = store.field else { return done.resume(throwing: ScanError.failed(L("Nothing was scanned."))) }
                 let boxMm = [field.half.x, field.half.y, field.half.z].map { Int($0 * 2000) }
                 switch mode {
                 case .surface:
@@ -314,8 +314,8 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
                 }
                 guard let (pieces, cell) = field.solids() else {
                     return done.resume(throwing: ScanError.failed(mode == .object
-                        ? "Too little was seen. Sweep slowly over everything inside the box, from several sides."
-                        : "Too little was recorded. Hold the button and sweep slowly over the surface."))
+                        ? L("Too little was seen. Sweep slowly over everything inside the box, from several sides.")
+                        : L("Too little was recorded. Hold the button and sweep slowly over the surface.")))
                 }
                 do {
                     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -355,7 +355,7 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
             cameras += f.camera
             sample += stride(from: 0, to: f.points.count, by: 40).map { f.points[$0] }
         }
-        guard frames.count >= 3, sample.count >= 200 else { throw ScanError.failed("Too little was recorded. Hold the button and sweep slowly over the surface.") }
+        guard frames.count >= 3, sample.count >= 200 else { throw ScanError.failed(L("Too little was recorded. Hold the button and sweep slowly over the surface.")) }
         cameras /= Float(frames.count)
         let mean = sample.reduce(.zero, +) / Float(sample.count)
         var cov = simd_float3x3()
@@ -377,7 +377,7 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
         }
         let (x0, x1) = range(0, 0.005), (y0, y1) = range(1, 0.005), (z0, z1) = range(2, 0.01)
         let half = SIMD3<Float>(x1 - x0, y1 - y0, z1 - z0) / 2
-        guard simd_reduce_max(half) <= 1.25 else { throw ScanError.failed("That is more than 2.5 m across. Record a smaller area.") }
+        guard simd_reduce_max(half) <= 1.25 else { throw ScanError.failed(L("That is more than 2.5 m across. Record a smaller area.")) }
         let centre = mean + axes * SIMD3<Float>((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
         var field = VoxelField(centre: centre, axes: axes, half: half)
         for f in frames { field.integrate(camera: f.camera, points: f.points, carve: f.carve) }
@@ -617,7 +617,7 @@ final class LidarScanner: NSObject, ObservableObject, ARSessionDelegate {
                 if !full { self.recorded += 1 }
                 if full, self.recording {
                     self.recording = false
-                    self.message = "That is as much as fits. Tap Done, or Start over."
+                    self.message = L("That is as much as fits. Tap Done, or Start over.")
                 }
             }
         }
@@ -792,7 +792,7 @@ struct LidarScanView: View {
             }
             VStack(spacing: 12) {
                 HStack {
-                    Button("Cancel", action: cancel).buttonStyle(.bordered)
+                    Button(L("Cancel"), action: cancel).buttonStyle(.bordered)
                     Spacer()
                 }
                 Spacer()
@@ -811,60 +811,59 @@ struct LidarScanView: View {
             hint(cornerHint)
             HStack {
                 if !scanner.corners.isEmpty {
-                    Button("Undo corner") { scanner.undoCorner() }.buttonStyle(.bordered)
+                    Button(L("Undo corner")) { scanner.undoCorner() }.buttonStyle(.bordered)
                 }
-                Button("Set corner") { scanner.tap() }.buttonStyle(.borderedProminent).controlSize(.large)
+                Button(L("Set corner")) { scanner.tap() }.buttonStyle(.borderedProminent).controlSize(.large)
             }
         case .sizing:
             if let m = scanner.message { hint(m) }
-            hint("\(cm(scanner.footprint.x)) × \(cm(scanner.footprint.y)) cm, height \(cm(scanner.height)) cm. Set the height so the whole object fits.")
+            hint(L("{w} × {d} cm, height {h} cm. Set the height so the whole object fits.", ["w": cm(scanner.footprint.x), "d": cm(scanner.footprint.y), "h": cm(scanner.height)]))
             HStack {
-                Text("Height").font(.callout)
+                Text(L("Height")).font(.callout)
                 Slider(value: $scanner.height, in: 0.02...1.5)
             }
             .padding(10)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             HStack {
-                Button("Undo corner") { scanner.undoCorner() }.buttonStyle(.bordered)
-                Button("Start scanning") { scanner.startScan() }.buttonStyle(.borderedProminent).controlSize(.large)
+                Button(L("Undo corner")) { scanner.undoCorner() }.buttonStyle(.bordered)
+                Button(L("Start scanning")) { scanner.startScan() }.buttonStyle(.borderedProminent).controlSize(.large)
             }
         case .scanning:
             if let m = scanner.message { hint(m) }
             if scanner.mode == .object {
-                hint(distanceHint + "\nGo slowly all the way round the object, from above and from low at the sides, until the teal surface covers it everywhere (half a minute or more). Sides left out stay open.")
+                hint(distanceHint + "\n" + L("Go slowly all the way round the object, from above and from low at the sides, until the teal surface covers it everywhere (half a minute or more). Sides left out stay open."))
                 HStack {
-                    Button("Start over") { scanner.restart() }.buttonStyle(.bordered)
-                    Button("Done", action: finish).buttonStyle(.borderedProminent).controlSize(.large).disabled(scanner.recorded < 10)
+                    Button(L("Start over")) { scanner.restart() }.buttonStyle(.bordered)
+                    Button(L("Done"), action: finish).buttonStyle(.borderedProminent).controlSize(.large).disabled(scanner.recorded < 10)
                 }
             } else {
                 hint(distanceHint + "\n" + (scanner.recording
-                    ? "Paint slowly over the surface with the circle, also at a slant into corners and recesses."
-                    : "Keep a finger on the screen to record what is inside the circle, like painting. Let go to move on."))
+                    ? L("Paint slowly over the surface with the circle, also at a slant into corners and recesses.")
+                    : L("Keep a finger on the screen to record what is inside the circle, like painting. Let go to move on.")))
                 HStack {
-                    Button("Start over") { scanner.restart() }.buttonStyle(.bordered).disabled(scanner.recording)
-                    Button("Done", action: finish).buttonStyle(.borderedProminent).controlSize(.large).disabled(scanner.recorded < 10 || scanner.recording)
+                    Button(L("Start over")) { scanner.restart() }.buttonStyle(.bordered).disabled(scanner.recording)
+                    Button(L("Done"), action: finish).buttonStyle(.borderedProminent).controlSize(.large).disabled(scanner.recorded < 10 || scanner.recording)
                 }
             }
         case .building:
-            ProgressView("Building the part…").padding().background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            ProgressView(L("Building the part…")).padding().background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
     private var cornerHint: String {
         let n = scanner.corners.count
-        let on = "on the table (or floor) around the object"
-        if n == 0 { return "Put the object on a table or the floor. Aim the cross at four corners \(on) and tap for each." }
-        return "Corner \(n + 1) of 4: aim the cross \(on) and tap."
+        if n == 0 { return L("Put the object on a table or the floor. Aim the cross at four corners on the table (or floor) around the object and tap for each.") }
+        return L("Corner {n} of 4: aim the cross on the table (or floor) around the object and tap.", ["n": n + 1])
     }
 
     private func cm(_ m: Float) -> String { "\(Int((m * 100).rounded()))" }
 
     private var distanceHint: String {
-        guard let d = scanner.distance else { return "Point the phone at it." }
+        guard let d = scanner.distance else { return L("Point the phone at it.") }
         let cm = Int((d * 100).rounded())
-        if d < 0.15 { return "\(cm) cm away: a bit further back." }
-        if d > 0.6 { return "\(cm) cm away: closer gives more detail." }
-        return "\(cm) cm away: good."
+        if d < 0.15 { return L("{cm} cm away: a bit further back.", ["cm": cm]) }
+        if d > 0.6 { return L("{cm} cm away: closer gives more detail.", ["cm": cm]) }
+        return L("{cm} cm away: good.", ["cm": cm])
     }
 
     private func hint(_ text: String) -> some View {
