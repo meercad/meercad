@@ -431,7 +431,9 @@ body { background: var(--scene); }
   border: 1px solid var(--glass-border) !important;
   box-shadow: var(--glass-shadow), 0 0 0 0.5px var(--glass-edge);
 }
-.menu, .palette, .modal, .tour-card { background: var(--glass-strong) !important; }
+.palette, .modal, .tour-card { background: var(--glass-strong) !important; }
+/* Menus open over dialogs and panels: opaque, so nothing shows through their text. */
+.menu { background: var(--panel) !important; }
 .toast.error { background: color-mix(in srgb, var(--err) 88%, transparent) !important; color: #fff; }
 
 /* full-bleed layout */
@@ -639,7 +641,8 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .rail-more { position: absolute; right: 5px; bottom: 5px; width: 0; height: 0; border-left: 5px solid transparent; border-bottom: 5px solid var(--muted); }
 .rail-group { position: relative; }
 .rail-flyout { position: absolute; left: calc(100% + 12px); top: -6px; min-width: 250px; padding: 6px; border-radius: 16px; display: flex; flex-direction: column; gap: 1px; z-index: 20;
-  background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow), 0 16px 40px rgb(20 20 50 / 0.16); animation: flyout-in 0.12s ease-out; }
+  /* Opaque: an open dialog or panel underneath would show through the text. */
+  background: var(--panel); border: 1px solid var(--border); box-shadow: var(--glass-shadow), 0 16px 40px rgb(20 20 50 / 0.16); animation: flyout-in 0.12s ease-out; }
 .rail-flyout::before { content: ""; position: absolute; left: -14px; top: 0; bottom: 0; width: 14px; } /* hover bridge */
 .rail-flyout-title { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 5px 10px 6px; }
 .rail-flyout button { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 4px 10px; border: none; background: none; border-radius: 11px; color: var(--text); text-align: left; }
