@@ -1,6 +1,7 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { FolderOpen, Grid3x3, HardDrive, Keyboard, Mouse, Ruler, X } from "lucide-react";
+import { FolderOpen, Grid3x3, HardDrive, Keyboard, Languages, Mouse, Ruler, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { desktop } from "../lib/persistence";
 import { changeProjectsFolder } from "../lib/storage";
@@ -42,6 +43,26 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <X />
           </button>
         </header>
+
+        <section>
+          <h3>
+            <Languages /> {t("Language")}
+          </h3>
+          <div className="seg">
+            {(
+              [
+                ["auto", t("Like the system")],
+                ["en", "English"],
+                ["de", "Deutsch"],
+              ] as [LangChoice, string][]
+            ).map(([id, label]) => (
+              <button key={id} className={langChoice() === id ? "on" : ""} onClick={() => langChoice() !== id && setLang(id)} aria-pressed={langChoice() === id}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="muted">{t("The app restarts in the chosen language; open projects stay as they are.")}</p>
+        </section>
 
         <section>
           <h3>
