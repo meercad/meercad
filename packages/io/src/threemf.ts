@@ -3,9 +3,13 @@ import type { TriangleMesh } from "./stl.js";
 
 /**
  * 3MF package with one object per mesh (units: mm). Duplicate vertices are merged. A mesh's
- * `color` ("#rrggbb") becomes a base material with that display colour.
+ * `color` ("#rrggbb") becomes a base material with that display colour. `filament` ("#rrggbb", the
+ * colour the user chose for printing) groups parts onto extruders (filament slots), numbered by
+ * first appearance, in the per-object settings that multi-material slicers read
+ * (Slic3r_PE_model.config and model_settings.config): with two or more filaments the parts arrive
+ * assigned to them; parts without one take the first.
  */
-export function write3mf(meshes: readonly (TriangleMesh & { name?: string; color?: string })[]): Uint8Array {
+export function write3mf(meshes: readonly (TriangleMesh & { name?: string; color?: string; filament?: string })[]): Uint8Array {
   const colored = meshes.filter((m) => m.color);
   const matId = meshes.length + 1;
   const materials = colored.length ? `<basematerials id="${matId}">${colored.map((m, k) => `<base name="${escapeXml(m.name ?? `Color ${k + 1}`)}" displaycolor="${m.color!.toUpperCase()}FF"/>`).join("")}</basematerials>` : "";
@@ -36,6 +40,16 @@ export function write3mf(meshes: readonly (TriangleMesh & { name?: string; color
     })
     .join("");
   const items = meshes.map((_, i) => `<item objectid="${i + 1}"/>`).join("");
+  // One extruder per filament colour, in the order they first appear.
+  const palette = [...new Set(meshes.flatMap((m) => (m.filament ? [m.filament.toUpperCase()] : [])))];
+  const extruder = (m: (typeof meshes)[number]) => (m.filament ? palette.indexOf(m.filament.toUpperCase()) + 1 : 1);
+  const slicers: Record<string, Uint8Array> = {};
+  if (palette.length > 1) {
+    const prusa = meshes.map((m, i) => `<object id="${i + 1}" instances_count="1"><metadata type="object" key="name" value="${escapeXml(m.name ?? `Body ${i + 1}`)}"/><metadata type="object" key="extruder" value="${extruder(m)}"/></object>`).join("");
+    const bambu = meshes.map((m, i) => `<object id="${i + 1}"><metadata key="name" value="${escapeXml(m.name ?? `Body ${i + 1}`)}"/><metadata key="extruder" value="${extruder(m)}"/></object>`).join("");
+    slicers["Metadata/Slic3r_PE_model.config"] = strToU8(`<?xml version="1.0" encoding="UTF-8"?><config>${prusa}</config>`);
+    slicers["Metadata/model_settings.config"] = strToU8(`<?xml version="1.0" encoding="UTF-8"?><config>${bambu}</config>`);
+  }
   const model = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>${materials}${objects}</resources><build>${items}</build></model>`;
   return zipSync({
     "[Content_Types].xml": strToU8(
@@ -45,6 +59,7 @@ export function write3mf(meshes: readonly (TriangleMesh & { name?: string; color
       `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`,
     ),
     "3D/3dmodel.model": strToU8(model),
+    ...slicers,
   });
 }
 

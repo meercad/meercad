@@ -54,7 +54,14 @@ export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
     if (format === "stl") download(`${baseName()}.stl`, writeStl(meshes) as BlobPart, "model/stl");
     else {
       const colors = partColors(useApp.getState().doc, useApp.getState().output?.report.bodies.map((b) => b.id) ?? [], usePrefs.getState().colorParts);
-      download(`${baseName()}.3mf`, write3mf(meshes.map((m) => ({ ...m, name: m.bodyId, ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) }))) as BlobPart, "model/3mf");
+      // Colours the user picked also choose filaments for multi-colour printers.
+      const picked = useApp.getState().doc.partColors ?? {};
+      const names = useApp.getState().doc.features;
+      download(
+        `${baseName()}.3mf`,
+        write3mf(meshes.map((m) => ({ ...m, name: partName(m.bodyId, names), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}), ...(picked[m.bodyId] ? { filament: picked[m.bodyId]! } : {}) }))) as BlobPart,
+        "model/3mf",
+      );
     }
   } catch (e) {
     toast(`${format.toUpperCase()} export failed: ${e instanceof Error ? e.message : String(e)}`, "error");

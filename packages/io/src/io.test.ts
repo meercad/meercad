@@ -94,3 +94,18 @@ describe("3MF / OBJ import", () => {
 function expand(m: { positions: Float32Array; indices: Uint32Array }): Float32Array {
   return Float32Array.from(Array.from(m.indices).flatMap((i) => [m.positions[i * 3]!, m.positions[i * 3 + 1]!, m.positions[i * 3 + 2]!]));
 }
+
+describe("3MF for multi-colour printing", () => {
+  it("assigns one extruder per colour for slicers", () => {
+    const tri = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), indices: new Uint32Array([0, 1, 2]) };
+    const zip = unzipSync(write3mf([{ ...tri, name: "Base", color: "#c4cfdc", filament: "#c4cfdc" }, { ...tri, name: "Lid", color: "#e8c39e", filament: "#e8c39e" }, { ...tri, name: "Knob", color: "#C4CFDC", filament: "#C4CFDC" }]));
+    const prusa = strFromU8(zip["Metadata/Slic3r_PE_model.config"]!);
+    const bambu = strFromU8(zip["Metadata/model_settings.config"]!);
+    expect(prusa).toContain('<object id="2" instances_count="1"><metadata type="object" key="name" value="Lid"/><metadata type="object" key="extruder" value="2"/>');
+    // The same colour (any case) shares an extruder.
+    expect(bambu).toContain('<object id="3"><metadata key="name" value="Knob"/><metadata key="extruder" value="1"/>');
+    // Colours alone (the automatic display colours) and a single filament assign nothing.
+    expect(unzipSync(write3mf([{ ...tri, color: "#c4cfdc" }, { ...tri, color: "#e8c39e" }]))["Metadata/model_settings.config"]).toBeUndefined();
+    expect(unzipSync(write3mf([{ ...tri, filament: "#c4cfdc" }, tri]))["Metadata/model_settings.config"]).toBeUndefined();
+  });
+});

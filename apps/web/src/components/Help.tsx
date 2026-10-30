@@ -121,6 +121,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
           <ul>
             <li>Projects save automatically as open <span className="mono">.meercad</span> files (readable JSON) — in the desktop app in Documents/meerCAD.</li>
             <li>Export: STL and 3MF for 3D printing, STEP for other CAD tools, DXF/SVG of a sketch for laser cutting.</li>
+            <li>Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already.</li>
             <li>Materials: right-click a part in the parts list → Material. The list then shows each part's mass and, below, the total mass and centre of gravity (solid material, 100 % infill).</li>
             <li>Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.</li>
             <li>Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import <Kbd k="Mod+O" />. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces.</li>
