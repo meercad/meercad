@@ -148,11 +148,22 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
             [0, width + e],
           ];
     const at = (r: number, z: number): Vec3 => lift(toWorld(frame, [cx + r, cy]), z);
-    const loop = rz.map((p, i) => ({ part: "flank" as const, pts: [p, rz[(i + 1) % rz.length]!] }));
-    const face = arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(wire(oc, arena, loop, ([r, z]) => at(r, z)), true)).Face());
-    const rev = arena.track(new oc.BRepPrimAPI_MakeRevol(face, arena.track(new oc.gp_Ax1(arena.track(new oc.gp_Pnt(...axisAt(0))), arena.track(new oc.gp_Dir(...n)))), 2 * Math.PI, false));
-    if (!rev.IsDone()) throw new FeatureError("could not chamfer the teeth");
-    solid = boolOp(oc, arena, "common", solid, arena.track(rev.Shape()));
+    const revolve = (pts: Pt[]) => {
+      const loop = pts.map((p, i) => ({ part: "flank" as const, pts: [p, pts[(i + 1) % pts.length]!] }));
+      const face = arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(wire(oc, arena, loop, ([r, z]) => at(r, z)), true)).Face());
+      const rev = arena.track(new oc.BRepPrimAPI_MakeRevol(face, arena.track(new oc.gp_Ax1(arena.track(new oc.gp_Pnt(...axisAt(0))), arena.track(new oc.gp_Dir(...n)))), 2 * Math.PI, false));
+      if (!rev.IsDone()) throw new FeatureError("could not chamfer the teeth");
+      return arena.track(rev.Shape());
+    };
+    if (params.kind === "internal") solid = boolOp(oc, arena, "common", solid, revolve(rz));
+    else {
+      // Spur gears: cut two thin 45° rings off the tooth tips at the ends, which touches the teeth
+      // only there (keeping everything inside the chamfered cylinder took several times longer).
+      const c0 = ra - chamfer;
+      const front = revolve([[c0 - e, -e], [ra + 1, -e], [ra + 1, ra + 1 - c0]]);
+      const back = revolve([[c0 - e, width + e], [ra + 1, width - (ra + 1 - c0)], [ra + 1, width + e]]);
+      solid = boolOp(oc, arena, "cut", boolOp(oc, arena, "cut", solid, front), back);
+    }
   }
 
   // Hub and bore (spur gears), along the axis through the centre.
