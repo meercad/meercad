@@ -654,6 +654,9 @@ export function closeSketch(): void {
 
 // ---------------------------------------------------------------- projects
 
+// Projects changed outside the app (another device through iCloud, the Finder): list them again.
+if (typeof window !== "undefined") window.addEventListener("meercad:projects-changed", () => void refreshProjects());
+
 export async function refreshProjects(): Promise<void> {
   const [projects, folders] = await Promise.all([listProjects(), listFolders()]);
   set({ projects, folders, folder: folders.includes(get().folder) ? get().folder : "" });

@@ -1,16 +1,19 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { FolderOpen, Grid3x3, HardDrive, Keyboard, Languages, Mouse, Ruler, X } from "lucide-react";
+import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Languages, Mouse, Ruler, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
+import { iCloudFolder, nativeApp, storageKind } from "../lib/native";
 import { desktop } from "../lib/persistence";
-import { changeProjectsFolder } from "../lib/storage";
+import { changeProjectsFolder, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
 
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
   const prefs = usePrefs();
   const [dir, setDir] = useState<string | null>(null);
+  const [cloud, setCloud] = useState<{ dir: string | null; available: boolean } | null>(null);
+  const [nativeKind, setNativeKind] = useState<"local" | "icloud" | null>(null);
 
   useEffect(() => {
     const toggle = () => setOpen((o) => !o);
@@ -29,7 +32,15 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
     };
   }, []);
   useEffect(() => {
-    if (open && desktop) void desktop.storage.status().then((s) => setDir(s.dir));
+    if (open && desktop)
+      void desktop.storage.status().then((s) => {
+        setDir(s.dir);
+        setCloud({ dir: s.iCloudDir, available: s.iCloudAvailable });
+      });
+    if (open && nativeApp) {
+      void storageKind().then(setNativeKind);
+      void iCloudFolder().then((d) => setCloud({ dir: d, available: !!d }));
+    }
   }, [open]);
 
   if (!open) return null;
@@ -159,8 +170,13 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
               <HardDrive /> {t("Projects folder")}
             </h3>
             <p className="muted">{t("Projects are plain .meercad files. Folders you create in meerCAD are real folders here.")}</p>
+            {dir && cloud?.dir === dir ? (
+              <p className="callout info">
+                <Cloud /> {t("In iCloud Drive › meerCAD: the same projects on your iPhone and iPad.")}
+              </p>
+            ) : null}
             <div className="folder-row">
-              <code title={dir ?? ""}>{dir ?? "…"}</code>
+              <code title={dir ?? ""}>{dir && cloud?.dir === dir ? "iCloud Drive › meerCAD" : (dir ?? "…")}</code>
               <button className="btn" onClick={() => void desktop!.projects.reveal()}>
                 <FolderOpen /> {t("folder::Show")}
               </button>
@@ -171,9 +187,54 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
                   if (d) setDir(d);
                 }}
               >
-                {t("Change…")}
+                {cloud?.dir === dir ? t("Use my own folder…") : t("Change…")}
               </button>
             </div>
+            {dir && cloud && cloud.dir !== dir ? (
+              cloud.available ? (
+                <>
+                  <p className="callout warn">
+                    <TriangleAlert /> {t("No sync: projects in this folder do not appear on your iPhone and iPad.")}
+                  </p>
+                  <button
+                    className="btn primary"
+                    onClick={async () => {
+                      const d = await changeProjectsFolder(cloud.dir!);
+                      if (d) setDir(d);
+                    }}
+                  >
+                    <Cloud /> {t("Switch to iCloud")}
+                  </button>
+                </>
+              ) : (
+                <p className="muted">{t("To have your projects on iPhone and iPad too: open meerCAD there with iCloud Drive on. Then you can switch to iCloud here.")}</p>
+              )
+            ) : null}
+          </section>
+        ) : nativeApp && nativeKind ? (
+          <section>
+            <h3>
+              {nativeKind === "icloud" ? <Cloud /> : <HardDrive />} {t("Where projects are saved")}
+            </h3>
+            {nativeKind === "icloud" ? (
+              <>
+                <p className="muted">{t("In iCloud Drive › meerCAD: on all your devices with this Apple ID, also on the Mac.")}</p>
+                <button className="btn" onClick={async () => (await switchNativeStorage("local")) && setNativeKind("local")}>
+                  {t("Keep on this device only…")}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="muted">{t("On this device (Files › On My iPad › meerCAD). Your other devices do not see them.")}</p>
+                {cloud?.available ? (
+                  <button className="btn primary" onClick={async () => (await switchNativeStorage("icloud")) && setNativeKind("icloud")}>
+                    <Cloud /> {t("Switch to iCloud")}
+                  </button>
+                ) : (
+                  <p className="muted">{t("For the same projects on all your devices, sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app.")}</p>
+                )}
+              </>
+            )}
           </section>
         ) : null}
       </div>

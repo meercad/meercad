@@ -5,7 +5,8 @@
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, type MenuItemConstructorOptions } from "electron";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
+import { homedir } from "node:os";
 import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -26,6 +27,12 @@ const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dir
 const mcpServer = app.isPackaged ? join(process.resourcesPath, "mcp", "server.js") : join(__dirname, "../../../packages/mcp/dist/server.js");
 const settingsPath = () => join(app.getPath("userData"), "settings.json");
 const defaultProjectsDir = () => join(app.getPath("documents"), "meerCAD");
+/**
+ * meerCAD's folder in iCloud Drive, shared with the iPhone and iPad app ("iCloud Drive › meerCAD").
+ * It appears on the Mac once the app has used iCloud on one of them; files written here sync.
+ */
+const iCloudContainer = () => join(homedir(), "Library", "Mobile Documents", "iCloud~dev~meercad~app");
+const iCloudDir = () => join(iCloudContainer(), "Documents");
 
 /** App-level settings that must live outside the projects folder (it is one of them). */
 interface Settings {
@@ -221,6 +228,8 @@ ipcMain.handle("storage:status", () => ({
   dir: projectsDir(),
   defaultDir: defaultProjectsDir(),
   chosen: Boolean(process.env["MEERCAD_PROJECTS_DIR"] ?? settings.projectsDir),
+  iCloudDir: iCloudDir(),
+  iCloudAvailable: existsSync(iCloudContainer()),
 }));
 ipcMain.handle("storage:choose", async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
@@ -273,8 +282,30 @@ ipcMain.handle("storage:set", async (_e, p: { dir: string; move: boolean }) => {
   settings = { ...settings, projectsDir: p.dir };
   await mkdir(app.getPath("userData"), { recursive: true });
   await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`);
+  watchProjects();
   return { dir: p.dir, moved, skipped };
 });
+/**
+ * Projects changed outside the app (from the iPad through iCloud, in the Finder) refresh the list
+ * in the window; several changes in a row are reported once.
+ */
+let watcher: FSWatcher | null = null;
+function watchProjects(): void {
+  watcher?.close();
+  watcher = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    watcher = watch(projectsDir(), { recursive: true }, (_event, file) => {
+      if (file && !String(file).endsWith(".meercad") && extname(String(file)) !== "") return;
+      clearTimeout(timer);
+      timer = setTimeout(() => mainWindow?.webContents.send("projects-changed"), 400);
+    });
+    watcher.on("error", () => undefined);
+  } catch {
+    // no folder yet: watched once it is chosen
+  }
+}
+
 /** Adds meerCAD to Claude Desktop's MCP configuration (keeps everything else, backs the file up first). */
 ipcMain.handle("mcp:install-claude-desktop", async () => {
   const file = join(app.getPath("appData"), "Claude", "claude_desktop_config.json");
@@ -552,6 +583,7 @@ else {
     serveApp();
     buildMenu();
     mainWindow = createWindow();
+    watchProjects();
     mainWindow.webContents.once("did-finish-load", () => {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
       // Check shortly after start, then hourly.

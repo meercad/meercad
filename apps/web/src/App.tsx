@@ -146,10 +146,12 @@ export function App() {
     });
     const offOpen = desktop.on("open-project", (id) => void openProject(id));
     const offError = desktop.on("error", (msg) => toast(msg, "error"));
+    const offChanged = desktop.on("projects-changed", () => window.dispatchEvent(new Event("meercad:projects-changed")));
     return () => {
       offMenu();
       offOpen();
       offError();
+      offChanged();
     };
   }, []);
   // iPad app: .meercad files opened from the Files app, and Apple Pencil double-tap / squeeze,

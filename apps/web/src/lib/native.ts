@@ -1,8 +1,9 @@
 /**
- * The iPad app (Capacitor shell, apps/ios). Projects are plain .meercad files in the app's
- * Documents folder, which the Files app shows under "On My iPad › meerCAD"; folders there are real
- * folders, like in the desktop app. Thumbnails live in Library, out of sight. Exports go through
- * the share sheet instead of a download.
+ * The iPad and iPhone app (Capacitor shell, apps/ios). Projects are plain .meercad files, either in
+ * the app's iCloud Drive folder ("iCloud Drive › meerCAD", the same projects on every device and
+ * the Mac) or in its Documents folder ("On My iPad › meerCAD", this device only); folders there are
+ * real folders, like in the desktop app. Thumbnails live in Library, out of sight. Exports go
+ * through the share sheet instead of a download.
  */
 import { App } from "@capacitor/app";
 import { Capacitor, registerPlugin } from "@capacitor/core";
@@ -24,6 +25,91 @@ const DOCS = Directory.Documents;
 const LIB = Directory.Library;
 const EXT = ".meercad";
 
+interface ICloudPlugin {
+  status(): Promise<{ available: boolean; url?: string }>;
+  download(o: { url: string; timeout?: number }): Promise<void>;
+  watch(): Promise<void>;
+  addListener(event: "change", fn: () => void): Promise<{ remove(): Promise<void> }>;
+}
+const ICloud = registerPlugin<ICloudPlugin>("ICloud");
+
+/** Where the projects are: the app's Documents, or the iCloud folder (its file URL, ending in "/"). */
+type Root = { kind: "local" } | { kind: "icloud"; base: string };
+const LOCAL: Root = { kind: "local" };
+const STORAGE_KEY = "meercad.storage";
+
+/** The iCloud folder if iCloud Drive is on for the app, else null. */
+export async function iCloudFolder(): Promise<string | null> {
+  if (!nativeApp) return null;
+  try {
+    const s = await ICloud.status();
+    return s.available && s.url ? s.url.replace(/\/?$/, "/") : null;
+  } catch {
+    return null;
+  }
+}
+
+let rootPromise: Promise<Root> | null = null;
+/**
+ * The projects' place. A fresh install with iCloud starts there; an install that already has
+ * projects on the device stays local until the user switches (Settings).
+ */
+function root(): Promise<Root> {
+  return (rootPromise ??= (async (): Promise<Root> => {
+    let choice: string | null = null;
+    try {
+      choice = localStorage.getItem(STORAGE_KEY);
+    } catch {
+      // no stored choice
+    }
+    const cloud = await iCloudFolder();
+    if (choice === "local") return LOCAL;
+    if (cloud && (choice === "icloud" || !(await projectIds(LOCAL)).length)) {
+      remember("icloud");
+      void watchICloud();
+      return { kind: "icloud", base: cloud };
+    }
+    if (choice === "icloud" && !cloud) return LOCAL;
+    remember("local");
+    return LOCAL;
+  })());
+}
+function remember(choice: "local" | "icloud"): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, choice);
+  } catch {
+    // asked again next start
+  }
+}
+
+/** Where projects are saved now. */
+export async function storageKind(): Promise<"local" | "icloud"> {
+  return (await root()).kind;
+}
+
+let watching = false;
+/** Changes from other devices refresh the projects list (debounced: an edit brings several events). */
+async function watchICloud(): Promise<void> {
+  if (watching) return;
+  watching = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await ICloud.addListener("change", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => window.dispatchEvent(new Event("meercad:projects-changed")), 400);
+  });
+  await ICloud.watch();
+}
+
+/** A path below the projects' place as Filesystem options: relative to Documents, or a file URL in iCloud. */
+function at(r: Root, path: string): { path: string; directory?: Directory } {
+  if (r.kind === "local") return { path, directory: DOCS };
+  return { path: r.base + path.split("/").filter(Boolean).map(encodeURIComponent).join("/") };
+}
+const renameOpts = (r: Root, from: string, to: string) => {
+  const a = at(r, from), b = at(r, to);
+  return { from: a.path, to: b.path, ...(a.directory ? { directory: a.directory, toDirectory: a.directory } : {}) };
+};
+
 const joinId = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
 const folderOf = (id: string) => (id.includes("/") ? id.slice(0, id.lastIndexOf("/")) : "");
 const nameOf = (id: string) => id.slice(id.lastIndexOf("/") + 1);
@@ -37,59 +123,72 @@ function thumbPath(id: string): string {
   return `thumbnails/${(h >>> 0).toString(16)}.png`;
 }
 
-const exists = (path: string, directory = DOCS) =>
-  Filesystem.stat({ path, directory }).then(
+const thumbExists = (path: string) =>
+  Filesystem.stat({ path, directory: LIB }).then(
+    () => true,
+    () => false,
+  );
+const exists = (r: Root, path: string) =>
+  Filesystem.stat(at(r, path)).then(
     () => true,
     () => false,
   );
 
-async function ensureDir(path: string, directory = DOCS): Promise<void> {
-  if (!path || (await exists(path, directory))) return;
-  await Filesystem.mkdir({ path, directory, recursive: true });
+async function ensureDir(r: Root, path: string): Promise<void> {
+  if (!path || (await exists(r, path))) return;
+  await Filesystem.mkdir({ ...at(r, path), recursive: true });
 }
 
 /** Where the Scan plugin keeps its captures (photos, meshes): not a project folder. */
 const SCANS = "Scans";
 const hidden = (folder: string, name: string) => name.startsWith(".") || (!folder && name === SCANS);
+/** A project still only in iCloud shows up as ".Name.meercad.icloud" (before iOS 17). */
+const PLACEHOLDER = /^\.(.+\.meercad)\.icloud$/;
 
-/** All .meercad files below a folder, as ids ("Folder/Name"). */
-async function projectIds(folder = ""): Promise<string[]> {
-  const out: string[] = [];
+/** All .meercad files below a folder: ids ("Folder/Name") and the file that stands for each now. */
+async function projectFiles(r: Root, folder = ""): Promise<{ id: string; file: string }[]> {
+  const out: { id: string; file: string }[] = [];
   let entries;
   try {
-    entries = (await Filesystem.readdir({ path: folder, directory: DOCS })).files;
+    entries = (await Filesystem.readdir(at(r, folder))).files;
   } catch {
     return out;
   }
   for (const e of entries) {
+    const cloud = r.kind === "icloud" ? PLACEHOLDER.exec(e.name) : null;
+    if (cloud) {
+      out.push({ id: joinId(folder, cloud[1]!).slice(0, -EXT.length), file: joinId(folder, e.name) });
+      continue;
+    }
     if (hidden(folder, e.name)) continue;
     const rel = joinId(folder, e.name);
-    if (e.type === "directory") out.push(...(await projectIds(rel)));
-    else if (e.name.endsWith(EXT)) out.push(rel.slice(0, -EXT.length));
+    if (e.type === "directory") out.push(...(await projectFiles(r, rel)));
+    else if (e.name.endsWith(EXT)) out.push({ id: rel.slice(0, -EXT.length), file: rel });
   }
   return out;
 }
+const projectIds = async (r: Root, folder = "") => (await projectFiles(r, folder)).map((p) => p.id);
 
-async function folderList(folder = ""): Promise<string[]> {
+async function folderList(r: Root, folder = ""): Promise<string[]> {
   const out: string[] = [];
   let entries;
   try {
-    entries = (await Filesystem.readdir({ path: folder, directory: DOCS })).files;
+    entries = (await Filesystem.readdir(at(r, folder))).files;
   } catch {
     return out;
   }
   for (const e of entries) {
     if (e.type !== "directory" || hidden(folder, e.name)) continue;
     const rel = joinId(folder, e.name);
-    out.push(rel, ...(await folderList(rel)));
+    out.push(rel, ...(await folderList(r, rel)));
   }
   return out;
 }
 
-async function uniqueId(name: string, folder = ""): Promise<string> {
+async function uniqueId(r: Root, name: string, folder = ""): Promise<string> {
   const base = safeName(name, "Untitled part");
   let id = joinId(folder, base);
-  for (let n = 2; await exists(projectPath(id)); n++) id = joinId(folder, `${base} ${n}`);
+  for (let n = 2; await exists(r, projectPath(id)); n++) id = joinId(folder, `${base} ${n}`);
   return id;
 }
 
@@ -103,28 +202,65 @@ async function readThumb(id: string): Promise<string | undefined> {
 }
 
 async function moveThumb(from: string, to: string): Promise<void> {
-  if (!(await exists(thumbPath(from), LIB))) return;
+  if (!(await thumbExists(thumbPath(from)))) return;
   await Filesystem.deleteFile({ path: thumbPath(to), directory: LIB }).catch(() => undefined);
   await Filesystem.rename({ from: thumbPath(from), to: thumbPath(to), directory: LIB, toDirectory: LIB });
 }
 
-async function moveProject(from: string, to: string): Promise<void> {
+async function moveProject(r: Root, from: string, to: string): Promise<void> {
   if (from === to) return;
-  await ensureDir(folderOf(to));
-  await Filesystem.rename({ from: projectPath(from), to: projectPath(to), directory: DOCS, toDirectory: DOCS });
+  await ensureDir(r, folderOf(to));
+  await Filesystem.rename(renameOpts(r, projectPath(from), projectPath(to)));
   await moveThumb(from, to);
 }
 
-const writeDoc = (id: string, doc: unknown) =>
-  Filesystem.writeFile({ path: projectPath(id), directory: DOCS, data: `${JSON.stringify(doc, null, 2)}\n`, encoding: Encoding.UTF8, recursive: true });
+const writeDoc = (r: Root, id: string, text: string) => Filesystem.writeFile({ ...at(r, projectPath(id)), data: text, encoding: Encoding.UTF8, recursive: true });
+const docText = (doc: unknown) => `${JSON.stringify(doc, null, 2)}\n`;
+
+/** A project's text; in iCloud it is fetched first if it is only in the cloud so far. */
+async function readDoc(r: Root, id: string): Promise<string> {
+  const where = at(r, projectPath(id));
+  if (r.kind === "icloud") await ICloud.download({ url: where.path });
+  return (await Filesystem.readFile({ ...where, encoding: Encoding.UTF8 })).data as string;
+}
+
+/**
+ * Moves every project (and the folders they are in) to iCloud or back onto this device, then
+ * saves there from now on. A project with the same name already at the target stays where it was.
+ */
+export async function switchStorage(to: "local" | "icloud"): Promise<{ moved: number; skipped: number }> {
+  const from = await root();
+  if (from.kind === to) return { moved: 0, skipped: 0 };
+  const cloud = to === "icloud" ? await iCloudFolder() : null;
+  if (to === "icloud" && !cloud) throw new Error(t("iCloud Drive is not available: sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app."));
+  const target: Root = cloud ? { kind: "icloud", base: cloud } : LOCAL;
+  let moved = 0, skipped = 0;
+  for (const f of await folderList(from)) await ensureDir(target, f);
+  for (const id of await projectIds(from)) {
+    if (await exists(target, projectPath(id))) {
+      skipped++;
+      continue;
+    }
+    await writeDoc(target, id, await readDoc(from, id));
+    await Filesystem.deleteFile(at(from, projectPath(id)));
+    moved++;
+  }
+  // Folders left empty on the device go; nothing is deleted in iCloud.
+  if (from.kind === "local") for (const f of (await folderList(from)).reverse()) if (!(await projectIds(from, f)).length) await Filesystem.rmdir({ ...at(from, f), recursive: true }).catch(() => undefined);
+  rootPromise = Promise.resolve(target);
+  remember(to);
+  if (to === "icloud") void watchICloud();
+  return { moved, skipped };
+}
 
 export const nativeFiles: FileStore | undefined = nativeApp
   ? {
       projects: {
         async list(): Promise<ProjectMeta[]> {
+          const r = await root();
           const out = await Promise.all(
-            (await projectIds()).map(async (id) => {
-              const st = await Filesystem.stat({ path: projectPath(id), directory: DOCS });
+            (await projectFiles(r)).map(async ({ id, file }) => {
+              const st = await Filesystem.stat(at(r, file));
               const thumbnail = await readThumb(id);
               return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, ...(st.ctime ? { createdAt: st.ctime } : {}), ...(thumbnail ? { thumbnail } : {}) };
             }),
@@ -132,12 +268,13 @@ export const nativeFiles: FileStore | undefined = nativeApp
           return out.sort((a, b) => b.updatedAt - a.updatedAt);
         },
         async load(id: string): Promise<Project> {
-          const st = await Filesystem.stat({ path: projectPath(id), directory: DOCS });
-          const r = await Filesystem.readFile({ path: projectPath(id), directory: DOCS, encoding: Encoding.UTF8 });
-          return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, doc: JSON.parse(r.data as string) as MeercadDocument };
+          const r = await root();
+          const text = await readDoc(r, id);
+          const st = await Filesystem.stat(at(r, projectPath(id)));
+          return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, doc: JSON.parse(text) as MeercadDocument };
         },
         async save(p: { id: string; doc: MeercadDocument; thumbnail?: string }): Promise<void> {
-          await writeDoc(p.id, p.doc);
+          await writeDoc(await root(), p.id, docText(p.doc));
           if (p.thumbnail?.startsWith("data:image/png;base64,")) {
             await Filesystem.writeFile({ path: thumbPath(p.id), directory: LIB, data: p.thumbnail.slice(22), recursive: true });
           }
@@ -146,47 +283,53 @@ export const nativeFiles: FileStore | undefined = nativeApp
           if (p.thumbnail.startsWith("data:image/png;base64,")) await Filesystem.writeFile({ path: thumbPath(p.id), directory: LIB, data: p.thumbnail.slice(22), recursive: true });
         },
         async create(p: { name: string; doc: MeercadDocument; folder?: string }): Promise<ProjectMeta> {
-          const id = await uniqueId(p.name, p.folder ?? "");
-          await writeDoc(id, p.doc);
+          const r = await root();
+          const id = await uniqueId(r, p.name, p.folder ?? "");
+          await writeDoc(r, id, docText(p.doc));
           return { id, name: nameOf(id), folder: folderOf(id), updatedAt: Date.now(), createdAt: Date.now() };
         },
         async rename(p: { id: string; name: string }) {
-          const id = await uniqueId(p.name, folderOf(p.id));
-          await moveProject(p.id, id);
+          const r = await root();
+          const id = await uniqueId(r, p.name, folderOf(p.id));
+          await moveProject(r, p.id, id);
           return { id, name: nameOf(id), folder: folderOf(id) };
         },
         async move(p: { id: string; folder: string }) {
           if (folderOf(p.id) === p.folder) return { id: p.id, name: nameOf(p.id), folder: p.folder };
-          const id = await uniqueId(nameOf(p.id), p.folder);
-          await moveProject(p.id, id);
+          const r = await root();
+          const id = await uniqueId(r, nameOf(p.id), p.folder);
+          await moveProject(r, p.id, id);
           return { id, name: nameOf(id), folder: folderOf(id) };
         },
-        folders: () => folderList(),
+        folders: async () => folderList(await root()),
         async delete(id: string): Promise<void> {
-          await Filesystem.deleteFile({ path: projectPath(id), directory: DOCS });
+          await Filesystem.deleteFile(at(await root(), projectPath(id)));
           await Filesystem.deleteFile({ path: thumbPath(id), directory: LIB }).catch(() => undefined);
         },
       },
       folders: {
         async create(p: { parent: string; name: string }): Promise<string> {
+          const r = await root();
           const base = safeName(p.name, "New folder");
           let folder = joinId(p.parent, base);
-          for (let n = 2; await exists(folder); n++) folder = joinId(p.parent, `${base} ${n}`);
-          await ensureDir(folder);
+          for (let n = 2; await exists(r, folder); n++) folder = joinId(p.parent, `${base} ${n}`);
+          await ensureDir(r, folder);
           return folder;
         },
         async rename(p: { folder: string; name: string }): Promise<string> {
+          const r = await root();
           const target = joinId(folderOf(p.folder), safeName(p.name, nameOf(p.folder)));
           if (target === p.folder) return target;
-          if (await exists(target)) throw new Error(t('a folder named "{name}" already exists', { name: nameOf(target) }));
-          const inside = await projectIds(p.folder);
-          await Filesystem.rename({ from: p.folder, to: target, directory: DOCS, toDirectory: DOCS });
+          if (await exists(r, target)) throw new Error(t('a folder named "{name}" already exists', { name: nameOf(target) }));
+          const inside = await projectIds(r, p.folder);
+          await Filesystem.rename(renameOpts(r, p.folder, target));
           for (const id of inside) await moveThumb(id, target + id.slice(p.folder.length));
           return target;
         },
         async delete(folder: string): Promise<void> {
-          for (const id of await projectIds(folder)) await Filesystem.deleteFile({ path: thumbPath(id), directory: LIB }).catch(() => undefined);
-          await Filesystem.rmdir({ path: folder, directory: DOCS, recursive: true });
+          const r = await root();
+          for (const id of await projectIds(r, folder)) await Filesystem.deleteFile({ path: thumbPath(id), directory: LIB }).catch(() => undefined);
+          await Filesystem.rmdir({ ...at(r, folder), recursive: true });
         },
       },
     }
@@ -218,7 +361,8 @@ export function onFileOpened(open: (target: { id: string } | { name: string; tex
   const handle = (url: string) => {
     if (!/\.meercad$/i.test(decodeURIComponent(url))) return;
     void (async () => {
-      const docs = (await Filesystem.getUri({ path: "", directory: DOCS })).uri.replace(/\/?$/, "/");
+      const place = await root();
+      const docs = place.kind === "icloud" ? place.base : (await Filesystem.getUri({ path: "", directory: DOCS })).uri.replace(/\/?$/, "/");
       const path = decodeURIComponent(url);
       if (path.startsWith(decodeURIComponent(docs))) return open({ id: path.slice(decodeURIComponent(docs).length, -EXT.length) });
       const r = await Filesystem.readFile({ path: url, encoding: Encoding.UTF8 });

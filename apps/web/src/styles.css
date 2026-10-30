@@ -228,6 +228,7 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .callout { padding: 8px 10px; border-radius: 7px; font-size: 12px; line-height: 1.4; }
 .callout.err { background: var(--err-soft); color: var(--err); }
 .callout.warn { background: var(--warn-soft); color: var(--warn); }
+.callout svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 .callout.info { background: var(--accent-soft); color: var(--accent); }
 .expr-wrap { position: relative; }
 .expr-wrap .computed { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); pointer-events: none; font-variant-numeric: tabular-nums; }

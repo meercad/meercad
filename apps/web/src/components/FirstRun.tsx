@@ -1,5 +1,5 @@
 /** First launch of the desktop app: pick where projects live before anything is saved. */
-import { FolderOpen } from "lucide-react";
+import { Cloud, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { desktop } from "../lib/persistence";
 import { changeProjectsFolder } from "../lib/storage";
@@ -7,7 +7,7 @@ import { Logo } from "./TopBar";
 import { t } from "../lib/i18n";
 
 export function FirstRun() {
-  const [status, setStatus] = useState<{ dir: string; defaultDir: string; chosen: boolean } | null>(null);
+  const [status, setStatus] = useState<{ dir: string; defaultDir: string; chosen: boolean; iCloudDir: string; iCloudAvailable: boolean } | null>(null);
   useEffect(() => {
     if (desktop) void desktop.storage.status().then(setStatus);
   }, []);
@@ -25,11 +25,16 @@ export function FirstRun() {
           )}
         </p>
         <code>{status.defaultDir}</code>
+        {status.iCloudAvailable ? (
+          <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} onClick={async () => done(await changeProjectsFolder(status.iCloudDir, { askToMove: false }))}>
+            <Cloud /> {t("Use iCloud Drive (same projects on iPhone and iPad)")}
+          </button>
+        ) : null}
         <div className="ask-actions">
           <button className="btn" onClick={async () => done(await changeProjectsFolder())}>
             <FolderOpen /> {t("Choose another folder…")}
           </button>
-          <button className="btn primary" onClick={async () => done(await changeProjectsFolder(status.defaultDir, { askToMove: false }))}>
+          <button className={`btn ${status.iCloudAvailable ? "" : "primary"}`} onClick={async () => done(await changeProjectsFolder(status.defaultDir, { askToMove: false }))}>
             {t("Use this folder")}
           </button>
         </div>
