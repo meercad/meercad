@@ -213,7 +213,7 @@ export const definitions: Record<string, Json> = {
       },
       ["profile", "path", "mode"],
     ),
-    fillet: feature("fillet", { edges: ref("edges"), radius: ref("expr") }, ["edges", "radius"]),
+    fillet: feature("fillet", { edges: ref("edges"), radius: ref("expr"), radius2: ref("expr") }, ["edges", "radius"]),
     chamfer: feature("chamfer", { edges: ref("edges"), distance: ref("expr") }, ["edges", "distance"]),
     shell: feature("shell", { faces: arr(ref("faceSelector")), thickness: ref("expr"), outward: bool }, ["faces", "thickness"]),
     thread: feature(

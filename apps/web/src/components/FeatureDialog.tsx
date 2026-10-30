@@ -954,6 +954,18 @@ function Body({ d }: { d: DialogState }) {
               <ExprInput value={f.distance} autoFocus onCommit={(distance) => set({ distance })} onLive={(distance) => set({ distance })} />
             )}
           </Field>
+          {f.op === "fillet" ? (
+            <>
+              <label className="checkbox">
+                <input type="checkbox" checked={f.radius2 !== undefined} onChange={(e) => set({ radius2: e.target.checked ? (typeof f.radius === "number" ? f.radius * 2 : 4) : undefined })} /> Variable: changes along the edge
+              </label>
+              {f.radius2 !== undefined ? (
+                <Field label="Radius at the other end">
+                  <ExprInput value={f.radius2} onCommit={(radius2) => set({ radius2 })} onLive={(radius2) => set({ radius2 })} />
+                </Field>
+              ) : null}
+            </>
+          ) : null}
         </>
       );
     }

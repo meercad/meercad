@@ -1041,9 +1041,15 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
   const ref = resolveEdges(asArray(f.edges), [...ctx.prev.bodies.values()]);
   const input = ctx.prev.bodies.get(ref.body)!;
 
+  // Variable rounding: from `radius` at one end of each edge to `radius2` at the other.
+  const r2 = f.op === "fillet" ? f.radius2 : undefined;
+  if (r2 !== undefined && !(r2 > 0)) throw new FeatureError("the end radius must be greater than zero");
   const attempt = (r: number) => {
     const mk = f.op === "fillet" ? arena.track(new oc.BRepFilletAPI_MakeFillet(input.shape, "ChFi3d_Rational")) : arena.track(new oc.BRepFilletAPI_MakeChamfer(input.shape));
-    for (const ei of ref.edges) mk.Add(r, input.edges[ei]!);
+    for (const ei of ref.edges) {
+      if (r2 !== undefined && mk instanceof oc.BRepFilletAPI_MakeFillet) mk.Add(r, (r2 * r) / size, input.edges[ei]!);
+      else mk.Add(r, input.edges[ei]!);
+    }
     try {
       mk.Build();
     } catch {

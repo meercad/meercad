@@ -34,7 +34,7 @@ export type ResolvedSketch = Omit<SketchFeature, "constraints"> & { constraints:
 export type ResolvedPlane = R<PlaneFeature, "offset" | "angle">;
 export type ResolvedExtrude = R<ExtrudeFeature, "distance" | "distance2">;
 export type ResolvedRevolve = R<RevolveFeature, "angle">;
-export type ResolvedFillet = R<FilletFeature, "radius">;
+export type ResolvedFillet = R<FilletFeature, "radius" | "radius2">;
 export type ResolvedChamfer = R<ChamferFeature, "distance">;
 export type ResolvedShell = R<ShellFeature, "thickness">;
 export type ResolvedThread = R<ThreadFeature, "pitch" | "length" | "clearance">;
@@ -110,7 +110,7 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
     case "revolve":
       return { ...f, angle: ev("angle", f.angle) };
     case "fillet":
-      return { ...f, radius: ev("radius", f.radius) };
+      return { ...f, radius: ev("radius", f.radius), radius2: opt("radius2", f.radius2) };
     case "chamfer":
       return { ...f, distance: ev("distance", f.distance) };
     case "shell":
@@ -198,7 +198,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     plane: ["offset", "angle"],
     extrude: ["distance", "distance2"],
     revolve: ["angle"],
-    fillet: ["radius"],
+    fillet: ["radius", "radius2"],
     chamfer: ["distance"],
     shell: ["thickness"],
     thread: ["pitch", "length", "clearance"],

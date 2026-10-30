@@ -156,6 +156,8 @@ export interface FilletFeature extends FeatureBase {
   op: "fillet";
   edges: EdgeSelector | EdgeSelector[];
   radius: Expr;
+  /** Variable rounding: the radius at the edge's other end; it changes smoothly along the edge. */
+  radius2?: Expr;
 }
 
 export interface ChamferFeature extends FeatureBase {
