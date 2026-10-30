@@ -308,6 +308,8 @@ export interface ImportFeature extends FeatureBase {
   fileName: string;
   /** Base64 file contents. */
   data: string;
+  /** STEP files with several solids: each becomes its own part (ids im1, im1_2, …) instead of one. */
+  split?: boolean;
 }
 
 /**

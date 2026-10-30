@@ -1263,10 +1263,19 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     if (String(reader.ReadFile(path)) !== "IFSelect_RetDone") throw new FeatureError(`could not read STEP file "${f.fileName}"`);
     reader.TransferRoots();
     const shape = arena.track(reader.OneShape());
-    const body = new Body(oc, arena, f.id, shape);
-    if (!body.faces.length) throw new FeatureError(`STEP file "${f.fileName}" contains no faces`);
-    body.faceTags = body.faces.map((_, i) => [`${f.id}.face[${i}]`]);
-    return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, unifyIfNeeded(ctx, body)) };
+    const solids: TopoDS_Shape[] = [];
+    if (f.split) for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID")); e.More(); e.Next()) solids.push(arena.track(e.Current()));
+    // One part, or (split) one per solid: an assembly from another CAD tool keeps its parts apart.
+    const pieces = solids.length > 1 ? solids : [shape];
+    const bodies = new Map(ctx.prev.bodies);
+    pieces.forEach((s, k) => {
+      const id = k === 0 ? f.id : `${f.id}_${k + 1}`;
+      const body = new Body(oc, arena, id, s);
+      if (!body.faces.length) throw new FeatureError(`STEP file "${f.fileName}" contains no faces`);
+      body.faceTags = body.faces.map((_, i) => [`${id}.face[${i}]`]);
+      bodies.set(id, unifyIfNeeded(ctx, body));
+    });
+    return { ...ctx.prev, bodies };
   } finally {
     oc.FS.unlink(path);
   }

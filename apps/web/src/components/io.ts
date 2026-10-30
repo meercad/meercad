@@ -189,7 +189,8 @@ export async function importFile(file?: File | null): Promise<boolean> {
 }
 
 async function importFeatures(file: File, ext: string): Promise<Feature[]> {
-  const imp = (fileName: string, format: "step" | "stl", bytes: Uint8Array): Feature => ({ id: "", op: "import", format, fileName, data: toBase64(bytes) });
+  // STEP assemblies come in as one part per solid.
+  const imp = (fileName: string, format: "step" | "stl", bytes: Uint8Array): Feature => ({ id: "", op: "import", format, fileName, data: toBase64(bytes), ...(format === "step" ? { split: true } : {}) });
   if (ext === "step" || ext === "stp") return [imp(file.name, "step", new Uint8Array(await file.arrayBuffer()))];
   if (ext === "stl") return [imp(file.name, "stl", new Uint8Array(await file.arrayBuffer()))];
   // 3MF and OBJ meshes go in as STL, one body per object on the build plate.

@@ -42,4 +42,13 @@ describe("STEP with names and colours", () => {
     const text = new TextDecoder().decode(exportStep(await getOcct(), s.state!));
     expect(text).not.toContain("STYLED_ITEM");
   });
+
+  it("reads a STEP assembly back as one part per solid when split", async () => {
+    const s = await newSession();
+    s.rebuild(doc(two));
+    const data = Buffer.from(exportStep(await getOcct(), s.state!, undefined, [{ id: "ex1", name: "A" }, { id: "ex2", name: "B" }])).toString("base64");
+    const back = await newSession();
+    const { report } = back.rebuild(doc([{ id: "im1", op: "import", format: "step", fileName: "x.step", data, split: true } as Feature]));
+    expect(report.bodies.map((b) => [b.id, Math.round(b.volume)])).toEqual([["im1", 1000], ["im1_2", 2000]]);
+  });
 });
