@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import type { Navigation } from "@meercad/viewport";
 import type { SketchTool } from "../sketch/state";
+import { t } from "./i18n";
 
 export type ModelAction =
   | "sketch"
@@ -109,17 +110,17 @@ export type KeyScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blend
 export type MouseScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blender" | "trackpad";
 
 export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Keymap }[] = [
-  { id: "meercad", label: "meerCAD", note: "Single letters for every tool, ⌘1–7 for views.", map: BASE },
+  { id: "meercad", label: "meerCAD", note: t("Single letters for every tool, ⌘1–7 for views."), map: BASE },
   {
     id: "fusion",
     label: "Fusion 360",
-    note: "S opens command search, P projects edges, F6 fits the view.",
+    note: t("S opens command search, P projects edges, F6 fits the view."),
     map: { ...BASE, sketch: [], palette: ["S", "Mod+F"], fit: ["F6"], "sketch.project": ["P"], "sketch.point": [] },
   },
   {
     id: "onshape",
     label: "Onshape",
-    note: "Shift+letter for features, Shift+1–7 for views, F fits, N looks normal to a face.",
+    note: t("Shift+letter for features, Shift+1–7 for views, F fits, N looks normal to a face."),
     map: {
       ...BASE,
       sketch: ["Shift+S"],
@@ -146,7 +147,7 @@ export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Key
   {
     id: "solidworks",
     label: "SolidWorks",
-    note: "Ctrl+1–7 for views, Ctrl+8 normal to, F fits.",
+    note: t("Ctrl+1–7 for views, Ctrl+8 normal to, F fits."),
     map: {
       ...BASE,
       fillet: [],
@@ -164,7 +165,7 @@ export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Key
   {
     id: "blender",
     label: "Blender",
-    note: "Numpad views (Ctrl for the opposite side), Home fits.",
+    note: t("Numpad views (Ctrl for the opposite side), Home fits."),
     map: {
       ...BASE,
       fit: ["Home"],
@@ -183,49 +184,49 @@ export const MOUSE_SCHEMES: { id: MouseScheme; label: string; orbit: string; pan
   {
     id: "meercad",
     label: "meerCAD",
-    orbit: "Right drag",
-    pan: "Middle drag or Shift + right drag",
-    zoom: "Wheel",
+    orbit: t("Right drag"),
+    pan: t("Middle drag or Shift + right drag"),
+    zoom: t("Wheel"),
     nav: { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "shift" }], zoom: [] },
   },
   {
     id: "fusion",
     label: "Fusion 360",
-    orbit: "Shift + middle drag",
-    pan: "Middle drag",
-    zoom: "Wheel",
+    orbit: t("Shift + middle drag"),
+    pan: t("Middle drag"),
+    zoom: t("Wheel"),
     nav: { orbit: [{ button: "middle", mod: "shift" }], pan: [{ button: "middle" }], zoom: [] },
   },
   {
     id: "onshape",
     label: "Onshape",
-    orbit: "Right drag",
-    pan: "Middle drag or Ctrl + right drag",
-    zoom: "Wheel",
+    orbit: t("Right drag"),
+    pan: t("Middle drag or Ctrl + right drag"),
+    zoom: t("Wheel"),
     nav: { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "ctrl" }], zoom: [] },
   },
   {
     id: "solidworks",
     label: "SolidWorks",
-    orbit: "Middle drag",
-    pan: "Ctrl + middle drag",
-    zoom: "Wheel or Shift + middle drag",
+    orbit: t("Middle drag"),
+    pan: t("Ctrl + middle drag"),
+    zoom: t("Wheel or Shift + middle drag"),
     nav: { orbit: [{ button: "middle" }], pan: [{ button: "middle", mod: "ctrl" }], zoom: [{ button: "middle", mod: "shift" }] },
   },
   {
     id: "blender",
     label: "Blender",
-    orbit: "Middle drag",
-    pan: "Shift + middle drag",
-    zoom: "Wheel or Ctrl + middle drag",
+    orbit: t("Middle drag"),
+    pan: t("Shift + middle drag"),
+    zoom: t("Wheel or Ctrl + middle drag"),
     nav: { orbit: [{ button: "middle" }], pan: [{ button: "middle", mod: "shift" }], zoom: [{ button: "middle", mod: "ctrl" }] },
   },
   {
     id: "trackpad",
-    label: "Trackpad / no middle button",
-    orbit: "Right drag (two-finger click-drag)",
-    pan: "Shift + right drag",
-    zoom: "Pinch or Alt + right drag",
+    label: t("Trackpad / no middle button"),
+    orbit: t("Right drag (two-finger click-drag)"),
+    pan: t("Shift + right drag"),
+    zoom: t("Pinch or Alt + right drag"),
     nav: { orbit: [{ button: "right" }], pan: [{ button: "right", mod: "shift" }], zoom: [{ button: "right", mod: "alt" }] },
   },
 ];

@@ -10,11 +10,24 @@ import { importFile } from "./io";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
 import { exampleThumbnail, fillExampleThumbnails, fillMissingThumbnails } from "../lib/thumbnails";
+import { t, tn } from "../lib/i18n";
 
 const DRAG_TYPE = "application/x-meercad-project";
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
 const parentOf = (f: string) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
-const fail = (what: string) => (e: unknown) => toast(`Could not ${what}: ${e instanceof Error ? e.message : String(e)}`, "error");
+/** `text` is a translated message with a {msg} placeholder for the error. */
+const fail = (text: string) => (e: unknown) => toast(text.replace("{msg}", e instanceof Error ? e.message : String(e)), "error");
+/** A translated text with {ext} shown as the file extension. */
+const withExt = (s: string) => {
+  const [a, b] = s.split("{ext}");
+  return (
+    <>
+      {a}
+      <span className="mono">.meercad</span>
+      {b}
+    </>
+  );
+};
 
 type SortKey = "edited" | "created" | "name";
 interface Sort {
@@ -23,7 +36,7 @@ interface Sort {
   asc: boolean;
 }
 const SORT_KEY = "meercad.sort";
-const SORT_LABELS: Record<SortKey, string> = { edited: "Last edited", created: "Created", name: "Name" };
+const SORT_LABELS: Record<SortKey, string> = { edited: t("Last edited"), created: t("Created"), name: t("Name") };
 function loadSort(): Sort {
   try {
     const s = JSON.parse(localStorage.getItem(SORT_KEY) ?? "null") as Sort | null;
@@ -42,45 +55,45 @@ function sortProjects(list: ProjectMeta[], s: Sort): ProjectMeta[] {
 }
 
 async function moveTo(id: string, folder: string): Promise<void> {
-  await moveProject(id, folder).then(refreshProjects, fail("move the part"));
+  await moveProject(id, folder).then(refreshProjects, fail(t("Could not move the part: {msg}")));
 }
 
 async function addFolder(): Promise<void> {
-  const name = await askText({ title: "New folder", label: "Name", value: "New folder", confirmLabel: "Create" });
+  const name = await askText({ title: t("New folder"), label: t("Name"), value: t("New folder"), confirmLabel: t("Create") });
   if (!name?.trim()) return;
   const parent = useApp.getState().folder;
-  await createFolder(parent, name.trim()).then(refreshProjects, fail("create the folder"));
+  await createFolder(parent, name.trim()).then(refreshProjects, fail(t("Could not create the folder: {msg}")));
 }
 
 function folderMenu(f: string, x: number, y: number): void {
   const name = f.slice(f.lastIndexOf("/") + 1);
   showMenu(x, y, [
-    { label: "Open", icon: <FolderOpen />, onClick: () => useApp.setState({ folder: f }) },
+    { label: t("Open"), icon: <FolderOpen />, onClick: () => useApp.setState({ folder: f }) },
     {
-      label: "Rename…",
+      label: t("Rename…"),
       icon: <Pencil />,
       onClick: async () => {
-        const next = await askText({ title: "Rename folder", label: "Name", value: name, confirmLabel: "Rename" });
-        if (next?.trim() && next.trim() !== name) await renameFolder(f, next.trim()).then(refreshProjects, fail("rename the folder"));
+        const next = await askText({ title: t("Rename folder"), label: t("Name"), value: name, confirmLabel: t("Rename") });
+        if (next?.trim() && next.trim() !== name) await renameFolder(f, next.trim()).then(refreshProjects, fail(t("Could not rename the folder: {msg}")));
       },
     },
-    ...(desktop ? [{ label: "Show in Finder", icon: <FolderOpen />, onClick: () => void desktop!.projects.reveal({ folder: f }) }] : []),
+    ...(desktop ? [{ label: t("Show in Finder"), icon: <FolderOpen />, onClick: () => void desktop!.projects.reveal({ folder: f }) }] : []),
     "sep",
     {
-      label: "Delete folder…",
+      label: t("Delete folder…"),
       icon: <Trash />,
       danger: true,
       onClick: async () => {
         const count = useApp.getState().projects.filter((p) => p.folder === f || p.folder?.startsWith(`${f}/`)).length;
         const ok = await askConfirm({
-          title: `Delete "${name}"?`,
+          title: t("Delete “{name}”?", { name }),
           message: count
-            ? `It contains ${count} part${count === 1 ? "" : "s"}, which will be deleted too.${desktop ? " Everything goes to the Trash." : " This cannot be undone."}`
-            : "The folder is empty.",
-          confirmLabel: "Delete folder",
+            ? `${tn(count, "It contains {n} part, which will be deleted too.", "It contains {n} parts, which will be deleted too.")} ${desktop ? t("Everything goes to the Trash.") : t("This cannot be undone.")}`
+            : t("The folder is empty."),
+          confirmLabel: t("Delete folder"),
           danger: true,
         });
-        if (ok) await deleteFolder(f).then(refreshProjects, fail("delete the folder"));
+        if (ok) await deleteFolder(f).then(refreshProjects, fail(t("Could not delete the folder: {msg}")));
       },
     },
   ]);
@@ -91,22 +104,22 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
   const current = p.folder ?? "";
   const targets = ["", ...folders].filter((f) => f !== current);
   showMenu(x, y, [
-    { label: "Open", icon: <Box />, onClick: () => void openProject(p.id) },
-    ...targets.map((f) => ({ label: `Move to ${f ? f.split("/").join(" › ") : "Your projects"}`, icon: <FolderInput />, onClick: () => void moveTo(p.id, f) })),
-    ...(desktop ? [{ label: "Show in Finder", icon: <FolderOpen />, onClick: () => void desktop!.projects.reveal(p.id) }] : []),
+    { label: t("Open"), icon: <Box />, onClick: () => void openProject(p.id) },
+    ...targets.map((f) => ({ label: t("Move to {folder}", { folder: f ? f.split("/").join(" › ") : t("Your projects") }), icon: <FolderInput />, onClick: () => void moveTo(p.id, f) })),
+    ...(desktop ? [{ label: t("Show in Finder"), icon: <FolderOpen />, onClick: () => void desktop!.projects.reveal(p.id) }] : []),
     "sep",
     {
-      label: "Delete…",
+      label: t("Delete…"),
       icon: <Trash />,
       danger: true,
       onClick: async () => {
         const ok = await askConfirm({
-          title: `Delete "${p.name}"?`,
-          message: desktop ? "The project file goes to the Trash." : nativeApp ? "The project file is deleted. This cannot be undone." : "The project is removed from this browser. This cannot be undone.",
-          confirmLabel: "Delete part",
+          title: t("Delete “{name}”?", { name: p.name }),
+          message: desktop ? t("The project file goes to the Trash.") : nativeApp ? t("The project file is deleted. This cannot be undone.") : t("The project is removed from this browser. This cannot be undone."),
+          confirmLabel: t("Delete part"),
           danger: true,
         });
-        if (ok) await deleteProject(p.id).then(refreshProjects, fail("delete the part"));
+        if (ok) await deleteProject(p.id).then(refreshProjects, fail(t("Could not delete the part: {msg}")));
       },
     },
   ]);
@@ -136,36 +149,36 @@ export function Home() {
     projects.filter((p) => (p.folder ?? "") === folder),
     sort,
   );
-  const dirLabel = sort.key === "name" ? (sort.asc ? "A to Z" : "Z to A") : sort.asc ? "Oldest first" : "Newest first";
-  const crumbs = [{ path: "", label: "Your projects" }, ...folder.split("/").filter(Boolean).map((label, i, all) => ({ path: all.slice(0, i + 1).join("/"), label }))];
+  const dirLabel = sort.key === "name" ? (sort.asc ? t("A to Z") : t("Z to A")) : sort.asc ? t("Oldest first") : t("Newest first");
+  const crumbs = [{ path: "", label: t("Your projects") }, ...folder.split("/").filter(Boolean).map((label, i, all) => ({ path: all.slice(0, i + 1).join("/"), label }))];
   const dropOn = async (e: DragEvent, target: string) => {
     e.preventDefault();
     setDropTarget(null);
     const id = e.dataTransfer.getData(DRAG_TYPE);
     if (id) await moveTo(id, target);
   };
-  const ago = (t: number) => {
-    const s = (Date.now() - t) / 1000;
-    if (s < 60) return "just now";
-    if (s < 3600) return `${Math.round(s / 60)} min ago`;
-    if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-    return new Date(t).toLocaleDateString();
+  const ago = (time: number) => {
+    const s = (Date.now() - time) / 1000;
+    if (s < 60) return t("just now");
+    if (s < 3600) return t("{n} min ago", { n: Math.round(s / 60) });
+    if (s < 86400) return t("{n} h ago", { n: Math.round(s / 3600) });
+    return new Date(time).toLocaleDateString();
   };
   return (
     <div className="home">
       <div className={`home-top ${desktop ? "desktop" : ""}`}>
         <span className="home-tab" aria-current="page">
-          Projects
+          {t("Projects")}
         </span>
         <TabStrip />
         <button className="btn" onClick={toggleTheme}>
-          Theme
+          {t("Theme")}
         </button>
         <button className="btn" onClick={() => void importFile()}>
-          <FileUp /> Open file
+          <FileUp /> {t("Open file")}
         </button>
         <button className="btn primary" onClick={() => void newProject()}>
-          <Plus /> New part
+          <Plus /> {t("New part")}
         </button>
       </div>
       <div className="home-main">
@@ -188,7 +201,7 @@ export function Home() {
           <span className="spacer" />
           <button
             className="btn"
-            title="Sort parts"
+            title={t("Sort parts")}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               showMenu(
@@ -200,29 +213,25 @@ export function Home() {
           >
             <ArrowUpDown /> {SORT_LABELS[sort.key]}
           </button>
-          <button className="btn" onClick={() => changeSort({ ...sort, asc: !sort.asc })} title={`${dirLabel} — click to reverse`} aria-label={`Order: ${dirLabel}`}>
+          <button className="btn" onClick={() => changeSort({ ...sort, asc: !sort.asc })} title={t("{order} — click to reverse", { order: dirLabel })} aria-label={t("Order: {order}", { order: dirLabel })}>
             {sort.asc ? <ArrowUp /> : <ArrowDown />} {dirLabel}
           </button>
           <button className="btn" onClick={() => void addFolder()}>
-            <FolderPlus /> New folder
+            <FolderPlus /> {t("New folder")}
           </button>
           {desktop ? (
-            <button className="btn" onClick={() => void desktop!.projects.reveal({ folder })} title="Show this folder in Finder">
-              <FolderOpen /> Show in Finder
+            <button className="btn" onClick={() => void desktop!.projects.reveal({ folder })} title={t("Show this folder in Finder")}>
+              <FolderOpen /> {t("Show in Finder")}
             </button>
           ) : null}
         </div>
         <p className="sub">
           {desktop ? (
-            <>
-              Saved as open <span className="mono">.meercad</span> files; folders here are real folders on disk. Drag a part onto a folder to move it.
-            </>
+            withExt(t("Saved as open {ext} files; folders here are real folders on disk. Drag a part onto a folder to move it."))
           ) : nativeApp ? (
-            <>
-              Saved as open <span className="mono">.meercad</span> files, in the Files app under On My {/iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad"} › meerCAD. Drag a part onto a folder to move it.
-            </>
+            withExt(t("Saved as open {ext} files, in the Files app under On My {device} › meerCAD. Drag a part onto a folder to move it.", { device: /iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad" }))
           ) : (
-            "Stored only in this browser. Use Share or Export to move them elsewhere. Drag a part onto a folder to move it."
+            t("Stored only in this browser. Use Share or Export to move them elsewhere. Drag a part onto a folder to move it.")
           )}
         </p>
         <div className="grid">
@@ -231,7 +240,7 @@ export function Home() {
               <Plus />
             </div>
             <div className="meta">
-              <b>New part</b>
+              <b>{t("New part")}</b>
             </div>
           </button>
           {subfolders.map((f) => {
@@ -260,11 +269,9 @@ export function Home() {
                 <div className="meta">
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <b>{name}</b>
-                    <small>
-                      {count} part{count === 1 ? "" : "s"}
-                    </small>
+                    <small>{tn(count, "{n} part", "{n} parts")}</small>
                   </div>
-                  <button className="icon-btn sm" title="Folder actions" onClick={(e) => (e.stopPropagation(), folderMenu(f, e.clientX, e.clientY))}>
+                  <button className="icon-btn sm" title={t("Folder actions")} onClick={(e) => (e.stopPropagation(), folderMenu(f, e.clientX, e.clientY))}>
                     <Ellipsis />
                   </button>
                 </div>
@@ -290,27 +297,27 @@ export function Home() {
               <div className="meta">
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <b>{p.name}</b>
-                  <small>{sort.key === "created" && p.createdAt ? `Created ${ago(p.createdAt)}` : ago(p.updatedAt)}</small>
+                  <small>{sort.key === "created" && p.createdAt ? t("Created {when}", { when: ago(p.createdAt) }) : ago(p.updatedAt)}</small>
                 </div>
-                <button className="icon-btn sm" title="Part actions" onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}>
+                <button className="icon-btn sm" title={t("Part actions")} onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}>
                   <Ellipsis />
                 </button>
               </div>
             </div>
           ))}
         </div>
-        <h1 style={{ marginTop: 36 }}>Start from an example</h1>
-        <p className="sub">Fully parametric — open one and change its variables.</p>
+        <h1 style={{ marginTop: 36 }}>{t("Start from an example")}</h1>
+        <p className="sub">{t("Fully parametric — open one and change its variables.")}</p>
         <div className="grid">
           {EXAMPLES.map((ex) => (
-            <button className="card" key={ex.name} onClick={() => void newProject(structuredClone(ex.doc), ex.name)}>
+            <button className="card" key={ex.name} onClick={() => void newProject(structuredClone(ex.doc), t(ex.name))}>
               <div className="thumb">
                 {ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc) ? <img src={ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)!} alt="" /> : <Box size={32} />}
               </div>
               <div className="meta">
                 <div style={{ minWidth: 0 }}>
-                  <b>{ex.name}</b>
-                  <small>{ex.description}</small>
+                  <b>{t(ex.name)}</b>
+                  <small>{t(ex.description)}</small>
                 </div>
               </div>
             </button>
@@ -319,9 +326,9 @@ export function Home() {
         <footer className="home-footer">
           {(
             [
-              ["about", "About meerCAD"],
-              ["privacy", "Privacy"],
-              ["licenses", "Licences"],
+              ["about", t("About meerCAD")],
+              ["privacy", t("Privacy")],
+              ["licenses", t("Licences")],
             ] as const
           ).map(([tab, label], i) => (
             <span key={tab}>

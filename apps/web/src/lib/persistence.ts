@@ -5,6 +5,7 @@
  */
 import type { MeercadDocument } from "@meercad/schema";
 import { nativeFiles } from "./native";
+import { t } from "./i18n";
 
 export interface ProjectMeta {
   id: string;
@@ -87,7 +88,7 @@ function open(): Promise<IDBDatabase> {
     };
     req.onerror = () => {
       opened = null;
-      reject(req.error ?? new Error("IndexedDB unavailable"));
+      reject(req.error ?? new Error(t("IndexedDB unavailable")));
     };
   }));
 }
@@ -110,10 +111,10 @@ async function copyLegacyProjects(db: IDBDatabase): Promise<void> {
     });
     legacy.close();
     await new Promise<void>((resolve, reject) => {
-      const t = db.transaction(STORE, "readwrite");
-      for (const p of all) t.objectStore(STORE).put(p);
-      t.oncomplete = () => resolve();
-      t.onerror = () => reject(t.error);
+      const tr = db.transaction(STORE, "readwrite");
+      for (const p of all) tr.objectStore(STORE).put(p);
+      tr.oncomplete = () => resolve();
+      tr.onerror = () => reject(tr.error);
     });
   } catch {
     // nothing to carry over
@@ -123,10 +124,10 @@ async function copyLegacyProjects(db: IDBDatabase): Promise<void> {
 async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await open();
   return new Promise((resolve, reject) => {
-    const t = db.transaction(STORE, mode);
-    const req = fn(t.objectStore(STORE));
+    const tr = db.transaction(STORE, mode);
+    const req = fn(tr.objectStore(STORE));
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("storage error"));
+    req.onerror = () => reject(req.error ?? new Error(t("storage error")));
   });
 }
 
@@ -220,7 +221,7 @@ export async function listFolders(): Promise<string[]> {
 
 export async function createFolder(parent: string, name: string): Promise<string> {
   if (files) return files.folders.create({ parent, name });
-  const base = name.replace(/\//g, "-").trim() || "New folder";
+  const base = name.replace(/\//g, "-").trim() || t("New folder");
   const existing = await listFolders();
   let folder = parent ? `${parent}/${base}` : base;
   for (let n = 2; existing.includes(folder); n++) folder = parent ? `${parent}/${base} ${n}` : `${base} ${n}`;
@@ -232,7 +233,7 @@ export async function renameFolder(folder: string, name: string): Promise<string
   if (files) return files.folders.rename({ folder, name });
   const parent = folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : "";
   const target = (parent ? `${parent}/` : "") + (name.replace(/\//g, "-").trim() || folder);
-  if ((await listFolders()).includes(target) && target !== folder) throw new Error(`a folder named "${name}" already exists`);
+  if ((await listFolders()).includes(target) && target !== folder) throw new Error(t("a folder named “{name}” already exists", { name }));
   const re = (f: string) => (inFolder(f, folder) ? target + f.slice(folder.length) : f);
   storeFolders(storedFolders().map(re));
   for (const p of await allProjects()) if (inFolder(p.folder, folder)) await tx("readwrite", (s) => s.put({ ...p, folder: re(p.folder!) }));
@@ -250,7 +251,7 @@ export async function deleteFolder(folder: string): Promise<void> {
 export async function moveProject(id: string, folder: string): Promise<ProjectMeta> {
   if (files) return { ...(await files.projects.move({ id, folder })), updatedAt: Date.now() };
   const p = await loadProject(id);
-  if (!p) throw new Error("project not found");
+  if (!p) throw new Error(t("project not found"));
   await tx("readwrite", (s) => s.put({ ...p, folder }));
   return { id, name: p.name, folder, updatedAt: p.updatedAt };
 }

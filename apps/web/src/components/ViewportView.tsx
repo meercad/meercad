@@ -24,6 +24,7 @@ import { SnapControls } from "./SnapControls";
 import { dragStep, gridLevels } from "../lib/grid";
 import { convertMmText, docUnit } from "../lib/units";
 import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
+import { t, tn } from "../lib/i18n";
 
 /** Dialog fields that take whole parts, so a click on a mesh part may fill them. */
 const PART_FIELDS = new Set(["targets", "target", "tools", "bodies", "source", "body"]);
@@ -402,7 +403,7 @@ export function ViewportView() {
       if (!pick) return;
       const spec = planeSpecForPick(pick, s.output?.meshes ?? []);
       if (spec) startSketch(spec);
-      else toast("Pick a plane or a flat face", "error");
+      else toast(t("Pick a plane or a flat face"), "error");
       return;
     }
     if (s.measure.active) {
@@ -449,47 +450,47 @@ export function ViewportView() {
       return { label: label ?? FEATURES[op].label, icon: <Icon />, kbd: FEATURES[op].shortcut, onClick: start(op) };
     };
     const common = [
-      ...(fid ? [{ label: `Edit ${fid}`, icon: <Pencil />, onClick: () => editFeature(fid) }] : []),
-      { label: "Measure", icon: <Ruler />, kbd: "Shift+M", onClick: () => useApp.setState({ measure: { active: true, picks: pick && (pick.kind === "face" || pick.kind === "edge") ? [pick] : [], result: null } }) },
+      ...(fid ? [{ label: t("Edit {feature}", { feature: fid }), icon: <Pencil />, onClick: () => editFeature(fid) }] : []),
+      { label: t("Measure"), icon: <Ruler />, kbd: "Shift+M", onClick: () => useApp.setState({ measure: { active: true, picks: pick && (pick.kind === "face" || pick.kind === "edge") ? [pick] : [], result: null } }) },
     ];
     if (!pick)
       return showMenu(x, y, [
-        { label: "Fit view", icon: <Focus />, kbd: fitKey, onClick: () => vp?.fit() },
-        { label: s.showPlanes ? "Hide planes" : "Show planes", icon: <Layers />, onClick: () => useApp.setState({ showPlanes: !s.showPlanes }) },
-        { label: "Show all parts", icon: <Eye />, onClick: () => useApp.setState({ hidden: new Set() }) },
+        { label: t("Fit view"), icon: <Focus />, kbd: fitKey, onClick: () => vp?.fit() },
+        { label: s.showPlanes ? t("Hide planes") : t("Show planes"), icon: <Layers />, onClick: () => useApp.setState({ showPlanes: !s.showPlanes }) },
+        { label: t("Show all parts"), icon: <Eye />, onClick: () => useApp.setState({ hidden: new Set() }) },
       ]);
     if (pick.kind === "face" && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId)) {
       const m = s.output?.meshes.find((b) => b.bodyId === pick.bodyId);
       if (m) useApp.setState({ selection: m.faceTags.map((tags, face) => ({ kind: "face" as const, bodyId: m.bodyId, face, tags, point: pick.point, normal: null })) });
       return showMenu(x, y, [
-        { label: `Move ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Move3d />, onClick: () => startFeature("transform") },
-        { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
-        { label: `Hide ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: t("Move {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <Move3d />, onClick: () => startFeature("transform") },
+        { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
+        { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         "sep",
-        { label: "Convert to editable body", icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
-        { label: "Rebuild with features", icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
+        { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
+        { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
         "sep",
         ...common,
         "sep",
-        { label: `Delete ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
+        { label: t("Delete {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
       ]);
     }
     if (pick.kind === "face")
       return showMenu(x, y, [
-        ...(pick.normal ? [{ label: "New sketch on face", icon: <Pencil />, kbd: "S", onClick: () => startSketch(planeSpecForPick(pick, s.output?.meshes ?? []) ?? undefined) }] : []),
-        item("extrude", "Push/pull face"),
-        item("fillet", "Fillet face edges"),
-        item("chamfer", "Chamfer face edges"),
-        item("shell", "Shell (remove this face)"),
-        ...(!pick.normal ? [item("thread", "Thread this hole or shaft")] : []),
-        ...(pick.normal ? [{ label: "Hole here", icon: <CircleDot />, kbd: "Shift+H", onClick: () => startHoleAt(pick) }] : []),
+        ...(pick.normal ? [{ label: t("New sketch on face"), icon: <Pencil />, kbd: "S", onClick: () => startSketch(planeSpecForPick(pick, s.output?.meshes ?? []) ?? undefined) }] : []),
+        item("extrude", t("Push/pull face")),
+        item("fillet", t("Fillet face edges")),
+        item("chamfer", t("Chamfer face edges")),
+        item("shell", t("Shell (remove this face)")),
+        ...(!pick.normal ? [item("thread", t("Thread this hole or shaft"))] : []),
+        ...(pick.normal ? [{ label: t("Hole here"), icon: <CircleDot />, kbd: "Shift+H", onClick: () => startHoleAt(pick) }] : []),
         "sep",
-        { label: `Hide ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
-        { label: "Mirror part", icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
+        { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         ...common,
         "sep",
-        { label: useApp.getState().selection.length > 1 ? "Delete selection" : "Delete face", icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
-        { label: `Delete ${partName(pick.bodyId, useApp.getState().doc.features)}`, icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
+        { label: useApp.getState().selection.length > 1 ? t("Delete selection") : t("Delete face"), icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
+        { label: t("Delete {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <Trash />, danger: true, onClick: () => deleteBodies([pick.bodyId]) },
       ]);
     if (pick.kind === "edge") return showMenu(x, y, [item("fillet"), item("chamfer"), "sep", ...common]);
     if (pick.kind === "region" || pick.kind === "sketch_curve")
@@ -497,14 +498,14 @@ export function ViewportView() {
         item("extrude"),
         item("revolve"),
         "sep",
-        { label: `Edit sketch ${pick.sketchId}`, icon: <Pencil />, onClick: () => editFeature(pick.sketchId) },
-        { label: "Hide sketch", icon: <EyeOff />, onClick: () => toggleHidden(pick.sketchId) },
+        { label: t("Edit sketch {sketch}", { sketch: pick.sketchId }), icon: <Pencil />, onClick: () => editFeature(pick.sketchId) },
+        { label: t("Hide sketch"), icon: <EyeOff />, onClick: () => toggleHidden(pick.sketchId) },
       ]);
     if (pick.kind === "plane")
       return showMenu(x, y, [
-        { label: `New sketch on ${PLANE_LABELS[pick.planeId] ?? pick.planeId}`, icon: <Pencil />, onClick: () => startSketch({ ref: pick.planeId }) },
-        item("plane", "Offset plane"),
-        ...(pick.planeId.startsWith("origin.") ? [] : [{ label: "Delete plane", icon: <Trash />, danger: true, onClick: () => {
+        { label: t("New sketch on {plane}", { plane: PLANE_LABELS[pick.planeId] ?? pick.planeId }), icon: <Pencil />, onClick: () => startSketch({ ref: pick.planeId }) },
+        item("plane", t("Offset plane")),
+        ...(pick.planeId.startsWith("origin.") ? [] : [{ label: t("Delete plane"), icon: <Trash />, danger: true, onClick: () => {
           const f = useApp.getState().doc.features.find((x) => x.id === pick.planeId);
           if (f) void deleteFeature(f);
         } }]),
@@ -537,49 +538,49 @@ export function ViewportView() {
           className={`select-box ${box.x1 >= box.x0 ? "enclosed" : "crossing"}`}
           style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0) }}
         >
-          <span>{box.filter === "all" ? "Faces + edges" : box.filter === "face" ? "Faces" : "Edges"} · {box.x1 >= box.x0 ? "inside" : "touching"} · F/E/Tab</span>
+          <span>{box.filter === "all" ? t("Faces + edges") : box.filter === "face" ? t("Faces") : t("Edges")} · {box.x1 >= box.x0 ? t("inside") : t("touching")} · F/E/Tab</span>
         </div>
       ) : null}
       {measure.active ? <MeasureCard /> : null}
       <LoadingOverlay />
       <div className="status-pill" title={kernelState.error ?? ""}>
         {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
-        {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? "Rebuilding…" : output ? `${output.report.bodies.length} part${output.report.bodies.length === 1 ? "" : "s"} · rebuild ${output.report.rebuildMs.toFixed(0)} ms${previewing ? " · preview" : ""}` : "Ready")}
+        {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}` : t("Ready"))}
       </div>
       <div className="view-controls">
         <SnapControls viewport={vp} />
         <span className="bar-sep" aria-hidden />
-        <button className="icon-btn sm" title={withKey("Fit all", fitKey)} onClick={() => vp?.fit()}>
+        <button className="icon-btn sm" title={withKey(t("Fit all"), fitKey)} onClick={() => vp?.fit()}>
           <Scan />
         </button>
         {/* Phone: the less used view switches share one menu, so the column stays short. */}
         <button
           className="icon-btn sm phone-only"
-          title="View options"
+          title={t("View options")}
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const check = (on: boolean) => (on ? "✓ " : "   ");
             const modes: [DisplayMode, string][] = [
-              ["shaded_edges", "Shaded with edges"],
-              ["shaded", "Shaded"],
-              ["hidden_line", "Hidden lines removed"],
-              ["xray", "X-ray"],
-              ["wireframe", "Wireframe"],
+              ["shaded_edges", t("Shaded with edges")],
+              ["shaded", t("Shaded")],
+              ["hidden_line", t("Hidden lines removed")],
+              ["xray", t("X-ray")],
+              ["wireframe", t("Wireframe")],
             ];
             showMenu(r.left - 220, r.top, [
               ...modes.map(([m, label]) => ({ label: `${check(vp?.mode === m)}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })),
               "sep" as const,
               {
-                label: `${check(ortho)}Orthographic`,
+                label: `${check(ortho)}${t("Orthographic")}`,
                 onClick: () => {
                   vp?.setProjection(ortho ? "perspective" : "orthographic");
                   setOrtho(!ortho);
                 },
               },
-              { label: `${check(showPlanes)}Planes`, onClick: () => useApp.setState({ showPlanes: !showPlanes }) },
-              { label: `${check(showSketches)}Sketches`, onClick: () => useApp.setState({ showSketches: !showSketches }) },
-              { label: `${check(showValues)}Dimensions on the model`, onClick: () => setPrefs({ showValues: !showValues }) },
-              { label: `${check(colorParts)}A colour for each part`, onClick: () => setPrefs({ colorParts: !colorParts }) },
+              { label: `${check(showPlanes)}${t("Planes")}`, onClick: () => useApp.setState({ showPlanes: !showPlanes }) },
+              { label: `${check(showSketches)}${t("Sketches")}`, onClick: () => useApp.setState({ showSketches: !showSketches }) },
+              { label: `${check(showValues)}${t("Dimensions on the model")}`, onClick: () => setPrefs({ showValues: !showValues }) },
+              { label: `${check(colorParts)}${t("A colour for each part")}`, onClick: () => setPrefs({ colorParts: !colorParts }) },
             ]);
           }}
         >
@@ -587,7 +588,7 @@ export function ViewportView() {
         </button>
         <button
           className={`icon-btn sm phone-hide ${ortho ? "active" : ""}`}
-          title={ortho ? "Orthographic (click for perspective)" : "Perspective (click for orthographic)"}
+          title={ortho ? t("Orthographic (click for perspective)") : t("Perspective (click for orthographic)")}
           onClick={() => {
             vp?.setProjection(ortho ? "perspective" : "orthographic");
             setOrtho(!ortho);
@@ -597,31 +598,31 @@ export function ViewportView() {
         </button>
         <button
           className="icon-btn sm mode-btn phone-hide"
-          title="Display mode"
+          title={t("Display mode")}
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const modes: [DisplayMode, string][] = [
-              ["shaded_edges", "Shaded with edges"],
-              ["shaded", "Shaded"],
-              ["hidden_line", "Hidden lines removed"],
-              ["xray", "X-ray"],
-              ["wireframe", "Wireframe"],
+              ["shaded_edges", t("Shaded with edges")],
+              ["shaded", t("Shaded")],
+              ["hidden_line", t("Hidden lines removed")],
+              ["xray", t("X-ray")],
+              ["wireframe", t("Wireframe")],
             ];
             showMenu(r.left, r.top - 6, modes.map(([m, label]) => ({ label: `${vp?.mode === m ? "✓ " : "   "}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })), { above: true });
           }}
         >
           <Box /> <span className="mode-label">{MODE_LABEL[mode]}</span>
         </button>
-        <button className={`icon-btn sm phone-hide ${showPlanes ? "active" : ""}`} title="Planes" onClick={() => useApp.setState({ showPlanes: !showPlanes })}>
+        <button className={`icon-btn sm phone-hide ${showPlanes ? "active" : ""}`} title={t("Planes")} onClick={() => useApp.setState({ showPlanes: !showPlanes })}>
           <Layers />
         </button>
-        <button className={`icon-btn sm phone-hide ${showSketches ? "active" : ""}`} title="Sketches" onClick={() => useApp.setState({ showSketches: !showSketches })}>
+        <button className={`icon-btn sm phone-hide ${showSketches ? "active" : ""}`} title={t("Sketches")} onClick={() => useApp.setState({ showSketches: !showSketches })}>
           <PencilLine />
         </button>
-        <button className={`icon-btn sm phone-hide ${showValues ? "active" : ""}`} title={`${showValues ? "Hide" : "Show"} dimensions on the model`} onClick={() => setPrefs({ showValues: !showValues })}>
+        <button className={`icon-btn sm phone-hide ${showValues ? "active" : ""}`} title={showValues ? t("Hide dimensions on the model") : t("Show dimensions on the model")} onClick={() => setPrefs({ showValues: !showValues })}>
           <Ruler />
         </button>
-        <button className={`icon-btn sm phone-hide ${colorParts ? "active" : ""}`} title={colorParts ? "Parts in one colour" : "A colour for each part"} onClick={() => setPrefs({ colorParts: !colorParts })}>
+        <button className={`icon-btn sm phone-hide ${colorParts ? "active" : ""}`} title={colorParts ? t("Parts in one colour") : t("A colour for each part")} onClick={() => setPrefs({ colorParts: !colorParts })}>
           <Palette />
         </button>
       </div>
@@ -629,7 +630,7 @@ export function ViewportView() {
   );
 }
 
-const MODE_LABEL: Record<DisplayMode, string> = { shaded_edges: "Shaded", shaded: "Shaded (no edges)", hidden_line: "Hidden line", xray: "X-ray", wireframe: "Wireframe" };
+const MODE_LABEL: Record<DisplayMode, string> = { shaded_edges: t("Shaded"), shaded: t("Shaded (no edges)"), hidden_line: t("Hidden line"), xray: t("X-ray"), wireframe: t("Wireframe") };
 
 function hiddenOverride(_id: string): boolean {
   return false;
@@ -641,7 +642,7 @@ function MeasureCard() {
     <div className="measure-card">
       <div className="dialog-head">
         <Ruler className="ficon" />
-        <h3>Measure</h3>
+        <h3>{t("Measure")}</h3>
         <button className="icon-btn sm" onClick={() => useApp.setState({ measure: { active: false, picks: [], result: null } })}>
           ×
         </button>
@@ -652,14 +653,14 @@ function MeasureCard() {
             <tbody>
               {m.result.rows.map(([k, v]) => (
                 <tr key={k}>
-                  <td className="muted">{k}</td>
+                  <td className="muted">{t(k)}</td>
                   <td>{convertMmText(v)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
-          <span className="muted">{m.picks.length ? "Measuring…" : "Click a face or an edge. Shift-click to add a second one."}</span>
+          <span className="muted">{m.picks.length ? t("Measuring…") : t("Click a face or an edge. Shift-click to add a second one.")}</span>
         )}
       </div>
     </div>
@@ -680,7 +681,7 @@ function AiActivity() {
       ) : null}
       {previewing ? (
         <>
-          <span className="muted">Preview — not applied</span>
+          <span className="muted">{t("Preview — not applied")}</span>
           <button
             className="btn"
             style={{ height: 22, padding: "0 8px" }}
@@ -689,7 +690,7 @@ function AiActivity() {
               scheduleRebuild();
             }}
           >
-            Dismiss
+            {t("Dismiss")}
           </button>
         </>
       ) : null}
@@ -702,7 +703,7 @@ function LoadingOverlay() {
   const kernelState = useApp((s) => s.kernel);
   const hasOutput = useApp((s) => !!s.output);
   const features = useApp((s) => s.doc.features.length);
-  const text = kernelState.error ? null : !kernelState.ready ? "Starting the geometry engine…" : !hasOutput && features ? `Building the model · ${features} feature${features === 1 ? "" : "s"}` : null;
+  const text = kernelState.error ? null : !kernelState.ready ? t("Starting the geometry engine…") : !hasOutput && features ? tn(features, "Building the model · {n} feature", "Building the model · {n} features") : null;
   if (!text) return null;
   return (
     <div className="loading-overlay" role="status" aria-live="polite">

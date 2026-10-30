@@ -1,4 +1,4 @@
-/** Fully parametric starter models for the home screen. */
+/** Fully parametric starter models for the home screen. Home shows `name` and `description` through t(). */
 import type { Expr, MeercadDocument, SketchConstraint, SketchEntity } from "@meercad/schema";
 
 /** Rectangle anchored at the origin with width/height dimensions. */

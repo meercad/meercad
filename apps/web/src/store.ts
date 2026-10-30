@@ -14,6 +14,7 @@ import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
 import { isCompact } from "./lib/layout";
+import { t } from "./lib/i18n";
 
 export interface DialogState {
   feature: Feature;
@@ -218,14 +219,14 @@ export function applyQuiet(...ops: DocOp[]): boolean {
 export function undo(): void {
   if (get().dialog) {
     cancelDialog();
-    toast("Undone: unsaved change");
+    toast(t("Undone: unsaved change"));
     return;
   }
   if (!docStore.canUndo) return;
   const before = docStore.doc;
   docStore.undo();
   syncDoc();
-  toast(`Undone: ${describeStep(docStore.doc, before)}`);
+  toast(t("Undone: {step}", { step: describeStep(docStore.doc, before) }));
 }
 
 export function redo(): void {
@@ -233,7 +234,7 @@ export function redo(): void {
   const before = docStore.doc;
   docStore.redo();
   syncDoc();
-  toast(`Redone: ${describeStep(before, docStore.doc)}`);
+  toast(t("Redone: {step}", { step: describeStep(before, docStore.doc) }));
 }
 
 /** A short name for what changed between two documents, for undo/redo feedback. */
@@ -243,11 +244,11 @@ function describeStep(from: MeercadDocument, to: MeercadDocument): string {
   const added = to.features.find((f) => !a.has(f.id));
   if (added) return featureName(added);
   const removed = from.features.find((f) => !b.has(f.id));
-  if (removed) return `delete ${featureName(removed)}`;
+  if (removed) return t("delete {name}", { name: featureName(removed) });
   const changed = to.features.find((f, i) => JSON.stringify(f) !== JSON.stringify(from.features.find((g) => g.id === f.id)) || from.features[i]?.id !== f.id);
   if (changed) return featureName(changed);
-  if (JSON.stringify(from.params) !== JSON.stringify(to.params)) return "variables";
-  return "change";
+  if (JSON.stringify(from.params) !== JSON.stringify(to.params)) return t("variables");
+  return t("change");
 }
 
 export const currentDoc = () => docStore.doc;
@@ -383,7 +384,7 @@ export function scheduleRebuild(): void {
         set({ building: false });
         const msg = e instanceof Error ? e.message : String(e);
         if (preview) set({ previewError: msg });
-        else toast(`Rebuild failed: ${msg}`, "error");
+        else toast(t("Rebuild failed: {msg}", { msg }), "error");
       },
     );
   });
@@ -593,7 +594,7 @@ export async function openProject(id: string): Promise<void> {
   }
   const p = await loadProject(id).catch(() => undefined);
   if (!p) {
-    toast("Project not found", "error");
+    toast(t("Project not found"), "error");
     closeTab(id, false);
     return;
   }
@@ -618,10 +619,10 @@ export function setDesignUnits(units: "mm" | "in"): void {
   if ((doc.units ?? "mm") === units) return;
   const { units: _old, ...rest } = doc;
   if (!apply({ type: "replace", doc: units === "in" ? { ...rest, units } : rest })) return;
-  toast(units === "in" ? "This design now uses inches" : "This design now uses millimetres");
+  toast(units === "in" ? t("This design now uses inches") : t("This design now uses millimetres"));
 }
 
-export async function newProject(doc: MeercadDocument = emptyDocument(), name = "Untitled part"): Promise<void> {
+export async function newProject(doc: MeercadDocument = emptyDocument(), name = t("Untitled part")): Promise<void> {
   await flushSave();
   // A blank design starts in the measuring system chosen in Settings.
   if (!doc.features.length && !Object.keys(doc.params).length && !doc.units && usePrefs.getState().units === "imperial") doc = { ...doc, units: "in" };
@@ -676,7 +677,7 @@ export async function renameProject(name: string): Promise<void> {
     retargetTab(p.id, meta);
     history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
   } catch (e) {
-    toast(`Could not rename: ${e instanceof Error ? e.message : String(e)}`, "error");
+    toast(t("Could not rename: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error");
   }
 }
 
@@ -722,7 +723,7 @@ export async function flushSave(withThumbnail = false): Promise<void> {
     set({ saveState: "saved" });
   } catch (e) {
     set({ saveState: "unsaved" });
-    toast(`Could not save: ${e instanceof Error ? e.message : String(e)}`, "error");
+    toast(t("Could not save: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error");
   }
 }
 

@@ -4,6 +4,7 @@
  * its fillet/chamfer, a hole or boss drops its region from the extrude, and anything else offers to
  * delete the feature that made it.
  */
+import { t, tn } from "./i18n";
 import type { DocOp, EdgeSelector, Feature } from "@meercad/schema";
 import type { Pick } from "@meercad/viewport";
 import { askConfirm } from "../components/Ask";
@@ -27,7 +28,7 @@ export function deleteBodies(bodies: string[]): void {
   const id = nextFeatureId(currentDoc(), "delete");
   if (apply({ type: "add_features", features: [{ id, op: "delete", bodies }] })) {
     useApp.setState({ selection: [] });
-    toast(`Deleted part${bodies.length > 1 ? "s" : ""} ${bodies.join(", ")} — undo with ⌘Z`);
+    toast(tn(bodies.length, "Deleted part {parts} — undo with ⌘Z", "Deleted parts {parts} — undo with ⌘Z", { parts: bodies.join(", ") }));
   }
 }
 
@@ -50,13 +51,13 @@ function cleanupEdgesOf(tag: string): DocOp[] {
 function opForFace(p: FacePick): { op: DocOp | null; extra?: DocOp[]; feature: Feature; what: string } | { problem: string; feature?: Feature } {
   const doc = currentDoc();
   const tag = p.tags[0];
-  if (!tag) return { problem: "This face has no name to work with" };
+  if (!tag) return { problem: t("This face has no name to work with") };
   const owner = doc.features.find((f) => f.id === tag.split(/[.@[]/)[0]);
-  if (!owner) return { problem: "Could not find the feature that made this face" };
+  if (!owner) return { problem: t("Could not find the feature that made this face") };
   const copy = /@([\w-]+)\.\d+$/.exec(tag);
   if (copy) {
     const pattern = doc.features.find((f) => f.id === copy[1]);
-    return { problem: `This is a copy made by ${pattern ? featureName(pattern) : copy[1]}. Lower its count, or delete the pattern.`, ...(pattern ? { feature: pattern } : {}) };
+    return { problem: t("This is a copy made by {name}. Lower its count, or delete the pattern.", { name: pattern ? featureName(pattern) : copy[1]! }), ...(pattern ? { feature: pattern } : {}) };
   }
   // Rounded / bevelled face: drop that edge from the fillet or chamfer.
   const edge = /^[\w-]+\.(?:round|bevel)\[(.+)\|(.+)\]$/.exec(tag);
@@ -64,9 +65,9 @@ function opForFace(p: FacePick): { op: DocOp | null; extra?: DocOp[]; feature: F
     const [, a, b] = edge as unknown as [string, string, string];
     const edges = (Array.isArray(owner.edges) ? owner.edges : [owner.edges]) as EdgeSelector[];
     const rest = edges.filter((s) => !sameEdge(s, a, b));
-    if (rest.length === edges.length) return { problem: `${featureName(owner)} selects its edges as a group, so one edge can't be removed alone.`, feature: owner };
+    if (rest.length === edges.length) return { problem: t("{name} selects its edges as a group, so one edge can't be removed alone.", { name: featureName(owner) }), feature: owner };
     return rest.length
-      ? { op: { type: "edit_feature", id: owner.id, patch: { edges: rest } }, feature: owner, what: `the ${owner.op} on this edge` }
+      ? { op: { type: "edit_feature", id: owner.id, patch: { edges: rest } }, feature: owner, what: owner.op === "fillet" ? t("the fillet on this edge") : t("the chamfer on this edge") }
       : { op: { type: "delete_feature", id: owner.id }, feature: owner, what: featureName(owner) };
   }
   // Hole or boss wall from a sketch circle (or other closed curve): drop its region from the extrude.
@@ -80,7 +81,7 @@ function opForFace(p: FacePick): { op: DocOp | null; extra?: DocOp[]; feature: F
       const outer = (key: string) => key.split("|")[0]!.split("+");
       const rest = current.filter((k) => !outer(k).includes(curveId));
       if (rest.length < current.length) {
-        const what = owner.op === "extrude" && owner.mode === "cut" ? "this hole" : "this shape";
+        const what = owner.op === "extrude" && owner.mode === "cut" ? t("this hole") : t("this shape");
         const op: DocOp = rest.length
           ? { type: "edit_feature", id: owner.id, patch: { profile: { sketch: sketchId, regions: rest } } }
           : { type: "delete_feature", id: owner.id };
@@ -88,7 +89,7 @@ function opForFace(p: FacePick): { op: DocOp | null; extra?: DocOp[]; feature: F
       }
     }
   }
-  return { problem: `This face is part of ${featureName(owner)}.`, feature: owner };
+  return { problem: t("This face is part of {name}.", { name: featureName(owner) }), feature: owner };
 }
 
 /** Delete key / menu entry for whatever is selected on the model. */
@@ -104,7 +105,7 @@ export async function deleteModelSelection(): Promise<void> {
 
   const faces = selection.filter((p): p is FacePick => p.kind === "face");
   if (!faces.length) {
-    toast(selection.some((p) => p.kind === "edge") ? "Edges can't be deleted on their own — select a face, or double-click to select the whole part" : "Nothing here can be deleted");
+    toast(selection.some((p) => p.kind === "edge") ? t("Edges can't be deleted on their own — select a face, or double-click to select the whole part") : t("Nothing here can be deleted"));
     return;
   }
   const ops: DocOp[] = [];
@@ -115,7 +116,7 @@ export async function deleteModelSelection(): Promise<void> {
     if ("problem" in r) {
       // Fall back to the owning feature, after asking.
       if (faces.length === 1 && r.feature) {
-        const ok = await askConfirm({ title: `Delete ${featureName(r.feature)}?`, message: `${r.problem} Deleting the whole feature removes everything it made.`, confirmLabel: `Delete ${featureName(r.feature)}`, danger: true });
+        const ok = await askConfirm({ title: t("Delete {name}?", { name: featureName(r.feature) }), message: t("{problem} Deleting the whole feature removes everything it made.", { problem: r.problem }), confirmLabel: t("Delete {name}", { name: featureName(r.feature) }), danger: true });
         if (ok) await deleteFeature(r.feature);
       } else toast(r.problem, "error");
       return;
@@ -133,7 +134,7 @@ export async function deleteModelSelection(): Promise<void> {
   if (ops.length === 1 || new Set(ops.map((o) => ("id" in o ? o.id : ""))).size === ops.length) {
     if (apply(...ops)) {
       useApp.setState({ selection: [] });
-      toast(`Deleted ${whats.length === 1 ? whats[0] : `${whats.length} items`} — undo with ⌘Z`);
+      toast(t("Deleted {what} — undo with ⌘Z", { what: whats.length === 1 ? whats[0]! : t("{n} items", { n: whats.length }) }));
     }
     return;
   }
@@ -144,5 +145,5 @@ export async function deleteModelSelection(): Promise<void> {
     if (!("problem" in r) && r.op && apply(r.op, ...(r.extra ?? []))) count++;
   }
   useApp.setState({ selection: [] });
-  toast(`Deleted ${count === 1 ? whats[0] : `${count} items`} — undo with ⌘Z`);
+  toast(t("Deleted {what} — undo with ⌘Z", { what: count === 1 ? whats[0]! : t("{n} items", { n: count }) }));
 }

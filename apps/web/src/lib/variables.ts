@@ -1,10 +1,12 @@
 /** How variables are grouped in the Variables panel and in the value picker. */
 import { referencedNames } from "@meercad/model";
 import type { Expr } from "@meercad/schema";
+import { t } from "./i18n";
 
 export type VariableGroup = "own" | "calculated" | "auto";
 
-export const GROUP_LABEL: Record<VariableGroup, string> = { own: "Your variables", calculated: "Calculated", auto: "Automatic" };
+export const GROUP_LABEL: Record<VariableGroup, string> = { own: t("Your variables"), calculated: t("Calculated"), auto: t("Automatic") }
+;
 export const GROUP_ORDER: VariableGroup[] = ["own", "calculated", "auto"];
 
 /**

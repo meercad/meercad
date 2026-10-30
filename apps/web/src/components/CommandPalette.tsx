@@ -13,6 +13,7 @@ import { Kbd } from "./Kbd";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleTheme } from "./TopBar";
 import { desktop } from "../lib/persistence";
+import { t } from "../lib/i18n";
 
 interface Command {
   label: string;
@@ -22,23 +23,24 @@ interface Command {
 }
 
 const SKETCH_TOOLS: [Exclude<SketchTool, "select">, string][] = [
-  ["line", "Line"],
-  ["rect", "Rectangle"],
-  ["rect_center", "Center rectangle"],
-  ["circle", "Circle"],
-  ["arc", "3-point arc"],
-  ["arc_center", "Center arc"],
-  ["polygon", "Polygon"],
-  ["spline", "Spline"],
-  ["point", "Point"],
-  ["trim", "Trim"],
-  ["fillet", "Round a corner"],
-  ["chamfer", "Bevel a corner"],
-  ["offset", "Offset curves"],
-  ["pattern", "Repeat curves (pattern)"],
-  ["dimension", "Dimension"],
-  ["project", "Project model edges"],
+  ["line", t("Line")],
+  ["rect", t("Rectangle")],
+  ["rect_center", t("Center rectangle")],
+  ["circle", t("Circle")],
+  ["arc", t("3-point arc")],
+  ["arc_center", t("Center arc")],
+  ["polygon", t("Polygon")],
+  ["spline", t("Spline")],
+  ["point", t("Point")],
+  ["trim", t("Trim")],
+  ["fillet", t("Round a corner")],
+  ["chamfer", t("Bevel a corner")],
+  ["offset", t("Offset curves")],
+  ["pattern", t("Repeat curves (pattern)")],
+  ["dimension", t("Dimension")],
+  ["project", t("Project model edges")],
 ];
+const G = { sketch: t("Sketch"), constraint: t("Constraint"), modeling: t("Modeling"), edit: t("Edit"), view: t("View"), file: t("File"), help: t("Help") };
 const kbd = (a: Action) => {
   const k = keyFor(a);
   return k ? { kbd: k } : {};
@@ -47,15 +49,15 @@ const kbd = (a: Action) => {
 /** Subsequence match with a score favouring word starts and contiguous runs. */
 function score(q: string, text: string): number {
   if (!q) return 1;
-  const t = text.toLowerCase();
+  const lower = text.toLowerCase();
   let ti = 0;
   let s = 0;
   let run = 0;
   for (const ch of q.toLowerCase()) {
-    const i = t.indexOf(ch, ti);
+    const i = lower.indexOf(ch, ti);
     if (i < 0) return 0;
     run = i === ti ? run + 1 : 1;
-    s += run + (i === 0 || t[i - 1] === " " ? 3 : 0);
+    s += run + (i === 0 || lower[i - 1] === " " ? 3 : 0);
     ti = i + 1;
   }
   return s;
@@ -87,45 +89,45 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
     const vp = () => getViewport();
     const list: Command[] = [];
     if (screen === "editor" && sketchId) {
-      for (const [tool, label] of SKETCH_TOOLS) list.push({ group: "Sketch", label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
-      for (const c of CONSTRAINT_TOOLS) list.push({ group: "Constraint", label: c.label, ...(c.key ? { kbd: c.key } : {}), run: () => applyConstraint(c.type) });
-      list.push({ group: "Sketch", label: "Toggle construction", ...kbd("sketch.construction"), run: toggleConstruction }, { group: "Sketch", label: "Finish sketch", kbd: "↵", run: closeSketch });
+      for (const [tool, label] of SKETCH_TOOLS) list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
+      for (const c of CONSTRAINT_TOOLS) list.push({ group: G.constraint, label: c.label, ...(c.key ? { kbd: c.key } : {}), run: () => applyConstraint(c.type) });
+      list.push({ group: G.sketch, label: t("Toggle construction"), ...kbd("sketch.construction"), run: toggleConstruction }, { group: G.sketch, label: t("Finish sketch"), kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {
-      for (const op of TOOLBAR) list.push({ group: "Modeling", label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
-      list.push({ group: "Modeling", label: "Measure", ...kbd("measure"), run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
+      for (const op of TOOLBAR) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
+      list.push({ group: G.modeling, label: t("Measure"), ...kbd("measure"), run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
     }
     if (screen === "editor") {
       list.push(
-        { group: "Edit", label: "Undo", kbd: "Mod+Z", run: undo },
-        { group: "Edit", label: "Redo", kbd: "Shift+Mod+Z", run: redo },
-        { group: "View", label: "Fit all", ...kbd("fit"), run: () => vp()?.fit() },
-        { group: "View", label: "Isometric view", ...kbd("view.iso"), run: () => vp()?.setView("iso") },
-        { group: "View", label: "Front view", ...kbd("view.front"), run: () => vp()?.setView("front") },
-        { group: "View", label: "Back view", ...kbd("view.back"), run: () => vp()?.setView("back") },
-        { group: "View", label: "Top view", ...kbd("view.top"), run: () => vp()?.setView("top") },
-        { group: "View", label: "Bottom view", ...kbd("view.bottom"), run: () => vp()?.setView("bottom") },
-        { group: "View", label: "Right view", ...kbd("view.right"), run: () => vp()?.setView("right") },
-        { group: "View", label: "Left view", ...kbd("view.left"), run: () => vp()?.setView("left") },
-        { group: "View", label: "Toggle orthographic", run: () => vp()?.setProjection(vp()?.projection === "orthographic" ? "perspective" : "orthographic") },
-        { group: "View", label: "Toggle planes", run: () => useApp.setState((s) => ({ showPlanes: !s.showPlanes })) },
-        { group: "File", label: "Export STL", run: () => void exportMesh("stl") },
-        { group: "File", label: "Export 3MF", run: () => void exportMesh("3mf") },
-        { group: "File", label: "Export STEP", run: () => void exportStep() },
-        { group: "File", label: "Technical drawing (PDF, SVG, DXF)", run: openDrawing },
-        { group: "Modeling", label: "Check whether parts overlap (interference)", run: () => void checkInterference() },
-        { group: "File", label: "Save copy as .meercad", kbd: "Shift+Mod+S", run: saveFile },
-        { group: "File", label: "All projects", run: goHome },
+        { group: G.edit, label: t("Undo"), kbd: "Mod+Z", run: undo },
+        { group: G.edit, label: t("Redo"), kbd: "Shift+Mod+Z", run: redo },
+        { group: G.view, label: t("Fit all"), ...kbd("fit"), run: () => vp()?.fit() },
+        { group: G.view, label: t("Isometric view"), ...kbd("view.iso"), run: () => vp()?.setView("iso") },
+        { group: G.view, label: t("Front view"), ...kbd("view.front"), run: () => vp()?.setView("front") },
+        { group: G.view, label: t("Back view"), ...kbd("view.back"), run: () => vp()?.setView("back") },
+        { group: G.view, label: t("Top view"), ...kbd("view.top"), run: () => vp()?.setView("top") },
+        { group: G.view, label: t("Bottom view"), ...kbd("view.bottom"), run: () => vp()?.setView("bottom") },
+        { group: G.view, label: t("Right view"), ...kbd("view.right"), run: () => vp()?.setView("right") },
+        { group: G.view, label: t("Left view"), ...kbd("view.left"), run: () => vp()?.setView("left") },
+        { group: G.view, label: t("Toggle orthographic"), run: () => vp()?.setProjection(vp()?.projection === "orthographic" ? "perspective" : "orthographic") },
+        { group: G.view, label: t("Toggle planes"), run: () => useApp.setState((s) => ({ showPlanes: !s.showPlanes })) },
+        { group: G.file, label: t("Export STL"), run: () => void exportMesh("stl") },
+        { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
+        { group: G.file, label: t("Export STEP"), run: () => void exportStep() },
+        { group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing },
+        { group: G.modeling, label: t("Check whether parts overlap (interference)"), run: () => void checkInterference() },
+        { group: G.file, label: t("Save copy as .meercad"), kbd: "Shift+Mod+S", run: saveFile },
+        { group: G.file, label: t("All projects"), run: goHome },
       );
     }
     list.push(
-      { group: "File", label: "New part", kbd: "Mod+N", run: () => void newProject() },
-      { group: "File", label: "Import / open file", kbd: "Mod+O", run: () => void importFile() },
-      { group: "Help", label: "Help & guides", run: onHelp },
-      { group: "Help", label: "Keyboard shortcuts", kbd: "?", run: onShortcuts },
-      { group: "Help", label: "Introduction tour", run: onTour },
-      { group: "Help", label: "Settings", kbd: "Mod+,", run: () => window.dispatchEvent(new Event("meercad:settings")) },
-      { group: "Help", label: "Toggle dark mode", run: toggleTheme },
-      ...(desktop ? [{ group: "Help", label: "Check for updates", run: () => void desktop!.updates.check() }] : []),
+      { group: G.file, label: t("New part"), kbd: "Mod+N", run: () => void newProject() },
+      { group: G.file, label: t("Import / open file"), kbd: "Mod+O", run: () => void importFile() },
+      { group: G.help, label: t("Help & guides"), run: onHelp },
+      { group: G.help, label: t("Keyboard shortcuts"), kbd: "?", run: onShortcuts },
+      { group: G.help, label: t("Introduction tour"), run: onTour },
+      { group: G.help, label: t("Settings"), kbd: "Mod+,", run: () => window.dispatchEvent(new Event("meercad:settings")) },
+      { group: G.help, label: t("Toggle dark mode"), run: toggleTheme },
+      ...(desktop ? [{ group: G.help, label: t("Check for updates"), run: () => void desktop!.updates.check() }] : []),
     );
     return list;
   }, [sketchId, screen, keys, onHelp, onShortcuts, onTour]);
@@ -144,13 +146,13 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
   };
   return (
     <div className="modal-backdrop palette-backdrop" onPointerDown={() => setOpen(false)}>
-      <div className="palette" onPointerDown={(e) => e.stopPropagation()} role="dialog" aria-label="Command search">
+      <div className="palette" onPointerDown={(e) => e.stopPropagation()} role="dialog" aria-label={t("Command search")}>
         <div className="palette-input">
           <Search />
           <input
             ref={input}
             value={q}
-            placeholder="Search commands…"
+            placeholder={t("Search commands…")}
             onChange={(e) => {
               setQ(e.target.value);
               setI(0);
@@ -174,7 +176,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
               {c.kbd ? <Kbd k={c.kbd} /> : null}
             </button>
           ))}
-          {!results.length ? <div className="empty">No matching command</div> : null}
+          {!results.length ? <div className="empty">{t("No matching command")}</div> : null}
         </div>
       </div>
     </div>

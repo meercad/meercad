@@ -9,6 +9,7 @@ import notices from "../../../../THIRD_PARTY_NOTICES.md?raw";
 import lgpl from "../../../../licenses/LGPL-2.1.txt?raw";
 import license from "../../../../LICENSE?raw";
 import { desktop } from "../lib/persistence";
+import { t } from "../lib/i18n";
 
 const SOURCE = "https://github.com/torbenberger/meercad";
 type Tab = "about" | "privacy" | "licenses";
@@ -38,16 +39,16 @@ export function AboutDialog() {
 
   if (!tab) return null;
   const tabs: [Tab, string, ReactNode][] = [
-    ["about", "About", <Info key="i" />],
-    ["privacy", "Privacy", <ShieldCheck key="p" />],
-    ["licenses", "Licences", <Scale key="l" />],
+    ["about", t("about::About"), <Info key="i" />],
+    ["privacy", t("Privacy"), <ShieldCheck key="p" />],
+    ["licenses", t("Licences"), <Scale key="l" />],
   ];
   return (
     <div className="modal-backdrop" onPointerDown={() => setTab(null)}>
-      <div className="modal settings about" role="dialog" aria-label="About meerCAD" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="modal settings about" role="dialog" aria-label={t("About meerCAD")} onPointerDown={(e) => e.stopPropagation()}>
         <header className="settings-head">
           <h2>meerCAD{version ? <span className="muted"> {version}</span> : null}</h2>
-          <button className="icon-btn" onClick={() => setTab(null)} title="Close (Esc)">
+          <button className="icon-btn" onClick={() => setTab(null)} title={t("Close (Esc)")}>
             <X />
           </button>
         </header>
@@ -62,30 +63,36 @@ export function AboutDialog() {
         {tab === "about" ? (
           <>
             <section>
-              <p>Free parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.</p>
-              <p className="muted">© 2026 Torben Berger. meerCAD is free to use, also commercially. Its source is public under the Functional Source License 1.1: anything goes except building a competing product from it, and each release becomes Apache-2.0 two years after it ships.</p>
+              <p>{t("Free parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.")}</p>
+              <p className="muted">
+                {t(
+                  "© 2026 Torben Berger. meerCAD is free to use, also commercially. Its source is public under the Functional Source License 1.1: anything goes except building a competing product from it, and each release becomes Apache-2.0 two years after it ships.",
+                )}
+              </p>
               <p>
                 <a href={SOURCE} target="_blank" rel="noreferrer">
-                  Source code on GitHub
+                  {t("Source code on GitHub")}
                 </a>
               </p>
             </section>
             <section>
               <h3>
-                <FileText /> No warranty
+                <FileText /> {t("No warranty")}
               </h3>
               <p className="muted">
-                meerCAD is provided as is, without warranty of any kind. Check dimensions, fits and strength before you print, mill or use a part, especially where it carries loads or matters for safety. The authors are not liable for damage arising from designs made with meerCAD or from parts made from them, as far as the law allows.
+                {t(
+                  "meerCAD is provided as is, without warranty of any kind. Check dimensions, fits and strength before you print, mill or use a part, especially where it carries loads or matters for safety. The authors are not liable for damage arising from designs made with meerCAD or from parts made from them, as far as the law allows.",
+                )}
               </p>
             </section>
             <section>
               <h3>
-                <ShieldCheck /> Privacy
+                <ShieldCheck /> {t("Privacy")}
               </h3>
               <p className="muted">
-                meerCAD collects no personal data: no account, no analytics, no tracking. Your designs stay on your device.{" "}
+                {t("meerCAD collects no personal data: no account, no analytics, no tracking. Your designs stay on your device.")}{" "}
                 <button className="link" onClick={() => setTab("privacy")}>
-                  Read the privacy policy
+                  {t("Read the privacy policy")}
                 </button>
               </p>
             </section>
@@ -98,9 +105,11 @@ export function AboutDialog() {
           <section className="doc">
             <Markdown text={notices} />
             <details>
-              <summary>Open CASCADE and PlaneGCS: GNU Lesser General Public License 2.1</summary>
+              <summary>{t("Open CASCADE and PlaneGCS: GNU Lesser General Public License 2.1")}</summary>
               <p className="muted">
-                On iPhone and iPad the WebAssembly modules are part of the signed app and cannot be swapped there. The full source of meerCAD is public, so you can build the app yourself with your own build of either library.
+                {t(
+                  "On iPhone and iPad the WebAssembly modules are part of the signed app and cannot be swapped there. The full source of meerCAD is public, so you can build the app yourself with your own build of either library.",
+                )}
               </p>
               <pre className="licence-text">{lgpl}</pre>
             </details>

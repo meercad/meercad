@@ -48,6 +48,7 @@ import { importFile } from "./io";
 import { Kbd } from "./Kbd";
 import { showMenu } from "./Menu";
 import { canScan, scanObject } from "../lib/scan";
+import { t } from "../lib/i18n";
 
 /** Whether this device can scan objects (iPhone/iPad with LiDAR). */
 function useCanScan(): boolean {
@@ -100,68 +101,68 @@ function useEntries(): RailEntry[] {
   const scan = useCanScan();
 
   if (sketchId) {
-    const t = ui.tool;
+    const cur = ui.tool;
     return [
-      sketchTool("select", MousePointer2, "Select", t),
-      sketchTool("line", Slash, "Line", t),
+      sketchTool("select", MousePointer2, t("Select"), cur),
+      sketchTool("line", Slash, t("Line"), cur),
       {
         id: "rects",
         icon: Square,
-        label: "Rectangle",
-        tools: [sketchTool("rect", Square, "Corner rectangle", t), sketchTool("rect_center", SquareDashed, "Center rectangle", t)],
+        label: t("Rectangle"),
+        tools: [sketchTool("rect", Square, t("Corner rectangle"), cur), sketchTool("rect_center", SquareDashed, t("Center rectangle"), cur)],
       },
-      sketchTool("circle", Circle, "Circle", t),
-      { id: "arcs", icon: Spline, label: "Arc", tools: [sketchTool("arc", Spline, "3-point arc", t), sketchTool("arc_center", DraftingCompass, "Center arc", t)] },
-      sketchTool("spline", Waves, "Spline", t),
-      { id: "shapes", icon: Shapes, label: "More", tools: [sketchTool("polygon", Hexagon, "Polygon", t), sketchTool("point", Dot, "Point", t)] },
+      sketchTool("circle", Circle, t("Circle"), cur),
+      { id: "arcs", icon: Spline, label: t("Arc"), tools: [sketchTool("arc", Spline, t("3-point arc"), cur), sketchTool("arc_center", DraftingCompass, t("Center arc"), cur)] },
+      sketchTool("spline", Waves, t("Spline"), cur),
+      { id: "shapes", icon: Shapes, label: t("More"), tools: [sketchTool("polygon", Hexagon, t("Polygon"), cur), sketchTool("point", Dot, t("Point"), cur)] },
       "sep",
-      sketchTool("dimension", Ruler, "Dimension", t),
-      sketchTool("trim", Scissors, "Trim", t),
+      sketchTool("dimension", Ruler, t("tool::Dimension"), cur),
+      sketchTool("trim", Scissors, t("Trim"), cur),
       {
         id: "sketch-tools",
         icon: Wrench,
-        label: "Tools",
+        label: t("Tools"),
         tools: [
-          sketchTool("fillet", SquareRoundCorner, "Round a corner", t),
-          sketchTool("chamfer", Triangle, "Bevel a corner", t),
-          sketchTool("offset", CopyPlus, "Offset curves", t),
-          sketchTool("pattern", Grid3x3, "Repeat curves", t),
-          sketchTool("project", Waypoints, "Project model edges", t),
-          { id: "construction", icon: Crosshair, label: "Construction geometry", ...withKbd(keyFor("sketch.construction")), active: ui.construction, run: toggleConstruction },
+          sketchTool("fillet", SquareRoundCorner, t("Round a corner"), cur),
+          sketchTool("chamfer", Triangle, t("Bevel a corner"), cur),
+          sketchTool("offset", CopyPlus, t("Offset curves"), cur),
+          sketchTool("pattern", Grid3x3, t("Repeat curves"), cur),
+          sketchTool("project", Waypoints, t("Project model edges"), cur),
+          { id: "construction", icon: Crosshair, label: t("Construction geometry"), ...withKbd(keyFor("sketch.construction")), active: ui.construction, run: toggleConstruction },
         ],
       },
       "sep",
-      { id: "finish", icon: Check, label: "Finish", kbd: "↵", primary: true, run: closeSketch },
+      { id: "finish", icon: Check, label: t("Finish"), kbd: "↵", primary: true, run: closeSketch },
     ];
   }
 
   return [
     feature("sketch", activeOp),
     "sep",
-    { id: "create", icon: Box, label: "Create", tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("loft", activeOp), feature("sweep", activeOp), feature("rib", activeOp), feature("text", activeOp), feature("standard_part", activeOp), feature("gear", activeOp), feature("plane", activeOp)] },
-    { id: "modify", icon: SquarePen, label: "Modify", tools: [feature("fillet", activeOp), feature("chamfer", activeOp), feature("shell", activeOp), feature("draft", activeOp), feature("hole", activeOp), feature("thread", activeOp), feature("split", activeOp), feature("boolean", activeOp)] },
+    { id: "create", icon: Box, label: t("Create"), tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("loft", activeOp), feature("sweep", activeOp), feature("rib", activeOp), feature("text", activeOp), feature("standard_part", activeOp), feature("gear", activeOp), feature("plane", activeOp)] },
+    { id: "modify", icon: SquarePen, label: t("Modify"), tools: [feature("fillet", activeOp), feature("chamfer", activeOp), feature("shell", activeOp), feature("draft", activeOp), feature("hole", activeOp), feature("thread", activeOp), feature("split", activeOp), feature("boolean", activeOp)] },
     {
       id: "transform",
       icon: Move3d,
-      label: "Transform",
+      label: t("Transform"),
       tools: [feature("transform", activeOp), feature("align", activeOp), feature("scale", activeOp), feature("linear_pattern", activeOp), feature("circular_pattern", activeOp), feature("mirror", activeOp)],
     },
     "sep",
     {
       id: "joints",
       icon: Link2,
-      label: "Joints",
+      label: t("Joints"),
       ...withKbd(keyFor("joints")),
-      hint: "Joints: parts that turn or slide; drag them to try",
+      hint: t("Joints: parts that turn or slide; drag them to try"),
       active: joints,
       run: toggleJoints,
     },
     {
       id: "measure",
       icon: Ruler,
-      label: "Measure",
+      label: t("Measure"),
       ...withKbd(keyFor("measure")),
-      hint: "Distances, angles and radii",
+      hint: t("Distances, angles and radii"),
       active: measure,
       run: () => useApp.setState((s) => ({ measure: { active: !s.measure.active, picks: [], result: null }, dialog: null })),
     },
@@ -170,16 +171,16 @@ function useEntries(): RailEntry[] {
           {
             id: "scan",
             icon: ScanLine,
-            label: "Scan",
+            label: t("Scan"),
             tools: [
-              { id: "scan-object", icon: Orbit, label: "Object (photos)", hint: "Walk all around an object; fine detail, takes a few minutes", run: () => void scanObject("object") },
-              { id: "scan-lidar", icon: Box, label: "Object (LiDAR)", hint: "Sweep around an object with LiDAR; quick and coarser, reachable sides are enough", run: () => void scanObject("lidar") },
-              { id: "scan-surface", icon: Mountain, label: "Surface (LiDAR)", hint: "Sweep over a surface, e.g. a recess a part must fit into", run: () => void scanObject("surface") },
+              { id: "scan-object", icon: Orbit, label: t("Object (photos)"), hint: t("Walk all around an object; fine detail, takes a few minutes"), run: () => void scanObject("object") },
+              { id: "scan-lidar", icon: Box, label: t("Object (LiDAR)"), hint: t("Sweep around an object with LiDAR; quick and coarser, reachable sides are enough"), run: () => void scanObject("lidar") },
+              { id: "scan-surface", icon: Mountain, label: t("Surface (LiDAR)"), hint: t("Sweep over a surface, e.g. a recess a part must fit into"), run: () => void scanObject("surface") },
             ],
           },
         ]
       : []),
-    { id: "import", icon: Import, label: "Import", kbd: "Mod+O", hint: "STEP, STL, 3MF, OBJ, DXF or SVG", run: () => void importFile() },
+    { id: "import", icon: Import, label: t("Import"), kbd: "Mod+O", hint: t("STEP, STL, 3MF, OBJ, DXF or SVG"), run: () => void importFile() },
   ];
 }
 
@@ -245,19 +246,19 @@ export function Toolbar() {
   }, [compact, entryKey]);
 
   return (
-    <nav className="toolbar rail" ref={rail} aria-label="Tools" onPointerLeave={() => hover(null)} data-more={more}>
+    <nav className="toolbar rail" ref={rail} aria-label={t("Tools")} onPointerLeave={() => hover(null)} data-more={more}>
       <div className="rail-items" ref={scroller}>
       {/* Phone: the panels that have no room on screen open from the bar. */}
       {compact ? (
         sketching ? (
           <button className={`tool ${constraints ? "active" : ""}`} onClick={() => usePhoneSheets.setState({ constraints: !constraints })}>
             <Link2 />
-            <span>Constrain</span>
+            <span>{t("Constrain")}</span>
           </button>
         ) : (
           <button className={`tool ${sideOpen ? "active" : ""}`} onClick={() => toggleSide()}>
             <Layers />
-            <span>Parts</span>
+            <span>{t("Parts")}</span>
           </button>
         )
       ) : null}

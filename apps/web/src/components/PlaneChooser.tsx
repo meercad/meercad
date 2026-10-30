@@ -4,6 +4,7 @@
  */
 import { useEffect, useRef } from "react";
 import type { PlaneView, Viewport } from "@meercad/viewport";
+import { t } from "../lib/i18n";
 import { startSketch, useApp } from "../store";
 
 export const PLANE_COLORS: Record<string, number> = { "origin.XY": 0x3b82f6, "origin.XZ": 0x22a35a, "origin.YZ": 0xe5484d };
@@ -61,8 +62,8 @@ export function PlaneChooser({ viewport, planes }: { viewport: Viewport; planes:
           </button>
         ))}
       </div>
-      <div className="plane-bar" role="toolbar" aria-label="Sketch plane">
-        <span>Sketch on</span>
+      <div className="plane-bar" role="toolbar" aria-label={t("Sketch plane")}>
+        <span>{t("Sketch on")}</span>
         {planes
           .filter((p) => p.id.startsWith("origin."))
           .map((p) => (
@@ -71,9 +72,9 @@ export function PlaneChooser({ viewport, planes }: { viewport: Viewport; planes:
               {p.label}
             </button>
           ))}
-        <span className="muted">or click a flat face</span>
-        <button className="plane-bar-cancel" onClick={() => useApp.setState({ pickingSketchPlane: false })} title="Cancel (Esc)">
-          Cancel
+        <span className="muted">{t("or click a flat face")}</span>
+        <button className="plane-bar-cancel" onClick={() => useApp.setState({ pickingSketchPlane: false })} title={t("Cancel (Esc)")}>
+          {t("Cancel")}
         </button>
       </div>
     </>

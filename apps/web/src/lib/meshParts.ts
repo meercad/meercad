@@ -5,6 +5,7 @@
  * moving it keeps it one.
  */
 import type { Feature } from "@meercad/schema";
+import { t } from "./i18n";
 
 export function meshBodyIds(features: readonly Feature[], meshes: readonly { bodyId: string; faceTags: string[][] }[]): Set<string> {
   const ids = features.filter((f) => f.op === "import" && f.format === "stl").map((f) => `${f.id}.`);
@@ -17,4 +18,4 @@ export function meshBodyIds(features: readonly Feature[], meshes: readonly { bod
 /** Feature tools that work on single faces or edges, which mesh parts do not offer. */
 export const FACE_TOOLS = new Set(["fillet", "chamfer", "shell", "thread", "hole", "extrude", "sketch", "plane"]);
 
-export const MESH_HINT = "Imported meshes are edited as whole parts: combine, cut, move or pattern them. For editable faces, right-click or long-press the part: Convert to editable body, or Rebuild with features.";
+export const MESH_HINT = t("Imported meshes are edited as whole parts: combine, cut, move or pattern them. For editable faces, right-click or long-press the part: Convert to editable body, or Rebuild with features.");

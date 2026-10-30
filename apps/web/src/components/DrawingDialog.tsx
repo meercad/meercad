@@ -5,20 +5,37 @@
  */
 import { FileDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { layoutSheet, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type SheetView } from "@meercad/io";
+import { layoutSheet, SHEET_LABELS, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type SheetLabels, type SheetView } from "@meercad/io";
 import { billOfMaterials, bomCsv, drawingDocument } from "@meercad/model";
 import { partName } from "../lib/features";
 import { currentDoc, kernel, toast, useApp } from "../store";
 import { baseName, download } from "./io";
+import { t } from "../lib/i18n";
 
 type ViewName = SheetView["name"];
 const VIEWS: [ViewName, string][] = [
-  ["front", "Front"],
-  ["top", "From above"],
-  ["left", "From the left"],
-  ["iso", "Isometric"],
-  ["section", "Section A-A"],
+  ["front", t("drawing::Front")],
+  ["top", t("From above")],
+  ["left", t("From the left")],
+  ["iso", t("Isometric")],
+  ["section", t("Section A-A")],
 ];
+
+/** The sheet's own words (title block, parts list header) in the interface language. */
+const SHEET_WORDS: SheetLabels = {
+  scale: t("sheet::Scale"),
+  material: t("sheet::Material"),
+  number: t("sheet::Number"),
+  sheet: t("sheet::Sheet"),
+  drawnBy: t("sheet::Drawn by"),
+  date: t("sheet::Date"),
+  projection: t("sheet::Projection"),
+  firstAngle: t("sheet::ISO E (first angle)"),
+  units: t("sheet::Units"),
+  pos: t("sheet::Pos"),
+  qty: t("sheet::Qty"),
+  name: t("sheet::Name"),
+} satisfies Record<keyof typeof SHEET_LABELS, string>;
 
 /** Opens the drawing dialog (from menus and the command palette). */
 export const openDrawing = () => window.dispatchEvent(new Event("meercad:drawing"));
@@ -54,7 +71,7 @@ export function DrawingDialog() {
     if (!open) return;
     if (!output?.report.bodies.length) {
       setViews(null);
-      setError("There is no part to draw yet.");
+      setError(t("There is no part to draw yet."));
       return;
     }
     let live = true;
@@ -70,7 +87,7 @@ export function DrawingDialog() {
 
   if (!open) return null;
   const bom = billOfMaterials(output?.report.bodies ?? [], (id) => partName(id, doc.features), doc.partMaterials ?? {});
-  const sheet = views ? layoutSheet(views, { paper, ...(withBom && bom.length > 1 ? { bom } : {}), title: { title: title || "Untitled", material, drawnBy, date: new Date().toLocaleDateString("sv") } }) : null;
+  const sheet = views ? layoutSheet(views, { paper, ...(withBom && bom.length > 1 ? { bom } : {}), title: { title: title || t("Untitled"), material, drawnBy, date: new Date().toLocaleDateString("sv") }, labels: SHEET_WORDS }) : null;
   const svg = sheet ? writeSheetSvg(sheet) : null;
   const name = `${baseName()}-drawing`;
   const save = (format: "pdf" | "svg" | "dxf") => {
@@ -78,34 +95,34 @@ export function DrawingDialog() {
     if (format === "pdf") download(`${name}.pdf`, writeSheetPdf(sheet) as BlobPart, "application/pdf");
     else if (format === "svg") download(`${name}.svg`, svg!, "image/svg+xml");
     else download(`${name}.dxf`, writeSheetDxf(sheet), "image/vnd.dxf");
-    toast(`Drawing saved as ${format.toUpperCase()} (scale ${sheet.scaleLabel})`);
+    toast(t("Drawing saved as {format} (scale {scale})", { format: format.toUpperCase(), scale: sheet.scaleLabel }));
   };
   return (
     <div className="modal-backdrop" onPointerDown={() => setOpen(false)}>
-      <div className="modal settings drawing-dialog" role="dialog" aria-label="Technical drawing" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="modal settings drawing-dialog" role="dialog" aria-label={t("Technical drawing")} onPointerDown={(e) => e.stopPropagation()}>
         <header className="settings-head">
-          <h2>Technical drawing</h2>
-          <button className="icon-btn" onClick={() => setOpen(false)} title="Close (Esc)">
+          <h2>{t("Technical drawing")}</h2>
+          <button className="icon-btn" onClick={() => setOpen(false)} title={t("Close (Esc)")}>
             <X />
           </button>
         </header>
         <div className="drawing-body">
-          <div className="drawing-preview">{error ? <div className="callout info">{error}</div> : svg ? <img alt="Drawing preview" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} /> : <span className="muted">Projecting the views…</span>}</div>
+          <div className="drawing-preview">{error ? <div className="callout info">{error}</div> : svg ? <img alt={t("Drawing preview")} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} /> : <span className="muted">{t("Projecting the views…")}</span>}</div>
           <div className="drawing-side col" style={{ gap: 10 }}>
             <label className="fld">
-              <span className="fld-label">Title</span>
+              <span className="fld-label">{t("Title")}</span>
               <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
             <label className="fld">
-              <span className="fld-label">Material</span>
-              <input className="field" value={material} placeholder="e.g. PETG, aluminium" onChange={(e) => setMaterial(e.target.value)} />
+              <span className="fld-label">{t("Material")}</span>
+              <input className="field" value={material} placeholder={t("e.g. PETG, aluminium")} onChange={(e) => setMaterial(e.target.value)} />
             </label>
             <label className="fld">
-              <span className="fld-label">Drawn by</span>
+              <span className="fld-label">{t("Drawn by")}</span>
               <input className="field" value={drawnBy} onChange={(e) => setDrawnBy(e.target.value)} />
             </label>
             <div className="fld">
-              <span className="fld-label">Sheet</span>
+              <span className="fld-label">{t("Sheet")}</span>
               <div className="segmented">
                 {(["A4", "A3", "A2"] as Paper[]).map((p) => (
                   <button key={p} className={p === paper ? "on" : ""} onClick={() => setPaper(p)}>
@@ -115,7 +132,7 @@ export function DrawingDialog() {
               </div>
             </div>
             <div className="fld">
-              <span className="fld-label">Views</span>
+              <span className="fld-label">{t("Views")}</span>
               {VIEWS.map(([v, label]) => (
                 <label className="checkbox" key={v}>
                   <input type="checkbox" checked={chosen.includes(v)} onChange={(e) => setChosen((c) => (e.target.checked ? VIEWS.map(([x]) => x).filter((x) => c.includes(x) || x === v) : c.filter((x) => x !== v)))} /> {label}
@@ -124,10 +141,10 @@ export function DrawingDialog() {
             </div>
             {bom.length > 1 ? (
               <label className="checkbox">
-                <input type="checkbox" checked={withBom} onChange={(e) => setWithBom(e.target.checked)} /> Parts list on the sheet ({bom.length} lines)
+                <input type="checkbox" checked={withBom} onChange={(e) => setWithBom(e.target.checked)} /> {t("Parts list on the sheet ({n} lines)", { n: bom.length })}
               </label>
             ) : null}
-            {sheet ? <p className="muted small">Scale {sheet.scaleLabel} · first-angle projection (ISO E) · dashed lines are hidden edges.</p> : null}
+            {sheet ? <p className="muted small">{t("Scale {scale} · first-angle projection (ISO E) · dashed lines are hidden edges.", { scale: sheet.scaleLabel })}</p> : null}
             <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
               <button className="btn primary" disabled={!sheet} onClick={() => save("pdf")}>
                 <FileDown /> PDF
@@ -138,8 +155,8 @@ export function DrawingDialog() {
               <button className="btn" disabled={!sheet} onClick={() => save("dxf")}>
                 DXF
               </button>
-              <button className="btn" disabled={!bom.length} onClick={() => download(`${baseName()}-parts.csv`, bomCsv(bom), "text/csv")} title="Parts list for a spreadsheet">
-                Parts list CSV
+              <button className="btn" disabled={!bom.length} onClick={() => download(`${baseName()}-parts.csv`, bomCsv(bom), "text/csv")} title={t("Parts list for a spreadsheet")}>
+                {t("Parts list CSV")}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 /** Sketch editing operations shared by the toolbar, keyboard shortcuts and the editor. */
 import type { ComponentType, SVGProps } from "react";
 import type { ConstraintType, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
+import { t } from "../lib/i18n";
 import { apply, applyQuiet, currentDoc, toast, useApp } from "../store";
 import { Coincident, Collinear, Concentric, EqualIcon, Fix, Horizontal, Midpoint, Parallel, Perpendicular, Symmetric, Tangent, Vertical } from "./icons";
 import { setSketchSelection, useSketchUi, type SketchSel } from "./state";
@@ -39,18 +40,18 @@ export const setExternalKinds = (m: Map<string, string>) => (externalKinds = m);
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 export const CONSTRAINT_TOOLS: { type: string; icon: Icon; label: string; key?: string; hint: string }[] = [
-  { type: "coincident", icon: Coincident, label: "Coincident", key: "Shift+N", hint: "two points, or a point and a curve" },
-  { type: "hv", icon: Horizontal, label: "Horiz./Vert.", key: "Shift+V", hint: "lines or two points; picks the nearest axis" },
-  { type: "vertical", icon: Vertical, label: "Vertical", hint: "lines or two points" },
-  { type: "parallel", icon: Parallel, label: "Parallel", key: "Shift+A", hint: "two lines" },
-  { type: "perpendicular", icon: Perpendicular, label: "Perpendicular", key: "Shift+P", hint: "two lines" },
-  { type: "tangent", icon: Tangent, label: "Tangent", key: "Shift+T", hint: "a line and an arc/circle, or two arcs" },
-  { type: "equal", icon: EqualIcon, label: "Equal", key: "Shift+E", hint: "lines or circles/arcs" },
-  { type: "concentric", icon: Concentric, label: "Concentric", key: "Shift+C", hint: "two circles/arcs" },
-  { type: "midpoint", icon: Midpoint, label: "Midpoint", key: "Shift+M", hint: "a point and a line" },
-  { type: "collinear", icon: Collinear, label: "Collinear", hint: "two lines" },
-  { type: "symmetric", icon: Symmetric, label: "Symmetric", key: "Shift+S", hint: "two points and a line" },
-  { type: "fix", icon: Fix, label: "Lock", key: "Shift+L", hint: "points or curves" },
+  { type: "coincident", icon: Coincident, label: t("Coincident"), key: "Shift+N", hint: t("two points, or a point and a curve") },
+  { type: "hv", icon: Horizontal, label: t("Horiz./Vert."), key: "Shift+V", hint: t("lines or two points; picks the nearest axis") },
+  { type: "vertical", icon: Vertical, label: t("Vertical"), hint: t("lines or two points") },
+  { type: "parallel", icon: Parallel, label: t("Parallel"), key: "Shift+A", hint: t("two lines") },
+  { type: "perpendicular", icon: Perpendicular, label: t("Perpendicular"), key: "Shift+P", hint: t("two lines") },
+  { type: "tangent", icon: Tangent, label: t("Tangent"), key: "Shift+T", hint: t("a line and an arc/circle, or two arcs") },
+  { type: "equal", icon: EqualIcon, label: t("Equal"), key: "Shift+E", hint: t("lines or circles/arcs") },
+  { type: "concentric", icon: Concentric, label: t("Concentric"), key: "Shift+C", hint: t("two circles/arcs") },
+  { type: "midpoint", icon: Midpoint, label: t("Midpoint"), key: "Shift+M", hint: t("a point and a line") },
+  { type: "collinear", icon: Collinear, label: t("Collinear"), hint: t("two lines") },
+  { type: "symmetric", icon: Symmetric, label: t("Symmetric"), key: "Shift+S", hint: t("two points and a line") },
+  { type: "fix", icon: Fix, label: t("Lock"), key: "Shift+L", hint: t("points or curves") },
 ];
 
 /** Creates constraints of `type` from the current selection. */
@@ -66,10 +67,10 @@ export function applyConstraint(type: string): void {
   const taken = new Set<string>();
   const out: SketchConstraint[] = [];
   const id = () => freshId(sk, "c", taken);
-  const need = (msg: string) => toast(`${CONSTRAINT_TOOLS.find((c) => c.type === type)?.label}: select ${msg}`, "error");
+  const need = (msg: string) => toast(t("{tool}: select {what}", { tool: CONSTRAINT_TOOLS.find((c) => c.type === type)?.label ?? "", what: msg }), "error");
 
   if (type === "concentric") {
-    if (rounds.length < 2) return need("two circles or arcs");
+    if (rounds.length < 2) return need(t("two circles or arcs"));
     for (let i = 1; i < rounds.length; i++) out.push({ id: id(), type: "coincident", a: `${rounds[0]}.center`, b: `${rounds[i]}.center` });
     if (writeSketch({ entities: sk.entities, constraints: [...sk.constraints, ...out] })) setSketchSelection([]);
     return;
@@ -90,7 +91,7 @@ export function applyConstraint(type: string): void {
       const [a, b] = [solvedAt(pts[0]!), solvedAt(pts[1]!)];
       out.push({ id: id(), type: Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]) ? "horizontal_points" : "vertical_points", a: pts[0]!, b: pts[1]! });
     }
-    if (!out.length) return need("lines or two points");
+    if (!out.length) return need(t("lines or two points"));
     if (writeSketch({ entities: sk.entities, constraints: [...sk.constraints, ...out] })) setSketchSelection([]);
     return;
   }
@@ -99,35 +100,35 @@ export function applyConstraint(type: string): void {
       if (pts.length >= 2) for (let i = 1; i < pts.length; i++) out.push({ id: id(), type: "coincident", a: pts[0]!, b: pts[i]! });
       else if (pts.length === 1 && curves.length >= 1) for (const c of curves) out.push({ id: id(), type: "point_on", point: pts[0]!, curve: c });
       else if (rounds.length === 2) out.push({ id: id(), type: "coincident", a: `${rounds[0]}.center`, b: `${rounds[1]}.center` });
-      else return need("two points, a point and a curve, or two circles (concentric)");
+      else return need(t("two points, a point and a curve, or two circles (concentric)"));
       break;
     case "horizontal":
     case "vertical":
       if (lines.length) for (const l of lines) out.push({ id: id(), type: type as "horizontal" | "vertical", line: l });
       else if (pts.length === 2) out.push({ id: id(), type: type === "horizontal" ? "horizontal_points" : "vertical_points", a: pts[0]!, b: pts[1]! });
-      else return need("lines or two points");
+      else return need(t("lines or two points"));
       break;
     case "parallel":
     case "perpendicular":
     case "collinear":
-      if (lines.length < 2) return need("two lines");
+      if (lines.length < 2) return need(t("two lines"));
       for (let i = 1; i < lines.length; i++) out.push({ id: id(), type: type as "parallel" | "perpendicular" | "collinear", a: lines[0]!, b: lines[i]! });
       break;
     case "tangent":
-      if (curves.length !== 2 || !rounds.length) return need("a line and an arc/circle, or two arcs/circles");
+      if (curves.length !== 2 || !rounds.length) return need(t("a line and an arc/circle, or two arcs/circles"));
       out.push({ id: id(), type: "tangent", a: curves[0]!, b: curves[1]! });
       break;
     case "equal":
       if (lines.length >= 2) for (let i = 1; i < lines.length; i++) out.push({ id: id(), type: "equal", a: lines[0]!, b: lines[i]! });
       else if (rounds.length >= 2) for (let i = 1; i < rounds.length; i++) out.push({ id: id(), type: "equal", a: rounds[0]!, b: rounds[i]! });
-      else return need("two lines or two circles/arcs");
+      else return need(t("two lines or two circles/arcs"));
       break;
     case "midpoint":
-      if (pts.length !== 1 || lines.length !== 1) return need("a point and a line");
+      if (pts.length !== 1 || lines.length !== 1) return need(t("a point and a line"));
       out.push({ id: id(), type: "midpoint", point: pts[0]!, line: lines[0]! });
       break;
     case "symmetric":
-      if (pts.length !== 2 || lines.length !== 1) return need("two points and a line");
+      if (pts.length !== 2 || lines.length !== 1) return need(t("two points and a line"));
       out.push({ id: id(), type: "symmetric", a: pts[0]!, b: pts[1]!, axis: lines[0]! });
       break;
     case "fix": {
@@ -138,7 +139,7 @@ export function applyConstraint(type: string): void {
         if (e?.type === "circle") targets.push(e.center);
         if (e?.type === "arc") targets.push(e.center, e.start, e.end);
       }
-      if (!targets.length) return need("points or curves");
+      if (!targets.length) return need(t("points or curves"));
       for (const p of new Set(targets)) out.push({ id: id(), type: "fix", point: p });
       break;
     }

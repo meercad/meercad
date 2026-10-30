@@ -16,6 +16,7 @@ import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, holdRebuilds
 import { InlineInput } from "./InlineValues";
 import { docUnit, fmtLen, lengthValue } from "../lib/units";
 import { Kbd } from "./Kbd";
+import { t } from "../lib/i18n";
 
 const num = (e: Expr | undefined, fallback = 0): number => {
   if (e === undefined) return fallback;
@@ -45,8 +46,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
     const label = (id: string, v: number) =>
       id === "edge"
         ? v >= 0
-          ? `Fillet R ${fmtLen(v)}`
-          : `Chamfer ${fmtLen(-v)}`
+          ? t("Fillet R {value}", { value: fmtLen(v) })
+          : t("Chamfer {value}", { value: fmtLen(-v) })
         : id === "fillet"
           ? `R ${fmtLen(v)}`
           : id === "hole"
@@ -319,7 +320,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const equal = sk.constraints.filter((c) => c.type === "equal" && (("a" in c && c.a === curveId) || ("b" in c && c.b === curveId)));
       const byVar = dim && typeof dim.value === "string" && Object.keys(params).some((n) => new RegExp(`\\b${n}\\b`).test(dim.value as string));
       holeLinks.set("hole", byVar || equal.length ? {
-        what: [byVar ? `the variable "${dim!.value}"` : null, equal.length ? `${equal.length === 1 ? "another circle" : `${equal.length} other circles`} (Equal)` : null].filter(Boolean).join(" and "),
+        what: [byVar ? t("the variable \"{name}\"", { name: String(dim!.value) }) : null, equal.length ? (equal.length === 1 ? t("another circle (Equal)") : t("{n} other circles (Equal)", { n: equal.length })) : null].filter(Boolean).join(t(" and ")),
         unlink: () => {
           const latest = currentDoc().features.find((f) => f.id === sketchId) as typeof sk;
           const r = curve.radius;
@@ -402,33 +403,33 @@ function QuickActions({ selection }: { selection: Pick[] }) {
   const partIds = new Set(selection.map((p) => (p.kind === "face" ? p.bodyId : "")));
   const wholePart = selection.length > 1 && partIds.size === 1 && !partIds.has("") && meshes.find((m) => m.bodyId === [...partIds][0])?.faceTags.length === selection.length;
   if (wholePart) {
-    actions.push({ icon: <Move3d />, label: "Move", kbd: keyFor("transform"), run: () => startFeature("transform") });
-    actions.push({ icon: <SquareSplitHorizontal />, label: "Mirror", kbd: keyFor("mirror"), run: () => startFeature("mirror") });
-    actions.push({ icon: <Grid3x3 />, label: "Pattern", kbd: keyFor("linear_pattern"), run: () => startFeature("linear_pattern") });
-    actions.push({ icon: <EyeOff />, label: "Hide", run: () => toggleHidden([...partIds][0]!) });
+    actions.push({ icon: <Move3d />, label: t("Move"), kbd: keyFor("transform"), run: () => startFeature("transform") });
+    actions.push({ icon: <SquareSplitHorizontal />, label: t("Mirror"), kbd: keyFor("mirror"), run: () => startFeature("mirror") });
+    actions.push({ icon: <Grid3x3 />, label: t("Pattern"), kbd: keyFor("linear_pattern"), run: () => startFeature("linear_pattern") });
+    actions.push({ icon: <EyeOff />, label: t("Hide"), run: () => toggleHidden([...partIds][0]!) });
   } else if (kinds.size === 1 && kinds.has("face")) {
     const plane = planeSpecForPick(last, meshes);
-    if (plane && selection.length === 1) actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch(plane) });
-    if (selection.length === 1 && last.kind === "face") actions.push({ icon: <ArrowUpFromLine />, label: "Push/Pull", kbd: "drag", run: () => startFeature("extrude") });
-    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: keyFor("fillet"), run: () => startFeature("fillet") });
-    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
-    actions.push({ icon: <Shell />, label: "Shell", kbd: keyFor("shell"), run: () => startFeature("shell") });
+    if (plane && selection.length === 1) actions.push({ icon: <Pencil />, label: t("Sketch"), kbd: keyFor("sketch"), run: () => startSketch(plane) });
+    if (selection.length === 1 && last.kind === "face") actions.push({ icon: <ArrowUpFromLine />, label: t("Push/Pull"), kbd: t("kbd::drag"), run: () => startFeature("extrude") });
+    actions.push({ icon: <SquareRoundCorner />, label: t("Fillet"), kbd: keyFor("fillet"), run: () => startFeature("fillet") });
+    actions.push({ icon: <Triangle />, label: t("Chamfer"), kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
+    actions.push({ icon: <Shell />, label: t("Shell"), kbd: keyFor("shell"), run: () => startFeature("shell") });
     const lastMesh = last.kind === "face" ? meshes.find((m) => m.bodyId === last.bodyId) : undefined;
-    if (selection.length === 1 && last.kind === "face" && lastMesh && isCylinderFace(lastMesh, last.face)) actions.push({ icon: <Bolt />, label: "Thread", kbd: keyFor("thread"), run: () => startFeature("thread") });
+    if (selection.length === 1 && last.kind === "face" && lastMesh && isCylinderFace(lastMesh, last.face)) actions.push({ icon: <Bolt />, label: t("Thread"), kbd: keyFor("thread"), run: () => startFeature("thread") });
   } else if (kinds.size === 1 && kinds.has("edge")) {
-    actions.push({ icon: <SquareRoundCorner />, label: "Fillet", kbd: keyFor("fillet"), run: () => startFeature("fillet") });
-    actions.push({ icon: <Triangle />, label: "Chamfer", kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
+    actions.push({ icon: <SquareRoundCorner />, label: t("Fillet"), kbd: keyFor("fillet"), run: () => startFeature("fillet") });
+    actions.push({ icon: <Triangle />, label: t("Chamfer"), kbd: keyFor("chamfer"), run: () => startFeature("chamfer") });
   } else if (kinds.has("region") || kinds.has("sketch_curve")) {
-    actions.push({ icon: <ArrowUpFromLine />, label: "Extrude", kbd: keyFor("extrude"), run: () => startFeature("extrude") });
-    actions.push({ icon: <Rotate3d />, label: "Revolve", kbd: keyFor("revolve"), run: () => startFeature("revolve") });
-    actions.push({ icon: <Cone />, label: "Loft", kbd: keyFor("loft"), run: () => startFeature("loft") });
-    actions.push({ icon: <Spline />, label: "Sweep", kbd: keyFor("sweep"), run: () => startFeature("sweep") });
+    actions.push({ icon: <ArrowUpFromLine />, label: t("Extrude"), kbd: keyFor("extrude"), run: () => startFeature("extrude") });
+    actions.push({ icon: <Rotate3d />, label: t("Revolve"), kbd: keyFor("revolve"), run: () => startFeature("revolve") });
+    actions.push({ icon: <Cone />, label: t("Loft"), kbd: keyFor("loft"), run: () => startFeature("loft") });
+    actions.push({ icon: <Spline />, label: t("Sweep"), kbd: keyFor("sweep"), run: () => startFeature("sweep") });
   } else if (kinds.has("plane") && selection.length === 1 && last.kind === "plane") {
-    actions.push({ icon: <Pencil />, label: "Sketch", kbd: keyFor("sketch"), run: () => startSketch({ ref: last.planeId }) });
+    actions.push({ icon: <Pencil />, label: t("Sketch"), kbd: keyFor("sketch"), run: () => startSketch({ ref: last.planeId }) });
   }
-  if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: "Measure", kbd: keyFor("measure"), run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
+  if (kinds.has("face") || kinds.has("edge")) actions.push({ icon: <Ruler />, label: t("Measure"), kbd: keyFor("measure"), run: () => useApp.setState({ measure: { active: true, picks: selection.slice(-2), result: null } }) });
   // Without a keyboard there is no Delete key.
-  if ((kinds.has("face") || kinds.has("edge")) && matchMedia("(pointer: coarse)").matches) actions.push({ icon: <Trash />, label: "Delete", run: () => void deleteModelSelection() });
+  if ((kinds.has("face") || kinds.has("edge")) && matchMedia("(pointer: coarse)").matches) actions.push({ icon: <Trash />, label: t("Delete"), run: () => void deleteModelSelection() });
   if (!actions.length) return null;
   return (
     <div className="quick-actions docked" onPointerDown={(e) => e.stopPropagation()}>
@@ -463,7 +464,7 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
         // Hole handles carry the radius but show and take the diameter.
         const scale = h.id === "hole" ? 2 : 1;
         const shown = +(h.value * scale).toFixed(4);
-        const text = h.id === "edge" ? "drag: out = fillet, in = chamfer" : `${h.id === "hole" ? "Ø " : ""}${fmtLen(shown)}`;
+        const text = h.id === "edge" ? t("drag: out = fillet, in = chamfer") : `${h.id === "hole" ? "Ø " : ""}${fmtLen(shown)}`;
         return (
           <div key={h.id} className="value-chip handle-chip" style={{ left: s[0] + 16, top: s[1] - 16 }} onPointerDown={(e) => e.stopPropagation()}>
             {typing === h.id ? (
@@ -482,11 +483,11 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
               />
             ) : (
               <>
-                <button onClick={() => setTyping(h.id)} title="Click to type a value">
+                <button onClick={() => setTyping(h.id)} title={t("Click to type a value")}>
                   {text}
                 </button>
                 {holeLinks.get(h.id) ? (
-                  <button className="unlink" onClick={() => holeLinks.get(h.id)!.unlink()} title={`Changes together with ${holeLinks.get(h.id)!.what}. Click to change only this hole.`}>
+                  <button className="unlink" onClick={() => holeLinks.get(h.id)!.unlink()} title={t("Changes together with {what}. Click to change only this hole.", { what: holeLinks.get(h.id)!.what })}>
                     <Link2Off />
                   </button>
                 ) : null}

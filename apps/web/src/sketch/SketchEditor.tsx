@@ -14,6 +14,7 @@ import { usePhoneSheets } from "../lib/layout";
 import { edgeSelectorForPick } from "../lib/topology";
 import { closeSketch, toast, useApp } from "../store";
 import { Kbd } from "../components/Kbd";
+import { t, tn } from "../lib/i18n";
 import { docUnit, fmtLen, inUnit, lengthExpr } from "../lib/units";
 import { InlineInput } from "../components/InlineValues";
 import { actionFor, SKETCH_ACTIONS, usePrefs } from "../lib/keymap";
@@ -123,7 +124,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     }
     const s = solver.solve({ entities: next.entities, constraints: cons, external });
     const entities = s.diagnostics.ok ? applySolution(next.entities, s) : next.entities;
-    if (!s.diagnostics.ok && s.diagnostics.conflicting.length) toast(`Over-constrained: ${s.diagnostics.conflicting.join(", ")}`, "error");
+    if (!s.diagnostics.ok && s.diagnostics.conflicting.length) toast(t("Over-constrained: {list}", { list: s.diagnostics.conflicting.join(", ") }), "error");
     return writeSketch({ entities, constraints: next.constraints }, merge);
   };
 
@@ -508,7 +509,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       // Length dimensions on a trimmed line no longer describe it.
       d.constraints = d.constraints.filter((c) => !(c.type === "length" && c.line === target.id));
     } else if (target.kind === "spline") {
-      return toast("Splines cannot be trimmed yet: move or delete their points instead", "info");
+      return toast(t("Splines cannot be trimmed yet: move or delete their points instead"), "info");
     } else {
       const ang = (q: Vec2) => Math.atan2(q[1] - target.center[1], q[0] - target.center[0]);
       const norm = (a: number, from: number) => ((a - from) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
@@ -566,7 +567,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       commit(patternCurves(sketch, shown.points, ids, o.kind === "linear" ? { kind: "linear", count: o.count, dx: o.dx, dy: o.dy } : { kind: "circular", count: o.count, angle: o.angle, center: [0, 0] }));
       setSketchSelection([]);
     } catch (e) {
-      if (e instanceof SketchEditError) toast(`Cannot repeat: ${e.message}`, "error");
+      if (e instanceof SketchEditError) toast(t("Cannot repeat: {reason}", { reason: e.message }), "error");
       else throw e;
     }
   };
@@ -583,11 +584,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const d = q ? Math.hypot(q[0] - p[0], q[1] - p[1]) : Infinity;
       if (d < best) [corner, best] = [id, d];
     }
-    if (!corner) return toast("Click the corner point where two lines meet", "info");
+    if (!corner) return toast(t("Click the corner point where two lines meet"), "info");
     try {
       commit(cornerEdit(sketch, shown.points, corner, ui.editSize, kind));
     } catch (e) {
-      if (e instanceof SketchEditError) toast(`Cannot ${kind === "fillet" ? "round" : "bevel"} this corner: ${e.message}`, "error");
+      if (e instanceof SketchEditError) toast(kind === "fillet" ? t("Cannot round this corner: {reason}", { reason: e.message }) : t("Cannot bevel this corner: {reason}", { reason: e.message }), "error");
       else throw e;
     }
   };
@@ -609,7 +610,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     try {
       commit(offsetCurves(sketch, shown.points, [...chain], ui.editSize));
     } catch (e) {
-      if (e instanceof SketchEditError) toast(`Cannot offset: ${e.message}`, "error");
+      if (e instanceof SketchEditError) toast(t("Cannot offset: {reason}", { reason: e.message }), "error");
       else throw e;
     }
   };
@@ -666,7 +667,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         else c = { type: "angle", a: a.id, b: b.id, value: round(Math.min(ang, 180 - ang) === ang ? ang : ang), label };
       }
     }
-    if (!c) return toast("Dimension: pick a line, circle, arc, two points, a point and a line, or two lines", "error");
+    if (!c) return toast(t("Dimension: pick a line, circle, arc, two points, a point and a line, or two lines"), "error");
     const bl = builder(sketch);
     const id = bl.constraint(c);
     if (commit(bl.d)) setEditing(id);
@@ -895,7 +896,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `R ${fmtLen(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))}` });
       } else if (tool === "polygon" && ts.points.length) {
         const c = ts.points[0]!.pos;
-        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: `hexagon R ${fmtLen(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))}` });
+        setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: t("hexagon R {r}", { r: fmtLen(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1])) }) });
       } else if ((tool === "rect" || tool === "rect_center") && ts.points.length) {
         const a = ts.points[0]!.pos;
         const k = tool === "rect_center" ? 2 : 1;
@@ -1102,7 +1103,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         case "project": {
           const pick = viewport.pick(e.clientX, e.clientY, new Set(["edge"]));
           const sel = pick ? edgeSelectorForPick(pick, useApp.getState().output?.meshes ?? []) : null;
-          if (!sel) return toast("Click a model edge to project it into the sketch", "error");
+          if (!sel) return toast(t("Click a model edge to project it into the sketch"), "error");
           const bl = builder(sketch);
           bl.entity({ type: "projection", edges: [sel] }, "pr");
           writeSketch(bl.d);
@@ -1298,7 +1299,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                 }}
               />
             ) : (
-              <button onClick={() => setTypingQuick(q.key)} title="Tap to set this value exactly">
+              <button onClick={() => setTypingQuick(q.key)} title={t("Tap to set this value exactly")}>
                 {q.text}
               </button>
             )}
@@ -1353,7 +1354,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                     entryInputs.current[i] = el;
                   }}
                   value={entry.fields[i] ?? ""}
-                  placeholder={i === 0 ? "" : "auto"}
+                  placeholder={i === 0 ? "" : t("auto")}
                   onFocus={(e) => entry.active !== i && setEntry({ ...entry, active: i })}
                   onChange={(e) => setEntry({ ...entry, fields: entry.fields.map((f, j) => (j === i ? e.target.value : f)) })}
                   onKeyDown={(e) => {
@@ -1367,15 +1368,15 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                     }
                   }}
                 />
-                {label === "Angle °" ? null : <em>{docUnit()}</em>}
+                {label === ANGLE_FIELD ? null : <em>{docUnit()}</em>}
               </label>
             ))}
-            <small>Enter to place · Tab next · Esc back to the mouse</small>
+            <small>{t("Enter to place · Tab next · Esc back to the mouse")}</small>
           </div>
         ) : null}
       </div>
       <div className={`constraint-palette ${phoneConstraints ? "open" : ""}`}>
-        <div className="palette-title">Constraints</div>
+        <div className="palette-title">{t("Constraints")}</div>
         {CONSTRAINT_TOOLS.map((c) => (
           <button key={c.type} onClick={() => applyConstraint(c.type)} title={`${c.label} — ${c.hint}`}>
             <c.icon />
@@ -1390,11 +1391,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             <b>{featureName(sketch)}</b>
             <span className={`dof ${diag && !diag.ok ? "bad" : diag?.dof === 0 ? "full" : ""}`}>
               <i />
-              {!diag ? "Solving…" : !diag.ok ? "Over-constrained" : diag.dof === 0 ? "Fully defined" : `${diag.dof} DOF left`}
+              {!diag ? t("Solving…") : !diag.ok ? t("Over-constrained") : diag.dof === 0 ? t("Fully defined") : tn(diag.dof, "one::{n} DOF left", "{n} DOF left")}
             </span>
             {/* Phone: finishing sits up here, where iOS puts "Done", not at the end of the scrolling bar. */}
             <button className="btn primary phone-only sketch-done" onClick={closeSketch}>
-              Done
+              {t("Done")}
             </button>
           </div>
           {diag?.message ? <div className="muted" style={{ marginTop: 4, color: "var(--err)" }}>{diag.message}</div> : null}
@@ -1404,12 +1405,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
               <div className="segmented">
                 {(["linear", "circular"] as const).map((k) => (
                   <button key={k} className={ui.pattern.kind === k ? "on" : ""} onClick={() => useSketchUi.setState({ pattern: { ...ui.pattern, kind: k } })}>
-                    {k === "linear" ? "Row" : "Round the origin"}
+                    {k === "linear" ? t("Row") : t("Round the origin")}
                   </button>
                 ))}
               </div>
               <div className="row" style={{ gap: 6 }}>
-                {([["count", "Count"], ...(ui.pattern.kind === "linear" ? [["dx", "Step x"], ["dy", "Step y"]] : [["angle", "Angle"]])] as ["count" | "dx" | "dy" | "angle", string][]).map(([k, label]) => (
+                {([["count", t("Count")], ...(ui.pattern.kind === "linear" ? [["dx", t("Step x")], ["dy", t("Step y")]] : [["angle", t("Angle")]])] as ["count" | "dx" | "dy" | "angle", string][]).map(([k, label]) => (
                   <label key={k} className="col" style={{ gap: 2 }}>
                     <span className="muted small">{label}</span>
                     <input className="field" type="number" style={{ width: 64 }} value={ui.pattern[k]} onChange={(e) => {
@@ -1420,13 +1421,13 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                 ))}
               </div>
               <button className="btn primary" disabled={!ui.selection.some((x) => x.kind === "curve")} onClick={repeatSelection}>
-                Repeat selection
+                {t("Repeat selection")}
               </button>
             </div>
           ) : null}
           {EDIT_TOOLS.has(ui.tool) && ui.tool !== "trim" ? (
             <label className="row" style={{ gap: 6, marginTop: 6 }}>
-              <span className="muted">{ui.tool === "fillet" ? "Radius" : ui.tool === "chamfer" ? "Distance" : "Offset"}</span>
+              <span className="muted">{ui.tool === "fillet" ? t("Radius") : ui.tool === "chamfer" ? t("Distance") : t("Offset")}</span>
               <input
                 className="field"
                 type="number"
@@ -1456,12 +1457,13 @@ const POINT_TOOLS = new Set<SketchTool>(["spline", "line", "rect", "rect_center"
 /** Tools that draw on press-drag-release as well as on two clicks. */
 const DRAG_TOOLS = new Set<SketchTool>(["line", "rect", "rect_center", "circle", "arc", "polygon"]);
 /** Values that can be typed while drawing (start typing a number, Tab moves to the next field). */
-const ENTRY_FIELDS: Partial<Record<SketchTool, string[]>> = { line: ["Length", "Angle °"], rect: ["Width", "Height"], rect_center: ["Width", "Height"], circle: ["Diameter"], arc: ["Radius", "Angle °"], arc_center: ["Angle °"] };
+const ANGLE_FIELD = t("Angle °");
+const ENTRY_FIELDS: Partial<Record<SketchTool, string[]>> = { line: [t("Length"), ANGLE_FIELD], rect: [t("Width"), t("Height")], rect_center: [t("Width"), t("Height")], circle: [t("Diameter")], arc: [t("Radius"), ANGLE_FIELD], arc_center: [ANGLE_FIELD] };
 /** Counter-clockwise sweep from a0 to a1, in (0, 2π]. */
 const sweepOf = (a0: number, a1: number) => (((a1 - a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 2 * Math.PI;
 /** Tools whose typed values only apply once two points are placed (an arc's ends, or centre and start). */
 const ENTRY_AFTER_TWO = new Set<SketchTool>(["arc", "arc_center"]);
-const isAngleField = (tool: SketchTool, i: number) => ENTRY_FIELDS[tool]?.[i] === "Angle °";
+const isAngleField = (tool: SketchTool, i: number) => ENTRY_FIELDS[tool]?.[i] === ANGLE_FIELD;
 
 /** The circle through an arc's two ends and a third point on it; start→end runs counter-clockwise through `m`. */
 function arcThrough(a: Vec2, b: Vec2, m: Vec2): { center: Vec2; radius: number; start: Vec2; end: Vec2; sweep: number; swapped: boolean } | null {
@@ -1495,7 +1497,7 @@ function arcMidFor(a: Vec2, b: Vec2, side: Vec2, radius: number | null, angleDeg
   return [mid[0] + n[0] * h, mid[1] + n[1] * h];
 }
 
-const SNAP_LABEL: Record<NonNullable<Snap["kind"]>, string> = { point: "Endpoint", mid: "Midpoint", cross: "Intersection", curve: "On curve", align: "Aligned", grid: "", center: "Center", edge: "On edge" };
+const SNAP_LABEL: Record<NonNullable<Snap["kind"]>, string> = { point: t("Endpoint"), mid: t("Midpoint"), cross: t("Intersection"), curve: t("On curve"), align: t("Aligned"), grid: "", center: t("Center"), edge: t("On edge") };
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const fmt = (n: number) => (Math.abs(n) >= 100 ? n.toFixed(1) : n.toFixed(2)).replace(/\.?0+$/, "");
@@ -1509,39 +1511,39 @@ function parseSel(s: string): SketchSel {
 function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
   switch (tool) {
     case "line":
-      return n ? "Click to continue · type a number for an exact length · double-click or Esc ends · click the start point to close" : "Click to start a line, or drag one out. Hold Alt (⌥) to place freely.";
+      return n ? t("Click to continue · type a number for an exact length · double-click or Esc ends · click the start point to close") : t("Click to start a line, or drag one out. Hold Alt (⌥) to place freely.");
     case "rect":
-      return n ? "Click the opposite corner, or type the width (Tab for the height)" : "Click the first corner, or drag the rectangle out";
+      return n ? t("Click the opposite corner, or type the width (Tab for the height)") : t("Click the first corner, or drag the rectangle out");
     case "rect_center":
-      return n ? "Click a corner, or type the width (Tab for the height)" : "Click the center, or drag from the center out";
+      return n ? t("Click a corner, or type the width (Tab for the height)") : t("Click the center, or drag from the center out");
     case "circle":
-      return n ? "Click to set the size, or type the diameter" : "Click the center, or drag the circle out";
+      return n ? t("Click to set the size, or type the diameter") : t("Click the center, or drag the circle out");
     case "arc":
-      return n === 0 ? "Click where the arc starts, or drag to its end" : n === 1 ? "Click where the arc ends" : "Move to bend the arc and click · type the radius (Tab for the angle)";
+      return n === 0 ? t("Click where the arc starts, or drag to its end") : n === 1 ? t("Click where the arc ends") : t("Move to bend the arc and click · type the radius (Tab for the angle)");
     case "arc_center":
-      return n === 0 ? "Click the arc center" : n === 1 ? "Click the start point" : "Click the end point (move clockwise to flip) · type the angle";
+      return n === 0 ? t("Click the arc center") : n === 1 ? t("Click the start point") : t("Click the end point (move clockwise to flip) · type the angle");
     case "point":
-      return "Click to place a point";
+      return t("Click to place a point");
     case "polygon":
-      return n ? "Click a corner (hexagon; constraints keep it regular)" : "Click the center";
+      return n ? t("Click a corner (hexagon; constraints keep it regular)") : t("Click the center");
     case "spline":
-      return n ? "Click the next point · double-click, Enter or Esc finishes · click the first point to close" : "Click where the smooth curve starts";
+      return n ? t("Click the next point · double-click, Enter or Esc finishes · click the first point to close") : t("Click where the smooth curve starts");
     case "trim":
-      return "Click the piece of a curve to cut away up to its nearest intersections";
+      return t("Click the piece of a curve to cut away up to its nearest intersections");
     case "fillet":
-      return "Click a corner where two lines meet to round it with this radius";
+      return t("Click a corner where two lines meet to round it with this radius");
     case "chamfer":
-      return "Click a corner where two lines meet to bevel it by this distance along each line";
+      return t("Click a corner where two lines meet to bevel it by this distance along each line");
     case "pattern":
-      return "Select the curves to repeat (Shift adds), set the pattern, then Repeat selection";
+      return t("Select the curves to repeat (Shift adds), set the pattern, then Repeat selection");
     case "offset":
-      return "Click a line, arc or circle: its whole chain is copied at this distance (outwards for closed shapes, negative goes inwards)";
+      return t("Click a line, arc or circle: its whole chain is copied at this distance (outwards for closed shapes, negative goes inwards)");
     case "dimension":
-      return dimFirst ? "Click a second entity, or click empty space to place the dimension (an arc: near its centre for the angle)" : "Click a line, circle, arc or point";
+      return dimFirst ? t("Click a second entity, or click empty space to place the dimension (an arc: near its centre for the angle)") : t("Click a line, circle, arc or point");
     case "project":
-      return "Click model edges to use them as fixed reference geometry";
+      return t("Click model edges to use them as fixed reference geometry");
     default:
-      return "Drag to move · Shift-click to multi-select · drag empty space to box-select · Del removes";
+      return t("Drag to move · Shift-click to multi-select · drag empty space to box-select · Del removes");
   }
 }
 
@@ -1854,6 +1856,31 @@ interface Label {
   dimension: boolean;
 }
 
+/** Constraint type names for the label tooltips (English shows the type id as before). */
+const CONSTRAINT_NAMES: Record<string, string> = {
+  length: t("constraint::length"),
+  distance: t("constraint::distance"),
+  radius: t("constraint::radius"),
+  diameter: t("constraint::diameter"),
+  angle: t("constraint::angle"),
+  arc_angle: t("constraint::arc_angle"),
+  horizontal: t("constraint::horizontal"),
+  vertical: t("constraint::vertical"),
+  horizontal_points: t("constraint::horizontal_points"),
+  vertical_points: t("constraint::vertical_points"),
+  parallel: t("constraint::parallel"),
+  perpendicular: t("constraint::perpendicular"),
+  tangent: t("constraint::tangent"),
+  equal: t("constraint::equal"),
+  midpoint: t("constraint::midpoint"),
+  point_on: t("constraint::point_on"),
+  fix: t("constraint::fix"),
+  symmetric: t("constraint::symmetric"),
+  collinear: t("constraint::collinear"),
+  coincident: t("constraint::coincident"),
+};
+const constraintName = (type: string) => CONSTRAINT_NAMES[type] ?? type;
+
 /** Positions for dimension values and constraint glyphs (sketch coordinates). */
 function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
   const out: Label[] = [];
@@ -1900,7 +1927,7 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
       if (!at) continue;
       const unit = c.type === "angle" || c.type === "arc_angle" ? "°" : "";
       const prefix = c.type === "diameter" ? "⌀" : c.type === "radius" ? "R" : c.type === "arc_angle" ? "∠" : "";
-      out.push({ id: c.id, at, text: `${prefix}${valueText(c.value, unit)}`, title: `${c.type} ${c.id} — double-click to edit, Del to remove`, dimension: true });
+      out.push({ id: c.id, at, text: `${prefix}${valueText(c.value, unit)}`, title: t("{type} {id} — double-click to edit, Del to remove", { type: constraintName(c.type), id: c.id }), dimension: true });
       continue;
     }
     const g = GLYPH[c.type] ?? "?";
@@ -1917,7 +1944,7 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
     } else if (c.type === "coincident") continue;
     if (!at) continue;
     const key = `${at[0].toFixed(3)},${at[1].toFixed(3)}`;
-    out.push({ id: c.id, at: offset(at, key), text: g, title: `${c.type} (${c.id}) — click to select, Del to remove`, dimension: false });
+    out.push({ id: c.id, at: offset(at, key), text: g, title: t("{type} ({id}) — click to select, Del to remove", { type: constraintName(c.type), id: c.id }), dimension: false });
   }
   return out;
 }

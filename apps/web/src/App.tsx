@@ -36,6 +36,7 @@ import { deleteModelSelection } from "./lib/deletion";
 import { AboutDialog } from "./components/AboutDialog";
 import { DrawingDialog } from "./components/DrawingDialog";
 import { isCompact } from "./lib/layout";
+import { t } from "./lib/i18n";
 
 try {
   const theme = localStorage.getItem("meercad.theme");
@@ -79,10 +80,10 @@ async function route(): Promise<void> {
     try {
       const v = validateDocument(await decodeShareFragment(hash));
       if (!v.ok) throw new Error(v.errors[0]);
-      await newProject(v.value, "Shared part");
-      toast("Opened a shared model as a new project in this browser");
+      await newProject(v.value, t("Shared part"));
+      toast(t("Opened a shared model as a new project in this browser"));
     } catch (e) {
-      toast(`Could not open share link: ${e instanceof Error ? e.message : String(e)}`, "error");
+      toast(t("Could not open share link: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error");
       history.replaceState(null, "", "#/");
     }
     return;
@@ -154,14 +155,14 @@ export function App() {
   useEffect(() => {
     if (!nativeApp) return;
     document.documentElement.classList.add("native");
-    const offOpen = onFileOpened((t) => {
-      if ("id" in t) return void openProject(t.id);
+    const offOpen = onFileOpened((file) => {
+      if ("id" in file) return void openProject(file.id);
       try {
-        const v = validateDocument(JSON.parse(t.text));
-        if (!v.ok) return toast(`Not a valid meerCAD file: ${v.errors[0]}`, "error");
-        void newProject(v.value, t.name);
+        const v = validateDocument(JSON.parse(file.text));
+        if (!v.ok) return toast(t("Not a valid meerCAD file: {msg}", { msg: v.errors[0]! }), "error");
+        void newProject(v.value, file.name);
       } catch {
-        toast(`Could not read ${t.name}`, "error");
+        toast(t("Could not read {name}", { name: file.name }), "error");
       }
     });
     let lastTool: SketchTool = "line";

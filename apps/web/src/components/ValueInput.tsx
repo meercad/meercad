@@ -10,6 +10,7 @@ import { apply, useApp } from "../store";
 import { parseExpr } from "./ExprInput";
 import { GROUP_LABEL, GROUP_ORDER, variableGroup } from "../lib/variables";
 import { docUnit, inUnit, lengthExpr, lengthText, lengthValue } from "../lib/units";
+import { t } from "../lib/i18n";
 
 export type ValueUnit = "mm" | "deg" | "";
 
@@ -94,7 +95,7 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
           autoFocus
           className={`value-input ${valid ? "" : "invalid"}`}
           value={naming}
-          aria-label="Variable name"
+          aria-label={t("Variable name")}
           onFocus={(e) => e.target.select()}
           onChange={(e) => setNaming(e.target.value)}
           onBlur={() => finish(null)}
@@ -105,7 +106,7 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
           }}
         />
         <div className="value-menu">
-          <div className="value-menu-note">{taken ? `"${naming}" already exists` : `New variable = ${target === null ? text : withUnit(target, unit)} · Enter to create`}</div>
+          <div className="value-menu-note">{taken ? t("\"{name}\" already exists", { name: naming }) : t("New variable = {value} · Enter to create", { value: target === null ? text : withUnit(target, unit) })}</div>
         </div>
       </div>
     );
@@ -117,7 +118,7 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
         autoFocus
         className="value-input"
         value={text}
-        aria-label="Value"
+        aria-label={t("Value")}
         onFocus={(e) => e.target.select()}
         onChange={(e) => {
           setText(e.target.value);
@@ -138,7 +139,7 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
           o.kind === "param" ? (
             <div key={o.name} className="value-menu-item">
             {i === 0 || options[i - 1]!.group !== o.group ? <div className="value-menu-group">{o.group}</div> : null}
-            <button className={i === active ? "active" : ""} onClick={() => pick(i)} title={`Use the variable ${o.name}`}>
+            <button className={i === active ? "active" : ""} onClick={() => pick(i)} title={t("Use the variable {name}", { name: o.name })}>
               <Variable />
               <span className="name">{o.name}</span>
               <span className="val">{values[o.name] !== undefined ? (unit === "mm" ? inUnit(values[o.name]!) : +values[o.name]!.toFixed(3)) : "?"}</span>
@@ -147,12 +148,13 @@ export function ValueInput({ value, unit = "mm", suggest, onDone }: { value: Exp
           ) : (
             <button key="new" className={`new ${i === active ? "active" : ""}`} onClick={() => pick(i)}>
               <Plus />
-              <span className="name">New variable…</span>
+              <span className="name">{t("New variable…")}</span>
             </button>
           ),
         )}
         </div>
-        {!names.length && byName ? <div className="value-menu-note">No variable matches "{typed}"</div> : null}
+        {!names.length && byName ? <div className="value-menu-note">{t("No variable matches \"{text}\"", { text: typed })}</div>
+ : null}
       </div>
     </div>
   );

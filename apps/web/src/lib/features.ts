@@ -31,6 +31,7 @@ import {
   type LucideIcon, Trash2 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, MeercadDocument } from "@meercad/schema";
 import { nextFeatureId, standardShape } from "@meercad/model";
+import { t } from "./i18n";
 
 export interface FeatureMeta {
   label: string;
@@ -40,33 +41,33 @@ export interface FeatureMeta {
 }
 
 export const FEATURES: Record<FeatureOp, FeatureMeta> = {
-  sketch: { label: "Sketch", icon: Pencil, shortcut: "S", hint: "Draw a constrained 2D sketch on a plane or face" },
-  extrude: { label: "Extrude", icon: ArrowUpFromLine, shortcut: "E", hint: "Extrude sketch regions to add, cut or intersect" },
-  revolve: { label: "Revolve", icon: Rotate3d, shortcut: "V", hint: "Revolve sketch regions around an axis" },
-  fillet: { label: "Fillet", icon: SquareRoundCorner, shortcut: "F", hint: "Round edges" },
-  chamfer: { label: "Chamfer", icon: Triangle, shortcut: "C", hint: "Bevel edges" },
-  shell: { shortcut: "H", label: "Shell", icon: Shell, hint: "Hollow a body, removing selected faces" },
-  thread: { shortcut: "T", label: "Thread", icon: Bolt, hint: "ISO metric thread in a hole or on a shaft" },
-  loft: { shortcut: "Shift+L", label: "Loft", icon: Cone, hint: "Solid through two or more profiles: funnels, round-to-square adapters" },
-  sweep: { shortcut: "W", label: "Sweep", icon: Spline, hint: "Move a profile along a path of lines and arcs: pipes, ducts, handles" },
-  scale: { label: "Scale", icon: Scaling, hint: "Make parts larger or smaller, e.g. correct a scan to a measured size" },
-  align: { shortcut: "Shift+A", label: "Align", icon: Magnet, hint: "Set a part's face onto another's, or a shaft's axis onto a hole's" },
-  standard_part: { shortcut: "Shift+P", label: "Standard part", icon: Nut, hint: "Screws, nuts, washers, bearings and magnets to standard sizes, placed on a face" },
-  text: { shortcut: "Shift+T", label: "Text", icon: Type, hint: "Raised or engraved lettering on a face" },
-  draft: { shortcut: "Shift+D", label: "Draft", icon: Pyramid, hint: "Tilt side faces by an angle so a cast or moulded part leaves its mould" },
-  rib: { shortcut: "Shift+B", label: "Rib", icon: Slash, hint: "Stiffening web from an open sketch line to the walls it meets" },
-  split: { shortcut: "Shift+K", label: "Split", icon: Scissors, hint: "Cut parts in two at a plane or flat face, e.g. for the printer's build volume" },
-  hole: { shortcut: "Shift+H", label: "Hole", icon: CircleDot, hint: "Holes for screws (clearance, counterbore, countersink), threads and heat-set inserts" },
-  gear: { shortcut: "G", label: "Gear", icon: Cog, hint: "Involute gear, ring gear or rack; adds the mating gear at the right distance" },
-  linear_pattern: { shortcut: "L", label: "Linear pattern", icon: Grid3x3, hint: "Repeat features or bodies along a direction" },
-  circular_pattern: { shortcut: "O", label: "Circular pattern", icon: Orbit, hint: "Repeat features or bodies around an axis" },
-  mirror: { shortcut: "I", label: "Mirror", icon: SquareSplitHorizontal, hint: "Mirror features or bodies about a plane" },
-  transform: { shortcut: "M", label: "Move", icon: Move3d, hint: "Move, rotate or copy parts" },
-  boolean: { shortcut: "B", label: "Boolean", icon: Combine, hint: "Union, subtract or intersect bodies" },
-  plane: { shortcut: "N", label: "Plane", icon: Layers, hint: "Construction plane offset from a plane or face" },
-  delete: { label: "Delete part", icon: Trash2, hint: "Remove parts from the model" },
-  import: { label: "Import", icon: FileUp, hint: "Import STEP or STL" },
-  mesh_convert: { label: "Convert mesh", icon: Shapes, hint: "Turn an imported mesh into a body with editable faces" },
+  sketch: { label: t("Sketch"), icon: Pencil, shortcut: "S", hint: t("Draw a constrained 2D sketch on a plane or face") },
+  extrude: { label: t("Extrude"), icon: ArrowUpFromLine, shortcut: "E", hint: t("Extrude sketch regions to add, cut or intersect") },
+  revolve: { label: t("Revolve"), icon: Rotate3d, shortcut: "V", hint: t("Revolve sketch regions around an axis") },
+  fillet: { label: t("Fillet"), icon: SquareRoundCorner, shortcut: "F", hint: t("Round edges") },
+  chamfer: { label: t("Chamfer"), icon: Triangle, shortcut: "C", hint: t("Bevel edges") },
+  shell: { shortcut: "H", label: t("Shell"), icon: Shell, hint: t("Hollow a body, removing selected faces") },
+  thread: { shortcut: "T", label: t("Thread"), icon: Bolt, hint: t("ISO metric thread in a hole or on a shaft") },
+  loft: { shortcut: "Shift+L", label: t("Loft"), icon: Cone, hint: t("Solid through two or more profiles: funnels, round-to-square adapters") },
+  sweep: { shortcut: "W", label: t("Sweep"), icon: Spline, hint: t("Move a profile along a path of lines and arcs: pipes, ducts, handles") },
+  scale: { label: t("Scale"), icon: Scaling, hint: t("Make parts larger or smaller, e.g. correct a scan to a measured size") },
+  align: { shortcut: "Shift+A", label: t("Align"), icon: Magnet, hint: t("Set a part's face onto another's, or a shaft's axis onto a hole's") },
+  standard_part: { shortcut: "Shift+P", label: t("Standard part"), icon: Nut, hint: t("Screws, nuts, washers, bearings and magnets to standard sizes, placed on a face") },
+  text: { shortcut: "Shift+T", label: t("Text"), icon: Type, hint: t("Raised or engraved lettering on a face") },
+  draft: { shortcut: "Shift+D", label: t("feature::Draft"), icon: Pyramid, hint: t("Tilt side faces by an angle so a cast or moulded part leaves its mould") },
+  rib: { shortcut: "Shift+B", label: t("Rib"), icon: Slash, hint: t("Stiffening web from an open sketch line to the walls it meets") },
+  split: { shortcut: "Shift+K", label: t("Split"), icon: Scissors, hint: t("Cut parts in two at a plane or flat face, e.g. for the printer's build volume") },
+  hole: { shortcut: "Shift+H", label: t("Hole"), icon: CircleDot, hint: t("Holes for screws (clearance, counterbore, countersink), threads and heat-set inserts") },
+  gear: { shortcut: "G", label: t("Gear"), icon: Cog, hint: t("Involute gear, ring gear or rack; adds the mating gear at the right distance") },
+  linear_pattern: { shortcut: "L", label: t("Linear pattern"), icon: Grid3x3, hint: t("Repeat features or bodies along a direction") },
+  circular_pattern: { shortcut: "O", label: t("Circular pattern"), icon: Orbit, hint: t("Repeat features or bodies around an axis") },
+  mirror: { shortcut: "I", label: t("Mirror"), icon: SquareSplitHorizontal, hint: t("Mirror features or bodies about a plane") },
+  transform: { shortcut: "M", label: t("Move"), icon: Move3d, hint: t("Move, rotate or copy parts") },
+  boolean: { shortcut: "B", label: t("Boolean"), icon: Combine, hint: t("Union, subtract or intersect bodies") },
+  plane: { shortcut: "N", label: t("Plane"), icon: Layers, hint: t("Construction plane offset from a plane or face") },
+  delete: { label: t("Delete part"), icon: Trash2, hint: t("Remove parts from the model") },
+  import: { label: t("Import"), icon: FileUp, hint: t("Import STEP or STL") },
+  mesh_convert: { label: t("Convert mesh"), icon: Shapes, hint: t("Turn an imported mesh into a body with editable faces") },
 };
 
 export const BODY_ICON = Box;
@@ -144,50 +145,50 @@ export function draftProblem(f: Feature): string | null {
   switch (f.op) {
     case "extrude":
     case "revolve":
-      return "face" in f.profile || f.profile.sketch ? null : "Select sketch regions or a face as profile";
+      return "face" in f.profile || f.profile.sketch ? null : t("Select sketch regions or a face as profile");
     case "fillet":
     case "chamfer":
-      return (Array.isArray(f.edges) ? f.edges.length : 1) ? null : "Select edges";
+      return (Array.isArray(f.edges) ? f.edges.length : 1) ? null : t("Select edges");
     case "shell":
-      return f.faces.length ? null : "Select faces to remove";
+      return f.faces.length ? null : t("Select faces to remove");
     case "thread":
-      return "face" in f.face && !f.face.face ? "Select a hole wall or a round shaft" : null;
+      return "face" in f.face && !f.face.face ? t("Select a hole wall or a round shaft") : null;
     case "linear_pattern":
     case "circular_pattern":
     case "mirror":
-      return ("features" in f.source ? f.source.features : f.source.bodies).length ? null : "Select features or bodies to copy";
+      return ("features" in f.source ? f.source.features : f.source.bodies).length ? null : t("Select features or bodies to copy");
     case "boolean":
-      return !f.target ? "Select the target body" : f.tools.length ? null : "Select tool bodies";
+      return !f.target ? t("Select the target body") : f.tools.length ? null : t("Select tool bodies");
     case "transform":
-      return f.bodies.length ? null : "Select parts to move";
+      return f.bodies.length ? null : t("Select parts to move");
     case "delete":
-      return f.bodies.length ? null : "Select parts to delete";
+      return f.bodies.length ? null : t("Select parts to delete");
     case "import":
-      return f.data ? null : "Choose a file";
+      return f.data ? null : t("Choose a file");
     case "mesh_convert":
-      return f.body ? null : "Select a mesh part";
+      return f.body ? null : t("Select a mesh part");
     case "scale":
-      return f.bodies.length ? null : "Pick the parts to scale";
+      return f.bodies.length ? null : t("Pick the parts to scale");
     case "align": {
       const empty = (s: Feature & { op: "align" }, k: "from" | "to") => {
         const v = s[k];
         const sel = "face" in v ? v.face : v.axisOf;
         return "face" in sel && !sel.face;
       };
-      return empty(f, "from") ? "Pick the face of the part to move" : empty(f, "to") ? "Pick the face to set it onto" : null;
+      return empty(f, "from") ? t("Pick the face of the part to move") : empty(f, "to") ? t("Pick the face to set it onto") : null;
     }
     case "standard_part":
-      return f.points.length ? null : "Tap a flat face where the part goes";
+      return f.points.length ? null : t("Tap a flat face where the part goes");
     case "draft":
-      return f.faces.length ? null : "Pick the side faces to draft";
+      return f.faces.length ? null : t("Pick the side faces to draft");
     case "rib":
-      return f.sketch ? null : "Pick the rib's line in a sketch";
+      return f.sketch ? null : t("Pick the rib's line in a sketch");
     case "loft":
-      return f.profiles.length >= 2 ? null : "Pick at least two profiles in order: sketch regions or flat faces";
+      return f.profiles.length >= 2 ? null : t("Pick at least two profiles in order: sketch regions or flat faces");
     case "sweep":
-      return !("face" in f.profile) && !f.profile.sketch ? "Pick the profile: sketch regions" : f.path.sketch ? null : "Pick the path: lines and arcs of a sketch";
+      return !("face" in f.profile) && !f.profile.sketch ? t("Pick the profile: sketch regions") : f.path.sketch ? null : t("Pick the path: lines and arcs of a sketch");
     case "hole":
-      return f.points.length ? null : "Tap a flat face where the hole goes";
+      return f.points.length ? null : t("Tap a flat face where the hole goes");
     default:
       return null;
   }

@@ -8,17 +8,18 @@ import { checkClearance, currentMechanism, deleteJoint, editJoint, jointValues, 
 import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
+import { t, tn } from "../lib/i18n";
 
 const TYPES: [Joint["type"], string][] = [
-  ["revolute", "Turn"],
-  ["slider", "Slide"],
-  ["fixed", "Fixed"],
+  ["revolute", t("joint::Turn")],
+  ["slider", t("joint::Slide")],
+  ["fixed", t("joint::Fixed")],
 ];
 
 function anchorText(j: Joint): string {
   const a = j.anchor;
-  if ("axis" in a) return `${a.axis.ref.slice(7)} axis`;
-  if ("gear" in a) return `Axis of ${a.gear}`;
+  if ("axis" in a) return t("{axis} axis", { axis: a.axis.ref.slice(7) });
+  if ("gear" in a) return t("Axis of {gear}", { gear: a.gear });
   if ("axisOf" in a) return describeFaceSelector(a.axisOf);
   return describeEdgeSelector(a.edge);
 }
@@ -38,7 +39,7 @@ export function MotionPanel() {
       const project = useApp.getState().project?.name ?? "meerCAD";
       download(`${project} ${id}.gif`, gif as BlobPart, "image/gif");
     } catch (e) {
-      toast(`Could not make the video: ${(e as Error).message}`, "error");
+      toast(t("Could not make the video: {error}", { error: (e as Error).message }), "error");
     } finally {
       setFilming(null);
     }
@@ -56,14 +57,14 @@ export function MotionPanel() {
   const joints = doc.mechanism?.joints ?? [];
   const couplings = doc.mechanism?.couplings ?? [];
   const gearsWithout = (useApp.getState().output?.report.gears ?? []).filter((g) => !joints.some((j) => j.a === g.id)).length;
-  const name = (id: string) => (id === "ground" ? "Ground" : partName(id, features));
+  const name = (id: string) => (id === "ground" ? t("Ground") : partName(id, features));
   const close = () => useMotion.setState({ open: false, draft: null });
   return (
     <div className="dialog motion-panel">
       <div className="dialog-head">
         <Link2 className="ficon" />
-        <h3>{draft ? (draft.isNew ? "New joint" : "Edit joint") : "Joints"}</h3>
-        <button className="icon-btn sm" title="Close" onClick={close}>
+        <h3>{draft ? (draft.isNew ? t("New joint") : t("Edit joint")) : t("Joints")}</h3>
+        <button className="icon-btn sm" title={t("Close")} onClick={close}>
           <X />
         </button>
       </div>
@@ -72,7 +73,7 @@ export function MotionPanel() {
           <JointForm />
         ) : (
           <>
-            {joints.length ? <p className="muted small">Drag a part to move it. The model itself stays as drawn.</p> : <p className="muted small">Joints let parts turn or slide against each other, from where they were drawn. Add one, then drag the part.</p>}
+            {joints.length ? <p className="muted small">{t("Drag a part to move it. The model itself stays as drawn.")}</p> : <p className="muted small">{t("Joints let parts turn or slide against each other, from where they were drawn. Add one, then drag the part.")}</p>}
             {joints.map((j) => {
               const v = values[j.id];
               const limits = mech.joint(j.id)?.limits;
@@ -84,27 +85,27 @@ export function MotionPanel() {
                   <div className="joint-head">
                     <b>{j.name ?? j.id}</b>
                     <span className="muted small">
-                      {name(j.a)} on {name(j.b)}
+                      {t("{part} on {base}", { part: name(j.a), base: name(j.b) })}
                     </span>
                     {j.type !== "fixed" && !problems[j.id] ? (
-                      <button className={`icon-btn sm ${filming === j.id ? "active" : ""}`} title="Save a video (GIF) of this motion" disabled={!!filming} onClick={() => void film(j.id)}>
+                      <button className={`icon-btn sm ${filming === j.id ? "active" : ""}`} title={t("Save a video (GIF) of this motion")} disabled={!!filming} onClick={() => void film(j.id)}>
                         <Film />
                       </button>
                     ) : null}
-                    <button className="icon-btn sm" title="Edit" onClick={() => editJoint(j.id)}>
+                    <button className="icon-btn sm" title={t("Edit")} onClick={() => editJoint(j.id)}>
                       <Pencil />
                     </button>
-                    <button className="icon-btn sm" title="Delete" onClick={() => deleteJoint(j.id)}>
+                    <button className="icon-btn sm" title={t("Delete")} onClick={() => deleteJoint(j.id)}>
                       <Trash2 />
                     </button>
                   </div>
                   {problems[j.id] ? (
                     <div className="callout warn">{problems[j.id]}</div>
                   ) : j.type === "fixed" ? (
-                    <span className="muted small">Held fixed</span>
+                    <span className="muted small">{t("Held fixed")}</span>
                   ) : (
                     <div className="row joint-value">
-                      <button className={`icon-btn sm ${playing === j.id ? "active" : ""}`} title={playing === j.id ? "Stop" : "Play: move it back and forth"} onClick={() => (playing === j.id ? stopPlaying() : playJoint(j.id))}>
+                      <button className={`icon-btn sm ${playing === j.id ? "active" : ""}`} title={playing === j.id ? t("Stop") : t("Play: move it back and forth")} onClick={() => (playing === j.id ? stopPlaying() : playJoint(j.id))}>
                         {playing === j.id ? <Pause /> : <Play />}
                       </button>
                       <input
@@ -121,7 +122,7 @@ export function MotionPanel() {
                       </span>
                     </div>
                   )}
-                  {driven ? <span className="muted small">Follows {driven.driver} × {String(driven.ratio)}</span> : null}
+                  {driven ? <span className="muted small">{t("Follows {driver} × {ratio}", { driver: driven.driver, ratio: String(driven.ratio) })}</span> : null}
                 </div>
               );
             })}
@@ -132,7 +133,7 @@ export function MotionPanel() {
                   {id}: {p}
                 </div>
               ))}
-            {stuck ? <div className="callout warn">It cannot move further this way: a dead point or a limit. Move it back, or drag another part.</div> : null}
+            {stuck ? <div className="callout warn">{t("It cannot move further this way: a dead point or a limit. Move it back, or drag another part.")}</div> : null}
             {mech.errors.filter((e) => !e.includes("moves in two joints")).map((e) => (
               <div key={e} className="callout warn">
                 {e}
@@ -140,11 +141,11 @@ export function MotionPanel() {
             ))}
             <div className="row">
               <button className="btn" onClick={startJoint}>
-                <Plus /> Add joint
+                <Plus /> {t("Add joint")}
               </button>
               {joints.length ? (
-                <button className="btn" onClick={restPose} title="Back to where the parts were drawn">
-                  <RotateCcw /> Rest position
+                <button className="btn" onClick={restPose} title={t("Back to where the parts were drawn")}>
+                  <RotateCcw /> {t("Rest position")}
                 </button>
               ) : null}
             </div>
@@ -154,10 +155,10 @@ export function MotionPanel() {
                 className="btn"
                 onClick={() => {
                   const n = jointsFromGears();
-                  if (n) toast(`${n} gear joint${n > 1 ? "s" : ""} added: drag a gear to turn it`);
+                  if (n) toast(tn(n, "{n} gear joint added: drag a gear to turn it", "{n} gear joints added: drag a gear to turn it"));
                 }}
               >
-                <Cog /> Joints for {gearsWithout} gear{gearsWithout > 1 ? "s" : ""}
+                <Cog /> {tn(gearsWithout, "Joints for {n} gear", "Joints for {n} gears")}
               </button>
             ) : null}
           </>
@@ -179,12 +180,12 @@ function ClearanceResults() {
   return (
     <>
       <button className="btn" onClick={() => void checkClearance()} disabled={check?.running}>
-        <ShieldCheck /> {check?.running ? "Checking…" : stale ? "Check again in this position" : "Check clearance"}
+        <ShieldCheck /> {check?.running ? t("Checking…") : stale ? t("Check again in this position") : t("Check clearance")}
       </button>
       {check && !check.running ? (
         <div className={`clearance-list ${stale ? "stale" : ""}`}>
           {check.error ? <div className="callout err">{check.error}</div> : null}
-          {!check.error && !check.results.length ? <span className="muted small">No part comes near another.</span> : null}
+          {!check.error && !check.results.length ? <span className="muted small">{t("No part comes near another.")}</span> : null}
           {check.results.map((r) => {
             const level = r.overlap > 1e-3 || r.distance < 1e-4 ? "bad" : r.distance < want ? "warn" : "ok";
             return (
@@ -193,11 +194,11 @@ function ClearanceResults() {
                 <span className="pair">
                   {name(r.a)} · {name(r.b)}
                 </span>
-                <b>{r.overlap > 1e-3 ? `overlap ${r.overlap.toFixed(r.overlap < 10 ? 2 : 0)} mm³` : r.distance < 1e-4 ? "touching" : `${r.distance.toFixed(2)} mm`}</b>
+                <b>{r.overlap > 1e-3 ? t("overlap {volume} mm³", { volume: r.overlap.toFixed(r.overlap < 10 ? 2 : 0) }) : r.distance < 1e-4 ? t("touching") : `${r.distance.toFixed(2)} mm`}</b>
               </div>
             );
           })}
-          {check.results.length ? <span className="muted small">Wanted for printing in place: at least {want} mm.</span> : null}
+          {check.results.length ? <span className="muted small">{t("Wanted for printing in place: at least {want} mm.", { want })}</span> : null}
         </div>
       ) : null}
     </>
@@ -213,7 +214,7 @@ function PickBox({ field, text, placeholder }: { field: JointField; text: string
           <span>{text}</span>
         </span>
       ) : (
-        <span className="placeholder">{active ? `${placeholder} in the viewport…` : placeholder}</span>
+        <span className="placeholder">{active ? t("{action} in the viewport…", { action: placeholder }) : placeholder}</span>
       )}
     </div>
   );
@@ -223,24 +224,24 @@ function JointForm() {
   const draft = useMotion((s) => s.draft)!;
   const features = useApp((s) => s.doc.features);
   const j = draft.joint;
-  const name = (id: string) => (id === "ground" ? "Ground" : id ? partName(id, features) : "");
+  const name = (id: string) => (id === "ground" ? t("Ground") : id ? partName(id, features) : "");
   const unit = j.type === "slider" ? "mm" : "deg";
   return (
     <>
       <div className="fld">
-        <span className="fld-label">Moving part</span>
-        <PickBox field="a" text={name(j.a)} placeholder="Tap the part that moves" />
+        <span className="fld-label">{t("Moving part")}</span>
+        <PickBox field="a" text={name(j.a)} placeholder={t("Tap the part that moves")} />
       </div>
       <div className="fld">
-        <span className="fld-label">Hangs on</span>
-        <PickBox field="b" text={name(j.b)} placeholder="Tap the part it hangs on" />
+        <span className="fld-label">{t("Hangs on")}</span>
+        <PickBox field="b" text={name(j.b)} placeholder={t("Tap the part it hangs on")} />
         <button className={`btn ${j.b === "ground" ? "primary" : ""}`} onClick={() => updateJointDraft({ b: "ground" }, "anchor")}>
-          Ground (stays put)
+          {t("Ground (stays put)")}
         </button>
       </div>
       <div className="fld">
-        <span className="fld-label">Axis</span>
-        <PickBox field="anchor" text={anchorText(j)} placeholder="Tap a hole, a shaft or an edge" />
+        <span className="fld-label">{t("Axis")}</span>
+        <PickBox field="anchor" text={anchorText(j)} placeholder={t("Tap a hole, a shaft or an edge")} />
         <div className="row">
           {(["origin.X", "origin.Y", "origin.Z"] as const).map((r) => (
             <button key={r} className={`btn ${"axis" in j.anchor && j.anchor.axis.ref === r ? "primary" : ""}`} style={{ flex: 1, height: 26 }} onClick={() => updateJointDraft({ anchor: { axis: { ref: r } } }, null)}>
@@ -250,10 +251,10 @@ function JointForm() {
         </div>
       </div>
       <div className="fld">
-        <span className="fld-label">Motion</span>
+        <span className="fld-label">{t("Motion")}</span>
         <div className="segmented">
-          {TYPES.map(([t, label]) => (
-            <button key={t} className={t === j.type ? "on" : ""} onClick={() => updateJointDraft({ type: t, ...(t === "fixed" ? { limits: undefined } : {}) })}>
+          {TYPES.map(([type, label]) => (
+            <button key={type} className={type === j.type ? "on" : ""} onClick={() => updateJointDraft({ type, ...(type === "fixed" ? { limits: undefined } : {}) })}>
               {label}
             </button>
           ))}
@@ -262,16 +263,16 @@ function JointForm() {
       {j.type !== "fixed" ? (
         <>
           <label className="checkbox">
-            <input type="checkbox" checked={!!j.limits} onChange={(e) => updateJointDraft({ limits: e.target.checked ? (j.type === "revolute" ? [0, 90] : [0, 20]) : undefined })} /> Limits
+            <input type="checkbox" checked={!!j.limits} onChange={(e) => updateJointDraft({ limits: e.target.checked ? (j.type === "revolute" ? [0, 90] : [0, 20]) : undefined })} /> {t("Limits")}
           </label>
           {j.limits ? (
             <div className="row">
               <div className="fld" style={{ flex: 1 }}>
-                <span className="fld-label">From</span>
+                <span className="fld-label">{t("From")}</span>
                 <ExprInput value={j.limits[0]} unit={unit} onCommit={(v) => updateJointDraft({ limits: [v, j.limits![1]] })} />
               </div>
               <div className="fld" style={{ flex: 1 }}>
-                <span className="fld-label">To</span>
+                <span className="fld-label">{t("To")}</span>
                 <ExprInput value={j.limits[1]} unit={unit} onCommit={(v) => updateJointDraft({ limits: [j.limits![0], v] })} />
               </div>
             </div>
@@ -279,18 +280,18 @@ function JointForm() {
         </>
       ) : null}
       <div className="fld">
-        <span className="fld-label">Name</span>
+        <span className="fld-label">{t("Name")}</span>
         <input className="field" value={j.name ?? ""} placeholder={j.id} onChange={(e) => updateJointDraft({ name: e.target.value || undefined })} />
       </div>
       <div className="row" style={{ justifyContent: "flex-end" }}>
-        <button className="cancel-btn" title="Cancel" onClick={() => useMotion.setState({ draft: null })}>
+        <button className="cancel-btn" title={t("Cancel")} onClick={() => useMotion.setState({ draft: null })}>
           <X />
         </button>
-        <button className="ok-btn" title="Save joint" onClick={saveJoint} disabled={!j.a}>
+        <button className="ok-btn" title={t("Save joint")} onClick={saveJoint} disabled={!j.a}>
           <Check />
         </button>
       </div>
-      {!draft.isNew ? null : <p className="muted small">The part keeps where it was drawn as its rest position.</p>}
+      {!draft.isNew ? null : <p className="muted small">{t("The part keeps where it was drawn as its rest position.")}</p>}
     </>
   );
 }

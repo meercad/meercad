@@ -2,6 +2,7 @@
 import { Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { closeTab, moveTab, newProject, openProject, renameProject, useApp } from "../store";
+import { t } from "../lib/i18n";
 
 const DRAG_TYPE = "application/x-meercad-tab";
 
@@ -18,45 +19,45 @@ export function TabStrip() {
   }, [activeId, tabs.length]);
 
   return (
-    <div className="tabs" role="tablist" aria-label="Open projects" ref={strip}>
-      {tabs.map((t) => {
-        const active = t.id === activeId;
+    <div className="tabs" role="tablist" aria-label={t("Open projects")} ref={strip}>
+      {tabs.map((tab) => {
+        const active = tab.id === activeId;
         return (
           <div
-            key={t.id}
+            key={tab.id}
             role="tab"
             aria-selected={active}
             tabIndex={0}
-            className={`tab ${active ? "active" : ""} ${dropBefore === t.id ? "drop-before" : ""}`}
-            title={`${t.folder ? `${t.folder.split("/").join(" › ")} › ` : ""}${t.name}${active ? " — double-click to rename" : ""}`}
+            className={`tab ${active ? "active" : ""} ${dropBefore === tab.id ? "drop-before" : ""}`}
+            title={((name) => (active ? t("{name} — double-click to rename", { name }) : name))(`${tab.folder ? `${tab.folder.split("/").join(" › ")} › ` : ""}${tab.name}`)}
             draggable={!editing}
             onDragStart={(e) => {
-              e.dataTransfer.setData(DRAG_TYPE, t.id);
+              e.dataTransfer.setData(DRAG_TYPE, tab.id);
               e.dataTransfer.effectAllowed = "move";
             }}
             onDragOver={(e) => {
               if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
               e.preventDefault();
-              setDropBefore(t.id);
+              setDropBefore(tab.id);
             }}
             onDragLeave={() => setDropBefore(null)}
             onDrop={(e) => {
               e.preventDefault();
               setDropBefore(null);
               const id = e.dataTransfer.getData(DRAG_TYPE);
-              if (id && id !== t.id) moveTab(id, t.id);
+              if (id && id !== tab.id) moveTab(id, tab.id);
             }}
-            onClick={() => void openProject(t.id)}
-            onKeyDown={(e) => e.key === "Enter" && !editing && void openProject(t.id)}
-            onAuxClick={(e) => e.button === 1 && closeTab(t.id)}
+            onClick={() => void openProject(tab.id)}
+            onKeyDown={(e) => e.key === "Enter" && !editing && void openProject(tab.id)}
+            onAuxClick={(e) => e.button === 1 && closeTab(tab.id)}
             onDoubleClick={() => active && setEditing(true)}
           >
             {active && editing ? (
               <input
                 autoFocus
                 className="tab-name-input"
-                defaultValue={t.name}
-                aria-label="Project name"
+                defaultValue={tab.name}
+                aria-label={t("Project name")}
                 onFocus={(e) => e.target.select()}
                 onClick={(e) => e.stopPropagation()}
                 onBlur={(e) => {
@@ -67,21 +68,21 @@ export function TabStrip() {
                   e.stopPropagation();
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   if (e.key === "Escape") {
-                    (e.target as HTMLInputElement).value = t.name;
+                    (e.target as HTMLInputElement).value = tab.name;
                     (e.target as HTMLInputElement).blur();
                   }
                 }}
               />
             ) : (
-              <span className="tab-name">{t.name}</span>
+              <span className="tab-name">{tab.name}</span>
             )}
-            {active && saveState !== "saved" ? <i className="tab-dirty" title={saveState === "saving" ? "Saving…" : "Unsaved changes"} /> : null}
+            {active && saveState !== "saved" ? <i className="tab-dirty" title={saveState === "saving" ? t("Saving…") : t("Unsaved changes")} /> : null}
             <button
               className="tab-close"
-              title="Close tab (⌘W)"
+              title={t("Close tab (⌘W)")}
               onClick={(e) => {
                 e.stopPropagation();
-                closeTab(t.id);
+                closeTab(tab.id);
               }}
             >
               <X />
@@ -89,7 +90,7 @@ export function TabStrip() {
           </div>
         );
       })}
-      <button className="icon-btn sm tab-new" title="New part (⌘T)" onClick={() => void newProject()}>
+      <button className="icon-btn sm tab-new" title={t("New part (⌘T)")} onClick={() => void newProject()}>
         <Plus />
       </button>
     </div>

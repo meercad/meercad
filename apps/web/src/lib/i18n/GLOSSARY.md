@@ -89,7 +89,7 @@ DXF, SVG, PDF, MCP.
 | undo / redo | Rückgängig / Wiederholen |
 | settings | Einstellungen |
 | shortcuts | Tastenkürzel |
-| toolbar groups: Sketch, Create, Modify, Transform, Joints, Measure, Import | Skizze, Erstellen, Ändern, Transformieren, Gelenke, Messen, Import |
+| toolbar groups: Sketch, Create, Modify, Transform, Joints, Measure, Import | Skizze, Erstellen, Ändern, Anordnen, Gelenke, Messen, Import |
 | suppress | Unterdrücken |
 | rebuild | Neu berechnen |
 | select / selection | Auswählen / Auswahl |

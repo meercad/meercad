@@ -1,157 +1,161 @@
 import { BookOpen, ChevronRight, Keyboard, PlayCircle, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Kbd } from "./Kbd";
+import { Kbd, rich } from "./Kbd";
+import { t } from "../lib/i18n";
 
 interface Guide {
   title: string;
   body: ReactNode;
 }
 
+const li = (text: string) => <li>{rich(text)}</li>;
+const about = (detail?: string) => window.dispatchEvent(new CustomEvent("meercad:about", detail ? { detail } : {}));
+
 const GUIDES: { section: string; guides: Guide[] }[] = [
   {
-    section: "Getting started",
+    section: t("Getting started"),
     guides: [
       {
-        title: "Your first part in 2 minutes",
+        title: t("Your first part in 2 minutes"),
         body: (
           <ol>
-            <li>Hover the grid's <b>Top</b> plane (or a flat face) and press <Kbd k="S" /> — or hover <b>Origin</b> in the feature list and pick a plane.</li>
-            <li>Press <Kbd k="R" />, click a corner on the origin, click the opposite corner.</li>
-            <li>Press <Kbd k="D" />, click the bottom line, click below it and type <span className="mono">40</span> <Kbd k="↵" />. Dimension the side the same way.</li>
-            <li>Press <Kbd k="↵" /> to finish the sketch, click inside the rectangle and <b>drag the arrow</b> up — or press <Kbd k="E" /> and type a distance.</li>
-            <li>Click a top edge and drag its arrow away from the part to round it.</li>
-            <li>Export → <b>STL</b> or <b>3MF</b> for your slicer.</li>
+            {li(t("Hover the grid's **Top** plane (or a flat face) and press [S] — or hover **Origin** in the feature list and pick a plane."))}
+            {li(t("Press [R], click a corner on the origin, click the opposite corner."))}
+            {li(t("Press [D], click the bottom line, click below it and type `40` [↵]. Dimension the side the same way."))}
+            {li(t("Press [↵] to finish the sketch, click inside the rectangle and **drag the arrow** up — or press [E] and type a distance."))}
+            {li(t("Click a top edge and drag its arrow away from the part to round it."))}
+            {li(t("Export → **STL** or **3MF** for your slicer."))}
           </ol>
         ),
       },
       {
-        title: "Navigating the 3D view",
+        title: t("Navigating the 3D view"),
         body: (
           <ul>
-            <li><b>Rotate</b>: right-drag (or drag the view cube) · <b>Pan</b>: middle-drag or Shift + right-drag · <b>Zoom</b>: wheel, towards the cursor.</li>
-            <li>View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. <Kbd k="Mod+1" />–<Kbd k="Mod+7" /> pick standard views, <Kbd k="Space" /> over a face looks straight at it, <Kbd k="Z" /> fits all.</li>
-            <li>The box icon at the bottom right switches perspective / orthographic.</li>
+            {li(t("**Rotate**: right-drag (or drag the view cube) · **Pan**: middle-drag or Shift + right-drag · **Zoom**: wheel, towards the cursor."))}
+            {li(t("View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. [Mod+1]–[Mod+7] pick standard views, [Space] over a face looks straight at it, [Z] fits all."))}
+            {li(t("The box icon at the bottom right switches perspective / orthographic."))}
           </ul>
         ),
       },
       {
-        title: "On iPhone and iPad",
+        title: t("On iPhone and iPad"),
         body: (
           <ul>
-            <li><b>Fingers navigate</b>: one finger rotates, two fingers pan and pinch to zoom. <b>The Apple Pencil works</b>: it selects, draws in sketches and drags the arrows.</li>
-            <li><b>Undo</b>: tap with two fingers or swipe three fingers left · <b>Redo</b>: tap with three fingers or swipe right — or use the arrows at the top right. A short note says what was undone.</li>
-            <li>Long-press for the menus a right-click opens on the Mac. Double-tap or squeeze the Pencil to switch a sketch between selecting and drawing.</li>
-          </ul>
-        ),
-      },
-    ],
-  },
-  {
-    section: "Sketching",
-    guides: [
-      {
-        title: "Drawing and snapping",
-        body: (
-          <ul>
-            <li>Tools: <Kbd k="L" /> line (keeps chaining; double-click or Esc ends, clicking the start closes), <Kbd k="R" /> rectangle, <Kbd k="Shift+R" /> center rectangle, <Kbd k="C" /> circle, <Kbd k="A" /> arc (center, start, end), <Kbd k="G" /> polygon, <Kbd k="P" /> point, <Kbd k="T" /> trim.</li>
-            <li>The cursor snaps to existing points, onto curves and onto the axes — the tip next to the cursor tells you which. Nearly horizontal/vertical lines become exactly so.</li>
-            <li><Kbd k="X" /> toggles construction geometry (dashed, ignored for profiles). <Kbd k="U" /> uses model edges as fixed references.</li>
-            <li>Closed loops fill light blue — those are the profiles you can extrude.</li>
-          </ul>
-        ),
-      },
-      {
-        title: "Dimensions and constraints",
-        body: (
-          <ul>
-            <li><Kbd k="D" />, then click a line (length), circle (diameter), arc (radius), two points (distance — place the label to the side for horizontal/vertical) or two lines (angle). Type a value or an expression like <span className="mono">width / 2</span>.</li>
-            <li>Double-click any dimension to change it. Select geometry and add constraints with <Kbd k="Shift" /> + letter: <Kbd k="Shift+V" /> horizontal/vertical, <Kbd k="Shift+N" /> coincident, <Kbd k="Shift+T" /> tangent, <Kbd k="Shift+E" /> equal, <Kbd k="Shift+A" /> parallel, <Kbd k="Shift+P" /> perpendicular, <Kbd k="Shift+C" /> concentric, <Kbd k="Shift+M" /> midpoint, <Kbd k="Shift+S" /> symmetric, <Kbd k="Shift+L" /> lock.</li>
-            <li>The badge top-left shows the remaining degrees of freedom; “Fully defined” means nothing can move by accident.</li>
-            <li>Drag points or lines to try shapes — the solver keeps all constraints.</li>
+            {li(t("**Fingers navigate**: one finger rotates, two fingers pan and pinch to zoom. **The Apple Pencil works**: it selects, draws in sketches and drags the arrows."))}
+            {li(t("**Undo**: tap with two fingers or swipe three fingers left · **Redo**: tap with three fingers or swipe right — or use the arrows at the top right. A short note says what was undone."))}
+            {li(t("Long-press for the menus a right-click opens on the Mac. Double-tap or squeeze the Pencil to switch a sketch between selecting and drawing."))}
           </ul>
         ),
       },
     ],
   },
   {
-    section: "Modeling",
+    section: t("Sketching"),
     guides: [
       {
-        title: "Push, pull, round and bevel",
+        title: t("Drawing and snapping"),
         body: (
           <ul>
-            <li>Select any face, flat or round → drag the knob: out adds material, in cuts.</li>
-            <li>Select a sketch region → drag to extrude it.</li>
-            <li>Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer.</li>
-            <li>The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts.</li>
-            <li>Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it.</li>
+            {li(t("Tools: [L] line (keeps chaining; double-click or Esc ends, clicking the start closes), [R] rectangle, [Shift+R] center rectangle, [C] circle, [A] arc (center, start, end), [G] polygon, [P] point, [T] trim."))}
+            {li(t("The cursor snaps to existing points, onto curves and onto the axes — the tip next to the cursor tells you which. Nearly horizontal/vertical lines become exactly so."))}
+            {li(t("[X] toggles construction geometry (dashed, ignored for profiles). [U] uses model edges as fixed references."))}
+            {li(t("Closed loops fill light blue — those are the profiles you can extrude."))}
           </ul>
         ),
       },
       {
-        title: "Features with exact values",
+        title: t("Dimensions and constraints"),
         body: (
           <ul>
-            <li>Extrude <Kbd k="E" />: New / Add / Remove / Intersect, blind, symmetric, two directions or through all.</li>
-            <li>Revolve <Kbd k="V" /> around an axis, line or edge. Fillet <Kbd k="F" />, Chamfer <Kbd k="C" />, Shell <Kbd k="H" />.</li>
-            <li>Patterns <Kbd k="L" /> / <Kbd k="O" /> and Mirror <Kbd k="I" /> copy extrudes/revolves or whole parts. Boolean <Kbd k="B" /> combines parts. Plane <Kbd k="N" /> adds offset construction planes.</li>
-            <li>Dialogs preview live; <Kbd k="↵" /> accepts, <Kbd k="Esc" /> cancels. Drag the arrows in the viewport to set distances.</li>
-          </ul>
-        ),
-      },
-      {
-        title: "History, rollback and variables",
-        body: (
-          <ul>
-            <li>Double-click a feature to edit it; everything after it updates. Drag features to reorder.</li>
-            <li>Drag the blue bar under the features to roll back and insert steps earlier.</li>
-            <li>Add variables (e.g. <span className="mono">wall = 2 mm</span>) and use them in any value; renaming a variable updates every use.</li>
-            <li>Right-click a feature to suppress, rename or delete it.</li>
+            {li(t("[D], then click a line (length), circle (diameter), arc (radius), two points (distance — place the label to the side for horizontal/vertical) or two lines (angle). Type a value or an expression like `width / 2`."))}
+            {li(t("Double-click any dimension to change it. Select geometry and add constraints with [Shift] + letter: [Shift+V] horizontal/vertical, [Shift+N] coincident, [Shift+T] tangent, [Shift+E] equal, [Shift+A] parallel, [Shift+P] perpendicular, [Shift+C] concentric, [Shift+M] midpoint, [Shift+S] symmetric, [Shift+L] lock."))}
+            {li(t("The badge top-left shows the remaining degrees of freedom; “Fully defined” means nothing can move by accident."))}
+            {li(t("Drag points or lines to try shapes — the solver keeps all constraints."))}
           </ul>
         ),
       },
     ],
   },
   {
-    section: "Files",
+    section: t("Modeling"),
     guides: [
       {
-        title: "Saving, export and import",
+        title: t("Push, pull, round and bevel"),
         body: (
           <ul>
-            <li>Projects save automatically as open <span className="mono">.meercad</span> files (readable JSON) — in the desktop app in Documents/meerCAD.</li>
-            <li>Export: STL and 3MF for 3D printing, STEP for other CAD tools, DXF/SVG of a sketch for laser cutting.</li>
-            <li>Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already.</li>
-            <li>Materials: right-click a part in the parts list → Material. The list then shows each part's mass and, below, the total mass and centre of gravity (solid material, 100 % infill).</li>
-            <li>Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.</li>
-            <li>Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import <Kbd k="Mod+O" />. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces.</li>
+            {li(t("Select any face, flat or round → drag the knob: out adds material, in cuts."))}
+            {li(t("Select a sketch region → drag to extrude it."))}
+            {li(t("Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer."))}
+            {li(t("The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts."))}
+            {li(t("Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it."))}
+          </ul>
+        ),
+      },
+      {
+        title: t("Features with exact values"),
+        body: (
+          <ul>
+            {li(t("Extrude [E]: New / Add / Remove / Intersect, blind, symmetric, two directions or through all."))}
+            {li(t("Revolve [V] around an axis, line or edge. Fillet [F], Chamfer [C], Shell [H]."))}
+            {li(t("Patterns [L] / [O] and Mirror [I] copy extrudes/revolves or whole parts. Boolean [B] combines parts. Plane [N] adds offset construction planes."))}
+            {li(t("Dialogs preview live; [↵] accepts, [Esc] cancels. Drag the arrows in the viewport to set distances."))}
+          </ul>
+        ),
+      },
+      {
+        title: t("History, rollback and variables"),
+        body: (
+          <ul>
+            {li(t("Double-click a feature to edit it; everything after it updates. Drag features to reorder."))}
+            {li(t("Drag the blue bar under the features to roll back and insert steps earlier."))}
+            {li(t("Add variables (e.g. `wall = 2 mm`) and use them in any value; renaming a variable updates every use."))}
+            {li(t("Right-click a feature to suppress, rename or delete it."))}
           </ul>
         ),
       },
     ],
   },
   {
-    section: "About",
+    section: t("Files"),
     guides: [
       {
-        title: "Licenses",
+        title: t("Saving, export and import"),
         body: (
           <ul>
-            <li>meerCAD is free to use, also commercially, and its source is public under the Functional Source License 1.1: anything goes except building a competing product from it. Each release also becomes Apache-2.0 two years after it ships. The file-format, I/O and naming libraries are MIT licensed.</li>
-            <li>Geometry by <b>Open CASCADE Technology</b> and sketch solving by <b>PlaneGCS</b> (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules.</li>
-            <li>Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages.</li>
-            <li>Your models belong to you: projects are plain files on your device; nothing is uploaded.</li>
+            {li(t("Projects save automatically as open `.meercad` files (readable JSON) — in the desktop app in Documents/meerCAD."))}
+            {li(t("Export: STL and 3MF for 3D printing, STEP for other CAD tools, DXF/SVG of a sketch for laser cutting."))}
+            {li(t("Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already."))}
+            {li(t("Materials: right-click a part in the parts list → Material. The list then shows each part's mass and, below, the total mass and centre of gravity (solid material, 100 % infill)."))}
+            {li(t("Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop."))}
+            {li(t("Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces."))}
+          </ul>
+        ),
+      },
+    ],
+  },
+  {
+    section: t("about::About"),
+    guides: [
+      {
+        title: t("Licenses"),
+        body: (
+          <ul>
+            {li(t("meerCAD is free to use, also commercially, and its source is public under the Functional Source License 1.1: anything goes except building a competing product from it. Each release also becomes Apache-2.0 two years after it ships. The file-format, I/O and naming libraries are MIT licensed."))}
+            {li(t("Geometry by **Open CASCADE Technology** and sketch solving by **PlaneGCS** (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules."))}
+            {li(t("Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages."))}
+            {li(t("Your models belong to you: projects are plain files on your device; nothing is uploaded."))}
             <li>
-              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about", { detail: "licenses" }))}>
-                All licences
+              <button className="link" onClick={() => about("licenses")}>
+                {t("All licences")}
               </button>{" "}
               ·{" "}
-              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about", { detail: "privacy" }))}>
-                Privacy policy
+              <button className="link" onClick={() => about("privacy")}>
+                {t("Privacy policy")}
               </button>{" "}
               ·{" "}
-              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about"))}>
-                No warranty
+              <button className="link" onClick={() => about()}>
+                {t("No warranty")}
               </button>
             </li>
           </ul>
@@ -160,15 +164,15 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
     ],
   },
   {
-    section: "AI assistants",
+    section: t("AI assistants"),
     guides: [
       {
-        title: "Model with Claude via MCP",
+        title: t("Model with Claude via MCP"),
         body: (
           <ol>
-            <li>Click the plug icon in the top bar and enable <b>Allow assistants to control meerCAD</b>.</li>
-            <li>Copy the shown configuration into Claude Desktop (Settings → Developer → Edit Config) or run the <span className="mono">claude mcp add …</span> command for Claude Code.</li>
-            <li>Ask for parts or changes, e.g. “make the plate 10 mm wider and add a third hole”. The assistant can pick and open projects, preview ideas and apply them — you see every step live and can undo.</li>
+            {li(t("Click the plug icon in the top bar and enable **Allow assistants to control meerCAD**."))}
+            {li(t("Copy the shown configuration into Claude Desktop (Settings → Developer → Edit Config) or run the `claude mcp add …` command for Claude Code."))}
+            {li(t("Ask for parts or changes, e.g. “make the plate 10 mm wider and add a third hole”. The assistant can pick and open projects, preview ideas and apply them — you see every step live and can undo."))}
           </ol>
         ),
       },
@@ -181,19 +185,19 @@ export function HelpPanel({ onClose, onTour, onShortcuts }: { onClose: () => voi
   return (
     <aside className="panel-right help-panel">
       <div className="head">
-        <BookOpen size={16} /> Help
+        <BookOpen size={16} /> {t("Help")}
         <span className="spacer" />
-        <button className="icon-btn sm" onClick={onClose} aria-label="Close help">
+        <button className="icon-btn sm" onClick={onClose} aria-label={t("Close help")}>
           <X />
         </button>
       </div>
       <div className="body">
         <div className="row">
           <button className="btn" onClick={onTour}>
-            <PlayCircle /> Restart tour
+            <PlayCircle /> {t("Restart tour")}
           </button>
           <button className="btn" onClick={onShortcuts}>
-            <Keyboard /> Shortcuts <Kbd k="?" />
+            <Keyboard /> {t("Shortcuts")} <Kbd k="?" />
           </button>
         </div>
         {GUIDES.map((s) => (

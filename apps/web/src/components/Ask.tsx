@@ -1,6 +1,7 @@
 /** In-app replacements for confirm()/prompt(): promise-based, styled like the rest of the UI. */
 import { useEffect, useRef, useState } from "react";
 import { Kbd } from "./Kbd";
+import { t } from "../lib/i18n";
 
 interface Request {
   title: string;
@@ -24,17 +25,17 @@ function ask(r: Omit<Request, "resolve">): Promise<string | null> {
 }
 
 export async function askConfirm(o: { title: string; message?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean }): Promise<boolean> {
-  const r = await ask({ title: o.title, ...(o.message ? { message: o.message } : {}), confirmLabel: o.confirmLabel ?? "OK", cancelLabel: o.cancelLabel ?? "Cancel", danger: o.danger ?? false });
+  const r = await ask({ title: o.title, ...(o.message ? { message: o.message } : {}), confirmLabel: o.confirmLabel ?? t("OK"), cancelLabel: o.cancelLabel ?? t("Cancel"), danger: o.danger ?? false });
   return r !== null;
 }
 
 export function askText(o: { title: string; label?: string; value?: string; message?: string; confirmLabel?: string }): Promise<string | null> {
-  return ask({ title: o.title, ...(o.message ? { message: o.message } : {}), ...(o.label ? { label: o.label } : {}), value: o.value ?? "", confirmLabel: o.confirmLabel ?? "OK", cancelLabel: "Cancel", danger: false });
+  return ask({ title: o.title, ...(o.message ? { message: o.message } : {}), ...(o.label ? { label: o.label } : {}), value: o.value ?? "", confirmLabel: o.confirmLabel ?? t("OK"), cancelLabel: t("Cancel"), danger: false });
 }
 
 /** A notice with a single button, e.g. a link to copy. */
 export async function showNotice(o: { title: string; message?: string; value?: string }): Promise<void> {
-  await ask({ title: o.title, ...(o.message ? { message: o.message } : {}), ...(o.value !== undefined ? { value: o.value } : {}), confirmLabel: "Done", cancelLabel: null, danger: false });
+  await ask({ title: o.title, ...(o.message ? { message: o.message } : {}), ...(o.value !== undefined ? { value: o.value } : {}), confirmLabel: t("Done"), cancelLabel: null, danger: false });
 }
 
 export function AskHost() {

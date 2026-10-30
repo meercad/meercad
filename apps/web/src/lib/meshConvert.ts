@@ -9,6 +9,7 @@ import type { DocOp, Feature } from "@meercad/schema";
 import { apply, currentDoc, editFeature, toast, useApp } from "../store";
 import { partName } from "./features";
 import { fmtVolume } from "./units";
+import { t } from "./i18n";
 
 export function convertMeshPart(bodyId: string): void {
   const doc = currentDoc();
@@ -17,21 +18,21 @@ export function convertMeshPart(bodyId: string): void {
   if (existing) {
     const st = useApp.getState().output?.report.features.find((f) => f.id === existing.id);
     if (st?.status === "error") {
-      toast(`Converting ${name} failed: ${st.message ?? "unknown error"}${st.hint ? ` (${st.hint})` : ""}`, "error");
+      toast(t("Converting {name} failed: {error}", { name, error: (st.message ?? t("unknown error")) + (st.hint ? ` (${st.hint})` : "") }), "error");
       editFeature(existing.id);
-    } else toast(`${name} is already converted by step ${existing.id}`);
+    } else toast(t("{name} is already converted by step {step}", { name, step: existing.id }));
     return;
   }
   const id = nextFeatureId(doc, "mesh_convert");
   if (!apply({ type: "add_features", features: [{ id, op: "mesh_convert", body: bodyId }] })) return;
   useApp.setState({ selection: [] });
-  toast(`Converting ${name}…`);
+  toast(t("Converting {name}…", { name }));
   void statusOf(id).then((st) => {
     if (!st) return;
     if (st.status === "error") {
-      toast(`Converting ${name} failed: ${st.message ?? "unknown error"}${st.hint ? ` (${st.hint})` : ""}. The mesh stays as it was; raise the tolerance in step ${id} or undo.`, "error");
+      toast(t("Converting {name} failed: {error}. The mesh stays as it was; raise the tolerance in step {step} or undo.", { name, error: (st.message ?? t("unknown error")) + (st.hint ? ` (${st.hint})` : ""), step: id }), "error");
       editFeature(id);
-    } else toast(`${name} has editable faces now${st.message ? ` (${st.message})` : ""}. Undo brings the mesh back.`);
+    } else toast(t("{name} has editable faces now{details}. Undo brings the mesh back.", { name, details: st.message ? ` (${st.message})` : "" }));
   });
 }
 
@@ -40,7 +41,7 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
   const mesh = s.output?.meshes.find((m) => m.bodyId === bodyId);
   const doc = currentDoc();
   const name = partName(bodyId, doc.features);
-  if (!mesh) return toast(`${name} is not in the model`, "error");
+  if (!mesh) return toast(t("{name} is not in the model", { name }), "error");
   let n = 1;
   while (doc.features.some((f) => f.id.startsWith(`rb${n}_`))) n++;
   const prefix = `rb${n}`;
@@ -51,7 +52,7 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
     meshVolume = fit.volume;
     plan = reconstruct(fit, { prefix });
   } catch (e) {
-    return toast(`Could not rebuild ${name}: ${e instanceof Error ? e.message : String(e)}`, "error");
+    return toast(t("Could not rebuild {name}: {error}", { name, error: e instanceof Error ? e.message : String(e) }), "error");
   }
   const ops: DocOp[] = Object.entries(plan.params).map(([param, expr]) => ({ type: "set_param", name: param, expr, auto: true }));
   ops.push({ type: "add_features", features: plan.features as Feature[] });
@@ -60,13 +61,19 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
   // Layers are fused into the first one.
   const body = `${prefix}_ex1`;
   const result = await builtVolume(prefix, body);
-  if (!result) return toast(`Rebuilt ${name} with ${plan.features.length} steps.`);
-  if (result.error) return toast(`Rebuilt ${name}, but ${result.error}`, "error");
+  if (!result) return toast(t("Rebuilt {name} with {n} steps.", { name, n: plan.features.length }));
+  if (result.error) return toast(t("Rebuilt {name}, but {error}", { name, error: result.error }), "error");
   // The mesh stays as the reference to compare against, hidden.
   useApp.setState((st) => ({ hidden: new Set([...st.hidden, bodyId]) }));
   const off = Math.abs(result.volume - meshVolume) / meshVolume;
   toast(
-    `Rebuilt ${name} from ${plan.features.length} steps with ${Object.keys(plan.params).length} parameters; ${off < 0.01 ? "same volume as the mesh" : `volume ${fmtVolume(result.volume)} against ${fmtVolume(meshVolume)} in the mesh`}${plan.warnings.length ? ` (${plan.warnings.join("; ")})` : ""}. The mesh is hidden; show it from the parts list to compare.`,
+    t("Rebuilt {name} from {n} steps with {params} parameters; {volume}{warnings}. The mesh is hidden; show it from the parts list to compare.", {
+      name,
+      n: plan.features.length,
+      params: Object.keys(plan.params).length,
+      volume: off < 0.01 ? t("same volume as the mesh") : t("volume {built} against {mesh} in the mesh", { built: fmtVolume(result.volume), mesh: fmtVolume(meshVolume) }),
+      warnings: plan.warnings.length ? ` (${plan.warnings.join("; ")})` : "",
+    }),
     off < 0.05 ? "info" : "error",
   );
 }
@@ -90,7 +97,7 @@ function builtVolume(prefix: string, body: string): Promise<{ volume: number; er
     const out = s.output;
     if (s.building || !out) return undefined;
     const failed = out.report.features.find((f) => f.id.startsWith(`${prefix}_`) && f.status === "error");
-    if (failed) return { volume: 0, error: `step ${failed.id} failed: ${failed.message ?? ""}` };
+    if (failed) return { volume: 0, error: t("step {step} failed: {error}", { step: failed.id, error: failed.message ?? "" }) };
     const b = out.report.bodies.find((x) => x.id === body);
     return b && Number.isFinite(b.volume) ? { volume: b.volume } : undefined;
   });

@@ -2,6 +2,7 @@ import { Download, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { desktop } from "../lib/persistence";
 import { toast } from "../store";
+import { t } from "../lib/i18n";
 
 type Update = { version: string; notes: string; changes?: string[]; page: string; canInstall: boolean };
 
@@ -30,7 +31,7 @@ export function UpdateBanner() {
     void desktop.info().then(({ version }) => {
       try {
         const before = localStorage.getItem("meercad.version");
-        if (before && before !== version) toast(`Updated to meerCAD ${version}`);
+        if (before && before !== version) toast(t("Updated to meerCAD {version}", { version }));
         localStorage.setItem("meercad.version", version);
       } catch {
         // no confirmation without storage
@@ -39,10 +40,10 @@ export function UpdateBanner() {
     const offs = [
       desktop.on("update-available", (u) => setUpdate(u)),
       desktop.on("update-progress", (p) => setProgress(p)),
-      desktop.on("update-none", (v) => toast(`meerCAD ${v} is up to date`)),
+      desktop.on("update-none", (v) => toast(t("meerCAD {version} is up to date", { version: v }))),
       desktop.on("update-error", (m) => {
         setProgress(null);
-        toast(`Update failed: ${m}`, "error");
+        toast(t("Update failed: {msg}", { msg: m }), "error");
       }),
     ];
     return () => offs.forEach((off) => off());
@@ -53,10 +54,10 @@ export function UpdateBanner() {
     <div className="update-banner" role="status">
       <div className="row">
         <Sparkles size={16} style={{ color: "var(--accent)" }} />
-        <b>meerCAD {update.version} is available</b>
+        <b>{t("meerCAD {version} is available", { version: update.version })}</b>
         <span className="spacer" />
         {progress === null ? (
-          <button className="icon-btn sm" onClick={() => setDismissed(update.version)} title="Later">
+          <button className="icon-btn sm" onClick={() => setDismissed(update.version)} title={t("Later")}>
             <X />
           </button>
         ) : null}
@@ -66,25 +67,25 @@ export function UpdateBanner() {
           {changes.slice(0, 6).map((c, i) => (
             <li key={i}>{c}</li>
           ))}
-          {changes.length > 6 ? <li className="muted">and {changes.length - 6} more</li> : null}
+          {changes.length > 6 ? <li className="muted">{t("and {n} more", { n: changes.length - 6 })}</li> : null}
         </ul>
       ) : null}
       {!update.canInstall ? (
-        <div className="muted update-hint">To update in place, move meerCAD into your Applications folder and start it from there.</div>
+        <div className="muted update-hint">{t("To update in place, move meerCAD into your Applications folder and start it from there.")}</div>
       ) : null}
       {progress !== null ? (
         <div className="update-progress">
           <div style={{ width: `${Math.round(progress * 100)}%` }} />
-          <span>{progress < 1 ? `Downloading… ${Math.round(progress * 100)}%` : "Installing and restarting…"}</span>
+          <span>{progress < 1 ? t("Downloading… {pct}%", { pct: Math.round(progress * 100) }) : t("Installing and restarting…")}</span>
         </div>
       ) : (
         <div className="row">
           <button className="btn" onClick={() => window.open(update.page, "_blank")}>
-            Release page
+            {t("Release page")}
           </button>
           <span className="spacer" />
           <button className="btn" onClick={() => setDismissed(update.version)}>
-            Later
+            {t("Later")}
           </button>
           <button
             className="btn primary"
@@ -94,7 +95,7 @@ export function UpdateBanner() {
               void desktop?.updates.install();
             }}
           >
-            <Download /> {update.canInstall ? "Update now" : "Download"}
+            <Download /> {update.canInstall ? t("Update now") : t("Download")}
           </button>
         </div>
       )}

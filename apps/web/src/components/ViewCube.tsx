@@ -3,17 +3,18 @@ import { useEffect, useRef, useState } from "react";
 import { THREE, type Viewport } from "@meercad/viewport";
 import { useKey } from "../lib/keymap";
 import { withKey } from "./Kbd";
+import { t } from "../lib/i18n";
 
 type V = [number, number, number];
 // Faces carry the colour of the axis they face (the same colours as the origin planes).
 const AXIS_COLORS = { x: "#e5484d", y: "#22a35a", z: "#3b82f6" };
-const FACES: { label: string; n: V; u: V; v: V; tint: string }[] = [
-  { label: "TOP", n: [0, 0, 1], u: [1, 0, 0], v: [0, -1, 0], tint: AXIS_COLORS.z },
-  { label: "BOTTOM", n: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0], tint: AXIS_COLORS.z },
-  { label: "FRONT", n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, -1], tint: AXIS_COLORS.y },
-  { label: "BACK", n: [0, 1, 0], u: [-1, 0, 0], v: [0, 0, -1], tint: AXIS_COLORS.y },
-  { label: "RIGHT", n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, -1], tint: AXIS_COLORS.x },
-  { label: "LEFT", n: [-1, 0, 0], u: [0, -1, 0], v: [0, 0, -1], tint: AXIS_COLORS.x },
+const FACES: { label: string; view: string; n: V; u: V; v: V; tint: string }[] = [
+  { label: t("TOP"), view: t("top view"), n: [0, 0, 1], u: [1, 0, 0], v: [0, -1, 0], tint: AXIS_COLORS.z },
+  { label: t("BOTTOM"), view: t("bottom view"), n: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0], tint: AXIS_COLORS.z },
+  { label: t("FRONT"), view: t("front view"), n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, -1], tint: AXIS_COLORS.y },
+  { label: t("BACK"), view: t("back view"), n: [0, 1, 0], u: [-1, 0, 0], v: [0, 0, -1], tint: AXIS_COLORS.y },
+  { label: t("RIGHT"), view: t("right view"), n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, -1], tint: AXIS_COLORS.x },
+  { label: t("LEFT"), view: t("left view"), n: [-1, 0, 0], u: [0, -1, 0], v: [0, 0, -1], tint: AXIS_COLORS.x },
 ];
 const AXES: { name: "x" | "y" | "z"; dir: V }[] = [
   { name: "x", dir: [1, 0, 0] },
@@ -145,7 +146,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
                     onPointerEnter={() => setHot(k)}
                     onPointerLeave={() => setHot((h) => (h === k ? null : h))}
                     data-dir={dir.join(",")}
-                    title={row === 1 && col === 1 ? `${f.label.toLowerCase()} view` : "view from here"}
+                    title={row === 1 && col === 1 ? f.view : t("view from here")}
                   />
                 );
               }),
@@ -154,13 +155,13 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
         ))}
       </div>
       <div className="cube-tools">
-        <button className="icon-btn sm" title={withKey("Isometric view", isoKey)} onClick={() => viewport.setView("iso")}>
+        <button className="icon-btn sm" title={withKey(t("Isometric view"), isoKey)} onClick={() => viewport.setView("iso")}>
           <House />
         </button>
-        <button className="icon-btn sm" title="Rotate view 90° left" onClick={() => viewport.orbit(Math.PI / 2, 0)}>
+        <button className="icon-btn sm" title={t("Rotate view 90° left")} onClick={() => viewport.orbit(Math.PI / 2, 0)}>
           <RotateCcw />
         </button>
-        <button className="icon-btn sm" title="Rotate view 90° right" onClick={() => viewport.orbit(-Math.PI / 2, 0)}>
+        <button className="icon-btn sm" title={t("Rotate view 90° right")} onClick={() => viewport.orbit(-Math.PI / 2, 0)}>
           <RotateCw />
         </button>
       </div>

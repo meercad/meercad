@@ -18,6 +18,7 @@ import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
 import { usePrefs } from "../lib/keymap";
 import { PART_PALETTE, partColors } from "../lib/partColors";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
+import { lang, t, tn } from "../lib/i18n";
 
 const NONE: never[] = [];
 const EMPTY: Record<string, never> = {};
@@ -63,7 +64,7 @@ function SectionHead({ open, onToggle, children, actions, sub }: { open: boolean
 export function SidePanel() {
   return (
     <aside className="side">
-      <button className="sheet-grip" onClick={() => toggleSide(false)} aria-label="Close" title="Close">
+      <button className="sheet-grip" onClick={() => toggleSide(false)} aria-label={t("Close")} title={t("Close")}>
         <i />
       </button>
       <div className="side-scroll">
@@ -118,26 +119,26 @@ function FeatureList() {
 
   const menu = (f: Feature, x: number, y: number) =>
     showMenu(x, y, [
-      { label: "Edit", icon: <Pencil />, kbd: "↵", onClick: () => editFeature(f.id) },
+      { label: t("Edit"), icon: <Pencil />, kbd: "↵", onClick: () => editFeature(f.id) },
       {
-        label: "Rename",
+        label: t("Rename"),
         icon: <Pencil />,
         onClick: async () => {
-          const name = await askText({ title: "Rename feature", label: "Name", value: featureName(f) });
+          const name = await askText({ title: t("Rename feature"), label: t("Name"), value: featureName(f) });
           if (name !== null) apply({ type: "edit_feature", id: f.id, patch: { name: name.trim() || null } });
         },
       },
-      { label: f.suppressed ? "Unsuppress" : "Suppress", icon: f.suppressed ? <Eye /> : <EyeOff />, onClick: () => apply({ type: "edit_feature", id: f.id, patch: { suppressed: f.suppressed ? null : true } }) },
-      { label: "Roll back to here", icon: <SkipBack />, onClick: () => apply({ type: "set_rollback", id: f.id }) },
+      { label: f.suppressed ? t("Unsuppress") : t("Suppress"), icon: f.suppressed ? <Eye /> : <EyeOff />, onClick: () => apply({ type: "edit_feature", id: f.id, patch: { suppressed: f.suppressed ? null : true } }) },
+      { label: t("Roll back to here"), icon: <SkipBack />, onClick: () => apply({ type: "set_rollback", id: f.id }) },
       ...(f.op === "sketch"
         ? [
-            { label: hidden.has(f.id) ? "Show sketch" : "Hide sketch", icon: hidden.has(f.id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(f.id) },
-            { label: "Export DXF", icon: <FileDown />, onClick: () => exportSketch(f.id, "dxf") },
-            { label: "Export SVG", icon: <FileDown />, onClick: () => exportSketch(f.id, "svg") },
+            { label: hidden.has(f.id) ? t("Show sketch") : t("Hide sketch"), icon: hidden.has(f.id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(f.id) },
+            { label: t("Export DXF"), icon: <FileDown />, onClick: () => exportSketch(f.id, "dxf") },
+            { label: t("Export SVG"), icon: <FileDown />, onClick: () => exportSketch(f.id, "svg") },
           ]
         : []),
       "sep",
-      { label: "Delete", icon: <Trash />, danger: true, kbd: "⌫", onClick: () => void deleteFeature(f) },
+      { label: t("Delete"), icon: <Trash />, danger: true, kbd: "⌫", onClick: () => void deleteFeature(f) },
     ]);
 
   return (
@@ -147,23 +148,23 @@ function FeatureList() {
         onToggle={toggle}
         actions={
           doc.rollback ? (
-            <button className="icon-btn sm" title="Roll forward to the end" onClick={() => apply({ type: "set_rollback", id: null })}>
+            <button className="icon-btn sm" title={t("Roll forward to the end")} onClick={() => apply({ type: "set_rollback", id: null })}>
               <SkipForward />
             </button>
           ) : null
         }
       >
-        Features <span className="count">{doc.features.length}</span>
+        {t("Features")} <span className="count">{doc.features.length}</span>
       </SectionHead>
       {open ? (
       <>
       <ul className="tree">
-        <li className="tree-item dim" title="Origin planes">
+        <li className="tree-item dim" title={t("Origin planes")}>
           <Layers className="ficon" />
-          <span className="tree-label">Origin</span>
+          <span className="tree-label">{t("Origin")}</span>
           <span className="actions">
             {Object.entries(PLANE_LABELS).map(([ref, label]) => (
-              <button key={ref} className="icon-btn sm" title={`New sketch on ${label}`} onClick={() => startSketch({ ref })} style={{ fontSize: 10.5, width: "auto" }}>
+              <button key={ref} className="icon-btn sm" title={t("New sketch on {plane}", { plane: label })} onClick={() => startSketch({ ref })} style={{ fontSize: 10.5, width: "auto" }}>
                 {label}
               </button>
             ))}
@@ -202,11 +203,11 @@ function FeatureList() {
                 <span className="tree-label">{featureName(f)}</span>
                 <span className="actions">
                   {f.op === "sketch" ? (
-                    <button className="icon-btn sm" title={hidden.has(f.id) ? "Show" : "Hide"} onClick={(e) => (e.stopPropagation(), toggleHidden(f.id))}>
+                    <button className="icon-btn sm" title={hidden.has(f.id) ? t("Show") : t("Hide")} onClick={(e) => (e.stopPropagation(), toggleHidden(f.id))}>
                       {hidden.has(f.id) ? <EyeOff /> : <Eye />}
                     </button>
                   ) : null}
-                  <button className="icon-btn sm" title="Edit" onClick={(e) => (e.stopPropagation(), f.op === "sketch" ? openSketch(f.id) : editFeature(f.id))}>
+                  <button className="icon-btn sm" title={t("Edit")} onClick={(e) => (e.stopPropagation(), f.op === "sketch" ? openSketch(f.id) : editFeature(f.id))}>
                     <Pencil />
                   </button>
                 </span>
@@ -221,11 +222,11 @@ function FeatureList() {
                 <div
                   className="rollback-bar"
                   draggable
-                  title="Drag to roll back the model"
+                  title={t("Drag to roll back the model")}
                   onDragStart={() => setDrag({ kind: "rollback", id: "" })}
                   onDragEnd={() => (setDrag(null), setDropAt(null))}
                 >
-                  {doc.rollback ? <span>Rolled back</span> : null}
+                  {doc.rollback ? <span>{t("Rolled back")}</span> : null}
                 </div>
               ) : null}
             </li>
@@ -234,7 +235,7 @@ function FeatureList() {
         <li onDragOver={(e) => (e.preventDefault(), setDropAt(doc.features.length))} onDrop={() => onDrop(doc.features.length)} style={{ height: 24 }} className={dropAt === doc.features.length ? "tree-item drop-before" : ""} />
       </ul>
       {multi.length > 1 ? <LinkBar ids={multi} /> : null}
-      {!doc.features.length ? <div className="empty">Start with a sketch: pick a plane under Origin, or press S.</div> : null}
+      {!doc.features.length ? <div className="empty">{t("Start with a sketch: pick a plane under Origin, or press S.")}</div> : null}
       </>
       ) : null}
     </>
@@ -243,16 +244,16 @@ function FeatureList() {
 
 /** Numeric fields that several features of one kind can share through a variable. */
 const LINKABLE: Partial<Record<Feature["op"], { field: string; label: string; unit: ValueUnit }[]>> = {
-  extrude: [{ field: "distance", label: "distance", unit: "mm" }, { field: "distance2", label: "second distance", unit: "mm" }],
-  revolve: [{ field: "angle", label: "angle", unit: "deg" }],
-  fillet: [{ field: "radius", label: "radius", unit: "mm" }],
-  chamfer: [{ field: "distance", label: "distance", unit: "mm" }],
-  shell: [{ field: "thickness", label: "thickness", unit: "mm" }],
-  plane: [{ field: "offset", label: "offset", unit: "mm" }],
-  linear_pattern: [{ field: "count", label: "count", unit: "" }, { field: "spacing", label: "spacing", unit: "mm" }],
-  circular_pattern: [{ field: "count", label: "count", unit: "" }, { field: "angle", label: "angle", unit: "deg" }],
-  gear: [{ field: "module", label: "module", unit: "mm" }, { field: "teeth", label: "teeth", unit: "" }, { field: "width", label: "width", unit: "mm" }],
-  thread: [{ field: "pitch", label: "pitch", unit: "mm" }, { field: "length", label: "length", unit: "mm" }, { field: "clearance", label: "clearance", unit: "mm" }],
+  extrude: [{ field: "distance", label: t("link::distance"), unit: "mm" }, { field: "distance2", label: t("link::second distance"), unit: "mm" }],
+  revolve: [{ field: "angle", label: t("link::angle"), unit: "deg" }],
+  fillet: [{ field: "radius", label: t("link::radius"), unit: "mm" }],
+  chamfer: [{ field: "distance", label: t("link::distance"), unit: "mm" }],
+  shell: [{ field: "thickness", label: t("link::thickness"), unit: "mm" }],
+  plane: [{ field: "offset", label: t("link::offset"), unit: "mm" }],
+  linear_pattern: [{ field: "count", label: t("link::count"), unit: "" }, { field: "spacing", label: t("link::spacing"), unit: "mm" }],
+  circular_pattern: [{ field: "count", label: t("link::count"), unit: "" }, { field: "angle", label: t("link::angle"), unit: "deg" }],
+  gear: [{ field: "module", label: t("link::module"), unit: "mm" }, { field: "teeth", label: t("link::teeth"), unit: "" }, { field: "width", label: t("link::width"), unit: "mm" }],
+  thread: [{ field: "pitch", label: t("link::pitch"), unit: "mm" }, { field: "length", label: t("link::length"), unit: "mm" }, { field: "clearance", label: t("link::clearance"), unit: "mm" }],
 };
 
 /** Offers to drive equal values of the picked features (same kind) from one new variable. */
@@ -261,8 +262,9 @@ function LinkBar({ ids }: { ids: string[] }) {
   const values = useApp((s) => s.output?.report.params) ?? EMPTY;
   const feats = ids.map((id) => doc.features.find((f) => f.id === id)).filter((f): f is Feature => !!f);
   const op = feats[0]?.op;
-  if (!op || feats.some((f) => f.op !== op)) return <div className="link-bar muted">{feats.length} features picked · pick features of one kind to link their values</div>;
-  const kind = `${FEATURES[op].label.toLowerCase()}s`;
+  if (!op || feats.some((f) => f.op !== op)) return <div className="link-bar muted">{t("{n} features picked · pick features of one kind to link their values", { n: feats.length })}</div>;
+  // German has no rule for the plural of a feature name, so it writes "3 × Extrudieren".
+  const kind = lang === "de" ? FEATURES[op].label : `${FEATURES[op].label.toLowerCase()}s`;
   const scope = new Map(Object.entries(values));
   const rows = (LINKABLE[op] ?? []).flatMap(({ field, label, unit }) => {
     const exprs = feats.map((f) => (f as unknown as Record<string, unknown>)[field] as string | number | undefined);
@@ -278,38 +280,38 @@ function LinkBar({ ids }: { ids: string[] }) {
     return [{ field, label, unit, same, linked, expr: exprs[0]!, value: nums[0]! }];
   });
   const link = async (r: (typeof rows)[number]) => {
-    const name = await askText({ title: `Link the ${r.label} of ${feats.length} ${kind}`, label: "Variable name", value: freeParamName(`${op}_${r.field}`), confirmLabel: "Create and link" });
+    const name = await askText({ title: t("Link the {what} of {n} {kind}", { what: r.label, n: feats.length, kind }), label: t("Variable name"), value: freeParamName(`${op}_${r.field}`), confirmLabel: t("Create and link") });
     if (!name?.trim()) return;
     const n = name.trim();
-    if (!/^[A-Za-z_]\w*$/.test(n) || n in doc.params) return toast(n in doc.params ? `"${n}" already exists` : "Use letters, digits and _ (not starting with a digit)", "error");
+    if (!/^[A-Za-z_]\w*$/.test(n) || n in doc.params) return toast(n in doc.params ? t("\"{name}\" already exists", { name: n }) : t("Use letters, digits and _ (not starting with a digit)"), "error");
     // Keep a shared expression as written; plain numbers get their unit.
     const expr = typeof r.expr === "string" && exprs(feats, r.field).every((e) => e === r.expr) ? r.expr : withUnit(r.value, r.unit);
     if (apply({ type: "set_param", name: n, expr, auto: true }, ...feats.map((f) => ({ type: "edit_feature" as const, id: f.id, patch: { [r.field]: n } }))))
-      toast(`${feats.length} ${kind} now share "${n}" — change it under Variables › Automatic`);
+      toast(t("{n} {kind} now share \"{name}\" — change it under Variables › Automatic", { n: feats.length, kind, name: n }));
   };
   return (
     <div className="link-bar">
       <div className="link-bar-title">
-        <Link2 /> {feats.length} {kind} picked
+        <Link2 /> {t("{n} {kind} picked", { n: feats.length, kind })}
       </div>
       {rows.length ? (
         rows.map((r) =>
           r.linked ? (
             <div key={r.field} className="link-row muted">
-              {r.label}: linked to <span className="mono">{String(r.expr)}</span>
+              {t("{what}: linked to", { what: r.label })} <span className="mono">{String(r.expr)}</span>
             </div>
           ) : r.same ? (
             <button key={r.field} className="link-row" onClick={() => void link(r)}>
-              Link {r.label} ({r.unit === "mm" ? fmtLen(r.value) : `${+r.value.toFixed(3)}${r.unit === "deg" ? "°" : ""}`}) with a variable…
+              {t("Link {what} ({value}) with a variable…", { what: r.label, value: r.unit === "mm" ? fmtLen(r.value) : `${+r.value.toFixed(3)}${r.unit === "deg" ? "°" : ""}` })}
             </button>
           ) : (
             <div key={r.field} className="link-row muted">
-              {r.label}: values differ
+              {t("{what}: values differ", { what: r.label })}
             </div>
           ),
         )
       ) : (
-        <div className="link-row muted">Nothing to link for {kind}</div>
+        <div className="link-row muted">{t("Nothing to link for {kind}", { kind })}</div>
       )}
     </div>
   );
@@ -329,9 +331,9 @@ export function toggleHidden(id: string): void {
 export async function deleteFeature(f: Feature): Promise<void> {
   const doc = useApp.getState().doc;
   const dependents = doc.features.filter((g) => g !== f && JSON.stringify(g).includes(`"${f.id}`) && doc.features.indexOf(g) > doc.features.indexOf(f));
-  if (dependents.length && !(await askConfirm({ title: `Delete ${featureName(f)}?`, message: `It is used by ${dependents.map(featureName).join(", ")}. Those will be deleted too.`, confirmLabel: `Delete ${dependents.length + 1} features`, danger: true }))) return;
+  if (dependents.length && !(await askConfirm({ title: t("Delete {name}?", { name: featureName(f) }), message: t("It is used by {names}. Those will be deleted too.", { names: dependents.map(featureName).join(", ") }), confirmLabel: t("Delete {n} features", { n: dependents.length + 1 }), danger: true }))) return;
   const ops = [...dependents].reverse().map((g) => ({ type: "delete_feature" as const, id: g.id }));
-  if (apply(...ops, { type: "delete_feature", id: f.id })) toast(`Deleted ${featureName(f)}`);
+  if (apply(...ops, { type: "delete_feature", id: f.id })) toast(t("Deleted {name}", { name: featureName(f) }));
 }
 
 /** Parts list: drag to reorder, drop onto a folder to group; order and folders are saved in the file. */
@@ -374,14 +376,14 @@ function Bodies() {
   const newGroup = async (with_?: string) => {
     const taken = new Set(groups.map((g) => g.name));
     let n = 1;
-    while (taken.has(`Group ${n}`)) n++;
-    const name = await askText({ title: "New group", label: "Name", value: `Group ${n}`, confirmLabel: "Create" });
+    while (taken.has(t("Group {n}", { n }))) n++;
+    const name = await askText({ title: t("New group"), label: t("Name"), value: t("Group {n}", { n }), confirmLabel: t("Create") });
     if (!name?.trim() || taken.has(name.trim())) return;
     const gs = (doc.partGroups ?? []).map((g) => ({ ...g, parts: g.parts.filter((x) => x !== with_) }));
     save(order, [...gs, { name: name.trim(), parts: with_ ? [with_] : [] }]);
   };
   const renameGroup = async (name: string) => {
-    const to = await askText({ title: "Rename group", label: "Name", value: name });
+    const to = await askText({ title: t("Rename group"), label: t("Name"), value: name });
     if (!to?.trim() || to.trim() === name || groups.some((g) => g.name === to.trim())) return;
     save(order, (doc.partGroups ?? []).map((g) => (g.name === name ? { ...g, name: to.trim() } : g)));
   };
@@ -429,12 +431,12 @@ function Bodies() {
   /** The material list as a second menu where the first one was. */
   const pickMaterial = (id: string, x: number, y: number) =>
     showMenu(x, y, [
-      ...MATERIALS.map((m) => ({ label: `${m.name} · ${m.density} g/cm³${doc.partMaterials?.[id] === m.id ? " ✓" : ""}`, icon: <Weight />, onClick: () => setMaterial(id, m.id) })),
-      ...(doc.partMaterials?.[id] ? ["sep" as const, { label: "No material", icon: <X />, onClick: () => setMaterial(id, null) }] : []),
+      ...MATERIALS.map((m) => ({ label: `${t(m.name)} · ${m.density} g/cm³${doc.partMaterials?.[id] === m.id ? " ✓" : ""}`, icon: <Weight />, onClick: () => setMaterial(id, m.id) })),
+      ...(doc.partMaterials?.[id] ? ["sep" as const, { label: t("No material"), icon: <X />, onClick: () => setMaterial(id, null) }] : []),
     ]);
   const massText = (id: string, volume: number) => {
     const m = materialById(doc.partMaterials?.[id]);
-    return m && Number.isFinite(volume) ? ` · ${formatMass(massOf(volume, m))} ${m.name}` : "";
+    return m && Number.isFinite(volume) ? ` · ${formatMass(massOf(volume, m))} ${t(m.name)}` : "";
   };
   // The browser's own colour picker (works with mouse and touch alike).
   const pickColor = (id: string) => {
@@ -450,42 +452,42 @@ function Bodies() {
       <li
         key={id}
         className={`tree-item ${hidden.has(id) ? "dim" : ""} ${nested ? "nested" : ""} ${over === id ? "drop-before" : ""}`}
-        title={`${b.faces} faces · ${b.bbox.max.map((v, i) => inUnit(v - b.bbox.min[i]!)).join(" × ")} ${docUnit()} — drag to reorder or onto a group`}
+        title={t("{faces} faces · {size} — drag to reorder or onto a group", { faces: b.faces, size: `${b.bbox.max.map((v, i) => inUnit(v - b.bbox.min[i]!)).join(" × ")} ${docUnit()}` })}
         draggable
         onDragStart={() => setDrag(id)}
         onDragEnd={() => (setDrag(null), setOver(null))}
         onContextMenu={(e) => {
           e.preventDefault();
           showMenu(e.clientX, e.clientY, [
-            { label: "New group with this part", icon: <FolderPlus />, onClick: () => void newGroup(id) },
-            ...groups.filter((g) => !g.parts.includes(id)).map((g) => ({ label: `Move to ${g.name}`, icon: <Folder />, onClick: () => move(id, `group:${g.name}`) })),
-            ...(grouped.has(id) ? [{ label: "Take out of group", icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).map((g) => ({ ...g, parts: g.parts.filter((x) => x !== id) }))) }] : []),
+            { label: t("New group with this part"), icon: <FolderPlus />, onClick: () => void newGroup(id) },
+            ...groups.filter((g) => !g.parts.includes(id)).map((g) => ({ label: t("Move to {group}", { group: g.name }), icon: <Folder />, onClick: () => move(id, `group:${g.name}`) })),
+            ...(grouped.has(id) ? [{ label: t("Take out of group"), icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).map((g) => ({ ...g, parts: g.parts.filter((x) => x !== id) }))) }] : []),
             "sep" as const,
-            { label: hidden.has(id) ? "Show" : "Hide", icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
-            ...(meshParts.has(id) ? [{ label: "Convert to editable body", icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: "Rebuild with features", icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }] : []),
-            { label: "Colour…", icon: <Palette />, onClick: () => pickColor(id) },
-            { label: "Material…", icon: <Weight />, onClick: () => pickMaterial(id, e.clientX, e.clientY) },
-            ...(doc.partColors?.[id] ? [{ label: "Automatic colour", icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
+            { label: hidden.has(id) ? t("Show") : t("Hide"), icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
+            ...(meshParts.has(id) ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }] : []),
+            { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
+            { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id, e.clientX, e.clientY) },
+            ...(doc.partColors?.[id] ? [{ label: t("Automatic colour"), icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
             "sep" as const,
-            { label: "Delete part", icon: <Trash />, danger: true, onClick: () => deleteBodies([id]) },
+            { label: t("Delete part"), icon: <Trash />, danger: true, onClick: () => deleteBodies([id]) },
           ]);
         }}
         {...dropProps(id)}
       >
-        <button className="part-swatch" title="Colour" style={{ background: colors.get(id) ?? PART_PALETTE[0] }} onClick={(e) => (e.stopPropagation(), pickColor(id))} />
+        <button className="part-swatch" title={t("Colour")} style={{ background: colors.get(id) ?? PART_PALETTE[0] }} onClick={(e) => (e.stopPropagation(), pickColor(id))} />
         <span className="tree-label">
           {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}{massText(id, b.volume)}</span> : null}
           {meshParts.has(id) ? (
             <span className="part-badge" title={MESH_HINT}>
-              Mesh
+              {t("Mesh")}
             </span>
           ) : null}
         </span>
         <span className="actions" style={{ display: "flex" }}>
-          <button className="icon-btn sm" title={hidden.has(id) ? "Show" : "Hide"} onClick={() => toggleHidden(id)}>
+          <button className="icon-btn sm" title={hidden.has(id) ? t("Show") : t("Hide")} onClick={() => toggleHidden(id)}>
             {hidden.has(id) ? <EyeOff /> : <Eye />}
           </button>
-          <button className="icon-btn sm" title="Delete part" onClick={() => deleteBodies([id])}>
+          <button className="icon-btn sm" title={t("Delete part")} onClick={() => deleteBodies([id])}>
             <Trash />
           </button>
         </span>
@@ -500,17 +502,17 @@ function Bodies() {
         actions={
           <>
             {bodies.length > 1 ? (
-              <button className="icon-btn sm" title="Check whether parts overlap" onClick={() => void checkInterference()}>
+              <button className="icon-btn sm" title={t("Check whether parts overlap")} onClick={() => void checkInterference()}>
                 <ShieldCheck />
               </button>
             ) : null}
-            <button className="icon-btn sm" title="New group" onClick={() => void newGroup()}>
+            <button className="icon-btn sm" title={t("New group")} onClick={() => void newGroup()}>
               <FolderPlus />
             </button>
           </>
         }
       >
-        Parts <span className="count">{bodies.length}</span>
+        {t("Parts")} <span className="count">{bodies.length}</span>
       </SectionHead>
       {open ? (
         <ul className="tree" {...dropProps(null)}>
@@ -526,14 +528,14 @@ function Bodies() {
                   onContextMenu={(e) => {
                     e.preventDefault();
                     showMenu(e.clientX, e.clientY, [
-                      { label: "Rename", icon: <Pencil />, onClick: () => void renameGroup(g.name) },
-                      { label: allHidden ? "Show all" : "Hide all", icon: allHidden ? <Eye /> : <EyeOff />, onClick: () => setHidden(g.parts, !allHidden) },
+                      { label: t("Rename"), icon: <Pencil />, onClick: () => void renameGroup(g.name) },
+                      { label: allHidden ? t("Show all") : t("Hide all"), icon: allHidden ? <Eye /> : <EyeOff />, onClick: () => setHidden(g.parts, !allHidden) },
                       "sep",
-                      { label: "Ungroup", icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).filter((x) => x.name !== g.name)) },
+                      { label: t("Ungroup"), icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).filter((x) => x.name !== g.name)) },
                     ]);
                   }}
                   {...dropProps(`group:${g.name}`)}
-                  title="Click to fold · double-click to rename · drop parts here"
+                  title={t("Click to fold · double-click to rename · drop parts here")}
                 >
                   <ChevronRight className={`ficon chev ${closed ? "" : "open"}`} />
                   <Folder className="ficon" />
@@ -541,12 +543,12 @@ function Bodies() {
                     {g.name} <span className="muted">· {g.parts.length}</span>
                   </span>
                   <span className="actions" style={{ display: "flex" }}>
-                    <button className="icon-btn sm" title={allHidden ? "Show all" : "Hide all"} onClick={(e) => (e.stopPropagation(), setHidden(g.parts, !allHidden))}>
+                    <button className="icon-btn sm" title={allHidden ? t("Show all") : t("Hide all")} onClick={(e) => (e.stopPropagation(), setHidden(g.parts, !allHidden))}>
                       {allHidden ? <EyeOff /> : <Eye />}
                     </button>
                   </span>
                 </div>
-                {!closed ? <ul className="tree">{g.parts.length ? g.parts.map((id) => part(id, true)) : <li className="tree-item nested dim">Drop parts here</li>}</ul> : null}
+                {!closed ? <ul className="tree">{g.parts.length ? g.parts.map((id) => part(id, true)) : <li className="tree-item nested dim">{t("Drop parts here")}</li>}</ul> : null}
               </li>
             );
           })}
@@ -559,16 +561,16 @@ function Bodies() {
             if (!total.mass) return null;
             const c = total.center?.map((v) => v.toFixed(1)).join(", ");
             const I = total.inertia;
-            const products = I ? `Products of inertia: Ixy ${formatInertia(I[3])}, Ixz ${formatInertia(I[4])}, Iyz ${formatInertia(I[5])}` : "";
+            const products = I ? t("Products of inertia: Ixy {xy}, Ixz {xz}, Iyz {yz}", { xy: formatInertia(I[3]), xz: formatInertia(I[4]), yz: formatInertia(I[5]) }) : "";
             return (
-              <li className="tree-item dim mass-total" title={[total.missing ? `${total.missing} part(s) without a material are not counted` : "Solid material (100 % infill)", products].filter(Boolean).join("\n")}>
+              <li className="tree-item dim mass-total" title={[total.missing ? tn(total.missing, "{n} part without a material is not counted", "{n} parts without a material are not counted") : t("Solid material (100 % infill)"), products].filter(Boolean).join("\n")}>
                 <Weight className="ficon" />
                 <span className="tree-label">
-                  {formatMass(total.mass)} {c ? <span className="muted">· centre of gravity ({c})</span> : null}
-                  {total.missing ? <span className="muted"> · {total.missing} without material</span> : null}
+                  {formatMass(total.mass)} {c ? <span className="muted">· {t("centre of gravity ({c})", { c })}</span> : null}
+                  {total.missing ? <span className="muted"> · {t("{n} without material", { n: total.missing })}</span> : null}
                   {I ? (
                     <span className="muted mass-inertia">
-                      Inertia about it: Ixx {formatInertia(I[0])} · Iyy {formatInertia(I[1])} · Izz {formatInertia(I[2])}
+                      {t("Inertia about it: Ixx {xx} · Iyy {yy} · Izz {zz}", { xx: formatInertia(I[0]), yy: formatInertia(I[1]), zz: formatInertia(I[2]) })}
                     </span>
                   ) : null}
                 </span>
@@ -611,8 +613,8 @@ function Params() {
         e.preventDefault();
         showMenu(e.clientX, e.clientY, [
           isAuto
-            ? { label: "Move to my variables", icon: <UserCheck />, onClick: () => apply({ type: "set_param", name, expr: params[name]!, auto: false }) }
-            : { label: "Move to automatic", icon: <Bot />, onClick: () => apply({ type: "set_param", name, expr: params[name]!, auto: true }) },
+            ? { label: t("Move to my variables"), icon: <UserCheck />, onClick: () => apply({ type: "set_param", name, expr: params[name]!, auto: false }) }
+            : { label: t("Move to automatic"), icon: <Bot />, onClick: () => apply({ type: "set_param", name, expr: params[name]!, auto: true }) },
         ]);
       }}
     >
@@ -629,19 +631,19 @@ function Params() {
       />
       {/* A length variable in an inch design shows its result and takes plain numbers in inches. */}
       <ExprInput value={params[name]} unit={unit === "in" && isLengthParam(name, params) ? "mm" : ""} quiet onCommit={(v) => apply({ type: "set_param", name, expr: v })} />
-      <span className="val" title={errors[name] ?? (unit === "in" && isLengthParam(name, params) ? "in inches" : "")} style={errors[name] ? { color: "var(--err)" } : undefined}>
-        {errors[name] ? "error" : values[name] === undefined ? "" : unit === "in" && isLengthParam(name, params) ? inUnit(values[name]!, "in") : +values[name]!.toFixed(3)}
+      <span className="val" title={errors[name] ?? (unit === "in" && isLengthParam(name, params) ? t("in inches") : "")} style={errors[name] ? { color: "var(--err)" } : undefined}>
+        {errors[name] ? t("error") : values[name] === undefined ? "" : unit === "in" && isLengthParam(name, params) ? inUnit(values[name]!, "in") : +values[name]!.toFixed(3)}
       </span>
       {isAuto ? (
-        <button className="icon-btn sm" title="Move to my variables" onClick={() => apply({ type: "set_param", name, expr: params[name]!, auto: false })}>
+        <button className="icon-btn sm" title={t("Move to my variables")} onClick={() => apply({ type: "set_param", name, expr: params[name]!, auto: false })}>
           <UserCheck />
         </button>
       ) : null}
       <button
         className="icon-btn sm"
-        title={used(name) ? "Still in use" : "Delete"}
+        title={used(name) ? t("Still in use") : t("Delete")}
         onClick={async () => {
-          if (used(name) && !(await askConfirm({ title: `Delete variable "${name}"?`, message: "It is still used by features or other variables; those will show an error until you fix them.", confirmLabel: "Delete", danger: true }))) return;
+          if (used(name) && !(await askConfirm({ title: t("Delete variable \"{name}\"?", { name }), message: t("It is still used by features or other variables; those will show an error until you fix them."), confirmLabel: t("Delete"), danger: true }))) return;
           apply({ type: "set_param", name, expr: null });
         }}
       >
@@ -656,28 +658,28 @@ function Params() {
         open={open}
         onToggle={toggle}
         actions={
-          <button className="icon-btn sm" title="Add variable" onClick={() => (open || toggle(), setAdding({ name: suggestName(params), expr: docUnit() === "in" ? "0.5 in" : "10 mm" }))}>
+          <button className="icon-btn sm" title={t("Add variable")} onClick={() => (open || toggle(), setAdding({ name: suggestName(params), expr: docUnit() === "in" ? "0.5 in" : "10 mm" }))}>
             <Plus />
           </button>
         }
       >
-        Variables <span className="count">{total}</span>
+        {t("Variables")} <span className="count">{total}</span>
       </SectionHead>
       {open ? (
         <div className="params">
           {total > 4 ? (
             <div className="param-search">
               <Search />
-              <input className="field" placeholder="Search variables" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setQuery("")} aria-label="Search variables" />
+              <input className="field" placeholder={t("Search variables")} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setQuery("")} aria-label={t("Search variables")} />
               {query ? (
-                <button className="icon-btn sm" title="Clear" onClick={() => setQuery("")}>
+                <button className="icon-btn sm" title={t("Clear")} onClick={() => setQuery("")}>
                   <X />
                 </button>
               ) : null}
             </div>
           ) : null}
           <SectionHead open={ownOpen || !!q} onToggle={toggleOwn} sub>
-            Your variables <span className="count">{own.length}</span>
+            {t("Your variables")} <span className="count">{own.length}</span>
           </SectionHead>
           {ownOpen || q ? own.map((n) => row(n, false)) : null}
           {adding ? (
@@ -692,7 +694,7 @@ function Params() {
                   if (e.key === "Escape") setAdding(null);
                 }}
               />
-              <button className="icon-btn sm" title="Add" onClick={() => apply({ type: "set_param", name: adding.name.trim(), expr: parseExpr(adding.expr) }) && setAdding(null)}>
+              <button className="icon-btn sm" title={t("Add")} onClick={() => apply({ type: "set_param", name: adding.name.trim(), expr: parseExpr(adding.expr) }) && setAdding(null)}>
                 <Plus />
               </button>
               <button className="icon-btn sm" onClick={() => setAdding(null)}>
@@ -700,23 +702,23 @@ function Params() {
               </button>
             </div>
           ) : null}
-          {!own.length && !adding && (ownOpen || q) ? <div className="empty" style={{ padding: "2px 4px" }}>{q ? "No match" : <>Named values like <span className="mono">wall = 2 mm</span> can drive any dimension.</>}</div> : null}
+          {!own.length && !adding && (ownOpen || q) ? <div className="empty" style={{ padding: "2px 4px" }}>{q ? t("No match") : <>{t("Named values like")} <span className="mono">wall = 2 mm</span> {t("can drive any dimension.")}</>}</div> : null}
           {calculated.length ? (
             <>
               <SectionHead open={calcOpen || !!q} onToggle={toggleCalc} sub>
-                <span title="Formulas of other variables; they follow automatically">Calculated</span> <span className="count">{calculated.filter(matches).length}</span>
+                <span title={t("Formulas of other variables; they follow automatically")}>{t("Calculated")}</span> <span className="count">{calculated.filter(matches).length}</span>
               </SectionHead>
               {calcOpen || q ? calculated.filter(matches).map((n) => row(n, auto.includes(n))) : null}
-              {(calcOpen || q) && !calculated.some(matches) ? <div className="empty" style={{ padding: "2px 4px" }}>No match</div> : null}
+              {(calcOpen || q) && !calculated.some(matches) ? <div className="empty" style={{ padding: "2px 4px" }}>{t("No match")}</div> : null}
             </>
           ) : null}
           {automatic.length ? (
             <>
               <SectionHead open={autoOpen || !!q} onToggle={toggleAuto} sub>
-                <span title="Created by meerCAD (linking, new variable from a value) or by an assistant">Automatic</span> <span className="count">{automatic.filter(matches).length}</span>
+                <span title={t("Created by meerCAD (linking, new variable from a value) or by an assistant")}>{t("Automatic")}</span> <span className="count">{automatic.filter(matches).length}</span>
               </SectionHead>
               {autoOpen || q ? automatic.filter(matches).map((n) => row(n, true)) : null}
-              {(autoOpen || q) && !automatic.some(matches) ? <div className="empty" style={{ padding: "2px 4px" }}>No match</div> : null}
+              {(autoOpen || q) && !automatic.some(matches) ? <div className="empty" style={{ padding: "2px 4px" }}>{t("No match")}</div> : null}
             </>
           ) : null}
         </div>

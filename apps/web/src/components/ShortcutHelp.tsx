@@ -2,6 +2,7 @@ import { Keyboard, X } from "lucide-react";
 import { FEATURES, TOOLBAR } from "../lib/features";
 import { keymapFor, MOUSE_SCHEMES, usePrefs, type Action, type Keymap } from "../lib/keymap";
 import { Kbd } from "./Kbd";
+import { t } from "../lib/i18n";
 
 /** "L / R / Shift+R" for several actions; unbound ones show as "–". */
 const keys = (map: Keymap, ...actions: Action[]) => actions.map((a) => map[a][0] ?? "–").join(" / ");
@@ -9,67 +10,67 @@ const keys = (map: Keymap, ...actions: Action[]) => actions.map((a) => map[a][0]
 function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: string; rows: [string, string][] }[] {
   return [
   {
-    title: "Modeling",
+    title: t("Modeling"),
     rows: [
       ...TOOLBAR.filter((op) => map[op as Action][0]).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
-      ["Measure", keys(map, "measure")],
-      ["Joints", keys(map, "joints")],
-      ["Command search", keys(map, "palette")],
-      ["Import file", "Mod+O"],
+      [t("Measure"), keys(map, "measure")],
+      [t("Joints"), keys(map, "joints")],
+      [t("Command search"), keys(map, "palette")],
+      [t("Import file"), "Mod+O"],
     ],
   },
   {
-    title: "Direct editing",
+    title: t("Direct editing"),
     rows: [
-      ["Push / pull a face", "drag arrow"],
-      ["Extrude a sketch region", "drag arrow"],
-      ["Fillet selected edges", "drag arrow"],
-      ["Edit feature under cursor", "double-click"],
-      ["Context actions", "right-click"],
-      ["Add to selection", "Shift+click"],
+      [t("Push / pull a face"), t("drag arrow")],
+      [t("Extrude a sketch region"), t("drag arrow")],
+      [t("Fillet selected edges"), t("drag arrow")],
+      [t("Edit feature under cursor"), t("double-click")],
+      [t("Context actions"), t("right-click")],
+      [t("Add to selection"), t("Shift+click")],
     ],
   },
   {
-    title: "View",
+    title: t("View"),
     rows: [
-      ["Rotate", mouse.orbit],
-      ["Pan", mouse.pan],
-      ["Zoom", mouse.zoom],
-      ["Fit all", keys(map, "fit")],
-      ["Look at hovered face", keys(map, "normal")],
-      ["Iso / Front / Back", keys(map, "view.iso", "view.front", "view.back")],
-      ["Top / Bottom", keys(map, "view.top", "view.bottom")],
-      ["Right / Left", keys(map, "view.right", "view.left")],
+      [t("Rotate"), mouse.orbit],
+      [t("Pan"), mouse.pan],
+      [t("Zoom"), mouse.zoom],
+      [t("Fit all"), keys(map, "fit")],
+      [t("Look at hovered face"), keys(map, "normal")],
+      [t("Iso / Front / Back"), keys(map, "view.iso", "view.front", "view.back")],
+      [t("Top / Bottom"), keys(map, "view.top", "view.bottom")],
+      [t("Right / Left"), keys(map, "view.right", "view.left")],
     ],
   },
   {
-    title: "Sketch",
+    title: t("Sketch"),
     rows: [
-      ["Sketch on hovered face", keys(map, "sketch")],
-      ["Line / Rectangle / Center rectangle", keys(map, "sketch.line", "sketch.rect", "sketch.rect_center")],
-      ["Circle / Arc / Polygon / Spline / Point", keys(map, "sketch.circle", "sketch.arc", "sketch.polygon", "sketch.spline", "sketch.point")],
-      ["Trim / Dimension / Project edges", keys(map, "sketch.trim", "sketch.dimension", "sketch.project")],
-      ["Round / Bevel a corner / Offset / Repeat", keys(map, "sketch.fillet", "sketch.chamfer", "sketch.offset", "sketch.pattern")],
-      ["Construction toggle", keys(map, "sketch.construction")],
-      ["Horizontal or vertical (nearest)", "Shift+V"],
-      ["Coincident / Concentric", "Shift+N / Shift+C"],
-      ["Parallel / Perpendicular", "Shift+A / Shift+P"],
-      ["Tangent / Equal / Midpoint", "Shift+T / Shift+E / Shift+M"],
-      ["Symmetric / Lock", "Shift+S / Shift+L"],
-      ["Select all", "Mod+A"],
-      ["Finish sketch", "Enter"],
+      [t("Sketch on hovered face"), keys(map, "sketch")],
+      [t("Line / Rectangle / Center rectangle"), keys(map, "sketch.line", "sketch.rect", "sketch.rect_center")],
+      [t("Circle / Arc / Polygon / Spline / Point"), keys(map, "sketch.circle", "sketch.arc", "sketch.polygon", "sketch.spline", "sketch.point")],
+      [t("Trim / Dimension / Project edges"), keys(map, "sketch.trim", "sketch.dimension", "sketch.project")],
+      [t("Round / Bevel a corner / Offset / Repeat"), keys(map, "sketch.fillet", "sketch.chamfer", "sketch.offset", "sketch.pattern")],
+      [t("Construction toggle"), keys(map, "sketch.construction")],
+      [t("Horizontal or vertical (nearest)"), "Shift+V"],
+      [t("Coincident / Concentric"), "Shift+N / Shift+C"],
+      [t("Parallel / Perpendicular"), "Shift+A / Shift+P"],
+      [t("Tangent / Equal / Midpoint"), "Shift+T / Shift+E / Shift+M"],
+      [t("Symmetric / Lock"), "Shift+S / Shift+L"],
+      [t("Select all"), "Mod+A"],
+      [t("Finish sketch"), "Enter"],
     ],
   },
   {
-    title: "General",
+    title: t("General"),
     rows: [
-      ["Undo / Redo", "Mod+Z / Shift+Mod+Z"],
-      ["Undo / Redo on iPhone and iPad", "2-finger tap or 3-finger swipe left / 3-finger tap or swipe right"],
-      ["Confirm tool", "Enter / click empty space"],
-      ["Cancel / clear selection", "Esc"],
-      ["Delete", "Del"],
-      ["Show this help", "?"],
-      ["Settings", "Mod+,"],
+      [t("Undo / Redo"), "Mod+Z / Shift+Mod+Z"],
+      [t("Undo / Redo on iPhone and iPad"), t("2-finger tap or 3-finger swipe left / 3-finger tap or swipe right")],
+      [t("Confirm tool"), t("Enter / click empty space")],
+      [t("Cancel / clear selection"), "Esc"],
+      [t("Delete"), "Del"],
+      [t("Show this help"), "?"],
+      [t("Settings"), "Mod+,"],
     ],
   },
   ];
@@ -80,11 +81,11 @@ export function ShortcutHelp({ onClose }: { onClose: () => void }) {
   const SECTIONS = sections(keymapFor(prefs.keys), MOUSE_SCHEMES.find((m) => m.id === prefs.mouse)!);
   return (
     <div className="modal-backdrop" onPointerDown={onClose}>
-      <div className="modal" onPointerDown={(e) => e.stopPropagation()} role="dialog" aria-label="Keyboard shortcuts">
+      <div className="modal" onPointerDown={(e) => e.stopPropagation()} role="dialog" aria-label={t("Keyboard shortcuts")}>
         <div className="dialog-head">
           <Keyboard className="ficon" />
-          <h3>Keyboard & mouse</h3>
-          <button className="icon-btn sm" onClick={onClose} aria-label="Close">
+          <h3>{t("Keyboard & mouse")}</h3>
+          <button className="icon-btn sm" onClick={onClose} aria-label={t("Close")}>
             <X />
           </button>
         </div>

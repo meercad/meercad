@@ -9,27 +9,28 @@ import { emptyDocument, validateDocument, type Feature, type SketchConstraint, t
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, kernel, newProject, openSketch, rebuildNow, toast, useApp } from "../store";
+import { t } from "../lib/i18n";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
-  stl: { name: "STL mesh", extensions: ["stl"] },
-  "3mf": { name: "3MF package", extensions: ["3mf"] },
-  step: { name: "STEP model", extensions: ["step", "stp"] },
-  dxf: { name: "DXF drawing", extensions: ["dxf"] },
-  svg: { name: "SVG drawing", extensions: ["svg"] },
-  ocad: { name: "meerCAD part", extensions: ["meercad", "meerCAD"] },
+  stl: { name: t("STL mesh"), extensions: ["stl"] },
+  "3mf": { name: t("3MF package"), extensions: ["3mf"] },
+  step: { name: t("STEP model"), extensions: ["step", "stp"] },
+  dxf: { name: t("DXF drawing"), extensions: ["dxf"] },
+  svg: { name: t("SVG drawing"), extensions: ["svg"] },
+  ocad: { name: t("meerCAD part"), extensions: ["meercad", "meerCAD"] },
 };
 
 /** Saves a file: a native save dialog on desktop, the share sheet on iPad, a browser download otherwise. */
 export function download(name: string, data: BlobPart, type: string): void {
   if (nativeApp) {
     const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
-    void shareFile(name, payload).catch((e: Error) => toast(`Could not share ${name}: ${e.message}`, "error"));
+    void shareFile(name, payload).catch((e: Error) => toast(t("Could not share {name}: {error}", { name, error: e.message }), "error"));
     return;
   }
   if (desktop) {
     const ext = name.split(".").pop() ?? "";
     const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
-    void desktop.saveFile({ name, data: payload, ...(FILTERS[ext] ? { filters: [FILTERS[ext]!] } : {}) }).then((path) => path && toast(`Saved ${path}`));
+    void desktop.saveFile({ name, data: payload, ...(FILTERS[ext] ? { filters: [FILTERS[ext]!] } : {}) }).then((path) => path && toast(t("Saved {path}", { path })));
     return;
   }
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -48,7 +49,7 @@ export const baseName = () => (useApp.getState().project?.name ?? "model").repla
 export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   const hidden = useApp.getState().hidden;
   const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
-  if (!ids?.length) return toast("Nothing to export", "error");
+  if (!ids?.length) return toast(t("Nothing to export"), "error");
   try {
     const meshes = await kernel.exportMeshes(ids);
     if (format === "stl") download(`${baseName()}.stl`, writeStl(meshes) as BlobPart, "model/stl");
@@ -64,7 +65,7 @@ export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
       );
     }
   } catch (e) {
-    toast(`${format.toUpperCase()} export failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+    toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
   }
 }
 
@@ -83,7 +84,7 @@ export async function exportStep(): Promise<void> {
     const data = await kernel.exportStep(ids, stepParts());
     download(`${baseName()}.step`, data as BlobPart, "model/step");
   } catch (e) {
-    toast(`STEP export failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+    toast(t("{format} export failed: {error}", { format: "STEP", error: e instanceof Error ? e.message : String(e) }), "error");
   }
 }
 
@@ -102,7 +103,7 @@ export function sketchCurves(sketchId: string): Curve2[] {
 
 export function exportSketch(sketchId: string, format: "dxf" | "svg"): void {
   const curves = sketchCurves(sketchId);
-  if (!curves.length) return toast("The sketch has no geometry", "error");
+  if (!curves.length) return toast(t("The sketch has no geometry"), "error");
   if (format === "dxf") download(`${baseName()}-${sketchId}.dxf`, writeDxf(curves), "image/vnd.dxf");
   else download(`${baseName()}-${sketchId}.svg`, writeSvg(curves), "image/svg+xml");
 }
@@ -112,9 +113,9 @@ export async function shareLink(): Promise<void> {
   const url = `${location.origin}${location.pathname}#${frag}`;
   try {
     await navigator.clipboard.writeText(url);
-    toast(`Link copied (${Math.round(url.length / 100) / 10} kB). The model lives in the link and never touches a server.`);
+    toast(t("Link copied ({size} kB). The model lives in the link and never touches a server.", { size: Math.round(url.length / 100) / 10 }));
   } catch {
-    await showNotice({ title: "Share link", message: "Copy this link. The model lives in the link itself.", value: url });
+    await showNotice({ title: t("Share link"), message: t("Copy this link. The model lives in the link itself."), value: url });
   }
 }
 
@@ -155,7 +156,7 @@ export async function importFile(file?: File | null): Promise<boolean> {
   if (ext === "meercad" || ext === "json") {
     const v = validateDocument(JSON.parse(await file.text()));
     if (!v.ok) {
-      toast(`Not a valid meerCAD file: ${v.errors[0]}`, "error");
+      toast(t("Not a valid meerCAD file: {error}", { error: String(v.errors[0]) }), "error");
       return false;
     }
     await flushSave();
@@ -163,11 +164,11 @@ export async function importFile(file?: File | null): Promise<boolean> {
     return true;
   }
   if (!["step", "stp", "stl", "3mf", "obj", "dxf", "svg"].includes(ext)) {
-    toast(`Unsupported file type .${ext}`, "error");
+    toast(t("Unsupported file type .{ext}", { ext }), "error");
     return false;
   }
   if (file.size > 40 * 1024 * 1024) {
-    toast("File is larger than 40 MB", "error");
+    toast(t("File is larger than 40 MB"), "error");
     return false;
   }
   // Build the features first, so a file that cannot be read starts no empty design.
@@ -175,7 +176,7 @@ export async function importFile(file?: File | null): Promise<boolean> {
   try {
     features = await importFeatures(file, ext);
   } catch (e) {
-    toast(`Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`, "error");
+    toast(t("Could not import {name}: {error}", { name: file.name, error: e instanceof Error ? e.message : String(e) }), "error");
     return false;
   }
   if (useApp.getState().screen !== "editor" || !useApp.getState().project) await newProject(emptyDocument(), base);
@@ -188,10 +189,10 @@ export async function importFile(file?: File | null): Promise<boolean> {
     openSketch(sketch.id);
     return true;
   }
-  toast(`Importing ${file.name}…`);
+  toast(t("Importing {name}…", { name: file.name }));
   const out = await rebuildNow().catch(() => null);
   const failed = out?.report.features.filter((r) => features.some((f) => f.id === r.id) && r.status === "error") ?? [];
-  if (failed.length) toast(`Import of ${file.name} failed: ${failed[0]!.message ?? "unknown error"}`, "error");
+  if (failed.length) toast(t("Import of {name} failed: {error}", { name: file.name, error: failed[0]!.message ?? t("unknown error") }), "error");
   return !!out && !failed.length;
 }
 
@@ -208,7 +209,7 @@ async function importFeatures(file: File, ext: string): Promise<Feature[]> {
   if (ext === "obj") return [imp(file.name, "stl", writeStl([readObj(await file.text())]))];
   const text = await file.text();
   const curves = ext === "dxf" ? readDxf(text) : readSvg(text);
-  if (!curves.length) throw new Error("no supported geometry found in the file");
+  if (!curves.length) throw new Error(t("no supported geometry found in the file"));
   const { entities, constraints } = curvesToSketch(curves);
   return [{ id: "", op: "sketch", name: file.name, plane: { ref: "origin.XY" }, entities, constraints }];
 }

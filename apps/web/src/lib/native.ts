@@ -10,6 +10,7 @@ import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import type { MeercadDocument } from "@meercad/schema";
 import type { FileStore, Project, ProjectMeta } from "./persistence";
+import { t } from "./i18n";
 
 export const nativeApp = Capacitor.isNativePlatform();
 
@@ -177,7 +178,7 @@ export const nativeFiles: FileStore | undefined = nativeApp
         async rename(p: { folder: string; name: string }): Promise<string> {
           const target = joinId(folderOf(p.folder), safeName(p.name, nameOf(p.folder)));
           if (target === p.folder) return target;
-          if (await exists(target)) throw new Error(`a folder named "${nameOf(target)}" already exists`);
+          if (await exists(target)) throw new Error(t('a folder named "{name}" already exists', { name: nameOf(target) }));
           const inside = await projectIds(p.folder);
           await Filesystem.rename({ from: p.folder, to: target, directory: DOCS, toDirectory: DOCS });
           for (const id of inside) await moveThumb(id, target + id.slice(p.folder.length));

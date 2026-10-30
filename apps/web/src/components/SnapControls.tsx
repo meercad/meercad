@@ -6,6 +6,7 @@ import { Grid3x3, Magnet } from "lucide-react";
 import { useEffect, useReducer } from "react";
 import type { Viewport } from "@meercad/viewport";
 import { formatStep } from "../lib/grid";
+import { t } from "../lib/i18n";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useApp, useDocUnit } from "../store";
 
@@ -20,11 +21,11 @@ export function SnapControls({ viewport }: { viewport: Viewport | null }) {
   return (
     <div className="snap-controls">
       {sketchId ? (
-        <button className={`icon-btn sm ${snapGeometry ? "active" : ""}`} aria-pressed={snapGeometry} title={`Magnet ${snapGeometry ? "on" : "off"}: snap to points, lines, circle centres and model edges`} onClick={() => setPrefs({ snapGeometry: !snapGeometry })}>
+        <button className={`icon-btn sm ${snapGeometry ? "active" : ""}`} aria-pressed={snapGeometry} title={snapGeometry ? t("Magnet on: snap to points, lines, circle centres and model edges") : t("Magnet off: snap to points, lines, circle centres and model edges")} onClick={() => setPrefs({ snapGeometry: !snapGeometry })}>
           <Magnet />
         </button>
       ) : null}
-      <button className={`icon-btn sm grid-snap ${snapGrid ? "active" : ""}`} aria-pressed={snapGrid} title={`Grid ${snapGrid ? "on" : "off"}: shown and snapped to; its spacing follows the zoom (Alt places freely)`} onClick={() => setPrefs({ snapGrid: !snapGrid })}>
+      <button className={`icon-btn sm grid-snap ${snapGrid ? "active" : ""}`} aria-pressed={snapGrid} title={snapGrid ? t("Grid on: shown and snapped to; its spacing follows the zoom (Alt places freely)") : t("Grid off: shown and snapped to; its spacing follows the zoom (Alt places freely)")} onClick={() => setPrefs({ snapGrid: !snapGrid })}>
         <Grid3x3 />
         {spacing ? <span>{formatStep(spacing, unit)}</span> : null}
       </button>

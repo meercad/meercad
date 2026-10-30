@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { bridgeStatus, onBridgeStatus, setBridgeEnabled } from "../lib/mcpBridge";
 import { toast } from "../store";
+import { t } from "../lib/i18n";
 
 import { desktop } from "../lib/persistence";
 
@@ -25,7 +26,7 @@ export function McpButton() {
   const config = JSON.stringify({ mcpServers: { meercad: cmd } }, null, 2);
   return (
     <>
-      <button className={`icon-btn ${status === "connected" ? "active" : ""}`} title={`AI assistants (MCP): ${status}`} onClick={() => setOpen(true)}>
+      <button className={`icon-btn ${status === "connected" ? "active" : ""}`} title={t("AI assistants (MCP): {status}", { status: status === "connected" ? t("connected") : status === "connecting" ? t("connecting") : t("off") })} onClick={() => setOpen(true)}>
         <Plug />
         <span className="mcp-dot" data-status={status} />
       </button>
@@ -34,19 +35,21 @@ export function McpButton() {
           <div className="modal" style={{ width: "min(620px, 94vw)" }} onPointerDown={(e) => e.stopPropagation()}>
             <div className="dialog-head">
               <Plug className="ficon" />
-              <h3>Connect AI assistants (MCP)</h3>
-              <button className="icon-btn sm" onClick={() => setOpen(false)}>
+              <h3>{t("Connect AI assistants (MCP)")}</h3>
+              <button className="icon-btn sm" onClick={() => setOpen(false)} aria-label={t("Close")}>
                 <X />
               </button>
             </div>
             <div className="dialog-body">
               <p style={{ margin: 0 }}>
-                Lets Claude Desktop, Claude Code or any MCP client read and change the open model: create sketches and features, edit parameters, render views, measure and export. Everything stays on this computer.
+                {t(
+                  "Lets Claude Desktop, Claude Code or any MCP client read and change the open model: create sketches and features, edit parameters, render views, measure and export. Everything stays on this computer.",
+                )}
               </p>
               <label className="checkbox">
                 <input type="checkbox" checked={status !== "off"} onChange={(e) => setBridgeEnabled(e.target.checked)} />
-                Allow assistants to control meerCAD
-                <span className="muted">— {status === "connected" ? "connected" : status === "connecting" ? "waiting for an assistant…" : "off"}</span>
+                {t("Allow assistants to control meerCAD")}
+                <span className="muted">— {status === "connected" ? t("connected") : status === "connecting" ? t("waiting for an assistant…") : t("off")}</span>
               </label>
               {desktop ? (
                 <div className="row">
@@ -54,30 +57,30 @@ export function McpButton() {
                     className="btn primary"
                     onClick={() =>
                       void desktop!.installClaudeDesktop().then(
-                        (file) => toast(`Added to Claude Desktop (${file}). Restart Claude Desktop to connect.`),
-                        (e: unknown) => toast(`Could not update the Claude Desktop config: ${e instanceof Error ? e.message : String(e)}`, "error"),
+                        (file) => toast(t("Added to Claude Desktop ({file}). Restart Claude Desktop to connect.", { file })),
+                        (e: unknown) => toast(t("Could not update the Claude Desktop config: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error"),
                       )
                     }
                   >
-                    <Plug /> Add to Claude Desktop
+                    <Plug /> {t("Add to Claude Desktop")}
                   </button>
                   <span className="muted" style={{ fontSize: 12 }}>
-                    Writes the entry below into Claude Desktop's config; other servers stay untouched.
+                    {t("Writes the entry below into Claude Desktop's config; other servers stay untouched.")}
                   </span>
                 </div>
               ) : null}
               <div className="fld">
-                <label>{desktop ? "Or add this" : "Add this"} to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)</label>
+                <label>{desktop ? t("Or add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)") : t("Add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)")}</label>
                 <pre className="mono" style={{ margin: 0, padding: 10, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, whiteSpace: "pre-wrap" }}>{config}</pre>
               </div>
               <div className="row">
                 <button
                   className="btn"
                   onClick={() => {
-                    void navigator.clipboard.writeText(config).then(() => toast("Configuration copied"));
+                    void navigator.clipboard.writeText(config).then(() => toast(t("Configuration copied")));
                   }}
                 >
-                  <Copy /> Copy configuration
+                  <Copy /> {t("Copy configuration")}
                 </button>
                 <span className="muted" style={{ fontSize: 12 }}>
                   Claude Code: <span className="mono">claude mcp add meercad {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
@@ -85,7 +88,7 @@ export function McpButton() {
               </div>
               {status === "connected" ? (
                 <div className="callout info">
-                  <Check size={14} /> An assistant is connected. Try: “Make a 60×40×4 mm mounting plate with two 4.5 mm holes”.
+                  <Check size={14} /> {t("An assistant is connected. Try: “Make a 60×40×4 mm mounting plate with two 4.5 mm holes”.")}
                 </div>
               ) : null}
             </div>

@@ -1,4 +1,5 @@
 /** Viewport picks → persistent selectors, and human-readable selector summaries. */
+import { t } from "./i18n";
 import type { BodyMesh } from "@meercad/kernel";
 import { selectorForEdge, selectorForFace, type Topology } from "@meercad/naming";
 import type { AxisRef, EdgeSelector, FaceSelector, PlaneSpec } from "@meercad/schema";
@@ -73,7 +74,7 @@ export function setFeatureLabels(fn: (id: string) => string): void {
   featureLabel = fn;
 }
 
-const KIND: Record<string, string> = { end_cap: "end face", start_cap: "start face", side: "side" };
+const KIND: Record<string, string> = { end_cap: t("end face"), start_cap: t("start face"), side: t("side") };
 /** A face tag in words: "ex1.end_cap" → "Extrude 1 · end face", "ex1.side[sk1.l2]" → "Extrude 1 · side l2". */
 function short(tag: string): string {
   const m = /^([^.[]+)\.([^[]+)(?:\[(.*)\])?$/.exec(tag);
@@ -84,28 +85,28 @@ function short(tag: string): string {
 }
 
 export function describeEdgeSelector(s: EdgeSelector): string {
-  if ("edge" in s) return `Edge: ${short(s.edge[0])} / ${short(s.edge[1])}`;
-  if (s.where?.face) return `Edges of ${short(s.where.face)}`;
-  return `All edges of ${s.of ? featureLabel(s.of) : "?"}`;
+  if ("edge" in s) return t("Edge: {a} / {b}", { a: short(s.edge[0]), b: short(s.edge[1]) });
+  if (s.where?.face) return t("Edges of {face}", { face: short(s.where.face) });
+  return t("All edges of {feature}", { feature: s.of ? featureLabel(s.of) : "?" });
 }
 
 export function describeFaceSelector(s: FaceSelector): string {
   if ("face" in s) return short(s.face);
-  return `Faces ${s.where?.normal ?? ""} ${s.pick ?? ""}`.trim();
+  return `${t("Faces")} ${s.where?.normal ?? ""} ${s.pick ?? ""}`.trim();
 }
 
 export function describePlane(p: PlaneSpec): string {
-  if ("ref" in p) return p.ref.startsWith("origin.") ? `${PLANE_LABELS[p.ref] ?? p.ref} plane` : featureLabel(p.ref);
+  if ("ref" in p) return p.ref.startsWith("origin.") ? t("{plane} plane", { plane: PLANE_LABELS[p.ref] ?? p.ref }) : featureLabel(p.ref);
   return describeFaceSelector(p.face);
 }
 
 export function describeAxis(a: AxisRef): string {
-  if ("ref" in a) return `${a.ref.slice(7)} axis`;
+  if ("ref" in a) return t("{axis} axis", { axis: a.ref.slice(7) });
   if ("line" in a) {
     const [sk, line] = a.line.split(".");
-    return `${featureLabel(sk!)} · line ${line ?? ""}`.trim();
+    return t("{sketch} · line {line}", { sketch: featureLabel(sk!), line: line ?? "" }).trim();
   }
   return describeEdgeSelector(a.edge);
 }
 
-export const PLANE_LABELS: Record<string, string> = { "origin.XY": "Top", "origin.XZ": "Front", "origin.YZ": "Right" };
+export const PLANE_LABELS: Record<string, string> = { "origin.XY": t("plane::Top"), "origin.XZ": t("plane::Front"), "origin.YZ": t("plane::Right") };

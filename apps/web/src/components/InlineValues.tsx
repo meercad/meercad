@@ -15,6 +15,7 @@ import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";
 import { ValueInput, type ValueUnit } from "./ValueInput";
 import { docUnit, fmtLen, lengthExpr, lengthText } from "../lib/units";
+import { t } from "../lib/i18n";
 
 type V3 = [number, number, number];
 
@@ -184,11 +185,11 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
               <ValueInput value={it.value} unit={it.unit} suggest={it.suggest} onDone={(v) => (setEditing(null), v !== null && v !== it.value && commitKeepingParams(it, v))} />
             ) : (
               <>
-                <button onClick={() => setEditing(it.key)} title="Click to edit">
+                <button onClick={() => setEditing(it.key)} title={t("Click to edit")}>
                   {it.text}
                 </button>
                 {it.unlinkable && typeof it.value === "string" && isLinked(it.value) ? (
-                  <button className="unlink" onClick={() => unlink(it)} title="Linked to a variable — click to use a plain number here instead">
+                  <button className="unlink" onClick={() => unlink(it)} title={t("Linked to a variable — click to use a plain number here instead")}>
                     <Link2Off />
                   </button>
                 ) : null}
@@ -272,9 +273,10 @@ function unlink(it: Item): void {
   try {
     const n = evaluate(it.value, new Map(Object.entries(useApp.getState().baseOutput?.report.params ?? {})));
     it.commit(+n.toFixed(4));
-    toast("Unlinked — this value no longer follows the variable");
+    toast(t("Unlinked — this value no longer follows the variable"));
   } catch {
-    toast("Could not evaluate this value", "error");
+    toast(t("Could not evaluate this value"), "error");
+
   }
 }
 

@@ -10,21 +10,23 @@ import { Filesystem } from "@capacitor/filesystem";
 import { toast } from "../store";
 import { importFile } from "../components/io";
 import { nativeApp } from "./native";
+import { lang, t, tn } from "./i18n";
 
 type Caps = { scan: boolean; surface?: boolean; reason?: string };
 export type ScanMode = "object" | "lidar" | "surface";
 
 interface ScanPlugin {
-  capabilities(): Promise<Caps>;
+  /** `lang`: the interface language, which the native scan screens use too. */
+  capabilities(o: { lang: string }): Promise<Caps>;
   imported(o: { folder: string }): Promise<void>;
-  scan(o: { mode: ScanMode }): Promise<{ path: string; paths?: string[]; folder: string; triangles: number; size: [number, number, number]; photos: number; seconds: number }>;
+  scan(o: { mode: ScanMode; lang: string }): Promise<{ path: string; paths?: string[]; folder: string; triangles: number; size: [number, number, number]; photos: number; seconds: number }>;
 }
 const Scan = registerPlugin<ScanPlugin>("Scan");
 
 let available: Promise<Caps> | null = null;
 /** Whether this device can scan, and why not (asked once). */
 function capabilities(): Promise<Caps> {
-  return (available ??= Scan.capabilities().catch((e: { message?: string }) => ({ scan: false, reason: `The scanner did not answer: ${e.message ?? String(e)}` })));
+  return (available ??= Scan.capabilities({ lang }).catch((e: { message?: string }) => ({ scan: false, reason: t("The scanner did not answer: {error}", { error: e.message ?? String(e) }) })));
 }
 
 /** Whether to offer scanning: in the iPhone/iPad app (a device that cannot scan says why on use). */
@@ -38,19 +40,19 @@ const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n.toFixed(1));
 export async function scanObject(mode: ScanMode = "object"): Promise<void> {
   const caps = await capabilities();
   console.info("scan capabilities", JSON.stringify(caps));
-  if (mode === "object" && !caps.scan) return toast(caps.reason || "This device cannot scan objects.", "error");
-  if (mode !== "object" && !caps.surface) return toast("Scanning with LiDAR needs an iPhone or iPad with LiDAR.", "error");
+  if (mode === "object" && !caps.scan) return toast(caps.reason || t("This device cannot scan objects."), "error");
+  if (mode !== "object" && !caps.surface) return toast(t("Scanning with LiDAR needs an iPhone or iPad with LiDAR."), "error");
   let r: Awaited<ReturnType<ScanPlugin["scan"]>>;
   try {
-    r = await Scan.scan({ mode });
+    r = await Scan.scan({ mode, lang });
   } catch (e) {
     const err = e as { code?: string; message?: string };
     console.info("scan failed", err.code, err.message);
-    if (err.code !== "cancelled") toast(err.message ?? "Scanning failed", "error");
+    if (err.code !== "cancelled") toast(err.message ?? t("Scanning failed"), "error");
     return;
   }
   const stamp = new Date().toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const label = { object: "Scan", lidar: "LiDAR scan", surface: "Surface scan" }[mode];
+  const label = { object: t("Scan"), lidar: t("LiDAR scan"), surface: t("Surface scan") }[mode];
   const paths = r.paths ?? [r.path];
   for (const [k, path] of paths.entries()) {
     const data = await Filesystem.readFile({ path: `file://${path}` });
@@ -60,5 +62,5 @@ export async function scanObject(mode: ScanMode = "object"): Promise<void> {
     if (!(await importFile(new File([bytes], name, { type: "model/stl" })))) return;
   }
   void Scan.imported({ folder: r.folder }).catch(() => undefined);
-  toast(`Scan: ${r.size.map(fmt).join(" × ")} mm · ${r.triangles.toLocaleString()} triangles${r.photos ? ` · ${r.photos} photos` : ""}`);
+  toast(t("Scan: {size} mm · {triangles} triangles", { size: r.size.map(fmt).join(" × "), triangles: r.triangles.toLocaleString() }) + (r.photos ? ` · ${tn(r.photos, "{n} photo", "{n} photos")}` : ""));
 }

@@ -10,6 +10,7 @@ import { create } from "zustand";
 import type { Clearance } from "@meercad/kernel";
 import { apply, currentDoc, kernel, toast, useApp } from "../store";
 import { edgeSelectorForPick, faceSelectorForPick } from "./topology";
+import { t } from "./i18n";
 
 export type JointField = "a" | "b" | "anchor";
 
@@ -201,7 +202,7 @@ const nextId = (prefix: string, taken: string[]) => {
 export function toggleJoints(): void {
   const open = !useMotion.getState().open;
   if (open) {
-    if (useApp.getState().dialog) return toast("Finish the open tool first");
+    if (useApp.getState().dialog) return toast(t("Finish the open tool first"));
     useApp.setState({ measure: { active: false, picks: [], result: null } });
   }
   if (!open) {
@@ -238,13 +239,13 @@ export function jointPick(pick: Pick | null): boolean {
   const meshes = useApp.getState().output?.meshes ?? [];
   if (d.field === "a" || d.field === "b") {
     if (pick.kind !== "face" && pick.kind !== "edge") return true;
-    if (d.field === "b" && pick.bodyId === d.joint.a) return toast("Pick another part, or Ground"), true;
+    if (d.field === "b" && pick.bodyId === d.joint.a) return toast(t("Pick another part, or Ground")), true;
     updateJointDraft(d.field === "a" ? { a: pick.bodyId, ...(d.joint.b === pick.bodyId ? { b: "ground" } : {}) } : { b: pick.bodyId }, d.field === "a" ? "b" : "anchor");
     return true;
   }
   let anchor: JointAnchor | null = null;
   if (pick.kind === "face") {
-    if (pick.normal) return toast("Pick a round face (hole or shaft) or an edge for the axis"), true;
+    if (pick.normal) return toast(t("Pick a round face (hole or shaft) or an edge for the axis")), true;
     const sel = faceSelectorForPick(pick, meshes);
     if (sel) anchor = { axisOf: sel };
   } else if (pick.kind === "edge") {
@@ -258,7 +259,7 @@ export function jointPick(pick: Pick | null): boolean {
 export function saveJoint(): boolean {
   const d = useMotion.getState().draft;
   if (!d) return false;
-  if (!d.joint.a) return toast("Pick the part that moves", "error"), false;
+  if (!d.joint.a) return toast(t("Pick the part that moves"), "error"), false;
   if (!apply({ type: "set_joint", joint: d.joint })) return false;
   useMotion.setState({ draft: null });
   return true;
@@ -393,7 +394,7 @@ export async function checkClearance(): Promise<void> {
   const free = { ...useMotion.getState().free, tick: useMotion.getState().tick };
   const poses = loopOf(mech)?.poses ?? mech.poses(mech.values(useMotion.getState().free));
   const moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
-  if (!moving.length) return toast("No part moves yet: add a joint first");
+  if (!moving.length) return toast(t("No part moves yet: add a joint first"));
   useMotion.setState({ check: { running: true, free, results: [] } });
   try {
     const results = await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2));
