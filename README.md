@@ -22,8 +22,13 @@ push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so 
 
 - **Try a change on this Mac:** `pnpm wip` builds the working tree and installs it as *meerCAD WIP*
   in Applications, next to any installed meerCAD.
-- **Testers:** `pnpm testflight` uploads iPhone and iPad builds to TestFlight.
+- **Testers:** `pnpm testflight` uploads iPhone and iPad builds, `pnpm mas` the sandboxed Mac build
+  (same App Store record, so one purchase covers every device). `pnpm mas --dev` builds a
+  development-signed copy to try the sandbox on this Mac.
 - **Customers** get meerCAD from the App Store, which also delivers updates.
+
+Signing material stays out of the repo: certificates in the keychain, provisioning profiles in
+`~/.appstoreconnect/certs/`, the App Store Connect API key in `~/.appstoreconnect/`.
 
 ## Your files
 
@@ -35,8 +40,10 @@ Exchange with other CAD tools via STEP; 3D printing via STL/3MF; laser cutting v
 ## Let Claude drive it (MCP)
 
 The desktop app accepts assistant connections out of the box (switch it off via the plug icon).
-Click the plug icon to copy the configuration for Claude Desktop (Settings → Developer → Edit Config)
-or the `claude mcp add …` command for Claude Code; the assistant starts the MCP server itself and you
+Click the plug icon: **Add to Claude Desktop** sets it up in one step (the App Store build hands
+Claude Desktop the meerCAD extension to install, since the sandbox cannot write Claude's config).
+For any other MCP client copy the configuration or the `claude mcp add …` command; in the App Store
+build that runs the bundled server with Node.js. The assistant starts the MCP server itself and you
 watch it work live in the app — including previews of ideas before they are applied. Tools: `get_guide`, `get_model`, `get_sketch`,
 `apply_ops`, `preview_ops`, `undo`/`redo`, project management, `render_view`, `set_view`,
 `measure`, `export`, `status`. The bridge only listens on `127.0.0.1`.

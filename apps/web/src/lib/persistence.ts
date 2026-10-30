@@ -23,8 +23,9 @@ export interface Project extends ProjectMeta {
 
 interface DesktopApi {
   isDesktop: true;
-  installClaudeDesktop(): Promise<string>;
-  info(): Promise<{ version: string; projectsDir: string; mcpCommand: { command: string; args: string[]; env?: Record<string, string> } }>;
+  /** The Claude Desktop config file written, or null when Claude Desktop was handed the extension to install. */
+  installClaudeDesktop(): Promise<string | null>;
+  info(): Promise<{ version: string; projectsDir: string; mcpCommand: { command: string; args: string[]; env?: Record<string, string> }; mas?: boolean }>;
   projects: {
     list(): Promise<ProjectMeta[]>;
     load(id: string): Promise<Project>;

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- Mac App Store build: sandboxed. Team and app ids come from the provisioning profile. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.application-identifier</key>
+    <string>7H7Q8H83P8.dev.meercad.app</string>
+    <key>com.apple.developer.team-identifier</key>
+    <string>7H7Q8H83P8</string>
+    <!-- Electron's processes talk through shared memory in the app group. -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+      <string>7H7Q8H83P8.dev.meercad.app</string>
+    </array>
+    <!-- V8 and the WebAssembly kernel need JIT. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- The MCP bridge (localhost WebSocket) and the copilot (the user's own AI key). -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- A projects folder the user picks, kept across launches with a bookmark; exports. -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
+    <!-- The iCloud Drive folder shared with the iPhone and iPad app. -->
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+      <string>iCloud.dev.meercad.app</string>
+    </array>
+    <key>com.apple.developer.ubiquity-container-identifiers</key>
+    <array>
+      <string>iCloud.dev.meercad.app</string>
+    </array>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+      <string>CloudDocuments</string>
+    </array>
+    <key>com.apple.developer.icloud-container-environment</key>
+    <string>Production</string>
+  </dict>
+</plist>

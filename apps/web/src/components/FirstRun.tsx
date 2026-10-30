@@ -2,7 +2,7 @@
 import { Cloud, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { desktop } from "../lib/persistence";
-import { changeProjectsFolder } from "../lib/storage";
+import { changeProjectsFolder, folderLabel } from "../lib/storage";
 import { Logo } from "./TopBar";
 import { t } from "../lib/i18n";
 
@@ -24,9 +24,9 @@ export function FirstRun() {
             "meerCAD saves every project as a .meercad file in a folder you choose, so your work stays yours even if you remove the app. Pick a folder you back up, or a synced one like iCloud Drive.",
           )}
         </p>
-        <code>{status.defaultDir}</code>
+        <code title={status.defaultDir}>{folderLabel(status.defaultDir)}</code>
         {status.iCloudAvailable ? (
-          <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} onClick={async () => done(await changeProjectsFolder(status.iCloudDir, { askToMove: false }))}>
+          <button className="btn primary first-run-cloud" onClick={async () => done(await changeProjectsFolder(status.iCloudDir, { askToMove: false }))}>
             <Cloud /> {t("Use iCloud Drive (same projects on iPhone and iPad)")}
           </button>
         ) : null}

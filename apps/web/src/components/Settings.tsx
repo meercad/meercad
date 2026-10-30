@@ -5,7 +5,7 @@ import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { iCloudFolder, nativeApp, storageKind } from "../lib/native";
 import { desktop } from "../lib/persistence";
-import { changeProjectsFolder, switchNativeStorage } from "../lib/storage";
+import { changeProjectsFolder, folderLabel, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
 
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
@@ -176,7 +176,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
               </p>
             ) : null}
             <div className="folder-row">
-              <code title={dir ?? ""}>{dir && cloud?.dir === dir ? "iCloud Drive › meerCAD" : (dir ?? "…")}</code>
+              <code title={dir ?? ""}>{dir ? folderLabel(dir, cloud?.dir ?? undefined) : "…"}</code>
               <button className="btn" onClick={() => void desktop!.projects.reveal()}>
                 <FolderOpen /> {t("folder::Show")}
               </button>

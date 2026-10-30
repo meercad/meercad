@@ -6,6 +6,17 @@ import { desktop } from "./persistence";
 import { t, tn } from "./i18n";
 
 /**
+ * A projects folder as people know it: iCloud Drive, or the App Store app's own folder (a path deep in
+ * ~/Library/Containers that means nothing to anyone) as "On this Mac".
+ */
+export function folderLabel(dir: string, iCloudDir?: string): string {
+  if (iCloudDir && dir === iCloudDir) return "iCloud Drive › meerCAD";
+  const own = /\/Library\/Containers\/[^/]+\/Data\/Documents(\/.*)?$/.exec(dir);
+  if (own) return [t("On this Mac"), ...(own[1] ?? "").split("/").filter(Boolean)].join(" › ");
+  return dir;
+}
+
+/**
  * Points the app at a new projects folder (picked with the system dialog unless given) and asks
  * whether the existing projects should move along. Resolves to the new folder, or null if cancelled.
  */
@@ -19,7 +30,7 @@ export async function changeProjectsFolder(dir?: string, opts: { askToMove?: boo
     count > 0 && (opts.askToMove ?? true)
       ? await askConfirm({
           title: tn(count, "Move your {n} project?", "Move your {n} projects?"),
-          message: t("They are currently in {dir}. Moving keeps your folder structure; nothing in the new folder is overwritten.", { dir: status.dir }),
+          message: t("They are currently in {dir}. Moving keeps your folder structure; nothing in the new folder is overwritten.", { dir: folderLabel(status.dir, status.iCloudDir) }),
           confirmLabel: t("Move projects"),
           cancelLabel: t("Leave them"),
         })

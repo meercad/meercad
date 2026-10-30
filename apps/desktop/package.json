@@ -97,6 +97,7 @@
     "@types/node": "^24.19.2",
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "node-api-headers": "1.5.0"
   }
 }

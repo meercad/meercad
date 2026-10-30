@@ -11,10 +11,14 @@ import { desktop } from "../lib/persistence";
 export function McpButton() {
   const [status, setStatus] = useState(bridgeStatus());
   const [open, setOpen] = useState(false);
+  const [mas, setMas] = useState(false);
   const [cmd, setCmd] = useState<{ command: string; args: string[]; env?: Record<string, string> }>({ command: "node", args: ["<path to meerCAD>/packages/mcp/dist/server.js"] });
   useEffect(() => {
     const off = onBridgeStatus(setStatus);
-    void desktop?.info().then((i) => setCmd(i.mcpCommand));
+    void desktop?.info().then((i) => {
+      setCmd(i.mcpCommand);
+      setMas(i.mas === true);
+    });
     return () => void off();
   }, []);
   useEffect(() => {
@@ -57,7 +61,8 @@ export function McpButton() {
                     className="btn primary"
                     onClick={() =>
                       void desktop!.installClaudeDesktop().then(
-                        (file) => toast(t("Added to Claude Desktop ({file}). Restart Claude Desktop to connect.", { file })),
+                        (file) =>
+                          toast(file ? t("Added to Claude Desktop ({file}). Restart Claude Desktop to connect.", { file }) : t("Claude Desktop opens the meerCAD extension: confirm the installation there.")),
                         (e: unknown) => toast(t("Could not update the Claude Desktop config: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error"),
                       )
                     }
@@ -65,12 +70,13 @@ export function McpButton() {
                     <Plug /> {t("Add to Claude Desktop")}
                   </button>
                   <span className="muted" style={{ fontSize: 12 }}>
-                    {t("Writes the entry below into Claude Desktop's config; other servers stay untouched.")}
+                    {mas ? t("Installs meerCAD as an extension in Claude Desktop.") : t("Writes the entry below into Claude Desktop's config; other servers stay untouched.")}
                   </span>
                 </div>
               ) : null}
               <div className="fld">
                 <label>{desktop ? t("Or add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)") : t("Add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)")}</label>
+                {mas ? <span className="muted" style={{ fontSize: 12 }}>{t("Other assistants start the server with Node.js; install it from nodejs.org if you do not have it yet.")}</span> : null}
                 <pre className="mono" style={{ margin: 0, padding: 10, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, whiteSpace: "pre-wrap" }}>{config}</pre>
               </div>
               <div className="row">

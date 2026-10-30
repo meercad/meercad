@@ -74,7 +74,7 @@ export async function renameLegacyFiles(root: string, thumbsDir: string): Promis
  * Claude Desktop still pointing at the old app (which no longer exists) gets the meerCAD entry
  * instead; a working custom setup is left alone. The previous file is kept as a .bak.
  */
-export async function fixClaudeConfig(entry: { command: string; args: string[]; env: Record<string, string> }): Promise<void> {
+export async function fixClaudeConfig(entry: { command: string; args: string[]; env?: Record<string, string> }): Promise<void> {
   const file = join(app.getPath("appData"), "Claude", "claude_desktop_config.json");
   if (!existsSync(file)) return;
   const raw = await readFile(file, "utf8");

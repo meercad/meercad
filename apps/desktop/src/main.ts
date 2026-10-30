@@ -2,6 +2,10 @@
  * meerCAD desktop shell. Serves the web app from an app:// origin (with the cross-origin isolation
  * headers it needs), stores projects as plain .meercad files in a folder the user picks on first
  * launch (default ~/Documents/meerCAD) and exposes a small, explicit file API to the renderer.
+ *
+ * The Mac App Store build (process.mas) runs sandboxed: a folder the user picks is kept with a
+ * security-scoped bookmark, iCloud Drive is found through the system, and Claude gets meerCAD as an
+ * extension instead of an entry written into its config.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, type MenuItemConstructorOptions } from "electron";
 import { createHash } from "node:crypto";
@@ -13,6 +17,7 @@ import { pathToFileURL } from "node:url";
 import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
 
 const DEV = process.argv.includes("--dev");
+const MAS = process.mas === true;
 /** "wip" for the local test build that lives next to the release (built by `pnpm wip`); it never self-updates. */
 const WIP = (() => {
   try {
@@ -28,14 +33,32 @@ const settingsPath = () => join(app.getPath("userData"), "settings.json");
 const defaultProjectsDir = () => join(app.getPath("documents"), "meerCAD");
 /**
  * meerCAD's folder in iCloud Drive, shared with the iPhone and iPad app ("iCloud Drive › meerCAD").
- * It appears on the Mac once the app has used iCloud on one of them; files written here sync.
+ * Outside the sandbox it appears once the app has used iCloud on one of them; the App Store build
+ * asks the system, which also sets it up (null without iCloud).
  */
-const iCloudContainer = () => join(homedir(), "Library", "Mobile Documents", "iCloud~dev~meercad~app");
-const iCloudDir = () => join(iCloudContainer(), "Documents");
+let iCloudDir: string | null = null;
+async function findICloud(): Promise<void> {
+  if (!MAS) {
+    const container = join(homedir(), "Library", "Mobile Documents", "iCloud~dev~meercad~app");
+    iCloudDir = existsSync(container) ? join(container, "Documents") : null;
+    return;
+  }
+  try {
+    // Native code cannot load from inside the asar archive; it is unpacked next to it.
+    const helper = join(__dirname, "native", "icloud.node").replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
+    const mod = { exports: {} as { containerPath(): Promise<string | null> } };
+    process.dlopen(mod, helper);
+    iCloudDir = await mod.exports.containerPath();
+  } catch {
+    iCloudDir = null;
+  }
+}
 
 /** App-level settings that must live outside the projects folder (it is one of them). */
 interface Settings {
   projectsDir?: string;
+  /** App Store build: the security-scoped bookmark that reopens a folder the user picked. */
+  projectsBookmark?: string;
 }
 function readSettings(): Settings {
   try {
@@ -223,13 +246,18 @@ ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | str
   await writeFile(r.filePath, typeof p.data === "string" ? p.data : Buffer.from(p.data));
   return r.filePath;
 });
-ipcMain.handle("storage:status", () => ({
-  dir: projectsDir(),
-  defaultDir: defaultProjectsDir(),
-  chosen: Boolean(process.env["MEERCAD_PROJECTS_DIR"] ?? settings.projectsDir),
-  iCloudDir: iCloudDir(),
-  iCloudAvailable: existsSync(iCloudContainer()),
-}));
+ipcMain.handle("storage:status", async () => {
+  await findICloud();
+  return {
+    dir: projectsDir(),
+    defaultDir: defaultProjectsDir(),
+    chosen: Boolean(process.env["MEERCAD_PROJECTS_DIR"] ?? settings.projectsDir),
+    iCloudDir: iCloudDir ?? "",
+    iCloudAvailable: iCloudDir !== null,
+  };
+});
+/** Bookmarks of folders picked in this session (App Store build), saved once one becomes the projects folder. */
+const picked = new Map<string, string>();
 ipcMain.handle("storage:choose", async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   const r = await dialog.showOpenDialog(win!, {
@@ -237,8 +265,11 @@ ipcMain.handle("storage:choose", async (e) => {
     buttonLabel: tr("Use this folder"),
     defaultPath: projectsDir(),
     properties: ["openDirectory", "createDirectory"],
+    securityScopedBookmarks: MAS,
   });
-  return r.canceled ? null : (r.filePaths[0] ?? null);
+  const dir = r.canceled ? null : (r.filePaths[0] ?? null);
+  if (dir && r.bookmarks?.[0]) picked.set(dir, r.bookmarks[0]);
+  return dir;
 });
 /** All .meercad files below a folder, as paths relative to it. */
 async function projectFiles(root: string, rel = ""): Promise<string[]> {
@@ -278,7 +309,11 @@ ipcMain.handle("storage:set", async (_e, p: { dir: string; move: boolean }) => {
     for (const f of folders) await mkdir(join(p.dir, ...f.split("/")), { recursive: true });
     for (const f of folders.reverse()) await rmdir(join(from, ...f.split("/"))).catch(() => undefined);
   }
+  // iCloud and the default folder are the app's own; any other needs the bookmark from the picker.
+  const bookmark = picked.get(p.dir);
   settings = { ...settings, projectsDir: p.dir };
+  if (bookmark) settings.projectsBookmark = bookmark;
+  else delete settings.projectsBookmark;
   await mkdir(app.getPath("userData"), { recursive: true });
   await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`);
   watchProjects();
@@ -305,8 +340,17 @@ function watchProjects(): void {
   }
 }
 
-/** Adds meerCAD to Claude Desktop's MCP configuration (keeps everything else, backs the file up first). */
+/**
+ * Adds meerCAD to Claude Desktop's MCP configuration (keeps everything else, backs the file up first)
+ * and returns the file. The sandboxed App Store build cannot write there: it hands Claude Desktop the
+ * meerCAD extension to install instead and returns null.
+ */
 ipcMain.handle("mcp:install-claude-desktop", async () => {
+  if (MAS) {
+    const error = await shell.openPath(join(process.resourcesPath, "meercad.mcpb"));
+    if (error) throw new Error(error);
+    return null;
+  }
   const file = join(app.getPath("appData"), "Claude", "claude_desktop_config.json");
   let config: { mcpServers?: Record<string, unknown> } = {};
   if (existsSync(file)) {
@@ -326,13 +370,15 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
   await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
   return file;
 });
-function mcpEntry() {
-  return { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
+/** How an MCP client starts the server: the app's own runtime, or Node for the sandboxed build (whose binary cannot run as Node). */
+function mcpEntry(): { command: string; args: string[]; env?: Record<string, string> } {
+  return MAS ? { command: "node", args: [mcpServer] } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
 }
 ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
   projectsDir: projectsDir(),
-  mcpCommand: { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } },
+  mcpCommand: mcpEntry(),
+  mas: MAS,
 }));
 
 // ---------------------------------------------------------------- windows
@@ -522,8 +568,10 @@ else {
   });
   void app.whenReady().then(async () => {
     // Coming from the app's earlier name: keep its projects folder, thumbnails and files.
-    if (!WIP) await carryOverAppData(settingsPath(), thumbsDir()).catch(() => undefined);
+    if (!WIP && !MAS) await carryOverAppData(settingsPath(), thumbsDir()).catch(() => undefined);
     settings = readSettings();
+    // Reopen access to a folder picked in an earlier session (held for the app's lifetime).
+    if (MAS && settings.projectsBookmark) app.startAccessingSecurityScopedResource(settings.projectsBookmark);
     // The WIP build starts on the same projects folder as the installed release.
     if (WIP && !settings.projectsDir) {
       for (const name of ["meerCAD", "leocad"]) {
@@ -538,7 +586,7 @@ else {
         }
       }
     }
-    if (!WIP && !process.env["MEERCAD_PROJECTS_DIR"]) {
+    if (!WIP && !MAS && !process.env["MEERCAD_PROJECTS_DIR"]) {
       const moved = await moveLegacyDefaultFolder(settings.projectsDir, defaultProjectsDir(), thumbsDir()).catch(() => null);
       if (moved) {
         settings = { ...settings, projectsDir: moved };
@@ -546,7 +594,8 @@ else {
       }
     }
     await renameLegacyFiles(projectsDir(), thumbsDir()).catch(() => 0);
-    if (app.isPackaged && !WIP) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
+    if (app.isPackaged && !WIP && !MAS) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
+    await findICloud();
     serveApp();
     buildMenu();
     mainWindow = createWindow();

@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.28.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm --filter @meercad/web dev",
     "dev:lan": "pnpm --filter @meercad/web dev:lan",
@@ -14,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "wip": "node scripts/install-wip.mjs",
-    "testflight": "node scripts/testflight.mjs"
+    "testflight": "node scripts/testflight.mjs",
+    "mas": "node scripts/mas.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
