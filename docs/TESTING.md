@@ -64,6 +64,7 @@ number that must come out.
 | 31 | Handle from splines | closed spline outline extruded with a hole, a rod swept along an open spline |
 | 32 | Plate with standard parts | M4 screws seated in counterbores, a 608 bearing |
 | 33 | Assembly by aligning | pin set into a hole by its axis and flush, block set onto a face and turned |
+| 34 | Scaled to a measured size | a scan-sized block scaled by wanted ÷ measured to exact size |
 
 Each model states what must come out (parts, volume worked out by hand where possible, size) and what
 a person should see when looking at it (`look`). The test rebuilds each one, checks the numbers and

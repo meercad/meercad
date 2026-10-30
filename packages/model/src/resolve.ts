@@ -12,6 +12,7 @@ import type {
   TextFeature,
   StandardPartFeature,
   AlignFeature,
+  ScaleFeature,
   RibFeature,
   LinearPatternFeature,
   MeshConvertFeature,
@@ -51,6 +52,7 @@ export type ResolvedGear = R<
 export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number };
 export type ResolvedRib = R<RibFeature, "thickness">;
 export type ResolvedDraft = R<DraftFeature, "angle">;
+export type ResolvedScale = R<ScaleFeature, "factor">;
 export type ResolvedAlign = R<AlignFeature, "offset" | "angle">;
 export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height"> & { points: [number, number][]; length?: number; diameter?: number; height?: number };
 export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & { position: [number, number]; size: number; angle: number; depth: number };
@@ -76,6 +78,7 @@ export type ResolvedFeature =
   | ResolvedText
   | ResolvedStandardPart
   | ResolvedAlign
+  | ResolvedScale
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" | "split" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
@@ -151,6 +154,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       };
     case "draft":
       return { ...f, angle: ev("angle", f.angle) };
+    case "scale":
+      return { ...f, factor: ev("factor", f.factor) };
     case "align":
       return { ...f, offset: opt("offset", f.offset), angle: opt("angle", f.angle) };
     case "standard_part":
@@ -207,6 +212,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     text: ["size", "angle", "depth"],
     standard_part: ["length", "diameter", "height"],
     align: ["offset", "angle"],
+    scale: ["factor"],
   };
   if (f.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);

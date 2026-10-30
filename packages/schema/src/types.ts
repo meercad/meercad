@@ -296,6 +296,17 @@ export interface AlignFeature extends FeatureBase {
   flip?: boolean;
 }
 
+/**
+ * Scales parts uniformly, e.g. to correct a scan to a measured size (factor = wanted ÷ measured) or
+ * to make a part larger. About each part's centre (its box's middle), or the origin.
+ */
+export interface ScaleFeature extends FeatureBase {
+  op: "scale";
+  bodies: string[];
+  factor: Expr;
+  center?: "part" | "origin";
+}
+
 /** Removes parts from the model from this point on (earlier features still see them). */
 export interface DeleteFeature extends FeatureBase {
   op: "delete";
@@ -484,6 +495,7 @@ export type Feature =
   | TextFeature
   | StandardPartFeature
   | AlignFeature
+  | ScaleFeature
   | SweepFeature
   | LinearPatternFeature
   | CircularPatternFeature

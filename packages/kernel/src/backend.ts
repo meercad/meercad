@@ -21,6 +21,7 @@ import {
   type ResolvedText,
   type ResolvedStandardPart,
   type ResolvedAlign,
+  type ResolvedScale,
   standardShape,
   StandardPartError,
   type ResolvedShell,
@@ -120,6 +121,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return standardPartFeature(f, ctx);
       case "align":
         return alignFeature(f, ctx);
+      case "scale":
+        return scaleFeature(f, ctx);
       case "fillet":
       case "chamfer":
         return edgeTreatment(f, ctx);
@@ -619,6 +622,23 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
   }
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+/** Uniform scaling of parts about their own centre (box middle) or the origin. */
+function scaleFeature(f: ResolvedScale, ctx: Ctx): Omit<ModelState, "arena"> {
+  if (!(f.factor > 0)) throw new FeatureError("the scale factor must be greater than zero");
+  if (!f.bodies.length) throw new FeatureError("pick the parts to scale");
+  const bodies = new Map(ctx.prev.bodies);
+  for (const id of f.bodies) {
+    const body = bodies.get(id);
+    if (!body) throw new FeatureError(`part "${id}" not found`);
+    const b = bounds(ctx.oc, ctx.arena, body.shape);
+    const c: Vec3 = f.center === "origin" ? [0, 0, 0] : [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2];
+    const t = ctx.arena.track(new ctx.oc.gp_Trsf());
+    t.SetScale(ctx.g.pnt(c), f.factor);
+    bodies.set(id, transformBody(ctx, body, t, id));
+  }
+  return { ...ctx.prev, bodies };
 }
 
 /** A flat face's plane (point, outward normal) or a round face's axis, and the part it belongs to. */

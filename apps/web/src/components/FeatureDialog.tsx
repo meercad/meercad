@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
 import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_NAMES, STANDARD_SIZES } from "@meercad/model";
@@ -440,6 +440,38 @@ function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string,
         <input type="checkbox" checked={!!f.leftHanded} onChange={(e) => set({ leftHanded: e.target.checked || undefined })} /> Left-hand thread
       </label>
       <p className="muted small">Holes get an internal thread, shafts an external one. Draw holes at the nominal size or the tap drill size; about 0.1–0.2 mm clearance helps printed threads fit.</p>
+    </>
+  );
+}
+
+/** Scale: parts, factor (typed, or from a measured and a wanted length), about what. */
+function ScaleFields({ f, set }: { f: Of<"scale">; set: (patch: Record<string, unknown>) => void }) {
+  const features = useApp((s) => s.doc.features);
+  const [measured, setMeasured] = useState("");
+  const [wanted, setWanted] = useState("");
+  const m = Number(measured.replace(",", ".")), w = Number(wanted.replace(",", "."));
+  const ready = m > 0 && w > 0;
+  return (
+    <>
+      <Field label="Parts">
+        <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder="Pick parts" onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
+      </Field>
+      <Field label="Factor">
+        <ExprInput value={f.factor} autoFocus unit="" onCommit={(factor) => set({ factor })} onLive={(factor) => set({ factor })} />
+      </Field>
+      <Field label="From a measurement">
+        <div className="row">
+          <input className="field" inputMode="decimal" placeholder="measured" value={measured} onChange={(e) => setMeasured(e.target.value)} />
+          <input className="field" inputMode="decimal" placeholder="should be" value={wanted} onChange={(e) => setWanted(e.target.value)} />
+          <button className="btn" disabled={!ready} onClick={() => set({ factor: `${w} / ${m}` })} title="Use wanted ÷ measured as the factor">
+            Use
+          </button>
+        </div>
+      </Field>
+      <Field label="About">
+        <Seg value={f.center ?? "part"} options={[["part", "Each part's centre"], ["origin", "Origin"]]} onChange={(center) => set({ center: center === "part" ? undefined : center })} />
+      </Field>
+      <p className="muted small">To correct a scan, measure a length on the real part with calipers, measure the same length on the model, and enter both.</p>
     </>
   );
 }
@@ -1023,6 +1055,8 @@ function Body({ d }: { d: DialogState }) {
           </label>
         </>
       );
+    case "scale":
+      return <ScaleFields f={f} set={set} />;
     case "align": {
       const desc = (v: Of<"align">["from"]) => {
         const sel = "face" in v ? v.face : v.axisOf;

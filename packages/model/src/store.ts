@@ -158,6 +158,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     text: "tx",
     standard_part: "np",
     align: "al",
+    scale: "sc",
     sweep: "sw",
   };
   const used = new Set(doc.features.map((f) => f.id));

@@ -151,6 +151,7 @@ export const definitions: Record<string, Json> = {
       { profile: ref("profile"), axis: ref("axisRef"), angle: ref("expr"), symmetric: bool, mode: ref("mode"), targets: arr(id) },
       ["profile", "axis", "angle", "mode"],
     ),
+    scale: feature("scale", { bodies: arr(id, { minItems: 1 }), factor: ref("expr"), center: { enum: ["part", "origin"] } }, ["bodies", "factor"]),
     align: feature(
       "align",
       {

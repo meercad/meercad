@@ -644,4 +644,15 @@ export const MODELS: TestModel[] = [
     ]),
     expect: { bodies: 3, volume: 40 * 40 * 10 - PI * 16 * 10 + PI * 16 * 30 + 500 },
   },
+  {
+    file: "34 Auf Maß skaliert",
+    name: "Scaled to a measured size",
+    look: "A block drawn 20.4 × 10.2 × 5.1 (as a scan might come out) scaled by 20 / 20.4 about its centre, so it measures exactly 20 × 10 × 5, with its Ø4.08 hole now Ø4.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, [...rect("l", 0, 0, 20.4, 10.2), ...circle("h", 10.2, 5.1, 2.04)]),
+      { id: "ex1", op: "extrude", name: "Scan", profile: { sketch: "sk1" }, extent: "blind", distance: 5.1, mode: "new_body" },
+      { id: "sc1", op: "scale", name: "To measured size", bodies: ["ex1"], factor: "20 / 20.4" },
+    ]),
+    expect: { bodies: 1, volume: (200 - PI * 4) * 5, size: [20, 10, 5] },
+  },
 ];

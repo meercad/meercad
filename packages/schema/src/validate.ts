@@ -197,6 +197,9 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "draft":
         planeSpec(f.neutral, at);
         break;
+      case "scale":
+        for (const b of f.bodies) body(b, at);
+        break;
       case "align":
         if ("face" in f.from !== "face" in f.to) errors.push(`${at}: align needs two flat faces or two round faces (axisOf)`);
         for (const b of f.bodies ?? []) body(b, at);
