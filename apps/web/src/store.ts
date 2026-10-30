@@ -178,6 +178,8 @@ export function toggleSide(open?: boolean): void {
 const set = useApp.setState;
 const get = useApp.getState;
 
+});
+
 // ---------------------------------------------------------------- toasts
 
 let toastId = 0;
@@ -568,7 +570,8 @@ export function startSketch(planeHint?: PlaneSpec): void {
 }
 
 export function openSketch(id: string): void {
-  set({ sketchId: id, selection: [], dialog: null, selectedFeature: id });
+  // Sketching ends measuring (one mode at a time).
+  set({ sketchId: id, selection: [], dialog: null, selectedFeature: id, measure: { active: false, picks: [], result: null } });
 }
 
 export function closeSketch(): void {

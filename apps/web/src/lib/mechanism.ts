@@ -251,6 +251,12 @@ export function toggleJoints(): void {
   useMotion.setState({ open, draft: null, ...(open ? {} : { free: {}, check: null }) });
 }
 
+// One mode at a time: a tool, a sketch or measuring closes the joints panel (and puts the parts back).
+useApp.subscribe((s, prev) => {
+  const started = (s.dialog && !prev.dialog) || (s.sketchId && !prev.sketchId) || (s.measure.active && !prev.measure.active);
+  if (started && useMotion.getState().open) toggleJoints();
+});
+
 export function startJoint(): void {
   const doc = currentDoc();
   const id = nextId("j", doc.mechanism?.joints.map((j) => j.id) ?? []);
