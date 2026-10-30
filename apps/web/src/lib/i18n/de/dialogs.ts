@@ -280,6 +280,11 @@ export default {
 
   // Standard part
   "Socket head cap screw ISO 4762": "Zylinderschraube mit Innensechskant ISO 4762",
+  "Countersunk screw ISO 10642": "Senkschraube mit Innensechskant ISO 10642",
+  "Hex head screw ISO 4017": "Sechskantschraube ISO 4017",
+  "Set screw ISO 4026": "Gewindestift ISO 4026",
+  "Heat-set insert": "Gewindeeinsatz zum Einschmelzen",
+  "It sits in the hole, flush with the face: tap the centre of a hole.": "Sitzt bündig in der Bohrung: tippe auf die Mitte einer Bohrung.",
   "Hex nut ISO 4032": "Sechskantmutter ISO 4032",
   "Washer ISO 7089": "Unterlegscheibe ISO 7089",
   "Ball bearing": "Kugellager",

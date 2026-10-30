@@ -2,7 +2,7 @@ import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
-import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_NAMES, STANDARD_SIZES } from "@meercad/model";
+import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH } from "@meercad/model";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { gearParams, pairInfo } from "../lib/gears";
@@ -1125,7 +1125,7 @@ function Body({ d }: { d: DialogState }) {
             <select className="field" value={f.kind} onChange={(e) => {
               const kind = e.target.value as Of<"standard_part">["kind"];
               const list = STANDARD_SIZES[kind];
-              set({ kind, size: kind === "magnet" ? undefined : list.includes(f.size ?? "") ? f.size : kind === "bearing" ? "608" : "M3", length: kind === "socket_screw" ? (f.length ?? 10) : undefined, diameter: kind === "magnet" ? 6 : undefined, height: kind === "magnet" ? 3 : undefined });
+              set({ kind, size: kind === "magnet" ? undefined : list.includes(f.size ?? "") ? f.size : kind === "bearing" ? "608" : "M3", length: STANDARD_WITH_LENGTH.includes(kind) ? (f.length ?? 10) : undefined, diameter: kind === "magnet" ? 6 : undefined, height: kind === "magnet" ? 3 : undefined });
             }}>
               {(Object.keys(STANDARD_NAMES) as Of<"standard_part">["kind"][]).map((k) => (
                 <option key={k} value={k}>
@@ -1146,7 +1146,7 @@ function Body({ d }: { d: DialogState }) {
                 </select>
               </Field>
             ) : null}
-            {f.kind === "socket_screw" ? (
+            {STANDARD_WITH_LENGTH.includes(f.kind) ? (
               <Field label={t("Length")}>
                 <select className="field" value={String(f.length ?? 10)} onChange={(e) => set({ length: Number(e.target.value) })}>
                   {SCREW_LENGTHS.map((l) => (
@@ -1193,7 +1193,14 @@ function Body({ d }: { d: DialogState }) {
               </div>
             ))}
           </Field>
-          <p className="muted small">{f.kind === "socket_screw" ? t("The head sits on the face, the shank goes in: tap the centre of a hole.") : t("The part stands on the face; turn it to set it into a recess.")} {t("Each place is its own part.")}</p>
+          <p className="muted small">
+            {f.kind === "socket_screw" || f.kind === "hex_screw"
+              ? t("The head sits on the face, the shank goes in: tap the centre of a hole.")
+              : f.kind === "countersunk_screw" || f.kind === "set_screw" || f.kind === "insert"
+                ? t("It sits in the hole, flush with the face: tap the centre of a hole.")
+                : t("The part stands on the face; turn it to set it into a recess.")}{" "}
+            {t("Each place is its own part.")}
+          </p>
         </>
       );
     }

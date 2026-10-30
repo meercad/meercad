@@ -355,16 +355,17 @@ export interface SweepFeature extends FeatureBase {
 
 /**
  * Standard parts placed on a flat face (or a plane) at points in its coordinates: socket head cap
- * screws (ISO 4762; the head stands on the face, the shank goes in), hex nuts (ISO 4032), washers
- * (ISO 7089), ball bearings and round magnets (standing on the face). Each point gives its own
+ * and hex head screws (ISO 4762, ISO 4017; the head stands on the face, the shank goes in),
+ * countersunk screws (ISO 10642), set screws (ISO 4026) and heat-set inserts (flush in the face),
+ * hex nuts (ISO 4032), washers (ISO 7089), ball bearings and round magnets (standing on the face). Each point gives its own
  * part (ids sp1, sp1_2, …). `flip` turns them the other way.
  */
 export interface StandardPartFeature extends FeatureBase {
   op: "standard_part";
-  kind: "socket_screw" | "hex_nut" | "washer" | "bearing" | "magnet";
+  kind: "socket_screw" | "countersunk_screw" | "hex_screw" | "set_screw" | "hex_nut" | "washer" | "insert" | "bearing" | "magnet";
   /** "M3" for screws, nuts and washers, "608" for bearings. */
   size?: string;
-  /** Screw length under the head. */
+  /** Screw length: under the head; countersunk screws and set screws overall. */
   length?: Expr;
   /** Magnets. */
   diameter?: Expr;

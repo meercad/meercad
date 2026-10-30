@@ -39,6 +39,12 @@ const ROWS: Row[] = [
 export const HOLE_SIZES: readonly string[] = ROWS.map((r) => r.size);
 export const INSERT_SIZES: readonly string[] = ROWS.filter((r) => r.insert).map((r) => r.size);
 
+/** A heat-set insert's outside (its hole once melted in) and length, for sizes that have one. */
+export function insertDims(size: string): { outer: number; length: number } | undefined {
+  const r = ROWS.find((x) => x.size === size)?.insert;
+  return r ? { outer: r[0], length: r[1] } : undefined;
+}
+
 /** The shape of one hole, from the surface inwards. */
 export interface HoleShape {
   /** Main bore diameter. */

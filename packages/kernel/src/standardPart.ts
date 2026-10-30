@@ -1,6 +1,7 @@
 /**
  * Standard parts as solids: the stacked rings of a StandardShape turned about the part's axis
- * (round, or hexagonal for nuts), their holes cut out, and a hex socket in a screw's head.
+ * (round, a cone for a countersunk head, or hexagonal for nuts and hex heads), their holes cut out,
+ * and a hex socket in a screw's head.
  * Faces are tagged by role: np1.head, np1.shank, np1.side, np1.top, np1.bottom, np1.bore, np1.socket.
  */
 
@@ -18,6 +19,18 @@ export function standardPartBody(oc: OC, arena: Arena, id: string, frame: PlaneF
   const pnt = (p: Vec3) => arena.track(new oc.gp_Pnt(...p));
   const ax = (t: number) => arena.track(new oc.gp_Ax2(pnt(along(t)), arena.track(new oc.gp_Dir(...a)), arena.track(new oc.gp_Dir(...frame.u))));
   const cylinder = (r: number, from: number, to: number): TopoDS_Shape => arena.track(arena.track(new oc.BRepPrimAPI_MakeCylinder(ax(from), r, to - from)).Shape());
+  // A cone frustum: its section (axis, r1 at `from`, r2 at `to`) turned about the axis.
+  const cone = (r1: number, r2: number, from: number, to: number): TopoDS_Shape => {
+    const at = (rad: number, t: number): Vec3 => [0, 1, 2].map((i) => c[i]! + a[i]! * t + frame.u[i]! * rad) as Vec3;
+    const pts = [at(0, from), at(r1, from), at(r2, to), at(0, to)];
+    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const vs = pts.map((p) => arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(pnt(p))).Vertex()));
+    vs.forEach((v0, i) => mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v0, vs[(i + 1) % vs.length]!)).Edge())));
+    const face = arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face());
+    const rev = arena.track(new oc.BRepPrimAPI_MakeRevol(face, arena.track(new oc.gp_Ax1(pnt(c), arena.track(new oc.gp_Dir(...a)))), 2 * Math.PI, false));
+    if (!rev.IsDone()) throw new FeatureError(`could not build the ${shape.label}`);
+    return arena.track(rev.Shape());
+  };
   // A hexagonal prism, flats parallel to the plane's u axis.
   const hexPrism = (across: number, from: number, to: number): TopoDS_Shape => {
     const R = across / Math.sqrt(3);
@@ -41,7 +54,7 @@ export function standardPartBody(oc: OC, arena: Arena, id: string, frame: PlaneF
   };
   let solid: TopoDS_Shape | null = null;
   shape.rings.forEach((ring, k) => {
-    let s = shape.hex?.ring === k ? hexPrism(shape.hex.across, ring.from, ring.to) : cylinder(ring.r, ring.from, ring.to);
+    let s = shape.hex?.ring === k ? hexPrism(shape.hex.across, ring.from, ring.to) : ring.r2 !== undefined ? cone(ring.r, ring.r2, ring.from, ring.to) : cylinder(ring.r, ring.from, ring.to);
     if (ring.hole > 0) s = bool("cut", s, cylinder(ring.hole, ring.from - 1, ring.to + 1));
     solid = solid ? bool("fuse", solid, s) : s;
   });
@@ -66,7 +79,9 @@ export function standardPartBody(oc: OC, arena: Arena, id: string, frame: PlaneF
     if (shape.socket && t > shape.socket.top - shape.socket.depth - 1e-6 && radial < shape.socket.key) return name("socket");
     const ring = shape.rings.find((r) => t >= r.from - 1e-6 && t <= r.to + 1e-6);
     if (ring && ring.hole > 0 && radial < (ring.hole + ring.r) / 2) return name("bore");
-    if (shape.socket) return name(t > 1e-6 ? "head" : "shank");
+    // Where two sections meet, the face belongs to the one it lies on: between their radii.
+    const on = shape.rings.filter((r) => t >= r.from - 1e-6 && t <= r.to + 1e-6).find((r) => r.role && t > r.from + 1e-6 && t < r.to - 1e-6);
+    if (on?.role) return name(on.role);
     void f;
     return name("side");
   });

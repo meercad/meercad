@@ -168,7 +168,7 @@ export const definitions: Record<string, Json> = {
     standard_part: feature(
       "standard_part",
       {
-        kind: { enum: ["socket_screw", "hex_nut", "washer", "bearing", "magnet"] },
+        kind: { enum: ["socket_screw", "countersunk_screw", "hex_screw", "set_screw", "hex_nut", "washer", "insert", "bearing", "magnet"] },
         size: { type: "string", maxLength: 16 },
         length: ref("expr"),
         diameter: ref("expr"),

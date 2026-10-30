@@ -48,6 +48,33 @@ describe("standard parts", () => {
     expect(body(magnet).volume).toBeCloseTo(PI * 9 * 3, 3);
   });
 
+  it("sinks countersunk screws, set screws and inserts flush into the face; hex screws stand on it", async () => {
+    // ISO 10642 M4 × 16: 90° head Ø8.96 (2.48 high), socket 2.5 deep 1.5, top flush with the face.
+    const cs = await run({ kind: "countersunk_screw", size: "M4", length: 16 });
+    ok(cs.report);
+    const k = (8.96 - 4) / 2;
+    const cone = (PI * k * (2 ** 2 + 2 * 4.48 + 4.48 ** 2)) / 3;
+    expect(body(cs.report).volume).toBeCloseTo(cone + PI * 4 * (16 - k) - hex(2.5) * 1.5, 2);
+    expect(body(cs.report).bbox.max[2]).toBeCloseTo(10, 6);
+    expect(body(cs.report).bbox.min[2]).toBeCloseTo(10 - 16, 6);
+    const tags = new Set(cs.meshes.find((m) => m.bodyId === "np1")!.faceTags.flat());
+    for (const t of ["np1.head", "np1.shank", "np1.socket"]) expect(tags).toContain(t);
+    // ISO 4017 M6 × 20: hex head 10 across flats, 4 high, on the face.
+    const hs = (await run({ kind: "hex_screw", size: "M6", length: 20 })).report;
+    expect(body(hs).volume).toBeCloseTo(hex(10) * 4 + PI * 9 * 20, 2);
+    expect(body(hs).bbox.max[2]).toBeCloseTo(14, 6);
+    // ISO 4026 M5 × 8: socket 2.5 deep 2.
+    const ss = (await run({ kind: "set_screw", size: "M5", length: 8 })).report;
+    expect(body(ss).volume).toBeCloseTo(PI * 6.25 * 8 - hex(2.5) * 2, 2);
+    expect(body(ss).bbox.max[2]).toBeCloseTo(10, 6);
+    // M3 insert: Ø4 × 5.7 around the M3 thread.
+    const ins = (await run({ kind: "insert", size: "M3", length: undefined })).report;
+    expect(body(ins).volume).toBeCloseTo(PI * (4 - 2.25) * 5.7, 3);
+    expect(body(ins).bbox.min[2]).toBeCloseTo(10 - 5.7, 6);
+    // A countersunk screw shorter than its head does not exist.
+    expect(status((await run({ kind: "countersunk_screw", size: "M8", length: 4 })).report, "np1").message).toMatch(/at least/);
+  });
+
   it("places one part per point", async () => {
     const { report } = await run({ points: [[10, 10], [30, 10], [30, 20]] });
     ok(report);

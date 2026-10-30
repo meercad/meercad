@@ -1,10 +1,15 @@
 /**
- * Standard parts by their norms: socket head cap screws (ISO 4762), hex nuts (ISO 4032), plain
- * washers (ISO 7089), deep-groove ball bearings (outer dimensions) and round magnets. Threads are
+ * Standard parts by their norms: socket head cap screws (ISO 4762), countersunk screws (ISO 10642),
+ * hex head screws (ISO 4017), set screws (ISO 4026), hex nuts (ISO 4032), plain washers (ISO 7089),
+ * heat-set inserts, deep-groove ball bearings (outer dimensions) and round magnets. Threads are
  * not modelled (as drawings show them); sizes are the nominal dimensions.
  */
+import { INSERT_SIZES, insertDims } from "./holes.js";
 
-export type StandardKind = "socket_screw" | "hex_nut" | "washer" | "bearing" | "magnet";
+export type StandardKind = "socket_screw" | "countersunk_screw" | "hex_screw" | "set_screw" | "hex_nut" | "washer" | "insert" | "bearing" | "magnet";
+
+/** Kinds sold by length, chosen from SCREW_LENGTHS. */
+export const STANDARD_WITH_LENGTH: readonly StandardKind[] = ["socket_screw", "countersunk_screw", "hex_screw", "set_screw"];
 
 /** ISO 4762: head diameter, head height, socket (hex key) size, socket depth. */
 const SCREWS: Record<string, { d: number; head: number; k: number; key: number; t: number }> = {
@@ -19,7 +24,40 @@ const SCREWS: Record<string, { d: number; head: number; k: number; key: number; 
   M12: { d: 12, head: 18, k: 12, key: 10, t: 6 },
   M16: { d: 16, head: 24, k: 16, key: 14, t: 8 },
 };
-/** Standard lengths of socket head cap screws, mm. */
+/** ISO 10642 (90° head, hex socket): head diameter (theoretical maximum), socket key size and depth. */
+const COUNTERSUNK: Record<string, { d: number; head: number; key: number; t: number }> = {
+  M3: { d: 3, head: 6.72, key: 2, t: 1.1 },
+  M4: { d: 4, head: 8.96, key: 2.5, t: 1.5 },
+  M5: { d: 5, head: 11.2, key: 3, t: 1.9 },
+  M6: { d: 6, head: 13.44, key: 4, t: 2.2 },
+  M8: { d: 8, head: 17.92, key: 5, t: 3 },
+  M10: { d: 10, head: 22.4, key: 6, t: 3.6 },
+  M12: { d: 12, head: 26.88, key: 8, t: 4.3 },
+  M16: { d: 16, head: 33.6, key: 10, t: 5.6 },
+};
+/** ISO 4017: width across flats and height of the hex head. */
+const HEX_SCREWS: Record<string, { d: number; s: number; k: number }> = {
+  M3: { d: 3, s: 5.5, k: 2 },
+  M4: { d: 4, s: 7, k: 2.8 },
+  M5: { d: 5, s: 8, k: 3.5 },
+  M6: { d: 6, s: 10, k: 4 },
+  M8: { d: 8, s: 13, k: 5.3 },
+  M10: { d: 10, s: 16, k: 6.4 },
+  M12: { d: 12, s: 18, k: 7.5 },
+  M16: { d: 16, s: 24, k: 10 },
+};
+/** ISO 4026 (flat point, hex socket): socket key size and depth. */
+const SET_SCREWS: Record<string, { d: number; key: number; t: number }> = {
+  M3: { d: 3, key: 1.5, t: 1.2 },
+  M4: { d: 4, key: 2, t: 1.5 },
+  M5: { d: 5, key: 2.5, t: 2 },
+  M6: { d: 6, key: 3, t: 2 },
+  M8: { d: 8, key: 4, t: 3 },
+  M10: { d: 10, key: 5, t: 4 },
+  M12: { d: 12, key: 6, t: 4.8 },
+  M16: { d: 16, key: 8, t: 6.4 },
+};
+/** Standard lengths of screws, mm. */
 export const SCREW_LENGTHS = [3, 4, 5, 6, 8, 10, 12, 14, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100] as const;
 /** ISO 4032: width across flats, height. */
 const NUTS: Record<string, { d: number; s: number; m: number }> = {
@@ -63,6 +101,10 @@ const BEARINGS: Record<string, { bore: number; outer: number; width: number }> =
 
 export const STANDARD_SIZES: Record<StandardKind, readonly string[]> = {
   socket_screw: Object.keys(SCREWS),
+  countersunk_screw: Object.keys(COUNTERSUNK),
+  hex_screw: Object.keys(HEX_SCREWS),
+  set_screw: Object.keys(SET_SCREWS),
+  insert: INSERT_SIZES,
   hex_nut: Object.keys(NUTS),
   washer: Object.keys(WASHERS),
   bearing: Object.keys(BEARINGS),
@@ -71,16 +113,23 @@ export const STANDARD_SIZES: Record<StandardKind, readonly string[]> = {
 
 export const STANDARD_NAMES: Record<StandardKind, string> = {
   socket_screw: "Socket head cap screw ISO 4762",
+  countersunk_screw: "Countersunk screw ISO 10642",
+  hex_screw: "Hex head screw ISO 4017",
+  set_screw: "Set screw ISO 4026",
   hex_nut: "Hex nut ISO 4032",
   washer: "Washer ISO 7089",
+  insert: "Heat-set insert",
   bearing: "Ball bearing",
   magnet: "Round magnet",
 };
 
 /** The part as stacked rings about its axis, from where it stands (0) outwards: what the kernel turns into a solid. */
 export interface StandardShape {
-  /** Turned sections: outer radius, inner (hole) radius, from and to along the axis (negative goes into the material). */
-  rings: { r: number; hole: number; from: number; to: number }[];
+  /**
+   * Turned sections: outer radius (`r2` at `to` for a cone), inner (hole) radius, from and to along
+   * the axis (negative goes into the material), and what its outside is called (np1.head, …).
+   */
+  rings: { r: number; r2?: number; hole: number; from: number; to: number; role?: string }[];
   /** A hexagonal outline instead of round for the ring at this index (nuts): width across flats. */
   hex?: { ring: number; across: number };
   /** A hex socket cut into the top: key size and depth (screws). */
@@ -97,13 +146,43 @@ export function standardShape(kind: StandardKind, o: { size?: string | undefined
     if (!row) throw new StandardPartError(`unknown size "${o.size ?? ""}": use one of ${Object.keys(table).join(", ")}`);
     return row;
   };
+  const length = () => {
+    const L = o.length ?? 10;
+    if (!(L > 0)) throw new StandardPartError("the screw's length must be greater than zero");
+    return L;
+  };
   switch (kind) {
     case "socket_screw": {
       const s = need(SCREWS);
-      const L = o.length ?? 10;
-      if (!(L > 0)) throw new StandardPartError("the screw's length must be greater than zero");
+      const L = length();
       // The head stands on the face, the shank goes in; the length is the shank's, as screws are sold.
-      return { rings: [{ r: s.head / 2, hole: 0, from: 0, to: s.k }, { r: s.d / 2, hole: 0, from: -L, to: 0 }], socket: { key: s.key, depth: s.t, top: s.k }, label: `${o.size}×${L} ISO 4762` };
+      return { rings: [{ r: s.head / 2, hole: 0, from: 0, to: s.k, role: "head" }, { r: s.d / 2, hole: 0, from: -L, to: 0, role: "shank" }], socket: { key: s.key, depth: s.t, top: s.k }, label: `${o.size}×${L} ISO 4762` };
+    }
+    case "countersunk_screw": {
+      const s = need(COUNTERSUNK);
+      const L = length();
+      // Sunk flush into the face; the length counts the head, as countersunk screws are sold.
+      const k = (s.head - s.d) / 2;
+      if (L <= k) throw new StandardPartError(`an ${o.size} countersunk screw is at least ${Math.ceil(k * 10) / 10} mm long`);
+      return { rings: [{ r: s.d / 2, r2: s.head / 2, hole: 0, from: -k, to: 0, role: "head" }, { r: s.d / 2, hole: 0, from: -L, to: -k, role: "shank" }], socket: { key: s.key, depth: s.t, top: 0 }, label: `${o.size}×${L} ISO 10642` };
+    }
+    case "hex_screw": {
+      const s = need(HEX_SCREWS);
+      const L = length();
+      return { rings: [{ r: s.s / Math.sqrt(3), hole: 0, from: 0, to: s.k, role: "head" }, { r: s.d / 2, hole: 0, from: -L, to: 0, role: "shank" }], hex: { ring: 0, across: s.s }, label: `${o.size}×${L} ISO 4017` };
+    }
+    case "set_screw": {
+      const s = need(SET_SCREWS);
+      const L = length();
+      // In the hole, flush with the face.
+      return { rings: [{ r: s.d / 2, hole: 0, from: -L, to: 0 }], socket: { key: s.key, depth: Math.min(s.t, L * 0.8), top: 0 }, label: `${o.size}×${L} ISO 4026` };
+    }
+    case "insert": {
+      const ins = o.size ? insertDims(o.size) : undefined;
+      if (!ins) throw new StandardPartError(`unknown size "${o.size ?? ""}": use one of ${INSERT_SIZES.join(", ")}`);
+      const d = Number(o.size!.slice(1));
+      // Melted into its hole, flush with the face.
+      return { rings: [{ r: ins.outer / 2, hole: d / 2, from: -ins.length, to: 0 }], label: `${o.size} insert ${ins.outer}×${ins.length}` };
     }
     case "hex_nut": {
       const n = need(NUTS);
