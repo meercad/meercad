@@ -2,7 +2,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
-import type { Clearance, Measurement, PickRef } from "./tools.js";
+import type { Clearance, Measurement, PickRef, StepPart } from "./tools.js";
 import type { DrawingView, ViewName } from "./drawing.js";
 
 export type { Measurement, PickRef } from "./tools.js";
@@ -88,8 +88,8 @@ export class KernelClient {
     return r.bodies;
   }
 
-  async exportStep(bodies?: string[]): Promise<Uint8Array> {
-    const r = await this.send({ type: "export_step", ...(bodies ? { bodies } : {}) });
+  async exportStep(bodies?: string[], parts?: StepPart[]): Promise<Uint8Array> {
+    const r = await this.send({ type: "export_step", ...(bodies ? { bodies } : {}) , ...(parts ? { parts } : {}) });
     if (r.type !== "exported") throw new Error("unexpected response");
     return r.data;
   }

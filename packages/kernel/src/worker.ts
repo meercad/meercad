@@ -76,7 +76,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
           break;
         }
         case "export_step": {
-          const data = exportStep(oc!, session!.state!, req.bodies);
+          const data = exportStep(oc!, session!.state!, req.bodies, req.parts);
           scope.postMessage({ type: "exported", seq: req.seq, data }, [data.buffer]);
           break;
         }

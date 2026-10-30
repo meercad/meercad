@@ -8,11 +8,22 @@ import { meshBody, type BodyMesh } from "./mesh.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
 
-export function exportStep(oc: OC, state: ModelState, bodyIds?: string[]): Uint8Array {
+/** Names and colours ("#rrggbb") of parts for the STEP file, by body id. */
+export type StepPart = { id: string; name: string; color?: string };
+
+export function exportStep(oc: OC, state: ModelState, bodyIds?: string[], parts?: readonly StepPart[]): Uint8Array {
   const arena = new Arena();
   try {
     const bodies = [...state.bodies.values()].filter((b) => !bodyIds || bodyIds.includes(b.bodyId));
     if (!bodies.length) throw new Error("nothing to export");
+    if (parts?.length) {
+      try {
+        return exportStepParts(oc, arena, bodies, parts);
+      } catch (e) {
+        // Names and colours are a nicety: without them the shapes still go out.
+        console.warn("STEP with names and colours failed, writing plain STEP:", e);
+      }
+    }
     const writer = arena.track(new oc.STEPControl_Writer());
     const range = arena.track(new oc.Message_ProgressRange());
     for (const b of bodies) writer.Transfer(b.shape, "STEPControl_AsIs", true, range);
@@ -24,6 +35,41 @@ export function exportStep(oc: OC, state: ModelState, bodyIds?: string[]): Uint8
   } finally {
     arena.dispose();
   }
+}
+
+/**
+ * STEP (AP214) with each part as a named shape in its colour, through an XCAF document: other CAD
+ * tools show the parts list with names and the parts in their colours.
+ */
+function exportStepParts(oc: OC, arena: Arena, bodies: readonly Body[], parts: readonly StepPart[]): Uint8Array {
+  const doc = arena.track(new oc.TDocStd_Document(arena.track(new oc.TCollection_ExtendedString("XmlXCAF", false))));
+  oc.XCAFDoc_ShapeTool.SetAutoNaming(false);
+  const main = arena.track(doc.Main());
+  const shapes = arena.track(oc.XCAFDoc_DocumentTool.ShapeTool(main));
+  const colors = arena.track(oc.XCAFDoc_DocumentTool.ColorTool(main));
+  for (const b of bodies) {
+    const label = arena.track(shapes.NewShape());
+    shapes.SetShape(label, b.shape);
+    const p = parts.find((x) => x.id === b.bodyId);
+    oc.TDataStd_Name.Set(label, arena.track(new oc.TCollection_ExtendedString(p?.name ?? b.bodyId, true)));
+    const hex = p?.color && /^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : null;
+    if (hex) {
+      // OCCT keeps colours in linear RGB; the hex is sRGB.
+      const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      const [r, g, bl] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16) / 255));
+      colors.SetColor(label, arena.track(new oc.Quantity_ColorRGBA(r!, g!, bl!, 1)), "XCAFDoc_ColorGen" as never);
+    }
+  }
+  shapes.UpdateAssemblies();
+  const writer = arena.track(new oc.STEPCAFControl_Writer());
+  writer.SetColorMode(true);
+  writer.SetNameMode(true);
+  // Perform writes one file; Transfer with a name (even empty) would split it into a file per part.
+  const path = `/export-${Date.now()}.step`;
+  if (!writer.Perform(doc, path, arena.track(new oc.Message_ProgressRange()))) throw new Error("STEP transfer failed");
+  const data = oc.FS.readFile(path) as Uint8Array;
+  oc.FS.unlink(path);
+  return data.slice();
 }
 
 /** Print/CNC-quality triangles of the last rebuild's bodies, for STL and 3MF export. */

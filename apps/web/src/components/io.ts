@@ -3,6 +3,7 @@ import { encodeShareFragment, read3mf, readDxf, readObj, write3mf, writeDxf, wri
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
+import { partName } from "../lib/features";
 import { nextFeatureId } from "@meercad/model";
 import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
@@ -60,11 +61,19 @@ export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   }
 }
 
+/** Each part's name and colour for STEP, so other CAD tools show the parts list and colours. */
+export function stepParts(): { id: string; name: string; color?: string }[] {
+  const { doc, output } = useApp.getState();
+  const ids = output?.report.bodies.map((b) => b.id) ?? [];
+  const colors = partColors(doc, ids, true);
+  return ids.map((id) => ({ id, name: partName(id, doc.features), ...(colors.get(id) ? { color: colors.get(id)! } : {}) }));
+}
+
 export async function exportStep(): Promise<void> {
   try {
     const hidden = useApp.getState().hidden;
     const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
-    const data = await kernel.exportStep(ids);
+    const data = await kernel.exportStep(ids, stepParts());
     download(`${baseName()}.step`, data as BlobPart, "model/step");
   } catch (e) {
     toast(`STEP export failed: ${e instanceof Error ? e.message : String(e)}`, "error");

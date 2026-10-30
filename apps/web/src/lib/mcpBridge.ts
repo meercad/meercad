@@ -10,7 +10,7 @@ import { applyOp, billOfMaterials, drawingDocument, massOf, massProperties, mate
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
-import { sketchCurves } from "../components/io";
+import { sketchCurves, stepParts } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, clearanceNow, setPose } from "./mechanism";
@@ -284,7 +284,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const format = String(p["format"]);
       if (format === "stl") return { base64: toB64(writeStl(await kernel.exportMeshes())) };
       if (format === "3mf") return { base64: toB64(write3mf((await kernel.exportMeshes()).map((m) => ({ ...m, name: m.bodyId })))) };
-      if (format === "step") return { base64: toB64(await kernel.exportStep()) };
+      if (format === "step") return { base64: toB64(await kernel.exportStep(undefined, stepParts())) };
       if (format === "meercad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
       const sketch = String(p["sketch"] ?? "");
       if (!sketch) throw new Error("dxf/svg export needs a sketch id");

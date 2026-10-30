@@ -1,7 +1,7 @@
 import type { MeercadDocument } from "@meercad/schema";
 import type { BodyMesh, BodySummary } from "./mesh.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
-import type { Clearance, Measurement, PickRef } from "./tools.js";
+import type { Clearance, Measurement, PickRef, StepPart } from "./tools.js";
 import type { DrawingView, ViewName } from "./drawing.js";
 
 export type WorkerRequest =
@@ -9,7 +9,8 @@ export type WorkerRequest =
   | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean; props?: boolean }
   /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
   | { type: "sandbox"; seq: number; doc: MeercadDocument }
-  | { type: "export_step"; seq: number; bodies?: string[] }
+  /** `parts`: names and colours to write with each part (XCAF), by body id. */
+  | { type: "export_step"; seq: number; bodies?: string[]; parts?: StepPart[] }
   /** Fine triangles for STL/3MF (the display meshes are too coarse to print or mill from). */
   | { type: "export_mesh"; seq: number; bodies?: string[] }
   /** Session settings: `meshCoarse` loosens tessellation (touch devices, where meshing is slow). */
