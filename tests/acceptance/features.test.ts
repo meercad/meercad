@@ -274,7 +274,8 @@ describe("large booleans", () => {
     expect(report.features.filter((f) => f.status !== "ok")).toEqual([]);
     expect(report.bodies).toHaveLength(1);
     expect(report.bodies[0]!.faces).toBe(n + 2);
-    // Matching the merged faces' names took seconds (every old face against every new one).
-    expect(ms).toBeLessThan(5000);
+    // About 2 s alone, more while the other test files run beside it. Matching the merged faces'
+    // names against every old face took minutes or broke the multi-threaded kernel.
+    expect(ms).toBeLessThan(15000);
   });
 });
