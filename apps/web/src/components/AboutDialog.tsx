@@ -7,11 +7,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import privacy from "../../../../PRIVACY.md?raw";
 import notices from "../../../../THIRD_PARTY_NOTICES.md?raw";
 import lgpl from "../../../../licenses/LGPL-2.1.txt?raw";
-import license from "../../../../LICENSE?raw";
 import { desktop } from "../lib/persistence";
 import { t } from "../lib/i18n";
 
-const SOURCE = "https://github.com/torbenberger/meercad";
 type Tab = "about" | "privacy" | "licenses";
 
 export function AboutDialog() {
@@ -64,16 +62,7 @@ export function AboutDialog() {
           <>
             <section>
               <p>{t("Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.")}</p>
-              <p className="muted">
-                {t(
-                  "© 2026 Torben Berger. meerCAD is free to use, also commercially. Its source is public under the Functional Source License 1.1: anything goes except building a competing product from it, and each release becomes Apache-2.0 two years after it ships.",
-                )}
-              </p>
-              <p>
-                <a href={SOURCE} target="_blank" rel="noreferrer">
-                  {t("Source code on GitHub")}
-                </a>
-              </p>
+              <p className="muted">{t("© 2026 Torben Berger. All rights reserved.")}</p>
             </section>
             <section>
               <h3>
@@ -108,14 +97,10 @@ export function AboutDialog() {
               <summary>{t("Open CASCADE and PlaneGCS: GNU Lesser General Public License 2.1")}</summary>
               <p className="muted">
                 {t(
-                  "On iPhone and iPad the WebAssembly modules are part of the signed app and cannot be swapped there. The full source of meerCAD is public, so you can build the app yourself with your own build of either library.",
+                  "Both libraries are used unmodified; their source is linked above. On iPhone and iPad the WebAssembly modules are part of the signed app and cannot be swapped there.",
                 )}
               </p>
               <pre className="licence-text">{lgpl}</pre>
-            </details>
-            <details>
-              <summary>meerCAD: Functional Source License 1.1</summary>
-              <pre className="licence-text">{license}</pre>
             </details>
           </section>
         )}

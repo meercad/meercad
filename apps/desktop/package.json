@@ -3,7 +3,7 @@
   "productName": "meerCAD",
   "version": "0.1.0",
   "private": true,
-  "description": "Free, source-available parametric CAD",
+  "description": "Parametric CAD for makers",
   "author": "meerCAD contributors",
   "license": "FSL-1.1-ALv2",
   "main": "dist/main.cjs",

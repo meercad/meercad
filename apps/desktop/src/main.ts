@@ -444,7 +444,6 @@ const MENU_DE: Record<string, string> = {
   Redo: "Wiederholen",
   View: "Darstellung",
   "Keyboard Shortcuts": "Tastenkürzel",
-  "meerCAD on GitHub": "meerCAD auf GitHub",
   "Choose a folder for your meerCAD projects": "Ordner für deine meerCAD-Projekte wählen",
   "Use this folder": "Diesen Ordner verwenden",
   // Standard items, which Electron names in English.
@@ -541,7 +540,6 @@ function buildMenu(): void {
       ],
     },
     role("windowMenu"),
-    role("help", { submenu: [{ label: tr("meerCAD on GitHub"), click: () => void shell.openExternal("https://github.com/") }] }),
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

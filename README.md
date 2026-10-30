@@ -5,7 +5,7 @@
 <h1 align="center">meerCAD</h1>
 
 <p align="center">
-  <b>Free, source-available parametric CAD for makers</b><br>
+  <b>Parametric CAD for makers</b><br>
   Runs locally on your Mac — no account, no cloud.
 </p>
 
