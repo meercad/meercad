@@ -121,7 +121,8 @@ function useEntries(): RailEntry[] {
       {
         id: "sketch-tools",
         icon: Wrench,
-        label: t("Tools"),
+        // "Werkzeuge" does not fit the rail.
+        label: t("rail::Tools"),
         tools: [
           sketchTool("fillet", SquareRoundCorner, t("Round a corner"), cur),
           sketchTool("chamfer", Triangle, t("Bevel a corner"), cur),

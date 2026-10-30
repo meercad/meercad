@@ -151,6 +151,7 @@ export default {
   Finish: "Fertig",
   Modify: "Ändern",
   Transform: "Anordnen",
+  "rail::Tools": "Ändern",
   Joints: "Gelenke",
   "Joints: parts that turn or slide; drag them to try": "Gelenke: Teile, die sich drehen oder verschieben; zieh daran, um es auszuprobieren",
   Measure: "Messen",
