@@ -178,6 +178,11 @@ export function toggleSide(open?: boolean): void {
 const set = useApp.setState;
 const get = useApp.getState;
 
+// A tool that opens takes over the history's highlight: only the step being edited stays marked
+// (none for a new one), so two things never look active at once.
+useApp.subscribe((s, prev) => {
+  const id = s.dialog && !s.dialog.isNew ? s.dialog.feature.id : null;
+  if (s.dialog && (!prev.dialog || prev.dialog.feature.id !== s.dialog.feature.id) && (s.selectedFeature !== id || s.featureSelection.length)) set({ selectedFeature: id, featureSelection: [] });
 });
 
 // ---------------------------------------------------------------- toasts
