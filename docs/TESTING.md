@@ -230,3 +230,32 @@ iPhone and TestFlight uploads.
 
 Checked and fine: examples and variables, sketch → extrude → fillet by hand, the 16 test models from
 all sides, measure, undo/redo, inch designs.
+
+### 2026-10-30 (Mac app, main after 3eaf66a)
+
+Run in the Electron app in development mode with a copy of the test models as its projects folder
+(`MEERCAD_PROJECTS_DIR=… electron . --dev --user-data-dir=… --remote-debugging-port=…`), driven over
+the DevTools protocol with real mouse and key events. A scan after each step lists every button or
+label that is cut off, wraps or sticks out of its panel. A covered window runs no animation frames:
+set views without animation and draw a frame before clicking into the model.
+
+Fixed:
+- Missing overview pictures built in the editor's kernel; one slow project blocked all later
+  pictures (the examples' too) and every project being opened. Pictures now use their own kernel,
+  ended on opening a project or after 60 s.
+- A boolean merging many faces (a mesh rebuilt as 20 layers) spent 15 s matching face names, and
+  ran out of memory in the multi-threaded kernel. A bounding-box filter: 16.7 s → 2.3 s.
+- A kernel that hit a WebAssembly runtime error was used on; it is now replaced by a fresh
+  single-threaded one and the open requests are sent again.
+- Playing a linkage past 180° solved most of a turn back in 120 steps every frame (about 15 frames a
+  second); joint values showed counting on. Now 60 frames a second, shown as −180° to 180°.
+- German labels that did not fit: tour buttons, the sketch rail's tools group, the result buttons of
+  the shape tools, the update banner's buttons.
+
+Added: joint symbols are handles; Move takes jointed parts along; the drawing's material field
+starts with the parts' material.
+
+Checked and fine: all 34 test models and 6 examples open in the app and build alike in the single-
+and multi-threaded kernels; sketch → extrude → fillet by hand (volumes as calculated); undo/redo;
+measuring; mass and inertia; drawing; STEP/STL export data; clearance check, GIF, gear joints;
+language switch; MCP `status` and `get_model`.
