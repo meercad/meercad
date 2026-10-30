@@ -120,6 +120,8 @@ function buildPrimitives(input: SolveInput, opts: SolveOptions): { prims: Prim[]
     ["origin.y", "line"],
   ]);
   const curvePoints = new Map<string, Record<string, string>>();
+  /** Open splines' point ids; the solver only sees their points, and their ends for tangency. */
+  const splines = new Map<string, readonly string[]>();
   const coords = new Map<string, Vec2>([["origin", [0, 0]]]);
 
   for (const e of input.entities) {
@@ -149,7 +151,7 @@ function buildPrimitives(input: SolveInput, opts: SolveOptions): { prims: Prim[]
       cons.push({ id: `${e.id}#rules`, type: "arc_rules", a_id: e.id });
       kinds.set(e.id, "arc");
       curvePoints.set(e.id, { center: e.center, start: e.start, end: e.end });
-    }
+    } else if (e.type === "spline" && !e.closed && e.points.length >= 2) splines.set(e.id, e.points);
   }
   for (const x of input.external ?? []) {
     // Projected model edges are lines, circles and arcs only.
@@ -228,10 +230,38 @@ function buildPrimitives(input: SolveInput, opts: SolveOptions): { prims: Prim[]
         add({ type: "point_on_line_pl", p_id: point(`${c.b}.p1`), l_id: c.a }, 1);
         break;
       case "tangent": {
-        const [ka, kb] = [kind(c.a), kind(c.b)];
+        // A spline end leaves towards its neighbouring point, so tangency there is that of the
+        // line between the two, standing in for the spline.
+        const ends = (r: string) => {
+          const sp = splines.get(r);
+          if (sp) return [sp[0]!, sp[sp.length - 1]!];
+          const cp = curvePoints.get(r) ?? {};
+          return [cp["p1"] ?? cp["start"], cp["p2"] ?? cp["end"]].filter((q): q is string => !!q);
+        };
+        const stand = (r: string, other: string) => {
+          const sp = splines.get(r);
+          if (!sp) return r;
+          const shared = ends(r).find((q) => ends(other).includes(q));
+          if (!shared) throw new SketchSolveError(`tangent ${c.id}: the spline must end where the other curve ends`);
+          const id = `${r}#${shared}`;
+          if (!kinds.has(id)) {
+            const next = shared === sp[0] ? sp[1]! : sp[sp.length - 2]!;
+            curves.push({ id, type: "line", p1_id: shared, p2_id: next });
+            kinds.set(id, "line");
+            curvePoints.set(id, { p1: shared, p2: next });
+          }
+          return id;
+        };
+        const [ta, tb] = [stand(c.a, c.b), stand(c.b, c.a)];
+        const [ka, kb] = [kind(ta), kind(tb)];
+        if ((ta !== c.a || tb !== c.b) && ka === "line" && kb === "line") {
+          // They share the end point: parallel makes them run on in one line.
+          add({ type: "parallel", l1_id: ta, l2_id: tb });
+          break;
+        }
         if (ka === "line" && kb === "line") throw new SketchSolveError(`tangent ${c.id}: needs a circle or arc`);
         if (ka === "line" || kb === "line") {
-          const [l, o, ko] = ka === "line" ? [c.a, c.b, kb] : [c.b, c.a, ka];
+          const [l, o, ko] = ka === "line" ? [ta, tb, kb] : [tb, ta, ka];
           // A line ending where the arc ends (a rounded corner): tangent at that point. "Tangent to
           // the circle" there would duplicate the point being on both, which the solver reports as
           // redundant.
@@ -247,9 +277,9 @@ function buildPrimitives(input: SolveInput, opts: SolveOptions): { prims: Prim[]
             const arcDir: Vec2 = [-(q[1] - ctr[1]), q[0] - ctr[0]];
             add({ type: "angle_via_point", crv1_id: l, crv2_id: o, p_id: shared, angle: along[0] * arcDir[0] + along[1] * arcDir[1] >= 0 ? 0 : Math.PI });
           } else add(ko === "circle" ? { type: "tangent_lc", l_id: l, c_id: o } : { type: "tangent_la", l_id: l, a_id: o });
-        } else if (ka === "circle" && kb === "circle") add({ type: "tangent_cc", c1_id: c.a, c2_id: c.b });
-        else if (ka === "arc" && kb === "arc") add({ type: "tangent_aa", a1_id: c.a, a2_id: c.b });
-        else add({ type: "tangent_ca", c_id: ka === "circle" ? c.a : c.b, a_id: ka === "arc" ? c.a : c.b });
+        } else if (ka === "circle" && kb === "circle") add({ type: "tangent_cc", c1_id: ta, c2_id: tb });
+        else if (ka === "arc" && kb === "arc") add({ type: "tangent_aa", a1_id: ta, a2_id: tb });
+        else add({ type: "tangent_ca", c_id: ka === "circle" ? ta : tb, a_id: ka === "arc" ? ta : tb });
         break;
       }
       case "equal": {

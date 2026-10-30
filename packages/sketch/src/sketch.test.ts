@@ -109,6 +109,76 @@ describe("arc angle", () => {
   });
 });
 
+describe("tangent to a spline end", () => {
+  const dir = (a: [number, number] | undefined, b: [number, number] | undefined) => {
+    const d = Math.hypot(b![0] - a![0], b![1] - a![1]);
+    return [(b![0] - a![0]) / d, (b![1] - a![1]) / d];
+  };
+  const wave: SketchEntity[] = [
+    { id: "s1p", type: "point", x: 10, y: 0 },
+    { id: "s2p", type: "point", x: 20, y: 8 },
+    { id: "s3p", type: "point", x: 35, y: -4 },
+    { id: "s1", type: "spline", points: ["s1p", "s2p", "s3p"] },
+  ];
+
+  it("turns the spline's first span in line with a line ending there", () => {
+    const s = solver.solve({
+      entities: [{ id: "a", type: "point", x: 0, y: 0 }, ...wave, { id: "l1", type: "line", p1: "a", p2: "s1p" }],
+      constraints: [
+        { id: "f1", type: "fix", point: "a" },
+        { id: "f2", type: "fix", point: "s1p" },
+        { id: "f3", type: "fix", point: "s3p" },
+        { id: "t", type: "tangent", a: "l1", b: "s1" },
+      ],
+    });
+    expect(s.diagnostics.ok).toBe(true);
+    // The line runs along x, so the spline leaves its start along x too: the next point moved onto y = 0.
+    expect(s.points.get("s2p")![1]).toBeCloseTo(0, 6);
+    const sp = s.curves.find((c) => c.id === "s1")!;
+    const d = sp.kind === "spline" ? dir(sp.pts[0], sp.pts[1]) : [];
+    expect(d[0]).toBeCloseTo(1, 3);
+  });
+
+  it("joins an arc smoothly at the spline's last point, and another spline", () => {
+    const s = solver.solve({
+      entities: [
+        ...wave,
+        { id: "c", type: "point", x: 35, y: -14 },
+        { id: "e", type: "point", x: 45, y: -14 },
+        { id: "a1", type: "arc", center: "c", start: "e", end: "s3p" },
+        { id: "q1", type: "point", x: 0, y: 10 },
+        { id: "s2", type: "spline", points: ["q1", "s1p"] },
+      ],
+      constraints: [
+        { id: "f1", type: "fix", point: "c" },
+        { id: "f2", type: "fix", point: "s1p" },
+        { id: "f3", type: "fix", point: "q1" },
+        { id: "t1", type: "tangent", a: "s1", b: "a1" },
+        { id: "t2", type: "tangent", a: "s2", b: "s1" },
+      ],
+    });
+    expect(s.diagnostics.ok).toBe(true);
+    const at = (id: string) => s.points.get(id)!;
+    // At the arc's end the radius is perpendicular to the spline's last span.
+    const r = dir(at("c"), at("s3p"));
+    const span = dir(at("s2p"), at("s3p"));
+    expect(r[0]! * span[0]! + r[1]! * span[1]!).toBeCloseTo(0, 6);
+    // The two splines run on in one direction through their shared point.
+    const into = dir(at("q1"), at("s1p"));
+    const out = dir(at("s1p"), at("s2p"));
+    expect(into[0]! * out[0]! + into[1]! * out[1]!).toBeCloseTo(1, 6);
+  });
+
+  it("asks for a shared end", () => {
+    const s = () =>
+      solver.solve({
+        entities: [...wave, { id: "a", type: "point", x: 0, y: 5 }, { id: "b", type: "point", x: 5, y: 5 }, { id: "l1", type: "line", p1: "a", p2: "b" }],
+        constraints: [{ id: "t", type: "tangent", a: "l1", b: "s1" }],
+      });
+    expect(s).toThrow(/must end where the other curve ends/);
+  });
+});
+
 describe("findRegions", () => {
   it("keeps an arc whole when it is a hair off its line's end", () => {
     // A slanted slot with round ends exactly as the solver returned it: the arcs' radii are off by

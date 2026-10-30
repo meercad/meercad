@@ -45,7 +45,7 @@ export const CONSTRAINT_TOOLS: { type: string; icon: Icon; label: string; key?: 
   { type: "vertical", icon: Vertical, label: t("Vertical"), hint: t("lines or two points") },
   { type: "parallel", icon: Parallel, label: t("Parallel"), key: "Shift+A", hint: t("two lines") },
   { type: "perpendicular", icon: Perpendicular, label: t("Perpendicular"), key: "Shift+P", hint: t("two lines") },
-  { type: "tangent", icon: Tangent, label: t("Tangent"), key: "Shift+T", hint: t("a line and an arc/circle, or two arcs") },
+  { type: "tangent", icon: Tangent, label: t("Tangent"), key: "Shift+T", hint: t("a line and an arc/circle, two arcs, or a spline and a curve at its end") },
   { type: "equal", icon: EqualIcon, label: t("Equal"), key: "Shift+E", hint: t("lines or circles/arcs") },
   { type: "concentric", icon: Concentric, label: t("Concentric"), key: "Shift+C", hint: t("two circles/arcs") },
   { type: "midpoint", icon: Midpoint, label: t("Midpoint"), key: "Shift+M", hint: t("a point and a line") },
@@ -64,6 +64,7 @@ export function applyConstraint(type: string): void {
   const kinds = curves.map((c) => curveKind(sk, c, externalKinds));
   const lines = curves.filter((_, i) => kinds[i] === "line");
   const rounds = curves.filter((_, i) => kinds[i] === "circle" || kinds[i] === "arc");
+  const splines = curves.filter((c) => sk.entities.some((e) => e.id === c && e.type === "spline"));
   const taken = new Set<string>();
   const out: SketchConstraint[] = [];
   const id = () => freshId(sk, "c", taken);
@@ -115,7 +116,14 @@ export function applyConstraint(type: string): void {
       for (let i = 1; i < lines.length; i++) out.push({ id: id(), type: type as "parallel" | "perpendicular" | "collinear", a: lines[0]!, b: lines[i]! });
       break;
     case "tangent":
-      if (curves.length !== 2 || !rounds.length) return need(t("a line and an arc/circle, or two arcs/circles"));
+      if (curves.length === 2 && splines.length) {
+        // A spline takes a tangent only at an end it shares with the other curve.
+        const ends = (c: string) => {
+          const e = sk.entities.find((x) => x.id === c);
+          return e?.type === "spline" ? (e.closed ? [] : [e.points[0], e.points[e.points.length - 1]]) : e?.type === "line" ? [e.p1, e.p2] : e?.type === "arc" ? [e.start, e.end] : [];
+        };
+        if (!ends(curves[0]!).some((q) => ends(curves[1]!).includes(q))) return need(t("a spline and a curve that ends where it ends"));
+      } else if (curves.length !== 2 || !rounds.length) return need(t("a line and an arc/circle, or two arcs/circles"));
       out.push({ id: id(), type: "tangent", a: curves[0]!, b: curves[1]! });
       break;
     case "equal":
