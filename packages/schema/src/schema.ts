@@ -120,11 +120,12 @@ export const definitions: Record<string, Json> = {
     {
       id,
       name: { type: "string", maxLength: 128 },
-      type: { enum: ["revolute", "slider", "fixed"] },
+      type: { enum: ["revolute", "slider", "cylindrical", "fixed"] },
       a: { type: "string", minLength: 1, maxLength: 128 },
       b: { type: "string", minLength: 1, maxLength: 128 },
       anchor: ref("jointAnchor"),
       limits: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
+      travel: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
       suppressed: bool,
     },
     ["id", "type", "a", "b", "anchor"],

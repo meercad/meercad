@@ -91,14 +91,24 @@ export function currentMechanism(): { mech: motion.Mechanism; problems: Record<s
     else if (!bodies.has(j.a)) problems[j.id] = `part "${j.a}" is gone`;
     else if (j.b !== "ground" && !bodies.has(j.b)) problems[j.id] = `part "${j.b}" is gone`;
     else {
+      const range = (r: [string | number, string | number] | undefined): [number, number] | undefined => {
+        if (!r) return undefined;
+        const v = [num(r[0]), num(r[1])];
+        return [Math.min(...v), Math.max(...v)];
+      };
       let limits: [number, number] | undefined;
+      let travel: [number, number] | undefined;
       try {
-        limits = j.limits ? [num(j.limits[0]), num(j.limits[1])] : undefined;
+        limits = range(j.limits);
+        travel = range(j.travel);
       } catch (e) {
         problems[j.id] = `limits: ${(e as Error).message}`;
         continue;
       }
-      joints.push({ id: j.id, type: j.type, a: j.a, b: j.b, origin: frame.origin, axis: frame.axis, ...(limits ? { limits: [Math.min(...limits), Math.max(...limits)] as [number, number] } : {}) });
+      const base = { id: j.id, a: j.a, b: j.b, origin: frame.origin, axis: frame.axis };
+      // A cylindrical joint moves as a turn and a slide of its own (motion.cylindricalJoints).
+      if (j.type === "cylindrical") joints.push(...motion.cylindricalJoints({ ...base, ...(limits ? { limits } : {}), ...(travel ? { travel } : {}) }));
+      else joints.push({ ...base, type: j.type, ...(limits ? { limits } : {}) });
     }
   }
   const couplings: motion.MotionCoupling[] = [];

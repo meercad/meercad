@@ -550,19 +550,22 @@ export type JointAnchor =
 
 /**
  * A joint lets part `a` move relative to part `b` (or stay on the ground) from where it was
- * modelled: revolute turns about the axis (degrees), slider moves along it (mm), fixed holds it.
+ * modelled: revolute turns about the axis (degrees), slider moves along it (mm), cylindrical does
+ * both (a pin in a guide, a telescope), fixed holds it.
  */
 export interface Joint {
   id: string;
   name?: string;
-  type: "revolute" | "slider" | "fixed";
+  type: "revolute" | "slider" | "cylindrical" | "fixed";
   /** Moving part (body id). */
   a: string;
   /** Part it hangs on (body id), or "ground". */
   b: string;
   anchor: JointAnchor;
-  /** Lowest and highest value (degrees or mm); none = free. */
+  /** Lowest and highest value (degrees or mm; a cylindrical joint's turn); none = free. */
   limits?: [Expr, Expr];
+  /** A cylindrical joint's lowest and highest slide along the axis (mm); none = free. */
+  travel?: [Expr, Expr];
   suppressed?: boolean;
 }
 

@@ -22,6 +22,10 @@ export default {
   Stop: "Stopp",
   "Play: move it back and forth": "Abspielen: hin und her bewegen",
   "Runs into: {pairs}": "Stößt an: {pairs}",
+  "joint::Both": "Beides",
+  "Turn and slide on one axis, like a pin in a guide": "Drehen und Schieben auf einer Achse, wie ein Stift in einer Führung",
+  "Limits of the turn": "Grenzen beim Drehen",
+  "Limits of the slide": "Grenzen beim Schieben",
   "Follows {driver} × {ratio}": "Folgt {driver} × {ratio}",
   "It cannot move further this way: a dead point or a limit. Move it back, or drag another part.":
     "In diese Richtung geht es nicht weiter: ein Totpunkt oder eine Grenze. Beweg es zurück oder zieh ein anderes Teil.",

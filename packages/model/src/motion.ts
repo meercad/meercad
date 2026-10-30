@@ -20,6 +20,23 @@ export interface MotionJoint {
   limits?: [number, number];
 }
 
+/**
+ * A cylindrical joint (turn and slide on one axis) as two plain joints through a part of its own:
+ * `<id>.turn` turns `a` on that part, `<id>.slide` moves the part along the axis on `b`. The two
+ * values are set apart, in the panel and by assistants.
+ */
+export function cylindricalJoints(j: Omit<MotionJoint, "type" | "limits"> & { limits?: [number, number]; travel?: [number, number] }): [MotionJoint, MotionJoint] {
+  const carrier = cylindricalCarrier(j.id);
+  return [
+    { id: `${j.id}${TURN}`, type: "revolute", a: j.a, b: carrier, origin: j.origin, axis: j.axis, ...(j.limits ? { limits: j.limits } : {}) },
+    { id: `${j.id}${SLIDE}`, type: "slider", a: carrier, b: j.b, origin: j.origin, axis: j.axis, ...(j.travel ? { limits: j.travel } : {}) },
+  ];
+}
+export const TURN = ".turn";
+export const SLIDE = ".slide";
+/** The part between a cylindrical joint's turn and slide (not a body of the model). */
+export const cylindricalCarrier = (id: string) => `${id}~carrier`;
+
 export interface MotionCoupling {
   driver: string;
   driven: string;

@@ -26,7 +26,7 @@ describe("joints", () => {
     expect(f.error).toBeUndefined();
     near(f.origin, [0, 0, 6.5]);
     expect(Math.abs(f.axis[2])).toBeCloseTo(1, 9);
-    const m = new motion.Mechanism([{ ...pin, limits: [-90, 90], origin: f.origin, axis: f.axis }]);
+    const m = new motion.Mechanism([{ id: pin.id, type: "revolute", a: pin.a, b: pin.b, limits: [-90, 90], origin: f.origin, axis: f.axis }]);
     const values = m.values({ j1: 120 });
     // Held at the limit.
     expect(values["j1"]).toBe(90);
@@ -54,7 +54,7 @@ describe("joints", () => {
     const f = s.rebuild(withJoints(hinge, [slide])).report.joints[0]!;
     expect(f.error).toBeUndefined();
     expect(Math.abs(f.axis[0])).toBeCloseTo(1, 9);
-    const m = new motion.Mechanism([{ ...slide, limits: [0, 15], origin: f.origin, axis: f.axis }]);
+    const m = new motion.Mechanism([{ id: slide.id, type: "slider", a: slide.a, b: slide.b, limits: [0, 15], origin: f.origin, axis: f.axis }]);
     const p = motion.transformPoint(m.poses(m.values({ j1: 40 })).get("ex2")!, [0, 0, 0]);
     expect(Math.abs(p[0])).toBeCloseTo(15, 9);
 
@@ -74,7 +74,7 @@ describe("joints", () => {
     ]);
     near(r.joints[1]!.origin, [30, 0, 2.5]);
     const gm = new motion.Mechanism(
-      joints.map((j, i) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis })),
+      joints.map((j, i) => ({ id: j.id, type: j.type as motion.MotionJoint["type"], a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis })),
       [{ driver: "j1", driven: "j2", ratio: -0.5 }],
     );
     // Ten turns of the pinion: the big gear turns five the other way, without drift.
@@ -110,7 +110,7 @@ describe("joints", () => {
     const s = await newSession();
     const d = MODELS.find((m) => m.file.startsWith("23"))!.doc;
     const r = s.rebuild(d).report;
-    const joints = d.mechanism!.joints.map((j, i) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis }));
+    const joints = d.mechanism!.joints.map((j, i) => ({ id: j.id, type: j.type as motion.MotionJoint["type"], a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis }));
     expect(linkage.hasLoops(joints)).toBe(true);
     const L = new linkage.Linkage(joints);
     let poses = new Map<string, motion.Mat4>();
@@ -128,7 +128,7 @@ describe("joints", () => {
     const s = await newSession();
     const d = MODELS.find((m) => m.file.startsWith("23"))!.doc;
     const r = s.rebuild(d).report;
-    const joints = d.mechanism!.joints.map((j, i) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis }));
+    const joints = d.mechanism!.joints.map((j, i) => ({ id: j.id, type: j.type as motion.MotionJoint["type"], a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis }));
     const L = new linkage.Linkage(joints);
     let poses = new Map<string, motion.Mat4>();
     let values: Record<string, number> = {};

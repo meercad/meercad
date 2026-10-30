@@ -4,15 +4,17 @@ import { download } from "./io";
 import { jointRange, renderMotionGif } from "../lib/render";
 import type { Joint } from "@meercad/schema";
 import { partName } from "../lib/features";
+import { motion } from "@meercad/model";
 import { checkClearance, currentMechanism, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, restPose, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
 import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
 import { t, tn } from "../lib/i18n";
 
-const TYPES: [Joint["type"], string][] = [
+const TYPES: [Joint["type"], string, string?][] = [
   ["revolute", t("joint::Turn")],
   ["slider", t("joint::Slide")],
+  ["cylindrical", t("joint::Both"), t("Turn and slide on one axis, like a pin in a guide")],
   ["fixed", t("joint::Fixed")],
 ];
 
@@ -87,14 +89,10 @@ export function MotionPanel() {
           <>
             {joints.length ? <p className="muted small">{t("Drag a part to move it. The model itself stays as drawn.")}</p> : <p className="muted small">{t("Joints let parts turn or slide against each other, from where they were drawn. Add one, then drag the part.")}</p>}
             {joints.map((j) => {
-              const v = values[j.id];
-              const limits = mech.joint(j.id)?.limits;
               const driven = couplings.find((c) => c.driven === j.id);
-              const unit = j.type === "revolute" ? "°" : " mm";
-              const [lo, hi] = limits ?? (j.type === "revolute" ? [-180, 180] : [-50, 50]);
-              // A turn without limits keeps counting inside; slider and number show it as -180° to 180°.
-              const turning = j.type === "revolute" && !limits;
-              const seen = turning ? wrapDegrees(v ?? 0) : (v ?? 0);
+              // A cylindrical joint has a value for its turn and one for its slide.
+              const parts: [string, "revolute" | "slider", string?][] =
+                j.type === "cylindrical" ? [[`${j.id}${motion.TURN}`, "revolute", t("joint::Turn")], [`${j.id}${motion.SLIDE}`, "slider", t("joint::Slide")]] : j.type === "fixed" ? [] : [[j.id, j.type]];
               return (
                 <div key={j.id} className="joint-row">
                   <div className="joint-head">
@@ -103,7 +101,7 @@ export function MotionPanel() {
                       {t("{part} on {base}", { part: name(j.a), base: name(j.b) })}
                     </span>
                     {j.type !== "fixed" && !problems[j.id] ? (
-                      <button className={`icon-btn sm ${filming === j.id ? "active" : ""}`} title={t("Save a video (GIF) of this motion")} disabled={!!filming} onClick={() => void film(j.id)}>
+                      <button className={`icon-btn sm ${filming === parts[0]![0] ? "active" : ""}`} title={t("Save a video (GIF) of this motion")} disabled={!!filming} onClick={() => void film(parts[0]![0])}>
                         <Film />
                       </button>
                     ) : null}
@@ -119,24 +117,36 @@ export function MotionPanel() {
                   ) : j.type === "fixed" ? (
                     <span className="muted small">{t("Held fixed")}</span>
                   ) : (
-                    <div className="row joint-value">
-                      <button className={`icon-btn sm ${playing === j.id ? "active" : ""}`} title={playing === j.id ? t("Stop") : t("Play: move it back and forth")} onClick={() => (playing === j.id ? stopPlaying() : playJoint(j.id))}>
-                        {playing === j.id ? <Pause /> : <Play />}
-                      </button>
-                      <input
-                        type="range"
-                        min={turning ? -180 : Math.max(lo, (v ?? 0) - 720)}
-                        max={turning ? 180 : Math.min(hi, (v ?? 0) + 720)}
-                        step={j.type === "revolute" ? 1 : 0.1}
-                        value={seen}
-                        // A free turn goes on from where it is: 179° → -179° is two degrees on, not a turn back.
-                        onChange={(e) => (stopPlaying(), setJointValue(j.id, turning ? (v ?? 0) + wrapDegrees(Number(e.target.value) - seen) : Number(e.target.value)))}
-                      />
-                      <span className="joint-num">
-                        {shown(seen, j.type === "revolute" ? 0 : 1)}
-                        {unit}
-                      </span>
-                    </div>
+                    parts.map(([id, kind, label]) => {
+                      const v = values[id];
+                      const limits = mech.joint(id)?.limits;
+                      const unit = kind === "revolute" ? "°" : " mm";
+                      const [lo, hi] = limits ?? (kind === "revolute" ? [-180, 180] : [-50, 50]);
+                      // A turn without limits keeps counting inside; slider and number show it as -180° to 180°.
+                      const turning = kind === "revolute" && !limits;
+                      const seen = turning ? wrapDegrees(v ?? 0) : (v ?? 0);
+                      return (
+                        <div key={id} className="row joint-value">
+                          {label ? <span className="joint-part muted small">{label}</span> : null}
+                          <button className={`icon-btn sm ${playing === id ? "active" : ""}`} title={playing === id ? t("Stop") : t("Play: move it back and forth")} onClick={() => (playing === id ? stopPlaying() : playJoint(id))}>
+                            {playing === id ? <Pause /> : <Play />}
+                          </button>
+                          <input
+                            type="range"
+                            min={turning ? -180 : Math.max(lo, (v ?? 0) - 720)}
+                            max={turning ? 180 : Math.min(hi, (v ?? 0) + 720)}
+                            step={kind === "revolute" ? 1 : 0.1}
+                            value={seen}
+                            // A free turn goes on from where it is: 179° → -179° is two degrees on, not a turn back.
+                            onChange={(e) => (stopPlaying(), setJointValue(id, turning ? (v ?? 0) + wrapDegrees(Number(e.target.value) - seen) : Number(e.target.value)))}
+                          />
+                          <span className="joint-num">
+                            {shown(seen, kind === "revolute" ? 0 : 1)}
+                            {unit}
+                          </span>
+                        </div>
+                      );
+                    })
                   )}
                   {driven ? <span className="muted small">{t("Follows {driver} × {ratio}", { driver: driven.driver, ratio: String(driven.ratio) })}</span> : null}
                 </div>
@@ -247,6 +257,7 @@ function JointForm() {
   const j = draft.joint;
   const name = (id: string) => (id === "ground" ? t("Ground") : id ? partName(id, features) : "");
   const unit = j.type === "slider" ? "mm" : "deg";
+  const turns = j.type === "revolute" || j.type === "cylindrical";
   return (
     <>
       <div className="fld">
@@ -274,8 +285,8 @@ function JointForm() {
       <div className="fld">
         <span className="fld-label">{t("Motion")}</span>
         <div className="segmented">
-          {TYPES.map(([type, label]) => (
-            <button key={type} className={type === j.type ? "on" : ""} onClick={() => updateJointDraft({ type, ...(type === "fixed" ? { limits: undefined } : {}) })}>
+          {TYPES.map(([type, label, hint]) => (
+            <button key={type} className={type === j.type ? "on" : ""} title={hint} onClick={() => updateJointDraft({ type, ...(type === "fixed" ? { limits: undefined } : {}), ...(type !== "cylindrical" ? { travel: undefined } : {}) })}>
               {label}
             </button>
           ))}
@@ -284,7 +295,7 @@ function JointForm() {
       {j.type !== "fixed" ? (
         <>
           <label className="checkbox">
-            <input type="checkbox" checked={!!j.limits} onChange={(e) => updateJointDraft({ limits: e.target.checked ? (j.type === "revolute" ? [0, 90] : [0, 20]) : undefined })} /> {t("Limits")}
+            <input type="checkbox" checked={!!j.limits} onChange={(e) => updateJointDraft({ limits: e.target.checked ? (turns ? [0, 90] : [0, 20]) : undefined })} /> {j.type === "cylindrical" ? t("Limits of the turn") : t("Limits")}
           </label>
           {j.limits ? (
             <div className="row">
@@ -297,6 +308,25 @@ function JointForm() {
                 <ExprInput value={j.limits[1]} unit={unit} onCommit={(v) => updateJointDraft({ limits: [j.limits![0], v] })} />
               </div>
             </div>
+          ) : null}
+          {j.type === "cylindrical" ? (
+            <>
+              <label className="checkbox">
+                <input type="checkbox" checked={!!j.travel} onChange={(e) => updateJointDraft({ travel: e.target.checked ? [0, 20] : undefined })} /> {t("Limits of the slide")}
+              </label>
+              {j.travel ? (
+                <div className="row">
+                  <div className="fld" style={{ flex: 1 }}>
+                    <span className="fld-label">{t("From")}</span>
+                    <ExprInput value={j.travel[0]} unit="mm" onCommit={(v) => updateJointDraft({ travel: [v, j.travel![1]] })} />
+                  </div>
+                  <div className="fld" style={{ flex: 1 }}>
+                    <span className="fld-label">{t("To")}</span>
+                    <ExprInput value={j.travel[1]} unit="mm" onCommit={(v) => updateJointDraft({ travel: [j.travel![0], v] })} />
+                  </div>
+                </div>
+              ) : null}
+            </>
           ) : null}
         </>
       ) : null}

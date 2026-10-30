@@ -211,8 +211,8 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .joint-head { display: flex; align-items: center; gap: 6px; }
 .joint-head b { font-weight: 600; }
 .joint-head .muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.joint-value input[type="range"] { flex: 1; }
-.joint-num { min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+.joint-value input[type="range"] { flex: 1; min-width: 0; }
+.joint-num { min-width: 56px; flex: none; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .clearance-list { display: flex; flex-direction: column; gap: 4px; }
 .clearance-list.stale { opacity: 0.5; }
 .clearance-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -1042,3 +1042,5 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .variant-chip { height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); font-size: 12px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .variant-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .param-row.in-variant .expr, .param-row.in-variant input.field:not(.name-input) { color: var(--accent); }
+/* A cylindrical joint's two values: "Turn" and "Slide" before their sliders. */
+.joint-part { width: 56px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

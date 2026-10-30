@@ -45,7 +45,7 @@ describe("live collisions on the test models", () => {
       const { report, meshes } = s.rebuild(doc);
       const joints: motion.MotionJoint[] = doc.mechanism!.joints.map((j) => {
         const f = report.joints.find((x) => x.id === j.id)!;
-        return { id: j.id, type: j.type, a: j.a, b: j.b, origin: f.origin, axis: f.axis, ...(j.limits ? { limits: [Number(j.limits[0]), Number(j.limits[1])] as [number, number] } : {}) };
+        return { id: j.id, type: j.type as motion.MotionJoint["type"], a: j.a, b: j.b, origin: f.origin, axis: f.axis, ...(j.limits ? { limits: [Number(j.limits[0]), Number(j.limits[1])] as [number, number] } : {}) };
       });
       const couplings = (doc.mechanism!.couplings ?? []).map((c) => ({ driver: c.driver, driven: c.driven, ratio: Number(c.ratio) }));
       const driver = joints.find((j) => j.type !== "fixed" && !couplings.some((c) => c.driven === j.id))!;

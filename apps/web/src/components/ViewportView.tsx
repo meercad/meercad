@@ -1,5 +1,6 @@
 import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { partColors } from "../lib/partColors";
+import { motion } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
 import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
@@ -208,7 +209,15 @@ export function ViewportView() {
         ? joints.flatMap((j) => {
             const f = frames.find((x) => x.id === j.id);
             if (!f || f.error || j.suppressed) return [];
-            return [{ id: j.id, type: j.type, origin: f.origin, axis: f.axis, ...(j.b !== "ground" ? { parent: j.b } : {}), active: motionDraft?.joint.id === j.id }];
+            const active = motionDraft?.joint.id === j.id;
+            const on = j.b !== "ground" ? { parent: j.b } : {};
+            // A cylindrical joint shows a ring to turn it (riding on its slide) and an arrow to slide it.
+            if (j.type === "cylindrical")
+              return [
+                { id: `${j.id}${motion.TURN}`, type: "revolute" as const, origin: f.origin, axis: f.axis, parent: motion.cylindricalCarrier(j.id), active },
+                { id: `${j.id}${motion.SLIDE}`, type: "slider" as const, origin: f.origin, axis: f.axis, ...on, active },
+              ];
+            return [{ id: j.id, type: j.type, origin: f.origin, axis: f.axis, ...on, active }];
           })
         : [],
     );
