@@ -63,7 +63,7 @@ export function AboutDialog() {
         {tab === "about" ? (
           <>
             <section>
-              <p>{t("Free parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.")}</p>
+              <p>{t("Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.")}</p>
               <p className="muted">
                 {t(
                   "© 2026 Torben Berger. meerCAD is free to use, also commercially. Its source is public under the Functional Source License 1.1: anything goes except building a competing product from it, and each release becomes Apache-2.0 two years after it ships.",

@@ -13,7 +13,7 @@ interface Step {
 const STEPS: Step[] = [
   {
     title: t("Welcome to meerCAD"),
-    body: rich(t("A free, parametric CAD for makers. This short tour shows the basics — it takes about a minute. You can skip it now and restart it any time from **Help**.")),
+    body: rich(t("A parametric CAD for makers. This short tour shows the basics — it takes about a minute. You can skip it now and restart it any time from **Help**.")),
   },
   {
     target: ".toolbar",
