@@ -42,6 +42,7 @@ const DEFAULT_KINDS = new Set<PickKind>(["edge", "face", "region", "sketch_curve
 const EMPTY_SCENE: SceneData = { bodies: [], sketches: [], planes: [], references: [], hiddenBodies: new Set(), editingSketch: null };
 
 const NO_HITS: [string, string][] = [];
+const NO_PARTS: string[] = [];
 const HIT_COLOR = "#d93f3f";
 
 export function ViewportView() {
@@ -64,12 +65,15 @@ export function ViewportView() {
   const heat = useDeviation((s) => s.maps);
   useEffect(() => vp?.setBodyHeat(heat), [vp, heat]);
   // Parts that run into each other while the joints panel is open show red.
+  // So do parts that cannot move further this way (links in line, a joint at its limit).
   const hits = useMotion((s) => (s.open ? s.hits : NO_HITS));
+  const blocked = useMotion((s) => (s.open ? s.blocked : NO_PARTS));
   useEffect(() => {
     if (!vp) return;
     const colors = partColors(doc, output?.report.bodies.map((b) => b.id) ?? [], colorParts);
-    vp.setBodyColors(hits.length ? new Map([...colors, ...hits.flat().map((id): [string, string] => [id, HIT_COLOR])]) : colors);
-  }, [vp, doc, output, colorParts, hits]);
+    const red = [...hits.flat(), ...blocked];
+    vp.setBodyColors(red.length ? new Map([...colors, ...red.map((id): [string, string] => [id, HIT_COLOR])]) : colors);
+  }, [vp, doc, output, colorParts, hits, blocked]);
   const kernelState = useApp((s) => s.kernel);
   const previewing = useApp((s) => s.previewing);
   const [ortho, setOrtho] = useState(false);

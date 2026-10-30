@@ -32,11 +32,11 @@ export const useMotion = create<{
   check: ClearanceCheck | null;
   /** Bumped when a closed-loop linkage moves (its pose lives outside the store). */
   tick: number;
-  /** Set when a linkage cannot move further (the end of a swing, a dead point or a limit). */
-  stuck: boolean;
+  /** Parts that cannot move further this way (two links in line at the end of a swing, a joint at its limit): shown red. */
+  blocked: string[];
   /** Pairs of parts that run into each other in the shown pose (and did not touch as drawn). */
   hits: [string, string][];
-}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null, tick: 0, stuck: false, hits: [] }));
+}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null, tick: 0, blocked: [], hits: [] }));
 
 // ---------------------------------------------------------------- closed loops
 
@@ -56,14 +56,41 @@ function moveLoop(l: NonNullable<typeof loop>, r: linkage.LinkageResult): boolea
     l.poses = r.poses;
     l.values = r.values;
   }
-  useMotion.setState((s) => ({ tick: s.tick + 1, stuck: !r.ok }));
+  useMotion.setState((s) => ({ tick: s.tick + 1, blocked: r.ok ? [] : inLine(currentMechanism().mech.joints, l.poses) }));
   return r.ok;
+}
+
+/**
+ * The two links that stand (nearly) in line through a joint, which is where a linkage stops (a
+ * rocker at the end of its swing): for each turning joint, the joint before it on one part, the
+ * joint itself and the joint after it on the other part; the joint closest to a straight line wins.
+ * Only asked once the linkage cannot move further, so "nearly" may be loose (the solver stops a
+ * few degrees short of the exact line, where its equations degenerate).
+ */
+function inLine(joints: readonly motion.MotionJoint[], poses: ReadonlyMap<string, motion.Mat4>): string[] {
+  const turning = joints.filter((j) => j.type === "revolute");
+  const at = (j: motion.MotionJoint, part: string) => motion.transformPoint(poses.get(part) ?? motion.IDENTITY, j.origin);
+  let best: { sin: number; parts: string[] } | null = null;
+  for (const j of turning) {
+    const before = turning.find((k) => k !== j && (k.a === j.a || k.b === j.a));
+    const after = turning.find((k) => k !== j && (k.a === j.b || k.b === j.b));
+    if (!before || !after) continue;
+    const p = at(before, j.a);
+    const q = at(j, j.a);
+    const r = at(after, j.b);
+    const u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+    const v = [r[0] - q[0], r[1] - q[1], r[2] - q[2]];
+    const c = [u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!];
+    const sin = Math.hypot(c[0]!, c[1]!, c[2]!) / (Math.hypot(u[0]!, u[1]!, u[2]!) * Math.hypot(v[0]!, v[1]!, v[2]!) || 1);
+    if (sin < 0.35 && (!best || sin < best.sin)) best = { sin, parts: [j.a, j.b].filter((x) => x !== "ground") };
+  }
+  return best?.parts ?? [];
 }
 
 /** Back to where the parts were drawn. */
 export function restPose(): void {
   loop = null;
-  useMotion.setState((s) => ({ free: {}, tick: s.tick + 1, stuck: false }));
+  useMotion.setState((s) => ({ free: {}, tick: s.tick + 1, blocked: [] }));
 }
 
 /** Every joint's value now (degrees or mm). */
@@ -136,11 +163,23 @@ export function currentPoses(): Map<string, number[]> {
 export function setJointValue(id: string, value: number): boolean {
   const { mech } = currentMechanism();
   const l = loopOf(mech);
-  if (l) return moveLoop(l, l.L.solve(l.poses, { [id]: value }, undefined, l.values));
+  if (l) {
+    let r = l.L.solve(l.poses, { [id]: value }, undefined, l.values);
+    // Leaving an end position the linkage can take the wrong branch and stick halfway; from the
+    // drawn position it often gets there: take whichever comes closer.
+    if (!r.ok) {
+      const fresh = l.L.solve(new Map(), { [id]: value });
+      if (fresh.poses.size && Math.abs((fresh.values[id] ?? 0) - value) < Math.abs((r.values[id] ?? 0) - value) - 0.5) r = fresh;
+    }
+    return moveLoop(l, r);
+  }
   const r = mech.rootValueFor(id, value);
   if (!r) return false;
   const [lo, hi] = mech.range(r.root);
-  useMotion.setState((s) => ({ free: { ...s.free, [r.root]: Math.min(hi, Math.max(lo, r.value)) } }));
+  // Asked for more than the limits allow: the part stops there and shows red.
+  const held = r.value < lo - 1e-9 || r.value > hi + 1e-9;
+  const part = mech.joint(id)?.a;
+  useMotion.setState((s) => ({ free: { ...s.free, [r.root]: Math.min(hi, Math.max(lo, r.value)) }, blocked: held && part ? [part] : [] }));
   return true;
 }
 
