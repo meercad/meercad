@@ -24,7 +24,7 @@ function anchorText(j: Joint): string {
   return describeEdgeSelector(a.edge);
 }
 
-/** A turn without limits keeps counting inside; it reads as −180° … 180°. */
+/** An angle as −180° … 180°. */
 const wrapDegrees = (d: number) => {
   const w = d - 360 * Math.round(d / 360);
   return w <= -180 ? w + 360 : w;
@@ -91,6 +91,9 @@ export function MotionPanel() {
               const driven = couplings.find((c) => c.driven === j.id);
               const unit = j.type === "revolute" ? "°" : " mm";
               const [lo, hi] = limits ?? (j.type === "revolute" ? [-180, 180] : [-50, 50]);
+              // A turn without limits keeps counting inside; slider and number show it as -180° to 180°.
+              const turning = j.type === "revolute" && !limits;
+              const seen = turning ? wrapDegrees(v ?? 0) : (v ?? 0);
               return (
                 <div key={j.id} className="joint-row">
                   <div className="joint-head">
@@ -121,14 +124,15 @@ export function MotionPanel() {
                       </button>
                       <input
                         type="range"
-                        min={Math.max(lo, (v ?? 0) - 720)}
-                        max={Math.min(hi, (v ?? 0) + 720)}
+                        min={turning ? -180 : Math.max(lo, (v ?? 0) - 720)}
+                        max={turning ? 180 : Math.min(hi, (v ?? 0) + 720)}
                         step={j.type === "revolute" ? 1 : 0.1}
-                        value={v ?? 0}
-                        onChange={(e) => (stopPlaying(), setJointValue(j.id, Number(e.target.value)))}
+                        value={seen}
+                        // A free turn goes on from where it is: 179° → -179° is two degrees on, not a turn back.
+                        onChange={(e) => (stopPlaying(), setJointValue(j.id, turning ? (v ?? 0) + wrapDegrees(Number(e.target.value) - seen) : Number(e.target.value)))}
                       />
                       <span className="joint-num">
-                        {shown(j.type === "revolute" && !limits ? wrapDegrees(v ?? 0) : (v ?? 0), j.type === "revolute" ? 0 : 1)}
+                        {shown(seen, j.type === "revolute" ? 0 : 1)}
                         {unit}
                       </span>
                     </div>
