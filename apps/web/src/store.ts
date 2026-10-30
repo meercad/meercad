@@ -245,7 +245,8 @@ function rebuildTask(): { onProgress: RebuildProgress; done(): void } {
 }
 export function toast(text: string, kind: Toast["kind"] = "info"): void {
   const id = ++toastId;
-  set((s) => ({ toasts: [...s.toasts, { id, text, kind }] }));
+  // The same message again replaces the one showing rather than stacking up.
+  set((s) => ({ toasts: [...s.toasts.filter((t) => t.text !== text), { id, text, kind }] }));
   setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), kind === "error" ? 6000 : 3000);
 }
 
@@ -601,6 +602,12 @@ function firstField(op: FeatureOp): string | null {
       thread: "face",
       gear: "plane",
       hole: "plane",
+      standard_part: "plane",
+      draft: "faces",
+      align: "from",
+      scale: "bodies",
+      loft: "profiles",
+      sweep: "profile",
       mesh_convert: "body",
       linear_pattern: "source",
       circular_pattern: "source",
