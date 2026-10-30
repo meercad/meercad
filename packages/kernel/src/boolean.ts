@@ -68,12 +68,16 @@ export function unify(oc: OC, arena: Arena, body: Body): Body {
   const sameIdx = out.faces.map((f) => body.faceIndex(f));
   const matched = new Set(sameIdx.filter((i) => i >= 0));
   const open = body.faces.map((_, i) => i).filter((i) => !matched.has(i));
+  // Only points inside a merged face's box can lie on it: the exact test (slow, and its objects
+  // live until the feature ends) then runs a few times per face instead of for every pair.
+  const near = (p: [number, number, number], b: ReturnType<typeof bounds>) => p.every((v, a) => v >= b.min[a]! - 1e-3 && v <= b.max[a]! + 1e-3);
   out.faceTags = out.faces.map((face, k) => {
     const same = sameIdx[k]!;
     if (same >= 0) return [...(body.faceTags[same] ?? [])];
+    const box = bounds(oc, arena, face);
     const tags: string[] = [];
     for (const i of open) {
-      if (pointOnFace(oc, arena, samples[i]!, face)) for (const t of body.faceTags[i] ?? []) if (!tags.includes(t)) tags.push(t);
+      if (near(samples[i]!, box) && pointOnFace(oc, arena, samples[i]!, face)) for (const t of body.faceTags[i] ?? []) if (!tags.includes(t)) tags.push(t);
     }
     return tags;
   });

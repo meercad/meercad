@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { exportStep, measure, type RebuildReport } from "@meercad/kernel";
-import type { Feature } from "@meercad/schema";
+import type { Feature, SketchEntity } from "@meercad/schema";
 import { circle, corpus, doc, getOcct, newSession, rect, sketch } from "./helpers.js";
 
 const box: Feature[] = [
@@ -251,5 +251,30 @@ describe("tessellation", () => {
       if ((m.normals[i]! * acc[i]! + m.normals[i + 1]! * acc[i + 1]! + m.normals[i + 2]! * acc[i + 2]!) / l < 0.8) bad++;
     }
     expect(bad).toBe(0);
+  });
+});
+
+describe("large booleans", () => {
+  it("joins a stack of many-sided layers quickly (a mesh rebuilt with features)", async () => {
+    // 20 layers of the same 120-sided outline, 1 mm each: the union merges 2400 side faces into 120.
+    const n = 120;
+    const pts: SketchEntity[] = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, type: "point", x: 30 * Math.cos((2 * Math.PI * i) / n), y: 20 * Math.sin((2 * Math.PI * i) / n) }));
+    const lines: SketchEntity[] = Array.from({ length: n }, (_, i) => ({ id: `l${i}`, type: "line", p1: `p${i}`, p2: `p${(i + 1) % n}` }));
+    const features: Feature[] = [];
+    for (let k = 0; k < 20; k++) {
+      features.push({ id: `pl${k}`, op: "plane", base: { ref: "origin.XY" }, offset: k });
+      features.push(sketch(`sk${k}`, { ref: `pl${k}` }, [...pts, ...lines]));
+      features.push({ id: `ex${k}`, op: "extrude", profile: { sketch: `sk${k}` }, extent: "blind", distance: 1, mode: "new_body" });
+    }
+    features.push({ id: "join", op: "boolean", operation: "union", target: "ex0", tools: Array.from({ length: 19 }, (_, k) => `ex${k + 1}`) });
+    const s = await newSession();
+    const t0 = performance.now();
+    const { report } = s.rebuild(doc(features));
+    const ms = performance.now() - t0;
+    expect(report.features.filter((f) => f.status !== "ok")).toEqual([]);
+    expect(report.bodies).toHaveLength(1);
+    expect(report.bodies[0]!.faces).toBe(n + 2);
+    // Matching the merged faces' names took seconds (every old face against every new one).
+    expect(ms).toBeLessThan(5000);
   });
 });
