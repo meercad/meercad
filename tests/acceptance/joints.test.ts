@@ -124,6 +124,27 @@ describe("joints", () => {
     expect(Math.abs(rocker - 360 * Math.round(rocker / 360))).toBeLessThan(1e-3);
   });
 
+  it("plays the four-bar past half a turn degree by degree, quickly", async () => {
+    const s = await newSession();
+    const d = MODELS.find((m) => m.file.startsWith("23"))!.doc;
+    const r = s.rebuild(d).report;
+    const joints = d.mechanism!.joints.map((j, i) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis }));
+    const L = new linkage.Linkage(joints);
+    let poses = new Map<string, motion.Mat4>();
+    let values: Record<string, number> = {};
+    // As the play button does: one degree a frame. 181° after 180° is one step on, not a turn back.
+    const t0 = performance.now();
+    for (let a = 1; a <= 400; a++) {
+      const step = L.solve(poses, { j1: a }, undefined, values);
+      expect(step.ok, `crank ${a}°`).toBe(true);
+      expect(step.values["j1"]).toBeCloseTo(a, 3);
+      poses = step.poses;
+      values = step.values;
+    }
+    // About a millisecond a step; a frame has 16.
+    expect((performance.now() - t0) / 400).toBeLessThan(8);
+  });
+
   it("checks joints and couplings in the document", () => {
     // A part may hang in several joints (closed loops), but not on itself.
     expect(validateDocument(withJoints(hinge, [pin, { ...pin, id: "j2", b: "ground" }])).ok).toBe(true);

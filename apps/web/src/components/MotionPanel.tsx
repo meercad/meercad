@@ -24,6 +24,17 @@ function anchorText(j: Joint): string {
   return describeEdgeSelector(a.edge);
 }
 
+/** A turn without limits keeps counting inside; it reads as −180° … 180°. */
+const wrapDegrees = (d: number) => {
+  const w = d - 360 * Math.round(d / 360);
+  return w <= -180 ? w + 360 : w;
+};
+/** Rounded for the panel, without a "-0". */
+const shown = (x: number, digits: number) => {
+  const s = x.toFixed(digits);
+  return Number(s) === 0 ? (0).toFixed(digits) : s;
+};
+
 /** Joints panel: the joints with their values, adding and editing joints; parts can be dragged while it is open. */
 export function MotionPanel() {
   const open = useMotion((s) => s.open);
@@ -117,7 +128,7 @@ export function MotionPanel() {
                         onChange={(e) => (stopPlaying(), setJointValue(j.id, Number(e.target.value)))}
                       />
                       <span className="joint-num">
-                        {(v ?? 0).toFixed(j.type === "revolute" ? 0 : 1)}
+                        {shown(j.type === "revolute" && !limits ? wrapDegrees(v ?? 0) : (v ?? 0), j.type === "revolute" ? 0 : 1)}
                         {unit}
                       </span>
                     </div>

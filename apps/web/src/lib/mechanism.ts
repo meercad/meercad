@@ -124,7 +124,7 @@ export function currentPoses(): Map<string, number[]> {
 export function setJointValue(id: string, value: number): boolean {
   const { mech } = currentMechanism();
   const l = loopOf(mech);
-  if (l) return moveLoop(l, l.L.solve(l.poses, { [id]: value }));
+  if (l) return moveLoop(l, l.L.solve(l.poses, { [id]: value }, undefined, l.values));
   const r = mech.rootValueFor(id, value);
   if (!r) return false;
   const [lo, hi] = mech.range(r.root);
@@ -165,7 +165,7 @@ export const partDrag = {
   move(ray: Ray): void {
     if (loopDrag) {
       const l = loopOf(currentMechanism().mech);
-      if (l) moveLoop(l, l.L.solve(l.poses, {}, { ...loopDrag, ray }));
+      if (l) moveLoop(l, l.L.solve(l.poses, {}, { ...loopDrag, ray }, l.values));
       return;
     }
     if (!drag) return;

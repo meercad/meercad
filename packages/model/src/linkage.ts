@@ -199,6 +199,7 @@ export class Linkage {
           for (let b = 0; b < n; b++) A[a * n + b] = A[a * n + b]! + ja * J[i * n + b]!;
         }
       let improved = false;
+      const before = cost;
       for (let tries = 0; tries < 10 && !improved; tries++) {
         const M = Float64Array.from(A);
         for (let a = 0; a < n; a++) M[a * n + a] = M[a * n + a]! * (1 + lambda) + 1e-12;
@@ -218,7 +219,8 @@ export class Linkage {
           improved = true;
         } else lambda *= 10;
       }
-      if (!improved || cost < 1e-18) break;
+      // The light hold keeps the cost above zero, so also stop once a step barely helps.
+      if (!improved || cost < 1e-18 || before - cost < before * 1e-12) break;
     }
     const poses = this.apply(start, x);
     const left = hard(poses).reduce((mx, v) => Math.max(mx, Math.abs(v)), 0);
@@ -233,8 +235,10 @@ export class Linkage {
    * Moves the linkage from `start` towards the targets (or the drag), in steps of a few degrees or
    * millimetres; stops at the last pose that closes when it reaches a dead point or a limit.
    */
-  solve(start: ReadonlyMap<string, Mat4>, targets: Readonly<Record<string, number>> = {}, drag?: Drag): LinkageResult {
-    const near = this.values(start);
+  solve(start: ReadonlyMap<string, Mat4>, targets: Readonly<Record<string, number>> = {}, drag?: Drag, prev: Readonly<Record<string, number>> = {}): LinkageResult {
+    // Angles read on the turn nearest the last values (`prev`, from the result before), so 181° after
+    // 180° is one degree on, not most of a turn back.
+    const near = this.values(start, prev);
     let goal = { ...targets };
     // Limits: targets are held within them.
     for (const j of this.joints) if (j.limits && goal[j.id] !== undefined) goal[j.id] = Math.min(j.limits[1], Math.max(j.limits[0], goal[j.id]!));
