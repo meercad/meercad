@@ -47,6 +47,13 @@ describe("drawing sheets", () => {
     expect(lowest).toBeGreaterThan(10 + 32 + 3 * 5.5);
   });
 
+  it("prints the sheet's words in another language", () => {
+    const s = layoutSheet(views, { title: { title: "Block" }, bom: [{ pos: 1, qty: 1, name: "Platte" }], labels: { scale: "Maßstab", qty: "Menge" } });
+    const words = s.texts.map((t) => t.text);
+    expect(words).toEqual(expect.arrayContaining(["Maßstab", "Menge", "Pos", "Date"]));
+    expect(words).not.toContain("Scale");
+  });
+
   it("hatches a section and marks the cutting plane on the view from above", () => {
     // Section of a 60 × 20 block with a 10 wide gap at x 15–25: two cut faces' worth of edges.
     const sec: SheetView = {

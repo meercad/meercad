@@ -65,7 +65,25 @@ export interface SheetBomRow {
 }
 const BOM_ROW = 5.5;
 
-export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; title: TitleBlock; scale?: number; bom?: readonly SheetBomRow[] }): Sheet {
+/** Words printed on the sheet (title block field names, parts list header), for other languages. */
+export const SHEET_LABELS = {
+  scale: "Scale",
+  material: "Material",
+  number: "Number",
+  sheet: "Sheet",
+  drawnBy: "Drawn by",
+  date: "Date",
+  projection: "Projection",
+  firstAngle: "ISO E (first angle)",
+  units: "Units",
+  pos: "Pos",
+  qty: "Qty",
+  name: "Name",
+};
+export type SheetLabels = typeof SHEET_LABELS;
+
+export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; title: TitleBlock; scale?: number; bom?: readonly SheetBomRow[]; labels?: Partial<SheetLabels> }): Sheet {
+  const words: SheetLabels = { ...SHEET_LABELS, ...o.labels };
   const [W, H] = PAPER[o.paper ?? "A4"];
   const sheet: Sheet = { width: W, height: H, scale: 1, scaleLabel: "1:1", lines: [], fills: [], texts: [] };
   // Frame: 20 mm on the left for filing, 10 mm elsewhere; the views keep clear of the title block's strip.
@@ -145,8 +163,8 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   if (pt) dimension(sheet, [pt.min[0], pt.min[1]], [pt.min[0], pt.max[1]], -10, h(top), "v");
   if (!pf && pl) dimension(sheet, [pl.min[0], pl.min[1]], [pl.max[0], pl.min[1]], -10, w(left), "h");
   frame(sheet, fx0, fy0, fx1, fy1);
-  titleBlock(sheet, fx1, fy0, o.title, label);
-  if (o.bom?.length) bomTable(sheet, fx1, fy0 + TITLE_H, o.bom);
+  titleBlock(sheet, fx1, fy0, o.title, label, words);
+  if (o.bom?.length) bomTable(sheet, fx1, fy0 + TITLE_H, o.bom, words);
   return sheet;
 }
 
@@ -243,7 +261,7 @@ function frame(s: Sheet, x0: number, y0: number, x1: number, y1: number): void {
 }
 
 /** Title block in the bottom right corner: title, number, scale, material, drawn by, date, projection. */
-function titleBlock(s: Sheet, right: number, bottom: number, t: TitleBlock, scale: string): void {
+function titleBlock(s: Sheet, right: number, bottom: number, t: TitleBlock, scale: string, w: SheetLabels): void {
   const x0 = right - TITLE_W, y0 = bottom, x1 = right, y1 = bottom + TITLE_H;
   const thin = (pts: Pt[]) => s.lines.push({ pts, kind: "thin" });
   s.lines.push({ pts: [[x0, y0], [x0, y1], [x1, y1]], kind: "frame" });
@@ -257,20 +275,20 @@ function titleBlock(s: Sheet, right: number, bottom: number, t: TitleBlock, scal
     s.texts.push({ at: [x, y + 6.2], text: label, size: 1.8, anchor: "start" });
     s.texts.push({ at: [x, y + 1.8], text: value, size: 3, anchor: "start" });
   };
-  field(0, 0, "Scale", scale);
-  field(1, 0, "Material", t.material ?? "");
-  field(2, 0, "Number", t.number ?? "");
-  field(3, 0, "Sheet", "1 / 1");
-  field(0, 1, "Drawn by", t.drawnBy ?? "");
-  field(1, 1, "Date", t.date ?? "");
-  field(2, 1, "Projection", "ISO E (first angle)");
-  field(3, 1, "Units", "mm");
+  field(0, 0, w.scale, scale);
+  field(1, 0, w.material, t.material ?? "");
+  field(2, 0, w.number, t.number ?? "");
+  field(3, 0, w.sheet, "1 / 1");
+  field(0, 1, w.drawnBy, t.drawnBy ?? "");
+  field(1, 1, w.date, t.date ?? "");
+  field(2, 1, w.projection, w.firstAngle);
+  field(3, 1, w.units, "mm");
   s.texts.push({ at: [x0 + 2, y0 + 23], text: t.title, size: 6, anchor: "start" });
   s.texts.push({ at: [x1 - 2, y0 + 20], text: "meerCAD", size: 2, anchor: "end" });
 }
 
 /** The parts list as a table on top of the title block, header at the bottom (ISO 7573). */
-function bomTable(s: Sheet, right: number, bottom: number, rows: readonly SheetBomRow[]): void {
+function bomTable(s: Sheet, right: number, bottom: number, rows: readonly SheetBomRow[], w: SheetLabels): void {
   const x0 = right - TITLE_W;
   const cols = [x0, x0 + 12, x0 + 24, x0 + 130, right];
   const top = bottom + (rows.length + 1) * BOM_ROW;
@@ -278,7 +296,7 @@ function bomTable(s: Sheet, right: number, bottom: number, rows: readonly SheetB
   for (let k = 1; k <= rows.length; k++) s.lines.push({ pts: [[x0, bottom + k * BOM_ROW], [right, bottom + k * BOM_ROW]], kind: "thin" });
   for (const x of cols.slice(1, -1)) s.lines.push({ pts: [[x, bottom], [x, top]], kind: "thin" });
   const row = (k: number, cells: string[], size: number) => cells.forEach((t, i) => s.texts.push({ at: [cols[i]! + 1.5, bottom + k * BOM_ROW + 1.6], text: t, size, anchor: "start" }));
-  row(0, ["Pos", "Qty", "Name", "Material"], 2.2);
+  row(0, [w.pos, w.qty, w.name, w.material], 2.2);
   // The first part sits right above the header, the last at the top.
   rows.forEach((r, k) => row(k + 1, [String(r.pos), String(r.qty), r.name, r.material ?? ""], 2.8));
 }
