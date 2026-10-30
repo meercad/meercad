@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { SketchConstraint, SketchEntity } from "@meercad/schema";
-import { cornerEdit, offsetCurves, SketchSolver, type ResolvedConstraint, type SketchData, type Vec2 } from "./index.js";
+import { cornerEdit, intersectionPoints, offsetCurves, SketchSolver, splineParam, splinePoints, trimSpline, type ResolvedConstraint, type SketchData, type Vec2 } from "./index.js";
 
 let solver: SketchSolver;
 beforeAll(async () => {
@@ -219,5 +219,58 @@ describe("patternCurves", () => {
     expect(d.entities.filter((e) => e.type === "point")).toHaveLength(4 + 8);
     expect(d.entities.filter((e) => e.type === "line")).toHaveLength(12);
     expect(() => patternCurves(sk, positions(sk.entities), ["l1"], { kind: "linear", count: 1, dx: 1, dy: 0 })).toThrow(/count/);
+  });
+});
+
+describe("trimSpline", () => {
+  const spline = (through: Vec2[], closed = false) => ({ id: "s1", kind: "spline" as const, pts: splinePoints(through, closed), through, points: through.map((_, i) => `p${i}`), closed, construction: false, external: false });
+  // A wave from x = 0 to 80 through five points; vertical lines at x = 30 and 50 cross it.
+  const wave = spline([[0, 0], [20, 15], [40, -10], [60, 10], [80, 0]]);
+  const cutAt = (x: number) => intersectionPoints(wave, { id: "l", kind: "line", a: [x, -50], b: [x, 50], p1: "a", p2: "b", construction: false, external: false })[0]!;
+  const cuts = [cutAt(30), cutAt(50)];
+
+  it("cuts out the stretch between the cuts around the click, keeping the old points on both sides", () => {
+    expect(trimSpline(wave, [40, -10], cuts)).toEqual([
+      [{ point: 0 }, { point: 1 }, { cut: 0 }],
+      [{ cut: 1 }, { point: 3 }, { point: 4 }],
+    ]);
+  });
+
+  it("shortens it from the end when only one cut is beside the click", () => {
+    expect(trimSpline(wave, [70, 5], cuts)).toEqual([[{ point: 0 }, { point: 1 }, { point: 2 }, { cut: 1 }]]);
+    expect(trimSpline(wave, [5, 3], cuts)).toEqual([[{ cut: 0 }, { point: 2 }, { point: 3 }, { point: 4 }]]);
+  });
+
+  it("removes it all when nothing crosses it", () => {
+    expect(trimSpline(wave, [40, -10], [])).toEqual([]);
+  });
+
+  it("stays close to the old shape and ends on the cut", () => {
+    const [piece] = trimSpline(wave, [70, 5], cuts);
+    const through = piece!.map((x) => ("point" in x ? wave.through[x.point]! : cuts[x.cut]!));
+    for (const q of splinePoints(through)) {
+      const s = splineParam(wave.pts, q);
+      const i = Math.min(Math.floor(s), wave.pts.length - 2);
+      const [a, b] = [wave.pts[i]!, wave.pts[i + 1]!];
+      expect(Math.hypot(a[0] + (b[0] - a[0]) * (s - i) - q[0], a[1] + (b[1] - a[1]) * (s - i) - q[1])).toBeLessThan(1);
+    }
+    close(through[through.length - 1]!, cuts[1]!);
+  });
+
+  it("opens a closed spline between the two cuts around the click", () => {
+    const ring = spline([[0, -20], [20, 0], [0, 20], [-20, 0]], true);
+    const cross = (x: number) => intersectionPoints(ring, { id: "l", kind: "line", a: [x, -50], b: [x, 50], p1: "a", p2: "b", construction: false, external: false });
+    const hits = [...cross(10), ...cross(-10)];
+    expect(hits).toHaveLength(4);
+    // Clicking the right-hand bulge removes it: what stays runs from its top cut around the left to its bottom cut.
+    const [piece] = trimSpline(ring, [20, 0], hits);
+    const right = hits.map((h, i) => ({ h, i })).filter(({ h }) => h[0] > 0);
+    const top = right.find(({ h }) => h[1] > 0)!.i;
+    const bottom = right.find(({ h }) => h[1] < 0)!.i;
+    expect(piece![0]).toEqual({ cut: top });
+    expect(piece![piece!.length - 1]).toEqual({ cut: bottom });
+    expect(piece!.filter((x) => "point" in x)).toEqual([{ point: 2 }, { point: 3 }, { point: 0 }]);
+    expect(trimSpline(ring, [20, 0], cross(10))).toHaveLength(1);
+    expect(trimSpline(ring, [20, 0], [hits[0]!])).toEqual([]);
   });
 });

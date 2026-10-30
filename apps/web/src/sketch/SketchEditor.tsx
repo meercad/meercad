@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
-import { cornerEdit, findRegions, patternCurves, splinePoints, intersectionPoints, offsetCurves, SketchEditError, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
+import { cornerEdit, findRegions, patternCurves, splinePoints, intersectionPoints, trimSpline, offsetCurves, SketchEditError, type ResolvedConstraint, type SketchSolver, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meercad/sketch";
 import { fatLine, frameMatrix, perFrame, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { featureName } from "../lib/features";
@@ -509,7 +509,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       // Length dimensions on a trimmed line no longer describe it.
       d.constraints = d.constraints.filter((c) => !(c.type === "length" && c.line === target.id));
     } else if (target.kind === "spline") {
-      return toast(t("Splines cannot be trimmed yet: move or delete their points instead"), "info");
+      const e = d.entities.find((x) => x.id === target.id);
+      if (e?.type !== "spline") return;
+      const pieces = trimSpline(target, p, hits.map((h) => h.pt));
+      if (!pieces.length) drop(target.id);
+      const ids = pieces.map((piece) => piece.map((x) => ("point" in x ? e.points[x.point]! : endpoint(hits[x.cut]!))));
+      // The first piece keeps the spline's id (and what refers to it), the others are new.
+      d.entities = d.entities.map((x) => (x.id === e.id && ids[0] ? { id: e.id, type: "spline", points: ids[0], ...(e.construction ? { construction: true } : {}) } : x));
+      for (const points of ids.slice(1)) bl.entity({ type: "spline", points, ...(e.construction ? { construction: true } : {}) }, "s");
     } else {
       const ang = (q: Vec2) => Math.atan2(q[1] - target.center[1], q[0] - target.center[0]);
       const norm = (a: number, from: number) => ((a - from) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
@@ -540,7 +547,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
     }
     // Drop points that no curve uses any more.
-    const used = new Set(d.entities.flatMap((x) => (x.type === "line" ? [x.p1, x.p2] : x.type === "circle" ? [x.center] : x.type === "arc" ? [x.center, x.start, x.end] : [])));
+    const used = new Set(d.entities.flatMap((x) => (x.type === "line" ? [x.p1, x.p2] : x.type === "circle" ? [x.center] : x.type === "arc" ? [x.center, x.start, x.end] : x.type === "spline" ? x.points : [])));
     const orphan = sketch.entities.filter((x) => x.type === "point" && !used.has(x.id) && sketch.entities.some((c) => c.type !== "point" && refsOfEntity(c).includes(x.id)));
     for (const o of orphan) drop(o.id);
     commit(d);

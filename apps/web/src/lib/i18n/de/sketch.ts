@@ -31,7 +31,6 @@ export default {
 
   // sketch/SketchEditor.tsx
   "Over-constrained: {list}": "Überbestimmt: {list}",
-  "Splines cannot be trimmed yet: move or delete their points instead": "Splines lassen sich noch nicht trimmen. Verschiebe oder lösche stattdessen ihre Punkte.",
   "Cannot repeat: {reason}": "Wiederholen nicht möglich: {reason}",
   "Click the corner point where two lines meet": "Klicke auf den Eckpunkt, an dem sich zwei Linien treffen",
   "Cannot round this corner: {reason}": "Diese Ecke lässt sich nicht abrunden: {reason}",

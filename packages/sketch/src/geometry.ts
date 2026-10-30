@@ -123,6 +123,63 @@ export function splinePoints(through: readonly Vec2[], closed = false): Vec2[] {
   return out;
 }
 
+/** Where along a spline's samples `q` is nearest, as a fractional sample index. */
+export function splineParam(pts: readonly Vec2[], q: Vec2): number {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [a, b] = [pts[i]!, pts[i + 1]!];
+    const len2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2;
+    const t = len2 ? Math.min(1, Math.max(0, ((q[0] - a[0]) * (b[0] - a[0]) + (q[1] - a[1]) * (b[1] - a[1])) / len2)) : 0;
+    const d = Math.hypot(a[0] + (b[0] - a[0]) * t - q[0], a[1] + (b[1] - a[1]) * t - q[1]);
+    if (d < bestD) [best, bestD] = [i + t, d];
+  }
+  return best;
+}
+
+/** One piece of a trimmed spline: its through-points in order, each an index into the old spline's points or into the cuts. */
+export type SplinePiece = Array<{ point: number } | { cut: number }>;
+
+/**
+ * Trimming a spline at `click` removes the stretch between the nearest cuts (intersections with
+ * other curves) around it. Returns the pieces that stay: none when nothing bounds the stretch,
+ * two when an open spline is cut in its middle. The pieces go through the old points, so their
+ * shape stays close to the old one; only the spans next to a cut bend a little.
+ */
+export function trimSpline(c: Extract<SolvedCurve, { kind: "spline" }>, click: Vec2, cuts: readonly Vec2[]): SplinePiece[] {
+  const spans = c.closed ? c.through.length : c.through.length - 1;
+  const total = c.pts.length - 1;
+  const per = total / spans;
+  const eps = 1e-6 * per;
+  const sc = splineParam(c.pts, click);
+  const params = cuts.map((q, cut) => ({ cut, s: splineParam(c.pts, q) })).filter((h) => c.closed || (h.s > eps && h.s < total - eps));
+  const below = params.filter((h) => h.s < sc).sort((a, b) => b.s - a.s);
+  const above = params.filter((h) => h.s > sc).sort((a, b) => a.s - b.s);
+  // Through-points strictly between two positions (unwrapped: past the end goes on from the start).
+  const between = (from: number, to: number) => {
+    const out: { point: number }[] = [];
+    for (let k = 0; k <= 2 * c.through.length; k++) if (k * per > from + eps && k * per < to - eps) out.push({ point: k % c.through.length });
+    return out;
+  };
+  const piece = (from: { cut: number; s: number } | null, to: { cut: number; s: number } | null, toS: number): SplinePiece => [
+    ...(from ? [{ cut: from.cut }] : []),
+    ...between(from?.s ?? -1, toS).map(({ point }) => ({ point })),
+    ...(to ? [{ cut: to.cut }] : []),
+  ];
+  if (c.closed) {
+    const after = above[0] ?? [...params].sort((a, b) => a.s - b.s)[0];
+    const before = below[0] ?? [...params].sort((a, b) => b.s - a.s)[0];
+    if (!after || !before || after === before) return [];
+    return [piece(after, before, before.s > after.s ? before.s : before.s + total)];
+  }
+  const before = below[0];
+  const after = above[0];
+  const pieces: SplinePiece[] = [];
+  if (before) pieces.push(piece(null, before, before.s));
+  if (after) pieces.push(piece(after, null, total + per / 2));
+  return pieces;
+}
+
 export interface SolveDiagnostics {
   /** Remaining degrees of freedom; 0 = fully constrained. */
   dof: number;
