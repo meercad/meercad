@@ -72,6 +72,25 @@ describe("drawing sheets", () => {
     void front;
   });
 
+  it("places the holes by coordinate dimensions from the bottom left corner", () => {
+    const top: SheetView = { ...box("top", 60, 40), circles: [{ c: [10, 10], r: 2.25 }, { c: [50, 10], r: 2.25 }, { c: [30, 25], r: 5 }, { c: [30, 25], r: 3 }] };
+    const s = layoutSheet([box("front", 60, 20), top], { title: { title: "Plate" } });
+    const along = s.texts.filter((t) => t.angle === 90 && t.size === 3).map((t) => t.text);
+    expect(along).toEqual(["0", "10", "30", "50"]);
+    // Up from the bottom: 0, 10 (two holes share it), 25 (two circles share the centre).
+    const up = s.texts.filter((t) => !t.angle && t.size === 3 && /^\d+$/.test(t.text)).map((t) => t.text);
+    expect(up).toEqual(["0", "10", "25"]);
+    // Below the view from above: the line lies under its lowest edge.
+    const lowest = Math.min(...s.lines.filter((l) => l.kind === "visible").slice(1).flatMap((l) => l.pts.map((p) => p[1])));
+    expect(Math.max(...s.texts.filter((t) => t.angle === 90 && t.size === 3).map((t) => t.at[1]))).toBeLessThan(lowest);
+    // Values too close for their text move apart: 0 and 1 mm at 1:1 end up a text height apart.
+    const near: SheetView = { ...box("top", 60, 40), circles: [{ c: [1, 20], r: 0.5 }] };
+    const xs = layoutSheet([box("front", 60, 20), near], { title: { title: "Pin" }, scale: 1 }).texts.filter((t) => t.angle === 90 && t.size === 3).map((t) => t.at[0]);
+    expect(xs[1]! - xs[0]!).toBeCloseTo(3.8, 6);
+    // Without round features there are none.
+    expect(layoutSheet(views, { title: { title: "Block" } }).texts.some((t) => t.size === 3 && t.angle === 90)).toBe(false);
+  });
+
   it("marks holes with centre lines and one diameter callout per size", () => {
     const top: SheetView = { ...box("top", 60, 40), circles: [{ c: [10, 10], r: 2.25 }, { c: [50, 10], r: 2.25 }, { c: [30, 20], r: 5 }, { c: [30, 20], r: 3 }] };
     const s = layoutSheet([box("front", 60, 20), top], { title: { title: "Plate" } });

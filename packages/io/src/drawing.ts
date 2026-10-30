@@ -162,6 +162,11 @@ export function layoutSheet(views: readonly SheetView[], o: { paper?: Paper; tit
   }
   if (pt) dimension(sheet, [pt.min[0], pt.min[1]], [pt.min[0], pt.max[1]], -10, h(top), "v");
   if (!pf && pl) dimension(sheet, [pl.min[0], pl.min[1]], [pl.max[0], pl.min[1]], -10, w(left), "h");
+  // Hole positions, in the view that shows the most round features end-on: below the view from above,
+  // above the others (their other sides hold the overall dimensions or a neighbouring view).
+  const centresOf = (p: typeof pf) => (p ? uniqueCentres(p.v.circles ?? []).length : 0);
+  const holeView = [pt, pf, pl].reduce((best, p) => (centresOf(p) > centresOf(best) ? p : best), null as typeof pf);
+  if (holeView) ordinates(sheet, holeView, scale, holeView === pt);
   frame(sheet, fx0, fy0, fx1, fy1);
   titleBlock(sheet, fx1, fy0, o.title, label, words);
   if (o.bom?.length) bomTable(sheet, fx1, fy0 + TITLE_H, o.bom, words);
@@ -225,6 +230,66 @@ function holeMarks(s: Sheet, circles: { c: Pt; r: number; d: number; hole: boole
     s.fills.push([edge, [edge[0] + 2.2 * Math.cos(a) - 0.5 * Math.sin(a), edge[1] + 2.2 * Math.sin(a) + 0.5 * Math.cos(a)], [edge[0] + 2.2 * Math.cos(a) + 0.5 * Math.sin(a), edge[1] + 2.2 * Math.sin(a) - 0.5 * Math.cos(a)]]);
     s.texts.push({ at: [knee[0] + 0.5, knee[1] + 0.8], text, size: 3, anchor: "start" });
   }
+}
+
+/** Least distance between neighbouring coordinate values on the sheet (text height and a gap). */
+const SPREAD = 3.8;
+
+function uniqueCentres(circles: readonly { c: Pt }[]): Pt[] {
+  const out: Pt[] = [];
+  for (const { c } of circles) if (!out.some((o) => Math.hypot(o[0] - c[0], o[1] - c[1]) < 1e-3)) out.push(c);
+  return out;
+}
+
+/**
+ * Coordinate dimensions (ISO 129-1) of the centres of round features in a placed view: across from
+ * its left edge (0) on one line below or above the view, up from its bottom edge on one line to its
+ * right. Each centre gets a thin line out to that line and its distance from the edge, written along it.
+ */
+function ordinates(s: Sheet, p: { min: Pt; max: Pt; v: SheetView }, scale: number, below: boolean): void {
+  const centres = uniqueCentres(p.v.circles ?? []);
+  if (!centres.length) return;
+  const at = (c: Pt): Pt => [p.min[0] + scale * (c[0] - p.v.min[0]), p.min[1] + scale * (c[1] - p.v.min[1])];
+  const round = (v: number) => Math.round(v * 100) / 100;
+  // Along x: the left edge and each distinct centre x, reached from the centre nearest the line.
+  const lineY = below ? p.min[1] - 6 : p.max[1] + 6;
+  const xs = new Map<number, number>([[0, below ? p.min[1] : p.max[1]]]);
+  for (const c of centres) {
+    const x = round(c[0] - p.v.min[0]);
+    const y = at(c)[1];
+    const prev = xs.get(x);
+    if (prev === undefined || (below ? y < prev : y > prev)) xs.set(x, y);
+  }
+  const dir = below ? -1 : 1;
+  // Values closer than a text height move along, their line bent over to them.
+  let last = -Infinity;
+  for (const [x, from] of [...xs].sort((a, b) => a[0] - b[0])) {
+    const sx = p.min[0] + scale * x;
+    const tx = Math.max(sx, last + SPREAD);
+    last = tx;
+    s.lines.push({ pts: [[sx, from + dir], [sx, lineY], [tx, lineY + 2.5 * dir]], kind: "thin" });
+    s.texts.push({ at: [tx + 1.1, lineY + 3.5 * dir], text: fmt(x), size: 3, anchor: below ? "end" : "start", angle: 90 });
+  }
+  // Along y: the bottom edge and each distinct centre y, out to the right.
+  const lineX = p.max[0] + 6;
+  const ys = new Map<number, number>([[0, p.max[0]]]);
+  for (const c of centres) {
+    const y = round(c[1] - p.v.min[1]);
+    const x = at(c)[0];
+    if ((ys.get(y) ?? -Infinity) < x) ys.set(y, x);
+  }
+  last = -Infinity;
+  for (const [y, from] of [...ys].sort((a, b) => a[0] - b[0])) {
+    const sy = p.min[1] + scale * y;
+    const ty = Math.max(sy, last + SPREAD);
+    last = ty;
+    s.lines.push({ pts: [[from + 1, sy], [lineX, sy], [lineX + 2.5, ty]], kind: "thin" });
+    s.texts.push({ at: [lineX + 3.5, ty - 1.1], text: fmt(y), size: 3, anchor: "start" });
+  }
+  // The origin both lines count from: a small circle on the view's bottom left corner.
+  const [ox, oy] = p.min;
+  const k = 1.2;
+  s.lines.push({ pts: Array.from({ length: 13 }, (_, i): Pt => [ox + k * Math.cos((i * Math.PI) / 6), oy + k * Math.sin((i * Math.PI) / 6)]), kind: "thin" });
 }
 
 /** A dimension between two sheet points: extension lines, a line with arrows `off` mm away, the value. */
