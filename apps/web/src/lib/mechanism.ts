@@ -32,7 +32,7 @@ export const useMotion = create<{
   check: ClearanceCheck | null;
   /** Bumped when a closed-loop linkage moves (its pose lives outside the store). */
   tick: number;
-  /** Set when a linkage cannot move further (a dead point or a limit). */
+  /** Set when a linkage cannot move further (the end of a swing, a dead point or a limit). */
   stuck: boolean;
   /** Pairs of parts that run into each other in the shown pose (and did not touch as drawn). */
   hits: [string, string][];

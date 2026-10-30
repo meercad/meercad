@@ -124,6 +124,29 @@ describe("joints", () => {
     expect(Math.abs(rocker - 360 * Math.round(rocker / 360))).toBeLessThan(1e-3);
   });
 
+  it("drives the four-bar's rocker right to the end of its swing, also in one big move", async () => {
+    const s = await newSession();
+    const d = MODELS.find((m) => m.file.startsWith("23"))!.doc;
+    const r = s.rebuild(d).report;
+    const joints = d.mechanism!.joints.map((j, i) => ({ id: j.id, type: j.type as motion.MotionJoint["type"], a: j.a, b: j.b, origin: r.joints[i]!.origin, axis: r.joints[i]!.axis }));
+    const L = new linkage.Linkage(joints);
+    // Degree by degree to where the rocker stops (crank and coupler in line).
+    let poses = new Map<string, motion.Mat4>();
+    let values: Record<string, number> = {};
+    let end = 0;
+    for (let v = 1; v < 90; v++) {
+      const step = L.solve(poses, { j3: v }, undefined, values);
+      if (!step.ok) break;
+      [poses, values, end] = [step.poses, step.values, v];
+    }
+    expect(end).toBeGreaterThan(5);
+    // Asked for far beyond it in one go, it gets there too, not a few degrees short.
+    const jump = L.solve(new Map(), { j3: end + 20 });
+    expect(jump.ok).toBe(false);
+    expect(jump.values["j3"]!).toBeGreaterThan(end - 0.1);
+    expect(jump.values["j3"]!).toBeLessThan(end + 1);
+  });
+
   it("plays the four-bar past half a turn degree by degree, quickly", async () => {
     const s = await newSession();
     const d = MODELS.find((m) => m.file.startsWith("23"))!.doc;

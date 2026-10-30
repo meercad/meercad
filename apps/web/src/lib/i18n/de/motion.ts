@@ -27,8 +27,8 @@ export default {
   "Limits of the turn": "Grenzen beim Drehen",
   "Limits of the slide": "Grenzen beim Schieben",
   "Follows {driver} × {ratio}": "Folgt {driver} × {ratio}",
-  "It cannot move further this way: a dead point or a limit. Move it back, or drag another part.":
-    "In diese Richtung geht es nicht weiter: ein Totpunkt oder eine Grenze. Beweg es zurück oder zieh ein anderes Teil.",
+  "It cannot move further this way: it is at the end of its swing (two links in line) or at a limit. Move it back, or drag another part.":
+    "In diese Richtung geht es nicht weiter: Das Teil ist am Ende seines Schwenkbereichs (zwei Glieder stehen in einer Linie) oder an einer Grenze. Beweg es zurück oder zieh ein anderes Teil.",
   "Add joint": "Gelenk hinzufügen",
   "Back to where the parts were drawn": "Zurück in die gezeichnete Lage der Teile",
   "Rest position": "Ruhelage",

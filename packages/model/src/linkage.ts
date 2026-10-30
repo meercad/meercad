@@ -245,21 +245,45 @@ export class Linkage {
     const span = Math.max(0, ...Object.entries(goal).map(([id, t]) => Math.abs(t - (near[id] ?? 0)) / (this.joints.find((j) => j.id === id)?.type === "revolute" ? 3 : 2)));
     const steps = Math.min(400, Math.max(1, Math.ceil(span)));
     let cur: LinkageResult = { ok: true, poses: new Map(start), values: near, residual: 0 };
-    for (let s = 1; s <= steps; s++) {
-      const step = Object.fromEntries(Object.entries(goal).map(([id, t]) => [id, (near[id] ?? 0) + ((t - (near[id] ?? 0)) * s) / steps]));
-      let next = this.solveOnce(cur.poses, step, drag, cur.values);
+    /** One solve from `from` to `step`, or null when it does not close or jumps. */
+    const attempt = (from: LinkageResult, step: Record<string, number>): LinkageResult | null => {
+      let next = this.solveOnce(from.poses, step, drag, from.values);
       // The drag pulls against the joints; a second pass without it closes them exactly.
       if (drag) next = this.solveOnce(next.poses, step, undefined, next.values);
       // A dragged joint past its limit: hold it at the limit and solve again.
       const over = this.joints.filter((j) => j.limits && (next.values[j.id]! < j.limits[0] - 1e-6 || next.values[j.id]! > j.limits[1] + 1e-6));
       if (over.length) {
         goal = { ...goal, ...Object.fromEntries(over.map((j) => [j.id, Math.min(j.limits![1], Math.max(j.limits![0], next.values[j.id]!))])) };
-        next = this.solveOnce(cur.poses, { ...step, ...Object.fromEntries(over.map((j) => [j.id, goal[j.id]!])) }, drag, cur.values);
+        next = this.solveOnce(from.poses, { ...step, ...Object.fromEntries(over.map((j) => [j.id, goal[j.id]!])) }, drag, from.values);
       }
       // Refuse a step that does not close, or that jumps (the linkage flipping over a dead point).
-      const jump = this.joints.some((j) => Math.abs((next.values[j.id] ?? 0) - (cur.values[j.id] ?? 0)) > (j.type === "revolute" ? 25 : 15));
-      if (!next.ok || jump) return { ...cur, ok: false };
-      cur = next;
+      const jump = this.joints.some((j) => Math.abs((next.values[j.id] ?? 0) - (from.values[j.id] ?? 0)) > (j.type === "revolute" ? 25 : 15));
+      return next.ok && !jump ? next : null;
+    };
+    for (let s = 1; s <= steps; s++) {
+      const step = Object.fromEntries(Object.entries(goal).map(([id, t]) => [id, (near[id] ?? 0) + ((t - (near[id] ?? 0)) * s) / steps]));
+      const next = attempt(cur, step);
+      if (next) {
+        cur = next;
+        continue;
+      }
+      // Near an end position (a crank-rocker's rocker at the end of its swing) the other links turn
+      // fast for a small step: creep up to where it really stops in ever smaller steps.
+      const from = Object.fromEntries(Object.keys(step).map((id) => [id, cur.values[id] ?? 0]));
+      let lo = 0;
+      let hi = 1;
+      for (let k = 0; k < 10; k++) {
+        const mid = (lo + hi) / 2;
+        const r = attempt(cur, Object.fromEntries(Object.entries(step).map(([id, t]) => [id, from[id]! + (t - from[id]!) * mid])));
+        if (r) {
+          cur = r;
+          // Measured from the new pose on: what is left of the way to `step`.
+          for (const id of Object.keys(from)) from[id] = cur.values[id] ?? 0;
+          hi = (hi - mid) / (1 - mid);
+          lo = 0;
+        } else hi = mid;
+      }
+      return { ...cur, ok: false };
     }
     return cur;
   }
