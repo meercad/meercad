@@ -28,6 +28,41 @@ function sphere(r: number, n: number): MeshCollider {
   return new MeshCollider(p, f);
 }
 
+/** A round pin as a prism with n sides (outward faces), radius r, height 0…h. */
+function pin(r: number, n: number, h: number): MeshCollider {
+  const p: number[] = [];
+  const f: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n;
+    p.push(r * Math.cos(a), r * Math.sin(a), 0, r * Math.cos(a), r * Math.sin(a), h);
+  }
+  p.push(0, 0, 0, 0, 0, h);
+  const c0 = 2 * n, c1 = 2 * n + 1;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    f.push(2 * i, 2 * j, 2 * j + 1, 2 * i, 2 * j + 1, 2 * i + 1, c0, 2 * j, 2 * i, c1, 2 * i + 1, 2 * j + 1);
+  }
+  return new MeshCollider(p, f);
+}
+
+/** A sleeve (tube) with inner radius ri and outer ro, n sides, height 0…h, faces pointing out of the material. */
+function sleeve(ri: number, ro: number, n: number, h: number): MeshCollider {
+  const p: number[] = [];
+  const f: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n;
+    const c = Math.cos(a), s = Math.sin(a);
+    p.push(ri * c, ri * s, 0, ri * c, ri * s, h, ro * c, ro * s, 0, ro * c, ro * s, h);
+  }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const [i0, i1, o0, o1] = [4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3];
+    const [j0, j1, k0, k1] = [4 * j, 4 * j + 1, 4 * j + 2, 4 * j + 3];
+    f.push(o0, k0, k1, o0, k1, o1, i0, i1, j1, i0, j1, j0, i0, j0, k0, i0, k0, o0, i1, o1, k1, i1, k1, j1);
+  }
+  return new MeshCollider(p, f);
+}
+
 describe("mesh collisions", () => {
   it("finds boxes that run into each other, not those apart or resting on each other", () => {
     const a = box(0, 0, 0, 10, 10, 10);
@@ -82,5 +117,15 @@ describe("mesh collisions", () => {
     // The tessellated sphere lies slightly inside the true one.
     expect(signedDistance(s, [0, 0, 12])).toBeCloseTo(2, 1);
     expect(signedDistance(s, [3, 0, 0])).toBeCloseTo(-7, 1);
+  });
+
+  it("lets a pin turn in its hole without crossing the facets, with an inset as big as the facets' error", () => {
+    const hole = sleeve(5, 8, 32, 10);
+    const turned = rotationAbout([0, 0, 0], [0, 0, 1], 360 / 64);
+    // Half a facet on, the pin's corners stand out of the hole's flat facets by r(1 − cos π/32) ≈ 0.024 mm.
+    expect(meshesCollide(hole, pin(5, 32, 10), undefined, turned, 0.005)).toBe(true);
+    expect(meshesCollide(hole, pin(5, 32, 10), undefined, turned, 0.05)).toBe(false);
+    // A pin really too thick still counts.
+    expect(meshesCollide(hole, pin(5.3, 32, 10), undefined, turned, 0.05)).toBe(true);
   });
 });

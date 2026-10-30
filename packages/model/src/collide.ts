@@ -23,6 +23,11 @@ export class MeshCollider {
   /** Triangle corners (9 numbers each) in the tree's order: a leaf's triangles lie together. */
   readonly tri: Float64Array;
   readonly root: Node;
+  /**
+   * Inward direction at each corner (9 numbers per triangle, tree order): the averaged normal of
+   * all faces meeting at that point, so setting a mesh in shrinks it at edges and corners too.
+   */
+  readonly inward: Float32Array;
   /** Corners after placing in another mesh's coordinates, filled per test (see `stamp`). */
   readonly placed: Float64Array;
   /** Test number each triangle in `placed` was filled for. */
@@ -47,6 +52,31 @@ export class MeshCollider {
     for (let i = 0; i < n; i++) this.tri.set(tri.subarray(order[i]! * 9, order[i]! * 9 + 9), i * 9);
     this.placed = new Float64Array(n * 9);
     this.stamp = new Uint32Array(n);
+    // Corners at the same place (faces of a B-rep part keep their own vertices) share one normal.
+    const key = (o: number) => `${Math.round(this.tri[o]! * 1e5)},${Math.round(this.tri[o + 1]! * 1e5)},${Math.round(this.tri[o + 2]! * 1e5)}`;
+    const sum = new Map<string, [number, number, number]>();
+    for (let t = 0; t < n; t++) {
+      const o = t * 9;
+      const T = this.tri;
+      const ux = T[o + 3]! - T[o]!, uy = T[o + 4]! - T[o + 1]!, uz = T[o + 5]! - T[o + 2]!;
+      const vx = T[o + 6]! - T[o]!, vy = T[o + 7]! - T[o + 1]!, vz = T[o + 8]! - T[o + 2]!;
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      const l = Math.hypot(nx, ny, nz);
+      if (!l) continue;
+      // Each face counts once per point, whatever its size.
+      for (let k = 0; k < 9; k += 3) {
+        const s = sum.get(key(o + k)) ?? sum.set(key(o + k), [0, 0, 0]).get(key(o + k))!;
+        s[0] += nx / l;
+        s[1] += ny / l;
+        s[2] += nz / l;
+      }
+    }
+    this.inward = new Float32Array(n * 9);
+    for (let t = 0; t < n * 9; t += 3) {
+      const s = sum.get(key(t));
+      const l = s ? Math.hypot(s[0], s[1], s[2]) : 0;
+      if (l) for (let a = 0; a < 3; a++) this.inward[t + a] = -s![a]! / l;
+    }
   }
 
   get triangles(): number {
@@ -82,8 +112,8 @@ function build(tri: Float64Array, order: Uint32Array, start: number, count: numb
 let tests = 0;
 
 /**
- * Whether the surfaces of `a` placed by `poseA` and `b` placed by `poseB` cross anywhere. Each of
- * b's faces is set `inset` (mm) inwards first: parts resting flush stay apart, while two plates of
+ * Whether the surfaces of `a` placed by `poseA` and `b` placed by `poseB` cross anywhere. b is set
+ * `inset` (mm) inwards first, every corner along its averaged normal: parts resting flush stay apart, while two plates of
  * the same thickness pushed into each other (whose faces would only meet along their edges) cross.
  */
 export function meshesCollide(a: MeshCollider, b: MeshCollider, poseA: Mat4 = IDENTITY, poseB: Mat4 = IDENTITY, inset = 0.005): boolean {
@@ -114,17 +144,14 @@ export function meshesCollide(a: MeshCollider, b: MeshCollider, poseA: Mat4 = ID
       B[o + k + 1] = m[1]! * x + m[5]! * y + m[9]! * z + m[13]!;
       B[o + k + 2] = m[2]! * x + m[6]! * y + m[10]! * z + m[14]!;
     }
-    if (inset) {
-      const ux = B[o + 3]! - B[o]!, uy = B[o + 4]! - B[o + 1]!, uz = B[o + 5]! - B[o + 2]!;
-      const vx = B[o + 6]! - B[o]!, vy = B[o + 7]! - B[o + 1]!, vz = B[o + 8]! - B[o + 2]!;
-      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
-      if (l) for (let k = 0; k < 9; k += 3) {
-        B[o + k] = B[o + k]! - (nx / l) * inset;
-        B[o + k + 1] = B[o + k + 1]! - (ny / l) * inset;
-        B[o + k + 2] = B[o + k + 2]! - (nz / l) * inset;
+    if (inset)
+      for (let k = 0; k < 9; k += 3) {
+        // The inward direction turns with the part (rotation only).
+        const ix = b.inward[o + k]!, iy = b.inward[o + k + 1]!, iz = b.inward[o + k + 2]!;
+        B[o + k] = B[o + k]! + (m[0]! * ix + m[4]! * iy + m[8]! * iz) * inset;
+        B[o + k + 1] = B[o + k + 1]! + (m[1]! * ix + m[5]! * iy + m[9]! * iz) * inset;
+        B[o + k + 2] = B[o + k + 2]! + (m[2]! * ix + m[6]! * iy + m[10]! * iz) * inset;
       }
-    }
     b.stamp[j] = test;
   };
   const moved = new Map<Node, { min: V3; max: V3 }>();

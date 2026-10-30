@@ -254,6 +254,18 @@ function placedBox(m: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3
   return { min, max };
 }
 
+/**
+ * How far a part's display mesh may stray from its true surface (mm), as the kernel meshes it:
+ * round faces become polygons, so a pin turning in its hole pokes through the hole's facets by
+ * up to this much although the real surfaces only slide on each other. Touch screens get looser
+ * meshes (see store).
+ */
+function meshSlack(m: BodyMesh): number {
+  const r = colliderOf(m).root;
+  const diag = Math.hypot(r.max[0] - r.min[0], r.max[1] - r.min[1], r.max[2] - r.min[2]);
+  return Math.max(0.01, diag * 5e-4) * (matchMedia("(pointer: coarse)").matches ? 2 : 1);
+}
+
 /** Parts that run into each other in the current pose, leaving out contacts that exist as drawn. */
 function findHits(): [string, string][] {
   const meshes = useApp.getState().output?.meshes ?? [];
@@ -275,10 +287,12 @@ function findHits(): [string, string][] {
       const q = boxes.get(b.bodyId)!;
       if (p.min[0] > q.max[0] || q.min[0] > p.max[0] || p.min[1] > q.max[1] || q.min[1] > p.max[1] || p.min[2] > q.max[2] || q.min[2] > p.max[2]) continue;
       const key = `${a.bodyId}|${b.bodyId}`;
+      // Only a part pushed further in than the meshes' own inaccuracy counts.
+      const inset = 1.5 * Math.max(meshSlack(a), meshSlack(b));
       let touching = rest.touching.get(key);
-      if (touching === undefined) rest.touching.set(key, (touching = meshesCollide(colliderOf(a), colliderOf(b))));
+      if (touching === undefined) rest.touching.set(key, (touching = meshesCollide(colliderOf(a), colliderOf(b), undefined, undefined, inset)));
       if (touching) continue;
-      if (meshesCollide(colliderOf(a), colliderOf(b), poses.get(a.bodyId), poses.get(b.bodyId))) hits.push([a.bodyId, b.bodyId]);
+      if (meshesCollide(colliderOf(a), colliderOf(b), poses.get(a.bodyId), poses.get(b.bodyId), inset)) hits.push([a.bodyId, b.bodyId]);
     }
   return hits;
 }
