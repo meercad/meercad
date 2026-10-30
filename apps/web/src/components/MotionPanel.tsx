@@ -56,6 +56,7 @@ export function MotionPanel() {
     }
   };
   const stuck = useMotion((s) => s.stuck);
+  const hits = useMotion((s) => s.hits);
   useMotion((s) => s.tick);
   const doc = useApp((s) => s.doc);
   useApp((s) => s.output);
@@ -148,6 +149,11 @@ export function MotionPanel() {
                   {id}: {p}
                 </div>
               ))}
+            {hits.length ? (
+              <div className="callout err">
+                {t("Runs into: {pairs}", { pairs: hits.map(([a, b]) => `${name(a)} · ${name(b)}`).join(", ") })}
+              </div>
+            ) : null}
             {stuck ? <div className="callout warn">{t("It cannot move further this way: a dead point or a limit. Move it back, or drag another part.")}</div> : null}
             {mech.errors.filter((e) => !e.includes("moves in two joints")).map((e) => (
               <div key={e} className="callout warn">

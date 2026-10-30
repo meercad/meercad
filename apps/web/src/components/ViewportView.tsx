@@ -39,6 +39,9 @@ const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
 const DEFAULT_KINDS = new Set<PickKind>(["edge", "face", "region", "sketch_curve", "plane"]);
 const EMPTY_SCENE: SceneData = { bodies: [], sketches: [], planes: [], references: [], hiddenBodies: new Set(), editingSketch: null };
 
+const NO_HITS: [string, string][] = [];
+const HIT_COLOR = "#d93f3f";
+
 export function ViewportView() {
   const host = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState<Viewport | null>(null);
@@ -55,9 +58,13 @@ export function ViewportView() {
   const measure = useApp((s) => s.measure);
   const pickingPlane = useApp((s) => s.pickingSketchPlane);
   const doc = useApp((s) => s.doc);
+  // Parts that run into each other while the joints panel is open show red.
+  const hits = useMotion((s) => (s.open ? s.hits : NO_HITS));
   useEffect(() => {
-    if (vp) vp.setBodyColors(partColors(doc, output?.report.bodies.map((b) => b.id) ?? [], colorParts));
-  }, [vp, doc, output, colorParts]);
+    if (!vp) return;
+    const colors = partColors(doc, output?.report.bodies.map((b) => b.id) ?? [], colorParts);
+    vp.setBodyColors(hits.length ? new Map([...colors, ...hits.flat().map((id): [string, string] => [id, HIT_COLOR])]) : colors);
+  }, [vp, doc, output, colorParts, hits]);
   const kernelState = useApp((s) => s.kernel);
   const previewing = useApp((s) => s.previewing);
   const [ortho, setOrtho] = useState(false);

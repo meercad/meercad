@@ -21,6 +21,7 @@ export default {
   "Held fixed": "Fest verbunden",
   Stop: "Stopp",
   "Play: move it back and forth": "Abspielen: hin und her bewegen",
+  "Runs into: {pairs}": "Stößt an: {pairs}",
   "Follows {driver} × {ratio}": "Folgt {driver} × {ratio}",
   "It cannot move further this way: a dead point or a limit. Move it back, or drag another part.":
     "In diese Richtung geht es nicht weiter: ein Totpunkt oder eine Grenze. Beweg es zurück oder zieh ein anderes Teil.",

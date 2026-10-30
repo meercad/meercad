@@ -3,11 +3,11 @@
  * the last rebuild), the joint values being shown (view state, not saved, no undo), dragging parts,
  * and the joint being drawn up in the joints panel.
  */
-import { evaluate, linkage, motion } from "@meercad/model";
+import { evaluate, linkage, MeshCollider, meshesCollide, motion } from "@meercad/model";
 import type { Coupling, Joint, JointAnchor } from "@meercad/schema";
 import type { Pick, Ray } from "@meercad/viewport";
 import { create } from "zustand";
-import type { Clearance } from "@meercad/kernel";
+import type { BodyMesh, Clearance } from "@meercad/kernel";
 import { apply, currentDoc, kernel, toast, useApp } from "../store";
 import { edgeSelectorForPick, faceSelectorForPick } from "./topology";
 import { t } from "./i18n";
@@ -34,7 +34,9 @@ export const useMotion = create<{
   tick: number;
   /** Set when a linkage cannot move further (a dead point or a limit). */
   stuck: boolean;
-}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null, tick: 0, stuck: false }));
+  /** Pairs of parts that run into each other in the shown pose (and did not touch as drawn). */
+  hits: [string, string][];
+}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null, tick: 0, stuck: false, hits: [] }));
 
 // ---------------------------------------------------------------- closed loops
 
@@ -228,6 +230,79 @@ export function joinedParts(part: string, joints: readonly Joint[] = currentDoc(
   }
   return [...group];
 }
+
+// ---------------------------------------------------------------- collisions while moving
+
+const colliders = new WeakMap<BodyMesh, MeshCollider>();
+const colliderOf = (m: BodyMesh) => colliders.get(m) ?? colliders.set(m, new MeshCollider(m.positions, m.indices)).get(m)!;
+/** Whether a pair touches as drawn, by the meshes of one result: those contacts are designed (a pin in its hole). */
+let rest: { meshes: BodyMesh[]; touching: Map<string, boolean> } | null = null;
+
+/** Box of a mesh in a pose. */
+function placedBox(m: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3; max: motion.V3 } {
+  const r = colliderOf(m).root;
+  const min: motion.V3 = [Infinity, Infinity, Infinity];
+  const max: motion.V3 = [-Infinity, -Infinity, -Infinity];
+  for (let c = 0; c < 8; c++) {
+    const p: motion.V3 = [c & 1 ? r.max[0] : r.min[0], c & 2 ? r.max[1] : r.min[1], c & 4 ? r.max[2] : r.min[2]];
+    const q = pose ? motion.transformPoint(pose, p) : p;
+    for (let k = 0; k < 3; k++) {
+      if (q[k]! < min[k]!) min[k] = q[k]!;
+      if (q[k]! > max[k]!) max[k] = q[k]!;
+    }
+  }
+  return { min, max };
+}
+
+/** Parts that run into each other in the current pose, leaving out contacts that exist as drawn. */
+function findHits(): [string, string][] {
+  const meshes = useApp.getState().output?.meshes ?? [];
+  const poses = currentPoses();
+  if (!poses.size || !meshes.length) return [];
+  if (rest?.meshes !== meshes) rest = { meshes, touching: new Map() };
+  const moved = (id: string) => {
+    const p = poses.get(id);
+    return !!p && p.some((v, i) => Math.abs(v - motion.IDENTITY[i]!) > 1e-9);
+  };
+  const boxes = new Map(meshes.map((m) => [m.bodyId, placedBox(m, poses.get(m.bodyId))]));
+  const hits: [string, string][] = [];
+  for (let i = 0; i < meshes.length; i++)
+    for (let j = i + 1; j < meshes.length; j++) {
+      const a = meshes[i]!;
+      const b = meshes[j]!;
+      if (!moved(a.bodyId) && !moved(b.bodyId)) continue;
+      const p = boxes.get(a.bodyId)!;
+      const q = boxes.get(b.bodyId)!;
+      if (p.min[0] > q.max[0] || q.min[0] > p.max[0] || p.min[1] > q.max[1] || q.min[1] > p.max[1] || p.min[2] > q.max[2] || q.min[2] > p.max[2]) continue;
+      const key = `${a.bodyId}|${b.bodyId}`;
+      let touching = rest.touching.get(key);
+      if (touching === undefined) rest.touching.set(key, (touching = meshesCollide(colliderOf(a), colliderOf(b))));
+      if (touching) continue;
+      if (meshesCollide(colliderOf(a), colliderOf(b), poses.get(a.bodyId), poses.get(b.bodyId))) hits.push([a.bodyId, b.bodyId]);
+    }
+  return hits;
+}
+
+// Checked after the parts move, at most every 60 ms (and once more after the last move).
+let hitTimer: ReturnType<typeof setTimeout> | null = null;
+let lastHitCheck = 0;
+function scheduleHits(): void {
+  if (hitTimer) return;
+  hitTimer = setTimeout(() => {
+    hitTimer = null;
+    lastHitCheck = performance.now();
+    const s = useMotion.getState();
+    const hits = s.open ? findHits() : [];
+    const same = hits.length === s.hits.length && hits.every(([a, b], i) => s.hits[i]![0] === a && s.hits[i]![1] === b);
+    if (!same) useMotion.setState({ hits });
+  }, Math.max(0, 60 - (performance.now() - lastHitCheck)));
+}
+useMotion.subscribe((s, prev) => {
+  if (s.open !== prev.open || s.free !== prev.free || s.tick !== prev.tick) scheduleHits();
+});
+useApp.subscribe((s, prev) => {
+  if (s.output !== prev.output && useMotion.getState().open) scheduleHits();
+});
 
 // ---------------------------------------------------------------- editing joints
 
