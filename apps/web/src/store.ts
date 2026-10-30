@@ -1,6 +1,6 @@
 /** Application state (zustand) and the document → kernel rebuild loop. */
 import { create } from "zustand";
-import { KernelClient, SupersededError, type Measurement, type RebuildOutput } from "@meercad/kernel/client";
+import { KernelClient, SupersededError, type Measurement, type RebuildOutput, type RebuildProgress } from "@meercad/kernel/client";
 import { DocumentStore, OpError } from "@meercad/model";
 import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick, setFeatureLabels } from "./lib/topology";
@@ -67,6 +67,10 @@ interface State {
   measure: { active: boolean; picks: Pick[]; result: Measurement | null };
   proposalDoc: MeercadDocument | null;
   toasts: Toast[];
+  /** Work in progress, shown with its progress (see `startTask`). */
+  tasks: Task[];
+  /** How far the first build of a model has got, for the loading overlay. */
+  buildProgress: { index: number; total: number; feature: string } | null;
   saveState: "saved" | "saving" | "unsaved";
   selectedFeature: string | null;
   /** Features picked together in the list (⌘/Shift-click), e.g. to link their values. */
@@ -149,6 +153,8 @@ export const useApp = create<State>(() => ({
   measure: { active: false, picks: [], result: null },
   proposalDoc: null,
   toasts: [],
+  tasks: [],
+  buildProgress: null,
   saveState: "saved",
   selectedFeature: null,
   featureSelection: [],
@@ -188,6 +194,55 @@ useApp.subscribe((s, prev) => {
 // ---------------------------------------------------------------- toasts
 
 let toastId = 0;
+
+export interface Task {
+  id: number;
+  label: string;
+  /** 0–1, or null while unknown. */
+  progress: number | null;
+  detail?: string;
+  /** When it started (performance.now()); short tasks are never shown. */
+  since: number;
+}
+let taskId = 0;
+
+/**
+ * Registers work the user should see running: anything that can take more than a moment (a slow
+ * rebuild, reading an import). Update it as it goes; `done` removes it. The Tasks panel shows it
+ * with a progress bar once it has run for a moment.
+ */
+export function startTask(label: string, progress: number | null = null): { update(progress: number | null, detail?: string): void; done(): void } {
+  const id = ++taskId;
+  set((s) => ({ tasks: [...s.tasks, { id, label, progress, since: performance.now() }] }));
+  return {
+    update(p, detail) {
+      set((s) => ({ tasks: s.tasks.map((x) => (x.id === id ? { ...x, progress: p, ...(detail !== undefined ? { detail } : {}) } : x)) }));
+    },
+    done() {
+      set((s) => ({ tasks: s.tasks.filter((x) => x.id !== id) }));
+    },
+  };
+}
+
+/**
+ * Progress of one kernel rebuild from the worker's per-feature reports: in the loading overlay while
+ * the model has no result yet, else as a "Rebuilding" task.
+ */
+function rebuildTask(): { onProgress: RebuildProgress; done(): void } {
+  let task: ReturnType<typeof startTask> | null = null;
+  return {
+    onProgress: ({ index, total, feature }) => {
+      if (!get().output) return set({ buildProgress: { index, total, feature } });
+      task ??= startTask(t("Rebuilding"));
+      const f = docStore.doc.features.find((x) => x.id === feature);
+      task.update(index / Math.max(1, total), t("{feature} ({n} of {total})", { feature: f ? featureName(f) : feature, n: index + 1, total }));
+    },
+    done: () => {
+      task?.done();
+      if (get().buildProgress) set({ buildProgress: null });
+    },
+  };
+}
 export function toast(text: string, kind: Toast["kind"] = "info"): void {
   const id = ++toastId;
   set((s) => ({ toasts: [...s.toasts, { id, text, kind }] }));
@@ -290,8 +345,9 @@ function displayDoc(): { doc: MeercadDocument; preview: boolean; problem: string
 export async function rebuildNow(): Promise<RebuildOutput> {
   set({ building: true });
   for (;;) {
+    const task = rebuildTask();
     try {
-      const output = await kernel.rebuild(docStore.doc);
+      const output = await kernel.rebuild(docStore.doc, { onProgress: task.onProgress });
       if (!get().dialog && !get().proposalDoc) set({ output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
       set({ building: false });
       return output;
@@ -300,6 +356,8 @@ export async function rebuildNow(): Promise<RebuildOutput> {
         set({ building: false });
         throw e;
       }
+    } finally {
+      task.done();
     }
   }
 }
@@ -377,9 +435,11 @@ export function scheduleRebuild(): void {
     set({ previewError: problem, building: true });
     const t0 = performance.now();
     rebuildsPending++;
+    const task = rebuildTask();
     // Volume and area (integrals over every face) follow once the new shape is on screen.
-    kernel.rebuild(doc, { props: false }).then(
+    kernel.rebuild(doc, { props: false, onProgress: task.onProgress }).then(
       (output) => {
+        task.done();
         rebuildsPending--;
         lastRebuildMs = performance.now() - t0;
         set(preview ? { output, previewing: true, building: false } : { output, baseOutput: output, previewing: false, building: false, selection: remapSelection(get().selection, get().baseOutput, output) });
@@ -389,6 +449,7 @@ export function scheduleRebuild(): void {
         }
       },
       (e: unknown) => {
+        task.done();
         rebuildsPending--;
         // A newer rebuild replaced this one; it clears the flag when it finishes.
         if (e instanceof SupersededError) return;

@@ -8,7 +8,7 @@ import { nextFeatureId } from "@meercad/model";
 import { emptyDocument, validateDocument, type Feature, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
-import { apply, currentDoc, flushSave, kernel, newProject, openSketch, rebuildNow, toast, useApp } from "../store";
+import { apply, currentDoc, flushSave, kernel, newProject, openSketch, rebuildNow, startTask, toast, useApp } from "../store";
 import { t } from "../lib/i18n";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
@@ -173,11 +173,14 @@ export async function importFile(file?: File | null): Promise<boolean> {
   }
   // Build the features first, so a file that cannot be read starts no empty design.
   let features: Feature[];
+  const reading = startTask(t("Reading {name}", { name: file.name }));
   try {
     features = await importFeatures(file, ext);
   } catch (e) {
     toast(t("Could not import {name}: {error}", { name: file.name, error: e instanceof Error ? e.message : String(e) }), "error");
     return false;
+  } finally {
+    reading.done();
   }
   if (useApp.getState().screen !== "editor" || !useApp.getState().project) await newProject(emptyDocument(), base);
   const doc = currentDoc();

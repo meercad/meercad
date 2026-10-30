@@ -20,7 +20,8 @@ export class SupersededError extends Error {
   }
 }
 
-type Pending = { req: WorkerRequest; retried: boolean; resolve: (r: WorkerResponse) => void; reject: (e: Error) => void };
+export type RebuildProgress = (p: { index: number; total: number; feature: string }) => void;
+type Pending = { req: WorkerRequest; retried: boolean; resolve: (r: WorkerResponse) => void; reject: (e: Error) => void; onProgress?: RebuildProgress };
 type Distribute<T> = T extends unknown ? Omit<T, "seq"> : never;
 
 /**
@@ -68,6 +69,7 @@ export class KernelClient {
       if (msg.type === "crashed") return this.crashed(msg);
       const p = this.pending.get(msg.seq);
       if (!p) return;
+      if (msg.type === "progress") return p.onProgress?.({ index: msg.index, total: msg.total, feature: msg.feature });
       this.pending.delete(msg.seq);
       if (msg.type === "failed") p.reject(msg.message === "superseded" ? new SupersededError() : new Error(msg.message));
       else {
@@ -102,9 +104,9 @@ export class KernelClient {
    * Rebuilds the document. Older rebuilds still queued reject with SupersededError. `props: false`
    * leaves out volume and surface area (NaN), which are slow to integrate on curved parts.
    */
-  async rebuild(doc: MeercadDocument, opts: { props?: boolean } = {}): Promise<RebuildOutput> {
+  async rebuild(doc: MeercadDocument, opts: { props?: boolean; onProgress?: RebuildProgress } = {}): Promise<RebuildOutput> {
     const sent = performance.timeOrigin + performance.now();
-    const r = await this.send({ type: "rebuild", doc, ...(opts.props === false ? { props: false } : {}) });
+    const r = await this.send({ type: "rebuild", doc, ...(opts.props === false ? { props: false } : {}) }, opts.onProgress);
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     if (r.report.timing) r.report.timing = { ...r.report.timing, sent, received: this.lastReceived };
     return { report: r.report, meshes: r.meshes, references: r.references };
@@ -161,10 +163,10 @@ export class KernelClient {
     return r.result;
   }
 
-  private send(req: Distribute<WorkerRequest>): Promise<WorkerResponse> {
+  private send(req: Distribute<WorkerRequest>, onProgress?: RebuildProgress): Promise<WorkerResponse> {
     return new Promise((resolve, reject) => {
       const full = { ...req, seq: ++this.seq } as WorkerRequest;
-      this.pending.set(full.seq, { req: full, retried: false, resolve, reject });
+      this.pending.set(full.seq, { req: full, retried: false, resolve, reject, ...(onProgress ? { onProgress } : {}) });
       this.worker.postMessage(full);
     });
   }

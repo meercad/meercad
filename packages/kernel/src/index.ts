@@ -12,4 +12,4 @@ export { KernelSession, type RebuildReport, type SketchView, type ReferenceView 
 export { drawingViews, type DrawingView, type Polyline, type ViewName } from "./drawing.js";
 export { clearances, exportMeshes, exportStep, measure, type StepPart, type Clearance, type PickRef, type Measurement } from "./tools.js";
 export type { WorkerRequest, WorkerResponse } from "./protocol.js";
-export { KernelClient, SupersededError, type RebuildOutput } from "./client.js";
+export { KernelClient, SupersededError, type RebuildOutput, type RebuildProgress } from "./client.js";

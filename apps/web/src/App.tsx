@@ -9,6 +9,7 @@ import { Home } from "./components/Home";
 import { MenuHost } from "./components/Menu";
 import { AskHost } from "./components/Ask";
 import { Settings } from "./components/Settings";
+import { Tasks } from "./components/Tasks";
 import { FirstRun } from "./components/FirstRun";
 import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
@@ -305,6 +306,7 @@ export function App() {
       <CommandPalette onHelp={() => setGuide(true)} onShortcuts={() => setHelp(true)} onTour={() => setTour(true)} />
       {tour && screen === "editor" ? <Tour onClose={() => setTour(false)} /> : null}
       <UpdateBanner />
+      <Tasks />
       <Toasts />
       <Settings onShortcuts={() => setHelp(true)} />
       <AboutDialog />

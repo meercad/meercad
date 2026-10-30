@@ -9,7 +9,7 @@ import { withKey } from "./Kbd";
 import { isCompact, usePhoneSheets } from "../lib/layout";
 import type { FeatureOp } from "@meercad/schema";
 import { perFrame, samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
-import { FEATURES, partName, sketchesUsed } from "../lib/features";
+import { FEATURES, featureName, partName, sketchesUsed } from "../lib/features";
 import { MultiTouch, Press } from "../lib/gestures";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { SketchEditor } from "../sketch/SketchEditor";
@@ -703,13 +703,27 @@ function LoadingOverlay() {
   const kernelState = useApp((s) => s.kernel);
   const hasOutput = useApp((s) => !!s.output);
   const features = useApp((s) => s.doc.features.length);
+  const progress = useApp((s) => s.buildProgress);
+  const doc = useApp((s) => s.doc);
   const text = kernelState.error ? null : !kernelState.ready ? t("Starting the geometry engine…") : !hasOutput && features ? tn(features, "Building the model · {n} feature", "Building the model · {n} features") : null;
   if (!text) return null;
+  // Which step the first build is at, once the kernel reports it.
+  const step = kernelState.ready && progress ? doc.features.find((f) => f.id === progress.feature) : undefined;
   return (
     <div className="loading-overlay" role="status" aria-live="polite">
       <div className="loading-card">
         <span className="spinner" aria-hidden />
-        {text}
+        <span>
+          {text}
+          {progress && kernelState.ready ? (
+            <>
+              <span className="loading-step">{t("{feature} ({n} of {total})", { feature: step ? featureName(step) : progress.feature, n: progress.index + 1, total: progress.total })}</span>
+              <span className="task-bar loading-bar">
+                <span className="task-fill" style={{ width: `${Math.max(2, (progress.index / Math.max(1, progress.total)) * 100)}%` }} />
+              </span>
+            </>
+          ) : null}
+        </span>
       </div>
     </div>
   );

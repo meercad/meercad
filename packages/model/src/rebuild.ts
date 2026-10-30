@@ -67,7 +67,8 @@ export class RebuildEngine<S> {
     this.root = backend.initialState();
   }
 
-  rebuild(doc: MeercadDocument): RebuildResult<S> {
+  /** `onFeature` is told before each feature that has to be computed (not those taken from cache). */
+  rebuild(doc: MeercadDocument, onFeature?: (index: number, total: number, id: string) => void): RebuildResult<S> {
     const t0 = performance.now();
     const { values, errors } = resolveParams(doc.params);
     const statuses: FeatureStatus[] = [];
@@ -102,6 +103,7 @@ export class RebuildEngine<S> {
           firstRecomputed = i;
           this.evictFrom(i);
         }
+        if (!f.suppressed && resolved) onFeature?.(i, doc.features.length, f.id);
         const tf = performance.now();
         let status: FeatureStatus;
         let next = state;

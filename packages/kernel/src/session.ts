@@ -72,8 +72,8 @@ export class KernelSession {
     this.engine = new RebuildEngine(new OcctBackend(oc, solver));
   }
 
-  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
-    const r = this.engine.rebuild(doc);
+  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean; onFeature?: (index: number, total: number, id: string) => void } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
+    const r = this.engine.rebuild(doc, opts.onFeature);
     this.last = r.state;
     const t = performance.now();
     const meshes: BodyMesh[] = [];

@@ -30,6 +30,8 @@ export type WorkerResponse =
   /** OCCT broke (a WebAssembly runtime error) while handling `seq`: the worker must be replaced. */
   | { type: "crashed"; seq: number; message: string; threads: boolean }
   | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] }
+  /** A rebuild is about to compute feature `index` of `total` (features from cache are skipped). */
+  | { type: "progress"; seq: number; index: number; total: number; feature: string }
   | { type: "exported"; seq: number; data: Uint8Array }
   | { type: "exported_mesh"; seq: number; meshes: BodyMesh[] }
   | { type: "measured"; seq: number; result: Measurement }

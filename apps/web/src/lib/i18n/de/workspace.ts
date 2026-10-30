@@ -228,6 +228,9 @@ export default {
   "Starting the geometry engine…": "Geometrie-Engine startet …",
   "Building the model · {n} feature": "Modell wird aufgebaut · {n} Schritt",
   "Building the model · {n} features": "Modell wird aufgebaut · {n} Schritte",
+  "{feature} ({n} of {total})": "{feature} ({n} von {total})",
+  Rebuilding: "Wird neu berechnet",
+  "Reading {name}": "{name} wird gelesen",
   // Measure results (row names from the kernel)
   Area: "Flächeninhalt",
   Radius: "Radius",
