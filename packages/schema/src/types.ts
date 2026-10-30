@@ -411,6 +411,19 @@ export interface DraftFeature extends FeatureBase {
 }
 
 /**
+ * Faces moved along their normals: out of the material for a positive distance (the part grows
+ * there), into it for a negative one. With `upTo`, flat faces move onto that plane instead (they
+ * must be parallel to it) and `distance` is the gap left before it. Works on curved faces too, e.g.
+ * a hole wall moved in makes the hole tighter.
+ */
+export interface OffsetFaceFeature extends FeatureBase {
+  op: "offset_face";
+  faces: FaceSelector[];
+  distance: Expr;
+  upTo?: PlaneSpec;
+}
+
+/**
  * A stiffening rib from open lines in a sketch: each line is thickened across the sketch plane and
  * filled from the line to the part's walls (in the sketch plane, at right angles to the line), so
  * a line drawn across a corner or between two walls becomes a web joining them.
@@ -494,6 +507,7 @@ export type Feature =
   | SplitFeature
   | RibFeature
   | DraftFeature
+  | OffsetFaceFeature
   | TextFeature
   | StandardPartFeature
   | AlignFeature

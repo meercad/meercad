@@ -197,6 +197,7 @@ export const definitions: Record<string, Json> = {
       ["plane", "text", "size", "depth", "mode"],
     ),
     draft: feature("draft", { faces: arr(ref("faceSelector"), { minItems: 1 }), angle: ref("expr"), neutral: ref("planeSpec"), flip: bool }, ["faces", "angle", "neutral"]),
+    offset_face: feature("offset_face", { faces: arr(ref("faceSelector"), { minItems: 1 }), distance: ref("expr"), upTo: ref("planeSpec") }, ["faces", "distance"]),
     rib: feature("rib", { sketch: id, curves: arr({ type: "string", maxLength: 256 }, { minItems: 1 }), thickness: ref("expr"), flip: bool }, ["sketch", "thickness"]),
     split: feature("split", { plane: ref("planeSpec"), bodies: arr(id), keep: { enum: ["both", "front", "back"] } }, ["plane", "bodies"]),
     loft: feature(

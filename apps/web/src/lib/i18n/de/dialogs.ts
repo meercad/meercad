@@ -28,6 +28,8 @@ export default {
   "Text": "Text",
   "Raised or engraved lettering on a face": "Erhabene oder gravierte Schrift auf einer Fläche",
   "feature::Draft": "Formschräge",
+  "feature::Move face": "Fläche versetzen",
+  "Move faces along their normals or up to a plane: thicker walls, tighter holes, a face flush with another": "Flächen senkrecht verschieben oder bis an eine Ebene: dickere Wände, engere Bohrungen, bündige Flächen",
   "Tilt side faces by an angle so a cast or moulded part leaves its mould": "Seitenflächen um einen Winkel neigen, damit ein Guss- oder Spritzgussteil aus der Form geht",
   "Rib": "Rippe",
   "Stiffening web from an open sketch line to the walls it meets": "Versteifung von einer offenen Skizzenlinie bis zu den Wänden, die sie trifft",
@@ -73,6 +75,7 @@ export default {
   "Pick the face to set it onto": "Wähle die Fläche, auf die es gesetzt wird",
   "Tap a flat face where the part goes": "Tippe auf eine plane Fläche, wo das Teil hin soll",
   "Pick the side faces to draft": "Wähle die Seitenflächen für die Formschräge",
+  "Pick the faces to move": "Wähle die Flächen, die versetzt werden sollen",
   "Pick the rib's line in a sketch": "Wähle die Linie der Rippe in einer Skizze",
   "Pick at least two profiles in order: sketch regions or flat faces": "Wähle mindestens zwei Profile der Reihe nach: Skizzenbereiche oder plane Flächen",
   "Pick the profile: sketch regions": "Wähle das Profil: Skizzenbereiche",
@@ -305,6 +308,13 @@ export default {
   "Position x": "Position x",
   "Position y": "Position y",
   "Letter height is the height of capitals. For printing, about 5 mm high and 0.6–1 mm deep reads well.": "Die Buchstabenhöhe ist die Höhe der Großbuchstaben. Für den Druck sind etwa 5 mm Höhe und 0.6–1 mm Tiefe gut lesbar.",
+
+  // Move face
+  "Up to": "Bis an",
+  "Optional: a plane or flat face": "Optional: Ebene oder plane Fläche",
+  "Gap before it": "Abstand davor",
+  "Flat faces parallel to the plane move onto it, or stop short of it by the gap.": "Plane Flächen parallel zur Ebene wandern bis an sie heran oder bleiben um den Abstand davor stehen.",
+  "Positive moves the faces out of the part (it grows there), negative into it. A hole wall moved out makes the hole tighter.": "Positiv schiebt die Flächen aus dem Teil heraus (es wächst dort), negativ hinein. Eine Bohrungswand nach außen versetzt macht die Bohrung enger.",
 
   // Draft, rib, split
   "Pick side faces": "Seitenflächen auswählen",

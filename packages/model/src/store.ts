@@ -182,6 +182,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     split: "sp",
     rib: "rb",
     draft: "dr",
+    offset_face: "of",
     text: "tx",
     standard_part: "np",
     align: "al",

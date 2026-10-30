@@ -655,4 +655,18 @@ export const MODELS: TestModel[] = [
     ]),
     expect: { bodies: 1, volume: (200 - PI * 4) * 5, size: [20, 10, 5] },
   },
+  {
+    file: "35 Halter mit versetzten Flächen",
+    name: "Holder with moved faces",
+    look: "A 40 × 20 block with a hole for an 8 mm pin. Drawn 10 high, its top was moved up 4 mm to 14; the hole wall moved in by 0.1 mm (Ø7.8 for a press fit); the right end moved out up to a plane at x = 50, so the block is 50 long.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, [...rect("l", 0, 0, 40, 20), ...circle("h", 10, 10, 4)]),
+      { id: "ex1", op: "extrude", name: "Holder", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
+      { id: "of1", op: "offset_face", name: "Taller", faces: [{ face: "ex1.end_cap" }], distance: 4 },
+      { id: "of2", op: "offset_face", name: "Press fit", faces: [{ face: "ex1.side[sk1.h]" }], distance: 0.1 },
+      { id: "pl1", op: "plane", name: "End stop", base: { ref: "origin.YZ" }, offset: 50 },
+      { id: "of3", op: "offset_face", name: "Longer", faces: [{ face: "ex1.side[sk1.l2]" }], distance: 0, upTo: { ref: "pl1" } },
+    ]),
+    expect: { bodies: 1, volume: 50 * 20 * 14 - PI * 3.9 ** 2 * 14, size: [50, 20, 14] },
+  },
 ];

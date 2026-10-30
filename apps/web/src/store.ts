@@ -604,6 +604,7 @@ function firstField(op: FeatureOp): string | null {
       hole: "plane",
       standard_part: "plane",
       draft: "faces",
+      offset_face: "faces",
       align: "from",
       scale: "bodies",
       loft: "profiles",

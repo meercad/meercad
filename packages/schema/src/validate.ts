@@ -197,6 +197,9 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "draft":
         planeSpec(f.neutral, at);
         break;
+      case "offset_face":
+        if (f.upTo) planeSpec(f.upTo, at);
+        break;
       case "scale":
         for (const b of f.bodies) body(b, at);
         break;

@@ -18,6 +18,7 @@ import {
   type ResolvedRevolve,
   type ResolvedRib,
   type ResolvedDraft,
+  type ResolvedOffsetFace,
   type ResolvedText,
   type ResolvedStandardPart,
   type ResolvedAlign,
@@ -115,6 +116,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return rib(f, ctx);
       case "draft":
         return draft(f, ctx);
+      case "offset_face":
+        return offsetFace(f, ctx);
       case "text":
         return textFeature(f, ctx);
       case "standard_part":
@@ -816,6 +819,88 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
     return listToArray(arena, mk.Modified(face)).map((s) => body.faceIndex(s)).filter((i) => i >= 0);
   });
   body.faceTags = propagateTags(input.faceTags, body.faces.length, { descendants, generated: [] }, `${f.id}.face`).tags;
+  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+}
+
+/**
+ * Faces moved along their normals. Each face is thickened into a slab of the distance (out of the
+ * material, or into it for a negative distance), which is joined to the part or cut from it. The
+ * slab's far side takes the face's tags, so later steps on that face still find it; its sides are
+ * `<step>.side`. Neighbours at right angles extend flush; slanted ones get a step.
+ */
+const OVERLAP = 1e-3;
+
+function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena, g } = ctx;
+  if (!f.faces.length) throw new FeatureError("select the faces to move");
+  const refs = f.faces.flatMap((s) => resolveFaces(s, [...ctx.prev.bodies.values()]));
+  const bodyIds = new Set(refs.map((r) => r.body));
+  if (bodyIds.size !== 1) throw new FeatureError("the faces must belong to one part");
+  const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
+  const faces = [...new Set(refs.flatMap((r) => r.faces))];
+  // Up to a plane: each flat face moves by its own distance onto it.
+  const target = f.upTo ? planeFrame(f.upTo, ctx) : null;
+  const distanceOf = (fi: number): number => {
+    if (!target) return f.distance;
+    const info = input.faceInfo[fi]!;
+    if (!info.planar || !info.normal) throw new FeatureError(`face ${input.faceTags[fi]?.[0] ?? fi} is not flat`, "only flat faces can be moved up to a plane");
+    const n = info.normal;
+    const dot = n[0] * target.normal[0] + n[1] * target.normal[1] + n[2] * target.normal[2];
+    if (Math.abs(Math.abs(dot) - 1) > 1e-6) throw new FeatureError(`face ${input.faceTags[fi]?.[0] ?? fi} is not parallel to the plane`, "pick a plane or flat face parallel to the faces");
+    const p = input.facePoints[fi]!;
+    const gap = (target.origin[0] - p[0]) * n[0] + (target.origin[1] - p[1]) * n[1] + (target.origin[2] - p[2]) * n[2];
+    return gap - f.distance;
+  };
+  const moves = faces.map((fi) => ({ fi, d: distanceOf(fi) })).filter((m) => Math.abs(m.d) > 1e-7);
+  if (!moves.length) throw new FeatureError(target ? "the faces already lie on the plane" : "the distance must not be zero");
+  let body = input;
+  // Growing faces first, then shrinking ones: each slab is made from the face as it was.
+  for (const sign of [1, -1]) {
+    const these = moves.filter((m) => Math.sign(m.d) === sign);
+    if (!these.length) continue;
+    const slabs = these.map(({ fi, d }) => {
+      const face = input.faces[fi]!;
+      const info = input.faceInfo[fi]!;
+      const name = input.faceTags[fi]?.[0] ?? fi;
+      let shape: TopoDS_Shape;
+      if (info.planar && info.normal) {
+        // A flat face: a prism along its outward normal (a positive distance grows the part). Its
+        // sides are real planes and cylinders, so they merge with the neighbours they continue.
+        const n = info.normal;
+        shape = arena.track(arena.track(new oc.BRepPrimAPI_MakePrism(face, g.vec([n[0] * d, n[1] * d, n[2] * d]), false, true)).Shape());
+      } else {
+        // A curved face is thickened along its normals instead. A growing slab starts a hair inside
+        // the part: curved faces exactly on top of each other (a hole wall) fail to fuse.
+        const mk = arena.track(new oc.BRepOffsetAPI_MakeThickSolid());
+        try {
+          let from: TopoDS_Shape = face;
+          if (d > 0) {
+            const off = arena.track(new oc.BRepOffsetAPI_MakeOffsetShape());
+            off.PerformBySimple(face, -OVERLAP);
+            from = arena.track(off.Shape());
+          }
+          mk.MakeThickSolidBySimple(from, d > 0 ? d + OVERLAP : d);
+        } catch (e) {
+          throw new FeatureError(`face ${name} cannot be moved: ${occtErrorMessage(oc, e)}`, "try a smaller distance");
+        }
+        if (!mk.IsDone()) throw new FeatureError(`face ${name} cannot be moved`, "try a smaller distance");
+        // The slab can come out inside out (negative volume): rebuild the solid from its shell, which orients it outwards.
+        const ex = arena.track(new oc.TopExp_Explorer(arena.track(mk.Shape()), oc.TopAbs_ShapeEnum.TopAbs_SHELL, oc.TopAbs_ShapeEnum.TopAbs_SHAPE));
+        if (!ex.More()) throw new FeatureError(`face ${name} cannot be moved`, "try a smaller distance");
+        shape = arena.track(arena.track(new oc.ShapeFix_Solid()).SolidFromShell(oc.TopoDS.Shell(ex.Current())));
+      }
+      const slab = new Body(oc, arena, f.id, shape);
+      // The far side lies |d| from the face; the near side and the sides touch it.
+      slab.faceTags = slab.faces.map((sf) => {
+        const dist = arena.track(new oc.BRepExtrema_DistShapeShape(sf, face));
+        const far = dist.IsDone() && dist.Value() > Math.abs(d) * 0.5;
+        return far ? [...(input.faceTags[fi] ?? []), `${f.id}.face`] : [`${f.id}.side`];
+      });
+      return slab;
+    });
+    const tool = slabs.length === 1 ? slabs[0]! : booleanBodies(oc, arena, slabs[0]!, slabs.slice(1), "fuse", f.id);
+    body = booleanBodies(oc, arena, body, tool, sign > 0 ? "fuse" : "cut");
+  }
   return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
 }
 

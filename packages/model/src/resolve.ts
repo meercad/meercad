@@ -9,6 +9,7 @@ import type {
   GearFeature,
   HoleFeature,
   DraftFeature,
+  OffsetFaceFeature,
   TextFeature,
   StandardPartFeature,
   AlignFeature,
@@ -52,6 +53,7 @@ export type ResolvedGear = R<
 export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number };
 export type ResolvedRib = R<RibFeature, "thickness">;
 export type ResolvedDraft = R<DraftFeature, "angle">;
+export type ResolvedOffsetFace = R<OffsetFaceFeature, "distance">;
 export type ResolvedScale = R<ScaleFeature, "factor">;
 export type ResolvedAlign = R<AlignFeature, "offset" | "angle">;
 export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height"> & { points: [number, number][]; length?: number; diameter?: number; height?: number };
@@ -75,6 +77,7 @@ export type ResolvedFeature =
   | ResolvedHole
   | ResolvedRib
   | ResolvedDraft
+  | ResolvedOffsetFace
   | ResolvedText
   | ResolvedStandardPart
   | ResolvedAlign
@@ -154,6 +157,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       };
     case "draft":
       return { ...f, angle: ev("angle", f.angle) };
+    case "offset_face":
+      return { ...f, distance: ev("distance", f.distance) };
     case "scale":
       return { ...f, factor: ev("factor", f.factor) };
     case "align":
@@ -209,6 +214,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     hole: ["diameter", "depth", "allowance"],
     rib: ["thickness"],
     draft: ["angle"],
+    offset_face: ["distance"],
     text: ["size", "angle", "depth"],
     standard_part: ["length", "diameter", "height"],
     align: ["offset", "angle"],

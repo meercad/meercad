@@ -43,6 +43,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     plane: ["plane", "face"],
     base: ["plane", "face"],
     neutral: ["plane", "face"],
+    upTo: ["plane", "face"],
     points: ["face"],
   };
   if (op === "linear_pattern" && d.field === "direction") return new Set(map["direction"]);
@@ -203,7 +204,8 @@ function handlePick(p: Pick, d: DialogState): void {
       }
       case "plane":
       case "base":
-      case "neutral": {
+      case "neutral":
+      case "upTo": {
         const spec = planeSpecForPick(p, meshes);
         if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
         // A hole goes where the face was tapped.
@@ -222,7 +224,7 @@ function handlePick(p: Pick, d: DialogState): void {
     return g as Feature;
   });
   // Single-valued fields advance to the next field automatically.
-  if (["axis", "direction", "plane", "base", "neutral", "target", "from", "to"].includes(field)) {
+  if (["axis", "direction", "plane", "base", "neutral", "upTo", "target", "from", "to"].includes(field)) {
     const next = f.op === "align" && field === "from" ? "to" : f.op === "boolean" && field === "target" ? "tools" : (f.op === "hole" || f.op === "standard_part") && field === "plane" ? "points" : null;
     setDialogField(next);
   }
@@ -1264,6 +1266,30 @@ function Body({ d }: { d: DialogState }) {
             <PlaneButtons value={f.neutral} onChange={(neutral) => set({ neutral })} />
           </Field>
           <p className="muted small">{t("The faces keep their edge on the neutral plane (usually the bottom or the parting face) and lean inwards in the pull direction. 1–3° is typical for moulded parts.")}</p>
+        </>
+      );
+    case "offset_face":
+      return (
+        <>
+          <Field label={t("Faces")}>
+            <SelBox field="faces" items={f.faces.map(describeFaceSelector)} placeholder={t("Pick faces")} onRemove={(i) => set({ faces: f.faces.filter((_, j) => j !== i) })} />
+          </Field>
+          <Field label={t("Up to")}>
+            <div className="row">
+              <div style={{ flex: 1 }}>
+                <SelBox field="upTo" items={f.upTo ? [describePlane(f.upTo)] : []} placeholder={t("Optional: a plane or flat face")} />
+              </div>
+              {f.upTo && (
+                <button className="icon-btn" title={t("Remove")} onClick={() => set({ upTo: undefined })}>
+                  <X />
+                </button>
+              )}
+            </div>
+          </Field>
+          <Field label={f.upTo ? t("Gap before it") : t("Distance")}>
+            <ExprInput value={f.distance} unit="mm" autoFocus onCommit={(distance) => set({ distance })} onLive={(distance) => set({ distance })} />
+          </Field>
+          <p className="muted small">{f.upTo ? t("Flat faces parallel to the plane move onto it, or stop short of it by the gap.") : t("Positive moves the faces out of the part (it grows there), negative into it. A hole wall moved out makes the hole tighter.")}</p>
         </>
       );
     case "rib": {

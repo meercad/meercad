@@ -1,6 +1,7 @@
 /** Labels, icons and default drafts for every feature type. */
 import {
   ArrowUpFromLine,
+  ArrowUpToLine,
   Bolt,
   Box,
   Cone,
@@ -54,6 +55,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   align: { shortcut: "Shift+A", label: t("Align"), icon: Magnet, hint: t("Set a part's face onto another's, or a shaft's axis onto a hole's") },
   standard_part: { shortcut: "Shift+P", label: t("Standard part"), icon: Nut, hint: t("Screws, nuts, washers, bearings and magnets to standard sizes, placed on a face") },
   text: { shortcut: "Shift+T", label: t("Text"), icon: Type, hint: t("Raised or engraved lettering on a face") },
+  offset_face: { shortcut: "Shift+E", label: t("feature::Move face"), icon: ArrowUpToLine, hint: t("Move faces along their normals or up to a plane: thicker walls, tighter holes, a face flush with another") },
   draft: { shortcut: "Shift+D", label: t("feature::Draft"), icon: Pyramid, hint: t("Tilt side faces by an angle so a cast or moulded part leaves its mould") },
   rib: { shortcut: "Shift+B", label: t("Rib"), icon: Slash, hint: t("Stiffening web from an open sketch line to the walls it meets") },
   split: { shortcut: "Shift+K", label: t("Split"), icon: Scissors, hint: t("Cut parts in two at a plane or flat face, e.g. for the printer's build volume") },
@@ -73,7 +75,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "fillet", "chamfer", "shell", "draft", "thread", "hole", "split", "gear", "transform", "align", "scale", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "hole", "split", "gear", "transform", "align", "scale", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -131,6 +133,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, plane: { ref: "origin.XY" }, text: "meerCAD", size: 8, depth: 1, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import") ? "join" : "new_body" };
     case "draft":
       return { id, op, faces: [], angle: 3, neutral: { ref: "origin.XY" } };
+    case "offset_face":
+      return { id, op, faces: [], distance: 1 };
     case "rib":
       return { id, op, sketch: lastSketch && !lastSketchUsed ? lastSketch.id : "", thickness: 3 };
     case "split":
@@ -181,6 +185,8 @@ export function draftProblem(f: Feature): string | null {
       return f.points.length ? null : t("Tap a flat face where the part goes");
     case "draft":
       return f.faces.length ? null : t("Pick the side faces to draft");
+    case "offset_face":
+      return f.faces.length ? null : t("Pick the faces to move");
     case "rib":
       return f.sketch ? null : t("Pick the rib's line in a sketch");
     case "loft":

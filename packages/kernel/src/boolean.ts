@@ -75,9 +75,12 @@ export function unify(oc: OC, arena: Arena, body: Body): Body {
     const same = sameIdx[k]!;
     if (same >= 0) return [...(body.faceTags[same] ?? [])];
     const box = bounds(oc, arena, face);
+    // Samples lie on the faces' mesh triangles: on a curved face up to the mesh deflection (0.1 mm) off it.
+    const flat = String(arena.track(new oc.BRepAdaptor_Surface(face, true)).GetType()) === "GeomAbs_Plane";
+    const tol = flat ? 1e-4 : 0.11;
     const tags: string[] = [];
     for (const i of open) {
-      if (near(samples[i]!, box) && pointOnFace(oc, arena, samples[i]!, face)) for (const t of body.faceTags[i] ?? []) if (!tags.includes(t)) tags.push(t);
+      if (near(samples[i]!, box) && pointOnFace(oc, arena, samples[i]!, face, tol)) for (const t of body.faceTags[i] ?? []) if (!tags.includes(t)) tags.push(t);
     }
     return tags;
   });
