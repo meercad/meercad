@@ -1,0 +1,303 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": -40,
+     "y": -25
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 40,
+     "y": -25
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 40,
+     "y": 25
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": -40,
+     "y": 25
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Box",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 30,
+   "mode": "new_body"
+  },
+  {
+   "id": "fi1",
+   "op": "fillet",
+   "name": "Round corners",
+   "edges": [
+    {
+     "edge": [
+      "ex1.side[sk1.l1]",
+      "ex1.side[sk1.l2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.l2]",
+      "ex1.side[sk1.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.l3]",
+      "ex1.side[sk1.l4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.l4]",
+      "ex1.side[sk1.l1]"
+     ]
+    }
+   ],
+   "radius": 5
+  },
+  {
+   "id": "sh1",
+   "op": "shell",
+   "name": "Hollow",
+   "faces": [
+    {
+     "face": "ex1.end_cap"
+    }
+   ],
+   "thickness": 2
+  },
+  {
+   "id": "pl1",
+   "op": "plane",
+   "name": "Floor",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": 2
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl1"
+   },
+   "entities": [
+    {
+     "id": "b1c",
+     "type": "point",
+     "x": -32,
+     "y": -17
+    },
+    {
+     "id": "b1",
+     "type": "circle",
+     "center": "b1c",
+     "radius": 3
+    },
+    {
+     "id": "i1c",
+     "type": "point",
+     "x": -32,
+     "y": -17
+    },
+    {
+     "id": "i1",
+     "type": "circle",
+     "center": "i1c",
+     "radius": 1.25
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Boss",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": 26,
+   "mode": "join"
+  },
+  {
+   "id": "lp1",
+   "op": "linear_pattern",
+   "name": "Bosses",
+   "source": {
+    "features": [
+     "ex2"
+    ]
+   },
+   "direction": {
+    "ref": "origin.X"
+   },
+   "count": 2,
+   "spacing": 64,
+   "direction2": {
+    "ref": "origin.Y"
+   },
+   "count2": 2,
+   "spacing2": 34
+  },
+  {
+   "id": "pl2",
+   "op": "plane",
+   "name": "Lid plane",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": 40
+  },
+  {
+   "id": "sk3",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl2"
+   },
+   "entities": [
+    {
+     "id": "mp1",
+     "type": "point",
+     "x": -40,
+     "y": -25
+    },
+    {
+     "id": "mp2",
+     "type": "point",
+     "x": 40,
+     "y": -25
+    },
+    {
+     "id": "mp3",
+     "type": "point",
+     "x": 40,
+     "y": 25
+    },
+    {
+     "id": "mp4",
+     "type": "point",
+     "x": -40,
+     "y": 25
+    },
+    {
+     "id": "m1",
+     "type": "line",
+     "p1": "mp1",
+     "p2": "mp2"
+    },
+    {
+     "id": "m2",
+     "type": "line",
+     "p1": "mp2",
+     "p2": "mp3"
+    },
+    {
+     "id": "m3",
+     "type": "line",
+     "p1": "mp3",
+     "p2": "mp4"
+    },
+    {
+     "id": "m4",
+     "type": "line",
+     "p1": "mp4",
+     "p2": "mp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex3",
+   "op": "extrude",
+   "name": "Lid",
+   "profile": {
+    "sketch": "sk3"
+   },
+   "extent": "blind",
+   "distance": 2,
+   "mode": "new_body"
+  },
+  {
+   "id": "fi2",
+   "op": "fillet",
+   "name": "Round lid",
+   "edges": [
+    {
+     "edge": [
+      "ex3.side[sk3.m1]",
+      "ex3.side[sk3.m2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex3.side[sk3.m2]",
+      "ex3.side[sk3.m3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex3.side[sk3.m3]",
+      "ex3.side[sk3.m4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex3.side[sk3.m4]",
+      "ex3.side[sk3.m1]"
+     ]
+    }
+   ],
+   "radius": 5
+  }
+ ],
+ "rollback": null
+}

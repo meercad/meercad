@@ -4,10 +4,15 @@ import { EXAMPLES } from "../../apps/web/src/lib/examples.js";
 import { newSession, withParams } from "./helpers.js";
 
 describe("home-screen examples", () => {
+  it("names are unique", () => expect(new Set(EXAMPLES.map((e) => e.name)).size).toBe(EXAMPLES.length));
+
   it.each(EXAMPLES.map((e) => [e.name, e] as const))("%s validates, is fully defined and rebuilds", async (_, ex) => {
     expect(validateDocument(ex.doc).ok).toBe(true);
     const { report } = (await newSession()).rebuild(ex.doc);
     expect(report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+    expect(report.bodies.length).toBeGreaterThan(0);
+    // The per-feature examples show a feature; only the starters are fully dimensioned.
+    if (ex.feature) return;
     for (const s of report.sketches) expect(s.diagnostics.dof, `${s.id} DOF`).toBe(0);
     // Most are one part; the gear pair has two, the hinged box three (box, lid, pin).
     expect(report.bodies).toHaveLength({ "Gear pair": 2, "Hinged box": 3 }[ex.name] ?? 1);

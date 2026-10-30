@@ -1,0 +1,96 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "holes": 6
+ },
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "o",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "c1",
+     "type": "circle",
+     "center": "o",
+     "radius": 30
+    },
+    {
+     "id": "c2",
+     "type": "circle",
+     "center": "o",
+     "radius": 10
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 6,
+   "mode": "new_body"
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "entities": [
+    {
+     "id": "hc",
+     "type": "point",
+     "x": 22,
+     "y": 0
+    },
+    {
+     "id": "h",
+     "type": "circle",
+     "center": "hc",
+     "radius": 2.5
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Bolt hole",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "through_all",
+   "distance": 1,
+   "flip": true,
+   "mode": "cut"
+  },
+  {
+   "id": "cp1",
+   "op": "circular_pattern",
+   "source": {
+    "features": [
+     "ex2"
+    ]
+   },
+   "axis": {
+    "ref": "origin.Z"
+   },
+   "count": "holes"
+  }
+ ],
+ "rollback": null
+}

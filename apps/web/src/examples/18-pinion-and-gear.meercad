@@ -1,0 +1,71 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "gr1",
+   "op": "gear",
+   "kind": "spur",
+   "teeth": 15,
+   "width": 8,
+   "mode": "new_body",
+   "name": "Pinion",
+   "module": 1.5,
+   "bore": {
+    "diameter": 5,
+    "shape": "d_flat",
+    "flat": 4.5,
+    "allowance": 0.15
+   }
+  },
+  {
+   "id": "gr2",
+   "op": "gear",
+   "kind": "spur",
+   "teeth": 30,
+   "width": 8,
+   "mode": "new_body",
+   "name": "Gear",
+   "meshWith": {
+    "gear": "gr1",
+    "direction": 30
+   },
+   "bore": {
+    "diameter": 8
+   }
+  }
+ ],
+ "mechanism": {
+  "joints": [
+   {
+    "id": "j1",
+    "name": "Pinion",
+    "type": "revolute",
+    "a": "gr1",
+    "b": "ground",
+    "anchor": {
+     "gear": "gr1"
+    }
+   },
+   {
+    "id": "j2",
+    "name": "Gear",
+    "type": "revolute",
+    "a": "gr2",
+    "b": "ground",
+    "anchor": {
+     "gear": "gr2"
+    }
+   }
+  ],
+  "couplings": [
+   {
+    "id": "c1",
+    "driver": "j1",
+    "driven": "j2",
+    "ratio": -0.5
+   }
+  ]
+ },
+ "rollback": null
+}

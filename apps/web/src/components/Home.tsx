@@ -11,6 +11,7 @@ import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
 import { exampleThumbnail, fillThumbnails } from "../lib/thumbnails";
 import { t, tn } from "../lib/i18n";
+import { setPrefs, usePrefs } from "../lib/keymap";
 
 const DRAG_TYPE = "application/x-meercad-project";
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
@@ -129,6 +130,7 @@ export function Home() {
   const projects = useApp((s) => s.projects);
   const folders = useApp((s) => s.folders);
   const folder = useApp((s) => s.folder);
+  const prefs = usePrefs();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [sort, setSort] = useState(loadSort);
   useEffect(() => void refreshProjects(), []);
@@ -305,8 +307,16 @@ export function Home() {
             </div>
           ))}
         </div>
-        <h1 style={{ marginTop: 36 }}>{t("Start from an example")}</h1>
-        <p className="sub">{t("Fully parametric — open one and change its variables.")}</p>
+        {prefs.showExamples ? (
+          <>
+        <button className="home-section-toggle" onClick={() => setPrefs({ examplesOpen: !prefs.examplesOpen })} aria-expanded={prefs.examplesOpen}>
+          <ChevronRight className={prefs.examplesOpen ? "open" : ""} />
+          <h1>{t("Start from an example")}</h1>
+          {prefs.examplesOpen ? null : <span className="muted">{EXAMPLES.length}</span>}
+        </button>
+        {prefs.examplesOpen ? (
+          <>
+        <p className="sub">{t("Fully parametric — open one and change its variables. Hide this section in Settings.")}</p>
         <div className="grid">
           {EXAMPLES.map((ex) => (
             <button className="card" key={ex.name} onClick={() => void newProject(structuredClone(ex.doc), t(ex.name))}>
@@ -322,6 +332,10 @@ export function Home() {
             </button>
           ))}
         </div>
+          </>
+        ) : null}
+          </>
+        ) : null}
         <footer className="home-footer">
           {(
             [

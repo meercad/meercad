@@ -1047,3 +1047,10 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .param-row.in-variant .expr, .param-row.in-variant input.field:not(.name-input) { color: var(--accent); }
 /* A cylindrical joint's two values: "Turn" and "Slide" before their sliders. */
 .joint-part { width: 56px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Start page: the examples section folds away. */
+.home-section-toggle { display: flex; align-items: center; gap: 8px; margin-top: 36px; padding: 0; background: none; border: 0; color: inherit; cursor: pointer; text-align: left; }
+.home-section-toggle h1 { margin: 0; }
+.home-section-toggle svg { width: 20px; height: 20px; flex: none; transition: transform 0.15s; color: var(--text-2); }
+.home-section-toggle svg.open { transform: rotate(90deg); }
+.home-section-toggle + .sub { margin-top: 6px; }

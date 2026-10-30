@@ -1,0 +1,96 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XZ"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": 10,
+     "y": 0
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 15,
+     "y": 0
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 15,
+     "y": 20
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": 10,
+     "y": 20
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    },
+    {
+     "id": "a1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "a2",
+     "type": "point",
+     "x": 0,
+     "y": 10
+    },
+    {
+     "id": "ax",
+     "type": "line",
+     "p1": "a1",
+     "p2": "a2",
+     "construction": true
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "rv1",
+   "op": "revolve",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "axis": {
+    "line": "sk1.ax"
+   },
+   "angle": 360,
+   "mode": "new_body"
+  }
+ ],
+ "rollback": null
+}

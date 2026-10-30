@@ -1,0 +1,124 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 60,
+     "y": 0
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 60,
+     "y": 40
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": 0,
+     "y": 40
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    },
+    {
+     "id": "h1c",
+     "type": "point",
+     "x": 8,
+     "y": 8
+    },
+    {
+     "id": "h1",
+     "type": "circle",
+     "center": "h1c",
+     "radius": 2.5
+    },
+    {
+     "id": "h2c",
+     "type": "point",
+     "x": 52,
+     "y": 8
+    },
+    {
+     "id": "h2",
+     "type": "circle",
+     "center": "h2c",
+     "radius": 2.5
+    },
+    {
+     "id": "h3c",
+     "type": "point",
+     "x": 8,
+     "y": 32
+    },
+    {
+     "id": "h3",
+     "type": "circle",
+     "center": "h3c",
+     "radius": 2.5
+    },
+    {
+     "id": "h4c",
+     "type": "point",
+     "x": 52,
+     "y": 32
+    },
+    {
+     "id": "h4",
+     "type": "circle",
+     "center": "h4c",
+     "radius": 2.5
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Plate",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 5,
+   "mode": "new_body"
+  }
+ ],
+ "rollback": null
+}

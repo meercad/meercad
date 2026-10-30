@@ -1,0 +1,233 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "bp1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "bp2",
+     "type": "point",
+     "x": 60,
+     "y": 0
+    },
+    {
+     "id": "bp3",
+     "type": "point",
+     "x": 60,
+     "y": 40
+    },
+    {
+     "id": "bp4",
+     "type": "point",
+     "x": 0,
+     "y": 40
+    },
+    {
+     "id": "b1",
+     "type": "line",
+     "p1": "bp1",
+     "p2": "bp2"
+    },
+    {
+     "id": "b2",
+     "type": "line",
+     "p1": "bp2",
+     "p2": "bp3"
+    },
+    {
+     "id": "b3",
+     "type": "line",
+     "p1": "bp3",
+     "p2": "bp4"
+    },
+    {
+     "id": "b4",
+     "type": "line",
+     "p1": "bp4",
+     "p2": "bp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Base",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 5,
+   "mode": "new_body"
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "wp1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "wp2",
+     "type": "point",
+     "x": 5,
+     "y": 0
+    },
+    {
+     "id": "wp3",
+     "type": "point",
+     "x": 5,
+     "y": 40
+    },
+    {
+     "id": "wp4",
+     "type": "point",
+     "x": 0,
+     "y": 40
+    },
+    {
+     "id": "w1",
+     "type": "line",
+     "p1": "wp1",
+     "p2": "wp2"
+    },
+    {
+     "id": "w2",
+     "type": "line",
+     "p1": "wp2",
+     "p2": "wp3"
+    },
+    {
+     "id": "w3",
+     "type": "line",
+     "p1": "wp3",
+     "p2": "wp4"
+    },
+    {
+     "id": "w4",
+     "type": "line",
+     "p1": "wp4",
+     "p2": "wp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Wall",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": 40,
+   "mode": "join"
+  },
+  {
+   "id": "pl1",
+   "op": "plane",
+   "name": "Rib plane 1",
+   "base": {
+    "ref": "origin.XZ"
+   },
+   "offset": -8
+  },
+  {
+   "id": "sk3",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl1"
+   },
+   "entities": [
+    {
+     "id": "r0a",
+     "type": "point",
+     "x": 5,
+     "y": 30
+    },
+    {
+     "id": "r0b",
+     "type": "point",
+     "x": 35,
+     "y": 5
+    },
+    {
+     "id": "r0",
+     "type": "line",
+     "p1": "r0a",
+     "p2": "r0b"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "rb1",
+   "op": "rib",
+   "name": "Rib 1",
+   "sketch": "sk3",
+   "thickness": 4
+  },
+  {
+   "id": "pl2",
+   "op": "plane",
+   "name": "Rib plane 2",
+   "base": {
+    "ref": "origin.XZ"
+   },
+   "offset": -32
+  },
+  {
+   "id": "sk4",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl2"
+   },
+   "entities": [
+    {
+     "id": "r1a",
+     "type": "point",
+     "x": 5,
+     "y": 30
+    },
+    {
+     "id": "r1b",
+     "type": "point",
+     "x": 35,
+     "y": 5
+    },
+    {
+     "id": "r1",
+     "type": "line",
+     "p1": "r1a",
+     "p2": "r1b"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "rb2",
+   "op": "rib",
+   "name": "Rib 2",
+   "sketch": "sk4",
+   "thickness": 4
+  }
+ ],
+ "rollback": null
+}

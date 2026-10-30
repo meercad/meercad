@@ -1,0 +1,228 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": -30,
+     "y": -20
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 30,
+     "y": -20
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 30,
+     "y": 20
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": -30,
+     "y": 20
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Box",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 20,
+   "mode": "new_body"
+  },
+  {
+   "id": "pl1",
+   "op": "plane",
+   "name": "Lid plane",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": 20
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl1"
+   },
+   "entities": [
+    {
+     "id": "mp1",
+     "type": "point",
+     "x": -30,
+     "y": -20
+    },
+    {
+     "id": "mp2",
+     "type": "point",
+     "x": 30,
+     "y": -20
+    },
+    {
+     "id": "mp3",
+     "type": "point",
+     "x": 30,
+     "y": 20
+    },
+    {
+     "id": "mp4",
+     "type": "point",
+     "x": -30,
+     "y": 20
+    },
+    {
+     "id": "m1",
+     "type": "line",
+     "p1": "mp1",
+     "p2": "mp2"
+    },
+    {
+     "id": "m2",
+     "type": "line",
+     "p1": "mp2",
+     "p2": "mp3"
+    },
+    {
+     "id": "m3",
+     "type": "line",
+     "p1": "mp3",
+     "p2": "mp4"
+    },
+    {
+     "id": "m4",
+     "type": "line",
+     "p1": "mp4",
+     "p2": "mp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Lid",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": 3,
+   "mode": "new_body"
+  },
+  {
+   "id": "pl2",
+   "op": "plane",
+   "name": "Pin plane",
+   "base": {
+    "ref": "origin.YZ"
+   },
+   "offset": -30
+  },
+  {
+   "id": "sk3",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl2"
+   },
+   "entities": [
+    {
+     "id": "c1c",
+     "type": "point",
+     "x": 20,
+     "y": 20
+    },
+    {
+     "id": "c1",
+     "type": "circle",
+     "center": "c1c",
+     "radius": 2.5
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex3",
+   "op": "extrude",
+   "name": "Pin",
+   "profile": {
+    "sketch": "sk3"
+   },
+   "extent": "blind",
+   "distance": 60,
+   "mode": "new_body"
+  }
+ ],
+ "mechanism": {
+  "joints": [
+   {
+    "id": "j1",
+    "name": "Pin",
+    "type": "fixed",
+    "a": "ex3",
+    "b": "ex1",
+    "anchor": {
+     "axisOf": {
+      "face": "ex3.side[sk3.c1]"
+     }
+    }
+   },
+   {
+    "id": "j2",
+    "name": "Lid",
+    "type": "revolute",
+    "a": "ex2",
+    "b": "ex1",
+    "anchor": {
+     "axisOf": {
+      "face": "ex3.side[sk3.c1]"
+     }
+    },
+    "limits": [
+     0,
+     110
+    ]
+   }
+  ]
+ },
+ "rollback": null
+}

@@ -12,8 +12,9 @@ describe("multi-threaded OCCT build", () => {
       const b = mt.rebuild(ex.doc).report.bodies[0]!;
       expect(b.faces, ex.name).toBe(a.faces);
       expect(b.edges, ex.name).toBe(a.edges);
-      expect(b.volume, ex.name).toBeCloseTo(a.volume, 6);
-      expect(b.area, ex.name).toBeCloseTo(a.area, 6);
+      // Relative: the larger examples differ in the last digits between the builds.
+      expect(Math.abs(b.volume - a.volume) / a.volume, ex.name).toBeLessThan(1e-8);
+      expect(Math.abs(b.area - a.area) / a.area, ex.name).toBeLessThan(1e-8);
     }
   });
 });

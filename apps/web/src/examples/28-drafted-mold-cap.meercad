@@ -1,0 +1,112 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": -25,
+     "y": -15
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 25,
+     "y": -15
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 25,
+     "y": 15
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": -25,
+     "y": 15
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Cap",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 15,
+   "mode": "new_body"
+  },
+  {
+   "id": "dr1",
+   "op": "draft",
+   "name": "Draft",
+   "faces": [
+    {
+     "face": "ex1.side[sk1.l1]"
+    },
+    {
+     "face": "ex1.side[sk1.l2]"
+    },
+    {
+     "face": "ex1.side[sk1.l3]"
+    },
+    {
+     "face": "ex1.side[sk1.l4]"
+    }
+   ],
+   "angle": 3,
+   "neutral": {
+    "ref": "origin.XY"
+   }
+  },
+  {
+   "id": "fi1",
+   "op": "fillet",
+   "name": "Top edges",
+   "edges": {
+    "select": "edges",
+    "of": "ex1",
+    "where": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "radius": 2
+  }
+ ],
+ "rollback": null
+}

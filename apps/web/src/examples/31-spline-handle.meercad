@@ -1,0 +1,167 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "o0",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "o1",
+     "type": "point",
+     "x": 40,
+     "y": -6
+    },
+    {
+     "id": "o2",
+     "type": "point",
+     "x": 90,
+     "y": 0
+    },
+    {
+     "id": "o3",
+     "type": "point",
+     "x": 92,
+     "y": 22
+    },
+    {
+     "id": "o4",
+     "type": "point",
+     "x": 45,
+     "y": 26
+    },
+    {
+     "id": "o5",
+     "type": "point",
+     "x": 2,
+     "y": 20
+    },
+    {
+     "id": "s1",
+     "type": "spline",
+     "points": [
+      "o0",
+      "o1",
+      "o2",
+      "o3",
+      "o4",
+      "o5"
+     ],
+     "closed": true
+    },
+    {
+     "id": "h1c",
+     "type": "point",
+     "x": 80,
+     "y": 12
+    },
+    {
+     "id": "h1",
+     "type": "circle",
+     "center": "h1c",
+     "radius": 4
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Handle",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 8,
+   "mode": "new_body"
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "rc",
+     "type": "point",
+     "x": 120,
+     "y": 0
+    },
+    {
+     "id": "r",
+     "type": "circle",
+     "center": "rc",
+     "radius": 3
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "sk3",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XZ"
+   },
+   "entities": [
+    {
+     "id": "p0",
+     "type": "point",
+     "x": 120,
+     "y": 0
+    },
+    {
+     "id": "p1",
+     "type": "point",
+     "x": 120,
+     "y": 20
+    },
+    {
+     "id": "p2",
+     "type": "point",
+     "x": 135,
+     "y": 40
+    },
+    {
+     "id": "p3",
+     "type": "point",
+     "x": 160,
+     "y": 45
+    },
+    {
+     "id": "s2",
+     "type": "spline",
+     "points": [
+      "p0",
+      "p1",
+      "p2",
+      "p3"
+     ]
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "sw1",
+   "op": "sweep",
+   "name": "Rod",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "path": {
+    "sketch": "sk3"
+   },
+   "mode": "new_body"
+  }
+ ],
+ "rollback": null
+}

@@ -1,0 +1,159 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 60,
+     "y": 0
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 60,
+     "y": 40
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": 0,
+     "y": 40
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 15,
+   "mode": "new_body"
+  },
+  {
+   "id": "ch1",
+   "op": "chamfer",
+   "edges": {
+    "select": "edges",
+    "of": "ex1",
+    "where": {
+     "face": "end_cap"
+    }
+   },
+   "distance": 1
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "entities": [
+    {
+     "id": "pp1",
+     "type": "point",
+     "x": 15,
+     "y": 10
+    },
+    {
+     "id": "pp2",
+     "type": "point",
+     "x": 45,
+     "y": 10
+    },
+    {
+     "id": "pp3",
+     "type": "point",
+     "x": 45,
+     "y": 30
+    },
+    {
+     "id": "pp4",
+     "type": "point",
+     "x": 15,
+     "y": 30
+    },
+    {
+     "id": "p1",
+     "type": "line",
+     "p1": "pp1",
+     "p2": "pp2"
+    },
+    {
+     "id": "p2",
+     "type": "line",
+     "p1": "pp2",
+     "p2": "pp3"
+    },
+    {
+     "id": "p3",
+     "type": "line",
+     "p1": "pp3",
+     "p2": "pp4"
+    },
+    {
+     "id": "p4",
+     "type": "line",
+     "p1": "pp4",
+     "p2": "pp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Pocket",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": 5,
+   "flip": true,
+   "mode": "cut"
+  }
+ ],
+ "rollback": null
+}

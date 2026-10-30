@@ -1,5 +1,5 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Languages, Mouse, Ruler, TriangleAlert, X } from "lucide-react";
+import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Languages, LayoutGrid, Mouse, Ruler, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
@@ -132,6 +132,16 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           <label className="check">
             <input type="checkbox" checked={prefs.showValues} onChange={(e) => setPrefs({ showValues: e.target.checked })} />
             {t("Show dimensions and sizes (diameters, distances, drag values)")}
+          </label>
+        </section>
+
+        <section>
+          <h3>
+            <LayoutGrid /> {t("Start page")}
+          </h3>
+          <label className="check">
+            <input type="checkbox" checked={prefs.showExamples} onChange={(e) => setPrefs({ showExamples: e.target.checked })} />
+            {t("Show the example models")}
           </label>
         </section>
 

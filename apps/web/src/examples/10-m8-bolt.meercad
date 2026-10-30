@@ -1,0 +1,142 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "c1c",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "c1",
+     "type": "circle",
+     "center": "c1c",
+     "radius": 4
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Shaft",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 20,
+   "mode": "new_body"
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "hp0",
+     "type": "point",
+     "x": 7.505553,
+     "y": 0
+    },
+    {
+     "id": "hp1",
+     "type": "point",
+     "x": 3.752777,
+     "y": 6.5
+    },
+    {
+     "id": "hp2",
+     "type": "point",
+     "x": -3.752777,
+     "y": 6.5
+    },
+    {
+     "id": "hp3",
+     "type": "point",
+     "x": -7.505553,
+     "y": 0
+    },
+    {
+     "id": "hp4",
+     "type": "point",
+     "x": -3.752777,
+     "y": -6.5
+    },
+    {
+     "id": "hp5",
+     "type": "point",
+     "x": 3.752777,
+     "y": -6.5
+    },
+    {
+     "id": "h0",
+     "type": "line",
+     "p1": "hp0",
+     "p2": "hp1"
+    },
+    {
+     "id": "h1",
+     "type": "line",
+     "p1": "hp1",
+     "p2": "hp2"
+    },
+    {
+     "id": "h2",
+     "type": "line",
+     "p1": "hp2",
+     "p2": "hp3"
+    },
+    {
+     "id": "h3",
+     "type": "line",
+     "p1": "hp3",
+     "p2": "hp4"
+    },
+    {
+     "id": "h4",
+     "type": "line",
+     "p1": "hp4",
+     "p2": "hp5"
+    },
+    {
+     "id": "h5",
+     "type": "line",
+     "p1": "hp5",
+     "p2": "hp0"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Head",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": 5.5,
+   "flip": true,
+   "mode": "join"
+  },
+  {
+   "id": "th1",
+   "op": "thread",
+   "face": {
+    "face": "ex1.side[sk1.c1]"
+   },
+   "length": 16
+  }
+ ],
+ "rollback": null
+}

@@ -249,13 +249,16 @@ interface Prefs {
   snapGeometry: boolean;
   /** Measuring system new designs start in (metric: mm, imperial: inches). */
   units: "metric" | "imperial";
+  /** The example models on the start page, and whether that section is folded open. */
+  showExamples: boolean;
+  examplesOpen: boolean;
 }
 
 
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric" };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -268,6 +271,8 @@ function load(): Prefs {
       snapGrid: raw.snapGrid !== false,
       snapGeometry: raw.snapGeometry !== false,
       units: raw.units === "imperial" ? "imperial" : "metric",
+      showExamples: raw.showExamples !== false,
+      examplesOpen: raw.examplesOpen !== false,
     };
   } catch {
     return fallback;

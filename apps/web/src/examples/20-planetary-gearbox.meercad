@@ -1,0 +1,153 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "gr1",
+   "op": "gear",
+   "kind": "internal",
+   "teeth": 60,
+   "width": 6,
+   "mode": "new_body",
+   "name": "Ring",
+   "module": 1,
+   "rim": 70
+  },
+  {
+   "id": "gr2",
+   "op": "gear",
+   "kind": "spur",
+   "teeth": 18,
+   "width": 6,
+   "mode": "new_body",
+   "name": "Planet 1",
+   "meshWith": {
+    "gear": "gr1",
+    "direction": 0
+   }
+  },
+  {
+   "id": "gr3",
+   "op": "gear",
+   "kind": "spur",
+   "teeth": 18,
+   "width": 6,
+   "mode": "new_body",
+   "name": "Planet 2",
+   "meshWith": {
+    "gear": "gr1",
+    "direction": 120
+   }
+  },
+  {
+   "id": "gr4",
+   "op": "gear",
+   "kind": "spur",
+   "teeth": 18,
+   "width": 6,
+   "mode": "new_body",
+   "name": "Planet 3",
+   "meshWith": {
+    "gear": "gr1",
+    "direction": 240
+   }
+  },
+  {
+   "id": "gr5",
+   "op": "gear",
+   "kind": "spur",
+   "teeth": 24,
+   "width": 6,
+   "mode": "new_body",
+   "name": "Sun",
+   "meshWith": {
+    "gear": "gr2",
+    "direction": 180
+   },
+   "bore": {
+    "diameter": 5
+   }
+  }
+ ],
+ "mechanism": {
+  "joints": [
+   {
+    "id": "j1",
+    "name": "Turn gr1",
+    "type": "revolute",
+    "a": "gr1",
+    "b": "ground",
+    "anchor": {
+     "gear": "gr1"
+    }
+   },
+   {
+    "id": "j2",
+    "name": "Turn gr2",
+    "type": "revolute",
+    "a": "gr2",
+    "b": "ground",
+    "anchor": {
+     "gear": "gr2"
+    }
+   },
+   {
+    "id": "j3",
+    "name": "Turn gr3",
+    "type": "revolute",
+    "a": "gr3",
+    "b": "ground",
+    "anchor": {
+     "gear": "gr3"
+    }
+   },
+   {
+    "id": "j4",
+    "name": "Turn gr4",
+    "type": "revolute",
+    "a": "gr4",
+    "b": "ground",
+    "anchor": {
+     "gear": "gr4"
+    }
+   },
+   {
+    "id": "j5",
+    "name": "Turn gr5",
+    "type": "revolute",
+    "a": "gr5",
+    "b": "ground",
+    "anchor": {
+     "gear": "gr5"
+    }
+   }
+  ],
+  "couplings": [
+   {
+    "id": "c1",
+    "driver": "j1",
+    "driven": "j2",
+    "ratio": 3.333333
+   },
+   {
+    "id": "c2",
+    "driver": "j1",
+    "driven": "j3",
+    "ratio": 3.333333
+   },
+   {
+    "id": "c3",
+    "driver": "j1",
+    "driven": "j4",
+    "ratio": 3.333333
+   },
+   {
+    "id": "c4",
+    "driver": "j2",
+    "driven": "j5",
+    "ratio": -0.75
+   }
+  ]
+ },
+ "rollback": null
+}

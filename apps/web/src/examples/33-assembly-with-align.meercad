@@ -1,0 +1,246 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "bp1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "bp2",
+     "type": "point",
+     "x": 40,
+     "y": 0
+    },
+    {
+     "id": "bp3",
+     "type": "point",
+     "x": 40,
+     "y": 40
+    },
+    {
+     "id": "bp4",
+     "type": "point",
+     "x": 0,
+     "y": 40
+    },
+    {
+     "id": "b1",
+     "type": "line",
+     "p1": "bp1",
+     "p2": "bp2"
+    },
+    {
+     "id": "b2",
+     "type": "line",
+     "p1": "bp2",
+     "p2": "bp3"
+    },
+    {
+     "id": "b3",
+     "type": "line",
+     "p1": "bp3",
+     "p2": "bp4"
+    },
+    {
+     "id": "b4",
+     "type": "line",
+     "p1": "bp4",
+     "p2": "bp1"
+    },
+    {
+     "id": "hc",
+     "type": "point",
+     "x": 20,
+     "y": 20
+    },
+    {
+     "id": "h",
+     "type": "circle",
+     "center": "hc",
+     "radius": 4
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Base",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 10,
+   "mode": "new_body"
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "kp1",
+     "type": "point",
+     "x": 60,
+     "y": 0
+    },
+    {
+     "id": "kp2",
+     "type": "point",
+     "x": 70,
+     "y": 0
+    },
+    {
+     "id": "kp3",
+     "type": "point",
+     "x": 70,
+     "y": 10
+    },
+    {
+     "id": "kp4",
+     "type": "point",
+     "x": 60,
+     "y": 10
+    },
+    {
+     "id": "k1",
+     "type": "line",
+     "p1": "kp1",
+     "p2": "kp2"
+    },
+    {
+     "id": "k2",
+     "type": "line",
+     "p1": "kp2",
+     "p2": "kp3"
+    },
+    {
+     "id": "k3",
+     "type": "line",
+     "p1": "kp3",
+     "p2": "kp4"
+    },
+    {
+     "id": "k4",
+     "type": "line",
+     "p1": "kp4",
+     "p2": "kp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Block",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": 5,
+   "mode": "new_body"
+  },
+  {
+   "id": "pl1",
+   "op": "plane",
+   "name": "Pin plane",
+   "base": {
+    "ref": "origin.YZ"
+   },
+   "offset": 60
+  },
+  {
+   "id": "sk3",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl1"
+   },
+   "entities": [
+    {
+     "id": "pc",
+     "type": "point",
+     "x": -30,
+     "y": 4
+    },
+    {
+     "id": "p",
+     "type": "circle",
+     "center": "pc",
+     "radius": 4
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex3",
+   "op": "extrude",
+   "name": "Pin",
+   "profile": {
+    "sketch": "sk3"
+   },
+   "extent": "blind",
+   "distance": 30,
+   "mode": "new_body"
+  },
+  {
+   "id": "al1",
+   "op": "align",
+   "name": "Pin into hole",
+   "from": {
+    "axisOf": {
+     "face": "ex3.side[sk3.p]"
+    }
+   },
+   "to": {
+    "axisOf": {
+     "face": "ex1.side[sk1.h]"
+    }
+   }
+  },
+  {
+   "id": "al2",
+   "op": "align",
+   "name": "Pin end flush",
+   "from": {
+    "face": {
+     "face": "ex3.start_cap"
+    }
+   },
+   "to": {
+    "face": {
+     "face": "ex1.start_cap"
+    }
+   },
+   "flip": true
+  },
+  {
+   "id": "al3",
+   "op": "align",
+   "name": "Block on top",
+   "from": {
+    "face": {
+     "face": "ex2.start_cap"
+    }
+   },
+   "to": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "angle": 45
+  }
+ ],
+ "rollback": null
+}

@@ -1,0 +1,111 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "hp0",
+     "type": "point",
+     "x": 6,
+     "y": 0
+    },
+    {
+     "id": "hp1",
+     "type": "point",
+     "x": 3,
+     "y": 5.196152
+    },
+    {
+     "id": "hp2",
+     "type": "point",
+     "x": -3,
+     "y": 5.196152
+    },
+    {
+     "id": "hp3",
+     "type": "point",
+     "x": -6,
+     "y": 0
+    },
+    {
+     "id": "hp4",
+     "type": "point",
+     "x": -3,
+     "y": -5.196152
+    },
+    {
+     "id": "hp5",
+     "type": "point",
+     "x": 3,
+     "y": -5.196152
+    },
+    {
+     "id": "h0",
+     "type": "line",
+     "p1": "hp0",
+     "p2": "hp1"
+    },
+    {
+     "id": "h1",
+     "type": "line",
+     "p1": "hp1",
+     "p2": "hp2"
+    },
+    {
+     "id": "h2",
+     "type": "line",
+     "p1": "hp2",
+     "p2": "hp3"
+    },
+    {
+     "id": "h3",
+     "type": "line",
+     "p1": "hp3",
+     "p2": "hp4"
+    },
+    {
+     "id": "h4",
+     "type": "line",
+     "p1": "hp4",
+     "p2": "hp5"
+    },
+    {
+     "id": "h5",
+     "type": "line",
+     "p1": "hp5",
+     "p2": "hp0"
+    },
+    {
+     "id": "bc",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "b",
+     "type": "circle",
+     "center": "bc",
+     "radius": 2.5
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "symmetric",
+   "distance": 20,
+   "mode": "new_body"
+  }
+ ],
+ "rollback": null
+}

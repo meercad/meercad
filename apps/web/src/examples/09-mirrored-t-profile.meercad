@@ -1,0 +1,121 @@
+{
+ "format": "meercad/1",
+ "params": {},
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XZ"
+   },
+   "entities": [
+    {
+     "id": "lp0",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": 40,
+     "y": 0
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 40,
+     "y": 4
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 4,
+     "y": 4
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": 4,
+     "y": 30
+    },
+    {
+     "id": "lp5",
+     "type": "point",
+     "x": 0,
+     "y": 30
+    },
+    {
+     "id": "l0",
+     "type": "line",
+     "p1": "lp0",
+     "p2": "lp1"
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp5"
+    },
+    {
+     "id": "l5",
+     "type": "line",
+     "p1": "lp5",
+     "p2": "lp0"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Angle",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 30,
+   "mode": "new_body"
+  },
+  {
+   "id": "mi1",
+   "op": "mirror",
+   "source": {
+    "bodies": [
+     "ex1"
+    ]
+   },
+   "plane": {
+    "ref": "origin.YZ"
+   }
+  },
+  {
+   "id": "bo1",
+   "op": "boolean",
+   "operation": "union",
+   "target": "ex1",
+   "tools": [
+    "mi1_1"
+   ]
+  }
+ ],
+ "rollback": null
+}
