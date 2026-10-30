@@ -5,7 +5,7 @@ import { jointRange, renderMotionGif } from "../lib/render";
 import type { Joint } from "@meercad/schema";
 import { partName } from "../lib/features";
 import { motion } from "@meercad/model";
-import { checkClearance, currentMechanism, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, restPose, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
+import { checkClearance, currentMechanism, swingRanges, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, restPose, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
 import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
@@ -66,6 +66,8 @@ export function MotionPanel() {
   const { mech, problems } = currentMechanism();
   void free;
   const values = jointValues();
+  // In a linkage some joints only swing part of a turn (a crank-rocker's rocker): their sliders end there.
+  const swing = swingRanges();
   const joints = doc.mechanism?.joints ?? [];
   const couplings = doc.mechanism?.couplings ?? [];
   const gearsWithout = (useApp.getState().output?.report.gears ?? []).filter((g) => !joints.some((j) => j.a === g.id)).length;
@@ -117,7 +119,7 @@ export function MotionPanel() {
                   ) : (
                     parts.map(([id, kind, label]) => {
                       const v = values[id];
-                      const limits = mech.joint(id)?.limits;
+                      const limits = mech.joint(id)?.limits ?? swing[id] ?? undefined;
                       const unit = kind === "revolute" ? "°" : " mm";
                       const [lo, hi] = limits ?? (kind === "revolute" ? [-180, 180] : [-50, 50]);
                       // A turn without limits keeps counting inside; slider and number show it as -180° to 180°.

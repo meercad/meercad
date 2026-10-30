@@ -32,7 +32,7 @@ export const useMotion = create<{
   check: ClearanceCheck | null;
   /** Bumped when a closed-loop linkage moves (its pose lives outside the store). */
   tick: number;
-  /** Parts that cannot move further this way (two links in line at the end of a swing, a joint at its limit): shown red. */
+  /** Parts held at their joint's limit: shown red. */
   blocked: string[];
   /** Pairs of parts that run into each other in the shown pose (and did not touch as drawn). */
   hits: [string, string][];
@@ -56,41 +56,38 @@ function moveLoop(l: NonNullable<typeof loop>, r: linkage.LinkageResult): boolea
     l.poses = r.poses;
     l.values = r.values;
   }
-  useMotion.setState((s) => ({ tick: s.tick + 1, blocked: r.ok ? [] : inLine(currentMechanism().mech.joints, l.poses) }));
+  useMotion.setState((s) => ({ tick: s.tick + 1, blocked: [] }));
   return r.ok;
 }
 
-/**
- * The two links that stand (nearly) in line through a joint, which is where a linkage stops (a
- * rocker at the end of its swing): for each turning joint, the joint before it on one part, the
- * joint itself and the joint after it on the other part; the joint closest to a straight line wins.
- * Only asked once the linkage cannot move further, so "nearly" may be loose (the solver stops a
- * few degrees short of the exact line, where its equations degenerate).
- */
-function inLine(joints: readonly motion.MotionJoint[], poses: ReadonlyMap<string, motion.Mat4>): string[] {
-  const turning = joints.filter((j) => j.type === "revolute");
-  const at = (j: motion.MotionJoint, part: string) => motion.transformPoint(poses.get(part) ?? motion.IDENTITY, j.origin);
-  let best: { sin: number; parts: string[] } | null = null;
-  for (const j of turning) {
-    const before = turning.find((k) => k !== j && (k.a === j.a || k.b === j.a));
-    const after = turning.find((k) => k !== j && (k.a === j.b || k.b === j.b));
-    if (!before || !after) continue;
-    const p = at(before, j.a);
-    const q = at(j, j.a);
-    const r = at(after, j.b);
-    const u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-    const v = [r[0] - q[0], r[1] - q[1], r[2] - q[2]];
-    const c = [u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!];
-    const sin = Math.hypot(c[0]!, c[1]!, c[2]!) / (Math.hypot(u[0]!, u[1]!, u[2]!) * Math.hypot(v[0]!, v[1]!, v[2]!) || 1);
-    if (sin < 0.35 && (!best || sin < best.sin)) best = { sin, parts: [j.a, j.b].filter((x) => x !== "ground") };
-  }
-  return best?.parts ?? [];
-}
 
 /** Back to where the parts were drawn. */
 export function restPose(): void {
   loop = null;
   useMotion.setState((s) => ({ free: {}, tick: s.tick + 1, blocked: [] }));
+}
+
+/**
+ * How far each joint of a linkage can move from the drawn position, by driving it each way until it
+ * stops (a rocker at the end of its swing); null for one that goes all the way round. Worked out
+ * once per linkage, for the panel's sliders.
+ */
+let swings: { key: string; ranges: Record<string, [number, number] | null> } | null = null;
+export function swingRanges(): Record<string, [number, number] | null> {
+  const { mech } = currentMechanism();
+  const l = loopOf(mech);
+  if (!l) return {};
+  if (swings?.key === l.key) return swings.ranges;
+  const ranges: Record<string, [number, number] | null> = {};
+  for (const j of mech.joints) {
+    if (j.type === "fixed") continue;
+    const far = j.type === "revolute" ? 200 : 1000;
+    const up = l.L.solve(new Map(), { [j.id]: far });
+    const down = l.L.solve(new Map(), { [j.id]: -far });
+    ranges[j.id] = up.ok && down.ok ? null : [down.values[j.id] ?? -far, up.values[j.id] ?? far];
+  }
+  swings = { key: l.key, ranges };
+  return ranges;
 }
 
 /** Every joint's value now (degrees or mm). */
