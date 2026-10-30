@@ -108,7 +108,14 @@ function handlePick(p: Pick, d: DialogState): void {
         // Flat faces mate; round ones line up by their axes.
         if (g.op !== "align" || p.kind !== "face") break;
         const fs = faceSelectorForPick(p, meshes);
-        if (fs) g[field] = p.normal ? { face: fs } : { axisOf: fs };
+        if (!fs) break;
+        g[field] = p.normal ? { face: fs } : { axisOf: fs };
+        // The moved part takes the parts joined to it along, unless the target is one of them
+        // (lining up parts of the same mechanism moves just the one).
+        if (field === "from") {
+          const group = joinedParts(p.bodyId, useApp.getState().doc.mechanism?.joints);
+          g.bodies = group.length > 1 ? group : undefined;
+        } else if (g.bodies?.includes(p.bodyId)) g.bodies = undefined;
         break;
       }
       case "curves": {
@@ -1092,6 +1099,7 @@ function Body({ d }: { d: DialogState }) {
           <Field label={t("Onto")}>
             <SelBox field="to" items={desc(f.to)} placeholder={t("Pick the face on the other part")} />
           </Field>
+          {f.bodies && f.bodies.length > 1 ? <p className="muted small">{t("Parts joined to them come along, so their joints stay together.")}</p> : null}
           <div className="row">
             <Field label={t("Gap")}>
               <ExprInput value={f.offset ?? 0} onCommit={(offset) => set({ offset: offset === 0 ? undefined : offset })} onLive={(offset) => set({ offset })} />

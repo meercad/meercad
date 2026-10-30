@@ -4,6 +4,7 @@
  */
 import { ArrowUpFromLine, Bolt, Cone, EyeOff, Link2Off, Grid3x3, Move3d, Pencil, Ruler, Rotate3d, Shell, Spline, SquareRoundCorner, SquareSplitHorizontal, Trash, Triangle } from "lucide-react";
 import { deleteModelSelection } from "../lib/deletion";
+import { joinedParts } from "../lib/mechanism";
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
@@ -176,7 +177,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const bodyId = [...bodyIds][0]!;
       const c = bodyCenter(out, bodyId);
       if (!c) return [];
-      return moveHandles(c, [0, 0, 0], (i, v) => updateDraft((g) => ({ ...g, translate: [0, 1, 2].map((j) => (j === i ? v : 0)) as [Expr, Expr, Expr] }) as Feature), (v) => finish(v), () => startDraft({ id: nextFeatureId(currentDoc(), "transform"), op: "transform", bodies: [bodyId], translate: [0, 0, 0] }));
+      return moveHandles(c, [0, 0, 0], (i, v) => updateDraft((g) => ({ ...g, translate: [0, 1, 2].map((j) => (j === i ? v : 0)) as [Expr, Expr, Expr] }) as Feature), (v) => finish(v), () => startDraft({ id: nextFeatureId(currentDoc(), "transform"), op: "transform", bodies: joinedParts(bodyId), translate: [0, 0, 0] }));
     }
     if (sel.length === 1 && sel[0]!.kind === "face") {
       const hole = holeHandle(out, sel[0]! as Extract<Pick, { kind: "face" }>);
