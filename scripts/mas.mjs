@@ -166,5 +166,5 @@ console.log(`✓ built ${pkgFile}`);
 if (!upload) process.exit(0);
 
 console.log("› uploading to App Store Connect");
-run("xcrun", ["altool", "--upload-package", pkgFile, "--type", "macos", "--asc-public-id", ASC_APP, "--bundle-id", APP_ID, "--bundle-version", build, "--bundle-short-version-string", VERSION, ...auth]);
+run("xcrun", ["altool", "--upload-package", pkgFile, "--type", "macos", "--apple-id", ASC_APP, "--bundle-id", APP_ID, "--bundle-version", build, "--bundle-short-version-string", VERSION, ...auth]);
 console.log(`✓ uploaded build ${build}; it appears in TestFlight (macOS) once Apple has processed it`);
