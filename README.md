@@ -28,7 +28,9 @@ push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so 
 - **Customers** get meerCAD from the App Store, which also delivers updates.
 
 Signing material stays out of the repo: certificates in the keychain, provisioning profiles in
-`~/.appstoreconnect/certs/`, the App Store Connect API key in `~/.appstoreconnect/`.
+`~/.appstoreconnect/certs/`, the App Store Connect API key and the app's Apple ID in
+`~/.appstoreconnect/`. Team and bundle id live in the Xcode project; `node scripts/apple-account.mjs
+--team <id> --bundle-id <id>` moves both apps to another developer team in one step.
 
 ## Your files
 

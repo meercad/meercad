@@ -17,4 +17,4 @@ any right to use them, so people can tell the original apart from copies and mod
   meerkat icon for CAD software).
 - Using the name or logo in a product, service or company name, or suggesting endorsement.
 
-Questions or permission requests: open an issue at https://github.com/torbenberger/meercad.
+Questions or permission requests: open an issue at https://github.com/meercad/meercad.

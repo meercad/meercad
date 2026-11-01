@@ -7,10 +7,14 @@
  * Signing material never lives in the repo. On this Mac:
  *
  *   Keychain: "Apple Distribution" and "3rd Party Mac Developer Installer" (upload),
- *             "Apple Development" (--dev)
+ *             "Apple Development" (--dev), each of the team in the Xcode project
  *   ~/.appstoreconnect/certs/meerCAD_Mac_App_Store.provisionprofile
  *   ~/.appstoreconnect/certs/meerCAD_Mac_Development.provisionprofile   (--dev)
- *   ~/.appstoreconnect/meercad.json + private_keys/AuthKey_<KEYID>.p8   (upload, as for pnpm testflight)
+ *   ~/.appstoreconnect/meercad.json + private_keys/AuthKey_<KEYID>.p8   (upload, as for pnpm testflight;
+ *             "appId" is the app's Apple ID from App Store Connect)
+ *
+ * Team and bundle id come from the iOS Xcode project, so both apps always ship as the same app
+ * (scripts/apple-account.mjs switches them all at once).
  *
  *   pnpm mas              build the .pkg and upload it
  *   pnpm mas --no-upload  build the .pkg only
@@ -18,16 +22,14 @@
  *
  * Each build gets a fresh build number (UTC date and time); the version shown in the store stays VERSION.
  */
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { X509Certificate } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, copyFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const VERSION = "1.0";
-const APP_ID = "dev.meercad.app";
-const ASC_APP = "6828142453";
-const TEAM = "7H7Q8H83P8";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktop = join(root, "apps/desktop");
@@ -45,15 +47,38 @@ const fail = (msg) => {
 };
 const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout.trim();
 
+const xcode = readFileSync(join(root, "apps/ios/ios/App/App.xcodeproj/project.pbxproj"), "utf8");
+const TEAM = /DEVELOPMENT_TEAM = (\w+);/.exec(xcode)?.[1];
+const APP_ID = /PRODUCT_BUNDLE_IDENTIFIER = ([\w.-]+);/.exec(xcode)?.[1];
+if (!TEAM || !APP_ID) fail("no DEVELOPMENT_TEAM or PRODUCT_BUNDLE_IDENTIFIER in the Xcode project");
+
+/** The keychain certificate of this kind that belongs to the team (its OU), by common name. */
+function identity(kind) {
+  let pem = "";
+  try {
+    pem = execFileSync("security", ["find-certificate", "-a", "-c", kind, "-p"], { encoding: "utf8" });
+  } catch {
+    // none of this kind
+  }
+  for (const p of pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? []) {
+    const c = new X509Certificate(p);
+    const field = (k) => new RegExp(`^${k}=(.+)$`, "m").exec(c.subject)?.[1];
+    if (field("OU") === TEAM && new Date(c.validTo) > new Date()) return field("CN").replace(`${kind}: `, "");
+  }
+  fail(`no valid "${kind}" certificate of team ${TEAM} in the keychain`);
+}
+
 const profile = join(certs, dev ? "meerCAD_Mac_Development.provisionprofile" : "meerCAD_Mac_App_Store.provisionprofile");
 if (!existsSync(profile)) fail(`provisioning profile not found: ${profile}`);
 
 let auth = [];
+let ascApp = "";
 if (upload) {
   const c = JSON.parse(readFileSync(join(homedir(), ".appstoreconnect", "meercad.json"), "utf8"));
-  if (!c.keyId || !c.issuerId) fail("~/.appstoreconnect/meercad.json needs keyId and issuerId");
+  if (!c.keyId || !c.issuerId || !c.appId) fail("~/.appstoreconnect/meercad.json needs keyId, issuerId and appId");
   // altool finds the key file in ~/.appstoreconnect/private_keys by its id.
   auth = ["--apiKey", c.keyId, "--apiIssuer", c.issuerId];
+  ascApp = String(c.appId);
 }
 
 const d = new Date();
@@ -123,11 +148,10 @@ const config = {
       ElectronTeamID: TEAM,
       ITSAppUsesNonExemptEncryption: false,
       // Same iCloud Drive folder as the iPhone and iPad app.
-      NSUbiquitousContainers: { "iCloud.dev.meercad.app": { NSUbiquitousContainerIsDocumentScopePublic: true, NSUbiquitousContainerName: "meerCAD", NSUbiquitousContainerSupportedFolderLevels: "Any" } },
+      NSUbiquitousContainers: { [`iCloud.${APP_ID}`]: { NSUbiquitousContainerIsDocumentScopePublic: true, NSUbiquitousContainerName: "meerCAD", NSUbiquitousContainerSupportedFolderLevels: "Any" } },
     },
   },
-  mas: { ...signing, type: "distribution", identity: `Torben Berger (${TEAM})` },
-  masDev: { ...signing, type: "development", identity: "Torben Berger (7P6Z7PQYAH)" },
+  ...(dev ? { masDev: { ...signing, type: "development", identity: identity("Apple Development") } } : { mas: { ...signing, type: "distribution", identity: identity("Apple Distribution") } }),
   extraMetadata: { version: `${VERSION}.0`, buildSha: sha },
 };
 delete config.dmg;
@@ -166,5 +190,5 @@ console.log(`✓ built ${pkgFile}`);
 if (!upload) process.exit(0);
 
 console.log("› uploading to App Store Connect");
-run("xcrun", ["altool", "--upload-package", pkgFile, "--type", "macos", "--apple-id", ASC_APP, "--bundle-id", APP_ID, "--bundle-version", build, "--bundle-short-version-string", VERSION, ...auth]);
+run("xcrun", ["altool", "--upload-package", pkgFile, "--type", "macos", "--apple-id", ascApp, "--bundle-id", APP_ID, "--bundle-version", build, "--bundle-short-version-string", VERSION, ...auth]);
 console.log(`✓ uploaded build ${build}; it appears in TestFlight (macOS) once Apple has processed it`);
