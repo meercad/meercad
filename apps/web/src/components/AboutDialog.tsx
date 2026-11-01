@@ -62,7 +62,7 @@ export function AboutDialog() {
           <>
             <section>
               <p>{t("Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.")}</p>
-              <p className="muted">{t("© 2026 Torben Berger. All rights reserved.")}</p>
+              <p className="muted">{t("© 2026 Torben Berger UG (haftungsbeschränkt). All rights reserved.")}</p>
             </section>
             <section>
               <h3>

@@ -141,7 +141,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
         title: t("Licenses"),
         body: (
           <ul>
-            {li(t("meerCAD © 2026 Torben Berger, all rights reserved. The file-format, I/O and naming libraries are MIT licensed, so other tools can read and write .meercad files."))}
+            {li(t("meerCAD © 2026 Torben Berger UG (haftungsbeschränkt), all rights reserved. The file-format, I/O and naming libraries are MIT licensed, so other tools can read and write .meercad files."))}
             {li(t("Geometry by **Open CASCADE Technology** and sketch solving by **PlaneGCS** (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules."))}
             {li(t("Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages."))}
             {li(t("Your models belong to you: projects are plain files on your device; nothing is uploaded."))}

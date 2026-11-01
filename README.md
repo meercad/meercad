@@ -122,11 +122,11 @@ See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## License
 
-meerCAD is free to use, for hobby and commercial work alike, and its source is open to read,
-modify and contribute to. It is licensed under the [Functional Source License 1.1](LICENSE)
-(FSL-1.1-ALv2): you may do anything with it except build a competing product or service from it.
-Two years after each release, that release automatically becomes available under the Apache
-License 2.0 as well.
+meerCAD is made by Torben Berger UG (haftungsbeschränkt). Its source is public under the
+[Functional Source License 1.1](LICENSE) (FSL-1.1-ALv2): you may read it, change it and build the
+app yourself for any purpose except a competing product or service. Official builds come only from
+the App Store; anything else you build may not carry the meerCAD name or logo. Two years after each
+release, that release becomes available under the Apache License 2.0 as well.
 
 - The file-format, I/O and naming libraries (`packages/schema`, `packages/io`, `packages/naming`)
   are MIT, so other tools can read and write `.meercad` files freely.

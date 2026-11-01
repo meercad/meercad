@@ -1,8 +1,8 @@
 # meerCAD trademarks
 
-"meerCAD" and the meerkat logo (`docs/brand/`) identify the official meerCAD app made by Torben
-Berger. The code license (see [LICENSE](LICENSE)) does not grant any right to use them, so people
-can tell the original apart from copies and modified versions.
+"meerCAD" and the meerkat logo (`docs/brand/`) identify the official meerCAD app of Torben Berger
+UG (haftungsbeschränkt), which owns them. The code license (see [LICENSE](LICENSE)) does not grant
+any right to use them, so people can tell the original apart from copies and modified versions.
 
 **Fine without asking**
 - Saying that something works with, imports or exports meerCAD files, or that you built it with

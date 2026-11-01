@@ -81,7 +81,7 @@ writeFileSync(
       display_name: "meerCAD",
       version: `${VERSION}.0`,
       description: "Lets Claude design parts in the meerCAD app on this Mac: sketches, features, parameters, renders and exports.",
-      author: { name: "Torben Berger" },
+      author: { name: "Torben Berger UG (haftungsbeschränkt)" },
       icon: "icon.png",
       server: { type: "node", entry_point: "server/server.js", mcp_config: { command: "node", args: ["${__dirname}/server/server.js"] } },
       compatibility: { platforms: ["darwin"] },
