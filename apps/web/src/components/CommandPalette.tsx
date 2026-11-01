@@ -9,6 +9,7 @@ import { closeSketch, getViewport, goHome, newProject, redo, startFeature, undo,
 import { exportMesh, exportStep, importFile, saveFile } from "./io";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
+import { hasPack, usePremium } from "../lib/premium";
 import { checkInterference } from "../lib/interference";
 import { Kbd } from "./Kbd";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
@@ -72,6 +73,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
   const sketchId = useApp((s) => s.sketchId);
   const screen = useApp((s) => s.screen);
   const keys = usePrefs((s) => s.keys);
+  const packs = usePremium();
 
   useEffect(() => {
     const toggle = () => {
@@ -94,7 +96,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       for (const c of CONSTRAINT_TOOLS) list.push({ group: G.constraint, label: c.label, ...(c.key ? { kbd: c.key } : {}), run: () => applyConstraint(c.type) });
       list.push({ group: G.sketch, label: t("Toggle construction"), ...kbd("sketch.construction"), run: toggleConstruction }, { group: G.sketch, label: t("Finish sketch"), kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {
-      for (const op of TOOLBAR) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
+      for (const op of TOOLBAR) if (op !== "gear" || hasPack("mechanics")) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
       list.push({ group: G.modeling, label: t("Measure"), ...kbd("measure"), run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
     }
     if (screen === "editor") {
@@ -114,9 +116,9 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: G.file, label: t("Export STL"), run: () => void exportMesh("stl") },
         { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
         { group: G.file, label: t("Export STEP"), run: () => void exportStep() },
-        { group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing },
-        { group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions },
-        { group: G.modeling, label: t("Check whether parts overlap (interference)"), run: () => void checkInterference() },
+        ...(hasPack("drawings") ? [{ group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing }] : []),
+        ...(hasPack("versions") ? [{ group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions }] : []),
+        ...(hasPack("mechanics") ? [{ group: G.modeling, label: t("Check whether parts overlap (interference)"), run: () => void checkInterference() }] : []),
         { group: G.file, label: t("Save copy as .meercad"), kbd: "Shift+Mod+S", run: saveFile },
         { group: G.file, label: t("All projects"), run: goHome },
       );
@@ -131,7 +133,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       { group: G.help, label: t("Toggle dark mode"), run: toggleTheme },
     );
     return list;
-  }, [sketchId, screen, keys, onHelp, onShortcuts, onTour]);
+  }, [sketchId, screen, keys, onHelp, onShortcuts, onTour, packs]);
 
   const results = commands
     .map((c) => ({ c, s: Math.max(score(q, c.label), score(q, `${c.group} ${c.label}`) - 2) }))

@@ -374,11 +374,28 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
 function mcpEntry(): { command: string; args: string[]; env?: Record<string, string> } {
   return MAS ? { command: "node", args: [mcpServer] } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
 }
+/**
+ * Where an App Store build came from: TestFlight and development installs carry a sandbox receipt
+ * (its environment field reads "ProductionSandbox"), App Store downloads a production one. Null
+ * outside the App Store build or without a receipt; the web app treats anything but "production"
+ * as a test build and shows the premium packs.
+ */
+function storeEnvironment(): "production" | "sandbox" | null {
+  if (!MAS) return null;
+  try {
+    const receipt = readFileSync(join(process.resourcesPath, "..", "_MASReceipt", "receipt"));
+    return receipt.includes("ProductionSandbox") ? "sandbox" : "production";
+  } catch {
+    return null;
+  }
+}
+
 ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
   projectsDir: projectsDir(),
   mcpCommand: mcpEntry(),
   mas: MAS,
+  store: storeEnvironment(),
 }));
 
 // ---------------------------------------------------------------- windows

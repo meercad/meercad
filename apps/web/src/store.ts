@@ -5,7 +5,8 @@ import { DocumentStore, OpError } from "@meercad/model";
 import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick, setFeatureLabels } from "./lib/topology";
 import { usePrefs } from "./lib/keymap";
-import { FACE_TOOLS, MESH_HINT, meshBodyIds } from "./lib/meshParts";
+import { FACE_TOOLS, meshBodyIds, meshHint } from "./lib/meshParts";
+import { hasPack } from "./lib/premium";
 import { setUnitSource } from "./lib/units";
 import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
@@ -497,7 +498,7 @@ export function startFeature(op: FeatureOp): void {
   if (s.dialog) cancelDialog();
   if (FACE_TOOLS.has(op) && selectionOnMesh()) {
     if (op === "sketch") set({ selection: [] });
-    else return toast(MESH_HINT);
+    else return toast(meshHint(hasPack("scan")));
   }
   if (op === "sketch") return startSketch();
   const feature = draftFeature(op, docStore.doc);

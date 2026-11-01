@@ -63,5 +63,6 @@ class AppViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(PencilPlugin())
         bridge?.registerPluginInstance(ScanPlugin())
         bridge?.registerPluginInstance(ICloudPlugin())
+        bridge?.registerPluginInstance(StorePlugin())
     }
 }

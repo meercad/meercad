@@ -49,6 +49,7 @@ import { Kbd } from "./Kbd";
 import { showMenu } from "./Menu";
 import { canScan, scanObject } from "../lib/scan";
 import { t } from "../lib/i18n";
+import { usePack } from "../lib/premium";
 
 /** Whether this device can scan objects (iPhone/iPad with LiDAR). */
 function useCanScan(): boolean {
@@ -98,7 +99,9 @@ function useEntries(): RailEntry[] {
   const joints = useMotion((s) => s.open);
   const ui = useSketchUi();
   usePrefs((s) => s.keys); // badges follow the shortcut preset
-  const scan = useCanScan();
+  const mechanics = usePack("mechanics");
+  const scanPack = usePack("scan");
+  const scan = useCanScan() && scanPack;
 
   if (sketchId) {
     const cur = ui.tool;
@@ -140,7 +143,7 @@ function useEntries(): RailEntry[] {
   return [
     feature("sketch", activeOp),
     "sep",
-    { id: "create", icon: Box, label: t("Create"), tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("loft", activeOp), feature("sweep", activeOp), feature("rib", activeOp), feature("text", activeOp), feature("standard_part", activeOp), feature("gear", activeOp), feature("plane", activeOp)] },
+    { id: "create", icon: Box, label: t("Create"), tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("loft", activeOp), feature("sweep", activeOp), feature("rib", activeOp), feature("text", activeOp), feature("standard_part", activeOp), ...(mechanics ? [feature("gear", activeOp)] : []), feature("plane", activeOp)] },
     { id: "modify", icon: SquarePen, label: t("Modify"), tools: [feature("fillet", activeOp), feature("chamfer", activeOp), feature("shell", activeOp), feature("draft", activeOp), feature("offset_face", activeOp), feature("hole", activeOp), feature("thread", activeOp), feature("split", activeOp), feature("boolean", activeOp)] },
     {
       id: "transform",
@@ -149,15 +152,19 @@ function useEntries(): RailEntry[] {
       tools: [feature("transform", activeOp), feature("align", activeOp), feature("scale", activeOp), feature("linear_pattern", activeOp), feature("circular_pattern", activeOp), feature("mirror", activeOp)],
     },
     "sep",
-    {
-      id: "joints",
-      icon: Link2,
-      label: t("Joints"),
-      ...withKbd(keyFor("joints")),
-      hint: t("Joints: parts that turn or slide; drag them to try"),
-      active: joints,
-      run: toggleJoints,
-    },
+    ...(mechanics
+      ? [
+          {
+            id: "joints",
+            icon: Link2,
+            label: t("Joints"),
+            ...withKbd(keyFor("joints")),
+            hint: t("Joints: parts that turn or slide; drag them to try"),
+            active: joints,
+            run: toggleJoints,
+          },
+        ]
+      : []),
     {
       id: "measure",
       icon: Ruler,

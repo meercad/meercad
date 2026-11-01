@@ -25,7 +25,7 @@ interface DesktopApi {
   isDesktop: true;
   /** The Claude Desktop config file written, or null when Claude Desktop was handed the extension to install. */
   installClaudeDesktop(): Promise<string | null>;
-  info(): Promise<{ version: string; projectsDir: string; mcpCommand: { command: string; args: string[]; env?: Record<string, string> }; mas?: boolean }>;
+  info(): Promise<{ version: string; projectsDir: string; mcpCommand: { command: string; args: string[]; env?: Record<string, string> }; mas?: boolean; store?: "production" | "sandbox" | null }>;
   projects: {
     list(): Promise<ProjectMeta[]>;
     load(id: string): Promise<Project>;

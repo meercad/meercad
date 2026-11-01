@@ -9,6 +9,7 @@ import type { MenuEntry } from "./Menu";
 import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile, shareLink } from "./io";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
+import { hasPack } from "../lib/premium";
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
@@ -60,10 +61,10 @@ export function TopBar() {
       { label: t("Export STL (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("stl") },
       { label: t("Export 3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
       { label: t("Export STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
-      ...(variants
+      ...(variants && hasPack("versions")
         ? (["stl", "3mf", "step"] as const).map((f) => ({ label: t("Export all {n} variants as {format} (zip)", { n: variants, format: f.toUpperCase() }), icon: <FileDown />, onClick: () => void exportVariants(f) }))
         : []),
-      { label: t("Technical drawing (PDF, DXF)…"), icon: <FileDown />, onClick: openDrawing },
+      ...(hasPack("drawings") ? [{ label: t("Technical drawing (PDF, DXF)…"), icon: <FileDown />, onClick: openDrawing }] : []),
       ...sketches.flatMap((s) => [
         { label: t("Export {name} as DXF (laser)", { name: sketchName(s.id) }), icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
         { label: t("Export {name} as SVG", { name: sketchName(s.id) }), icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
@@ -72,7 +73,7 @@ export function TopBar() {
       { label: `${units === "mm" ? "✓ " : "   "}${t("Millimetres (this design)")}`, icon: <Ruler />, onClick: () => setDesignUnits("mm") },
       { label: `${units === "in" ? "✓ " : "   "}${t("Inches (this design)")}`, icon: <Ruler />, onClick: () => setDesignUnits("in") },
       "sep",
-      { label: t("Versions…"), icon: <History />, onClick: openVersions },
+      ...(hasPack("versions") ? [{ label: t("Versions…"), icon: <History />, onClick: openVersions }] : []),
       { label: t("Save copy as .meercad…"), icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
       ...(desktop ? [] : [{ label: t("Copy share link"), icon: <Share2 />, onClick: () => void shareLink() }]),
   ];

@@ -2,6 +2,7 @@ import { BookOpen, ChevronRight, Keyboard, PlayCircle, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Kbd, rich } from "./Kbd";
 import { t } from "../lib/i18n";
+import { hasPack } from "../lib/premium";
 
 interface Guide {
   title: string;
@@ -11,7 +12,8 @@ interface Guide {
 const li = (text: string) => <li>{rich(text)}</li>;
 const about = (detail?: string) => window.dispatchEvent(new CustomEvent("meercad:about", detail ? { detail } : {}));
 
-const GUIDES: { section: string; guides: Guide[] }[] = [
+/** Built when the panel opens, so it only describes the premium packs that are shown. */
+const guides = (): { section: string; guides: Guide[] }[] => [
   {
     section: t("Getting started"),
     guides: [
@@ -127,7 +129,7 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
             {li(t("Export: STL and 3MF for 3D printing, STEP for other CAD tools, DXF/SVG of a sketch for laser cutting."))}
             {li(t("Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already."))}
             {li(t("Materials: right-click a part in the parts list → Material. The list then shows each part's mass and, below, the total mass and centre of gravity (solid material, 100 % infill)."))}
-            {li(t("Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop."))}
+            {hasPack("drawings") ? li(t("Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.")) : null}
             {li(t("Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces."))}
           </ul>
         ),
@@ -181,7 +183,8 @@ const GUIDES: { section: string; guides: Guide[] }[] = [
 ];
 
 export function HelpPanel({ onClose, onTour, onShortcuts }: { onClose: () => void; onTour: () => void; onShortcuts: () => void }) {
-  const [open, setOpen] = useState<string | null>(GUIDES[0]!.guides[0]!.title);
+  const [all] = useState(guides);
+  const [open, setOpen] = useState<string | null>(all[0]!.guides[0]!.title);
   return (
     <aside className="panel-right help-panel">
       <div className="head">
@@ -200,7 +203,7 @@ export function HelpPanel({ onClose, onTour, onShortcuts }: { onClose: () => voi
             <Keyboard /> {t("Shortcuts")} <Kbd k="?" />
           </button>
         </div>
-        {GUIDES.map((s) => (
+        {all.map((s) => (
           <section key={s.section}>
             <h4 className="help-section">{s.section}</h4>
             {s.guides.map((g) => (

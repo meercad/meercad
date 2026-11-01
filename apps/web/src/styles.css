@@ -1054,3 +1054,4 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .home-section-toggle svg { width: 20px; height: 20px; flex: none; transition: transform 0.15s; color: var(--text-2); }
 .home-section-toggle svg.open { transform: rotate(90deg); }
 .home-section-toggle + .sub { margin-top: 6px; }
+.settings .pack-contents { display: block; margin-top: 2px; font-size: 11.5px; }

@@ -3,6 +3,7 @@ import { FEATURES, TOOLBAR } from "../lib/features";
 import { keymapFor, MOUSE_SCHEMES, usePrefs, type Action, type Keymap } from "../lib/keymap";
 import { Kbd } from "./Kbd";
 import { t } from "../lib/i18n";
+import { hasPack } from "../lib/premium";
 
 /** "L / R / Shift+R" for several actions; unbound ones show as "–". */
 const keys = (map: Keymap, ...actions: Action[]) => actions.map((a) => map[a][0] ?? "–").join(" / ");
@@ -12,9 +13,9 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
   {
     title: t("Modeling"),
     rows: [
-      ...TOOLBAR.filter((op) => map[op as Action][0]).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
+      ...TOOLBAR.filter((op) => map[op as Action][0] && (op !== "gear" || hasPack("mechanics"))).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
       [t("Measure"), keys(map, "measure")],
-      [t("Joints"), keys(map, "joints")],
+      ...(hasPack("mechanics") ? [[t("Joints"), keys(map, "joints")] as [string, string]] : []),
       [t("Command search"), keys(map, "palette")],
       [t("Import file"), "Mod+O"],
     ],

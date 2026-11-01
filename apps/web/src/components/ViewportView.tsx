@@ -2,6 +2,7 @@ import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { partColors } from "../lib/partColors";
 import { motion } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
+import { hasPack } from "../lib/premium";
 import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,7 +26,7 @@ import { ViewCube } from "./ViewCube";
 import { SnapControls } from "./SnapControls";
 import { dragStep, gridLevels } from "../lib/grid";
 import { convertMmText, docUnit } from "../lib/units";
-import { MESH_HINT, meshBodyIds } from "../lib/meshParts";
+import { meshBodyIds, meshHint } from "../lib/meshParts";
 import { t, tn } from "../lib/i18n";
 
 /** Dialog fields that take whole parts, so a click on a mesh part may fill them. */
@@ -446,7 +447,7 @@ export function ViewportView() {
     // A mesh part is picked as a whole: its faces are thousands of triangles.
     const onMesh = pick && (pick.kind === "face" || pick.kind === "edge") && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId);
     if (s.dialog) {
-      if (onMesh && s.dialog.field && !PART_FIELDS.has(s.dialog.field)) return toast(MESH_HINT);
+      if (onMesh && s.dialog.field && !PART_FIELDS.has(s.dialog.field)) return toast(meshHint(hasPack("scan")));
       if (pick && s.dialog.field) dialogPick?.(pick, additive);
       // Clicking empty space accepts the tool unless a selection field is waiting.
       else if (!pick && !s.dialog.field) commitDialog();
@@ -491,9 +492,13 @@ export function ViewportView() {
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
-        "sep",
-        { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
-        { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
+        ...(hasPack("scan")
+          ? [
+              "sep" as const,
+              { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
+              { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
+            ]
+          : []),
         "sep",
         ...common,
         "sep",
@@ -513,7 +518,7 @@ export function ViewportView() {
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
-        ...deviationItems(pick.bodyId),
+        ...(hasPack("scan") ? deviationItems(pick.bodyId) : []),
         ...common,
         "sep",
         { label: useApp.getState().selection.length > 1 ? t("Delete selection") : t("Delete face"), icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
