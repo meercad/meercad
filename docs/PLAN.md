@@ -336,7 +336,7 @@ Assemblies & Joints → Laser-CAM → Sheet Metal → optionaler Sync → Zeichn
 
 ### Lizenz
 
-- **App:** FSL-1.1-ALv2 (seit 27.10.2026; vorher AGPL-3.0): frei nutzbar, auch kommerziell, aber keine Konkurrenzprodukte; jede Version wird nach 2 Jahren Apache-2.0
+- **App:** FSL-1.1-ALv2: frei nutzbar, auch kommerziell, aber keine Konkurrenzprodukte; jede Version wird nach 2 Jahren Apache-2.0
 - **Wiederverwendbare Libraries** (`schema`, `io`, `naming`): MIT — für maximale Nutzung durch andere
 - Abhängigkeiten prüfen: OCCT (LGPL) ✓, PlaneGCS (LGPL) ✓, Three.js (MIT) ✓. GPL-Bibliotheken (z. B. libslvs) nur bewusst.
 - Contributor-Regel: Beiträge unter denselben Bedingungen (FSL); für einen späteren Lizenzwechsel bräuchte es eine Rechteeinräumung (CLA)

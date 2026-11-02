@@ -159,7 +159,6 @@ release, that release becomes available under the Apache License 2.0 as well.
 - The file-format, I/O and naming libraries (`packages/schema`, `packages/io`, `packages/naming`)
   are MIT, so other tools can read and write `.meercad` files freely.
 - Issues are welcome; pull requests are not accepted at the moment (see [CONTRIBUTING.md](CONTRIBUTING.md)).
-- Versions published before 27 October 2026 (the leocad releases) remain under the GNU AGPL-3.0.
 - Third-party components keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - The name **meerCAD** and the meerkat logo are trademarks; see [TRADEMARKS.md](TRADEMARKS.md).
 
