@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MeshCollider, meshesCollide, signedDistance, trianglesCross } from "./collide.js";
+import { MeshCollider, meshesCollide, rayDistance, signedDistance, trianglesCross } from "./collide.js";
 import { rotationAbout, translation } from "./motion.js";
 
 /** An axis-aligned box as 12 triangles. */
@@ -129,3 +129,21 @@ describe("mesh collisions", () => {
     expect(meshesCollide(hole, pin(5.3, 32, 10), undefined, turned, 0.05)).toBe(true);
   });
 });
+
+describe("rayDistance", () => {
+  it("measures through a plate from one face to the other", () => {
+    const plate = box(0, 0, 0, 40, 30, 2.5);
+    // From the top face straight down: the plate's thickness.
+    expect(rayDistance(plate, [10, 10, 2.5], [0, 0, -1])).toBeCloseTo(2.5, 9);
+    // Sideways from the end face: its length.
+    expect(rayDistance(plate, [0, 15, 1], [1, 0, 0])).toBeCloseTo(40, 9);
+    // Out of the part: nothing.
+    expect(rayDistance(plate, [10, 10, 2.5], [0, 0, 1])).toBe(Infinity);
+  });
+
+  it("finds the nearest of many faces, in a tree", () => {
+    const ball = sphere(10, 24);
+    expect(rayDistance(ball, [-20, 0.3, 0.2], [1, 0, 0])).toBeCloseTo(10, 0);
+  });
+});
+

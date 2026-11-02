@@ -308,6 +308,59 @@ export function signedDistance(c: MeshCollider, p: V3): number {
   return Math.sqrt(best) * sign;
 }
 
+/**
+ * How far a ray from `o` along the unit direction `d` travels before it meets the mesh surface
+ * (Infinity when it leaves without). Hits closer than `skip` are ignored, so a ray can start on
+ * the surface it leaves.
+ */
+export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6): number {
+  const T = c.tri;
+  let best = Infinity;
+  const inv = [1 / d[0], 1 / d[1], 1 / d[2]];
+  const enter = (n: Node): number => {
+    let lo = -Infinity;
+    let hi = Infinity;
+    for (let a = 0; a < 3; a++) {
+      let t1 = (n.min[a]! - o[a]!) * inv[a]!;
+      let t2 = (n.max[a]! - o[a]!) * inv[a]!;
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      // A ray along a face of the box gives NaN: count it as inside on that axis.
+      if (!Number.isNaN(t1)) lo = Math.max(lo, t1);
+      if (!Number.isNaN(t2)) hi = Math.min(hi, t2);
+    }
+    return hi >= Math.max(lo, 0) ? Math.max(lo, 0) : Infinity;
+  };
+  const stack: Node[] = [c.root];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (enter(n) >= best) continue;
+    if (n.left) {
+      // Nearer child last, so it is searched first and the farther one is often skipped.
+      if (enter(n.left) < enter(n.right!)) stack.push(n.right!, n.left);
+      else stack.push(n.left, n.right!);
+      continue;
+    }
+    for (let i = n.start; i < n.start + n.count; i++) {
+      // Möller–Trumbore.
+      const q = i * 9;
+      const e1x = T[q + 3]! - T[q]!, e1y = T[q + 4]! - T[q + 1]!, e1z = T[q + 5]! - T[q + 2]!;
+      const e2x = T[q + 6]! - T[q]!, e2y = T[q + 7]! - T[q + 1]!, e2z = T[q + 8]! - T[q + 2]!;
+      const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x;
+      const det = e1x * px + e1y * py + e1z * pz;
+      if (Math.abs(det) < 1e-14) continue;
+      const tx = o[0] - T[q]!, ty = o[1] - T[q + 1]!, tz = o[2] - T[q + 2]!;
+      const u = (tx * px + ty * py + tz * pz) / det;
+      if (u < 0 || u > 1) continue;
+      const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+      const v = (d[0] * qx + d[1] * qy + d[2] * qz) / det;
+      if (v < 0 || u + v > 1) continue;
+      const t = (e2x * qx + e2y * qy + e2z * qz) / det;
+      if (t > skip && t < best) best = t;
+    }
+  }
+  return best;
+}
+
 const near = new Float64Array(3);
 const set = (x: number, y: number, z: number) => {
   near[0] = x;

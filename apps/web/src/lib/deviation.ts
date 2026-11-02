@@ -99,9 +99,10 @@ async function update(): Promise<void> {
 /**
  * The part's triangles as a list of corners (no index), long ones split until every edge is
  * shorter than a step that suits the part's size, so values are sampled across large flat faces
- * too (the part's own mesh has corners only at their outlines). At most 200 000 triangles.
+ * too (the part's own mesh has corners only at their outlines). At most `budget` triangles, unless
+ * the mesh itself has more.
  */
-function refine(m: BodyMesh): Float32Array {
+export function refine(m: BodyMesh, budget = 200_000): Float32Array {
   const P = m.positions;
   const I = m.indices;
   let area = 0;
@@ -121,9 +122,9 @@ function refine(m: BodyMesh): Float32Array {
   const diag = Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!);
   // Equilateral triangles of side L cover about 0.43·L² each.
   // Long thin triangles split into many pieces whatever their area: coarser until within budget.
-  for (let step = Math.max(diag / 150, Math.sqrt(area / (0.43 * 150_000)), 1e-3); ; step *= 1.5) {
+  for (let step = Math.max(diag / 150, Math.sqrt(area / (0.43 * budget * 0.75)), 1e-3); ; step *= 1.5) {
     const out = split(P, I, step);
-    if (out.length <= 9 * 200_000 || step > diag) return Float32Array.from(out);
+    if (out.length <= 9 * budget || step > diag) return Float32Array.from(out);
   }
 }
 
@@ -157,7 +158,7 @@ function split(P: Float32Array, I: Uint32Array, step: number): number[] {
 }
 
 /** Rounds up to 1, 2 or 5 times a power of ten. */
-function niceStep(v: number): number {
+export function niceStep(v: number): number {
   const p = 10 ** Math.floor(Math.log10(v));
   return [1, 2, 5, 10].map((k) => k * p).find((s) => s >= v - 1e-12)!;
 }

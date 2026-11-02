@@ -356,4 +356,14 @@ export default {
   "Fit tolerance": "Toleranz",
   "On a scan or other mesh, a click fits the plane, cylinder, cone or sphere there; a second click measures between the two.": "Auf einem Scan oder anderen Netz passt ein Klick dort eine Ebene, einen Zylinder, Kegel oder eine Kugel ein; ein zweiter Klick misst zwischen beiden.",
   "No plane, cylinder, cone or sphere fits there within {tol} mm. Raise the tolerance for rough scans.": "Dort passt keine Ebene, kein Zylinder, Kegel oder keine Kugel innerhalb von {tol} mm. Erhöhe die Toleranz bei groben Scans.",
+  // Wall thickness
+  "Wall thickness": "Wandstärke",
+  "Hide wall thickness": "Wandstärke ausblenden",
+  "Wall thickness of {part}": "Wandstärke von {part}",
+  "The part is not in the model any more.": "Das Teil ist nicht mehr im Modell.",
+  "Thinnest wall allowed": "Dünnste erlaubte Wand",
+  "Thinnest: {min} · {share} % of the surface below {wall}": "Dünnste Stelle: {min} · {share} % der Oberfläche unter {wall}",
+  "No wall could be measured: the mesh is open.": "Keine Wand messbar: Das Netz ist offen.",
+  "Measuring the wall thickness": "Wandstärke wird gemessen",
+  "Red: thinner than allowed · green: three times as thick or more · grey: not measured (open mesh).": "Rot: dünner als erlaubt · Grün: dreimal so dick oder mehr · Grau: nicht gemessen (offenes Netz).",
 } as Record<string, string>;

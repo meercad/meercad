@@ -3,6 +3,7 @@ import { partColors } from "../lib/partColors";
 import { motion } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
 import { hasPack } from "../lib/premium";
+import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
 import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
@@ -65,7 +66,8 @@ export function ViewportView() {
   const doc = useApp((s) => s.doc);
   // Deviation from a mesh as a colour map on the part.
   const heat = useDeviation((s) => s.maps);
-  useEffect(() => vp?.setBodyHeat(heat), [vp, heat]);
+  const wall = useThickness((s) => s.maps);
+  useEffect(() => vp?.setBodyHeat(wall.size ? wall : heat), [vp, heat, wall]);
   // Shapes fitted on a scan in the Measure tool, laid over the triangles they cover.
   const scanShapes = useScanMeasure((s) => s.shapes);
   useEffect(() => {
@@ -531,6 +533,7 @@ export function ViewportView() {
               "sep" as const,
               { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
               { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
+              thicknessItem(pick.bodyId),
             ]
           : []),
         "sep",
@@ -552,7 +555,7 @@ export function ViewportView() {
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
-        ...(hasPack("scan") ? deviationItems(pick.bodyId) : []),
+        ...(hasPack("scan") ? [...deviationItems(pick.bodyId), thicknessItem(pick.bodyId)] : []),
         ...common,
         "sep",
         { label: useApp.getState().selection.length > 1 ? t("Delete selection") : t("Delete face"), icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
@@ -610,6 +613,7 @@ export function ViewportView() {
       {measure.active ? <MeasureCard /> : null}
       <LoadingOverlay />
       <DeviationLegend />
+      <ThicknessLegend />
       <div className="status-pill" title={kernelState.error ?? ""}>
         {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
         {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}` : t("Ready"))}
@@ -822,7 +826,69 @@ function deviationItems(body: string): { label: string; icon: React.ReactNode; o
   const s = useApp.getState();
   if (useDeviation.getState().body === body) return [{ label: t("Hide deviation"), icon: <ScanSearch />, onClick: hideDeviation }];
   const meshes = [...meshBodyIds(s.doc.features, s.output?.meshes ?? [])].filter((id) => id !== body);
-  return meshes.map((mesh) => ({ label: t("Deviation from {mesh}", { mesh: partName(mesh, s.doc.features) }), icon: <ScanSearch />, onClick: () => showDeviation(body, mesh) }));
+  return meshes.map((mesh) => ({ label: t("Deviation from {mesh}", { mesh: partName(mesh, s.doc.features) }), icon: <ScanSearch />, onClick: () => (hideThickness(), showDeviation(body, mesh)) }));
+}
+
+function thicknessItem(body: string): { label: string; icon: React.ReactNode; onClick: () => void } {
+  if (useThickness.getState().body === body) return { label: t("Hide wall thickness"), icon: <Layers />, onClick: hideThickness };
+  return { label: t("Wall thickness"), icon: <Layers />, onClick: () => (hideDeviation(), showThickness(body)) };
+}
+
+/** Scale, thinnest spot and the minimum wall of the thickness map. */
+function ThicknessLegend() {
+  const { body, stats, error, minWall } = useThickness();
+  const features = useApp((s) => s.doc.features);
+  if (!body) return null;
+  return (
+    <div className="deviation-card" role="status">
+      <div className="row">
+        <Layers className="ficon" />
+        <b>{t("Wall thickness of {part}", { part: partName(body, features) })}</b>
+        <span className="spacer" />
+        <button className="icon-btn sm" title={t("Close")} onClick={hideThickness}>
+          <X />
+        </button>
+      </div>
+      {error ? (
+        <p className="muted small">{t("The part is not in the model any more.")}</p>
+      ) : (
+        <>
+          <div className="deviation-scale" style={{ background: THICKNESS_GRADIENT }} />
+          <div className="deviation-ticks">
+            <span>{convertMmText(`${minWall} mm`)}</span>
+            <span>{convertMmText(`${minWall * 2} mm`)}</span>
+            <span>{convertMmText(`${minWall * 3} mm`)}</span>
+          </div>
+          <label className="row small" style={{ gap: 6 }}>
+            <span className="muted">{t("Thinnest wall allowed")}</span>
+            <input
+              className="field"
+              type="number"
+              step="0.1"
+              min="0.1"
+              style={{ width: 64 }}
+              defaultValue={minWall}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0) setMinWall(v);
+              }}
+            />
+            <span className="muted">mm</span>
+          </label>
+          {stats ? (
+            <p className="small">
+              {Number.isFinite(stats.min)
+                ? t("Thinnest: {min} · {share} % of the surface below {wall}", { min: convertMmText(`${stats.min.toFixed(2)} mm`), share: Math.round(stats.thin * 100), wall: convertMmText(`${stats.minWall} mm`) })
+                : t("No wall could be measured: the mesh is open.")}
+            </p>
+          ) : (
+            <p className="muted small">{t("Measuring the wall thickness")}</p>
+          )}
+          <p className="muted small">{t("Red: thinner than allowed · green: three times as thick or more · grey: not measured (open mesh).")}</p>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Scale and numbers of the deviation map. */
