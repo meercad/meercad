@@ -4,11 +4,12 @@
  * sketch of lines, arcs and circles (taken from the recognised planes and cylinders, so a hole is a
  * circle with a diameter parameter) that is extruded by the layer's height. Deterministic: the
  * same mesh always gives the same features, with parameters for the sizes worth measuring on the
- * real object.
+ * real object. A part lying at an angle is turned upright first, rebuilt, and turned back by
+ * transform steps.
  */
 import type { Expr, Feature, PlaneRef, PlaneSpec, SketchConstraint, SketchEntity } from "@meercad/schema";
 import { ORIGIN_FRAMES, toSketch, type PlaneFrame } from "@meercad/sketch";
-import type { MeshFit, Vec3 } from "./meshfit.js";
+import { fitMesh, type MeshFit, type Vec3 } from "./meshfit.js";
 
 export interface Measurement {
   param: string;
@@ -26,6 +27,8 @@ export interface Reconstruction {
   warnings: string[];
   /** Sketch plane the layers are stacked on. */
   plane: PlaneRef;
+  /** Id of the rebuilt part. */
+  body: string;
 }
 
 export interface ReconstructOptions {
@@ -42,16 +45,21 @@ const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const len = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
+const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
+const norm = (a: Vec3): Vec3 => scale(a, 1 / len(a));
 const COS_2DEG = Math.cos((2 * Math.PI) / 180);
 
 /** Rebuilds the fitted mesh; throws an Error with a readable message when the part has no flat faces to stack on. */
-export function reconstruct(fit: MeshFit, opts: ReconstructOptions = {}): Reconstruction {
+export function reconstruct(fit: MeshFit, opts: ReconstructOptions = {}, upright = false): Reconstruction {
   const prefix = opts.prefix ?? "rb";
   const warnings: string[] = [];
   const dir = mainDirection(fit);
   if (!dir) throw new Error("no flat face to build on: the part needs at least one plane");
   const axis = nearestAxis(dir);
-  if (!axis) throw new Error("the part's main direction is not along X, Y or Z: rotate it first");
+  if (!axis) {
+    if (upright) throw new Error("the part could not be stood upright along its main direction");
+    return reconstructTilted(fit, dir, opts);
+  }
   const { plane, frame } = axis;
   const n = frame.normal;
   const tol = fit.tolerance;
@@ -125,7 +133,63 @@ export function reconstruct(fit: MeshFit, opts: ReconstructOptions = {}): Recons
   if (layerBodies.length > 1) features.push({ id: `${prefix}_union`, op: "boolean", name: "Join layers", operation: "union", target: layerBodies[0]!, tools: layerBodies.slice(1) });
   // Overall sizes first: they are what one measures with a ruler.
   measurements.sort((a, b) => rank(a) - rank(b));
-  return { features, params, measurements, warnings, plane };
+  return { features, params, measurements, warnings, plane, body: layerBodies[0]! };
+}
+
+/**
+ * A part whose main direction is not along X, Y or Z: turned about the origin so that it points
+ * along Z and its largest side wall faces X (so outlines come out as widths and depths), rebuilt
+ * there, and turned back by up to three rotations about X, Y and Z.
+ */
+function reconstructTilted(fit: MeshFit, dir: Vec3, opts: ReconstructOptions): Reconstruction {
+  // Standing on its largest flat face, as on a print bed: that face looks down.
+  let base: Vec3 = dir;
+  let baseArea = 0;
+  for (const r of fit.regions) {
+    const s = r.primitive;
+    if (s?.kind !== "plane" || Math.abs(dot(s.normal, dir)) < COS_2DEG || r.area <= baseArea) continue;
+    base = s.normal;
+    baseArea = r.area;
+  }
+  const e3 = norm(scale(base, -1));
+  let side: Vec3 | null = null;
+  let sideArea = 0;
+  for (const r of fit.regions) {
+    const s = r.primitive;
+    if (s?.kind !== "plane" || Math.abs(dot(s.normal, e3)) > Math.sin((2 * Math.PI) / 180) || r.area <= sideArea) continue;
+    side = s.normal;
+    sideArea = r.area;
+  }
+  // Without a flat side wall (a round part), any direction square to the main one.
+  const seed: Vec3 = side ?? (Math.abs(e3[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
+  const e1 = norm(sub(seed, scale(e3, dot(seed, e3))));
+  const e2 = cross(e3, e1);
+  // Upright coordinates are (e1·p, e2·p, e3·p); back is p = e1·x + e2·y + e3·z.
+  const corners: number[] = [];
+  for (let t = 0; t < fit.triangles.length; t++) {
+    const i = fit.triangles[t]!;
+    const q: Vec3 = [fit.positions[i * 3]!, fit.positions[i * 3 + 1]!, fit.positions[i * 3 + 2]!];
+    corners.push(dot(e1, q), dot(e2, q), dot(e3, q));
+  }
+  const rb = reconstruct(fitMesh(corners, { tolerance: fit.tolerance }), opts, true);
+  const prefix = opts.prefix ?? "rb";
+  // Columns e1, e2, e3 as Rz(γ)·Ry(β)·Rx(α): turned about X first, then Y, then Z.
+  const m = [
+    [e1[0], e2[0], e3[0]],
+    [e1[1], e2[1], e3[1]],
+    [e1[2], e2[2], e3[2]],
+  ] as const;
+  const deg = (r: number) => (r * 180) / Math.PI;
+  const beta = Math.asin(Math.max(-1, Math.min(1, -m[2][0])));
+  const locked = Math.abs(Math.cos(beta)) < 1e-9;
+  const alpha = locked ? 0 : Math.atan2(m[2][1], m[2][2]);
+  const gamma = locked ? Math.atan2(-m[0][1], m[1][1]) : Math.atan2(m[1][0], m[0][0]);
+  for (const [axis, angle] of [["X", alpha], ["Y", beta], ["Z", gamma]] as const) {
+    const a = Math.round(deg(angle) * 1e6) / 1e6;
+    if (Math.abs(a) < 1e-6) continue;
+    rb.features.push({ id: `${prefix}_rot${axis}`, op: "transform", name: `Turn back about ${axis}`, bodies: [rb.body], rotate: { axis: { ref: `origin.${axis}` }, angle: `${a} deg` } });
+  }
+  return rb;
 }
 
 /**

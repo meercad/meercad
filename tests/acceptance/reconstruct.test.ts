@@ -57,4 +57,30 @@ describe("reconstruct", () => {
     expect(r.bodies).toHaveLength(1);
     expect(r.bodies[0]!.volume).toBeCloseTo(volume, 0);
   });
+
+  it("rebuilds a part lying at an angle upright and turns it back into place", async () => {
+    const { corners, volume } = await meshOf(pin);
+    // Tilted by 30° about X and 20° about Y, so no face is square to X, Y or Z.
+    const [a, b] = [(30 * Math.PI) / 180, (20 * Math.PI) / 180];
+    const tilted = new Float32Array(corners.length);
+    for (let i = 0; i < corners.length; i += 3) {
+      const [x, y0, z0] = [corners[i]!, corners[i + 1]!, corners[i + 2]!];
+      const [y, z] = [y0 * Math.cos(a) - z0 * Math.sin(a), y0 * Math.sin(a) + z0 * Math.cos(a)];
+      tilted.set([x * Math.cos(b) + z * Math.sin(b), y, -x * Math.sin(b) + z * Math.cos(b)], i);
+    }
+    const fit = fitMesh(tilted);
+    const rb = reconstruct(fit);
+    expect(rb.params).toMatchObject({ h1: "5 mm", h2: "15 mm", width1: "20 mm", depth1: "20 mm", hole_d1: "10 mm" });
+    expect(rb.features.filter((f) => f.op === "transform").length).toBeGreaterThan(0);
+    const s = await newSession();
+    const r = s.rebuild({ format: "meercad/1", params: rb.params, features: rb.features, rollback: null }).report;
+    expect(r.features.map((f) => `${f.id}: ${f.status} ${f.message ?? ""}`).filter((x) => !/ ok $/.test(x))).toEqual([]);
+    expect(r.bodies.map((x) => x.id)).toEqual([rb.body]);
+    expect(r.bodies[0]!.volume).toBeCloseTo(volume, 0);
+    // Back where the mesh is.
+    for (const k of [0, 1, 2]) {
+      expect(r.bodies[0]!.bbox.min[k]).toBeCloseTo(fit.bbox.min[k]!, 1);
+      expect(r.bodies[0]!.bbox.max[k]).toBeCloseTo(fit.bbox.max[k]!, 1);
+    }
+  });
 });

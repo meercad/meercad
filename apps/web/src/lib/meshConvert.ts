@@ -1,7 +1,8 @@
 /**
  * Mesh parts made editable. "Convert to editable body" adds a mesh_convert step: flat, round,
  * conical and spherical areas of the triangles become real faces. "Rebuild with features" rebuilds
- * a layered part as dimensioned sketches and extrudes with parameters, next to the mesh (hidden).
+ * a layered part as dimensioned sketches and extrudes with parameters, next to the mesh (hidden);
+ * a part lying at an angle is built upright and turned back into place.
  */
 import { fitMesh, reconstruct } from "@meercad/kernel/fit";
 import { nextFeatureId, type FeatureStatus } from "@meercad/model";
@@ -58,9 +59,7 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
   ops.push({ type: "add_features", features: plan.features as Feature[] });
   if (!apply(...ops)) return;
   useApp.setState({ selection: [] });
-  // Layers are fused into the first one.
-  const body = `${prefix}_ex1`;
-  const result = await builtVolume(prefix, body);
+  const result = await builtVolume(prefix, plan.body);
   if (!result) return toast(t("Rebuilt {name} with {n} steps.", { name, n: plan.features.length }));
   if (result.error) return toast(t("Rebuilt {name}, but {error}", { name, error: result.error }), "error");
   // The mesh stays as the reference to compare against, hidden.
