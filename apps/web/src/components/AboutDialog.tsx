@@ -12,6 +12,8 @@ import { t } from "../lib/i18n";
 
 type Tab = "about" | "privacy" | "licenses";
 
+const SOURCE = "https://github.com/meercad/meercad";
+
 export function AboutDialog() {
   const [tab, setTab] = useState<Tab | null>(null);
   const [version, setVersion] = useState<string | null>(null);
@@ -62,7 +64,12 @@ export function AboutDialog() {
           <>
             <section>
               <p>{t("Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.")}</p>
-              <p className="muted">{t("© 2026 Torben Berger UG (haftungsbeschränkt). All rights reserved.")}</p>
+              <p className="muted">
+                {t("© 2026 Torben Berger UG (haftungsbeschränkt). The source code is public under the FSL-1.1-ALv2:")}{" "}
+                <a href={SOURCE} target="_blank" rel="noreferrer">
+                  {SOURCE.replace("https://", "")}
+                </a>
+              </p>
             </section>
             <section>
               <h3>
@@ -97,7 +104,7 @@ export function AboutDialog() {
               <summary>{t("Open CASCADE and PlaneGCS: GNU Lesser General Public License 2.1")}</summary>
               <p className="muted">
                 {t(
-                  "Both libraries are used unmodified; their source is linked above. On iPhone and iPad the WebAssembly modules are part of the signed app and cannot be swapped there.",
+                  "Both libraries are used unmodified; their source is linked above. The App Store apps are signed, so the WebAssembly modules cannot be swapped inside them. To use a modified version, build meerCAD yourself from its public source.",
                 )}
               </p>
               <pre className="licence-text">{lgpl}</pre>

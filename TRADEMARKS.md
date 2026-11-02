@@ -9,6 +9,8 @@ any right to use them, so people can tell the original apart from copies and mod
   meerCAD.
 - Writing about meerCAD, reviewing it, teaching it, linking to it.
 - Using the name and logo unchanged to refer to the official app.
+- Building meerCAD from this repository for your own use, unchanged or modified, as long as you do
+  not pass that build on.
 
 **Needs permission**
 - Distributing a modified version, or a build of your own, under the name meerCAD or with the logo.

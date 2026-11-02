@@ -6,11 +6,12 @@
 
 <p align="center">
   <b>Parametric CAD for makers</b><br>
-  Runs locally on your Mac — no account, no cloud.
+  Runs locally on your Mac, iPhone and iPad — no account, no cloud.
 </p>
 
 <p align="center">
-  <a href="#install-macos">Install</a> ·
+  <a href="#get-meercad">Get it</a> ·
+  <a href="#build-it-yourself">Build it yourself</a> ·
   <a href="docs/FORMAT.md">File format</a> ·
   <a href="#let-claude-drive-it-mcp">MCP</a>
 </p>
@@ -18,19 +19,44 @@
 Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/ISO threads/patterns/mirror/booleans, direct
 push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model for you.
 
-## Install (macOS)
+## Get meerCAD
 
-- **Try a change on this Mac:** `pnpm wip` builds the working tree and installs it as *meerCAD WIP*
-  in Applications, next to any installed meerCAD.
-- **Testers:** `pnpm testflight` uploads iPhone and iPad builds, `pnpm mas` the sandboxed Mac build
-  (same App Store record, so one purchase covers every device). `pnpm mas --dev` builds a
-  development-signed copy to try the sandbox on this Mac.
-- **Customers** get meerCAD from the App Store, which also delivers updates.
+meerCAD for Mac, iPhone and iPad comes from the App Store, which also delivers updates. There are no
+other official builds or downloads.
+
+## Build it yourself
+
+The complete source of the apps is here, and you may build them for your own use (see
+[License](#license)). Builds of your own must not be passed on under the name meerCAD or with its logo
+([TRADEMARKS.md](TRADEMARKS.md)). You need Node.js 22 or newer and pnpm; for iPhone and iPad also Xcode.
+
+```bash
+pnpm install
+pnpm --filter meercad-desktop run dist     # Mac: .dmg in apps/desktop/release, signed ad hoc for this Mac
+```
+
+For iPhone and iPad, first point the Xcode project at your own Apple developer team and a bundle id
+of your own, then build and run from Xcode:
+
+```bash
+node scripts/apple-account.mjs --team <your team id> --bundle-id <your.bundle.id>
+pnpm ios                                   # builds the web app, syncs it into Xcode, opens Xcode
+```
+
+iCloud Drive sync needs a paid developer account with an iCloud container named `iCloud.<your bundle id>`;
+without one, remove the iCloud capability in Xcode and projects stay on the device.
+
+### Release builds (maintainers)
 
 Signing material stays out of the repo: certificates in the keychain, provisioning profiles in
 `~/.appstoreconnect/certs/`, the App Store Connect API key and the app's Apple ID in
-`~/.appstoreconnect/`. Team and bundle id live in the Xcode project; `node scripts/apple-account.mjs
---team <id> --bundle-id <id>` moves both apps to another developer team in one step.
+`~/.appstoreconnect/`. Team and bundle id live in the Xcode project.
+
+- `pnpm wip` builds the working tree and installs it as *meerCAD WIP* in Applications, next to any
+  installed meerCAD.
+- `pnpm testflight` uploads iPhone and iPad builds, `pnpm mas` the sandboxed Mac build (same App
+  Store record, so one purchase covers every device). `pnpm mas --dev` builds a development-signed
+  copy to try the sandbox on this Mac.
 
 ## Your files
 
@@ -56,7 +82,6 @@ watch it work live in the app — including previews of ideas before they are ap
 pnpm install
 pnpm dev                                   # web app at http://localhost:5173
 pnpm --filter meercad-desktop dev          # desktop shell against the dev server
-pnpm --filter meercad-desktop run dist     # build the .dmg locally
 pnpm test && pnpm typecheck
 ```
 
@@ -92,7 +117,7 @@ Safari only allows the clipboard on `https`.
 ### iPad app
 
 `apps/ios` wraps the web app with Capacitor. Needs Xcode; signing uses the Apple account signed in
-to Xcode (Settings › Accounts).
+to Xcode (Settings › Accounts) and the team set in the project (see [Build it yourself](#build-it-yourself)).
 
 ```bash
 pnpm ios                                   # builds the web app, syncs it into the Xcode project, opens Xcode
@@ -119,6 +144,7 @@ the app.
 | `packages/mcp` | MCP server bridging assistants to the app | FSL-1.1 |
 | `apps/web` | The app (React) | FSL-1.1 |
 | `apps/desktop` | Electron shell for macOS | FSL-1.1 |
+| `apps/ios` | Capacitor shell for iPhone and iPad | FSL-1.1 |
 
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
@@ -132,6 +158,7 @@ release, that release becomes available under the Apache License 2.0 as well.
 
 - The file-format, I/O and naming libraries (`packages/schema`, `packages/io`, `packages/naming`)
   are MIT, so other tools can read and write `.meercad` files freely.
+- Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor agreement.
 - Versions published before 27 October 2026 (the leocad releases) remain under the GNU AGPL-3.0.
 - Third-party components keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - The name **meerCAD** and the meerkat logo are trademarks; see [TRADEMARKS.md](TRADEMARKS.md).
