@@ -391,7 +391,7 @@ export function primitiveNormal(q: Vec3, s: Primitive): Vec3 {
 
 // ---------------------------------------------------------------- welding & graph helpers
 
-function weld(corners: ArrayLike<number>): { positions: Float64Array; triangles: Uint32Array } {
+export function weld(corners: ArrayLike<number>): { positions: Float64Array; triangles: Uint32Array } {
   const count = corners.length / 3;
   let lo = Infinity;
   let hi = -Infinity;
@@ -683,7 +683,7 @@ function solve3(a: number[], b: number[]): number[] | null {
 }
 
 /** Gaussian elimination with partial pivoting on a row-major n×n matrix; null when singular. */
-function solveN(a: number[], b: number[], n: number): number[] | null {
+export function solveN(a: number[], b: number[], n: number): number[] | null {
   const m = [...a];
   const r = [...b];
   let scaleMax = 0;
@@ -712,7 +712,7 @@ function solveN(a: number[], b: number[], n: number): number[] | null {
 }
 
 /** Eigen decomposition of a symmetric 3×3 matrix (Jacobi rotations). */
-function eigen3(m: number[]): { values: number[]; vectors: Vec3[] } {
+export function eigen3(m: number[]): { values: number[]; vectors: Vec3[] } {
   const a = [...m];
   const v = [1, 0, 0, 0, 1, 0, 0, 0, 1];
   for (let sweep = 0; sweep < 50; sweep++) {

@@ -3,6 +3,7 @@ import { partColors } from "../lib/partColors";
 import { motion } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
 import { hasPack } from "../lib/premium";
+import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
 import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +12,7 @@ import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
 import { withKey } from "./Kbd";
 import { isCompact, usePhoneSheets } from "../lib/layout";
 import type { FeatureOp } from "@meercad/schema";
-import { perFrame, samePick, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
+import { perFrame, samePick, THREE, Viewport, type DisplayMode, type Pick, type PickKind, type PlaneView, type SceneData, type SketchView } from "@meercad/viewport";
 import { FEATURES, featureName, partName, sketchesUsed } from "../lib/features";
 import { MultiTouch, Press } from "../lib/gestures";
 import { planeSpecForPick, PLANE_LABELS } from "../lib/topology";
@@ -65,6 +66,36 @@ export function ViewportView() {
   // Deviation from a mesh as a colour map on the part.
   const heat = useDeviation((s) => s.maps);
   useEffect(() => vp?.setBodyHeat(heat), [vp, heat]);
+  // Shapes fitted on a scan in the Measure tool, laid over the triangles they cover.
+  const scanShapes = useScanMeasure((s) => s.shapes);
+  useEffect(() => {
+    if (!vp || !scanShapes.length) return;
+    const group = new THREE.Group();
+    scanShapes.forEach(({ bodyId, shape }, i) => {
+      const m = scanOf(bodyId);
+      if (!m) return;
+      const pos = new Float32Array(shape.triangles.length * 9);
+      shape.triangles.forEach((tri, k) => {
+        for (let c = 0; c < 3; c++) pos.set(m.positions.subarray(m.triangles[tri * 3 + c]! * 3, m.triangles[tri * 3 + c]! * 3 + 3), k * 9 + c * 3);
+      });
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.MeshBasicMaterial({ color: i ? 0x2e7dff : 0xff7a1a, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      group.add(new THREE.Mesh(g, mat));
+    });
+    vp.overlay.add(group);
+    vp.invalidate();
+    return () => {
+      vp.overlay.remove(group);
+      group.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+      vp.invalidate();
+    };
+  }, [vp, scanShapes]);
   // Parts that run into each other while the joints panel is open show red.
   // So do parts that cannot move further this way (links in line, a joint at its limit).
   const hits = useMotion((s) => (s.open ? s.hits : NO_HITS));
@@ -432,6 +463,9 @@ export function ViewportView() {
       return;
     }
     if (s.measure.active) {
+      // On a scan or other mesh part: the shape the surface follows there.
+      if (pick && (pick.kind === "face" || pick.kind === "edge") && hasPack("scan") && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId)) return measureOnScan(pick.bodyId, pick.point);
+      clearScanMeasure();
       if (!pick || (pick.kind !== "face" && pick.kind !== "edge")) return useApp.setState({ measure: { active: true, picks: [], result: null } });
       const picks = s.measure.picks.length >= 2 || !additive && s.measure.picks.length >= 2 ? [pick] : [...s.measure.picks.filter((p) => !samePick(p, pick)), pick].slice(-2);
       useApp.setState({ measure: { active: true, picks, result: null } });
@@ -671,6 +705,7 @@ function hiddenOverride(_id: string): boolean {
 
 function MeasureCard() {
   const m = useApp((s) => s.measure);
+  const scan = useScanMeasure();
   return (
     <div className="measure-card">
       <div className="dialog-head">
@@ -695,6 +730,26 @@ function MeasureCard() {
         ) : (
           <span className="muted">{m.picks.length ? t("Measuring…") : t("Click a face or an edge. Shift-click to add a second one.")}</span>
         )}
+        {scan.shapes.length ? (
+          <label className="row" style={{ gap: 6, marginTop: 6 }}>
+            <span className="muted">{t("Fit tolerance")}</span>
+            <input
+              className="field"
+              type="number"
+              step="0.05"
+              min="0.01"
+              style={{ width: 72 }}
+              defaultValue={scan.tol}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0) setScanTolerance(v);
+              }}
+            />
+            <span className="muted">mm</span>
+          </label>
+        ) : hasPack("scan") && !m.result ? (
+          <p className="muted small">{t("On a scan or other mesh, a click fits the plane, cylinder, cone or sphere there; a second click measures between the two.")}</p>
+        ) : null}
       </div>
     </div>
   );
