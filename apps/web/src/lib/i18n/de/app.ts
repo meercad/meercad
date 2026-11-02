@@ -84,7 +84,7 @@ export default {
   "Mechanics": "Mechanik",
   "Joints and moving parts, gears, interference check": "Gelenke und bewegliche Teile, Zahnräder, Überschneidungsprüfung",
   "Scan and mesh": "Scan und Netze",
-  "3D scan with the camera or LiDAR, meshes to editable bodies, deviation from a mesh": "3D-Scan mit Kamera oder LiDAR, Netze in bearbeitbare Teile umwandeln, Abweichung zum Netz",
+  "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up": "3D-Scan mit Kamera oder LiDAR, Netze in bearbeitbare Teile umwandeln, Netzschnitte nachzeichnen, auf Scans messen, Abweichungs- und Wandstärken-Karte, Netze aufräumen",
   "Technical drawings": "Technische Zeichnungen",
   "Drawings as PDF, SVG and DXF": "Zeichnungen als PDF, SVG und DXF",
   "Versions and variants": "Versionen und Varianten",

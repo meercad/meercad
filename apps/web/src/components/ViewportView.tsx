@@ -3,9 +3,10 @@ import { partColors } from "../lib/partColors";
 import { motion } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
 import { hasPack } from "../lib/premium";
+import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair } from "../lib/meshRepair";
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { Box, CircleDot, Copy, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
+import { Box, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -534,6 +535,7 @@ export function ViewportView() {
               { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
               { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
               thicknessItem(pick.bodyId),
+              ...(importOf(pick.bodyId) ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(pick.bodyId) }] : []),
             ]
           : []),
         "sep",
@@ -614,6 +616,7 @@ export function ViewportView() {
       <LoadingOverlay />
       <DeviationLegend />
       <ThicknessLegend />
+      <MeshRepairCard />
       <div className="status-pill" title={kernelState.error ?? ""}>
         {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
         {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}` : t("Ready"))}
@@ -832,6 +835,72 @@ function deviationItems(body: string): { label: string; icon: React.ReactNode; o
 function thicknessItem(body: string): { label: string; icon: React.ReactNode; onClick: () => void } {
   if (useThickness.getState().body === body) return { label: t("Hide wall thickness"), icon: <Layers />, onClick: hideThickness };
   return { label: t("Wall thickness"), icon: <Layers />, onClick: () => (hideDeviation(), showThickness(body)) };
+}
+
+/** Triangles in a binary STL import's file (from its header), 0 when unknown. */
+function fileTriangles(body: string): number {
+  const f = importOf(body);
+  if (!f) return 0;
+  const head = Uint8Array.from(atob(f.data.slice(0, 112)), (c) => c.charCodeAt(0));
+  return head.length >= 84 ? new DataView(head.buffer).getUint32(80, true) : 0;
+}
+
+/** Options for cleaning up a mesh part, and its triangle count now. */
+function MeshRepairCard() {
+  const r = useMeshRepair();
+  const features = useApp((s) => s.doc.features);
+  const shown = useApp((s) => (r.body ? s.output?.meshes.find((m) => m.bodyId === r.body) : undefined));
+  // A mesh that failed to import (open) has no part: count the file's triangles instead.
+  const triangles = shown ? shown.indices.length / 3 : r.body ? fileTriangles(r.body) : 0;
+  if (!r.body) return null;
+  const check = (key: "removePieces" | "fillHoles" | "reduce", label: string) => (
+    <label className="row small" style={{ gap: 6 }}>
+      <input type="checkbox" checked={r[key]} onChange={(e) => useMeshRepair.setState({ [key]: e.target.checked })} />
+      <span>{label}</span>
+    </label>
+  );
+  return (
+    <div className="deviation-card" role="dialog">
+      <div className="row">
+        <Eraser className="ficon" />
+        <b>{t("Clean up {part}", { part: partName(r.body, features) })}</b>
+        <span className="spacer" />
+        <button className="icon-btn sm" title={t("Close")} onClick={closeMeshRepair}>
+          <X />
+        </button>
+      </div>
+      {triangles ? <p className="muted small">{tn(triangles, "one::{n} triangle", "{n} triangles")}</p> : null}
+      {check("removePieces", t("Remove loose pieces (scan debris)"))}
+      {check("fillHoles", t("Close holes"))}
+      {check("reduce", t("Fewer triangles"))}
+      {r.reduce ? (
+        <label className="row small" style={{ gap: 6, paddingLeft: 22 }}>
+          <span className="muted">{t("Surface moves at most")}</span>
+          <input
+            className="field"
+            type="number"
+            step="0.01"
+            min="0.001"
+            style={{ width: 64 }}
+            defaultValue={r.tolerance}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isFinite(v) && v > 0) useMeshRepair.setState({ tolerance: v });
+            }}
+          />
+          <span className="muted">mm</span>
+        </label>
+      ) : null}
+      <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+        <button className="btn" onClick={closeMeshRepair}>
+          {t("Cancel")}
+        </button>
+        <button className="btn primary" disabled={!r.removePieces && !r.fillHoles && !r.reduce} onClick={() => void runMeshRepair()}>
+          {t("Clean up")}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** Scale, thinnest spot and the minimum wall of the thickness map. */

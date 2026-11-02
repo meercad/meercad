@@ -1,4 +1,4 @@
-import { Bot, ChevronRight, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { Bot, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -19,6 +19,7 @@ import { meshBodyIds, meshHint } from "../lib/meshParts";
 import { usePrefs } from "../lib/keymap";
 import { PART_PALETTE, partColors } from "../lib/partColors";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
+import { openMeshRepair } from "../lib/meshRepair";
 import { lang, t, tn } from "../lib/i18n";
 
 const NONE: never[] = [];
@@ -138,6 +139,8 @@ function FeatureList() {
             { label: t("Export SVG"), icon: <FileDown />, onClick: () => exportSketch(f.id, "svg") },
           ]
         : []),
+      // Also for a mesh that failed to import (a scan with holes): cleaning it up can close them.
+      ...(f.op === "import" && f.format === "stl" && hasPack("scan") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(f.id) }] : []),
       "sep",
       { label: t("Delete"), icon: <Trash />, danger: true, kbd: "⌫", onClick: () => void deleteFeature(f) },
     ]);
@@ -473,7 +476,7 @@ function Bodies() {
             "sep" as const,
             { label: hidden.has(id) ? t("Show") : t("Hide"), icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
             { label: doc.seeThrough?.includes(id) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(id) },
-            ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }] : []),
+            ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
             { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id, e.clientX, e.clientY) },
             ...(doc.partColors?.[id] ? [{ label: t("Automatic colour"), icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
