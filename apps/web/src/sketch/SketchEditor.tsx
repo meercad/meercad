@@ -23,6 +23,8 @@ import { GLYPH } from "./icons";
 import { Press } from "../lib/gestures";
 import { ValueInput } from "../components/ValueInput";
 import { getSolver } from "./solver";
+import { chainAt, meshSections, traceSections } from "./section";
+import { usePack } from "../lib/premium";
 import { sameSel, setSketchSelection, setTool, useSketchUi, type SketchSel, type SketchTool } from "./state";
 
 type Draft = Pick<SketchFeature, "entities" | "constraints">;
@@ -44,7 +46,7 @@ interface Snap {
   guides?: [Vec2, Vec2][];
 }
 
-const COLORS = { under: 0x2266dd, full: 0x16a34a, construction: 0x8aa4c8, external: 0xa35cff, sel: 0xff7a1a, hover: 0x2e7dff, preview: 0x1a5fd6, conflict: 0xd93f3f, snap: 0xf08c00, guide: 0x8a94a6 };
+const COLORS = { under: 0x2266dd, full: 0x16a34a, construction: 0x8aa4c8, external: 0xa35cff, sel: 0xff7a1a, hover: 0x2e7dff, preview: 0x1a5fd6, conflict: 0xd93f3f, snap: 0xf08c00, guide: 0x8a94a6, section: 0xe8590c };
 
 export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketchId: string }) {
   const doc = useApp((s) => s.doc);
@@ -59,6 +61,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const [hover, setHover] = useState<SketchSel | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [hoverChain, setHoverChain] = useState(-1);
+  const scanPack = usePack("scan");
   const layer = useRef<HTMLDivElement>(null);
   const toolState = useRef<{ points: Snap[]; cursor: Vec2 | null; snap: Snap | null; sweep: number; dimFirst: SketchSel | null }>({ points: [], cursor: null, snap: null, sweep: 0, dimFirst: null });
   usePrefs(); // re-render when snapping settings change
@@ -183,6 +187,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       m.renderOrder = 20;
       group.add(m);
     }
+    sections.forEach((c, i) => {
+      const hot = ui.tool === "section" && i === hoverChain;
+      const o = fatLine(c.points, { color: COLORS.section, width: hot ? 3 : 1.5, loop: c.closed, ...(hot ? {} : { dashed: { dash: 1.5, gap: 1 } }) });
+      o.renderOrder = 22;
+      group.add(o);
+    });
     for (const c of shown.curves) {
       const sel = isSel({ kind: "curve", id: c.id });
       const hov = hover?.kind === "curve" && hover.id === c.id;
@@ -267,6 +277,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const size = Math.max(1, ...output.report.bodies.map((b) => Math.hypot(...b.bbox.max.map((v, i) => v - b.bbox.min[i]!))));
     return planeEdges(output.meshes, frame, size * 1e-5 + 1e-4);
   }, [output, frame]);
+  // Where the plane cuts imported meshes: a guide to draw over, and what the section tool traces.
+  const sections = useMemo(() => (frame && output && scanPack ? meshSections(doc.features, output.meshes, frame) : []), [output, frame, scanPack, doc.features]);
 
   /**
    * Where the cursor lands: existing points, then (with smart snaps) midpoints, crossings, curves and
@@ -299,6 +311,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       let onEdge: { pos: Vec2; dist: number } | null = null;
       for (const e of modelEdges) {
         const h = nearestOnPolyline(e.pts, p);
+        if (h.dist < unit * 7 && (!onEdge || h.dist < onEdge.dist)) onEdge = h;
+      }
+      for (const c of sections) {
+        const h = nearestOnPolyline(c.closed ? [...c.points, c.points[0]!] : c.points, p);
         if (h.dist < unit * 7 && (!onEdge || h.dist < onEdge.dist)) onEdge = h;
       }
       if (onEdge) return { pos: onEdge.pos, kind: "edge" };
@@ -469,6 +485,15 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const lines = pts.map((p, i) => bl.entity({ type: "line", p1: p, p2: pts[(i + 1) % sides]!, ...cons }, "l"));
     for (let i = 1; i < lines.length; i++) bl.constraint({ type: "equal", a: lines[0]!, b: lines[i]! });
     commit(bl.d);
+  };
+
+  /** Lines, arcs and circles along mesh sections, as ordinary sketch geometry. */
+  const traceSection = (chains: typeof sections) => {
+    if (!sketch || !chains.length) return;
+    const { draft, curves } = traceSections(sketch, chains, ui.traceTol, construction);
+    if (!curves) return toast(t("Nothing to trace here"), "error");
+    commit(draft);
+    toast(tn(curves, "one::Traced {n} curve. Dimension it to set the size.", "Traced {n} curves. Dimension them to set the sizes."));
   };
 
   /** Removes the piece of a curve between the nearest intersections around the click. */
@@ -870,6 +895,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (tool === "select" || tool === "pattern" || tool === "dimension" || EDIT_TOOLS.has(tool)) setHover(targetAt(p));
       else setHover(null);
       if (tool === "project") return;
+      if (tool === "section") {
+        const i = chainAt(sections, p, px() * 10);
+        if (i !== hoverChain) setHoverChain(i);
+        return;
+      }
       const s: Snap = tool === "select" || tool === "pattern" || tool === "dimension" || EDIT_TOOLS.has(tool) ? { pos: p } : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
       ts.cursor = s.pos;
       // Tools that place points show where the next one will land.
@@ -1106,6 +1136,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           ts.points = [];
           setSketchSelection([]);
           return rerender();
+        }
+        case "section": {
+          const i = chainAt(sections, p, px() * 10);
+          if (i < 0) return toast(sections.length ? t("Click the orange section line of the mesh") : t("The sketch plane does not cut a mesh part. Sketch on a plane through the part."), "error");
+          return traceSection([sections[i]!]);
         }
         case "project": {
           const pick = viewport.pick(e.clientX, e.clientY, new Set(["edge"]));
@@ -1432,6 +1467,29 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
               </button>
             </div>
           ) : null}
+          {ui.tool === "section" ? (
+            <div className="col" style={{ gap: 6, marginTop: 6 }}>
+              <label className="row" style={{ gap: 6 }}>
+                <span className="muted">{t("Tolerance")}</span>
+                <input
+                  className="field"
+                  type="number"
+                  step="0.05"
+                  min="0.01"
+                  style={{ width: 80 }}
+                  value={ui.traceTol}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (Number.isFinite(v) && v > 0) useSketchUi.setState({ traceTol: v });
+                  }}
+                />
+                <span className="muted">mm</span>
+              </label>
+              <button className="btn primary" disabled={!sections.length} onClick={() => traceSection(sections)}>
+                {t("Trace all ({n})", { n: sections.length })}
+              </button>
+            </div>
+          ) : null}
           {EDIT_TOOLS.has(ui.tool) && ui.tool !== "trim" ? (
             <label className="row" style={{ gap: 6, marginTop: 6 }}>
               <span className="muted">{ui.tool === "fillet" ? t("Radius") : ui.tool === "chamfer" ? t("Distance") : t("Offset")}</span>
@@ -1549,6 +1607,8 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
       return dimFirst ? t("Click a second entity, or click empty space to place the dimension (an arc: near its centre for the angle)") : t("Click a line, circle, arc or point");
     case "project":
       return t("Click model edges to use them as fixed reference geometry");
+    case "section":
+      return t("Click the orange line where the plane cuts a mesh: it becomes lines, arcs and circles within the tolerance. Raise it for rough scans.");
     default:
       return t("Drag to move · Shift-click to multi-select · drag empty space to box-select · Del removes");
   }

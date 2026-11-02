@@ -41,6 +41,7 @@ const SKETCH_TOOLS: [Exclude<SketchTool, "select">, string][] = [
   ["pattern", t("Repeat curves (pattern)")],
   ["dimension", t("Dimension")],
   ["project", t("Project model edges")],
+  ["section", t("Trace mesh section")],
 ];
 const G = { sketch: t("Sketch"), constraint: t("Constraint"), modeling: t("Modeling"), edit: t("Edit"), view: t("View"), file: t("File"), help: t("Help") };
 const kbd = (a: Action) => {
@@ -92,7 +93,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
     const vp = () => getViewport();
     const list: Command[] = [];
     if (screen === "editor" && sketchId) {
-      for (const [tool, label] of SKETCH_TOOLS) list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
+      for (const [tool, label] of SKETCH_TOOLS) if (tool !== "section" || hasPack("scan")) list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
       for (const c of CONSTRAINT_TOOLS) list.push({ group: G.constraint, label: c.label, ...(c.key ? { kbd: c.key } : {}), run: () => applyConstraint(c.type) });
       list.push({ group: G.sketch, label: t("Toggle construction"), ...kbd("sketch.construction"), run: toggleConstruction }, { group: G.sketch, label: t("Finish sketch"), kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {

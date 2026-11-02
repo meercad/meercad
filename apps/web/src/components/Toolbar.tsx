@@ -132,6 +132,7 @@ function useEntries(): RailEntry[] {
           sketchTool("offset", CopyPlus, t("Offset curves"), cur),
           sketchTool("pattern", Grid3x3, t("Repeat curves"), cur),
           sketchTool("project", Waypoints, t("Project model edges"), cur),
+          ...(scanPack ? [sketchTool("section", ScanLine, t("Trace mesh section"), cur)] : []),
           { id: "construction", icon: Crosshair, label: t("Construction geometry"), ...withKbd(keyFor("sketch.construction")), active: ui.construction, run: toggleConstruction },
         ],
       },

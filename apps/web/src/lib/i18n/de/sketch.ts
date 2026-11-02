@@ -134,4 +134,12 @@ export default {
   "or click a flat face": "oder klicke auf eine ebene Fläche",
   "Cancel (Esc)": "Abbrechen (Esc)",
   Cancel: "Abbrechen",
+  "Trace mesh section": "Netzschnitt nachzeichnen",
+  "Click the orange section line of the mesh": "Klicke auf die orange Schnittlinie des Netzes",
+  "The sketch plane does not cut a mesh part. Sketch on a plane through the part.": "Die Skizzenebene schneidet kein Netz-Teil. Skizziere auf einer Ebene durch das Teil.",
+  "Nothing to trace here": "Hier gibt es nichts nachzuzeichnen",
+  "one::Traced {n} curve. Dimension it to set the size.": "{n} Kurve nachgezeichnet. Bemaße sie, um die Größe festzulegen.",
+  "Traced {n} curves. Dimension them to set the sizes.": "{n} Kurven nachgezeichnet. Bemaße sie, um die Größen festzulegen.",
+  "Trace all ({n})": "Alle nachzeichnen ({n})",
+  "Click the orange line where the plane cuts a mesh: it becomes lines, arcs and circles within the tolerance. Raise it for rough scans.": "Klicke auf die orange Linie, wo die Ebene ein Netz schneidet: Sie wird zu Linien, Bögen und Kreisen innerhalb der Toleranz. Erhöhe sie bei groben Scans.",
 } as Record<string, string>;
