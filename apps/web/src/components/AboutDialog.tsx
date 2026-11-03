@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import privacy from "../../../../PRIVACY.md?raw";
 import notices from "../../../../THIRD_PARTY_NOTICES.md?raw";
 import lgpl from "../../../../licenses/LGPL-2.1.txt?raw";
+import licenceTexts from "../../../../licenses/THIRD_PARTY_LICENSES.txt?raw";
 import { desktop } from "../lib/persistence";
 import { t } from "../lib/i18n";
 
@@ -108,6 +109,10 @@ export function AboutDialog() {
                 )}
               </p>
               <pre className="licence-text">{lgpl}</pre>
+            </details>
+            <details>
+              <summary>{t("Licence texts of all components")}</summary>
+              <pre className="licence-text">{licenceTexts}</pre>
             </details>
           </section>
         )}

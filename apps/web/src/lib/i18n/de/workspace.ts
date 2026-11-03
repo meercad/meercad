@@ -457,4 +457,5 @@ export default {
   "Tap a face or an edge; a second tap adds another.": "Tippe auf eine Fläche oder Kante; ein zweites Tippen kommt dazu.",
   "On a terrain, a tap shows where the point is (with GPS when the photos had it); a second tap gives the distance, the height difference, the slope and the direction from north.": "Auf einem Gelände zeigt Tippen, wo der Punkt liegt (mit GPS, wenn die Fotos es hatten); ein zweites Tippen ergibt Strecke, Höhenunterschied, Gefälle und Richtung ab Nord.",
   "Select edges (each tap adds one) → drag away from the part for a fillet, towards it for a chamfer.": "Wähl Kanten aus (jedes Tippen nimmt eine dazu) → zieh vom Teil weg für eine Rundung, zum Teil hin für eine Fase.",
+  "Licence texts of all components": "Lizenztexte aller Komponenten",
 } as Record<string, string>;
