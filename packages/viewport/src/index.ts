@@ -62,6 +62,91 @@ export interface ReferenceMeshView {
 }
 
 /** A textured model shown around the design (an area made from drone photos): a GLB in millimetres, Z up. */
+/** Surfaces the terrain height grid keeps per cell. */
+const LAYERS = 4;
+
+/** Heights of a terrain on an n × n grid from (x0, y0), up to LAYERS surfaces per cell, highest first. */
+export interface HeightGrid {
+  x0: number;
+  y0: number;
+  cell: number;
+  n: number;
+  z: Float32Array;
+}
+
+/**
+ * Fills a height grid from triangles (corners, xyz each) seen from above: every surface over a cell
+ * goes in (floor, table, ceiling; lawn and treetop), surfaces closer than three cells merge.
+ */
+export function layeredHeights(corners: Float32Array, n = 1024): HeightGrid | null {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let k = 0; k < corners.length; k += 3) {
+    x0 = Math.min(x0, corners[k]!), x1 = Math.max(x1, corners[k]!);
+    y0 = Math.min(y0, corners[k + 1]!), y1 = Math.max(y1, corners[k + 1]!);
+  }
+  if (!(x1 > x0 || y1 > y0)) return null;
+  const cell = Math.max(x1 - x0, y1 - y0) / n || 1;
+  const z = new Float32Array(n * n * LAYERS).fill(NaN);
+  const merge = cell * 3;
+  const c = corners;
+  for (let t = 0; t + 8 < c.length; t += 9) {
+    const ax = c[t]!, ay = c[t + 1]!, az = c[t + 2]!, bx = c[t + 3]!, by = c[t + 4]!, bz = c[t + 5]!, cx = c[t + 6]!, cy = c[t + 7]!, cz = c[t + 8]!;
+    const det = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    if (Math.abs(det) < 1e-12) continue;
+    const i0 = Math.max(0, Math.floor((Math.min(ax, bx, cx) - x0) / cell)), i1 = Math.min(n - 1, Math.floor((Math.max(ax, bx, cx) - x0) / cell));
+    const j0 = Math.max(0, Math.floor((Math.min(ay, by, cy) - y0) / cell)), j1 = Math.min(n - 1, Math.floor((Math.max(ay, by, cy) - y0) / cell));
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) {
+        const px = x0 + (i + 0.5) * cell, py = y0 + (j + 0.5) * cell;
+        const l1 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / det;
+        const l2 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / det;
+        const l3 = 1 - l1 - l2;
+        if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+        const h = l1 * az + l2 * bz + l3 * cz;
+        // Into the cell's layers, highest first: the same surface again, a new one, or (full) dropped unless higher.
+        const k = (j * n + i) * LAYERS;
+        let l = 0;
+        while (l < LAYERS && !Number.isNaN(z[k + l]!) && z[k + l]! > h + merge) l++;
+        if (l === LAYERS) continue;
+        const there = z[k + l]!;
+        if (!Number.isNaN(there) && Math.abs(there - h) <= merge) {
+          if (h > there) z[k + l] = h;
+          continue;
+        }
+        for (let m = LAYERS - 1; m > l; m--) z[k + m] = z[k + m - 1]!;
+        z[k + l] = h;
+      }
+  }
+  return { x0, y0, cell, n, z };
+}
+
+/** The grid's height at (x, y): of the surface nearest to `near`, else the highest; null where there is none. */
+export function heightAt(g: HeightGrid, x: number, y: number, near?: number): number | null {
+  const fx = (x - g.x0) / g.cell - 0.5, fy = (y - g.y0) / g.cell - 0.5;
+  const i = Math.floor(fx), j = Math.floor(fy);
+  const pick = (k: number): number => {
+    let best = NaN;
+    for (let l = 0; l < LAYERS; l++) {
+      const z = g.z[k * LAYERS + l]!;
+      if (Number.isNaN(z)) break;
+      if (Number.isNaN(best) || (near === undefined ? z > best : Math.abs(z - near) < Math.abs(best - near))) best = z;
+    }
+    return best;
+  };
+  // Bilinear between the four cells around, leaving out cells with no surface.
+  let sum = 0, weight = 0;
+  for (const [di, dj] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
+    const ci = i + di, cj = j + dj;
+    if (ci < 0 || cj < 0 || ci >= g.n || cj >= g.n) continue;
+    const z = pick(cj * g.n + ci);
+    if (Number.isNaN(z)) continue;
+    const w = (di ? fx - i : 1 - (fx - i)) * (dj ? fy - j : 1 - (fy - j)) + 1e-9;
+    sum += z * w;
+    weight += w;
+  }
+  return weight ? sum / weight : null;
+}
+
 export interface SceneryView {
   id: string;
   data: ArrayBuffer;
@@ -869,24 +954,14 @@ export class Viewport {
     return { id, point: [hit.point.x, hit.point.y, hit.point.z], normal: [n.x, n.y, n.z] };
   }
 
-  /** Height of the highest shown reference-model surface at (x, y) (mm), or null where there is none. */
-  sceneryHeight(x: number, y: number): number | null {
+  /**
+   * Height of a shown reference-model surface at (x, y) (mm), or null where there is none: the one
+   * nearest to `near` (the floor rather than the ceiling above it, the lawn under a tree), else the
+   * highest.
+   */
+  sceneryHeight(x: number, y: number, near?: number): number | null {
     const g = (this.heights ??= this.heightGrid());
-    if (!g) return null;
-    const fx = (x - g.x0) / g.cell - 0.5, fy = (y - g.y0) / g.cell - 0.5;
-    const i = Math.floor(fx), j = Math.floor(fy);
-    // Bilinear between the four cells around, leaving out cells with no surface.
-    let sum = 0, weight = 0;
-    for (const [di, dj] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
-      const ci = i + di, cj = j + dj;
-      if (ci < 0 || cj < 0 || ci >= g.n || cj >= g.n) continue;
-      const z = g.z[cj * g.n + ci]!;
-      if (Number.isNaN(z)) continue;
-      const w = (di ? fx - i : 1 - (fx - i)) * (dj ? fy - j : 1 - (fy - j)) + 1e-9;
-      sum += z * w;
-      weight += w;
-    }
-    return weight ? sum / weight : null;
+    return g ? heightAt(g, x, y, near) : null;
   }
 
   /** Size of one cell of the height grid (mm): finer steps than this follow nothing new. */
@@ -894,23 +969,18 @@ export class Viewport {
     return (this.heights ??= this.heightGrid())?.cell ?? 0;
   }
 
-  private heights: { x0: number; y0: number; cell: number; n: number; z: Float32Array } | null | undefined;
+  private heights: HeightGrid | null | undefined;
 
   /**
-   * The shown reference models as a grid of heights, the highest surface in each cell, made by
-   * filling in their triangles from above (one pass over them; a ray per query would be far slower).
+   * The shown reference models as a grid of heights, up to LAYERS surfaces in each cell (floor,
+   * table, ceiling; lawn and treetop), made by filling in their triangles from above (one pass over
+   * them; a ray per query would be far slower). Surfaces closer than a few cells merge.
    */
-  private heightGrid(): { x0: number; y0: number; cell: number; n: number; z: Float32Array } | null {
+  private heightGrid(): HeightGrid | null {
     const objects = this.shownScenery();
     if (!objects.length) return null;
-    const box = new THREE.Box3();
-    for (const o of objects) box.expandByObject(o);
-    if (box.isEmpty()) return null;
-    const n = 1024;
-    const cell = Math.max(box.max.x - box.min.x, box.max.y - box.min.y) / n || 1;
-    const x0 = box.min.x, y0 = box.min.y;
-    const z = new Float32Array(n * n).fill(NaN);
-    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    const corners: number[] = [];
+    const v = new THREE.Vector3();
     for (const root of objects)
       root.traverse((o) => {
         const mesh = o as THREE.Mesh;
@@ -918,27 +988,12 @@ export class Viewport {
         const pos = mesh.geometry.getAttribute("position");
         const index = mesh.geometry.getIndex();
         const count = index ? index.count : pos.count;
-        const at = (k: number, v: THREE.Vector3) => v.fromBufferAttribute(pos, index ? index.getX(k) : k).applyMatrix4(mesh.matrixWorld);
-        for (let t = 0; t + 2 < count; t += 3) {
-          at(t, a), at(t + 1, b), at(t + 2, c);
-          const det = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-          if (Math.abs(det) < 1e-12) continue;
-          const i0 = Math.max(0, Math.floor((Math.min(a.x, b.x, c.x) - x0) / cell)), i1 = Math.min(n - 1, Math.floor((Math.max(a.x, b.x, c.x) - x0) / cell));
-          const j0 = Math.max(0, Math.floor((Math.min(a.y, b.y, c.y) - y0) / cell)), j1 = Math.min(n - 1, Math.floor((Math.max(a.y, b.y, c.y) - y0) / cell));
-          for (let j = j0; j <= j1; j++)
-            for (let i = i0; i <= i1; i++) {
-              const px = x0 + (i + 0.5) * cell, py = y0 + (j + 0.5) * cell;
-              const l1 = ((b.y - c.y) * (px - c.x) + (c.x - b.x) * (py - c.y)) / det;
-              const l2 = ((c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y)) / det;
-              const l3 = 1 - l1 - l2;
-              if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
-              const h = l1 * a.z + l2 * b.z + l3 * c.z;
-              const k = j * n + i;
-              if (!(z[k]! >= h)) z[k] = h;
-            }
+        for (let k = 0; k < count; k++) {
+          v.fromBufferAttribute(pos, index ? index.getX(k) : k).applyMatrix4(mesh.matrixWorld);
+          corners.push(v.x, v.y, v.z);
         }
       });
-    return { x0, y0, cell, n, z };
+    return corners.length ? layeredHeights(Float32Array.from(corners)) : null;
   }
 
   /**

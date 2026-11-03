@@ -44,7 +44,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>meerCAD uses the camera to scan objects into 3D parts.</string>
+	<string>meerCAD uses the camera to scan objects, rooms and areas in 3D.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

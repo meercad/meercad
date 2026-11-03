@@ -14,7 +14,9 @@ import {
   Link2,
   ScanLine,
   Orbit,
+  DoorOpen,
   Map as MapIcon,
+  Trees,
   Mountain,
   MousePointer2,
   Move3d,
@@ -50,6 +52,7 @@ import { Kbd } from "./Kbd";
 import { showMenu } from "./Menu";
 import { canScan, scanObject } from "../lib/scan";
 import { buildTerrain, canBuildTerrain } from "../lib/terrain";
+import { canScanSpaces, scanArea, scanRoom } from "../lib/roomScan";
 import { t } from "../lib/i18n";
 import { usePack } from "../lib/premium";
 
@@ -190,6 +193,12 @@ function useEntries(): RailEntry[] {
                     { id: "scan-object", icon: Orbit, label: t("Object (photos)"), hint: t("Walk all around an object; fine detail, takes a few minutes"), run: () => void scanObject("object") },
                     { id: "scan-lidar", icon: Box, label: t("Object (LiDAR)"), hint: t("Sweep around an object with LiDAR; quick and coarser, reachable sides are enough"), run: () => void scanObject("lidar") },
                     { id: "scan-surface", icon: Mountain, label: t("Surface (LiDAR)"), hint: t("Sweep over a surface, e.g. a recess a part must fit into"), run: () => void scanObject("surface") },
+                  ]
+                : []),
+              ...(canScanSpaces
+                ? [
+                    { id: "scan-room", icon: DoorOpen, label: t("Room (LiDAR)"), hint: t("Walk through a room: walls, doors, windows and furniture become parts you can edit"), run: () => void scanRoom() },
+                    { id: "scan-area", icon: Trees, label: t("Area (guided)"), hint: t("A garden bed, a terrace, a corner: the app shows where to point; true size, no drone"), run: () => void scanArea() },
                   ]
                 : []),
               ...(canBuildTerrain

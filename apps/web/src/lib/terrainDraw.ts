@@ -161,11 +161,13 @@ export function drape(points: readonly Vec3[], closed: boolean, vp: Viewport): V
     for (let i = 0; i < pieces; i++) {
       const u = i / pieces;
       const x = a[0] + (b[0] - a[0]) * u, y = a[1] + (b[1] - a[1]) * u;
-      out.push([x, y, (vp.sceneryHeight(x, y) ?? a[2] + (b[2] - a[2]) * u) + up]);
+      // The surface the clicked points lie on (the floor, not the ceiling above it).
+      const near = a[2] + (b[2] - a[2]) * u;
+      out.push([x, y, (vp.sceneryHeight(x, y, near) ?? near) + up]);
     }
   }
   const last = points[closed ? 0 : points.length - 1];
-  if (last) out.push([last[0], last[1], (vp.sceneryHeight(last[0], last[1]) ?? last[2]) + up]);
+  if (last) out.push([last[0], last[1], (vp.sceneryHeight(last[0], last[1], last[2]) ?? last[2]) + up]);
   return out;
 }
 
@@ -177,7 +179,8 @@ export function drapeFill(points: readonly Vec3[], vp: Viewport): Float32Array {
   const step = Math.max(vp.sceneryStep * 2, 1);
   const up = lift(vp) * 0.5;
   const out: number[] = [];
-  const at = (x: number, y: number) => out.push(x, y, (vp.sceneryHeight(x, y) ?? points[0]![2]) + up);
+  const level = points.reduce((s, p) => s + p[2], 0) / points.length;
+  const at = (x: number, y: number) => out.push(x, y, (vp.sceneryHeight(x, y, level) ?? level) + up);
   const split = (a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2, depth: number) => {
     const ab = a.distanceTo(b), bc = b.distanceTo(c), ca = c.distanceTo(a);
     if (Math.max(ab, bc, ca) <= step || depth > 12 || out.length > 3_000_000) {
@@ -208,7 +211,7 @@ export function ribbon(line: readonly Vec3[], width: number, vp: Viewport): Floa
     const a = line[Math.max(0, i - 1)]!, b = line[Math.min(line.length - 1, i + 1)]!;
     const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
     const nx = (-dy / l) * half, ny = (dx / l) * half;
-    const at = (x: number, y: number): Vec3 => [x, y, (vp.sceneryHeight(x, y) ?? p[2]) + up];
+    const at = (x: number, y: number): Vec3 => [x, y, (vp.sceneryHeight(x, y, p[2] - lift(vp)) ?? p[2]) + up];
     return [at(p[0] + nx, p[1] + ny), at(p[0] - nx, p[1] - ny)];
   });
   const out: number[] = [];
@@ -279,7 +282,7 @@ export function marksForView(refs: readonly ReferenceModel[] | undefined, drawin
     for (const m of r.marks ?? []) {
       if (m.kind === "note" || m.kind === "point") {
         const p = m.points[0]!;
-        const ground: Vec3 = [p[0], p[1], vp.sceneryHeight(p[0], p[1]) ?? p[2]];
+        const ground: Vec3 = [p[0], p[1], vp.sceneryHeight(p[0], p[1], p[2]) ?? p[2]];
         labels.push({ key: `${r.id}/${m.id}`, ref: r.id, mark: m, at: ground, kind: m.kind, title: m.kind === "note" ? (m.text ?? "") : (m.text ?? t("Point")), ...(m.kind === "point" ? { detail: placeText(r, ground) } : {}), color: m.color });
         continue;
       }
@@ -324,7 +327,8 @@ export function marksForView(refs: readonly ReferenceModel[] | undefined, drawin
 /** The middle of an area, on the ground: where its label goes. */
 function centreOf(points: readonly Vec3[], vp: Viewport): Vec3 {
   const x = points.reduce((s, p) => s + p[0], 0) / points.length, y = points.reduce((s, p) => s + p[1], 0) / points.length;
-  return [x, y, (vp.sceneryHeight(x, y) ?? points[0]![2]) + lift(vp)];
+  const level = points.reduce((s, p) => s + p[2], 0) / points.length;
+  return [x, y, (vp.sceneryHeight(x, y, level) ?? level) + lift(vp)];
 }
 
 // ---------------------------------------------------------------- measuring, staking out, scale

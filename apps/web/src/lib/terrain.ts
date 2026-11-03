@@ -77,7 +77,7 @@ export function cancelTerrain(): void {
   else void Terrain.cancel();
 }
 
-function addTerrain(r: TerrainResult & { folder: string }, bytes: Uint8Array): void {
+export function addTerrain(r: TerrainResult & { folder: string }, bytes: Uint8Array): void {
   const doc = useApp.getState().doc;
   const used = new Set(doc.references?.map((x) => x.id));
   let n = 1;
@@ -143,7 +143,7 @@ export function sketchOnTerrain(point: readonly [number, number, number]): void 
  * How far a part moves to stand on the terrain, `offset` mm above it: its lowest point onto the
  * highest ground under its footprint, so no corner sinks in. With `at`, its middle goes there.
  */
-function moveOnto(body: string, at: readonly [number, number] | undefined, offset: number): [number, number, number] | null {
+function moveOnto(body: string, at: readonly [number, number, number] | undefined, offset: number): [number, number, number] | null {
   const vp = getViewport();
   const m = useApp.getState().output?.meshes.find((x) => x.bodyId === body);
   if (!vp || !m) return null;
@@ -155,11 +155,13 @@ function moveOnto(body: string, at: readonly [number, number] | undefined, offse
     }
   const dx = at ? at[0] - (lo[0]! + hi[0]!) / 2 : 0;
   const dy = at ? at[1] - (lo[1]! + hi[1]!) / 2 : 0;
-  // The ground under the footprint, on a 7 × 7 grid (corners and edges included).
+  // The ground under the footprint, on a 7 × 7 grid (corners and edges included): the surface at the
+  // pointer's height (or the part's foot), so a part goes onto the floor, not the ceiling above.
+  const near = at ? at[2] : lo[2]!;
   let ground = -Infinity;
   for (let i = 0; i <= 6; i++)
     for (let j = 0; j <= 6; j++) {
-      const h = vp.sceneryHeight(lo[0]! + dx + ((hi[0]! - lo[0]!) * i) / 6, lo[1]! + dy + ((hi[1]! - lo[1]!) * j) / 6);
+      const h = vp.sceneryHeight(lo[0]! + dx + ((hi[0]! - lo[0]!) * i) / 6, lo[1]! + dy + ((hi[1]! - lo[1]!) * j) / 6, near);
       if (h !== null && h > ground) ground = h;
     }
   if (ground === -Infinity) return null;
@@ -198,13 +200,13 @@ export function startPlacing(body: string): void {
   });
 }
 
-let lastAt: [number, number] | null = null;
+let lastAt: [number, number, number] | null = null;
 
 /** Shows the part standing at a point of the terrain (pointer over the ground). */
 export function previewPlace(point: readonly [number, number, number]): void {
   const { body, offset } = useTerrainPlace.getState();
   if (!body) return;
-  lastAt = [point[0], point[1]];
+  lastAt = [point[0], point[1], point[2]];
   useTerrainPlace.setState({ move: moveOnto(body, lastAt, offset) });
 }
 
@@ -219,7 +221,7 @@ export function placeAt(point: readonly [number, number, number]): void {
   useTerrainPlace.setState({ body: null, move: null });
   lastAt = null;
   if (!body) return;
-  const move = moveOnto(body, [point[0], point[1]], offset);
+  const move = moveOnto(body, [point[0], point[1], point[2]], offset);
   if (!move) return toast(t("There is no terrain there."), "error");
   commitMove(body, move);
 }
