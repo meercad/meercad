@@ -40,7 +40,7 @@ of your own, then build and run from Xcode:
 
 ```bash
 node scripts/apple-account.mjs --team <your team id> --bundle-id <your.bundle.id>
-pnpm ios                                   # builds the web app, syncs it into Xcode, opens Xcode
+pnpm ios                                   # builds the interface, syncs it into Xcode, opens Xcode
 ```
 
 iCloud Drive sync needs a paid developer account with an iCloud container named `iCloud.<your bundle id>`;
@@ -80,20 +80,15 @@ watch it work live in the app — including previews of ideas before they are ap
 
 ```bash
 pnpm install
-pnpm dev                                   # web app at http://localhost:5173
-pnpm --filter meercad-desktop dev          # desktop shell against the dev server
+pnpm dev                                   # interface dev server (http://localhost:5173), for the Mac app
+pnpm --filter meercad-desktop dev          # Mac app against the dev server
 pnpm test && pnpm typecheck
 ```
 
-### Try it on an iPad
+meerCAD is the Mac and iPad app; `apps/web` is the interface both of them show. Opened in a plain
+browser it only says so.
 
-```bash
-pnpm ipad                                  # production build, served on your local network
-```
-
-Vite prints a `Network:` address such as `http://192.168.1.20:4173`. Open it in Safari on an iPad
-on the same Wi-Fi. Judge speed only on this build: `pnpm dev:lan` (port 5173) reloads on every
-change but runs React's much slower development mode and loads hundreds of separate modules.
+### On the iPad
 
 | Gesture | Does |
 | --- | --- |
@@ -110,17 +105,15 @@ change but runs React's much slower development mode and loads hundreds of separ
 The Pencil draws in sketches and drags the arrows; on iPads that sense a hovering Pencil the snap
 dot shows before the tip touches. Until a Pencil touches the screen a finger tap also places points
 in a sketch; after that only the Pencil draws. Fingers resting on the screen while the Pencil is
-down are ignored. Over plain `http` on the network the page is not cross-origin isolated; the
-modelling kernel does not need that. Copying a share link falls back to a dialog there because
-Safari only allows the clipboard on `https`.
+down are ignored.
 
 ### iPad app
 
-`apps/ios` wraps the web app with Capacitor. Needs Xcode; signing uses the Apple account signed in
+`apps/ios` wraps the interface with Capacitor. Needs Xcode; signing uses the Apple account signed in
 to Xcode (Settings › Accounts) and the team set in the project (see [Build it yourself](#build-it-yourself)).
 
 ```bash
-pnpm ios                                   # builds the web app, syncs it into the Xcode project, opens Xcode
+pnpm ios                                   # builds the interface, syncs it into the Xcode project, opens Xcode
 ```
 
 In Xcode pick your iPad (cable or same Wi-Fi) or a simulator and press Run. In the app, projects are
@@ -135,7 +128,7 @@ the app.
 |---|---|---|
 | `packages/schema` | Document + Operations-API types and JSON Schema, validation | MIT |
 | `packages/naming` | Persistent references: selector resolution, tag propagation | MIT |
-| `packages/io` | STL/3MF/DXF/SVG writers & readers, share links | MIT |
+| `packages/io` | STL/3MF/DXF/SVG writers & readers | MIT |
 | `packages/sketch` | PlaneGCS constraint solving, region detection | FSL-1.1 |
 | `packages/model` | Expressions, document store (undo/redo), incremental rebuild | FSL-1.1 |
 | `packages/kernel` | OpenCascade (WASM) modelling, tessellation, worker | FSL-1.1 |

@@ -75,7 +75,7 @@ export function McpButton() {
                 </div>
               ) : null}
               <div className="fld">
-                <label>{desktop ? t("Or add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)") : t("Add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)")}</label>
+                <label>{t("Or add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)")}</label>
                 {mas ? <span className="muted" style={{ fontSize: 12 }}>{t("Other assistants start the server with Node.js; install it from nodejs.org if you do not have it yet.")}</span> : null}
                 <pre className="mono" style={{ margin: 0, padding: 10, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, whiteSpace: "pre-wrap" }}>{config}</pre>
               </div>

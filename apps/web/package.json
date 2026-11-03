@@ -6,10 +6,7 @@
   "license": "FSL-1.1-ALv2",
   "scripts": {
     "dev": "vite",
-    "dev:lan": "vite --host",
     "build": "vite build",
-    "preview": "vite preview",
-    "preview:lan": "vite preview --host",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {

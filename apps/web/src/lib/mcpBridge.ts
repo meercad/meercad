@@ -58,9 +58,8 @@ export function initBridge(): void {
   } catch {
     pref = null;
   }
-  // The desktop app is ready for assistants out of the box; the browser version asks first.
-  const desktop = !!(window as { meercadDesktop?: unknown }).meercadDesktop;
-  if (pref === "1" || (desktop && pref !== "0")) setBridgeEnabled(true);
+  // The Mac app is ready for assistants out of the box (the iPad app has no assistants).
+  if (pref !== "0" && (window as { meercadDesktop?: unknown }).meercadDesktop) setBridgeEnabled(true);
 }
 
 function connect(): void {

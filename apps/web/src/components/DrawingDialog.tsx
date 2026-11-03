@@ -96,9 +96,9 @@ export function DrawingDialog() {
   const name = `${baseName()}-drawing`;
   const save = (format: "pdf" | "svg" | "dxf") => {
     if (!sheet) return;
-    if (format === "pdf") download(`${name}.pdf`, writeSheetPdf(sheet) as BlobPart, "application/pdf");
-    else if (format === "svg") download(`${name}.svg`, svg!, "image/svg+xml");
-    else download(`${name}.dxf`, writeSheetDxf(sheet), "image/vnd.dxf");
+    if (format === "pdf") download(`${name}.pdf`, writeSheetPdf(sheet) as BlobPart);
+    else if (format === "svg") download(`${name}.svg`, svg!);
+    else download(`${name}.dxf`, writeSheetDxf(sheet));
     toast(t("Drawing saved as {format} (scale {scale})", { format: format.toUpperCase(), scale: sheet.scaleLabel }));
   };
   return (
@@ -159,7 +159,7 @@ export function DrawingDialog() {
               <button className="btn" disabled={!sheet} onClick={() => save("dxf")}>
                 DXF
               </button>
-              <button className="btn" disabled={!bom.length} onClick={() => download(`${baseName()}-parts.csv`, bomCsv(bom), "text/csv")} title={t("Parts list for a spreadsheet")}>
+              <button className="btn" disabled={!bom.length} onClick={() => download(`${baseName()}-parts.csv`, bomCsv(bom))} title={t("Parts list for a spreadsheet")}>
                 {t("Parts list CSV")}
               </button>
             </div>

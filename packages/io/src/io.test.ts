@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeShareFragment, encodeShareFragment, meshVolume, readStl, writeStl } from "./index.js";
+import { meshVolume, readStl, writeStl } from "./index.js";
 
 describe("STL", () => {
   it("round-trips a tetrahedron with correct volume", () => {
@@ -8,16 +8,6 @@ describe("STL", () => {
     const stl = readStl(writeStl([{ positions, indices }]));
     expect(stl.triangles).toBe(4);
     expect(meshVolume(stl.vertices)).toBeCloseTo(1 / 6);
-  });
-});
-
-describe("share links", () => {
-  it("round-trips and stays URL-safe", async () => {
-    const doc = { format: "meercad/1", params: { w: "40 mm" }, features: [], rollback: null };
-    const frag = await encodeShareFragment(doc);
-    expect(frag).toMatch(/^m1\.[A-Za-z0-9_-]+$/);
-    expect(await decodeShareFragment(`#${frag}`)).toEqual(doc);
-    await expect(decodeShareFragment("#garbage")).rejects.toThrow();
   });
 });
 

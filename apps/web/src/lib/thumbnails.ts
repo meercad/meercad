@@ -133,7 +133,7 @@ async function fillMissingThumbnails(): Promise<void> {
 
 /**
  * Pictures for home-screen examples that ship without one, made the same way and kept in the
- * browser's storage (keyed by the example's content, so a changed example gets a new picture).
+ * app's web storage (keyed by the example's content, so a changed example gets a new picture).
  */
 const exampleShots = new Map<string, string>();
 const keyOf = (name: string, doc: MeercadDocument) => {
