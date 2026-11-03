@@ -89,7 +89,7 @@ what it must come out as.
 ### Setup
 
 - **Mac:** `pnpm wip` installs "meerCAD WIP" next to the release. An agent starts it with
-  `open -a "meerCAD WIP" --args --remote-debugging-port=9333` and clicks, reads and takes
+  `"/Applications/meerCAD WIP.app/Contents/MacOS/meerCAD WIP" --remote-debugging-port=9334` and clicks, reads and takes
   screenshots with `node scripts/drive-app.mjs` (eval / shot). There is no browser version: in a
   plain browser the interface only says it runs as the app. Check once with a narrow window (phone
   layout).
