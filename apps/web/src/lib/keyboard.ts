@@ -36,3 +36,8 @@ export function installKeyboardDetection(): void {
   fine.addEventListener("change", apply);
   apply();
 }
+
+/** True on a touch screen without a keyboard (the iPad on its own): hints then speak of taps and buttons. */
+export function touchOnly(): boolean {
+  return document.documentElement.classList.contains("no-keyboard");
+}

@@ -1,6 +1,7 @@
 import { BookOpen, ChevronRight, Keyboard, PlayCircle, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Kbd, rich } from "./Kbd";
+import { touchOnly } from "../lib/keyboard";
 import { t } from "../lib/i18n";
 import { hasPack } from "../lib/premium";
 
@@ -88,7 +89,7 @@ const guides = (): { section: string; guides: Guide[] }[] => [
           <ul>
             {li(t("Select any face, flat or round → drag the knob: out adds material, in cuts."))}
             {li(t("Select a sketch region → drag to extrude it."))}
-            {li(t("Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer."))}
+            {li(touchOnly() ? t("Select edges (each tap adds one) → drag away from the part for a fillet, towards it for a chamfer.") : t("Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer."))}
             {li(t("The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts."))}
             {li(t("Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it."))}
           </ul>

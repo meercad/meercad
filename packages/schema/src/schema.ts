@@ -138,7 +138,20 @@ export const definitions: Record<string, Json> = {
       format: { const: "glb" },
       data: { type: "string", maxLength: 256 * 1024 * 1024 },
       hidden: bool,
+      scale: { type: "number", exclusiveMinimum: 0 },
       geo: obj({ lat: { type: "number" }, lon: { type: "number" }, alt: { type: "number" } }, ["lat", "lon", "alt"]),
+      marks: arr(
+        obj(
+          {
+            id,
+            kind: { enum: ["line", "area", "note", "point"] },
+            points: arr(arr({ type: "number" }, { minItems: 3, maxItems: 3 }), { minItems: 1, maxItems: 10_000 }),
+            color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+            text: { type: "string", maxLength: 2000 },
+          },
+          ["id", "kind", "points", "color"],
+        ),
+      ),
     },
     ["id", "name", "format", "data"],
   ),

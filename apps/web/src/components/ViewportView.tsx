@@ -1,13 +1,16 @@
-import { currentPoses, jointPick, partDrag, useMotion } from "../lib/mechanism";
+import { currentPoses, joinedParts, jointPick, partDrag, useMotion } from "../lib/mechanism";
 import { partColors } from "../lib/partColors";
 import { motion } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
 import { hasPack } from "../lib/premium";
 import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair } from "../lib/meshRepair";
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
-import { sceneryOf } from "../lib/terrain";
+import { touchOnly } from "../lib/keyboard";
+import { hasTerrain, placeAt, previewPlace, sceneryOf, sketchOnTerrain, terrainItems, useTerrainPlace } from "../lib/terrain";
+import { addMarkPoint, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
+import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { Box, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
+import { ArrowDownToLine, Box, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -65,6 +68,7 @@ export function ViewportView() {
   const selection = useApp((s) => s.selection);
   const measure = useApp((s) => s.measure);
   const pickingPlane = useApp((s) => s.pickingSketchPlane);
+  const placing = useTerrainPlace((s) => !!s.body);
   const doc = useApp((s) => s.doc);
   // Deviation from a mesh as a colour map on the part.
   const heat = useDeviation((s) => s.maps);
@@ -72,7 +76,16 @@ export function ViewportView() {
   useEffect(() => vp?.setBodyHeat(wall.size ? wall : heat), [vp, heat, wall]);
   // Reference models (an area from drone photos) around the design.
   const references = doc.references;
-  useEffect(() => vp?.setScenery(sceneryOf({ ...doc, references })), [vp, references]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [sceneryReady, setSceneryReady] = useState(0);
+  useEffect(() => void vp?.setScenery(sceneryOf({ ...doc, references })).then(() => setSceneryReady((n) => n + 1)), [vp, references]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Lines, areas and notes on it, with the one being drawn.
+  const drawing = useTerrainDraw();
+  const terrainMeasure = useTerrainMeasure();
+  useEffect(() => {
+    if (!measure.active && !terrainMeasure.scale && terrainMeasure.points.length) clearTerrainMeasure();
+  }, [measure.active, terrainMeasure]);
+  const marks = useMemo(() => (vp ? marksForView(references, drawing) : { lines: [], labels: [] }), [vp, references, drawing, terrainMeasure, sceneryReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => vp?.setSceneryMarks(marks.lines), [vp, marks]);
   // Shapes fitted on a scan in the Measure tool, laid over the triangles they cover.
   const scanShapes = useScanMeasure((s) => s.shapes);
   useEffect(() => {
@@ -236,11 +249,16 @@ export function ViewportView() {
   // Moving parts: poses from the joint values; parts can be dragged while the joints panel is open.
   const motionFree = useMotion((s) => s.free);
   const motionTick = useMotion((s) => s.tick);
+  // A part being set onto the terrain shows where it would stand.
+  const placeMove = useTerrainPlace((s) => s.move);
+  const placeBody = useTerrainPlace((s) => s.body);
   useEffect(() => {
     if (!vp) return;
     vp.partDrag = motionOpen && !dialog ? partDrag : null;
-    vp.setPoses(currentPoses());
-  }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog]);
+    const poses = currentPoses();
+    if (placeBody && placeMove) for (const id of joinedParts(placeBody)) poses.set(id, new THREE.Matrix4().makeTranslation(...placeMove).toArray());
+    vp.setPoses(poses);
+  }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog, placeBody, placeMove]);
   // Joint symbols while the joints panel is open; the one being edited stands out.
   const motionDraft = useMotion((s) => s.draft);
   useEffect(() => {
@@ -357,6 +375,16 @@ export function ViewportView() {
         return showBox(d.x, d.y, e);
       }
       if (e.buttons) return;
+      // Setting a part onto the terrain or drawing on it: the ground under the pointer is what counts.
+      const ms = useTerrainMeasure.getState();
+      const measuring = ms.scale || (useApp.getState().measure.active && ms.points.length === 1);
+      if (useTerrainPlace.getState().body || useTerrainDraw.getState().kind || measuring) {
+        const hit = vp.sceneryHit(e.clientX, e.clientY);
+        if (useTerrainPlace.getState().body && hit) previewPlace(hit.point);
+        if (useTerrainDraw.getState().kind) useTerrainDraw.setState({ hover: hit?.point ?? null });
+        if (measuring) useTerrainMeasure.setState({ hover: hit?.point ?? null });
+        if (!measuring || ms.scale) return;
+      }
       vp.setHover(vp.pick(e.clientX, e.clientY, kinds()));
     });
     const finishBox = (additive: boolean) => {
@@ -398,7 +426,7 @@ export function ViewportView() {
       }
       if (e.pointerType === "touch") {
         if (useApp.getState().sketchId) return;
-        if (gesture === "tap") onClick(vp.pick(e.clientX, e.clientY, kinds()), true);
+        if (gesture === "tap") onClick(vp.pick(e.clientX, e.clientY, kinds()), true, [e.clientX, e.clientY]);
         if (gesture === "double") {
           const pick = vp.pick(e.clientX, e.clientY, new Set(["face"]));
           if (pick?.kind === "face" && pick.normal) vp.lookAtFace(pick.point, pick.normal);
@@ -413,9 +441,10 @@ export function ViewportView() {
       if (!d || useApp.getState().sketchId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
       const pick = vp.pick(e.clientX, e.clientY, kinds());
       if (d.button === 2) return contextMenu(pick, e.clientX, e.clientY);
-      if (d.button === 0) onClick(pick, e.shiftKey || e.metaKey || e.ctrlKey || e.pointerType === "pen");
+      if (d.button === 0) onClick(pick, e.shiftKey || e.metaKey || e.ctrlKey || e.pointerType === "pen", [e.clientX, e.clientY]);
     };
     const onDbl = (e: MouseEvent) => {
+      if (useTerrainDraw.getState().kind) return finishMarking();
       if (useApp.getState().sketchId || useApp.getState().dialog) return;
       const pick = vp.pick(e.clientX, e.clientY, DEFAULT_KINDS);
       // Double-clicking a face selects its whole part; other entities open their feature.
@@ -459,10 +488,33 @@ export function ViewportView() {
     };
   }, [vp]);
 
-  const onClick = (pick: Pick | null, additive: boolean) => {
+  const onClick = (pick: Pick | null, additive: boolean, at?: [number, number]) => {
     const s = useApp.getState();
+    // Drawing on the terrain: each click is a point where it meets the ground.
+    if (useTerrainDraw.getState().kind) {
+      const hit = at && vp?.sceneryHit(at[0], at[1]);
+      if (hit) addMarkPoint(hit.point, hit.id);
+      return;
+    }
+    // A part waiting to be set onto the terrain goes where it is clicked.
+    if (useTerrainPlace.getState().body) {
+      const hit = at && vp?.sceneryHit(at[0], at[1]);
+      if (hit) placeAt(hit.point);
+      else toast(t("Click on the terrain"), "error");
+      return;
+    }
+    // Measuring on the terrain, or the two ends of a known distance to scale it by.
+    const ms = useTerrainMeasure.getState();
+    if (ms.scale || (s.measure.active && !pick)) {
+      const hit = at && vp?.sceneryHit(at[0], at[1]);
+      if (hit) return measurePoint(hit.point, hit.id);
+      if (ms.scale) return;
+    }
     if (!s.dialog && jointPick(pick)) return;
     if (s.pickingSketchPlane) {
+      // On the terrain (no part or plane in the way): a level sketch at that height.
+      const ground = !pick && at ? vp?.sceneryHit(at[0], at[1]) : null;
+      if (ground) return sketchOnTerrain(ground.point);
       if (!pick) return;
       const spec = planeSpecForPick(pick, s.output?.meshes ?? []);
       if (spec) startSketch(spec);
@@ -519,8 +571,20 @@ export function ViewportView() {
       ...(fid ? [{ label: t("Edit {feature}", { feature: fid }), icon: <Pencil />, onClick: () => editFeature(fid) }] : []),
       { label: t("Measure"), icon: <Ruler />, kbd: "Shift+M", onClick: () => useApp.setState({ measure: { active: true, picks: pick && (pick.kind === "face" || pick.kind === "edge") ? [pick] : [], result: null } }) },
     ];
+    const ground = !pick ? vp?.sceneryHit(x, y) : null;
     if (!pick)
       return showMenu(x, y, [
+        ...(ground
+          ? [
+              { label: t("Mark a line"), icon: <PencilLine />, onClick: () => (startMarking("line", ground.id), addMarkPoint(ground.point)) },
+              { label: t("Mark an area"), icon: <Shapes />, onClick: () => (startMarking("area", ground.id), addMarkPoint(ground.point)) },
+              { label: t("Pin a note here"), icon: <StickyNote />, onClick: () => (startMarking("note", ground.id), addMarkPoint(ground.point)) },
+              { label: t("Stake-out point here"), icon: <MapPin />, onClick: () => (startMarking("point", ground.id), addMarkPoint(ground.point)) },
+              { label: t("Measure from here"), icon: <Ruler />, onClick: () => (useApp.setState({ measure: { active: true, picks: [], result: null } }), clearTerrainMeasure(), measurePoint(ground.point, ground.id)) },
+              { label: t("New sketch here on the ground"), icon: <Pencil />, onClick: () => sketchOnTerrain(ground.point) },
+              "sep" as const,
+            ]
+          : []),
         { label: t("Fit view"), icon: <Focus />, kbd: fitKey, onClick: () => vp?.fit() },
         { label: s.showPlanes ? t("Hide planes") : t("Show planes"), icon: <Layers />, onClick: () => useApp.setState({ showPlanes: !s.showPlanes }) },
         { label: t("Show all parts"), icon: <Eye />, onClick: () => useApp.setState({ hidden: new Set() }) },
@@ -532,6 +596,7 @@ export function ViewportView() {
         { label: t("Move {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <Move3d />, onClick: () => startFeature("transform") },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         ...(hasPack("scan")
           ? [
@@ -559,6 +624,7 @@ export function ViewportView() {
         ...(pick.normal ? [{ label: t("Hole here"), icon: <CircleDot />, kbd: "Shift+H", onClick: () => startHoleAt(pick) }] : []),
         "sep",
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         ...(hasPack("scan") ? [...deviationItems(pick.bodyId), thicknessItem(pick.bodyId)] : []),
@@ -601,12 +667,14 @@ export function ViewportView() {
   };
 
   return (
-    <div className={`view ${dialog?.field || pickingPlane || measure.active ? "picking" : ""}`} ref={host}>
+    <div className={`view ${dialog?.field || pickingPlane || measure.active || placing ? "picking" : ""}`} ref={host}>
       {vp ? <ViewCube viewport={vp} /> : null}
       {vp ? <Manipulators viewport={vp} /> : null}
       {vp ? <InlineValues viewport={vp} /> : null}
       {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
       {vp && pickingPlane && scene ? <PlaneChooser viewport={vp} planes={scene.planes} /> : null}
+      {vp && marks.labels.length ? <TerrainLabels viewport={vp} labels={marks.labels} /> : null}
+      <TerrainHud />
       <AiActivity />
       {box ? (
         <div
@@ -739,7 +807,7 @@ function MeasureCard() {
             </tbody>
           </table>
         ) : (
-          <span className="muted">{m.picks.length ? t("Measuring…") : t("Click a face or an edge. Shift-click to add a second one.")}</span>
+          <span className="muted">{m.picks.length ? t("Measuring…") : (touchOnly() ? t("Tap a face or an edge; a second tap adds another.") : t("Click a face or an edge. Shift-click to add a second one."))}</span>
         )}
         {scan.shapes.length ? (
           <label className="row" style={{ gap: 6, marginTop: 6 }}>
@@ -761,6 +829,7 @@ function MeasureCard() {
         ) : hasPack("scan") && !m.result ? (
           <p className="muted small">{t("On a scan or other mesh, a click fits the plane, cylinder, cone or sphere there; a second click measures between the two.")}</p>
         ) : null}
+        {hasTerrain() && !m.result ? <p className="muted small">{touchOnly() ? t("On a terrain, a tap shows where the point is (with GPS when the photos had it); a second tap gives the distance, the height difference, the slope and the direction from north.") : t("On a terrain, a click shows where the point is (with GPS when the photos had it); a second click gives the distance, the height difference, the slope and the direction from north.")}</p> : null}
       </div>
     </div>
   );

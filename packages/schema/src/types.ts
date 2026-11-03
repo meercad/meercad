@@ -617,6 +617,28 @@ export interface ReferenceModel {
   hidden?: boolean;
   /** Where the model's origin is on Earth (degrees, metres above sea level), when its photos had GPS. */
   geo?: { lat: number; lon: number; alt: number };
+  /** Lines, areas, notes and points put onto it. */
+  marks?: TerrainMark[];
+  /**
+   * Correction of its size (about its origin), e.g. from a distance whose real length is known;
+   * its marks are scaled with it.
+   */
+  scale?: number;
+}
+
+/**
+ * A marking on a reference model: a line or an area through the clicked points (mm), drawn
+ * following the ground between them, a note pinned to one point, or a point to stake out (shown
+ * with its coordinates).
+ */
+export interface TerrainMark {
+  id: string;
+  kind: "line" | "area" | "note" | "point";
+  points: Vec3[];
+  /** "#rrggbb". */
+  color: string;
+  /** A note's text, or a line's or area's name. */
+  text?: string;
 }
 
 export interface MeercadDocument {

@@ -1,4 +1,4 @@
-import { Bot, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { ArrowDownToLine, Bot, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -18,6 +18,8 @@ import { docUnit, fmtLen, fmtVolume, inUnit, isLengthParam } from "../lib/units"
 import { meshBodyIds, meshHint } from "../lib/meshParts";
 import { usePrefs } from "../lib/keymap";
 import { PART_PALETTE, partColors } from "../lib/partColors";
+import { terrainItems } from "../lib/terrain";
+import { startMarking, startScaling } from "../lib/terrainDraw";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { openMeshRepair } from "../lib/meshRepair";
 import { lang, t, tn } from "../lib/i18n";
@@ -477,6 +479,7 @@ function Bodies() {
             "sep" as const,
             { label: hidden.has(id) ? t("Show") : t("Hide"), icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
             { label: doc.seeThrough?.includes(id) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(id) },
+            ...terrainItems(id, { set: <ArrowDownToLine />, place: <MapPin /> }),
             ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
             { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id, e.clientX, e.clientY) },
@@ -621,6 +624,12 @@ function References() {
               onContextMenu={(e) => {
                 e.preventDefault();
                 showMenu(e.clientX, e.clientY, [
+                  { label: t("Mark a line"), icon: <Pencil />, onClick: () => startMarking("line", r.id) },
+                  { label: t("Mark an area"), icon: <Shapes />, onClick: () => startMarking("area", r.id) },
+                  { label: t("Pin a note"), icon: <StickyNote />, onClick: () => startMarking("note", r.id) },
+                  { label: t("Set a stake-out point"), icon: <MapPin />, onClick: () => startMarking("point", r.id) },
+                  { label: t("Correct the scale…"), icon: <Ruler />, onClick: () => startScaling(r.id) },
+                  "sep" as const,
                   { label: t("Rename…"), icon: <Pencil />, onClick: () => void rename(r) },
                   { label: r.hidden ? t("Show") : t("Hide"), icon: r.hidden ? <Eye /> : <EyeOff />, onClick: () => set(r, { hidden: !r.hidden || undefined }) },
                   "sep" as const,
@@ -629,7 +638,9 @@ function References() {
               }}
             >
               <MapIcon className="ficon" />
-              <span className="tree-label">{r.name}</span>
+              <span className="tree-label">
+                {r.name} {r.marks?.length ? <span className="muted">· {tn(r.marks.length, "{n} mark", "{n} marks")}</span> : null}
+              </span>
               <span className="actions" style={{ display: "flex" }}>
                 <button className="icon-btn sm" title={r.hidden ? t("Show") : t("Hide")} onClick={() => set(r, { hidden: !r.hidden || undefined })}>
                   {r.hidden ? <EyeOff /> : <Eye />}

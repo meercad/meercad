@@ -7,7 +7,7 @@ describe("multi-threaded OCCT build", () => {
   it("rebuilds the examples to the same bodies as the single-threaded build", async () => {
     const mt = new KernelSession(await loadOcct(undefined, true), await getSolver());
     const st = await newSession();
-    for (const ex of EXAMPLES) {
+    for (const ex of EXAMPLES.filter((e) => !e.url)) {
       const a = st.rebuild(ex.doc).report.bodies[0]!;
       const b = mt.rebuild(ex.doc).report.bodies[0]!;
       expect(b.faces, ex.name).toBe(a.faces);

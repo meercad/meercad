@@ -12,6 +12,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import { Viewport } from "@meercad/viewport";
 import { spareKernel, useApp } from "../store";
 import { meshBodyIds } from "./meshParts";
+import { sceneryOf } from "./terrain";
 import { loadProject, saveThumbnail, type ProjectMeta } from "./persistence";
 
 const LIMIT_MS = 60_000;
@@ -101,7 +102,7 @@ async function fillMissingThumbnails(): Promise<void> {
         const project = await loadProject(next.id);
         if (!project || useApp.getState().screen !== "home") continue;
         const output = await build(project.doc);
-        if (!output.meshes.length || useApp.getState().screen !== "home") continue;
+        if ((!output.meshes.length && !project.doc.references?.length) || useApp.getState().screen !== "home") continue;
         if (!vp) {
           host = document.createElement("div");
           host.style.cssText = "position:fixed;left:-10000px;top:0;width:480px;height:360px;pointer-events:none";
@@ -112,6 +113,7 @@ async function fillMissingThumbnails(): Promise<void> {
         const meshParts = meshBodyIds(project.doc.features, output.meshes);
         const bodies = output.meshes.map((m) => (meshParts.has(m.bodyId) ? { ...m, edgeLines: new Float32Array(), edgeRanges: new Int32Array() } : m));
         vp.setScene({ bodies, sketches: [], planes: [], references: [] });
+        await vp.setScenery(sceneryOf(project.doc));
         vp.setView("iso", false);
         const thumbnail = vp.snapshot(480, 360, true);
         await saveThumbnail(next.id, thumbnail);

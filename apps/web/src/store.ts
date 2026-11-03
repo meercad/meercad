@@ -795,6 +795,8 @@ function scheduleThumbnail(): void {
 }
 
 function snapshot(): string | undefined {
+  // Without its terrain while that is still being read: the picture waits for the next save.
+  if (viewportRef?.sceneryLoading) return undefined;
   try {
     return viewportRef?.snapshot(480, 360, true);
   } catch {

@@ -4,8 +4,9 @@ import { askConfirm, askText } from "./Ask";
 import { showMenu } from "./Menu";
 import { nativeApp } from "../lib/native";
 import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
-import { newProject, openProject, refreshProjects, toast, useApp } from "../store";
-import { EXAMPLES } from "../lib/examples";
+import { newProject, openProject, refreshProjects, startTask, toast, useApp } from "../store";
+import type { MeercadDocument } from "@meercad/schema";
+import { EXAMPLES, type Example } from "../lib/examples";
 import { importFile } from "./io";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
@@ -319,7 +320,7 @@ export function Home() {
         <p className="sub">{t("Fully parametric — open one and change its variables. Hide this section in Settings.")}</p>
         <div className="grid">
           {EXAMPLES.map((ex) => (
-            <button className="card" key={ex.name} onClick={() => void newProject(structuredClone(ex.doc), t(ex.name))}>
+            <button className="card" key={ex.name} onClick={() => void openExample(ex)}>
               <div className="thumb">
                 {ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc) ? <img src={ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)!} alt="" /> : <Box size={32} />}
               </div>
@@ -355,4 +356,18 @@ export function Home() {
       </div>
     </div>
   );
+}
+
+/** A new project from an example; a large one is fetched first. */
+async function openExample(ex: Example): Promise<void> {
+  if (!ex.url) return void newProject(structuredClone(ex.doc), t(ex.name));
+  const task = startTask(t("Opening {name}", { name: t(ex.name) }));
+  try {
+    const doc = (await (await fetch(ex.url)).json()) as MeercadDocument;
+    await newProject(doc, t(ex.name));
+  } catch (e) {
+    toast(t("Could not open {name}: {error}", { name: t(ex.name), error: (e as Error).message }), "error");
+  } finally {
+    task.done();
+  }
 }

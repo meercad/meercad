@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import { validateDocument } from "@meercad/schema";
 import { EXAMPLES } from "../../apps/web/src/lib/examples.js";
 import { newSession, withParams } from "./helpers.js";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const PUBLIC = join(import.meta.dirname, "../../apps/web/public");
 
 describe("home-screen examples", () => {
   it("names are unique", () => expect(new Set(EXAMPLES.map((e) => e.name)).size).toBe(EXAMPLES.length));
 
-  it.each(EXAMPLES.map((e) => [e.name, e] as const))("%s validates, is fully defined and rebuilds", async (_, ex) => {
+  it.each(EXAMPLES.filter((e) => !e.url).map((e) => [e.name, e] as const))("%s validates, is fully defined and rebuilds", async (_, ex) => {
     expect(validateDocument(ex.doc).ok).toBe(true);
     const { report } = (await newSession()).rebuild(ex.doc);
     expect(report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
@@ -16,6 +20,15 @@ describe("home-screen examples", () => {
     for (const s of report.sketches) expect(s.diagnostics.dof, `${s.id} DOF`).toBe(0);
     // Most are one part; the gear pair has two, the hinged box three (box, lid, pin).
     expect(report.bodies).toHaveLength({ "Gear pair": 2, "Hinged box": 3 }[ex.name] ?? 1);
+  });
+
+  it("the examples fetched when opened are there and valid", () => {
+    for (const ex of EXAMPLES.filter((e) => e.url)) {
+      const v = validateDocument(JSON.parse(readFileSync(join(PUBLIC, ex.url!), "utf8")));
+      expect(v.ok, ex.name).toBe(true);
+      if (v.ok) expect(v.value.references?.[0]?.marks?.length, ex.name).toBeGreaterThan(0);
+      expect(existsSync(join(PUBLIC, ex.thumbnail!)), `${ex.name} picture`).toBe(true);
+    }
   });
 
   it("gear pair and hinged box follow their variables", async () => {

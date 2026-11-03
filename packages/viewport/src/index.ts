@@ -66,6 +66,8 @@ export interface SceneryView {
   id: string;
   data: ArrayBuffer;
   hidden?: boolean;
+  /** Size correction about the model's origin. */
+  scale?: number;
 }
 
 export type Pick =
@@ -250,7 +252,7 @@ export class Viewport {
 
     this.grid = new THREE.Group();
     this.grid.add(this.gridMesh);
-    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sceneryGroup, this.sketchGroup, this.overlay, this.handleGroup, this.jointGroup);
+    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sceneryGroup, this.marksGroup, this.sketchGroup, this.overlay, this.handleGroup, this.jointGroup);
     this.axes = axesHelper();
     this.scene.add(this.axes);
 
@@ -445,6 +447,7 @@ export class Viewport {
   /** Back to the starting view for the next model shown (a project is opening). */
   resetFraming(): void {
     this.framed = false;
+    this.sceneryFramed = false;
     this.setView("iso", false);
   }
 
@@ -789,7 +792,8 @@ export class Viewport {
    * Textured models around the design. Each file is read once; a list without it removes it.
    * They are only looked at: picks and the model's framing ignore them while there are parts.
    */
-  setScenery(list: readonly SceneryView[]): void {
+  setScenery(list: readonly SceneryView[]): Promise<void> {
+    this.heights = undefined;
     for (const [id, s] of this.scenery) {
       if (list.some((l) => l.id === id && l.data === s.data)) continue;
       if (s.object) {
@@ -803,27 +807,166 @@ export class Viewport {
       if (!entry) {
         const e = (entry = { data: s.data, object: null as THREE.Object3D | null });
         this.scenery.set(s.id, e);
+        this.sceneryLoading++;
+        const settle = () => {
+          this.sceneryLoading--;
+          if (!this.sceneryLoading) for (const r of this.sceneryWaiting.splice(0)) r();
+        };
         new GLTFLoader().parse(
           s.data,
           "",
           (gltf) => {
+            settle();
             if (this.scenery.get(s.id) !== e) return disposeTree(gltf.scene, true);
             e.object = gltf.scene;
+            e.object.scale.setScalar(list.find((l) => l.id === s.id)?.scale ?? 1);
+            this.heights = undefined;
             e.object.visible = !list.find((l) => l.id === s.id)?.hidden;
             this.sceneryGroup.add(gltf.scene);
-            if (!this.framed && !this.bodies.length) {
+            // The first view of a project takes in its surroundings once they are there.
+            if (!this.sceneryFramed) {
+              this.sceneryFramed = true;
               this.framed = true;
               this.fit(false);
             }
             this.invalidate();
           },
-          (err) => console.warn("scenery", s.id, err),
+          (err) => {
+            settle();
+            console.warn("scenery", s.id, err);
+          },
         );
       }
-      if (entry.object) entry.object.visible = !s.hidden;
+      if (entry.object) {
+        entry.object.visible = !s.hidden;
+        entry.object.scale.setScalar(s.scale ?? 1);
+        entry.object.updateMatrixWorld(true);
+      }
+    }
+    this.invalidate();
+    return this.sceneryLoading ? new Promise((r) => this.sceneryWaiting.push(r)) : Promise.resolve();
+  }
+
+  private sceneryFramed = false;
+
+  /** Reference models still being read; a picture taken meanwhile would miss them. */
+  sceneryLoading = 0;
+  private sceneryWaiting: (() => void)[] = [];
+
+  private shownScenery(): THREE.Object3D[] {
+    return this.sceneryGroup.children.filter((o) => o.visible);
+  }
+
+  /** Where the ray through a screen point first meets a shown reference model, with the surface's upward normal there. */
+  sceneryHit(clientX: number, clientY: number): { id: string; point: Vec3; normal: Vec3 } | null {
+    this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+    const hit = this.raycaster.intersectObjects(this.shownScenery(), true)[0];
+    if (!hit) return null;
+    const n = (hit.face?.normal.clone() ?? new THREE.Vector3(0, 0, 1)).transformDirection(hit.object.matrixWorld);
+    if (n.z < 0) n.negate();
+    let id = "";
+    for (const [key, e] of this.scenery) if (e.object && hit.object !== e.object && e.object.getObjectById(hit.object.id)) id = key;
+    return { id, point: [hit.point.x, hit.point.y, hit.point.z], normal: [n.x, n.y, n.z] };
+  }
+
+  /** Height of the highest shown reference-model surface at (x, y) (mm), or null where there is none. */
+  sceneryHeight(x: number, y: number): number | null {
+    const g = (this.heights ??= this.heightGrid());
+    if (!g) return null;
+    const fx = (x - g.x0) / g.cell - 0.5, fy = (y - g.y0) / g.cell - 0.5;
+    const i = Math.floor(fx), j = Math.floor(fy);
+    // Bilinear between the four cells around, leaving out cells with no surface.
+    let sum = 0, weight = 0;
+    for (const [di, dj] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
+      const ci = i + di, cj = j + dj;
+      if (ci < 0 || cj < 0 || ci >= g.n || cj >= g.n) continue;
+      const z = g.z[cj * g.n + ci]!;
+      if (Number.isNaN(z)) continue;
+      const w = (di ? fx - i : 1 - (fx - i)) * (dj ? fy - j : 1 - (fy - j)) + 1e-9;
+      sum += z * w;
+      weight += w;
+    }
+    return weight ? sum / weight : null;
+  }
+
+  /** Size of one cell of the height grid (mm): finer steps than this follow nothing new. */
+  get sceneryStep(): number {
+    return (this.heights ??= this.heightGrid())?.cell ?? 0;
+  }
+
+  private heights: { x0: number; y0: number; cell: number; n: number; z: Float32Array } | null | undefined;
+
+  /**
+   * The shown reference models as a grid of heights, the highest surface in each cell, made by
+   * filling in their triangles from above (one pass over them; a ray per query would be far slower).
+   */
+  private heightGrid(): { x0: number; y0: number; cell: number; n: number; z: Float32Array } | null {
+    const objects = this.shownScenery();
+    if (!objects.length) return null;
+    const box = new THREE.Box3();
+    for (const o of objects) box.expandByObject(o);
+    if (box.isEmpty()) return null;
+    const n = 1024;
+    const cell = Math.max(box.max.x - box.min.x, box.max.y - box.min.y) / n || 1;
+    const x0 = box.min.x, y0 = box.min.y;
+    const z = new Float32Array(n * n).fill(NaN);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    for (const root of objects)
+      root.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const pos = mesh.geometry.getAttribute("position");
+        const index = mesh.geometry.getIndex();
+        const count = index ? index.count : pos.count;
+        const at = (k: number, v: THREE.Vector3) => v.fromBufferAttribute(pos, index ? index.getX(k) : k).applyMatrix4(mesh.matrixWorld);
+        for (let t = 0; t + 2 < count; t += 3) {
+          at(t, a), at(t + 1, b), at(t + 2, c);
+          const det = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+          if (Math.abs(det) < 1e-12) continue;
+          const i0 = Math.max(0, Math.floor((Math.min(a.x, b.x, c.x) - x0) / cell)), i1 = Math.min(n - 1, Math.floor((Math.max(a.x, b.x, c.x) - x0) / cell));
+          const j0 = Math.max(0, Math.floor((Math.min(a.y, b.y, c.y) - y0) / cell)), j1 = Math.min(n - 1, Math.floor((Math.max(a.y, b.y, c.y) - y0) / cell));
+          for (let j = j0; j <= j1; j++)
+            for (let i = i0; i <= i1; i++) {
+              const px = x0 + (i + 0.5) * cell, py = y0 + (j + 0.5) * cell;
+              const l1 = ((b.y - c.y) * (px - c.x) + (c.x - b.x) * (py - c.y)) / det;
+              const l2 = ((c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y)) / det;
+              const l3 = 1 - l1 - l2;
+              if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+              const h = l1 * a.z + l2 * b.z + l3 * c.z;
+              const k = j * n + i;
+              if (!(z[k]! >= h)) z[k] = h;
+            }
+        }
+      });
+    return { x0, y0, cell, n, z };
+  }
+
+  /**
+   * Lines and areas drawn on the reference models (already following the ground: points in mm).
+   * Areas are filled see-through; everything stays visible through the ground a little.
+   */
+  setSceneryMarks(marks: readonly { id: string; points: readonly Vec3[]; closed?: boolean; color: string; fill?: Float32Array; width?: number; dashed?: boolean }[]): void {
+    disposeTree(this.marksGroup);
+    for (const m of marks) {
+      if (m.points.length >= 2) {
+        const pts = m.points.map((p) => new THREE.Vector3(...p));
+        const line = fatLine(pts, { color: new THREE.Color(m.color).getHex(), width: m.width ?? 3, loop: !!m.closed, depthTest: true, ...(m.dashed ? { dashed: { dash: 800, gap: 500 } } : {}) });
+        line.userData = { mark: m.id };
+        line.renderOrder = 5;
+        this.marksGroup.add(line);
+      }
+      if (m.fill?.length) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(m.fill, 3));
+        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+        mesh.userData = { mark: m.id };
+        mesh.renderOrder = 4;
+        this.marksGroup.add(mesh);
+      }
     }
     this.invalidate();
   }
+  private marksGroup = new THREE.Group();
 
   /** Near and far follow the view distance, so an area hundreds of metres across shows whole without losing depth precision up close. */
   private updateClipping(): void {
@@ -1557,7 +1700,7 @@ export class Viewport {
     const box = new THREE.Box3().setFromObject(this.bodiesGroup);
     const sk = new THREE.Box3().setFromObject(this.sketchGroup);
     if (!sk.isEmpty()) box.union(sk);
-    if (box.isEmpty()) box.setFromObject(this.sceneryGroup);
+    for (const o of this.shownScenery()) box.expandByObject(o);
     const target = center && box.isEmpty() ? center : box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
     const size = box.isEmpty() ? 100 : Math.max(box.getSize(new THREE.Vector3()).length(), 10);
     // Fit the narrower of the two view angles, so tall (phone) windows frame the model too.
@@ -1773,8 +1916,9 @@ export class Viewport {
     this.ortho.left = this.ortho.bottom * aspect;
     this.ortho.right = this.ortho.top * aspect;
     this.ortho.updateProjectionMatrix();
-    // Clean shots frame the model tightly with the perspective camera.
+    // Clean shots frame the model tightly with the perspective camera, with its surroundings.
     const box = new THREE.Box3().setFromObject(this.bodiesGroup);
+    for (const o of this.shownScenery()) box.expandByObject(o);
     const cam = clean && !box.isEmpty() ? this.persp : this.camera;
     const pose = { pos: this.persp.position.clone(), quat: this.persp.quaternion.clone() };
     if (cam === this.persp && clean) {
@@ -1786,6 +1930,9 @@ export class Viewport {
       this.persp.position.copy(sphere.center).addScaledVector(dir, dist);
       this.persp.up.set(...VIEWS.iso.up);
       this.persp.lookAt(sphere.center);
+      this.persp.near = Math.max(0.1, dist / 2000);
+      this.persp.far = Math.max(100_000, dist * 4);
+      this.persp.updateProjectionMatrix();
       this.persp.updateMatrixWorld();
     }
     this.renderer.render(this.scene, cam);
@@ -1800,6 +1947,7 @@ export class Viewport {
     this.ortho.left = saved.l;
     this.ortho.right = saved.r;
     this.ortho.updateProjectionMatrix();
+    this.updateClipping();
     this.applyInset();
     if (clean) helpers.forEach((h, i) => (h.visible = shown[i]!));
     return url;

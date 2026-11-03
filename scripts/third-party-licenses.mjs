@@ -59,6 +59,11 @@ modifications is permitted.
 
 Electron additionally ships Chromium's licenses in \`LICENSES.chromium.html\` inside the app bundle.
 
+## Example data
+
+The example "Park from drone photos" is built from OpenDroneMap's Aukerman data set (photos by Stephen Mather),
+dedicated to the public domain under CC0 1.0: https://github.com/OpenDroneMap/odm_data_aukerman
+
 ## All components
 
 | Package | Version | License |

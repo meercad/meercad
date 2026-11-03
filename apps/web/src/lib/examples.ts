@@ -218,6 +218,8 @@ export interface Example {
   doc: MeercadDocument;
   /** One of the per-feature examples: shows a feature, its sketches are not all fully dimensioned. */
   feature?: true;
+  /** A large example kept out of the app's code (`doc` is then empty): fetched when it is opened. */
+  url?: string;
 }
 
 /** One example per feature, simple to elaborate: files in src/examples, with the name and line shown for them. */
@@ -267,6 +269,8 @@ export const EXAMPLES: Example[] = [
   { name: "Gear pair", description: "Meshing gears that turn together", doc: gearPair },
   { name: "Hinged box", description: "Lid on a pin that swings open", doc: hingedBox },
   { name: "Name plate", description: "Raised and engraved text", doc: namePlate },
+  // Photos: OpenDroneMap's "Aukerman" data set, CC0 (public domain).
+  { name: "Park from drone photos", description: "A terrain from 77 photos, with an area, a path, a note and a stake-out point", thumbnail: "/examples/drone-park.jpg", url: "/examples/drone-park.meercad", doc: { format: "meercad/1", params: {}, features: [], rollback: null } },
   ...MORE.map(([file, name, description]) => {
     const raw = files[`../examples/${file}.meercad`];
     if (!raw) throw new Error(`example ${file} is missing`);
