@@ -19,6 +19,7 @@ import { meshBodyIds, meshHint } from "../lib/meshParts";
 import { usePrefs } from "../lib/keymap";
 import { PART_PALETTE, partColors } from "../lib/partColors";
 import { terrainItems } from "../lib/terrain";
+import { cleanUpMenu } from "./TerrainTools";
 import { startMarking, startScaling } from "../lib/terrainDraw";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { openMeshRepair } from "../lib/meshRepair";
@@ -630,6 +631,7 @@ function References() {
                   { label: t("Pin a note"), icon: <StickyNote />, onClick: () => startMarking("note", r.id) },
                   { label: t("Set a stake-out point"), icon: <MapPin />, onClick: () => startMarking("point", r.id) },
                   { label: t("Correct the scale…"), icon: <Ruler />, onClick: () => startScaling(r.id) },
+                  { label: t("Clean up…"), icon: <Eraser />, onClick: () => cleanUpMenu(r.id, e.clientX, e.clientY) },
                   "sep" as const,
                   { label: t("Rename…"), icon: <Pencil />, onClick: () => void rename(r) },
                   { label: r.hidden ? t("Show") : t("Hide"), icon: r.hidden ? <Eye /> : <EyeOff />, onClick: () => set(r, { hidden: !r.hidden || undefined }) },

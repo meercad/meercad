@@ -7,6 +7,7 @@ import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
 import { touchOnly } from "../lib/keyboard";
 import { hasTerrain, placeAt, previewPlace, sceneryOf, sketchOnTerrain, terrainItems, useTerrainPlace } from "../lib/terrain";
+import { cleanUpMenu } from "./TerrainTools";
 import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
@@ -82,7 +83,7 @@ export function ViewportView() {
   const drawing = useTerrainDraw();
   // The highlighter: a press on the ground paints until it comes up (mouse, finger or Pencil). It
   // takes the pointer before the view's own handling, so painting never turns the view.
-  const painting = drawing.kind === "stroke";
+  const painting = drawing.kind === "stroke" || drawing.kind === "erase";
   useEffect(() => {
     const el = host.current;
     if (!vp || !el || !painting) return;
@@ -627,6 +628,7 @@ export function ViewportView() {
               { label: t("Stake-out point here"), icon: <MapPin />, onClick: () => (startMarking("point", ground.id), addMarkPoint(ground.point)) },
               { label: t("Measure from here"), icon: <Ruler />, onClick: () => (useApp.setState({ measure: { active: true, picks: [], result: null } }), clearTerrainMeasure(), measurePoint(ground.point, ground.id)) },
               { label: t("New sketch here on the ground"), icon: <Pencil />, onClick: () => sketchOnTerrain(ground.point) },
+              { label: t("Clean up…"), icon: <Eraser />, onClick: () => cleanUpMenu(ground.id, x, y) },
               "sep" as const,
             ]
           : []),

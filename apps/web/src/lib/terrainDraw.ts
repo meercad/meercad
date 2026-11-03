@@ -9,11 +9,14 @@ import type { ReferenceModel, TerrainMark, Vec3 } from "@meercad/schema";
 import { THREE, type Viewport } from "@meercad/viewport";
 import { create } from "zustand";
 import { askText } from "../components/Ask";
-import { apply, currentDoc, getViewport, toast } from "../store";
+import { apply, currentDoc, getViewport, startTask, toast } from "../store";
+import { crop, cutHeight, erase, keepTriangles, removeLoosePieces } from "./glbEdit";
 import { t } from "./i18n";
 import { touchOnly } from "./keyboard";
 
 export type MarkKind = TerrainMark["kind"];
+/** What can be drawn: a mark, or a clean-up of the model itself (an outline to crop to, an eraser stroke). */
+export type DrawKind = MarkKind | "crop" | "erase";
 export const MARK_COLORS = ["#e8590c", "#f2c94c", "#2f9e44", "#1c7ed6", "#c2255c", "#ffffff"];
 
 /** Highlighter widths, in steps of the terrain's detail (so they suit a field as well as a garden). */
@@ -23,7 +26,7 @@ export const STROKE_WIDTHS = { s: 2, m: 6, l: 16 } as const;
  * The marking being drawn: its kind, the terrain, the points so far and where the pointer is; for
  * the highlighter also its width and the stroke being painted.
  */
-export const useTerrainDraw = create<{ kind: MarkKind | null; ref: string | null; points: Vec3[]; hover: Vec3 | null; color: string; width: keyof typeof STROKE_WIDTHS; painting: boolean }>(() => ({
+export const useTerrainDraw = create<{ kind: DrawKind | null; ref: string | null; points: Vec3[]; hover: Vec3 | null; color: string; width: keyof typeof STROKE_WIDTHS; painting: boolean }>(() => ({
   kind: null,
   ref: null,
   points: [],
@@ -36,7 +39,7 @@ export const useTerrainDraw = create<{ kind: MarkKind | null; ref: string | null
 const shown = (): ReferenceModel[] => (currentDoc().references ?? []).filter((r) => !r.hidden);
 
 /** Starts drawing a line, an area, a note or a point on a terrain (the one clicked, or the first shown). */
-export function startMarking(kind: MarkKind, ref?: string): void {
+export function startMarking(kind: DrawKind, ref?: string): void {
   const target = ref ?? shown()[0]?.id;
   if (!target) return toast(t("Show a terrain to draw on first."), "error");
   useTerrainDraw.setState({ kind, ref: target, points: [], hover: null });
@@ -46,6 +49,10 @@ export function startMarking(kind: MarkKind, ref?: string): void {
       ? touch ? t("Tap the terrain where the note goes.") : t("Click on the terrain where the note goes.")
       : kind === "point"
         ? touch ? t("Tap the terrain where the point goes.") : t("Click on the terrain where the point goes.")
+        : kind === "erase"
+          ? touch ? t("Wipe over what should go with a finger. Done ends erasing.") : t("Wipe over what should go with the mouse button held down. Esc ends erasing.")
+        : kind === "crop"
+          ? touch ? t("Tap the corners of what to keep or remove, then choose.") : t("Click the corners of what to keep or remove, then choose; Esc cancels.")
         : kind === "stroke"
           ? touch ? t("Paint on the terrain with a finger. Done ends painting.") : t("Paint on the terrain with the mouse button held down. Esc ends painting.")
           : touch ? t("Tap points on the terrain, then Done.") : t("Click points on the terrain; Enter or a double click finishes, Esc cancels."),
@@ -85,6 +92,7 @@ export function endStroke(): void {
   useTerrainDraw.setState({ points: [], painting: false });
   if (!s.ref || s.points.length < 2) return;
   const width = Math.round(Math.max(getViewport()?.sceneryStep ?? 100, 1) * STROKE_WIDTHS[s.width]);
+  if (s.kind === "erase") return void cleanUp(s.ref, (glb) => erase(glb, s.points, width), t("Erased"));
   saveMark(s.ref, { id: newMarkId(s.ref), kind: "stroke", points: s.points, color: s.color, width });
 }
 
@@ -92,9 +100,20 @@ export function undoMarkPoint(): void {
   useTerrainDraw.setState((s) => ({ points: s.points.slice(0, -1) }));
 }
 
+/** Crops the model to the outline drawn: keeps what is inside, or removes it. */
+export function finishCrop(keepInside: boolean): void {
+  const s = useTerrainDraw.getState();
+  if (s.kind !== "crop" || !s.ref) return;
+  if (s.points.length < 3) return toast(t("An area needs at least three points."), "error");
+  const outline = s.points;
+  cancelMarking();
+  void cleanUp(s.ref, (glb) => crop(glb, outline, keepInside), keepInside ? t("Cropped") : t("Removed"));
+}
+
 /** Keeps the line or area drawn so far (at least two or three points). */
 export function finishMarking(): void {
   const s = useTerrainDraw.getState();
+  if (s.kind === "crop") return finishCrop(true);
   if ((s.kind !== "line" && s.kind !== "area") || !s.ref) return;
   const need = s.kind === "area" ? 3 : 2;
   if (s.points.length < need) return toast(s.kind === "area" ? t("An area needs at least three points.") : t("A line needs at least two points."), "error");
@@ -310,15 +329,15 @@ export function marksForView(refs: readonly ReferenceModel[] | undefined, drawin
       labels.unshift({ key: "measure", ref: ms.ref ?? "", at: lifted[1]!, kind: "value", title: head!, detail: rest.join(" · "), color: "#ffffff" });
     } else if (ref) labels.unshift({ key: "measure", ref: ms.ref ?? "", at: pts[0]!, kind: "point", title: t("Here"), detail: placeText(ref, pts[0]!), color: "#ffffff" });
   }
-  // The stroke being painted.
-  if (drawing.kind === "stroke" && drawing.points.length >= 2) lines.push({ id: "drawing", points: [], color: drawing.color, fill: ribbon(drape(drawing.points, false, vp), vp.sceneryStep * STROKE_WIDTHS[drawing.width], vp), fillOpacity: 0.55 });
+  // The stroke being painted (the eraser in red).
+  if ((drawing.kind === "stroke" || drawing.kind === "erase") && drawing.points.length >= 2) lines.push({ id: "drawing", points: [], color: drawing.kind === "erase" ? "#e03131" : drawing.color, fill: ribbon(drape(drawing.points, false, vp), vp.sceneryStep * STROKE_WIDTHS[drawing.width], vp), fillOpacity: 0.55 });
   // The line or area being drawn, up to the pointer.
-  if ((drawing.kind === "line" || drawing.kind === "area") && drawing.points.length) {
+  if ((drawing.kind === "line" || drawing.kind === "area" || drawing.kind === "crop") && drawing.points.length) {
     const pts = drawing.hover ? [...drawing.points, drawing.hover] : drawing.points;
-    const area = drawing.kind === "area" && pts.length >= 3;
+    const area = drawing.kind !== "line" && pts.length >= 3;
     const points = drape(pts, area, vp);
     const fill = area ? drapeFill(pts, vp) : undefined;
-    lines.push({ id: "drawing", points, color: drawing.color, dashed: true, ...(fill ? { fill } : {}) });
+    lines.push({ id: "drawing", points, color: drawing.kind === "crop" ? "#ffffff" : drawing.color, dashed: true, ...(fill ? { fill } : {}) });
     labels.unshift({ key: "drawing", ref: drawing.ref ?? "", at: points[points.length - 1]!, kind: "value", title: area ? squareMetres(areaOf(pts, fill!).ground) : metres(lengthOf(points)), color: drawing.color });
   }
   return { lines, labels };
@@ -392,3 +411,44 @@ export function placeText(r: ReferenceModel, p: Vec3): string {
   const lon = r.geo.lon + p[0] / 1000 / (111_320 * Math.cos((r.geo.lat * Math.PI) / 180));
   return `${local}\n${lat.toFixed(7)}, ${lon.toFixed(7)} · ${(r.geo.alt + p[2] / 1000).toFixed(1)} m`;
 }
+
+// ---------------------------------------------------------------- cleaning up
+
+type Edit = ReturnType<typeof keepTriangles>;
+
+/**
+ * Applies a clean-up to a terrain's file: the model is replaced in one step, which Undo takes back.
+ * Runs after the next paint so the busy note shows first (a large scan takes a moment).
+ */
+export async function cleanUp(ref: string, edit: (glb: Uint8Array) => Edit, done: string): Promise<void> {
+  const r = currentDoc().references?.find((x) => x.id === ref);
+  if (!r) return;
+  const task = startTask(t("Cleaning up"));
+  await new Promise((res) => setTimeout(res, 30));
+  try {
+    const result = edit(Uint8Array.from(atob(r.data), (c) => c.charCodeAt(0)));
+    if (!result) return toast(t("Nothing there to remove."));
+    if (!result.after) return toast(t("That would remove everything: nothing was changed."), "error");
+    let data = "";
+    for (let i = 0; i < result.glb.length; i += 0x8000) data += String.fromCharCode(...result.glb.subarray(i, i + 0x8000));
+    apply({ type: "set_reference", reference: { ...r, data: btoa(data) } });
+    toast(t("{what}: {n} of {total} triangles removed. Undo brings them back.", { what: done, n: (result.before - result.after).toLocaleString(), total: result.before.toLocaleString() }));
+  } catch (e) {
+    toast(t("Could not clean up: {error}", { error: (e as Error).message }), "error");
+  } finally {
+    task.done();
+  }
+}
+
+/** Removes everything above a height the user enters (a ceiling, treetops). */
+export async function cutAbove(ref: string): Promise<void> {
+  const answer = await askText({ title: t("Remove everything above"), message: t("Height above the ground, e.g. 2.2 for a ceiling at 2.4 m."), label: t("Height (m)"), value: "2.2", confirmLabel: t("Remove") });
+  const h = Number((answer ?? "").replace(",", "."));
+  if (!answer || !Number.isFinite(h)) return;
+  await cleanUp(ref, (glb) => cutHeight(glb, h * 1000, true), t("Cut above {h} m", { h: h.toFixed(2) }));
+}
+
+export function removeLoose(ref: string): Promise<void> {
+  return cleanUp(ref, (glb) => removeLoosePieces(glb), t("Loose pieces"));
+}
+

@@ -4,14 +4,28 @@
  * works on the iPad without a keyboard), and the labels of lines, areas and notes in the view.
  */
 import type { Viewport } from "@meercad/viewport";
-import { Check, Minus, Pencil, Plus, Trash, Undo2, X } from "lucide-react";
+import { ArrowUpToLine, Check, Crop, Eraser, Minus, Pencil, Plus, Puzzle, Trash, Undo2, X } from "lucide-react";
 import { useEffect, useReducer, useState } from "react";
 import { setPlaceOffset, useTerrainPlace } from "../lib/terrain";
-import { STROKE_WIDTHS, cancelMarking, clearTerrainMeasure, deleteMark, editMark, finishMarking, MARK_COLORS, undoMarkPoint, useTerrainDraw, useTerrainMeasure, type TerrainLabel } from "../lib/terrainDraw";
+import { STROKE_WIDTHS, cancelMarking, cutAbove, finishCrop, removeLoose, startMarking, clearTerrainMeasure, deleteMark, editMark, finishMarking, MARK_COLORS, undoMarkPoint, useTerrainDraw, useTerrainMeasure, type TerrainLabel } from "../lib/terrainDraw";
 import { partName } from "../lib/features";
 import { useApp } from "../store";
+import { showMenu } from "./Menu";
 import { touchOnly } from "../lib/keyboard";
 import { t } from "../lib/i18n";
+
+/** The clean-up tools for a terrain or scanned area, as a menu. */
+export function cleanUpMenu(ref: string, x: number, y: number): void {
+  // After the menu that opened this one has closed.
+  setTimeout(() =>
+    showMenu(x, y, [
+      { label: t("Crop…"), icon: <Crop />, onClick: () => startMarking("crop", ref) },
+      { label: t("Eraser"), icon: <Eraser />, onClick: () => startMarking("erase", ref) },
+      { label: t("Remove everything above…"), icon: <ArrowUpToLine />, onClick: () => void cutAbove(ref) },
+      { label: t("Remove loose pieces"), icon: <Puzzle />, onClick: () => void removeLoose(ref) },
+    ]),
+  );
+}
 
 export function TerrainHud() {
   const draw = useTerrainDraw();
@@ -35,16 +49,32 @@ export function TerrainHud() {
   }, [draw.kind]);
 
   if (draw.kind) {
-    const title = { line: t("Mark a line"), area: t("Mark an area"), note: t("Pin a note"), point: t("Set a stake-out point"), stroke: t("Highlighter") }[draw.kind];
+    const title = { line: t("Mark a line"), area: t("Mark an area"), note: t("Pin a note"), point: t("Set a stake-out point"), stroke: t("Highlighter"), erase: t("Eraser"), crop: t("Crop") }[draw.kind];
+    const cleaning = draw.kind === "erase" || draw.kind === "crop";
     return (
       <div className="terrain-hud">
         <strong>{title}</strong>
+        {cleaning ? null : (
         <span className="swatches">
           {MARK_COLORS.map((c) => (
             <button key={c} className={`swatch ${draw.color === c ? "on" : ""}`} style={{ background: c }} title={c} onClick={() => useTerrainDraw.setState({ color: c })} />
           ))}
         </span>
-        {draw.kind === "stroke" ? (
+        )}
+        {draw.kind === "crop" ? (
+          <>
+            <button className="icon-btn sm" title={t("Take back the last point")} disabled={!draw.points.length} onClick={undoMarkPoint}>
+              <Undo2 />
+            </button>
+            <button className="btn sm" disabled={draw.points.length < 3} onClick={() => finishCrop(false)}>
+              {t("Remove inside")}
+            </button>
+            <button className="btn sm primary" disabled={draw.points.length < 3} onClick={() => finishCrop(true)}>
+              <Check /> {t("Keep inside")}
+            </button>
+          </>
+        ) : null}
+        {draw.kind === "stroke" || draw.kind === "erase" ? (
           <>
             <span className="widths">
               {(Object.keys(STROKE_WIDTHS) as (keyof typeof STROKE_WIDTHS)[]).map((w) => (
@@ -68,7 +98,7 @@ export function TerrainHud() {
             </button>
           </>
         ) : null}
-        {draw.kind !== "stroke" ? (
+        {draw.kind !== "stroke" && draw.kind !== "erase" ? (
           <button className="icon-btn sm" title={t("Cancel")} onClick={cancelMarking}>
             <X />
           </button>
