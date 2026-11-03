@@ -7,7 +7,8 @@
  * security-scoped bookmark, iCloud Drive is found through the system, and Claude gets meerCAD as an
  * extension instead of an entry written into its config.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, shell, type MenuItemConstructorOptions } from "electron";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
@@ -246,6 +247,60 @@ ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | str
   await writeFile(r.filePath, typeof p.data === "string" ? p.data : Buffer.from(p.data));
   return r.filePath;
 });
+/**
+ * A textured model of an area from a folder of photos (a drone flight), built by the native helper
+ * with Apple's photogrammetry. Progress goes to the window as "photos-progress"; null when the user
+ * picks no folder. One build at a time; "photos:cancel" stops it.
+ */
+let photoBuild: ChildProcess | null = null;
+ipcMain.handle("photos:build", async (e) => {
+  if (photoBuild) throw new Error("busy");
+  const win = BrowserWindow.fromWebContents(e.sender);
+  // MEERCAD_PHOTOS_DIR skips the folder dialog (automated tests of the whole build in the app).
+  const folder = process.env["MEERCAD_PHOTOS_DIR"] || (await dialog.showOpenDialog(win!, { properties: ["openDirectory"], message: lang === "de" ? "Ordner mit den Fotos" : "Folder with the photos" })).filePaths[0];
+  if (!folder) return null;
+  const helper = join(__dirname, "native", "meercad-photos").replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
+  const work = join(app.getPath("temp"), `meercad-photos-${Date.now()}`);
+  const glb = join(work, "model.glb");
+  await mkdir(work, { recursive: true });
+  try {
+    const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      const child = (photoBuild = spawn(helper, [folder, glb, work, "full"]));
+      let rest = "";
+      let failure = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        const lines = (rest + chunk.toString()).split("\n");
+        rest = lines.pop() ?? "";
+        for (const line of lines) {
+          try {
+            const m = JSON.parse(line) as { progress?: number; step?: string; done?: Record<string, unknown>; error?: string };
+            if (m.progress !== undefined) {
+              e.sender.send("photos-progress", { progress: m.progress, step: m.step });
+              // In the Dock too, so it can be followed from another app.
+              win?.setProgressBar(m.step === "writing" ? 2 : m.progress);
+            }
+            if (m.done) resolve(m.done);
+            if (m.error) failure = m.error;
+          } catch {
+            // not a message
+          }
+        }
+      });
+      child.on("error", reject);
+      child.on("exit", (code, signal) => reject(new Error(signal ? "cancelled" : failure || `the photo helper stopped (${code})`)));
+    });
+    if (win && !win.isFocused()) {
+      new Notification({ title: "meerCAD", body: lang === "de" ? "Das Modell aus den Fotos ist fertig." : "The model from the photos is ready." }).show();
+      app.dock?.bounce("informational");
+    }
+    return { ...result, folder: basename(folder), data: new Uint8Array(await readFile(glb)) };
+  } finally {
+    win?.setProgressBar(-1);
+    photoBuild = null;
+    await rm(work, { recursive: true, force: true });
+  }
+});
+ipcMain.handle("photos:cancel", () => void photoBuild?.kill());
 ipcMain.handle("storage:status", async () => {
   await findICloud();
   return {

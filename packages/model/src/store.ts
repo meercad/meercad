@@ -166,6 +166,19 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       pruneBlobs(next);
       break;
     }
+    case "set_reference": {
+      const list = (next.references ??= []);
+      const i = list.findIndex((r) => r.id === op.reference.id);
+      if (i >= 0) list[i] = structuredClone(op.reference);
+      else list.push(structuredClone(op.reference));
+      break;
+    }
+    case "delete_reference": {
+      if (!next.references?.some((r) => r.id === op.id)) throw new OpError(`unknown reference model "${op.id}"`);
+      next.references = next.references.filter((r) => r.id !== op.id);
+      if (!next.references.length) delete next.references;
+      break;
+    }
     case "delete_coupling": {
       const m = next.mechanism;
       if (!m?.couplings?.some((c) => c.id === op.id)) throw new OpError(`unknown coupling "${op.id}"`);

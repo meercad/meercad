@@ -204,6 +204,12 @@ export interface Task {
   detail?: string;
   /** When it started (performance.now()); short tasks are never shown. */
   since: number;
+  /** The project it works for: its tab shows the progress too. */
+  project?: string;
+  /** Shows a button that stops it. */
+  cancel?: () => void;
+  /** Long work (minutes): shows the time it has run and an estimate of what is left. */
+  long?: boolean;
 }
 let taskId = 0;
 
@@ -212,9 +218,9 @@ let taskId = 0;
  * rebuild, reading an import). Update it as it goes; `done` removes it. The Tasks panel shows it
  * with a progress bar once it has run for a moment.
  */
-export function startTask(label: string, progress: number | null = null): { update(progress: number | null, detail?: string): void; done(): void } {
+export function startTask(label: string, progress: number | null = null, options: { project?: string; cancel?: () => void; long?: boolean } = {}): { update(progress: number | null, detail?: string): void; done(): void } {
   const id = ++taskId;
-  set((s) => ({ tasks: [...s.tasks, { id, label, progress, since: performance.now() }] }));
+  set((s) => ({ tasks: [...s.tasks, { id, label, progress, since: performance.now(), ...options }] }));
   return {
     update(p, detail) {
       set((s) => ({ tasks: s.tasks.map((x) => (x.id === id ? { ...x, progress: p, ...(detail !== undefined ? { detail } : {}) } : x)) }));

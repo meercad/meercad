@@ -18,4 +18,7 @@ if (process.platform === "darwin") {
     { stdio: "inherit" },
   );
   if (r.status !== 0) process.exit(r.status ?? 1);
+  // The photo helper (Apple's photogrammetry: Apple silicon, macOS 14), sharing its code with the iPad app.
+  const photos = spawnSync("xcrun", ["swiftc", "-O", "-target", "arm64-apple-macos14", "../ios/ios/App/App/TerrainBuild.swift", "native/photos/main.swift", "-o", "dist/native/meercad-photos"], { stdio: "inherit" });
+  if (photos.status !== 0) process.exit(photos.status ?? 1);
 }

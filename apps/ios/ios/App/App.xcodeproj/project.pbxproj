@@ -19,6 +19,8 @@
 		A11CE0000000000000000001 /* PencilPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000002 /* PencilPlugin.swift */; };
 		A11CE0000000000000000011 /* ICloudPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000012 /* ICloudPlugin.swift */; };
 		A11CE0000000000000000031 /* StorePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000032 /* StorePlugin.swift */; };
+		A11CE00000000000000006B1 /* TerrainPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000006B2 /* TerrainPlugin.swift */; };
+		A11CE00000000000000006B3 /* TerrainBuild.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000006B4 /* TerrainBuild.swift */; };
 		A11CE00000000000000005A1 /* ScanPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005A2 /* ScanPlugin.swift */; };
 		A11CE00000000000000005A7 /* MeshSimplify.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005A8 /* MeshSimplify.swift */; };
 		A11CE00000000000000005A5 /* LidarScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE00000000000000005A6 /* LidarScan.swift */; };
@@ -43,6 +45,8 @@
 		A11CE0000000000000000012 /* ICloudPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudPlugin.swift; sourceTree = "<group>"; };
 		A11CE0000000000000000032 /* StorePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePlugin.swift; sourceTree = "<group>"; };
 		A11CE0000000000000000013 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		A11CE00000000000000006B2 /* TerrainPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerrainPlugin.swift; sourceTree = "<group>"; };
+		A11CE00000000000000006B4 /* TerrainBuild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerrainBuild.swift; sourceTree = "<group>"; };
 		A11CE00000000000000005A2 /* ScanPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanPlugin.swift; sourceTree = "<group>"; };
 		A11CE00000000000000005A8 /* MeshSimplify.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshSimplify.swift; sourceTree = "<group>"; };
 		A11CE00000000000000005A6 /* LidarScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LidarScan.swift; sourceTree = "<group>"; };
@@ -89,6 +93,8 @@
 				A11CE0000000000000000032 /* StorePlugin.swift */,
 				A11CE0000000000000000013 /* App.entitlements */,
 				A11CE00000000000000005A2 /* ScanPlugin.swift */,
+				A11CE00000000000000006B4 /* TerrainBuild.swift */,
+				A11CE00000000000000006B2 /* TerrainPlugin.swift */,
 				A11CE00000000000000005A8 /* MeshSimplify.swift */,
 				A11CE00000000000000005A6 /* LidarScan.swift */,
 				A11CE00000000000000005A4 /* VoxelField.swift */,
@@ -194,6 +200,8 @@
 				A11CE0000000000000000011 /* ICloudPlugin.swift in Sources */,
 				A11CE0000000000000000031 /* StorePlugin.swift in Sources */,
 				A11CE00000000000000005A1 /* ScanPlugin.swift in Sources */,
+				A11CE00000000000000006B3 /* TerrainBuild.swift in Sources */,
+				A11CE00000000000000006B1 /* TerrainPlugin.swift in Sources */,
 				A11CE00000000000000005A7 /* MeshSimplify.swift in Sources */,
 				A11CE00000000000000005A5 /* LidarScan.swift in Sources */,
 				A11CE00000000000000005A3 /* VoxelField.swift in Sources */,

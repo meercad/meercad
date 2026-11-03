@@ -131,6 +131,17 @@ export const definitions: Record<string, Json> = {
     ["id", "type", "a", "b", "anchor"],
   ),
   coupling: obj({ id, name: { type: "string", maxLength: 128 }, driver: id, driven: id, ratio: ref("expr") }, ["id", "driver", "driven", "ratio"]),
+  reference: obj(
+    {
+      id,
+      name: { type: "string", maxLength: 256 },
+      format: { const: "glb" },
+      data: { type: "string", maxLength: 256 * 1024 * 1024 },
+      hidden: bool,
+      geo: obj({ lat: { type: "number" }, lon: { type: "number" }, alt: { type: "number" } }, ["lat", "lon", "alt"]),
+    },
+    ["id", "name", "format", "data"],
+  ),
   feature: tagged("op", {
     sketch: feature("sketch", { plane: ref("planeSpec"), entities: arr(ref("entity")), constraints: arr(ref("constraint")) }, ["plane", "entities", "constraints"]),
     plane: feature("plane", { base: ref("planeSpec"), offset: ref("expr"), angle: ref("expr") }, ["base", "offset"]),
@@ -321,6 +332,7 @@ export const documentSchema = {
       units: { enum: ["mm", "in"] },
       features: arr(ref("feature")),
       mechanism: obj({ joints: arr(ref("joint")), couplings: arr(ref("coupling")), clearance: ref("expr") }, ["joints"]),
+      references: arr(ref("reference")),
       variants: arr(obj({ name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") } }, ["name", "params"])),
       variant: VARIANT_NAME,
       // A version's state is checked when it is restored, as the whole document it then becomes.
@@ -349,6 +361,8 @@ export const docOpSchema = {
     delete_joint: obj({ type: true, id }, ["id"]),
     set_coupling: obj({ type: true, coupling: ref("coupling") }, ["coupling"]),
     delete_coupling: obj({ type: true, id }, ["id"]),
+    set_reference: obj({ type: true, reference: ref("reference") }, ["reference"]),
+    delete_reference: obj({ type: true, id }, ["id"]),
     set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, { type: "string", pattern: "^[a-z0-9]{1,32}$" }) }, ["part", "material"]),
     set_variant: obj({ type: true, name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") }, rename: VARIANT_NAME }, ["name", "params"]),
     delete_variant: obj({ type: true, name: VARIANT_NAME }, ["name"]),

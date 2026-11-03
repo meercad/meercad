@@ -35,6 +35,13 @@ export function snapshot(doc: MeercadDocument, name: string, at: number, blobs: 
     blobs[key] = f.data;
     return { ...f, data: key };
   });
+  state.references = state.references?.map((r) => {
+    if (r.data.length < INLINE) return r;
+    const key = blobKey(r.data);
+    blobs[key] = r.data;
+    return { ...r, data: key };
+  });
+  if (!state.references) delete state.references;
   return { name, at, state };
 }
 
@@ -47,13 +54,25 @@ export function restored(doc: MeercadDocument, version: Version): MeercadDocumen
     if (data === undefined) throw new Error(`version "${version.name}": the contents of ${f.fileName} are missing`);
     return { ...f, data };
   });
+  state.references = state.references?.map((r) => {
+    if (!r.data.startsWith("blob:")) return r;
+    const data = doc.blobs?.[r.data];
+    if (data === undefined) throw new Error(`version "${version.name}": the contents of ${r.name} are missing`);
+    return { ...r, data };
+  });
+  if (!state.references) delete state.references;
   return { ...state, format: doc.format, ...(doc.versions ? { versions: doc.versions } : {}), ...(doc.blobs ? { blobs: doc.blobs } : {}) };
 }
 
 /** Drops blobs no version refers to any more. */
 export function pruneBlobs(doc: MeercadDocument): void {
   if (!doc.blobs) return;
-  const used = new Set(doc.versions?.flatMap((v) => v.state.features.flatMap((f) => (f.op === "import" && f.data.startsWith("blob:") ? [f.data] : []))) ?? []);
+  const used = new Set(
+    doc.versions?.flatMap((v) => [
+      ...v.state.features.flatMap((f) => (f.op === "import" && f.data.startsWith("blob:") ? [f.data] : [])),
+      ...(v.state.references ?? []).flatMap((r) => (r.data.startsWith("blob:") ? [r.data] : [])),
+    ]) ?? [],
+  );
   for (const k of Object.keys(doc.blobs)) if (!used.has(k)) delete doc.blobs[k];
   if (!Object.keys(doc.blobs).length) delete doc.blobs;
 }
@@ -72,7 +91,9 @@ export function versionChanges(version: VersionState, design: MeercadDocument): 
   const changed = design.features.filter((f) => then.has(f.id) && !same(then.get(f.id)!, f)).map((f) => f.id);
   const { features: _a, ...restThen } = version;
   const { features: _b, format: _c, versions: _d, blobs: _e, ...restNow } = design;
-  const other = JSON.stringify(sorted(restThen)) !== JSON.stringify(sorted(restNow));
+  // Reference models, like imports, compare by their file.
+  const keyed = (rest: Partial<VersionState>) => (rest.references ? { ...rest, references: rest.references.map((r) => ({ ...r, data: r.data.startsWith("blob:") ? r.data : blobKey(r.data) })) } : rest);
+  const other = JSON.stringify(sorted(keyed(restThen))) !== JSON.stringify(sorted(keyed(restNow)));
   return { added, removed, changed, other };
 }
 

@@ -1,6 +1,6 @@
 /** Open projects as tabs: click to switch, double-click the active one to rename, drag to reorder. */
 import { Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { closeTab, moveTab, newProject, openProject, renameProject, useApp } from "../store";
 import { t } from "../lib/i18n";
 
@@ -10,6 +10,7 @@ export function TabStrip() {
   const tabs = useApp((s) => s.tabs);
   const activeId = useApp((s) => (s.screen === "editor" ? s.project?.id : null));
   const saveState = useApp((s) => s.saveState);
+  const tasks = useApp((s) => s.tasks);
   const [editing, setEditing] = useState(false);
   const [dropBefore, setDropBefore] = useState<string | null>(null);
   const strip = useRef<HTMLDivElement>(null);
@@ -76,6 +77,14 @@ export function TabStrip() {
             ) : (
               <span className="tab-name">{tab.name}</span>
             )}
+            {((work) =>
+              work ? (
+                <i
+                  className={`tab-progress ${work.progress === null ? "indeterminate" : ""}`}
+                  title={`${work.label}${work.progress !== null ? ` · ${Math.round(work.progress * 100)} %` : ""}`}
+                  style={{ "--p": `${Math.round((work.progress ?? 0.25) * 360)}deg` } as CSSProperties}
+                />
+              ) : null)(tasks.find((x) => x.project === tab.id))}
             {active && saveState !== "saved" ? <i className="tab-dirty" title={saveState === "saving" ? t("Saving…") : t("Unsaved changes")} /> : null}
             <button
               className="tab-close"

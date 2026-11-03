@@ -604,6 +604,21 @@ export interface Mechanism {
 
 export type LengthUnit = "mm" | "in";
 
+/**
+ * A textured model to look at and design against, not a part: a landscape or building made from
+ * photos. Millimetres, Z up; one made from photos with GPS has east along +X and north along +Y.
+ */
+export interface ReferenceModel {
+  id: string;
+  name: string;
+  format: "glb";
+  /** Base64 file contents (in a version: a key into the document's `blobs`). */
+  data: string;
+  hidden?: boolean;
+  /** Where the model's origin is on Earth (degrees, metres above sea level), when its photos had GPS. */
+  geo?: { lat: number; lon: number; alt: number };
+}
+
 export interface MeercadDocument {
   format: typeof FORMAT;
   /** Named user parameters, e.g. `{ wall: "2 mm", width: "wall * 10" }`. */
@@ -628,6 +643,8 @@ export interface MeercadDocument {
   features: Feature[];
   /** Joints between parts; moving them never changes the model. */
   mechanism?: Mechanism;
+  /** Models shown with the design but not built into it: an area flown over with a drone, say. */
+  references?: ReferenceModel[];
   /**
    * Named sets of parameter values, e.g. one holder for three pipe sizes. The variant in use
    * (`variant`) replaces the values of the parameters it lists; the others keep theirs.
@@ -678,6 +695,9 @@ export type DocOp =
   | { type: "delete_joint"; id: string }
   | { type: "set_coupling"; coupling: Coupling }
   | { type: "delete_coupling"; id: string }
+  /** Adds a reference model or replaces the one with the same id. */
+  | { type: "set_reference"; reference: ReferenceModel }
+  | { type: "delete_reference"; id: string }
   /** A part's material (an id from model/materials such as "petg"), or null for none. */
   | { type: "set_material"; part: string; material: string | null }
   /** Adds a variant or replaces the one with that name (`rename` gives it a new name). */

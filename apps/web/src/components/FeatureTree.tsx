@@ -1,11 +1,11 @@
-import { Bot, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { Bot, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
 import { checkInterference } from "../lib/interference";
 import { hasPack, usePack } from "../lib/premium";
 import { evaluate, formatInertia, formatMass, massOf, massProperties, materialById, MATERIALS, referencedNames } from "@meercad/model";
-import type { Expr, Feature } from "@meercad/schema";
+import type { Expr, Feature, ReferenceModel } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp } from "../store";
@@ -72,6 +72,7 @@ export function SidePanel() {
       <div className="side-scroll">
         <FeatureList />
         <Bodies />
+        <References />
         <Params />
       </div>
     </aside>
@@ -589,6 +590,56 @@ function Bodies() {
               </li>
             );
           })()}
+        </ul>
+      ) : null}
+    </>
+  );
+}
+
+/** Models shown with the design but not built into it (an area from drone photos). */
+function References() {
+  const refs = useApp((s) => s.doc.references);
+  const [open, toggle] = useSection("references");
+  if (!refs?.length) return null;
+  const set = (r: ReferenceModel, patch: Partial<ReferenceModel>) => apply({ type: "set_reference", reference: { ...r, ...patch } });
+  const rename = async (r: ReferenceModel) => {
+    const name = (await askText({ title: t("Rename"), label: t("Name"), value: r.name }))?.trim();
+    if (name) set(r, { name });
+  };
+  return (
+    <>
+      <SectionHead open={open} onToggle={toggle}>
+        {t("Surroundings")} <span className="count">{refs.length}</span>
+      </SectionHead>
+      {open ? (
+        <ul className="tree">
+          {refs.map((r) => (
+            <li
+              key={r.id}
+              className={`tree-item ${r.hidden ? "dim" : ""}`}
+              title={r.geo ? t("Placed by GPS at {lat}, {lon}", { lat: r.geo.lat.toFixed(6), lon: r.geo.lon.toFixed(6) }) : undefined}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                showMenu(e.clientX, e.clientY, [
+                  { label: t("Rename…"), icon: <Pencil />, onClick: () => void rename(r) },
+                  { label: r.hidden ? t("Show") : t("Hide"), icon: r.hidden ? <Eye /> : <EyeOff />, onClick: () => set(r, { hidden: !r.hidden || undefined }) },
+                  "sep" as const,
+                  { label: t("Delete"), icon: <Trash />, danger: true, onClick: () => apply({ type: "delete_reference", id: r.id }) },
+                ]);
+              }}
+            >
+              <MapIcon className="ficon" />
+              <span className="tree-label">{r.name}</span>
+              <span className="actions" style={{ display: "flex" }}>
+                <button className="icon-btn sm" title={r.hidden ? t("Show") : t("Hide")} onClick={() => set(r, { hidden: !r.hidden || undefined })}>
+                  {r.hidden ? <EyeOff /> : <Eye />}
+                </button>
+                <button className="icon-btn sm" title={t("Delete")} onClick={() => apply({ type: "delete_reference", id: r.id })}>
+                  <Trash />
+                </button>
+              </span>
+            </li>
+          ))}
         </ul>
       ) : null}
     </>

@@ -14,6 +14,7 @@ import {
   Link2,
   ScanLine,
   Orbit,
+  Map as MapIcon,
   Mountain,
   MousePointer2,
   Move3d,
@@ -48,6 +49,7 @@ import { importFile } from "./io";
 import { Kbd } from "./Kbd";
 import { showMenu } from "./Menu";
 import { canScan, scanObject } from "../lib/scan";
+import { buildTerrain, canBuildTerrain } from "../lib/terrain";
 import { t } from "../lib/i18n";
 import { usePack } from "../lib/premium";
 
@@ -101,7 +103,8 @@ function useEntries(): RailEntry[] {
   usePrefs((s) => s.keys); // badges follow the shortcut preset
   const mechanics = usePack("mechanics");
   const scanPack = usePack("scan");
-  const scan = useCanScan() && scanPack;
+  const canScanHere = useCanScan();
+  const scan = (canScanHere || canBuildTerrain) && scanPack;
 
   if (sketchId) {
     const cur = ui.tool;
@@ -182,9 +185,16 @@ function useEntries(): RailEntry[] {
             icon: ScanLine,
             label: t("Scan"),
             tools: [
-              { id: "scan-object", icon: Orbit, label: t("Object (photos)"), hint: t("Walk all around an object; fine detail, takes a few minutes"), run: () => void scanObject("object") },
-              { id: "scan-lidar", icon: Box, label: t("Object (LiDAR)"), hint: t("Sweep around an object with LiDAR; quick and coarser, reachable sides are enough"), run: () => void scanObject("lidar") },
-              { id: "scan-surface", icon: Mountain, label: t("Surface (LiDAR)"), hint: t("Sweep over a surface, e.g. a recess a part must fit into"), run: () => void scanObject("surface") },
+              ...(canScanHere
+                ? [
+                    { id: "scan-object", icon: Orbit, label: t("Object (photos)"), hint: t("Walk all around an object; fine detail, takes a few minutes"), run: () => void scanObject("object") },
+                    { id: "scan-lidar", icon: Box, label: t("Object (LiDAR)"), hint: t("Sweep around an object with LiDAR; quick and coarser, reachable sides are enough"), run: () => void scanObject("lidar") },
+                    { id: "scan-surface", icon: Mountain, label: t("Surface (LiDAR)"), hint: t("Sweep over a surface, e.g. a recess a part must fit into"), run: () => void scanObject("surface") },
+                  ]
+                : []),
+              ...(canBuildTerrain
+                ? [{ id: "scan-terrain", icon: MapIcon, label: t("Area (drone photos)"), hint: t("A textured model of an area from a folder of overlapping drone photos; true size and north from their GPS"), run: () => void buildTerrain() }]
+                : []),
             ],
           },
         ]

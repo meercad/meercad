@@ -31,8 +31,12 @@ const api = {
     count: () => ipcRenderer.invoke("storage:count"),
     set: (p: { dir: string; move: boolean }) => ipcRenderer.invoke("storage:set", p),
   },
+  photos: {
+    build: () => ipcRenderer.invoke("photos:build"),
+    cancel: () => ipcRenderer.invoke("photos:cancel"),
+  },
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
-  on: (channel: "menu" | "open-project" | "projects-changed" | "error", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "projects-changed" | "error" | "photos-progress", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

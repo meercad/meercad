@@ -5,6 +5,7 @@ import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "
 import { hasPack } from "../lib/premium";
 import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair } from "../lib/meshRepair";
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
+import { sceneryOf } from "../lib/terrain";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
 import { Box, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Layers, Move3d, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
@@ -69,6 +70,9 @@ export function ViewportView() {
   const heat = useDeviation((s) => s.maps);
   const wall = useThickness((s) => s.maps);
   useEffect(() => vp?.setBodyHeat(wall.size ? wall : heat), [vp, heat, wall]);
+  // Reference models (an area from drone photos) around the design.
+  const references = doc.references;
+  useEffect(() => vp?.setScenery(sceneryOf({ ...doc, references })), [vp, references]); // eslint-disable-line react-hooks/exhaustive-deps
   // Shapes fitted on a scan in the Measure tool, laid over the triangles they cover.
   const scanShapes = useScanMeasure((s) => s.shapes);
   useEffect(() => {

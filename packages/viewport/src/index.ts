@@ -5,6 +5,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
@@ -58,6 +59,13 @@ export interface ReferenceMeshView {
   id: string;
   positions: Float32Array;
   indices: Uint32Array;
+}
+
+/** A textured model shown around the design (an area made from drone photos): a GLB in millimetres, Z up. */
+export interface SceneryView {
+  id: string;
+  data: ArrayBuffer;
+  hidden?: boolean;
 }
 
 export type Pick =
@@ -185,6 +193,8 @@ export class Viewport {
   private sketchGroup = new THREE.Group();
   private planeGroup = new THREE.Group();
   private refGroup = new THREE.Group();
+  private sceneryGroup = new THREE.Group();
+  private scenery = new Map<string, { data: ArrayBuffer; object: THREE.Object3D | null }>();
   private bodies: BodyObj[] = [];
   private hover: Pick | null = null;
   private selected: Pick[] = [];
@@ -240,7 +250,7 @@ export class Viewport {
 
     this.grid = new THREE.Group();
     this.grid.add(this.gridMesh);
-    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sketchGroup, this.overlay, this.handleGroup, this.jointGroup);
+    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sceneryGroup, this.sketchGroup, this.overlay, this.handleGroup, this.jointGroup);
     this.axes = axesHelper();
     this.scene.add(this.axes);
 
@@ -773,6 +783,64 @@ export class Viewport {
       m.userData = { reference: r.id };
       this.refGroup.add(m);
     }
+  }
+
+  /**
+   * Textured models around the design. Each file is read once; a list without it removes it.
+   * They are only looked at: picks and the model's framing ignore them while there are parts.
+   */
+  setScenery(list: readonly SceneryView[]): void {
+    for (const [id, s] of this.scenery) {
+      if (list.some((l) => l.id === id && l.data === s.data)) continue;
+      if (s.object) {
+        this.sceneryGroup.remove(s.object);
+        disposeTree(s.object, true);
+      }
+      this.scenery.delete(id);
+    }
+    for (const s of list) {
+      let entry = this.scenery.get(s.id);
+      if (!entry) {
+        const e = (entry = { data: s.data, object: null as THREE.Object3D | null });
+        this.scenery.set(s.id, e);
+        new GLTFLoader().parse(
+          s.data,
+          "",
+          (gltf) => {
+            if (this.scenery.get(s.id) !== e) return disposeTree(gltf.scene, true);
+            e.object = gltf.scene;
+            e.object.visible = !list.find((l) => l.id === s.id)?.hidden;
+            this.sceneryGroup.add(gltf.scene);
+            if (!this.framed && !this.bodies.length) {
+              this.framed = true;
+              this.fit(false);
+            }
+            this.invalidate();
+          },
+          (err) => console.warn("scenery", s.id, err),
+        );
+      }
+      if (entry.object) entry.object.visible = !s.hidden;
+    }
+    this.invalidate();
+  }
+
+  /** Near and far follow the view distance, so an area hundreds of metres across shows whole without losing depth precision up close. */
+  private updateClipping(): void {
+    const d = this.camera.position.distanceTo(this.controls.target);
+    let far = Math.max(100_000, d * 20);
+    if (this.sceneryGroup.children.length) {
+      const box = new THREE.Box3().setFromObject(this.sceneryGroup);
+      if (!box.isEmpty()) far = Math.max(far, d * 2 + box.getSize(new THREE.Vector3()).length() * 2);
+    }
+    const near = Math.max(0.1, d / 2000);
+    if (this.persp.near === near && this.persp.far === far) return;
+    this.persp.near = near;
+    this.persp.far = far;
+    this.persp.updateProjectionMatrix();
+    this.ortho.near = -far;
+    this.ortho.far = far;
+    this.ortho.updateProjectionMatrix();
   }
 
   /**
@@ -1489,6 +1557,7 @@ export class Viewport {
     const box = new THREE.Box3().setFromObject(this.bodiesGroup);
     const sk = new THREE.Box3().setFromObject(this.sketchGroup);
     if (!sk.isEmpty()) box.union(sk);
+    if (box.isEmpty()) box.setFromObject(this.sceneryGroup);
     const target = center && box.isEmpty() ? center : box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
     const size = box.isEmpty() ? 100 : Math.max(box.getSize(new THREE.Vector3()).length(), 10);
     // Fit the narrower of the two view angles, so tall (phone) windows frame the model too.
@@ -1753,6 +1822,7 @@ export class Viewport {
     this.controls.update();
     if (this.changed) {
       this.changed = false;
+      this.updateClipping();
       this.updateGrid();
       if (this.handles.length) this.drawHandles();
       for (const fn of this.listeners) fn();
@@ -1920,13 +1990,15 @@ function handleKnob(color: number, twoWay: boolean): THREE.Texture | null {
   return tex;
 }
 
-function disposeTree(g: THREE.Object3D): void {
+function disposeTree(g: THREE.Object3D, textures = false): void {
   g.traverse((o) => {
     const m = o as THREE.Mesh;
     m.geometry?.dispose();
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-    if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-    else mat?.dispose();
+    for (const x of Array.isArray(mat) ? mat : mat ? [mat] : []) {
+      if (textures) (x as THREE.MeshBasicMaterial).map?.dispose();
+      x.dispose();
+    }
   });
   g.clear();
 }

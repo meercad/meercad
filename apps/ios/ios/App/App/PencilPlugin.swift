@@ -62,6 +62,7 @@ class AppViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(PencilPlugin())
         bridge?.registerPluginInstance(ScanPlugin())
+        bridge?.registerPluginInstance(TerrainPlugin())
         bridge?.registerPluginInstance(ICloudPlugin())
         bridge?.registerPluginInstance(StorePlugin())
     }

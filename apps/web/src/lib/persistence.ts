@@ -21,6 +21,17 @@ export interface Project extends ProjectMeta {
   doc: MeercadDocument;
 }
 
+/** What the native photo build reports besides the model itself. */
+export interface TerrainResult {
+  photos: number;
+  triangles: number;
+  /** Size in mm (east, north, up). */
+  size: [number, number, number];
+  seconds: number;
+  /** Where the model's origin is, when the photos had GPS; `error` how well they agreed (m). */
+  geo?: { lat: number; lon: number; alt: number; error: number; cameras: number };
+}
+
 interface DesktopApi {
   isDesktop: true;
   /** The Claude Desktop config file written, or null when Claude Desktop was handed the extension to install. */
@@ -50,8 +61,14 @@ interface DesktopApi {
     count(): Promise<number>;
     set(p: { dir: string; move: boolean }): Promise<{ dir: string; moved: number; skipped: number }>;
   };
+  /** A model from a folder of photos the user picks (null: none picked); see lib/terrain. */
+  photos: {
+    build(): Promise<(TerrainResult & { folder: string; data: Uint8Array }) | null>;
+    cancel(): Promise<void>;
+  };
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
   on(channel: "menu" | "open-project" | "projects-changed" | "error", fn: (arg: string) => void): () => void;
+  on(channel: "photos-progress", fn: (arg: { progress: number; step: string }) => void): () => void;
 }
 
 export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;

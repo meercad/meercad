@@ -1055,3 +1055,11 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .home-section-toggle svg.open { transform: rotate(90deg); }
 .home-section-toggle + .sub { margin-top: 6px; }
 .settings .pack-contents { display: block; margin-top: 2px; font-size: 11.5px; }
+/* A long task's time and stop button; a ring on the tab of the project it works for. */
+.task-cancel { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px -6px -4px 2px; padding: 0; border: none; border-radius: 6px; background: none; color: rgb(255 255 255 / 0.7); align-self: center; }
+.task-cancel:hover { background: rgb(255 255 255 / 0.12); color: #fff; }
+.task-cancel svg { width: 14px; height: 14px; }
+.task-time { margin-top: 6px; font-size: 12px; color: rgb(255 255 255 / 0.65); }
+.tab-progress { width: 14px; height: 14px; border-radius: 50%; flex: none; background: conic-gradient(var(--accent) var(--p), var(--glass-border) 0); -webkit-mask: radial-gradient(circle, transparent 3.5px, #000 4px); mask: radial-gradient(circle, transparent 3.5px, #000 4px); }
+.tab-progress.indeterminate { animation: tab-spin 1s linear infinite; }
+@keyframes tab-spin { to { transform: rotate(360deg); } }
