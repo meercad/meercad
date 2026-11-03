@@ -198,7 +198,7 @@ function useEntries(): RailEntry[] {
               ...(canScanSpaces
                 ? [
                     { id: "scan-room", icon: DoorOpen, label: t("Room (LiDAR)"), hint: t("Walk through a room: walls, doors, windows and furniture become parts you can edit"), run: () => void scanRoom() },
-                    { id: "scan-area", icon: Trees, label: t("Area (guided)"), hint: t("A garden bed, a terrace, a corner: the app shows where to point; true size, no drone"), run: () => void scanArea() },
+                    { id: "scan-area", icon: Trees, label: t("Area (guided)"), hint: t("A garden bed, a terrace, a corner: walk about, the app shows what is in; true size, no drone"), run: () => void scanArea() },
                   ]
                 : []),
               ...(canBuildTerrain

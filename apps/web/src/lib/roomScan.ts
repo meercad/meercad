@@ -1,11 +1,11 @@
 /**
- * Scanning a room or an area with the iPhone or iPad (the app's Room plugin, guided live by Apple's
- * capture screens): a room becomes a design of editable parts (see roomDoc), an area a textured
- * model around the design (see terrain). The Mac has no camera for this; it opens the results.
+ * Scanning a room or an area with the iPhone or iPad and its LiDAR (the app's Room plugin, guided
+ * live): a room becomes a design of editable parts (see roomDoc), an area a coloured model of true
+ * size around the design (see terrain). The Mac has no camera for this; it opens the results.
  */
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Filesystem } from "@capacitor/filesystem";
-import { newProject, startTask, toast } from "../store";
+import { newProject, toast } from "../store";
 import { nativeApp } from "./native";
 import type { TerrainResult } from "./persistence";
 import { roomDocument, type RoomScan } from "./roomDoc";
@@ -16,7 +16,6 @@ interface RoomPlugin {
   capabilities(o: { lang: string }): Promise<{ room: boolean; area: boolean }>;
   scanRoom(o: { lang: string }): Promise<RoomScan>;
   scanArea(o: { lang: string }): Promise<TerrainResult & { path: string }>;
-  addListener(event: "progress", fn: (e: { progress: number }) => void): Promise<{ remove(): Promise<void> }>;
 }
 const Room = registerPlugin<RoomPlugin>("Room");
 
@@ -55,9 +54,7 @@ export async function scanRoom(): Promise<void> {
 
 /** Scans an area (garden bed, terrace, a corner) into a textured model around the open design. */
 export async function scanArea(): Promise<void> {
-  if (!(await capabilities()).area) return toast(t("Scanning areas needs an iPhone or iPad with LiDAR and iOS 18 or later."), "error");
-  const task = startTask(t("Model from photos"), 0, { long: true });
-  const listener = await Room.addListener("progress", (e) => task.update(e.progress, t("Building the model")));
+  if (!(await capabilities()).area) return toast(t("Scanning areas needs an iPhone or iPad with LiDAR."), "error");
   try {
     const r = await Room.scanArea({ lang });
     const file = await Filesystem.readFile({ path: `file://${r.path}` });
@@ -66,9 +63,6 @@ export async function scanArea(): Promise<void> {
   } catch (e) {
     const err = e as { code?: string; message?: string };
     if (err.code !== "cancelled") toast(err.message ?? t("Scanning failed"), "error");
-  } finally {
-    void listener.remove();
-    task.done();
   }
 }
 

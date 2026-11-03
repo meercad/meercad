@@ -27,6 +27,8 @@ export interface TerrainResult {
   /** Size in mm (east, north, up). */
   size: [number, number, number];
   seconds: number;
+  /** Scanned with LiDAR: true size and level without GPS. */
+  measured?: boolean;
   /** Where the model's origin is, when the photos had GPS; `error` how well they agreed (m). */
   geo?: { lat: number; lon: number; alt: number; error: number; cameras: number };
 }

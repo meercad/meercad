@@ -91,7 +91,9 @@ export function addTerrain(r: TerrainResult & { folder: string }, bytes: Uint8Ar
   if (!apply({ type: "set_reference", reference })) return;
   const size = r.size.map((v) => (v / 1000).toFixed(v >= 10_000 ? 0 : 1)).join(" × ");
   toast(
-    r.geo
+    r.measured
+      ? t("Area scanned: {size} m, true size. Long-press it to mark, measure or set parts onto it.", { size })
+      : r.geo
       ? t("{photos} photos → {size} m, placed by GPS (±{error} m)", { photos: r.photos, size, error: r.geo.error.toFixed(1) })
       : t("{photos} photos → model without GPS: its size is not to scale", { photos: r.photos }),
   );
