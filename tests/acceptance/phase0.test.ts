@@ -1,7 +1,7 @@
 /** Phase 0 acceptance criteria (PLAN.md §7), now on the full sketch + feature stack. */
 import { describe, expect, it } from "vitest";
 import type { BodyMesh } from "@meercad/kernel";
-import { decodeShareFragment, encodeShareFragment, meshVolume, readStl, writeStl } from "@meercad/io";
+import { meshVolume, readStl, writeStl } from "@meercad/io";
 import { validateDocument, type MeercadDocument } from "@meercad/schema";
 import { corpus, newSession, withParams } from "./helpers.js";
 
@@ -69,14 +69,4 @@ describe("Phase 0 acceptance", () => {
     expect(median).toBeLessThan(200);
   });
 
-  it("4: share link rebuilds identically", async () => {
-    const doc = corpus("box-fillet.meercad.json");
-    const parsed = validateDocument(await decodeShareFragment(await encodeShareFragment(doc)));
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
-    const a = (await newSession()).rebuild(doc);
-    const b = (await newSession()).rebuild(parsed.value);
-    expect(b.report.bodies).toEqual(a.report.bodies);
-    expect(b.meshes[0]!.faceTags).toEqual(a.meshes[0]!.faceTags);
-  });
 });

@@ -1,7 +1,7 @@
 # Testing meerCAD
 
 meerCAD is tested on three levels. The first two run in seconds and catch most regressions. The
-third one is a person (or an agent driving the browser) using the app as a maker would, and it is the
+third one is a person (or an agent driving the app) using the app as a maker would, and it is the
 only one that sees what the model *looks* like. Run all three before a release and after any change
 to the kernel, the viewport or a tool.
 
@@ -9,7 +9,7 @@ to the kernel, the viewport or a tool.
 | --- | --- | --- |
 | 1. Unit and acceptance tests | Geometry is right: volumes, sizes, topology, threads, imports, units | `pnpm test` |
 | 2. Test models | Real designs from simple to complex rebuild with the expected result, also after parameter changes | `pnpm test tests/acceptance/models.test.ts` |
-| 3. Hands-on run | Tools, dialogs, picking, keyboard, touch, views and rendering behave as a person expects | Checklist below, in the browser and in the apps |
+| 3. Hands-on run | Tools, dialogs, picking, keyboard, touch, views and rendering behave as a person expects | Checklist below, in the Mac and iPad apps |
 
 Before reporting work as done: `pnpm typecheck` (every package plus the tests) and `pnpm test`, and
 read the whole output.
@@ -88,9 +88,11 @@ what it must come out as.
 
 ### Setup
 
-- **Browser:** `pnpm dev` (or the `web` entry in `.claude/launch.json`), a window of at least
-  1400 × 900, and once at phone width.
-- **Mac:** `pnpm wip` installs "meerCAD WIP" next to the release.
+- **Mac:** `pnpm wip` installs "meerCAD WIP" next to the release. An agent starts it with
+  `open -a "meerCAD WIP" --args --remote-debugging-port=9333` and clicks, reads and takes
+  screenshots with `node scripts/drive-app.mjs` (eval / shot). There is no browser version: in a
+  plain browser the interface only says it runs as the app. Check once with a narrow window (phone
+  layout).
 - **iPad:** build and install the iOS app (`apps/ios`). Every check below runs on the iPad with touch
   and Pencil and no keyboard as well.
 - In development builds `window.meercadTest` gives scripts the document, the result and the store
@@ -175,7 +177,7 @@ the history, then check the result as above)
 - Export STL, 3MF and STEP; open the files in a slicer: watertight, right size, smooth curves.
 - Share link opens the same design.
 
-**Phone layout** (iPhone, or a browser window up to 600 px wide; `html[data-compact]`)
+**Phone layout** (iPhone, or a Mac window up to 600 px wide; `html[data-compact]`)
 - Top bar: Home, project name (tap: open projects, new part, rename, close), undo, redo, "⋯" with the
   File items first. Nothing is cut off at 375 and 440 px width.
 - Tools in a bar at the bottom; groups open a menu above the bar; "Finish" stays visible in sketches.
@@ -196,7 +198,7 @@ the history, then check the result as above)
 
 - A mirror or pattern cannot take another mirror or pattern as its source; pattern in two directions
   instead.
-- In the browser test tools, ⌘A in a text field does not select all (the synthetic key event has no
+- When driving the app by script, ⌘A in a text field does not select all (the synthetic key event has no
   editing command); triple-click the field instead.
 
 ## Findings log

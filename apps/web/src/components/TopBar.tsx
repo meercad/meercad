@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, History, House, Info, Keyboard, Moon, PanelLeft, Pencil, Plus, Redo2, Ruler, Settings, Share2, Undo2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, History, House, Info, Keyboard, Moon, PanelLeft, Pencil, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -6,7 +6,7 @@ import { featureName } from "../lib/features";
 import { useCompact } from "../lib/layout";
 import { askText } from "./Ask";
 import type { MenuEntry } from "./Menu";
-import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile, shareLink } from "./io";
+import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile } from "./io";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
 import { hasPack } from "../lib/premium";
@@ -75,7 +75,6 @@ export function TopBar() {
       "sep",
       ...(hasPack("versions") ? [{ label: t("Versions…"), icon: <History />, onClick: openVersions }] : []),
       { label: t("Save copy as .meercad…"), icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
-      ...(desktop ? [] : [{ label: t("Copy share link"), icon: <Share2 />, onClick: () => void shareLink() }]),
   ];
   const openFile = () => {
     const r = fileBtn.current!.getBoundingClientRect();
@@ -153,7 +152,7 @@ export function TopBar() {
       <button className="btn" ref={fileBtn} onClick={openFile} title={t("Import and export")}>
         {t("File")} <ChevronDown />
       </button>
-      {/* Assistants connect through the desktop app or a browser on a computer, not the iPad app. */}
+      {/* Assistants connect through the Mac app, not the iPad app. */}
       {nativeApp ? null : (
         <span className="mcp-anchor">
           <McpButton />

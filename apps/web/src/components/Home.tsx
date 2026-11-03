@@ -2,7 +2,6 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Ellipsis, Fi
 import { useEffect, useState, type DragEvent } from "react";
 import { askConfirm, askText } from "./Ask";
 import { showMenu } from "./Menu";
-import { nativeApp } from "../lib/native";
 import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
 import { newProject, openProject, refreshProjects, toast, useApp } from "../store";
 import { EXAMPLES } from "../lib/examples";
@@ -116,7 +115,7 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
       onClick: async () => {
         const ok = await askConfirm({
           title: t("Delete “{name}”?", { name: p.name }),
-          message: desktop ? t("The project file goes to the Trash.") : nativeApp ? t("The project file is deleted. This cannot be undone.") : t("The project is removed from this browser. This cannot be undone."),
+          message: desktop ? t("The project file goes to the Trash.") : t("The project file is deleted. This cannot be undone."),
           confirmLabel: t("Delete part"),
           danger: true,
         });
@@ -229,10 +228,8 @@ export function Home() {
         <p className="sub">
           {desktop ? (
             withExt(t("Saved as open {ext} files; folders here are real folders on disk. Drag a part onto a folder to move it."))
-          ) : nativeApp ? (
-            withExt(t("Saved as open {ext} files, in the Files app under On My {device} › meerCAD. Drag a part onto a folder to move it.", { device: /iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad" }))
           ) : (
-            t("Stored only in this browser. Use Share or Export to move them elsewhere. Drag a part onto a folder to move it.")
+            withExt(t("Saved as open {ext} files, in the Files app under On My {device} › meerCAD. Drag a part onto a folder to move it.", { device: /iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad" }))
           )}
         </p>
         <div className="grid">

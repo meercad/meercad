@@ -50,7 +50,7 @@ export function MotionPanel() {
       const [from, to] = jointRange(id);
       const gif = await renderMotionGif(id, from, to);
       const project = useApp.getState().project?.name ?? "meerCAD";
-      download(`${project} ${id}.gif`, gif as BlobPart, "image/gif");
+      download(`${project} ${id}.gif`, gif as BlobPart);
     } catch (e) {
       toast(t("Could not make the video: {error}", { error: (e as Error).message }), "error");
     } finally {

@@ -121,7 +121,7 @@ COEP `require-corp`, which we already send, **and** a secure context (https, or 
   To test threads on the iPad, serve over https: for example `tailscale serve` (real certificate, no
   setup on the iPad), a Cloudflare tunnel, or a local CA (mkcert) whose root is installed and trusted on
   the iPad. A plain self-signed certificate that you click through may not be enough for workers (untested).
-- **Production web (Cloudflare Pages, `_headers`):** https plus the headers already set, so threads are on.
+- **Production web:** none any more; meerCAD ships only as the Mac and iPad app.
 - **Electron:** `app://` is registered as `secure: true` and `main.ts` sets COOP/COEP/CORP, so the desktop
   app is cross-origin isolated and uses threads. Chromium has no 8-thread cap, so desktop gets one
   thread per core.

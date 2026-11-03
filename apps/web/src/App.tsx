@@ -2,7 +2,6 @@ import { MotionPanel } from "./components/MotionPanel";
 import { toggleJoints, useMotion } from "./lib/mechanism";
 import { hasPack } from "./lib/premium";
 import { useEffect, useState } from "react";
-import { decodeShareFragment } from "@meercad/io";
 import { validateDocument } from "@meercad/schema";
 import { FeatureDialog } from "./components/FeatureDialog";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
@@ -79,18 +78,6 @@ function runModelAction(action: ModelAction): void {
 
 async function route(): Promise<void> {
   const hash = location.hash;
-  if (hash.startsWith("#m1.")) {
-    try {
-      const v = validateDocument(await decodeShareFragment(hash));
-      if (!v.ok) throw new Error(v.errors[0]);
-      await newProject(v.value, t("Shared part"));
-      toast(t("Opened a shared model as a new project in this browser"));
-    } catch (e) {
-      toast(t("Could not open share link: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error");
-      history.replaceState(null, "", "#/");
-    }
-    return;
-  }
   const m = /^#\/p\/(.+)$/.exec(hash);
   const s = useApp.getState();
   if (m) {

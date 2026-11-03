@@ -3,7 +3,7 @@
  * plugin): an object from photos all around it (fine, takes a while), an object with LiDAR (quick,
  * coarser, works from the reachable sides), or a surface with LiDAR (for parts that must fit onto or
  * into something). The scan comes back as STL in millimetres, one file per separate piece, each
- * imported like any mesh, as a whole part. Elsewhere (Mac, browser) scanning is not offered.
+ * imported like any mesh, as a whole part. On the Mac scanning is not offered.
  */
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Filesystem } from "@capacitor/filesystem";

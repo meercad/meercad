@@ -1,5 +1,5 @@
 /** File import/export and share links. */
-import { encodeShareFragment, read3mf, readDxf, readObj, write3mf, writeDxf, writeStl, writeSvg, writeZip, type Curve2 } from "@meercad/io";
+import { read3mf, readDxf, readObj, write3mf, writeDxf, writeStl, writeSvg, writeZip, type Curve2 } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
@@ -23,27 +23,16 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   zip: { name: t("Zip archive"), extensions: ["zip"] },
 };
 
-/** Saves a file: a native save dialog on desktop, the share sheet on iPad, a browser download otherwise. */
-export function download(name: string, data: BlobPart, type: string): void {
+/** Saves a file: a save dialog on the Mac, the share sheet on the iPad. */
+export function download(name: string, data: BlobPart): void {
   if (nativeApp) {
     const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
     void shareFile(name, payload).catch((e: Error) => toast(t("Could not share {name}: {error}", { name, error: e.message }), "error"));
     return;
   }
-  if (desktop) {
-    const ext = name.split(".").pop() ?? "";
-    const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
-    void desktop.saveFile({ name, data: payload, ...(FILTERS[ext] ? { filters: [FILTERS[ext]!] } : {}) }).then((path) => path && toast(t("Saved {path}", { path })));
-    return;
-  }
-  const url = URL.createObjectURL(new Blob([data], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const ext = name.split(".").pop() ?? "";
+  const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+  void desktop?.saveFile({ name, data: payload, ...(FILTERS[ext] ? { filters: [FILTERS[ext]!] } : {}) }).then((path) => path && toast(t("Saved {path}", { path })));
 }
 
 export const baseName = () => (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
@@ -72,7 +61,7 @@ export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   try {
     const poses = shownPoses(ids);
     const meshes = (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m));
-    download(`${baseName()}.${format}`, meshFile(format, meshes) as BlobPart, format === "stl" ? "model/stl" : "model/3mf");
+    download(`${baseName()}.${format}`, meshFile(format, meshes) as BlobPart);
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
   }
@@ -111,7 +100,7 @@ export async function exportVariants(format: "stl" | "3mf" | "step"): Promise<vo
       const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
       files[file] = format === "step" ? await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id))) : meshFile(format, await kernel.exportMeshes(ids));
     }
-    download(`${baseName()}-${t("variants")}.zip`, writeZip(files) as BlobPart, "application/zip");
+    download(`${baseName()}-${t("variants")}.zip`, writeZip(files) as BlobPart);
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
   } finally {
@@ -135,7 +124,7 @@ export async function exportStep(): Promise<void> {
     const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
     const poses = shownPoses(ids ?? []);
     const data = await kernel.exportStep(ids, stepParts().map((p) => (poses.has(p.id) ? { ...p, pose: poses.get(p.id)! } : p)));
-    download(`${baseName()}.step`, data as BlobPart, "model/step");
+    download(`${baseName()}.step`, data as BlobPart);
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: "STEP", error: e instanceof Error ? e.message : String(e) }), "error");
   }
@@ -157,24 +146,12 @@ export function sketchCurves(sketchId: string): Curve2[] {
 export function exportSketch(sketchId: string, format: "dxf" | "svg"): void {
   const curves = sketchCurves(sketchId);
   if (!curves.length) return toast(t("The sketch has no geometry"), "error");
-  if (format === "dxf") download(`${baseName()}-${sketchId}.dxf`, writeDxf(curves), "image/vnd.dxf");
-  else download(`${baseName()}-${sketchId}.svg`, writeSvg(curves), "image/svg+xml");
-}
-
-export async function shareLink(): Promise<void> {
-  // The link carries the design only, not its saved versions.
-  const frag = await encodeShareFragment(designOf(currentDoc()));
-  const url = `${location.origin}${location.pathname}#${frag}`;
-  try {
-    await navigator.clipboard.writeText(url);
-    toast(t("Link copied ({size} kB). The model lives in the link and never touches a server.", { size: Math.round(url.length / 100) / 10 }));
-  } catch {
-    await showNotice({ title: t("Share link"), message: t("Copy this link. The model lives in the link itself."), value: url });
-  }
+  if (format === "dxf") download(`${baseName()}-${sketchId}.dxf`, writeDxf(curves));
+  else download(`${baseName()}-${sketchId}.svg`, writeSvg(curves));
 }
 
 export function saveFile(): void {
-  download(`${baseName()}.meercad`, JSON.stringify(currentDoc(), null, 2), "application/json");
+  download(`${baseName()}.meercad`, JSON.stringify(currentDoc(), null, 2));
 }
 
 function pickFile(accept: string): Promise<File | null> {

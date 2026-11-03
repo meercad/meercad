@@ -1,5 +1,5 @@
 /**
- * Phone layout ("compact"): windows up to 600 px wide, i.e. the iPhone and narrow browser windows.
+ * Phone layout ("compact"): windows up to 600 px wide, i.e. the iPhone and narrow Mac windows.
  * The tools move to a bar at the bottom, panels and dialogs open as sheets from below, and the
  * top bar keeps only what fits. `html[data-compact]` lets the stylesheet follow the same switch.
  */

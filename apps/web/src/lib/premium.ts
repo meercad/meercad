@@ -1,6 +1,6 @@
 /**
  * Premium packs: functions that are sold later on top of the free app. Until they are, the App
- * Store build hides them. Test builds (TestFlight, the WIP and development builds, the browser)
+ * Store build hides them. Test builds (TestFlight, the WIP and development builds)
  * show them, and testers can switch each pack off in Settings to see the app as customers will.
  *
  * Only entry points are hidden. A file that already uses a pack (joints, variants, versions, a
@@ -47,8 +47,8 @@ function loadOff(): PremiumState["off"] {
 }
 
 // The apps start without the packs until their shell has answered (quickly, before the first
-// project is open), so an App Store download never flashes them; the browser is a test build.
-export const usePremium = create<PremiumState>(() => ({ tester: !desktop && !nativeApp, off: loadOff() }));
+// project is open), so an App Store download never flashes them.
+export const usePremium = create<PremiumState>(() => ({ tester: false, off: loadOff() }));
 
 /** Whether a pack's functions are shown. */
 export function hasPack(id: PackId): boolean {
