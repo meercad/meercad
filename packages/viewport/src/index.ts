@@ -945,7 +945,7 @@ export class Viewport {
    * Lines and areas drawn on the reference models (already following the ground: points in mm).
    * Areas are filled see-through; everything stays visible through the ground a little.
    */
-  setSceneryMarks(marks: readonly { id: string; points: readonly Vec3[]; closed?: boolean; color: string; fill?: Float32Array; width?: number; dashed?: boolean }[]): void {
+  setSceneryMarks(marks: readonly { id: string; points: readonly Vec3[]; closed?: boolean; color: string; fill?: Float32Array; fillOpacity?: number; width?: number; dashed?: boolean }[]): void {
     disposeTree(this.marksGroup);
     for (const m of marks) {
       if (m.points.length >= 2) {
@@ -958,7 +958,7 @@ export class Viewport {
       if (m.fill?.length) {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", new THREE.BufferAttribute(m.fill, 3));
-        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: m.fillOpacity ?? 0.35, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
         mesh.userData = { mark: m.id };
         mesh.renderOrder = 4;
         this.marksGroup.add(mesh);

@@ -7,10 +7,10 @@ import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
 import { touchOnly } from "../lib/keyboard";
 import { hasTerrain, placeAt, previewPlace, sceneryOf, sketchOnTerrain, terrainItems, useTerrainPlace } from "../lib/terrain";
-import { addMarkPoint, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
+import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { ArrowDownToLine, Box, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
+import { ArrowDownToLine, Box, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -80,6 +80,50 @@ export function ViewportView() {
   useEffect(() => void vp?.setScenery(sceneryOf({ ...doc, references })).then(() => setSceneryReady((n) => n + 1)), [vp, references]); // eslint-disable-line react-hooks/exhaustive-deps
   // Lines, areas and notes on it, with the one being drawn.
   const drawing = useTerrainDraw();
+  // The highlighter: a press on the ground paints until it comes up (mouse, finger or Pencil). It
+  // takes the pointer before the view's own handling, so painting never turns the view.
+  const painting = drawing.kind === "stroke";
+  useEffect(() => {
+    const el = host.current;
+    if (!vp || !el || !painting) return;
+    let active: number | null = null;
+    const down = (e: PointerEvent) => {
+      if (active !== null || e.target !== vp.canvas || (e.pointerType === "mouse" && e.button !== 0)) return;
+      const hit = vp.sceneryHit(e.clientX, e.clientY);
+      if (!hit) return;
+      e.stopPropagation();
+      e.preventDefault();
+      active = e.pointerId;
+      try {
+        vp.canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // A pointer the browser no longer knows: the stroke still follows it while over the view.
+      }
+      beginStroke(hit.point, hit.id);
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== active) return;
+      e.stopPropagation();
+      const hit = vp.sceneryHit(e.clientX, e.clientY);
+      if (hit) extendStroke(hit.point);
+    };
+    const up = (e: PointerEvent) => {
+      if (e.pointerId !== active) return;
+      e.stopPropagation();
+      active = null;
+      endStroke();
+    };
+    el.addEventListener("pointerdown", down, true);
+    el.addEventListener("pointermove", move, true);
+    el.addEventListener("pointerup", up, true);
+    el.addEventListener("pointercancel", up, true);
+    return () => {
+      el.removeEventListener("pointerdown", down, true);
+      el.removeEventListener("pointermove", move, true);
+      el.removeEventListener("pointerup", up, true);
+      el.removeEventListener("pointercancel", up, true);
+    };
+  }, [vp, painting]);
   const terrainMeasure = useTerrainMeasure();
   useEffect(() => {
     if (!measure.active && !terrainMeasure.scale && terrainMeasure.points.length) clearTerrainMeasure();
@@ -578,6 +622,7 @@ export function ViewportView() {
           ? [
               { label: t("Mark a line"), icon: <PencilLine />, onClick: () => (startMarking("line", ground.id), addMarkPoint(ground.point)) },
               { label: t("Mark an area"), icon: <Shapes />, onClick: () => (startMarking("area", ground.id), addMarkPoint(ground.point)) },
+              { label: t("Highlighter"), icon: <Highlighter />, onClick: () => startMarking("stroke", ground.id) },
               { label: t("Pin a note here"), icon: <StickyNote />, onClick: () => (startMarking("note", ground.id), addMarkPoint(ground.point)) },
               { label: t("Stake-out point here"), icon: <MapPin />, onClick: () => (startMarking("point", ground.id), addMarkPoint(ground.point)) },
               { label: t("Measure from here"), icon: <Ruler />, onClick: () => (useApp.setState({ measure: { active: true, picks: [], result: null } }), clearTerrainMeasure(), measurePoint(ground.point, ground.id)) },

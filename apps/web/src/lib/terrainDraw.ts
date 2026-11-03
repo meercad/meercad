@@ -16,13 +16,21 @@ import { touchOnly } from "./keyboard";
 export type MarkKind = TerrainMark["kind"];
 export const MARK_COLORS = ["#e8590c", "#f2c94c", "#2f9e44", "#1c7ed6", "#c2255c", "#ffffff"];
 
-/** The marking being drawn: its kind, the terrain, the points so far and where the pointer is. */
-export const useTerrainDraw = create<{ kind: MarkKind | null; ref: string | null; points: Vec3[]; hover: Vec3 | null; color: string }>(() => ({
+/** Highlighter widths, in steps of the terrain's detail (so they suit a field as well as a garden). */
+export const STROKE_WIDTHS = { s: 2, m: 6, l: 16 } as const;
+
+/**
+ * The marking being drawn: its kind, the terrain, the points so far and where the pointer is; for
+ * the highlighter also its width and the stroke being painted.
+ */
+export const useTerrainDraw = create<{ kind: MarkKind | null; ref: string | null; points: Vec3[]; hover: Vec3 | null; color: string; width: keyof typeof STROKE_WIDTHS; painting: boolean }>(() => ({
   kind: null,
   ref: null,
   points: [],
   hover: null,
   color: MARK_COLORS[0]!,
+  width: "m",
+  painting: false,
 }));
 
 const shown = (): ReferenceModel[] => (currentDoc().references ?? []).filter((r) => !r.hidden);
@@ -38,7 +46,9 @@ export function startMarking(kind: MarkKind, ref?: string): void {
       ? touch ? t("Tap the terrain where the note goes.") : t("Click on the terrain where the note goes.")
       : kind === "point"
         ? touch ? t("Tap the terrain where the point goes.") : t("Click on the terrain where the point goes.")
-        : touch ? t("Tap points on the terrain, then Done.") : t("Click points on the terrain; Enter or a double click finishes, Esc cancels."),
+        : kind === "stroke"
+          ? touch ? t("Paint on the terrain with a finger. Done ends painting.") : t("Paint on the terrain with the mouse button held down. Esc ends painting.")
+          : touch ? t("Tap points on the terrain, then Done.") : t("Click points on the terrain; Enter or a double click finishes, Esc cancels."),
   );
 }
 
@@ -53,6 +63,29 @@ export function addMarkPoint(p: Vec3, ref?: string): void {
   if (ref && !s.points.length) useTerrainDraw.setState({ ref });
   if (s.kind === "note" || s.kind === "point") return void placeNote(p);
   useTerrainDraw.setState({ points: [...s.points, p] });
+}
+
+/** The highlighter: a stroke starts where the pointer goes down on the ground… */
+export function beginStroke(p: Vec3, ref: string): void {
+  useTerrainDraw.setState({ ref, points: [p], painting: true });
+}
+
+/** …follows it (points a little apart, the ground fills in between)… */
+export function extendStroke(p: Vec3): void {
+  const s = useTerrainDraw.getState();
+  const last = s.points[s.points.length - 1];
+  const step = Math.max(getViewport()?.sceneryStep ?? 1, 1);
+  if (!s.painting || (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < step * 0.8)) return;
+  useTerrainDraw.setState({ points: [...s.points, p] });
+}
+
+/** …and is kept when it comes up. Painting goes on until Done. */
+export function endStroke(): void {
+  const s = useTerrainDraw.getState();
+  useTerrainDraw.setState({ points: [], painting: false });
+  if (!s.ref || s.points.length < 2) return;
+  const width = Math.round(Math.max(getViewport()?.sceneryStep ?? 100, 1) * STROKE_WIDTHS[s.width]);
+  saveMark(s.ref, { id: newMarkId(s.ref), kind: "stroke", points: s.points, color: s.color, width });
 }
 
 export function undoMarkPoint(): void {
@@ -167,6 +200,25 @@ export function drapeFill(points: readonly Vec3[], vp: Viewport): Float32Array {
   return Float32Array.from(out);
 }
 
+/** A band of the given width lying on the ground along a line (triangles, corners, no index): a highlighter stroke. */
+export function ribbon(line: readonly Vec3[], width: number, vp: Viewport): Float32Array {
+  const up = lift(vp) * 0.7;
+  const half = width / 2;
+  const sides: [Vec3, Vec3][] = line.map((p, i) => {
+    const a = line[Math.max(0, i - 1)]!, b = line[Math.min(line.length - 1, i + 1)]!;
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / l) * half, ny = (dx / l) * half;
+    const at = (x: number, y: number): Vec3 => [x, y, (vp.sceneryHeight(x, y) ?? p[2]) + up];
+    return [at(p[0] + nx, p[1] + ny), at(p[0] - nx, p[1] - ny)];
+  });
+  const out: number[] = [];
+  for (let i = 1; i < sides.length; i++) {
+    const [l0, r0] = sides[i - 1]!, [l1, r1] = sides[i]!;
+    out.push(...l0, ...r0, ...l1, ...l1, ...r0, ...r1);
+  }
+  return Float32Array.from(out);
+}
+
 /** Length along the ground (mm). */
 export function lengthOf(draped: readonly Vec3[]): number {
   let l = 0;
@@ -231,6 +283,10 @@ export function marksForView(refs: readonly ReferenceModel[] | undefined, drawin
         labels.push({ key: `${r.id}/${m.id}`, ref: r.id, mark: m, at: ground, kind: m.kind, title: m.kind === "note" ? (m.text ?? "") : (m.text ?? t("Point")), ...(m.kind === "point" ? { detail: placeText(r, ground) } : {}), color: m.color });
         continue;
       }
+      if (m.kind === "stroke") {
+        lines.push({ id: `${r.id}/${m.id}`, points: [], color: m.color, fill: ribbon(drape(m.points, false, vp), m.width ?? vp.sceneryStep * STROKE_WIDTHS.m, vp), fillOpacity: 0.55 });
+        continue;
+      }
       const area = m.kind === "area";
       const points = drape(m.points, area, vp);
       const fill = area ? drapeFill(m.points, vp) : undefined;
@@ -251,8 +307,10 @@ export function marksForView(refs: readonly ReferenceModel[] | undefined, drawin
       labels.unshift({ key: "measure", ref: ms.ref ?? "", at: lifted[1]!, kind: "value", title: head!, detail: rest.join(" · "), color: "#ffffff" });
     } else if (ref) labels.unshift({ key: "measure", ref: ms.ref ?? "", at: pts[0]!, kind: "point", title: t("Here"), detail: placeText(ref, pts[0]!), color: "#ffffff" });
   }
-  // The drawing in progress, up to the pointer.
-  if (drawing.kind && drawing.kind !== "note" && drawing.kind !== "point" && drawing.points.length) {
+  // The stroke being painted.
+  if (drawing.kind === "stroke" && drawing.points.length >= 2) lines.push({ id: "drawing", points: [], color: drawing.color, fill: ribbon(drape(drawing.points, false, vp), vp.sceneryStep * STROKE_WIDTHS[drawing.width], vp), fillOpacity: 0.55 });
+  // The line or area being drawn, up to the pointer.
+  if ((drawing.kind === "line" || drawing.kind === "area") && drawing.points.length) {
     const pts = drawing.hover ? [...drawing.points, drawing.hover] : drawing.points;
     const area = drawing.kind === "area" && pts.length >= 3;
     const points = drape(pts, area, vp);

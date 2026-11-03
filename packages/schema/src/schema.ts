@@ -144,10 +144,11 @@ export const definitions: Record<string, Json> = {
         obj(
           {
             id,
-            kind: { enum: ["line", "area", "note", "point"] },
+            kind: { enum: ["line", "area", "note", "point", "stroke"] },
             points: arr(arr({ type: "number" }, { minItems: 3, maxItems: 3 }), { minItems: 1, maxItems: 10_000 }),
             color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
             text: { type: "string", maxLength: 2000 },
+            width: { type: "number", exclusiveMinimum: 0 },
           },
           ["id", "kind", "points", "color"],
         ),

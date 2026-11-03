@@ -1068,6 +1068,10 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .terrain-hud .swatches { display: inline-flex; gap: 4px; }
 .terrain-hud .swatch { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); }
 .terrain-hud .swatch.on { box-shadow: 0 0 0 2px var(--accent); }
+.terrain-hud .widths { display: inline-flex; gap: 2px; }
+.terrain-hud .width { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; padding: 0; border: none; border-radius: 7px; background: none; }
+.terrain-hud .width i { display: block; width: 18px; border-radius: 3px; background: var(--text-2); }
+.terrain-hud .width.on { background: var(--glass-hover); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .terrain-hud .hud-num { width: 72px; height: 28px; padding: 0 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel-2); color: var(--text); font: 13px var(--mono); text-align: right; }
 .terrain-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
 .tl { position: absolute; width: 0; height: 0; }
@@ -1092,6 +1096,8 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .tl-pill b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .tl-value.open .tl-pill, .tl-value:hover .tl-pill { border-radius: 10px; padding: 5px 10px; }
 .tl-pill .tl-detail { color: rgb(255 255 255 / 0.75); font-family: inherit; }
+/* The value of what is being drawn follows the pointer: beside it, and clicks go through it. */
+.tl.live .tl-pill { pointer-events: none; transform: translate(14px, calc(-100% - 10px)); }
 .tl-actions { display: flex; gap: 2px; margin-top: 3px; }
 .tl-actions .icon-btn { width: 24px; height: 24px; }
 .tl-pill .tl-actions .icon-btn { color: #fff; }

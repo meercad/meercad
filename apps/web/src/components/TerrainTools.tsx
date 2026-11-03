@@ -7,7 +7,7 @@ import type { Viewport } from "@meercad/viewport";
 import { Check, Minus, Pencil, Plus, Trash, Undo2, X } from "lucide-react";
 import { useEffect, useReducer, useState } from "react";
 import { setPlaceOffset, useTerrainPlace } from "../lib/terrain";
-import { cancelMarking, clearTerrainMeasure, deleteMark, editMark, finishMarking, MARK_COLORS, undoMarkPoint, useTerrainDraw, useTerrainMeasure, type TerrainLabel } from "../lib/terrainDraw";
+import { STROKE_WIDTHS, cancelMarking, clearTerrainMeasure, deleteMark, editMark, finishMarking, MARK_COLORS, undoMarkPoint, useTerrainDraw, useTerrainMeasure, type TerrainLabel } from "../lib/terrainDraw";
 import { partName } from "../lib/features";
 import { useApp } from "../store";
 import { touchOnly } from "../lib/keyboard";
@@ -35,7 +35,7 @@ export function TerrainHud() {
   }, [draw.kind]);
 
   if (draw.kind) {
-    const title = { line: t("Mark a line"), area: t("Mark an area"), note: t("Pin a note"), point: t("Set a stake-out point") }[draw.kind];
+    const title = { line: t("Mark a line"), area: t("Mark an area"), note: t("Pin a note"), point: t("Set a stake-out point"), stroke: t("Highlighter") }[draw.kind];
     return (
       <div className="terrain-hud">
         <strong>{title}</strong>
@@ -44,6 +44,20 @@ export function TerrainHud() {
             <button key={c} className={`swatch ${draw.color === c ? "on" : ""}`} style={{ background: c }} title={c} onClick={() => useTerrainDraw.setState({ color: c })} />
           ))}
         </span>
+        {draw.kind === "stroke" ? (
+          <>
+            <span className="widths">
+              {(Object.keys(STROKE_WIDTHS) as (keyof typeof STROKE_WIDTHS)[]).map((w) => (
+                <button key={w} className={`width ${draw.width === w ? "on" : ""}`} title={{ s: t("Thin"), m: t("Medium"), l: t("Wide") }[w]} onClick={() => useTerrainDraw.setState({ width: w })}>
+                  <i style={{ height: { s: 3, m: 7, l: 12 }[w] }} />
+                </button>
+              ))}
+            </span>
+            <button className="btn sm primary" onClick={cancelMarking}>
+              <Check /> {t("Done")}
+            </button>
+          </>
+        ) : null}
         {draw.kind === "line" || draw.kind === "area" ? (
           <>
             <button className="icon-btn sm" title={t("Take back the last point")} disabled={!draw.points.length} onClick={undoMarkPoint}>
@@ -54,9 +68,11 @@ export function TerrainHud() {
             </button>
           </>
         ) : null}
-        <button className="icon-btn sm" title={t("Cancel")} onClick={cancelMarking}>
-          <X />
-        </button>
+        {draw.kind !== "stroke" ? (
+          <button className="icon-btn sm" title={t("Cancel")} onClick={cancelMarking}>
+            <X />
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -144,7 +160,7 @@ export function TerrainLabels({ viewport, labels }: { viewport: Viewport; labels
           ) : null;
         const toggle = (e: React.MouseEvent) => (e.stopPropagation(), setOpen(isOpen ? null : l.key));
         return (
-          <div key={l.key} className={`tl tl-${l.kind} ${isOpen ? "open" : ""} ${free ? "" : "hidden"}`} style={{ left: p[0], top: p[1], ["--mark" as string]: l.color }}>
+          <div key={l.key} className={`tl tl-${l.kind} ${isOpen ? "open" : ""} ${free ? "" : "hidden"} ${live(l.key) ? "live" : ""}`} style={{ left: p[0], top: p[1], ["--mark" as string]: l.color }}>
             {l.kind === "value" ? (
               <div className="tl-pill" onClick={toggle}>
                 <b>{l.title}</b>

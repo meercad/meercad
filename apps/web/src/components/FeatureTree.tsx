@@ -1,4 +1,4 @@
-import { ArrowDownToLine, Bot, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { ArrowDownToLine, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -626,6 +626,7 @@ function References() {
                 showMenu(e.clientX, e.clientY, [
                   { label: t("Mark a line"), icon: <Pencil />, onClick: () => startMarking("line", r.id) },
                   { label: t("Mark an area"), icon: <Shapes />, onClick: () => startMarking("area", r.id) },
+                  { label: t("Highlighter"), icon: <Highlighter />, onClick: () => startMarking("stroke", r.id) },
                   { label: t("Pin a note"), icon: <StickyNote />, onClick: () => startMarking("note", r.id) },
                   { label: t("Set a stake-out point"), icon: <MapPin />, onClick: () => startMarking("point", r.id) },
                   { label: t("Correct the scale…"), icon: <Ruler />, onClick: () => startScaling(r.id) },

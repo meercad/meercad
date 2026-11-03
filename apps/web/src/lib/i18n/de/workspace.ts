@@ -458,4 +458,10 @@ export default {
   "On a terrain, a tap shows where the point is (with GPS when the photos had it); a second tap gives the distance, the height difference, the slope and the direction from north.": "Auf einem Gelände zeigt Tippen, wo der Punkt liegt (mit GPS, wenn die Fotos es hatten); ein zweites Tippen ergibt Strecke, Höhenunterschied, Gefälle und Richtung ab Nord.",
   "Select edges (each tap adds one) → drag away from the part for a fillet, towards it for a chamfer.": "Wähl Kanten aus (jedes Tippen nimmt eine dazu) → zieh vom Teil weg für eine Rundung, zum Teil hin für eine Fase.",
   "Licence texts of all components": "Lizenztexte aller Komponenten",
+  "Highlighter": "Textmarker",
+  "Paint on the terrain with a finger. Done ends painting.": "Male mit dem Finger aufs Gelände. Fertig beendet das Malen.",
+  "Paint on the terrain with the mouse button held down. Esc ends painting.": "Male mit gedrückter Maustaste aufs Gelände. Esc beendet das Malen.",
+  "Thin": "Dünn",
+  "Medium": "Mittel",
+  "Wide": "Breit",
 } as Record<string, string>;

@@ -628,17 +628,19 @@ export interface ReferenceModel {
 
 /**
  * A marking on a reference model: a line or an area through the clicked points (mm), drawn
- * following the ground between them, a note pinned to one point, or a point to stake out (shown
- * with its coordinates).
+ * following the ground between them, a note pinned to one point, a point to stake out (shown
+ * with its coordinates), or a stroke painted freehand like a highlighter.
  */
 export interface TerrainMark {
   id: string;
-  kind: "line" | "area" | "note" | "point";
+  kind: "line" | "area" | "note" | "point" | "stroke";
   points: Vec3[];
   /** "#rrggbb". */
   color: string;
   /** A note's text, or a line's or area's name. */
   text?: string;
+  /** A stroke's width on the ground (mm): painted like a highlighter. */
+  width?: number;
 }
 
 export interface MeercadDocument {
