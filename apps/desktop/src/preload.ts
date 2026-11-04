@@ -35,6 +35,8 @@ const api = {
     build: () => ipcRenderer.invoke("photos:build"),
     cancel: () => ipcRenderer.invoke("photos:cancel"),
   },
+  /** The system's text editing in the focused field: cut, copy, paste, selectAll. */
+  editNative: (cmd: string) => ipcRenderer.invoke("edit:native", cmd),
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
   on: (channel: "menu" | "open-project" | "projects-changed" | "error" | "photos-progress", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);

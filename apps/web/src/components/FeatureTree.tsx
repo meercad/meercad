@@ -1,4 +1,4 @@
-import { ArrowDownToLine, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { ArrowDownToLine, ClipboardPaste, CopyPlus, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -19,6 +19,7 @@ import { meshBodyIds, meshHint } from "../lib/meshParts";
 import { usePrefs } from "../lib/keymap";
 import { PART_PALETTE, partColors } from "../lib/partColors";
 import { terrainItems } from "../lib/terrain";
+import { copyParts, hasClip, pasteParts, selectedParts, selectParts } from "../lib/clipboard";
 import { cleanUpMenu } from "./TerrainTools";
 import { startMarking, startScaling } from "../lib/terrainDraw";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
@@ -356,6 +357,9 @@ function Bodies() {
   const bodies = useApp((s) => s.output?.report.bodies) ?? NONE;
   const doc = useApp((s) => s.doc);
   const hidden = useApp((s) => s.hidden);
+  // Parts selected as a whole (in the view or here) stand out in the list.
+  const selection = useApp((s) => s.selection);
+  const picked = new Set(selectedParts(selection));
   const [open, toggle] = useSection("parts");
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -466,7 +470,9 @@ function Bodies() {
     return (
       <li
         key={id}
-        className={`tree-item ${hidden.has(id) ? "dim" : ""} ${nested ? "nested" : ""} ${over === id ? "drop-before" : ""}`}
+        className={`tree-item ${hidden.has(id) ? "dim" : ""} ${nested ? "nested" : ""} ${over === id ? "drop-before" : ""} ${picked.has(id) ? "selected" : ""}`}
+        ref={picked.has(id) ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+        onClick={(e) => selectParts([id], e.shiftKey || e.metaKey || e.ctrlKey)}
         title={t("{faces} faces · {size} — drag to reorder or onto a group", { faces: b.faces, size: `${b.bbox.max.map((v, i) => inUnit(v - b.bbox.min[i]!)).join(" × ")} ${docUnit()}` })}
         draggable
         onDragStart={() => setDrag(id)}
@@ -477,6 +483,10 @@ function Bodies() {
             { label: t("New group with this part"), icon: <FolderPlus />, onClick: () => void newGroup(id) },
             ...groups.filter((g) => !g.parts.includes(id)).map((g) => ({ label: t("Move to {group}", { group: g.name }), icon: <Folder />, onClick: () => move(id, `group:${g.name}`) })),
             ...(grouped.has(id) ? [{ label: t("Take out of group"), icon: <X />, onClick: () => save(order, (doc.partGroups ?? []).map((g) => ({ ...g, parts: g.parts.filter((x) => x !== id) }))) }] : []),
+            "sep" as const,
+            { label: t("Copy"), icon: <Copy />, kbd: "Mod+C", onClick: () => copyParts(selectedParts().includes(id) ? selectedParts() : [id]) },
+            { label: t("Duplicate"), icon: <CopyPlus />, kbd: "Mod+D", onClick: () => (copyParts(selectedParts().includes(id) ? selectedParts() : [id]), void pasteParts()) },
+            ...(hasClip() ? [{ label: t("Paste"), icon: <ClipboardPaste />, kbd: "Mod+V", onClick: () => void pasteParts() }] : []),
             "sep" as const,
             { label: hidden.has(id) ? t("Show") : t("Hide"), icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
             { label: doc.seeThrough?.includes(id) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(id) },

@@ -3,6 +3,7 @@ import { toggleJoints, useMotion } from "./lib/mechanism";
 import { hasPack } from "./lib/premium";
 import { useEffect, useState } from "react";
 import { validateDocument } from "@meercad/schema";
+import { copyParts, cutParts, duplicateParts, pasteParts, selectAll } from "./lib/clipboard";
 import { FeatureDialog } from "./components/FeatureDialog";
 import { deleteFeature, SidePanel } from "./components/FeatureTree";
 import { Home } from "./components/Home";
@@ -124,7 +125,14 @@ export function App() {
       else if (cmd === "close-tab" && useApp.getState().project) closeTab(useApp.getState().project!.id);
       else if (cmd === "reopen-tab") reopenClosedTab();
       else if (cmd === "next-tab" || cmd === "prev-tab") cycleTab(cmd === "next-tab" ? 1 : -1);
-      else if (cmd === "undo" || cmd === "redo") {
+      else if (cmd === "cut" || cmd === "copy" || cmd === "paste" || cmd === "selectAll" || cmd === "duplicate") {
+        // Text in a field (or selected on the page) is edited as text; otherwise the command acts on parts.
+        const el = document.activeElement;
+        const text = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement | null)?.isContentEditable || !!window.getSelection()?.toString();
+        if (text || useApp.getState().screen !== "editor") {
+          if (cmd !== "duplicate") void desktop?.editNative(cmd);
+        } else partCommand(cmd);
+      } else if (cmd === "undo" || cmd === "redo") {
         // In a text field the menu undoes typing; everywhere else it undoes the model.
         const el = document.activeElement;
         if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) document.execCommand(cmd);
@@ -226,6 +234,10 @@ export function App() {
         } else if (k === "o") {
           e.preventDefault();
           void importFile();
+        } else if (!desktop && !e.shiftKey && !e.altKey && (k === "a" || k === "c" || k === "x" || k === "v" || k === "d") && !s.sketchId && !s.dialog) {
+          // The iPad with a keyboard (on the Mac the Edit menu sends these).
+          e.preventDefault();
+          partCommand(({ a: "selectAll", c: "copy", x: "cut", v: "paste", d: "duplicate" } as const)[k]);
         } else {
           const action = actionFor(e, MODEL_ACTIONS);
           if (action) {
@@ -308,4 +320,15 @@ export function App() {
       {debugHud ? <DebugHud /> : null}
     </>
   );
+}
+
+/** Select all, copy, cut, paste or duplicate whole parts (see lib/clipboard). */
+function partCommand(cmd: "cut" | "copy" | "paste" | "selectAll" | "duplicate"): void {
+  const s = useApp.getState();
+  if (s.screen !== "editor" || s.sketchId || s.dialog) return;
+  if (cmd === "selectAll") selectAll();
+  else if (cmd === "copy") copyParts();
+  else if (cmd === "cut") cutParts();
+  else if (cmd === "paste") void pasteParts();
+  else duplicateParts();
 }

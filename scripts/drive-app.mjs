@@ -5,7 +5,7 @@
  *   node scripts/drive-app.mjs eval "<js run in the app's window>"
  *   node scripts/drive-app.mjs shot screen.png
  *   node scripts/drive-app.mjs clicks x y [x y …]   (window pixels, several clicks in one session)
- *   node scripts/drive-app.mjs rclick x y | drag x y x y … | key Enter | type "text"
+ *   node scripts/drive-app.mjs rclick x y | dblclick x y | drag x y x y … | key Enter | type "text"
  */
 import { writeFileSync } from "node:fs";
 const list = await (await fetch(`http://localhost:${process.env.PORT ?? 9334}/json`)).json();
@@ -40,6 +40,13 @@ if (cmd === "eval") {
     await call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
     await call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
     await new Promise((r) => setTimeout(r, 700));
+  }
+} else if (cmd === "dblclick") {
+  const [x, y] = [Number(arg), Number(process.argv[4])];
+  await call("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+  for (const clickCount of [1, 2]) {
+    await call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount });
+    await call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount });
   }
 } else if (cmd === "drag") {
   // A held-down left drag through x y x y …

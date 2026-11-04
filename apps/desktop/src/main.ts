@@ -301,6 +301,10 @@ ipcMain.handle("photos:build", async (e) => {
   }
 });
 ipcMain.handle("photos:cancel", () => void photoBuild?.kill());
+// The page asks for the system's own text editing (a field or selected text has the focus).
+ipcMain.handle("edit:native", (e, cmd: "cut" | "copy" | "paste" | "selectAll") => {
+  if (["cut", "copy", "paste", "selectAll"].includes(cmd)) e.sender[cmd]();
+});
 ipcMain.handle("storage:status", async () => {
   await findICloud();
   return {
@@ -609,10 +613,9 @@ function buildMenu(): void {
         { label: tr("Undo"), accelerator: "CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "undo") },
         { label: tr("Redo"), accelerator: "Shift+CmdOrCtrl+Z", registerAccelerator: false, click: send("menu", "redo") },
         { type: "separator" },
-        role("cut"),
-        role("copy"),
-        role("paste"),
-        role("selectAll"),
+        // Cut, copy, paste and select all: on parts in the model, on text in a field (the page decides, see "edit:native").
+        ...(["cut", "copy", "paste", "selectAll"] as const).map((r) => ({ ...role(r), click: send("menu", r) })),
+        { label: lang === "de" ? "Duplizieren" : "Duplicate", accelerator: "CmdOrCtrl+D", click: send("menu", "duplicate") },
       ],
     },
     {

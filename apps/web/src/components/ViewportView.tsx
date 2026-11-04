@@ -8,10 +8,11 @@ import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickn
 import { touchOnly } from "../lib/keyboard";
 import { hasTerrain, placeAt, previewPlace, sceneryOf, sketchOnTerrain, terrainItems, useTerrainPlace } from "../lib/terrain";
 import { cleanUpMenu } from "./TerrainTools";
+import { copyParts, hasClip, pasteParts, selectAll, selectedParts, selectParts } from "../lib/clipboard";
 import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { ArrowDownToLine, Box, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
+import { ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -493,14 +494,7 @@ export function ViewportView() {
       if (useApp.getState().sketchId || useApp.getState().dialog) return;
       const pick = vp.pick(e.clientX, e.clientY, DEFAULT_KINDS);
       // Double-clicking a face selects its whole part; other entities open their feature.
-      if (pick?.kind === "face") {
-        const m = useApp.getState().output?.meshes.find((x) => x.bodyId === pick.bodyId);
-        if (m) {
-          const faces = m.faceTags.map((tags, face) => ({ kind: "face" as const, bodyId: m.bodyId, face, tags, point: pick.point, normal: null }));
-          useApp.setState({ selection: faces, selectedFeature: null });
-        }
-        return;
-      }
+      if (pick?.kind === "face") return selectParts([pick.bodyId], e.shiftKey || e.metaKey || e.ctrlKey);
       const fid = pick ? featureOfPick(pick) : null;
       if (fid) editFeature(fid);
     };
@@ -632,6 +626,8 @@ export function ViewportView() {
               "sep" as const,
             ]
           : []),
+        { label: t("Select all parts"), icon: <BoxSelect />, kbd: "Mod+A", onClick: () => selectAll() },
+        ...(hasClip() ? [{ label: t("Paste"), icon: <ClipboardPaste />, kbd: "Mod+V", onClick: () => void pasteParts() }] : []),
         { label: t("Fit view"), icon: <Focus />, kbd: fitKey, onClick: () => vp?.fit() },
         { label: s.showPlanes ? t("Hide planes") : t("Show planes"), icon: <Layers />, onClick: () => useApp.setState({ showPlanes: !s.showPlanes }) },
         { label: t("Show all parts"), icon: <Eye />, onClick: () => useApp.setState({ hidden: new Set() }) },
@@ -643,6 +639,8 @@ export function ViewportView() {
         { label: t("Move {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <Move3d />, onClick: () => startFeature("transform") },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: t("Copy"), icon: <Copy />, kbd: "Mod+C", onClick: () => copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]) },
+        { label: t("Duplicate"), icon: <CopyPlus />, kbd: "Mod+D", onClick: () => (copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]), void pasteParts()) },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         ...(hasPack("scan")
@@ -671,6 +669,8 @@ export function ViewportView() {
         ...(pick.normal ? [{ label: t("Hole here"), icon: <CircleDot />, kbd: "Shift+H", onClick: () => startHoleAt(pick) }] : []),
         "sep",
         { label: t("Hide {part}", { part: partName(pick.bodyId, useApp.getState().doc.features) }), icon: <EyeOff />, onClick: () => toggleHidden(pick.bodyId) },
+        { label: t("Copy"), icon: <Copy />, kbd: "Mod+C", onClick: () => copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]) },
+        { label: t("Duplicate"), icon: <CopyPlus />, kbd: "Mod+D", onClick: () => (copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]), void pasteParts()) },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
