@@ -142,8 +142,9 @@ const config = {
     target: [{ target: dev ? "mas-dev" : "mas", arch: ["universal"] }],
     bundleShortVersion: VERSION,
     bundleVersion: build,
-    // Already universal: copied as is when the two architectures are merged.
-    x64ArchFiles: "**/native/*.node",
+    // Copied as is when the two architectures are merged: the .node helpers are already universal,
+    // the photo helper is Apple silicon only (Apple's photogrammetry needs it).
+    x64ArchFiles: "**/native/{*.node,meercad-photos}",
     extendInfo: {
       ElectronTeamID: TEAM,
       ITSAppUsesNonExemptEncryption: false,
