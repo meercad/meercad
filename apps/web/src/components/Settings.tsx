@@ -1,10 +1,10 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Ruler, TriangleAlert, X } from "lucide-react";
+import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Ruler, TriangleAlert, Type, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { iCloudFolder, nativeApp, storageKind } from "../lib/native";
-import { desktop } from "../lib/persistence";
+import { desktop, type UiScale } from "../lib/persistence";
 import { PACKS, setPack, usePremium } from "../lib/premium";
 import { changeProjectsFolder, folderLabel, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
@@ -16,6 +16,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [dir, setDir] = useState<string | null>(null);
   const [cloud, setCloud] = useState<{ dir: string | null; available: boolean } | null>(null);
   const [nativeKind, setNativeKind] = useState<"local" | "icloud" | null>(null);
+  const [uiScale, setUiScale] = useState<UiScale | null>(null);
 
   useEffect(() => {
     const toggle = () => setOpen((o) => !o);
@@ -33,6 +34,11 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
       window.removeEventListener("keydown", onKey);
     };
   }, []);
+  useEffect(() => {
+    if (!open || !desktop) return;
+    void desktop.uiScale.get().then(setUiScale);
+    return desktop.on("ui-scale", setUiScale);
+  }, [open]);
   useEffect(() => {
     if (open && desktop)
       void desktop.storage.status().then((s) => {
@@ -76,6 +82,24 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           </div>
           <p className="muted">{t("The app restarts in the chosen language; open projects stay as they are.")}</p>
         </section>
+
+        {uiScale && (
+          <section>
+            <h3>
+              <Type /> {t("Interface size")}
+            </h3>
+            <div className="seg">
+              {(["auto", ...uiScale.steps] as const).map((c) => (
+                <button key={c} className={uiScale.choice === c ? "on" : ""} aria-pressed={uiScale.choice === c} onClick={() => void desktop?.uiScale.set(c)}>
+                  {c === "auto" ? `${t("Automatic")} (${pct(uiScale.auto)})` : pct(c)}
+                </button>
+              ))}
+            </div>
+            <p className="muted">
+              {t("Automatic makes everything bigger on large monitors without Retina scaling.")} <Kbd k="Mod++" /> <Kbd k="Mod+-" /> <Kbd k="Mod+0" />
+            </p>
+          </section>
+        )}
 
         <section>
           <h3>
@@ -271,3 +295,5 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
     </div>
   );
 }
+
+const pct = (f: number) => `${Math.round(f * 100)} %`;

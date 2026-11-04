@@ -67,10 +67,24 @@ interface DesktopApi {
     build(): Promise<(TerrainResult & { folder: string; data: Uint8Array }) | null>;
     cancel(): Promise<void>;
   };
+  /** The interface size: the choice ("auto" or a factor), what automatic means on this display, the steps. */
+  uiScale: {
+    get(): Promise<UiScale | null>;
+    set(choice: number | "auto"): Promise<void>;
+  };
   editNative(cmd: "cut" | "copy" | "paste" | "selectAll"): Promise<void>;
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
   on(channel: "menu" | "open-project" | "projects-changed" | "error", fn: (arg: string) => void): () => void;
   on(channel: "photos-progress", fn: (arg: { progress: number; step: string }) => void): () => void;
+  on(channel: "ui-scale", fn: (arg: UiScale) => void): () => void;
+}
+
+/** The desktop app's interface size (1 = 100 %), set in the main process. */
+export interface UiScale {
+  choice: number | "auto";
+  auto: number;
+  current: number;
+  steps: number[];
 }
 
 export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;

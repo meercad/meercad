@@ -2,6 +2,9 @@
 export default {
   Language: "Sprache",
   "Like the system": "Wie das System",
+  "Interface size": "Größe der Oberfläche",
+  "Automatic": "Automatisch",
+  "Automatic makes everything bigger on large monitors without Retina scaling.": "Automatisch vergrößert alles auf großen Monitoren ohne Retina-Skalierung.",
   "The app restarts in the chosen language; open projects stay as they are.": "Die App startet in der gewählten Sprache neu; offene Projekte bleiben erhalten.",
   "Not a valid meerCAD file: {msg}": "Keine gültige meerCAD-Datei: {msg}",
   "Could not read {name}": "{name} konnte nicht gelesen werden",

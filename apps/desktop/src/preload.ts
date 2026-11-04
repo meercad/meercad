@@ -7,6 +7,11 @@ const api = {
   info: () => ipcRenderer.invoke("app:info"),
   /** The interface language, so the menu bar and system dialogs match it. */
   setLanguage: (lang: string) => ipcRenderer.send("app:language", lang),
+  /** The interface size: the choice ("auto" or a factor), what automatic means here, and the steps. */
+  uiScale: {
+    get: () => ipcRenderer.invoke("ui:scale"),
+    set: (choice: number | "auto") => ipcRenderer.invoke("ui:scale:set", choice),
+  },
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),
@@ -38,7 +43,7 @@ const api = {
   /** The system's text editing in the focused field: cut, copy, paste, selectAll. */
   editNative: (cmd: string) => ipcRenderer.invoke("edit:native", cmd),
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
-  on: (channel: "menu" | "open-project" | "projects-changed" | "error" | "photos-progress", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "projects-changed" | "error" | "photos-progress" | "ui-scale", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

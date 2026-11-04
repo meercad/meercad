@@ -7,7 +7,7 @@
  * security-scoped bookmark, iCloud Drive is found through the system, and Claude gets meerCAD as an
  * extension instead of an entry written into its config.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, shell, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, screen, shell, type MenuItemConstructorOptions } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
@@ -60,6 +60,8 @@ interface Settings {
   projectsDir?: string;
   /** App Store build: the security-scoped bookmark that reopens a folder the user picked. */
   projectsBookmark?: string;
+  /** The interface size as a factor (1 = 100 %); absent: automatic, see autoUiScale. */
+  uiScale?: number;
 }
 function readSettings(): Settings {
   try {
@@ -457,6 +459,52 @@ ipcMain.handle("app:info", () => ({
   store: storeEnvironment(),
 }));
 
+// ---------------------------------------------------------------- interface size
+
+/** The sizes the interface steps through (⌘+ / ⌘−, Settings). */
+const UI_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+/**
+ * The automatic interface size for the display a window is on. A big monitor run at its full
+ * resolution without Retina scaling (a 4K or 5K2K screen at "1x") shows everything tiny at 100 %:
+ * there it grows with the screen height, in quarter steps up to 200 %. Retina displays and the
+ * usual resolutions keep 100 %; someone who picked "more space" on a Retina display chose it.
+ */
+function autoUiScale(win: BrowserWindow): number {
+  const d = screen.getDisplayMatching(win.getBounds());
+  const h = d.workAreaSize.height;
+  if (d.scaleFactor > 1 || h < 1800) return 1;
+  return Math.min(2, Math.max(1, Math.round((h / 1440) * 4) / 4));
+}
+const uiScaleOf = (win: BrowserWindow) => settings.uiScale ?? autoUiScale(win);
+function applyUiScale(win: BrowserWindow): void {
+  const f = uiScaleOf(win);
+  if (Math.abs(win.webContents.getZoomFactor() - f) > 1e-3) win.webContents.setZoomFactor(f);
+  win.webContents.send("ui-scale", uiScaleState(win));
+}
+const uiScaleState = (win: BrowserWindow) => ({ choice: settings.uiScale ?? "auto", auto: autoUiScale(win), current: uiScaleOf(win), steps: UI_SCALES });
+async function setUiScale(choice: number | "auto"): Promise<void> {
+  const next = { ...settings };
+  if (choice === "auto") delete next.uiScale;
+  else next.uiScale = Math.min(2, Math.max(0.8, choice));
+  settings = next;
+  await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`).catch(() => undefined);
+  for (const w of BrowserWindow.getAllWindows()) applyUiScale(w);
+}
+/** One step bigger (+1) or smaller (−1) from the size in use. */
+function stepUiScale(dir: 1 | -1): void {
+  if (!mainWindow) return;
+  const cur = uiScaleOf(mainWindow);
+  const next = dir > 0 ? UI_SCALES.find((s) => s > cur + 1e-3) : [...UI_SCALES].reverse().find((s) => s < cur - 1e-3);
+  if (next !== undefined) void setUiScale(next);
+}
+ipcMain.handle("ui:scale", (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  return win ? uiScaleState(win) : null;
+});
+ipcMain.handle("ui:scale:set", (_e, choice: unknown) => {
+  if (choice === "auto" || (typeof choice === "number" && Number.isFinite(choice))) return setUiScale(choice);
+});
+
 // ---------------------------------------------------------------- windows
 
 let mainWindow: BrowserWindow | null = null;
@@ -477,6 +525,9 @@ function createWindow(): BrowserWindow {
     webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   win.once("ready-to-show", () => win.show());
+  // The interface size follows the display the window is on (when automatic).
+  win.webContents.on("did-finish-load", () => applyUiScale(win));
+  win.on("moved", () => applyUiScale(win));
   // External links open in the browser; the app never navigates away from itself.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
@@ -538,6 +589,9 @@ const MENU_DE: Record<string, string> = {
   "Keyboard Shortcuts": "Tastenkürzel",
   "Choose a folder for your meerCAD projects": "Ordner für deine meerCAD-Projekte wählen",
   "Use this folder": "Diesen Ordner verwenden",
+  "Bigger Interface": "Oberfläche größer",
+  "Smaller Interface": "Oberfläche kleiner",
+  "Automatic Interface Size": "Oberfläche automatisch",
   // Standard items, which Electron names in English.
   about: "Über meerCAD",
   services: "Dienste",
@@ -623,6 +677,12 @@ function buildMenu(): void {
       submenu: [
         { label: tr("Keyboard Shortcuts"), accelerator: "CmdOrCtrl+/", click: send("menu", "shortcuts") },
         { type: "separator" },
+        { label: tr("Bigger Interface"), accelerator: "CmdOrCtrl+Plus", click: () => stepUiScale(1) },
+        // ⌘= is the same key without Shift on most layouts; it works too but is not listed twice.
+        { label: tr("Bigger Interface"), accelerator: "CmdOrCtrl+=", visible: false, acceleratorWorksWhenHidden: true, click: () => stepUiScale(1) },
+        { label: tr("Smaller Interface"), accelerator: "CmdOrCtrl+-", click: () => stepUiScale(-1) },
+        { label: tr("Automatic Interface Size"), accelerator: "CmdOrCtrl+0", click: () => void setUiScale("auto") },
+        { type: "separator" },
         role("reload"),
         role("toggleDevTools"),
         { type: "separator" },
@@ -674,6 +734,7 @@ else {
     serveApp();
     buildMenu();
     mainWindow = createWindow();
+    screen.on("display-metrics-changed", () => BrowserWindow.getAllWindows().forEach(applyUiScale));
     watchProjects();
     mainWindow.webContents.once("did-finish-load", () => {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
