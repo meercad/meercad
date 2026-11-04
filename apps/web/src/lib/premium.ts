@@ -1,10 +1,7 @@
 /**
- * Premium packs: functions that are sold later on top of the free app.
- *
- * Switched off for now (PACKS_ACTIVE): every build shows every function and Settings has no pack
- * switches. With PACKS_ACTIVE the App Store build hides the packs, test builds (TestFlight, the WIP
- * and development builds) show them, and testers can switch each pack off in Settings to see the
- * app as customers will.
+ * Premium packs: functions that are sold later on top of the free app. Until they are, the App
+ * Store build hides them. Test builds (TestFlight, the WIP and development builds)
+ * show them, and testers can switch each pack off in Settings to see the app as customers will.
  *
  * Only entry points are hidden. A file that already uses a pack (joints, variants, versions, a
  * scan) still opens and builds exactly as before.
@@ -13,9 +10,6 @@ import { create } from "zustand";
 import { registerPlugin } from "@capacitor/core";
 import { desktop } from "./persistence";
 import { nativeApp } from "./native";
-
-/** Whether packs exist yet. Until they are sold, nothing is hidden anywhere. */
-const PACKS_ACTIVE = false;
 
 export type PackId = "mechanics" | "scan" | "drawings" | "versions";
 
@@ -58,14 +52,13 @@ export const usePremium = create<PremiumState>(() => ({ tester: false, off: load
 
 /** Whether a pack's functions are shown. */
 export function hasPack(id: PackId): boolean {
-  if (!PACKS_ACTIVE) return true;
   const s = usePremium.getState();
   return s.tester && !s.off[id];
 }
 
 /** Re-renders when the pack is switched. */
 export function usePack(id: PackId): boolean {
-  return usePremium((s) => !PACKS_ACTIVE || (s.tester && !s.off[id]));
+  return usePremium((s) => s.tester && !s.off[id]);
 }
 
 export function setPack(id: PackId, on: boolean): void {
@@ -93,5 +86,4 @@ async function checkTester(): Promise<boolean> {
   return true;
 }
 
-// Without packs no build is a test build in this sense, so Settings shows no pack switches.
-if (PACKS_ACTIVE) void checkTester().then((tester) => usePremium.setState({ tester }));
+void checkTester().then((tester) => usePremium.setState({ tester }));
