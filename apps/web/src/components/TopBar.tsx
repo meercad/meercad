@@ -60,9 +60,10 @@ export function TopBar() {
       "sep",
       { label: t("Export STL (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("stl") },
       { label: t("Export 3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
+      { label: t("Export OBJ (rendering, other 3D tools)"), icon: <FileDown />, onClick: () => void exportMesh("obj") },
       { label: t("Export STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
       ...(variants && hasPack("versions")
-        ? (["stl", "3mf", "step"] as const).map((f) => ({ label: t("Export all {n} variants as {format} (zip)", { n: variants, format: f.toUpperCase() }), icon: <FileDown />, onClick: () => void exportVariants(f) }))
+        ? (["stl", "3mf", "obj", "step"] as const).map((f) => ({ label: t("Export all {n} variants as {format} (zip)", { n: variants, format: f.toUpperCase() }), icon: <FileDown />, onClick: () => void exportVariants(f) }))
         : []),
       ...(hasPack("drawings") ? [{ label: t("Technical drawing (PDF, DXF)…"), icon: <FileDown />, onClick: openDrawing }] : []),
       ...sketches.flatMap((s) => [

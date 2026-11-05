@@ -340,8 +340,8 @@ server.registerTool(
   "export",
   {
     title: "Export a file",
-    description: "Exports the model (stl, 3mf, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer.",
-    inputSchema: { format: z.enum(["stl", "3mf", "step", "dxf", "svg", "meercad"]), path: z.string().describe("Absolute or relative output path"), sketch: z.string().optional() },
+    description: "Exports the model (stl, 3mf, obj, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer.",
+    inputSchema: { format: z.enum(["stl", "3mf", "obj", "step", "dxf", "svg", "meercad"]), path: z.string().describe("Absolute or relative output path"), sketch: z.string().optional() },
   },
   guard(async ({ format, path, sketch }) => {
     const r = await call<{ base64: string }>("export", { format, sketch });

@@ -49,7 +49,7 @@ describe("DXF / SVG / 3MF", () => {
   });
 });
 
-import { read3mf, readObj } from "./index.js";
+import { read3mf, readObj, writeObj } from "./index.js";
 import { strToU8, zipSync } from "fflate";
 
 describe("3MF / OBJ import", () => {
@@ -77,6 +77,35 @@ describe("3MF / OBJ import", () => {
     const obj = ["v 0 0 0", "v 1 0 0", "v 1 1 0", "v 0 1 0", "f 1/1/1 2/2/2 3/3/3 4/4/4", "f -4 -2 -1"].join("\n");
     const m = readObj(obj);
     expect(Array.from(m.indices)).toEqual([0, 1, 2, 0, 2, 3, 0, 2, 3]);
+  });
+});
+
+describe("OBJ export", () => {
+  const cube = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1]), indices: new Uint32Array([0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7]) };
+  /** The same cube with three own corners per triangle, as tessellators hand them out. */
+  const soup = (dx: number) => {
+    const e = expand(cube);
+    for (let i = 0; i < e.length; i += 3) e[i] = e[i]! + dx;
+    return { positions: e, indices: Uint32Array.from({ length: e.length / 3 }, (_, i) => i) };
+  };
+
+  it("writes one object per part, merges corners and reads back with the same volume", () => {
+    const obj = writeObj([{ ...soup(0), name: "Base plate" }, { ...soup(5), name: "Lid" }]);
+    expect(obj.match(/^o .*/gm)).toEqual(["o Base_plate", "o Lid"]);
+    expect(obj.match(/^v /gm)).toHaveLength(16);
+    expect(obj.match(/^f /gm)).toHaveLength(24);
+    // The second part's faces point at its own corners (9–16), not the first part's.
+    const lid = obj.slice(obj.indexOf("o Lid"));
+    expect(Math.min(...[...lid.matchAll(/^f (\d+) (\d+) (\d+)/gm)].flatMap((m) => [1, 2, 3].map((k) => Number(m[k]))))).toBe(9);
+    const back = readObj(obj);
+    expect(meshVolume(expand(back))).toBeCloseTo(2);
+  });
+
+  it("puts a part's colour on its vertices", () => {
+    const obj = writeObj([{ ...cube, color: "#ff8000" }, { ...cube }]);
+    const lines = obj.split("\n").filter((l) => l.startsWith("v "));
+    expect(lines[0]).toBe("v 0 0 0 1.0000 0.5020 0.0000");
+    expect(lines[8]).toBe("v 0 0 0");
   });
 });
 

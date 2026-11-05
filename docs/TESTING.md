@@ -174,7 +174,7 @@ the history, then check the result as above)
 - View cube: faces, edges, corners, drag, the 90° arrows; tooltips name the keys of the selected
   key preset.
 - Display modes, planes, sketches and dimensions toggles; perspective and orthographic.
-- Export STL, 3MF and STEP; open the files in a slicer: watertight, right size, smooth curves.
+- Export STL, 3MF, OBJ and STEP; open the files in a slicer: watertight, right size, smooth curves.
 - Share link opens the same design.
 
 **Phone layout** (iPhone, or a Mac window up to 600 px wide; `html[data-compact]`)

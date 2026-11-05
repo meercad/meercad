@@ -127,7 +127,7 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         body: (
           <ul>
             {li(t("Projects save automatically as open `.meercad` files (readable JSON) — in the desktop app in Documents/meerCAD."))}
-            {li(t("Export: STL and 3MF for 3D printing, STEP for other CAD tools, DXF/SVG of a sketch for laser cutting."))}
+            {li(t("Export: STL and 3MF for 3D printing, STEP for other CAD tools, OBJ for rendering and other 3D tools, DXF/SVG of a sketch for laser cutting."))}
             {li(t("Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already."))}
             {li(t("Materials: right-click a part in the parts list → Material. The list then shows each part's mass and, below, the total mass and centre of gravity (solid material, 100 % infill)."))}
             {hasPack("drawings") ? li(t("Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.")) : null}

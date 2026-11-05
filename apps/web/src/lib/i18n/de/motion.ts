@@ -144,6 +144,7 @@ export default {
 
   "STL mesh": "STL-Netz",
   "3MF package": "3MF-Paket",
+  "OBJ mesh": "OBJ-Netz",
   "STEP model": "STEP-Modell",
   "DXF drawing": "DXF-Zeichnung",
   "SVG drawing": "SVG-Zeichnung",

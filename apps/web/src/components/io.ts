@@ -1,5 +1,5 @@
 /** File import/export and share links. */
-import { read3mf, readDxf, readObj, write3mf, writeDxf, writeStl, writeSvg, writeZip, type Curve2 } from "@meercad/io";
+import { read3mf, readDxf, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2 } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
@@ -16,6 +16,7 @@ import { currentPoses } from "../lib/mechanism";
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   stl: { name: t("STL mesh"), extensions: ["stl"] },
   "3mf": { name: t("3MF package"), extensions: ["3mf"] },
+  obj: { name: t("OBJ mesh"), extensions: ["obj"] },
   step: { name: t("STEP model"), extensions: ["step", "stp"] },
   dxf: { name: t("DXF drawing"), extensions: ["dxf"] },
   svg: { name: t("SVG drawing"), extensions: ["svg"] },
@@ -53,8 +54,8 @@ function shownPoses(ids: readonly string[]): Map<string, number[]> {
   return moved;
 }
 
-/** STL/3MF from a print-quality tessellation (the on-screen one is far coarser). */
-export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
+/** STL/3MF/OBJ from a print-quality tessellation (the on-screen one is far coarser). */
+export async function exportMesh(format: MeshFormat): Promise<void> {
   const hidden = useApp.getState().hidden;
   const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
   if (!ids?.length) return toast(t("Nothing to export"), "error");
@@ -67,11 +68,14 @@ export async function exportMesh(format: "stl" | "3mf"): Promise<void> {
   }
 }
 
-/** Parts as an STL, or a 3MF with their names and colours. */
-function meshFile(format: "stl" | "3mf", meshes: BodyMesh[]): Uint8Array {
+export type MeshFormat = "stl" | "3mf" | "obj";
+
+/** Parts as an STL, or a 3MF or OBJ with their names and colours. */
+function meshFile(format: MeshFormat, meshes: BodyMesh[]): Uint8Array {
   if (format === "stl") return writeStl(meshes);
   const { doc } = useApp.getState();
   const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  if (format === "obj") return new TextEncoder().encode(writeObj(meshes.map((m) => ({ ...m, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) }))));
   // Colours the user picked also choose filaments for multi-colour printers.
   const picked = doc.partColors ?? {};
   return write3mf(meshes.map((m) => ({ ...m, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}), ...(picked[m.bodyId] ? { filament: picked[m.bodyId]! } : {}) })));
@@ -81,7 +85,7 @@ function meshFile(format: "stl" | "3mf", meshes: BodyMesh[]): Uint8Array {
  * Every variant exported at once, one file each in a zip ("holder-Pipe 25.stl", …). The kernel
  * builds each variant in turn; afterwards the design is built as it is again.
  */
-export async function exportVariants(format: "stl" | "3mf" | "step"): Promise<void> {
+export async function exportVariants(format: MeshFormat | "step"): Promise<void> {
   const doc = currentDoc();
   const variants = doc.variants ?? [];
   if (!variants.length) return toast(t("This design has no variants"), "error");

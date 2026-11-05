@@ -17,7 +17,7 @@
 </p>
 
 Constraint-based sketches, extrude/revolve/fillet/chamfer/shell/ISO threads/patterns/mirror/booleans, direct
-push/pull editing with drag handles, STEP/STL/3MF/DXF/SVG, and an MCP server so Claude can model for you.
+push/pull editing with drag handles, STEP/STL/3MF/OBJ/DXF/SVG, and an MCP server so Claude can model for you.
 
 ## Get meerCAD
 
@@ -63,7 +63,7 @@ Signing material stays out of the repo: certificates in the keychain, provisioni
 Projects are plain `.meercad` files in a folder you pick on first launch (default `~/Documents/meerCAD`,
 changeable in Settings). Folders you create in the app are real folders there. The files are human-readable JSON (see
 [docs/FORMAT.md](docs/FORMAT.md)) that you can version with git, edit by hand or generate with scripts.
-Exchange with other CAD tools via STEP; 3D printing via STL/3MF; laser cutting via DXF/SVG.
+Exchange with other CAD tools via STEP; 3D printing via STL/3MF; rendering and other 3D tools via OBJ; laser cutting via DXF/SVG.
 
 ## Let Claude drive it (MCP)
 
@@ -128,7 +128,7 @@ the app.
 |---|---|---|
 | `packages/schema` | Document + Operations-API types and JSON Schema, validation | MIT |
 | `packages/naming` | Persistent references: selector resolution, tag propagation | MIT |
-| `packages/io` | STL/3MF/DXF/SVG writers & readers | MIT |
+| `packages/io` | STL/3MF/OBJ/DXF/SVG writers & readers | MIT |
 | `packages/sketch` | PlaneGCS constraint solving, region detection | FSL-1.1 |
 | `packages/model` | Expressions, document store (undo/redo), incremental rebuild | FSL-1.1 |
 | `packages/kernel` | OpenCascade (WASM) modelling, tessellation, worker | FSL-1.1 |

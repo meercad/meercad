@@ -116,6 +116,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: G.view, label: t("Toggle planes"), run: () => useApp.setState((s) => ({ showPlanes: !s.showPlanes })) },
         { group: G.file, label: t("Export STL"), run: () => void exportMesh("stl") },
         { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
+        { group: G.file, label: t("Export OBJ"), run: () => void exportMesh("obj") },
         { group: G.file, label: t("Export STEP"), run: () => void exportStep() },
         ...(hasPack("drawings") ? [{ group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing }] : []),
         ...(hasPack("versions") ? [{ group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions }] : []),

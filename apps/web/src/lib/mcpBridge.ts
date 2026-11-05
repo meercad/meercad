@@ -2,7 +2,7 @@
  * Connects the app to a local meerCAD MCP server so assistants like Claude can drive it. The app is
  * the WebSocket client; the server only listens on 127.0.0.1 and checks the page origin.
  */
-import { layoutSheet, write3mf, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeStl, writeSvg, type Paper } from "@meercad/io";
+import { layoutSheet, write3mf, writeDxf, writeObj, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeStl, writeSvg, type Paper } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
@@ -287,6 +287,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const format = String(p["format"]);
       if (format === "stl") return { base64: toB64(writeStl(await kernel.exportMeshes())) };
       if (format === "3mf") return { base64: toB64(write3mf((await kernel.exportMeshes()).map((m) => ({ ...m, name: m.bodyId })))) };
+      if (format === "obj") return { base64: toB64(writeObj((await kernel.exportMeshes()).map((m) => ({ ...m, name: m.bodyId })))) };
       if (format === "step") return { base64: toB64(await kernel.exportStep(undefined, stepParts())) };
       if (format === "meercad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
       const sketch = String(p["sketch"] ?? "");
