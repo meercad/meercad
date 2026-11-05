@@ -2,7 +2,7 @@
  * Connects the app to a local meerCAD MCP server so assistants like Claude can drive it. The app is
  * the WebSocket client; the server only listens on 127.0.0.1 and checks the page origin.
  */
-import { layoutSheet, write3mf, writeDxf, writeObj, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeStl, writeSvg, type Paper } from "@meercad/io";
+import { layoutSheet, write3mf, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeStl, writeSvg, type Paper } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
@@ -10,7 +10,7 @@ import { applyOp, billOfMaterials, designOf, drawingDocument, massOf, massProper
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
-import { sketchCurves, stepParts } from "../components/io";
+import { objExport, sketchCurves, stepParts } from "../components/io";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, clearanceNow, setPose } from "./mechanism";
@@ -287,7 +287,11 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const format = String(p["format"]);
       if (format === "stl") return { base64: toB64(writeStl(await kernel.exportMeshes())) };
       if (format === "3mf") return { base64: toB64(write3mf((await kernel.exportMeshes()).map((m) => ({ ...m, name: m.bodyId })))) };
-      if (format === "obj") return { base64: toB64(writeObj((await kernel.exportMeshes()).map((m) => ({ ...m, name: m.bodyId })))) };
+      if (format === "obj") {
+        // With terrains or scans around the design, the OBJ comes with its materials and pictures.
+        const files = objExport(String(p["name"] ?? "model"), await kernel.exportMeshes(), true);
+        return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])) };
+      }
       if (format === "step") return { base64: toB64(await kernel.exportStep(undefined, stepParts())) };
       if (format === "meercad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
       const sketch = String(p["sketch"] ?? "");

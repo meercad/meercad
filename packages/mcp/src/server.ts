@@ -6,7 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, extname, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { SYSTEM_PROMPT } from "@meercad/ai/prompt";
@@ -340,12 +340,24 @@ server.registerTool(
   "export",
   {
     title: "Export a file",
-    description: "Exports the model (stl, 3mf, obj, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer.",
+    description: "Exports the model (stl, 3mf, obj, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer. obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj.",
     inputSchema: { format: z.enum(["stl", "3mf", "obj", "step", "dxf", "svg", "meercad"]), path: z.string().describe("Absolute or relative output path"), sketch: z.string().optional() },
   },
   guard(async ({ format, path, sketch }) => {
-    const r = await call<{ base64: string }>("export", { format, sketch });
     const out = resolve(path);
+    if (format === "obj") {
+      // The OBJ refers to its .mtl and pictures by name, so they go next to it under its name.
+      const name = basename(out).replace(/\.obj$/i, "");
+      const r = await call<{ files: Record<string, string> }>("export", { format, name });
+      const written: string[] = [];
+      for (const [file, b64] of Object.entries(r.files)) {
+        const target = file.toLowerCase().endsWith(".obj") ? out : join(dirname(out), file);
+        await writeFile(target, Buffer.from(b64, "base64"));
+        written.push(target);
+      }
+      return text(`wrote ${written.join(", ")}`);
+    }
+    const r = await call<{ base64: string }>("export", { format, sketch });
     const data = Buffer.from(r.base64, "base64");
     await writeFile(out, data);
     return text(`wrote ${data.length} bytes to ${out}`);

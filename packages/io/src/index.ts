@@ -1,7 +1,8 @@
 export { writeStl, readStl, parseStl, meshVolume, type TriangleMesh } from "./stl.js";
 export { read3mf, write3mf } from "./threemf.js";
 export { encodeGif, type GifFrame } from "./gif.js";
-export { readObj, writeObj } from "./obj.js";
+export { objFiles, readObj, writeMtl, writeObj, type ObjMesh } from "./obj.js";
+export { readGlb, type TexturedMesh } from "./glb.js";
 export { writeDxf, readDxf, writeSvg } from "./dxf.js";
 export type { Curve2 } from "./curves.js";
 export { layoutSheet, SHEET_LABELS, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type Sheet, type SheetBomRow, type SheetLabels, type SheetView, type TitleBlock } from "./drawing.js";

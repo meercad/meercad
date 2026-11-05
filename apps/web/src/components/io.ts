@@ -1,5 +1,5 @@
 /** File import/export and share links. */
-import { read3mf, readDxf, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2 } from "@meercad/io";
+import { objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
@@ -12,6 +12,7 @@ import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
 import { t } from "../lib/i18n";
 import { currentPoses } from "../lib/mechanism";
+import { sceneryOf } from "../lib/terrain";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   stl: { name: t("STL mesh"), extensions: ["stl"] },
@@ -57,11 +58,20 @@ function shownPoses(ids: readonly string[]): Map<string, number[]> {
 /** STL/3MF/OBJ from a print-quality tessellation (the on-screen one is far coarser). */
 export async function exportMesh(format: MeshFormat): Promise<void> {
   const hidden = useApp.getState().hidden;
-  const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
-  if (!ids?.length) return toast(t("Nothing to export"), "error");
+  const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id)) ?? [];
+  // OBJ also takes the terrains and scanned areas shown around the design, with their pictures.
+  const surroundings = format === "obj" && (currentDoc().references ?? []).some((r) => !r.hidden);
+  if (!ids.length && !surroundings) return toast(t("Nothing to export"), "error");
   try {
     const poses = shownPoses(ids);
-    const meshes = (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m));
+    const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
+    if (format === "obj") {
+      const files = objExport(baseName(), meshes, true);
+      const names = Object.keys(files);
+      if (names.length > 1) toast(t("Exported as a zip: the OBJ with its materials and pictures"), "info");
+      download(names.length > 1 ? `${baseName()}.zip` : `${baseName()}.obj`, (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart);
+      return;
+    }
     download(`${baseName()}.${format}`, meshFile(format, meshes) as BlobPart);
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
@@ -70,12 +80,46 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
 
 export type MeshFormat = "stl" | "3mf" | "obj";
 
+/** Parts for OBJ, with their names and colours. */
+function objParts(meshes: readonly BodyMesh[]): ObjMesh[] {
+  const { doc } = useApp.getState();
+  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  return meshes.map((m) => ({ positions: m.positions, indices: m.indices, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) }));
+}
+
+/**
+ * The visible reference models (terrains from drone photos, scanned areas) as meshes in design
+ * coordinates, with their pictures or vertex colours and their size correction.
+ */
+function surroundingMeshes(): (TexturedMesh & { name: string })[] {
+  const doc = currentDoc();
+  const views = sceneryOf(doc);
+  return (doc.references ?? []).flatMap((r) => {
+    const view = views.find((v) => v.id === r.id);
+    if (r.hidden || !view) return [];
+    const pieces = readGlb(new Uint8Array(view.data));
+    return pieces.map((m, k) => {
+      if (r.scale && r.scale !== 1) {
+        const p = new Float32Array(m.positions);
+        for (let i = 0; i < p.length; i++) p[i] = p[i]! * r.scale;
+        m = { ...m, positions: p };
+      }
+      return { ...m, name: pieces.length > 1 ? `${r.name} ${k + 1}` : r.name };
+    });
+  });
+}
+
+/** The files of an OBJ export: the parts, and with `surroundings` the visible terrains and scans. */
+export function objExport(name: string, meshes: readonly BodyMesh[], surroundings: boolean): Record<string, Uint8Array> {
+  return objFiles(name, [...objParts(meshes), ...(surroundings ? surroundingMeshes() : [])]);
+}
+
 /** Parts as an STL, or a 3MF or OBJ with their names and colours. */
 function meshFile(format: MeshFormat, meshes: BodyMesh[]): Uint8Array {
   if (format === "stl") return writeStl(meshes);
   const { doc } = useApp.getState();
   const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
-  if (format === "obj") return new TextEncoder().encode(writeObj(meshes.map((m) => ({ ...m, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) }))));
+  if (format === "obj") return new TextEncoder().encode(writeObj(objParts(meshes)));
   // Colours the user picked also choose filaments for multi-colour printers.
   const picked = doc.partColors ?? {};
   return write3mf(meshes.map((m) => ({ ...m, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}), ...(picked[m.bodyId] ? { filament: picked[m.bodyId]! } : {}) })));
