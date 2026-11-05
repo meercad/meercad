@@ -304,12 +304,20 @@ final class ScanFlow: ObservableObject {
 
         phase = .writing
         let stl = folder.appendingPathComponent("scan.stl")
-        let stats = try await Task.detached { try MeshExport.write(usdz: usdz, stl: stl) }.value
+        let uv = folder.appendingPathComponent("scan-uv.bin")
+        let picture = folder.appendingPathComponent("scan-texture.jpg")
+        let stats = try await Task.detached { try MeshExport.write(usdz: usdz, stl: stl, uv: uv, picture: picture) }.value
         log["triangles"] = stats.triangles
         log["sizeMm"] = stats.size
         log["holesClosed"] = stats.holes
+        log["textured"] = stats.textured
         writeLog()
-        return ["path": stl.path, "folder": folder.path, "triangles": stats.triangles, "size": stats.size, "photos": photoCount, "seconds": Int(Date().timeIntervalSince(started))]
+        var result: [String: Any] = ["path": stl.path, "folder": folder.path, "triangles": stats.triangles, "size": stats.size, "photos": photoCount, "seconds": Int(Date().timeIntervalSince(started))]
+        if stats.textured {
+            result["uvs"] = uv.path
+            result["texture"] = picture.path
+        }
+        return result
     }
 
     /// Builds the model from the photos into `usdz`.
@@ -376,14 +384,34 @@ final class ScanFlow: ObservableObject {
 
 /// The rebuilt USDZ as a binary STL in millimetres, turned from RealityKit's Y-up metres to meerCAD's Z-up.
 enum MeshExport {
-    static func write(usdz: URL, stl: URL) throws -> (triangles: Int, size: [Double], holes: Int) {
+    /// The scan as STL; with `uv` and `picture`, also its texture: one coordinate pair per STL corner
+    /// (little-endian float32, v counting rows from the top as in glTF) and the picture as JPEG.
+    /// Corners of the triangles that close holes take the coordinates of the corner at the same spot.
+    static func write(usdz: URL, stl: URL, uv: URL? = nil, picture: URL? = nil) throws -> (triangles: Int, size: [Double], holes: Int, textured: Bool) {
         let asset = MDLAsset(url: usdz)
+        asset.loadTextures()
         var corners: [SIMD3<Float>] = []
-        for i in 0..<asset.count { collect(asset.object(at: i), into: &corners) }
+        var uvs: [SIMD2<Float>] = []
+        var textures: [CGImage] = []
+        for i in 0..<asset.count { collect(asset.object(at: i), into: &corners, uvs: &uvs, textures: &textures) }
         guard !corners.isEmpty else { throw ScanError.emptyModel }
+        let scanned = corners.count
         let holes = closeHoles(&corners)
         let (count, size) = try writeSTL(corners, to: stl)
-        return (count, size, holes)
+        // One picture for the whole scan (what Object Capture makes); anything else stays plain.
+        var textured = false
+        if let uv, let picture, uvs.count == scanned, textures.count == 1, #available(iOS 17, *), let jpeg = GLBWriter.jpeg(textures[0]) {
+            let key = { (p: SIMD3<Float>) in SIMD3<Int32>((p * 1000).rounded(.toNearestOrAwayFromZero)) }
+            var at: [SIMD3<Int32>: SIMD2<Float>] = [:]
+            for k in 0..<scanned where at[key(corners[k])] == nil { at[key(corners[k])] = uvs[k] }
+            for k in scanned..<corners.count { uvs.append(at[key(corners[k])] ?? uvs[k % 3 == 0 ? 0 : k - k % 3]) }
+            var data = Data(capacity: uvs.count * 8)
+            for t in uvs { withUnsafeBytes(of: (t.x.bitPattern.littleEndian, (1 - t.y).bitPattern.littleEndian)) { data.append(contentsOf: $0) } }
+            try data.write(to: uv)
+            try jpeg.write(to: picture)
+            textured = true
+        }
+        return (count, size, holes, textured)
     }
 
     /// Triangle corners (millimetres) as a binary STL; returns the triangle count and the size in mm.
@@ -455,9 +483,15 @@ enum MeshExport {
         return loops
     }
 
-    private static func collect(_ object: MDLObject, into out: inout [SIMD3<Float>]) {
+    private static func collect(_ object: MDLObject, into out: inout [SIMD3<Float>], uvs: inout [SIMD2<Float>], textures: inout [CGImage]) {
         if let mesh = object as? MDLMesh, let attr = mesh.vertexAttributeData(forAttributeNamed: MDLVertexAttributePosition, as: .float3) {
             let matrix = MDLTransform.globalTransform(with: object, atTime: 0)
+            let uvAttr = mesh.vertexAttributeData(forAttributeNamed: MDLVertexAttributeTextureCoordinate, as: .float2)
+            let uvOf = { (i: Int) -> SIMD2<Float> in
+                guard let uvAttr else { return .zero }
+                let t = uvAttr.dataStart.advanced(by: i * uvAttr.stride).assumingMemoryBound(to: Float.self)
+                return SIMD2(t[0], t[1])
+            }
             let base = attr.dataStart
             let position = { (i: Int) -> SIMD3<Float> in
                 let p = base.advanced(by: i * attr.stride).assumingMemoryBound(to: Float.self)
@@ -475,10 +509,14 @@ enum MeshExport {
                     default: index = Int(map.bytes.load(fromByteOffset: k * 4, as: UInt32.self))
                     }
                     out.append(position(index))
+                    if uvAttr != nil { uvs.append(uvOf(index)) }
+                }
+                if let image = sub.material?.property(with: .baseColor)?.textureSamplerValue?.texture?.imageFromTexture()?.takeUnretainedValue(), !textures.contains(where: { $0 === image }) {
+                    textures.append(image)
                 }
             }
         }
-        for child in object.children.objects { collect(child, into: &out) }
+        for child in object.children.objects { collect(child, into: &out, uvs: &uvs, textures: &textures) }
     }
 }
 

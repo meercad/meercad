@@ -25,6 +25,8 @@ export class Body implements Topology {
    * re-meshing thousands of triangle faces, which OCCT does slowly and with a lot of memory.
    */
   sourceMesh: Float32Array | null = null;
+  /** The import feature whose file `sourceMesh` comes from (triangle i is the file's triangle i). */
+  sourceFeature: string | null = null;
   private samples: { faces: Vec3[]; edges: Vec3[] } | null = null;
 
   constructor(

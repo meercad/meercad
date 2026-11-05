@@ -6,13 +6,14 @@ import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
 import { applyOp, designOf, motion, nextFeatureId } from "@meercad/model";
-import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
+import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
 import { t } from "../lib/i18n";
 import { currentPoses } from "../lib/mechanism";
 import { sceneryOf } from "../lib/terrain";
+import { exportTexture } from "../lib/meshTexture";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   stl: { name: t("STL mesh"), extensions: ["stl"] },
@@ -80,11 +81,14 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
 
 export type MeshFormat = "stl" | "3mf" | "obj";
 
-/** Parts for OBJ, with their names and colours. */
-function objParts(meshes: readonly BodyMesh[]): ObjMesh[] {
+/** Parts for OBJ, with their names and colours, and scans with their pictures (unless switched off). */
+function objParts(meshes: readonly BodyMesh[]): (ObjMesh & { image?: { data: Uint8Array; mime: string } })[] {
   const { doc } = useApp.getState();
   const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
-  return meshes.map((m) => ({ positions: m.positions, indices: m.indices, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) }));
+  return meshes.map((m) => {
+    const tex = exportTexture(doc.features, m);
+    return { positions: m.positions, indices: m.indices, name: partName(m.bodyId, doc.features), ...(tex ? { uvs: tex.uvs, image: tex.image } : colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) };
+  });
 }
 
 /**
@@ -227,7 +231,7 @@ export const IMPORT_TYPES = ".step,.stp,.stl,.3mf,.obj,.dxf,.svg,.meercad,.json"
  * a new design named after the file. Meshes become solid bodies; a failed import says why.
  */
 /** Imports a file into the open design (or a new one); true when it came in without errors. */
-export async function importFile(file?: File | null, opts: { seeThrough?: boolean } = {}): Promise<boolean> {
+export async function importFile(file?: File | null, opts: { seeThrough?: boolean; texture?: MeshTexture } = {}): Promise<boolean> {
   file ??= await pickFile(IMPORT_TYPES);
   if (!file) return false;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -262,6 +266,9 @@ export async function importFile(file?: File | null, opts: { seeThrough?: boolea
     reading.done();
   }
   if (useApp.getState().screen !== "editor" || !useApp.getState().project) await newProject(emptyDocument(), base);
+  // A scan's picture goes onto its mesh (one mesh per file, so it is the first import).
+  const mesh = features.find((f) => f.op === "import" && f.format === "stl");
+  if (opts.texture && mesh?.op === "import") mesh.texture = opts.texture;
   const doc = currentDoc();
   let n = 0;
   for (const f of features) f.id = nextFeatureId({ ...doc, features: [...doc.features, ...features.slice(0, n++)] }, f.op === "sketch" ? "sketch" : "import");

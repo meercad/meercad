@@ -176,9 +176,14 @@ export class KernelClient {
   }
 }
 
-/** The document without its saved versions: the worker builds the design only, and need not be sent the versions' files. */
+/**
+ * The document without its saved versions and mesh pictures: the worker builds the design only,
+ * and need not be sent the versions' files or the textures (which only change the look).
+ */
 function design(doc: MeercadDocument): MeercadDocument {
-  if (!doc.versions && !doc.blobs) return doc;
+  const textured = doc.features.some((f) => f.op === "import" && f.texture);
+  if (!doc.versions && !doc.blobs && !textured) return doc;
   const { versions: _v, blobs: _b, ...rest } = doc;
+  if (textured) rest.features = rest.features.map((f) => (f.op === "import" && f.texture ? (({ texture: _t, ...plain }) => plain)(f) : f));
   return rest;
 }

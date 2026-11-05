@@ -323,6 +323,25 @@ export interface ImportFeature extends FeatureBase {
   data: string;
   /** STEP files with several solids: each becomes its own part (ids im1, im1_2, …) instead of one. */
   split?: boolean;
+  /** A mesh's picture (a scan's colours), shown on the part and exported with OBJ. */
+  texture?: MeshTexture;
+}
+
+/**
+ * The picture laid on an imported mesh. Only the look: the part is built from `data` alone. It
+ * follows the part when moved, copied or patterned; after cutting or combining the part is plain.
+ */
+export interface MeshTexture {
+  /** Base64 picture (in a version: a key into the document's `blobs`). */
+  image: string;
+  mime: "image/jpeg" | "image/png";
+  /**
+   * Base64 little-endian float32 pairs, one per triangle corner of `data` in file order, glTF
+   * convention (v runs down the picture). Base64 too, or a blob key in a version.
+   */
+  uvs: string;
+  /** Shown plain (without the picture) and exported without it. */
+  hidden?: boolean;
 }
 
 /**

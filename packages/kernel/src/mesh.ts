@@ -16,6 +16,13 @@ export interface BodyMesh {
   edgeRanges: Int32Array;
   faceTags: string[][];
   edgeFaces: number[][];
+  /**
+   * For a part that still shows an imported mesh's own triangles (also moved, copied or patterned):
+   * the import feature, and whether the corners of each triangle were turned round (display corner
+   * k of triangle i is then file corner [0, 2, 1][k] of the file's triangle i). Lets a scan's
+   * texture follow the part.
+   */
+  source?: { feature: string; flipped: boolean };
 }
 
 export interface BodySummary {
@@ -70,6 +77,7 @@ function sourceMeshOf(body: Body, corners: Float32Array): BodyMesh {
     edgeRanges: new Int32Array(),
     faceTags: body.faceTags.map((t) => [...t]),
     edgeFaces: body.edgeFaces.map((a) => [...a]),
+    ...(body.sourceFeature ? { source: { feature: body.sourceFeature, flipped: vol < 0 } } : {}),
   };
 }
 

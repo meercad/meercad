@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ClipboardPaste, CopyPlus, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, ClipboardPaste, CopyPlus, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -9,6 +9,7 @@ import type { Expr, Feature, ReferenceModel } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp } from "../store";
+import { textureToggle } from "../lib/meshTexture";
 import { ExprInput, parseExpr } from "./ExprInput";
 import { freeParamName, withUnit, type ValueUnit } from "./ValueInput";
 import { variableGroup } from "../lib/variables";
@@ -490,6 +491,10 @@ function Bodies() {
             "sep" as const,
             { label: hidden.has(id) ? t("Show") : t("Hide"), icon: hidden.has(id) ? <Eye /> : <EyeOff />, onClick: () => toggleHidden(id) },
             { label: doc.seeThrough?.includes(id) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(id) },
+            ...(() => {
+              const sw = textureToggle(id);
+              return sw ? [{ label: sw.label, icon: sw.shown ? <ImageOff /> : <PictureIcon />, onClick: sw.onClick }] : [];
+            })(),
             ...terrainItems(id, { set: <ArrowDownToLine />, place: <MapPin /> }),
             ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },

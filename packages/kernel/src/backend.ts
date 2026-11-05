@@ -1062,6 +1062,7 @@ function transformBody(ctx: Ctx, body: Body, trsf: gp_Trsf, id: string, suffix =
       m[i + 2] = p.Z();
     }
     out.sourceMesh = m;
+    out.sourceFeature = body.sourceFeature;
   }
   return out;
 }
@@ -1364,7 +1365,10 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     body.faceTags = body.faces.map((_, i) => [`${f.id}.face[${i}]`]);
     // One face per triangle, in file order: show and export the file's own triangles.
     const corners = parseStl(bytes).positions;
-    if (corners.length === body.faces.length * 9) body.sourceMesh = corners;
+    if (corners.length === body.faces.length * 9) {
+      body.sourceMesh = corners;
+      body.sourceFeature = f.id;
+    }
     return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body) };
   }
   const path = `/import-${f.id}.step`;

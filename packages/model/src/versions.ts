@@ -29,11 +29,15 @@ export function designOf(doc: MeercadDocument): MeercadDocument {
 /** The current design as a version, its large imports moved into `blobs` (which it adds to). */
 export function snapshot(doc: MeercadDocument, name: string, at: number, blobs: Record<string, string>): Version {
   const { format: _f, ...state } = structuredClone(designOf(doc));
+  const keep = (data: string) => {
+    if (data.length < INLINE) return data;
+    const key = blobKey(data);
+    blobs[key] = data;
+    return key;
+  };
   state.features = state.features.map((f): Feature => {
-    if (f.op !== "import" || f.data.length < INLINE) return f;
-    const key = blobKey(f.data);
-    blobs[key] = f.data;
-    return { ...f, data: key };
+    if (f.op !== "import") return f;
+    return { ...f, data: keep(f.data), ...(f.texture ? { texture: { ...f.texture, image: keep(f.texture.image), uvs: keep(f.texture.uvs) } } : {}) };
   });
   state.references = state.references?.map((r) => {
     if (r.data.length < INLINE) return r;
@@ -49,10 +53,14 @@ export function snapshot(doc: MeercadDocument, name: string, at: number, blobs: 
 export function restored(doc: MeercadDocument, version: Version): MeercadDocument {
   const state: VersionState = structuredClone(version.state);
   state.features = state.features.map((f): Feature => {
-    if (f.op !== "import" || !f.data.startsWith("blob:")) return f;
-    const data = doc.blobs?.[f.data];
-    if (data === undefined) throw new Error(`version "${version.name}": the contents of ${f.fileName} are missing`);
-    return { ...f, data };
+    if (f.op !== "import") return f;
+    const fill = (data: string) => {
+      if (!data.startsWith("blob:")) return data;
+      const full = doc.blobs?.[data];
+      if (full === undefined) throw new Error(`version "${version.name}": the contents of ${f.fileName} are missing`);
+      return full;
+    };
+    return { ...f, data: fill(f.data), ...(f.texture ? { texture: { ...f.texture, image: fill(f.texture.image), uvs: fill(f.texture.uvs) } } : {}) };
   });
   state.references = state.references?.map((r) => {
     if (!r.data.startsWith("blob:")) return r;
@@ -69,7 +77,7 @@ export function pruneBlobs(doc: MeercadDocument): void {
   if (!doc.blobs) return;
   const used = new Set(
     doc.versions?.flatMap((v) => [
-      ...v.state.features.flatMap((f) => (f.op === "import" && f.data.startsWith("blob:") ? [f.data] : [])),
+      ...v.state.features.flatMap((f) => (f.op === "import" ? [f.data, f.texture?.image ?? "", f.texture?.uvs ?? ""].filter((d) => d.startsWith("blob:")) : [])),
       ...(v.state.references ?? []).flatMap((r) => (r.data.startsWith("blob:") ? [r.data] : [])),
     ]) ?? [],
   );

@@ -33,6 +33,18 @@ export interface ViewMesh {
   edgeFaces: number[][];
 }
 
+/**
+ * A picture laid on a part (a scanned mesh): texture coordinates for every vertex of the part's
+ * ViewMesh (glTF convention, v runs down the picture) and the picture; `key` names the picture so
+ * parts sharing it (copies, patterns) load it once.
+ */
+export interface BodyTexture {
+  bodyId: string;
+  uvs: Float32Array;
+  image: Blob;
+  key: string;
+}
+
 export type SketchCurveView =
   | { id: string; kind: "line"; a: Vec2; b: Vec2; construction: boolean; external: boolean }
   | { id: string; kind: "circle"; center: Vec2; radius: number; construction: boolean; external: boolean }
@@ -240,6 +252,8 @@ interface BodyObj {
   ghost: boolean;
   /** What the colours were last painted for, so unchanged bodies are skipped. */
   painted?: string;
+  /** Shows its picture (the colours under it stay white, so the picture is seen as it is). */
+  textured?: boolean;
 }
 
 const VIEWS: Record<StandardView, { dir: Vec3; up: Vec3 }> = {
@@ -515,6 +529,7 @@ export class Viewport {
     const t0 = performance.now();
     this.sceneData = data;
     this.rebuildBodies(data);
+    this.applyTextures(false);
     this.rebuildSketches(data);
     this.rebuildPlanes(data.planes);
     this.rebuildReferences(data.references);
@@ -1243,6 +1258,61 @@ export class Viewport {
       b.group.add(m);
     }
   }
+  private textures = new Map<string, BodyTexture>();
+  private textureCache = new Map<string, { tex: THREE.Texture | null }>();
+
+  /** Pictures on parts (scans); a part left out shows plain again. */
+  setBodyTextures(list: readonly BodyTexture[]): void {
+    this.textures = new Map(list.map((t) => [t.bodyId, t]));
+    for (const [key, c] of this.textureCache) {
+      if (list.some((t) => t.key === key)) continue;
+      c.tex?.dispose();
+      this.textureCache.delete(key);
+    }
+    this.applyTextures(true);
+  }
+
+  private applyTextures(repaint: boolean): void {
+    for (const b of this.bodies) {
+      const t = this.textures.get(b.mesh.bodyId);
+      const tex = t && t.uvs.length === (b.mesh.positions.length / 3) * 2 ? this.textureFor(t) : null;
+      const mat = b.faces.material as THREE.MeshStandardMaterial;
+      if (mat.map === tex) continue;
+      if (tex) b.faces.geometry.setAttribute("uv", new THREE.BufferAttribute(t!.uvs, 2));
+      else b.faces.geometry.deleteAttribute("uv");
+      mat.map = tex;
+      mat.needsUpdate = true;
+      b.textured = !!tex;
+      b.painted = undefined;
+    }
+    if (repaint) {
+      this.paint();
+      this.invalidate();
+    }
+  }
+
+  /** The loaded picture, or null while it loads (the part is shown again once it is there). */
+  private textureFor(t: BodyTexture): THREE.Texture | null {
+    const cached = this.textureCache.get(t.key);
+    if (cached) return cached.tex;
+    const entry: { tex: THREE.Texture | null } = { tex: null };
+    this.textureCache.set(t.key, entry);
+    createImageBitmap(t.image)
+      .then((bitmap) => {
+        if (this.disposed || this.textureCache.get(t.key) !== entry) return bitmap.close();
+        const tex = new THREE.Texture(bitmap);
+        // glTF convention: the coordinates already count rows from the top.
+        tex.flipY = false;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 4;
+        tex.needsUpdate = true;
+        entry.tex = tex;
+        this.applyTextures(true);
+      })
+      .catch((e: unknown) => console.warn("texture", t.key, e));
+    return null;
+  }
+
   setBodyColors(colors: ReadonlyMap<string, string>): void {
     const next = new Map([...colors].map(([id, hex]) => [id, new THREE.Color(hex)]));
     const same = next.size === this.bodyColors.size && [...next].every(([id, c]) => this.bodyColors.get(id)?.equals(c));
@@ -1276,7 +1346,7 @@ export class Viewport {
       b.painted = key;
       const fc = b.faces.geometry.getAttribute("color") as THREE.BufferAttribute;
       const idx = b.mesh.indices;
-      const base = this.bodyColors.get(id) ?? C.face;
+      const base = b.textured ? WHITE : (this.bodyColors.get(id) ?? C.face);
       const wholeColor = sf.size || se.size ? C.faceSel : hovered ? C.faceHover : base;
       const faceColor = (f: number) => (whole ? wholeColor : sf.has(f) ? C.faceSel : hovered?.kind === "face" && hovered.face === f ? C.faceHover : base);
       for (let t = 0; t < b.triFace.length; t++) {
@@ -2081,6 +2151,8 @@ export class Viewport {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const c of this.textureCache.values()) c.tex?.dispose();
+    this.textureCache.clear();
     this.resizeObserver.disconnect();
     this.renderer.setAnimationLoop(null);
     this.controls.dispose();
@@ -2145,6 +2217,8 @@ export function curvePoints(c: SketchCurveView): Vec2[] {
   }
   return pts;
 }
+
+const WHITE = new THREE.Color(0xffffff);
 
 const knobs = new Map<string, THREE.Texture>();
 /**

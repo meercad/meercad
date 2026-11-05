@@ -12,7 +12,7 @@ import { copyParts, hasClip, pasteParts, selectAll, selectedParts, selectParts }
 import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -36,6 +36,7 @@ import { SnapControls } from "./SnapControls";
 import { dragStep, gridLevels } from "../lib/grid";
 import { convertMmText, docUnit } from "../lib/units";
 import { meshBodyIds, meshHint } from "../lib/meshParts";
+import { bodyTextures, textureToggle } from "../lib/meshTexture";
 import { t, tn } from "../lib/i18n";
 
 /** Dialog fields that take whole parts, so a click on a mesh part may fill them. */
@@ -267,6 +268,8 @@ export function ViewportView() {
     vp.setScene(scene ?? EMPTY_SCENE);
     if (!scene) vp.resetFraming();
   }, [vp, scene]);
+  // Scanned parts wear their picture (unless it is switched off on the part).
+  useEffect(() => vp?.setBodyTextures(bodyTextures(doc.features, output?.meshes ?? [])), [vp, doc.features, output]);
   // Phone: sheets cover the lower part of the view; the model centres in the space above them.
   const motionOpen = useMotion((s) => s.open);
   const sideOpen = useApp((s) => s.sideOpen);
@@ -643,6 +646,7 @@ export function ViewportView() {
         { label: t("Duplicate"), icon: <CopyPlus />, kbd: "Mod+D", onClick: () => (copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]), void pasteParts()) },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
+        ...textureItems(pick.bodyId),
         ...(hasPack("scan")
           ? [
               "sep" as const,
@@ -673,6 +677,7 @@ export function ViewportView() {
         { label: t("Duplicate"), icon: <CopyPlus />, kbd: "Mod+D", onClick: () => (copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]), void pasteParts()) },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
+        ...textureItems(pick.bodyId),
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         ...(hasPack("scan") ? [...deviationItems(pick.bodyId), thicknessItem(pick.bodyId)] : []),
         ...common,
@@ -1115,4 +1120,10 @@ function DeviationLegend() {
       )}
     </div>
   );
+}
+
+/** The switch for a scan's picture, for the part menus. */
+function textureItems(bodyId: string) {
+  const sw = textureToggle(bodyId);
+  return sw ? [{ label: sw.label, icon: sw.shown ? <ImageOff /> : <PictureIcon />, onClick: sw.onClick }] : [];
 }

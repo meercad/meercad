@@ -321,7 +321,22 @@ export const definitions: Record<string, Json> = {
       ["plane", "points", "kind"],
     ),
     mesh_convert: feature("mesh_convert", { body: id, tolerance: ref("expr"), angle: ref("expr") }, ["body"]),
-    import: feature("import", { format: { enum: ["step", "stl"] }, fileName: { type: "string", maxLength: 256 }, data: { type: "string", maxLength: 64 * 1024 * 1024 }, split: bool }, ["format", "fileName", "data"]),
+    import: feature(
+      "import",
+      {
+        format: { enum: ["step", "stl"] },
+        fileName: { type: "string", maxLength: 256 },
+        data: { type: "string", maxLength: 64 * 1024 * 1024 },
+        split: bool,
+        texture: {
+          type: "object",
+          additionalProperties: false,
+          required: ["image", "mime", "uvs"],
+          properties: { image: { type: "string", maxLength: 32 * 1024 * 1024 }, mime: { enum: ["image/jpeg", "image/png"] }, uvs: { type: "string", maxLength: 64 * 1024 * 1024 }, hidden: bool },
+        },
+      },
+      ["format", "fileName", "data"],
+    ),
   }),
 };
 

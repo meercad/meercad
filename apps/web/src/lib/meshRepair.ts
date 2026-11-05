@@ -46,7 +46,8 @@ export async function runMeshRepair(): Promise<void> {
     let s = "";
     const bytes = writeStl([{ positions: out.positions, indices: out.indices }]);
     for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    if (!apply({ type: "edit_feature", id: f.id, patch: { data: btoa(s) } })) return;
+    // The picture belongs to the old triangles: it goes (undo brings both back).
+    if (!apply({ type: "edit_feature", id: f.id, patch: { data: btoa(s), ...(f.texture ? { texture: null } : {}) } })) return;
     closeMeshRepair();
     toast(
       t("{name}: {before} → {after} triangles, {pieces} loose pieces removed, {holes} holes closed. Undo brings the original back.", {
@@ -55,7 +56,7 @@ export async function runMeshRepair(): Promise<void> {
         after: report.after.toLocaleString(),
         pieces: report.piecesRemoved,
         holes: report.holesFilled,
-      }),
+      }) + (f.texture ? ` ${t("Its texture was removed, as it belonged to the old triangles.")}` : ""),
     );
   } catch (e) {
     toast(t("Could not clean up {name}: {error}", { name, error: e instanceof Error ? e.message : String(e) }), "error");

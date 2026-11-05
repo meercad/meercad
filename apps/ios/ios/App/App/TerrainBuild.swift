@@ -315,7 +315,7 @@ enum GLBWriter {
         return (triangles, [size.x, size.y, size.z].map { ($0 * 10).rounded() / 10 })
     }
 
-    private static func jpeg(_ image: CGImage) -> Data? {
+    static func jpeg(_ image: CGImage) -> Data? {
         var image = image
         let longest = max(image.width, image.height)
         if longest > 4096 {
