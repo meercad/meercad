@@ -17,6 +17,7 @@ import { joinedParts } from "./mechanism";
 import { nativeApp } from "./native";
 import { desktop, type TerrainResult } from "./persistence";
 import { t } from "./i18n";
+import { PHOTOGRAMMETRY } from "./eta";
 
 interface TerrainPlugin {
   build(): Promise<(TerrainResult & { path: string; folder: string }) | { cancelled: true }>;
@@ -36,7 +37,7 @@ export async function buildTerrain(): Promise<void> {
   busy = true;
   // The model goes into the project open now, even if another one is open when it is done.
   const project = useApp.getState().project?.id;
-  const task = startTask(t("Model from photos"), null, { long: true, cancel: cancelTerrain, ...(project ? { project } : {}) });
+  const task = startTask(t("Model from photos"), null, { long: true, pace: PHOTOGRAMMETRY, cancel: cancelTerrain, ...(project ? { project } : {}) });
   task.update(null, t("Choose the folder with the photos"));
   const steps: Record<string, string> = { model: t("Building the model"), writing: t("Preparing the model") };
   const progress = (e: { progress: number; step: string }) => task.update(e.step === "writing" ? null : e.progress, steps[e.step] ?? "");

@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApp, type Task } from "../store";
 import { t } from "../lib/i18n";
+import { secondsLeft } from "../lib/eta";
 
 const SHOW_AFTER_MS = 350;
 
@@ -60,8 +61,8 @@ function timeText(task: Task, now: number): string {
   const ran = (now - task.since) / 1000;
   const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const so = t("{time} so far", { time: clock(ran) });
-  const p = task.progress;
-  if (p === null || p < 0.03 || ran < 20) return so;
-  const left = (ran * (1 - p)) / p;
+  // Counted from the first progress, so choosing the photos does not count as work.
+  const left = task.progress === null ? null : secondsLeft(task.progressLog ?? [], (now - (task.progressFrom ?? task.since)) / 1000, task.pace);
+  if (left === null) return so;
   return `${so} · ${left < 60 ? t("less than a minute left") : t("about {n} min left", { n: Math.round(left / 60) })}`;
 }

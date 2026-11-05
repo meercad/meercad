@@ -15,6 +15,7 @@ import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
 import { isCompact } from "./lib/layout";
+import type { PaceCurve, ProgressPoint } from "./lib/eta";
 import { t } from "./lib/i18n";
 
 export interface DialogState {
@@ -210,6 +211,11 @@ export interface Task {
   cancel?: () => void;
   /** Long work (minutes): shows the time it has run and an estimate of what is left. */
   long?: boolean;
+  /** How its progress goes with time, when not evenly (see lib/eta). */
+  pace?: PaceCurve;
+  /** When the first progress came (performance.now()), and every change since: [seconds after it, progress]. */
+  progressFrom?: number;
+  progressLog?: ProgressPoint[];
 }
 let taskId = 0;
 
@@ -218,12 +224,20 @@ let taskId = 0;
  * rebuild, reading an import). Update it as it goes; `done` removes it. The Tasks panel shows it
  * with a progress bar once it has run for a moment.
  */
-export function startTask(label: string, progress: number | null = null, options: { project?: string; cancel?: () => void; long?: boolean } = {}): { update(progress: number | null, detail?: string): void; done(): void } {
+export function startTask(label: string, progress: number | null = null, options: { project?: string; cancel?: () => void; long?: boolean; pace?: PaceCurve } = {}): { update(progress: number | null, detail?: string): void; done(): void } {
   const id = ++taskId;
   set((s) => ({ tasks: [...s.tasks, { id, label, progress, since: performance.now(), ...options }] }));
   return {
     update(p, detail) {
-      set((s) => ({ tasks: s.tasks.map((x) => (x.id === id ? { ...x, progress: p, ...(detail !== undefined ? { detail } : {}) } : x)) }));
+      const now = performance.now();
+      set((s) => ({
+        tasks: s.tasks.map((x) => {
+          if (x.id !== id) return x;
+          const from = x.progressFrom ?? (p !== null ? now : undefined);
+          const log = x.long && p !== null && p !== x.progress && from !== undefined ? [...(x.progressLog ?? []), [(now - from) / 1000, p] as const] : x.progressLog;
+          return { ...x, progress: p, ...(detail !== undefined ? { detail } : {}), ...(from !== undefined ? { progressFrom: from } : {}), ...(log ? { progressLog: log } : {}) };
+        }),
+      }));
     },
     done() {
       set((s) => ({ tasks: s.tasks.filter((x) => x.id !== id) }));
