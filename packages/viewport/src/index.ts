@@ -1281,6 +1281,9 @@ export class Viewport {
       if (tex) b.faces.geometry.setAttribute("uv", new THREE.BufferAttribute(t!.uvs, 2));
       else b.faces.geometry.deleteAttribute("uv");
       mat.map = tex;
+      // A scan's photo already holds the light: no shine on top of it.
+      mat.roughness = tex ? 1 : 0.55;
+      mat.metalness = tex ? 0 : 0.08;
       mat.needsUpdate = true;
       b.textured = !!tex;
       b.painted = undefined;
