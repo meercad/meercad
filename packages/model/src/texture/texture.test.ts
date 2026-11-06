@@ -256,6 +256,17 @@ describe("texture displacement", () => {
     expect(m.faceRanges[4 * 3 + 1]).toBe(6);
   });
 
+  it("refines a round face meshed in thin strips without multiplying the triangles", () => {
+    // 200 strips 0.25 mm wide and 50 mm tall, as the kernel meshes a fillet: ladders, not fans.
+    const { mesh, surfaces } = cylinder(8, 50, 200);
+    const t0 = performance.now();
+    const m = applyTextures(mesh, [layer([0], { pitch: 4 })], surfaces, { samples: 8, maxTriangles: 1e7 })!;
+    const area = 2 * Math.PI * 8 * 50;
+    expect(m.indices.length / 3).toBeLessThan((12 * area) / 0.5 ** 2);
+    expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
+    expect(performance.now() - t0).toBeLessThan(5000);
+  });
+
   it("works for every pattern", () => {
     const img = { width: 2, height: 2, pixels: Uint8Array.from([0, 255, 255, 0]) };
     for (const p of TEXTURE_PATTERNS) {

@@ -158,8 +158,8 @@ export function applyTextures(mesh: TexturableMesh, layers: TextureLayer[], surf
       area[r.layer]! += Math.hypot(n[0], n[1], n[2]) / 2;
     }
   const spacing = layers.map((l) => Math.max(0.02, l.pitch / opts.samples));
-  // Bisecting longest edges until none is longer than h leaves about 6·area/h² triangles.
-  const estimate = layers.reduce((s, _, i) => s + (6 * area[i]!) / spacing[i]! ** 2, 0);
+  // Bisecting longest edges until none is longer than h leaves about 6–12·area/h² triangles (more on round faces meshed in strips).
+  const estimate = layers.reduce((s, _, i) => s + (10 * area[i]!) / spacing[i]! ** 2, 0);
   if (estimate > opts.maxTriangles) {
     const k = Math.sqrt(estimate / opts.maxTriangles);
     for (let i = 0; i < spacing.length; i++) spacing[i]! *= k;
@@ -194,11 +194,20 @@ export function applyTextures(mesh: TexturableMesh, layers: TextureLayer[], surf
   }
   const groupOf = ranges.map((r, i) => (r.layer < 0 ? -1 : find(i)));
 
-  // ---- refine: split every edge of a chosen face that is longer than its layer's spacing
   const mids = new Map<number, number>();
+  // Edges cut for ladders whose other side still has them whole: they split on every face.
+  const preset = ladders(ranges, spacing, surfaces, pos, edgeKey, mids);
+
+  // ---- refine: split every edge of a chosen face that is longer than its layer's spacing
   for (let pass = 0; pass < 40; pass++) {
     const long = new Map<number, number>();
     ranges.forEach((r, ri) => {
+      if (preset.size)
+        for (let t = 0; t < r.tris.length; t += 3)
+          for (let k = 0; k < 3; k++) {
+            const key = edgeKey(r.weld[r.tris[t + k]!]!, r.weld[r.tris[t + ((k + 1) % 3)]!]!);
+            if (preset.has(key) && !long.has(key)) long.set(key, ri);
+          }
       if (r.layer < 0) return;
       const h2 = spacing[r.layer]! ** 2;
       // Each triangle's longest edge only (longest-edge bisection keeps the triangles well shaped).
@@ -219,6 +228,7 @@ export function applyTextures(mesh: TexturableMesh, layers: TextureLayer[], surf
       }
     });
     if (!long.size) break;
+    for (const key of long.keys()) preset.delete(key);
     const midWeld = (a: number, b: number, key: number): number => {
       let m = mids.get(key);
       if (m !== undefined) return m;
@@ -692,4 +702,145 @@ class MinHeap {
     }
     return top;
   }
+}
+
+/**
+ * Long thin triangles, the strips a round face comes meshed in (a fillet 50 mm tall in strips a
+ * quarter millimetre wide), become ladders first: their long edges are halved until no piece is
+ * longer than the spacing and the strip is filled with rungs across. Bisecting such strips instead
+ * would put new corners between the strip's own ones at every step and multiply the triangles. The
+ * halving points are the midpoints the refinement afterwards uses too (`mids`), so a neighbour that
+ * is no strip (a flat wall), textured or not, splits the shared edge at exactly the same points.
+ */
+function ladders(ranges: Range[], spacing: number[], surfaces: FaceSurface[], pos: number[], edgeKey: (a: number, b: number) => number, mids: Map<number, number>): Set<number> {
+  const preset = new Set<number>();
+  const dist = (a: number, b: number) => Math.hypot(pos[a * 3]! - pos[b * 3]!, pos[a * 3 + 1]! - pos[b * 3 + 1]!, pos[a * 3 + 2]! - pos[b * 3 + 2]!);
+  // Strips: the shortest edge below the spacing, the other two above it and much longer.
+  const strips: { r: Range; t: number; apex: number }[] = [];
+  const cutH = new Map<number, { h: number; s: FaceSurface | undefined }>();
+  for (const r of ranges) {
+    if (r.layer < 0) continue;
+    const h = spacing[r.layer]!;
+    for (let t = 0; t < r.tris.length; t += 3) {
+      const w = [r.weld[r.tris[t]!]!, r.weld[r.tris[t + 1]!]!, r.weld[r.tris[t + 2]!]!];
+      const l = [dist(w[0]!, w[1]!), dist(w[1]!, w[2]!), dist(w[2]!, w[0]!)];
+      const s = l.indexOf(Math.min(...l));
+      const others = [l[(s + 1) % 3]!, l[(s + 2) % 3]!];
+      if (!(l[s]! <= h && Math.min(...others) > h && l[s]! < 0.5 * Math.min(...others))) continue;
+      const apex = (s + 2) % 3;
+      strips.push({ r, t, apex });
+      for (const b of [(apex + 1) % 3, (apex + 2) % 3]) {
+        const key = edgeKey(w[apex]!, w[b]!);
+        const c = cutH.get(key);
+        if (!c || h < c.h) cutH.set(key, { h, s: c?.s ?? surfaces[r.face] });
+      }
+    }
+  }
+  if (!strips.length) return preset;
+  // The points on each cut edge, from its lower welded corner to its higher one, by halving.
+  const points = new Map<number, number[]>();
+  for (const [key, { h, s }] of cutH) {
+    const a = Math.floor(key / 134217728), b = key % 134217728;
+    const halve = (x: number, y: number): number[] => {
+      if (dist(x, y) <= h) return [];
+      const k = edgeKey(x, y);
+      let m = mids.get(k);
+      if (m === undefined) {
+        let p: V3 = [(pos[x * 3]! + pos[y * 3]!) / 2, (pos[x * 3 + 1]! + pos[y * 3 + 1]!) / 2, (pos[x * 3 + 2]! + pos[y * 3 + 2]!) / 2];
+        if (s?.kind === "cylinder") p = ontoCylinder(p, s);
+        m = pos.length / 3;
+        pos.push(p[0], p[1], p[2]);
+        mids.set(k, m);
+        preset.add(k);
+      }
+      return [...halve(x, m), m, ...halve(m, y)];
+    };
+    const ids = halve(a, b);
+    if (ids.length) points.set(key, ids);
+  }
+  if (!points.size) return preset;
+  // Each strip as a ladder between its two long edges.
+  const byRange = new Map<Range, Map<number, number[]>>();
+  for (const { r, t, apex } of strips) {
+    const c = [r.tris[t]!, r.tris[t + 1]!, r.tris[t + 2]!];
+    const v0 = c[apex]!, v1 = c[(apex + 1) % 3]!, v2 = c[(apex + 2) % 3]!;
+    const chain = (from: number, to: number): number[] => {
+      const wa = r.weld[from]!, wb = r.weld[to]!;
+      const ids = points.get(edgeKey(wa, wb));
+      if (!ids) return [from, to];
+      const along = wa < wb ? ids : [...ids].reverse();
+      const out = [from];
+      for (const w of along) out.push(localFor(r, w, from, to, surfaces[r.face], pos));
+      out.push(to);
+      return out;
+    };
+    const L = chain(v0, v1), R = chain(v0, v2);
+    if (L.length === 2 && R.length === 2) continue;
+    const local = (x: number) => [pos[r.weld[x]! * 3]!, pos[r.weld[x]! * 3 + 1]!, pos[r.weld[x]! * 3 + 2]!] as V3;
+    const d2 = (x: number, y: number) => {
+      const p = local(x), q = local(y);
+      return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+    };
+    const tris = [L[0]!, L[1]!, R[1]!];
+    let i = 1, j = 1;
+    while (i < L.length - 1 || j < R.length - 1) {
+      const stepL = j === R.length - 1 || (i < L.length - 1 && d2(L[i + 1]!, R[j]!) <= d2(L[i]!, R[j + 1]!));
+      if (stepL) tris.push(L[i]!, L[++i]!, R[j]!);
+      else tris.push(L[i]!, R[j + 1]!, R[j++]!);
+    }
+    let m = byRange.get(r);
+    if (!m) byRange.set(r, (m = new Map()));
+    m.set(t, tris);
+  }
+  for (const [r, replaced] of byRange) {
+    const out: number[] = [];
+    for (let t = 0; t < r.tris.length; t += 3) {
+      const rep = replaced.get(t);
+      if (rep) out.push(...rep);
+      else out.push(r.tris[t]!, r.tris[t + 1]!, r.tris[t + 2]!);
+    }
+    r.tris = out;
+  }
+  // Cut edges inside the ladders are gone; keep those still on a face whole, with their halves.
+  const live = new Set<number>();
+  for (const r of ranges)
+    for (let t = 0; t < r.tris.length; t += 3)
+      for (let k = 0; k < 3; k++) {
+        const key = edgeKey(r.weld[r.tris[t + k]!]!, r.weld[r.tris[t + ((k + 1) % 3)]!]!);
+        if (preset.has(key)) live.add(key);
+      }
+  const kept = new Set<number>();
+  const keep = (key: number) => {
+    const m = mids.get(key);
+    if (m === undefined || !preset.has(key) || kept.has(key)) return;
+    kept.add(key);
+    const a = Math.floor(key / 134217728), b = key % 134217728;
+    keep(edgeKey(a, m));
+    keep(edgeKey(m, b));
+  };
+  for (const key of live) keep(key);
+  return kept;
+}
+
+/** A face's corner for welded vertex `w` on its edge from corner `a` to `b` (normal in between, or the cylinder's). */
+function localFor(r: Range, w: number, a: number, b: number, s: FaceSurface | undefined, pos: number[]): number {
+  const hit = r.local.get(w);
+  if (hit !== undefined) return hit;
+  const l = r.weld.length;
+  r.weld.push(w);
+  const na: V3 = [r.nrm[a * 3]!, r.nrm[a * 3 + 1]!, r.nrm[a * 3 + 2]!];
+  let n: V3;
+  if (s?.kind === "cylinder") {
+    const radial = radialOf([pos[w * 3]!, pos[w * 3 + 1]!, pos[w * 3 + 2]!], s);
+    const out = dot(radial, na) >= 0 ? 1 : -1;
+    n = [radial[0] * out, radial[1] * out, radial[2] * out];
+  } else {
+    const pa = r.weld[a]!, pb = r.weld[b]!;
+    const total = Math.hypot(pos[pa * 3]! - pos[pb * 3]!, pos[pa * 3 + 1]! - pos[pb * 3 + 1]!, pos[pa * 3 + 2]! - pos[pb * 3 + 2]!) || 1;
+    const f = Math.hypot(pos[pa * 3]! - pos[w * 3]!, pos[pa * 3 + 1]! - pos[w * 3 + 1]!, pos[pa * 3 + 2]! - pos[w * 3 + 2]!) / total;
+    n = norm([0, 1, 2].map((k) => r.nrm[a * 3 + k]! * (1 - f) + r.nrm[b * 3 + k]! * f) as V3);
+  }
+  r.nrm.push(n[0], n[1], n[2]);
+  r.local.set(w, l);
+  return l;
 }
