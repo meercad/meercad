@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { clearances, type RebuildReport } from "@meercad/kernel";
 import { screwBoxSizes, snapBoxSizes, boxDefaults, snapHookStrain, DEFAULT_CLEARANCE } from "@meercad/model";
-import { validateDocument, type BoxFeature, type Feature, type SnapHookFeature } from "@meercad/schema";
+import { validateDocument, type BoxFeature, type Feature, type MeercadDocument, type SnapHookFeature } from "@meercad/schema";
+import { readFileSync } from "node:fs";
 import { doc, getOcct, newSession, rect, sketch } from "./helpers.js";
 
 const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
@@ -36,8 +37,8 @@ describe("boxes with a snap lid", () => {
     const { report, meshes } = await build([box({ shape: "round", depth: undefined })]);
     ok(report);
     expect(body(report, "bx1").bbox.max[1]).toBeCloseTo(30, 3);
-    for (const tag of ["bx1.wall", "bx1.groove", "bx1.rim", "bx1.notch"]) expect(tagsOf(meshes, "bx1")).toContain(tag);
-    for (const tag of ["bx1.lid_side", "bx1.lid_bead", "bx1.lid_lip"]) expect(tagsOf(meshes, "bx1_lid")).toContain(tag);
+    for (const tag of ["bx1.wall", "bx1.groove", "bx1.rim", "bx1.notch", "bx1.bottom", "bx1.floor"]) expect(tagsOf(meshes, "bx1")).toContain(tag);
+    for (const tag of ["bx1.lid_side", "bx1.lid_bead", "bx1.lid_lip", "bx1.lid_top", "bx1.lid_under"]) expect(tagsOf(meshes, "bx1_lid")).toContain(tag);
   });
 
   it("closes without the parts overlapping: the bead sits in the groove with play", async () => {
@@ -74,8 +75,8 @@ describe("jars with a screw lid", () => {
     expect(b.bbox.max[0] - b.bbox.min[0]).toBeCloseTo(60, 3);
     expect(b.bbox.max[2]).toBeCloseTo(50, 6);
     expect(c.bbox.max[2]).toBeCloseTo(52, 6);
-    for (const tag of ["bx1.thread", "bx1.neck", "bx1.shoulder", "bx1.wall", "bx1.rim", "bx1.floor"]) expect(tagsOf(meshes, "bx1")).toContain(tag);
-    for (const tag of ["bx1.lid_thread", "bx1.lid_top", "bx1.lid_inner", "bx1.lid_side"]) expect(tagsOf(meshes, "bx1_lid")).toContain(tag);
+    for (const tag of ["bx1.thread", "bx1.neck", "bx1.shoulder", "bx1.wall", "bx1.rim", "bx1.floor", "bx1.bottom", "bx1.inner"]) expect(tagsOf(meshes, "bx1")).toContain(tag);
+    for (const tag of ["bx1.lid_thread", "bx1.lid_top", "bx1.lid_under", "bx1.lid_rim", "bx1.lid_inner", "bx1.lid_side"]) expect(tagsOf(meshes, "bx1_lid")).toContain(tag);
     const pair = clearances(oc, session.state!, ["bx1", "bx1_lid"], {}, 1).find((p) => p.a !== p.b)!;
     expect(pair.overlap).toBeLessThan(1e-3);
     // The threads really are there: the ridges add material beyond the plain neck and skirt.
@@ -139,5 +140,21 @@ describe("snap hooks", () => {
     expect(snapHookStrain({ length: 10, thickness: 1.6, overhang: 0.8 })).toBeCloseTo(0.0192, 6);
     const { report } = await build([...parts, hook({ length: 4, thickness: 2.5, catchIn: undefined })]);
     expect(report.features.find((f) => f.id === "sh1")!.message).toMatch(/bends 18\.8 %/);
+  });
+});
+
+describe("example: boxes and snap hooks", () => {
+  it("the case's lid clicks in: its hooks sit in the windows without touching the case", async () => {
+    const oc = await getOcct();
+    const ex = JSON.parse(readFileSync(new URL("../../apps/web/src/examples/42-boxes-and-snap-hooks.meercad", import.meta.url), "utf8")) as MeercadDocument;
+    const session = await newSession();
+    const { report, meshes } = session.rebuild(ex);
+    ok(report);
+    expect(report.bodies.map((b) => b.id).sort()).toEqual(["bx1", "bx1_lid", "bx2", "bx2_lid", "ex1", "ex2"]);
+    expect(tagsOf(meshes, "ex1")).toContain("sh1.window");
+    expect(tagsOf(meshes, "ex1")).toContain("sh2.window");
+    expect(tagsOf(meshes, "ex2")).toContain("sh1.catch");
+    const pair = clearances(oc, session.state!, ["ex1", "ex2"], {}, 1).find((p) => p.a !== p.b)!;
+    expect(pair.overlap).toBeLessThan(1e-3);
   });
 });

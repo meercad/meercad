@@ -33,6 +33,8 @@ import {
   Tag,
   Rainbow,
   Waves,
+  PackageOpen,
+  FishingHook,
   type LucideIcon, Trash2 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, MeercadDocument } from "@meercad/schema";
 import { nextFeatureId, standardShape } from "@meercad/model";
@@ -60,6 +62,8 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   align: { shortcut: "Shift+A", label: t("Align"), icon: Magnet, hint: t("Set a part's face onto another's, or a shaft's axis onto a hole's") },
   standard_part: { shortcut: "Shift+P", label: t("Standard part"), icon: Nut, hint: t("Screws, nuts, bearings, magnets, aluminium profiles, linear guides and lead screws to standard sizes, placed on a face") },
   gridfinity: { label: t("Storage bin"), icon: LayoutGrid, hint: t("Bins and baseplates for the Gridfinity storage grid: compartments, scoops, label tabs, magnets; editable like any part") },
+  box: { label: t("Box with lid"), icon: PackageOpen, hint: t("Printable box with a snap lid, or a round jar with a screw lid; box and lid as two parts with the right play") },
+  snap_hook: { label: t("Snap hook"), icon: FishingHook, hint: t("Snap hooks on a face that click into a window in the other part, with the bending strain checked") },
   label: { label: t("Label"), icon: Tag, hint: t("Printable label with a screw, nut or insert symbol and text, raised or engraved, in one or two colours") },
   text: { shortcut: "Shift+T", label: t("Text"), icon: Type, hint: t("Raised or engraved lettering on a face") },
   offset_face: { shortcut: "Shift+E", label: t("feature::Move face"), icon: ArrowUpToLine, hint: t("Move faces along their normals or up to a plane: thicker walls, tighter holes, a face flush with another") },
@@ -83,7 +87,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "label", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "label", "box", "snap_hook", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -147,6 +151,10 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
     }
     case "label":
       return { id, op, text: "M3×10", symbol: "screw_socket" };
+    case "box":
+      return { id, op, lid: "snap", width: 80, depth: 60, height: 40 };
+    case "snap_hook":
+      return { id, op, plane: { ref: "origin.XY" }, points: [] };
     case "text":
       return { id, op, plane: { ref: "origin.XY" }, text: "meerCAD", size: 8, depth: 1, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import") ? "join" : "new_body" };
     case "draft":
@@ -233,6 +241,8 @@ export function draftProblem(f: Feature): string | null {
       return !("face" in f.profile) && !f.profile.sketch ? t("Pick the profile: sketch regions") : f.path.sketch ? null : t("Pick the path: lines and arcs of a sketch");
     case "hole":
       return f.points.length ? null : t("Tap a flat face where the hole goes");
+    case "snap_hook":
+      return f.points.length ? null : t("Tap a flat face where the hook stands");
     default:
       return null;
   }
@@ -254,6 +264,11 @@ export function featureName(f: Feature): string {
   // Bins and baseplates by their size ("Bin 2×1×3", "Baseplate 4×3"), labels by their text.
   if (!f.name && f.op === "gridfinity" && typeof f.units[0] === "number" && typeof f.units[1] === "number")
     return f.kind === "bin" ? `${t("Bin")} ${f.units[0]}×${f.units[1]}×${typeof f.height === "number" ? f.height : 3}` : f.drawer ? `${t("Baseplate")} ${f.id.replace(/^\D+/, "")}` : `${t("Baseplate")} ${f.units[0]}×${f.units[1]}`;
+  // Boxes by their size ("Box 80×60×40", "Jar ⌀60×50").
+  if (!f.name && f.op === "box" && typeof f.width === "number" && typeof f.height === "number")
+    return f.lid === "screw" || f.shape === "round"
+      ? `${t(f.lid === "screw" ? "Jar" : "Round box")} ⌀${f.width}×${f.height}`
+      : `${t("Box")} ${f.width}×${typeof f.depth === "number" ? f.depth : f.width}×${f.height}`;
   if (!f.name && f.op === "label" && f.text?.trim()) return `${t("Label")} ${f.text.trim().split("\n")[0]}`;
   return f.name ?? `${FEATURES[f.op].label} ${f.id.replace(/^\D+/, "")}`;
 }
@@ -279,6 +294,7 @@ export function partName(id: string, features: readonly Feature[]): string {
       // the generic name below
     }
   }
+  if (best.op === "box" && rest === "lid") return t("Lid of {name}", { name: featureName(best) });
   if (/^\d+$/.test(rest)) return `${featureName(best)} (${rest})`;
   // Copies of several parts carry the copied part's id: "lp1_ex2_3".
   const [, of, n] = /^(.*?)(?:_(\d+))?$/.exec(rest)!;

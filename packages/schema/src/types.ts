@@ -489,9 +489,9 @@ export interface GridfinityFeature extends FeatureBase {
  * `height` of the box without its lid. `clearance` is the play between box and lid per side.
  * With `layout: "beside"` (default) the lid lies upside down next to the box, ready to print;
  * `"closed"` puts it on the box. The box stands on the plane (default origin.XY) centred on `position`.
- * Faces: bx1.bottom, bx1.wall, bx1.inner, bx1.floor, bx1.rim, bx1.groove, bx1.shoulder, bx1.neck,
- * bx1.thread; on the lid bx1.lid_top, bx1.lid_side, bx1.lid_under, bx1.lid_lip, bx1.lid_bead,
- * bx1.lid_thread.
+ * Faces: bx1.bottom, bx1.wall, bx1.inner, bx1.floor, bx1.rim, bx1.groove, bx1.notch, bx1.shoulder,
+ * bx1.neck, bx1.thread; on the lid bx1.lid_top, bx1.lid_side, bx1.lid_under, bx1.lid_lip,
+ * bx1.lid_bead, and on a cap bx1.lid_rim (the skirt's edge), bx1.lid_inner, bx1.lid_thread.
  */
 export interface BoxFeature extends FeatureBase {
   op: "box";
@@ -541,7 +541,7 @@ export interface BoxFeature extends FeatureBase {
  * `catchIn` cuts the window the barb clicks into (with `clearance`) into those parts, where the barb
  * sits; the window runs on through their wall. Hooks join the part they stand on (`mode`).
  * Faces: sh1.beam, sh1.back, sh1.lead (the lead-in slope), sh1.catch (the holding face), sh1.tip,
- * sh1.side; the window: sh1.window.
+ * sh1.side, sh1.root; the window: sh1.window.
  */
 export interface SnapHookFeature extends FeatureBase {
   op: "snap_hook";

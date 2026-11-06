@@ -9,7 +9,7 @@
  */
 
 import { BOX, ClosureError, FeatureError, checkSnapHook, screwBoxSizes, snapBoxSizes, snapHookProfile, snapHookStrain, type ResolvedBox, type ResolvedSnapHook } from "@meercad/model";
-import type { PlaneFrame, Vec3 } from "@meercad/sketch";
+import { toWorld, type PlaneFrame, type Vec3 } from "@meercad/sketch";
 import type { TopoDS_Shape, TopoDS_Wire, gp_Trsf } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
 import { Body } from "./body.js";
@@ -191,10 +191,10 @@ function snapBox(b: ClosureBuilder, f: ResolvedBox): { box: Body; lid: Body; lid
     const p = samplePoint(b.oc, b.arena, box, i);
     const n = box.faceInfo[i]!.normal;
     const name = (x: string) => [`${f.id}.${x}`];
-    const up = !!n && n[2] > 0.99, down = !!n && n[2] < -0.99;
-    if (down && Math.abs(p[2]) < 1e-6) return name("bottom");
-    if (up && Math.abs(p[2] - f.floor) < 1e-6) return name("floor");
-    if (up && Math.abs(p[2] - H) < 1e-6) return name("rim");
+    const flat = !!n && Math.abs(n[2]) > 0.99;
+    if (flat && Math.abs(p[2]) < 1e-6) return name("bottom");
+    if (flat && Math.abs(p[2] - f.floor) < 1e-6) return name("floor");
+    if (flat && Math.abs(p[2] - H) < 1e-6 && !(notch && p[1] < -D / 2 + t + 1e-3 && Math.abs(p[0]) < nw / 2 + 1e-3)) return name("rim");
     if (notch && p[1] < -D / 2 + t + 1e-3 && p[2] > H - nd - 1e-3 && Math.abs(p[0]) < nw / 2 + 1e-3) return name("notch");
     if (Math.abs(outlineDistance(p[0], p[1], W, D, R)) < 1e-3) return name("wall");
     if (p[2] > grooveBottom && p[2] < grooveTop && outlineDistance(p[0], p[1], iw, id, ri) > 1e-3) return name("groove");
@@ -219,8 +219,9 @@ function snapBox(b: ClosureBuilder, f: ResolvedBox): { box: Body; lid: Body; lid
     const p = samplePoint(b.oc, b.arena, lid, i);
     const n = lid.faceInfo[i]!.normal;
     const name = (x: string) => [`${f.id}.${x}`];
-    if (n && n[2] > 0.99 && Math.abs(p[2] - H - T) < 1e-6) return name("lid_top");
-    if (n && n[2] < -0.99 && Math.abs(p[2] - H) < 1e-6) return name("lid_under");
+    const flat = !!n && Math.abs(n[2]) > 0.99;
+    if (flat && Math.abs(p[2] - H - T) < 1e-6) return name("lid_top");
+    if (flat && Math.abs(p[2] - H) < 1e-6) return name("lid_under");
     if (p[2] > H - 1e-6 && Math.abs(outlineDistance(p[0], p[1], W, D, R)) < 1e-3) return name("lid_side");
     if (p[2] > s.beadZ - bh - snap - 1e-3 && p[2] < s.beadZ + bh + snap + 1e-3 && outlineDistance(p[0], p[1], lw, ld, lr) > 1e-3) return name("lid_bead");
     return name("lid_lip");
@@ -255,12 +256,13 @@ function screwBox(b: ClosureBuilder, f: ResolvedBox): { box: Body; lid: Body; li
     const p = samplePoint(b.oc, b.arena, box, i);
     const nrm = box.faceInfo[i]!.normal;
     const name = (x: string) => [`${f.id}.${x}`];
-    const up = !!nrm && nrm[2] > 0.99, down = !!nrm && nrm[2] < -0.99;
+    // Turned faces can report their normal either way round: flat faces are told apart by height.
+    const flat = !!nrm && Math.abs(nrm[2]) > 0.99;
     const r = rad(p);
-    if (down && Math.abs(p[2]) < 1e-6) return name("bottom");
-    if (up && Math.abs(p[2] - fl) < 1e-6) return name("floor");
-    if (up && Math.abs(p[2] - H) < 1e-6) return name("rim");
-    if (up && Math.abs(p[2] - sh) < 1e-6) return name("shoulder");
+    if (flat && Math.abs(p[2]) < 1e-6) return name("bottom");
+    if (flat && Math.abs(p[2] - fl) < 1e-6) return name("floor");
+    if (flat && Math.abs(p[2] - H) < 1e-6) return name("rim");
+    if (flat && Math.abs(p[2] - sh) < 1e-6 && r > rn - 1e-3) return name("shoulder");
     if (Math.abs(r - R) < 1e-3) return name("wall");
     if (Math.abs(r - rn) < 1e-3 && p[2] > sh - 1e-6) return name("neck");
     if (r > rn + 1e-3 && r < rn + d + 1e-3 && p[2] > sh) return name("thread");
@@ -274,9 +276,10 @@ function screwBox(b: ClosureBuilder, f: ResolvedBox): { box: Body; lid: Body; li
     const nrm = lid.faceInfo[i]!.normal;
     const name = (x: string) => [`${f.id}.${x}`];
     const r = rad(p);
-    if (nrm && nrm[2] > 0.99 && Math.abs(p[2] - H - T) < 1e-6) return name("lid_top");
-    if (nrm && nrm[2] < -0.99 && Math.abs(p[2] - H) < 1e-6) return name("lid_under");
-    if (nrm && nrm[2] < -0.99 && Math.abs(p[2] - sh - g) < 1e-6) return name("lid_rim");
+    const flat = !!nrm && Math.abs(nrm[2]) > 0.99;
+    if (flat && Math.abs(p[2] - H - T) < 1e-6) return name("lid_top");
+    if (flat && Math.abs(p[2] - H) < 1e-6) return name("lid_under");
+    if (flat && Math.abs(p[2] - sh - g) < 1e-6) return name("lid_rim");
     if (Math.abs(r - R) < 1e-3) return name("lid_side");
     if (Math.abs(r - rs) < 1e-3) return name("lid_inner");
     return name("lid_thread");
@@ -317,7 +320,8 @@ export function snapHookTools(oc: OC, arena: Arena, f: ResolvedSnapHook, frame: 
 
   // One body each for all hooks and all windows, their faces named as the single ones.
   const merge = (one: Body, id: string) => {
-    const parts = f.points.map((pt) => b.place(one, b.placement(placed, pt, f.angle), id));
+    // Points and the barb's direction are in the face's own coordinates, flipped or not.
+    const parts = f.points.map((pt) => b.place(one, b.placement({ ...placed, origin: toWorld(frame, pt) }, [0, 0], f.flip ? -f.angle : f.angle), id));
     if (parts.length === 1) return parts[0]!;
     const all = new Body(oc, arena, id, b.compound(parts.map((x) => x.shape)));
     const tags: string[][] = all.faces.map(() => []);

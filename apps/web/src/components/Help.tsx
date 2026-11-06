@@ -150,6 +150,16 @@ const guides = (): { section: string; guides: Guide[] }[] => [
           </ul>
         ),
       },
+      {
+        title: t("Boxes, lids and snap hooks"),
+        body: (
+          <ul>
+            {li(t("**Create → Box with lid** makes a box and its lid as two parts: rectangular or round with a **snap lid** that clicks into a groove, or a round jar with a **screw lid**. Start from a preset, then change sizes, wall, play, snap or thread."))}
+            {li(t("The lid lies upside down next to the box, ready to print. **Lid on the box** shows it closed; **Check fit** confirms that nothing overlaps."))}
+            {li(t("**Create → Snap hook** puts hooks on a flat face. Tap the face where they stand, turn the barb with the turn button, and tap the part they click into: its window is cut with play. The dialog shows how far the hook bends and which plastics take it."))}
+          </ul>
+        ),
+      },
     ],
   },
   {
