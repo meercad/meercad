@@ -86,7 +86,7 @@ export function drawerFit(size: [number, number], margin = 0.5): { units: [numbe
 }
 
 /** The compartments' sizes inside a bin: width, depth and height above the floor. */
-export function compartments(units: [number, number], height: number, dividers: [number, number], wall = GRIDFINITY.wall, thickness = wall, floor = GRIDFINITY.binFloor) {
+export function compartments(units: [number, number], height: number, dividers: [number, number], wall: number = GRIDFINITY.wall, thickness: number = wall, floor: number = GRIDFINITY.binFloor) {
   const s = binSize(units, height);
   const inner = [s.width - 2 * wall, s.depth - 2 * wall];
   return {
