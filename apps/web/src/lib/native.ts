@@ -346,6 +346,33 @@ export async function shareFile(name: string, data: string | Uint8Array): Promis
   await Share.share({ title: name, files: [written.uri] }).catch(() => undefined);
 }
 
+interface ARPluginApi {
+  available(): Promise<{ ar: boolean }>;
+  show(o: { url: string }): Promise<void>;
+}
+const AR = registerPlugin<ARPluginApi>("AR");
+
+/** Whether this iPhone or iPad can place a part in the room (false on the Mac and in the browser). */
+export async function arAvailable(): Promise<boolean> {
+  if (!nativeApp) return false;
+  try {
+    return (await AR.available()).ar;
+  } catch {
+    return false; // an app build without the AR plugin
+  }
+}
+
+/**
+ * Shows a USDZ in AR Quick Look: the part stands on the table in real size (pinching cannot
+ * scale it). Resolves when the preview is closed. The file is named after the part, which
+ * Quick Look shows as its title and uses when it is shared from there.
+ */
+export async function showInAr(name: string, usdz: Uint8Array): Promise<void> {
+  await Filesystem.rmdir({ path: "ar", directory: Directory.Cache, recursive: true }).catch(() => undefined);
+  const written = await Filesystem.writeFile({ path: `ar/${name}`, directory: Directory.Cache, recursive: true, data: toBase64(usdz) });
+  await AR.show({ url: written.uri });
+}
+
 function toBase64(bytes: Uint8Array): string {
   let s = "";
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
