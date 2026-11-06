@@ -17,14 +17,14 @@ import { t } from "../lib/i18n";
 type Of<O extends Feature["op"]> = Extract<Feature, { op: O }>;
 type SetFn = (patch: Record<string, unknown>) => void;
 
-const Field = ({ label, children }: { label: string; children: ReactNode }) => (
+export const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <div className="fld">
     <span className="fld-label">{label}</span>
     {children}
   </div>
 );
 
-function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, ReactNode][]; onChange: (v: T) => void }) {
+export function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, ReactNode][]; onChange: (v: T) => void }) {
   return (
     <div className="segmented">
       {options.map(([v, label]) => (
@@ -36,7 +36,7 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
   );
 }
 
-function PlaneBox({ placeholder, value }: { placeholder: string; value: string }) {
+export function PlaneBox({ placeholder, value }: { placeholder: string; value: string }) {
   const active = useApp((s) => s.dialog?.field === "plane");
   return (
     <div className={`selbox ${active ? "active" : ""}`} onClick={() => setDialogField(active ? null : "plane")} role="button" tabIndex={0}>
@@ -51,10 +51,10 @@ function PlaneBox({ placeholder, value }: { placeholder: string; value: string }
   );
 }
 
-const num = (e: Expr | undefined, fallback: number) => (typeof e === "number" ? e : fallback);
+export const num = (e: Expr | undefined, fallback: number) => (typeof e === "number" ? e : fallback);
 
 /** A whole number with − and + beside it (no keyboard needed). */
-function Count({ value, min, max, onChange }: { value: Expr | undefined; min: number; max: number; onChange: (v: Expr) => void }) {
+export function Count({ value, min, max, onChange }: { value: Expr | undefined; min: number; max: number; onChange: (v: Expr) => void }) {
   const n = num(value, min);
   return (
     <div className="row" style={{ gap: 4, alignItems: "center" }}>
@@ -71,7 +71,7 @@ function Count({ value, min, max, onChange }: { value: Expr | undefined; min: nu
   );
 }
 
-const mm = (v: number) => `${+v.toFixed(1)} mm`;
+export const mm = (v: number) => `${+v.toFixed(1)} mm`;
 
 interface Preset {
   label: string;

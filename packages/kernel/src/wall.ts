@@ -254,10 +254,10 @@ function holderBody(oc: OC, arena: Arena, f: ResolvedWall, frame0: PlaneFrame, b
     adds.push(b.bool("cut", b.bool("fuse", b.cylinderY(0, zc, ro, y0, y1), [b.block(0, (y0 + y1) / 2, Math.min(2 * ro, W - 2), rh, 0, p - 0.05, zc)]), [b.cylinderY(0, zc, ri, y0 - 1, y1 + 1)]));
     regions.push({ tag: "ring", test: () => true });
   } else if (acc === "shelf" || acc === "bin") {
-    const sides = (w: number, depth: number, top: number) => {
+    const sides = (w: number, depth: number, top: number, t = 2) => {
       // Side walls from the plate's top down to the front.
       const prof: [number, number][] = [[Y0, p - 0.05], [Y0 + H, p - 0.05], [Y0 + top, p + depth], [Y0, p + depth]];
-      for (const sx of [-1, 1]) adds.push(b.prismX(prof.slice().reverse(), sx > 0 ? w / 2 - 2 : -w / 2, sx > 0 ? w / 2 : -w / 2 + 2));
+      for (const sx of [-1, 1]) adds.push(b.prismX(prof.slice().reverse(), sx > 0 ? w / 2 - t : -w / 2, sx > 0 ? w / 2 : -w / 2 + t));
     };
     if (acc === "shelf") {
       const depth = f.depth ?? WALL.shelfDepth, lip = f.size ?? WALL.shelfLip;
@@ -274,13 +274,13 @@ function holderBody(oc: OC, arena: Arena, f: ResolvedWall, frame0: PlaneFrame, b
       const Wb = n * G.pitch + 3, Db = G.pitch + 3, fl = 1.5, top = fl + G.pocketHeight;
       if (Wb > W + 1e-6) throw new FeatureError(`${n} bin${n > 1 ? "s need" : " needs"} a holder at least ${binShelfCells(n, s.pitch)} cells wide`);
       // A small baseplate built lying down (pockets up, depth along −y), then stood against the plate.
-      let shelf = b.block(0, -Db / 2, Wb, Db, G.plateRadius, 0, top);
+      let shelf = b.block(0, -Db / 2 + 0.025, Wb, Db + 0.05, G.plateRadius, 0, top);
       const prof: [number, number][] = G.pocket.map(([z, d]) => [fl + z, d] as [number, number]);
       prof.push([top + 0.5, -0.5]);
       const pockets = Array.from({ length: n }, (_, k) => b.profileSolid((k - (n - 1) / 2) * G.pitch, -Db / 2, G.pitch, G.pitch, G.plateRadius, prof));
       shelf = b.bool("cut", shelf, pockets);
-      adds.push(b.turnedX(shelf, -90, Y0, p - 0.05));
-      sides(Wb, Db, top);
+      adds.push(b.turnedX(shelf, -90, Y0, p));
+      sides(Wb, Db, top, 1.5);
     }
     regions.push({ tag: "shelf", test: () => true });
   }

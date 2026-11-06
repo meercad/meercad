@@ -27,6 +27,12 @@ Electron additionally ships Chromium's licenses in `LICENSES.chromium.html` insi
 The example "Park from drone photos" is built from OpenDroneMap's Aukerman data set (photos by Stephen Mather),
 dedicated to the public domain under CC0 1.0: https://github.com/OpenDroneMap/odm_data_aukerman
 
+## Open hardware standards
+
+The wall storage tool builds openGrid boards and snaps from the published dimensions of openGrid by David D,
+licensed CC BY 4.0: https://github.com/openGrid-3D/openGrid-docs and https://www.printables.com/model/1214361.
+The geometry is meerCAD's own code; no openGrid files are included.
+
 ## All components
 
 | Package | Version | License |

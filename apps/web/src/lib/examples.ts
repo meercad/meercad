@@ -230,6 +230,27 @@ const storage: MeercadDocument = {
   rollback: null,
 };
 
+/**
+ * A tool wall on openGrid: a lite board with screw holes and holders clicked into it, a hook, a
+ * ring for screwdrivers, a shelf and a shelf holding two Gridfinity bins.
+ */
+const toolWall: MeercadDocument = {
+  format: "meercad/1",
+  params: {},
+  features: [
+    { id: "wl1", op: "wall", name: "Board", system: "opengrid", kind: "board", units: [7, 5], variant: "lite", screws: true },
+    { id: "wl2", op: "wall", name: "Hook", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", board: "wl1", cell: [0, 4] },
+    { id: "wl3", op: "wall", name: "Screwdriver ring", system: "opengrid", kind: "holder", units: [1, 1], accessory: "ring", size: 12, board: "wl1", cell: [1, 4] },
+    { id: "wl4", op: "wall", name: "Long hook", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", depth: 60, board: "wl1", cell: [2, 4] },
+    { id: "wl5", op: "wall", name: "Shelf", system: "opengrid", kind: "holder", units: [3, 2], accessory: "shelf", depth: 50, board: "wl1", cell: [4, 3] },
+    { id: "wl6", op: "wall", name: "Bin shelf", system: "opengrid", kind: "holder", units: [4, 2], accessory: "bin", size: 2, board: "wl1", cell: [0, 0] },
+    // A bin standing in the bin shelf's left cell: on a plane facing up the wall at the cells' floor.
+    { id: "pl1", op: "plane", name: "Shelf floor", base: { ref: "origin.XZ" }, angle: 180, offset: 68 },
+    { id: "gf1", op: "gridfinity", name: "Bin", kind: "bin", units: [1, 1], height: 3, scoop: 8, tab: {}, plane: { ref: "pl1" }, position: [-63, -29.5] },
+  ],
+  rollback: null,
+};
+
 /** `thumbnail`: a picture shipped with the app; examples without one are pictured on the home screen. */
 export interface Example {
   name: string;
@@ -296,6 +317,7 @@ export const EXAMPLES: Example[] = [
   { name: "Hinged box", description: "Lid on a pin that swings open", doc: hingedBox },
   { name: "Name plate", description: "Raised and engraved text", doc: namePlate },
   { name: "Storage grid with labels", description: "Bins in a baseplate, with label tabs and two-colour labels", doc: storage, feature: true },
+  { name: "Tool wall on openGrid", description: "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins", doc: toolWall, feature: true },
   // Photos: OpenDroneMap's "Aukerman" data set, CC0 (public domain).
   { name: "Park from drone photos", description: "A terrain from 77 photos, with an area, a path, a note and a stake-out point", thumbnail: "/examples/drone-park.jpg", url: "/examples/drone-park.meercad", doc: { format: "meercad/1", params: {}, features: [], rollback: null } },
   ...MORE.map(([file, name, description]) => {

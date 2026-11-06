@@ -90,6 +90,17 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
       if (f.op === "linear_pattern" && at) items.push(...item("spacing", [at[0], at[1], at[2] + 6], "↔ ", f.spacing, "spacing"));
       return items;
     }
+    case "wall": {
+      // Cells along x and y at the part's box.
+      const b = out.report.bodies.find((x) => x.id === f.id)?.bbox;
+      if (!b || f.accessory === "screw") return [];
+      const mid = (i: number) => (b.min[i]! + b.max[i]!) / 2;
+      const pairItem = (key: string, p: V3, value: Expr, commit: (v: Expr) => void): Item => ({ key: `${f.id}.${key}`, at: p, text: `▦ ${fmt(value, "")}`, value, unit: "", suggest: `wall_${key}`, unlinkable: false, commit });
+      return [
+        pairItem("units_x", [mid(0), b.min[1]! - 4, b.max[2]!], f.units[0], (v) => edit({ units: [v, f.units[1]] })),
+        pairItem("units_y", [b.max[0]! + 4, mid(1), b.max[2]!], f.units[1], (v) => edit({ units: [f.units[0], v] })),
+      ];
+    }
     case "gridfinity":
     case "label": {
       // Sizes at the part's box: count of cells (or the label's size) along x and y, a bin's height on top.

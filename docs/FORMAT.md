@@ -77,6 +77,18 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   many cells as a drawer takes and fills the rest with a border; `magnets` / `screws` add the holes
   (and a 3.4 mm floor). A bin with `"baseplate": "gf1", "cell": [i, j]` stands in that baseplate.
   Faces: `gf1.foot`, `.floor`, `.wall`, `.inner`, `.lip`, `.top`, `.divider`, `.scoop`, `.tab`, `.pocket`, `.hole`, `.bottom`.
+- **wall** — wall storage built as ordinary parts, flat for printing (back on the plane, front +z,
+  y up the wall): `{ "op": "wall", "system": "opengrid", "kind": "board", "units": [4, 4] }` is an
+  openGrid board (28 mm cells, `variant` `"full"` 6.8 mm or `"lite"` 4 mm, `screws` adds countersunk
+  holes at the crossings next to the corners); `"system": "pegboard"` a perforated board (`grid`:
+  `us_quarter`, `us_eighth`, `metric_25`, `square_38`; `pitch`, `hole`, `thickness` override).
+  `{ "kind": "holder", "units": [1, 1], "accessory": "hook", "board": "wl1", "cell": [0, 3] }` hangs
+  a holder on an earlier board: snaps (openGrid) or pegs (pegboard, the top ones hooking up behind)
+  in its corner cells, a back plate (`plate`, 3 mm) and `accessory` `plain`, `hook` (`depth` reach,
+  `size` tip rise), `ring` (`size` inner diameter, `depth` gap), `shelf` (`depth`, `size` lip),
+  `bin` (a shelf with Gridfinity cells for `size` bins) or `screw` (openGrid: a bare snap with a
+  countersunk hole of diameter `size`). Faces: `wl1.back`, `.front`, `.side`, `.opening`, `.hole`,
+  `.snap`, `.peg`, `.plate`, `.hook`, `.ring`, `.shelf`.
 - **label** — a printable label: `{ "op": "label", "text": "M3×10", "symbol": "screw_socket", "width": 36, "height": 11 }`,
   a rounded plate with a symbol (`screw_pan`, `screw_countersunk`, `screw_socket`, `screw_hex`, `nut`,
   `washer`, `insert`) and text sized to fit, `style` raised or engraved (`depth`, default 0.6 mm).

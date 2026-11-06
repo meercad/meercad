@@ -3,6 +3,7 @@ import { clearances, type RebuildReport } from "@meercad/kernel";
 import { OPENGRID, PEGBOARDS, openGridOpening } from "@meercad/model";
 import { validateDocument, type Feature, type WallFeature } from "@meercad/schema";
 import { doc, getOcct, newSession } from "./helpers.js";
+import { EXAMPLES } from "../../apps/web/src/lib/examples.js";
 
 const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
 const failed = (r: RebuildReport, id: string) => r.features.find((f) => f.id === id && f.status === "error")?.message ?? "";
@@ -162,5 +163,21 @@ describe("pegboards", () => {
     const v = validateDocument(doc([board({ system: "pegboard" }), holder()]));
     const errors = v.ok ? [] : v.errors;
     expect(errors.join("\n")).toMatch(/pegboard board/);
+  });
+});
+
+describe("the tool wall example", () => {
+  it("clicks every holder into the board and stands the bin in the bin shelf, all without overlap", async () => {
+    const ex = EXAMPLES.find((e) => e.name === "Tool wall on openGrid")!;
+    const s = await newSession();
+    const { report } = s.rebuild(ex.doc);
+    ok(report);
+    const bin = body(report, "gf1");
+    expect(bin.bbox.min[1]).toBeCloseTo(-68, 3);
+    const oc = await getOcct();
+    const ids = ["wl1", "wl2", "wl3", "wl4", "wl5", "wl6", "gf1"];
+    for (const p of await clearances(oc, s.state!, ids, {}, 0)) if (p.a !== p.b) expect(p.overlap, `${p.a} ${p.b}`).toBeLessThan(1e-3);
+    const fit = (await clearances(oc, s.state!, ["wl6", "gf1"], {}, 0)).find((p) => p.a !== p.b)!;
+    expect(fit.distance).toBeLessThan(1e-3);
   });
 });
