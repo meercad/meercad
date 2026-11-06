@@ -96,6 +96,20 @@ export function defaultFade(pitch: number): number {
 
 /** The textured mesh, or null when no layer has a face in the mesh. */
 export function applyTextures(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceSurface[], opts: TextureOptions): TexturedMesh | null {
+  // The triangle count is estimated beforehand; a part that comes out above the budget anyway is
+  // made again coarser, so the budget holds for the whole part.
+  let coarser = 1;
+  let out: TexturedMesh | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    out = texturize(mesh, layers, surfaces, opts, coarser);
+    const n = out ? out.indices.length / 3 : 0;
+    if (!out || n <= opts.maxTriangles) return out;
+    coarser *= Math.sqrt(n / opts.maxTriangles) * 1.05;
+  }
+  return out;
+}
+
+function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceSurface[], opts: TextureOptions, coarser: number): TexturedMesh | null {
   const layerOf = new Map<number, number>();
   layers.forEach((l, i) => {
     if (l.pitch > 0 && Number.isFinite(l.depth)) for (const f of l.faces) layerOf.set(f, i);
@@ -157,7 +171,7 @@ export function applyTextures(mesh: TexturableMesh, layers: TextureLayer[], surf
       const n = cross(sub(b, a), sub(c, a));
       area[r.layer]! += Math.hypot(n[0], n[1], n[2]) / 2;
     }
-  const spacing = layers.map((l) => Math.max(0.02, l.pitch / opts.samples));
+  const spacing = layers.map((l) => Math.max(0.02, l.pitch / opts.samples) * coarser);
   // Bisecting longest edges until none is longer than h leaves about 6–12·area/h² triangles (more on round faces meshed in strips).
   const estimate = layers.reduce((s, _, i) => s + (10 * area[i]!) / spacing[i]! ** 2, 0);
   if (estimate > opts.maxTriangles) {
@@ -725,7 +739,7 @@ class MinHeap {
 function ladders(ranges: Range[], spacing: number[], surfaces: FaceSurface[], pos: number[], edgeKey: (a: number, b: number) => number, mids: Map<number, number>): Set<number> {
   const preset = new Set<number>();
   const dist = (a: number, b: number) => Math.hypot(pos[a * 3]! - pos[b * 3]!, pos[a * 3 + 1]! - pos[b * 3 + 1]!, pos[a * 3 + 2]! - pos[b * 3 + 2]!);
-  // Strips: the shortest edge below the spacing, the other two above it and much longer.
+  // Strips: the two longer edges above the spacing and at least five times as long as the third.
   const strips: { r: Range; t: number; apex: number }[] = [];
   const cutH = new Map<number, { h: number; s: FaceSurface | undefined }>();
   for (const r of ranges) {
@@ -736,11 +750,13 @@ function ladders(ranges: Range[], spacing: number[], surfaces: FaceSurface[], po
       const l = [dist(w[0]!, w[1]!), dist(w[1]!, w[2]!), dist(w[2]!, w[0]!)];
       const s = l.indexOf(Math.min(...l));
       const others = [l[(s + 1) % 3]!, l[(s + 2) % 3]!];
-      if (!(l[s]! <= h && Math.min(...others) > h && l[s]! < 0.5 * Math.min(...others))) continue;
+      if (!(Math.min(...others) > h && l[s]! < 0.2 * Math.min(...others))) continue;
       const apex = (s + 2) % 3;
       strips.push({ r, t, apex });
-      for (const b of [(apex + 1) % 3, (apex + 2) % 3]) {
-        const key = edgeKey(w[apex]!, w[b]!);
+      // The long edges, and the short one too when it is above the spacing (a strip wider than it).
+      for (const [a, b] of [[apex, (apex + 1) % 3], [apex, (apex + 2) % 3], [(apex + 1) % 3, (apex + 2) % 3]] as const) {
+        if (a !== apex && l[s]! <= h) continue;
+        const key = edgeKey(w[a]!, w[b]!);
         const c = cutH.get(key);
         if (!c || h < c.h) cutH.set(key, { h, s: c?.s ?? surfaces[r.face] });
       }
@@ -784,19 +800,38 @@ function ladders(ranges: Range[], spacing: number[], surfaces: FaceSurface[], po
       out.push(to);
       return out;
     };
-    const L = chain(v0, v1), R = chain(v0, v2);
-    if (L.length === 2 && R.length === 2) continue;
+    const L = chain(v0, v1), R = chain(v0, v2), F = chain(v2, v1);
+    if (L.length === 2 && R.length === 2 && F.length === 2) continue;
     const local = (x: number) => [pos[r.weld[x]! * 3]!, pos[r.weld[x]! * 3 + 1]!, pos[r.weld[x]! * 3 + 2]!] as V3;
     const d2 = (x: number, y: number) => {
       const p = local(x), q = local(y);
       return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
     };
-    const tris = [L[0]!, L[1]!, R[1]!];
-    let i = 1, j = 1;
-    while (i < L.length - 1 || j < R.length - 1) {
-      const stepL = j === R.length - 1 || (i < L.length - 1 && d2(L[i + 1]!, R[j]!) <= d2(L[i]!, R[j + 1]!));
-      if (stepL) tris.push(L[i]!, L[++i]!, R[j]!);
-      else tris.push(L[i]!, R[j + 1]!, R[j++]!);
+    let tris: number[];
+    if (F.length === 2) {
+      tris = [L[0]!, L[1]!, R[1]!];
+      let i = 1, j = 1;
+      while (i < L.length - 1 || j < R.length - 1) {
+        const stepL = j === R.length - 1 || (i < L.length - 1 && d2(L[i + 1]!, R[j]!) <= d2(L[i]!, R[j + 1]!));
+        if (stepL) tris.push(L[i]!, L[++i]!, R[j]!);
+        else tris.push(L[i]!, R[j + 1]!, R[j++]!);
+      }
+    } else {
+      // The short edge is cut too: rungs from the one long edge to the other and on along the short
+      // edge, both chains ending in v1. Neither chain reaches v1 before the other is at its last
+      // point, or a rung would lie along an edge (a flat triangle).
+      if (L.length < 3 || R.length < 2) continue;
+      const B = [...R, ...F.slice(1)];
+      const n = L.length - 1, m = B.length - 1;
+      tris = [L[0]!, L[1]!, B[1]!];
+      let i = 1, j = 1;
+      while (!(i === n - 1 && j === m - 1)) {
+        const canL = i + 1 < n, canB = j + 1 < m;
+        const stepL = canL && (!canB || d2(L[i + 1]!, B[j]!) <= d2(L[i]!, B[j + 1]!));
+        if (stepL) tris.push(L[i]!, L[++i]!, B[j]!);
+        else tris.push(L[i]!, B[j + 1]!, B[j++]!);
+      }
+      tris.push(L[n - 1]!, L[n]!, B[m - 1]!);
     }
     let m = byRange.get(r);
     if (!m) byRange.set(r, (m = new Map()));
