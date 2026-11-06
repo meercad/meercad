@@ -10,6 +10,7 @@ import { joinedParts } from "../lib/mechanism";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, openDraft, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
+import { GridfinityFields, LabelFields } from "./GridfinityFields";
 import { Kbd } from "./Kbd";
 import { t, tn } from "../lib/i18n";
 
@@ -212,6 +213,8 @@ function handlePick(p: Pick, d: DialogState): void {
         if (spec && (g.op === "hole" || g.op === "standard_part") && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
         // Text starts where the face was tapped.
         if (spec && g.op === "text" && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
+        // Labels and free-standing bins are centred where the face was tapped.
+        if (spec && (g.op === "label" || (g.op === "gridfinity" && !g.baseplate)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         break;
       }
       case "points": {
@@ -1005,6 +1008,10 @@ function Body({ d }: { d: DialogState }) {
       return <ThreadFields f={f} set={set} />;
     case "gear":
       return <GearFields f={f} set={set} />;
+    case "gridfinity":
+      return <GridfinityFields f={f} set={set} />;
+    case "label":
+      return <LabelFields f={f} set={set} />;
     case "hole":
       return <HoleFields f={f} set={set} />;
     case "linear_pattern":

@@ -79,6 +79,31 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
       if (f.op === "linear_pattern" && at) items.push(...item("spacing", [at[0], at[1], at[2] + 6], "↔ ", f.spacing, "spacing"));
       return items;
     }
+    case "gridfinity":
+    case "label": {
+      // Sizes at the part's box: count of cells (or the label's size) along x and y, a bin's height on top.
+      const b = out.report.bodies.find((x) => x.id === f.id)?.bbox;
+      if (!b) return [];
+      const mid = (i: number) => (b.min[i]! + b.max[i]!) / 2;
+      const at = (x: number, y: number, z: number): V3 => [x, y, z];
+      const pairItem = (key: string, p: V3, label: string, value: Expr, unit: string, commit: (v: Expr) => void): Item => ({
+        key: `${f.id}.${key}`, at: p, text: `${label}${fmt(value, unit)}`, value, unit: unit === " mm" ? "mm" : "", suggest: `${f.op}_${key}`, unlinkable: unit === " mm", commit,
+      });
+      if (f.op === "label") {
+        const w = f.width ?? 36, h = f.height ?? 11;
+        return [
+          pairItem("width", at(mid(0), b.min[1]! - 3, b.max[2]!), "↔ ", w, " mm", (width) => edit({ width })),
+          pairItem("height", at(b.max[0]! + 3, mid(1), b.max[2]!), "↕ ", h, " mm", (height) => edit({ height })),
+        ];
+      }
+      if (f.drawer) return [];
+      const items = [
+        pairItem("units_x", at(mid(0), b.min[1]! - 4, b.min[2]!), "▦ ", f.units[0], "", (v) => edit({ units: [v, f.units[1]] })),
+        pairItem("units_y", at(b.max[0]! + 4, mid(1), b.min[2]!), "▦ ", f.units[1], "", (v) => edit({ units: [f.units[0], v] })),
+      ];
+      if (f.kind === "bin") items.push(pairItem("height", at(b.max[0]!, b.min[1]!, b.max[2]!), "↕ ", f.height ?? 3, "", (height) => edit({ height })));
+      return items;
+    }
     default:
       return [];
   }
