@@ -12,10 +12,18 @@ import { refine } from "./deviation";
 import { t } from "./i18n";
 
 export interface ThicknessStats {
+  /**
+   * The thinnest wall, ignoring the thinnest half percent of the surface: rays from slivers at sharp
+   * edges hit the neighbouring face at once and would report walls of nothing.
+   */
   min: number;
+  /** The smallest value measured at all. */
+  absoluteMin?: number;
   /** Share of the surface thinner than `minWall`. */
   thin: number;
   minWall: number;
+  /** Where the wall is thinnest (a point on the surface). */
+  at?: [number, number, number];
 }
 
 export const useThickness = create<{ body: string | null; minWall: number; maps: Map<string, { positions: Float32Array; colors: Float32Array }>; stats: ThicknessStats | null; error?: string }>(() => ({
@@ -64,6 +72,7 @@ async function update(): Promise<void> {
   let area = 0;
   let thinArea = 0;
   let min = Infinity;
+  const samples: { d: number; a: number; c: [number, number, number] }[] = [];
   const task = startTask(t("Measuring the wall thickness"));
   try {
     let slice = performance.now();
@@ -96,13 +105,18 @@ async function update(): Promise<void> {
       area += l / 2;
       if (d < minWall) thinArea += l / 2;
       if (d < min) min = d;
+      samples.push({ d, a: l / 2, c });
     }
   } finally {
     task.done();
   }
+  // The thinnest wall that covers more than a speck of the surface.
+  samples.sort((x, y) => x.d - y.d);
+  let acc = 0;
+  const robust = samples.find((x) => (acc += x.a) > area * 0.005) ?? samples[0];
   const colors = new Float32Array(n * 9);
   for (let k = 0; k < n; k++) for (let c = 0; c < 3; c++) colorFor(wall[k]!, minWall, colors, k * 9 + c * 3);
-  useThickness.setState({ maps: new Map([[body, { positions, colors }]]), stats: { min, thin: area ? thinArea / area : 0, minWall }, error: undefined });
+  useThickness.setState({ maps: new Map([[body, { positions, colors }]]), stats: { min: robust ? robust.d : min, absoluteMin: min, thin: area ? thinArea / area : 0, minWall, ...(robust ? { at: robust.c } : {}) }, error: undefined });
 }
 
 // Red below the minimum wall, then yellow, green from three times it; grey where nothing was measured.
