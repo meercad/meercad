@@ -169,7 +169,7 @@ export function MaterialPicker() {
                   <span className="fld-label">{t("Density (g/cm³)")}</span>
                   <input className="field" inputMode="decimal" value={draft.density} placeholder={String(MATERIALS.find((m) => m.id === draft.base)?.density ?? "")} onChange={(e) => setDraft({ ...draft, density: e.target.value })} />
                 </label>
-                <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                   <button className="btn primary" disabled={!draft.name.trim()} onClick={saveDraft}>
                     <Check /> {draft.id ? t("Save") : t("Create and use")}
                   </button>
