@@ -9,6 +9,9 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { applyLook, drawSwatches, PLAIN_LOOK, RenderedStage, studioEnvironment, TEXTURED_LOOK, type BodyLook, type SwatchSpec } from "./looks.js";
+
+export type { BodyLook, SwatchSpec } from "./looks.js";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -223,7 +226,8 @@ export interface Handle {
   twoWay?: boolean;
 }
 
-export type DisplayMode = "shaded_edges" | "shaded" | "wireframe" | "xray" | "hidden_line";
+/** `rendered`: materials in studio light with soft shadows on a ground, no edges (for pictures). */
+export type DisplayMode = "shaded_edges" | "shaded" | "wireframe" | "xray" | "hidden_line" | "rendered";
 
 export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom" | "iso";
 
@@ -344,10 +348,15 @@ export class Viewport {
     key.position.set(0.5, -1, 2);
     const fill = new THREE.DirectionalLight(0xffffff, 0.5);
     fill.position.set(-1, 0.5, -0.5);
+    const lamps: THREE.Light[] = [hemi];
     for (const cam of [this.persp, this.ortho]) {
-      cam.add(key.clone(), fill.clone());
+      const k = key.clone();
+      const f = fill.clone();
+      cam.add(k, f);
+      lamps.push(k, f);
       this.scene.add(cam);
     }
+    this.stage = new RenderedStage(this.scene, this.renderer, lamps);
 
     this.grid = new THREE.Group();
     this.grid.add(this.gridMesh);
@@ -368,6 +377,10 @@ export class Viewport {
   // ---------------------------------------------------------------- navigation
 
   private axes!: THREE.Group;
+  /** Studio light, sun, shadow and ground of the rendered view. */
+  private stage!: RenderedStage;
+  /** Finishes of parts with a material, by body id. */
+  private looks = new Map<string, BodyLook>();
   private navigation: Navigation = { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "shift" }], zoom: [] };
 
   /** Which mouse button (plus modifier) orbits, pans and zooms. Left always selects. */
@@ -530,6 +543,7 @@ export class Viewport {
     this.sceneData = data;
     this.rebuildBodies(data);
     this.applyTextures(false);
+    this.applyLooks();
     this.rebuildSketches(data);
     this.rebuildPlanes(data.planes);
     this.rebuildReferences(data.references);
@@ -621,6 +635,7 @@ export class Viewport {
       b.group.updateMatrixWorld(true);
     }
     this.placeJoints();
+    if (this.stage.active) this.stage.fit(new THREE.Box3().setFromObject(this.bodiesGroup));
     this.invalidate();
   }
 
@@ -778,10 +793,10 @@ export class Viewport {
     }
     const faces = new THREE.Mesh(
       geo,
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshPhysicalMaterial({
         vertexColors: true,
-        metalness: 0.08,
-        roughness: 0.55,
+        metalness: PLAIN_LOOK.metalness,
+        roughness: PLAIN_LOOK.roughness,
         polygonOffset: true,
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
@@ -792,6 +807,7 @@ export class Viewport {
       }),
     );
     faces.userData = { body: mesh.bodyId };
+    faces.castShadow = !ghost;
 
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute("position", new THREE.BufferAttribute(mesh.edgeLines, 3));
@@ -1173,6 +1189,7 @@ export class Viewport {
   setDark(dark: boolean): void {
     if (dark === this.dark) return;
     this.dark = dark;
+    this.stage.setDark(dark);
     this.changed = true;
   }
 
@@ -1188,11 +1205,22 @@ export class Viewport {
 
   private applyDisplayMode(): void {
     const m = this.displayMode;
+    const rendered = m === "rendered";
+    if (rendered !== this.stage.active) {
+      if (rendered) this.stage.enable();
+      else {
+        this.stage.disable();
+        this.setTurntable(false);
+      }
+      this.grid.visible = !rendered && this.gridWanted;
+      this.applyLooks();
+    }
+    if (rendered) this.stage.fit(new THREE.Box3().setFromObject(this.bodiesGroup));
     for (const b of this.bodies) {
       const fm = b.faces.material as THREE.MeshStandardMaterial;
       const em = b.edges.material as THREE.LineBasicMaterial;
       b.faces.visible = m !== "wireframe";
-      b.edges.visible = m !== "shaded";
+      b.edges.visible = m !== "shaded" && !rendered;
       fm.transparent = m === "xray" || b.ghost;
       fm.opacity = m === "xray" ? 0.22 : b.ghost ? 0.25 : 1;
       fm.depthWrite = m !== "xray" && !b.ghost;
@@ -1219,8 +1247,11 @@ export class Viewport {
     this.sketchGroup.visible = v;
   }
   setGridVisible(v: boolean): void {
-    this.grid.visible = v;
+    this.gridWanted = v;
+    // The rendered view stands the model on its ground instead.
+    this.grid.visible = v && !this.stage.active;
   }
+  private gridWanted = true;
 
   // ---------------------------------------------------------------- highlight
 
@@ -1281,11 +1312,9 @@ export class Viewport {
       if (tex) b.faces.geometry.setAttribute("uv", new THREE.BufferAttribute(t!.uvs, 2));
       else b.faces.geometry.deleteAttribute("uv");
       mat.map = tex;
-      // A scan's photo already holds the light: no shine on top of it.
-      mat.roughness = tex ? 1 : 0.55;
-      mat.metalness = tex ? 0 : 0.08;
       mat.needsUpdate = true;
       b.textured = !!tex;
+      this.applyLook(b);
       b.painted = undefined;
     }
     if (repaint) {
@@ -1314,6 +1343,51 @@ export class Viewport {
       })
       .catch((e: unknown) => console.warn("texture", t.key, e));
     return null;
+  }
+
+  /** Finishes of parts by body id (from their materials); parts not listed look plain. */
+  setBodyLooks(looks: ReadonlyMap<string, BodyLook>): void {
+    const same = looks.size === this.looks.size && [...looks].every(([id, l]) => JSON.stringify(this.looks.get(id)) === JSON.stringify(l));
+    if (same) return;
+    this.looks = new Map(looks);
+    this.applyLooks();
+    this.invalidate();
+  }
+
+  private applyLooks(): void {
+    for (const b of this.bodies) this.applyLook(b);
+    if (this.stage.active) this.renderer.shadowMap.needsUpdate = true;
+  }
+
+  private applyLook(b: BodyObj): void {
+    const mat = b.faces.material as THREE.MeshPhysicalMaterial;
+    // A scan's photo already holds the light: no shine on top of it.
+    const look = b.textured ? TEXTURED_LOOK : (this.looks.get(b.mesh.bodyId) ?? PLAIN_LOOK);
+    const rendered = this.stage.active;
+    // Plain parts in the working view keep the lamps' light alone, as they always looked.
+    const env = rendered || (this.looks.has(b.mesh.bodyId) && !b.textured) ? studioEnvironment(this.renderer) : null;
+    applyLook(mat, look, env, rendered);
+  }
+
+  /**
+   * Sphere swatches of materials for pickers (PNG data URLs, `size` px square). Drawn with this
+   * view's renderer in a studio of their own; the view is drawn again right after.
+   */
+  swatches(specs: readonly SwatchSpec[], size = 96): string[] {
+    const out = drawSwatches(this.renderer, specs, size);
+    this.renderer.render(this.scene, this.camera);
+    return out;
+  }
+
+  /** Turns the model slowly about the vertical axis (the rendered view's turntable). */
+  setTurntable(on: boolean, speed = 1.5): void {
+    this.controls.autoRotate = on;
+    this.controls.autoRotateSpeed = speed;
+    this.invalidate();
+  }
+
+  get turntable(): boolean {
+    return this.controls.autoRotate;
   }
 
   setBodyColors(colors: ReadonlyMap<string, string>): void {
@@ -1948,7 +2022,10 @@ export class Viewport {
     bodyColors?: ReadonlyMap<string, string>;
     faces?: Pick[];
     box?: { min: Vec3; max: Vec3 };
+    /** In the rendered look (materials in studio light, soft shadow), whatever the view shows. */
+    rendered?: boolean;
   }): string {
+    if (o.rendered && this.displayMode !== "rendered") return this.inMode("rendered", () => this.render({ ...o, rendered: false }));
     const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.sketchGroup, this.refGroup];
     const shown = helpers.map((h) => h.visible);
     helpers.forEach((h) => (h.visible = false));
@@ -2024,6 +2101,81 @@ export class Viewport {
     helpers.forEach((h, i) => (h.visible = shown[i]!));
     this.invalidate();
     return url;
+  }
+
+  /** Runs `fn` with another display mode and puts the mode back. */
+  private inMode<T>(mode: DisplayMode, fn: () => T): T {
+    const before = this.displayMode;
+    const spin = this.controls.autoRotate;
+    this.setDisplayMode(mode);
+    try {
+      return fn();
+    } finally {
+      this.setDisplayMode(before);
+      if (spin) this.setTurntable(true, this.controls.autoRotateSpeed);
+    }
+  }
+
+  /** Largest picture side `renderImage` makes. */
+  static readonly MAX_IMAGE = 8192;
+
+  /**
+   * A picture of the view as the user sees it, in the rendered look, at any size up to
+   * MAX_IMAGE: drawn in tiles (so it needs no big drawing buffer on a tablet), with a sharper
+   * shadow, without helpers. `transparent` leaves out the backdrop.
+   */
+  renderImage(width: number, height: number, opts: { transparent?: boolean } = {}): HTMLCanvasElement {
+    const W = Math.max(1, Math.min(Viewport.MAX_IMAGE, Math.round(width)));
+    const H = Math.max(1, Math.min(Viewport.MAX_IMAGE, Math.round(height)));
+    if (this.displayMode !== "rendered") return this.inMode("rendered", () => this.renderImage(W, H, opts));
+    const out = document.createElement("canvas");
+    out.width = W;
+    out.height = H;
+    const g = out.getContext("2d")!;
+    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.sketchGroup, this.jointGroup, this.marksGroup];
+    const shown = helpers.map((h) => h.visible);
+    helpers.forEach((h) => (h.visible = false));
+    const prev = { size: this.renderer.getSize(new THREE.Vector2()), ratio: this.renderer.getPixelRatio(), aspect: this.persp.aspect, l: this.ortho.left, r: this.ortho.right };
+    const cam = this.camera;
+    const aspect = W / H;
+    // Same height of view as on screen; the width follows the picture's proportions.
+    if (cam instanceof THREE.PerspectiveCamera) cam.aspect = aspect;
+    else {
+      cam.left = cam.bottom * aspect;
+      cam.right = cam.top * aspect;
+    }
+    this.stage.setBackdrop(!opts.transparent);
+    const tile = Math.min(1024, this.renderer.capabilities.maxTextureSize);
+    try {
+      this.renderer.setPixelRatio(1);
+      this.stage.withShadowSize(4096, () => {
+        for (let y = 0; y < H; y += tile)
+          for (let x = 0; x < W; x += tile) {
+            const w = Math.min(tile, W - x);
+            const h = Math.min(tile, H - y);
+            this.renderer.setSize(w, h, false);
+            cam.setViewOffset(W, H, x, y, w, h);
+            cam.updateProjectionMatrix();
+            this.renderer.render(this.scene, cam);
+            g.drawImage(this.renderer.domElement, 0, 0, w, h, x, y, w, h);
+          }
+      });
+    } finally {
+      cam.clearViewOffset();
+      this.persp.aspect = prev.aspect;
+      this.ortho.left = prev.l;
+      this.ortho.right = prev.r;
+      this.persp.updateProjectionMatrix();
+      this.ortho.updateProjectionMatrix();
+      this.renderer.setPixelRatio(prev.ratio);
+      this.renderer.setSize(prev.size.x, prev.size.y, false);
+      this.applyInset();
+      this.stage.setBackdrop(true);
+      helpers.forEach((h, i) => (h.visible = shown[i]!));
+      this.renderer.shadowMap.needsUpdate = true;
+      this.invalidate();
+    }
+    return out;
   }
 
   snapshot(width = 480, height = 360, clean = false): string {
