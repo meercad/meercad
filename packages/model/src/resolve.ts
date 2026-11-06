@@ -7,6 +7,9 @@ import type {
   Feature,
   FilletFeature,
   GearFeature,
+  CoilFeature,
+  SpringFeature,
+  ScrewFeature,
   HoleFeature,
   DraftFeature,
   OffsetFaceFeature,
@@ -42,7 +45,10 @@ export type ResolvedRevolve = R<RevolveFeature, "angle">;
 export type ResolvedFillet = R<FilletFeature, "radius" | "radius2">;
 export type ResolvedChamfer = R<ChamferFeature, "distance">;
 export type ResolvedShell = R<ShellFeature, "thickness">;
-export type ResolvedThread = R<ThreadFeature, "pitch" | "length" | "clearance">;
+export type ResolvedThread = R<ThreadFeature, "pitch" | "length" | "clearance" | "diameter" | "starts">;
+export type ResolvedCoil = R<CoilFeature, "pitch" | "turns" | "taper">;
+export type ResolvedSpring = R<Omit<SpringFeature, "center">, "wire" | "diameter" | "coils" | "length" | "gap" | "legs"> & { center?: [number, number] };
+export type ResolvedScrew = R<Omit<ScrewFeature, "center">, "diameter" | "pitch" | "starts" | "length" | "threadLength" | "clearance"> & { center?: [number, number] };
 export type ResolvedLinearPattern = R<LinearPatternFeature, "count" | "spacing" | "count2" | "spacing2">;
 export type ResolvedCircularPattern = R<CircularPatternFeature, "count" | "angle">;
 export type ResolvedGear = R<
@@ -107,6 +113,9 @@ export type ResolvedFeature =
   | ResolvedShell
   | ResolvedThread
   | ResolvedGear
+  | ResolvedCoil
+  | ResolvedSpring
+  | ResolvedScrew
   | ResolvedLinearPattern
   | ResolvedCircularPattern
   | ResolvedMeshConvert
@@ -158,7 +167,35 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
     case "shell":
       return { ...f, thickness: ev("thickness", f.thickness) };
     case "thread":
-      return { ...f, pitch: opt("pitch", f.pitch), length: opt("length", f.length), clearance: opt("clearance", f.clearance) };
+      return { ...f, pitch: opt("pitch", f.pitch), length: opt("length", f.length), clearance: opt("clearance", f.clearance), diameter: opt("diameter", f.diameter), starts: count("starts", f.starts) };
+    case "coil":
+      return { ...f, pitch: ev("pitch", f.pitch), turns: ev("turns", f.turns), taper: opt("taper", f.taper) };
+    case "spring": {
+      const { center, ...rest } = f;
+      return {
+        ...rest,
+        wire: ev("wire", f.wire),
+        diameter: ev("diameter", f.diameter),
+        coils: ev("coils", f.coils),
+        length: opt("length", f.length),
+        gap: opt("gap", f.gap),
+        legs: opt("legs", f.legs),
+        ...(center ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] } : {}),
+      };
+    }
+    case "screw": {
+      const { center, ...rest } = f;
+      return {
+        ...rest,
+        diameter: ev("diameter", f.diameter),
+        pitch: opt("pitch", f.pitch),
+        starts: count("starts", f.starts),
+        length: opt("length", f.length),
+        threadLength: opt("threadLength", f.threadLength),
+        clearance: opt("clearance", f.clearance),
+        ...(center ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] } : {}),
+      };
+    }
     case "gear": {
       const { center, meshWith, bore, hub, ...rest } = f;
       const teeth = Math.round(ev("teeth", f.teeth));
@@ -288,7 +325,10 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     fillet: ["radius", "radius2"],
     chamfer: ["distance"],
     shell: ["thickness"],
-    thread: ["pitch", "length", "clearance"],
+    thread: ["pitch", "length", "clearance", "diameter", "starts"],
+    coil: ["pitch", "turns", "taper"],
+    spring: ["wire", "diameter", "coils", "length", "gap", "legs"],
+    screw: ["diameter", "pitch", "starts", "length", "threadLength", "clearance"],
     gear: ["module", "teeth", "width", "pressureAngle", "profileShift", "helix", "backlash", "clearance", "rotation", "rim", "chamfer"],
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
@@ -320,6 +360,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
   if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
+  if ((f.op === "spring" || f.op === "screw") && Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
   if (f.op === "gear") {
     if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
     const nested = (o: unknown, ks: string[]) => {

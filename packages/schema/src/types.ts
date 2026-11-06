@@ -190,6 +190,99 @@ export interface ThreadFeature extends FeatureBase {
   /** Extra room per side for printed fits: internal threads grow, external ones shrink. */
   clearance?: Expr;
   leftHanded?: boolean;
+  /** Thread form, default ISO metric. The other forms take the drawn diameter (or `diameter`). */
+  profile?: ThreadProfile;
+  /** Nominal (major) diameter for a thread that is not a standard size; default the drawn one. */
+  diameter?: Expr;
+  /** Number of starts (1–8), e.g. 2–4 for bottle caps and fast lids; the lead is starts × pitch. */
+  starts?: Expr;
+}
+
+/**
+ * Thread forms: ISO metric (60°), trapezoidal (ISO 2904), square, buttress (ISO 3030) and round
+ * (knuckle, for lids and printed threads).
+ */
+export type ThreadProfile = "iso" | "trapezoid" | "square" | "buttress" | "round";
+
+/**
+ * Coil (helix): a sketch profile swept along a helix round an axis, like a thread, a spring of any
+ * cross-section, a worm or a spiral ramp. The helix starts where the profile is, at its distance
+ * from the axis, and climbs `pitch` per turn along the axis direction (`flip` the other way);
+ * `taper` (degrees) widens (+) or narrows (−) it into a cone.
+ */
+export interface CoilFeature extends FeatureBase {
+  op: "coil";
+  profile: ProfileRef;
+  axis: AxisRef;
+  /** Rise per turn, mm. */
+  pitch: Expr;
+  /** Number of turns, may be fractional. */
+  turns: Expr;
+  taper?: Expr;
+  leftHanded?: boolean;
+  flip?: boolean;
+  mode: BooleanMode;
+  targets?: string[];
+}
+
+/**
+ * Coil spring from its spec: compression (ends closed and ground flat by default), extension (close
+ * wound with a loop at each end) or torsion (close wound with two straight legs). It stands on a
+ * plane at `center`, its axis along the plane's normal.
+ */
+export interface SpringFeature extends FeatureBase {
+  op: "spring";
+  kind: "compression" | "extension" | "torsion";
+  /** Wire diameter, mm. */
+  wire: Expr;
+  /** Outside diameter of the coils, mm. */
+  diameter: Expr;
+  /** Active (springing) coils; fractional values turn a torsion spring's second leg. */
+  coils: Expr;
+  /** Compression: free length, mm (default 3 × diameter). */
+  length?: Expr;
+  /** Compression spring ends: open, closed (the last turn touches the next) or closed and ground flat (default). */
+  ends?: "open" | "closed" | "ground";
+  /** Extension and torsion: gap between neighbouring coils, mm (default 0.3, so printed coils stay apart). */
+  gap?: Expr;
+  /** Torsion: length of each leg from the coil, mm (default the outside diameter). */
+  legs?: Expr;
+  leftHanded?: boolean;
+  /** Default origin.XY. */
+  plane?: PlaneSpec;
+  /** Centre in plane coordinates. */
+  center?: [Expr, Expr];
+  mode: BooleanMode;
+  targets?: string[];
+}
+
+/**
+ * A screw, threaded rod or nut of any size and thread form, standing on a plane at `center` (screws
+ * head down, the shank up along the plane's normal). Head sizes follow the diameter (hex heads like
+ * ISO 4017, socket heads like ISO 4762). A screw and a nut with the same thread fit each other;
+ * `clearance` makes room for printing (the screw's thread shrinks, the nut's grows).
+ */
+export interface ScrewFeature extends FeatureBase {
+  op: "screw";
+  kind: "screw" | "nut";
+  /** Screws: hex, socket (cylinder with hex socket), round (button), knob (ribbed thumb head) or none (threaded rod). Nuts: hex, round or knob. Default hex. */
+  head?: "hex" | "socket" | "round" | "knob" | "none";
+  profile?: ThreadProfile;
+  /** Nominal (major) diameter, mm. */
+  diameter: Expr;
+  /** Default the form's usual pitch (ISO coarse, trapezoidal ISO 2904). */
+  pitch?: Expr;
+  starts?: Expr;
+  /** Screws: shank length under the head; nuts: height (default 0.8 × diameter). */
+  length?: Expr;
+  /** Screws: threaded length from the tip (default the whole shank). */
+  threadLength?: Expr;
+  clearance?: Expr;
+  leftHanded?: boolean;
+  plane?: PlaneSpec;
+  center?: [Expr, Expr];
+  mode: BooleanMode;
+  targets?: string[];
 }
 
 /**
@@ -711,6 +804,9 @@ export type Feature =
   | ShellFeature
   | ThreadFeature
   | GearFeature
+  | CoilFeature
+  | SpringFeature
+  | ScrewFeature
   | HoleFeature
   | LoftFeature
   | SplitFeature

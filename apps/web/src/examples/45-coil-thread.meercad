@@ -1,0 +1,19 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "pitch": "3 mm",
+  "turns": 9
+ },
+ "features": [
+  { "id": "sk1", "op": "sketch", "name": "Rod", "plane": { "ref": "origin.XY" }, "entities": [{ "id": "c1c", "type": "point", "x": 0, "y": 0 }, { "id": "c1", "type": "circle", "center": "c1c", "radius": 10 }], "constraints": [{ "id": "k1", "type": "coincident", "a": "c1c", "b": "origin" }, { "id": "k2", "type": "diameter", "curve": "c1", "value": "20 mm" }] },
+  { "id": "ex1", "op": "extrude", "name": "Rod", "profile": { "sketch": "sk1" }, "extent": "blind", "distance": "40 mm", "mode": "new_body" },
+  { "id": "sk2", "op": "sketch", "name": "Tooth profile", "plane": { "ref": "origin.XZ" }, "entities": [
+   { "id": "p1", "type": "point", "x": 8.4, "y": 6 }, { "id": "p2", "type": "point", "x": 10.6, "y": 4.9 }, { "id": "p3", "type": "point", "x": 10.6, "y": 7.1 },
+   { "id": "l1", "type": "line", "p1": "p1", "p2": "p2" }, { "id": "l2", "type": "line", "p1": "p2", "p2": "p3" }, { "id": "l3", "type": "line", "p1": "p3", "p2": "p1" }
+  ], "constraints": [] },
+  { "id": "co1", "op": "coil", "name": "Custom thread", "profile": { "sketch": "sk2" }, "axis": { "ref": "origin.Z" }, "pitch": "pitch", "turns": "turns", "mode": "cut" },
+  { "id": "sk3", "op": "sketch", "name": "Ramp profile", "plane": { "ref": "origin.XZ" }, "entities": [{ "id": "r1c", "type": "point", "x": 40, "y": 1 }, { "id": "r1", "type": "circle", "center": "r1c", "radius": 1 }], "constraints": [] },
+  { "id": "co2", "op": "coil", "name": "Conical coil", "profile": { "sketch": "sk3" }, "axis": { "ref": "origin.Z" }, "pitch": "4 mm", "turns": 6, "taper": -25, "mode": "new_body" }
+ ],
+ "rollback": null
+}

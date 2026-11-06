@@ -54,7 +54,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   `set_part_list {groups?, order?}` (null clears). `replace` sends the whole document; one without
   `versions` keeps the saved versions and their blobs.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
-  `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
+  `thread`, `coil`, `spring`, `screw`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
   `gridfinity`, `label`, `bend`, `texture` (and more: see the schema).
 - **Ops for materials** (Operations API): `set_material {part, material}` (null for none),
   `define_material {material}` (adds or replaces an own material by id), `delete_material {id}`
@@ -62,6 +62,18 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 - **thread** — `{ "op": "thread", "face": { "face": "ex2.side[sk2.c1]" }, "size": "M8", "clearance": 0.15 }`
   models an ISO metric thread on a hole wall (internal) or a shaft (external). `size`, `pitch` and
   `length` are optional (picked from the diameter, the standard coarse pitch, the whole face).
+  `profile` picks another form (`trapezoid`, `square`, `buttress`, `round`; they take the drawn
+  diameter, or `diameter`), `starts` makes a multi-start thread (lead = starts × pitch).
+- **coil** — `{ "op": "coil", "profile": { "sketch": "sk2" }, "axis": { "ref": "origin.Z" }, "pitch": 4, "turns": 5, "mode": "cut" }`
+  sweeps the profile along a helix round the axis through the profile's centre (`taper` in degrees
+  makes it conical, `leftHanded`, `flip`). The profile stays beside the axis and, above one turn,
+  shorter than the pitch.
+- **spring** — `{ "op": "spring", "kind": "compression", "wire": 1.5, "diameter": 15, "coils": 6, "length": 40, "mode": "new_body" }`
+  a coil spring standing on `plane` at `center`: compression (`ends` `ground` (default), `closed`,
+  `open`), extension (loops at both ends, `gap` between coils) or torsion (`legs`).
+- **screw** — `{ "op": "screw", "kind": "screw", "head": "hex", "diameter": 8, "length": 25, "mode": "new_body" }`
+  a screw (heads `hex`, `socket`, `round`, `knob`, `none` for a threaded rod) or `"kind": "nut"`
+  (`hex`, `round`, `knob`) with any thread (`profile`, `pitch`, `starts`, `clearance`, `leftHanded`).
 - `standard_part` also makes machine parts: `"kind": "profile"` (aluminium profiles `2020`, `2040`,
   `3030`, `4040`, standing on the face, `length`), `corner_bracket`, `t_nut`, `linear_bearing`
   (`LM6UU` … `LM12UU`), `shaft`, `lead_screw` (`Tr8x8`, `Tr8x2`, `Tr10x2`, `Tr12x3`) and `rail`

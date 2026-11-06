@@ -74,7 +74,7 @@ function runModelAction(action: ModelAction): void {
       }
       return startFeature("sketch");
     default:
-      if (action === "gear" && !hasPack("mechanics")) return;
+      if ((action === "gear" || action === "spring") && !hasPack("mechanics")) return;
       return startFeature(action as FeatureOp);
   }
 }

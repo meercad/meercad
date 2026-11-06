@@ -30,6 +30,9 @@ DXF, SVG, PDF, MCP.
 | pattern | Muster |
 | hole | Bohrung |
 | thread | Gewinde |
+| coil (helix) | Wendel |
+| spring (compression / extension / torsion) | Feder (Druck- / Zug- / Drehfeder) |
+| pitch / starts | Steigung / Gänge |
 | text | Text |
 | scale | Skalieren |
 | align | Ausrichten |

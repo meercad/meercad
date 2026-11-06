@@ -97,7 +97,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       for (const c of CONSTRAINT_TOOLS) list.push({ group: G.constraint, label: c.label, ...(c.key ? { kbd: c.key } : {}), run: () => applyConstraint(c.type) });
       list.push({ group: G.sketch, label: t("Toggle construction"), ...kbd("sketch.construction"), run: toggleConstruction }, { group: G.sketch, label: t("Finish sketch"), kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {
-      for (const op of TOOLBAR) if (op !== "gear" || hasPack("mechanics")) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
+      for (const op of TOOLBAR) if ((op !== "gear" && op !== "spring") || hasPack("mechanics")) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
       list.push({ group: G.modeling, label: t("Measure"), ...kbd("measure"), run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
     }
     if (screen === "editor") {

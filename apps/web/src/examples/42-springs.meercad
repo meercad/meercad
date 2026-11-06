@@ -1,0 +1,46 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "wire": "1.5 mm",
+  "outside": "15 mm",
+  "coils": 6,
+  "free_length": "40 mm"
+ },
+ "features": [
+  {
+   "id": "spr1",
+   "op": "spring",
+   "name": "Compression spring",
+   "kind": "compression",
+   "wire": "wire",
+   "diameter": "outside",
+   "coils": "coils",
+   "length": "free_length",
+   "mode": "new_body"
+  },
+  {
+   "id": "spr2",
+   "op": "spring",
+   "name": "Extension spring",
+   "kind": "extension",
+   "wire": 1,
+   "diameter": 10,
+   "coils": 12,
+   "center": [30, 0],
+   "mode": "new_body"
+  },
+  {
+   "id": "spr3",
+   "op": "spring",
+   "name": "Torsion spring",
+   "kind": "torsion",
+   "wire": 1.5,
+   "diameter": 12,
+   "coils": 4.25,
+   "legs": 20,
+   "center": [-35, 0],
+   "mode": "new_body"
+  }
+ ],
+ "rollback": null
+}

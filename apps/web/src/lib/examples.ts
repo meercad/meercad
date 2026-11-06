@@ -286,6 +286,10 @@ const MORE: [file: string, name: string, description: string][] = [
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
   ["40-stackable-ribbed-box", "Stackable ribbed box", "Rim bead, plinth and framed handles; its foot sits in the box below; three sizes"],
   ["41-linear-axis", "Linear axis", "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts"],
+  ["42-springs", "Springs", "Compression, extension and torsion springs from wire, diameter and coils"],
+  ["43-trapezoid-screw-and-nut", "Clamp screw and nut", "A Tr16 screw with a knurled head and its nut, with play for printing"],
+  ["45-coil-thread", "Coil", "A thread of your own profile cut into a rod, and a conical coil"],
+  ["44-jar-with-lid", "Jar with screw lid", "A three-start round thread: the lid closes in a third of a turn"],
 ];
 
 export const EXAMPLES: Example[] = [
