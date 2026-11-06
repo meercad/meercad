@@ -23,6 +23,8 @@ export interface BodyMesh {
    * texture follow the part.
    */
   source?: { feature: string; flipped: boolean };
+  /** The triangles carry a surface texture (finer than the faces, moved off the smooth surface). */
+  textured?: boolean;
 }
 
 export interface BodySummary {

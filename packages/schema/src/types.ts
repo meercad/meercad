@@ -443,6 +443,65 @@ export interface OffsetFaceFeature extends FeatureBase {
   upTo?: PlaneSpec;
 }
 
+/** Patterns of a surface texture (see TextureFeature). */
+export const TEXTURE_PATTERNS = [
+  "ribs",
+  "ribs_square",
+  "ribs_v",
+  "knurl",
+  "cross_knurl",
+  "hex",
+  "dots",
+  "waves",
+  "brick",
+  "wood",
+  "leather",
+  "weave",
+  "image",
+] as const;
+export type TexturePattern = (typeof TEXTURE_PATTERNS)[number];
+
+/**
+ * A greyscale height picture for a custom texture: `width` × `height` bytes, row by row from the
+ * top, 0 = low, 255 = high, base64 (in a version: a key into the document's `blobs`).
+ */
+export interface TextureImage {
+  width: number;
+  height: number;
+  pixels: string;
+}
+
+/**
+ * A printable surface texture on faces of a part: ribs, knurling, a honeycomb, leather and more.
+ * The faces' triangles are refined and moved along their normals by the pattern's height times
+ * `depth` (outwards for a positive depth, into the part for a negative one). Only the triangles
+ * change: STL, 3MF and OBJ export the textured surface, STEP and the part's volume and mass keep
+ * the smooth faces. The pattern is laid on flat faces flat, wrapped around round faces and runs on
+ * across smooth edges between the chosen faces; at the border to other faces and at sharp edges it
+ * fades out over `fade`.
+ */
+export interface TextureFeature extends FeatureBase {
+  op: "texture";
+  faces: FaceSelector[];
+  pattern: TexturePattern;
+  /** Height of the pattern, mm: positive raises it out of the face, negative cuts it in. */
+  depth: Expr;
+  /** Size of one repeat of the pattern, mm (rib spacing, cell size). */
+  pitch: Expr;
+  /** Turns the pattern on the face, degrees (0: ribs run up the face, or along a round face's axis). */
+  angle?: Expr;
+  /** Raised share of each repeat, 0.1–0.95 (rib width, cell size, dot size); default per pattern. */
+  ratio?: Expr;
+  /** Width of the fade at the border, mm; 0 = none; default half the pitch (at most 2 mm). */
+  fade?: Expr;
+  /** Varies the random patterns (wood, leather). */
+  seed?: number;
+  /** The height picture for pattern "image" (repeats every `pitch` mm across). */
+  image?: TextureImage;
+  /** Swaps high and low. */
+  invert?: boolean;
+}
+
 /**
  * A stiffening rib from open lines in a sketch: each line is thickened across the sketch plane and
  * filled from the line to the part's walls (in the sketch plane, at right angles to the line), so
@@ -528,6 +587,7 @@ export type Feature =
   | RibFeature
   | DraftFeature
   | OffsetFaceFeature
+  | TextureFeature
   | TextFeature
   | StandardPartFeature
   | AlignFeature

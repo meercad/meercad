@@ -5,6 +5,7 @@ import { Arena } from "./arena.js";
 import type { Body } from "./body.js";
 import { bounds, boundsOverlap } from "./boolean.js";
 import { meshBody, type BodyMesh } from "./mesh.js";
+import { texturedMesh, texturesOf } from "./texture.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
 
@@ -93,7 +94,8 @@ export function exportMeshes(oc: OC, state: ModelState, bodyIds?: string[]): Bod
       const mesh = meshBody(oc, b, bounds(oc, arena, b.shape), 1, true);
       // The fine triangulation stays on the shape otherwise, and later display meshes would reuse it.
       oc.BRepTools.Clean(b.shape, true);
-      return mesh;
+      const tex = texturesOf(state, b);
+      return tex ? texturedMesh(oc, b, mesh, tex.layers, "export") : mesh;
     });
   } finally {
     arena.dispose();

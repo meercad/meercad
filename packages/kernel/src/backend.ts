@@ -55,6 +55,7 @@ import { holeTools } from "./hole.js";
 import { nest, textLoops } from "./text.js";
 import { standardPartBody } from "./standardPart.js";
 import { threadBody } from "./thread.js";
+import { textureRecord } from "./texture.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
 
@@ -118,6 +119,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return draft(f, ctx);
       case "offset_face":
         return offsetFace(f, ctx);
+      case "texture":
+        return { ...ctx.prev, textures: new Map(ctx.prev.textures).set(f.id, textureRecord(f, ctx.prev.bodies)) };
       case "text":
         return textFeature(f, ctx);
       case "standard_part":
