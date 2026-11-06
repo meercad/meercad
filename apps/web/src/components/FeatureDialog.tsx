@@ -620,7 +620,7 @@ function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unk
       <Field label={t("Hole")}>
         <select className="field" value={f.kind} onChange={(e) => {
           const kind = e.target.value as Of<"hole">["kind"];
-          set(kind === "simple" ? { kind, size: undefined, fit: undefined, diameter: f.diameter ?? 5 } : { kind, diameter: undefined, size: (kind === "insert" ? INSERT_SIZES : HOLE_SIZES).includes(f.size ?? "") ? f.size : "M3", ...(kind === "insert" ? { depth: undefined } : {}) });
+          set(kind === "simple" ? { kind, size: undefined, fit: undefined, diameter: f.diameter ?? 5, allowance: f.allowance ?? "2 * fit" } : { kind, diameter: undefined, size: (kind === "insert" ? INSERT_SIZES : HOLE_SIZES).includes(f.size ?? "") ? f.size : "M3", ...(kind === "insert" ? { depth: undefined } : {}) });
         }}>
           {HOLE_KINDS.map(([k, label]) => (
             <option key={k} value={k}>
@@ -837,7 +837,7 @@ function GearFields({ f, set }: { f: Of<"gear">; set: (patch: Record<string, unk
       {f.kind === "spur" ? (
         <>
           <label className="checkbox">
-            <input type="checkbox" checked={!!f.bore} onChange={(e) => set({ bore: e.target.checked ? { diameter: 5, allowance: 0.15 } : undefined })} /> {t("Bore")}
+            <input type="checkbox" checked={!!f.bore} onChange={(e) => set({ bore: e.target.checked ? { diameter: 5, allowance: "2 * fit" } : undefined })} /> {t("Bore")}
           </label>
           {f.bore ? (
             <>

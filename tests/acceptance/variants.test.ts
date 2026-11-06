@@ -19,7 +19,7 @@ describe("variants", () => {
     expect(volume()).toBeCloseTo(1000, 3);
     d = applyOp(d, { type: "use_variant", name: "Large" });
     expect(volume()).toBeCloseTo(4000, 3);
-    expect(effectiveParams(d)).toEqual({ width: 40, depth: "width / 2" });
+    expect(effectiveParams(d)).toEqual({ fit: 0.2, width: 40, depth: "width / 2" });
     d = applyOp(d, { type: "use_variant", name: null });
     expect(volume()).toBeCloseTo(2000, 3);
   });

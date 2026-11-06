@@ -810,7 +810,7 @@ export interface Coupling {
 export interface Mechanism {
   joints: Joint[];
   couplings?: Coupling[];
-  /** Smallest wanted gap between jointed parts for print-in-place, mm (default 0.3). */
+  /** Smallest wanted gap between jointed parts for print-in-place, mm (default: the design's fit). */
   clearance?: Expr;
 }
 
@@ -882,6 +882,13 @@ export interface MeercadDocument {
    * millimetres; an inch design stores typed values with their unit, e.g. "2 in".
    */
   units?: LengthUnit;
+  /**
+   * The fit of this design: the gap (mm) the printer needs between two parts that slide or
+   * plug into each other, measured with the fit test part. Every expression can use it as
+   * `fit` (default 0.2 mm when absent); holes, bores, joints, clips and connectors made in the
+   * app start with `fit` as their gap.
+   */
+  fit?: Expr;
   features: Feature[];
   /** Joints between parts; moving them never changes the model. */
   mechanism?: Mechanism;
@@ -982,6 +989,8 @@ export type DocOp =
   | { type: "set_part_list"; groups?: { name: string; parts: string[] }[] | null; order?: string[] | null }
   /** The unit lengths are shown and typed in; stored values stay as they are. */
   | { type: "set_units"; units: "mm" | "in" }
+  /** The design's fit (see `MeercadDocument.fit`), or null for the default. */
+  | { type: "set_fit"; fit: Expr | null }
   /** The whole document; saved versions (and their blobs) are kept when `doc` has none. */
   | { type: "replace"; doc: MeercadDocument };
 

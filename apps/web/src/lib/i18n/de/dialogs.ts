@@ -391,4 +391,18 @@ export default {
   "Linked to a variable — click to use a plain number here instead": "Mit einer Variable verknüpft: klicke, um hier stattdessen eine feste Zahl zu verwenden",
   "Unlinked — this value no longer follows the variable": "Verknüpfung gelöst: Dieser Wert folgt der Variable nicht mehr",
   "Could not evaluate this value": "Dieser Wert lässt sich nicht berechnen",
+  // Fit (Spiel): FitRow, Settings, lib/fit.ts
+  "fit::Gap": "Spiel",
+  "Fit test": "Spiel-Test",
+  "A fit is between 0 and 1 mm": "Das Spiel liegt zwischen 0 und 1 mm",
+  "{value} is now your printer's fit for new designs (Settings)": "{value} ist jetzt das Spiel deines Druckers für neue Designs (Einstellungen)",
+  "Print the fit test part…": "Testteil für das Spiel drucken…",
+  "Use my printer's fit ({value})": "Spiel meines Druckers nehmen ({value})",
+  "Save as my printer's fit": "Als Spiel meines Druckers merken",
+  "Back to the default ({value})": "Zurück zum Standard ({value})",
+  "Gap per side between parts that fit into each other, measured with the fit test part. Holes, bores, threads and moving parts use it as “fit”.": "Spalt je Seite zwischen Teilen, die ineinander passen, gemessen mit dem Testteil. Bohrungen, Wellenbohrungen, Gewinde und bewegliche Teile nutzen ihn als „fit“.",
+  "Fit options": "Spiel-Optionen",
+  "3D printing": "3D-Druck",
+  "Fit of my printer": "Spiel meines Druckers",
+  "The gap per side your printer needs between parts that fit into each other. Print the test part, push the pin into its holes and enter the smallest number where it slides in without wobbling. New designs start with it; holes, bores, threads and moving parts use it as “fit”.": "Der Spalt je Seite, den dein Drucker zwischen ineinander passenden Teilen braucht. Drucke das Testteil, stecke den Stift in die Löcher und trage die kleinste Zahl ein, bei der er ohne Kraft und ohne Wackeln hineingleitet. Neue Designs starten damit; Bohrungen, Wellenbohrungen, Gewinde und bewegliche Teile nutzen ihn als „fit“.",
 } as Record<string, string>;

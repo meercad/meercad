@@ -263,13 +263,15 @@ interface Prefs {
   examplesOpen: boolean;
   /** Surface textures on screen; off makes editing a textured part quicker (exports keep them). */
   showTextures: boolean;
+  /** The fit measured on this device's printer (mm per side), given to new designs; null: not measured. */
+  printerFit: number | null;
 }
 
 
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printerFit: null };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -285,6 +287,7 @@ function load(): Prefs {
       showExamples: raw.showExamples !== false,
       examplesOpen: raw.examplesOpen !== false,
       showTextures: raw.showTextures !== false,
+      printerFit: typeof raw.printerFit === "number" && raw.printerFit >= 0 && raw.printerFit <= 1 ? raw.printerFit : null,
     };
   } catch {
     return fallback;

@@ -1,5 +1,5 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Ruler, TriangleAlert, Type, X } from "lucide-react";
+import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
@@ -8,6 +8,8 @@ import { desktop, type UiScale } from "../lib/persistence";
 import { PACKS, setPack, usePremium } from "../lib/premium";
 import { changeProjectsFolder, folderLabel, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
+import { DEFAULT_FIT } from "@meercad/model";
+import { openFitTest } from "../lib/fit";
 
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
@@ -201,6 +203,41 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             </select>
           </label>
           <p className="muted">{t("An open design switches in File → Millimetres / Inches. Switching never changes sizes, only how lengths are shown and typed.")}</p>
+        </section>
+
+        <section>
+          <h3>
+            <Printer /> {t("3D printing")}
+          </h3>
+          <label className="check">
+            {t("Fit of my printer")}
+            <input
+              className="field fit-input"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={1}
+              step={0.05}
+              key={prefs.printerFit ?? "none"}
+              defaultValue={prefs.printerFit ?? ""}
+              placeholder={String(DEFAULT_FIT)}
+              onBlur={(e) => {
+                const v = e.target.value.trim().replace(",", ".");
+                const n = Number(v);
+                if (!v) setPrefs({ printerFit: null });
+                else if (n >= 0 && n <= 1) setPrefs({ printerFit: n });
+                else e.target.value = prefs.printerFit === null ? "" : String(prefs.printerFit);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            />
+            mm
+          </label>
+          <p className="muted">
+            {t("The gap per side your printer needs between parts that fit into each other. Print the test part, push the pin into its holes and enter the smallest number where it slides in without wobbling. New designs start with it; holes, bores, threads and moving parts use it as “fit”.")}{" "}
+            <button className="link" onClick={() => (setOpen(false), void openFitTest())}>
+              {t("Print the fit test part…")}
+            </button>
+          </p>
         </section>
 
         <section>

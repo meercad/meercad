@@ -1,5 +1,6 @@
 import type { Expr, MeercadDocument } from "@meercad/schema";
 import { resolveParams } from "./expr.js";
+import { FIT_VAR, fitExpr } from "./fit.js";
 import { hashString } from "./hash.js";
 import { resolveFeature, type ResolvedFeature } from "./resolve.js";
 
@@ -64,10 +65,12 @@ interface CacheEntry<S> {
  * Failed features pass the previous state through so later features can still be evaluated.
  */
 /** The document's parameters with the values of the variant in use put in. */
-export function effectiveParams(doc: Pick<MeercadDocument, "params" | "variants" | "variant">): Record<string, Expr> {
+export function effectiveParams(doc: Pick<MeercadDocument, "params" | "variants" | "variant" | "fit">): Record<string, Expr> {
+  // The design's fit is there by name (`fit`); an own variable of that name (from before) wins.
+  const params = { [FIT_VAR]: fitExpr(doc), ...doc.params };
   const v = doc.variant !== undefined ? doc.variants?.find((x) => x.name === doc.variant) : undefined;
-  if (!v) return doc.params;
-  return { ...doc.params, ...Object.fromEntries(Object.entries(v.params).filter(([k]) => k in doc.params)) };
+  if (!v) return params;
+  return { ...params, ...Object.fromEntries(Object.entries(v.params).filter(([k]) => k in doc.params)) };
 }
 
 export class RebuildEngine<S> {

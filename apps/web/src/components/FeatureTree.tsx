@@ -13,6 +13,7 @@ import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp } from "../store";
 import { textureToggle } from "../lib/meshTexture";
 import { ExprInput, parseExpr } from "./ExprInput";
+import { FitRow } from "./FitRow";
 import { freeParamName, withUnit, type ValueUnit } from "./ValueInput";
 import { variableGroup } from "../lib/variables";
 import { exportSketch, seeThroughDoc } from "./io";
@@ -866,6 +867,7 @@ function Params() {
               ) : null}
             </>
           ) : null}
+          {!q ? <FitRow /> : null}
           <SectionHead open={ownOpen || !!q} onToggle={toggleOwn} sub>
             {t("Your variables")} <span className="count">{own.length}</span>
           </SectionHead>
