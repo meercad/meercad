@@ -26,6 +26,8 @@ export interface Shot {
   /** Cut the model open: a plane through the origin offset along its normal; the cut shows red. */
   section?: { normal: V3; offset?: number };
   highlight?: { parts?: string[]; faces?: FaceSelector[] };
+  /** Materials in studio light with a soft shadow, no edges (a presentable picture). */
+  rendered?: boolean;
 }
 
 const HIGHLIGHT = "#ff8a3d";
@@ -63,6 +65,7 @@ function renderOptions(s: Shot, box?: { min: V3; max: V3 }) {
     ...(s.highlight?.parts?.length ? { bodyColors: new Map(s.highlight.parts.map((p) => [p, HIGHLIGHT])) } : {}),
     ...(s.highlight?.faces?.length ? { faces: facePicks(s.highlight.faces) } : {}),
     ...(box ? { box } : {}),
+    ...(s.rendered ? { rendered: true } : {}),
   };
 }
 

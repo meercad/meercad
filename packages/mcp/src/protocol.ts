@@ -22,7 +22,8 @@ export type BridgeMethod =
   | "render_motion"
   | "drawing"
   | "get_status"
-  | "clear_preview";
+  | "clear_preview"
+  | "list_materials";
 
 export interface BridgeRequest {
   id: number;

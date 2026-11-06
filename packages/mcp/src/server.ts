@@ -257,13 +257,21 @@ server.registerTool(
   {
     title: "Look at the model",
     description:
-      "Renders the model as a PNG to check the result: from a standard view or any direction, zoomed onto parts (focus, isolate), cut open by a plane (section, cut faces red) and with parts or faces highlighted. Moving parts show in their current pose (set_pose). Does not move the user's camera.",
-    inputSchema: { ...shot, width: z.number().int().min(64).max(2048).optional(), height: z.number().int().min(64).max(2048).optional() },
+      "Renders the model as a PNG to check the result: from a standard view or any direction, zoomed onto parts (focus, isolate), cut open by a plane (section, cut faces red) and with parts or faces highlighted. Moving parts show in their current pose (set_pose). Does not move the user's camera. style \"rendered\" makes a presentable picture: parts in their materials (set_material) under studio light with a soft shadow on a ground, no edges; with path the PNG is also written to that file (up to 4096 px a side).",
+    inputSchema: {
+      ...shot,
+      width: z.number().int().min(64).max(4096).optional(),
+      height: z.number().int().min(64).max(4096).optional(),
+      style: z.enum(["working", "rendered"]).optional().describe("working (default): shaded with edges, for checking; rendered: materials, studio light and shadow, for showing"),
+      path: z.string().optional().describe("Also write the PNG to this file"),
+    },
     annotations: { readOnlyHint: true },
   },
   guard(async (a) => {
-    const r = await call<{ png: string }>("render_view", a);
-    return { content: [{ type: "image", data: r.png, mimeType: "image/png" }] };
+    const { path, ...shotArgs } = a;
+    const r = await call<{ png: string }>("render_view", shotArgs);
+    if (path) await writeFile(resolve(path), Buffer.from(r.png, "base64"));
+    return { content: [{ type: "image", data: r.png, mimeType: "image/png" }, ...(path ? [{ type: "text" as const, text: `wrote ${resolve(path)}` }] : [])] };
   }),
 );
 
@@ -340,7 +348,7 @@ server.registerTool(
   "export",
   {
     title: "Export a file",
-    description: "Exports the model (stl, 3mf, obj, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer. obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj.",
+    description: "Exports the model (stl, 3mf, obj, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer. 3mf carries the parts' materials and colours and assigns parts with different materials or colours to different filaments (slots) for multi-material slicers. obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj.",
     inputSchema: { format: z.enum(["stl", "3mf", "obj", "step", "dxf", "svg", "meercad"]), path: z.string().describe("Absolute or relative output path"), sketch: z.string().optional() },
   },
   guard(async ({ format, path, sketch }) => {
@@ -357,11 +365,22 @@ server.registerTool(
       }
       return text(`wrote ${written.join(", ")}`);
     }
-    const r = await call<{ base64: string }>("export", { format, sketch });
+    const r = await call<{ base64: string; filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch });
     const data = Buffer.from(r.base64, "base64");
     await writeFile(out, data);
-    return text(`wrote ${data.length} bytes to ${out}`);
+    return text(`wrote ${data.length} bytes to ${out}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
   }),
+);
+
+server.registerTool(
+  "list_materials",
+  {
+    title: "Materials",
+    description:
+      "The materials parts can be made of: the built-in library (id, name, density g/cm³, filament type, nozzle and bed temperature, Shore hardness, finish) and the document's own materials, with each part's material. Assign with apply_ops [{type:\"set_material\", part, material}] (one op per part); make an own material (a library material under an own name and colour) with {type:\"define_material\", material:{id, name, base, color?, density?}}.",
+    annotations: { readOnlyHint: true },
+  },
+  guard(async () => text(await call("list_materials"))),
 );
 
 server.registerTool(
