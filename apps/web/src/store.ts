@@ -444,6 +444,15 @@ export function holdRebuilds(on: boolean): void {
   if (!on && wanted) scheduleRebuild();
 }
 
+let draftTextures = false;
+
+/** While a surface texture's value is being dragged: textures are made coarse and quick; letting go makes them fine again. */
+export function setDraftTextures(on: boolean): void {
+  if (draftTextures === on) return;
+  draftTextures = on;
+  if (!on) scheduleRebuild();
+}
+
 export function scheduleRebuild(): void {
   if (held !== "off") {
     held = "wanted";
@@ -459,7 +468,7 @@ export function scheduleRebuild(): void {
     rebuildsPending++;
     const task = rebuildTask();
     // Volume and area (integrals over every face) follow once the new shape is on screen.
-    kernel.rebuild(doc, { props: false, onProgress: task.onProgress }).then(
+    kernel.rebuild(doc, { props: false, draft: draftTextures, onProgress: task.onProgress }).then(
       (output) => {
         task.done();
         rebuildsPending--;
@@ -626,6 +635,7 @@ function firstField(op: FeatureOp): string | null {
       standard_part: "plane",
       draft: "faces",
       offset_face: "faces",
+      texture: "faces",
       align: "from",
       scale: "bodies",
       loft: "profiles",

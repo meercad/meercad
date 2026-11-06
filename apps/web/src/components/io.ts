@@ -177,6 +177,7 @@ export async function exportStep(): Promise<void> {
     const poses = shownPoses(ids ?? []);
     const data = await kernel.exportStep(ids, stepParts().map((p) => (poses.has(p.id) ? { ...p, pose: poses.get(p.id)! } : p)));
     download(`${baseName()}.step`, data as BlobPart);
+    if (currentDoc().features.some((f) => f.op === "texture" && !f.suppressed)) toast(t("STEP keeps the smooth faces: surface textures come along in STL, 3MF and OBJ"), "info");
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: "STEP", error: e instanceof Error ? e.message : String(e) }), "error");
   }

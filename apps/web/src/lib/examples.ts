@@ -260,6 +260,7 @@ const MORE: [file: string, name: string, description: string][] = [
   ["32-plate-with-standard-parts", "Plate with standard parts", "Screws sitting in their holes"],
   ["33-assembly-with-align", "Assembly with align", "Parts placed against each other"],
   ["34-scaled-to-size", "Scaled to size", "A scan scaled to its measured size"],
+  ["35-ribbed-storage-box", "Ribbed storage box", "Round ribs as a surface texture on the walls"],
 ];
 
 export const EXAMPLES: Example[] = [

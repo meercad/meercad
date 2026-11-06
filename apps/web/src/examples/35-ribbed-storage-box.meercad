@@ -1,0 +1,211 @@
+{
+  "format": "meercad/1",
+  "params": {
+    "width": "80 mm",
+    "depth": "60 mm",
+    "height": "50 mm",
+    "wall": "2 mm",
+    "corner": "8 mm",
+    "rib": "0.8 mm",
+    "spacing": "4 mm"
+  },
+  "features": [
+    {
+      "id": "sk1",
+      "op": "sketch",
+      "name": "Footprint",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "p1",
+          "type": "point",
+          "x": -40.0,
+          "y": -30.0
+        },
+        {
+          "id": "p2",
+          "type": "point",
+          "x": 40.0,
+          "y": -30.0
+        },
+        {
+          "id": "p3",
+          "type": "point",
+          "x": 40.0,
+          "y": 30.0
+        },
+        {
+          "id": "p4",
+          "type": "point",
+          "x": -40.0,
+          "y": 30.0
+        },
+        {
+          "id": "l1",
+          "type": "line",
+          "p1": "p1",
+          "p2": "p2"
+        },
+        {
+          "id": "l2",
+          "type": "line",
+          "p1": "p2",
+          "p2": "p3"
+        },
+        {
+          "id": "l3",
+          "type": "line",
+          "p1": "p3",
+          "p2": "p4"
+        },
+        {
+          "id": "l4",
+          "type": "line",
+          "p1": "p4",
+          "p2": "p1"
+        },
+        {
+          "id": "d1",
+          "type": "line",
+          "p1": "p1",
+          "p2": "p3",
+          "construction": true
+        }
+      ],
+      "constraints": [
+        {
+          "id": "c1",
+          "type": "horizontal",
+          "line": "l1"
+        },
+        {
+          "id": "c2",
+          "type": "horizontal",
+          "line": "l3"
+        },
+        {
+          "id": "c3",
+          "type": "vertical",
+          "line": "l2"
+        },
+        {
+          "id": "c4",
+          "type": "vertical",
+          "line": "l4"
+        },
+        {
+          "id": "c5",
+          "type": "length",
+          "line": "l1",
+          "value": "width",
+          "label": [
+            0,
+            -36.0
+          ]
+        },
+        {
+          "id": "c6",
+          "type": "length",
+          "line": "l2",
+          "value": "depth",
+          "label": [
+            48.0,
+            0
+          ]
+        },
+        {
+          "id": "c7",
+          "type": "midpoint",
+          "point": "origin",
+          "line": "d1"
+        }
+      ]
+    },
+    {
+      "id": "ex1",
+      "op": "extrude",
+      "name": "Box",
+      "profile": {
+        "sketch": "sk1"
+      },
+      "extent": "blind",
+      "distance": "height",
+      "mode": "new_body"
+    },
+    {
+      "id": "fi1",
+      "op": "fillet",
+      "name": "Round corners",
+      "edges": [
+        {
+          "edge": [
+            "ex1.side[sk1.l1]",
+            "ex1.side[sk1.l2]"
+          ]
+        },
+        {
+          "edge": [
+            "ex1.side[sk1.l2]",
+            "ex1.side[sk1.l3]"
+          ]
+        },
+        {
+          "edge": [
+            "ex1.side[sk1.l3]",
+            "ex1.side[sk1.l4]"
+          ]
+        },
+        {
+          "edge": [
+            "ex1.side[sk1.l1]",
+            "ex1.side[sk1.l4]"
+          ]
+        }
+      ],
+      "radius": "corner"
+    },
+    {
+      "id": "fi2",
+      "op": "fillet",
+      "name": "Bottom edge",
+      "edges": {
+        "select": "edges",
+        "of": "ex1",
+        "where": {
+          "face": "start_cap"
+        }
+      },
+      "radius": "wall + 1 mm"
+    },
+    {
+      "id": "sh1",
+      "op": "shell",
+      "name": "Hollow",
+      "faces": [
+        {
+          "face": "ex1.end_cap"
+        }
+      ],
+      "thickness": "wall"
+    },
+    {
+      "id": "st1",
+      "op": "texture",
+      "name": "Ribs",
+      "faces": [
+        {
+          "face": "ex1.side[*]"
+        },
+        {
+          "face": "fi1.round[*]"
+        }
+      ],
+      "pattern": "ribs",
+      "depth": "rib",
+      "pitch": "spacing"
+    }
+  ],
+  "rollback": null
+}

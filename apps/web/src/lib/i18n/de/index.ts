@@ -3,8 +3,9 @@ import app from "./app";
 import dialogs from "./dialogs";
 import motion from "./motion";
 import sketch from "./sketch";
+import texture from "./texture";
 import workspace from "./workspace";
 
-export const DE_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>> = { app, dialogs, motion, sketch, workspace };
+export const DE_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>> = { app, dialogs, motion, sketch, texture, workspace };
 
 export const DE: Readonly<Record<string, string>> = Object.assign({}, ...Object.values(DE_PARTS));
