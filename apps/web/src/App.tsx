@@ -37,6 +37,7 @@ import { deleteModelSelection } from "./lib/deletion";
 import { AboutDialog } from "./components/AboutDialog";
 import { DrawingDialog } from "./components/DrawingDialog";
 import { VersionsDialog } from "./components/VersionsDialog";
+import { MaterialPicker } from "./components/MaterialPicker";
 import { isCompact } from "./lib/layout";
 import { t } from "./lib/i18n";
 
@@ -314,6 +315,7 @@ export function App() {
       <AboutDialog />
       <DrawingDialog />
       <VersionsDialog />
+      <MaterialPicker />
       {desktop ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />

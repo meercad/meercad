@@ -1,11 +1,12 @@
 /** File import/export and share links. */
-import { objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
+import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
 import { applyOp, designOf, motion, nextFeatureId } from "@meercad/model";
+import { threeMfParts } from "../lib/printParts";
 import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
@@ -24,6 +25,7 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   svg: { name: t("SVG drawing"), extensions: ["svg"] },
   ocad: { name: t("meerCAD part"), extensions: ["meercad", "meerCAD"] },
   zip: { name: t("Zip archive"), extensions: ["zip"] },
+  png: { name: t("PNG picture"), extensions: ["png"] },
 };
 
 /** Saves a file: a save dialog on the Mac, the share sheet on the iPad. */
@@ -74,6 +76,7 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
       return;
     }
     download(`${baseName()}.${format}`, meshFile(format, meshes) as BlobPart);
+    if (format === "3mf") tellFilaments(meshes);
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
   }
@@ -118,15 +121,23 @@ export function objExport(name: string, meshes: readonly BodyMesh[], surrounding
   return objFiles(name, [...objParts(meshes), ...(surroundings ? surroundingMeshes() : [])]);
 }
 
+/** After a 3MF with several filaments: which slot gets which material, to set up in the slicer. */
+function tellFilaments(meshes: readonly BodyMesh[]): void {
+  const doc = currentDoc();
+  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  const { filaments } = filamentSlots(threeMfParts(doc, meshes, colors));
+  if (filaments.length < 2) return;
+  const lines = filaments.map((f, i) => t("Filament {n}: {material} {color}", { n: i + 1, material: f.material ?? t("any material"), color: f.color }));
+  void showNotice({ title: t("{n} filaments assigned", { n: filaments.length }), message: `${lines.join("\n")}\n\n${t("Load these filaments in the slicer in this order; each part is already assigned to its filament.")}` });
+}
+
 /** Parts as an STL, or a 3MF or OBJ with their names and colours. */
 function meshFile(format: MeshFormat, meshes: BodyMesh[]): Uint8Array {
   if (format === "stl") return writeStl(meshes);
   const { doc } = useApp.getState();
   const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
   if (format === "obj") return new TextEncoder().encode(writeObj(objParts(meshes)));
-  // Colours the user picked also choose filaments for multi-colour printers.
-  const picked = doc.partColors ?? {};
-  return write3mf(meshes.map((m) => ({ ...m, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}), ...(picked[m.bodyId] ? { filament: picked[m.bodyId]! } : {}) })));
+  return write3mf(threeMfParts(doc, meshes, colors));
 }
 
 /**

@@ -57,9 +57,10 @@ export function DrawingDialog() {
     const show = () => {
       setTitle((cur) => cur || baseName());
       // The parts' material when they all share one.
-      const ids = new Set(Object.values(useApp.getState().doc.partMaterials ?? {}));
-      const only = ids.size === 1 ? materialById([...ids][0]!) : undefined;
-      if (only) setMaterial((m) => m || t(only.name));
+      const d = useApp.getState().doc;
+      const ids = new Set(Object.values(d.partMaterials ?? {}));
+      const only = ids.size === 1 ? materialById([...ids][0]!, d.materials) : undefined;
+      if (only) setMaterial((m) => m || (only.base ? only.name : t(only.name)));
       setOpen(true);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -90,7 +91,7 @@ export function DrawingDialog() {
   }, [open, output, chosen.join(",")]);
 
   if (!open) return null;
-  const bom = billOfMaterials(output?.report.bodies ?? [], (id) => partName(id, doc.features), doc.partMaterials ?? {});
+  const bom = billOfMaterials(output?.report.bodies ?? [], (id) => partName(id, doc.features), doc.partMaterials ?? {}, doc.materials);
   const sheet = views ? layoutSheet(views, { paper, ...(withBom && bom.length > 1 ? { bom } : {}), title: { title: title || t("Untitled"), material, drawnBy, date: new Date().toLocaleDateString("sv") }, labels: SHEET_WORDS }) : null;
   const svg = sheet ? writeSheetSvg(sheet) : null;
   const name = `${baseName()}-drawing`;

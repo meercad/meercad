@@ -256,6 +256,9 @@ importers:
       '@meercad/sketch':
         specifier: workspace:*
         version: link:../packages/sketch
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
 
 packages:
 
