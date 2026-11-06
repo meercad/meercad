@@ -110,11 +110,19 @@ export class RenderedStage {
   ) {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
-    this.sun.shadow.radius = 10;
-    this.sun.shadow.blurSamples = 16;
+    this.sun.shadow.radius = 5;
     this.sun.shadow.bias = -0.0005;
     this.sun.shadow.normalBias = 0.02;
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShadowMaterial({ color: 0x0d1424, opacity: 0.32, depthWrite: false }));
+    // The ground only shows the shadow, fading out towards its rim: it ends inside the area the
+    // sun's shadow covers, so there is no edge to see.
+    const shadowOnly = new THREE.ShadowMaterial({ color: 0x0d1424, opacity: 0.32, depthWrite: false });
+    shadowOnly.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace("void main() {", "varying vec2 vGround;\nvoid main() {").replace("#include <begin_vertex>", "#include <begin_vertex>\n\tvGround = position.xy;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("void main() {", "varying vec2 vGround;\nvoid main() {")
+        .replace("gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );", "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) * ( 1.0 - smoothstep( 0.3, 0.5, length( vGround ) ) ) );");
+    };
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), shadowOnly);
     this.ground.receiveShadow = true;
     this.ground.renderOrder = -2;
     this.ground.userData["stage"] = true;
@@ -131,7 +139,8 @@ export class RenderedStage {
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.VSMShadowMap;
+    // Filtered (PCF): soft enough, and clean where a part stands on the ground (no light bleeding).
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = true;
     // The studio and the sun light the model now; the lamps that follow the camera only fill in.
@@ -183,10 +192,9 @@ export class RenderedStage {
     cam.near = r * 0.5;
     cam.far = r * 8;
     cam.updateProjectionMatrix();
-    // Softness grows with the model, so a small part and a big one look alike.
-    this.sun.shadow.radius = 10;
     this.ground.position.set(sphere.center.x, sphere.center.y, box.min.z - r * 0.002);
-    this.ground.scale.set(r * 30, r * 30, 1);
+    // As wide as the shadow camera sees (its rim fades out), no wider.
+    this.ground.scale.set(r * 4.4, r * 4.4, 1);
     this.ground.updateMatrixWorld();
     this.renderer.shadowMap.needsUpdate = true;
   }
