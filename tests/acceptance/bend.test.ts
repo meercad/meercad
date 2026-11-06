@@ -58,7 +58,7 @@ describe("bend", () => {
       { id: "bd1", op: "bend", bodies: ["ex1"], mode: "wrap", axis: { ref: "origin.Y" }, radius: 30 },
     ]);
     ok(report);
-    expect(status(report, "bd1").message).toMatch(/ends meet/);
+    expect(status(report, "bd1").info?.["closed"]).toBe(1);
     const [dx, dy, dz] = size(report);
     // A ring round Y: inner radius 30, 2 mm wall plus the letters; 12 mm wide.
     expect(dy).toBeCloseTo(12, 3);

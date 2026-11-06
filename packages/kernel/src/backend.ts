@@ -1413,8 +1413,12 @@ function stlSolid(ctx: Ctx, f: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
   return meshSolid(ctx, `import-${f.id}`, bytes, `STL file "${f.fileName}"`);
 }
 
-/** Solid from a binary STL in memory, one face per triangle (see `stlSolid`). */
-function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: string): TopoDS_Shape {
+/**
+ * Solid from a binary STL in memory, one face per triangle (see `stlSolid`). `trusted`: the
+ * triangles are known to be closed, manifold and wound outwards (made here, e.g. by a bend), so
+ * the slow checks (validity, orientation, volume) are skipped.
+ */
+function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: string, trusted = false): TopoDS_Shape {
   const path = `/${name}.stl`;
   oc.FS.writeFile(path, bytes);
   let faces: TopoDS_Shape;
@@ -1437,6 +1441,8 @@ function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: st
     builder.MakeShell(shell);
     for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE")); e.More(); e.Next()) builder.Add(shell, arena.track(e.Current()));
     const solid = arena.track(oc.TopoDS.Solid(arena.track(arena.track(new oc.BRepBuilderAPI_MakeSolid(shell)).Solid())));
+    // Trusted triangles all came through (none dropped as degenerate): the solid is closed.
+    if (trusted && count * 50 + 84 === bytes.length) return solid;
     oc.BRepLib.OrientClosedSolid(solid);
     if (!arena.track(new oc.BRepCheck_Analyzer(solid, true, false)).IsValid()) return null;
     const props = arena.track(new oc.GProp_GProps());
@@ -1558,7 +1564,7 @@ function bendFeature(f: ResolvedBend, ctx: Ctx): Omit<ModelState, "arena"> {
     const id = inputs[k]!.bodyId;
     const n = m.corners.length / 9;
     const indices = Uint32Array.from({ length: n * 3 }, (_, i) => i);
-    const shape = meshSolid(ctx, `bend-${f.id}-${k}`, writeStl([{ positions: m.corners, indices }]), `the bent part "${id}"`);
+    const shape = meshSolid(ctx, `bend-${f.id}-${k}`, writeStl([{ positions: m.corners, indices }]), `the bent part "${id}"`, true);
     const body = new Body(oc, arena, id, shape);
     body.faceTags = body.faces.map((_, i) => [`${f.id}.face[${i}]`]);
     if (body.faces.length === n) body.sourceMesh = m.corners;

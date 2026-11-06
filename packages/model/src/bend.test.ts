@@ -86,7 +86,7 @@ describe("bend mapping", () => {
     const r = 100 / (2 * Math.PI);
     const b = makeBender(box([0, 0, 0], [100, 10, 2]), { mode: "wrap", axis: [0, 1, 0], radius: r });
     expect(b.info.closed).toBe(true);
-    expect(b.warnings.join()).toMatch(/ends meet/);
+    expect(b.warnings).toEqual([]);
     // Inner face on the cylinder: its centre is r below the middle of the bottom face.
     const c: V3 = [50, 0, -r];
     for (const x of [0, 13, 50, 77, 100]) expect(Math.hypot(b.map(x, 0, 0)[0] - c[0], b.map(x, 0, 0)[2] - c[2])).toBeCloseTo(r, 9);

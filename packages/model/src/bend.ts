@@ -203,7 +203,6 @@ export function makeBender(points: ArrayLike<number>, o: BendOptions): Bender {
       R = len / full;
       sweep = full;
       info.closed = true;
-      warnings.push("the ends meet and are joined into a closed ring");
     }
     info.radius = R;
     info.angle = (sweep * 180) / Math.PI;
@@ -313,19 +312,20 @@ export function bendMeshes(meshes: ArrayLike<number>[], o: BendOptions): BentMes
   return meshes.map((corners) => {
     const q = Math.max(1e-9, (hi - lo) * 1e-7);
     const welded = weldClosed(corners, q);
-    let out = refineAndMap(welded.positions, welded.triangles, bender, tol, budget);
-    if (out.ring) {
-      // The two ends now lie on each other: welded together, their faces gone, one closed ring.
-      let ring;
-      try {
-        ring = weldClosed(out.corners, q);
-      } catch {
-        throw new BendError("the ends meet but their shapes differ, so they cannot be joined into a ring", "make the radius a little larger so the ends stay apart");
-      }
-      const c = new Float32Array(ring.triangles.length * 3);
-      ring.triangles.forEach((v, i) => c.set(ring.positions.slice(v * 3, v * 3 + 3), i * 3));
-      out = { corners: c, ring: true };
+    const out = refineAndMap(welded.positions, welded.triangles, bender, tol, budget);
+    // Welded again and checked: closed, every edge shared by two triangles, wound outwards. A
+    // ring's two ends now lie on each other and are welded together (their faces were dropped).
+    let checked;
+    try {
+      checked = weldClosed(out.corners, q);
+    } catch {
+      throw out.ring
+        ? new BendError("the ends meet but their shapes differ, so they cannot be joined into a ring", "make the radius a little larger so the ends stay apart")
+        : new BendError("bending left the surface open", "try a smaller tolerance");
     }
+    const c = new Float32Array(checked.triangles.length * 3);
+    checked.triangles.forEach((v, i) => c.set(checked.positions.slice(v * 3, v * 3 + 3), i * 3));
+    out.corners = c;
     budget -= out.corners.length / 9;
     return { corners: out.corners, info: bender.info, warnings: bender.warnings, triangles: { before: corners.length / 9, after: out.corners.length / 9 } };
   });
