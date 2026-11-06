@@ -101,4 +101,6 @@ export default {
     "Mehrmaterialdruck: Exportier als **3MF**. Teile mit verschiedenen Werkstoffen oder Farben kommen auf verschiedene Filamente (etwa ein PETG-Gehäuse und ein TPU-Griff), und meerCAD sagt dir, welche Filamentnummer welchen Werkstoff bekommt, damit du sie im Slicer in dieser Reihenfolge einlegst.",
   "Pictures: Display mode → **Rendered** shows the materials in studio light with a soft shadow. **Turntable** turns the model slowly; **Save image** saves a sharp picture up to 4K, also with a transparent background.":
     "Bilder: Darstellung → **Gerendert** zeigt die Werkstoffe im Studiolicht mit weichem Schatten. **Drehteller** dreht das Modell langsam; **Bild speichern** speichert ein scharfes Bild bis 4K, auch mit transparentem Hintergrund.",
+  "Two-material grip": "Griff aus zwei Materialien",
+  "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF": "Ein PLA-Griff mit gerändelter TPU-Hülle: zwei Filamente in einem 3MF",
 } as Record<string, string>;

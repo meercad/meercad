@@ -49,6 +49,10 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   A part's colour is the picked one, else its material's own colour (carbon, wood, metal, own
   materials), else an automatic one. All three are optional; files without them open as before.
 - **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way; op `set_see_through {parts, on}`).
+- **units** (optional) — `"in"` for an inch design (op `set_units {units}`); stored values keep their units.
+- **Ops for what the parts list shows**: `set_part_color {part, color|null}`, `set_see_through {parts, on}`,
+  `set_part_list {groups?, order?}` (null clears). `replace` sends the whole document; one without
+  `versions` keeps the saved versions and their blobs.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
   `gridfinity`, `label`, `bend`, `texture` (and more: see the schema).

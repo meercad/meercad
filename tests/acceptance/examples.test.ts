@@ -19,7 +19,7 @@ describe("home-screen examples", () => {
     if (ex.feature) return;
     for (const s of report.sketches) expect(s.diagnostics.dof, `${s.id} DOF`).toBe(0);
     // Most are one part; the gear pair has two, the hinged box three (box, lid, pin).
-    expect(report.bodies).toHaveLength({ "Gear pair": 2, "Hinged box": 3 }[ex.name] ?? 1);
+    expect(report.bodies).toHaveLength({ "Gear pair": 2, "Hinged box": 3, "Two-material grip": 2 }[ex.name] ?? 1);
   });
 
   it("the examples fetched when opened are there and valid", () => {

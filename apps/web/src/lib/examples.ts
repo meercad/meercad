@@ -281,6 +281,7 @@ const MORE: [file: string, name: string, description: string][] = [
   ["33-assembly-with-align", "Assembly with align", "Parts placed against each other"],
   ["34-scaled-to-size", "Scaled to size", "A scan scaled to its measured size"],
   ["35-ribbed-storage-box", "Ribbed storage box", "Round ribs as a surface texture on the walls"],
+  ["39-two-material-grip", "Two-material grip", "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF"],
   ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
 ];
