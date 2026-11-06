@@ -58,7 +58,7 @@ function Count({ value, min, max, onChange }: { value: Expr | undefined; min: nu
         <Minus />
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <ExprInput value={value ?? min} unit="" integer quiet onCommit={onChange} onLive={onChange} />
+        <ExprInput value={value ?? min} unit="" integer quiet className="count" onCommit={onChange} onLive={onChange} />
       </div>
       <button className="icon-btn sm" aria-label={t("More")} disabled={typeof value === "number" && n >= max} onClick={() => onChange(Math.min(max, n + 1))}>
         <Plus />
@@ -148,13 +148,16 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
           <Field label={t("Cells deep")}>
             <Count value={f.units[1]} min={1} max={30} onChange={(v) => pair("units", 1, v, f.units)} />
           </Field>
-          {bin ? (
-            <Field label={t("Height (units)")}>
-              <Count value={f.height ?? 3} min={1} max={40} onChange={(height) => set({ height })} />
-            </Field>
-          ) : null}
         </div>
       )}
+      {bin ? (
+        <div className="row">
+          <Field label={t("Height (units)")}>
+            <Count value={f.height ?? 3} min={1} max={40} onChange={(height) => set({ height })} />
+          </Field>
+          <div style={{ flex: 1 }} />
+        </div>
+      ) : null}
       <p className="muted small">{info}</p>
       {bin ? (
         <>

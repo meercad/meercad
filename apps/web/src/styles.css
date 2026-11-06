@@ -233,6 +233,8 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .expr-wrap { position: relative; }
 .expr-wrap .computed { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); pointer-events: none; font-variant-numeric: tabular-nums; }
 .expr-wrap input { padding-right: 56px; }
+/* Counters with − and + beside them: just the number, centred. */
+.expr-wrap input.count { padding-right: 6px; text-align: center; }
 
 /* right panels */
 .right { grid-area: right; display: flex; }

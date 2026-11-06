@@ -135,11 +135,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, kind: "socket_screw", size: "M3", length: 10, plane: { ref: "origin.XY" }, points: [] } as unknown as Feature;
     case "gridfinity": {
       // A new bin goes into the last baseplate, beside the bins already in it.
-      const plate = [...doc.features].reverse().find((f) => f.op === "gridfinity" && f.kind === "baseplate");
-      if (plate) {
-        const taken = doc.features.filter((f) => f.op === "gridfinity" && f.baseplate === plate.id).length;
-        return { id, op, kind: "bin", units: [1, 1], height: 3, baseplate: plate.id, cell: [taken, 0] };
-      }
+      const plate = [...doc.features].reverse().find((f): f is Extract<Feature, { op: "gridfinity" }> => f.op === "gridfinity" && f.kind === "baseplate");
+      if (plate) return { id, op, kind: "bin", units: [1, 1], height: 3, baseplate: plate.id, cell: freeCell(doc, plate) };
       return { id, op, kind: "bin", units: [2, 1], height: 3, dividers: [3, 0], scoop: 10, tab: {} };
     }
     case "label":
@@ -157,6 +154,20 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
     case "hole":
       return { id, op, plane: { ref: "origin.XY" }, points: [], kind: "clearance", size: "M3" } as unknown as Feature;
   }
+}
+
+/** The first cell of a baseplate that no bin stands on yet (row by row), or [0, 0] when it is full. */
+function freeCell(doc: MeercadDocument, plate: Extract<Feature, { op: "gridfinity" }>): [number, number] {
+  const n = (e: unknown, d: number) => (typeof e === "number" ? e : d);
+  const [px, py] = plate.drawer ? [0, 0] : [n(plate.units[0], 1), n(plate.units[1], 1)];
+  const taken = new Set<string>();
+  for (const f of doc.features)
+    if (f.op === "gridfinity" && f.baseplate === plate.id) {
+      const [ci, cj] = [n(f.cell?.[0], 0), n(f.cell?.[1], 0)];
+      for (let i = 0; i < n(f.units[0], 1); i++) for (let j = 0; j < n(f.units[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
+    }
+  for (let j = 0; j < py; j++) for (let i = 0; i < px; i++) if (!taken.has(`${i},${j}`)) return [i, j];
+  return [0, 0];
 }
 
 /** Why a draft cannot be built yet (missing selections), or null. */
@@ -227,6 +238,10 @@ export function featureName(f: Feature): string {
       // Falls through to the generic name.
     }
   }
+  // Bins and baseplates by their size ("Bin 2×1×3", "Baseplate 4×3"), labels by their text.
+  if (!f.name && f.op === "gridfinity" && typeof f.units[0] === "number" && typeof f.units[1] === "number")
+    return f.kind === "bin" ? `${t("Bin")} ${f.units[0]}×${f.units[1]}×${typeof f.height === "number" ? f.height : 3}` : f.drawer ? `${t("Baseplate")} ${f.id.replace(/^\D+/, "")}` : `${t("Baseplate")} ${f.units[0]}×${f.units[1]}`;
+  if (!f.name && f.op === "label" && f.text?.trim()) return `${t("Label")} ${f.text.trim().split("\n")[0]}`;
   return f.name ?? `${FEATURES[f.op].label} ${f.id.replace(/^\D+/, "")}`;
 }
 
