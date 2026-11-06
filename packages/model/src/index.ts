@@ -14,6 +14,7 @@ export * from "./standardParts.js";
 export { MeshCollider, meshesCollide, rayDistance, signedDistance } from "./collide.js";
 export { blobKey, designOf, restored, versionChanges } from "./versions.js";
 export * from "./gridfinity.js";
+export * from "./wall.js";
 export * from "./bend.js";
 export * from "./texture/patterns.js";
 export * from "./texture/displace.js";

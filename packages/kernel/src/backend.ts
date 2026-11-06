@@ -56,6 +56,7 @@ import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import { gridfinityBody, labelBodies } from "./gridfinity.js";
+import { wallBody } from "./wall.js";
 import { convertMesh } from "./meshconvert.js";
 import { holeTools } from "./hole.js";
 import { nest, textLoops } from "./text.js";
@@ -159,6 +160,14 @@ export class OcctBackend implements KernelBackend<ModelState> {
         const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings);
         const bodies = new Map(ctx.prev.bodies).set(f.id, body);
         return { ...ctx.prev, bodies, ...(record ? { grids: new Map(ctx.prev.grids ?? []).set(f.id, record) } : {}) };
+      }
+      case "wall": {
+        const board = f.board ? ctx.prev.walls?.get(f.board) : undefined;
+        if (f.board && !board) throw new FeatureError(`board "${f.board}" not found`);
+        const frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
+        const { body, record } = wallBody(ctx.oc, ctx.arena, f, frame, board, ctx.warnings);
+        const bodies = new Map(ctx.prev.bodies).set(f.id, body);
+        return { ...ctx.prev, bodies, ...(record ? { walls: new Map(ctx.prev.walls ?? []).set(f.id, record) } : {}) };
       }
       case "label": {
         const bodies = new Map(ctx.prev.bodies);
