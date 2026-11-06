@@ -19,6 +19,7 @@ import type {
   RibFeature,
   LinearPatternFeature,
   MeshConvertFeature,
+  BendFeature,
   PlaneFeature,
   RevolveFeature,
   ShellFeature,
@@ -89,6 +90,7 @@ export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" 
   angle: number;
 };
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
+export type ResolvedBend = R<BendFeature, "angle" | "radius" | "gap" | "tolerance">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
   | ResolvedTransform
@@ -104,6 +106,7 @@ export type ResolvedFeature =
   | ResolvedLinearPattern
   | ResolvedCircularPattern
   | ResolvedMeshConvert
+  | ResolvedBend
   | ResolvedHole
   | ResolvedRib
   | ResolvedDraft
@@ -253,6 +256,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
 
     case "mesh_convert":
       return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
+    case "bend":
+      return { ...f, angle: opt("angle", f.angle), radius: opt("radius", f.radius), gap: opt("gap", f.gap), tolerance: opt("tolerance", f.tolerance) };
     case "transform": {
       const { translate, rotate, ...rest } = f;
       return {
@@ -281,6 +286,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
     mesh_convert: ["tolerance", "angle"],
+    bend: ["angle", "radius", "gap", "tolerance"],
     hole: ["diameter", "depth", "allowance"],
     rib: ["thickness"],
     draft: ["angle"],

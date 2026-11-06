@@ -274,6 +274,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     delete: "del",
     import: "im",
     mesh_convert: "mc",
+    bend: "bd",
     hole: "ho",
     loft: "lo",
     split: "sp",

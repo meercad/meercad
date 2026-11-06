@@ -31,6 +31,7 @@ import {
   Move3d,
   LayoutGrid,
   Tag,
+  Rainbow,
   type LucideIcon, Trash2 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, MeercadDocument } from "@meercad/schema";
 import { nextFeatureId, standardShape } from "@meercad/model";
@@ -54,6 +55,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   loft: { shortcut: "Shift+L", label: t("Loft"), icon: Cone, hint: t("Solid through two or more profiles: funnels, round-to-square adapters") },
   sweep: { shortcut: "W", label: t("Sweep"), icon: Spline, hint: t("Move a profile along a path of lines and arcs: pipes, ducts, handles") },
   scale: { label: t("Scale"), icon: Scaling, hint: t("Make parts larger or smaller, e.g. correct a scan to a measured size") },
+  bend: { label: t("Bend"), icon: Rainbow, hint: t("Bend parts round an axis, wrap them into a ring or roll a long strip into a flat spiral") },
   align: { shortcut: "Shift+A", label: t("Align"), icon: Magnet, hint: t("Set a part's face onto another's, or a shaft's axis onto a hole's") },
   standard_part: { shortcut: "Shift+P", label: t("Standard part"), icon: Nut, hint: t("Screws, nuts, washers, bearings and magnets to standard sizes, placed on a face") },
   gridfinity: { label: t("Storage bin"), icon: LayoutGrid, hint: t("Bins and baseplates for the Gridfinity storage grid: compartments, scoops, label tabs, magnets; editable like any part") },
@@ -79,7 +81,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "label", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "hole", "split", "gear", "transform", "align", "scale", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "label", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -129,6 +131,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, profile, path: { sketch: "" }, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "loft" || f.op === "sweep" || f.op === "import") ? "join" : "new_body" };
     case "scale":
       return { id, op, bodies: [], factor: 1 };
+    case "bend":
+      return { id, op, bodies: [], mode: "spiral", axis: { ref: "origin.Z" }, radius: 20, gap: 1 };
     case "align":
       return { id, op, from: { face: { face: "" } }, to: { face: { face: "" } } };
     case "standard_part":
@@ -199,6 +203,8 @@ export function draftProblem(f: Feature): string | null {
       return f.body ? null : t("Select a mesh part");
     case "scale":
       return f.bodies.length ? null : t("Pick the parts to scale");
+    case "bend":
+      return f.bodies.length ? null : t("Pick the parts to bend");
     case "align": {
       const empty = (s: Feature & { op: "align" }, k: "from" | "to") => {
         const v = s[k];

@@ -17,6 +17,7 @@ import { apply, applyQuiet, cancelDialog, commitDialog, currentDoc, holdRebuilds
 import { InlineInput } from "./InlineValues";
 import { docUnit, fmtLen, lengthValue } from "../lib/units";
 import { Kbd } from "./Kbd";
+import { bendInfo } from "../lib/bend";
 import { t } from "../lib/i18n";
 
 const num = (e: Expr | undefined, fallback = 0): number => {
@@ -49,7 +50,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         ? v >= 0
           ? t("Fillet R {value}", { value: fmtLen(v) })
           : t("Chamfer {value}", { value: fmtLen(-v) })
-        : id === "fillet"
+        : id === "fillet" || id === "bend"
           ? `R ${fmtLen(v)}`
           : id === "hole"
             ? `Ø ${fmtLen(2 * v)}`
@@ -161,6 +162,29 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         // The base output may already include this move when editing it: anchor at the original spot.
         const origin = (d.isNew ? c : c.map((v, i) => v - t[i]!)) as [number, number, number];
         return moveHandles(origin, t, (i, v) => updateDraft((g) => ({ ...g, translate: (((g as Extract<Feature, { op: "transform" }>).translate ?? [0, 0, 0]).map((x, j) => (j === i ? v : x))) as [Expr, Expr, Expr] }) as Feature), () => undefined);
+      }
+      if (f.op === "bend") {
+        // One arrow for the radius: a spiral's from its centre to where it starts; a bend's or a
+        // ring's from the middle of the part (which stays put) towards the centre.
+        const info = bendInfo(useApp.getState().output, f.id);
+        if (!info) return [];
+        const c: V3 = [info["cx"]!, info["cy"]!, info["cz"]!];
+        const o: V3 = [info["ox"]!, info["oy"]!, info["oz"]!];
+        const r = info["radius"]!;
+        if (f.mode === "spiral")
+          return [{ id: "bend", origin: c, dir: o, value: r, min: 0.5, onDrag: (v) => updateDraft({ radius: +v.toFixed(2) }), onEnd: () => undefined }];
+        const len = info["length"]!, half = info["thickness"]! / 2;
+        return [
+          {
+            id: "bend",
+            origin: c.map((x, i) => x + o[i]! * r) as V3,
+            dir: o.map((x) => -x) as V3,
+            value: r,
+            min: f.mode === "bend" ? Math.max(half * 1.05, len / (2 * Math.PI)) : Math.max(0.5, len / (2 * Math.PI)),
+            onDrag: (v) => updateDraft(f.mode === "bend" ? { angle: +Math.min(360, (len / v) * (180 / Math.PI)).toFixed(1), radius: undefined } : { radius: +v.toFixed(2) }),
+            onEnd: () => undefined,
+          },
+        ];
       }
       if (f.op === "shell" && f.faces[0]) {
         const a = faceSelectorAnchor(out, f.faces[0]);

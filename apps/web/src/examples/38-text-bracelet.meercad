@@ -1,0 +1,153 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "wrist": "60 mm",
+  "width": "14 mm",
+  "band": "2 mm"
+ },
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "name": "Band",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 188.5,
+     "y": 0
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 188.5,
+     "y": 14
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": 0,
+     "y": 14
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    }
+   ],
+   "constraints": [
+    {
+     "id": "h1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "h2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "v1",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "v2",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "o",
+     "type": "coincident",
+     "a": "lp1",
+     "b": "origin"
+    },
+    {
+     "id": "len",
+     "type": "length",
+     "line": "l1",
+     "value": "wrist * pi"
+    },
+    {
+     "id": "w",
+     "type": "length",
+     "line": "l2",
+     "value": "width"
+    }
+   ]
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Band",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": "band",
+   "mode": "new_body"
+  },
+  {
+   "id": "tx1",
+   "op": "text",
+   "name": "Name",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "meerCAD",
+   "font": "sans-bold",
+   "align": "center",
+   "position": [
+    "wrist * pi / 2",
+    3.5
+   ],
+   "size": "7 mm",
+   "depth": "0.8 mm",
+   "mode": "join"
+  },
+  {
+   "id": "bd1",
+   "op": "bend",
+   "name": "Into a ring",
+   "bodies": [
+    "ex1"
+   ],
+   "mode": "wrap",
+   "axis": {
+    "ref": "origin.Y"
+   },
+   "radius": "wrist / 2"
+  }
+ ],
+ "rollback": null
+}

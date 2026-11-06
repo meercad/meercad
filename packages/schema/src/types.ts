@@ -604,6 +604,36 @@ export interface MeshConvertFeature extends FeatureBase {
   angle?: Expr;
 }
 
+/**
+ * Bends parts as if they were flexible: round an axis by an angle (`bend`), onto a cylinder
+ * (`wrap`: a flat pattern becomes a ring or bracelet), or rolled up into a flat spiral (`spiral`:
+ * a long strip such as a ruler or a band of text becomes compact enough to print). The parts'
+ * length is their longest extent across the axis; lengths along it are kept (in the middle of the
+ * thickness for bend and spiral, on the inner face for wrap). The parts become mesh parts (fine
+ * triangles) and keep their ids; `tolerance` is how far the triangles may stray from the exact
+ * curved shape.
+ */
+export interface BendFeature extends FeatureBase {
+  op: "bend";
+  /** Parts to bend; several are bent together, as one piece (a chain of links, a word of letters). */
+  bodies: string[];
+  mode: "bend" | "wrap" | "spiral";
+  /** Direction of the axis it is bent around (a ring's or coil's axis); only the direction counts. */
+  axis: AxisRef;
+  /** bend: total angle in degrees, at most 360 (instead of `radius`). */
+  angle?: Expr;
+  /** wrap: the cylinder's radius; spiral: the inner radius; bend: the radius of the middle of the thickness. */
+  radius?: Expr;
+  /** spiral: gap between neighbouring turns (default 1 mm). */
+  gap?: Expr;
+  /** Bend the other way round (the centre on the other side of the part). */
+  flip?: boolean;
+  /** spiral: the coil starts at the other end of the part. */
+  reverse?: boolean;
+  /** Largest distance (mm) between the triangles and the exact bent shape; default from the part's size. */
+  tolerance?: Expr;
+}
+
 export type Feature =
   | SketchFeature
   | PlaneFeature
@@ -634,7 +664,8 @@ export type Feature =
   | TransformFeature
   | DeleteFeature
   | ImportFeature
-  | MeshConvertFeature;
+  | MeshConvertFeature
+  | BendFeature;
 export type FeatureOp = Feature["op"];
 
 // ---------------------------------------------------------------- selectors

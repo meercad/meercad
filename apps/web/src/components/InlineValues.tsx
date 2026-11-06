@@ -72,6 +72,17 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
       const p = out.report.planes.find((x) => x.id === f.id);
       return item("offset", p ? p.frame.origin : null, "⇥ ", f.offset, "offset");
     }
+    case "bend": {
+      const info = out.report.features.find((x) => x.id === f.id)?.info;
+      if (!info) return [];
+      const c: V3 = [info["cx"]!, info["cy"]!, info["cz"]!];
+      const o: V3 = [info["ox"]!, info["oy"]!, info["oz"]!];
+      if (f.mode === "bend") return f.angle !== undefined || f.radius === undefined ? item("angle", c, "∠ ", f.angle ?? 90, "angle", "°") : item("radius", c, "R ", f.radius, "radius");
+      const items = item("radius", c, "R ", f.radius ?? 0, "radius");
+      // A spiral's gap sits on its outside.
+      if (f.mode === "spiral") items.push(...item("gap", c.map((x, i) => x + o[i]! * info["outerRadius"]!) as V3, "↔ ", f.gap ?? 1, "gap"));
+      return items;
+    }
     case "linear_pattern":
     case "circular_pattern": {
       const at = faceCenterByTag(out, `@${f.id}.1`) ?? null;

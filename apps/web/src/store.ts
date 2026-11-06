@@ -629,6 +629,7 @@ function firstField(op: FeatureOp): string | null {
       offset_face: "faces",
       align: "from",
       scale: "bodies",
+      bend: "bodies",
       loft: "profiles",
       sweep: "profile",
       mesh_convert: "body",

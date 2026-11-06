@@ -72,6 +72,16 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   `washer`, `insert`) and text sized to fit, `style` raised or engraved (`depth`, default 0.6 mm).
   `"separate": true` makes the marking its own part `lb1_mark` for a second colour (raised on top, or
   engraved as a flush inlay). Put it on a bin's tab with `"plane": { "face": { "face": "gf1.tab" } }`.
+- **bend** — `{ "op": "bend", "bodies": ["ex1"], "mode": "spiral", "axis": { "ref": "origin.Z" }, "radius": 20, "gap": 1 }`
+  bends parts as if flexible: `"bend"` round the axis by `angle` (degrees, at most 360) or with
+  `radius` (of the middle of the thickness); `"wrap"` onto a cylinder of `radius` (inner face on it;
+  a flat pattern becomes a ring); `"spiral"` rolls the part into a flat Archimedean coil with inner
+  `radius` and `gap` between turns (default 1 mm; 0 or less is refused, as the turns would touch).
+  `axis` gives only the direction; the part's length is its longest extent across it and is kept
+  (in the middle of the thickness for bend and spiral, on the inner face for wrap). `flip` bends
+  the other way, `reverse` starts a spiral at the other end, `tolerance` (mm) is how far the
+  triangles may stray from the exact shape. Ends that meet are joined into a closed ring. The
+  parts become mesh parts and keep their ids.
 - **References** never use indices. Faces carry *tags* from the feature that made them
   (`ex1.end_cap`, `ex1.side[sk1.l3]`, `fi1.round[a|b]`) and later features select by tag, so edits
   upstream don't silently re-target downstream features.

@@ -118,13 +118,18 @@ function showActivity(client: string, tool: string): void {
   activityTimer = window.setTimeout(() => useApp.setState({ aiActivity: null }), 4000);
 }
 
+/** A step's numbers for the assistant (e.g. a bend's turns and size), rounded; directions left out. */
+function reportInfo(info: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(info).filter(([k]) => !/^[oa][xyz]$/.test(k)).map(([k, v]) => [k, +v.toFixed(3)]));
+}
+
 function summary(out: RebuildOutput) {
   const r = out.report;
   const doc = useApp.getState().doc;
   const mat = (id: string) => partMaterial(doc, id);
   const total = massProperties(r.bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(b.inertia ? { inertia: b.inertia } : {}), ...(mat(b.id) ? { material: mat(b.id)! } : {}) })));
   return {
-    features: r.features.map((f) => ({ id: f.id, status: f.status, ...(f.message ? { message: f.message } : {}), ...(f.hint ? { hint: f.hint } : {}) })),
+    features: r.features.map((f) => ({ id: f.id, status: f.status, ...(f.message ? { message: f.message } : {}), ...(f.hint ? { hint: f.hint } : {}), ...(f.info ? { info: reportInfo(f.info) } : {}) })),
     params: r.params,
     ...(Object.keys(r.paramErrors).length ? { paramErrors: r.paramErrors } : {}),
     bodies: r.bodies.map((b) => ({

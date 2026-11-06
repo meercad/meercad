@@ -280,6 +280,8 @@ const MORE: [file: string, name: string, description: string][] = [
   ["32-plate-with-standard-parts", "Plate with standard parts", "Screws sitting in their holes"],
   ["33-assembly-with-align", "Assembly with align", "Parts placed against each other"],
   ["34-scaled-to-size", "Scaled to size", "A scan scaled to its measured size"],
+  ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
+  ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
 ];
 
 export const EXAMPLES: Example[] = [
