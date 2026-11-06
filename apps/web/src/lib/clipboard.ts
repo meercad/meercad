@@ -24,7 +24,7 @@ export function selectedParts(selection: readonly Pick[] = useApp.getState().sel
 }
 
 /** Selects whole parts (all their faces), replacing the selection or adding to it. */
-export function selectParts(ids: readonly string[], add = false): void {
+export function selectParts(ids: readonly string[], add = false, keepFeature = false): void {
   const s = useApp.getState();
   const picks: Pick[] = [];
   for (const id of ids) {
@@ -34,7 +34,7 @@ export function selectParts(ids: readonly string[], add = false): void {
     const point: [number, number, number] = [c[0] ?? 0, c[1] ?? 0, c[2] ?? 0];
     m.faceTags.forEach((tags, face) => picks.push({ kind: "face", bodyId: id, face, tags, point, normal: null }));
   }
-  useApp.setState({ selection: add ? [...s.selection.filter((p) => !(p.kind === "face" && ids.includes(p.bodyId))), ...picks] : picks, selectedFeature: null });
+  useApp.setState({ selection: add ? [...s.selection.filter((p) => !(p.kind === "face" && ids.includes(p.bodyId))), ...picks] : picks, ...(keepFeature ? {} : { selectedFeature: null }) });
 }
 
 export function selectAll(): void {

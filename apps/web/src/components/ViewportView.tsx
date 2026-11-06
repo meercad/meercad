@@ -44,6 +44,8 @@ import { t, tn } from "../lib/i18n";
 
 /** Dialog fields that take whole parts, so a click on a mesh part may fill them. */
 const PART_FIELDS = new Set(["targets", "target", "tools", "bodies", "source", "body"]);
+/** Two clicks this close in time (ms) are a double-click. */
+const DOUBLE_MS = 400;
 import { CUSTOM_PLANE_COLOR, PLANE_COLORS, PlaneChooser } from "./PlaneChooser";
 
 const ORIGIN_FRAMES: Record<string, PlaneView["frame"]> = {
@@ -370,6 +372,9 @@ export function ViewportView() {
     if (!vp) return;
     const el = vp.canvas;
     let down: { x: number; y: number; button: number; empty: boolean } | null = null;
+    /** The last plain click, to catch the second click of a double-click on a face. */
+    let lastClick: { at: number; x: number; y: number; body: string | null } | null = null;
+    let doubleDone = -Infinity;
     let filter: "all" | "face" | "edge" = "all";
     const onKey = (e: KeyboardEvent) => {
       if (!boxRef.current) return;
@@ -500,9 +505,22 @@ export function ViewportView() {
       if (!d || useApp.getState().sketchId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
       const pick = vp.pick(e.clientX, e.clientY, kinds());
       if (d.button === 2) return contextMenu(pick, e.clientX, e.clientY);
-      if (d.button === 0) onClick(pick, e.shiftKey || e.metaKey || e.ctrlKey || e.pointerType === "pen", [e.clientX, e.clientY]);
+      if (d.button !== 0) return;
+      // The second click of a double-click on a face selects its part right away: going through
+      // the face again and then the part made the highlight and the steps list flicker.
+      const now = performance.now();
+      const prev = lastClick;
+      lastClick = { at: now, x: e.clientX, y: e.clientY, body: pick?.kind === "face" ? pick.bodyId : null };
+      if (prev && pick?.kind === "face" && prev.body === pick.bodyId && now - prev.at < DOUBLE_MS && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 6 && !useApp.getState().dialog && !useApp.getState().measure.active && !useTerrainDraw.getState().kind) {
+        lastClick = null;
+        doubleDone = now;
+        return selectParts([pick.bodyId], e.shiftKey || e.metaKey || e.ctrlKey, true);
+      }
+      onClick(pick, e.shiftKey || e.metaKey || e.ctrlKey || e.pointerType === "pen", [e.clientX, e.clientY]);
     };
     const onDbl = (e: MouseEvent) => {
+      // Already handled on the second click.
+      if (performance.now() - doubleDone < DOUBLE_MS) return;
       if (useTerrainDraw.getState().kind) return finishMarking();
       if (useApp.getState().sketchId || useApp.getState().dialog) return;
       const pick = vp.pick(e.clientX, e.clientY, DEFAULT_KINDS);
