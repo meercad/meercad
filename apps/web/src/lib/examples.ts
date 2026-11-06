@@ -210,6 +210,26 @@ const namePlate: MeercadDocument = {
   rollback: null,
 };
 
+/**
+ * Storage on the Gridfinity grid: a 3 × 2 baseplate with magnets, three bins standing in it, and
+ * labels on the tabs of the first bin (one as a second-colour inlay).
+ */
+const storage: MeercadDocument = {
+  format: "meercad/1",
+  params: { height: "3", scoop: "8 mm" },
+  features: [
+    { id: "gf1", op: "gridfinity", name: "Baseplate", kind: "baseplate", units: [3, 2], magnets: true },
+    { id: "gf2", op: "gridfinity", name: "Screws", kind: "bin", units: [2, 1], height: "height", dividers: [1, 0], scoop: "scoop", tab: {}, baseplate: "gf1", cell: [0, 0] },
+    { id: "gf3", op: "gridfinity", name: "Inserts", kind: "bin", units: [1, 1], height: "height", scoop: "scoop", tab: {}, baseplate: "gf1", cell: [2, 0] },
+    { id: "gf4", op: "gridfinity", name: "Sorter", kind: "bin", units: [3, 1], height: "height", dividers: [5, 0], scoop: "scoop", baseplate: "gf1", cell: [0, 1] },
+    { id: "lb1", op: "label", name: "Screw label", plane: { face: { face: "gf2.tab" } }, position: [-41.6, -8.6], text: "M3×10", symbol: "screw_socket" },
+    { id: "lb2", op: "label", name: "Nut label", plane: { face: { face: "gf2.tab" } }, position: [-0.4, -8.6], text: "M3", symbol: "nut", style: "engraved", separate: true },
+    { id: "lb3", op: "label", name: "Insert label", plane: { face: { face: "gf3.tab" } }, position: [42, -8.6], width: 34, text: "M3", symbol: "insert" },
+  ],
+  partColors: { lb2_mark: "#2b2b2b" },
+  rollback: null,
+};
+
 /** `thumbnail`: a picture shipped with the app; examples without one are pictured on the home screen. */
 export interface Example {
   name: string;
@@ -269,6 +289,7 @@ export const EXAMPLES: Example[] = [
   { name: "Gear pair", description: "Meshing gears that turn together", doc: gearPair },
   { name: "Hinged box", description: "Lid on a pin that swings open", doc: hingedBox },
   { name: "Name plate", description: "Raised and engraved text", doc: namePlate },
+  { name: "Storage grid with labels", description: "Bins in a baseplate, with label tabs and two-colour labels", doc: storage, feature: true },
   // Photos: OpenDroneMap's "Aukerman" data set, CC0 (public domain).
   { name: "Park from drone photos", description: "A terrain from 77 photos, with an area, a path, a note and a stake-out point", thumbnail: "/examples/drone-park.jpg", url: "/examples/drone-park.meercad", doc: { format: "meercad/1", params: {}, features: [], rollback: null } },
   ...MORE.map(([file, name, description]) => {

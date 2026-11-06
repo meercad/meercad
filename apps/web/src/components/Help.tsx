@@ -117,6 +117,17 @@ const guides = (): { section: string; guides: Guide[] }[] => [
           </ul>
         ),
       },
+      {
+        title: t("Storage bins and labels"),
+        body: (
+          <ul>
+            {li(t("**Create → Storage bin** makes bins and baseplates for the open Gridfinity grid (42 mm cells, 7 mm height units). Start from a preset, then change cells, height, dividers, scoop, label tab, stacking lip and magnet or screw holes; − and + step the counts."))}
+            {li(t("A baseplate fills a drawer when you give its inside size; bins pick a baseplate and a cell to stand in, and **Check fit** confirms that nothing overlaps."))}
+            {li(t("**Create → Label** makes a printable label with a screw, nut, washer or insert symbol and text like `M3×10`. Tap a bin's label tab to put it there; **Two colours** makes the marking its own part for a second colour."))}
+            {li(t("Both are ordinary parts: round their edges, cut into them or write on them."))}
+          </ul>
+        ),
+      },
     ],
   },
   {

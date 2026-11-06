@@ -215,6 +215,20 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         planeSpec(f.plane, at);
         for (const t of f.targets ?? []) earlier(t, at, "target body");
         break;
+      case "gridfinity":
+        if (f.plane) planeSpec(f.plane, at);
+        if (f.baseplate) {
+          earlier(f.baseplate, at, "baseplate", ["gridfinity"]);
+          const bp = seen.get(f.baseplate);
+          if (bp && bp.op === "gridfinity" && bp.kind !== "baseplate") errors.push(`${at}: "${f.baseplate}" is a bin, not a baseplate`);
+        }
+        if (f.kind === "baseplate" && f.baseplate) errors.push(`${at}: a baseplate cannot sit in a baseplate`);
+        if (f.kind === "bin" && f.drawer) errors.push(`${at}: drawer is for baseplates`);
+        break;
+      case "label":
+        if (f.plane) planeSpec(f.plane, at);
+        if (!f.text?.trim() && (f.symbol ?? "none") === "none") errors.push(`${at}: a label needs a text or a symbol`);
+        break;
       case "rib":
         earlier(f.sketch, at, "sketch", ["sketch"]);
         break;

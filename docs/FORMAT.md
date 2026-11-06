@@ -50,13 +50,28 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   materials), else an automatic one. All three are optional; files without them open as before.
 - **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way; op `set_see_through {parts, on}`).
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
-  `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.
+  `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
+  `gridfinity`, `label` (and more: see the schema).
 - **Ops for materials** (Operations API): `set_material {part, material}` (null for none),
   `define_material {material}` (adds or replaces an own material by id), `delete_material {id}`
   (its parts go back to the base material).
 - **thread** — `{ "op": "thread", "face": { "face": "ex2.side[sk2.c1]" }, "size": "M8", "clearance": 0.15 }`
   models an ISO metric thread on a hole wall (internal) or a shaft (external). `size`, `pitch` and
   `length` are optional (picked from the diameter, the standard coarse pitch, the whole face).
+- **gridfinity** — storage on the open Gridfinity grid (42 mm cells, 7 mm height units), built as an
+  ordinary part: `{ "op": "gridfinity", "kind": "bin", "units": [2, 1], "height": 3, "dividers": [2, 0], "scoop": 8, "tab": {}, "magnets": true }`.
+  Bins have one foot per cell, walls (`wall`, default 1.2 mm), a floor 7 mm above the bottom, the
+  stacking lip 4.4 mm above the rim (`"lip": false` leaves it off), optional `solid`, `dividers`
+  (walls across x and y), `scoop` (finger-slide radius) and label `tab` (`width`, `angle`, `style`).
+  `{ "kind": "baseplate", "units": [4, 3] }` is the grid to stand them on; `drawer: [w, d]` fits as
+  many cells as a drawer takes and fills the rest with a border; `magnets` / `screws` add the holes
+  (and a 3.4 mm floor). A bin with `"baseplate": "gf1", "cell": [i, j]` stands in that baseplate.
+  Faces: `gf1.foot`, `.floor`, `.wall`, `.inner`, `.lip`, `.top`, `.divider`, `.scoop`, `.tab`, `.pocket`, `.hole`, `.bottom`.
+- **label** — a printable label: `{ "op": "label", "text": "M3×10", "symbol": "screw_socket", "width": 36, "height": 11 }`,
+  a rounded plate with a symbol (`screw_pan`, `screw_countersunk`, `screw_socket`, `screw_hex`, `nut`,
+  `washer`, `insert`) and text sized to fit, `style` raised or engraved (`depth`, default 0.6 mm).
+  `"separate": true` makes the marking its own part `lb1_mark` for a second colour (raised on top, or
+  engraved as a flush inlay). Put it on a bin's tab with `"plane": { "face": { "face": "gf1.tab" } }`.
 - **References** never use indices. Faces carry *tags* from the feature that made them
   (`ex1.end_cap`, `ex1.side[sk1.l3]`, `fi1.round[a|b]`) and later features select by tag, so edits
   upstream don't silently re-target downstream features.
