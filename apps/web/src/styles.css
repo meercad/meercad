@@ -249,7 +249,7 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .measure-card td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 560; }
 
 /* context menu */
-.menu { position: fixed; min-width: 200px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--shadow); z-index: 50; }
+.menu { position: fixed; min-width: 200px; max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--shadow); z-index: 50; }
 .menu button { display: flex; width: 100%; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: none; background: none; border-radius: 6px; text-align: left; }
 .menu button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .menu button:disabled { opacity: 0.4; }
@@ -641,6 +641,9 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
   /* Opaque: an open dialog or panel underneath would show through the text. */
   background: var(--panel); border: 1px solid var(--border); box-shadow: var(--glass-shadow), 0 16px 40px rgb(20 20 50 / 0.16); animation: flyout-in 0.12s ease-out; }
 .rail-flyout::before { content: ""; position: absolute; left: -14px; top: 0; bottom: 0; width: 14px; } /* hover bridge */
+.rail-flyout { overflow-y: auto; overscroll-behavior: contain; }
+.rail-flyout.two-columns { display: grid; grid-template-columns: repeat(2, minmax(250px, 1fr)); column-gap: 4px; align-content: start; }
+.rail-flyout.two-columns .rail-flyout-title { grid-column: 1 / -1; }
 .rail-flyout-title { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 5px 10px 6px; }
 .rail-flyout button { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 4px 10px; border: none; background: none; border-radius: 11px; color: var(--text); text-align: left; }
 .rail-flyout button:hover { background: var(--glass-hover); }

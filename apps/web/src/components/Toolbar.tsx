@@ -38,7 +38,7 @@ import {
   Waves,
   Grid3x3,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import type { FeatureOp } from "@meercad/schema";
 import { toggleJoints, useMotion } from "../lib/mechanism";
 import { FEATURES } from "../lib/features";
@@ -331,7 +331,7 @@ export function Toolbar() {
               <i className="rail-more" />
             </button>
             {open === e.id ? (
-              <div className="rail-flyout" role="menu" aria-label={e.label}>
+              <RailFlyout label={e.label}>
                 <div className="rail-flyout-title">{e.label}</div>
                 {e.tools.map((t) => (
                   <button key={t.id} role="menuitem" className={t.active ? "active" : ""} onClick={() => run(t)} title={t.hint ?? t.label}>
@@ -343,12 +343,48 @@ export function Toolbar() {
                     {t.kbd ? <Kbd k={t.kbd} /> : null}
                   </button>
                 ))}
-              </div>
+              </RailFlyout>
             ) : null}
           </div>
         );
       })}
       </div>
     </nav>
+  );
+}
+
+/**
+ * A toolbar group's tools beside the rail, kept inside the window: moved up when it would run off the
+ * bottom, in two columns when it is taller than the window, and scrolling only if that is still too tall.
+ */
+function RailFlyout({ label, children }: { label: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.classList.remove("two-columns");
+      el.style.transform = "";
+      el.style.maxHeight = "";
+      const margin = 8;
+      const room = innerHeight - 2 * margin;
+      let r = el.getBoundingClientRect();
+      if (r.height > room && innerWidth - r.left > 2 * r.width + margin) {
+        el.classList.add("two-columns");
+        r = el.getBoundingClientRect();
+      }
+      if (r.height > room) el.style.maxHeight = `${room}px`;
+      const h = Math.min(r.height, room);
+      const shift = Math.max(margin - r.top, Math.min(0, innerHeight - margin - (r.top + h)));
+      if (shift) el.style.transform = `translateY(${shift}px)`;
+    };
+    fit();
+    addEventListener("resize", fit);
+    return () => removeEventListener("resize", fit);
+  }, []);
+  return (
+    <div className="rail-flyout" role="menu" aria-label={label} ref={ref}>
+      {children}
+    </div>
   );
 }

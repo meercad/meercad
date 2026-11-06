@@ -40,9 +40,13 @@ function PlaneBox({ placeholder, value }: { placeholder: string; value: string }
   const active = useApp((s) => s.dialog?.field === "plane");
   return (
     <div className={`selbox ${active ? "active" : ""}`} onClick={() => setDialogField(active ? null : "plane")} role="button" tabIndex={0}>
-      <span className="chip" title={value}>
-        <span>{active ? t("{what} in the viewport…", { what: placeholder }) : value}</span>
-      </span>
+      {active ? (
+        <span className="placeholder">{t("{what} in the viewport…", { what: placeholder })}</span>
+      ) : (
+        <span className="chip" title={value}>
+          <span>{value}</span>
+        </span>
+      )}
     </div>
   );
 }
