@@ -630,6 +630,32 @@ export interface SplitFeature extends FeatureBase {
   bodies: string[];
   /** "both" (default), or only the piece in front of the plane (along its normal) or behind it. */
   keep?: "both" | "front" | "back";
+  /** Connectors at the cut so the pieces go back together in one place (only with keep "both"). */
+  connectors?: SplitConnectors;
+}
+
+/**
+ * How the pieces of a split hold together. `pins`: pegs grow out of the front piece into holes in the
+ * back piece. `dowels`: holes in both pieces and loose dowels as extra parts (`sp1_dowel1`, …), or
+ * for bought dowel pins. `dovetail`: a dovetail tongue on the front piece runs across the cut, and
+ * the back piece slides onto it sideways. Holes and slots are `clearance` larger on every side.
+ */
+export interface SplitConnectors {
+  kind: "pins" | "dowels" | "dovetail";
+  /** Pin or dowel diameter; for a dovetail its width at the cut. Default: from the size of the cut. */
+  size?: Expr;
+  /** How far a pin or tongue reaches into the other piece (dowels: their whole length). Default: from size. */
+  depth?: Expr;
+  /** Gap on every side between a connector and its hole (default 0.2 mm). */
+  clearance?: Expr;
+  /** Pins or dowels per cut face when placed automatically (default 2, or 1 on a small cut). */
+  count?: Expr;
+  /** Pin or dowel centres in the plane's coordinates, instead of automatic placement. */
+  points?: [Expr, Expr][];
+  /** Dovetail: slides in along the longer side of the cut (default) or the shorter one. */
+  slide?: "long" | "short";
+  /** Dovetail: direction it slides in, in degrees from the plane's u axis (instead of `slide`). */
+  angle?: Expr;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
+import { ArrowLeftRight, Check, Cog, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
@@ -20,6 +20,9 @@ import { BEND_MODES, evaluate } from "@meercad/model";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, openDraft, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
+import { usePrefs } from "../lib/keymap";
+import { partSize, tooBig } from "../lib/printBed";
+import { docUnit, inUnit } from "../lib/units";
 import { GridfinityFields, LabelFields } from "./GridfinityFields";
 import { TextureFields } from "./TextureFields";
 import { Kbd } from "./Kbd";
@@ -339,6 +342,75 @@ function SelBox({ field, items, placeholder, onRemove }: { field: string; items:
         <span className="placeholder">{active ? t("{what} in the viewport…", { what: placeholder }) : placeholder}</span>
       )}
     </div>
+  );
+}
+
+/** Whether the parts (as the preview shows them) fit the print bed set in Settings. */
+function BedCheck() {
+  const bodies = useApp((s) => s.output?.report.bodies);
+  const bed = usePrefs((s) => s.printBed);
+  const doc = useApp((s) => s.doc);
+  if (!bed || !bodies?.length) return null;
+  const big = tooBig(bodies, bed);
+  const size = `${bed.map((v) => inUnit(v)).join(" × ")} ${docUnit()}`;
+  return big.length ? (
+    <p className="small bed-warn">
+      <TriangleAlert /> {t("Still too big for the print bed ({bed}): {parts}", { bed: size, parts: big.map((b) => `${partName(b.id, doc.features)} (${partSize(b.bbox).map((v) => inUnit(v)).join(" × ")})`).join(", ") })}
+    </p>
+  ) : (
+    <p className="muted small">{t("Every part fits the print bed ({bed}).", { bed: size })}</p>
+  );
+}
+
+/** Pins, dowels or a dovetail at the cut, so the printed pieces go back together in one place. */
+function SplitConnectorFields({ f, set }: { f: Extract<Feature, { op: "split" }>; set: (patch: Partial<Extract<Feature, { op: "split" }>>) => void }) {
+  const c = f.connectors;
+  const put = (patch: Partial<NonNullable<typeof c>>) => c && set({ connectors: { ...c, ...patch } });
+  const auto = (e: Expr) => (e === 0 ? undefined : e);
+  return (
+    <>
+      <Field label={t("Connectors")}>
+        <Seg
+          value={c?.kind ?? "none"}
+          options={[["none", t("Without")], ["pins", t("Pins")], ["dowels", t("Dowels")], ["dovetail", t("Dovetail")]]}
+          onChange={(kind) => set({ connectors: kind === "none" ? undefined : { ...c, kind } })}
+        />
+      </Field>
+      {c ? (
+        <>
+          <div className="row">
+            <Field label={c.kind === "dovetail" ? t("Width") : t("Diameter")}>
+              <ExprInput value={c.size} placeholder={t("auto")} onCommit={(size) => put({ size: auto(size) })} />
+            </Field>
+            <Field label={c.kind === "dowels" ? t("Length") : t("Depth")}>
+              <ExprInput value={c.depth} placeholder={t("auto")} onCommit={(depth) => put({ depth: auto(depth) })} />
+            </Field>
+          </div>
+          <div className="row">
+            <Field label={t("Clearance")}>
+              <ExprInput value={c.clearance} placeholder="0.2" onCommit={(clearance) => put({ clearance })} />
+            </Field>
+            {c.kind === "dovetail" ? null : (
+              <Field label={t("Count")}>
+                <ExprInput value={c.count} unit="" integer placeholder={t("auto")} onCommit={(count) => put({ count: auto(count) })} />
+              </Field>
+            )}
+          </div>
+          {c.kind === "dovetail" ? (
+            <Field label={t("Slides in along")}>
+              <Seg value={c.slide ?? "long"} options={[["long", t("Longer side")], ["short", t("Shorter side")]]} onChange={(slide) => put({ slide: slide === "long" ? undefined : slide, angle: undefined })} />
+            </Field>
+          ) : null}
+          <p className="muted small">
+            {c.kind === "pins"
+              ? t("Pins grow out of the front piece into holes in the back piece, placed on the cut with wall around them. Clearance is the gap on every side; 0 for auto sizes.")
+              : c.kind === "dowels"
+                ? t("Holes in both pieces and loose dowels as their own parts: print them lying down, or use bought dowel pins. Clearance is the gap on every side; 0 for auto sizes.")
+                : t("A dovetail tongue on the front piece runs across the cut; the back piece slides onto it from the side. Clearance is the gap on every side; 0 for auto sizes.")}
+          </p>
+        </>
+      ) : null}
+    </>
   );
 }
 
@@ -1490,9 +1562,11 @@ function Body({ d }: { d: DialogState }) {
             <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder={t("All parts the plane crosses")} onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
           </Field>
           <Field label={t("Keep")}>
-            <Seg value={f.keep ?? "both"} options={[["both", t("Both")], ["front", t("Front")], ["back", t("Back")]]} onChange={(keep) => set({ keep: keep === "both" ? undefined : keep })} />
+            <Seg value={f.keep ?? "both"} options={[["both", t("Both")], ["front", t("Front")], ["back", t("Back")]]} onChange={(keep) => set(keep === "both" ? { keep: undefined } : { keep, connectors: undefined })} />
           </Field>
+          {(f.keep ?? "both") === "both" ? <SplitConnectorFields f={f} set={set} /> : null}
           <p className="muted small">{t("For a part larger than the printer: split at an offset plane, print both pieces. Front is the side the plane's arrow points to; that piece keeps the part's name.")}</p>
+          <BedCheck />
         </>
       );
     case "delete":

@@ -25,6 +25,7 @@ import type {
   RevolveFeature,
   ShellFeature,
   SketchConstraint,
+  SplitFeature,
   ThreadFeature,
   SketchFeature,
   TransformFeature,
@@ -90,6 +91,10 @@ export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" 
   position: [number, number];
   angle: number;
 };
+/** A split with its connector numbers worked out; unset ones keep their defaults (chosen from the cut). */
+export type ResolvedSplit = Omit<SplitFeature, "connectors"> & {
+  connectors?: { kind: "pins" | "dowels" | "dovetail"; slide?: "long" | "short"; size?: number; depth?: number; clearance?: number; count?: number; points?: [number, number][]; angle?: number };
+};
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedBend = R<BendFeature, "angle" | "radius" | "gap" | "tolerance">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
@@ -121,7 +126,8 @@ export type ResolvedFeature =
   | ResolvedLabel
   | ResolvedAlign
   | ResolvedScale
-  | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" | "split" }>;
+  | ResolvedSplit
+  | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
 export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): ResolvedFeature {
@@ -194,6 +200,23 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         depth: opt("depth", f.depth),
         allowance: opt("allowance", f.allowance),
       };
+    case "split": {
+      const { connectors: c, ...rest } = f;
+      if (!c) return rest;
+      return {
+        ...rest,
+        connectors: {
+          kind: c.kind,
+          ...(c.slide ? { slide: c.slide } : {}),
+          size: opt("connectors.size", c.size),
+          depth: opt("connectors.depth", c.depth),
+          clearance: opt("connectors.clearance", c.clearance),
+          count: count("connectors.count", c.count),
+          ...(c.points ? { points: c.points.map(([u, v], i) => [ev(`connectors.points[${i}][0]`, u), ev(`connectors.points[${i}][1]`, v)] as [number, number]) } : {}),
+          angle: opt("connectors.angle", c.angle),
+        },
+      };
+    }
     case "draft":
       return { ...f, angle: ev("angle", f.angle) };
     case "offset_face":

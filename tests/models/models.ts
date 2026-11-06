@@ -728,4 +728,29 @@ export const MODELS: TestModel[] = [
     expect: { bodies: 9, size: [300, 80, 68] },
     variants: [{ params: { travel: "200 mm" }, expect: { bodies: 9 } }],
   },
+  {
+    file: "41 Geteilter Balken mit Stiften",
+    name: "Bar split with pins",
+    look: "A 300 × 40 × 20 bar split at x = 150. Two Ø5 pins, 8 long, stand out of the right piece's cut face (at y = 10 and y = 30, mid height); the left piece has Ø5.4 holes 8.2 deep in the same places, so the pieces plug together.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 300, 40)),
+      { id: "ex1", op: "extrude", name: "Bar", profile: { sketch: "sk1" }, extent: "blind", distance: 20, mode: "new_body" },
+      { id: "pl1", op: "plane", name: "Middle", base: { ref: "origin.YZ" }, offset: 150 },
+      { id: "sp1", op: "split", name: "Split for printing", plane: { ref: "pl1" }, bodies: ["ex1"], connectors: { kind: "pins", size: 5, depth: 8, points: [[10, 10], [30, 10]] } },
+    ]),
+    expect: { bodies: 2, volume: 300 * 40 * 20 + 2 * PI * 6.25 * 8 - 2 * PI * 2.7 ** 2 * 8.2, size: [300, 40, 20] },
+  },
+  {
+    file: "42 Brett mit Schwalbenschwanz",
+    name: "Board split with a dovetail",
+    look: "A 400 × 120 × 18 board split at x = 200 into two pieces that fit a 256 mm bed. The right piece has a dovetail tongue running across the whole 120 mm cut (7 wide at the cut, 4 deep, widening 15° to each side); the left piece has the matching slot 0.2 mm larger all round, open at both long edges, so it slides on from the side.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 400, 120)),
+      { id: "ex1", op: "extrude", name: "Board", profile: { sketch: "sk1" }, extent: "blind", distance: 18, mode: "new_body" },
+      { id: "pl1", op: "plane", name: "Middle", base: { ref: "origin.YZ" }, offset: 200 },
+      { id: "sp1", op: "split", name: "Split for printing", plane: { ref: "pl1" }, bodies: ["ex1"], connectors: { kind: "dovetail" } },
+    ]),
+    // The slot is 0.2 larger all round than the tongue: about 0.2 × 17.5 (its outline in the cut) × 120 less.
+    expect: { bodies: 2, volume: [400 * 120 * 18 - 0.2 * 17.5 * 120 * 1.1, 400 * 120 * 18 - 0.2 * 17.5 * 120 * 0.9] as [number, number], size: [400, 120, 18] },
+  },
 ];

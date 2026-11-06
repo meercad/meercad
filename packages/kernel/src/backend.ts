@@ -17,6 +17,7 @@ import {
   defaultBendTolerance,
   bendInfoRecord,
   type ResolvedHole,
+  type ResolvedSplit,
   holeShape,
   HoleError,
   type ResolvedPlane,
@@ -34,7 +35,7 @@ import {
   type ResolvedSketch,
   type ResolvedTransform,
 } from "@meercad/model";
-import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type LoftFeature, type SplitFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef, type SweepFeature } from "@meercad/schema";
+import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type LoftFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef, type SweepFeature } from "@meercad/schema";
 import {
   findRegions,
   frameFromPlane,
@@ -58,6 +59,7 @@ import { gearBody } from "./gear.js";
 import { gridfinityBody, labelBodies } from "./gridfinity.js";
 import { convertMesh } from "./meshconvert.js";
 import { holeTools } from "./hole.js";
+import { joinPieces } from "./splitjoint.js";
 import { nest, textLoops } from "./text.js";
 import { standardPartBody } from "./standardPart.js";
 import { threadBody } from "./thread.js";
@@ -1027,7 +1029,7 @@ function rib(f: ResolvedRib, ctx: Ctx): Omit<ModelState, "arena"> {
  * Parts cut in two at a plane: each kept piece is the part in common with a large box on that side.
  * The new faces at the plane are tagged `<step>.cut`.
  */
-function split(f: SplitFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+function split(f: ResolvedSplit, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena, g } = ctx;
   const frame = planeFrame(f.plane, ctx);
   const size = modelSize(ctx) * 2;
@@ -1065,6 +1067,14 @@ function split(f: SplitFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     }
     crossed++;
     bodies.delete(id);
+    if (f.connectors && keep === "both") {
+      const c = f.connectors;
+      const joined = joinPieces(oc, arena, frame, { ...f, connectors: c }, body, a, b, (k) => `${otherId}_dowel${k}`, ctx.warnings);
+      bodies.set(id, joined.front);
+      bodies.set(joined.back.bodyId, joined.back);
+      for (const d of joined.dowels) bodies.set(d.bodyId, d);
+      continue;
+    }
     if (keep !== "back") bodies.set(id, a);
     if (keep !== "front") bodies.set(b.bodyId, b);
   }

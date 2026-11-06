@@ -1,4 +1,4 @@
-import { Image as PictureIcon, ImageOff, ArrowDownToLine, ClipboardPaste, CopyPlus, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, UserCheck, Weight, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, ClipboardPaste, CopyPlus, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, TriangleAlert, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -20,6 +20,7 @@ import { showMenu } from "./Menu";
 import { docUnit, fmtLen, fmtVolume, inUnit, isLengthParam } from "../lib/units";
 import { meshBodyIds, meshHint } from "../lib/meshParts";
 import { usePrefs } from "../lib/keymap";
+import { partSize, tooBig } from "../lib/printBed";
 import { PART_PALETTE, partColors } from "../lib/partColors";
 import { terrainItems } from "../lib/terrain";
 import { copyParts, hasClip, pasteParts, selectedParts, selectParts } from "../lib/clipboard";
@@ -368,7 +369,9 @@ function Bodies() {
   const [over, setOver] = useState<string | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
   const colorParts = usePrefs((s) => s.colorParts);
+  const printBed = usePrefs((s) => s.printBed);
   if (!bodies.length) return null;
+  const oversize = new Set(tooBig(bodies, printBed).map((b) => b.id));
   const fmt = (n: number) => fmtVolume(n);
   const ids = bodies.map((b) => b.id);
   const order = [...(doc.partOrder ?? []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(doc.partOrder ?? []).includes(id))];
@@ -458,6 +461,7 @@ function Bodies() {
   };
   const part = (id: string, nested: boolean) => {
     const b = bodies.find((x) => x.id === id)!;
+    const big = oversize.has(id);
     return (
       <li
         key={id}
@@ -513,6 +517,21 @@ function Bodies() {
           }}
         />
         <span className="tree-label">
+          {big ? (
+            <button
+              className="too-big"
+              title={t("Too big for the print bed")}
+              aria-label={t("Too big for the print bed")}
+              onClick={(e) => {
+                e.stopPropagation();
+                const size = partSize(b.bbox).map((v) => inUnit(v)).join(" × ");
+                const bed = printBed!.map((v) => inUnit(v)).join(" × ");
+                toast(t("{part} is {size} {unit}, larger than the print bed ({bed} {unit}). Split it into pieces that fit (Shift+K), with pins or a dovetail.", { part: partName(id, doc.features), size, bed, unit: docUnit() }));
+              }}
+            >
+              <TriangleAlert />
+            </button>
+          ) : null}
           {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
           {Number.isFinite(b.volume) ? (
             // The material (or the offer to pick one) opens the picker.

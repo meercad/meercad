@@ -240,6 +240,8 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "split":
         planeSpec(f.plane, at);
         for (const b of f.bodies) body(b, at);
+        if (f.connectors && (f.keep ?? "both") !== "both") errors.push(`${at}: connectors need both pieces (keep "both")`);
+        if (f.connectors?.points && f.connectors.kind === "dovetail") errors.push(`${at}: points are for pins and dowels`);
         break;
       case "mesh_convert":
         body(f.body, at);

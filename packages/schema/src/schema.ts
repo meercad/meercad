@@ -292,7 +292,28 @@ export const definitions: Record<string, Json> = {
       ["faces", "pattern", "depth", "pitch"],
     ),
     rib: feature("rib", { sketch: id, curves: arr({ type: "string", maxLength: 256 }, { minItems: 1 }), thickness: ref("expr"), flip: bool }, ["sketch", "thickness"]),
-    split: feature("split", { plane: ref("planeSpec"), bodies: arr(id), keep: { enum: ["both", "front", "back"] } }, ["plane", "bodies"]),
+    split: feature(
+      "split",
+      {
+        plane: ref("planeSpec"),
+        bodies: arr(id),
+        keep: { enum: ["both", "front", "back"] },
+        connectors: obj(
+          {
+            kind: { enum: ["pins", "dowels", "dovetail"] },
+            size: ref("expr"),
+            depth: ref("expr"),
+            clearance: ref("expr"),
+            count: ref("expr"),
+            points: arr(arr(ref("expr"), { minItems: 2, maxItems: 2 }), { minItems: 1, maxItems: 100 }),
+            slide: { enum: ["long", "short"] },
+            angle: ref("expr"),
+          },
+          ["kind"],
+        ),
+      },
+      ["plane", "bodies"],
+    ),
     loft: feature(
       "loft",
       { profiles: arr(ref("profile"), { minItems: 2, maxItems: 50 }), ruled: bool, mode: ref("mode"), targets: arr(id) },

@@ -1,5 +1,5 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Ruler, TriangleAlert, Type, X } from "lucide-react";
+import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
@@ -8,6 +8,7 @@ import { desktop, type UiScale } from "../lib/persistence";
 import { PACKS, setPack, usePremium } from "../lib/premium";
 import { changeProjectsFolder, folderLabel, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
+import { BED_PRESETS, DEFAULT_BED, type Bed } from "../lib/printBed";
 
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
@@ -161,6 +162,8 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           </label>
         </section>
 
+        <PrintBedSection />
+
         <section>
           <h3>
             <LayoutGrid /> {t("Start page")}
@@ -297,3 +300,60 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
 }
 
 const pct = (f: number) => `${Math.round(f * 100)} %`;
+
+/** The printer's build volume, for the warning on parts that do not fit (parts list, Split). */
+function PrintBedSection() {
+  const bed = usePrefs((p) => p.printBed);
+  const [custom, setCustom] = useState(false);
+  const preset = bed && !custom ? BED_PRESETS.find((p) => p.size.every((v, i) => v === bed[i])) : undefined;
+  const shown = bed ?? DEFAULT_BED;
+  const setAxis = (i: number, v: number) => {
+    if (!(v >= 10 && v <= 5000)) return;
+    setPrefs({ printBed: shown.map((x, j) => (j === i ? v : x)) as Bed });
+  };
+  return (
+    <section>
+      <h3>
+        <Printer /> {t("3D printer")}
+      </h3>
+      <label className="check">
+        <input type="checkbox" checked={!!bed} onChange={(e) => setPrefs({ printBed: e.target.checked ? DEFAULT_BED : null })} />
+        {t("Warn when a part does not fit the print bed")}
+      </label>
+      {bed ? (
+        <>
+          <label className="check">
+            {t("Build volume")}
+            <select
+              value={preset?.id ?? "custom"}
+              onChange={(e) => {
+                const p = BED_PRESETS.find((x) => x.id === e.target.value);
+                setCustom(!p);
+                if (p) setPrefs({ printBed: p.size });
+              }}
+            >
+              {BED_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label} mm
+                </option>
+              ))}
+              <option value="custom">{t("Custom size")}</option>
+            </select>
+          </label>
+          {!preset ? (
+            <div className="bed-size">
+              {(["X", "Y", "Z"] as const).map((axis, i) => (
+                <label key={axis}>
+                  {axis}
+                  <input className="field" type="number" min={10} max={5000} defaultValue={shown[i]} onBlur={(e) => setAxis(i, Number(e.target.value))} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
+                  mm
+                </label>
+              ))}
+            </div>
+          ) : null}
+          <p className="muted">{t("A part that is larger in any direction gets a warning sign in the parts list. Split it into pieces that fit (Split, with pins or a dovetail so they go back together).")}</p>
+        </>
+      ) : null}
+    </section>
+  );
+}

@@ -6,6 +6,7 @@ import { create } from "zustand";
 import type { Navigation } from "@meercad/viewport";
 import type { SketchTool } from "../sketch/state";
 import { t } from "./i18n";
+import { DEFAULT_BED, validBed, type Bed } from "./printBed";
 
 export type ModelAction =
   | "sketch"
@@ -263,13 +264,15 @@ interface Prefs {
   examplesOpen: boolean;
   /** Surface textures on screen; off makes editing a textured part quicker (exports keep them). */
   showTextures: boolean;
+  /** The printer's build volume (mm); null turns the "too big for the bed" warning off. */
+  printBed: Bed | null;
 }
 
 
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -285,6 +288,7 @@ function load(): Prefs {
       showExamples: raw.showExamples !== false,
       examplesOpen: raw.examplesOpen !== false,
       showTextures: raw.showTextures !== false,
+      printBed: validBed(raw.printBed) === undefined ? fallback.printBed : validBed(raw.printBed)!,
     };
   } catch {
     return fallback;
