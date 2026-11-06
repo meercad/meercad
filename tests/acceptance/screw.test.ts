@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RebuildReport } from "@meercad/kernel";
 import type { Feature } from "@meercad/schema";
 import { grooveShape, threadSpec } from "@meercad/model";
+import { readFileSync } from "node:fs";
 import { circle, doc, newSession, sketch } from "./helpers.js";
 
 const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
@@ -61,5 +62,23 @@ describe("screw", () => {
     expect(report.bodies).toHaveLength(2);
     const n = report.bodies.find((b) => b.id === "scr2")!;
     expect(n.bbox.max[2] - n.bbox.min[2]).toBeCloseTo(9.6, 2);
+  });
+});
+
+describe("jar with lid", () => {
+  it("threads the jar at its rim (both ends of the wall are open; the rim is the smaller end face)", async () => {
+    const s = await newSession();
+    const d = JSON.parse(readFileSync(new URL("../../apps/web/src/examples/44-jar-with-lid.meercad", import.meta.url), "utf8"));
+    const r = s.rebuild(d);
+    ok(r.report);
+    const m = r.meshes.find((x) => x.bodyId === "ex1")!;
+    let zmin = Infinity;
+    for (let i = 0; i < m.faceRanges.length; i += 3) {
+      if (!m.faceTags[m.faceRanges[i + 2]!]?.includes("th1.thread")) continue;
+      for (let k = m.faceRanges[i]!; k < m.faceRanges[i]! + m.faceRanges[i + 1]!; k++) zmin = Math.min(zmin, m.positions[m.indices[k]! * 3 + 2]!);
+    }
+    // The jar is 50 tall; the 10 mm thread sits at the top.
+    expect(zmin).toBeGreaterThan(38);
+    expect(zmin).toBeLessThan(50);
   });
 });

@@ -78,6 +78,8 @@ export function threadFace(oc: OC, arena: Arena, input: Body, fi: number, f: Thr
   // Run-out past the end only into free space: a chamfer or rounded edge there stops the groove at
   // the face's edge (OCCT cannot intersect the groove with the cone reliably, and it reads better).
   const free = [true, true];
+  // The flat face at each end (a jar's rim, a shaft's end): with both ends open the thread starts at the smaller one.
+  const endArea = [Infinity, Infinity];
   input.edgeFaces.forEach((adj, ei) => {
     if (!adj.includes(fi)) return;
     const p = input.edgePoints[ei]!;
@@ -89,6 +91,7 @@ export function threadFace(oc: OC, arena: Arena, input: Body, fi: number, f: Thr
       const info = input.faceInfo[nb]!;
       // A planar neighbour whose outside faces back along the face is a shoulder or a hole bottom.
       if (info.planar && info.normal && dot(info.normal, a) * (end === 0 ? -1 : 1) < 0.3) open[end] = false;
+      else if (info.planar) endArea[end] = Math.min(endArea[end]!, info.area);
       if (!info.planar) free[end] = false;
     }
   });
@@ -110,8 +113,10 @@ export function threadFace(oc: OC, arena: Arena, input: Body, fi: number, f: Thr
   const length = Math.min(f.length ?? full, full);
   if (!(length > 0)) throw new FeatureError("thread length must be greater than zero");
 
-  // Threads start at an open end (the top one if both are open) and run `length` along the face.
-  const fromTop = open[1] || !open[0];
+  // Threads start at an open end (the top one if both are open, unless the bottom's end face is clearly
+  // smaller, like a jar's rim against its bottom) and run `length` along the face.
+  const smallerLo = open[0] && open[1] && endArea[0]! < 0.9 * endArea[1]!;
+  const fromTop = (open[1] || !open[0]) && !smallerLo;
   const lo = fromTop ? t1 - length : t0;
   const hi = fromTop ? t1 : t0 + length;
   const runOutLo = open[0] && free[0] && lo <= t0 + 1e-9;
