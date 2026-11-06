@@ -1,5 +1,5 @@
 export { writeStl, readStl, parseStl, meshVolume, type TriangleMesh } from "./stl.js";
-export { read3mf, write3mf } from "./threemf.js";
+export { filamentSlots, read3mf, write3mf, type Filament, type Mesh3mf } from "./threemf.js";
 export { encodeGif, type GifFrame } from "./gif.js";
 export { objFiles, readObj, writeMtl, writeObj, type ObjMesh } from "./obj.js";
 export { readGlb, type TexturedMesh } from "./glb.js";

@@ -49,7 +49,7 @@ describe("DXF / SVG / 3MF", () => {
   });
 });
 
-import { read3mf, readObj, writeObj } from "./index.js";
+import { filamentSlots, read3mf, readObj, writeObj } from "./index.js";
 import { strToU8, zipSync } from "fflate";
 
 describe("3MF / OBJ import", () => {
@@ -137,5 +137,39 @@ describe("zip", () => {
     expect(Object.keys(files)).toEqual(["a-Pipe 25.stl", "b.txt"]);
     expect([...files["a-Pipe 25.stl"]!]).toEqual([1, 2, 3]);
     expect(strFromU8(files["b.txt"]!)).toBe("hello");
+  });
+});
+
+describe("3MF with materials", () => {
+  const tri = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), indices: new Uint32Array([0, 1, 2]) };
+  const petg = { color: "#3366cc", material: "PETG", look: { roughness: 0.18, metalness: 0 }, filament: { color: "#3366cc", material: "PETG", type: "PETG" } };
+  const tpu = { color: "#222222", material: "TPU 95A", look: { roughness: 0.6, metalness: 0 }, filament: { color: "#222222", material: "TPU 95A", type: "TPU" } };
+
+  it("names base materials after the material, once per material and colour, with their finish", () => {
+    const zip = unzipSync(write3mf([{ ...tri, name: "Body", ...petg }, { ...tri, name: "Grip", ...tpu }, { ...tri, name: "Cap", ...petg }]));
+    const model = strFromU8(zip["3D/3dmodel.model"]!);
+    expect(model).toContain('xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"');
+    expect(model).toContain('<m:pbmetallicdisplayproperties id="5"><m:pbmetallic name="PETG" metallicness="0" roughness="0.18"/><m:pbmetallic name="TPU 95A" metallicness="0" roughness="0.6"/></m:pbmetallicdisplayproperties>');
+    expect(model).toContain('<basematerials id="4" displaypropertiesid="5"><base name="PETG" displaycolor="#3366CCFF"/><base name="TPU 95A" displaycolor="#222222FF"/></basematerials>');
+    expect(model).toContain('<object id="3" type="model" name="Cap" pid="4" pindex="0">');
+    expect(model).toContain('<object id="2" type="model" name="Grip" pid="4" pindex="1">');
+  });
+
+  it("puts different materials on different filaments, even in the same colour", () => {
+    const black = { ...tpu, filament: { ...tpu.filament, color: "#3366CC" }, color: "#3366cc" };
+    const { filaments, slot } = filamentSlots([petg, black, { filament: "#3366cc" }, {}, petg]);
+    expect(filaments).toEqual([{ color: "#3366CC", material: "PETG", type: "PETG" }, { color: "#3366CC", material: "TPU 95A", type: "TPU" }, { color: "#3366CC" }]);
+    expect(slot).toEqual([1, 2, 3, 1, 1]);
+  });
+
+  it("gives the per-object settings each object's triangles, so slicers load the meshes", () => {
+    const cube = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]), indices: new Uint32Array([0, 1, 2, 1, 3, 2]) };
+    const zip = unzipSync(write3mf([{ ...cube, name: "Body", ...petg }, { ...tri, name: "Grip", ...tpu }]));
+    const prusa = strFromU8(zip["Metadata/Slic3r_PE_model.config"]!);
+    expect(prusa).toContain('<object id="1" instances_count="1"><metadata type="object" key="name" value="Body"/><metadata type="object" key="extruder" value="1"/><volume firstid="0" lastid="1">');
+    expect(prusa).toContain('<metadata type="object" key="extruder" value="2"/><volume firstid="0" lastid="0">');
+    expect(strFromU8(zip["Metadata/model_settings.config"]!)).toContain('<object id="2"><metadata key="name" value="Grip"/><metadata key="extruder" value="2"/></object>');
+    // A single material assigns nothing.
+    expect(unzipSync(write3mf([{ ...tri, ...petg }, { ...tri, ...petg }]))["Metadata/Slic3r_PE_model.config"]).toBeUndefined();
   });
 });
