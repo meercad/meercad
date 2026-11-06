@@ -331,7 +331,10 @@ function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame
     if (down && Math.abs(p[2]) < 1e-6) return name("bottom");
     if (p[2] < G.footHeight + 1e-6 && (down || toOutline(p[0], p[1], W, D, R) > 1e-3)) return name("foot");
     if (up && Math.abs(p[2] - floor) < 1e-6 && !f.solid) return name("floor");
-    for (const r of regions) if (inBox(p, r.box)) return name(r.tag === "tab" && !(up && Math.abs(p[2] - H) < 1e-6) ? "tab_under" : r.tag);
+    // A tab's top runs on over the dividers' tops in one face: tabs first.
+    const onTop = up && Math.abs(p[2] - H) < 1e-6;
+    if (onTop && f.tab && regions.some((r) => r.tag === "tab" && Math.abs(p[1] - (r.box.min[1] + r.box.max[1]) / 2) < (r.box.max[1] - r.box.min[1]) / 2 + 1e-3)) return name("tab");
+    for (const r of regions) if (inBox(p, r.box)) return name(r.tag === "tab" && !onTop ? "tab_under" : r.tag);
     if (toOutline(p[0], p[1], W, D, R) < 1e-3) return name("wall");
     if (up && Math.abs(p[2] - H) < 1e-6) return name("top");
     if (lip && p[2] > H - (G.lip[0]![1] - t) - 1e-3) return name("lip");
