@@ -38,6 +38,7 @@ import { AboutDialog } from "./components/AboutDialog";
 import { DrawingDialog } from "./components/DrawingDialog";
 import { VersionsDialog } from "./components/VersionsDialog";
 import { MaterialPicker } from "./components/MaterialPicker";
+import { AiLock } from "./components/AiLock";
 import { isCompact } from "./lib/layout";
 import { t } from "./lib/i18n";
 
@@ -117,6 +118,8 @@ export function App() {
     if (!desktop) return;
     document.documentElement.classList.add("is-desktop");
     const offMenu = desktop.on("menu", (cmd) => {
+      // While an assistant works on the model, the menu commands wait too.
+      if (useApp.getState().aiLock && cmd !== "shortcuts") return;
       if (cmd === "new") void newProject();
       else if (cmd === "import") void importFile();
       else if (cmd === "home") goHome();
@@ -291,6 +294,7 @@ export function App() {
 
   return (
     <>
+      <AiLock />
       {screen === "home" ? (
         <Home />
       ) : (

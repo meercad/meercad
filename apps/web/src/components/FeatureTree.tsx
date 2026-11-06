@@ -735,6 +735,7 @@ function Params() {
       <input
         className="field name-input"
         defaultValue={name}
+        title={name}
         key={`${name}-n`}
         onBlur={(e) => {
           const to = e.target.value.trim();
