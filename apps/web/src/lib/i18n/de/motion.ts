@@ -132,7 +132,7 @@ export default {
   "Drawing preview": "Vorschau der Zeichnung",
   "Projecting the views…": "Ansichten werden erstellt…",
   Title: "Titel",
-  Material: "Werkstoff",
+  Material: "Material",
   "e.g. PETG, aluminium": "z. B. PETG, Aluminium",
   "Drawn by": "Gezeichnet von",
   Sheet: "Blatt",
@@ -199,7 +199,7 @@ export default {
   "Imported meshes are edited as whole parts: combine, cut, move or pattern them. For editable faces, right-click or long-press the part: Convert to editable body, or Rebuild with features.":
     "Importierte Netze bearbeitest du als ganze Teile: kombinieren, abziehen, verschieben oder als Muster anordnen. Für bearbeitbare Flächen klick das Teil mit rechts an oder drück lange darauf: In bearbeitbares Teil umwandeln oder Mit Schritten nachbauen.",
   "sheet::Scale": "Maßstab",
-  "sheet::Material": "Werkstoff",
+  "sheet::Material": "Material",
   "sheet::Number": "Nummer",
   "sheet::Sheet": "Blatt",
   "sheet::Drawn by": "Gezeichnet",

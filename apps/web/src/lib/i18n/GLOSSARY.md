@@ -82,7 +82,7 @@ DXF, SVG, PDF, MCP.
 | sheet | Blatt |
 | title block | Schriftfeld |
 | bill of materials | Stückliste |
-| material | Werkstoff |
+| material | Material (im 3D-Druck üblich; nicht „Werkstoff“) |
 | mass / centre of gravity / inertia | Masse / Schwerpunkt / Trägheit |
 | import / export | Importieren / Exportieren |
 | scan | Scan (verb: Scannen) |

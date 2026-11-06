@@ -489,16 +489,45 @@ function Bodies() {
             ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
             { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id) },
-            ...(doc.partColors?.[id] ? [{ label: t("Automatic colour"), icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
+            ...(doc.partColors?.[id] ? [{ label: t("Reset colour"), icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
             "sep" as const,
             { label: t("Delete part"), icon: <Trash />, danger: true, onClick: () => deleteBodies([id]) },
           ]);
         }}
         {...dropProps(id)}
       >
-        <button className="part-swatch" title={t("Colour")} style={{ background: colors.get(id) ?? PART_PALETTE[0] }} onClick={(e) => (e.stopPropagation(), pickColor(id))} />
+        <button
+          className="part-swatch"
+          title={t("Colour and material")}
+          style={{ background: colors.get(id) ?? PART_PALETTE[0] }}
+          onClick={(e) => {
+            e.stopPropagation();
+            // Colour, material and going back to the automatic colour, in one place (mouse and touch).
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const m = partMaterial(doc, id);
+            showMenu(r.left, r.bottom + 4, [
+              { label: m ? t("Material: {name}…", { name: materialName(m) }) : t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id) },
+              { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
+              ...(doc.partColors?.[id] ? [{ label: t("Reset colour"), icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
+            ]);
+          }}
+        />
         <span className="tree-label">
-          {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}{massText(id, b.volume)}</span> : null}
+          {partName(id, doc.features)} {Number.isFinite(b.volume) ? <span className="muted">· {fmt(b.volume)}</span> : null}
+          {Number.isFinite(b.volume) ? (
+            // The material (or the offer to pick one) opens the picker.
+            // A span, not a button: a button is cut off whole when the name does not fit.
+            <span
+              className="link-btn muted"
+              role="button"
+              tabIndex={0}
+              title={t("Material…")}
+              onClick={(e) => (e.stopPropagation(), pickMaterial(id))}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), e.stopPropagation(), pickMaterial(id))}
+            >
+              {partMaterial(doc, id) ? massText(id, b.volume) : ` · ${t("No material")}`}
+            </span>
+          ) : null}
           {meshParts.has(id) ? (
             <span className="part-badge" title={meshHint(hasPack("scan"))}>
               {t("Mesh")}

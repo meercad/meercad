@@ -1121,3 +1121,7 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .tl-actions { display: flex; gap: 2px; margin-top: 3px; }
 .tl-actions .icon-btn { width: 24px; height: 24px; }
 .tl-pill .tl-actions .icon-btn { color: #fff; }
+
+/* Text that opens something (the material in the parts list): looks like the text around it. */
+.link-btn { display: inline; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.link-btn:hover { text-decoration: underline dotted; text-underline-offset: 2px; color: var(--text); }

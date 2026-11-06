@@ -1597,12 +1597,26 @@ export class Viewport {
   private bindHandles(): void {
     const el = this.renderer.domElement;
     let grab = 0;
+    // A plain click (not on an arrow): the arrow that appears where it selected a face must not
+    // catch the second click of a double-click there, which selects the whole part.
+    let lastClick: { at: number; x: number; y: number } | null = null;
+    let grabbed = false;
+    el.addEventListener(
+      "pointerup",
+      (e) => {
+        lastClick = !grabbed && e.button === 0 ? { at: performance.now(), x: e.clientX, y: e.clientY } : null;
+        grabbed = false;
+      },
+      { capture: true },
+    );
     el.addEventListener(
       "pointerdown",
       (e) => {
         if (e.button !== 0 || (e.pointerType === "touch" && this.penSeen)) return;
         const h = this.hitHandle(e.clientX, e.clientY, e.pointerType === "touch" ? 30 : 18);
         if (!h) return;
+        if (lastClick && performance.now() - lastClick.at < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 6) return;
+        grabbed = true;
         e.stopImmediatePropagation();
         e.preventDefault();
         el.setPointerCapture(e.pointerId);

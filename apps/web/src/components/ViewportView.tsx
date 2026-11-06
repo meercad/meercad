@@ -511,10 +511,10 @@ export function ViewportView() {
       const now = performance.now();
       const prev = lastClick;
       lastClick = { at: now, x: e.clientX, y: e.clientY, body: pick?.kind === "face" ? pick.bodyId : null };
-      if (prev && pick?.kind === "face" && prev.body === pick.bodyId && now - prev.at < DOUBLE_MS && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 6 && !useApp.getState().dialog && !useApp.getState().measure.active && !useTerrainDraw.getState().kind) {
+      if (prev?.body && (!pick || pick.kind === "face") && now - prev.at < DOUBLE_MS && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 6 && !useApp.getState().dialog && !useApp.getState().measure.active && !useTerrainDraw.getState().kind) {
         lastClick = null;
         doubleDone = now;
-        return selectParts([pick.bodyId], e.shiftKey || e.metaKey || e.ctrlKey, true);
+        return selectParts([prev.body], e.shiftKey || e.metaKey || e.ctrlKey, true);
       }
       onClick(pick, e.shiftKey || e.metaKey || e.ctrlKey || e.pointerType === "pen", [e.clientX, e.clientY]);
     };
@@ -525,7 +525,7 @@ export function ViewportView() {
       if (useApp.getState().sketchId || useApp.getState().dialog) return;
       const pick = vp.pick(e.clientX, e.clientY, DEFAULT_KINDS);
       // Double-clicking a face selects its whole part; other entities open their feature.
-      if (pick?.kind === "face") return selectParts([pick.bodyId], e.shiftKey || e.metaKey || e.ctrlKey);
+      if (pick?.kind === "face") return selectParts([pick.bodyId], e.shiftKey || e.metaKey || e.ctrlKey, true);
       const fid = pick ? featureOfPick(pick) : null;
       if (fid) editFeature(fid);
     };

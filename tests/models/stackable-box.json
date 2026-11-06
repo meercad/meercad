@@ -1,0 +1,1562 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "width": "220 mm",
+  "depth": "150 mm",
+  "height": "100 mm",
+  "wall": "2.4 mm",
+  "corner": "14 mm",
+  "foot": "5 mm",
+  "clearance": "0.4 mm",
+  "handle_len": "depth * 0.5",
+  "handle_h": "24 mm",
+  "handle_drop": "lip_h + frame + handle_h / 2 + 1 mm",
+  "rib": "0.8 mm",
+  "spacing": "4 mm",
+  "band": "1 mm",
+  "lip_h": "4 mm",
+  "plinth_h": "6 mm",
+  "frame": "5 mm"
+ },
+ "features": [
+  {
+   "id": "pl1",
+   "op": "plane",
+   "name": "Top of foot",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": "foot"
+  },
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "name": "Footprint",
+   "plane": {
+    "ref": "pl1"
+   },
+   "entities": [
+    {
+     "id": "p1",
+     "type": "point",
+     "x": -110,
+     "y": -75
+    },
+    {
+     "id": "p2",
+     "type": "point",
+     "x": 110,
+     "y": -75
+    },
+    {
+     "id": "p3",
+     "type": "point",
+     "x": 110,
+     "y": 75
+    },
+    {
+     "id": "p4",
+     "type": "point",
+     "x": -110,
+     "y": 75
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "p2",
+     "p2": "p3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "p3",
+     "p2": "p4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "p4",
+     "p2": "p1"
+    },
+    {
+     "id": "d1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p3",
+     "construction": true
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "c2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "c3",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "c4",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "c5",
+     "type": "length",
+     "line": "l1",
+     "value": "width"
+    },
+    {
+     "id": "c6",
+     "type": "length",
+     "line": "l2",
+     "value": "depth"
+    },
+    {
+     "id": "c7",
+     "type": "midpoint",
+     "point": "origin",
+     "line": "d1"
+    }
+   ]
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Box",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": "height - foot",
+   "mode": "new_body"
+  },
+  {
+   "id": "fi1",
+   "op": "fillet",
+   "name": "Round corners",
+   "edges": [
+    {
+     "edge": [
+      "ex1.side[sk1.l1]",
+      "ex1.side[sk1.l2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.l2]",
+      "ex1.side[sk1.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.l3]",
+      "ex1.side[sk1.l4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.l1]",
+      "ex1.side[sk1.l4]"
+     ]
+    }
+   ],
+   "radius": "corner"
+  },
+  {
+   "id": "ch1",
+   "op": "chamfer",
+   "name": "Stacking slope",
+   "edges": {
+    "select": "edges",
+    "of": "ex1",
+    "where": {
+     "face": "start_cap"
+    }
+   },
+   "distance": "wall + clearance"
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "name": "Foot",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "p1",
+     "type": "point",
+     "x": -107,
+     "y": -72
+    },
+    {
+     "id": "p2",
+     "type": "point",
+     "x": 107,
+     "y": -72
+    },
+    {
+     "id": "p3",
+     "type": "point",
+     "x": 107,
+     "y": 72
+    },
+    {
+     "id": "p4",
+     "type": "point",
+     "x": -107,
+     "y": 72
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "p2",
+     "p2": "p3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "p3",
+     "p2": "p4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "p4",
+     "p2": "p1"
+    },
+    {
+     "id": "d1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p3",
+     "construction": true
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "c2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "c3",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "c4",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "c5",
+     "type": "length",
+     "line": "l1",
+     "value": "width - 2 * (wall + clearance)"
+    },
+    {
+     "id": "c6",
+     "type": "length",
+     "line": "l2",
+     "value": "depth - 2 * (wall + clearance)"
+    },
+    {
+     "id": "c7",
+     "type": "midpoint",
+     "point": "origin",
+     "line": "d1"
+    }
+   ]
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Foot",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": "foot + 1 mm",
+   "mode": "new_body"
+  },
+  {
+   "id": "fi2",
+   "op": "fillet",
+   "name": "Foot corners",
+   "edges": [
+    {
+     "edge": [
+      "ex2.side[sk2.l1]",
+      "ex2.side[sk2.l2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex2.side[sk2.l2]",
+      "ex2.side[sk2.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex2.side[sk2.l3]",
+      "ex2.side[sk2.l4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex2.side[sk2.l1]",
+      "ex2.side[sk2.l4]"
+     ]
+    }
+   ],
+   "radius": "corner - wall - clearance"
+  },
+  {
+   "id": "bo1",
+   "op": "boolean",
+   "name": "Box with foot",
+   "operation": "union",
+   "target": "ex1",
+   "tools": [
+    "ex2"
+   ]
+  },
+  {
+   "id": "sh1",
+   "op": "shell",
+   "name": "Hollow",
+   "faces": [
+    {
+     "face": "ex1.end_cap"
+    }
+   ],
+   "thickness": "wall"
+  },
+  {
+   "id": "pl2",
+   "op": "plane",
+   "name": "Rim",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": "height - lip_h"
+  },
+  {
+   "id": "sk5",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl2"
+   },
+   "entities": [
+    {
+     "id": "p1",
+     "type": "point",
+     "x": -100,
+     "y": -70
+    },
+    {
+     "id": "p2",
+     "type": "point",
+     "x": 100,
+     "y": -70
+    },
+    {
+     "id": "p3",
+     "type": "point",
+     "x": 100,
+     "y": 70
+    },
+    {
+     "id": "p4",
+     "type": "point",
+     "x": -100,
+     "y": 70
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "p2",
+     "p2": "p3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "p3",
+     "p2": "p4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "p4",
+     "p2": "p1"
+    },
+    {
+     "id": "d1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p3",
+     "construction": true
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "c2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "c3",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "c4",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "c5",
+     "type": "length",
+     "line": "l1",
+     "value": "width + 2 * band"
+    },
+    {
+     "id": "c6",
+     "type": "length",
+     "line": "l2",
+     "value": "depth + 2 * band"
+    },
+    {
+     "id": "c7",
+     "type": "midpoint",
+     "point": "origin",
+     "line": "d1"
+    }
+   ]
+  },
+  {
+   "id": "ex5",
+   "op": "extrude",
+   "name": "Rim outside",
+   "profile": {
+    "sketch": "sk5"
+   },
+   "extent": "blind",
+   "distance": "lip_h",
+   "mode": "new_body"
+  },
+  {
+   "id": "fi5",
+   "op": "fillet",
+   "edges": [
+    {
+     "edge": [
+      "ex5.side[sk5.l1]",
+      "ex5.side[sk5.l2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex5.side[sk5.l2]",
+      "ex5.side[sk5.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex5.side[sk5.l3]",
+      "ex5.side[sk5.l4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex5.side[sk5.l1]",
+      "ex5.side[sk5.l4]"
+     ]
+    }
+   ],
+   "radius": "corner + band"
+  },
+  {
+   "id": "sk6",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl2"
+   },
+   "entities": [
+    {
+     "id": "p1",
+     "type": "point",
+     "x": -100,
+     "y": -70
+    },
+    {
+     "id": "p2",
+     "type": "point",
+     "x": 100,
+     "y": -70
+    },
+    {
+     "id": "p3",
+     "type": "point",
+     "x": 100,
+     "y": 70
+    },
+    {
+     "id": "p4",
+     "type": "point",
+     "x": -100,
+     "y": 70
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "p2",
+     "p2": "p3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "p3",
+     "p2": "p4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "p4",
+     "p2": "p1"
+    },
+    {
+     "id": "d1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p3",
+     "construction": true
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "c2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "c3",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "c4",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "c5",
+     "type": "length",
+     "line": "l1",
+     "value": "width - 2 * wall"
+    },
+    {
+     "id": "c6",
+     "type": "length",
+     "line": "l2",
+     "value": "depth - 2 * wall"
+    },
+    {
+     "id": "c7",
+     "type": "midpoint",
+     "point": "origin",
+     "line": "d1"
+    }
+   ]
+  },
+  {
+   "id": "ex6",
+   "op": "extrude",
+   "name": "Rim inside",
+   "profile": {
+    "sketch": "sk6"
+   },
+   "extent": "blind",
+   "distance": "lip_h + 1 mm",
+   "mode": "new_body"
+  },
+  {
+   "id": "fi6",
+   "op": "fillet",
+   "edges": [
+    {
+     "edge": [
+      "ex6.side[sk6.l1]",
+      "ex6.side[sk6.l2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex6.side[sk6.l2]",
+      "ex6.side[sk6.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex6.side[sk6.l3]",
+      "ex6.side[sk6.l4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex6.side[sk6.l1]",
+      "ex6.side[sk6.l4]"
+     ]
+    }
+   ],
+   "radius": "corner - wall"
+  },
+  {
+   "id": "bo3",
+   "op": "boolean",
+   "name": "Rim ring",
+   "operation": "subtract",
+   "target": "ex5",
+   "tools": [
+    "ex6"
+   ]
+  },
+  {
+   "id": "bo4",
+   "op": "boolean",
+   "name": "Box with rim",
+   "operation": "union",
+   "target": "ex1",
+   "tools": [
+    "ex5"
+   ]
+  },
+  {
+   "id": "pl3",
+   "op": "plane",
+   "name": "Plinth",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": "foot + wall + clearance"
+  },
+  {
+   "id": "sk7",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl3"
+   },
+   "entities": [
+    {
+     "id": "p1",
+     "type": "point",
+     "x": -100,
+     "y": -70
+    },
+    {
+     "id": "p2",
+     "type": "point",
+     "x": 100,
+     "y": -70
+    },
+    {
+     "id": "p3",
+     "type": "point",
+     "x": 100,
+     "y": 70
+    },
+    {
+     "id": "p4",
+     "type": "point",
+     "x": -100,
+     "y": 70
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "p2",
+     "p2": "p3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "p3",
+     "p2": "p4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "p4",
+     "p2": "p1"
+    },
+    {
+     "id": "d1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p3",
+     "construction": true
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "c2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "c3",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "c4",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "c5",
+     "type": "length",
+     "line": "l1",
+     "value": "width + 2 * band"
+    },
+    {
+     "id": "c6",
+     "type": "length",
+     "line": "l2",
+     "value": "depth + 2 * band"
+    },
+    {
+     "id": "c7",
+     "type": "midpoint",
+     "point": "origin",
+     "line": "d1"
+    }
+   ]
+  },
+  {
+   "id": "ex7",
+   "op": "extrude",
+   "name": "Plinth outside",
+   "profile": {
+    "sketch": "sk7"
+   },
+   "extent": "blind",
+   "distance": "plinth_h",
+   "mode": "new_body"
+  },
+  {
+   "id": "fi7",
+   "op": "fillet",
+   "edges": [
+    {
+     "edge": [
+      "ex7.side[sk7.l1]",
+      "ex7.side[sk7.l2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex7.side[sk7.l2]",
+      "ex7.side[sk7.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex7.side[sk7.l3]",
+      "ex7.side[sk7.l4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex7.side[sk7.l1]",
+      "ex7.side[sk7.l4]"
+     ]
+    }
+   ],
+   "radius": "corner + band"
+  },
+  {
+   "id": "sk8",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl3"
+   },
+   "entities": [
+    {
+     "id": "p1",
+     "type": "point",
+     "x": -100,
+     "y": -70
+    },
+    {
+     "id": "p2",
+     "type": "point",
+     "x": 100,
+     "y": -70
+    },
+    {
+     "id": "p3",
+     "type": "point",
+     "x": 100,
+     "y": 70
+    },
+    {
+     "id": "p4",
+     "type": "point",
+     "x": -100,
+     "y": 70
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "p2",
+     "p2": "p3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "p3",
+     "p2": "p4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "p4",
+     "p2": "p1"
+    },
+    {
+     "id": "d1",
+     "type": "line",
+     "p1": "p1",
+     "p2": "p3",
+     "construction": true
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "c2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "c3",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "c4",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "c5",
+     "type": "length",
+     "line": "l1",
+     "value": "width - 2 * wall"
+    },
+    {
+     "id": "c6",
+     "type": "length",
+     "line": "l2",
+     "value": "depth - 2 * wall"
+    },
+    {
+     "id": "c7",
+     "type": "midpoint",
+     "point": "origin",
+     "line": "d1"
+    }
+   ]
+  },
+  {
+   "id": "ex8",
+   "op": "extrude",
+   "name": "Plinth inside",
+   "profile": {
+    "sketch": "sk8"
+   },
+   "extent": "blind",
+   "distance": "plinth_h",
+   "mode": "new_body"
+  },
+  {
+   "id": "fi8",
+   "op": "fillet",
+   "edges": [
+    {
+     "edge": [
+      "ex8.side[sk8.l1]",
+      "ex8.side[sk8.l2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex8.side[sk8.l2]",
+      "ex8.side[sk8.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex8.side[sk8.l3]",
+      "ex8.side[sk8.l4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex8.side[sk8.l1]",
+      "ex8.side[sk8.l4]"
+     ]
+    }
+   ],
+   "radius": "corner - wall"
+  },
+  {
+   "id": "bo5",
+   "op": "boolean",
+   "name": "Plinth ring",
+   "operation": "subtract",
+   "target": "ex7",
+   "tools": [
+    "ex8"
+   ]
+  },
+  {
+   "id": "ch2",
+   "op": "chamfer",
+   "name": "Plinth slope",
+   "edges": [
+    {
+     "edge": [
+      "ex7.start_cap",
+      "ex7.side[*]"
+     ]
+    },
+    {
+     "edge": [
+      "ex7.start_cap",
+      "fi7.round[*]"
+     ]
+    }
+   ],
+   "distance": "band * 0.9"
+  },
+  {
+   "id": "bo6",
+   "op": "boolean",
+   "name": "Box with plinth",
+   "operation": "union",
+   "target": "ex1",
+   "tools": [
+    "ex7"
+   ]
+  },
+  {
+   "id": "pl4",
+   "op": "plane",
+   "name": "Handle frame right",
+   "base": {
+    "ref": "origin.YZ"
+   },
+   "offset": "width / 2 - wall"
+  },
+  {
+   "id": "sk9",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl4"
+   },
+   "entities": [
+    {
+     "id": "c1",
+     "type": "point",
+     "x": -28,
+     "y": 78
+    },
+    {
+     "id": "c2",
+     "type": "point",
+     "x": 28,
+     "y": 78
+    },
+    {
+     "id": "tl",
+     "type": "point",
+     "x": -28,
+     "y": 95
+    },
+    {
+     "id": "tr",
+     "type": "point",
+     "x": 28,
+     "y": 95
+    },
+    {
+     "id": "bl",
+     "type": "point",
+     "x": -28,
+     "y": 61
+    },
+    {
+     "id": "br",
+     "type": "point",
+     "x": 28,
+     "y": 61
+    },
+    {
+     "id": "lt",
+     "type": "line",
+     "p1": "tr",
+     "p2": "tl"
+    },
+    {
+     "id": "lb",
+     "type": "line",
+     "p1": "bl",
+     "p2": "br"
+    },
+    {
+     "id": "a1",
+     "type": "arc",
+     "center": "c2",
+     "start": "br",
+     "end": "tr"
+    },
+    {
+     "id": "a2",
+     "type": "arc",
+     "center": "c1",
+     "start": "tl",
+     "end": "bl"
+    }
+   ],
+   "constraints": [
+    {
+     "id": "k1",
+     "type": "horizontal",
+     "line": "lt"
+    },
+    {
+     "id": "k3",
+     "type": "tangent",
+     "a": "a1",
+     "b": "lt"
+    },
+    {
+     "id": "k4",
+     "type": "tangent",
+     "a": "a1",
+     "b": "lb"
+    },
+    {
+     "id": "k5",
+     "type": "tangent",
+     "a": "a2",
+     "b": "lt"
+    },
+    {
+     "id": "k6",
+     "type": "tangent",
+     "a": "a2",
+     "b": "lb"
+    },
+    {
+     "id": "k7",
+     "type": "radius",
+     "curve": "a1",
+     "value": "(handle_h + 2 * frame) / 2"
+    },
+    {
+     "id": "k9",
+     "type": "distance",
+     "a": "c1",
+     "b": "c2",
+     "axis": "x",
+     "value": "handle_len - handle_h"
+    },
+    {
+     "id": "k10",
+     "type": "symmetric",
+     "a": "c1",
+     "b": "c2",
+     "axis": "origin.y"
+    },
+    {
+     "id": "k11",
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "y",
+     "value": "height - handle_drop"
+    }
+   ]
+  },
+  {
+   "id": "ex9",
+   "op": "extrude",
+   "name": "Handle frame right",
+   "profile": {
+    "sketch": "sk9"
+   },
+   "extent": "blind",
+   "distance": "wall + band",
+   "mode": "join",
+   "targets": [
+    "ex1"
+   ]
+  },
+  {
+   "id": "pl5",
+   "op": "plane",
+   "name": "Handle frame left",
+   "base": {
+    "ref": "origin.YZ"
+   },
+   "offset": "-width / 2 - band"
+  },
+  {
+   "id": "sk10",
+   "op": "sketch",
+   "plane": {
+    "ref": "pl5"
+   },
+   "entities": [
+    {
+     "id": "c1",
+     "type": "point",
+     "x": -28,
+     "y": 78
+    },
+    {
+     "id": "c2",
+     "type": "point",
+     "x": 28,
+     "y": 78
+    },
+    {
+     "id": "tl",
+     "type": "point",
+     "x": -28,
+     "y": 95
+    },
+    {
+     "id": "tr",
+     "type": "point",
+     "x": 28,
+     "y": 95
+    },
+    {
+     "id": "bl",
+     "type": "point",
+     "x": -28,
+     "y": 61
+    },
+    {
+     "id": "br",
+     "type": "point",
+     "x": 28,
+     "y": 61
+    },
+    {
+     "id": "lt",
+     "type": "line",
+     "p1": "tr",
+     "p2": "tl"
+    },
+    {
+     "id": "lb",
+     "type": "line",
+     "p1": "bl",
+     "p2": "br"
+    },
+    {
+     "id": "a1",
+     "type": "arc",
+     "center": "c2",
+     "start": "br",
+     "end": "tr"
+    },
+    {
+     "id": "a2",
+     "type": "arc",
+     "center": "c1",
+     "start": "tl",
+     "end": "bl"
+    }
+   ],
+   "constraints": [
+    {
+     "id": "k1",
+     "type": "horizontal",
+     "line": "lt"
+    },
+    {
+     "id": "k3",
+     "type": "tangent",
+     "a": "a1",
+     "b": "lt"
+    },
+    {
+     "id": "k4",
+     "type": "tangent",
+     "a": "a1",
+     "b": "lb"
+    },
+    {
+     "id": "k5",
+     "type": "tangent",
+     "a": "a2",
+     "b": "lt"
+    },
+    {
+     "id": "k6",
+     "type": "tangent",
+     "a": "a2",
+     "b": "lb"
+    },
+    {
+     "id": "k7",
+     "type": "radius",
+     "curve": "a1",
+     "value": "(handle_h + 2 * frame) / 2"
+    },
+    {
+     "id": "k9",
+     "type": "distance",
+     "a": "c1",
+     "b": "c2",
+     "axis": "x",
+     "value": "handle_len - handle_h"
+    },
+    {
+     "id": "k10",
+     "type": "symmetric",
+     "a": "c1",
+     "b": "c2",
+     "axis": "origin.y"
+    },
+    {
+     "id": "k11",
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "y",
+     "value": "height - handle_drop"
+    }
+   ]
+  },
+  {
+   "id": "ex10",
+   "op": "extrude",
+   "name": "Handle frame left",
+   "profile": {
+    "sketch": "sk10"
+   },
+   "extent": "blind",
+   "distance": "wall + band",
+   "mode": "join",
+   "targets": [
+    "ex1"
+   ]
+  },
+  {
+   "id": "sk3",
+   "op": "sketch",
+   "name": "Handle",
+   "plane": {
+    "ref": "origin.YZ"
+   },
+   "entities": [
+    {
+     "id": "c1",
+     "type": "point",
+     "x": -28,
+     "y": 78
+    },
+    {
+     "id": "c2",
+     "type": "point",
+     "x": 28,
+     "y": 78
+    },
+    {
+     "id": "tl",
+     "type": "point",
+     "x": -28,
+     "y": 90
+    },
+    {
+     "id": "tr",
+     "type": "point",
+     "x": 28,
+     "y": 90
+    },
+    {
+     "id": "bl",
+     "type": "point",
+     "x": -28,
+     "y": 66
+    },
+    {
+     "id": "br",
+     "type": "point",
+     "x": 28,
+     "y": 66
+    },
+    {
+     "id": "lt",
+     "type": "line",
+     "p1": "tr",
+     "p2": "tl"
+    },
+    {
+     "id": "lb",
+     "type": "line",
+     "p1": "bl",
+     "p2": "br"
+    },
+    {
+     "id": "a1",
+     "type": "arc",
+     "center": "c2",
+     "start": "br",
+     "end": "tr"
+    },
+    {
+     "id": "a2",
+     "type": "arc",
+     "center": "c1",
+     "start": "tl",
+     "end": "bl"
+    }
+   ],
+   "constraints": [
+    {
+     "id": "k1",
+     "type": "horizontal",
+     "line": "lt"
+    },
+    {
+     "id": "k3",
+     "type": "tangent",
+     "a": "a1",
+     "b": "lt"
+    },
+    {
+     "id": "k4",
+     "type": "tangent",
+     "a": "a1",
+     "b": "lb"
+    },
+    {
+     "id": "k5",
+     "type": "tangent",
+     "a": "a2",
+     "b": "lt"
+    },
+    {
+     "id": "k6",
+     "type": "tangent",
+     "a": "a2",
+     "b": "lb"
+    },
+    {
+     "id": "k7",
+     "type": "radius",
+     "curve": "a1",
+     "value": "handle_h / 2"
+    },
+    {
+     "id": "k9",
+     "type": "distance",
+     "a": "c1",
+     "b": "c2",
+     "axis": "x",
+     "value": "handle_len - handle_h"
+    },
+    {
+     "id": "k10",
+     "type": "symmetric",
+     "a": "c1",
+     "b": "c2",
+     "axis": "origin.y"
+    },
+    {
+     "id": "k11",
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "y",
+     "value": "height - handle_drop"
+    }
+   ]
+  },
+  {
+   "id": "ex3",
+   "op": "extrude",
+   "name": "Handle cut-outs",
+   "profile": {
+    "sketch": "sk3"
+   },
+   "extent": "symmetric",
+   "distance": "width + 10 mm",
+   "mode": "cut",
+   "targets": [
+    "ex1"
+   ]
+  },
+  {
+   "id": "fi11",
+   "op": "fillet",
+   "name": "Rim round",
+   "edges": {
+    "select": "edges",
+    "of": "ex5",
+    "where": {
+     "face": "end_cap"
+    }
+   },
+   "radius": "1.2 mm"
+  },
+  {
+   "id": "fi12",
+   "op": "fillet",
+   "name": "Frame edge",
+   "edges": [
+    {
+     "edge": [
+      "ex9.end_cap",
+      "ex9.side[*]"
+     ]
+    },
+    {
+     "edge": [
+      "ex10.start_cap",
+      "ex10.side[*]"
+     ]
+    }
+   ],
+   "radius": "0.8 mm",
+   "suppressed": false
+  },
+  {
+   "id": "fi13",
+   "op": "fillet",
+   "name": "Handle edges",
+   "edges": [
+    {
+     "edge": [
+      "ex9.end_cap",
+      "ex3.side[*]"
+     ]
+    },
+    {
+     "edge": [
+      "ex10.start_cap",
+      "ex3.side[*]"
+     ]
+    }
+   ],
+   "radius": "1.2 mm"
+  },
+  {
+   "id": "st1",
+   "op": "texture",
+   "name": "Ribs",
+   "faces": [
+    {
+     "face": "ex1.side[*]"
+    },
+    {
+     "face": "fi1.round[*]"
+    }
+   ],
+   "pattern": "ribs",
+   "depth": "rib",
+   "pitch": "spacing",
+   "suppressed": false,
+   "fade": "0.5 mm"
+  }
+ ],
+ "rollback": null,
+ "materials": [
+  {
+   "id": "anthrazit",
+   "name": "PLA matt anthrazit",
+   "base": "plamatte",
+   "color": "#3a3b3d"
+  }
+ ],
+ "partMaterials": {
+  "ex1": "anthrazit"
+ }
+}

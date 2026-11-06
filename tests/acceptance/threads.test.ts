@@ -8,13 +8,15 @@ describe("multi-threaded OCCT build", () => {
     const mt = new KernelSession(await loadOcct(undefined, true), await getSolver());
     const st = await newSession();
     for (const ex of EXAMPLES.filter((e) => !e.url)) {
-      const a = st.rebuild(ex.doc).report.bodies[0]!;
-      const b = mt.rebuild(ex.doc).report.bodies[0]!;
+      // Only the solids are compared: meshing (surface textures above all) would just cost time.
+      const a = st.rebuild(ex.doc, { mesh: false }).report.bodies[0]!;
+      const b = mt.rebuild(ex.doc, { mesh: false }).report.bodies[0]!;
       expect(b.faces, ex.name).toBe(a.faces);
       expect(b.edges, ex.name).toBe(a.edges);
       // Relative: the larger examples differ in the last digits between the builds.
       expect(Math.abs(b.volume - a.volume) / a.volume, ex.name).toBeLessThan(1e-8);
       expect(Math.abs(b.area - a.area) / a.area, ex.name).toBeLessThan(1e-8);
     }
-  });
+    // Every example twice: about a minute here, twice that on the CI machines.
+  }, 360_000);
 });

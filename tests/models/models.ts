@@ -8,6 +8,7 @@ import { GEAR_DEFAULTS, gearShape, outlineArea, type GearParams } from "@meercad
 import type { Feature, GearFeature, MeercadDocument, SketchEntity } from "@meercad/schema";
 import { circle, rect, sketch } from "../acceptance/helpers.js";
 import { cornerEdit, offsetCurves, splinePoints, type SketchData, type Vec2 } from "@meercad/sketch";
+import { readFileSync } from "node:fs";
 
 export interface Expectation {
   bodies: number;
@@ -668,5 +669,55 @@ export const MODELS: TestModel[] = [
       { id: "of3", op: "offset_face", name: "Longer", faces: [{ face: "ex1.side[sk1.l2]" }], distance: 0, upTo: { ref: "pl1" } },
     ]),
     expect: { bodies: 1, volume: 50 * 20 * 14 - PI * 3.9 ** 2 * 14, size: [50, 20, 14] },
+  },
+  {
+    file: "36 Gerippte Box",
+    name: "Ribbed storage box (surface texture)",
+    look: "An open 80 × 60 × 50 box, 2 mm walls, round upright corners (r 8), with round vertical ribs 0.8 mm high every 4 mm on its walls and corners. The ribs are a finish: the volume is the smooth box's.",
+    doc: doc(
+      [
+        sketch("sk1", { ref: "origin.XY" }, rect("l", -40, -30, 80, 60)),
+        { id: "ex1", op: "extrude", name: "Box", profile: { sketch: "sk1" }, extent: "blind", distance: 50, mode: "new_body" },
+        { id: "fi1", op: "fillet", name: "Round corners", edges: ["l1|l2", "l2|l3", "l3|l4", "l4|l1"].map((p) => ({ edge: p.split("|").map((c) => `ex1.side[sk1.${c}]`) as [string, string] })), radius: 8 },
+        { id: "sh1", op: "shell", name: "Hollow", faces: [{ face: "ex1.end_cap" }], thickness: 2 },
+        { id: "st1", op: "texture", name: "Ribs", faces: [{ face: "ex1.side[*]" }, { face: "fi1.round[*]" }], pattern: "ribs", depth: 0.8, pitch: 4 },
+      ],
+    ),
+    // Outside minus inside: rounded rectangles (corner r 8 outside, 6 inside), floor 2 mm.
+    expect: { bodies: 1, volume: (80 * 60 - (4 - PI) * 64) * 50 - (76 * 56 - (4 - PI) * 36) * 48, size: [80, 60, 50] },
+  },
+  {
+    file: "37 Gebogener Streifen",
+    name: "Strip bent through 90°",
+    look: "A 100 × 10 × 2 strip bent round the Y axis through 90°: one leg flat, the bend round, the far end pointing up. Bending keeps its volume.",
+    doc: doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("l", 0, -5, 100, 10)),
+      { id: "ex1", op: "extrude", name: "Strip", profile: { sketch: "sk1" }, extent: "blind", distance: 2, mode: "new_body" },
+      { id: "bd1", op: "bend", name: "Bend", bodies: ["ex1"], mode: "bend", axis: { ref: "origin.Y" }, angle: 90 },
+    ]),
+    expect: { bodies: 1, volume: [100 * 10 * 2 * 0.99, 100 * 10 * 2 * 1.01] },
+  },
+  {
+    file: "38 Gridfinity-Box mit Etikett",
+    name: "Gridfinity bin with a label",
+    look: "A 2 × 1 Gridfinity bin, 3 units (21 mm) plus lip, with a divider, a finger scoop and a label tab; on the tab a raised label with a screw symbol and M3×10. The bin is 83.5 × 41.5 mm.",
+    doc: doc([
+      { id: "gf1", op: "gridfinity", name: "Bin", kind: "bin", units: [2, 1], height: 3, dividers: [1, 0], scoop: 6, tab: {} },
+      { id: "lb1", op: "label", name: "Label", plane: { face: { face: "gf1.tab" } }, position: [-20.8, -8.6], text: "M3×10", symbol: "screw_socket" },
+    ]),
+    // The label is a part of its own (printed on the tab, or in another colour).
+    expect: { bodies: 2, size: [83.5, 41.5, 25.4] },
+  },
+  {
+    file: "39 Stapelbox",
+    name: "Stackable ribbed box",
+    look: "A 220 × 150 × 100 box like a shop storage box: round rim bead on top, smooth plinth band at the bottom, framed handle slots on the short ends, round ribs between. Its foot fits into the box below with 0.4 mm play and a 45° slope; three sizes as variants.",
+    doc: JSON.parse(readFileSync(new URL("./stackable-box.json", import.meta.url), "utf8")) as MeercadDocument,
+    // Volume measured once (walls, bead, plinth, frames), kept as a check that nothing moves.
+    expect: { bodies: 1, volume: 241834, size: [222, 152, 100] },
+    variants: [
+      { params: { width: "150 mm", depth: "100 mm", height: "70 mm", corner: "10 mm", handle_h: "20 mm" }, expect: { bodies: 1, size: [152, 102, 70] } },
+      { params: { width: "250 mm", depth: "180 mm", height: "140 mm", corner: "16 mm" }, expect: { bodies: 1, size: [252, 182, 140] } },
+    ],
   },
 ];

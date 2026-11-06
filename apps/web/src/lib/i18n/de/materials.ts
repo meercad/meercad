@@ -1,4 +1,4 @@
-/** German texts: materials, the material picker, the rendered view. See ../GLOSSARY.md (material = Werkstoff). */
+/** German texts: materials, the material picker, the rendered view. See ../GLOSSARY.md (material = Material). */
 export default {
   // Material names new in the library (packages/model MATERIALS; the older ones are in workspace.ts)
   "PLA matte": "PLA matt",
@@ -41,24 +41,24 @@ export default {
   "Resin printer": "Harzdrucker",
 
   // MaterialPicker.tsx
-  "Your materials": "Deine Werkstoffe",
+  "Your materials": "Deine Materialien",
   Filament: "Filament",
   Resin: "Harz",
   "Metal, wood and more": "Metall, Holz und mehr",
   "My {material}": "Mein {material}",
-  "Search materials": "Werkstoffe suchen",
-  "New material": "Neuer Werkstoff",
+  "Search materials": "Materialien suchen",
+  "New material": "Neues Material",
   "own name and colour": "eigener Name und Farbe",
-  "Edit material": "Werkstoff bearbeiten",
+  "Edit material": "Material bearbeiten",
   "Based on": "Basiert auf",
   "Density (g/cm³)": "Dichte (g/cm³)",
   Save: "Speichern",
   "Create and use": "Anlegen und verwenden",
   "Based on {material}": "Basiert auf {material}",
   "{mass} for {parts} (solid)": "{mass} für {parts} (massiv)",
-  "Own material from this": "Eigener Werkstoff daraus",
-  "The parts have different materials. Pick one to give them all the same.": "Die Teile haben verschiedene Werkstoffe. Wähl einen, um allen denselben zu geben.",
-  "Pick a material: the parts get its look, their mass, and the right filament in 3MF exports.": "Wähl einen Werkstoff: Die Teile bekommen sein Aussehen, ihre Masse und im 3MF-Export das passende Filament.",
+  "Own material from this": "Eigenes Material daraus",
+  "The parts have different materials. Pick one to give them all the same.": "Die Teile haben verschiedene Materialien. Wähl eines, um allen dasselbe zu geben.",
+  "Pick a material: the parts get its look, their mass, and the right filament in 3MF exports.": "Wähl ein Material: Die Teile bekommen sein Aussehen, ihre Masse und im 3MF-Export das passende Filament.",
 
   // RenderBar.tsx, ViewportView.tsx
   Rendered: "Gerendert",
@@ -80,27 +80,27 @@ export default {
 
   // ViewportView.tsx (measure)
   "{v} cm³": "{v} cm³",
-  "no material, so no mass": "kein Werkstoff, daher keine Masse",
+  "no material, so no mass": "kein Material, daher keine Masse",
 
   // io.ts
   "PNG picture": "PNG-Bild",
   "Filament {n}: {material} {color}": "Filament {n}: {material} {color}",
-  "any material": "beliebiger Werkstoff",
+  "any material": "beliebiges Material",
   "{n} filaments assigned": "{n} Filamente zugeordnet",
   "Load these filaments in the slicer in this order; each part is already assigned to its filament.": "Leg diese Filamente im Slicer in dieser Reihenfolge ein; jedes Teil ist seinem Filament schon zugeordnet.",
 
   // Help.tsx
-  "Materials and rendered pictures": "Werkstoffe und gerenderte Bilder",
+  "Materials and rendered pictures": "Materialien und gerenderte Bilder",
   "Give parts a material: right-click (or long-press) a part in the view or the parts list → **Material…**. Select several parts first to give them all the same one. Search by name, or browse filaments, resins, metals and wood.":
-    "Teilen einen Werkstoff geben: Rechtsklick (oder lang drücken) auf ein Teil in der Ansicht oder der Teileliste → **Werkstoff …**. Wähl vorher mehrere Teile aus, um allen denselben zu geben. Such nach dem Namen oder stöbere in Filamenten, Harzen, Metallen und Holz.",
+    "Teilen ein Material geben: Rechtsklick (oder lang drücken) auf ein Teil in der Ansicht oder der Teileliste → **Material …**. Wähl vorher mehrere Teile aus, um allen dasselbe zu geben. Such nach dem Namen oder stöbere in Filamenten, Harzen, Metallen und Holz.",
   "A material sets the part's finish (matte, glossy, silk, rubbery, metal), its mass (shown in the parts list, solid at 100 % infill) and its print data: nozzle and bed temperature, hardness of flexible ones. Carbon, wood and metal bring their own colour; plastics keep the part's colour.":
-    "Ein Werkstoff bestimmt die Oberfläche des Teils (matt, glänzend, Seide, gummiartig, Metall), seine Masse (in der Teileliste, massiv bei 100 % Füllung) und seine Druckdaten: Düsen- und Betttemperatur, bei flexiblen die Härte. Kohlefaser, Holz und Metall bringen ihre eigene Farbe mit; Kunststoffe behalten die Farbe des Teils.",
+    "Ein Material bestimmt die Oberfläche des Teils (matt, glänzend, Seide, gummiartig, Metall), seine Masse (in der Teileliste, massiv bei 100 % Füllung) und seine Druckdaten: Düsen- und Betttemperatur, bei flexiblen die Härte. Kohlefaser, Holz und Metall bringen ihre eigene Farbe mit; Kunststoffe behalten die Farbe des Teils.",
   "Your own materials: in the picker, **Own material from this** makes one with your name and colour (say, your black PETG), based on a library material. Edit or delete it there; its parts then go back to the base material.":
-    "Eigene Werkstoffe: Im Auswahlfenster legt **Eigener Werkstoff daraus** einen mit deinem Namen und deiner Farbe an (etwa dein schwarzes PETG), auf Basis eines Werkstoffs aus der Bibliothek. Dort kannst du ihn bearbeiten oder löschen; seine Teile bekommen dann wieder den Basiswerkstoff.",
+    "Eigene Materialien: Im Auswahlfenster legt **Eigenes Material daraus** eines mit deinem Namen und deiner Farbe an (etwa dein schwarzes PETG), auf Basis eines Materials aus der Bibliothek. Dort kannst du es bearbeiten oder löschen; seine Teile bekommen dann wieder das Basismaterial.",
   "Multi-material printing: export **3MF**. Parts with different materials or colours go to different filaments (a PETG body and a TPU grip, for instance), and meerCAD tells you which filament number gets which material, so you load them in that order in the slicer.":
-    "Mehrmaterialdruck: Exportier als **3MF**. Teile mit verschiedenen Werkstoffen oder Farben kommen auf verschiedene Filamente (etwa ein PETG-Gehäuse und ein TPU-Griff), und meerCAD sagt dir, welche Filamentnummer welchen Werkstoff bekommt, damit du sie im Slicer in dieser Reihenfolge einlegst.",
+    "Mehrmaterialdruck: Exportier als **3MF**. Teile mit verschiedenen Materialien oder Farben kommen auf verschiedene Filamente (etwa ein PETG-Gehäuse und ein TPU-Griff), und meerCAD sagt dir, welche Filamentnummer welches Material bekommt, damit du sie im Slicer in dieser Reihenfolge einlegst.",
   "Pictures: Display mode → **Rendered** shows the materials in studio light with a soft shadow. **Turntable** turns the model slowly; **Save image** saves a sharp picture up to 4K, also with a transparent background.":
-    "Bilder: Darstellung → **Gerendert** zeigt die Werkstoffe im Studiolicht mit weichem Schatten. **Drehteller** dreht das Modell langsam; **Bild speichern** speichert ein scharfes Bild bis 4K, auch mit transparentem Hintergrund.",
+    "Bilder: Darstellung → **Gerendert** zeigt die Materialien im Studiolicht mit weichem Schatten. **Drehteller** dreht das Modell langsam; **Bild speichern** speichert ein scharfes Bild bis 4K, auch mit transparentem Hintergrund.",
   "Two-material grip": "Griff aus zwei Materialien",
   "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF": "Ein PLA-Griff mit gerändelter TPU-Hülle: zwei Filamente in einem 3MF",
 } as Record<string, string>;

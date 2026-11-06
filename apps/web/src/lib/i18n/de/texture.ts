@@ -33,6 +33,8 @@ export default {
   "STEP keeps the smooth faces: surface textures come along in STL, 3MF and OBJ": "STEP enthält die glatten Flächen: Oberflächenstrukturen kommen nur in STL, 3MF und OBJ mit",
   // Example
   "Ribbed storage box": "Aufbewahrungsbox mit Rippen",
+  "Stackable ribbed box": "Stapelbare Rippenbox",
+  "Rim bead, plinth and framed handles; its foot sits in the box below; three sizes": "Randwulst, Sockel und gerahmte Griffe; der Fuß sitzt in der Box darunter; drei Größen",
   "Round ribs as a surface texture on the walls": "Runde Rippen als Oberflächenstruktur an den Wänden",
   // Help
   "Surface textures": "Oberflächenstrukturen",

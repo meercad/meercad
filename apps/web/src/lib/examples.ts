@@ -284,6 +284,7 @@ const MORE: [file: string, name: string, description: string][] = [
   ["39-two-material-grip", "Two-material grip", "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF"],
   ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
+  ["40-stackable-ribbed-box", "Stackable ribbed box", "Rim bead, plinth and framed handles; its foot sits in the box below; three sizes"],
 ];
 
 export const EXAMPLES: Example[] = [
