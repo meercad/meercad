@@ -5,7 +5,7 @@
  * centred on the origin, the lid on top), their faces named there, then the lid is laid upside
  * down beside the box unless the layout keeps it closed. Round parts are turned profiles; snap
  * beads and grooves are ruled lofts through outlines grown and shrunk at 45°. Threads are a
- * trapezoid ridge swept along a helix, trimmed to their height and joined to neck and cap.
+ * trapezoid ridge swept along a helix between two heights (ending in flat faces) and joined to neck and cap.
  */
 
 import { BOX, ClosureError, FeatureError, checkSnapHook, screwBoxSizes, snapBoxSizes, snapHookProfile, snapHookStrain, type ResolvedBox, type ResolvedSnapHook } from "@meercad/model";
@@ -102,9 +102,11 @@ class ClosureBuilder extends Builder {
   }
   /**
    * A thread ridge round the z axis: the [r, dz] polygon (dz along the axis from the helix) swept
-   * along a helix of `lead` starting at height z0 and turned by `phase` (radians), kept between zLo and zHi.
+   * along a helix of `lead` from height z0 up by `height`, starting `phase` (radians) round from x.
+   * The ends are the profile itself, flat: trimming a ridge at a height would taper it to a sliver
+   * that does not mesh closed.
    */
-  ridge(profile: [number, number][], lead: number, z0: number, height: number, phase: number, zLo: number, zHi: number): TopoDS_Shape {
+  ridge(profile: [number, number][], lead: number, z0: number, height: number, phase: number): TopoDS_Shape {
     const { oc } = this;
     const x: Vec3 = [Math.cos(phase), Math.sin(phase), 0];
     const rMid = profile.reduce((s, p) => s + p[0], 0) / profile.length;
@@ -128,10 +130,7 @@ class ClosureBuilder extends Builder {
     const props = this.tr(new oc.GProp_GProps());
     oc.BRepGProp.VolumeProperties(swept, props, false, false, false);
     if (props.Mass() < 0) swept = this.tr(swept.Reversed());
-    const rMax = Math.max(...profile.map((p) => p[0])) + 1;
-    const common = this.tr(new oc.BRepAlgoAPI_Common(swept, this.cylinderZ(0, 0, rMax, zLo, zHi)));
-    if (!common.IsDone() || common.HasErrors()) throw new FeatureError("could not trim the thread");
-    return this.tr(common.Shape());
+    return swept;
   }
   /** Lid laid upside down beside the box: turned over the x axis and moved along x. */
   besides(height: number, dx: number): gp_Trsf {
@@ -236,18 +235,19 @@ function screwBox(b: ClosureBuilder, f: ResolvedBox): { box: Body; lid: Body; li
   const lead = n * P;
   const zc = sh - (ri - rni);
   let boxShape = b.turned([[0, 0], [R, 0], [R, sh], [rn, sh], [rn, H], [rni, H], [rni, sh], [ri, zc], [ri, fl], [0, fl]]);
-  // Ridges start a lead below the neck and run a lead past it, then are cut to height: the cut ends
-  // taper the ridge over a turn, which leads the cap in.
+  // Each ridge runs between two heights; where it starts is set by the turn it is at there, so
+  // all ridges lie on one family of helices and, closed, the cap's sit half a pitch along the neck's.
   const e = 0.15;
   const neckProfile: [number, number][] = [[rn - e, -wb / 2 - e], [rn + d, -wt / 2], [rn + d, wt / 2], [rn - e, wb / 2 + e]];
   const capProfile: [number, number][] = [[rs + e, -wb / 2 - e], [rs - d, -wt / 2], [rs - d, wt / 2], [rs + e, wb / 2 + e]];
-  const from = sh - lead, span = H - sh + 2 * lead;
+  const hw = wb / 2 + e;
   const neckRidges: TopoDS_Shape[] = [], capRidges: TopoDS_Shape[] = [];
+  const along = (base: number, k: number, z0: number) => (2 * Math.PI * k) / n + (2 * Math.PI * (z0 - base)) / lead;
   for (let k = 0; k < n; k++) {
-    const phase = (2 * Math.PI * k) / n;
-    neckRidges.push(b.ridge(neckProfile, lead, from, span, phase, sh + 1, H - 0.8));
-    // Closed, the cap's ridges sit half a pitch along, in the neck's grooves.
-    capRidges.push(b.ridge(capProfile, lead, from + P / 2, span, phase, sh + g + 0.8, H - 0.3));
+    const n0 = sh + 1 + hw, n1 = H - 0.8 - hw;
+    neckRidges.push(b.ridge(neckProfile, lead, n0, n1 - n0, along(sh, k, n0)));
+    const c0 = sh + g + 0.8 + hw, c1 = H - 0.3 - hw;
+    capRidges.push(b.ridge(capProfile, lead, c0, c1 - c0, along(sh + P / 2, k, c0)));
   }
   boxShape = b.unify(b.bool("fuse", boxShape, neckRidges));
   const box = new Body(b.oc, b.arena, f.id, boxShape);

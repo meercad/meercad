@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { clearances, type RebuildReport } from "@meercad/kernel";
-import { screwBoxSizes, snapBoxSizes, boxDefaults, snapHookStrain, DEFAULT_CLEARANCE } from "@meercad/model";
+import { clearances, exportMeshes, type RebuildReport } from "@meercad/kernel";
+import { weldClosed, screwBoxSizes, snapBoxSizes, boxDefaults, snapHookStrain, DEFAULT_CLEARANCE } from "@meercad/model";
 import { validateDocument, type BoxFeature, type Feature, type MeercadDocument, type SnapHookFeature } from "@meercad/schema";
 import { readFileSync } from "node:fs";
 import { doc, getOcct, newSession, rect, sketch } from "./helpers.js";
@@ -156,5 +156,27 @@ describe("example: boxes and snap hooks", () => {
     expect(tagsOf(meshes, "ex2")).toContain("sh1.catch");
     const pair = clearances(oc, session.state!, ["ex1", "ex2"], {}, 1).find((p) => p.a !== p.b)!;
     expect(pair.overlap).toBeLessThan(1e-3);
+  });
+});
+
+describe("export", () => {
+  it("every box, lid and hooked part exports closed and manifold", async () => {
+    const oc = await getOcct();
+    const ex = JSON.parse(readFileSync(new URL("../../apps/web/src/examples/42-boxes-and-snap-hooks.meercad", import.meta.url), "utf8")) as MeercadDocument;
+    const session = await newSession();
+    ok(session.rebuild({ ...ex, features: [...ex.features, { ...box({ id: "bx3", shape: "round", depth: undefined }), position: [0, 200] }, { ...jar({ id: "bx4", starts: 2, pitch: 3 }), position: [200, 200] }] }).report);
+    const meshes = exportMeshes(oc, session.state!);
+    expect(meshes).toHaveLength(10);
+    const open = meshes.filter((m) => {
+      const corners = new Float32Array(m.indices.length * 3);
+      for (let i = 0; i < m.indices.length; i++) corners.set(m.positions.subarray(m.indices[i]! * 3, m.indices[i]! * 3 + 3), i * 3);
+      try {
+        weldClosed(corners, 1e-4);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect(open.map((m) => m.bodyId)).toEqual([]);
   });
 });
