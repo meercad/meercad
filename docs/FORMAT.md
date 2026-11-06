@@ -62,6 +62,12 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 - **thread** — `{ "op": "thread", "face": { "face": "ex2.side[sk2.c1]" }, "size": "M8", "clearance": 0.15 }`
   models an ISO metric thread on a hole wall (internal) or a shaft (external). `size`, `pitch` and
   `length` are optional (picked from the diameter, the standard coarse pitch, the whole face).
+- `standard_part` also makes machine parts: `"kind": "profile"` (aluminium profiles `2020`, `2040`,
+  `3030`, `4040`, standing on the face, `length`), `corner_bracket`, `t_nut`, `linear_bearing`
+  (`LM6UU` … `LM12UU`), `shaft`, `lead_screw` (`Tr8x8`, `Tr8x2`, `Tr10x2`, `Tr12x3`) and `rail`
+  (`MGN7` … `MGN15`, lying along the plane's u axis, turned by `angle`). `"withMoving": true` adds
+  a rail's carriage (`np1_carriage`) or a lead screw's nut (`np1_nut`); the app and MCP add their
+  joints (`j_np1_carriage`; `j_np1` turning, `j_np1_nut` sliding, coupled by the lead).
 - **gridfinity** — storage on the open Gridfinity grid (42 mm cells, 7 mm height units), built as an
   ordinary part: `{ "op": "gridfinity", "kind": "bin", "units": [2, 1], "height": 3, "dividers": [2, 0], "scoop": 8, "tab": {}, "magnets": true }`.
   Bins have one foot per cell, walls (`wall`, default 1.2 mm), a floor 7 mm above the bottom, the

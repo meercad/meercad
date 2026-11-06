@@ -737,16 +737,23 @@ function standardPartFeature(f: ResolvedStandardPart, ctx: Ctx): Omit<ModelState
   if (!f.points.length) throw new FeatureError("place at least one part");
   let shape;
   try {
-    shape = standardShape(f.kind, { size: f.size, length: f.length, diameter: f.diameter, height: f.height });
+    shape = standardShape(f.kind, { size: f.size, length: f.length, diameter: f.diameter, height: f.height, moving: f.withMoving });
   } catch (e) {
     if (e instanceof StandardPartError) throw new FeatureError(e.message);
     throw e;
   }
-  const frame = planeFrame(f.plane, ctx);
+  const plane = planeFrame(f.plane, ctx);
+  // Rails and brackets lie along u; `angle` turns them in the plane.
+  const rad = ((f.angle ?? 0) * Math.PI) / 180, co = Math.cos(rad), si = Math.sin(rad);
+  const turned = rad ? { ...plane, u: [0, 1, 2].map((i) => plane.u[i]! * co + plane.v[i]! * si) as Vec3, v: [0, 1, 2].map((i) => plane.v[i]! * co - plane.u[i]! * si) as Vec3 } : plane;
   const bodies = new Map(ctx.prev.bodies);
   f.points.forEach((p, k) => {
     const id = k === 0 ? f.id : `${f.id}_${k + 1}`;
-    bodies.set(id, standardPartBody(ctx.oc, ctx.arena, id, frame, p, shape, !!f.flip));
+    // The point is in the plane as it is; only the part is turned about it.
+    const frame = { ...turned, origin: toWorld(plane, p) };
+    bodies.set(id, standardPartBody(ctx.oc, ctx.arena, id, frame, [0, 0], shape, !!f.flip));
+    // The moving part (carriage, nut) is a part of its own: "np1_carriage", "np1_2_nut".
+    if (shape.moving) bodies.set(`${id}_${shape.moving.suffix}`, standardPartBody(ctx.oc, ctx.arena, `${id}_${shape.moving.suffix}`, frame, [0, 0], { ...shape.moving.shape, label: shape.moving.label }, !!f.flip));
   });
   return { ...ctx.prev, bodies };
 }

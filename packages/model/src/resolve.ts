@@ -60,7 +60,7 @@ export type ResolvedDraft = R<DraftFeature, "angle">;
 export type ResolvedOffsetFace = R<OffsetFaceFeature, "distance">;
 export type ResolvedScale = R<ScaleFeature, "factor">;
 export type ResolvedAlign = R<AlignFeature, "offset" | "angle">;
-export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height"> & { points: [number, number][]; length?: number; diameter?: number; height?: number };
+export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height" | "angle"> & { points: [number, number][]; length?: number; diameter?: number; height?: number; angle?: number };
 export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & { position: [number, number]; size: number; angle: number; depth: number };
 export type ResolvedGridfinity = Omit<
   GridfinityFeature,
@@ -211,6 +211,7 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         length: opt("length", f.length),
         diameter: opt("diameter", f.diameter),
         height: opt("height", f.height),
+        angle: opt("angle", f.angle),
       };
     case "text":
       return {
@@ -299,7 +300,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     offset_face: ["distance"],
     texture: ["depth", "pitch", "angle", "ratio", "fade"],
     text: ["size", "angle", "depth"],
-    standard_part: ["length", "diameter", "height"],
+    standard_part: ["length", "diameter", "height", "angle"],
     gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
     align: ["offset", "angle"],

@@ -193,9 +193,11 @@ export const definitions: Record<string, Json> = {
     standard_part: feature(
       "standard_part",
       {
-        kind: { enum: ["socket_screw", "countersunk_screw", "hex_screw", "set_screw", "hex_nut", "washer", "insert", "bearing", "magnet"] },
+        kind: { enum: ["socket_screw", "countersunk_screw", "hex_screw", "set_screw", "hex_nut", "washer", "insert", "bearing", "magnet", "profile", "corner_bracket", "t_nut", "linear_bearing", "shaft", "lead_screw", "rail"] },
         size: { type: "string", maxLength: 16 },
         length: ref("expr"),
+        withMoving: bool,
+        angle: ref("expr"),
         diameter: ref("expr"),
         height: ref("expr"),
         plane: ref("planeSpec"),

@@ -6,7 +6,7 @@ import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, wri
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
-import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial } from "@meercad/model";
+import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
@@ -264,7 +264,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       useApp.setState({ proposalDoc: null });
       // Variables an assistant creates are the user's (the dimensions they asked for); helpers it marks auto: true.
-      const ops = tools.restoreElided(p["ops"] as DocOp[], currentDoc());
+      // Rails with carriages and lead screws with nuts get their joints, as in the app.
+      const ops = withMotion(tools.restoreElided(p["ops"] as DocOp[], currentDoc()), currentDoc());
       // Validate first so a bad op returns a precise error instead of a toast.
       ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       if (!apply(...ops)) throw new Error("ops were rejected");

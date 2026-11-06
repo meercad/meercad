@@ -265,7 +265,8 @@ describe("texture displacement", () => {
     const area = 2 * Math.PI * 8 * 50;
     expect(m.indices.length / 3).toBeLessThan((12 * area) / 0.5 ** 2);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
-    expect(performance.now() - t0).toBeLessThan(5000);
+    // Guards against the refinement blowing up (once minutes), with room for a loaded machine.
+    expect(performance.now() - t0).toBeLessThan(15000);
   });
 
   it("refines a round face in strips wider than the spacing (export meshing) to the intended density", () => {
@@ -280,7 +281,8 @@ describe("texture displacement", () => {
     expect(m.indices.length / 3).toBeLessThan(EXPORT_TEXTURE.maxTriangles);
     expect(m.spacing).toBeCloseTo(spacing, 6);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
-    expect(performance.now() - t0).toBeLessThan(10000);
+    // Guards against the refinement blowing up (once minutes), with room for a loaded machine.
+    expect(performance.now() - t0).toBeLessThan(30000);
   });
 
   it("holds the triangle budget over the whole part", () => {

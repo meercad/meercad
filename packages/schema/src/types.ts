@@ -381,11 +381,19 @@ export interface SweepFeature extends FeatureBase {
  */
 export interface StandardPartFeature extends FeatureBase {
   op: "standard_part";
-  kind: "socket_screw" | "countersunk_screw" | "hex_screw" | "set_screw" | "hex_nut" | "washer" | "insert" | "bearing" | "magnet";
-  /** "M3" for screws, nuts and washers, "608" for bearings. */
+  kind: "socket_screw" | "countersunk_screw" | "hex_screw" | "set_screw" | "hex_nut" | "washer" | "insert" | "bearing" | "magnet" | "profile" | "corner_bracket" | "t_nut" | "linear_bearing" | "shaft" | "lead_screw" | "rail";
+  /**
+   * "M3" for screws, nuts and washers, "608" for bearings; "2020" for aluminium profiles and their
+   * corner brackets, "M5-8" for T-nuts (thread, slot), "LM8UU", "8" for shafts, "Tr8x8" lead
+   * screws, "MGN12" linear rails.
+   */
   size?: string;
-  /** Screw length: under the head; countersunk screws and set screws overall. */
+  /** Screw length (under the head; countersunk and set screws overall); profiles, shafts, lead screws and rails: their length. */
   length?: Expr;
+  /** Lead screws: with their flanged nut; rails: with a carriage. The app joins them so they move (slider, and the nut coupled to the screw's turning). */
+  withMoving?: boolean;
+  /** Rails and brackets lie on the face along its u axis; this turns them in the plane, degrees. */
+  angle?: Expr;
   /** Magnets. */
   diameter?: Expr;
   height?: Expr;

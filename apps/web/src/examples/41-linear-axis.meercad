@@ -1,0 +1,241 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "travel": "240 mm",
+  "plate": "8 mm"
+ },
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": -150,
+     "y": -40
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 150,
+     "y": -40
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 150,
+     "y": 40
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": -150,
+     "y": 40
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Base plate",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": "plate",
+   "mode": "new_body"
+  },
+  {
+   "id": "np1",
+   "op": "standard_part",
+   "kind": "rail",
+   "size": "MGN12",
+   "length": "travel",
+   "withMoving": true,
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "points": [
+    [
+     -120,
+     20
+    ]
+   ]
+  },
+  {
+   "id": "pl1",
+   "op": "plane",
+   "name": "Screw start",
+   "base": {
+    "ref": "origin.YZ"
+   },
+   "offset": -130
+  },
+  {
+   "id": "np2",
+   "op": "standard_part",
+   "kind": "lead_screw",
+   "size": "Tr8x8",
+   "length": "travel + 20 mm",
+   "withMoving": true,
+   "plane": {
+    "ref": "pl1"
+   },
+   "points": [
+    [
+     -10,
+     "plate + 14 mm"
+    ]
+   ]
+  },
+  {
+   "id": "np3",
+   "op": "standard_part",
+   "kind": "profile",
+   "size": "2020",
+   "length": 60,
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "points": [
+    [
+     -140,
+     -28
+    ],
+    [
+     140,
+     -28
+    ]
+   ]
+  },
+  {
+   "id": "np4",
+   "op": "standard_part",
+   "kind": "corner_bracket",
+   "size": "2020",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "points": [
+    [
+     -130,
+     -28
+    ]
+   ],
+   "angle": -90
+  },
+  {
+   "id": "np5",
+   "op": "standard_part",
+   "kind": "corner_bracket",
+   "size": "2020",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "points": [
+    [
+     130,
+     -28
+    ]
+   ],
+   "angle": 90
+  }
+ ],
+ "rollback": null,
+ "mechanism": {
+  "joints": [
+   {
+    "id": "j_np1_carriage",
+    "name": "MGN12 carriage",
+    "type": "slider",
+    "a": "np1_carriage",
+    "b": "np1",
+    "anchor": {
+     "edge": {
+      "edge": [
+       "np1.top",
+       "np1.right"
+      ]
+     }
+    },
+    "limits": [
+     0,
+     "(travel) - 34.7 mm"
+    ]
+   },
+   {
+    "id": "j_np2",
+    "name": "Tr8x8 turning",
+    "type": "revolute",
+    "a": "np2",
+    "b": "ground",
+    "anchor": {
+     "axisOf": {
+      "face": "np2.rod"
+     }
+    }
+   },
+   {
+    "id": "j_np2_nut",
+    "name": "Tr8x8 nut",
+    "type": "slider",
+    "a": "np2_nut",
+    "b": "ground",
+    "anchor": {
+     "axisOf": {
+      "face": "np2.rod"
+     }
+    },
+    "limits": [
+     0,
+     "(travel + 20 mm) - 15 mm"
+    ]
+   }
+  ],
+  "couplings": [
+   {
+    "id": "c_np2_nut",
+    "driver": "j_np2",
+    "driven": "j_np2_nut",
+    "ratio": 0.022222222222222223
+   }
+  ]
+ }
+}

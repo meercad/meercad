@@ -720,4 +720,12 @@ export const MODELS: TestModel[] = [
       { params: { width: "250 mm", depth: "180 mm", height: "140 mm", corner: "16 mm" }, expect: { bodies: 1, size: [252, 182, 140] } },
     ],
   },
+  {
+    file: "40 Linearachse",
+    name: "Linear axis with rail, lead screw and aluminium profiles",
+    look: "A 300 × 80 plate with an MGN12 rail and its carriage, a Tr8×8 lead screw lying along it with its flanged nut, two 2020 posts and two corner brackets against them. The carriage slides 0–205.3 mm; turning the screw 360° moves the nut 8 mm.",
+    doc: JSON.parse(readFileSync(new URL("../../apps/web/src/examples/41-linear-axis.meercad", import.meta.url), "utf8")) as MeercadDocument,
+    expect: { bodies: 9, size: [300, 80, 68] },
+    variants: [{ params: { travel: "200 mm" }, expect: { bodies: 9 } }],
+  },
 ];

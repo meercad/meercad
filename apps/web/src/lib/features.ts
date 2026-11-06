@@ -58,7 +58,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   scale: { label: t("Scale"), icon: Scaling, hint: t("Make parts larger or smaller, e.g. correct a scan to a measured size") },
   bend: { label: t("Bend"), icon: Rainbow, hint: t("Bend parts round an axis, wrap them into a ring or roll a long strip into a flat spiral") },
   align: { shortcut: "Shift+A", label: t("Align"), icon: Magnet, hint: t("Set a part's face onto another's, or a shaft's axis onto a hole's") },
-  standard_part: { shortcut: "Shift+P", label: t("Standard part"), icon: Nut, hint: t("Screws, nuts, washers, bearings and magnets to standard sizes, placed on a face") },
+  standard_part: { shortcut: "Shift+P", label: t("Standard part"), icon: Nut, hint: t("Screws, nuts, bearings, magnets, aluminium profiles, linear guides and lead screws to standard sizes, placed on a face") },
   gridfinity: { label: t("Storage bin"), icon: LayoutGrid, hint: t("Bins and baseplates for the Gridfinity storage grid: compartments, scoops, label tabs, magnets; editable like any part") },
   label: { label: t("Label"), icon: Tag, hint: t("Printable label with a screw, nut or insert symbol and text, raised or engraved, in one or two colours") },
   text: { shortcut: "Shift+T", label: t("Text"), icon: Type, hint: t("Raised or engraved lettering on a face") },
@@ -245,7 +245,8 @@ export function featureName(f: Feature): string {
       const length = typeof f.length === "number" ? f.length : undefined;
       const diameter = typeof f.diameter === "number" ? f.diameter : undefined;
       const height = typeof f.height === "number" ? f.height : undefined;
-      return standardShape(f.kind, { size: f.size, length, diameter, height }).label;
+      const shape = standardShape(f.kind, { size: f.size, length, diameter, height });
+      return shape.labelText ? t(shape.labelText.text, shape.labelText.values) : shape.label;
     } catch {
       // Falls through to the generic name.
     }
@@ -268,6 +269,16 @@ export function partName(id: string, features: readonly Feature[]): string {
   if (!best) return id;
   const rest = id.slice(best.id.length + 1);
   if (!rest) return featureName(best);
+  // A rail's carriage, a lead screw's nut: named by what they are ("MGN12C carriage").
+  const moving = /^(?:(\d+)_)?(carriage|nut)$/.exec(rest);
+  if (moving && best.op === "standard_part") {
+    try {
+      const m = standardShape(best.kind, { size: best.size, moving: true }).moving;
+      if (m) return `${m.shape.labelText ? t(m.shape.labelText.text, m.shape.labelText.values) : m.label}${moving[1] ? ` (${moving[1]})` : ""}`;
+    } catch {
+      // the generic name below
+    }
+  }
   if (/^\d+$/.test(rest)) return `${featureName(best)} (${rest})`;
   // Copies of several parts carry the copied part's id: "lp1_ex2_3".
   const [, of, n] = /^(.*?)(?:_(\d+))?$/.exec(rest)!;

@@ -1,7 +1,7 @@
 /** Application state (zustand) and the document → kernel rebuild loop. */
 import { create } from "zustand";
 import { KernelClient, SupersededError, type Measurement, type RebuildOutput, type RebuildProgress } from "@meercad/kernel/client";
-import { DocumentStore, OpError } from "@meercad/model";
+import { DocumentStore, OpError, withMotion } from "@meercad/model";
 import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick, setFeatureLabels } from "./lib/topology";
 import { usePrefs } from "./lib/keymap";
@@ -632,13 +632,14 @@ export function commitDialog(): boolean {
     return false;
   }
   let ok: boolean;
-  if (d.isNew) ok = apply({ type: "add_features", features: [d.feature] });
+  // A rail with its carriage or a lead screw with its nut gets the joints that make them move.
+  if (d.isNew) ok = apply(...withMotion([{ type: "add_features", features: [d.feature] }], docStore.doc));
   else {
     // Keys the draft dropped must be deleted (null) rather than merged back from the original.
     const original = docStore.doc.features.find((f) => f.id === d.feature.id) ?? {};
     const patch: Record<string, unknown> = { ...(d.feature as unknown as Record<string, unknown>) };
     for (const k of Object.keys(original)) if (!(k in patch)) patch[k] = null;
-    ok = apply({ type: "edit_feature", id: d.feature.id, patch });
+    ok = apply(...withMotion([{ type: "edit_feature", id: d.feature.id, patch }], docStore.doc));
   }
   if (ok) {
     set({ dialog: null, selection: [], previewError: null });

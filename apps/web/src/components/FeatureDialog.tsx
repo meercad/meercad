@@ -2,7 +2,15 @@ import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
-import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH } from "@meercad/model";
+import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_CUT_TO_LENGTH, STANDARD_DEFAULT_SIZE, STANDARD_LYING, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH, STANDARD_WITH_MOVING } from "@meercad/model";
+
+/** The standard parts in the picker, by what they are for. */
+const STANDARD_GROUPS: [string, (keyof typeof STANDARD_NAMES)[]][] = [
+  ["Screws and nuts", ["socket_screw", "countersunk_screw", "hex_screw", "set_screw", "hex_nut", "washer", "insert"]],
+  ["Aluminium profiles", ["profile", "corner_bracket", "t_nut"]],
+  ["Linear motion", ["rail", "lead_screw", "linear_bearing", "shaft"]],
+  ["Bearings and magnets", ["bearing", "magnet"]],
+];
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { gearParams, pairInfo } from "../lib/gears";
@@ -1232,12 +1240,26 @@ function Body({ d }: { d: DialogState }) {
             <select className="field" value={f.kind} onChange={(e) => {
               const kind = e.target.value as Of<"standard_part">["kind"];
               const list = STANDARD_SIZES[kind];
-              set({ kind, size: kind === "magnet" ? undefined : list.includes(f.size ?? "") ? f.size : kind === "bearing" ? "608" : "M3", length: STANDARD_WITH_LENGTH.includes(kind) ? (f.length ?? 10) : undefined, diameter: kind === "magnet" ? 6 : undefined, height: kind === "magnet" ? 3 : undefined });
+              const length = STANDARD_WITH_LENGTH.includes(kind) ? (STANDARD_WITH_LENGTH.includes(f.kind) ? (f.length ?? 10) : 10) : STANDARD_CUT_TO_LENGTH.includes(kind) ? (STANDARD_CUT_TO_LENGTH.includes(f.kind) ? (f.length ?? 200) : 200) : undefined;
+              set({
+                kind,
+                size: list.includes(f.size ?? "") ? f.size : STANDARD_DEFAULT_SIZE[kind],
+                length,
+                diameter: kind === "magnet" ? 6 : undefined,
+                height: kind === "magnet" ? 3 : undefined,
+                // A rail comes with its carriage and a lead screw with its nut, moving.
+                withMoving: STANDARD_WITH_MOVING.includes(kind) ? true : undefined,
+                angle: STANDARD_LYING.includes(kind) ? f.angle : undefined,
+              });
             }}>
-              {(Object.keys(STANDARD_NAMES) as Of<"standard_part">["kind"][]).map((k) => (
-                <option key={k} value={k}>
-                  {t(STANDARD_NAMES[k])}
-                </option>
+              {STANDARD_GROUPS.map(([group, kinds]) => (
+                <optgroup key={group} label={t(group)}>
+                  {kinds.map((k) => (
+                    <option key={k} value={k}>
+                      {t(STANDARD_NAMES[k])}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </Field>
@@ -1264,6 +1286,11 @@ function Body({ d }: { d: DialogState }) {
                 </select>
               </Field>
             ) : null}
+            {STANDARD_CUT_TO_LENGTH.includes(f.kind) ? (
+              <Field label={t("Length")}>
+                <ExprInput value={f.length ?? 200} onCommit={(length) => set({ length })} />
+              </Field>
+            ) : null}
             {f.kind === "magnet" ? (
               <>
                 <Field label={t("Diameter")}>
@@ -1275,6 +1302,18 @@ function Body({ d }: { d: DialogState }) {
               </>
             ) : null}
           </div>
+          {/* Its own row: next to size and length the size would not fit. */}
+          {STANDARD_LYING.includes(f.kind) ? (
+            <Field label={t("Turned")}>
+              <ExprInput value={f.angle ?? 0} unit="deg" onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })} />
+            </Field>
+          ) : null}
+          {STANDARD_WITH_MOVING.includes(f.kind) ? (
+            <label className="checkbox">
+              <input type="checkbox" checked={!!f.withMoving} onChange={(e) => set({ withMoving: e.target.checked ? true : undefined })} />
+              {f.kind === "rail" ? t("With carriage (slides on the rail)") : t("With nut (travels when the screw turns)")}
+            </label>
+          ) : null}
           <Field label={t("Face")}>
             <div className="row">
               <div style={{ flex: 1 }}>
