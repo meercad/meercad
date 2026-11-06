@@ -488,6 +488,16 @@ server.registerTool(
 );
 
 server.registerTool(
+  "print_check",
+  {
+    title: "Printability",
+    description: "Checks how a part prints on an FDM printer as it stands (bed under its lowest point, -Z down): area hanging over more steeply than limit degrees from vertical (default 45), a rough support volume (mm³) and the area on the bed, plus the best way up found (least support). turn: \"best\" or a direction [x,y,z] that should face the bed turns the part first (added as move steps; it lands on Z = 0 where it stood). The colour map stays shown (red needs support, blue on the bed, green fine) unless show: false.",
+    inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), z.tuple([z.number(), z.number(), z.number()])]).optional() },
+  },
+  guard(async (a) => text(await call("print_check", a, 300_000))),
+);
+
+server.registerTool(
   "deviation",
   {
     title: "Deviation from a mesh",

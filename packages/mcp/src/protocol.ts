@@ -26,6 +26,7 @@ export type BridgeMethod =
   | "get_version"
   | "check_interference"
   | "wall_thickness"
+  | "print_check"
   | "deviation"
   | "repair_mesh"
   | "rebuild_mesh"
