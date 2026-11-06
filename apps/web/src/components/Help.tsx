@@ -129,9 +129,20 @@ const guides = (): { section: string; guides: Guide[] }[] => [
             {li(t("Projects save automatically as open `.meercad` files (readable JSON) — in the desktop app in Documents/meerCAD."))}
             {li(t("Export: STL and 3MF for 3D printing, STEP for other CAD tools, OBJ for rendering and other 3D tools (terrains and scans keep their textures), DXF/SVG of a sketch for laser cutting."))}
             {li(t("Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already."))}
-            {li(t("Materials: right-click a part in the parts list → Material. The list then shows each part's mass and, below, the total mass and centre of gravity (solid material, 100 % infill)."))}
             {hasPack("drawings") ? li(t("Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.")) : null}
             {li(t("Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces."))}
+          </ul>
+        ),
+      },
+      {
+        title: t("Materials and rendered pictures"),
+        body: (
+          <ul>
+            {li(t("Give parts a material: right-click (or long-press) a part in the view or the parts list → **Material…**. Select several parts first to give them all the same one. Search by name, or browse filaments, resins, metals and wood."))}
+            {li(t("A material sets the part's finish (matte, glossy, silk, rubbery, metal), its mass (shown in the parts list, solid at 100 % infill) and its print data: nozzle and bed temperature, hardness of flexible ones. Carbon, wood and metal bring their own colour; plastics keep the part's colour."))}
+            {li(t("Your own materials: in the picker, **Own material from this** makes one with your name and colour (say, your black PETG), based on a library material. Edit or delete it there; its parts then go back to the base material."))}
+            {li(t("Multi-material printing: export **3MF**. Parts with different materials or colours go to different filaments (a PETG body and a TPU grip, for instance), and meerCAD tells you which filament number gets which material, so you load them in that order in the slicer."))}
+            {li(t("Pictures: Display mode → **Rendered** shows the materials in studio light with a soft shadow. **Turntable** turns the model slowly; **Save image** saves a sharp picture up to 4K, also with a transparent background."))}
           </ul>
         ),
       },

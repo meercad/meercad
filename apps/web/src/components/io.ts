@@ -1,11 +1,12 @@
 /** File import/export and share links. */
-import { objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
+import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
 import { applyOp, designOf, motion, nextFeatureId } from "@meercad/model";
+import { threeMfParts } from "../lib/printParts";
 import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
@@ -24,6 +25,7 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   svg: { name: t("SVG drawing"), extensions: ["svg"] },
   ocad: { name: t("meerCAD part"), extensions: ["meercad", "meerCAD"] },
   zip: { name: t("Zip archive"), extensions: ["zip"] },
+  png: { name: t("PNG picture"), extensions: ["png"] },
 };
 
 /** Saves a file: a save dialog on the Mac, the share sheet on the iPad. */
@@ -69,24 +71,25 @@ function exportIds(parts?: readonly string[]): string[] {
  * coarser), named `name`.ext; OBJ also takes the visible terrains and scans with their pictures.
  * `posed` (default) takes moved parts where they are shown. `moved` tells whether any were.
  */
-export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean }> {
+export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[] }> {
   const name = opts.name ?? baseName();
   const ids = exportIds(opts.parts);
   const surroundings = format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
   if (!ids.length && !surroundings) throw new Error(t("Nothing to export"));
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
   const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
-  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0 };
-  return { files: { [`${name}.${format}`]: meshFile(format, meshes) }, moved: poses.size > 0 };
+  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes };
+  return { files: { [`${name}.${format}`]: meshFile(format, meshes) }, moved: poses.size > 0, meshes };
 }
 
 export async function exportMesh(format: MeshFormat): Promise<void> {
   try {
-    const { files, moved } = await meshExportFiles(format);
+    const { files, moved, meshes } = await meshExportFiles(format);
     if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
     const names = Object.keys(files);
     if (names.length > 1) toast(t("Exported as a zip: the OBJ with its materials and pictures"), "info");
     download(names.length > 1 ? `${baseName()}.zip` : names[0]!, (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart);
+    if (format === "3mf") tellFilaments(meshes);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg === t("Nothing to export")) return toast(msg, "error");
@@ -133,15 +136,28 @@ export function objExport(name: string, meshes: readonly BodyMesh[], surrounding
   return objFiles(name, [...objParts(meshes), ...(surroundings ? surroundingMeshes() : [])]);
 }
 
+/** After a 3MF with several filaments: which slot gets which material, to set up in the slicer. */
+/** The filaments a 3MF of these parts asks for, in slot order (material and colour). */
+export function filamentsOf(meshes: readonly BodyMesh[]) {
+  const doc = currentDoc();
+  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  return filamentSlots(threeMfParts(doc, meshes, colors)).filaments;
+}
+
+function tellFilaments(meshes: readonly BodyMesh[]): void {
+  const filaments = filamentsOf(meshes);
+  if (filaments.length < 2) return;
+  const lines = filaments.map((f, i) => t("Filament {n}: {material} {color}", { n: i + 1, material: f.material ?? t("any material"), color: f.color }));
+  void showNotice({ title: t("{n} filaments assigned", { n: filaments.length }), message: `${lines.join("\n")}\n\n${t("Load these filaments in the slicer in this order; each part is already assigned to its filament.")}` });
+}
+
 /** Parts as an STL, or a 3MF or OBJ with their names and colours. */
 function meshFile(format: MeshFormat, meshes: BodyMesh[]): Uint8Array {
   if (format === "stl") return writeStl(meshes);
   const { doc } = useApp.getState();
   const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
   if (format === "obj") return new TextEncoder().encode(writeObj(objParts(meshes)));
-  // Colours the user picked also choose filaments for multi-colour printers.
-  const picked = doc.partColors ?? {};
-  return write3mf(meshes.map((m) => ({ ...m, name: partName(m.bodyId, doc.features), ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}), ...(picked[m.bodyId] ? { filament: picked[m.bodyId]! } : {}) })));
+  return write3mf(threeMfParts(doc, meshes, colors));
 }
 
 /**

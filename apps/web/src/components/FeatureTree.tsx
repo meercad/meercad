@@ -4,7 +4,9 @@ import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
 import { checkInterference } from "../lib/interference";
 import { hasPack, usePack } from "../lib/premium";
-import { evaluate, formatInertia, formatMass, massOf, massProperties, materialById, MATERIALS, referencedNames } from "@meercad/model";
+import { evaluate, formatInertia, formatMass, massOf, massProperties, partMaterial, referencedNames } from "@meercad/model";
+import { materialName } from "../lib/materials";
+import { openMaterialPicker } from "./MaterialPicker";
 import type { Expr, Feature, ReferenceModel } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
@@ -440,23 +442,11 @@ function Bodies() {
     if (!Object.keys(picked).length) delete next.partColors;
     apply({ type: "replace", doc: next });
   };
-  const setMaterial = (id: string, material: string | null) => {
-    const picked = { ...(doc.partMaterials ?? {}) };
-    if (material) picked[id] = material;
-    else delete picked[id];
-    const next = { ...doc, partMaterials: picked } as typeof doc;
-    if (!Object.keys(picked).length) delete next.partMaterials;
-    apply({ type: "replace", doc: next });
-  };
-  /** The material list as a second menu where the first one was. */
-  const pickMaterial = (id: string, x: number, y: number) =>
-    showMenu(x, y, [
-      ...MATERIALS.map((m) => ({ label: `${t(m.name)} · ${m.density} g/cm³${doc.partMaterials?.[id] === m.id ? " ✓" : ""}`, icon: <Weight />, onClick: () => setMaterial(id, m.id) })),
-      ...(doc.partMaterials?.[id] ? ["sep" as const, { label: t("No material"), icon: <X />, onClick: () => setMaterial(id, null) }] : []),
-    ]);
+  /** The material picker, for the selected parts when this one is among them. */
+  const pickMaterial = (id: string) => openMaterialPicker(selectedParts().includes(id) ? selectedParts() : [id]);
   const massText = (id: string, volume: number) => {
-    const m = materialById(doc.partMaterials?.[id]);
-    return m && Number.isFinite(volume) ? ` · ${formatMass(massOf(volume, m))} ${t(m.name)}` : "";
+    const m = partMaterial(doc, id);
+    return m && Number.isFinite(volume) ? ` · ${formatMass(massOf(volume, m))} ${materialName(m)}` : "";
   };
   // The browser's own colour picker (works with mouse and touch alike).
   const pickColor = (id: string) => {
@@ -498,7 +488,7 @@ function Bodies() {
             ...terrainItems(id, { set: <ArrowDownToLine />, place: <MapPin /> }),
             ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
-            { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id, e.clientX, e.clientY) },
+            { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id) },
             ...(doc.partColors?.[id] ? [{ label: t("Automatic colour"), icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
             "sep" as const,
             { label: t("Delete part"), icon: <Trash />, danger: true, onClick: () => deleteBodies([id]) },
@@ -589,7 +579,7 @@ function Bodies() {
           {(() => {
             // Total mass and centre of gravity once parts have materials.
             if (!doc.partMaterials) return null;
-            const total = massProperties(bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(b.inertia ? { inertia: b.inertia } : {}), ...(materialById(doc.partMaterials?.[b.id]) ? { material: materialById(doc.partMaterials?.[b.id])! } : {}) })));
+            const total = massProperties(bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(b.inertia ? { inertia: b.inertia } : {}), ...(partMaterial(doc, b.id) ? { material: partMaterial(doc, b.id)! } : {}) })));
             if (!total.mass) return null;
             const c = total.center?.map((v) => v.toFixed(1)).join(", ");
             const I = total.inertia;

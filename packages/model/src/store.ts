@@ -135,12 +135,32 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       break;
     }
     case "set_material": {
-      if (op.material !== null && !materialById(op.material)) throw new OpError(`unknown material "${op.material}": use one of ${MATERIALS.map((m) => m.id).join(", ")}`);
+      if (op.material !== null && !materialById(op.material, next.materials)) throw new OpError(`unknown material "${op.material}": use one of ${[...(next.materials ?? []), ...MATERIALS].map((m) => m.id).join(", ")}`);
       const picked = { ...(next.partMaterials ?? {}) };
       if (op.material) picked[op.part] = op.material;
       else delete picked[op.part];
       if (Object.keys(picked).length) next.partMaterials = picked;
       else delete next.partMaterials;
+      break;
+    }
+    case "define_material": {
+      const m = structuredClone(op.material);
+      if (MATERIALS.some((x) => x.id === m.id)) throw new OpError(`"${m.id}" is a library material; give your own material another id`);
+      if (!materialById(m.base)) throw new OpError(`unknown base material "${m.base}": use one of ${MATERIALS.map((x) => x.id).join(", ")}`);
+      const list = (next.materials ??= []);
+      const i = list.findIndex((x) => x.id === m.id);
+      if (i >= 0) list[i] = m;
+      else list.push(m);
+      break;
+    }
+    case "delete_material": {
+      const list = next.materials ?? [];
+      const m = list.find((x) => x.id === op.id);
+      if (!m) throw new OpError(`no own material "${op.id}"`);
+      // Parts keep what they are made of: the base material.
+      for (const [part, id] of Object.entries(next.partMaterials ?? {})) if (id === op.id) next.partMaterials![part] = m.base;
+      next.materials = list.filter((x) => x !== m);
+      if (!next.materials.length) delete next.materials;
       break;
     }
     case "set_variant": {

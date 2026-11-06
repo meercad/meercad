@@ -41,7 +41,8 @@ export type BridgeMethod =
   | "open_example"
   | "terrain_height"
   | "place_on_terrain"
-  | "photo_terrain";
+  | "photo_terrain"
+  | "list_materials";
 
 export interface BridgeRequest {
   id: number;

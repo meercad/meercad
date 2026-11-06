@@ -1,6 +1,9 @@
 import { currentPoses, joinedParts, jointPick, partDrag, useMotion } from "../lib/mechanism";
+import { materialName, partLooks } from "../lib/materials";
+import { RenderBar } from "./RenderBar";
+import { openMaterialPicker } from "./MaterialPicker";
 import { partColors } from "../lib/partColors";
-import { motion } from "@meercad/model";
+import { formatMass, massOf, motion, partMaterial } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
 import { hasPack } from "../lib/premium";
 import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair } from "../lib/meshRepair";
@@ -12,7 +15,7 @@ import { copyParts, hasClip, pasteParts, selectAll, selectedParts, selectParts }
 import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, Weight, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -173,6 +176,11 @@ export function ViewportView() {
     const red = [...hits.flat(), ...blocked];
     vp.setBodyColors(red.length ? new Map([...colors, ...red.map((id): [string, string] => [id, HIT_COLOR])]) : colors);
   }, [vp, doc, output, colorParts, hits, blocked]);
+  // Materials give parts their finish (PBR).
+  useEffect(() => {
+    if (!vp) return;
+    vp.setBodyLooks(partLooks(doc, output?.report.bodies.map((b) => b.id) ?? []));
+  }, [vp, doc, output]);
   const kernelState = useApp((s) => s.kernel);
   const previewing = useApp((s) => s.previewing);
   const [ortho, setOrtho] = useState(false);
@@ -646,6 +654,7 @@ export function ViewportView() {
         { label: t("Duplicate"), icon: <CopyPlus />, kbd: "Mod+D", onClick: () => (copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]), void pasteParts()) },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
+        { label: t("Material…"), icon: <Weight />, onClick: () => openMaterialPicker(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]) },
         ...textureItems(pick.bodyId),
         ...(hasPack("scan")
           ? [
@@ -677,6 +686,7 @@ export function ViewportView() {
         { label: t("Duplicate"), icon: <CopyPlus />, kbd: "Mod+D", onClick: () => (copyParts(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]), void pasteParts()) },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
+        { label: t("Material…"), icon: <Weight />, onClick: () => openMaterialPicker(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]) },
         ...textureItems(pick.bodyId),
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
         ...(hasPack("scan") ? [...deviationItems(pick.bodyId), thicknessItem(pick.bodyId)] : []),
@@ -737,6 +747,7 @@ export function ViewportView() {
         </div>
       ) : null}
       {measure.active ? <MeasureCard /> : null}
+      {mode === "rendered" && vp ? <RenderBar vp={vp} onExit={() => (vp.setDisplayMode("shaded_edges"), setMode("shaded_edges"))} /> : null}
       <LoadingOverlay />
       <DeviationLegend />
       <ThicknessLegend />
@@ -764,6 +775,7 @@ export function ViewportView() {
               ["hidden_line", t("Hidden lines removed")],
               ["xray", t("X-ray")],
               ["wireframe", t("Wireframe")],
+              ["rendered", t("Rendered")],
             ];
             showMenu(r.left - 220, r.top, [
               ...modes.map(([m, label]) => ({ label: `${check(vp?.mode === m)}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })),
@@ -805,6 +817,7 @@ export function ViewportView() {
               ["hidden_line", t("Hidden lines removed")],
               ["xray", t("X-ray")],
               ["wireframe", t("Wireframe")],
+              ["rendered", t("Rendered")],
             ];
             showMenu(r.left, r.top - 6, modes.map(([m, label]) => ({ label: `${vp?.mode === m ? "✓ " : "   "}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })), { above: true });
           }}
@@ -828,7 +841,7 @@ export function ViewportView() {
   );
 }
 
-const MODE_LABEL: Record<DisplayMode, string> = { shaded_edges: t("Shaded"), shaded: t("Shaded (no edges)"), hidden_line: t("Hidden line"), xray: t("X-ray"), wireframe: t("Wireframe") };
+const MODE_LABEL: Record<DisplayMode, string> = { shaded_edges: t("Shaded"), shaded: t("Shaded (no edges)"), hidden_line: t("Hidden line"), xray: t("X-ray"), wireframe: t("Wireframe"), rendered: t("Rendered") };
 
 function hiddenOverride(_id: string): boolean {
   return false;
@@ -861,6 +874,7 @@ function MeasureCard() {
         ) : (
           <span className="muted">{m.picks.length ? t("Measuring…") : (touchOnly() ? t("Tap a face or an edge; a second tap adds another.") : t("Click a face or an edge. Shift-click to add a second one."))}</span>
         )}
+        <PartMass picks={m.picks} />
         {scan.shapes.length ? (
           <label className="row" style={{ gap: 6, marginTop: 6 }}>
             <span className="muted">{t("Fit tolerance")}</span>
@@ -884,6 +898,22 @@ function MeasureCard() {
         {hasTerrain() && !m.result ? <p className="muted small">{touchOnly() ? t("On a terrain, a tap shows where the point is (with GPS when the photos had it); a second tap gives the distance, the height difference, the slope and the direction from north.") : t("On a terrain, a click shows where the point is (with GPS when the photos had it); a second click gives the distance, the height difference, the slope and the direction from north.")}</p> : null}
       </div>
     </div>
+  );
+}
+
+/** The measured part's volume and, with a material, its mass. */
+function PartMass({ picks }: { picks: readonly Pick[] }) {
+  const doc = useApp((s) => s.doc);
+  const bodies = useApp((s) => s.output?.report.bodies);
+  const id = picks.find((p): p is Extract<Pick, { bodyId: string }> => "bodyId" in p)?.bodyId;
+  const body = id ? bodies?.find((b) => b.id === id) : undefined;
+  if (!body || !Number.isFinite(body.volume)) return null;
+  const m = partMaterial(doc, body.id);
+  return (
+    <p className="small" style={{ margin: "8px 0 0" }}>
+      <b>{partName(body.id, doc.features)}</b> · {t("{v} cm³", { v: (body.volume / 1000).toFixed(2) })}
+      {m ? ` · ${formatMass(massOf(body.volume, m))} ${materialName(m)}` : <span className="muted"> · {t("no material, so no mass")}</span>}
+    </p>
   );
 }
 

@@ -6,7 +6,7 @@ import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, wri
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
-import { applyOp, billOfMaterials, designOf, drawingDocument, massOf, massProperties, materialById } from "@meercad/model";
+import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
@@ -120,8 +120,8 @@ function showActivity(client: string, tool: string): void {
 
 function summary(out: RebuildOutput) {
   const r = out.report;
-  const materials = useApp.getState().doc.partMaterials ?? {};
-  const mat = (id: string) => materialById(materials[id]);
+  const doc = useApp.getState().doc;
+  const mat = (id: string) => partMaterial(doc, id);
   const total = massProperties(r.bodies.map((b) => ({ volume: b.volume, ...(b.centroid ? { centroid: b.centroid } : {}), ...(b.inertia ? { inertia: b.inertia } : {}), ...(mat(b.id) ? { material: mat(b.id)! } : {}) })));
   return {
     features: r.features.map((f) => ({ id: f.id, status: f.status, ...(f.message ? { message: f.message } : {}), ...(f.hint ? { hint: f.hint } : {}) })),
@@ -157,6 +157,7 @@ function shotOf(p: Record<string, unknown>): Shot {
     ...(Array.isArray(p["focus"]) ? { focus: p["focus"] as string[], isolate: !!p["isolate"] } : {}),
     ...(normal ? { section: { normal, offset: sec?.offset ?? 0 } } : {}),
     ...(p["highlight"] ? { highlight: p["highlight"] as Shot["highlight"] & object } : {}),
+    ...(p["style"] === "rendered" ? { rendered: true } : {}),
   };
 }
 
@@ -262,7 +263,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const doc = currentDoc();
       const names = (p["views"] as ViewName[] | undefined) ?? ["front", "top", "left", "iso"];
       const views = await kernel.drawing(names, undefined, drawingDocument(doc));
-      const bom = billOfMaterials(out.report.bodies, (id) => partName(id, doc.features), doc.partMaterials ?? {});
+      const bom = billOfMaterials(out.report.bodies, (id) => partName(id, doc.features), doc.partMaterials ?? {}, doc.materials);
       const sheet = layoutSheet(views, {
         paper: (p["paper"] as Paper | undefined) ?? "A4",
         title: { title: String(p["title"] ?? useApp.getState().project?.name ?? "Untitled"), material: p["material"] as string | undefined, drawnBy: p["drawnBy"] as string | undefined, number: p["number"] as string | undefined, date: new Date().toLocaleDateString("sv") },
@@ -304,13 +305,30 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         const curves = sketchCurves(sketch);
         return { files: { [`sketch.${format}`]: toB64(format === "dxf" ? writeDxf(curves) : writeSvg(curves)) } };
       }
-      const files = await tools.exportFiles(format as "stl", {
+      const { files, filaments } = await tools.exportFiles(format as "stl", {
         ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
         ...(typeof p["posed"] === "boolean" ? { posed: p["posed"] } : {}),
         ...(p["variants"] ? { variants: true } : {}),
         ...(typeof p["name"] === "string" ? { name: p["name"] } : {}),
       });
-      return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])) };
+      return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])), ...(filaments ? { filaments } : {}) };
+    }
+    case "list_materials": {
+      const doc = currentDoc();
+      const describe = (m: ReturnType<typeof documentMaterials>[number]) => ({
+        id: m.id,
+        name: m.name,
+        ...(m.base ? { base: m.base } : {}),
+        density: m.density,
+        kind: m.kind,
+        ...(m.filament ? { filament: m.filament } : {}),
+        ...(m.nozzle ? { nozzleC: m.nozzle } : {}),
+        ...(m.bed ? { bedC: m.bed } : {}),
+        ...(m.shore ? { shore: m.shore } : {}),
+        look: m.look,
+        notes: m.notes,
+      });
+      return { materials: documentMaterials(doc).map(describe), parts: doc.partMaterials ?? {} };
     }
     case "set_pose": {
       needProject();

@@ -340,6 +340,20 @@ export const definitions: Record<string, Json> = {
   }),
 };
 
+const MATERIAL_ID = { type: "string", pattern: "^[a-z0-9]{1,32}$" } as const;
+/** An own material: a library material under an own name and colour. */
+const CUSTOM_MATERIAL = obj(
+  {
+    id: MATERIAL_ID,
+    name: { type: "string", minLength: 1, maxLength: 64 },
+    base: MATERIAL_ID,
+    color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+    density: { type: "number", exclusiveMinimum: 0, maximum: 30 },
+    notes: { type: "string", maxLength: 500 },
+  },
+  ["id", "name", "base"],
+);
+
 /** A variant's name: shown in the variables list, e.g. "M8" or "Pipe 25 mm". */
 const VARIANT_NAME = { type: "string", minLength: 1, maxLength: 64 } as const;
 /** A version's name, e.g. "Before the fillets" or "Sent to the workshop". */
@@ -357,6 +371,7 @@ export const documentSchema = {
       partColors: { type: "object", propertyNames: { maxLength: 128 }, additionalProperties: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" } },
       seeThrough: arr({ type: "string", maxLength: 128 }),
       partMaterials: { type: "object", propertyNames: { maxLength: 128 }, additionalProperties: { type: "string", pattern: "^[a-z0-9]{1,32}$" } },
+      materials: arr(CUSTOM_MATERIAL),
       partGroups: arr(obj({ name: { type: "string", minLength: 1, maxLength: 128 }, parts: arr({ type: "string", maxLength: 128 }) }, ["name", "parts"])),
       units: { enum: ["mm", "in"] },
       features: arr(ref("feature")),
@@ -396,7 +411,9 @@ export const docOpSchema = {
     delete_coupling: obj({ type: true, id }, ["id"]),
     set_reference: obj({ type: true, reference: ref("reference") }, ["reference"]),
     delete_reference: obj({ type: true, id }, ["id"]),
-    set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, { type: "string", pattern: "^[a-z0-9]{1,32}$" }) }, ["part", "material"]),
+    set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, MATERIAL_ID) }, ["part", "material"]),
+    define_material: obj({ type: true, material: CUSTOM_MATERIAL }, ["material"]),
+    delete_material: obj({ type: true, id: MATERIAL_ID }, ["id"]),
     set_variant: obj({ type: true, name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") }, rename: VARIANT_NAME }, ["name", "params"]),
     delete_variant: obj({ type: true, name: VARIANT_NAME }, ["name"]),
     use_variant: obj({ type: true, name: oneOf({ type: "null" }, VARIANT_NAME) }, ["name"]),

@@ -7,7 +7,7 @@
 import { compareShapes, nearestTriangle, shapeAt, shapeValues } from "@meercad/kernel/fit";
 import { restored } from "@meercad/model";
 import type { MeercadDocument } from "@meercad/schema";
-import { importFile, meshExportFiles, stepFile, variantFiles, type MeshFormat } from "../components/io";
+import { filamentsOf, importFile, meshExportFiles, stepFile, variantFiles, type MeshFormat } from "../components/io";
 import { currentDoc, getViewport, kernel, newProject, rebuildNow, refreshProjects, renameProject, useApp } from "../store";
 import { showDeviation, hideDeviation, useDeviation, TOLERANCE } from "./deviation";
 import { EXAMPLES } from "./examples";
@@ -175,12 +175,14 @@ export interface ExportOptions {
   name?: string;
 }
 
-/** The files of an export as the app makes them: names, colours and filaments, visible parts, poses, variants. */
-export async function exportFiles(format: MeshFormat | "step", o: ExportOptions): Promise<Record<string, Uint8Array>> {
+/** The files of an export as the app makes them: names, colours, materials and filaments, visible parts, poses, variants. */
+export async function exportFiles(format: MeshFormat | "step", o: ExportOptions): Promise<{ files: Record<string, Uint8Array>; filaments?: { slot: number; material?: string; color: string }[] }> {
   await rebuildNow();
-  if (o.variants) return variantFiles(format, undefined, o.parts);
-  if (format === "step") return { [`${o.name ?? "model"}.step`]: (await stepFile({ ...(o.parts ? { parts: o.parts } : {}), ...(o.posed !== undefined ? { posed: o.posed } : {}) })).data };
-  return (await meshExportFiles(format, { ...(o.parts ? { parts: o.parts } : {}), ...(o.posed !== undefined ? { posed: o.posed } : {}), ...(o.name ? { name: o.name } : {}) })).files;
+  if (o.variants) return { files: await variantFiles(format, undefined, o.parts) };
+  if (format === "step") return { files: { [`${o.name ?? "model"}.step`]: (await stepFile({ ...(o.parts ? { parts: o.parts } : {}), ...(o.posed !== undefined ? { posed: o.posed } : {}) })).data } };
+  const r = await meshExportFiles(format, { ...(o.parts ? { parts: o.parts } : {}), ...(o.posed !== undefined ? { posed: o.posed } : {}), ...(o.name ? { name: o.name } : {}) });
+  const filaments = format === "3mf" ? filamentsOf(r.meshes) : [];
+  return { files: r.files, ...(filaments.length > 1 ? { filaments: filaments.map((f, i) => ({ slot: i + 1, ...f })) } : {}) };
 }
 
 // ---------------------------------------------------------------- what is shown

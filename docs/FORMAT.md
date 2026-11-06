@@ -36,9 +36,24 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   counting rows from the top (as in glTF). Only the look: the part is built from `data` alone. It
   follows the part when moved, copied or patterned; a cut or combined part is shown plain.
   `hidden` shows the part without it (and exports it without).
+- **partColors / partMaterials / materials** (optional) — what parts look like and are made of, by
+  body id. `partColors`: `{ "ex1": "#2f6fd6" }`, the colour picked for a part (its filament colour).
+  `partMaterials`: `{ "ex1": "petg", "ex2": "own1" }`, an id from the built-in library (`pla`,
+  `plamatte`, `plasilk`, `petg`, `abs`, `asa`, `tpu` = TPU 95A, `tpu85a`, `pa12`, `pc`, `placf`,
+  `petgcf`, `woodfill`, `metalfill`, `resin`, `resinclear`, `aluminium`, `steel`, `stainless`,
+  `brass`, `copper`, `wood`, `plywood`, `acrylic`; see `MATERIALS` in
+  [`packages/model/src/materials.ts`](../packages/model/src/materials.ts) for density, print data
+  and finish) or of an own material. `materials`: the user's own materials, each a library material
+  under an own name, optionally with its own colour and density:
+  `[{ "id": "own1", "name": "Black TPU", "base": "tpu", "color": "#1c1c1c", "density": 1.2 }]`.
+  A part's colour is the picked one, else its material's own colour (carbon, wood, metal, own
+  materials), else an automatic one. All three are optional; files without them open as before.
 - **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way; op `set_see_through {parts, on}`).
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.
+- **Ops for materials** (Operations API): `set_material {part, material}` (null for none),
+  `define_material {material}` (adds or replaces an own material by id), `delete_material {id}`
+  (its parts go back to the base material).
 - **thread** — `{ "op": "thread", "face": { "face": "ex2.side[sk2.c1]" }, "size": "M8", "clearance": 0.15 }`
   models an ISO metric thread on a hole wall (internal) or a shaft (external). `size`, `pitch` and
   `length` are optional (picked from the diameter, the standard coarse pitch, the whole face).
