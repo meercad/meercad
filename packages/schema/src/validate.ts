@@ -205,6 +205,11 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if (f.image && !f.image.pixels.startsWith("blob:") && f.image.pixels.length !== Math.ceil((f.image.width * f.image.height) / 3) * 4)
           errors.push(`${at}: image.pixels must hold width × height bytes (base64)`);
         break;
+      case "lithophane":
+        if (f.plane) planeSpec(f.plane, at);
+        if (!f.image.pixels.startsWith("blob:") && f.image.pixels.length !== Math.ceil((f.image.width * f.image.height) / 3) * 4)
+          errors.push(`${at}: image.pixels must hold width × height bytes (base64)`);
+        break;
       case "scale":
         for (const b of f.bodies) body(b, at);
         break;

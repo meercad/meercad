@@ -160,6 +160,29 @@ function sampleImage(img: HeightImage, a: number, b: number): number {
   return top * (1 - ty) + bottom * ty;
 }
 
+/**
+ * A picture stretched once over the unit square, for a texture that fits its faces: `s` from the
+ * left (0) to the right (1), `t` from the top (0) to the bottom (1). Outside the square the border
+ * pixels go on; when `wrap` is set the left and right sides join (a picture round a closed tube).
+ */
+export function imageFit(img: HeightImage, invert = false, wrap = false): (s: number, t: number) => number {
+  const W = img.width, H = img.height;
+  const px = (i: number, j: number) => {
+    const x = wrap ? mod(i, W) : i < 0 ? 0 : i >= W ? W - 1 : i;
+    const y = j < 0 ? 0 : j >= H ? H - 1 : j;
+    return img.pixels[y * W + x]! / 255;
+  };
+  return (s, t) => {
+    const x = (wrap ? fract(s) : s) * W - 0.5, y = t * H - 0.5;
+    const x0 = Math.floor(x), y0 = Math.floor(y);
+    const tx = x - x0, ty = y - y0;
+    const top = px(x0, y0) * (1 - tx) + px(x0 + 1, y0) * tx;
+    const bottom = px(x0, y0 + 1) * (1 - tx) + px(x0 + 1, y0 + 1) * tx;
+    const v = top * (1 - ty) + bottom * ty;
+    return invert ? 1 - v : v;
+  };
+}
+
 /** Periods of a pattern, `image` taking the picture's proportions. */
 export function patternPeriods(pattern: TexturePattern, image?: HeightImage): [number, number] {
   if (pattern === "image" && image) return [1, image.height / image.width];

@@ -27,7 +27,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 - **versions / blobs** (optional) — named states of the design the user saved:
   `"versions": [{ "name": "Before the fillets", "at": 1793366400000, "state": { "params": …, "features": …, "rollback": null } }]`.
   A state is the whole document without `format`, `versions` and `blobs`. Imported files' contents
-  (`import.data`, a mesh's `texture.image` and `texture.uvs`, and a surface texture's `image.pixels`) longer than 4 kB are stored once
+  (`import.data`, a mesh's `texture.image` and `texture.uvs`, and a surface texture's or lithophane's `image.pixels`) longer than 4 kB are stored once
   in `blobs` under a key (`"blob:…"`) that the states use instead, however many versions share them.
 - **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders (op `set_part_list {groups?, order?}`; null clears).
 - **import.texture** (optional, STL imports) — the picture on a mesh, e.g. a scan's colours:
@@ -55,7 +55,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   `versions` keeps the saved versions and their blobs.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
-  `gridfinity`, `label`, `bend`, `texture` (and more: see the schema).
+  `gridfinity`, `label`, `bend`, `texture`, `lithophane` (and more: see the schema).
 - **Ops for materials** (Operations API): `set_material {part, material}` (null for none),
   `define_material {material}` (adds or replaces an own material by id), `delete_material {id}`
   (its parts go back to the base material).
@@ -100,9 +100,21 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   a round face's axis), `ratio` (raised share 0.1–0.95), `fade` (mm at the border, default half the
   pitch up to 2 mm), `seed` (wood, leather), `invert`, and for `image` a greyscale height picture
   `{ "width": 64, "height": 64, "pixels": "<base64 of width × height bytes, row by row from the top, 255 = high>" }`
-  (kept in `blobs` by versions like imported files). Only the triangles change: the display and STL,
-  3MF and OBJ export carry the texture; the solid, its volume and mass, STEP and later steps keep the
-  smooth faces.
+  (kept in `blobs` by versions like imported files); `"fit": true` lays that picture once over the
+  chosen faces, stretched to them (top up the face), instead of repeating it every `pitch`. Only the
+  triangles change: the display and STL, 3MF and OBJ export carry the texture; the solid, its volume
+  and mass, STEP and later steps keep the smooth faces.
+- **lithophane** — a photo as a printable plate whose thickness follows its brightness:
+  `{ "op": "lithophane", "image": { "width": 400, "height": 300, "pixels": "<base64 greyscale, 255 = bright>" }, "width": 100, "frame": 3 }`.
+  `kind` `"lithophane"` (default: dark = thick, shows the photo against the light; `thickness` 0.8 mm
+  thinnest, `depth` 2.2 mm added at black) or `"relief"` (bright = high; base 1.6, relief 1.6).
+  `width` is the picture's width in mm, its height follows the picture. `frame` (mm) keeps the full
+  thickness round the picture. `curve` (degrees) bends it round the plane's normal: 0 lies flat on
+  the plane (default origin.XY, picture top towards the plane's v), more stands it up bent with the
+  picture outside, 360 closes it into a lamp shade. `invert` swaps dark and bright; `plane` and
+  `position` place it. It is built on the picture texture with `fit`: STL, 3MF and OBJ carry the
+  picture, STEP, volume and mass see the plain plate. Faces: `li1.picture`, `.back`, `.frame`, `.side`.
+  Its picture is kept in `blobs` by versions like a texture's.
 - **References** never use indices. Faces carry *tags* from the feature that made them
   (`ex1.end_cap`, `ex1.side[sk1.l3]`, `fi1.round[a|b]`) and later features select by tag, so edits
   upstream don't silently re-target downstream features.

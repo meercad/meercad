@@ -50,9 +50,11 @@ export function texturesOf(state: ModelState, body: Body): { layers: TextureLaye
       ...(f.fade !== undefined ? { fade: f.fade } : {}),
       ...(f.seed !== undefined ? { seed: f.seed } : {}),
       ...(f.image ? { image: decodeHeightImage(f.image) } : {}),
+      ...(f.fit ? { fit: true } : {}),
+      ...(rec.up ? { up: rec.up } : {}),
       ...(f.invert ? { invert: true } : {}),
     });
-    sig.push(faces, f.pattern, f.depth, f.pitch, f.angle, f.ratio, f.fade, f.seed, f.invert, f.image ? [f.image.width, f.image.height, f.image.pixels] : null);
+    sig.push(faces, f.pattern, f.depth, f.pitch, f.angle, f.ratio, f.fade, f.seed, f.invert, f.fit, rec.up, f.image ? [f.image.width, f.image.height, f.image.pixels] : null);
   }
   return layers.length ? { layers, sig: JSON.stringify(sig) } : null;
 }

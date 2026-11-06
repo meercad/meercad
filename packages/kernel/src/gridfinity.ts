@@ -27,7 +27,7 @@ export interface GridRecord {
 
 type Box3 = { min: Vec3; max: Vec3 };
 
-class Builder {
+export class Builder {
   constructor(
     readonly oc: OC,
     readonly arena: Arena,

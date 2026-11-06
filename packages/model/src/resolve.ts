@@ -15,6 +15,7 @@ import type {
   StandardPartFeature,
   GridfinityFeature,
   LabelFeature,
+  LithophaneFeature,
   AlignFeature,
   ScaleFeature,
   RibFeature,
@@ -90,6 +91,15 @@ export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" 
   position: [number, number];
   angle: number;
 };
+export type ResolvedLithophane = Omit<LithophaneFeature, "width" | "thickness" | "depth" | "frame" | "curve" | "position"> & {
+  kind: "lithophane" | "relief";
+  width: number;
+  thickness: number;
+  depth: number;
+  frame: number;
+  curve: number;
+  position: [number, number];
+};
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedBend = R<BendFeature, "angle" | "radius" | "gap" | "tolerance">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
@@ -119,6 +129,7 @@ export type ResolvedFeature =
   | ResolvedStandardPart
   | ResolvedGridfinity
   | ResolvedLabel
+  | ResolvedLithophane
   | ResolvedAlign
   | ResolvedScale
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" | "split" }>;
@@ -260,7 +271,19 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
         angle: opt("angle", f.angle) ?? 0,
       };
-
+    case "lithophane": {
+      const kind = f.kind ?? "lithophane";
+      return {
+        ...f,
+        kind,
+        width: ev("width", f.width),
+        thickness: opt("thickness", f.thickness) ?? (kind === "relief" ? 1.6 : 0.8),
+        depth: opt("depth", f.depth) ?? (kind === "relief" ? 1.6 : 2.2),
+        frame: opt("frame", f.frame) ?? 0,
+        curve: opt("curve", f.curve) ?? 0,
+        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
+      };
+    }
     case "mesh_convert":
       return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
     case "bend":
@@ -303,6 +326,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     standard_part: ["length", "diameter", "height", "angle"],
     gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
+    lithophane: ["width", "thickness", "depth", "frame", "curve"],
     align: ["offset", "angle"],
     scale: ["factor"],
   };
@@ -317,6 +341,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     const tab = g["tab"] as Record<string, Expr>;
     for (const k of ["width", "angle"]) if (tab[k] !== undefined) tab[k] = fn(tab[k]);
   }
+  if (f.op === "lithophane" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));

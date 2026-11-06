@@ -56,6 +56,7 @@ import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import { gridfinityBody, labelBodies } from "./gridfinity.js";
+import { lithophaneBody } from "./lithophane.js";
 import { convertMesh } from "./meshconvert.js";
 import { holeTools } from "./hole.js";
 import { nest, textLoops } from "./text.js";
@@ -159,6 +160,10 @@ export class OcctBackend implements KernelBackend<ModelState> {
         const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings);
         const bodies = new Map(ctx.prev.bodies).set(f.id, body);
         return { ...ctx.prev, bodies, ...(record ? { grids: new Map(ctx.prev.grids ?? []).set(f.id, record) } : {}) };
+      }
+      case "lithophane": {
+        const { body, texture } = lithophaneBody(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx));
+        return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body), textures: new Map(ctx.prev.textures).set(f.id, texture) };
       }
       case "label": {
         const bodies = new Map(ctx.prev.bodies);

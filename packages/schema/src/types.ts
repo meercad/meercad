@@ -598,8 +598,46 @@ export interface TextureFeature extends FeatureBase {
   seed?: number;
   /** The height picture for pattern "image" (repeats every `pitch` mm across). */
   image?: TextureImage;
+  /**
+   * Pattern "image": the picture covers the chosen faces exactly once, stretched to their extent
+   * (top of the picture up the face, or along a round face's axis); `pitch` and `angle` then do
+   * nothing.
+   */
+  fit?: boolean;
   /** Swaps high and low. */
   invert?: boolean;
+}
+
+/**
+ * A picture made into a printable plate whose thickness follows the picture's brightness, built on
+ * the picture texture (see TextureFeature): a lithophane (dark parts thick, bright parts thin; held
+ * against light it shows the photo) or a relief (bright parts high, a picture you see by its
+ * shadows). Flat, the plate lies on the plane (default origin.XY), centred on `position`, the
+ * picture's top towards the plane's v; curved (`curve` > 0) it stands on the plane, bent round the
+ * plane's normal through `position` by `curve` degrees (360: a closed lamp shade), the picture on
+ * the outside. A frame keeps the full thickness round the picture. Like any texture, only the
+ * triangles carry the picture: STL, 3MF and OBJ export it; STEP, volume and mass see the plain
+ * plate at `thickness`. Faces: li1.picture, li1.back, li1.frame (frame top), li1.side.
+ */
+export interface LithophaneFeature extends FeatureBase {
+  op: "lithophane";
+  /** "lithophane" (default): dark = thick; "relief": bright = high. */
+  kind?: "lithophane" | "relief";
+  image: TextureImage;
+  /** Width of the picture, mm (round a curve: along the picture side); its height follows the picture. */
+  width: Expr;
+  /** Thinnest place (lithophane) or base plate (relief), mm; default 0.8 or 1.6. */
+  thickness?: Expr;
+  /** Thickness the picture adds at its darkest (lithophane) or brightest (relief) place, mm; default 2.2 or 1.6. */
+  depth?: Expr;
+  /** Frame width round the picture at the full thickness, mm; default 0 (a curve of 360: only top and bottom). */
+  frame?: Expr;
+  /** Bend round the plane's normal, degrees: 0 flat (default), up to 360 (closed round). */
+  curve?: Expr;
+  /** Swaps dark and bright. */
+  invert?: boolean;
+  plane?: PlaneSpec;
+  position?: [Expr, Expr];
 }
 
 /**
@@ -722,6 +760,7 @@ export type Feature =
   | StandardPartFeature
   | GridfinityFeature
   | LabelFeature
+  | LithophaneFeature
   | AlignFeature
   | ScaleFeature
   | SweepFeature

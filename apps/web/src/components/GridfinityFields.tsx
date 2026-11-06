@@ -36,7 +36,7 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
   );
 }
 
-function PlaneBox({ placeholder, value }: { placeholder: string; value: string }) {
+export function PlaneBox({ placeholder, value }: { placeholder: string; value: string }) {
   const active = useApp((s) => s.dialog?.field === "plane");
   return (
     <div className={`selbox ${active ? "active" : ""}`} onClick={() => setDialogField(active ? null : "plane")} role="button" tabIndex={0}>

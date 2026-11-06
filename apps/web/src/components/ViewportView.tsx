@@ -71,7 +71,7 @@ export function ViewportView() {
   const showSketches = useApp((s) => s.showSketches);
   const showValues = usePrefs((s) => s.showValues);
   const showTextures = usePrefs((s) => s.showTextures);
-  const hasTextures = useApp((s) => s.doc.features.some((f) => f.op === "texture" && !f.suppressed));
+  const hasTextures = useApp((s) => s.doc.features.some((f) => (f.op === "texture" || f.op === "lithophane") && !f.suppressed));
   const colorParts = usePrefs((s) => s.colorParts);
   const sketchId = useApp((s) => s.sketchId);
   const dialog = useApp((s) => s.dialog);
