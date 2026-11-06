@@ -82,6 +82,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
           mesh: req.mesh !== false,
           props: req.props !== false,
           draft: req.draft === true,
+          textures: req.textures !== false,
           // Sent at once, not with the replies: the page shows how far the rebuild has got.
           onFeature: (index, total, feature) => scope.postMessage({ type: "progress", seq: req.seq, index, total, feature }),
         });

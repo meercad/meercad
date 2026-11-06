@@ -81,6 +81,8 @@ interface State {
   sideOpen: boolean;
   /** What a connected assistant is doing right now (MCP). */
   aiActivity: { client: string; tool: string; at: number } | null;
+  /** An assistant is working on the model (MCP): the app takes no input until it is done or stopped. */
+  aiLock: { client: string } | null;
   /** Waiting for the user to click a plane/face to start a sketch. */
   pickingSketchPlane: boolean;
 }
@@ -162,6 +164,7 @@ export const useApp = create<State>(() => ({
   featureSelection: [],
   pickingSketchPlane: false,
   aiActivity: null,
+  aiLock: null,
   sideOpen: (() => {
     // On a phone the panel is a sheet over the model: it starts closed.
     if (isCompact()) return false;
@@ -369,7 +372,7 @@ export async function rebuildNow(): Promise<RebuildOutput> {
   for (;;) {
     const task = rebuildTask();
     try {
-      const output = await kernel.rebuild(docStore.doc, { onProgress: task.onProgress });
+      const output = await kernel.rebuild(docStore.doc, { textures: usePrefs.getState().showTextures, onProgress: task.onProgress });
       if (!get().dialog && !get().proposalDoc) set({ output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
       set({ building: false });
       return output;
@@ -445,6 +448,15 @@ export function holdRebuilds(on: boolean): void {
 }
 
 let draftTextures = false;
+/** A rebuild with textures slower than this suggests hiding them (once per session). */
+const SLOW_TEXTURE_MS = 3000;
+let texturesHinted = false;
+// Showing or hiding textures rebuilds the meshes (the geometry comes from the cache).
+usePrefs.subscribe((p, prev) => {
+  if (p.showTextures !== prev.showTextures) scheduleRebuild();
+});
+/** Counts rebuild requests, so a fine texture that a newer edit overtook is not shown. */
+let rebuildGeneration = 0;
 
 /** While a surface texture's value is being dragged: textures are made coarse and quick; letting go makes them fine again. */
 export function setDraftTextures(on: boolean): void {
@@ -467,17 +479,43 @@ export function scheduleRebuild(): void {
     const t0 = performance.now();
     rebuildsPending++;
     const task = rebuildTask();
+    const gen = ++rebuildGeneration;
+    // Surface textures take a while at full detail: the part shows first with a coarse texture,
+    // and the fine one follows (the geometry is not computed again for it).
+    const textures = usePrefs.getState().showTextures;
+    const textured = doc.features.some((f) => f.op === "texture" && !f.suppressed);
+    const quick = textures && !draftTextures && textured;
+    const show = (output: RebuildOutput, final: boolean) => {
+      set(preview ? { output, previewing: true, building: !final } : { output, baseOutput: output, previewing: false, building: !final, selection: remapSelection(get().selection, get().baseOutput, output) });
+      if (!preview && final) {
+        scheduleThumbnail();
+        fillBodyProps(output);
+      }
+      // Once per session: a slow textured part gets the hint that textures can be hidden while editing.
+      if (final && textures && textured && !texturesHinted && performance.now() - t0 > SLOW_TEXTURE_MS) {
+        texturesHinted = true;
+        toast(t("Surface textures slow down rebuilding. Hide them while you edit with the texture button at the bottom right; exports keep them."));
+      }
+    };
     // Volume and area (integrals over every face) follow once the new shape is on screen.
-    kernel.rebuild(doc, { props: false, draft: draftTextures, onProgress: task.onProgress }).then(
+    kernel.rebuild(doc, { props: false, draft: draftTextures || quick, textures, onProgress: task.onProgress }).then(
       (output) => {
         task.done();
         rebuildsPending--;
         lastRebuildMs = performance.now() - t0;
-        set(preview ? { output, previewing: true, building: false } : { output, baseOutput: output, previewing: false, building: false, selection: remapSelection(get().selection, get().baseOutput, output) });
-        if (!preview) {
-          scheduleThumbnail();
-          fillBodyProps(output);
-        }
+        show(output, !quick);
+        if (!quick) return;
+        rebuildsPending++;
+        kernel.rebuild(doc, { props: false }).then(
+          (fine) => {
+            rebuildsPending--;
+            if (gen === rebuildGeneration) show(fine, true);
+          },
+          (e: unknown) => {
+            rebuildsPending--;
+            if (gen === rebuildGeneration && !(e instanceof SupersededError)) set({ building: false });
+          },
+        );
       },
       (e: unknown) => {
         task.done();

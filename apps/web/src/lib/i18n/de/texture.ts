@@ -44,4 +44,5 @@ export default {
     "Auf ebenen Flächen liegt das Muster flach, runde Flächen bekommen es mit ganzen Wiederholungen herumgewickelt, und über abgerundete Ecken läuft es ohne Naht weiter. Am Rand zu anderen Flächen und an scharfen Kanten läuft es aus.",
   "It is a finish on the triangles: STL, 3MF and OBJ carry it for printing; STEP, volume and mass keep the smooth faces.":
     "Sie ist ein Finish auf den Dreiecken: STL, 3MF und OBJ enthalten sie zum Drucken; STEP, Volumen und Masse behalten die glatten Flächen.",
+  "Textures make every rebuild slower. While you change other values, hide them with the texture button at the bottom right.": "Strukturen machen jedes Neuberechnen langsamer. Während du andere Werte änderst, blendest du sie mit dem Wellen-Knopf unten rechts aus.",
 };

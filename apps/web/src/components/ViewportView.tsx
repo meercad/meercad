@@ -15,7 +15,7 @@ import { copyParts, hasClip, pasteParts, selectAll, selectedParts, selectParts }
 import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, Weight, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, Waves, Weight, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -68,6 +68,8 @@ export function ViewportView() {
   const showPlanes = useApp((s) => s.showPlanes);
   const showSketches = useApp((s) => s.showSketches);
   const showValues = usePrefs((s) => s.showValues);
+  const showTextures = usePrefs((s) => s.showTextures);
+  const hasTextures = useApp((s) => s.doc.features.some((f) => f.op === "texture" && !f.suppressed));
   const colorParts = usePrefs((s) => s.colorParts);
   const sketchId = useApp((s) => s.sketchId);
   const dialog = useApp((s) => s.dialog);
@@ -754,7 +756,7 @@ export function ViewportView() {
       <MeshRepairCard />
       <div className="status-pill" title={kernelState.error ?? ""}>
         {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
-        {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}` : t("Ready"))}
+        {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}${hasTextures && !showTextures ? ` · ${t("textures hidden")}` : ""}` : t("Ready"))}
       </div>
       <div className="view-controls">
         <SnapControls viewport={vp} />
@@ -791,6 +793,7 @@ export function ViewportView() {
               { label: `${check(showSketches)}${t("Sketches")}`, onClick: () => useApp.setState({ showSketches: !showSketches }) },
               { label: `${check(showValues)}${t("Dimensions on the model")}`, onClick: () => setPrefs({ showValues: !showValues }) },
               { label: `${check(colorParts)}${t("A colour for each part")}`, onClick: () => setPrefs({ colorParts: !colorParts }) },
+              ...(hasTextures ? [{ label: `${check(showTextures)}${t("Surface textures")}`, onClick: () => setPrefs({ showTextures: !showTextures }) }] : []),
             ]);
           }}
         >
@@ -830,6 +833,12 @@ export function ViewportView() {
         <button className={`icon-btn sm phone-hide ${showSketches ? "active" : ""}`} title={t("Sketches")} onClick={() => useApp.setState({ showSketches: !showSketches })}>
           <PencilLine />
         </button>
+        {/* Textures cost time on every rebuild: hidden, editing a textured part is quicker (exports keep them). */}
+        {hasTextures ? (
+          <button className={`icon-btn sm phone-hide ${showTextures ? "active" : ""}`} title={showTextures ? t("Hide surface textures while editing (rebuilds faster; exports keep them)") : t("Show surface textures")} onClick={() => setPrefs({ showTextures: !showTextures })}>
+            <Waves />
+          </button>
+        ) : null}
         <button className={`icon-btn sm phone-hide ${showValues ? "active" : ""}`} title={showValues ? t("Hide dimensions on the model") : t("Show dimensions on the model")} onClick={() => setPrefs({ showValues: !showValues })}>
           <Ruler />
         </button>
@@ -918,7 +927,7 @@ function PartMass({ picks }: { picks: readonly Pick[] }) {
 }
 
 function AiActivity() {
-  const activity = useApp((s) => s.aiActivity);
+  const activity = useApp((s) => (s.aiLock ? null : s.aiActivity));
   const previewing = useApp((s) => !!s.proposalDoc);
   if (!activity && !previewing) return null;
   return (

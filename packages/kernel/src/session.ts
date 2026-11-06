@@ -75,7 +75,7 @@ export class KernelSession {
     this.engine = new RebuildEngine(new OcctBackend(oc, solver));
   }
 
-  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean; draft?: boolean; onFeature?: (index: number, total: number, id: string) => void } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
+  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean; draft?: boolean; textures?: boolean; onFeature?: (index: number, total: number, id: string) => void } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
     const r = this.engine.rebuild(doc, opts.onFeature);
     this.last = r.state;
     const t = performance.now();
@@ -93,7 +93,7 @@ export class KernelSession {
         cached.props = true;
       }
       bodies.push(cached.summary);
-      if (opts.mesh !== false) meshes.push(this.withTextures(r.state, body, cached.mesh, cached.summary, opts.draft === true));
+      if (opts.mesh !== false) meshes.push(opts.textures === false ? cached.mesh : this.withTextures(r.state, body, cached.mesh, cached.summary, opts.draft === true));
     }
     const sketches: SketchView[] = [...r.state.sketches.values()].map((s) => ({
       id: s.id,

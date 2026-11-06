@@ -6,8 +6,8 @@ import type { DrawingView, ViewName } from "./drawing.js";
 
 export type WorkerRequest =
   /** `props: false` skips volume and surface area (previews while dragging). */
-  /** `draft`: surface textures coarse and quick (while a value is being dragged). */
-  | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean; props?: boolean; draft?: boolean }
+  /** `draft`: surface textures coarse and quick (while a value is being dragged); `textures: false` shows parts smooth. */
+  | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean; props?: boolean; draft?: boolean; textures?: boolean }
   /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
   | { type: "sandbox"; seq: number; doc: MeercadDocument }
   /** `parts`: names and colours to write with each part (XCAF), by body id. */
