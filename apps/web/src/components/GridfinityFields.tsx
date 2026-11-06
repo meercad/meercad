@@ -335,16 +335,18 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
         <Field label={t("Height")}>
           <ExprInput value={f.height} placeholder="11" onCommit={(height) => set({ height })} onLive={(height) => set({ height })} />
         </Field>
+      </div>
+      <div className="row">
         <Field label={t("Thickness")}>
           <ExprInput value={f.thickness} placeholder="1.2" onCommit={(thickness) => set({ thickness })} />
+        </Field>
+        <Field label={f.style === "engraved" ? t("Depth") : t("Height")}>
+          <ExprInput value={f.depth} placeholder="0.6" onCommit={(depth) => set({ depth })} />
         </Field>
       </div>
       <div className="row">
         <Field label={t("Letter height")}>
           <ExprInput value={f.size} placeholder={t("fit")} onCommit={(size) => set({ size })} />
-        </Field>
-        <Field label={f.style === "engraved" ? t("Depth") : t("Height")}>
-          <ExprInput value={f.depth} placeholder="0.6" onCommit={(depth) => set({ depth })} />
         </Field>
         <Field label={t("Font")}>
           <select className="field" value={f.font ?? "sans"} onChange={(e) => set({ font: e.target.value === "sans" ? undefined : e.target.value })}>

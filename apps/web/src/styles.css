@@ -552,6 +552,8 @@ input.field:focus, select.field:focus, textarea.field:focus { background: var(--
 .app > .right { top: var(--top); }
 .viewcube { top: var(--top); }
 .dialog, .measure-card, .sketch-hud { top: var(--top); left: var(--left); }
+/* Below the top bar: a tall dialog scrolls inside and keeps its OK and Cancel buttons on screen. */
+.dialog { max-height: calc(100% - var(--top) - 12px); }
 .ai-activity { top: var(--top); }
 .status-pill { left: var(--left); }
 .topbar .save-state { display: none; }
