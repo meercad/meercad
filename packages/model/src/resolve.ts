@@ -12,6 +12,8 @@ import type {
   OffsetFaceFeature,
   TextFeature,
   StandardPartFeature,
+  GridfinityFeature,
+  LabelFeature,
   AlignFeature,
   ScaleFeature,
   RibFeature,
@@ -58,6 +60,34 @@ export type ResolvedScale = R<ScaleFeature, "factor">;
 export type ResolvedAlign = R<AlignFeature, "offset" | "angle">;
 export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height"> & { points: [number, number][]; length?: number; diameter?: number; height?: number };
 export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & { position: [number, number]; size: number; angle: number; depth: number };
+export type ResolvedGridfinity = Omit<
+  GridfinityFeature,
+  "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell"
+> & {
+  units: [number, number];
+  height: number;
+  wall?: number;
+  floor?: number;
+  dividers: [number, number];
+  dividerThickness?: number;
+  scoop?: number;
+  tab?: { width?: number; angle?: number; style?: "full" | "left" | "center" | "right" };
+  magnetDiameter?: number;
+  magnetDepth?: number;
+  drawer?: [number, number];
+  position: [number, number];
+  cell: [number, number];
+};
+export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" | "corner" | "size" | "depth" | "position" | "angle"> & {
+  width: number;
+  height: number;
+  thickness: number;
+  corner: number;
+  size?: number;
+  depth: number;
+  position: [number, number];
+  angle: number;
+};
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 export type ResolvedFeature =
@@ -80,6 +110,8 @@ export type ResolvedFeature =
   | ResolvedOffsetFace
   | ResolvedText
   | ResolvedStandardPart
+  | ResolvedGridfinity
+  | ResolvedLabel
   | ResolvedAlign
   | ResolvedScale
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" | "split" }>;
@@ -181,6 +213,44 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       };
     case "rib":
       return { ...f, thickness: ev("thickness", f.thickness) };
+    case "gridfinity": {
+      const int = (field: string, e: Expr, lo: number, hi: number) => {
+        const n = Math.round(ev(field, e));
+        if (n < lo || n > hi) throw new ExprError(`${field}: must be between ${lo} and ${hi}`);
+        return n;
+      };
+      const pair = (field: string, p: [Expr, Expr]) => [ev(`${field}[0]`, p[0]), ev(`${field}[1]`, p[1])] as [number, number];
+      const { tab, ...rest } = f;
+      return {
+        ...rest,
+        units: [int("units[0]", f.units[0], 1, 30), int("units[1]", f.units[1], 1, 30)],
+        height: f.height === undefined ? 3 : int("height", f.height, 1, 40),
+        wall: opt("wall", f.wall),
+        floor: opt("floor", f.floor),
+        dividers: f.dividers ? [int("dividers[0]", f.dividers[0], 0, 50), int("dividers[1]", f.dividers[1], 0, 50)] : [0, 0],
+        dividerThickness: opt("dividerThickness", f.dividerThickness),
+        scoop: opt("scoop", f.scoop),
+        ...(tab ? { tab: { style: tab.style, width: opt("tab.width", tab.width), angle: opt("tab.angle", tab.angle) } } : {}),
+        magnetDiameter: opt("magnetDiameter", f.magnetDiameter),
+        magnetDepth: opt("magnetDepth", f.magnetDepth),
+        drawer: f.drawer ? pair("drawer", f.drawer) : undefined,
+        position: f.position ? pair("position", f.position) : [0, 0],
+        cell: f.cell ? [int("cell[0]", f.cell[0], 0, 100), int("cell[1]", f.cell[1], 0, 100)] : [0, 0],
+      };
+    }
+    case "label":
+      return {
+        ...f,
+        width: opt("width", f.width) ?? 36,
+        height: opt("height", f.height) ?? 11,
+        thickness: opt("thickness", f.thickness) ?? 1.2,
+        corner: opt("corner", f.corner) ?? 1,
+        size: opt("size", f.size),
+        depth: opt("depth", f.depth) ?? 0.6,
+        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
+        angle: opt("angle", f.angle) ?? 0,
+      };
+
     case "mesh_convert":
       return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
     case "transform": {
@@ -217,6 +287,8 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     offset_face: ["distance"],
     text: ["size", "angle", "depth"],
     standard_part: ["length", "diameter", "height"],
+    gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],
+    label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
     align: ["offset", "angle"],
     scale: ["factor"],
   };
@@ -226,6 +298,12 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     if (rot) rot.angle = fn(rot.angle);
   }
   if (f.op === "text" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
+  if (f.op === "gridfinity") for (const k of ["units", "dividers", "drawer", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
+  if (f.op === "gridfinity" && g["tab"]) {
+    const tab = g["tab"] as Record<string, Expr>;
+    for (const k of ["width", "angle"]) if (tab[k] !== undefined) tab[k] = fn(tab[k]);
+  }
+  if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "gear") {

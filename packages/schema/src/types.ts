@@ -417,6 +417,98 @@ export interface TextFeature extends FeatureBase {
 }
 
 /**
+ * Gridfinity storage on the open 42 mm grid (7 mm height units): a bin or a baseplate built from its
+ * sizes, as an ordinary part that later features can fillet, cut or write on. The part's id is the
+ * feature id; it stands on the plane (default origin.XY) centred on `position`.
+ *
+ * Bin: `units` cells wide and deep, `height` units tall (the stacking lip stands 4.4 mm above), one
+ * foot per cell, hollow with `wall` thick walls unless `solid`, `dividers` walls across x and y,
+ * a `scoop` (finger slide, radius) at the front of each compartment and a label `tab` at its back.
+ * `baseplate` puts the bin into an earlier baseplate at `cell` (its lower-left cell, from 0).
+ * Baseplate: `units` cells, or as many as fit a `drawer` (width, depth) with the rest as border.
+ * `magnets` / `screws` add the holes of the standard in the bin's feet or the baseplate's cells.
+ * Faces: gf1.foot, gf1.floor, gf1.wall, gf1.inner, gf1.lip, gf1.top, gf1.divider, gf1.scoop,
+ * gf1.tab (top of the label tabs), gf1.tab_under, gf1.pocket (baseplate), gf1.bottom, gf1.hole.
+ */
+export interface GridfinityFeature extends FeatureBase {
+  op: "gridfinity";
+  kind: "bin" | "baseplate";
+  /** Grid cells along x and y (42 mm each). A baseplate with `drawer` takes as many as fit. */
+  units: [Expr, Expr];
+  /** Bin height in 7 mm units, default 3. */
+  height?: Expr;
+  /** Bin wall thickness, default 1.2 mm. */
+  wall?: Expr;
+  /**
+   * Bin: height of the inside floor above the bottom, default 7 mm.
+   * Baseplate: solid bottom below the pockets, default 0 (open grid), 3.4 mm with magnets or screws.
+   */
+  floor?: Expr;
+  /** Number of divider walls across x (splitting the width) and across y. */
+  dividers?: [Expr, Expr];
+  /** Divider thickness, default the wall's. */
+  dividerThickness?: Expr;
+  /** Radius of the finger slide at the front (−y) of every compartment; absent or 0 = none. */
+  scoop?: Expr;
+  /** Label tab at the back (+y) of every compartment, its top flush with the rim. */
+  tab?: { width?: Expr; angle?: Expr; style?: "full" | "left" | "center" | "right" };
+  /** Stacking lip on top of the bin, default true. */
+  lip?: boolean;
+  /** A solid block instead of a hollow bin (to cut your own pockets). */
+  solid?: boolean;
+  magnets?: boolean;
+  screws?: boolean;
+  /** Magnet holes, default 6.5 mm × 2.4 mm. */
+  magnetDiameter?: Expr;
+  magnetDepth?: Expr;
+  /** Baseplate: fill a drawer of this inside size (mm); the grid is centred, the rest is border. */
+  drawer?: [Expr, Expr];
+  /** Default origin.XY. With `baseplate`, the baseplate's plane. */
+  plane?: PlaneSpec;
+  /** Centre of the footprint in plane coordinates, default [0, 0]. Ignored with `baseplate`. */
+  position?: [Expr, Expr];
+  /** Bin: sit in this earlier baseplate (gridfinity feature id). */
+  baseplate?: string;
+  /** Bin in a baseplate: the baseplate cell under the bin's lower-left cell, from [0, 0]. */
+  cell?: [Expr, Expr];
+}
+
+/** Symbols for printable labels, drawn as clean outlines: screws by head (side view), nuts, washers, inserts. */
+export type LabelSymbol = "none" | "screw_pan" | "screw_countersunk" | "screw_socket" | "screw_hex" | "nut" | "washer" | "insert";
+
+/**
+ * A printable label: a rounded plate with a symbol on the left and text beside it, raised or
+ * engraved. With `separate` the marking is its own part (`lb1_mark`), for a second colour: raised
+ * marks stand on the plate, engraved ones fill the engraving flush (an inlay). The plate lies on
+ * the plane (default origin.XY) centred on `position`; a Gridfinity bin's `gf1.tab` is a good face.
+ * Faces: lb1.top, lb1.side, lb1.bottom, lb1.mark (the marking's top or the engraving's floor).
+ */
+export interface LabelFeature extends FeatureBase {
+  op: "label";
+  /** Plate size, default 36 × 11 mm (a 1-unit Gridfinity tab). */
+  width?: Expr;
+  height?: Expr;
+  /** Plate thickness, default 1.2 mm. */
+  thickness?: Expr;
+  /** Corner radius, default 1 mm. */
+  corner?: Expr;
+  text?: string;
+  symbol?: LabelSymbol;
+  /** Capital-letter height; default: as large as fits. */
+  size?: Expr;
+  font?: "sans" | "sans-bold" | "mono";
+  /** Default raised. */
+  style?: "raised" | "engraved";
+  /** Height of raised marks / depth of engraving, default 0.6 mm. */
+  depth?: Expr;
+  separate?: boolean;
+  plane?: PlaneSpec;
+  position?: [Expr, Expr];
+  /** Rotation in the plane, degrees counter-clockwise. */
+  angle?: Expr;
+}
+
+/**
  * Draft for cast and moulded parts: tilts side faces by an angle so the part comes out of its
  * mould. The faces keep their line on the neutral plane (usually the parting face or the bottom)
  * and lean inwards along the pull direction (the neutral plane's normal; `flip` reverses it).
@@ -530,6 +622,8 @@ export type Feature =
   | OffsetFaceFeature
   | TextFeature
   | StandardPartFeature
+  | GridfinityFeature
+  | LabelFeature
   | AlignFeature
   | ScaleFeature
   | SweepFeature

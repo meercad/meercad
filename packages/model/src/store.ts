@@ -230,6 +230,8 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     offset_face: "of",
     text: "tx",
     standard_part: "np",
+    gridfinity: "gf",
+    label: "lb",
     align: "al",
     scale: "sc",
     sweep: "sw",
