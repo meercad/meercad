@@ -10,6 +10,7 @@ import type {
   HoleFeature,
   DraftFeature,
   OffsetFaceFeature,
+  TextureFeature,
   TextFeature,
   StandardPartFeature,
   GridfinityFeature,
@@ -92,7 +93,10 @@ export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" 
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedBend = R<BendFeature, "angle" | "radius" | "gap" | "tolerance">;
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
+/** A texture with its numbers worked out; `fade` stays undefined for the default (half the pitch, at most 2 mm). */
+export type ResolvedTexture = Omit<TextureFeature, "depth" | "pitch" | "angle" | "ratio" | "fade"> & { depth: number; pitch: number; angle: number; ratio?: number; fade?: number };
 export type ResolvedFeature =
+  | ResolvedTexture
   | ResolvedTransform
   | ResolvedSketch
   | ResolvedPlane
@@ -194,6 +198,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return { ...f, angle: ev("angle", f.angle) };
     case "offset_face":
       return { ...f, distance: ev("distance", f.distance) };
+    case "texture":
+      return { ...f, depth: ev("depth", f.depth), pitch: ev("pitch", f.pitch), angle: opt("angle", f.angle) ?? 0, ratio: opt("ratio", f.ratio), fade: opt("fade", f.fade) };
     case "scale":
       return { ...f, factor: ev("factor", f.factor) };
     case "align":
@@ -291,6 +297,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     rib: ["thickness"],
     draft: ["angle"],
     offset_face: ["distance"],
+    texture: ["depth", "pitch", "angle", "ratio", "fade"],
     text: ["size", "angle", "depth"],
     standard_part: ["length", "diameter", "height"],
     gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],

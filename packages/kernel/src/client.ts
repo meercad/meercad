@@ -104,9 +104,9 @@ export class KernelClient {
    * Rebuilds the document. Older rebuilds still queued reject with SupersededError. `props: false`
    * leaves out volume and surface area (NaN), which are slow to integrate on curved parts.
    */
-  async rebuild(doc: MeercadDocument, opts: { props?: boolean; onProgress?: RebuildProgress } = {}): Promise<RebuildOutput> {
+  async rebuild(doc: MeercadDocument, opts: { props?: boolean; draft?: boolean; onProgress?: RebuildProgress } = {}): Promise<RebuildOutput> {
     const sent = performance.timeOrigin + performance.now();
-    const r = await this.send({ type: "rebuild", doc: design(doc), ...(opts.props === false ? { props: false } : {}) }, opts.onProgress);
+    const r = await this.send({ type: "rebuild", doc: design(doc), ...(opts.props === false ? { props: false } : {}), ...(opts.draft ? { draft: true } : {}) }, opts.onProgress);
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     if (r.report.timing) r.report.timing = { ...r.report.timing, sent, received: this.lastReceived };
     return { report: r.report, meshes: r.meshes, references: r.references };

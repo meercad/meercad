@@ -1,0 +1,16 @@
+/* Surface texture dialog: pattern tiles and sliders with their typed value. */
+.texture-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.texture-tile { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 2px 5px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); cursor: pointer; min-width: 0; }
+.texture-tile:hover { border-color: var(--border-strong); }
+.texture-tile.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
+.texture-thumb { width: 100%; max-width: 56px; aspect-ratio: 1; border-radius: 5px; display: block; }
+.texture-thumb.placeholder { display: flex; align-items: center; justify-content: center; background: var(--field, var(--panel)); color: var(--muted); }
+.texture-thumb.placeholder svg { width: 20px; height: 20px; }
+.texture-name { font-size: 10.5px; line-height: 1.15; text-align: center; color: var(--text-2); max-width: 100%; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
+.texture-tile.on .texture-name { color: var(--text); }
+.texture-slider { display: flex; align-items: center; gap: 8px; }
+.texture-slider input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
+.texture-value { width: 118px; flex: none; }
+@media (pointer: coarse) {
+  .texture-slider input[type="range"] { height: 36px; }
+}

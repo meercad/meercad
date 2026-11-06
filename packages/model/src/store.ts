@@ -281,6 +281,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     rib: "rb",
     draft: "dr",
     offset_face: "of",
+    texture: "st",
     text: "tx",
     standard_part: "np",
     gridfinity: "gf",

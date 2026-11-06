@@ -200,6 +200,11 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "offset_face":
         if (f.upTo) planeSpec(f.upTo, at);
         break;
+      case "texture":
+        if (f.pattern === "image" && !f.image) errors.push(`${at}: pattern "image" needs an image`);
+        if (f.image && !f.image.pixels.startsWith("blob:") && f.image.pixels.length !== Math.ceil((f.image.width * f.image.height) / 3) * 4)
+          errors.push(`${at}: image.pixels must hold width × height bytes (base64)`);
+        break;
       case "scale":
         for (const b of f.bodies) body(b, at);
         break;

@@ -7,6 +7,7 @@ import { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh
 import { gearViews, jointFrames, type GearView, type JointFrame } from "./joints.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
+import { needsFineBase, texturedMesh, texturesOf } from "./texture.js";
 
 /** Solved sketch geometry for the editor and for drawing sketches in the viewport. */
 export interface SketchView {
@@ -61,6 +62,8 @@ export interface RebuildTiming {
 export class KernelSession {
   private readonly engine: RebuildEngine<ModelState>;
   private meshCache = new WeakMap<Body, { mesh: BodyMesh; summary: BodySummary; props: boolean }>();
+  /** Textured display meshes by body, with what they were made from (`sig`). */
+  private textureCache = new WeakMap<Body, { sig: string; mesh: BodyMesh }>();
   private last: ModelState | null = null;
   /** Tessellation tolerance factor (see meshBody); set before the first rebuild. */
   meshCoarse = 1;
@@ -72,7 +75,7 @@ export class KernelSession {
     this.engine = new RebuildEngine(new OcctBackend(oc, solver));
   }
 
-  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean; onFeature?: (index: number, total: number, id: string) => void } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
+  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean; draft?: boolean; onFeature?: (index: number, total: number, id: string) => void } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
     const r = this.engine.rebuild(doc, opts.onFeature);
     this.last = r.state;
     const t = performance.now();
@@ -90,7 +93,7 @@ export class KernelSession {
         cached.props = true;
       }
       bodies.push(cached.summary);
-      if (opts.mesh !== false) meshes.push(cached.mesh);
+      if (opts.mesh !== false) meshes.push(this.withTextures(r.state, body, cached.mesh, cached.summary, opts.draft === true));
     }
     const sketches: SketchView[] = [...r.state.sketches.values()].map((s) => ({
       id: s.id,
@@ -117,6 +120,24 @@ export class KernelSession {
       meshes,
       references: [...r.state.references.values()].map((m) => ({ id: m.id, positions: m.positions, indices: m.indices })),
     };
+  }
+
+  /** A body's display mesh with its surface textures, if it has any (cached while they stay the same). */
+  private withTextures(state: ModelState, body: Body, mesh: BodyMesh, summary: BodySummary, draft: boolean): BodyMesh {
+    const tex = texturesOf(state, body);
+    if (!tex) return mesh;
+    const hit = this.textureCache.get(body);
+    // A finished mesh also serves a draft request; a draft is redone once the value is let go.
+    if (hit && (hit.sig === tex.sig || hit.sig === `draft:${tex.sig}`) && (draft || !hit.sig.startsWith("draft:"))) return hit.mesh;
+    let base = mesh;
+    if (needsFineBase(this.oc, body, tex.layers)) {
+      // Curved faces need a base that follows the surface closely, or its facets show through.
+      base = meshBody(this.oc, body, summary.bbox, 1, true);
+      this.oc.BRepTools.Clean(body.shape, true);
+    }
+    const textured = texturedMesh(this.oc, body, base, tex.layers, draft ? "draft" : "display", this.meshCoarse);
+    this.textureCache.set(body, { sig: draft ? `draft:${tex.sig}` : tex.sig, mesh: textured });
+    return textured;
   }
 
   /** Summaries with volume and area for the last rebuild's bodies, filling in what `props: false` skipped. */

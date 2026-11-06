@@ -36,6 +36,7 @@ export function snapshot(doc: MeercadDocument, name: string, at: number, blobs: 
     return key;
   };
   state.features = state.features.map((f): Feature => {
+    if (f.op === "texture" && f.image) return { ...f, image: { ...f.image, pixels: keep(f.image.pixels) } };
     if (f.op !== "import") return f;
     return { ...f, data: keep(f.data), ...(f.texture ? { texture: { ...f.texture, image: keep(f.texture.image), uvs: keep(f.texture.uvs) } } : {}) };
   });
@@ -53,6 +54,11 @@ export function snapshot(doc: MeercadDocument, name: string, at: number, blobs: 
 export function restored(doc: MeercadDocument, version: Version): MeercadDocument {
   const state: VersionState = structuredClone(version.state);
   state.features = state.features.map((f): Feature => {
+    if (f.op === "texture" && f.image?.pixels.startsWith("blob:")) {
+      const pixels = doc.blobs?.[f.image.pixels];
+      if (pixels === undefined) throw new Error(`version "${version.name}": the picture of ${f.name ?? f.id} is missing`);
+      return { ...f, image: { ...f.image, pixels } };
+    }
     if (f.op !== "import") return f;
     const fill = (data: string) => {
       if (!data.startsWith("blob:")) return data;
@@ -77,7 +83,9 @@ export function pruneBlobs(doc: MeercadDocument): void {
   if (!doc.blobs) return;
   const used = new Set(
     doc.versions?.flatMap((v) => [
-      ...v.state.features.flatMap((f) => (f.op === "import" ? [f.data, f.texture?.image ?? "", f.texture?.uvs ?? ""].filter((d) => d.startsWith("blob:")) : [])),
+      ...v.state.features.flatMap((f) =>
+        (f.op === "import" ? [f.data, f.texture?.image ?? "", f.texture?.uvs ?? ""] : f.op === "texture" ? [f.image?.pixels ?? ""] : []).filter((d) => d.startsWith("blob:")),
+      ),
       ...(v.state.references ?? []).flatMap((r) => (r.data.startsWith("blob:") ? [r.data] : [])),
     ]) ?? [],
   );
@@ -91,7 +99,12 @@ export function versionChanges(version: VersionState, design: MeercadDocument): 
   const now = new Map(design.features.map((f) => [f.id, f]));
   const same = (a: Feature, b: Feature) => {
     // Imports compare by their file, not by the key a version keeps.
-    const strip = (f: Feature) => (f.op === "import" ? { ...f, data: f.data.startsWith("blob:") ? f.data : blobKey(f.data) } : f);
+    const strip = (f: Feature) =>
+      f.op === "import"
+        ? { ...f, data: f.data.startsWith("blob:") ? f.data : blobKey(f.data) }
+        : f.op === "texture" && f.image
+          ? { ...f, image: { ...f.image, pixels: f.image.pixels.startsWith("blob:") || f.image.pixels.length < INLINE ? f.image.pixels : blobKey(f.image.pixels) } }
+          : f;
     return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
   };
   const added = design.features.filter((f) => !then.has(f.id)).map((f) => f.id);

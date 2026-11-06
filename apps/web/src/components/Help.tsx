@@ -118,6 +118,17 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         ),
       },
       {
+        title: t("Surface textures"),
+        body: (
+          <ul>
+            {li(t("Modify → **Surface texture**, then pick the faces: ribs, knurling, honeycomb, dots, waves, bricks, wood grain, leather, weave, or your own picture as a height map (bright = high)."))}
+            {li(t("Drag the sliders for depth, spacing and angle and watch the part; positive depth raises the pattern, negative cuts it in."))}
+            {li(t("On flat faces the pattern lies flat, round faces get it wrapped around with whole repeats, and over rounded corners it runs on without a seam. At the border to other faces and at sharp edges it fades out."))}
+            {li(t("It is a finish on the triangles: STL, 3MF and OBJ carry it for printing; STEP, volume and mass keep the smooth faces."))}
+          </ul>
+        ),
+      },
+      {
         title: t("History, rollback and variables"),
         body: (
           <ul>

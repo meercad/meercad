@@ -1,3 +1,4 @@
+import type { ResolvedTexture } from "@meercad/model";
 import type { BooleanMode } from "@meercad/schema";
 import type { PlaneFrame, Region, SolvedSketch } from "@meercad/sketch";
 import type { Arena } from "./arena.js";
@@ -24,6 +25,13 @@ export interface ReferenceMesh {
   indices: Uint32Array;
 }
 
+/** A texture step: the part as it was then, and the face indices on it (see texture.ts). */
+export interface TextureRecord {
+  feature: ResolvedTexture;
+  body: Body;
+  faces: number[];
+}
+
 export interface ModelState {
   readonly bodies: ReadonlyMap<string, Body>;
   readonly sketches: ReadonlyMap<string, SketchResult>;
@@ -34,6 +42,8 @@ export interface ModelState {
   readonly gears: ReadonlyMap<string, GearRecord>;
   /** Gridfinity baseplates by feature id, for bins set into them (absent in older states). */
   readonly grids?: ReadonlyMap<string, GridRecord>;
+  /** Surface textures by feature id; they change only the triangles, never the solid. */
+  readonly textures?: ReadonlyMap<string, TextureRecord>;
   /** Objects created by the feature that produced this state. */
   readonly arena: Arena;
 }

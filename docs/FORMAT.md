@@ -27,7 +27,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 - **versions / blobs** (optional) — named states of the design the user saved:
   `"versions": [{ "name": "Before the fillets", "at": 1793366400000, "state": { "params": …, "features": …, "rollback": null } }]`.
   A state is the whole document without `format`, `versions` and `blobs`. Imported files' contents
-  (`import.data`, and a mesh's `texture.image` and `texture.uvs`) longer than 4 kB are stored once
+  (`import.data`, a mesh's `texture.image` and `texture.uvs`, and a surface texture's `image.pixels`) longer than 4 kB are stored once
   in `blobs` under a key (`"blob:…"`) that the states use instead, however many versions share them.
 - **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders (op `set_part_list {groups?, order?}`; null clears).
 - **import.texture** (optional, STL imports) — the picture on a mesh, e.g. a scan's colours:
@@ -51,7 +51,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 - **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way; op `set_see_through {parts, on}`).
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
-  `gridfinity`, `label` (and more: see the schema).
+  `gridfinity`, `label`, `bend`, `texture` (and more: see the schema).
 - **Ops for materials** (Operations API): `set_material {part, material}` (null for none),
   `define_material {material}` (adds or replaces an own material by id), `delete_material {id}`
   (its parts go back to the base material).
@@ -82,6 +82,17 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   the other way, `reverse` starts a spiral at the other end, `tolerance` (mm) is how far the
   triangles may stray from the exact shape. Ends that meet are joined into a closed ring. The
   parts become mesh parts and keep their ids.
+- **texture** — a printable surface texture on faces of one part:
+  `{ "op": "texture", "faces": [{ "face": "ex1.side[*]" }], "pattern": "ribs", "depth": 0.8, "pitch": 4 }`.
+  `pattern` is one of `ribs`, `ribs_square`, `ribs_v`, `knurl`, `cross_knurl`, `hex`, `dots`, `waves`,
+  `brick`, `wood`, `leather`, `weave`, `image`; `depth` (mm) raises the pattern (positive) or cuts it in
+  (negative), `pitch` (mm) is one repeat. Optional: `angle` (degrees; 0 = ribs run up a wall or along
+  a round face's axis), `ratio` (raised share 0.1–0.95), `fade` (mm at the border, default half the
+  pitch up to 2 mm), `seed` (wood, leather), `invert`, and for `image` a greyscale height picture
+  `{ "width": 64, "height": 64, "pixels": "<base64 of width × height bytes, row by row from the top, 255 = high>" }`
+  (kept in `blobs` by versions like imported files). Only the triangles change: the display and STL,
+  3MF and OBJ export carry the texture; the solid, its volume and mass, STEP and later steps keep the
+  smooth faces.
 - **References** never use indices. Faces carry *tags* from the feature that made them
   (`ex1.end_cap`, `ex1.side[sk1.l3]`, `fi1.round[a|b]`) and later features select by tag, so edits
   upstream don't silently re-target downstream features.
