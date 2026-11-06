@@ -6,11 +6,11 @@
 .texture-thumb { width: 100%; max-width: 56px; aspect-ratio: 1; border-radius: 5px; display: block; }
 .texture-thumb.placeholder { display: flex; align-items: center; justify-content: center; background: var(--field, var(--panel)); color: var(--muted); }
 .texture-thumb.placeholder svg { width: 20px; height: 20px; }
-.texture-name { font-size: 10.5px; line-height: 1.15; text-align: center; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.texture-name { font-size: 10.5px; line-height: 1.15; text-align: center; color: var(--text-2); max-width: 100%; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
 .texture-tile.on .texture-name { color: var(--text); }
 .texture-slider { display: flex; align-items: center; gap: 8px; }
 .texture-slider input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
-.texture-value { width: 92px; flex: none; }
+.texture-value { width: 118px; flex: none; }
 @media (pointer: coarse) {
   .texture-slider input[type="range"] { height: 36px; }
 }

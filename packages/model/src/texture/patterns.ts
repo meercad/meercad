@@ -37,7 +37,7 @@ const SQRT3 = Math.sqrt(3);
 const KNURL = Math.tan(Math.PI / 6);
 
 export const PATTERNS: Record<TexturePattern, PatternInfo> = {
-  ribs: { periodA: 1, periodB: 0, ratio: 0.9, pitch: 3, depth: 0.6 },
+  ribs: { periodA: 1, periodB: 0, ratio: 0.8, pitch: 3, depth: 0.6 },
   ribs_square: { periodA: 1, periodB: 0, ratio: 0.5, pitch: 3, depth: 0.6 },
   ribs_v: { periodA: 1, periodB: 0, pitch: 2, depth: 0.6 },
   knurl: { periodA: 1, periodB: 1 / KNURL, pitch: 2, depth: 0.5 },

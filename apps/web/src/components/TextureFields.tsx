@@ -138,7 +138,7 @@ export function TextureFields({ f, set, faces }: { f: TextureFeature; set: Set; 
         <SliderValue value={f.pitch} fallback={info.pitch} min={0.5} max={f.pattern === "image" ? 100 : 30} step={0.1} unit="mm" onChange={(p) => set({ pitch: p ?? info.pitch })} />
       </Labeled>
       <Labeled label={t("Angle")}>
-        <SliderValue value={f.angle} fallback={0} min={-90} max={90} step={1} unit="deg" onChange={(angle) => set({ angle: angle === 0 ? undefined : angle })} />
+        <SliderValue value={f.angle} fallback={0} min={-90} max={90} step={1} unit="deg" placeholder="0" onChange={(angle) => set({ angle: angle === 0 ? undefined : angle })} />
       </Labeled>
       {info.ratio !== undefined ? (
         <Labeled label={t("Raised share")}>

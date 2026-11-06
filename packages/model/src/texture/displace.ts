@@ -342,7 +342,7 @@ export function applyTextures(mesh: TexturableMesh, layers: TextureLayer[], surf
   const groups = new Map<number, GroupMap>();
   for (const g of new Set(groupOf.filter((g) => g >= 0))) {
     const members = ranges.map((r, i) => i).filter((i) => groupOf[i] === g);
-    groups.set(g, groupMapping(members.map((i) => ranges[i]!), members, surfaces, layers[ranges[g]!.layer]!, P));
+    groups.set(g, groupMapping(members.map((i) => ranges[i]!), members, surfaces, layers[ranges[g]!.layer]!, P, spacing[ranges[g]!.layer]!));
   }
 
   // ---- heights
@@ -503,9 +503,9 @@ function upOn(n: V3): V3 {
   return norm([ref[0] - n[0] * t, ref[1] - n[1] * t, ref[2] - n[2] * t]);
 }
 
-function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], layer: TextureLayer, P: (w: number) => V3): GroupMap {
+function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], layer: TextureLayer, P: (w: number) => V3, footprint: number): GroupMap {
   const periods = patternPeriods(layer.pattern, layer.image);
-  const h = patternHeight(layer.pattern, { ...(layer.ratio !== undefined ? { ratio: layer.ratio } : {}), ...(layer.seed !== undefined ? { seed: layer.seed } : {}), ...(layer.image ? { image: layer.image } : {}), ...(layer.invert ? { invert: true } : {}) });
+  const h = prefiltered(footprint / layer.pitch, patternHeight(layer.pattern, { ...(layer.ratio !== undefined ? { ratio: layer.ratio } : {}), ...(layer.seed !== undefined ? { seed: layer.seed } : {}), ...(layer.image ? { image: layer.image } : {}), ...(layer.invert ? { invert: true } : {}) }));
   const firstNormal = (r: Range): V3 => [r.nrm[0]!, r.nrm[1]!, r.nrm[2]!];
   const kinds = members.map((r) => surfaces[r.face] ?? { kind: "other" as const });
   const cyl = kinds.find((k) => k.kind === "cylinder") as Extract<FaceSurface, { kind: "cylinder" }> | undefined;
@@ -643,6 +643,16 @@ function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], 
       return h(u * ca + v * sa, -u * sa + v * ca);
     },
   };
+}
+
+/**
+ * The pattern averaged over the patch a corner stands for (`size` in pattern units, the spacing of
+ * the corners): grooves and edges finer than the triangles then come out evenly instead of
+ * appearing at some corners and missing between others.
+ */
+function prefiltered(size: number, h: (a: number, b: number) => number): (a: number, b: number) => number {
+  const r = size / 3;
+  return (a, b) => (2 * h(a, b) + h(a + r, b) + h(a - r, b) + h(a, b + r) + h(a, b - r)) / 6;
 }
 
 /** Free-form faces: the pattern seen from the three axes, blended by how much the face looks along each. */
