@@ -9,7 +9,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { applyLook, drawSwatches, PLAIN_LOOK, RenderedStage, studioEnvironment, TEXTURED_LOOK, type BodyLook, type SwatchSpec } from "./looks.js";
+import { applyLook, drawSwatches, paintBackdrop, PLAIN_LOOK, RenderedStage, studioEnvironment, TEXTURED_LOOK, type BodyLook, type SwatchSpec } from "./looks.js";
 
 export type { BodyLook, SwatchSpec } from "./looks.js";
 
@@ -2144,7 +2144,9 @@ export class Viewport {
       cam.left = cam.bottom * aspect;
       cam.right = cam.top * aspect;
     }
-    this.stage.setBackdrop(!opts.transparent);
+    // The backdrop is painted once under the whole picture: drawn per tile it would start over in each.
+    this.stage.setBackdrop(false);
+    if (!opts.transparent) paintBackdrop(g, W, H, this.stage.dark);
     const tile = Math.min(1024, this.renderer.capabilities.maxTextureSize);
     try {
       this.renderer.setPixelRatio(1);

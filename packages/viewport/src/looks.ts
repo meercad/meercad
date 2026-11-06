@@ -68,13 +68,9 @@ export function applyLook(mat: THREE.MeshPhysicalMaterial, look: BodyLook, env: 
 /** What makes three.js compile another shader for a material. */
 const programKey = (m: THREE.MeshPhysicalMaterial) => `${!!m.envMap}|${m.clearcoat > 0}|${m.sheen > 0}|${m.transmission > 0}`;
 
-/** A vertical gradient as the backdrop of the rendered view. */
-function backdrop(dark: boolean): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 4;
-  c.height = 256;
-  const g = c.getContext("2d")!;
-  const grad = g.createLinearGradient(0, 0, 0, 256);
+/** Paints the rendered view's backdrop, a vertical gradient, over a whole canvas. */
+export function paintBackdrop(g: CanvasRenderingContext2D, width: number, height: number, dark: boolean): void {
+  const grad = g.createLinearGradient(0, 0, 0, height);
   if (dark) {
     grad.addColorStop(0, "#3a404b");
     grad.addColorStop(1, "#16191e");
@@ -83,7 +79,15 @@ function backdrop(dark: boolean): THREE.CanvasTexture {
     grad.addColorStop(1, "#d5dbe3");
   }
   g.fillStyle = grad;
-  g.fillRect(0, 0, 4, 256);
+  g.fillRect(0, 0, width, height);
+}
+
+/** The backdrop as a texture for the view on screen. */
+function backdrop(dark: boolean): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 4;
+  c.height = 256;
+  paintBackdrop(c.getContext("2d")!, 4, 256, dark);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
