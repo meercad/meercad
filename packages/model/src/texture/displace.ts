@@ -57,7 +57,7 @@ export interface TextureOptions {
 export const DISPLAY_TEXTURE: TextureOptions = { samples: 8, maxTriangles: 300_000 };
 /** While a value is being dragged: quick and coarse. */
 export const DRAFT_TEXTURE: TextureOptions = { samples: 6, maxTriangles: 60_000 };
-export const EXPORT_TEXTURE: TextureOptions = { samples: 16, maxTriangles: 3_000_000 };
+export const EXPORT_TEXTURE: TextureOptions = { samples: 12, maxTriangles: 2_000_000 };
 
 export interface TexturedMesh {
   positions: Float32Array;
