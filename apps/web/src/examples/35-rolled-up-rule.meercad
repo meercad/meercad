@@ -1,0 +1,755 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "length": "1000 mm",
+  "width": "20 mm",
+  "thickness": "3 mm",
+  "inner": "25 mm",
+  "gap": "1.5 mm"
+ },
+ "features": [
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "name": "Strip",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "lp1",
+     "type": "point",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "lp2",
+     "type": "point",
+     "x": 1000,
+     "y": 0
+    },
+    {
+     "id": "lp3",
+     "type": "point",
+     "x": 1000,
+     "y": 20
+    },
+    {
+     "id": "lp4",
+     "type": "point",
+     "x": 0,
+     "y": 20
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "p1": "lp1",
+     "p2": "lp2"
+    },
+    {
+     "id": "l2",
+     "type": "line",
+     "p1": "lp2",
+     "p2": "lp3"
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "p1": "lp3",
+     "p2": "lp4"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "p1": "lp4",
+     "p2": "lp1"
+    }
+   ],
+   "constraints": [
+    {
+     "id": "lh1",
+     "type": "horizontal",
+     "line": "l1"
+    },
+    {
+     "id": "lh2",
+     "type": "horizontal",
+     "line": "l3"
+    },
+    {
+     "id": "lv1",
+     "type": "vertical",
+     "line": "l2"
+    },
+    {
+     "id": "lv2",
+     "type": "vertical",
+     "line": "l4"
+    },
+    {
+     "id": "o",
+     "type": "coincident",
+     "a": "lp1",
+     "b": "origin"
+    },
+    {
+     "id": "len",
+     "type": "length",
+     "line": "l1",
+     "value": "length"
+    },
+    {
+     "id": "w",
+     "type": "length",
+     "line": "l2",
+     "value": "width"
+    }
+   ]
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Rule",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": "thickness",
+   "mode": "new_body"
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "name": "Decimetre marks",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "entities": [
+    {
+     "id": "m1_p1",
+     "type": "point",
+     "x": 99.5,
+     "y": 1.5
+    },
+    {
+     "id": "m1_p2",
+     "type": "point",
+     "x": 100.5,
+     "y": 1.5
+    },
+    {
+     "id": "m1_p3",
+     "type": "point",
+     "x": 100.5,
+     "y": 8.5
+    },
+    {
+     "id": "m1_p4",
+     "type": "point",
+     "x": 99.5,
+     "y": 8.5
+    },
+    {
+     "id": "m1_1",
+     "type": "line",
+     "p1": "m1_p1",
+     "p2": "m1_p2"
+    },
+    {
+     "id": "m1_2",
+     "type": "line",
+     "p1": "m1_p2",
+     "p2": "m1_p3"
+    },
+    {
+     "id": "m1_3",
+     "type": "line",
+     "p1": "m1_p3",
+     "p2": "m1_p4"
+    },
+    {
+     "id": "m1_4",
+     "type": "line",
+     "p1": "m1_p4",
+     "p2": "m1_p1"
+    },
+    {
+     "id": "m2_p1",
+     "type": "point",
+     "x": 199.5,
+     "y": 1.5
+    },
+    {
+     "id": "m2_p2",
+     "type": "point",
+     "x": 200.5,
+     "y": 1.5
+    },
+    {
+     "id": "m2_p3",
+     "type": "point",
+     "x": 200.5,
+     "y": 8.5
+    },
+    {
+     "id": "m2_p4",
+     "type": "point",
+     "x": 199.5,
+     "y": 8.5
+    },
+    {
+     "id": "m2_1",
+     "type": "line",
+     "p1": "m2_p1",
+     "p2": "m2_p2"
+    },
+    {
+     "id": "m2_2",
+     "type": "line",
+     "p1": "m2_p2",
+     "p2": "m2_p3"
+    },
+    {
+     "id": "m2_3",
+     "type": "line",
+     "p1": "m2_p3",
+     "p2": "m2_p4"
+    },
+    {
+     "id": "m2_4",
+     "type": "line",
+     "p1": "m2_p4",
+     "p2": "m2_p1"
+    },
+    {
+     "id": "m3_p1",
+     "type": "point",
+     "x": 299.5,
+     "y": 1.5
+    },
+    {
+     "id": "m3_p2",
+     "type": "point",
+     "x": 300.5,
+     "y": 1.5
+    },
+    {
+     "id": "m3_p3",
+     "type": "point",
+     "x": 300.5,
+     "y": 8.5
+    },
+    {
+     "id": "m3_p4",
+     "type": "point",
+     "x": 299.5,
+     "y": 8.5
+    },
+    {
+     "id": "m3_1",
+     "type": "line",
+     "p1": "m3_p1",
+     "p2": "m3_p2"
+    },
+    {
+     "id": "m3_2",
+     "type": "line",
+     "p1": "m3_p2",
+     "p2": "m3_p3"
+    },
+    {
+     "id": "m3_3",
+     "type": "line",
+     "p1": "m3_p3",
+     "p2": "m3_p4"
+    },
+    {
+     "id": "m3_4",
+     "type": "line",
+     "p1": "m3_p4",
+     "p2": "m3_p1"
+    },
+    {
+     "id": "m4_p1",
+     "type": "point",
+     "x": 399.5,
+     "y": 1.5
+    },
+    {
+     "id": "m4_p2",
+     "type": "point",
+     "x": 400.5,
+     "y": 1.5
+    },
+    {
+     "id": "m4_p3",
+     "type": "point",
+     "x": 400.5,
+     "y": 8.5
+    },
+    {
+     "id": "m4_p4",
+     "type": "point",
+     "x": 399.5,
+     "y": 8.5
+    },
+    {
+     "id": "m4_1",
+     "type": "line",
+     "p1": "m4_p1",
+     "p2": "m4_p2"
+    },
+    {
+     "id": "m4_2",
+     "type": "line",
+     "p1": "m4_p2",
+     "p2": "m4_p3"
+    },
+    {
+     "id": "m4_3",
+     "type": "line",
+     "p1": "m4_p3",
+     "p2": "m4_p4"
+    },
+    {
+     "id": "m4_4",
+     "type": "line",
+     "p1": "m4_p4",
+     "p2": "m4_p1"
+    },
+    {
+     "id": "m5_p1",
+     "type": "point",
+     "x": 499.5,
+     "y": 1.5
+    },
+    {
+     "id": "m5_p2",
+     "type": "point",
+     "x": 500.5,
+     "y": 1.5
+    },
+    {
+     "id": "m5_p3",
+     "type": "point",
+     "x": 500.5,
+     "y": 8.5
+    },
+    {
+     "id": "m5_p4",
+     "type": "point",
+     "x": 499.5,
+     "y": 8.5
+    },
+    {
+     "id": "m5_1",
+     "type": "line",
+     "p1": "m5_p1",
+     "p2": "m5_p2"
+    },
+    {
+     "id": "m5_2",
+     "type": "line",
+     "p1": "m5_p2",
+     "p2": "m5_p3"
+    },
+    {
+     "id": "m5_3",
+     "type": "line",
+     "p1": "m5_p3",
+     "p2": "m5_p4"
+    },
+    {
+     "id": "m5_4",
+     "type": "line",
+     "p1": "m5_p4",
+     "p2": "m5_p1"
+    },
+    {
+     "id": "m6_p1",
+     "type": "point",
+     "x": 599.5,
+     "y": 1.5
+    },
+    {
+     "id": "m6_p2",
+     "type": "point",
+     "x": 600.5,
+     "y": 1.5
+    },
+    {
+     "id": "m6_p3",
+     "type": "point",
+     "x": 600.5,
+     "y": 8.5
+    },
+    {
+     "id": "m6_p4",
+     "type": "point",
+     "x": 599.5,
+     "y": 8.5
+    },
+    {
+     "id": "m6_1",
+     "type": "line",
+     "p1": "m6_p1",
+     "p2": "m6_p2"
+    },
+    {
+     "id": "m6_2",
+     "type": "line",
+     "p1": "m6_p2",
+     "p2": "m6_p3"
+    },
+    {
+     "id": "m6_3",
+     "type": "line",
+     "p1": "m6_p3",
+     "p2": "m6_p4"
+    },
+    {
+     "id": "m6_4",
+     "type": "line",
+     "p1": "m6_p4",
+     "p2": "m6_p1"
+    },
+    {
+     "id": "m7_p1",
+     "type": "point",
+     "x": 699.5,
+     "y": 1.5
+    },
+    {
+     "id": "m7_p2",
+     "type": "point",
+     "x": 700.5,
+     "y": 1.5
+    },
+    {
+     "id": "m7_p3",
+     "type": "point",
+     "x": 700.5,
+     "y": 8.5
+    },
+    {
+     "id": "m7_p4",
+     "type": "point",
+     "x": 699.5,
+     "y": 8.5
+    },
+    {
+     "id": "m7_1",
+     "type": "line",
+     "p1": "m7_p1",
+     "p2": "m7_p2"
+    },
+    {
+     "id": "m7_2",
+     "type": "line",
+     "p1": "m7_p2",
+     "p2": "m7_p3"
+    },
+    {
+     "id": "m7_3",
+     "type": "line",
+     "p1": "m7_p3",
+     "p2": "m7_p4"
+    },
+    {
+     "id": "m7_4",
+     "type": "line",
+     "p1": "m7_p4",
+     "p2": "m7_p1"
+    },
+    {
+     "id": "m8_p1",
+     "type": "point",
+     "x": 799.5,
+     "y": 1.5
+    },
+    {
+     "id": "m8_p2",
+     "type": "point",
+     "x": 800.5,
+     "y": 1.5
+    },
+    {
+     "id": "m8_p3",
+     "type": "point",
+     "x": 800.5,
+     "y": 8.5
+    },
+    {
+     "id": "m8_p4",
+     "type": "point",
+     "x": 799.5,
+     "y": 8.5
+    },
+    {
+     "id": "m8_1",
+     "type": "line",
+     "p1": "m8_p1",
+     "p2": "m8_p2"
+    },
+    {
+     "id": "m8_2",
+     "type": "line",
+     "p1": "m8_p2",
+     "p2": "m8_p3"
+    },
+    {
+     "id": "m8_3",
+     "type": "line",
+     "p1": "m8_p3",
+     "p2": "m8_p4"
+    },
+    {
+     "id": "m8_4",
+     "type": "line",
+     "p1": "m8_p4",
+     "p2": "m8_p1"
+    },
+    {
+     "id": "m9_p1",
+     "type": "point",
+     "x": 899.5,
+     "y": 1.5
+    },
+    {
+     "id": "m9_p2",
+     "type": "point",
+     "x": 900.5,
+     "y": 1.5
+    },
+    {
+     "id": "m9_p3",
+     "type": "point",
+     "x": 900.5,
+     "y": 8.5
+    },
+    {
+     "id": "m9_p4",
+     "type": "point",
+     "x": 899.5,
+     "y": 8.5
+    },
+    {
+     "id": "m9_1",
+     "type": "line",
+     "p1": "m9_p1",
+     "p2": "m9_p2"
+    },
+    {
+     "id": "m9_2",
+     "type": "line",
+     "p1": "m9_p2",
+     "p2": "m9_p3"
+    },
+    {
+     "id": "m9_3",
+     "type": "line",
+     "p1": "m9_p3",
+     "p2": "m9_p4"
+    },
+    {
+     "id": "m9_4",
+     "type": "line",
+     "p1": "m9_p4",
+     "p2": "m9_p1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Marks",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": "0.6 mm",
+   "flip": true,
+   "mode": "cut"
+  },
+  {
+   "id": "tx1",
+   "op": "text",
+   "name": "10 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "10",
+   "position": [
+    101.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx2",
+   "op": "text",
+   "name": "20 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "20",
+   "position": [
+    201.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx3",
+   "op": "text",
+   "name": "30 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "30",
+   "position": [
+    301.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx4",
+   "op": "text",
+   "name": "40 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "40",
+   "position": [
+    401.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx5",
+   "op": "text",
+   "name": "50 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "50",
+   "position": [
+    501.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx6",
+   "op": "text",
+   "name": "60 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "60",
+   "position": [
+    601.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx7",
+   "op": "text",
+   "name": "70 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "70",
+   "position": [
+    701.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx8",
+   "op": "text",
+   "name": "80 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "80",
+   "position": [
+    801.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "tx9",
+   "op": "text",
+   "name": "90 cm",
+   "plane": {
+    "face": {
+     "face": "ex1.end_cap"
+    }
+   },
+   "text": "90",
+   "position": [
+    901.5,
+    10
+   ],
+   "size": "5 mm",
+   "depth": "0.6 mm",
+   "mode": "cut"
+  },
+  {
+   "id": "bd1",
+   "op": "bend",
+   "name": "Rolled up",
+   "bodies": [
+    "ex1"
+   ],
+   "mode": "spiral",
+   "axis": {
+    "ref": "origin.Z"
+   },
+   "radius": "inner",
+   "gap": "gap"
+  }
+ ],
+ "rollback": null
+}

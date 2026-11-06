@@ -37,4 +37,8 @@ export default {
     "Zieh am Pfeil oder tipp Radius, Winkel oder Abstand ein. Der Schritt zeigt, wie viele Windungen eine Spirale hat und wie breit sie wird; Windungen, die sich berühren würden, werden abgelehnt, solche näher als 0.3 mm bekommen eine Warnung.",
   "Lengths along the part stay the same, so a ruler's marks keep their spacing. The result is a mesh part, ready for STL or 3MF.":
     "Längen entlang des Teils bleiben gleich, die Striche eines Lineals behalten also ihren Abstand. Das Ergebnis ist ein Netz-Teil, bereit für STL oder 3MF.",
+  "Rolled-up rule": "Aufgerollter Meterstab",
+  "A 1 m rule rolled into a flat spiral that fits the print bed": "Ein 1-m-Maßstab, zu einer flachen Spirale aufgerollt, die aufs Druckbett passt",
+  "Text bracelet": "Armband mit Schrift",
+  "A band with raised text wrapped into a closed ring": "Ein Band mit erhabener Schrift, zu einem geschlossenen Ring gebogen",
 };
