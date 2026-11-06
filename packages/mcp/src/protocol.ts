@@ -22,7 +22,26 @@ export type BridgeMethod =
   | "render_motion"
   | "drawing"
   | "get_status"
-  | "clear_preview";
+  | "clear_preview"
+  | "get_version"
+  | "check_interference"
+  | "wall_thickness"
+  | "deviation"
+  | "repair_mesh"
+  | "rebuild_mesh"
+  | "measure_scan"
+  | "joints_from_gears"
+  | "import_file"
+  | "set_visibility"
+  | "rename_project"
+  | "list_folders"
+  | "create_folder"
+  | "move_project"
+  | "list_examples"
+  | "open_example"
+  | "terrain_height"
+  | "place_on_terrain"
+  | "photo_terrain";
 
 export interface BridgeRequest {
   id: number;

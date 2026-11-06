@@ -32,13 +32,13 @@ export const canBuildTerrain = !!desktop || (nativeApp && Capacitor.getPlatform(
 let busy = false;
 
 /** Asks for a folder of photos, builds the model and adds it to the open design. */
-export async function buildTerrain(): Promise<void> {
+export async function buildTerrain(folder?: string): Promise<void> {
   if (busy) return toast(t("A model from photos is already being built."), "error");
   busy = true;
   // The model goes into the project open now, even if another one is open when it is done.
   const project = useApp.getState().project?.id;
   const task = startTask(t("Model from photos"), null, { long: true, pace: PHOTOGRAMMETRY, cancel: cancelTerrain, ...(project ? { project } : {}) });
-  task.update(null, t("Choose the folder with the photos"));
+  if (!folder) task.update(null, t("Choose the folder with the photos"));
   const steps: Record<string, string> = { model: t("Building the model"), writing: t("Preparing the model") };
   const progress = (e: { progress: number; step: string }) => task.update(e.step === "writing" ? null : e.progress, steps[e.step] ?? "");
   let stop: (() => void) | undefined;
@@ -47,7 +47,7 @@ export async function buildTerrain(): Promise<void> {
     let bytes: Uint8Array;
     if (desktop) {
       stop = desktop.on("photos-progress", progress);
-      const r = await desktop.photos.build();
+      const r = await desktop.photos.build(folder);
       if (!r) return;
       ({ data: bytes, ...result } = r);
     } else {

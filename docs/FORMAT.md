@@ -29,14 +29,14 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   A state is the whole document without `format`, `versions` and `blobs`. Imported files' contents
   (`import.data`, and a mesh's `texture.image` and `texture.uvs`) longer than 4 kB are stored once
   in `blobs` under a key (`"blob:…"`) that the states use instead, however many versions share them.
-- **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders.
+- **partOrder / partGroups** (optional) — how the parts list is ordered and grouped into folders (op `set_part_list {groups?, order?}`; null clears).
 - **import.texture** (optional, STL imports) — the picture on a mesh, e.g. a scan's colours:
   `{ "image": "<base64 JPEG/PNG>", "mime": "image/jpeg", "uvs": "<base64 float32 pairs>", "hidden": true }`.
   `uvs` has one little-endian float32 pair per triangle corner of `data`, in file order, with v
   counting rows from the top (as in glTF). Only the look: the part is built from `data` alone. It
   follows the part when moved, copied or patterned; a cut or combined part is shown plain.
   `hidden` shows the part without it (and exports it without).
-- **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way).
+- **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way; op `set_see_through {parts, on}`).
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`.
 - **thread** — `{ "op": "thread", "face": { "face": "ex2.side[sk2.c1]" }, "size": "M8", "clearance": 0.15 }`

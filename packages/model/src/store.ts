@@ -76,8 +76,40 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       if (op.id !== null) indexOf(next, op.id);
       next.rollback = op.id;
       break;
-    case "replace":
-      return checked(op.doc);
+    case "replace": {
+      // A document read back without its versions (get_model leaves them out) keeps them.
+      const keep = !op.doc.versions && doc.versions ? { versions: doc.versions, ...(doc.blobs ? { blobs: doc.blobs } : {}) } : {};
+      return checked({ ...op.doc, ...keep });
+    }
+    case "set_part_color": {
+      const colors = { ...(next.partColors ?? {}) };
+      if (op.color) colors[op.part] = op.color.toLowerCase();
+      else delete colors[op.part];
+      if (Object.keys(colors).length) next.partColors = colors;
+      else delete next.partColors;
+      break;
+    }
+    case "set_see_through": {
+      const set = new Set(next.seeThrough ?? []);
+      for (const p of op.parts) op.on ? set.add(p) : set.delete(p);
+      if (set.size) next.seeThrough = [...set];
+      else delete next.seeThrough;
+      break;
+    }
+    case "set_part_list":
+      if (op.groups !== undefined) {
+        if (op.groups?.length) next.partGroups = structuredClone(op.groups);
+        else delete next.partGroups;
+      }
+      if (op.order !== undefined) {
+        if (op.order?.length) next.partOrder = [...op.order];
+        else delete next.partOrder;
+      }
+      break;
+    case "set_units":
+      if (op.units === "in") next.units = "in";
+      else delete next.units;
+      break;
     case "set_joint": {
       const m = (next.mechanism ??= { joints: [] });
       const i = m.joints.findIndex((j) => j.id === op.joint.id);

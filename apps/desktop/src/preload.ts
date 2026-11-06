@@ -37,7 +37,7 @@ const api = {
     set: (p: { dir: string; move: boolean }) => ipcRenderer.invoke("storage:set", p),
   },
   photos: {
-    build: () => ipcRenderer.invoke("photos:build"),
+    build: (folder?: string) => ipcRenderer.invoke("photos:build", folder),
     cancel: () => ipcRenderer.invoke("photos:cancel"),
   },
   /** The system's text editing in the focused field: cut, copy, paste, selectAll. */

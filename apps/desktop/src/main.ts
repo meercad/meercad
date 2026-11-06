@@ -255,11 +255,12 @@ ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | str
  * picks no folder. One build at a time; "photos:cancel" stops it.
  */
 let photoBuild: ChildProcess | null = null;
-ipcMain.handle("photos:build", async (e) => {
+ipcMain.handle("photos:build", async (e, given?: unknown) => {
   if (photoBuild) throw new Error("busy");
   const win = BrowserWindow.fromWebContents(e.sender);
   // MEERCAD_PHOTOS_DIR skips the folder dialog (automated tests of the whole build in the app).
-  const folder = process.env["MEERCAD_PHOTOS_DIR"] || (await dialog.showOpenDialog(win!, { properties: ["openDirectory"], message: lang === "de" ? "Ordner mit den Fotos" : "Folder with the photos" })).filePaths[0];
+  // An assistant (MCP) names the folder itself.
+  const folder = (typeof given === "string" && given) || process.env["MEERCAD_PHOTOS_DIR"] || (await dialog.showOpenDialog(win!, { properties: ["openDirectory"], message: lang === "de" ? "Ordner mit den Fotos" : "Folder with the photos" })).filePaths[0];
   if (!folder) return null;
   const helper = join(__dirname, "native", "meercad-photos").replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
   const work = join(app.getPath("temp"), `meercad-photos-${Date.now()}`);

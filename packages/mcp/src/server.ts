@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
-import { SYSTEM_PROMPT } from "@meercad/ai/prompt";
+import { MCP_NOTES, SYSTEM_PROMPT } from "@meercad/ai/prompt";
 import { read3mf, readObj, writeStl } from "@meercad/io";
 import { gearCalc } from "./gearCalc.js";
 import { DEFAULT_PORT, type BridgeHello, type BridgeMethod, type BridgeResponse } from "./protocol.js";
@@ -158,6 +158,7 @@ const guard =
  * feature per object (ids get a suffix from the second one on).
  */
 async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  // (also: set_reference with `path` reads the .glb)
   const inline = async (f: Record<string, unknown>): Promise<Record<string, unknown>[]> => {
     if (f["op"] !== "import" || typeof f["path"] !== "string") return [f];
     const path = resolve(f["path"].replace(/^~(?=\/|$)/, homedir()));
@@ -178,6 +179,14 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
     if (!format) throw new Error(`import ${String(f["id"] ?? "")}: unknown file type "${ext}" (use .step, .stp, .stl, .3mf or .obj, or set format)`);
     return [{ ...rest, format, fileName: name, data: bytes.toString("base64") }];
   };
+  const reference = async (o: Record<string, unknown>) => {
+    const r = o["reference"] as Record<string, unknown> | undefined;
+    if (o["type"] !== "set_reference" || !r || typeof r["path"] !== "string") return o;
+    const path = resolve(r["path"].replace(/^~(?=\/|$)/, homedir()));
+    const { path: _p, ...rest } = r;
+    return { ...o, reference: { ...rest, data: (await readFile(path)).toString("base64") } };
+  };
+  ops = await Promise.all(ops.map(reference));
   return Promise.all(
     ops.map(async (o) => (o["type"] === "add_features" && Array.isArray(o["features"]) ? { ...o, features: (await Promise.all((o["features"] as Record<string, unknown>[]).map(inline))).flat() } : o)),
   );
@@ -188,12 +197,18 @@ const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructio
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
 
-server.registerTool("get_guide", { title: "Modelling guide", description: "How meerCAD documents, sketches, features, face tags and selectors work, with the JSON Schema of every op. Read before editing." }, async () => text(SYSTEM_PROMPT));
+server.registerTool("get_guide", { title: "Modelling guide", description: "How meerCAD documents, sketches, features, face tags and selectors work, with the JSON Schema of every op. Read before editing." }, async () => text(`${SYSTEM_PROMPT.replace("The user previews your changes before accepting them.", "")}\n\n${MCP_NOTES}`));
 
 server.registerTool(
   "get_model",
-  { title: "Current model", description: "The open project: document (params + features), rebuild status per feature, bodies with volume and bounding box, sketch degrees of freedom.", annotations: { readOnlyHint: true } },
-  guard(async () => text(await call("get_model"))),
+  {
+    title: "Current model",
+    description:
+      "The open project: document (params + features), rebuild status per feature, bodies with volume and bounding box, sketch degrees of freedom. Embedded files (imported meshes, pictures, terrains) are left out as \"…elided:<n> chars…\"; ops may send such a placeholder back unchanged to keep the value. full: true returns them whole.",
+    inputSchema: { full: z.boolean().optional() },
+    annotations: { readOnlyHint: true },
+  },
+  guard(async ({ full }) => text(await call("get_model", { full }))),
 );
 
 server.registerTool(
@@ -206,7 +221,8 @@ server.registerTool(
   "apply_ops",
   {
     title: "Change the model",
-    description: "Applies Operations-API ops atomically as one undo step (add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback, replace; joints and couplings: set_joint, delete_joint, set_coupling, delete_coupling) and returns the rebuild result. Rejected ops leave the model unchanged. An import feature may give `path` (a file on this computer) instead of base64 `data`.",
+    description:
+      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units; joints: set_joint, delete_joint, set_coupling, delete_coupling; reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`.",
     inputSchema: { ops: z.array(op).min(1) },
   },
   guard(async ({ ops }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops) }))),
@@ -340,27 +356,31 @@ server.registerTool(
   "export",
   {
     title: "Export a file",
-    description: "Exports the model (stl, 3mf, obj, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer. obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj.",
-    inputSchema: { format: z.enum(["stl", "3mf", "obj", "step", "dxf", "svg", "meercad"]), path: z.string().describe("Absolute or relative output path"), sketch: z.string().optional() },
+    description:
+      "Exports the model (stl, 3mf, obj, step) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and 3MF filaments, moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant).",
+    inputSchema: {
+      format: z.enum(["stl", "3mf", "obj", "step", "dxf", "svg", "meercad"]),
+      path: z.string().describe("Absolute or relative output path"),
+      sketch: z.string().optional(),
+      parts: z.array(z.string()).optional().describe("Part ids; default every part not hidden"),
+      posed: z.boolean().optional(),
+      variants: z.boolean().optional(),
+    },
   },
-  guard(async ({ format, path, sketch }) => {
+  guard(async ({ format, path, sketch, parts, posed, variants }) => {
     const out = resolve(path);
-    if (format === "obj") {
-      // The OBJ refers to its .mtl and pictures by name, so they go next to it under its name.
-      const name = basename(out).replace(/\.obj$/i, "");
-      const r = await call<{ files: Record<string, string> }>("export", { format, name });
-      const written: string[] = [];
-      for (const [file, b64] of Object.entries(r.files)) {
-        const target = file.toLowerCase().endsWith(".obj") ? out : join(dirname(out), file);
-        await writeFile(target, Buffer.from(b64, "base64"));
-        written.push(target);
-      }
-      return text(`wrote ${written.join(", ")}`);
+    const name = basename(out).replace(/\.[^.]+$/, "");
+    const r = await call<{ files: Record<string, string> }>("export", { format, sketch, parts, posed, variants, name }, 300_000);
+    const files = Object.entries(r.files);
+    const written: string[] = [];
+    for (const [file, b64] of files) {
+      // One file goes to `path`; the main file of several goes there and the rest next to it.
+      const main = files.length === 1 || (!variants && file.toLowerCase().endsWith(`.${format}`));
+      const target = main && !variants ? out : join(variants ? (extname(out) ? dirname(out) : out) : dirname(out), file);
+      await writeFile(target, Buffer.from(b64, "base64"));
+      written.push(target);
     }
-    const r = await call<{ base64: string }>("export", { format, sketch });
-    const data = Buffer.from(r.base64, "base64");
-    await writeFile(out, data);
-    return text(`wrote ${data.length} bytes to ${out}`);
+    return text(`wrote ${written.join(", ")}`);
   }),
 );
 
@@ -424,6 +444,116 @@ server.registerTool(
     annotations: { readOnlyHint: true },
   },
   guard(async ({ joint, from, to, steps }) => text(await call("check_motion", { joint, from, to, steps }))),
+);
+
+server.registerTool(
+  "get_version",
+  { title: "Look at a version", description: "A saved version's design (see the version names in get_model), without restoring it.", inputSchema: { name: z.string() }, annotations: { readOnlyHint: true } },
+  guard(async ({ name }) => text(await call("get_version", { name }))),
+);
+
+server.registerTool(
+  "check_interference",
+  { title: "Check for overlaps", description: "Every part against every other where they are modelled (no joints needed): pairs that overlap with the shared volume (mm³), and pairs that only touch.", annotations: { readOnlyHint: true } },
+  guard(async () => text(await call("check_interference", {}, 300_000))),
+);
+
+server.registerTool(
+  "wall_thickness",
+  {
+    title: "Wall thickness",
+    description: "Measures a part's walls (rays into the material from all over the surface) against the wall a printer needs (minWall, default 1 mm): the thinnest wall and where, and the share of the surface thinner than minWall. The colour map stays shown in the app (red thin → green) unless show: false.",
+    inputSchema: { part: z.string(), minWall: z.number().positive().optional(), show: z.boolean().optional() },
+  },
+  guard(async (a) => text(await call("wall_thickness", a, 300_000))),
+);
+
+server.registerTool(
+  "deviation",
+  {
+    title: "Deviation from a mesh",
+    description: "How far a part's surface is from a mesh part (e.g. the scan it was modelled after): smallest and largest distance (mm, negative inside) and the share within the tolerance. The colour map stays shown unless show: false.",
+    inputSchema: { part: z.string(), mesh: z.string(), show: z.boolean().optional() },
+  },
+  guard(async (a) => text(await call("deviation", a, 300_000))),
+);
+
+server.registerTool(
+  "repair_mesh",
+  {
+    title: "Clean up a mesh",
+    description: "Cleans up an imported mesh part (STL/3MF/OBJ/scan): removes loose pieces, closes holes, and with reduce (a tolerance in mm, e.g. 0.05) uses fewer triangles. One undo step; a scan's texture is dropped as it belongs to the old triangles.",
+    inputSchema: { part: z.string(), removePieces: z.boolean().optional(), fillHoles: z.boolean().optional(), reduce: z.number().positive().optional() },
+  },
+  guard(async (a) => text(await call("repair_mesh", a, 300_000))),
+);
+
+server.registerTool(
+  "rebuild_mesh",
+  { title: "Rebuild a mesh with features", description: "Fits sketches and extrudes to a mesh part (planes and cylinders it is made of) and adds them as editable steps with parameters; the mesh stays, hidden, to compare (deviation).", inputSchema: { part: z.string() } },
+  guard(async (a) => text(await call("rebuild_mesh", a, 300_000))),
+);
+
+server.registerTool(
+  "measure_scan",
+  {
+    title: "Measure on a scan",
+    description: "On a mesh part, fits the plane, cylinder, cone or sphere the surface follows at a point (within tolerance mm, default 0.1) and gives its sizes; with `other` (a second point, on the same or another part) also the distance and angle between the two shapes.",
+    inputSchema: { part: z.string(), point: z.tuple([z.number(), z.number(), z.number()]), other: z.object({ part: z.string().optional(), point: z.tuple([z.number(), z.number(), z.number()]) }).optional(), tolerance: z.number().positive().optional() },
+    annotations: { readOnlyHint: true },
+  },
+  guard(async (a) => text(await call("measure_scan", a))),
+);
+
+server.registerTool(
+  "joints_from_gears",
+  { title: "Joints for gears", description: "Adds a joint to every gear that has none (turning on its axis, a rack sliding) and couples gears in mesh by their ratio, as one undo step." },
+  guard(async () => text(await call("joints_from_gears"))),
+);
+
+server.registerTool(
+  "import_file",
+  {
+    title: "Import a file",
+    description: "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project. (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ.)",
+    inputSchema: { path: z.string() },
+  },
+  guard(async ({ path }) => {
+    const file = resolve(path.replace(/^~(?=\/|$)/, homedir()));
+    const data = await readFile(file);
+    return text(await call("import_file", { name: basename(file), base64: data.toString("base64") }, 300_000));
+  }),
+);
+
+server.registerTool(
+  "set_visibility",
+  { title: "Show or hide parts", description: "Hides or shows parts in the user's view (not saved with the design; exports take the parts shown): hide, show, only (show just these), all (show every part).", inputSchema: { hide: z.array(z.string()).optional(), show: z.array(z.string()).optional(), only: z.array(z.string()).optional(), all: z.boolean().optional() } },
+  guard(async (a) => text(await call("set_visibility", a))),
+);
+
+server.registerTool("rename_project", { title: "Rename the project", description: "Renames the open project.", inputSchema: { name: z.string().min(1).max(120) } }, guard(async (a) => text(await call("rename_project", a))));
+server.registerTool("list_folders", { title: "List folders", description: "The folders projects are kept in (\"\" is the top level) and the open project's folder.", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_folders"))));
+server.registerTool("create_folder", { title: "New folder", description: "Creates a folder for projects inside `parent` (\"\" for the top level).", inputSchema: { parent: z.string().optional(), name: z.string().min(1).max(120) } }, guard(async (a) => text(await call("create_folder", a))));
+server.registerTool("move_project", { title: "Move the project", description: "Moves the open project into a folder (see list_folders; \"\" for the top level).", inputSchema: { folder: z.string() } }, guard(async (a) => text(await call("move_project", a))));
+server.registerTool("list_examples", { title: "Examples", description: "The example designs that come with meerCAD (worked samples of features).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_examples"))));
+server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own.", inputSchema: { id: z.union([z.number().int(), z.string()]) } }, guard(async (a) => text(await call("open_example", a))));
+
+server.registerTool(
+  "terrain_height",
+  { title: "Ground height", description: "The extent of the shown terrains (models from drone photos, scanned areas) and their ground heights at x/y points in design coordinates (mm); null where there is no terrain.", inputSchema: { points: z.array(z.tuple([z.number(), z.number()])).max(500).optional() }, annotations: { readOnlyHint: true } },
+  guard(async (a) => text(await call("terrain_height", a))),
+);
+
+server.registerTool(
+  "place_on_terrain",
+  { title: "Stand a part on the terrain", description: "Moves a part so its lowest point sits on the terrain: where it is, or at `at` (x/y, mm), raised by `offset` mm. One undo step (a move step).", inputSchema: { part: z.string(), at: z.tuple([z.number(), z.number()]).optional(), offset: z.number().optional() } },
+  guard(async (a) => text(await call("place_on_terrain", a))),
+);
+
+server.registerTool(
+  "photo_terrain",
+  { title: "Terrain from drone photos", description: "Builds a textured terrain model from a folder of overlapping photos on this Mac (Apple photogrammetry; true size and north from their GPS) and adds it to the open design. Takes several minutes; the app shows progress.", inputSchema: { folder: z.string() } },
+  guard(async ({ folder }) => text(await call("photo_terrain", { folder: resolve(folder.replace(/^~(?=\/|$)/, homedir())) }, 3_600_000))),
 );
 
 server.registerTool(

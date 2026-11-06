@@ -155,6 +155,7 @@ export default {
   "Show solid": "Undurchsichtig zeigen",
   "Exported as shown: moved parts are where they are now": "Exportiert wie angezeigt: Bewegte Teile stehen in ihrer aktuellen Stellung",
   "Nothing to export": "Nichts zu exportieren",
+  "unknown part {id}": "unbekanntes Teil {id}",
   "{format} export failed: {error}": "{format}-Export fehlgeschlagen: {error}",
   "The sketch has no geometry": "Die Skizze hat keine Geometrie",
   "Not a valid meerCAD file: {error}": "Keine gültige meerCAD-Datei: {error}",

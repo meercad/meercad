@@ -64,7 +64,7 @@ interface DesktopApi {
   };
   /** A model from a folder of photos the user picks (null: none picked); see lib/terrain. */
   photos: {
-    build(): Promise<(TerrainResult & { folder: string; data: Uint8Array }) | null>;
+    build(folder?: string): Promise<(TerrainResult & { folder: string; data: Uint8Array }) | null>;
     cancel(): Promise<void>;
   };
   /** The interface size: the choice ("auto" or a factor), what automatic means on this display, the steps. */

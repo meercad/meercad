@@ -2,7 +2,7 @@
  * Connects the app to a local meerCAD MCP server so assistants like Claude can drive it. The app is
  * the WebSocket client; the server only listens on 127.0.0.1 and checks the page origin.
  */
-import { layoutSheet, write3mf, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeStl, writeSvg, type Paper } from "@meercad/io";
+import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
@@ -10,7 +10,8 @@ import { applyOp, billOfMaterials, designOf, drawingDocument, massOf, massProper
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
-import { objExport, sketchCurves, stepParts } from "../components/io";
+import { sketchCurves } from "../components/io";
+import * as tools from "./mcpTools";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, clearanceNow, setPose } from "./mechanism";
@@ -62,10 +63,21 @@ export function initBridge(): void {
   if (pref !== "0" && (window as { meercadDesktop?: unknown }).meercadDesktop) setBridgeEnabled(true);
 }
 
+/** The bridge port: the default, or for test runs the one in localStorage "meercad.mcp.port" (a server started with MEERCAD_MCP_PORT). */
+function bridgePort(): number {
+  try {
+    const p = Number(localStorage.getItem("meercad.mcp.port"));
+    if (Number.isInteger(p) && p > 1024 && p < 65536) return p;
+  } catch {
+    // default
+  }
+  return DEFAULT_PORT;
+}
+
 function connect(): void {
   if (!wanted || socket) return;
   setStatus("connecting");
-  const ws = new WebSocket(`ws://127.0.0.1:${DEFAULT_PORT}`);
+  const ws = new WebSocket(`ws://127.0.0.1:${bridgePort()}`);
   socket = ws;
   ws.onopen = () => {
     setStatus("connected");
@@ -167,7 +179,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       {
         // Versions are listed by name; their states would only fill the assistant's context.
         const doc = currentDoc();
-        return { project: useApp.getState().project, document: designOf(doc), ...(doc.versions ? { versions: doc.versions.map((v) => ({ name: v.name, at: new Date(v.at).toISOString() })) } : {}), rebuild: summary(await rebuildNow()) };
+        return { project: useApp.getState().project, document: p["full"] ? designOf(doc) : tools.lightDocument(doc), ...(doc.versions ? { versions: doc.versions.map((v) => ({ name: v.name, at: new Date(v.at).toISOString() })) } : {}), rebuild: summary(await rebuildNow()) };
       }
     case "get_sketch": {
       needProject();
@@ -191,7 +203,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       useApp.setState({ proposalDoc: null });
       // Variables an assistant creates are listed apart from the user's own.
-      const ops = (p["ops"] as DocOp[]).map((op) => (op.type === "set_param" && op.expr !== null && op.auto === undefined && !(op.name in currentDoc().params) ? { ...op, auto: true } : op));
+      const ops = tools.restoreElided(p["ops"] as DocOp[], currentDoc()).map((op) => (op.type === "set_param" && op.expr !== null && op.auto === undefined && !(op.name in currentDoc().params) ? { ...op, auto: true } : op));
       // Validate first so a bad op returns a precise error instead of a toast.
       ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       if (!apply(...ops)) throw new Error("ops were rejected");
@@ -199,7 +211,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     }
     case "preview_ops": {
       needProject();
-      const doc = (p["ops"] as DocOp[]).reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
+      const doc = tools.restoreElided(p["ops"] as DocOp[], currentDoc()).reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       const result = summary(await kernel.sandbox(doc));
       // Show it live; the document itself stays untouched.
       useApp.setState({ proposalDoc: doc });
@@ -285,19 +297,20 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       await rebuildNow();
       const format = String(p["format"]);
-      if (format === "stl") return { base64: toB64(writeStl(await kernel.exportMeshes())) };
-      if (format === "3mf") return { base64: toB64(write3mf((await kernel.exportMeshes()).map((m) => ({ ...m, name: m.bodyId })))) };
-      if (format === "obj") {
-        // With terrains or scans around the design, the OBJ comes with its materials and pictures.
-        const files = objExport(String(p["name"] ?? "model"), await kernel.exportMeshes(), true);
-        return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])) };
+      if (format === "meercad") return { files: { "model.meercad": toB64(JSON.stringify(currentDoc(), null, 2)) } };
+      if (format === "dxf" || format === "svg") {
+        const sketch = String(p["sketch"] ?? "");
+        if (!sketch) throw new Error("dxf/svg export needs a sketch id");
+        const curves = sketchCurves(sketch);
+        return { files: { [`sketch.${format}`]: toB64(format === "dxf" ? writeDxf(curves) : writeSvg(curves)) } };
       }
-      if (format === "step") return { base64: toB64(await kernel.exportStep(undefined, stepParts())) };
-      if (format === "meercad") return { base64: toB64(JSON.stringify(currentDoc(), null, 2)) };
-      const sketch = String(p["sketch"] ?? "");
-      if (!sketch) throw new Error("dxf/svg export needs a sketch id");
-      const curves = sketchCurves(sketch);
-      return { base64: toB64(format === "dxf" ? writeDxf(curves) : writeSvg(curves)) };
+      const files = await tools.exportFiles(format as "stl", {
+        ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
+        ...(typeof p["posed"] === "boolean" ? { posed: p["posed"] } : {}),
+        ...(p["variants"] ? { variants: true } : {}),
+        ...(typeof p["name"] === "string" ? { name: p["name"] } : {}),
+      });
+      return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])) };
     }
     case "set_pose": {
       needProject();
@@ -329,5 +342,57 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       };
       return kernel.measure(ref(p["a"]), p["b"] ? ref(p["b"]) : undefined);
     }
+    case "get_version":
+      needProject();
+      return { name: p["name"], document: tools.versionDocument(String(p["name"])) };
+    case "check_interference":
+      needProject();
+      return tools.interference();
+    case "wall_thickness":
+      needProject();
+      return tools.wallThickness(String(p["part"]), p["minWall"] === undefined ? 1 : Number(p["minWall"]), p["show"] !== false);
+    case "deviation":
+      needProject();
+      return tools.deviation(String(p["part"]), String(p["mesh"]), p["show"] !== false);
+    case "repair_mesh":
+      needProject();
+      return tools.repairMesh(String(p["part"]), p as { removePieces?: boolean; fillHoles?: boolean; reduce?: number });
+    case "rebuild_mesh":
+      needProject();
+      return tools.rebuildMesh(String(p["part"]));
+    case "measure_scan":
+      needProject();
+      return tools.measureScan(String(p["part"]), p["point"] as [number, number, number], p["other"] as { part?: string; point: [number, number, number] } | undefined, p["tolerance"] === undefined ? undefined : Number(p["tolerance"]));
+    case "joints_from_gears":
+      needProject();
+      return tools.gearJoints();
+    case "import_file":
+      return tools.importBytes(String(p["name"]), String(p["base64"]));
+    case "set_visibility":
+      needProject();
+      return tools.setVisibility(p as { hide?: string[]; show?: string[]; only?: string[]; all?: boolean });
+    case "rename_project":
+      needProject();
+      return tools.renameOpenProject(String(p["name"]));
+    case "list_folders":
+      return tools.folders();
+    case "create_folder":
+      return tools.newFolder(String(p["parent"] ?? ""), String(p["name"]));
+    case "move_project":
+      needProject();
+      return tools.moveOpenProject(String(p["folder"] ?? ""));
+    case "list_examples":
+      return tools.examples();
+    case "open_example":
+      return tools.openExample(typeof p["id"] === "number" ? p["id"] : String(p["id"]));
+    case "terrain_height":
+      needProject();
+      return tools.terrainHeights((p["points"] as [number, number][] | undefined) ?? []);
+    case "place_on_terrain":
+      needProject();
+      return tools.placeOnTerrain(String(p["part"]), p["at"] as [number, number] | undefined, p["offset"] === undefined ? 0 : Number(p["offset"]));
+    case "photo_terrain":
+      needProject();
+      return tools.photoTerrain(String(p["folder"]));
   }
 }

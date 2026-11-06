@@ -14,6 +14,15 @@ to the kernel, the viewport or a tool.
 Before reporting work as done: `pnpm typecheck` (every package plus the tests) and `pnpm test`, and
 read the whole output.
 
+### MCP tools end to end
+
+The MCP server and the app talk over port 47821, which an assistant session of the user may hold.
+For a test run, start the server with `MEERCAD_MCP_PORT=47999` (e.g. the WIP's own
+`Contents/Resources/mcp/server.js` with `ELECTRON_RUN_AS_NODE=1`), set
+`localStorage["meercad.mcp.port"] = "47999"` in the app window (through `scripts/drive-app.mjs eval`)
+and reload it; then drive the tools with an MCP client (`@modelcontextprotocol/sdk` client over stdio).
+Check what comes back and the files written (unzip a 3MF, count STEP solids), not only "no error".
+
 ## 1. Unit and acceptance tests
 
 - `packages/*/src/**/*.test.ts`: schema, expressions, sketch solver, readers and writers.

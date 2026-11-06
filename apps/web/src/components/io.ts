@@ -51,31 +51,46 @@ export function seeThroughDoc(doc: MeercadDocument, parts: readonly string[], on
 
 /** Parts moved in the joints panel, where they are shown: exports take them as they are seen. */
 function shownPoses(ids: readonly string[]): Map<string, number[]> {
-  const moved = new Map([...currentPoses()].filter(([id, m]) => ids.includes(id) && motion.isMoved(m)));
-  if (moved.size) toast(t("Exported as shown: moved parts are where they are now"), "info");
-  return moved;
+  return new Map([...currentPoses()].filter(([id, m]) => ids.includes(id) && motion.isMoved(m)));
 }
 
-/** STL/3MF/OBJ from a print-quality tessellation (the on-screen one is far coarser). */
-export async function exportMesh(format: MeshFormat): Promise<void> {
+/** The parts an export takes: the ones asked for, else every part not hidden. */
+function exportIds(parts?: readonly string[]): string[] {
   const hidden = useApp.getState().hidden;
-  const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id)) ?? [];
-  // OBJ also takes the terrains and scanned areas shown around the design, with their pictures.
-  const surroundings = format === "obj" && (currentDoc().references ?? []).some((r) => !r.hidden);
-  if (!ids.length && !surroundings) return toast(t("Nothing to export"), "error");
+  const all = useApp.getState().output?.report.bodies.map((b) => b.id) ?? [];
+  if (!parts) return all.filter((id) => !hidden.has(id));
+  const unknown = parts.filter((p) => !all.includes(p));
+  if (unknown.length) throw new Error(t("unknown part {id}", { id: unknown.join(", ") }));
+  return [...parts];
+}
+
+/**
+ * The files of an STL/3MF/OBJ export from a print-quality tessellation (the on-screen one is far
+ * coarser), named `name`.ext; OBJ also takes the visible terrains and scans with their pictures.
+ * `posed` (default) takes moved parts where they are shown. `moved` tells whether any were.
+ */
+export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean }> {
+  const name = opts.name ?? baseName();
+  const ids = exportIds(opts.parts);
+  const surroundings = format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
+  if (!ids.length && !surroundings) throw new Error(t("Nothing to export"));
+  const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
+  const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
+  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0 };
+  return { files: { [`${name}.${format}`]: meshFile(format, meshes) }, moved: poses.size > 0 };
+}
+
+export async function exportMesh(format: MeshFormat): Promise<void> {
   try {
-    const poses = shownPoses(ids);
-    const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
-    if (format === "obj") {
-      const files = objExport(baseName(), meshes, true);
-      const names = Object.keys(files);
-      if (names.length > 1) toast(t("Exported as a zip: the OBJ with its materials and pictures"), "info");
-      download(names.length > 1 ? `${baseName()}.zip` : `${baseName()}.obj`, (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart);
-      return;
-    }
-    download(`${baseName()}.${format}`, meshFile(format, meshes) as BlobPart);
+    const { files, moved } = await meshExportFiles(format);
+    if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
+    const names = Object.keys(files);
+    if (names.length > 1) toast(t("Exported as a zip: the OBJ with its materials and pictures"), "info");
+    download(names.length > 1 ? `${baseName()}.zip` : names[0]!, (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart);
   } catch (e) {
-    toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === t("Nothing to export")) return toast(msg, "error");
+    toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: msg }), "error");
   }
 }
 
@@ -134,29 +149,44 @@ function meshFile(format: MeshFormat, meshes: BodyMesh[]): Uint8Array {
  * builds each variant in turn; afterwards the design is built as it is again.
  */
 export async function exportVariants(format: MeshFormat | "step"): Promise<void> {
-  const doc = currentDoc();
-  const variants = doc.variants ?? [];
-  if (!variants.length) return toast(t("This design has no variants"), "error");
-  const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, "-").trim();
-  const task = startTask(t("Exporting {n} variants", { n: variants.length }));
-  const files: Record<string, Uint8Array> = {};
-  holdRebuilds(true);
+  if (!(currentDoc().variants ?? []).length) return toast(t("This design has no variants"), "error");
+  const task = startTask(t("Exporting {n} variants", { n: currentDoc().variants!.length }));
   try {
-    for (const [k, v] of variants.entries()) {
-      task.update(k / variants.length);
-      const out = await kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
-      const failed = out.report.features.find((f) => f.status === "error");
-      if (failed) throw new Error(t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }));
-      const hidden = useApp.getState().hidden;
-      const ids = out.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
-      const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
-      files[file] = format === "step" ? await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id))) : meshFile(format, await kernel.exportMeshes(ids));
-    }
-    download(`${baseName()}-${t("variants")}.zip`, writeZip(files) as BlobPart);
+    download(`${baseName()}-${t("variants")}.zip`, writeZip(await variantFiles(format, (k, n) => task.update(k / n))) as BlobPart);
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
   } finally {
     task.done();
+  }
+}
+
+/**
+ * Every variant as a file of its own ("holder-Pipe 25.stl", …). The kernel builds each variant in
+ * turn; afterwards the design is built as it is again.
+ */
+export async function variantFiles(format: MeshFormat | "step", progress?: (k: number, n: number) => void, parts?: readonly string[]): Promise<Record<string, Uint8Array>> {
+  const doc = currentDoc();
+  const variants = doc.variants ?? [];
+  if (!variants.length) throw new Error(t("This design has no variants"));
+  const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, "-").trim();
+  const files: Record<string, Uint8Array> = {};
+  holdRebuilds(true);
+  try {
+    for (const [k, v] of variants.entries()) {
+      progress?.(k, variants.length);
+      const out = await kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
+      const failed = out.report.features.find((f) => f.status === "error");
+      if (failed) throw new Error(t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }));
+      const hidden = useApp.getState().hidden;
+      const ids = out.report.bodies.map((b) => b.id).filter((id) => (parts ? parts.includes(id) : !hidden.has(id)));
+      const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
+      if (format === "obj") {
+        const obj = objExport(`${safe(baseName())}-${safe(v.name)}`, await kernel.exportMeshes(ids), false);
+        Object.assign(files, obj);
+      } else files[file] = format === "step" ? await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id))) : meshFile(format, await kernel.exportMeshes(ids));
+    }
+    return files;
+  } finally {
     holdRebuilds(false);
     scheduleRebuild();
   }
@@ -170,12 +200,18 @@ export function stepParts(): { id: string; name: string; color?: string }[] {
   return ids.map((id) => ({ id, name: partName(id, doc.features), ...(colors.get(id) ? { color: colors.get(id)! } : {}) }));
 }
 
+/** A STEP file of the parts (default: the ones not hidden), moved parts where they are shown unless `posed` is false. */
+export async function stepFile(opts: { parts?: readonly string[]; posed?: boolean } = {}): Promise<{ data: Uint8Array; moved: boolean }> {
+  const ids = exportIds(opts.parts);
+  const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
+  const data = await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id)).map((p) => (poses.has(p.id) ? { ...p, pose: poses.get(p.id)! } : p)));
+  return { data, moved: poses.size > 0 };
+}
+
 export async function exportStep(): Promise<void> {
   try {
-    const hidden = useApp.getState().hidden;
-    const ids = useApp.getState().output?.report.bodies.map((b) => b.id).filter((id) => !hidden.has(id));
-    const poses = shownPoses(ids ?? []);
-    const data = await kernel.exportStep(ids, stepParts().map((p) => (poses.has(p.id) ? { ...p, pose: poses.get(p.id)! } : p)));
+    const { data, moved } = await stepFile();
+    if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
     download(`${baseName()}.step`, data as BlobPart);
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: "STEP", error: e instanceof Error ? e.message : String(e) }), "error");

@@ -95,3 +95,20 @@ ${JSON.stringify(example)}
 
 JSON Schema of one op:
 ${opSchemaText}`;
+
+/**
+ * What an MCP client needs on top of the guide: there is no preview step, and the tools beyond
+ * apply_ops. Kept apart from SYSTEM_PROMPT, which the app's own assistant also uses.
+ */
+export const MCP_NOTES = `Working through MCP
+- apply_ops changes the model at once (there is no accept step); undo reverts the last call. Use preview_ops to show an idea first, clear_preview to drop it.
+- get_model leaves embedded files out ("…elided:<n> chars…"). Send such a placeholder back unchanged and the value stays (e.g. edit_feature of a scan's texture: {texture:{image:"…elided…", mime, uvs:"…elided…", hidden:true}} switches its picture off). get_model {full:true} returns them.
+- Steps: edit_feature patch {name:"Bracket"} names a step (the parts list shows that name), {suppressed:true} switches it off; move_feature {id, after} reorders, set_rollback {id|null} builds only up to a step, rename_param {name, to}. Sketch constraint arc_angle {curve, value} sets an arc's angle.
+- Parts: set_part_color {part, color:"#rrggbb"|null} (colours also pick the filament per part in 3MF), set_see_through {parts, on} (draws a part see-through, e.g. a scan to model against), set_part_list {groups:[{name, parts}], order:[ids]} (folders and order in the parts list), set_units {units:"mm"|"in"} (switches the design to inches; stored values stay). replace keeps the saved versions when the document sent has none.
+- Reference models (terrains from drone photos, scanned areas) are not built into the design: set_reference {reference:{id, name, format:"glb", data|path, hidden?, scale?, geo?, marks?}} adds or replaces one (path: a .glb file on this computer), delete_reference {id}. marks: {id, kind:"line"|"area"|"note"|"point"|"stroke", points:[[x,y,z],...], color:"#rrggbb", text?, width?}. terrain_height gives the ground height at x/y, place_on_terrain stands a part on it, photo_terrain builds one from a folder of drone photos (Mac, minutes).
+- Checks: check_interference (all parts where they are modelled), check_clearance / check_motion (moving parts), wall_thickness {part, minWall} (thinnest wall and where, share too thin), deviation {part, mesh} (a model against the scan it follows), measure and measure_scan (sizes of planes, cylinders, cones and spheres a mesh follows). Look with render_view / render_motion.
+- Meshes (imported STL/3MF/OBJ, scans): repair_mesh (loose pieces, holes, fewer triangles), mesh_convert (op: real faces), rebuild_mesh (editable sketches and extrudes fitted to it).
+- Mechanisms: joints_from_gears adds joints and couplings for all gears at once.
+- Files: import_file {path} imports as the app does (STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch, .meercad as a new project); export {format, path, parts?, posed?, variants?} writes what the app's export writes; export_drawing makes drawings.
+- What the user sees: set_view moves their camera, set_visibility hides and shows parts (exports take the parts shown).
+- Projects: list_projects, open_project, new_project, rename_project, list_folders, create_folder, move_project, list_examples / open_example (worked samples), get_version {name} (look at a saved version without restoring it). Deleting projects is left to the user.`;

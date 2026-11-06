@@ -957,6 +957,15 @@ export class Viewport {
     return this.sceneryGroup.children.filter((o) => o.visible);
   }
 
+  /** The box around the shown reference models once they are loaded (mm), or null. */
+  sceneryBox(): { min: Vec3; max: Vec3 } | null {
+    const objects = this.shownScenery();
+    if (!objects.length) return null;
+    const box = new THREE.Box3();
+    for (const o of objects) box.expandByObject(o);
+    return box.isEmpty() ? null : { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] };
+  }
+
   /** Where the ray through a screen point first meets a shown reference model, with the surface's upward normal there. */
   sceneryHit(clientX: number, clientY: number): { id: string; point: Vec3; normal: Vec3 } | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);

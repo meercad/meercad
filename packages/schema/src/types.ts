@@ -754,6 +754,15 @@ export type DocOp =
   | { type: "restore_version"; name: string }
   | { type: "rename_version"; name: string; to: string }
   | { type: "delete_version"; name: string }
+  /** A part's colour ("#rrggbb"), or null to colour it automatically again; colours also pick 3MF filaments. */
+  | { type: "set_part_color"; part: string; color: string | null }
+  /** Draws parts see-through (a reference to model against, e.g. a scan), or solid again. */
+  | { type: "set_see_through"; parts: string[]; on: boolean }
+  /** The parts list: named folders of parts and/or the order of parts (body ids); null clears it. */
+  | { type: "set_part_list"; groups?: { name: string; parts: string[] }[] | null; order?: string[] | null }
+  /** The unit lengths are shown and typed in; stored values stay as they are. */
+  | { type: "set_units"; units: "mm" | "in" }
+  /** The whole document; saved versions (and their blobs) are kept when `doc` has none. */
   | { type: "replace"; doc: MeercadDocument };
 
 export function emptyDocument(): MeercadDocument {
