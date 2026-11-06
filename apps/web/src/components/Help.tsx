@@ -107,6 +107,17 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         ),
       },
       {
+        title: t("Bend, ring and spiral"),
+        body: (
+          <ul>
+            {li(t("**Bend** (Transform menu): pick the parts, then choose **Bend** (round the axis by an angle), **Ring** (onto a cylinder: a flat pattern becomes a bracelet) or **Spiral** (a long strip rolls up into a flat coil that fits the print bed)."))}
+            {li(t("The axis buttons X / Y / Z or a picked edge set the axis it bends round. A spiral's axis goes through the strip's thin side, so it stays flat on the bed."))}
+            {li(t("Drag the arrow or type the radius, angle or gap. The step shows how many turns a spiral makes and how wide it gets; turns that would touch are refused, ones closer than 0.3 mm get a warning."))}
+            {li(t("Lengths along the part stay the same, so a ruler's marks keep their spacing. The result is a mesh part, ready for STL or 3MF."))}
+          </ul>
+        ),
+      },
+      {
         title: t("History, rollback and variables"),
         body: (
           <ul>

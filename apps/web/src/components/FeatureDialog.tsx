@@ -7,6 +7,8 @@ import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { gearParams, pairInfo } from "../lib/gears";
 import { joinedParts } from "../lib/mechanism";
+import { bendDefaults, bendInfo, describeBend, gapProblem, partsBox, unbentBox } from "../lib/bend";
+import { evaluate } from "@meercad/model";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, openDraft, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
@@ -179,6 +181,11 @@ function handlePick(p: Pick, d: DialogState): void {
         // Moving a part takes the parts joined to it along, so the joints stay together.
         if (g.op === "transform" && !g.copy && !cur.includes(b)) g.bodies = [...new Set([...cur, ...joinedParts(b, useApp.getState().doc.mechanism?.joints)])];
         else (g as Of<"transform" | "delete">).bodies = toggle(cur, b);
+        // The first part picked for a bend sets which way it bends and how far, from its shape.
+        if (g.op === "bend" && !cur.length && g.bodies.length) {
+          const box = partsBox(useApp.getState().baseOutput, g.bodies);
+          if (box) Object.assign(g, bendDefaults(g.mode, box));
+        }
         break;
       }
       case "body": {
@@ -457,6 +464,91 @@ function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string,
         <input type="checkbox" checked={!!f.leftHanded} onChange={(e) => set({ leftHanded: e.target.checked || undefined })} /> {t("Left-hand thread")}
       </label>
       <p className="muted small">{t("Holes get an internal thread, shafts an external one. Draw holes at the nominal size or the tap drill size; about 0.1–0.2 mm clearance helps printed threads fit.")}</p>
+    </>
+  );
+}
+
+/** Bend: parts, how (bend, wrap, spiral), axis and the values of that mode, and what it comes to. */
+function BendFields({ f, set }: { f: Of<"bend">; set: (patch: Record<string, unknown>) => void }) {
+  const features = useApp((s) => s.doc.features);
+  const params = useApp((s) => s.baseOutput?.report.params);
+  const info = useApp((s) => bendInfo(s.output, f.id));
+  const base = useApp((s) => s.baseOutput);
+  const num = (e: Expr | undefined) => {
+    if (e === undefined) return undefined;
+    try {
+      return evaluate(e, new Map(Object.entries(params ?? {})));
+    } catch {
+      return undefined;
+    }
+  };
+  const isNew = useApp((s) => !!s.dialog?.isNew);
+  // The parts as they were before bending: the model before this step, or (editing it) the step's report.
+  const box = isNew || !info ? partsBox(base, f.bodies) : unbentBox(info);
+  const gap = gapProblem(f, f.mode === "spiral" ? (num(f.gap) ?? 1) : undefined);
+  const switchMode = (mode: Of<"bend">["mode"]) => {
+    set(box && f.bodies.length ? { ...bendDefaults(mode, box) } : { mode, ...(mode === "spiral" ? { radius: 20, gap: 1, angle: undefined } : mode === "wrap" ? { radius: 30, gap: undefined, angle: undefined } : { angle: 90, radius: undefined, gap: undefined }) });
+  };
+  return (
+    <>
+      <Field label={t("Parts")}>
+        <SelBox field="bodies" items={f.bodies.map((b) => partName(b, features))} placeholder={t("Pick parts")} onRemove={(i) => set({ bodies: f.bodies.filter((_, j) => j !== i) })} />
+      </Field>
+      <Seg value={f.mode} options={[["bend", t("Bend")], ["wrap", t("Ring")], ["spiral", t("Spiral")]]} onChange={switchMode} />
+      <Field label={f.mode === "spiral" ? t("Axis of the coil") : t("Bend axis")}>
+        <SelBox field="axis" items={[describeAxis(f.axis)]} placeholder={t("Pick an edge or line")} />
+        <AxisButtons value={f.axis} onChange={(axis) => set({ axis })} />
+      </Field>
+      {f.mode === "bend" ? (
+        f.angle !== undefined || f.radius === undefined ? (
+          <Field label={t("Angle")}>
+            <ExprInput value={f.angle ?? 90} unit="deg" autoFocus onCommit={(angle) => set({ angle, radius: undefined })} onLive={(angle) => set({ angle, radius: undefined })} />
+          </Field>
+        ) : (
+          <Field label={t("Radius")}>
+            <ExprInput value={f.radius} autoFocus onCommit={(radius) => set({ radius })} onLive={(radius) => set({ radius })} />
+          </Field>
+        )
+      ) : (
+        <Field label={f.mode === "spiral" ? t("Inner radius") : t("Cylinder radius")}>
+          <div className="row">
+            <div style={{ flex: 1 }}>
+              <ExprInput value={f.radius ?? 20} autoFocus onCommit={(radius) => set({ radius })} onLive={(radius) => set({ radius })} />
+            </div>
+            {f.mode === "wrap" && (info || box) ? (
+              <button className="btn" onClick={() => set({ radius: info ? +(info["length"]! / (2 * Math.PI)).toFixed(3) : bendDefaults("wrap", box!).radius })} title={t("Make the ring's ends meet")}>
+                {t("Close ring")}
+              </button>
+            ) : null}
+          </div>
+        </Field>
+      )}
+      {f.mode === "spiral" ? (
+        <Field label={t("Gap between turns")}>
+          <ExprInput value={f.gap ?? 1} onCommit={(g) => set({ gap: g })} onLive={(g) => set({ gap: g })} />
+        </Field>
+      ) : null}
+      {gap ? <div className={`callout ${gap.error ? "err" : "warn"}`}>{gap.text}</div> : null}
+      <label className="checkbox">
+        <input type="checkbox" checked={!!f.flip} onChange={(e) => set({ flip: e.target.checked || undefined })} /> {t("Bend the other way")}
+      </label>
+      {f.mode === "spiral" ? (
+        <label className="checkbox">
+          <input type="checkbox" checked={!!f.reverse} onChange={(e) => set({ reverse: e.target.checked || undefined })} /> {t("Start at the other end")}
+        </label>
+      ) : null}
+      <Field label={t("Tolerance")}>
+        <ExprInput value={f.tolerance} placeholder="auto" onCommit={(tolerance) => set({ tolerance: tolerance === 0 ? undefined : tolerance })} />
+      </Field>
+      {info ? <p className="small">{describeBend(f.mode, info)}</p> : null}
+      <p className="muted small">
+        {f.mode === "spiral"
+          ? t("Rolls a long strip into a flat coil that fits the print bed: a ruler, a band of text, a chain. The length in the middle of the strip stays the same.")
+          : f.mode === "wrap"
+            ? t("Lays the part onto a cylinder, its bottom face on it: a flat pattern becomes a ring or a bracelet. Close ring makes the ends meet.")
+            : t("Bends the part round the axis by the angle, about its middle; the length in the middle of the thickness stays the same.")}{" "}
+        {t("The result is a mesh part; drag the arrow to change the radius.")}
+      </p>
     </>
   );
 }
@@ -1087,6 +1179,8 @@ function Body({ d }: { d: DialogState }) {
       );
     case "scale":
       return <ScaleFields f={f} set={set} />;
+    case "bend":
+      return <BendFields f={f} set={set} />;
     case "align": {
       const desc = (v: Of<"align">["from"]) => {
         const sel = "face" in v ? v.face : v.axisOf;
