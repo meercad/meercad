@@ -3,6 +3,7 @@ import type { PlaneFrame, Region, SolvedSketch } from "@meercad/sketch";
 import type { Arena } from "./arena.js";
 import type { Body } from "./body.js";
 import type { GearRecord } from "./gear.js";
+import type { GridRecord } from "./gridfinity.js";
 
 export interface SketchResult {
   id: string;
@@ -31,6 +32,8 @@ export interface ModelState {
   readonly references: ReadonlyMap<string, ReferenceMesh>;
   /** Gears by feature id, for gears that mesh with them. */
   readonly gears: ReadonlyMap<string, GearRecord>;
+  /** Gridfinity baseplates by feature id, for bins set into them (absent in older states). */
+  readonly grids?: ReadonlyMap<string, GridRecord>;
   /** Objects created by the feature that produced this state. */
   readonly arena: Arena;
 }

@@ -50,6 +50,7 @@ import { Body, listToArray } from "./body.js";
 import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
+import { gridfinityBody, labelBodies } from "./gridfinity.js";
 import { convertMesh } from "./meshconvert.js";
 import { holeTools } from "./hole.js";
 import { nest, textLoops } from "./text.js";
@@ -141,6 +142,19 @@ export class OcctBackend implements KernelBackend<ModelState> {
         const frame = partner ? partner.frame : planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
         const { body, record } = gearBody(ctx.oc, ctx.arena, f, frame, partner);
         return { ...applyTool(ctx, f.id, body, f.mode, f.targets), gears: new Map(ctx.prev.gears).set(f.id, record) };
+      }
+      case "gridfinity": {
+        const plate = f.baseplate ? ctx.prev.grids?.get(f.baseplate) : undefined;
+        if (f.baseplate && !plate) throw new FeatureError(`baseplate "${f.baseplate}" not found`);
+        const frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
+        const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings);
+        const bodies = new Map(ctx.prev.bodies).set(f.id, body);
+        return { ...ctx.prev, bodies, ...(record ? { grids: new Map(ctx.prev.grids ?? []).set(f.id, record) } : {}) };
+      }
+      case "label": {
+        const bodies = new Map(ctx.prev.bodies);
+        for (const b of labelBodies(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx), ctx.warnings)) bodies.set(b.bodyId, b);
+        return { ...ctx.prev, bodies };
       }
       case "linear_pattern":
       case "circular_pattern":
