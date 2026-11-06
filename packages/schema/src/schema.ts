@@ -321,6 +321,21 @@ export const definitions: Record<string, Json> = {
       ["plane", "points", "kind"],
     ),
     mesh_convert: feature("mesh_convert", { body: id, tolerance: ref("expr"), angle: ref("expr") }, ["body"]),
+    bend: feature(
+      "bend",
+      {
+        bodies: arr(id, { minItems: 1 }),
+        mode: { enum: ["bend", "wrap", "spiral"] },
+        axis: ref("axisRef"),
+        angle: ref("expr"),
+        radius: ref("expr"),
+        gap: ref("expr"),
+        flip: bool,
+        reverse: bool,
+        tolerance: ref("expr"),
+      },
+      ["bodies", "mode", "axis"],
+    ),
     import: feature(
       "import",
       {

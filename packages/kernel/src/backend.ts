@@ -1,4 +1,4 @@
-import { parseStl } from "@meercad/io";
+import { parseStl, writeStl } from "@meercad/io";
 import { propagateTags, resolveEdges, resolveFaces, ResolveError, selectorForEdge } from "@meercad/naming";
 import {
   FeatureError,
@@ -11,6 +11,11 @@ import {
   type ResolvedFillet,
   type ResolvedLinearPattern,
   type ResolvedMeshConvert,
+  type ResolvedBend,
+  bendMeshes,
+  BendError,
+  defaultBendTolerance,
+  bendInfoRecord,
   type ResolvedHole,
   holeShape,
   HoleError,
@@ -66,6 +71,7 @@ interface Ctx {
   g: Geom;
   prev: ModelState;
   warnings: string[];
+  info?: Record<string, number>;
 }
 
 export class OcctBackend implements KernelBackend<ModelState> {
@@ -87,7 +93,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
     const ctx: Ctx = { oc: this.oc, arena, g: new Geom(this.oc, arena), prev, warnings: [] };
     try {
       const next = this.run(f, ctx);
-      return { state: { ...next, arena }, warnings: ctx.warnings };
+      return { state: { ...next, arena }, warnings: ctx.warnings, ...(ctx.info ? { info: ctx.info } : {}) };
     } catch (e) {
       arena.dispose();
       if (e instanceof FeatureError) throw e;
@@ -159,6 +165,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return importFeature(f, ctx);
       case "mesh_convert":
         return meshConvertFeature(f, ctx);
+      case "bend":
+        return bendFeature(f, ctx);
       case "hole":
         return holeFeature(f, ctx);
     }
@@ -1401,13 +1409,18 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
  * shell and then a solid (sewn first if the mesh has tiny gaps), which booleans can work with. An
  * open mesh is reported, not dropped silently.
  */
-function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
-  const path = `/import-${f.id}.stl`;
+function stlSolid(ctx: Ctx, f: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
+  return meshSolid(ctx, `import-${f.id}`, bytes, `STL file "${f.fileName}"`);
+}
+
+/** Solid from a binary STL in memory, one face per triangle (see `stlSolid`). */
+function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: string): TopoDS_Shape {
+  const path = `/${name}.stl`;
   oc.FS.writeFile(path, bytes);
   let faces: TopoDS_Shape;
   try {
     faces = arena.track(new oc.TopoDS_Shape());
-    if (!arena.track(new oc.StlAPI_Reader()).Read(faces, path)) throw new FeatureError(`could not read STL file "${f.fileName}"`);
+    if (!arena.track(new oc.StlAPI_Reader()).Read(faces, path)) throw new FeatureError(`could not read ${what}`);
   } finally {
     oc.FS.unlink(path);
   }
@@ -1417,7 +1430,7 @@ function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): Topo
     return n;
   };
   const count = triangles(faces);
-  if (!count) throw new FeatureError(`STL file "${f.fileName}" contains no triangles`);
+  if (!count) throw new FeatureError(`${what} contains no triangles`);
   const toSolid = (shape: TopoDS_Shape): TopoDS_Shape | null => {
     const builder = arena.track(new oc.TopoDS_Builder());
     const shell = arena.track(new oc.TopoDS_Shell());
@@ -1438,7 +1451,7 @@ function stlSolid({ oc, arena }: Ctx, f: ImportFeature, bytes: Uint8Array): Topo
     sew.Perform(arena.track(new oc.Message_ProgressRange()));
     solid = toSolid(arena.track(sew.SewedShape()));
   }
-  if (!solid) throw new FeatureError(`STL file "${f.fileName}" is not a closed solid (${count} triangles)`, "repair the mesh so it has no holes, e.g. in your slicer or mesh tool, and import it again");
+  if (!solid) throw new FeatureError(`${what} is not a closed solid (${count} triangles)`, "repair the mesh so it has no holes, e.g. in your slicer or mesh tool, and import it again");
   // Faces stay one per triangle: imported meshes are edited as whole parts, and keeping the file's
   // triangles lets display and export skip OCCT's meshing.
   return solid;
@@ -1504,6 +1517,73 @@ function meshConvertFeature(f: ResolvedMeshConvert, ctx: Ctx): Omit<ModelState, 
   const parts = (["plane", "cylinder", "cone", "sphere"] as const).filter((k) => r.counts[k]).map((k) => `${r.counts[k]} ${k}${r.counts[k] === 1 ? "" : "s"}`);
   if (r.counts.facet) ctx.warnings.push(`${r.counts.facet} triangles match no surface and stay flat facets (found ${parts.join(", ") || "no surfaces"})`);
   return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+}
+
+/**
+ * Parts bent round an axis, wrapped onto a cylinder or rolled into a flat spiral (see
+ * model/bend.ts). The parts are cut into triangles fine enough for the tolerance, bent together
+ * as one piece and become mesh parts with the same ids.
+ */
+function bendFeature(f: ResolvedBend, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena } = ctx;
+  if (!f.bodies.length) throw new FeatureError("pick the parts to bend");
+  const inputs = f.bodies.map((id) => {
+    const body = ctx.prev.bodies.get(id);
+    if (!body) throw new FeatureError(`part "${id}" not found`);
+    return body;
+  });
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const b of inputs) {
+    const bb = bounds(oc, arena, b.shape);
+    for (let k = 0; k < 3; k++) {
+      lo[k] = Math.min(lo[k]!, bb.min[k]!);
+      hi[k] = Math.max(hi[k]!, bb.max[k]!);
+    }
+  }
+  const tolerance = f.tolerance ?? defaultBendTolerance(Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!));
+  if (!(tolerance > 0)) throw new FeatureError("the tolerance must be greater than zero");
+  const ax = axis(f.axis, ctx).dir;
+  let bent;
+  try {
+    bent = bendMeshes(
+      inputs.map((b) => b.sourceMesh ?? surfaceTriangles(ctx, b, tolerance)),
+      { mode: f.mode, axis: ax, angle: f.angle, radius: f.radius, gap: f.gap, flip: f.flip, reverse: f.reverse, tolerance },
+    );
+  } catch (e) {
+    if (e instanceof BendError) throw new FeatureError(e.message, e.hint);
+    throw e;
+  }
+  const bodies = new Map(ctx.prev.bodies);
+  bent.forEach((m, k) => {
+    const id = inputs[k]!.bodyId;
+    const n = m.corners.length / 9;
+    const indices = Uint32Array.from({ length: n * 3 }, (_, i) => i);
+    const shape = meshSolid(ctx, `bend-${f.id}-${k}`, writeStl([{ positions: m.corners, indices }]), `the bent part "${id}"`);
+    const body = new Body(oc, arena, id, shape);
+    body.faceTags = body.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+    if (body.faces.length === n) body.sourceMesh = m.corners;
+    bodies.set(id, body);
+  });
+  ctx.warnings.push(...bent[0]!.warnings);
+  ctx.info = bendInfoRecord(bent[0]!.info);
+  return { ...ctx.prev, bodies };
+}
+
+/** A body's surface as triangle corners, within `tolerance` of its faces. */
+function surfaceTriangles({ oc }: Ctx, body: Body, tolerance: number): Float32Array {
+  const m = oc.ReplicadMeshExtractor.extract(body.shape, tolerance, 0.2, false);
+  try {
+    const buf = oc.wasmMemory.buffer;
+    const positions = new Float32Array(buf, m.getVerticesPtr() >>> 0, m.getVerticesSize()).slice();
+    const indices = new Uint32Array(buf, m.getTrianglesPtr() >>> 0, m.getTrianglesSize()).slice();
+    const out = new Float32Array(indices.length * 3);
+    for (let i = 0; i < indices.length; i++) out.set(positions.subarray(indices[i]! * 3, indices[i]! * 3 + 3), i * 3);
+    return out;
+  } finally {
+    m.delete();
+    // The fine triangulation would otherwise stay on the shape and be reused for display.
+    oc.BRepTools.Clean(body.shape, true);
+  }
 }
 
 /** Triangle corners of a body whose faces are all triangles (a mesh part without its source mesh), else null. */

@@ -16,6 +16,8 @@ export class FeatureError extends Error {
 export interface ExecResult<S> {
   state: S;
   warnings?: string[];
+  /** Numbers about the result for the interface (e.g. what a bend comes to). */
+  info?: Record<string, number>;
 }
 
 /** What the rebuild engine needs from a geometry kernel. States must be treated as immutable. */
@@ -37,6 +39,8 @@ export interface FeatureStatus {
   /** Execution time in ms; 0 when taken from cache. */
   ms: number;
   cached: boolean;
+  /** Numbers about the result for the interface (see ExecResult). */
+  info?: Record<string, number>;
 }
 
 export interface RebuildResult<S> {
@@ -125,6 +129,7 @@ export class RebuildEngine<S> {
             status = r.warnings?.length
               ? { id: f.id, status: "warning", message: r.warnings.join("; "), ms: 0, cached: false }
               : { id: f.id, status: "ok", ms: 0, cached: false };
+            if (r.info) status.info = r.info;
           } catch (e) {
             status = {
               id: f.id,
