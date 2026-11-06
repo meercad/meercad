@@ -72,7 +72,7 @@ export function fitTestDocument(): MeercadDocument {
     const x = xs[i % cols]!;
     const y = rows[Math.floor(i / cols)]!;
     holes.push({ id: `ho${i + 1}`, op: "hole", name: `Gap ${fitLabel(gap)}`, plane: { face: { face: "ex1.end_cap" } }, points: [[x, y]], kind: "simple", diameter: `pin + ${2 * gap} mm` });
-    labels.push({ id: `tx${i + 1}`, op: "text", name: `Label ${fitLabel(gap)}`, plane: { face: { face: "ex1.end_cap" } }, text: fitLabel(gap), font: "sans-bold", align: "center", position: [x, y - 8.5], size: "3.5 mm", depth: "0.6 mm", mode: "cut" });
+    labels.push({ id: `tx${i + 1}`, op: "text", name: `Label ${fitLabel(gap)}`, plane: { face: { face: "ex1.end_cap" } }, text: fitLabel(gap), font: "sans-bold", align: "center", position: [x, y - 8.5], size: "3.5 mm", depth: "0.6 mm", mode: "new_body", flip: true });
   });
   return {
     format: FORMAT,
@@ -82,6 +82,8 @@ export function fitTestDocument(): MeercadDocument {
       { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: "thickness", mode: "new_body" },
       ...holes,
       ...labels,
+      // All numbers cut at once: one by one, every cut has to work through the letters cut before.
+      { id: "bo1", op: "boolean", name: "Engrave the gaps", operation: "subtract", target: "ex1", tools: labels.map((l) => l.id) },
       {
         id: "sk2",
         op: "sketch",
