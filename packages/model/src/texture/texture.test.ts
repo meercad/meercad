@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TEXTURE_PATTERNS } from "@meercad/schema";
-import { applyTextures, DISPLAY_TEXTURE, type FaceSurface, type TexturableMesh, type TextureLayer, type TexturedMesh } from "./displace.js";
+import { applyTextures, DISPLAY_TEXTURE, EXPORT_TEXTURE, type FaceSurface, type TexturableMesh, type TextureLayer, type TexturedMesh } from "./displace.js";
 import { decodeHeightImage, fitWrap, patternHeight, patternPeriods, PATTERNS } from "./patterns.js";
 
 type V3 = [number, number, number];
@@ -265,6 +265,29 @@ describe("texture displacement", () => {
     expect(m.indices.length / 3).toBeLessThan((12 * area) / 0.5 ** 2);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
     expect(performance.now() - t0).toBeLessThan(5000);
+  });
+
+  it("refines a round face in strips wider than the spacing (export meshing) to the intended density", () => {
+    // A 26 × 60 mm grip meshed for export: 126 strips 0.65 mm wide, knurled at a 3 mm pitch.
+    const { mesh, surfaces } = cylinder(13, 60, 126);
+    const t0 = performance.now();
+    const m = applyTextures(mesh, [layer([0], { pattern: "knurl", depth: 0.6, pitch: 3 })], surfaces, EXPORT_TEXTURE)!;
+    const spacing = 3 / EXPORT_TEXTURE.samples;
+    const triangles = m.indices.length / 3 - 2 * 126;
+    // Every edge at most the spacing needs about 6 × area / spacing² triangles; it once made 29×.
+    expect(triangles).toBeLessThan((10 * 2 * Math.PI * 13 * 60) / spacing ** 2);
+    expect(m.indices.length / 3).toBeLessThan(EXPORT_TEXTURE.maxTriangles);
+    expect(m.spacing).toBeCloseTo(spacing, 6);
+    expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
+    expect(performance.now() - t0).toBeLessThan(10000);
+  });
+
+  it("holds the triangle budget over the whole part", () => {
+    const { mesh, surfaces } = cylinder(13, 60, 126);
+    const m = applyTextures(mesh, [layer([0], { pattern: "knurl", pitch: 3 })], surfaces, { samples: 12, maxTriangles: 100_000 })!;
+    expect(m.indices.length / 3).toBeLessThanOrEqual(100_000);
+    expect(m.indices.length / 3).toBeGreaterThan(40_000);
+    expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
   });
 
   it("works for every pattern", () => {
