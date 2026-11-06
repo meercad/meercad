@@ -286,6 +286,8 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     standard_part: "np",
     gridfinity: "gf",
     label: "lb",
+    box: "bx",
+    snap_hook: "sh",
     align: "al",
     scale: "sc",
     sweep: "sw",

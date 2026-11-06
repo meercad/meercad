@@ -230,6 +230,16 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if (f.kind === "baseplate" && f.baseplate) errors.push(`${at}: a baseplate cannot sit in a baseplate`);
         if (f.kind === "bin" && f.drawer) errors.push(`${at}: drawer is for baseplates`);
         break;
+      case "box":
+        if (f.plane) planeSpec(f.plane, at);
+        if (f.lid === "screw" && f.shape === "rect") errors.push(`${at}: screw lids need a round box`);
+        if (f.lid === "screw" && f.depth !== undefined) errors.push(`${at}: a round box has no depth (width is its diameter)`);
+        break;
+      case "snap_hook":
+        planeSpec(f.plane, at);
+        for (const b of f.catchIn ?? []) body(b, at);
+        for (const b of f.targets ?? []) body(b, at);
+        break;
       case "label":
         if (f.plane) planeSpec(f.plane, at);
         if (!f.text?.trim() && (f.symbol ?? "none") === "none") errors.push(`${at}: a label needs a text or a symbol`);
