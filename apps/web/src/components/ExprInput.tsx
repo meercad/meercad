@@ -60,7 +60,7 @@ export function ExprInput({ value, onCommit, onLive, unit = "mm", autoFocus, pla
     <div className="expr-wrap">
       <input
         ref={ref}
-        className={`field expr ${error ? "invalid" : ""} ${className ?? ""}`}
+        className={`field expr ${error ? "invalid" : ""} ${quiet ? "quiet" : ""} ${className ?? ""}`}
         value={text}
         placeholder={placeholder}
         // On touch screens focusing pops up the keyboard (e.g. when a drag opens a dialog): tap to type.

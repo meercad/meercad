@@ -258,7 +258,7 @@ server.registerTool(
 const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
 const shot = {
   view: view.optional(),
-  direction: z.tuple([z.number(), z.number(), z.number()]).optional().describe("Look along this direction (camera towards model), e.g. [1,-1,-0.5] from front-left above; overrides view"),
+  direction: z.tuple([z.number(), z.number(), z.number()]).optional().describe("Where the camera is, seen from the model (Z up, front is -Y), e.g. [-1,-1,0.6] from front-left above, [0,0,-1] from below; overrides view"),
   focus: z.array(z.string()).optional().describe("Part ids to zoom onto"),
   isolate: z.boolean().optional().describe("With focus: hide all other parts"),
   section: z

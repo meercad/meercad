@@ -77,3 +77,14 @@ describe("embedded files left out for assistants", () => {
     expect(next.features[0]).toEqual(d.features[0]);
   });
 });
+
+describe("assistant names", () => {
+  it("shows the connected program by the name people know", async () => {
+    const { clientLabel } = await import("../apps/web/src/lib/mcpClient");
+    expect(clientLabel("claude-code")).toBe("Claude Code");
+    expect(clientLabel("claude-ai")).toBe("Claude");
+    expect(clientLabel("my-agent")).toBe("My Agent");
+    expect(clientLabel("Zed Editor")).toBe("Zed Editor");
+    expect(clientLabel(undefined)).toBe("Assistant");
+  });
+});

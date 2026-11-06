@@ -159,6 +159,7 @@ export function TextureFields({ f, set, faces }: { f: TextureFeature; set: Set; 
         ) : null}
       </div>
       <p className="muted small">{t("Positive depth raises the pattern, negative cuts it in. It runs on across smooth edges and fades out at the border. Only the triangles change: STL, 3MF and OBJ export the texture; STEP, volume and mass keep the smooth faces.")}</p>
+      <p className="muted small">{t("Textures make every rebuild slower. While you change other values, hide them with the texture button at the bottom right.")}</p>
     </>
   );
 }

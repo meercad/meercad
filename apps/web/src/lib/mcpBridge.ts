@@ -12,6 +12,7 @@ import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
 import { sketchCurves } from "../components/io";
 import * as tools from "./mcpTools";
+import { clientLabel } from "./mcpClient";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, clearanceNow, setPose } from "./mechanism";
@@ -36,13 +37,15 @@ export const onBridgeStatus = (fn: (s: Status) => void) => {
   return () => listeners.delete(fn);
 };
 
-export function setBridgeEnabled(on: boolean): void {
+export function setBridgeEnabled(on: boolean, remember = true): void {
   wanted = on;
-  try {
-    localStorage.setItem("meercad.mcp", on ? "1" : "0");
-  } catch {
-    // preference not persisted
-  }
+  if (remember)
+    try {
+      localStorage.setItem("meercad.mcp", on ? "1" : "0");
+    } catch {
+      // preference not persisted
+    }
+  if (!on) unlock();
   if (on) connect();
   else {
     clearTimeout(retry);
@@ -102,14 +105,66 @@ function connect(): void {
   ws.onerror = () => ws.close();
   ws.onmessage = async (e) => {
     const req = JSON.parse(String(e.data)) as BridgeRequest;
-    showActivity(req.client ?? "Assistant", req.method);
+    const client = clientLabel(req.client);
+    showActivity(client, req.method);
+    const locks = !READS.has(req.method);
+    if (locks) lock(client);
     try {
       ws.send(JSON.stringify({ id: req.id, result: await handle(req) }));
     } catch (err) {
       ws.send(JSON.stringify({ id: req.id, error: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      if (locks && socket === ws) release();
     }
   };
 }
+
+/** Requests that only look things up: they do not lock the app. */
+const READS = new Set(["status", "get_version", "list_projects", "list_folders", "list_examples", "list_materials"]);
+/** How long the app stays locked after the assistant's last request: it often thinks a while between two. */
+export const LOCK_IDLE_MS = 12_000;
+let running = 0;
+let lockTimer: number | undefined;
+function lock(client: string): void {
+  running++;
+  clearTimeout(lockTimer);
+  if (useApp.getState().aiLock?.client !== client) useApp.setState({ aiLock: { client } });
+}
+function release(): void {
+  running = Math.max(0, running - 1);
+  if (running) return;
+  clearTimeout(lockTimer);
+  lockTimer = window.setTimeout(unlock, LOCK_IDLE_MS);
+}
+function unlock(): void {
+  running = 0;
+  clearTimeout(lockTimer);
+  if (useApp.getState().aiLock) useApp.setState({ aiLock: null });
+}
+
+/**
+ * The user ends the assistant's editing: the app is free again and the assistant is disconnected
+ * until it is allowed again with the plug icon (next start it is connected as before).
+ */
+export function stopAssistant(): void {
+  setBridgeEnabled(false, false);
+  clearTimeout(activityTimer);
+  useApp.setState({ aiActivity: null });
+}
+
+// While an assistant works, keys do nothing in the app (registered before any other key handler),
+// except on the bar that offers to stop it.
+for (const type of ["keydown", "keyup"] as const)
+  window.addEventListener(
+    type,
+    (e) => {
+      if (!useApp.getState().aiLock) return;
+      if (e.target instanceof Element && e.target.closest(".ai-lock-bar")) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    },
+    true,
+  );
 
 let activityTimer: number | undefined;
 function showActivity(client: string, tool: string): void {
@@ -208,8 +263,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "apply_ops": {
       needProject();
       useApp.setState({ proposalDoc: null });
-      // Variables an assistant creates are listed apart from the user's own.
-      const ops = tools.restoreElided(p["ops"] as DocOp[], currentDoc()).map((op) => (op.type === "set_param" && op.expr !== null && op.auto === undefined && !(op.name in currentDoc().params) ? { ...op, auto: true } : op));
+      // Variables an assistant creates are the user's (the dimensions they asked for); helpers it marks auto: true.
+      const ops = tools.restoreElided(p["ops"] as DocOp[], currentDoc());
       // Validate first so a bad op returns a precise error instead of a toast.
       ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       if (!apply(...ops)) throw new Error("ops were rejected");

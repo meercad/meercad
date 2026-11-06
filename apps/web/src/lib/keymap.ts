@@ -261,13 +261,15 @@ interface Prefs {
   /** The example models on the start page, and whether that section is folded open. */
   showExamples: boolean;
   examplesOpen: boolean;
+  /** Surface textures on screen; off makes editing a textured part quicker (exports keep them). */
+  showTextures: boolean;
 }
 
 
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -282,6 +284,7 @@ function load(): Prefs {
       units: raw.units === "imperial" ? "imperial" : "metric",
       showExamples: raw.showExamples !== false,
       examplesOpen: raw.examplesOpen !== false,
+      showTextures: raw.showTextures !== false,
     };
   } catch {
     return fallback;

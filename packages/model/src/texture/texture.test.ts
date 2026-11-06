@@ -250,7 +250,8 @@ describe("texture displacement", () => {
   it("stays below the triangle budget and leaves other faces alone", () => {
     const base = box(100, 100, 50);
     const m = applyTextures(base, [layer([5], { pitch: 0.5 })], planes, { samples: 8, maxTriangles: 50_000 })!;
-    expect(m.indices.length / 3).toBeLessThan(80_000);
+    expect(m.indices.length / 3).toBeLessThanOrEqual(50_000);
+    expect(m.indices.length / 3).toBeGreaterThan(25_000);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
     // The bottom keeps its two triangles (it only touches the top at no edge).
     expect(m.faceRanges[4 * 3 + 1]).toBe(6);
@@ -287,6 +288,15 @@ describe("texture displacement", () => {
     const m = applyTextures(mesh, [layer([0], { pattern: "knurl", pitch: 3 })], surfaces, { samples: 12, maxTriangles: 100_000 })!;
     expect(m.indices.length / 3).toBeLessThanOrEqual(100_000);
     expect(m.indices.length / 3).toBeGreaterThan(40_000);
+    expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
+  });
+
+  it("makes a retry coarser when the first try overshoots the budget", () => {
+    // A wall in 40 wide strips: the estimate is low, the first try makes about 113k triangles.
+    // The retry once came out the same (the estimate undid its coarser spacing) and ran four times.
+    const { mesh, surfaces } = cylinder(30, 100, 40);
+    const m = applyTextures(mesh, [layer([0], { pitch: 4 })], surfaces, { samples: 8, maxTriangles: 100_000 })!;
+    expect(m.indices.length / 3).toBeLessThanOrEqual(100_000);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
   });
 

@@ -18,7 +18,7 @@ export interface Shot {
   width?: number;
   height?: number;
   view?: StandardView;
-  /** Looking along this direction (from the camera towards the model), instead of a standard view. */
+  /** Where the camera is, seen from the model ([-1, -1, 0.6]: front-left above), instead of a standard view. */
   direction?: V3;
   /** Parts to frame (zoom onto); `isolate` hides all others. */
   focus?: string[];

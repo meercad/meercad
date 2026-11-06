@@ -52,11 +52,14 @@ export interface TextureOptions {
   samples: number;
   /** Upper bound on the number of new triangles; the refinement gets coarser to stay below it. */
   maxTriangles: number;
+  /** Overshoot of the budget accepted without a coarser retry (1.25 = 25 % more); default 1. */
+  slack?: number;
 }
 
-export const DISPLAY_TEXTURE: TextureOptions = { samples: 8, maxTriangles: 300_000 };
+// On screen a few more triangles cost less than computing the texture a second time.
+export const DISPLAY_TEXTURE: TextureOptions = { samples: 8, maxTriangles: 300_000, slack: 1.25 };
 /** While a value is being dragged: quick and coarse. */
-export const DRAFT_TEXTURE: TextureOptions = { samples: 6, maxTriangles: 60_000 };
+export const DRAFT_TEXTURE: TextureOptions = { samples: 6, maxTriangles: 60_000, slack: 1.25 };
 export const EXPORT_TEXTURE: TextureOptions = { samples: 12, maxTriangles: 2_000_000 };
 
 export interface TexturedMesh {
@@ -103,7 +106,7 @@ export function applyTextures(mesh: TexturableMesh, layers: TextureLayer[], surf
   for (let attempt = 0; attempt < 4; attempt++) {
     out = texturize(mesh, layers, surfaces, opts, coarser);
     const n = out ? out.indices.length / 3 : 0;
-    if (!out || n <= opts.maxTriangles) return out;
+    if (!out || n <= opts.maxTriangles * (opts.slack ?? 1)) return out;
     coarser *= Math.sqrt(n / opts.maxTriangles) * 1.05;
   }
   return out;
@@ -171,13 +174,12 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
       const n = cross(sub(b, a), sub(c, a));
       area[r.layer]! += Math.hypot(n[0], n[1], n[2]) / 2;
     }
-  const spacing = layers.map((l) => Math.max(0.02, l.pitch / opts.samples) * coarser);
+  const spacing = layers.map((l) => Math.max(0.02, l.pitch / opts.samples));
   // Bisecting longest edges until none is longer than h leaves about 6–12·area/h² triangles (more on round faces meshed in strips).
   const estimate = layers.reduce((s, _, i) => s + (10 * area[i]!) / spacing[i]! ** 2, 0);
-  if (estimate > opts.maxTriangles) {
-    const k = Math.sqrt(estimate / opts.maxTriangles);
-    for (let i = 0; i < spacing.length; i++) spacing[i]! *= k;
-  }
+  // A retry's `coarser` comes on top of the estimate, otherwise the estimate would undo it.
+  const k = Math.max(1, Math.sqrt(estimate / opts.maxTriangles)) * coarser;
+  for (let i = 0; i < spacing.length; i++) spacing[i]! *= k;
 
   // ---- groups of chosen faces joined by smooth edges (per layer), from the original triangles
   const parent = ranges.map((_, i) => i);
@@ -215,11 +217,20 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
   // ---- refine: split every edge of a chosen face that is longer than its layer's spacing
   for (let pass = 0; pass < 40; pass++) {
     const long = new Map<number, number>();
+    // Corners of preset edges: only edges between two of them are looked up.
+    const presetAt = new Uint8Array(pos.length / 3);
+    for (const key of preset) {
+      const a = Math.floor(key / 134217728);
+      presetAt[a] = 1;
+      presetAt[key - a * 134217728] = 1;
+    }
     ranges.forEach((r, ri) => {
       if (preset.size)
         for (let t = 0; t < r.tris.length; t += 3)
           for (let k = 0; k < 3; k++) {
-            const key = edgeKey(r.weld[r.tris[t + k]!]!, r.weld[r.tris[t + ((k + 1) % 3)]!]!);
+            const a = r.weld[r.tris[t + k]!]!, b = r.weld[r.tris[t + ((k + 1) % 3)]!]!;
+            if (presetAt[a] !== 1 || presetAt[b] !== 1) continue;
+            const key = edgeKey(a, b);
             if (preset.has(key) && !long.has(key)) long.set(key, ri);
           }
       if (r.layer < 0) return;
@@ -242,7 +253,13 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
       }
     });
     if (!long.size) break;
-    for (const key of long.keys()) preset.delete(key);
+    const hot = new Uint8Array(pos.length / 3);
+    for (const key of long.keys()) {
+      preset.delete(key);
+      const a = Math.floor(key / 134217728);
+      hot[a] = 1;
+      hot[key - a * 134217728] = 1;
+    }
     const midWeld = (a: number, b: number, key: number): number => {
       let m = mids.get(key);
       if (m !== undefined) return m;
@@ -275,12 +292,20 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
       };
       const out: number[] = [];
       let changed = false;
+      const c = [0, 0, 0];
+      const split = [false, false, false];
       for (let t = 0; t < r.tris.length; t += 3) {
-        const c = [r.tris[t]!, r.tris[t + 1]!, r.tris[t + 2]!];
-        const split = [0, 1, 2].map((k) => long.has(edgeKey(r.weld[c[k]!]!, r.weld[c[(k + 1) % 3]!]!)));
-        const count = split.filter(Boolean).length;
+        c[0] = r.tris[t]!;
+        c[1] = r.tris[t + 1]!;
+        c[2] = r.tris[t + 2]!;
+        const w0 = r.weld[c[0]]!, w1 = r.weld[c[1]]!, w2 = r.weld[c[2]]!;
+        // Only edges between two corners of split edges can be split: most triangles skip the lookups.
+        split[0] = hot[w0] === 1 && hot[w1] === 1 && long.has(edgeKey(w0, w1));
+        split[1] = hot[w1] === 1 && hot[w2] === 1 && long.has(edgeKey(w1, w2));
+        split[2] = hot[w2] === 1 && hot[w0] === 1 && long.has(edgeKey(w2, w0));
+        const count = +split[0] + +split[1] + +split[2];
         if (!count) {
-          out.push(c[0]!, c[1]!, c[2]!);
+          out.push(c[0], c[1], c[2]);
           continue;
         }
         changed = true;

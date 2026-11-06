@@ -144,7 +144,9 @@ button { cursor: pointer; }
 .empty { padding: 10px 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
 .params { padding: 0 10px; display: flex; flex-direction: column; gap: 4px; }
-.param-row { display: grid; grid-template-columns: minmax(56px, 0.8fr) 1.4fr 52px 22px; gap: 4px; align-items: center; }
+/* Name and value share the width evenly, so names like handle_drop stay readable in a narrow panel. */
+.param-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(34px, auto) 22px; gap: 4px; align-items: center; }
+.param-row > .field, .param-row > .expr-wrap { min-width: 0; width: 100%; }
 .param-row .val { text-align: right; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 input.field, select.field, textarea.field { height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-2); min-width: 0; width: 100%; }
 textarea.field { height: auto; padding: 6px 8px; resize: vertical; }
@@ -233,6 +235,8 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .expr-wrap { position: relative; }
 .expr-wrap .computed { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); pointer-events: none; font-variant-numeric: tabular-nums; }
 .expr-wrap input { padding-right: 56px; }
+/* Without the result in the field (the variables list shows it beside), the text gets the room. */
+.expr-wrap input.quiet { padding-right: 8px; }
 /* Counters with − and + beside them: just the number, centred. */
 .expr-wrap input.count { padding-right: 6px; text-align: center; }
 
@@ -343,6 +347,12 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .ai-activity { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); box-shadow: var(--shadow); font-size: 12.5px; z-index: 6; }
 .ai-activity .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.25; transform: scale(0.7); } }
+/* An assistant at work: the app takes no input, the bar offers to stop it. */
+.ai-lock { position: fixed; inset: 0; z-index: 150; background: rgb(10 14 20 / 0.08); cursor: progress; touch-action: none; }
+.ai-lock-bar { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 8px 8px 8px 14px; border-radius: 999px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: var(--shadow); font-size: 13px; cursor: default; }
+.ai-lock-bar > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-lock-bar .pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.ai-lock-bar .btn { flex: none; height: 30px; padding: 0 14px; border-radius: 999px; }
 
 /* tour */
 .tour { position: fixed; inset: 0; z-index: 80; }
@@ -811,7 +821,7 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
 .value-menu-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; }
 .value-menu-item { display: flex; flex-direction: column; }
 .value-menu-group { padding: 6px 7px 2px; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-.param-row.auto { grid-template-columns: minmax(56px, 0.8fr) 1.4fr 44px 22px 22px; }
+.param-row.auto { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(34px, auto) 22px 22px; }
 
 /* Home and editor share one title bar geometry, so switching between them doesn't jump. */
 .topbar, .home-top { height: 56px; padding: 0 10px 0 12px; }
