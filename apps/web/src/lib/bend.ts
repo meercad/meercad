@@ -4,7 +4,7 @@
  */
 import type { AxisRef, Feature } from "@meercad/schema";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { fmtLen } from "./units";
+import { fmtLen as fmtLength } from "./units";
 import { t } from "./i18n";
 
 type Bend = Extract<Feature, { op: "bend" }>;
@@ -45,6 +45,7 @@ export function bendInfo(out: RebuildOutput | null, id: string): Record<string, 
 /** One line on what the bend comes to. */
 export function describeBend(mode: Bend["mode"], info: Record<string, number>): string {
   const n = (v: number, d = 1) => String(+v.toFixed(d));
+  const fmtLen = (v: number) => fmtLength(Math.round(v * 10) / 10);
   if (mode === "spiral")
     return t("{turns} turns, {outer} across; {length} long, {thick} thick", {
       turns: n(info["turns"]!),

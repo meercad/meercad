@@ -508,8 +508,11 @@ function refineAndMap(world: number[], tris: number[], bender: Bender, tol: numb
   return { corners: res, ring };
 }
 
-/** A bend's numbers as a flat record (for the rebuild report). */
+/** Modes by their number in `bendInfoRecord`. */
+export const BEND_MODES: readonly BendMode[] = ["bend", "wrap", "spiral"];
+
+/** A bend's numbers as a flat record (for the rebuild report); `mode` is its index in BEND_MODES. */
 export function bendInfoRecord(i: BendInfo): Record<string, number> {
   const [cx, cy, cz] = i.centre, [ox, oy, oz] = i.outward, [ax, ay, az] = i.axis;
-  return { length: i.length, thickness: i.thickness, width: i.width, radius: i.radius, angle: i.angle, turns: i.turns, gap: i.gap, outerRadius: i.outerRadius, closed: i.closed ? 1 : 0, cx, cy, cz, ox, oy, oz, ax, ay, az };
+  return { mode: BEND_MODES.indexOf(i.mode), length: i.length, thickness: i.thickness, width: i.width, radius: i.radius, angle: i.angle, turns: i.turns, gap: i.gap, outerRadius: i.outerRadius, closed: i.closed ? 1 : 0, cx, cy, cz, ox, oy, oz, ax, ay, az };
 }

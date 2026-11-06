@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Check, Cog, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
 import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH } from "@meercad/model";
@@ -8,7 +8,7 @@ import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { gearParams, pairInfo } from "../lib/gears";
 import { joinedParts } from "../lib/mechanism";
 import { bendDefaults, bendInfo, describeBend, gapProblem, partsBox, unbentBox } from "../lib/bend";
-import { evaluate } from "@meercad/model";
+import { BEND_MODES, evaluate } from "@meercad/model";
 import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, describePlane, edgeSelectorForPick, faceSelectorForPick, planeSpecForPick, PLANE_LABELS } from "../lib/topology";
 import { cancelDialog, commitDialog, openDraft, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
@@ -472,8 +472,14 @@ function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string,
 function BendFields({ f, set }: { f: Of<"bend">; set: (patch: Record<string, unknown>) => void }) {
   const features = useApp((s) => s.doc.features);
   const params = useApp((s) => s.baseOutput?.report.params);
-  const info = useApp((s) => bendInfo(s.output, f.id));
   const base = useApp((s) => s.baseOutput);
+  // The preview's numbers, else (a preview that failed) the last good ones or the saved step's.
+  const fresh = useApp((s) => bendInfo(s.output, f.id));
+  const lastGood = useRef<Record<string, number> | null>(null);
+  if (fresh) lastGood.current = fresh;
+  const known = fresh ?? lastGood.current ?? bendInfo(base, f.id);
+  // Numbers of another mode (the preview not caught up yet) are not shown.
+  const info = fresh && fresh["mode"] === BEND_MODES.indexOf(f.mode) ? fresh : null;
   const num = (e: Expr | undefined) => {
     if (e === undefined) return undefined;
     try {
@@ -482,9 +488,8 @@ function BendFields({ f, set }: { f: Of<"bend">; set: (patch: Record<string, unk
       return undefined;
     }
   };
-  const isNew = useApp((s) => !!s.dialog?.isNew);
-  // The parts as they were before bending: the model before this step, or (editing it) the step's report.
-  const box = isNew || !info ? partsBox(base, f.bodies) : unbentBox(info);
+  // The parts as they were before bending: from the bend's numbers, else the model before this step.
+  const box = known ? unbentBox(known) : partsBox(base, f.bodies);
   const gap = gapProblem(f, f.mode === "spiral" ? (num(f.gap) ?? 1) : undefined);
   const switchMode = (mode: Of<"bend">["mode"]) => {
     set(box && f.bodies.length ? { ...bendDefaults(mode, box) } : { mode, ...(mode === "spiral" ? { radius: 20, gap: 1, angle: undefined } : mode === "wrap" ? { radius: 30, gap: undefined, angle: undefined } : { angle: 90, radius: undefined, gap: undefined }) });
@@ -515,8 +520,8 @@ function BendFields({ f, set }: { f: Of<"bend">; set: (patch: Record<string, unk
             <div style={{ flex: 1 }}>
               <ExprInput value={f.radius ?? 20} autoFocus onCommit={(radius) => set({ radius })} onLive={(radius) => set({ radius })} />
             </div>
-            {f.mode === "wrap" && (info || box) ? (
-              <button className="btn" onClick={() => set({ radius: info ? +(info["length"]! / (2 * Math.PI)).toFixed(3) : bendDefaults("wrap", box!).radius })} title={t("Make the ring's ends meet")}>
+            {f.mode === "wrap" && (known || box) ? (
+              <button className="btn" onClick={() => set({ radius: known ? +(known["length"]! / (2 * Math.PI)).toFixed(3) : bendDefaults("wrap", box!).radius })} title={t("Make the ring's ends meet")}>
                 {t("Close ring")}
               </button>
             ) : null}
