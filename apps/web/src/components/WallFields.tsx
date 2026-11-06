@@ -62,6 +62,7 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
 
   let info = "";
   if (!holder) info = t("{w} × {h} outside, {t} thick", { w: mm(units[0] * pitch), h: mm(units[1] * pitch), t: mm(og ? (f.variant === "lite" ? OPENGRID.lite : OPENGRID.full) : peg.thickness) });
+  else if (acc === "screw") info = t("A snap {w} square, {t} deep, screwed to the wall through its middle", { w: mm(OPENGRID.snap), t: mm(src.variant === "lite" ? OPENGRID.snapLite : OPENGRID.full) });
   else info = t("Plate {w} × {h}", { w: mm(units[0] * pitch - WALL.plateGap), h: mm(units[1] * pitch - WALL.plateGap) });
   const bins = Math.round(num(f.size, WALL.bins));
   const needCells = acc === "bin" ? binShelfCells(bins, pitch) : 0;
@@ -101,9 +102,12 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
             <Field label={PEGBOARDS[f.grid ?? "us_quarter"].square ? t("Hole side") : t("Hole diameter")}>
               <ExprInput value={f.hole} placeholder={String(PEGBOARDS[f.grid ?? "us_quarter"].hole)} onCommit={(hole) => set({ hole })} />
             </Field>
+          </div>
+          <div className="row">
             <Field label={t("Board thickness")}>
               <ExprInput value={f.thickness} placeholder={String(PEGBOARDS[f.grid ?? "us_quarter"].thickness)} onCommit={(thickness) => set({ thickness })} />
             </Field>
+            <div style={{ flex: 1 }} />
           </div>
         </>
       ) : null}

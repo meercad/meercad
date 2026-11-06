@@ -123,4 +123,5 @@ export default {
   "**Create → Wall storage** makes openGrid boards (28 mm cells, full or lite) and pegboards, and holders that clip into them: hooks, rings for tools, shelves and shelves that hold Gridfinity bins. Pick the board a holder hangs on and its cell; **Check fit** confirms the snaps or pegs sit free.": "**Erstellen → Wandsystem** macht openGrid-Platten (28-mm-Felder, voll oder Lite) und Lochplatten sowie Halter, die darin einrasten: Haken, Ringe für Werkzeug, Ablagen und Ablagen für Gridfinity-Boxen. Wähle die Platte, an der ein Halter hängt, und sein Feld; **Passung prüfen** zeigt, dass Snaps oder Stifte frei sitzen.",
   "Tool wall on openGrid": "Werkzeugwand mit openGrid",
   "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins": "Eine Platte mit Haken, Ring, Ablage und einer Ablage für Gridfinity-Boxen",
+  "A snap {w} square, {t} deep, screwed to the wall through its middle": "Ein Snap, {w} im Quadrat und {t} tief, mittig an die Wand geschraubt",
 };

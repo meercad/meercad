@@ -238,12 +238,12 @@ const toolWall: MeercadDocument = {
   format: "meercad/1",
   params: {},
   features: [
-    { id: "wl1", op: "wall", name: "Board", system: "opengrid", kind: "board", units: [7, 5], variant: "lite", screws: true },
-    { id: "wl2", op: "wall", name: "Hook", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", board: "wl1", cell: [0, 4] },
-    { id: "wl3", op: "wall", name: "Screwdriver ring", system: "opengrid", kind: "holder", units: [1, 1], accessory: "ring", size: 12, board: "wl1", cell: [1, 4] },
-    { id: "wl4", op: "wall", name: "Long hook", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", depth: 60, board: "wl1", cell: [2, 4] },
-    { id: "wl5", op: "wall", name: "Shelf", system: "opengrid", kind: "holder", units: [3, 2], accessory: "shelf", depth: 50, board: "wl1", cell: [4, 3] },
-    { id: "wl6", op: "wall", name: "Bin shelf", system: "opengrid", kind: "holder", units: [4, 2], accessory: "bin", size: 2, board: "wl1", cell: [0, 0] },
+    { id: "wl1", op: "wall", system: "opengrid", kind: "board", units: [7, 5], variant: "lite", screws: true },
+    { id: "wl2", op: "wall", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", board: "wl1", cell: [0, 4] },
+    { id: "wl3", op: "wall", system: "opengrid", kind: "holder", units: [1, 1], accessory: "ring", size: 12, board: "wl1", cell: [1, 4] },
+    { id: "wl4", op: "wall", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", depth: 60, board: "wl1", cell: [2, 4] },
+    { id: "wl5", op: "wall", system: "opengrid", kind: "holder", units: [3, 2], accessory: "shelf", depth: 50, board: "wl1", cell: [4, 3] },
+    { id: "wl6", op: "wall", system: "opengrid", kind: "holder", units: [4, 2], accessory: "bin", size: 2, board: "wl1", cell: [0, 0] },
     // A bin standing in the bin shelf's left cell: on a plane facing up the wall at the cells' floor.
     { id: "pl1", op: "plane", name: "Shelf floor", base: { ref: "origin.XZ" }, angle: 180, offset: 68 },
     { id: "gf1", op: "gridfinity", name: "Bin", kind: "bin", units: [1, 1], height: 3, scoop: 8, tab: {}, plane: { ref: "pl1" }, position: [-63, -29.5] },
