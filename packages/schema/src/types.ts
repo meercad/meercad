@@ -674,8 +674,14 @@ export interface MeercadDocument {
   partColors?: Record<string, string>;
   /** Parts drawn see-through, as a reference to model against (a scan, for instance). */
   seeThrough?: string[];
-  /** Materials of parts (material id from the list in model/materials, by body id): mass and weight. */
+  /**
+   * Materials of parts (by body id): an id from the built-in library in model/materials ("petg")
+   * or of one of the document's own `materials`. Gives mass and weight, the look in the viewport
+   * and the filament in 3MF exports.
+   */
   partMaterials?: Record<string, string>;
+  /** The user's own materials, each based on one from the library with its own name and colour. */
+  materials?: CustomMaterial[];
   /** Named folders of parts in the parts list. */
   partGroups?: { name: string; parts: string[] }[];
   /**
@@ -717,6 +723,23 @@ export interface Version {
   state: VersionState;
 }
 
+/**
+ * A material the user defined: a library material (`base`, e.g. "petg") under an own name, with
+ * its own colour and optionally its own density. Everything else (finish, print data) comes from
+ * the base.
+ */
+export interface CustomMaterial {
+  /** Lowercase letters and digits, not one of the library's ids. */
+  id: string;
+  name: string;
+  base: string;
+  /** "#rrggbb": the filament's colour. */
+  color?: string;
+  /** g/cm³, when it differs from the base. */
+  density?: number;
+  notes?: string;
+}
+
 export interface Variant {
   name: string;
   /** Values for some of the document's parameters. */
@@ -741,8 +764,12 @@ export type DocOp =
   /** Adds a reference model or replaces the one with the same id. */
   | { type: "set_reference"; reference: ReferenceModel }
   | { type: "delete_reference"; id: string }
-  /** A part's material (an id from model/materials such as "petg"), or null for none. */
+  /** A part's material (an id from model/materials such as "petg", or an own material's id), or null for none. */
   | { type: "set_material"; part: string; material: string | null }
+  /** Adds an own material or replaces the one with the same id. */
+  | { type: "define_material"; material: CustomMaterial }
+  /** Removes an own material; parts that had it keep its base material. */
+  | { type: "delete_material"; id: string }
   /** Adds a variant or replaces the one with that name (`rename` gives it a new name). */
   | { type: "set_variant"; name: string; params: Record<string, Expr>; rename?: string }
   | { type: "delete_variant"; name: string }

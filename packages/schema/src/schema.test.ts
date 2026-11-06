@@ -57,3 +57,18 @@ describe("validateOp", () => {
     expect(validateOp({ type: "explode" }).ok).toBe(false);
   });
 });
+
+describe("materials in documents", () => {
+  it("keeps own materials and rejects malformed ones; documents without them stay as they were", () => {
+    const base = corpus("box-fillet.meercad.json");
+    const own = [{ id: "own1", name: "Galaxy black", base: "petg", color: "#1a1a1f", density: 1.3 }];
+    const r = validateDocument({ ...base, materials: own, partMaterials: { ex1: "own1" } });
+    expect(r.ok ? r.value.materials : r.errors).toEqual(own);
+    expect(validateDocument({ ...base, materials: [{ id: "Own 1", name: "x", base: "pla" }] }).ok).toBe(false);
+    expect(validateDocument({ ...base, materials: [{ id: "own1", name: "x", base: "pla", color: "black" }] }).ok).toBe(false);
+    const plain = validateDocument(base);
+    expect(plain.ok && "materials" in plain.value).toBe(false);
+    expect(validateOp({ type: "define_material", material: own[0] }).ok).toBe(true);
+    expect(validateOp({ type: "delete_material", id: "own1" }).ok).toBe(true);
+  });
+});
