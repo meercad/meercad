@@ -392,7 +392,7 @@ export default {
   "Unlinked — this value no longer follows the variable": "Verknüpfung gelöst: Dieser Wert folgt der Variable nicht mehr",
   "Could not evaluate this value": "Dieser Wert lässt sich nicht berechnen",
   // Fit (Spiel): FitRow, Settings, lib/fit.ts
-  "fit::Gap": "Spiel",
+  "fit::Fit": "Spiel (fit)",
   "Fit test": "Spiel-Test",
   "A fit is between 0 and 1 mm": "Das Spiel liegt zwischen 0 und 1 mm",
   "{value} is now your printer's fit for new designs (Settings)": "{value} ist jetzt das Spiel deines Druckers für neue Designs (Einstellungen)",

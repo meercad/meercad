@@ -31,6 +31,18 @@ describe("fit (Spiel)", () => {
     expect(applyOp(d, { type: "rename_param", name: "nozzle", to: "noz" }).fit).toBe("noz / 2");
   });
 
+  it("a hole with allowance 2 * fit follows the design's fit", async () => {
+    const session = await newSession();
+    const base = fitTestDocument().features.slice(0, 2);
+    const hole = { id: "ho1", op: "hole" as const, plane: { face: { face: "ex1.end_cap" } }, points: [[0, 0]] as [number, number][], kind: "simple" as const, diameter: 8, allowance: "2 * fit" };
+    const vol = (fit?: string) => {
+      session.rebuild({ ...doc([...base, hole], { pin: "8 mm", thickness: "5 mm" }), ...(fit ? { fit } : {}) });
+      return session.bodyProps().find((b) => b.id === "ex1")!.volume;
+    };
+    expect(64 * 40 * 5 - vol()).toBeCloseTo(Math.PI * 4.2 ** 2 * 5, 1);
+    expect(64 * 40 * 5 - vol("0.3 mm")).toBeCloseTo(Math.PI * 4.3 ** 2 * 5, 1);
+  });
+
   it("the test part builds: a plate with a labelled hole per gap and a pin", async () => {
     const d = fitTestDocument();
     expect(validateDocument(d).ok).toBe(true);

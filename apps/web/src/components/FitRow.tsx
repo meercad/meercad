@@ -53,7 +53,7 @@ export function FitRow() {
       title={t("Gap per side between parts that fit into each other, measured with the fit test part. Holes, bores, threads and moving parts use it as “fit”.")}
       onContextMenu={(e) => (e.preventDefault(), menu(e.clientX, e.clientY))}
     >
-      <span className="field name-input fit-name">{t("fit::Gap")}</span>
+      <span className="field name-input fit-name">{t("fit::Fit")}</span>
       <ExprInput value={fit} placeholder={String(DEFAULT_FIT)} quiet onCommit={commit} />
       <span className="val" style={error ? { color: "var(--err)" } : undefined} title={error ?? ""}>
         {error ? t("error") : value === undefined ? "" : inch ? inUnit(value, "in") : +value.toFixed(3)}
