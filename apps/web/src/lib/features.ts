@@ -30,6 +30,7 @@ import {
   Shapes,
   Move3d,
   LayoutGrid,
+  Grid2x2,
   Tag,
   Rainbow,
   Waves,
@@ -64,6 +65,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   gridfinity: { label: t("Storage bin"), icon: LayoutGrid, hint: t("Bins and baseplates for the Gridfinity storage grid: compartments, scoops, label tabs, magnets; editable like any part") },
   box: { label: t("Box with lid"), icon: PackageOpen, hint: t("Printable box with a snap lid, or a round jar with a screw lid; box and lid as two parts with the right play") },
   snap_hook: { label: t("Snap hook"), icon: FishingHook, hint: t("Snap hooks on a face that click into a window in the other part, with the bending strain checked") },
+  wall: { label: t("Wall storage"), icon: Grid2x2, hint: t("Boards for the wall (openGrid, pegboards) and holders that clip into them: hooks, rings, shelves, shelves for Gridfinity bins") },
   label: { label: t("Label"), icon: Tag, hint: t("Printable label with a screw, nut or insert symbol and text, raised or engraved, in one or two colours") },
   text: { shortcut: "Shift+T", label: t("Text"), icon: Type, hint: t("Raised or engraved lettering on a face") },
   offset_face: { shortcut: "Shift+E", label: t("feature::Move face"), icon: ArrowUpToLine, hint: t("Move faces along their normals or up to a plane: thicker walls, tighter holes, a face flush with another") },
@@ -87,7 +89,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "label", "box", "snap_hook", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "wall", "label", "box", "snap_hook", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -150,6 +152,12 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       if (plate) return { id, op, kind: "bin", units: [1, 1], height: 3, baseplate: plate.id, cell: freeCell(doc, plate) };
       return { id, op, kind: "bin", units: [2, 1], height: 3, dividers: [3, 0], scoop: 10, tab: {} };
     }
+    case "wall": {
+      // A new holder goes onto the last board, beside the holders already on it.
+      const board = [...doc.features].reverse().find((f): f is Extract<Feature, { op: "wall" }> => f.op === "wall" && f.kind === "board");
+      if (board) return { id, op, system: board.system, kind: "holder", units: [1, 1], accessory: "hook", board: board.id, cell: freeWallCell(doc, board) };
+      return { id, op, system: "opengrid", kind: "board", units: [4, 4] };
+    }
     case "label":
       return { id, op, text: "M3×10", symbol: "screw_socket" };
     case "box":
@@ -171,6 +179,20 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
     case "hole":
       return { id, op, plane: { ref: "origin.XY" }, points: [], kind: "clearance", size: "M3" } as unknown as Feature;
   }
+}
+
+/** The first cell of a wall board that no holder covers yet (top row first, left to right), or [0, 0]. */
+function freeWallCell(doc: MeercadDocument, board: Extract<Feature, { op: "wall" }>): [number, number] {
+  const n = (e: unknown, d: number) => (typeof e === "number" ? e : d);
+  const [bx, by] = [n(board.units[0], 1), n(board.units[1], 1)];
+  const taken = new Set<string>();
+  for (const f of doc.features)
+    if (f.op === "wall" && f.board === board.id) {
+      const [ci, cj] = [n(f.cell?.[0], 0), n(f.cell?.[1], 0)];
+      for (let i = 0; i < n(f.units[0], 1); i++) for (let j = 0; j < n(f.units[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
+    }
+  for (let j = by - 1; j >= 0; j--) for (let i = 0; i < bx; i++) if (!taken.has(`${i},${j}`)) return [i, j];
+  return [0, 0];
 }
 
 /** The first cell of a baseplate that no bin stands on yet (row by row), or [0, 0] when it is full. */
@@ -249,6 +271,16 @@ export function draftProblem(f: Feature): string | null {
   }
 }
 
+/** Names of the wall holders' accessories. */
+export const WALL_ACCESSORIES: Record<NonNullable<Extract<Feature, { op: "wall" }>["accessory"]>, string> = {
+  plain: t("Plate"),
+  hook: t("Hook"),
+  ring: t("Ring holder"),
+  shelf: t("Shelf"),
+  bin: t("Bin shelf"),
+  screw: t("Screw snap"),
+};
+
 export function featureName(f: Feature): string {
   if (!f.name && f.op === "standard_part") {
     // A standard part is named by what it is, e.g. "M3×12 ISO 4762".
@@ -270,6 +302,12 @@ export function featureName(f: Feature): string {
     return f.lid === "screw" || f.shape === "round"
       ? `${t(f.lid === "screw" ? "Jar" : "Round box")} ⌀${f.width}×${f.height}`
       : `${t("Box")} ${f.width}×${typeof f.depth === "number" ? f.depth : f.width}×${f.height}`;
+  // Wall boards by system and size ("openGrid 4×4", "Pegboard 6×4"), holders by what they hold ("Hook 1×1").
+  if (!f.name && f.op === "wall" && typeof f.units[0] === "number" && typeof f.units[1] === "number") {
+    const size = `${f.units[0]}×${f.units[1]}`;
+    if (f.kind === "board") return `${f.system === "opengrid" ? "openGrid" : t("Pegboard")} ${size}`;
+    return `${WALL_ACCESSORIES[f.accessory ?? "hook"]} ${size}`;
+  }
   if (!f.name && f.op === "label" && f.text?.trim()) return `${t("Label")} ${f.text.trim().split("\n")[0]}`;
   return f.name ?? `${FEATURES[f.op].label} ${f.id.replace(/^\D+/, "")}`;
 }

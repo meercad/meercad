@@ -14,6 +14,7 @@ import type {
   TextFeature,
   StandardPartFeature,
   GridfinityFeature,
+  WallFeature,
   LabelFeature,
   AlignFeature,
   ScaleFeature,
@@ -82,6 +83,17 @@ export type ResolvedGridfinity = Omit<
   position: [number, number];
   cell: [number, number];
 };
+export type ResolvedWall = Omit<WallFeature, "units" | "pitch" | "hole" | "thickness" | "plate" | "depth" | "size" | "position" | "cell"> & {
+  units: [number, number];
+  pitch?: number;
+  hole?: number;
+  thickness?: number;
+  plate?: number;
+  depth?: number;
+  size?: number;
+  position: [number, number];
+  cell: [number, number];
+};
 export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" | "corner" | "size" | "depth" | "position" | "angle"> & {
   width: number;
   height: number;
@@ -124,6 +136,7 @@ export type ResolvedFeature =
   | ResolvedText
   | ResolvedStandardPart
   | ResolvedGridfinity
+  | ResolvedWall
   | ResolvedLabel
   | ResolvedBox
   | ResolvedSnapHook
@@ -274,6 +287,25 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         cell: f.cell ? [int("cell[0]", f.cell[0], 0, 100), int("cell[1]", f.cell[1], 0, 100)] : [0, 0],
       };
     }
+    case "wall": {
+      const int = (field: string, e: Expr, lo: number, hi: number) => {
+        const n = Math.round(ev(field, e));
+        if (n < lo || n > hi) throw new ExprError(`${field}: must be between ${lo} and ${hi}`);
+        return n;
+      };
+      return {
+        ...f,
+        units: [int("units[0]", f.units[0], 1, 60), int("units[1]", f.units[1], 1, 60)],
+        pitch: opt("pitch", f.pitch),
+        hole: opt("hole", f.hole),
+        thickness: opt("thickness", f.thickness),
+        plate: opt("plate", f.plate),
+        depth: opt("depth", f.depth),
+        size: opt("size", f.size),
+        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
+        cell: f.cell ? [int("cell[0]", f.cell[0], 0, 200), int("cell[1]", f.cell[1], 0, 200)] : [0, 0],
+      };
+    }
     case "label":
       return {
         ...f,
@@ -335,6 +367,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
     box: ["width", "depth", "height", "wall", "floor", "corner", "lidThickness", "clearance", "snap", "lipHeight", "pitch", "neck", "starts"],
     snap_hook: ["angle", "length", "thickness", "width", "overhang", "insertAngle", "retainAngle", "clearance"],
+    wall: ["pitch", "hole", "thickness", "plate", "depth", "size"],
     align: ["offset", "angle"],
     scale: ["factor"],
   };
@@ -351,6 +384,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
   }
   if (f.op === "box" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "snap_hook") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
+  if (f.op === "wall") for (const k of ["units", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
   if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));

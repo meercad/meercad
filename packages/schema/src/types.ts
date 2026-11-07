@@ -571,6 +571,67 @@ export interface SnapHookFeature extends FeatureBase {
   flip?: boolean;
 }
 
+/**
+ * Wall storage: a board to mount on the wall and holders that clip into it, built from the
+ * published sizes of the open systems as ordinary parts. Everything is built flat for printing:
+ * the board's back lies on the plane (default origin.XY), x across, y up the wall, its front
+ * facing +z; `position` is the footprint's centre.
+ *
+ * `system` "opengrid": the openGrid board (28 mm cells; `variant` "full" 6.8 mm or "lite" 4 mm)
+ * with countersunk `screws` at the crossings next to its corners, and holders on snaps (one per
+ * cell they cover) that click into its openings.
+ * `system` "pegboard": a perforated board with round or square holes (`grid` preset, or `pitch`,
+ * `hole` and `thickness`) and holders whose pegs go through its holes, the top row hooking up
+ * behind the board.
+ *
+ * Holder (`kind` "holder"): a back plate `plate` thick over `units` cells, with an `accessory`
+ * in front: "plain" (just the plate), "hook" (an arm `depth` long, its tip rising `size`),
+ * "ring" (a ring of inner diameter `size`, `depth` out from the plate, for tools hung through it),
+ * "shelf" (a tray `depth` deep with a front lip `size` high), "bin" (a shelf with Gridfinity cells
+ * for `size` bins of 42 mm, 1 cell deep) or "screw" (openGrid only: a bare snap with a
+ * countersunk hole of diameter `size` to screw a full board to the wall).
+ * `board` puts the holder on an earlier board at `cell` (its lower-left cell, from 0).
+ * Faces: wl1.back, wl1.front, wl1.side, wl1.opening (board), wl1.hole, wl1.snap, wl1.peg,
+ * wl1.plate, wl1.hook, wl1.ring, wl1.shelf.
+ */
+export interface WallFeature extends FeatureBase {
+  op: "wall";
+  system: "opengrid" | "pegboard";
+  kind: "board" | "holder";
+  /** Cells across (x) and up (y): 28 mm for openGrid, the hole pitch for a pegboard. */
+  units: [Expr, Expr];
+  /** openGrid thickness: "full" 6.8 mm (default) or "lite" 4 mm. */
+  variant?: "full" | "lite";
+  /** openGrid board: countersunk screw holes at the crossings one cell in from each corner. */
+  screws?: boolean;
+  /**
+   * Pegboard hole pattern: "us_quarter" (1" pitch, 7.1 mm holes, 6.35 mm board, default),
+   * "us_eighth" (1", 4.8 mm, 3.2 mm), "metric_25" (25 mm, 5 mm, 3 mm),
+   * "square_38" (38 mm, 10 × 10 mm square holes, 1.5 mm sheet).
+   */
+  grid?: "us_quarter" | "us_eighth" | "metric_25" | "square_38";
+  /** Pegboard: hole pitch, hole size (diameter or square side) and board thickness, overriding the preset. */
+  pitch?: Expr;
+  hole?: Expr;
+  thickness?: Expr;
+  /** Holder: what sits on the back plate, default "hook". */
+  accessory?: "plain" | "hook" | "ring" | "shelf" | "bin" | "screw";
+  /** Holder: back plate thickness, default 3 mm (none for "screw"). */
+  plate?: Expr;
+  /** Holder: how far the hook, ring or shelf reaches out from the plate (mm). */
+  depth?: Expr;
+  /** Holder: hook tip rise, ring inner diameter, shelf lip height, number of bins, or screw diameter. */
+  size?: Expr;
+  /** Default origin.XY. With `board`, the board's plane. */
+  plane?: PlaneSpec;
+  /** Centre of the footprint in plane coordinates, default [0, 0]. Ignored with `board`. */
+  position?: [Expr, Expr];
+  /** Holder: mounted on this earlier board (wall feature id) of the same system. */
+  board?: string;
+  /** Holder on a board: the board cell under the holder's lower-left cell, from [0, 0]. */
+  cell?: [Expr, Expr];
+}
+
 /** Symbols for printable labels, drawn as clean outlines: screws by head (side view), nuts, washers, inserts. */
 export type LabelSymbol = "none" | "screw_pan" | "screw_countersunk" | "screw_socket" | "screw_hex" | "nut" | "washer" | "insert";
 
@@ -837,6 +898,7 @@ export type Feature =
   | TextFeature
   | StandardPartFeature
   | GridfinityFeature
+  | WallFeature
   | LabelFeature
   | BoxFeature
   | SnapHookFeature

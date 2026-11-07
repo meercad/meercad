@@ -91,15 +91,7 @@ class ClosureBuilder extends Builder {
     if (!rev.IsDone()) throw new FeatureError("could not build the round box");
     return this.tr(rev.Shape());
   }
-  /** A closed polygon in the x–z plane (points as [x, z]) extruded along y from y0 to y1. */
-  prismY(pts: [number, number][], y0: number, y1: number): TopoDS_Shape {
-    const { oc } = this;
-    const mw = this.tr(new oc.BRepBuilderAPI_MakeWire());
-    const vs = pts.map(([x, z]) => this.vertex(x, y0, z));
-    vs.forEach((v, i) => mw.Add(this.tr(this.tr(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())));
-    const face = this.tr(this.tr(new oc.BRepBuilderAPI_MakeFace(this.tr(mw.Wire()), true)).Face());
-    return this.tr(this.tr(new oc.BRepPrimAPI_MakePrism(face, this.tr(new oc.gp_Vec(0, y1 - y0, 0)), false, true)).Shape());
-  }
+
   /**
    * A thread ridge round the z axis: the [r, dz] polygon (dz along the axis from the helix) swept
    * along a helix of `lead` from height z0 up by `height`, starting `phase` (radians) round from x.

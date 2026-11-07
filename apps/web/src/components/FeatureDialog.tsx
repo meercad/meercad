@@ -25,6 +25,7 @@ import { partSize, tooBig } from "../lib/printBed";
 import { docUnit, inUnit } from "../lib/units";
 import { GridfinityFields, LabelFields } from "./GridfinityFields";
 import { BoxFields, SnapHookFields } from "./ClosureFields";
+import { WallFields } from "./WallFields";
 import { TextureFields } from "./TextureFields";
 import { Kbd } from "./Kbd";
 import { t, tn } from "../lib/i18n";
@@ -239,8 +240,8 @@ function handlePick(p: Pick, d: DialogState): void {
         if (spec && (g.op === "hole" || g.op === "standard_part" || g.op === "snap_hook") && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
         // Text starts where the face was tapped.
         if (spec && g.op === "text" && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
-        // Labels and free-standing bins are centred where the face was tapped.
-        if (spec && (g.op === "label" || g.op === "box" || (g.op === "gridfinity" && !g.baseplate)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
+        if (spec && (g.op === "label" || g.op === "box" || (g.op === "gridfinity" && !g.baseplate) || (g.op === "wall" && !g.board)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
+        // Labels, free-standing bins and wall boards are centred where the face was tapped.
         break;
       }
       case "points": {
@@ -1195,6 +1196,8 @@ function Body({ d }: { d: DialogState }) {
       return <GearFields f={f} set={set} />;
     case "gridfinity":
       return <GridfinityFields f={f} set={set} />;
+    case "wall":
+      return <WallFields f={f} set={set} />;
     case "label":
       return <LabelFields f={f} set={set} />;
     case "box":

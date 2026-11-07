@@ -29,7 +29,7 @@ export interface GridRecord {
 const inBox = (p: Vec3, b: Box3, eps = 1e-3) => p.every((v, i) => v >= b.min[i]! - eps && v <= b.max[i]! + eps);
 
 /** Distance from a point to a rounded rectangle's outline (centred on the origin), in the plane. */
-function toOutline(x: number, y: number, w: number, h: number, r: number): number {
+export function toOutline(x: number, y: number, w: number, h: number, r: number): number {
   const qx = Math.abs(x) - (w / 2 - r), qy = Math.abs(y) - (h / 2 - r);
   const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
   return Math.abs(outside - r);

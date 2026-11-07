@@ -5,6 +5,7 @@ import type { Arena } from "./arena.js";
 import type { Body } from "./body.js";
 import type { GearRecord } from "./gear.js";
 import type { GridRecord } from "./gridfinity.js";
+import type { WallRecord } from "./wall.js";
 
 export interface SketchResult {
   id: string;
@@ -42,6 +43,8 @@ export interface ModelState {
   readonly gears: ReadonlyMap<string, GearRecord>;
   /** Gridfinity baseplates by feature id, for bins set into them (absent in older states). */
   readonly grids?: ReadonlyMap<string, GridRecord>;
+  /** Wall boards by feature id, for holders mounted on them (absent in older states). */
+  readonly walls?: ReadonlyMap<string, WallRecord>;
   /** Surface textures by feature id; they change only the triangles, never the solid. */
   readonly textures?: ReadonlyMap<string, TextureRecord>;
   /** Objects created by the feature that produced this state. */

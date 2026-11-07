@@ -16,6 +16,7 @@ export { MeshCollider, meshesCollide, rayDistance, signedDistance } from "./coll
 export { blobKey, designOf, restored, versionChanges } from "./versions.js";
 export * from "./gridfinity.js";
 export * from "./closures.js";
+export * from "./wall.js";
 export * from "./bend.js";
 export * from "./printability.js";
 export * from "./texture/patterns.js";

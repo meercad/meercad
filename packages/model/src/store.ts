@@ -297,6 +297,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     label: "lb",
     box: "bx",
     snap_hook: "sh",
+    wall: "wl",
     align: "al",
     scale: "sc",
     sweep: "sw",

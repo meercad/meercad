@@ -78,7 +78,52 @@ export class Builder {
     vs.forEach((v, i) => mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())));
     const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(mw.Wire()), true)).Face());
     return this.t(this.t(new oc.BRepPrimAPI_MakePrism(face, this.t(new oc.gp_Vec(x1 - x0, 0, 0)), false, true)).Shape());
+  }  /** A closed polygon in the plane y = y0 (points as [x, z]) extruded along y to y1. */
+  prismY(pts: [number, number][], y0: number, y1: number): TopoDS_Shape {
+    const { oc } = this;
+    const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
+    const vs = pts.map(([x, z]) => this.vertex(x, y0, z));
+    vs.forEach((v, i) => mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())));
+    const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(mw.Wire()), true)).Face());
+    return this.t(this.t(new oc.BRepPrimAPI_MakePrism(face, this.t(new oc.gp_Vec(0, y1 - y0, 0)), false, true)).Shape());
   }
+  /** A closed polygon at height z as a wire. */
+  polyWire(loop: [number, number][], z: number): TopoDS_Wire {
+    const { oc } = this;
+    const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
+    const vs = loop.map(([x, y]) => this.vertex(x, y, z));
+    vs.forEach((v, i) => mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())));
+    return this.t(mw.Wire());
+  }
+  /** Ruled loft through polygons with the same number of corners, from the bottom up. */
+  polyLoft(sections: { z: number; loop: [number, number][] }[]): TopoDS_Shape {
+    const { oc } = this;
+    const loft = this.t(new oc.BRepOffsetAPI_ThruSections(true, true, 1e-6));
+    for (const s of sections) loft.AddWire(this.polyWire(s.loop, s.z));
+    loft.Build(this.t(new oc.Message_ProgressRange()));
+    if (!loft.IsDone()) throw new FeatureError("could not build a sloped profile");
+    return this.t(loft.Shape());
+  }
+  /** A copy of a shape moved by (dx, dy, dz). */
+  moved(s: TopoDS_Shape, dx: number, dy: number, dz: number): TopoDS_Shape {
+    const tr = this.t(new this.oc.gp_Trsf());
+    tr.SetTranslation(this.t(new this.oc.gp_Vec(dx, dy, dz)));
+    return this.t(this.t(new this.oc.BRepBuilderAPI_Transform(s, tr, true, false)).Shape());
+  }
+  /** A copy of a shape turned about the x axis by `deg` degrees, then moved by (0, dy, dz). */
+  turnedX(s: TopoDS_Shape, deg: number, dy: number, dz: number): TopoDS_Shape {
+    const { oc } = this;
+    const r = this.t(new oc.gp_Trsf());
+    r.SetRotation(this.t(new oc.gp_Ax1(this.pnt(0, 0, 0), this.t(new oc.gp_Dir(1, 0, 0)))), (deg * Math.PI) / 180);
+    const turned = this.t(this.t(new oc.BRepBuilderAPI_Transform(s, r, true, false)).Shape());
+    return this.moved(turned, 0, dy, dz);
+  }
+  /** A cylinder along y through (x, z), from y0 to y1. */
+  cylinderY(x: number, z: number, r: number, y0: number, y1: number): TopoDS_Shape {
+    const ax = this.t(new this.oc.gp_Ax2(this.pnt(x, y0, z), this.t(new this.oc.gp_Dir(0, 1, 0))));
+    return this.t(this.t(new this.oc.BRepPrimAPI_MakeCylinder(ax, r, y1 - y0)).Shape());
+  }
+
   /** A cylinder along x through (y, z), from x0 to x1. */
   cylinderX(y: number, z: number, r: number, x0: number, x1: number): TopoDS_Shape {
     const ax = this.t(new this.oc.gp_Ax2(this.pnt(x0, y, z), this.t(new this.oc.gp_Dir(1, 0, 0))));

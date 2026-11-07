@@ -240,6 +240,17 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         for (const b of f.catchIn ?? []) body(b, at);
         for (const b of f.targets ?? []) body(b, at);
         break;
+      case "wall":
+        if (f.plane) planeSpec(f.plane, at);
+        if (f.board) {
+          earlier(f.board, at, "board", ["wall"]);
+          const bd = seen.get(f.board);
+          if (bd && bd.op === "wall" && bd.kind !== "board") errors.push(`${at}: "${f.board}" is a holder, not a board`);
+          if (bd && bd.op === "wall" && bd.system !== f.system) errors.push(`${at}: "${f.board}" is a ${bd.system} board, not ${f.system}`);
+        }
+        if (f.kind === "board" && f.board) errors.push(`${at}: a board cannot sit on a board`);
+        if (f.accessory === "screw" && f.system !== "opengrid") errors.push(`${at}: the screw snap is for openGrid boards`);
+        break;
       case "label":
         if (f.plane) planeSpec(f.plane, at);
         if (!f.text?.trim() && (f.symbol ?? "none") === "none") errors.push(`${at}: a label needs a text or a symbol`);
