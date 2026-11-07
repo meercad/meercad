@@ -35,7 +35,7 @@ describe("placeMesh", () => {
 });
 
 describe("motions over time", () => {
-  const walk = {
+  const walk: motion.MotionTrack = {
     duration: 2,
     loop: true,
     keys: [
@@ -63,7 +63,7 @@ describe("motions over time", () => {
     expect(k).toBeLessThan(40);
   });
   it("goes straight when not smooth, and holds at the ends of an open run", () => {
-    const open = { duration: 2, smooth: false, keys: [{ at: 0.5, values: { a: 0 } }, { at: 1.5, values: { a: 10 } }] };
+    const open: motion.MotionTrack = { duration: 2, smooth: false, keys: [{ at: 0.5, values: { a: 0 } }, { at: 1.5, values: { a: 10 } }] };
     expect(motion.sampleMotion(open, 1).a).toBeCloseTo(5, 9);
     expect(motion.sampleMotion(open, 0).a).toBe(0);
     expect(motion.sampleMotion(open, 2).a).toBe(10);

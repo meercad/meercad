@@ -245,6 +245,12 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         planeSpec(f.plane, at);
         if (f.kind !== "magnet" && !f.size) errors.push(`${at}: a ${f.kind} needs a size`);
         break;
+      case "primitive":
+        if (f.shape === "box" && !f.size) errors.push(`${at}: a box needs a size [x, y, z]`);
+        if (f.shape !== "box" && f.diameter === undefined) errors.push(`${at}: a ${f.shape} needs a diameter`);
+        if (f.shape === "cylinder" && f.height === undefined) errors.push(`${at}: a cylinder needs a height`);
+        for (const t of f.targets ?? []) body(t, at, "target body");
+        break;
       case "text":
         planeSpec(f.plane, at);
         for (const t of f.targets ?? []) body(t, at, "target body");

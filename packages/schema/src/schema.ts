@@ -226,6 +226,20 @@ export const definitions: Record<string, Json> = {
       },
       ["kind", "plane", "points"],
     ),
+    primitive: feature(
+      "primitive",
+      {
+        shape: { enum: ["box", "cylinder", "sphere"] },
+        size: arr(ref("expr"), { minItems: 3, maxItems: 3 }),
+        diameter: ref("expr"),
+        height: ref("expr"),
+        axis: { enum: ["X", "Y", "Z"] },
+        center: arr(ref("expr"), { minItems: 3, maxItems: 3 }),
+        mode: ref("mode"),
+        targets: arr(id),
+      },
+      ["shape", "mode"],
+    ),
     text: feature(
       "text",
       {

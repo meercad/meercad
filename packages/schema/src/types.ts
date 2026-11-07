@@ -1009,7 +1009,31 @@ export interface BendFeature extends FeatureBase {
   tolerance?: Expr;
 }
 
+/**
+ * A basic solid without a sketch: a box, a cylinder or a sphere, placed by its centre. For stand-ins
+ * (a servo, a battery), quick assemblies and blocks to cut with. Faces: box `<id>.top` (+Z),
+ * `.bottom`, `.front` (−Y), `.back`, `.left` (−X), `.right`; cylinder `.side`, `.start_cap`,
+ * `.end_cap` (along its axis); sphere `.side`.
+ */
+export interface PrimitiveFeature extends FeatureBase {
+  op: "primitive";
+  shape: "box" | "cylinder" | "sphere";
+  /** Box: size along X, Y and Z. */
+  size?: [Expr, Expr, Expr];
+  /** Cylinder and sphere. */
+  diameter?: Expr;
+  /** Cylinder: length along its axis. */
+  height?: Expr;
+  /** Cylinder: the axis it stands on (default Z). */
+  axis?: "X" | "Y" | "Z";
+  /** Centre of the solid (world mm), default the origin. */
+  center?: [Expr, Expr, Expr];
+  mode: BooleanMode;
+  targets?: string[];
+}
+
 export type Feature =
+  | PrimitiveFeature
   | SketchFeature
   | PlaneFeature
   | ExtrudeFeature

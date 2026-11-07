@@ -286,6 +286,7 @@ function indexOf(doc: MeercadDocument, id: string): number {
 export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
   const prefix: Record<Feature["op"], string> = {
     sketch: "sk",
+    primitive: "pr",
     plane: "pl",
     extrude: "ex",
     revolve: "rv",

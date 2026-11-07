@@ -15,6 +15,7 @@ import type {
   OffsetFaceFeature,
   TextureFeature,
   TextFeature,
+  PrimitiveFeature,
   StandardPartFeature,
   GridfinityFeature,
   WallFeature,
@@ -72,6 +73,7 @@ export type ResolvedScale = R<ScaleFeature, "factor">;
 export type ResolvedAlign = R<AlignFeature, "offset" | "angle">;
 export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height" | "angle"> & { points: [number, number][]; length?: number; diameter?: number; height?: number; angle?: number };
 export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & { position: [number, number]; size: number; angle: number; depth: number };
+export type ResolvedPrimitive = Omit<PrimitiveFeature, "size" | "diameter" | "height" | "center"> & { size?: [number, number, number]; diameter?: number; height?: number; center: [number, number, number] };
 export type ResolvedGridfinity = Omit<
   GridfinityFeature,
   "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell"
@@ -153,6 +155,7 @@ export type ResolvedFeature =
   | ResolvedDraft
   | ResolvedOffsetFace
   | ResolvedText
+  | ResolvedPrimitive
   | ResolvedStandardPart
   | ResolvedGridfinity
   | ResolvedWall
@@ -300,6 +303,14 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         height: opt("height", f.height),
         angle: opt("angle", f.angle),
       };
+    case "primitive": {
+      const v3 = (field: string, e: [Expr, Expr, Expr] | undefined): [number, number, number] | undefined => (e ? [ev(`${field}[0]`, e[0]), ev(`${field}[1]`, e[1]), ev(`${field}[2]`, e[2])] : undefined);
+      const size = v3("size", f.size);
+      const diameter = opt("diameter", f.diameter);
+      const height = opt("height", f.height);
+      const { size: _s, diameter: _d, height: _h, center: _c, ...rest } = f;
+      return { ...rest, ...(size ? { size } : {}), ...(diameter !== undefined ? { diameter } : {}), ...(height !== undefined ? { height } : {}), center: v3("center", f.center) ?? [0, 0, 0] };
+    }
     case "text":
       return {
         ...f,
@@ -426,6 +437,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     offset_face: ["distance"],
     texture: ["depth", "pitch", "angle", "ratio", "fade"],
     text: ["size", "angle", "depth"],
+    primitive: ["diameter", "height"],
     standard_part: ["length", "diameter", "height", "angle"],
     gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
@@ -442,6 +454,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     if (rot) rot.angle = fn(rot.angle);
   }
   if (f.op === "text" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
+  if (f.op === "primitive") for (const k of ["size", "center"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
   if (f.op === "gridfinity") for (const k of ["units", "dividers", "drawer", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
   if (f.op === "gridfinity" && g["tab"]) {
     const tab = g["tab"] as Record<string, Expr>;
