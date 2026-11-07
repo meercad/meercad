@@ -220,6 +220,7 @@ export default {
   "Adds the pose shown now as the next moment": "Fügt die gezeigte Pose als nächsten Zeitpunkt hinzu",
   "Add this pose": "Pose hinzufügen",
   "Check for collisions": "Auf Kollisionen prüfen",
+  "motion::Check": "Prüfen",
   "New motion from this pose": "Neuer Ablauf ab dieser Pose",
   "Collides at {times}: {parts}": "Kollision bei {times}: {parts}",
   "No collision. Held at a limit: {joints}": "Keine Kollision. An der Grenze gehalten: {joints}",

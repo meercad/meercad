@@ -216,6 +216,9 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .joint-value input[type="range"] { flex: 1; min-width: 0; }
 .motions { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .motion-keys { display: flex; flex-wrap: wrap; gap: 4px; }
+.motion-keys .chip, .motion-keys .chip button.link { white-space: nowrap; }
+.motions .row { flex-wrap: wrap; }
+.motions .row .btn { flex: 1 1 auto; min-width: 0; }
 .motion-keys .chip button.link svg { width: 12px; height: 12px; }
 /* Touch: moments are tapped to show the pose, so they get a finger-sized target. */
 @media (pointer: coarse) { .motion-keys .chip { height: 32px; padding: 0 6px 0 10px; } }

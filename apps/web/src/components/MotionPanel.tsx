@@ -295,8 +295,8 @@ function MotionsSection() {
               <button className="btn" onClick={() => (stopPlaying(), addPoseToMotion(m.id))} title={t("Adds the pose shown now as the next moment")}>
                 <Plus /> {t("Add this pose")}
               </button>
-              <button className="btn" onClick={() => void check(m)} disabled={c?.running}>
-                <ShieldCheck /> {c?.running ? t("Checking…") : t("Check for collisions")}
+              <button className="btn" onClick={() => void check(m)} disabled={c?.running} title={t("Check for collisions")}>
+                <ShieldCheck /> {c?.running ? t("Checking…") : t("motion::Check")}
               </button>
             </div>
             {c?.text ? <div className={`callout ${c.bad ? "warn" : ""}`}>{c.text}</div> : null}

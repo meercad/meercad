@@ -2206,8 +2206,8 @@ export class Viewport {
   }
 
   snapshot(width = 480, height = 360, clean = false): string {
-    // Thumbnails leave out helpers so only the model is pictured.
-    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes];
+    // Thumbnails leave out helpers (joint symbols too) so only the model is pictured.
+    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.jointGroup];
     const shown = helpers.map((h) => h.visible);
     if (clean) helpers.forEach((h) => (h.visible = false));
     const prev = this.renderer.getSize(new THREE.Vector2());
