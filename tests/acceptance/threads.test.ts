@@ -7,7 +7,9 @@ describe("multi-threaded OCCT build", () => {
   it("rebuilds the examples to the same bodies as the single-threaded build", async () => {
     const mt = new KernelSession(await loadOcct(undefined, true), await getSolver());
     const st = await newSession();
-    for (const ex of EXAMPLES.filter((e) => !e.url)) {
+    // Springs and coils are long helical sweeps (minutes for both builds); coil.test.ts covers them.
+    const helical = (e: (typeof EXAMPLES)[number]) => e.doc.features.some((f) => f.op === "coil" || f.op === "spring");
+    for (const ex of EXAMPLES.filter((e) => !e.url && !helical(e))) {
       // Only the solids are compared: meshing (surface textures above all) would just cost time.
       const a = st.rebuild(ex.doc, { mesh: false }).report.bodies[0]!;
       const b = mt.rebuild(ex.doc, { mesh: false }).report.bodies[0]!;
