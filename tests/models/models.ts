@@ -748,6 +748,8 @@ export const MODELS: TestModel[] = [
     look: "Three things: a box with a snap lid (lid beside it), a jar with a screw cap (cap beside it) and a 60 × 40 × 25 case whose separate lid has two snap hooks on its underside; their barbs sit in windows cut through the case's long walls.",
     doc: JSON.parse(readFileSync(new URL("../../apps/web/src/examples/42-boxes-and-snap-hooks.meercad", import.meta.url), "utf8")) as MeercadDocument,
     expect: { bodies: 6 },
+  },
+  {
     file: "44 Geteilter Balken mit Stiften",
     name: "Bar split with pins",
     look: "A 300 × 40 × 20 bar split at x = 150. Two Ø5 pins, 8 long, stand out of the right piece's cut face (at y = 10 and y = 30, mid height); the left piece has Ø5.4 holes 8.2 deep in the same places, so the pieces plug together.",
