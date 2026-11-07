@@ -1121,10 +1121,36 @@ export interface Coupling {
   ratio: Expr;
 }
 
+/** One moment of a motion: the joint values the parts take then. Joints left out keep moving between the moments that name them. */
+export interface MotionKey {
+  /** Seconds from the start of the motion. */
+  at: number;
+  /** Joint id → value (degrees or mm; a cylindrical joint's "<id>.turn" / "<id>.slide"). */
+  values: Record<string, number>;
+}
+
+/**
+ * Several joints moved together over time (walking, waving, a gripper closing): poses at moments,
+ * run through one after another. A looping motion goes from its last moment back to its first
+ * within `duration`, so a walk cycle repeats without a jump.
+ */
+export interface Motion {
+  id: string;
+  name?: string;
+  /** Length of one run in seconds (a loop: one cycle). */
+  duration: number;
+  loop?: boolean;
+  /** true (default): smooth curves through the moments; false: straight from one to the next. */
+  smooth?: boolean;
+  keys: MotionKey[];
+}
+
 /** Moving parts. The modelled position is the rest position; joints say how parts move from it. */
 export interface Mechanism {
   joints: Joint[];
   couplings?: Coupling[];
+  /** Linked moves of several joints over time. */
+  motions?: Motion[];
   /** Smallest wanted gap between jointed parts for print-in-place, mm (default: the design's fit). */
   clearance?: Expr;
 }
@@ -1276,6 +1302,9 @@ export type DocOp =
   | { type: "delete_joint"; id: string }
   | { type: "set_coupling"; coupling: Coupling }
   | { type: "delete_coupling"; id: string }
+  /** Adds a motion or replaces the one with the same id. */
+  | { type: "set_motion"; motion: Motion }
+  | { type: "delete_motion"; id: string }
   /** Adds a reference model or replaces the one with the same id. */
   | { type: "set_reference"; reference: ReferenceModel }
   | { type: "delete_reference"; id: string }

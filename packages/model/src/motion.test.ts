@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as motion from "./motion.js";
 import { cylindricalJoints, IDENTITY, isMoved, Mechanism, placeMesh, rotationAbout, transformPoint, translation } from "./motion.js";
 
 describe("cylindrical joints", () => {
@@ -30,5 +31,45 @@ describe("placeMesh", () => {
     expect(lifted.id).toBe("x");
     expect(isMoved(IDENTITY)).toBe(false);
     expect(isMoved(m)).toBe(true);
+  });
+});
+
+describe("motions over time", () => {
+  const walk = {
+    duration: 2,
+    loop: true,
+    keys: [
+      { at: 0, values: { hip: 0, knee: 10 } },
+      { at: 0.5, values: { hip: 20 } },
+      { at: 1, values: { hip: 0, knee: 40 } },
+      { at: 1.5, values: { hip: -20 } },
+    ],
+  };
+  it("passes through every moment and interpolates in between", () => {
+    expect(motion.sampleMotion(walk, 0.5).hip).toBeCloseTo(20, 9);
+    expect(motion.sampleMotion(walk, 1.5).hip).toBeCloseTo(-20, 9);
+    expect(motion.sampleMotion(walk, 1).knee).toBeCloseTo(40, 9);
+    const h = motion.sampleMotion(walk, 0.25).hip!;
+    expect(h).toBeGreaterThan(0);
+    expect(h).toBeLessThan(20);
+  });
+  it("loops without a jump: the end runs back into the start", () => {
+    expect(motion.sampleMotion(walk, 2).hip).toBeCloseTo(motion.sampleMotion(walk, 0).hip!, 9);
+    expect(motion.sampleMotion(walk, 1.999).hip).toBeCloseTo(0, 1);
+    expect(motion.sampleMotion(walk, 2.5).hip).toBeCloseTo(20, 9);
+    // The knee has two moments: it goes back from 40 to 10 between 1 s and 2 s.
+    const k = motion.sampleMotion(walk, 1.5).knee!;
+    expect(k).toBeGreaterThan(10);
+    expect(k).toBeLessThan(40);
+  });
+  it("goes straight when not smooth, and holds at the ends of an open run", () => {
+    const open = { duration: 2, smooth: false, keys: [{ at: 0.5, values: { a: 0 } }, { at: 1.5, values: { a: 10 } }] };
+    expect(motion.sampleMotion(open, 1).a).toBeCloseTo(5, 9);
+    expect(motion.sampleMotion(open, 0).a).toBe(0);
+    expect(motion.sampleMotion(open, 2).a).toBe(10);
+  });
+  it("samples a loop without its repeated end", () => {
+    expect(motion.motionTimes({ duration: 2, loop: true }, 4)).toEqual([0, 0.5, 1, 1.5]);
+    expect(motion.motionTimes({ duration: 2 }, 3)).toEqual([0, 1, 2]);
   });
 });

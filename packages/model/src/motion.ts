@@ -257,3 +257,80 @@ export function rayLineParam(origin: V3, dir: V3, o: V3, n: V3): number | null {
   if (Math.abs(den) < 1e-9) return null;
   return (c * d - b * e) / den;
 }
+
+// ---------------------------------------------------------------- motions (linked moves over time)
+
+/** What `sampleMotion` needs of a motion (the document's `Motion`). */
+export interface MotionTrack {
+  duration: number;
+  loop?: boolean;
+  smooth?: boolean;
+  keys: readonly { at: number; values: Readonly<Record<string, number>> }[];
+}
+
+/**
+ * Joint values of a motion at `t` seconds. Each joint runs through the moments that name it: a
+ * smooth curve (Catmull-Rom, so it passes through every moment without stopping there) or straight
+ * lines. A loop is periodic: after its last moment it heads back to the first within `duration`.
+ * Before a joint's first and after its last moment (no loop) it holds that value.
+ */
+export function sampleMotion(m: MotionTrack, t: number): Record<string, number> {
+  const T = m.duration;
+  const time = m.loop ? ((t % T) + T) % T : Math.min(Math.max(t, 0), T);
+  const tracks = new Map<string, { at: number; v: number }[]>();
+  for (const k of [...m.keys].sort((a, b) => a.at - b.at))
+    for (const [j, v] of Object.entries(k.values)) {
+      const list = tracks.get(j) ?? [];
+      // Two moments at the same time: the later one wins.
+      if (list.length && Math.abs(list[list.length - 1]!.at - k.at) < 1e-9) list[list.length - 1] = { at: k.at, v };
+      else list.push({ at: k.at, v });
+      tracks.set(j, list);
+    }
+  const out: Record<string, number> = {};
+  for (const [j, pts] of tracks) out[j] = sampleTrack(pts, time, T, !!m.loop, m.smooth !== false);
+  return out;
+}
+
+function sampleTrack(pts: { at: number; v: number }[], t: number, T: number, loop: boolean, smooth: boolean): number {
+  const n = pts.length;
+  if (n === 1) return pts[0]!.v;
+  // Point k of the (periodic) sequence, with its time shifted by whole cycles.
+  const at = (k: number) => {
+    if (!loop) return pts[Math.min(n - 1, Math.max(0, k))]!;
+    const c = Math.floor(k / n);
+    const p = pts[((k % n) + n) % n]!;
+    return { at: p.at + c * T, v: p.v };
+  };
+  let i: number;
+  if (loop) {
+    // Segment from point i to i+1 holding t (t may lie before the first point: then it is the wrap-around segment).
+    i = pts.findIndex((p, k) => k === n - 1 || pts[k + 1]!.at > t);
+    if (t < pts[0]!.at) i = -1;
+  } else {
+    if (t <= pts[0]!.at) return pts[0]!.v;
+    if (t >= pts[n - 1]!.at) return pts[n - 1]!.v;
+    i = pts.findIndex((_, k) => pts[k + 1]!.at > t);
+  }
+  const p0 = at(i - 1);
+  const p1 = at(i);
+  const p2 = at(i + 1);
+  const p3 = at(i + 2);
+  const span = p2.at - p1.at;
+  if (span <= 1e-12) return p2.v;
+  const u = (t - p1.at) / span;
+  if (!smooth) return p1.v + (p2.v - p1.v) * u;
+  // Catmull-Rom for uneven spacing: tangents from the neighbours, scaled to this segment; at the
+  // open ends the curve starts flat.
+  const m1 = loop || i > 0 ? ((p2.v - p0.v) / Math.max(1e-12, p2.at - p0.at)) * span : 0;
+  const m2 = loop || i + 1 < n - 1 ? ((p3.v - p1.v) / Math.max(1e-12, p3.at - p1.at)) * span : 0;
+  const u2 = u * u;
+  const u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p1.v + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * p2.v + (u3 - u2) * m2;
+}
+
+/** The moments to look at when checking or picturing a motion: `frames` evenly over one run. */
+export function motionTimes(m: Pick<MotionTrack, "duration" | "loop">, frames: number): number[] {
+  const n = Math.max(2, Math.round(frames));
+  // A loop's end is its start again: leave it out.
+  return Array.from({ length: n }, (_, k) => (m.loop ? (m.duration * k) / n : (m.duration * k) / (n - 1)));
+}

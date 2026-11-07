@@ -340,6 +340,17 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       if (j.a === "ground") errors.push(`${at}: the moving part cannot be the ground`);
       if ("gear" in j.anchor) earlier(j.anchor.gear, at, "gear", ["gear"]);
     }
+    const motionIds = new Set<string>();
+    for (const m of mech.motions ?? []) {
+      const at = `motion ${m.id}`;
+      if (motionIds.has(m.id)) errors.push(`${at}: duplicate id`);
+      motionIds.add(m.id);
+      for (const k of m.keys) {
+        if (k.at > m.duration + 1e-9) errors.push(`${at}: a moment at ${k.at} s lies after the end (${m.duration} s)`);
+        // Cylindrical joints move as "<id>.turn" and "<id>.slide".
+        for (const j of Object.keys(k.values)) if (!jointIds.has(j.replace(/\.(turn|slide)$/, ""))) errors.push(`${at}: unknown joint "${j}"`);
+      }
+    }
     for (const c of mech.couplings ?? []) {
       const at = `coupling ${c.id}`;
       for (const r of [c.driver, c.driven]) if (!jointIds.has(r)) errors.push(`${at}: unknown joint "${r}"`);

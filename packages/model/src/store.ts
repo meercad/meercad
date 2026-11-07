@@ -132,7 +132,9 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       m.joints = m.joints.filter((j) => j.id !== op.id);
       // Couplings of a deleted joint go with it.
       if (m.couplings) m.couplings = m.couplings.filter((c) => c.driver !== op.id && c.driven !== op.id);
-      if (!m.joints.length && !m.couplings?.length) delete next.mechanism;
+      // Motions forget the joint.
+      for (const mo of m.motions ?? []) for (const k of mo.keys) for (const j of Object.keys(k.values)) if (j === op.id || j.startsWith(`${op.id}.`)) delete k.values[j];
+      if (!m.joints.length && !m.couplings?.length && !m.motions?.length) delete next.mechanism;
       break;
     }
     case "set_coupling": {
@@ -245,6 +247,23 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       if (!m?.couplings?.some((c) => c.id === op.id)) throw new OpError(`unknown coupling "${op.id}"`);
       m.couplings = m.couplings.filter((c) => c.id !== op.id);
       if (!m.couplings.length) delete m.couplings;
+      break;
+    }
+    case "set_motion": {
+      const m = (next.mechanism ??= { joints: [] });
+      const list = (m.motions ??= []);
+      const motion = structuredClone(op.motion);
+      motion.keys.sort((a, b) => a.at - b.at);
+      const i = list.findIndex((x) => x.id === motion.id);
+      if (i >= 0) list[i] = motion;
+      else list.push(motion);
+      break;
+    }
+    case "delete_motion": {
+      const m = next.mechanism;
+      if (!m?.motions?.some((x) => x.id === op.id)) throw new OpError(`unknown motion "${op.id}"`);
+      m.motions = m.motions.filter((x) => x.id !== op.id);
+      if (!m.motions.length) delete m.motions;
       break;
     }
   }

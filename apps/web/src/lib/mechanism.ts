@@ -4,7 +4,7 @@
  * and the joint being drawn up in the joints panel.
  */
 import { evaluate, fitExpr, linkage, MeshCollider, meshesCollide, motion } from "@meercad/model";
-import type { Coupling, Joint, JointAnchor } from "@meercad/schema";
+import type { Coupling, Joint, JointAnchor, Motion } from "@meercad/schema";
 import type { Pick, Ray } from "@meercad/viewport";
 import { create } from "zustand";
 import type { BodyMesh, Clearance } from "@meercad/kernel";
@@ -29,6 +29,8 @@ export const useMotion = create<{
   draft: { joint: Joint; isNew: boolean; field: JointField | null } | null;
   /** Joint being played (driven back and forth or round), or null. */
   playing: string | null;
+  /** Motion being played (its id), or null. */
+  playingMotion: string | null;
   check: ClearanceCheck | null;
   /** Bumped when a closed-loop linkage moves (its pose lives outside the store). */
   tick: number;
@@ -36,7 +38,7 @@ export const useMotion = create<{
   blocked: string[];
   /** Pairs of parts that run into each other in the shown pose (and did not touch as drawn). */
   hits: [string, string][];
-}>(() => ({ open: false, free: {}, draft: null, playing: null, check: null, tick: 0, blocked: [], hits: [] }));
+}>(() => ({ open: false, free: {}, draft: null, playing: null, playingMotion: null, check: null, tick: 0, blocked: [], hits: [] }));
 
 // ---------------------------------------------------------------- closed loops
 
@@ -552,7 +554,111 @@ export function playJoint(id: string): void {
 
 export function stopPlaying(): void {
   cancelAnimationFrame(frame);
-  if (useMotion.getState().playing) useMotion.setState({ playing: null });
+  if (useMotion.getState().playing || useMotion.getState().playingMotion) useMotion.setState({ playing: null, playingMotion: null });
+}
+
+// ---------------------------------------------------------------- motions (several joints over time)
+
+/** The design's motion with this id. */
+export function motionById(id: string): Motion {
+  const m = currentDoc().mechanism?.motions?.find((x) => x.id === id);
+  if (!m) throw new Error(`no motion "${id}"${currentDoc().mechanism?.motions?.length ? `: there are ${currentDoc().mechanism!.motions!.map((x) => x.id).join(", ")}` : ""}`);
+  return m;
+}
+
+/**
+ * Puts the parts where a motion has them at `t` seconds. Joints the motion does not name keep their
+ * values. Returns the joints a limit (or dead point) held short of the motion's value.
+ */
+export function showMotionAt(m: Motion, t: number): { joint: string; wanted: number; got: number }[] {
+  const values = motion.sampleMotion(m, t);
+  for (const [id, v] of Object.entries(values)) setJointValue(id, v);
+  const now = jointValues();
+  return Object.entries(values)
+    .filter(([id, v]) => Math.abs((now[id] ?? 0) - v) > 1e-3)
+    .map(([id, v]) => ({ joint: id, wanted: +v.toFixed(3), got: +(now[id] ?? 0).toFixed(3) }));
+}
+
+/** Plays a motion in the app, looping ones over and over, others once. */
+export function playMotion(id: string): void {
+  stopPlaying();
+  const m = motionById(id);
+  openForCheck();
+  const t0 = performance.now();
+  useMotion.setState({ playingMotion: id });
+  const step = (now: number) => {
+    const t = (now - t0) / 1000;
+    const cur = currentDoc().mechanism?.motions?.find((x) => x.id === id);
+    if (!cur) return stopPlaying();
+    showMotionAt(cur, t);
+    if (!cur.loop && t >= cur.duration) return stopPlaying();
+    frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+}
+
+/** Adds the pose shown now to a motion as a moment (a new motion when `id` is not one yet). */
+export function addPoseToMotion(id: string, at?: number): void {
+  const { mech } = currentMechanism();
+  const values = Object.fromEntries(
+    Object.entries(jointValues())
+      .filter(([j]) => mech.joint(j)?.type !== "fixed" && mech.rootOf(j) === j)
+      .map(([j, v]) => [j, +v.toFixed(3)]),
+  );
+  const existing = currentDoc().mechanism?.motions?.find((x) => x.id === id);
+  const m: Motion = existing ? structuredClone(existing) : { id, name: t("Motion"), duration: 2, loop: true, keys: [] };
+  const when = at ?? (m.keys.length ? Math.min(m.duration, (m.keys[m.keys.length - 1]!.at ?? 0) + 0.5) : 0);
+  m.keys = [...m.keys.filter((k) => Math.abs(k.at - when) > 1e-9), { at: when, values }].sort((a, b) => a.at - b.at);
+  if (when > m.duration) m.duration = when;
+  apply({ type: "set_motion", motion: m });
+}
+
+/** Pairs that touch on purpose: held together by a fixed joint, or meeting at a joint they turn on. */
+export function designedContacts(): Set<string> {
+  const pairs = new Set<string>();
+  for (const j of currentDoc().mechanism?.joints ?? []) if (j.b !== "ground") pairs.add([j.a, j.b].sort().join("|"));
+  return pairs;
+}
+
+/**
+ * Runs a motion in `frames` steps and checks the gaps at each: every pose where parts run into each
+ * other (overlap), and the joints a limit held short. The joints go back where they were.
+ */
+export async function checkMotionRun(id: string, frames = 24): Promise<{
+  frames: number;
+  collisions: { at: number; a: string; b: string; overlap: number }[];
+  held: { at: number; joint: string; wanted: number; got: number }[];
+  smallest: { a: string; b: string; distance: number; at: number }[];
+}> {
+  openForCheck();
+  stopPlaying();
+  const m = motionById(id);
+  const before = jointValues();
+  const free = { ...useMotion.getState().free };
+  const touching = designedContacts();
+  const collisions: { at: number; a: string; b: string; overlap: number }[] = [];
+  const held: { at: number; joint: string; wanted: number; got: number }[] = [];
+  const smallest = new Map<string, { a: string; b: string; distance: number; at: number }>();
+  const times = motion.motionTimes(m, Math.max(2, Math.min(240, Math.round(frames))));
+  try {
+    for (const at of times) {
+      const t3 = +at.toFixed(3);
+      for (const h of showMotionAt(m, at)) held.push({ at: t3, ...h });
+      for (const c of (await clearanceNow()).pairs) {
+        if (c.overlap > 1e-3) collisions.push({ at: t3, a: c.a, b: c.b, overlap: +c.overlap.toFixed(3) });
+        const key = `${c.a}|${c.b}`;
+        // Parts that touch by design (a servo on its link) are no news; their overlaps still count.
+        if (touching.has([c.a, c.b].sort().join("|"))) continue;
+        const cur = smallest.get(key);
+        if (!cur || c.distance < cur.distance) smallest.set(key, { a: c.a, b: c.b, distance: +c.distance.toFixed(3), at: t3 });
+      }
+    }
+  } finally {
+    restPose();
+    useMotion.setState({ free });
+    for (const [jid, v] of Object.entries(before)) if (v) setJointValue(jid, v);
+  }
+  return { frames: times.length, collisions, held, smallest: [...smallest.values()].sort((x, y) => x.distance - y.distance).slice(0, 12) };
 }
 
 // ---------------------------------------------------------------- clearance
@@ -615,8 +721,13 @@ export function setPose(values: Readonly<Record<string, number>>): { values: Rec
     reached = setJointValue(id, v) && reached;
   }
   const now = jointValues();
-  // A limit or a dead point can stop a joint short of its value.
-  for (const [id, v] of Object.entries(values)) if (Math.abs((now[id] ?? 0) - v) > 1e-3) reached = false;
+  // A limit or a dead point can stop a joint short of its value: say which and where.
+  for (const [id, v] of Object.entries(values))
+    if (Math.abs((now[id] ?? 0) - v) > 1e-3) {
+      reached = false;
+      const lim = mech.joint(id)?.limits;
+      problems[id] = lim && ((now[id] ?? 0) <= lim[0] + 1e-6 || (now[id] ?? 0) >= lim[1] - 1e-6) ? `held at its limit ${+(now[id] ?? 0).toFixed(3)} (limits ${lim[0]} to ${lim[1]}), asked ${v}` : `stopped at ${+(now[id] ?? 0).toFixed(3)}, asked ${v}`;
+    }
   return { values: now, reached, problems };
 }
 
@@ -648,6 +759,7 @@ export async function checkMotion(joint: string, from: number, to: number, steps
   let firstContact: { value: number; a: string; b: string; kind: "touch" | "overlap"; overlap: number } | null = null;
   let stoppedAt: number | null = null;
   const smallest = new Map<string, { a: string; b: string; distance: number; at: number }>();
+  const touching = designedContacts();
   try {
     for (let k = 0; k <= n; k++) {
       const v = from + ((to - from) * k) / n;
@@ -659,7 +771,9 @@ export async function checkMotion(joint: string, from: number, to: number, steps
         const key = `${c.a}|${c.b}`;
         const cur = smallest.get(key);
         if (!cur || c.distance < cur.distance) smallest.set(key, { a: c.a, b: c.b, distance: c.distance, at: v });
-        if (!firstContact && (c.overlap > 1e-3 || c.distance < 1e-4)) firstContact = { value: v, a: c.a, b: c.b, kind: c.overlap > 1e-3 ? "overlap" : "touch", overlap: c.overlap };
+        // Parts that touch by design (fixed together, or meeting at their joint) only count when they overlap.
+        const designed = touching.has([c.a, c.b].sort().join("|"));
+        if (!firstContact && (c.overlap > 1e-3 || (c.distance < 1e-4 && !designed))) firstContact = { value: v, a: c.a, b: c.b, kind: c.overlap > 1e-3 ? "overlap" : "touch", overlap: c.overlap };
       }
     }
   } finally {

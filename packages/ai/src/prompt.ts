@@ -90,10 +90,11 @@ Features
 - Variants (one part in several sizes, e.g. a holder for three pipe diameters): op set_variant {name, params:{<param>: <expr>, ...}, rename?} adds or replaces a named set of parameter values; use_variant {name|null} puts one in use (null = the plain values in params); delete_variant {name}. The variant in use overrides only the parameters it lists; get_model shows document.variants and document.variant. To export every size, use each variant in turn and export.
 - Versions (named states the user saved): op save_version {name} saves the design as it is now (same name replaces), restore_version {name} makes one the design again (save the current state first if the user may want it back), rename_version {name, to}, delete_version {name}. get_model lists them in versions.
 - Moving parts are not features: ops set_joint {joint:{id, type:"revolute"|"slider"|"cylindrical"|"fixed", a:<moving body id>, b:<body id or "ground">, anchor, limits?:[from,to], travel?:[from,to], name?}}, delete_joint {id}, set_coupling {coupling:{id, driver:<joint id>, driven:<joint id>, ratio}} (driven = ratio × driver; gear pair -z1/z2, ring +, rack mm per degree = pitch radius·π/180), delete_coupling {id}. anchor: {axisOf:<round face selector>} | {edge:<edge selector>} (straight: its direction; round: the circle's axis) | {axis:{ref:"origin.Z"}} | {gear:<gear id>}. The drawn position is the rest position; revolute values are degrees about the axis, slider values mm along it. A cylindrical joint turns and slides on one axis (a pin in a guide): limits bound its turn, travel its slide, and it has two values, "<id>.turn" (degrees) and "<id>.slide" (mm), which set_pose and the reports use. Each part moves in at most one joint.
+- Motions link joints over time (walking, waving, a gripper closing): op set_motion {motion:{id, name?, duration (s), loop?, smooth? (default true: smooth curves through the moments), keys:[{at (s), values:{<joint id>: value, ...}}, ...]}}, delete_motion {id}. Each joint runs through the moments that name it; a loop runs from its last moment back to its first within duration, so a walk cycle repeats without a jump (put moments at 0, ¼, ½, ¾ of the cycle; mirrored legs move half a cycle apart). With MCP: check_motion {motion} checks every frame for collisions and joints held at a limit, render_motion {motion} pictures it (video.path writes a GIF in real time), play_motion {motion} plays it in the app.
 - linear_pattern {source:{features:[extrude/revolve ids]}|{bodies:[ids]}, direction:<axis>, count, spacing, direction2?, count2?, spacing2?}; circular_pattern {source, axis, count, angle? (total, default 360)}; mirror {source, plane:<plane spec>}
 - boolean {operation:"union"|"subtract"|"intersect", target:<body id>, tools:[body ids], keepTools?}; plane {base:<plane spec>, offset, angle?}
 - transform {bodies:[body ids], translate?:[x,y,z], rotate?:{axis, angle}, copy?}; delete {bodies:[body ids]} removes parts from that point on (prefer this over deleting the features that made them)
-- Body ids are the id of the feature that created the body (e.g. "ex1").
+- Body ids are the id of the feature that created the body (e.g. "ex1"). Copies: transform with copy:true makes "<feature id>_<source body id>"; pattern and mirror copies of one source are "<feature id>_<n>" (n = 1, 2, …; several sources: "<feature id>_<source body id>_<n>"). Copies can be used like any body in later features and joints; the rebuild result lists every body id.
 
 Face tags (how geometry is referenced; never use indices)
 - extrude ex1 from sketch sk1: ex1.start_cap (on the sketch plane), ex1.end_cap, ex1.side[sk1.<curve id>] for each profile curve (split curves get ":0", ":1" suffixes). Push/pull sides: ex1.side[<tag of the neighbouring face>].
@@ -107,6 +108,56 @@ ${JSON.stringify(example)}
 JSON Schema of one op:
 ${opSchemaText}`;
 
+/** The guide without the long JSON Schema (MCP clients fetch the schema of the ops they use). */
+export const GUIDE_TEXT = SYSTEM_PROMPT.slice(0, SYSTEM_PROMPT.indexOf("JSON Schema of one op:")).trimEnd();
+
+type Json = Record<string, unknown>;
+const schema = docOpSchema as unknown as { allOf: { if: { properties: { type: { const: string } } }; then: Json }[]; definitions: Record<string, Json> };
+/** Op types and feature ops with their own JSON Schema. */
+const featureDef = schema.definitions["feature"] as { allOf?: { if: { properties: { op: { const: string } } }; then: Json }[] };
+export const OP_NAMES: string[] = schema.allOf.map((x) => x.if.properties.type.const);
+export const FEATURE_NAMES: string[] = (featureDef.allOf ?? []).map((x) => x.if.properties.op.const);
+
+/** The definitions a piece of schema refers to (#/definitions/<name>), followed through. */
+function refsOf(node: unknown, out: Set<string>): void {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) return node.forEach((n) => refsOf(n, out));
+  for (const [k, v] of Object.entries(node)) {
+    if (k === "$ref" && typeof v === "string" && v.startsWith("#/definitions/")) {
+      const name = v.slice("#/definitions/".length);
+      if (name !== "feature" && !out.has(name)) {
+        out.add(name);
+        refsOf(schema.definitions[name], out);
+      }
+    } else refsOf(v, out);
+  }
+}
+
+/**
+ * JSON Schema of some ops and features by name, with the shared definitions they use (expressions,
+ * selectors, profiles, …); ["all"] gives the whole op schema.
+ */
+export function schemaFor(names: readonly string[]): string {
+  if (names.includes("all")) return `JSON Schema of one op:\n${opSchemaText}`;
+  const parts: Record<string, Json> = {};
+  const unknown: string[] = [];
+  for (const n of names) {
+    const op = schema.allOf.find((x) => x.if.properties.type.const === n);
+    const feature = featureDef.allOf?.find((x) => x.if.properties.op.const === n);
+    if (op) parts[`op ${n}`] = op.then;
+    if (feature) parts[`feature ${n}`] = feature.then;
+    if (!op && !feature) unknown.push(n);
+  }
+  const defs = new Set<string>();
+  refsOf(parts, defs);
+  const definitions = Object.fromEntries([...defs].sort().map((d) => [d, schema.definitions[d]]));
+  return [
+    ...(unknown.length ? [`Unknown: ${unknown.join(", ")}. Ops: ${OP_NAMES.join(", ")}. Features: ${FEATURE_NAMES.join(", ")}.`] : []),
+    `JSON Schema (refs point to "definitions" below; "#/definitions/feature" is any feature):`,
+    JSON.stringify({ ...parts, definitions }),
+  ].join("\n");
+}
+
 /**
  * What an MCP client needs on top of the guide: there is no preview step, and the tools beyond
  * apply_ops. Kept apart from SYSTEM_PROMPT, which the app's own assistant also uses.
@@ -119,7 +170,8 @@ export const MCP_NOTES = `Working through MCP
 - Reference models (terrains from drone photos, scanned areas) are not built into the design: set_reference {reference:{id, name, format:"glb", data|path, hidden?, scale?, geo?, marks?}} adds or replaces one (path: a .glb file on this computer), delete_reference {id}. marks: {id, kind:"line"|"area"|"note"|"point"|"stroke", points:[[x,y,z],...], color:"#rrggbb", text?, width?}. terrain_height gives the ground height at x/y, place_on_terrain stands a part on it, photo_terrain builds one from a folder of drone photos (Mac, minutes).
 - Checks: check_interference (all parts where they are modelled), check_clearance / check_motion (moving parts), wall_thickness {part, minWall} (thinnest wall and where, share too thin), print_check {part, limit?, turn?:"best"|[x,y,z]} (overhangs over 45°, support volume, best way up; turn lays it that way on the bed), deviation {part, mesh} (a model against the scan it follows), measure and measure_scan (sizes of planes, cylinders, cones and spheres a mesh follows). Look with render_view / render_motion.
 - Meshes (imported STL/3MF/OBJ, scans): repair_mesh (loose pieces, holes, fewer triangles), mesh_convert (op: real faces), rebuild_mesh (editable sketches and extrudes fitted to it).
-- Mechanisms: joints_from_gears adds joints and couplings for all gears at once.
+- Mechanisms: joints_from_gears adds joints and couplings for all gears at once. set_pose names every joint a limit held short (problems). Motions (set_motion): check_motion {motion} before showing one: no frame may collide; render_motion {motion, video:{path}} for a GIF; play_motion to play it in the app. Picture series line up when every frame uses the same camera: render_motion frames them together, render_view takes frame:{min,max}.
+- apply_ops and preview_ops answer briefly (steps not ok, new or changed bodies, the edited steps' sketches); detail:"full" or get_model shows everything.
 - Files: import_file {path} imports as the app does (STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch, .meercad as a new project); export {format, path, parts?, posed?, variants?} writes what the app's export writes; export_drawing makes drawings.
 - What the user sees: set_view moves their camera, set_visibility hides and shows parts (exports take the parts shown).
 - Projects: list_projects, open_project, new_project, rename_project, list_folders, create_folder, move_project, list_examples / open_example (worked samples), get_version {name} (look at a saved version without restoring it). Deleting projects is left to the user.`;
