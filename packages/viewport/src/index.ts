@@ -2049,7 +2049,8 @@ export class Viewport {
     rendered?: boolean;
   }): string {
     if (o.rendered && this.displayMode !== "rendered") return this.inMode("rendered", () => this.render({ ...o, rendered: false }));
-    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.sketchGroup, this.refGroup];
+    // Joint symbols are editing aids like the grid: pictures and motion frames show the parts only.
+    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.sketchGroup, this.refGroup, this.jointGroup];
     const shown = helpers.map((h) => h.visible);
     helpers.forEach((h) => (h.visible = false));
     const hidden = o.isolate && o.focus ? this.bodies.filter((b) => !o.focus!.includes(b.mesh.bodyId)) : [];
@@ -2060,7 +2061,8 @@ export class Viewport {
     if (o.faces) this.setSelection(o.faces);
     // The cut: clip everything, and show the inside (back faces) in red where the plane opens it.
     const caps: THREE.Mesh[] = [];
-    const plane = o.section ? new THREE.Plane(new THREE.Vector3(...o.section.normal).normalize(), -o.section.offset) : null;
+    // three.js keeps the side a plane's normal points to; the section removes that side, so the plane faces away.
+    const plane = o.section ? new THREE.Plane(new THREE.Vector3(...o.section.normal).normalize().negate(), o.section.offset) : null;
     if (plane) {
       this.renderer.localClippingEnabled = true;
       for (const b of this.bodies) {
