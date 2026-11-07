@@ -286,6 +286,7 @@ const MORE: [file: string, name: string, description: string][] = [
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
   ["40-stackable-ribbed-box", "Stackable ribbed box", "Rim bead, plinth and framed handles; its foot sits in the box below; three sizes"],
   ["41-linear-axis", "Linear axis", "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts"],
+  ["42-boxes-and-snap-hooks", "Boxes and snap hooks", "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks"],
 ];
 
 export const EXAMPLES: Example[] = [

@@ -481,6 +481,96 @@ export interface GridfinityFeature extends FeatureBase {
   cell?: [Expr, Expr];
 }
 
+/**
+ * A printable box with a lid, built from its sizes: the box (part id = the feature id) and its lid
+ * (`bx1_lid`) as two parts. `lid: "snap"` gives a plug lid whose lip clicks into a groove round the
+ * inside of the rim (rectangular or round); `lid: "screw"` a round jar whose cap screws onto a
+ * threaded neck. Sizes are outside sizes: `width` × `depth` (round: `width` is the diameter) and
+ * `height` of the box without its lid. `clearance` is the play between box and lid per side.
+ * With `layout: "beside"` (default) the lid lies upside down next to the box, ready to print;
+ * `"closed"` puts it on the box. The box stands on the plane (default origin.XY) centred on `position`.
+ * Faces: bx1.bottom, bx1.wall, bx1.inner, bx1.floor, bx1.rim, bx1.groove, bx1.notch, bx1.shoulder,
+ * bx1.neck, bx1.thread; on the lid bx1.lid_top, bx1.lid_side, bx1.lid_under, bx1.lid_lip,
+ * bx1.lid_bead, and on a cap bx1.lid_rim (the skirt's edge), bx1.lid_inner, bx1.lid_thread.
+ */
+export interface BoxFeature extends FeatureBase {
+  op: "box";
+  lid: "snap" | "screw";
+  /** Default "rect" for snap lids; screw lids are always round. */
+  shape?: "rect" | "round";
+  /** Outside width (round: diameter), mm. */
+  width: Expr;
+  /** Outside depth (rectangular boxes), default the width. */
+  depth?: Expr;
+  /** Outside height of the box without the lid. */
+  height: Expr;
+  /** Wall thickness of box and lid, default 2 mm. */
+  wall?: Expr;
+  /** Bottom thickness, default the wall's. */
+  floor?: Expr;
+  /** Corner radius of a rectangular box (outside), default 4 mm. */
+  corner?: Expr;
+  /** Thickness of the lid's top, default the wall's. */
+  lidThickness?: Expr;
+  /** Play between box and lid per side, default 0.2 mm. */
+  clearance?: Expr;
+  /** Snap lid: how far the bead stands out of the lip (the snap's grip), default 0.5 mm. */
+  snap?: Expr;
+  /** Snap lid: how far the lip reaches into the box, default 6 mm. */
+  lipHeight?: Expr;
+  /** Screw lid: thread pitch, default 4 mm. */
+  pitch?: Expr;
+  /** Screw lid: height of the threaded neck (and the cap's skirt), default 12 mm. */
+  neck?: Expr;
+  /** Screw lid: number of thread starts (2 closes in half the turn), default 1. */
+  starts?: Expr;
+  /** A notch in the rim to lift a snap lid with a finger nail, default true. */
+  notch?: boolean;
+  layout?: "beside" | "closed";
+  /** Default origin.XY. */
+  plane?: PlaneSpec;
+  /** Centre of the box's footprint in plane coordinates, default [0, 0]. */
+  position?: [Expr, Expr];
+}
+
+/**
+ * Cantilever snap hooks standing on a flat face (or a plane) at points in its coordinates: a beam
+ * `length` tall, `thickness` thick and `width` wide with a barb at its tip that stands `overhang` out
+ * towards `angle` (degrees in the plane from its u axis). The barb's lead-in slopes at `insertAngle`
+ * (to the beam), its back at `retainAngle` (90: holds for good, 30–45: lets go when pulled hard).
+ * `catchIn` cuts the window the barb clicks into (with `clearance`) into those parts, where the barb
+ * sits; the window runs on through their wall. Hooks join the part they stand on (`mode`).
+ * Faces: sh1.beam, sh1.back, sh1.lead (the lead-in slope), sh1.catch (the holding face), sh1.tip,
+ * sh1.side, sh1.root; the window: sh1.window.
+ */
+export interface SnapHookFeature extends FeatureBase {
+  op: "snap_hook";
+  plane: PlaneSpec;
+  points: [Expr, Expr][];
+  /** Direction the barb points, degrees in the plane from its u axis, default 0. */
+  angle?: Expr;
+  /** Beam height above the face up to the barb's catch, default 10 mm. */
+  length?: Expr;
+  /** Beam thickness (in the bending direction), default 1.6 mm. */
+  thickness?: Expr;
+  /** Beam width, default 6 mm. */
+  width?: Expr;
+  /** How far the barb stands out (the deflection when it snaps), default 0.8 mm. */
+  overhang?: Expr;
+  /** Lead-in slope to the beam, degrees, default 30. */
+  insertAngle?: Expr;
+  /** Back of the barb to the beam, degrees: 90 holds for good, default 90. */
+  retainAngle?: Expr;
+  /** Play round the window cut by `catchIn`, default 0.2 mm. */
+  clearance?: Expr;
+  catchIn?: string[];
+  /** Default join (onto the part under the face). */
+  mode?: BooleanMode;
+  targets?: string[];
+  /** Hooks stand against the plane's normal instead. */
+  flip?: boolean;
+}
+
 /** Symbols for printable labels, drawn as clean outlines: screws by head (side view), nuts, washers, inserts. */
 export type LabelSymbol = "none" | "screw_pan" | "screw_countersunk" | "screw_socket" | "screw_hex" | "nut" | "washer" | "insert";
 
@@ -722,6 +812,8 @@ export type Feature =
   | StandardPartFeature
   | GridfinityFeature
   | LabelFeature
+  | BoxFeature
+  | SnapHookFeature
   | AlignFeature
   | ScaleFeature
   | SweepFeature

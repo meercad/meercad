@@ -673,6 +673,8 @@ function firstField(op: FeatureOp): string | null {
       hole: "plane",
       standard_part: "plane",
       label: "plane",
+      box: "plane",
+      snap_hook: "plane",
       draft: "faces",
       offset_face: "faces",
       texture: "faces",

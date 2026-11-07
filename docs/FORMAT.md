@@ -55,7 +55,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   `versions` keeps the saved versions and their blobs.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
   `thread`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
-  `gridfinity`, `label`, `bend`, `texture` (and more: see the schema).
+  `gridfinity`, `label`, `box`, `snap_hook`, `bend`, `texture` (and more: see the schema).
 - **Ops for materials** (Operations API): `set_material {part, material}` (null for none),
   `define_material {material}` (adds or replaces an own material by id), `delete_material {id}`
   (its parts go back to the base material).
@@ -82,6 +82,15 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   `washer`, `insert`) and text sized to fit, `style` raised or engraved (`depth`, default 0.6 mm).
   `"separate": true` makes the marking its own part `lb1_mark` for a second colour (raised on top, or
   engraved as a flush inlay). Put it on a bin's tab with `"plane": { "face": { "face": "gf1.tab" } }`.
+- **box** — a printable box and its lid as two parts (`bx1`, `bx1_lid`): `{ "op": "box", "lid": "snap", "width": 80, "depth": 60, "height": 40 }`.
+  `lid: "snap"` (rectangular or `"shape": "round"`): the lid's lip reaches into the box and its bead
+  (`snap`, default 0.5 mm) clicks into a groove inside the wall. `lid: "screw"`: a round jar
+  (`width` = diameter) with a threaded neck (`neck`, `pitch`, `starts`) and a cap as wide as the jar;
+  the thread's 45° flanks print without supports. `clearance` (default 0.2 mm per side) is the play
+  between box and lid. The lid lies upside down beside the box (`"layout": "closed"` puts it on).
+- **snap_hook** — cantilever snap hooks on a face at `points`: `{ "op": "snap_hook", "plane": { "face": { "face": "bx1.lid_under" } }, "points": [[0, 20]], "angle": 90, "catchIn": ["bx1"] }`.
+  `length`, `thickness`, `width`, `overhang`, `insertAngle`, `retainAngle` (90 holds for good), joined
+  to the part under the face; `catchIn` cuts the window the barb clicks into (with `clearance`).
 - **bend** — `{ "op": "bend", "bodies": ["ex1"], "mode": "spiral", "axis": { "ref": "origin.Z" }, "radius": 20, "gap": 1 }`
   bends parts as if flexible: `"bend"` round the axis by `angle` (degrees, at most 360) or with
   `radius` (of the middle of the thickness); `"wrap"` onto a cylinder of `radius` (inner face on it;

@@ -90,6 +90,20 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
       if (f.op === "linear_pattern" && at) items.push(...item("spacing", [at[0], at[1], at[2] + 6], "↔ ", f.spacing, "spacing"));
       return items;
     }
+    case "box": {
+      // The box's outside sizes at its edges: width in front, depth at the side, height on top.
+      const b = out.report.bodies.find((x) => x.id === f.id)?.bbox;
+      if (!b) return [];
+      const mid = (i: number) => (b.min[i]! + b.max[i]!) / 2;
+      const size = (key: string, p: V3, label: string, value: Expr, commit: (v: Expr) => void): Item => ({
+        key: `${f.id}.${key}`, at: p, text: `${label}${fmt(value, " mm")}`, value, unit: "mm", suggest: `box_${key}`, unlinkable: true, commit,
+      });
+      const round = f.lid === "screw" || f.shape === "round";
+      const items = [size("width", [mid(0), b.min[1]! - 4, b.min[2]!], round ? "⌀ " : "↔ ", f.width, (width) => edit({ width }))];
+      if (!round) items.push(size("depth", [b.max[0]! + 4, mid(1), b.min[2]!], "↕ ", f.depth ?? f.width, (depth) => edit({ depth })));
+      items.push(size("height", [b.max[0]!, b.min[1]!, b.max[2]!], "↥ ", f.height, (height) => edit({ height })));
+      return items;
+    }
     case "gridfinity":
     case "label": {
       // Sizes at the part's box: count of cells (or the label's size) along x and y, a bin's height on top.

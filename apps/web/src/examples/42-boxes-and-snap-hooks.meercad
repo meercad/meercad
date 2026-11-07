@@ -1,0 +1,298 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "wall": "2 mm",
+  "play": "0.2 mm"
+ },
+ "features": [
+  {
+   "id": "bx1",
+   "op": "box",
+   "name": "Small parts box",
+   "lid": "snap",
+   "width": 80,
+   "depth": 60,
+   "height": 40,
+   "wall": "wall",
+   "clearance": "play"
+  },
+  {
+   "id": "bx2",
+   "op": "box",
+   "name": "Jar",
+   "lid": "screw",
+   "width": 70,
+   "height": 70,
+   "wall": "wall",
+   "clearance": "play",
+   "position": [
+    0,
+    90
+   ]
+  },
+  {
+   "id": "sk1",
+   "op": "sketch",
+   "name": "Case outline",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
+    {
+     "id": "ap1",
+     "type": "point",
+     "x": -30,
+     "y": -110
+    },
+    {
+     "id": "ap2",
+     "type": "point",
+     "x": 30,
+     "y": -110
+    },
+    {
+     "id": "ap3",
+     "type": "point",
+     "x": 30,
+     "y": -70
+    },
+    {
+     "id": "ap4",
+     "type": "point",
+     "x": -30,
+     "y": -70
+    },
+    {
+     "id": "a1",
+     "type": "line",
+     "p1": "ap1",
+     "p2": "ap2"
+    },
+    {
+     "id": "a2",
+     "type": "line",
+     "p1": "ap2",
+     "p2": "ap3"
+    },
+    {
+     "id": "a3",
+     "type": "line",
+     "p1": "ap3",
+     "p2": "ap4"
+    },
+    {
+     "id": "a4",
+     "type": "line",
+     "p1": "ap4",
+     "p2": "ap1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex1",
+   "op": "extrude",
+   "name": "Case",
+   "profile": {
+    "sketch": "sk1"
+   },
+   "extent": "blind",
+   "distance": 25,
+   "mode": "new_body"
+  },
+  {
+   "id": "fi1",
+   "op": "fillet",
+   "name": "Corners",
+   "edges": [
+    {
+     "edge": [
+      "ex1.side[sk1.a1]",
+      "ex1.side[sk1.a2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.a2]",
+      "ex1.side[sk1.a3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.a3]",
+      "ex1.side[sk1.a4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex1.side[sk1.a4]",
+      "ex1.side[sk1.a1]"
+     ]
+    }
+   ],
+   "radius": 4
+  },
+  {
+   "id": "sh0",
+   "op": "shell",
+   "name": "Hollow",
+   "faces": [
+    {
+     "face": "ex1.end_cap"
+    }
+   ],
+   "thickness": "wall"
+  },
+  {
+   "id": "pl1",
+   "op": "plane",
+   "name": "Rim",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": 25
+  },
+  {
+   "id": "sk2",
+   "op": "sketch",
+   "name": "Lid outline",
+   "plane": {
+    "ref": "pl1"
+   },
+   "entities": [
+    {
+     "id": "bp1",
+     "type": "point",
+     "x": -30,
+     "y": -110
+    },
+    {
+     "id": "bp2",
+     "type": "point",
+     "x": 30,
+     "y": -110
+    },
+    {
+     "id": "bp3",
+     "type": "point",
+     "x": 30,
+     "y": -70
+    },
+    {
+     "id": "bp4",
+     "type": "point",
+     "x": -30,
+     "y": -70
+    },
+    {
+     "id": "b1",
+     "type": "line",
+     "p1": "bp1",
+     "p2": "bp2"
+    },
+    {
+     "id": "b2",
+     "type": "line",
+     "p1": "bp2",
+     "p2": "bp3"
+    },
+    {
+     "id": "b3",
+     "type": "line",
+     "p1": "bp3",
+     "p2": "bp4"
+    },
+    {
+     "id": "b4",
+     "type": "line",
+     "p1": "bp4",
+     "p2": "bp1"
+    }
+   ],
+   "constraints": []
+  },
+  {
+   "id": "ex2",
+   "op": "extrude",
+   "name": "Lid",
+   "profile": {
+    "sketch": "sk2"
+   },
+   "extent": "blind",
+   "distance": "wall",
+   "mode": "new_body"
+  },
+  {
+   "id": "fi2",
+   "op": "fillet",
+   "name": "Lid corners",
+   "edges": [
+    {
+     "edge": [
+      "ex2.side[sk2.b1]",
+      "ex2.side[sk2.b2]"
+     ]
+    },
+    {
+     "edge": [
+      "ex2.side[sk2.b2]",
+      "ex2.side[sk2.b3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex2.side[sk2.b3]",
+      "ex2.side[sk2.b4]"
+     ]
+    },
+    {
+     "edge": [
+      "ex2.side[sk2.b4]",
+      "ex2.side[sk2.b1]"
+     ]
+    }
+   ],
+   "radius": 4
+  },
+  {
+   "id": "sh1",
+   "op": "snap_hook",
+   "name": "Right hook",
+   "plane": {
+    "ref": "pl1"
+   },
+   "flip": true,
+   "points": [
+    [
+     27.8,
+     -90
+    ]
+   ],
+   "catchIn": [
+    "ex1"
+   ],
+   "clearance": "play"
+  },
+  {
+   "id": "sh2",
+   "op": "snap_hook",
+   "name": "Left hook",
+   "plane": {
+    "ref": "pl1"
+   },
+   "flip": true,
+   "points": [
+    [
+     -27.8,
+     -90
+    ]
+   ],
+   "angle": 180,
+   "catchIn": [
+    "ex1"
+   ],
+   "clearance": "play"
+  }
+ ],
+ "rollback": null
+}
