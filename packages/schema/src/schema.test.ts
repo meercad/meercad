@@ -49,6 +49,23 @@ describe("validateDocument", () => {
   });
 });
 
+describe("body ids of copies", () => {
+  it("finds copies of features whose ids hold underscores", () => {
+    const base = corpus("box-fillet.meercad.json") as { features: unknown[] };
+    const first = (base.features as { id: string; op: string }[]).find((f) => f.op === "extrude")!.id;
+    const features = [
+      ...base.features,
+      { id: "tr_knee", op: "transform", bodies: [first], translate: [0, 30, 0], copy: true },
+      { id: "mi_leg", op: "mirror", source: { bodies: [`tr_knee_${first}`] }, plane: { ref: "origin.YZ" } },
+      { id: "mv_up", op: "transform", bodies: ["mi_leg_1"], translate: [0, 0, 5] },
+    ];
+    const r = validateDocument({ ...base, features });
+    expect(r.ok ? [] : r.errors).toEqual([]);
+    const bad = validateDocument({ ...base, features: [...features, { id: "mv2", op: "transform", bodies: ["nope_1"], translate: [1, 0, 0] }] });
+    expect(bad.ok ? [] : bad.errors).toEqual(['feature mv2: body refers to unknown or later feature "nope"']);
+  });
+});
+
 describe("validateOp", () => {
   it("validates set_param and rejects junk", () => {
     expect(validateOp({ type: "set_param", name: "h", expr: "12 mm" }).ok).toBe(true);
