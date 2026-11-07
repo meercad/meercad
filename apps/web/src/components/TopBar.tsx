@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, History, House, Info, Keyboard, Moon, PanelLeft, Pencil, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Download, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -24,10 +24,14 @@ export function Logo() {
   return <img src="/logo.png" alt="" width={28} height={28} />;
 }
 
+function isDark(): boolean {
+  const theme = document.documentElement.dataset["theme"];
+  return theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
 export function toggleTheme(): void {
   const root = document.documentElement;
-  const dark = root.dataset["theme"] ? root.dataset["theme"] === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-  root.dataset["theme"] = dark ? "light" : "dark";
+  root.dataset["theme"] = isDark() ? "light" : "dark";
   try {
     localStorage.setItem("meercad.theme", root.dataset["theme"]);
   } catch {
@@ -55,29 +59,60 @@ export function TopBar() {
     const f = features.find((x) => x.id === id);
     return f ? featureName(f) : id;
   };
-  const fileItems = (): MenuEntry[] => [
-      { label: t("Import STEP, STL, 3MF, OBJ, DXF, SVG…"), icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
-      "sep",
-      { label: t("Export STL (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("stl") },
-      { label: t("Export 3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
-      { label: t("Export OBJ (rendering, other 3D tools)"), icon: <FileDown />, onClick: () => void exportMesh("obj") },
-      { label: t("Export STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
-      { label: nativeApp ? t("View in AR (real size on the table)") : t("Export USDZ (AR on iPhone and iPad)"), icon: <Rotate3d />, onClick: () => void viewInAr() },
-      ...(variants && hasPack("versions")
-        ? (["stl", "3mf", "obj", "step"] as const).map((f) => ({ label: t("Export all {n} variants as {format} (zip)", { n: variants, format: f.toUpperCase() }), icon: <FileDown />, onClick: () => void exportVariants(f) }))
-        : []),
-      ...(hasPack("drawings") ? [{ label: t("Technical drawing (PDF, DXF)…"), icon: <FileDown />, onClick: openDrawing }] : []),
-      ...sketches.flatMap((s) => [
-        { label: t("Export {name} as DXF (laser)", { name: sketchName(s.id) }), icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
-        { label: t("Export {name} as SVG", { name: sketchName(s.id) }), icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
-      ]),
-      "sep",
-      { label: `${units === "mm" ? "✓ " : "   "}${t("Millimetres (this design)")}`, icon: <Ruler />, onClick: () => setDesignUnits("mm") },
-      { label: `${units === "in" ? "✓ " : "   "}${t("Inches (this design)")}`, icon: <Ruler />, onClick: () => setDesignUnits("in") },
-      "sep",
-      ...(hasPack("versions") ? [{ label: t("Versions…"), icon: <History />, onClick: openVersions }] : []),
-      { label: t("Save copy as .meercad…"), icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
+  const on = (yes: boolean) => (yes ? <Check /> : <span className="menu-icon-gap" />);
+  const exportItems = (): MenuEntry[] => [
+    { label: t("STL (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("stl") },
+    { label: t("3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
+    { label: t("OBJ (rendering, other 3D tools)"), icon: <FileDown />, onClick: () => void exportMesh("obj") },
+    { label: t("STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
+    // In the apps AR is a top-level entry; the browser hands out the USDZ file instead.
+    ...(nativeApp ? [] : [{ label: t("USDZ (AR on iPhone and iPad)"), icon: <Rotate3d />, onClick: () => void viewInAr() }]),
+    "sep",
+    ...(hasPack("drawings") ? [{ label: t("Technical drawing (PDF, DXF)…"), icon: <FileText />, onClick: openDrawing }] : []),
+    ...(variants && hasPack("versions")
+      ? [
+          {
+            label: t("All {n} variants (zip)", { n: variants }),
+            icon: <Layers />,
+            submenu: (["stl", "3mf", "obj", "step"] as const).map((f) => ({ label: f.toUpperCase(), icon: <FileDown />, onClick: () => void exportVariants(f) })),
+          },
+        ]
+      : []),
+    "sep",
+    ...sketches.map((s) => ({
+      label: sketchName(s.id),
+      icon: <PenLine />,
+      submenu: [
+        { label: t("DXF (laser)"), icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
+        { label: "SVG", icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
+      ],
+    })),
   ];
+  const fileItems = (): MenuEntry[] => [
+    { label: t("Import STEP, STL, 3MF, OBJ, DXF, SVG…"), icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
+    { label: t("Export"), icon: <FileDown />, submenu: exportItems() },
+    ...(nativeApp ? [{ label: t("View in AR (real size on the table)"), icon: <Rotate3d />, onClick: () => void viewInAr() }] : []),
+    {
+      label: t("Units"),
+      icon: <Ruler />,
+      hint: units,
+      submenu: [
+        { label: t("Millimetres (this design)"), icon: on(units === "mm"), onClick: () => setDesignUnits("mm") },
+        { label: t("Inches (this design)"), icon: on(units === "in"), onClick: () => setDesignUnits("in") },
+      ],
+    },
+    "sep",
+    ...(hasPack("versions") ? [{ label: t("Versions…"), icon: <History />, onClick: openVersions }] : []),
+    { label: t("Save copy as .meercad…"), icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
+  ];
+  const viewItems = (): MenuEntry[] => {
+    const prefs = usePrefs.getState();
+    return [
+      { label: t("Dimensions on the model"), icon: on(prefs.showValues), onClick: () => setPrefs({ showValues: !prefs.showValues }) },
+      ...(compact ? [] : [{ label: t("Shortcut badges"), icon: on(prefs.showKeys), onClick: () => setPrefs({ showKeys: !prefs.showKeys }) }]),
+      { label: t("Dark mode"), icon: on(isDark()), onClick: toggleTheme },
+    ];
+  };
   const openFile = () => {
     const r = fileBtn.current!.getBoundingClientRect();
     showMenu(r.right - 240, r.bottom + 6, fileItems());
@@ -87,12 +122,10 @@ export function TopBar() {
     // The phone has no File button: its items come first here.
     showMenu(r.right - 240, r.bottom + 6, [
       ...(compact ? [...fileItems(), "sep" as const] : []),
+      { label: t("View"), icon: <Eye />, submenu: viewItems() },
       { label: t("Settings…"), icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("meercad:settings")) },
       { label: t("Help & guides"), icon: <CircleHelp />, onClick: () => window.dispatchEvent(new Event("meercad:help")) },
       ...(compact ? [] : [{ label: t("Keyboard shortcuts"), icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) }]),
-      { label: usePrefs.getState().showValues ? t("Hide dimensions on the model") : t("Show dimensions on the model"), icon: <Ruler />, onClick: () => setPrefs({ showValues: !usePrefs.getState().showValues }) },
-      ...(compact ? [] : [{ label: usePrefs.getState().showKeys ? t("Hide shortcut badges") : t("Show shortcut badges"), icon: <Keyboard />, onClick: () => setPrefs({ showKeys: !usePrefs.getState().showKeys }) }]),
-      { label: t("Toggle dark mode"), icon: <Moon />, onClick: toggleTheme },
       "sep",
       { label: t("About meerCAD, privacy & licences"), icon: <Info />, onClick: () => window.dispatchEvent(new CustomEvent("meercad:about")) },
     ]);
@@ -102,7 +135,7 @@ export function TopBar() {
   const openProjects = () => {
     const r = nameBtn.current!.getBoundingClientRect();
     showMenu(r.left, r.bottom + 6, [
-      ...tabs.map((t) => ({ label: t.name, icon: t.id === project?.id ? <Check /> : <span />, onClick: () => void openProject(t.id) })),
+      ...tabs.map((t) => ({ label: t.name, icon: t.id === project?.id ? <Check /> : <span className="menu-icon-gap" />, onClick: () => void openProject(t.id) })),
       "sep",
       { label: t("New part"), icon: <Plus />, onClick: () => void newProject() },
       {

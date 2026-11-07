@@ -255,11 +255,18 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 /* context menu */
 .menu { position: fixed; min-width: 200px; max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--shadow); z-index: 50; }
 .menu button { display: flex; width: 100%; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: none; background: none; border-radius: 6px; text-align: left; }
-.menu button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+/* Hover only with a pointer that hovers: on touch it would stick to wherever the finger last was. */
+@media (hover: hover) { .menu button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); } }
+.menu button:active:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .menu button:disabled { opacity: 0.4; }
 .menu button svg { width: 15px; height: 15px; }
 .menu button kbd { margin-left: auto; font: 11px var(--mono); color: var(--muted); }
 .menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 2px; }
+.menu .menu-back { font-weight: 600; }
+.menu .menu-icon-gap { width: 15px; flex: none; }
+.menu .menu-hint { margin-left: auto; padding-left: 12px; color: var(--muted); font-size: 12px; }
+.menu .menu-hint + .menu-more, .menu kbd + .menu-more, .menu .kbd + .menu-more { margin-left: 4px; }
+.menu .menu-more { margin-left: auto; color: var(--muted); }
 .menu-anchor { position: relative; }
 .dropdown { position: absolute; top: calc(100% + 4px); right: 0; }
 
