@@ -131,6 +131,26 @@ export const definitions: Record<string, Json> = {
     ["id", "type", "a", "b", "anchor"],
   ),
   coupling: obj({ id, name: { type: "string", maxLength: 128 }, driver: id, driven: id, ratio: ref("expr") }, ["id", "driver", "driven", "ratio"]),
+  motion: obj(
+    {
+      id,
+      name: { type: "string", maxLength: 128 },
+      duration: { type: "number", exclusiveMinimum: 0, maximum: 3600 },
+      loop: bool,
+      smooth: bool,
+      keys: arr(
+        obj(
+          {
+            at: { type: "number", minimum: 0, maximum: 3600 },
+            values: { type: "object", propertyNames: { minLength: 1, maxLength: 140 }, additionalProperties: { type: "number" } },
+          },
+          ["at", "values"],
+        ),
+        { minItems: 1, maxItems: 2000 },
+      ),
+    },
+    ["id", "duration", "keys"],
+  ),
   reference: obj(
     {
       id,
@@ -205,6 +225,20 @@ export const definitions: Record<string, Json> = {
         flip: bool,
       },
       ["kind", "plane", "points"],
+    ),
+    primitive: feature(
+      "primitive",
+      {
+        shape: { enum: ["box", "cylinder", "sphere"] },
+        size: arr(ref("expr"), { minItems: 3, maxItems: 3 }),
+        diameter: ref("expr"),
+        height: ref("expr"),
+        axis: { enum: ["X", "Y", "Z"] },
+        center: arr(ref("expr"), { minItems: 3, maxItems: 3 }),
+        mode: ref("mode"),
+        targets: arr(id),
+      },
+      ["shape", "mode"],
     ),
     text: feature(
       "text",
@@ -623,7 +657,7 @@ export const documentSchema = {
       units: { enum: ["mm", "in"] },
       fit: ref("expr"),
       features: arr(ref("feature")),
-      mechanism: obj({ joints: arr(ref("joint")), couplings: arr(ref("coupling")), clearance: ref("expr") }, ["joints"]),
+      mechanism: obj({ joints: arr(ref("joint")), couplings: arr(ref("coupling")), motions: arr(ref("motion")), clearance: ref("expr") }, ["joints"]),
       references: arr(ref("reference")),
       variants: arr(obj({ name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") } }, ["name", "params"])),
       variant: VARIANT_NAME,
@@ -658,6 +692,8 @@ export const docOpSchema = {
     delete_joint: obj({ type: true, id }, ["id"]),
     set_coupling: obj({ type: true, coupling: ref("coupling") }, ["coupling"]),
     delete_coupling: obj({ type: true, id }, ["id"]),
+    set_motion: obj({ type: true, motion: ref("motion") }, ["motion"]),
+    delete_motion: obj({ type: true, id }, ["id"]),
     set_reference: obj({ type: true, reference: ref("reference") }, ["reference"]),
     delete_reference: obj({ type: true, id }, ["id"]),
     set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, MATERIAL_ID) }, ["part", "material"]),

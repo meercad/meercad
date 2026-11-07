@@ -1,13 +1,13 @@
-import { Check, Cog, Film, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
+import { Check, Cog, Film, Footprints, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { download } from "./io";
 import { jointRange, renderMotionGif } from "../lib/render";
-import type { Joint } from "@meercad/schema";
+import type { Joint, Motion } from "@meercad/schema";
 import { partName } from "../lib/features";
 import { motion } from "@meercad/model";
-import { checkClearance, currentMechanism, swingRanges, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, restPose, saveJoint, setJointField, setJointValue, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
+import { addPoseToMotion, checkClearance, checkMotionRun, currentMechanism, swingRanges, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, playMotion, restPose, saveJoint, setJointField, setJointValue, showMotionAt, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
 import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
-import { toast, useApp } from "../store";
+import { apply, toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
 import { t, tn } from "../lib/i18n";
 
@@ -175,6 +175,7 @@ export function MotionPanel() {
               ) : null}
             </div>
             {joints.length ? <ClearanceResults /> : null}
+            {joints.some((j) => j.type !== "fixed") ? <MotionsSection /> : null}
             {gearsWithout ? (
               <button
                 className="btn"
@@ -189,6 +190,122 @@ export function MotionPanel() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Next free motion id (m1, m2, …). */
+function nextMotionId(list: readonly Motion[]): string {
+  for (let k = 1; ; k++) if (!list.some((m) => m.id === `m${k}`)) return `m${k}`;
+}
+
+/**
+ * Motions: several joints moved together over time (walking, waving). A motion is made from poses:
+ * set the joints, add the pose as a moment, set the next pose, add it, … then play it. A loop runs
+ * from its last moment back to its first.
+ */
+function MotionsSection() {
+  const motions = useApp((s) => s.doc.mechanism?.motions ?? []);
+  const playingMotion = useMotion((s) => s.playingMotion);
+  const [checks, setChecks] = useState<Record<string, { running: boolean; text?: string; bad?: boolean }>>({});
+  const [filming, setFilming] = useState<string | null>(null);
+  const features = useApp((s) => s.doc.features);
+  const update = (m: Motion) => apply({ type: "set_motion", motion: m });
+  const check = async (m: Motion) => {
+    setChecks((c) => ({ ...c, [m.id]: { running: true } }));
+    try {
+      const r = await checkMotionRun(m.id, 24);
+      const pairs = [...new Map(r.collisions.map((c) => [`${c.a}|${c.b}`, c])).values()];
+      const text = pairs.length
+        ? t("Collides at {times}: {parts}", { times: [...new Set(r.collisions.map((c) => `${c.at} s`))].slice(0, 4).join(", "), parts: pairs.map((c) => `${partName(c.a, features)} · ${partName(c.b, features)}`).join(", ") })
+        : r.held.length
+          ? t("No collision. Held at a limit: {joints}", { joints: [...new Set(r.held.map((h) => h.joint))].join(", ") })
+          : t("No collision in {n} poses.", { n: r.frames });
+      setChecks((c) => ({ ...c, [m.id]: { running: false, text, bad: pairs.length > 0 } }));
+    } catch (e) {
+      setChecks((c) => ({ ...c, [m.id]: { running: false, text: (e as Error).message, bad: true } }));
+    }
+  };
+  const film = async (m: Motion) => {
+    setFilming(m.id);
+    try {
+      const gif = await renderMotionGif("", 0, 0, 36, {}, m.id);
+      download(`${useApp.getState().project?.name ?? "meerCAD"} ${m.name ?? m.id}.gif`, gif as BlobPart);
+    } catch (e) {
+      toast(t("Could not make the video: {error}", { error: (e as Error).message }), "error");
+    } finally {
+      setFilming(null);
+    }
+  };
+  return (
+    <div className="motions">
+      <div className="joint-head">
+        <Footprints className="ficon" />
+        <b>{t("Motions")}</b>
+      </div>
+      {!motions.length ? <p className="muted small">{t("Link joints into a motion: set a pose, add it as a moment, set the next one, add it, then play.")}</p> : null}
+      {motions.map((m) => {
+        const c = checks[m.id];
+        return (
+          <div key={m.id} className="joint-row">
+            <div className="joint-head">
+              <button className={`icon-btn sm ${playingMotion === m.id ? "active" : ""}`} title={playingMotion === m.id ? t("Stop") : t("Play the motion")} onClick={() => (playingMotion === m.id ? stopPlaying() : playMotion(m.id))}>
+                {playingMotion === m.id ? <Pause /> : <Play />}
+              </button>
+              <input className="field" value={m.name ?? ""} placeholder={m.id} onChange={(e) => update({ ...m, name: e.target.value || undefined })} style={{ flex: 1 }} />
+              <button className={`icon-btn sm ${filming === m.id ? "active" : ""}`} title={t("Save a video (GIF) of this motion")} disabled={!!filming} onClick={() => void film(m)}>
+                <Film />
+              </button>
+              <button className="icon-btn sm" title={t("Delete")} onClick={() => (stopPlaying(), apply({ type: "delete_motion", id: m.id }))}>
+                <Trash2 />
+              </button>
+            </div>
+            <div className="row">
+              <label className="fld" style={{ flex: 1 }}>
+                <span className="fld-label">{t("Duration")}</span>
+                <input
+                  className="field"
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={m.duration}
+                  onChange={(e) => {
+                    const d = Number(e.target.value);
+                    if (d > 0) update({ ...m, duration: Math.max(d, ...m.keys.map((k) => k.at)) });
+                  }}
+                />
+              </label>
+              <label className="checkbox">
+                <input type="checkbox" checked={!!m.loop} onChange={(e) => update({ ...m, loop: e.target.checked || undefined })} /> {t("Loop")}
+              </label>
+            </div>
+            <div className="motion-keys">
+              {m.keys.map((k) => (
+                <span key={k.at} className="chip">
+                  <button className="link" title={t("Show this pose")} onClick={() => (stopPlaying(), showMotionAt(m, k.at))}>
+                    {k.at.toFixed(2)} s
+                  </button>
+                  <button className="link" title={t("Delete")} onClick={() => update({ ...m, keys: m.keys.filter((x) => x !== k) })}>
+                    <X />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="row">
+              <button className="btn" onClick={() => (stopPlaying(), addPoseToMotion(m.id))} title={t("Adds the pose shown now as the next moment")}>
+                <Plus /> {t("Add this pose")}
+              </button>
+              <button className="btn" onClick={() => void check(m)} disabled={c?.running} title={t("Check for collisions")}>
+                <ShieldCheck /> {c?.running ? t("Checking…") : t("motion::Check")}
+              </button>
+            </div>
+            {c?.text ? <div className={`callout ${c.bad ? "warn" : ""}`}>{c.text}</div> : null}
+          </div>
+        );
+      })}
+      <button className="btn" onClick={() => (stopPlaying(), addPoseToMotion(nextMotionId(motions), 0))}>
+        <Plus /> {t("New motion from this pose")}
+      </button>
     </div>
   );
 }

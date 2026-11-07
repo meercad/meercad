@@ -488,4 +488,12 @@ export default {
   "({n} already existed there and were left in place)": "({n} gab es dort schon, sie blieben an ihrem Platz)",
   "Projects are now saved in {dir}": "Projekte werden jetzt in {dir} gespeichert",
   "Could not use that folder: {msg}": "Dieser Ordner kann nicht verwendet werden: {msg}",
+  // Basic solids
+  "Basic solid": "Grundkörper",
+  "A box, cylinder or sphere without a sketch: stand-ins, quick assemblies, blocks to cut with": "Quader, Zylinder oder Kugel ohne Skizze: Platzhalter, schnelle Baugruppen, Blöcke zum Ausschneiden",
+  "primitive::Box": "Quader",
+  "primitive::Cylinder": "Zylinder",
+  "primitive::Sphere": "Kugel",
+  "Size {axis}": "Größe {axis}",
+  "Centre {axis}": "Mitte {axis}",
 } as Record<string, string>;
