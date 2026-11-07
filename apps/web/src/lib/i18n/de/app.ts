@@ -504,6 +504,8 @@ export default {
   joints: "Gelenke",
   "saved versions": "gespeicherte Versionen",
   "terrain models": "Geländemodelle",
+  "Without this pack the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.":
+    "Ohne dieses Paket lässt sich das Modell trotzdem öffnen, berechnen und exportieren, und alles andere bleibt änderbar; nur diese Teile bleiben, wie sie sind.",
   "Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.":
     "Ohne diese Pakete lässt sich das Modell trotzdem öffnen, berechnen und exportieren, und alles andere bleibt änderbar; nur diese Teile bleiben, wie sie sind.",
   "Changing joints needs the Mechanics pack.": "Gelenke ändern geht mit dem Paket Mechanik.",

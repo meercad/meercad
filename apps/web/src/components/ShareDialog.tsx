@@ -109,7 +109,7 @@ export function ShareDialog() {
                 {t("Uses {pack}: {what}.", { pack: t(PACKS.find((p) => p.id === u.pack)!.name), what: u.what.map((w) => WHAT[w] ?? w).join(", ") })}
               </p>
             ))}
-            <p>{t("Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.")}</p>
+            <p>{tn(packs.length, "Without this pack the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.", "Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.")}</p>
           </div>
         ) : null}
         <div className="row share-actions">
