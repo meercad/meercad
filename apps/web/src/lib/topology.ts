@@ -74,7 +74,36 @@ export function setFeatureLabels(fn: (id: string) => string): void {
   featureLabel = fn;
 }
 
-const KIND: Record<string, string> = { end_cap: t("end face"), start_cap: t("start face"), side: t("side") };
+const KIND: Record<string, string> = {
+  end_cap: t("end face"),
+  start_cap: t("start face"),
+  side: t("side"),
+  // Generators (boxes, lids, snap hooks, bins).
+  wall: t("face::wall"),
+  inner: t("face::inside"),
+  floor: t("face::floor"),
+  bottom: t("face::bottom"),
+  rim: t("face::rim"),
+  groove: t("face::groove"),
+  notch: t("face::notch"),
+  shoulder: t("face::shoulder"),
+  neck: t("face::neck"),
+  thread: t("face::thread"),
+  lid_top: t("face::lid top"),
+  lid_under: t("face::lid underside"),
+  lid_side: t("face::lid side"),
+  lid_lip: t("face::lid lip"),
+  lid_bead: t("face::lid bead"),
+  lid_rim: t("face::lid edge"),
+  lid_inner: t("face::lid inside"),
+  lid_thread: t("face::lid thread"),
+  beam: t("face::beam"),
+  back: t("face::back"),
+  catch: t("face::catch"),
+  lead: t("face::lead-in"),
+  tip: t("face::tip"),
+  window: t("face::window"),
+};
 /** A face tag in words: "ex1.end_cap" → "Extrude 1 · end face", "ex1.side[sk1.l2]" → "Extrude 1 · side l2". */
 function short(tag: string): string {
   const m = /^([^.[]+)\.([^[]+)(?:\[(.*)\])?$/.exec(tag);

@@ -729,7 +729,26 @@ export const MODELS: TestModel[] = [
     variants: [{ params: { travel: "200 mm" }, expect: { bodies: 9 } }],
   },
   {
-    file: "41 Geteilter Balken mit Stiften",
+    file: "41 Box mit Schnappdeckel",
+    name: "Box with a snap lid",
+    look: "An 80 × 60 × 40 box with 2 mm walls and rounded corners, a groove round the inside 3 mm below the rim and a finger-nail notch in the front rim. Beside it, 10 mm to the right, its lid lies upside down: a plate as large as the box with a lip that has a bead round it.",
+    doc: doc([{ id: "bx1", op: "box", name: "Box", lid: "snap", width: 80, depth: 60, height: 40 }]),
+    expect: { bodies: 2, size: [170, 60, 40] },
+  },
+  {
+    file: "42 Schraubdose",
+    name: "Jar with a screw lid",
+    look: "A round jar ⌀70 × 70 with a narrower threaded neck on top (coarse 4 mm thread, 45° flanks); beside it its cap lies upside down, as wide as the jar, with the inner thread in its skirt.",
+    doc: doc([{ id: "bx1", op: "box", name: "Jar", lid: "screw", width: 70, height: 70 }]),
+    expect: { bodies: 2, size: [150, 70, 70] },
+  },
+  {
+    file: "43 Boxen und Schnapphaken",
+    name: "Boxes and snap hooks",
+    look: "Three things: a box with a snap lid (lid beside it), a jar with a screw cap (cap beside it) and a 60 × 40 × 25 case whose separate lid has two snap hooks on its underside; their barbs sit in windows cut through the case's long walls.",
+    doc: JSON.parse(readFileSync(new URL("../../apps/web/src/examples/42-boxes-and-snap-hooks.meercad", import.meta.url), "utf8")) as MeercadDocument,
+    expect: { bodies: 6 },
+    file: "44 Geteilter Balken mit Stiften",
     name: "Bar split with pins",
     look: "A 300 × 40 × 20 bar split at x = 150. Two Ø5 pins, 8 long, stand out of the right piece's cut face (at y = 10 and y = 30, mid height); the left piece has Ø5.4 holes 8.2 deep in the same places, so the pieces plug together.",
     doc: doc([
@@ -741,7 +760,7 @@ export const MODELS: TestModel[] = [
     expect: { bodies: 2, volume: 300 * 40 * 20 + 2 * PI * 6.25 * 8 - 2 * PI * 2.7 ** 2 * 8.2, size: [300, 40, 20] },
   },
   {
-    file: "42 Brett mit Schwalbenschwanz",
+    file: "45 Brett mit Schwalbenschwanz",
     name: "Board split with a dovetail",
     look: "A 400 × 120 × 18 board split at x = 200 into two pieces that fit a 256 mm bed. The right piece has a dovetail tongue running across the whole 120 mm cut (7 wide at the cut, 4 deep, widening 15° to each side); the left piece has the matching slot 0.2 mm larger all round, open at both long edges, so it slides on from the side.",
     doc: doc([

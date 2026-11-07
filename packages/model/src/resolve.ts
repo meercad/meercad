@@ -31,6 +31,7 @@ import type {
   TransformFeature,
 } from "@meercad/schema";
 import { evaluate, ExprError } from "./expr.js";
+import { boxDefaults, snapHookDefaults, type ResolvedBox, type ResolvedSnapHook } from "./closures.js";
 
 /** `T` with the expression fields `K` evaluated to numbers. */
 type R<T, K extends keyof T> = Omit<T, K> & { [P in K]: undefined extends T[P] ? number | undefined : number };
@@ -124,6 +125,8 @@ export type ResolvedFeature =
   | ResolvedStandardPart
   | ResolvedGridfinity
   | ResolvedLabel
+  | ResolvedBox
+  | ResolvedSnapHook
   | ResolvedAlign
   | ResolvedScale
   | ResolvedSplit
@@ -284,6 +287,10 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         angle: opt("angle", f.angle) ?? 0,
       };
 
+    case "box":
+      return boxDefaults(f, (field, e) => opt(field, e as Expr | undefined));
+    case "snap_hook":
+      return snapHookDefaults(f, (field, e) => opt(field, e as Expr | undefined));
     case "mesh_convert":
       return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
     case "bend":
@@ -326,6 +333,8 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     standard_part: ["length", "diameter", "height", "angle"],
     gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
+    box: ["width", "depth", "height", "wall", "floor", "corner", "lidThickness", "clearance", "snap", "lipHeight", "pitch", "neck", "starts"],
+    snap_hook: ["angle", "length", "thickness", "width", "overhang", "insertAngle", "retainAngle", "clearance"],
     align: ["offset", "angle"],
     scale: ["factor"],
   };
@@ -340,6 +349,8 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     const tab = g["tab"] as Record<string, Expr>;
     for (const k of ["width", "angle"]) if (tab[k] !== undefined) tab[k] = fn(tab[k]);
   }
+  if (f.op === "box" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
+  if (f.op === "snap_hook") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
