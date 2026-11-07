@@ -31,6 +31,8 @@ export interface TextureRecord {
   feature: ResolvedTexture;
   body: Body;
   faces: number[];
+  /** Which way the picture's top points, for a lithophane's picture (world). */
+  up?: [number, number, number];
 }
 
 export interface ModelState {

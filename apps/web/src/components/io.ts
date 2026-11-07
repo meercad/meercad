@@ -276,7 +276,7 @@ export async function exportStep(): Promise<void> {
     const { data, moved } = await stepFile();
     if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
     download(`${baseName()}.step`, data as BlobPart);
-    if (currentDoc().features.some((f) => f.op === "texture" && !f.suppressed)) toast(t("STEP keeps the smooth faces: surface textures come along in STL, 3MF and OBJ"), "info");
+    if (currentDoc().features.some((f) => (f.op === "texture" || f.op === "lithophane") && !f.suppressed)) toast(t("STEP keeps the smooth faces: surface textures come along in STL, 3MF and OBJ"), "info");
   } catch (e) {
     toast(t("{format} export failed: {error}", { format: "STEP", error: e instanceof Error ? e.message : String(e) }), "error");
   }

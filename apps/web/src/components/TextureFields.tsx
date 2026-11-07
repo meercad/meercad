@@ -45,7 +45,7 @@ function useNumber(e: Expr | undefined, fallback: number): number {
 }
 
 /** A slider for touch and mouse plus the typed value; while the slider moves, textures preview coarse. */
-function SliderValue({ value, fallback, min, max, step, unit, onChange, placeholder }: { value: Expr | undefined; fallback: number; min: number; max: number; step: number; unit: "mm" | "deg" | ""; onChange: (v: Expr | undefined) => void; placeholder?: string }) {
+export function SliderValue({ value, fallback, min, max, step, unit, onChange, placeholder }: { value: Expr | undefined; fallback: number; min: number; max: number; step: number; unit: "mm" | "deg" | ""; onChange: (v: Expr | undefined) => void; placeholder?: string }) {
   const n = useNumber(value, fallback);
   const end = () => setDraftTextures(false);
   return (
@@ -130,16 +130,25 @@ export function TextureFields({ f, set, faces }: { f: TextureFeature; set: Set; 
           {f.image ? <span className="muted small">{`${f.image.width} × ${f.image.height}`}</span> : null}
         </div>
       ) : null}
+      {f.pattern === "image" ? (
+        <label className="checkbox">
+          <input type="checkbox" checked={!!f.fit} onChange={(e) => set({ fit: e.target.checked || undefined })} /> {t("Picture once over the faces, stretched to fit")}
+        </label>
+      ) : null}
       <input ref={file} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => void choosePicture(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
       <Labeled label={t("Depth")}>
         <SliderValue value={f.depth} fallback={info.depth} min={-3} max={3} step={0.05} unit="mm" onChange={(depth) => set({ depth: depth ?? info.depth })} />
       </Labeled>
-      <Labeled label={f.pattern === "image" ? t("Picture width") : t("texture::Spacing")}>
-        <SliderValue value={f.pitch} fallback={info.pitch} min={0.5} max={f.pattern === "image" ? 100 : 30} step={0.1} unit="mm" onChange={(p) => set({ pitch: p ?? info.pitch })} />
-      </Labeled>
-      <Labeled label={t("Angle")}>
-        <SliderValue value={f.angle} fallback={0} min={-90} max={90} step={1} unit="deg" placeholder="0" onChange={(angle) => set({ angle: angle === 0 ? undefined : angle })} />
-      </Labeled>
+      {f.pattern === "image" && f.fit ? null : (
+        <>
+          <Labeled label={f.pattern === "image" ? t("Picture width") : t("texture::Spacing")}>
+            <SliderValue value={f.pitch} fallback={info.pitch} min={0.5} max={f.pattern === "image" ? 100 : 30} step={0.1} unit="mm" onChange={(p) => set({ pitch: p ?? info.pitch })} />
+          </Labeled>
+          <Labeled label={t("Angle")}>
+            <SliderValue value={f.angle} fallback={0} min={-90} max={90} step={1} unit="deg" placeholder="0" onChange={(angle) => set({ angle: angle === 0 ? undefined : angle })} />
+          </Labeled>
+        </>
+      )}
       {info.ratio !== undefined ? (
         <Labeled label={t("Raised share")}>
           <SliderValue value={f.ratio} fallback={info.ratio} min={0.1} max={0.95} step={0.01} unit="" placeholder={String(info.ratio)} onChange={(ratio) => set({ ratio })} />

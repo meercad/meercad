@@ -14,7 +14,7 @@
  * to zero over `fade` mm. Pure TypeScript; runs in the kernel worker.
  */
 import type { TexturePattern } from "@meercad/schema";
-import { fitWrap, patternHeight, patternPeriods, type HeightImage } from "./patterns.js";
+import { fitWrap, imageFit, patternHeight, patternPeriods, type HeightImage } from "./patterns.js";
 
 type V3 = [number, number, number];
 
@@ -44,6 +44,10 @@ export interface TextureLayer {
   fade?: number;
   seed?: number;
   image?: HeightImage;
+  /** The picture covers the faces once (see TextureFeature.fit). */
+  fit?: boolean;
+  /** Which way the picture's top points (world): flat faces take it laid onto them, round faces orient their axis by it. */
+  up?: V3;
   invert?: boolean;
 }
 
@@ -174,7 +178,15 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
       const n = cross(sub(b, a), sub(c, a));
       area[r.layer]! += Math.hypot(n[0], n[1], n[2]) / 2;
     }
-  const spacing = layers.map((l) => Math.max(0.02, l.pitch / opts.samples));
+  // Pictures: a corner per pixel for export (`samples` 12), a little coarser on screen.
+  const spacing = layers.map((l, i) => {
+    let h = l.pitch / opts.samples;
+    if (l.pattern === "image" && l.image) {
+      const pixel = l.fit ? Math.sqrt(area[i]! / (l.image.width * l.image.height)) : l.pitch / l.image.width;
+      h = l.fit ? (pixel * 12) / opts.samples : Math.min(h, (pixel * 12) / opts.samples);
+    }
+    return Math.max(0.02, h);
+  });
   // Bisecting longest edges until none is longer than h leaves about 6–12·area/h² triangles (more on round faces meshed in strips).
   const estimate = layers.reduce((s, _, i) => s + (10 * area[i]!) / spacing[i]! ** 2, 0);
   // A retry's `coarser` comes on top of the estimate, otherwise the estimate would undo it.
@@ -551,13 +563,21 @@ function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], 
   let axis: V3 | null = null;
   if (!kinds.some((k) => k.kind === "other")) {
     if (cyl) {
-      const a = norm(cyl.axis);
+      let a = norm(cyl.axis);
+      if (layer.up && dot(a, layer.up) < 0) a = [-a[0], -a[1], -a[2]];
       const parallel = kinds.every((k) => k.kind !== "cylinder" || Math.abs(Math.abs(dot(norm(k.axis), a)) - 1) < 1e-4);
       const across = members.every((r, i) => kinds[i]!.kind !== "plane" || Math.abs(dot(firstNormal(r), a)) < 1e-3);
       if (parallel && across) axis = a;
     } else {
       const n0 = firstNormal(members[0]!);
-      if (members.every((r) => dot(firstNormal(r), n0) > 1 - 1e-6)) axis = upOn(n0);
+      if (members.every((r) => dot(firstNormal(r), n0) > 1 - 1e-6)) {
+        axis = upOn(n0);
+        if (layer.up) {
+          const t = dot(layer.up, n0);
+          const up: V3 = [layer.up[0] - n0[0] * t, layer.up[1] - n0[1] * t, layer.up[2] - n0[2] * t];
+          if (Math.hypot(up[0], up[1], up[2]) > 1e-6) axis = norm(up);
+        }
+      }
     }
   }
   if (!axis) return boxMapping(layer, h, P);
@@ -656,6 +676,23 @@ function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], 
     umax = Math.max(umax, u);
     vmin = Math.min(vmin, v);
     vmax = Math.max(vmax, v);
+  }
+  if (layer.fit && layer.image) {
+    // The picture once over the group: left to right across, top to bottom down the axis; round a
+    // closed group its sides join.
+    const closed = perimeter > 0;
+    const du = closed ? perimeter : umax - umin || 1, dv = vmax - vmin || 1;
+    const fit = imageFit(layer.image, layer.invert, closed);
+    const r = footprint / 3;
+    const rs = r / du, rt = r / dv;
+    const hf = (s: number, t: number) => (2 * fit(s, t) + fit(s + rs, t) + fit(s - rs, t) + fit(s, t + rt) + fit(s, t - rt)) / 6;
+    return {
+      height(w, ri) {
+        const i = rangeIndex.get(ri) ?? 0;
+        const p = P(w);
+        return hf((localU[i]!(p) + offset[i]! - umin) / du, (vmax - dot(p, a)) / dv);
+      },
+    };
   }
   let pitch = layer.pitch, angle = layer.angle, u0: number, v0 = (vmin + vmax) / 2;
   if (perimeter > 0) {

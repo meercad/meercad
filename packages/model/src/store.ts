@@ -301,6 +301,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     box: "bx",
     snap_hook: "sh",
     wall: "wl",
+    lithophane: "li",
     align: "al",
     scale: "sc",
     sweep: "sw",

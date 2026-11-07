@@ -483,7 +483,7 @@ export function scheduleRebuild(): void {
     // Surface textures take a while at full detail: the part shows first with a coarse texture,
     // and the fine one follows (the geometry is not computed again for it).
     const textures = usePrefs.getState().showTextures;
-    const textured = doc.features.some((f) => f.op === "texture" && !f.suppressed);
+    const textured = doc.features.some((f) => (f.op === "texture" || f.op === "lithophane") && !f.suppressed);
     const quick = textures && !draftTextures && textured;
     const show = (output: RebuildOutput, final: boolean) => {
       set(preview ? { output, previewing: true, building: !final } : { output, baseOutput: output, previewing: false, building: !final, selection: remapSelection(get().selection, get().baseOutput, output) });

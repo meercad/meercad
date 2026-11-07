@@ -26,6 +26,7 @@ import { docUnit, inUnit } from "../lib/units";
 import { GridfinityFields, LabelFields } from "./GridfinityFields";
 import { BoxFields, SnapHookFields } from "./ClosureFields";
 import { WallFields } from "./WallFields";
+import { LithophaneFields } from "./LithophaneFields";
 import { TextureFields } from "./TextureFields";
 import { Kbd } from "./Kbd";
 import { t, tn } from "../lib/i18n";
@@ -244,6 +245,8 @@ function handlePick(p: Pick, d: DialogState): void {
         if (spec && g.op === "text" && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         if (spec && (g.op === "label" || g.op === "box" || (g.op === "gridfinity" && !g.baseplate) || (g.op === "wall" && !g.board)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         // Labels, free-standing bins and wall boards are centred where the face was tapped.
+        // Labels and free-standing bins are centred where the face was tapped.
+        if (spec && (g.op === "label" || g.op === "lithophane" || (g.op === "gridfinity" && !g.baseplate)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         break;
       }
       case "points": {
@@ -1515,6 +1518,8 @@ function Body({ d }: { d: DialogState }) {
       return <BoxFields f={f} set={set} />;
     case "snap_hook":
       return <SnapHookFields f={f} set={set} />;
+    case "lithophane":
+      return <LithophaneFields f={f} set={set} />;
     case "hole":
       return <HoleFields f={f} set={set} />;
     case "linear_pattern":

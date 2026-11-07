@@ -21,7 +21,7 @@ describe("USDZ of a built part", () => {
     const nums = [...usda.matchAll(/float3\[\] extent = \[\(([^)]*)\), \(([^)]*)\)\]/g)].map((m) => [m[1]!.split(", ").map(Number), m[2]!.split(", ").map(Number)] as const);
     const lo = [0, 1, 2].map((k) => Math.min(...nums.map(([a]) => a[k]!)));
     const hi = [0, 1, 2].map((k) => Math.max(...nums.map(([, b]) => b[k]!)));
-    const box = report.bodies.map((b) => b.bbox).reduce((a, b) => ({ min: a.min.map((v, k) => Math.min(v, b.min[k]!)), max: a.max.map((v, k) => Math.max(v, b.max[k]!)) }));
+    const box = report.bodies.map((b) => b.bbox).reduce((a, b) => ({ min: a.min.map((v, k) => Math.min(v, b.min[k]!)) as typeof a.min, max: a.max.map((v, k) => Math.max(v, b.max[k]!)) as typeof a.max }));
     const size = [0, 1, 2].map((k) => box.max[k]! - box.min[k]!);
     expect((hi[0]! - lo[0]!) * 1000).toBeCloseTo(size[0]!, 1);
     expect((hi[1]! - lo[1]!) * 1000).toBeCloseTo(size[2]!, 1);
