@@ -357,7 +357,7 @@ export function Home() {
 
 /** A new project from an example; a large one is fetched first. */
 async function openExample(ex: Example): Promise<void> {
-  if (!ex.url) return void newProject(structuredClone(ex.doc), t(ex.name));
+  if (!ex.url) return void newProject(structuredClone(ex.doc), t(ex.name), true);
   const task = startTask(t("Opening {name}", { name: t(ex.name) }));
   try {
     const doc = (await (await fetch(ex.url)).json()) as MeercadDocument;

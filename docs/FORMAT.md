@@ -50,6 +50,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   materials), else an automatic one. All three are optional; files without them open as before.
 - **seeThrough** (optional) — body ids of parts drawn see-through as a reference to model against (scans come in that way; op `set_see_through {parts, on}`).
 - **units** (optional) — `"in"` for an inch design (op `set_units {units}`); stored values keep their units.
+- **fit** (optional) — the design's fit (Spiel): the gap per side the printer needs between parts that fit into each other, measured with the fit test part (op `set_fit {fit}`, default 0.2 mm). Every expression can use it as `fit`; an own parameter called `fit` from older files takes its place. Bores for shafts use `2 * fit` on the diameter, lids `fit` per side, threads `fit / 2`; print-in-place checks use at least `max(fit, 0.3 mm)`.
 - **Ops for what the parts list shows**: `set_part_color {part, color|null}`, `set_see_through {parts, on}`,
   `set_part_list {groups?, order?}` (null clears). `replace` sends the whole document; one without
   `versions` keeps the saved versions and their blobs.

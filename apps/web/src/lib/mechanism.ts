@@ -3,7 +3,7 @@
  * the last rebuild), the joint values being shown (view state, not saved, no undo), dragging parts,
  * and the joint being drawn up in the joints panel.
  */
-import { evaluate, linkage, MeshCollider, meshesCollide, motion } from "@meercad/model";
+import { evaluate, fitExpr, linkage, MeshCollider, meshesCollide, motion } from "@meercad/model";
 import type { Coupling, Joint, JointAnchor } from "@meercad/schema";
 import type { Pick, Ray } from "@meercad/viewport";
 import { create } from "zustand";
@@ -557,13 +557,25 @@ export function stopPlaying(): void {
 
 // ---------------------------------------------------------------- clearance
 
+const PRINT_IN_PLACE_MIN = 0.3;
+
 /** Smallest wanted gap between moving parts (print-in-place), mm. */
 export function wantedClearance(): number {
-  const c = currentDoc().mechanism?.clearance;
+  const doc = currentDoc();
+  const scope = new Map(Object.entries(useApp.getState().output?.report.params ?? {}));
+  // Without an own value: the design's fit, but at least 0.3 mm (parts printed in place fuse more easily).
+  const fallback = () => {
+    try {
+      return Math.max(PRINT_IN_PLACE_MIN, evaluate(fitExpr(doc), scope));
+    } catch {
+      return PRINT_IN_PLACE_MIN;
+    }
+  };
+  const c = doc.mechanism?.clearance;
   try {
-    return c === undefined ? 0.3 : evaluate(c, new Map(Object.entries(useApp.getState().output?.report.params ?? {})));
+    return c === undefined ? fallback() : evaluate(c, scope);
   } catch {
-    return 0.3;
+    return fallback();
   }
 }
 

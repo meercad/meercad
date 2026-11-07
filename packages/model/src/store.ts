@@ -1,6 +1,7 @@
 import { MATERIALS, materialById } from "./materials.js";
 import { emptyDocument, validateDocument, validateOp, type DocOp, type Expr, type Feature, type MeercadDocument } from "@meercad/schema";
 import { renameInExpr } from "./expr.js";
+import { FIT_VAR } from "./fit.js";
 import { mapFeatureExprs } from "./resolve.js";
 import { pruneBlobs, restored, snapshot } from "./versions.js";
 
@@ -48,6 +49,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     case "rename_param": {
       if (!(op.name in next.params)) throw new OpError(`unknown parameter "${op.name}"`);
       if (op.to in next.params) throw new OpError(`parameter "${op.to}" already exists`);
+      if (op.to === FIT_VAR) throw new OpError(`"${FIT_VAR}" is the design's fit (set_fit); choose another name`);
       next.params = Object.fromEntries(Object.entries(next.params).map(([k, v]) => [k === op.name ? op.to : k, renameInExpr(v, op.name, op.to)]));
       if (next.autoParams) next.autoParams = next.autoParams.map((n) => (n === op.name ? op.to : n));
       next.features = next.features.map((f) => mapFeatureExprs(f, (e) => renameInExpr(e, op.name, op.to)));
@@ -58,9 +60,12 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
         for (const c of next.mechanism.couplings ?? []) c.ratio = ren(c.ratio);
         if (next.mechanism.clearance !== undefined) next.mechanism.clearance = ren(next.mechanism.clearance);
       }
+      if (next.fit !== undefined) next.fit = renameInExpr(next.fit, op.name, op.to);
       break;
     }
     case "set_param": {
+      // `fit` is the design's fit; only a variable of that name from before it existed stays editable.
+      if (op.name === FIT_VAR && op.expr !== null && !(op.name in next.params)) throw new OpError(`"${FIT_VAR}" is the design's fit: set it with set_fit`);
       if (op.expr === null) {
         delete next.params[op.name];
         for (const v of next.variants ?? []) delete v.params[op.name];
@@ -105,6 +110,10 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
         if (op.order?.length) next.partOrder = [...op.order];
         else delete next.partOrder;
       }
+      break;
+    case "set_fit":
+      if (op.fit === null) delete next.fit;
+      else next.fit = op.fit;
       break;
     case "set_units":
       if (op.units === "in") next.units = "in";

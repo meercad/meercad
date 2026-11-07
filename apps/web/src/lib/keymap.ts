@@ -270,13 +270,15 @@ interface Prefs {
   showTextures: boolean;
   /** The printer's build volume (mm); null turns the "too big for the bed" warning off. */
   printBed: Bed | null;
+  /** The fit measured on this device's printer (mm per side), given to new designs; null: not measured. */
+  printerFit: number | null;
 }
 
 
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED, printerFit: null };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -293,6 +295,7 @@ function load(): Prefs {
       examplesOpen: raw.examplesOpen !== false,
       showTextures: raw.showTextures !== false,
       printBed: validBed(raw.printBed) === undefined ? fallback.printBed : validBed(raw.printBed)!,
+      printerFit: typeof raw.printerFit === "number" && raw.printerFit >= 0 && raw.printerFit <= 1 ? raw.printerFit : null,
     };
   } catch {
     return fallback;

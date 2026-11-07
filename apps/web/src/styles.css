@@ -769,6 +769,8 @@ html.no-keyboard .kbd, html.no-keyboard .hide-kbd .modal .kbd, html.no-keyboard 
 .settings .bed-size input { width: 72px; height: 28px; }
 .tree-item .too-big { color: var(--warn); background: none; border: 0; padding: 0 2px; cursor: pointer; display: inline-flex; vertical-align: middle; }
 .tree-item .too-big svg { width: 14px; height: 14px; }
+.settings .check .fit-input { width: 72px; flex: none; margin-left: 8px; height: 28px; }
+.fit-row .fit-name { display: flex; align-items: center; color: var(--muted); cursor: default; }
 
 /* exact values typed while drawing */
 .draw-entry { position: absolute; transform: translate(16px, 16px); z-index: 6; display: flex; flex-direction: column; gap: 4px; padding: 7px 8px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12px; }

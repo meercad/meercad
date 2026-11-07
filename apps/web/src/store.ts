@@ -780,10 +780,20 @@ export function setDesignUnits(units: "mm" | "in"): void {
   toast(units === "in" ? t("This design now uses inches") : t("This design now uses millimetres"));
 }
 
-export async function newProject(doc: MeercadDocument = emptyDocument(), name = t("Untitled part")): Promise<void> {
+/** `doc` with the fit measured on this device's printer, unless it has its own. */
+export function withPrinterFit(doc: MeercadDocument): MeercadDocument {
+  const fit = usePrefs.getState().printerFit;
+  return fit === null || doc.fit !== undefined ? doc : { ...doc, fit: `${fit} mm` };
+}
+
+/** `fresh`: a starter model rather than a file, which takes this device's settings like a blank design. */
+export async function newProject(doc: MeercadDocument = emptyDocument(), name = t("Untitled part"), fresh = false): Promise<void> {
   await flushSave();
   // A blank design starts in the measuring system chosen in Settings.
   if (!doc.features.length && !Object.keys(doc.params).length && !doc.units && usePrefs.getState().units === "imperial") doc = { ...doc, units: "in" };
+  // A blank design (or a starter model) gets the fit measured on this device's printer; a file
+  // opened keeps what it has, so its sizes stay as they were.
+  if (!doc.features.length || fresh) doc = withPrinterFit(doc);
   // New parts land next to the open project, or in the folder the overview shows.
   const meta = await createProject(name, doc, get().project?.folder ?? get().folder);
   loadDoc(doc, meta);

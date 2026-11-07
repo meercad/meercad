@@ -222,7 +222,7 @@ server.registerTool(
   {
     title: "Change the model",
     description:
-      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units; joints: set_joint, delete_joint, set_coupling, delete_coupling; reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`.",
+      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling; reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`.",
     inputSchema: { ops: z.array(op).min(1) },
   },
   guard(async ({ ops }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops) }))),
@@ -448,7 +448,7 @@ server.registerTool(
   "check_clearance",
   {
     title: "Check clearance",
-    description: "In the pose shown now: the gap between every moving part and the parts near it (mm), and the overlapping volume where they collide (mm³), with the wanted print-in-place gap (mechanism.clearance, default 0.3 mm).",
+    description: "In the pose shown now: the gap between every moving part and the parts near it (mm), and the overlapping volume where they collide (mm³), with the wanted print-in-place gap (mechanism.clearance; default the design's fit, at least 0.3 mm).",
     annotations: { readOnlyHint: true },
   },
   guard(async () => text(await call("check_clearance"))),

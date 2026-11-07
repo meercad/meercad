@@ -1,6 +1,6 @@
 /** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
 import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { iCloudFolder, nativeApp, storageKind } from "../lib/native";
@@ -9,6 +9,8 @@ import { PACKS, setPack, usePremium } from "../lib/premium";
 import { changeProjectsFolder, folderLabel, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
 import { BED_PRESETS, DEFAULT_BED, type Bed } from "../lib/printBed";
+import { DEFAULT_FIT } from "@meercad/model";
+import { openFitTest } from "../lib/fit";
 
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
@@ -162,7 +164,6 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           </label>
         </section>
 
-        <PrintBedSection />
 
         <section>
           <h3>
@@ -205,6 +206,38 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           </label>
           <p className="muted">{t("An open design switches in File → Millimetres / Inches. Switching never changes sizes, only how lengths are shown and typed.")}</p>
         </section>
+
+        <PrintBedSection>
+          <label className="check">
+            {t("Fit of my printer")}
+            <input
+              className="field fit-input"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={1}
+              step={0.05}
+              key={prefs.printerFit ?? "none"}
+              defaultValue={prefs.printerFit ?? ""}
+              placeholder={String(DEFAULT_FIT)}
+              onBlur={(e) => {
+                const v = e.target.value.trim().replace(",", ".");
+                const n = Number(v);
+                if (!v) setPrefs({ printerFit: null });
+                else if (n >= 0 && n <= 1) setPrefs({ printerFit: n });
+                else e.target.value = prefs.printerFit === null ? "" : String(prefs.printerFit);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            />
+            mm
+          </label>
+          <p className="muted">
+            {t("The gap per side your printer needs between parts that fit into each other. Print the test part, push the pin into its holes and enter the smallest number where it slides in without wobbling. New designs start with it; holes, bores, threads and moving parts use it as “fit”.")}{" "}
+            <button className="link" onClick={() => (setOpen(false), void openFitTest())}>
+              {t("Print the fit test part…")}
+            </button>
+          </p>
+        </PrintBedSection>
 
         <section>
           <h3>
@@ -302,7 +335,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
 const pct = (f: number) => `${Math.round(f * 100)} %`;
 
 /** The printer's build volume, for the warning on parts that do not fit (parts list, Split). */
-function PrintBedSection() {
+function PrintBedSection({ children }: { children?: ReactNode }) {
   const bed = usePrefs((p) => p.printBed);
   const [custom, setCustom] = useState(false);
   const preset = bed && !custom ? BED_PRESETS.find((p) => p.size.every((v, i) => v === bed[i])) : undefined;
@@ -354,6 +387,7 @@ function PrintBedSection() {
           <p className="muted">{t("A part that is larger in any direction gets a warning sign in the parts list. Split it into pieces that fit (Split, with pins or a dovetail so they go back together).")}</p>
         </>
       ) : null}
+      {children}
     </section>
   );
 }

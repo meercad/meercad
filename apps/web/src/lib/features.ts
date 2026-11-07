@@ -110,7 +110,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
     case "shell":
       return { id, op, faces: [], thickness: 2 };
     case "thread":
-      return { id, op, face: { face: "" } };
+      // Printed threads fit with half the design's fit on their flanks (it can be set to 0 for cut threads).
+      return { id, op, face: { face: "" }, clearance: "fit / 2" };
     case "gear":
       return { id, op, kind: "spur", module: 1.5, teeth: 20, width: 8, plane: { ref: "origin.XY" }, mode: "new_body" };
     case "linear_pattern":
