@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Download, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Download, Share, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -9,6 +9,7 @@ import type { MenuEntry } from "./Menu";
 import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile, viewInAr } from "./io";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
+import { openShare } from "./ShareDialog";
 import { hasPack } from "../lib/premium";
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
@@ -103,6 +104,7 @@ export function TopBar() {
     },
     "sep",
     ...(hasPack("versions") ? [{ label: t("Versions…"), icon: <History />, onClick: openVersions }] : []),
+    { label: t("Share…"), icon: <Share />, onClick: openShare },
     { label: t("Save copy as .meercad…"), icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
   ];
   const viewItems = (): MenuEntry[] => {

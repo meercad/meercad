@@ -105,6 +105,8 @@ function useEntries(): RailEntry[] {
   const ui = useSketchUi();
   usePrefs((s) => s.keys); // badges follow the shortcut preset
   const mechanics = usePack("mechanics");
+  // A design with joints shows them without the pack too (to look at and move, not to change).
+  const hasJoints = useApp((s) => !!s.doc.mechanism?.joints.length);
   const scanPack = usePack("scan");
   const canScanHere = useCanScan();
   const scan = (canScanHere || canBuildTerrain) && scanPack;
@@ -159,7 +161,7 @@ function useEntries(): RailEntry[] {
       tools: [feature("transform", activeOp), feature("align", activeOp), feature("scale", activeOp), feature("bend", activeOp), feature("linear_pattern", activeOp), feature("circular_pattern", activeOp), feature("mirror", activeOp)],
     },
     "sep",
-    ...(mechanics
+    ...(mechanics || hasJoints
       ? [
           {
             id: "joints",

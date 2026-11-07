@@ -37,6 +37,7 @@ import { deleteModelSelection } from "./lib/deletion";
 import { AboutDialog } from "./components/AboutDialog";
 import { DrawingDialog } from "./components/DrawingDialog";
 import { VersionsDialog } from "./components/VersionsDialog";
+import { openShare, ShareDialog } from "./components/ShareDialog";
 import { MaterialPicker } from "./components/MaterialPicker";
 import { AiLock } from "./components/AiLock";
 import { isCompact } from "./lib/layout";
@@ -66,7 +67,7 @@ function runModelAction(action: ModelAction): void {
     case "measure":
       return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
     case "joints":
-      return hasPack("mechanics") ? toggleJoints() : undefined;
+      return hasPack("mechanics") || s.doc.mechanism?.joints.length ? toggleJoints() : undefined;
     case "sketch":
       if (hovered && (hovered.kind === "plane" || (hovered.kind === "face" && hovered.normal))) {
         const spec = planeSpecForPick(hovered, s.output?.meshes ?? []);
@@ -124,6 +125,7 @@ export function App() {
       else if (cmd === "import") void importFile();
       else if (cmd === "home") goHome();
       else if (cmd === "save-as" && useApp.getState().project) saveFile();
+      else if (cmd === "share" && useApp.getState().project) openShare();
       else if (cmd === "shortcuts") setHelp((h) => !h);
       else if (cmd === "settings") window.dispatchEvent(new Event("meercad:settings"));
       else if (cmd === "close-tab" && useApp.getState().project) closeTab(useApp.getState().project!.id);
@@ -319,6 +321,7 @@ export function App() {
       <AboutDialog />
       <DrawingDialog />
       <VersionsDialog />
+      <ShareDialog />
       <MaterialPicker />
       {desktop ? <FirstRun /> : null}
       <MenuHost />

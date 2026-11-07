@@ -43,6 +43,8 @@ const api = {
   /** The system's text editing in the focused field: cut, copy, paste, selectAll. */
   editNative: (cmd: string) => ipcRenderer.invoke("edit:native", cmd),
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
+  /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
+  shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
   on: (channel: "menu" | "open-project" | "projects-changed" | "error" | "photos-progress" | "ui-scale", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);

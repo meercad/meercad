@@ -488,4 +488,36 @@ export default {
   "({n} already existed there and were left in place)": "({n} gab es dort schon, sie blieben an ihrem Platz)",
   "Projects are now saved in {dir}": "Projekte werden jetzt in {dir} gespeichert",
   "Could not use that folder: {msg}": "Dieser Ordner kann nicht verwendet werden: {msg}",
+  // Sharing a design, and designs that use packs not on here
+  "Share…": "Teilen …",
+  "Share design": "Modell teilen",
+  "Share the design (with its history, editable)": "Modell teilen (mit Verlauf, bearbeitbar)",
+  "The design goes along with every step of its history: whoever opens it in meerCAD can change all of it, just like you. It does not change your own copy.":
+    "Das Modell geht mit jedem Schritt seines Verlaufs raus: Wer es in meerCAD öffnet, kann alles ändern, genau wie du. Deine eigene Kopie bleibt, wie sie ist.",
+  "Include the saved version": "Die gespeicherte Version mitgeben",
+  "Include the {n} saved versions": "Die {n} gespeicherten Versionen mitgeben",
+  "{n} kB": "{n} kB",
+  "{n} MB": "{n} MB",
+  "Uses {pack}: {what}.": "Nutzt {pack}: {what}.",
+  gears: "Zahnräder",
+  springs: "Federn",
+  joints: "Gelenke",
+  "saved versions": "gespeicherte Versionen",
+  "terrain models": "Geländemodelle",
+  "Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.":
+    "Ohne diese Pakete lässt sich das Modell trotzdem öffnen, berechnen und exportieren, und alles andere bleibt änderbar; nur diese Teile bleiben, wie sie sind.",
+  "Changing joints needs the Mechanics pack.": "Gelenke ändern geht mit dem Paket Mechanik.",
+  "This design uses the {pack} pack": "Dieses Modell nutzt das Paket {pack}",
+  "This design uses the packs {packs}": "Dieses Modell nutzt die Pakete {packs}",
+  "You can look at it, print it and export it, and change everything else as usual. Saving keeps all of it.":
+    "Du kannst es ansehen, drucken und exportieren und alles andere wie gewohnt ändern. Beim Speichern bleibt alles erhalten.",
+  "Gears, springs and joints are shown and can be moved; changing them needs the Mechanics pack.":
+    "Zahnräder, Federn und Gelenke werden angezeigt und lassen sich bewegen; ändern geht mit dem Paket Mechanik.",
+  "Terrain models are shown; the scan and mesh tools need the Scan and mesh pack.": "Geländemodelle werden angezeigt; die Scan- und Netzwerkzeuge gibt es mit dem Paket Scan und Netze.",
+  "Technical drawings need the Technical drawings pack.": "Technische Zeichnungen gibt es mit dem Paket Technische Zeichnungen.",
+  "Variants can be switched; the saved versions stay in the file and are shown with the Versions and variants pack.":
+    "Varianten lassen sich umschalten; die gespeicherten Versionen bleiben in der Datei und werden mit dem Paket Versionen und Varianten angezeigt.",
+  "{name} needs the {pack} pack": "{name} braucht das Paket {pack}",
+  "This design came with it, so it stays, builds and exports as it is. Changing it needs the {pack} pack; you can still delete it or change the rest of the design.":
+    "Es kam mit dem Modell und bleibt, wird berechnet und exportiert wie es ist. Ändern geht mit dem Paket {pack}; löschen kannst du es trotzdem, und der Rest des Modells bleibt änderbar.",
 } as Record<string, string>;

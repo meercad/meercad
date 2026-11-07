@@ -10,8 +10,10 @@ import { create } from "zustand";
 import { registerPlugin } from "@capacitor/core";
 import { desktop } from "./persistence";
 import { nativeApp } from "./native";
+import type { MeercadDocument } from "@meercad/schema";
+import { featurePack, packsUsed, type PackId, type PackUse } from "./packUse";
 
-export type PackId = "mechanics" | "scan" | "drawings" | "versions";
+export type { PackId };
 
 export interface Pack {
   id: PackId;
@@ -61,6 +63,17 @@ export function usePack(id: PackId): boolean {
   return usePremium((s) => s.tester && !s.off[id]);
 }
 
+/** The packs a design uses that are not on here (for a design someone shared). */
+export function missingPacks(doc: MeercadDocument): PackUse[] {
+  return packsUsed(doc).filter((u) => !hasPack(u.pack));
+}
+
+/** The pack needed to change this feature, when it is not on here; null when it can be changed. */
+export function lockedBy(f: Parameters<typeof featurePack>[0]): Pack | null {
+  const id = featurePack(f);
+  return id && !hasPack(id) ? PACKS.find((p) => p.id === id)! : null;
+}
+
 export function setPack(id: PackId, on: boolean): void {
   const off = { ...usePremium.getState().off };
   if (on) delete off[id];
@@ -86,4 +99,5 @@ async function checkTester(): Promise<boolean> {
   return true;
 }
 
-void checkTester().then((tester) => usePremium.setState({ tester }));
+/** Settles once the shell has said whether this is a test build. */
+export const premiumReady: Promise<void> = checkTester().then((tester) => usePremium.setState({ tester }));

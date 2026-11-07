@@ -7,12 +7,12 @@
  * security-scoped bookmark, iCloud Drive is found through the system, and Claude gets meerCAD as an
  * extension instead of an entry written into its config.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, screen, shell, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, screen, ShareMenu, shell, type MenuItemConstructorOptions } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
-import { copyFile, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
@@ -248,6 +248,28 @@ ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | str
   if (r.canceled || !r.filePath) return null;
   await writeFile(r.filePath, typeof p.data === "string" ? p.data : Buffer.from(p.data));
   return r.filePath;
+});
+/**
+ * Shares a file through the system's share menu (AirDrop, Messages, Mail …) at the pointer, or at
+ * x/y in the window. The file is written to a fresh temporary folder under the given name. Where
+ * there is no share menu (not macOS) the file is shown in the file manager instead.
+ */
+ipcMain.handle("files:share", async (e, p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const dir = await mkdtemp(join(app.getPath("temp"), "meercad-share-"));
+  const file = join(dir, safeName(p.name, "design.meercad"));
+  await writeFile(file, typeof p.data === "string" ? p.data : Buffer.from(p.data));
+  if (process.platform !== "darwin") {
+    shell.showItemInFolder(file);
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    new ShareMenu({ filePaths: [file] }).popup({
+      ...(win ? { window: win } : {}),
+      ...(p.x !== undefined && p.y !== undefined ? { x: Math.round(p.x), y: Math.round(p.y) } : {}),
+      callback: () => resolve(),
+    });
+  });
 });
 /**
  * A textured model of an area from a folder of photos (a drone flight), built by the native helper
@@ -576,6 +598,7 @@ const MENU_DE: Record<string, string> = {
   "Open…": "Öffnen …",
   "All Projects": "Alle Projekte",
   "Save Copy As .meercad…": "Kopie als .meercad sichern …",
+  "Share…": "Teilen …",
   "Show Projects Folder": "Projektordner zeigen",
   "New Tab": "Neuer Tab",
   "Close Tab": "Tab schließen",
@@ -647,6 +670,7 @@ function buildMenu(): void {
         { label: tr("Open…"), accelerator: "CmdOrCtrl+O", click: send("menu", "import") },
         { label: tr("All Projects"), accelerator: "CmdOrCtrl+Shift+H", click: send("menu", "home") },
         { type: "separator" },
+        { label: tr("Share…"), click: send("menu", "share") },
         { label: tr("Save Copy As .meercad…"), accelerator: "CmdOrCtrl+Shift+S", click: send("menu", "save-as") },
         { label: tr("Show Projects Folder"), click: () => void shell.openPath(projectsDir()) },
         { type: "separator" },

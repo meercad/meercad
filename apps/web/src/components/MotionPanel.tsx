@@ -10,6 +10,7 @@ import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
 import { t, tn } from "../lib/i18n";
+import { usePack } from "../lib/premium";
 
 const TYPES: [Joint["type"], string, string?][] = [
   ["revolute", t("joint::Turn")],
@@ -43,6 +44,8 @@ export function MotionPanel() {
   const draft = useMotion((s) => s.draft);
   const free = useMotion((s) => s.free);
   const playing = useMotion((s) => s.playing);
+  // Without the pack the joints of a design someone shared are there to look at and move, not to change.
+  const canEdit = usePack("mechanics");
   const [filming, setFilming] = useState<string | null>(null);
   const film = async (id: string) => {
     setFilming(id);
@@ -77,13 +80,13 @@ export function MotionPanel() {
     <div className="dialog motion-panel">
       <div className="dialog-head">
         <Link2 className="ficon" />
-        <h3>{draft ? (draft.isNew ? t("New joint") : t("Edit joint")) : t("Joints")}</h3>
+        <h3>{draft && canEdit ? (draft.isNew ? t("New joint") : t("Edit joint")) : t("Joints")}</h3>
         <button className="icon-btn sm" title={t("Close")} onClick={close}>
           <X />
         </button>
       </div>
       <div className="dialog-body">
-        {draft ? (
+        {draft && canEdit ? (
           <JointForm />
         ) : (
           <>
@@ -105,12 +108,16 @@ export function MotionPanel() {
                         <Film />
                       </button>
                     ) : null}
-                    <button className="icon-btn sm" title={t("Edit")} onClick={() => editJoint(j.id)}>
-                      <Pencil />
-                    </button>
-                    <button className="icon-btn sm" title={t("Delete")} onClick={() => deleteJoint(j.id)}>
-                      <Trash2 />
-                    </button>
+                    {canEdit ? (
+                      <>
+                        <button className="icon-btn sm" title={t("Edit")} onClick={() => editJoint(j.id)}>
+                          <Pencil />
+                        </button>
+                        <button className="icon-btn sm" title={t("Delete")} onClick={() => deleteJoint(j.id)}>
+                          <Trash2 />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                   {problems[j.id] ? (
                     <div className="callout warn">{problems[j.id]}</div>
@@ -164,10 +171,13 @@ export function MotionPanel() {
                 {e}
               </div>
             ))}
+            {canEdit ? null : <p className="muted small">{t("Changing joints needs the Mechanics pack.")}</p>}
             <div className="row">
-              <button className="btn" onClick={startJoint}>
-                <Plus /> {t("Add joint")}
-              </button>
+              {canEdit ? (
+                <button className="btn" onClick={startJoint}>
+                  <Plus /> {t("Add joint")}
+                </button>
+              ) : null}
               {joints.length ? (
                 <button className="btn" onClick={restPose} title={t("Back to where the parts were drawn")}>
                   <RotateCcw /> {t("Rest position")}
@@ -175,7 +185,7 @@ export function MotionPanel() {
               ) : null}
             </div>
             {joints.length ? <ClearanceResults /> : null}
-            {gearsWithout ? (
+            {gearsWithout && canEdit ? (
               <button
                 className="btn"
                 onClick={() => {

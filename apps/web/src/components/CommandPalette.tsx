@@ -11,6 +11,7 @@ import { nativeApp } from "../lib/native";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
 import { hasPack, usePremium } from "../lib/premium";
+import { openShare } from "./ShareDialog";
 import { checkInterference } from "../lib/interference";
 import { Kbd } from "./Kbd";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
@@ -123,6 +124,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         ...(hasPack("drawings") ? [{ group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing }] : []),
         ...(hasPack("versions") ? [{ group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions }] : []),
         ...(hasPack("mechanics") ? [{ group: G.modeling, label: t("Check whether parts overlap (interference)"), run: () => void checkInterference() }] : []),
+        { group: G.file, label: t("Share the design (with its history, editable)"), run: openShare },
         { group: G.file, label: t("Save copy as .meercad"), kbd: "Shift+Mod+S", run: saveFile },
         { group: G.file, label: t("All projects"), run: goHome },
       );

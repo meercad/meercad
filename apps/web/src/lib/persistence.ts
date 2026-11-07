@@ -74,6 +74,8 @@ interface DesktopApi {
   };
   editNative(cmd: "cut" | "copy" | "paste" | "selectAll"): Promise<void>;
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
+  /** Missing in desktop apps from before sharing. */
+  shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
   on(channel: "menu" | "open-project" | "projects-changed" | "error", fn: (arg: string) => void): () => void;
   on(channel: "photos-progress", fn: (arg: { progress: number; step: string }) => void): () => void;
   on(channel: "ui-scale", fn: (arg: UiScale) => void): () => void;

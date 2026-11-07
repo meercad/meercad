@@ -1141,3 +1141,10 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .link-btn:hover { text-decoration: underline dotted; text-underline-offset: 2px; color: var(--text); }
 .bed-warn { color: var(--warn); display: flex; gap: 6px; align-items: flex-start; }
 .bed-warn svg { width: 14px; height: 14px; flex: none; margin-top: 2px; }
+
+/* Share dialog */
+.modal.settings.share-dialog { width: min(480px, calc(100vw - 32px)); }
+.share-dialog .callout { margin: 12px 0 0; font-size: 13px; }
+.share-dialog .callout p { margin: 0 0 6px; }
+.share-dialog .callout p:last-child { margin: 0; }
+.share-dialog .share-actions { justify-content: flex-end; gap: 8px; margin-top: 18px; }

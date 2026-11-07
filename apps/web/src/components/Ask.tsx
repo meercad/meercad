@@ -78,7 +78,7 @@ export function AskHost() {
         }}
       >
         <h3>{req.title}</h3>
-        {req.message ? <p>{req.message}</p> : null}
+        {req.message ? req.message.split("\n\n").map((para, i) => <p key={i}>{para}</p>) : null}
         {req.value !== undefined ? (
           <label className="ask-field">
             {req.label ? <span>{req.label}</span> : null}

@@ -7,6 +7,7 @@ import { planeSpecForPick, setFeatureLabels } from "./lib/topology";
 import { usePrefs } from "./lib/keymap";
 import { FACE_TOOLS, meshBodyIds, meshHint } from "./lib/meshParts";
 import { hasPack } from "./lib/premium";
+import { notePacks, refuseLocked } from "./lib/packNotice";
 import { setUnitSource } from "./lib/units";
 import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
@@ -579,6 +580,8 @@ export function editFeature(id: string): void {
   if (!f) return;
   if (get().dialog) cancelDialog();
   if (f.op === "sketch") return openSketch(id);
+  // A design shared with someone keeps its gears and springs, but only the pack changes them.
+  if (refuseLocked(f, featureName(f))) return;
   set({ dialog: { feature: structuredClone(f), isNew: false, field: null }, selection: [] });
   scheduleRebuild();
 }
@@ -826,6 +829,7 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   });
   syncDoc();
   set({ saveState: "saved" });
+  void notePacks(meta.id, doc);
 }
 
 export const undoAvailable = () => docStore.canUndo;
