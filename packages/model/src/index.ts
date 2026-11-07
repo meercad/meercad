@@ -16,5 +16,6 @@ export { blobKey, designOf, restored, versionChanges } from "./versions.js";
 export * from "./gridfinity.js";
 export * from "./closures.js";
 export * from "./bend.js";
+export * from "./printability.js";
 export * from "./texture/patterns.js";
 export * from "./texture/displace.js";

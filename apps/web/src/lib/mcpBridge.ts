@@ -430,6 +430,9 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "wall_thickness":
       needProject();
       return tools.wallThickness(String(p["part"]), p["minWall"] === undefined ? 1 : Number(p["minWall"]), p["show"] !== false);
+    case "print_check":
+      needProject();
+      return tools.printCheck(String(p["part"]), { ...(p["limit"] !== undefined ? { limit: Number(p["limit"]) } : {}), show: p["show"] !== false, ...(p["turn"] !== undefined ? { turn: p["turn"] as "best" | [number, number, number] } : {}) });
     case "deviation":
       needProject();
       return tools.deviation(String(p["part"]), String(p["mesh"]), p["show"] !== false);

@@ -20,6 +20,7 @@ import { createFolder, listFolders, moveProject } from "./persistence";
 import { scanOf } from "./scanMeasure";
 import { placeAt, setOnTerrain, useTerrainPlace } from "./terrain";
 import { hideThickness, setMinWall, showThickness, useThickness } from "./thickness";
+import { checkPart, hidePrintCheck, layDown, setOverhangLimit, showPrintCheck } from "./printability";
 
 type Vec3 = [number, number, number];
 const round = (v: number, d = 3) => +v.toFixed(d);
@@ -92,6 +93,45 @@ export async function wallThickness(part: string, minWall = 1, show = true) {
   });
   if (!show) hideThickness();
   return { part, minWall, thinnestMm: Number.isFinite(stats.min) ? round(stats.min) : null, ...(stats.absoluteMin !== undefined && Number.isFinite(stats.absoluteMin) ? { smallestRayMm: round(stats.absoluteMin) } : {}), ...(stats.at ? { thinnestAt: vec(stats.at) } : {}), shareThinnerThanMinWall: round(stats.thin, 4), shown: show };
+}
+
+/**
+ * Printability of a part on an FDM printer as it stands (down = -Z): overhangs steeper than `limit`
+ * degrees from vertical, rough support volume, and the best way up found. `turn` turns it first:
+ * "best", or the direction (in the part's coordinates now) that should go onto the bed.
+ */
+export async function printCheck(part: string, opts: { limit?: number; show?: boolean; turn?: "best" | Vec3 }) {
+  await rebuildNow();
+  needPart(part);
+  const limit = opts.limit ?? 45;
+  let turned: Awaited<ReturnType<typeof said>> | undefined;
+  if (opts.turn) {
+    const down = opts.turn === "best" ? checkPart(part, limit)?.stats.best?.down : opts.turn;
+    turned = await said(() => (down ? layDown(part, down) : undefined));
+    if (!down) turned.messages.push({ text: "already the best way up", error: false });
+    await rebuildNow();
+  }
+  const r = checkPart(part, limit);
+  if (!r) throw new Error(`no part "${part}"`);
+  if (opts.show !== false) {
+    hideThickness();
+    hideDeviation();
+    setOverhangLimit(limit);
+    showPrintCheck(part);
+  } else hidePrintCheck();
+  const s = r.stats;
+  return {
+    part,
+    limitDeg: limit,
+    overhangMm2: round(s.overhangArea, 1),
+    overhangShare: round(s.overhangShare, 4),
+    supportMm3: round(s.supportVolume, 0),
+    onBedMm2: round(s.plateArea, 1),
+    heightMm: round(s.height, 2),
+    best: s.best ? { down: vec(s.best.down), supportMm3: round(s.best.supportVolume, 0), onBedMm2: round(s.best.plateArea, 1), heightMm: round(s.best.height, 2) } : "as it stands",
+    ...(turned ? { turned: turned.messages } : {}),
+    shown: opts.show !== false,
+  };
 }
 
 /** How far a part's surface is from a mesh (a scan it was modelled after). */

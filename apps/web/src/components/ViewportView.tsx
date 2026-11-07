@@ -8,6 +8,7 @@ import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "
 import { hasPack } from "../lib/premium";
 import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair } from "../lib/meshRepair";
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
+import { hidePrintCheck, layOnFace, pickFaceToLay, PRINT_COLORS, printBestWayUp, setOverhangLimit, showPrintCheck, usePrintCheck } from "../lib/printability";
 import { touchOnly } from "../lib/keyboard";
 import { hasTerrain, placeAt, previewPlace, sceneryOf, sketchOnTerrain, terrainItems, useTerrainPlace } from "../lib/terrain";
 import { cleanUpMenu } from "./TerrainTools";
@@ -15,7 +16,7 @@ import { copyParts, hasClip, pasteParts, selectAll, selectedParts, selectParts }
 import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, Waves, Weight, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Printer, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, Waves, Weight, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
@@ -78,12 +79,14 @@ export function ViewportView() {
   const selection = useApp((s) => s.selection);
   const measure = useApp((s) => s.measure);
   const pickingPlane = useApp((s) => s.pickingSketchPlane);
-  const placing = useTerrainPlace((s) => !!s.body);
+  const placing = useTerrainPlace((s) => !!s.body) || usePrintCheck((s) => s.picking);
   const doc = useApp((s) => s.doc);
   // Deviation from a mesh as a colour map on the part.
   const heat = useDeviation((s) => s.maps);
   const wall = useThickness((s) => s.maps);
-  useEffect(() => vp?.setBodyHeat(wall.size ? wall : heat), [vp, heat, wall]);
+  const print = usePrintCheck((s) => s.maps);
+  useEffect(() => vp?.setBodyHeat(print.size ? print : wall.size ? wall : heat), [vp, heat, wall, print]);
+  const layingOnFace = usePrintCheck((s) => s.picking);
   // Reference models (an area from drone photos) around the design.
   const references = doc.references;
   const [sceneryReady, setSceneryReady] = useState(0);
@@ -573,6 +576,12 @@ export function ViewportView() {
       else toast(t("Click on the terrain"), "error");
       return;
     }
+    // Laying a part on the plate: the face clicked goes down.
+    if (usePrintCheck.getState().picking) {
+      if (pick?.kind === "face") layOnFace(pick.bodyId, pick.face, pick.normal ?? pick.surface);
+      else pickFaceToLay(false);
+      return;
+    }
     // Measuring on the terrain, or the two ends of a known distance to scale it by.
     const ms = useTerrainMeasure.getState();
     if (ms.scale || (s.measure.active && !pick)) {
@@ -676,6 +685,9 @@ export function ViewportView() {
         { label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"), icon: <Ghost />, onClick: () => toggleSeeThrough(pick.bodyId) },
         { label: t("Material…"), icon: <Weight />, onClick: () => openMaterialPicker(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]) },
         ...textureItems(pick.bodyId),
+        "sep" as const,
+        printItem(pick.bodyId),
+        { label: t("Lay on this face"), icon: <ArrowDownToLine />, onClick: () => layOnFace(pick.bodyId, pick.face, pick.normal ?? pick.surface) },
         ...(hasPack("scan")
           ? [
               "sep" as const,
@@ -709,6 +721,9 @@ export function ViewportView() {
         { label: t("Material…"), icon: <Weight />, onClick: () => openMaterialPicker(selectedParts().includes(pick.bodyId) ? selectedParts() : [pick.bodyId]) },
         ...textureItems(pick.bodyId),
         { label: t("Mirror part"), icon: <Copy />, onClick: () => (useApp.setState({ selection: [] }), startFeature("mirror")) },
+        "sep",
+        printItem(pick.bodyId),
+        ...(pick.normal ? [{ label: t("Lay on this face"), icon: <ArrowDownToLine />, onClick: () => layOnFace(pick.bodyId, pick.face) }] : []),
         ...(hasPack("scan") ? [...deviationItems(pick.bodyId), thicknessItem(pick.bodyId)] : []),
         ...common,
         "sep",
@@ -771,6 +786,16 @@ export function ViewportView() {
       <LoadingOverlay />
       <DeviationLegend />
       <ThicknessLegend />
+      <PrintCheckCard />
+      {layingOnFace ? (
+        <div className="terrain-hud" role="status">
+          <strong>{t("Lay on a face")}</strong>
+          <span className="muted">{touchOnly() ? t("Tap the face that should lie on the plate") : t("Click the face that should lie on the plate")}</span>
+          <button className="btn" onClick={() => pickFaceToLay(false)}>
+            {t("Cancel")}
+          </button>
+        </div>
+      ) : null}
       <MeshRepairCard />
       <div className="status-pill" title={kernelState.error ?? ""}>
         {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
@@ -1011,12 +1036,17 @@ function deviationItems(body: string): { label: string; icon: React.ReactNode; o
   const s = useApp.getState();
   if (useDeviation.getState().body === body) return [{ label: t("Hide deviation"), icon: <ScanSearch />, onClick: hideDeviation }];
   const meshes = [...meshBodyIds(s.doc.features, s.output?.meshes ?? [])].filter((id) => id !== body);
-  return meshes.map((mesh) => ({ label: t("Deviation from {mesh}", { mesh: partName(mesh, s.doc.features) }), icon: <ScanSearch />, onClick: () => (hideThickness(), showDeviation(body, mesh)) }));
+  return meshes.map((mesh) => ({ label: t("Deviation from {mesh}", { mesh: partName(mesh, s.doc.features) }), icon: <ScanSearch />, onClick: () => (hideThickness(), hidePrintCheck(), showDeviation(body, mesh)) }));
 }
 
 function thicknessItem(body: string): { label: string; icon: React.ReactNode; onClick: () => void } {
   if (useThickness.getState().body === body) return { label: t("Hide wall thickness"), icon: <Layers />, onClick: hideThickness };
-  return { label: t("Wall thickness"), icon: <Layers />, onClick: () => (hideDeviation(), showThickness(body)) };
+  return { label: t("Wall thickness"), icon: <Layers />, onClick: () => (hideDeviation(), hidePrintCheck(), showThickness(body)) };
+}
+
+function printItem(body: string): { label: string; icon: React.ReactNode; onClick: () => void } {
+  if (usePrintCheck.getState().body === body) return { label: t("Hide printability"), icon: <Printer />, onClick: hidePrintCheck };
+  return { label: t("Check printability"), icon: <Printer />, onClick: () => (hideDeviation(), hideThickness(), showPrintCheck(body)) };
 }
 
 /** Triangles in a binary STL import's file (from its header), 0 when unknown. */
@@ -1136,6 +1166,89 @@ function ThicknessLegend() {
             <p className="muted small">{t("Measuring the wall thickness")}</p>
           )}
           <p className="muted small">{t("Red: thinner than allowed · green: three times as thick or more · grey: not measured (open mesh).")}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Colours, overhang limit, support estimate and the best way up of the printability map. */
+function PrintCheckCard() {
+  const { body, stats, error, limit, picking } = usePrintCheck();
+  const features = useApp((s) => s.doc.features);
+  if (!body) return null;
+  const cm2 = (mm2: number) => `${(mm2 / 100).toFixed(mm2 < 1000 ? 1 : 0)} cm²`;
+  const cm3 = (mm3: number) => `${(mm3 / 1000).toFixed(mm3 < 10_000 ? 1 : 0)} cm³`;
+  const swatch = (color: string, label: string) => (
+    <span className="row small" style={{ gap: 4 }}>
+      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: "inline-block" }} />
+      {label}
+    </span>
+  );
+  return (
+    <div className="deviation-card" role="status">
+      <div className="row">
+        <Printer className="ficon" />
+        <b>{t("Printability of {part}", { part: partName(body, features) })}</b>
+        <span className="spacer" />
+        <button className="icon-btn sm" title={t("Close")} onClick={hidePrintCheck}>
+          <X />
+        </button>
+      </div>
+      {error ? (
+        <p className="muted small">{t("The part is not in the model any more.")}</p>
+      ) : (
+        <>
+          <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+            {swatch(PRINT_COLORS.overhang, t("Needs support"))}
+            {swatch(PRINT_COLORS.ok, t("Prints without"))}
+            {swatch(PRINT_COLORS.plate, t("On the plate"))}
+          </div>
+          <label className="row small" style={{ gap: 6 }}>
+            <span className="muted">{t("Steepest overhang without support")}</span>
+            <input
+              className="field"
+              type="number"
+              step="5"
+              min="0"
+              max="89"
+              style={{ width: 56 }}
+              defaultValue={limit}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v >= 0 && v < 90) setOverhangLimit(v);
+              }}
+            />
+            <span className="muted">°</span>
+          </label>
+          {stats ? (
+            <>
+              <p className="small">
+                {stats.overhangArea > 0.5
+                  ? t("Overhang: {area} ({share} % of the surface) · support about {volume}", { area: convertMmText(cm2(stats.overhangArea)), share: Math.max(1, Math.round(stats.overhangShare * 100)), volume: convertMmText(cm3(stats.supportVolume)) })
+                  : t("No overhangs: prints without support as it stands.")}
+              </p>
+              {stats.best ? (
+                <p className="small">
+                  {stats.best.supportVolume < 1
+                    ? t("Turned another way up it prints without support.")
+                    : t("Turned another way up: support about {volume}.", { volume: convertMmText(cm3(stats.best.supportVolume)) })}
+                </p>
+              ) : null}
+              <div className="row" style={{ gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button className={`btn ${picking ? "primary" : ""}`} onClick={() => pickFaceToLay(!picking)}>
+                  {t("Lay on a face…")}
+                </button>
+                {stats.best ? (
+                  <button className="btn primary" onClick={() => printBestWayUp(body)}>
+                    {t("Turn the best way up")}
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <p className="muted small">{t("Checking printability")}</p>
+          )}
         </>
       )}
     </div>
