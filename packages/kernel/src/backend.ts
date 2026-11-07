@@ -26,6 +26,7 @@ import {
   type ResolvedOffsetFace,
   type ResolvedText,
   type ResolvedStandardPart,
+  type ResolvedSnapHook,
   type ResolvedAlign,
   type ResolvedScale,
   standardShape,
@@ -56,6 +57,7 @@ import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import { gridfinityBody, labelBodies } from "./gridfinity.js";
+import { boxBodies, snapHookTools } from "./closures.js";
 import { convertMesh } from "./meshconvert.js";
 import { holeTools } from "./hole.js";
 import { nest, textLoops } from "./text.js";
@@ -165,6 +167,13 @@ export class OcctBackend implements KernelBackend<ModelState> {
         for (const b of labelBodies(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx), ctx.warnings)) bodies.set(b.bodyId, b);
         return { ...ctx.prev, bodies };
       }
+      case "box": {
+        const bodies = new Map(ctx.prev.bodies);
+        for (const b of boxBodies(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx))) bodies.set(b.bodyId, b);
+        return { ...ctx.prev, bodies };
+      }
+      case "snap_hook":
+        return snapHookFeature(f, ctx);
       case "linear_pattern":
       case "circular_pattern":
       case "mirror":
@@ -756,6 +765,41 @@ function standardPartFeature(f: ResolvedStandardPart, ctx: Ctx): Omit<ModelState
     if (shape.moving) bodies.set(`${id}_${shape.moving.suffix}`, standardPartBody(ctx.oc, ctx.arena, `${id}_${shape.moving.suffix}`, frame, [0, 0], { ...shape.moving.shape, label: shape.moving.label }, !!f.flip));
   });
   return { ...ctx.prev, bodies };
+}
+
+/**
+ * Snap hooks: the windows are cut into the `catchIn` parts first, then the hooks join the part
+ * under the face (or `targets`), never the parts they click into.
+ */
+function snapHookFeature(f: ResolvedSnapHook, ctx: Ctx): Omit<ModelState, "arena"> {
+  const frame = planeFrame(f.plane, ctx);
+  const { hooks, windows } = snapHookTools(ctx.oc, ctx.arena, f, frame, ctx.warnings);
+  const catchIn = f.catchIn ?? [];
+  const bodies = new Map(ctx.prev.bodies);
+  for (const id of catchIn) {
+    const target = bodies.get(id);
+    if (!target) throw new FeatureError(`part "${id}" not found`);
+    if (!boundsOverlap(bounds(ctx.oc, ctx.arena, target.shape), bounds(ctx.oc, ctx.arena, windows.shape))) {
+      ctx.warnings.push(`the hooks' barbs do not reach "${id}": no window cut`);
+      continue;
+    }
+    bodies.set(id, booleanBodies(ctx.oc, ctx.arena, target, windows, "cut"));
+  }
+  const after = { ...ctx, prev: { ...ctx.prev, bodies } };
+  const mode = f.mode ?? "join";
+  let targets = f.targets;
+  if (!targets?.length && mode !== "new_body") {
+    if ("face" in f.plane) targets = [...new Set(resolveFaces(f.plane.face, [...bodies.values()]).map((r) => r.body))].filter((id) => !catchIn.includes(id));
+    else {
+      const tb = bounds(ctx.oc, ctx.arena, hooks.shape);
+      targets = [...bodies.values()].filter((b) => !catchIn.includes(b.bodyId) && boundsOverlap(bounds(ctx.oc, ctx.arena, b.shape), tb)).map((b) => b.bodyId);
+    }
+    if (!targets.length) {
+      if (mode === "join") ctx.warnings.push("nothing to join; created a new body");
+      return applyTool(after, f.id, hooks, "new_body");
+    }
+  }
+  return applyTool(after, f.id, hooks, mode, targets);
 }
 
 /**

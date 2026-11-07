@@ -21,6 +21,7 @@ import { axisForPick, describeAxis, describeEdgeSelector, describeFaceSelector, 
 import { cancelDialog, commitDialog, openDraft, setDialogField, setDialogPick, updateDraft, useApp, type DialogState } from "../store";
 import { ExprInput } from "./ExprInput";
 import { GridfinityFields, LabelFields } from "./GridfinityFields";
+import { BoxFields, SnapHookFields } from "./ClosureFields";
 import { TextureFields } from "./TextureFields";
 import { Kbd } from "./Kbd";
 import { t, tn } from "../lib/i18n";
@@ -57,6 +58,7 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     neutral: ["plane", "face"],
     upTo: ["plane", "face"],
     points: ["face"],
+    catchIn: ["face", "edge"],
   };
   if (op === "linear_pattern" && d.field === "direction") return new Set(map["direction"]);
   return new Set(map[d.field] ?? []);
@@ -198,6 +200,11 @@ function handlePick(p: Pick, d: DialogState): void {
         }
         break;
       }
+      case "catchIn": {
+        const b = bodyOf(p);
+        if (b && g.op === "snap_hook") g.catchIn = toggle(g.catchIn ?? [], b);
+        break;
+      }
       case "body": {
         const b = bodyOf(p);
         if (b) (g as Of<"mesh_convert">).body = b;
@@ -226,16 +233,16 @@ function handlePick(p: Pick, d: DialogState): void {
         const spec = planeSpecForPick(p, meshes);
         if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
         // A hole goes where the face was tapped.
-        if (spec && (g.op === "hole" || g.op === "standard_part") && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
+        if (spec && (g.op === "hole" || g.op === "standard_part" || g.op === "snap_hook") && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
         // Text starts where the face was tapped.
         if (spec && g.op === "text" && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         // Labels and free-standing bins are centred where the face was tapped.
-        if (spec && (g.op === "label" || (g.op === "gridfinity" && !g.baseplate)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
+        if (spec && (g.op === "label" || g.op === "box" || (g.op === "gridfinity" && !g.baseplate)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         break;
       }
       case "points": {
         // Points are the tap projected onto the hole's plane (u, v are the same on parallel faces).
-        if ((g.op !== "hole" && g.op !== "standard_part") || p.kind !== "face" || !p.normal) break;
+        if ((g.op !== "hole" && g.op !== "standard_part" && g.op !== "snap_hook") || p.kind !== "face" || !p.normal) break;
         g.points = [...g.points, holePoint(p.point, p.normal)];
         break;
       }
@@ -244,7 +251,7 @@ function handlePick(p: Pick, d: DialogState): void {
   });
   // Single-valued fields advance to the next field automatically.
   if (["axis", "direction", "plane", "base", "neutral", "upTo", "target", "from", "to"].includes(field)) {
-    const next = f.op === "align" && field === "from" ? "to" : f.op === "boolean" && field === "target" ? "tools" : (f.op === "hole" || f.op === "standard_part") && field === "plane" ? "points" : null;
+    const next = f.op === "align" && field === "from" ? "to" : f.op === "boolean" && field === "target" ? "tools" : (f.op === "hole" || f.op === "standard_part" || f.op === "snap_hook") && field === "plane" ? "points" : null;
     setDialogField(next);
   }
 }
@@ -1118,6 +1125,10 @@ function Body({ d }: { d: DialogState }) {
       return <GridfinityFields f={f} set={set} />;
     case "label":
       return <LabelFields f={f} set={set} />;
+    case "box":
+      return <BoxFields f={f} set={set} />;
+    case "snap_hook":
+      return <SnapHookFields f={f} set={set} />;
     case "hole":
       return <HoleFields f={f} set={set} />;
     case "linear_pattern":

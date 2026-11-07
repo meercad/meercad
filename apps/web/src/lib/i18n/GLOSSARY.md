@@ -76,6 +76,10 @@ DXF, SVG, PDF, MCP.
 | fixed (joint) | Fest |
 | ground | Boden |
 | clearance | Spiel |
+| box with lid / jar | Box mit Deckel / Schraubdose |
+| snap lid / screw lid / lid | Schnappdeckel / Schraubdeckel / Deckel |
+| snap hook / barb / overhang | Schnapphaken / Rastnase / Überstand |
+| snap (grip of a snap fit) | Rastung |
 | interference | Überschneidung |
 | measure | Messen |
 | drawing | Zeichnung |
