@@ -5,7 +5,7 @@
  * at the nominal size, a shaft is trimmed to (or grown to) the major diameter.
  */
 
-import { externalMinor, FeatureError, internalMinor, threadFor, type ResolvedThread } from "@meercad/model";
+import { FeatureError, grooveShape, threadSpec, type ResolvedThread, type ThreadProfile } from "@meercad/model";
 import { resolveFaces } from "@meercad/naming";
 import type { TopoDS_Shape, TopoDS_Wire } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
@@ -14,9 +14,9 @@ import { booleanBodies } from "./boolean.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 
 type V = [number, number, number];
+const FUZZY = 1e-5;
 const add = (p: V, q: V, s = 1): V => [p[0] + q[0] * s, p[1] + q[1] * s, p[2] + q[2] * s];
 const dot = (p: V, q: V) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
-const TAN30 = Math.tan(Math.PI / 6);
 
 export interface ThreadInfo {
   size: string;
@@ -30,7 +30,24 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
   const count = refs.reduce((n, r) => n + r.faces.length, 0);
   if (count !== 1) throw new FeatureError(`the face selector matches ${count} faces; pick exactly one cylindrical face`);
   const input = bodies.get(refs[0]!.body)!;
-  const fi = refs[0]!.faces[0]!;
+  return threadFace(oc, arena, input, refs[0]!.faces[0]!, { ...f, tag: `${f.id}.thread` });
+}
+
+export interface ThreadOptions {
+  profile?: ThreadProfile;
+  size?: string;
+  diameter?: number;
+  pitch?: number;
+  starts?: number;
+  length?: number;
+  clearance?: number;
+  leftHanded?: boolean;
+  /** Tag of the thread's faces. */
+  tag: string;
+}
+
+/** Threads face `fi` of `input` (a cylinder): the body brought to the thread's diameters, the groove(s) cut. */
+export function threadFace(oc: OC, arena: Arena, input: Body, fi: number, f: ThreadOptions): { body: Body; info: ThreadInfo } {
   const face = input.faces[fi]!;
 
   const surf = arena.track(new oc.BRepAdaptor_Surface(face, true));
@@ -61,6 +78,8 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
   // Run-out past the end only into free space: a chamfer or rounded edge there stops the groove at
   // the face's edge (OCCT cannot intersect the groove with the cone reliably, and it reads better).
   const free = [true, true];
+  // The flat face at each end (a jar's rim, a shaft's end): with both ends open the thread starts at the smaller one.
+  const endArea = [Infinity, Infinity];
   input.edgeFaces.forEach((adj, ei) => {
     if (!adj.includes(fi)) return;
     const p = input.edgePoints[ei]!;
@@ -72,32 +91,38 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
       const info = input.faceInfo[nb]!;
       // A planar neighbour whose outside faces back along the face is a shoulder or a hole bottom.
       if (info.planar && info.normal && dot(info.normal, a) * (end === 0 ? -1 : 1) < 0.3) open[end] = false;
+      else if (info.planar) endArea[end] = Math.min(endArea[end]!, info.area);
       if (!info.planar) free[end] = false;
     }
   });
 
-  let spec: { size: string; d: number; pitch: number };
+  let spec: ReturnType<typeof threadSpec>;
+  let shape: ReturnType<typeof grooveShape>;
+  const c = f.clearance ?? 0;
   try {
-    spec = threadFor(radius * 2, internal, f.size, f.pitch);
+    spec = threadSpec(radius * 2, internal, f);
+    if (!(spec.pitch > 0) || spec.pitch > spec.d / 2) throw new Error(`pitch ${spec.pitch} mm does not fit ${spec.size}`);
+    if (c < 0 || c > spec.pitch / 4) throw new Error(`clearance must be between 0 and ${(spec.pitch / 4).toFixed(2)} mm for this pitch`);
+    shape = grooveShape(spec.profile, spec.d, spec.pitch, internal, c);
   } catch (e) {
     throw new FeatureError(e instanceof Error ? e.message : String(e));
   }
   const P = spec.pitch;
-  const R = spec.d / 2;
-  if (!(P > 0) || P > R) throw new FeatureError(`pitch ${P} mm does not fit ${spec.size}`);
-  const c = f.clearance ?? 0;
-  if (c < 0 || c > P / 4) throw new FeatureError(`clearance must be between 0 and ${(P / 4).toFixed(2)} mm for this pitch`);
+  const L = spec.lead;
+  if (!(shape.root > 0.1)) throw new FeatureError(`the thread is deeper than ${spec.size} is thick`, "use a finer pitch");
   const length = Math.min(f.length ?? full, full);
   if (!(length > 0)) throw new FeatureError("thread length must be greater than zero");
 
-  // Threads start at an open end (the top one if both are open) and run `length` along the face.
-  const fromTop = open[1] || !open[0];
+  // Threads start at an open end (the top one if both are open, unless the bottom's end face is clearly
+  // smaller, like a jar's rim against its bottom) and run `length` along the face.
+  const smallerLo = open[0] && open[1] && endArea[0]! < 0.9 * endArea[1]!;
+  const fromTop = (open[1] || !open[0]) && !smallerLo;
   const lo = fromTop ? t1 - length : t0;
   const hi = fromTop ? t1 : t0 + length;
   const runOutLo = open[0] && free[0] && lo <= t0 + 1e-9;
   const runOutHi = open[1] && free[1] && hi >= t1 - 1e-9;
-  const zLo = lo - (runOutLo ? P : 0);
-  const zHi = hi + (runOutHi ? P : 0);
+  const zLo = lo - (runOutLo ? L : 0);
+  const zHi = hi + (runOutHi ? L : 0);
 
   // Seams: OCCT can miss the groove/cylinder intersection (the cut then silently removes nothing)
   // depending on where the helix starts relative to the cylinders' seam. A quarter turn from the
@@ -112,57 +137,39 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
   const xdir: V = add([xd.X() * Math.cos(u0), xd.Y() * Math.cos(u0), xd.Z() * Math.cos(u0)], [yd.X(), yd.Y(), yd.Z()], Math.sin(u0));
   const cross = (p: V, q: V): V => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
   const ahead = f.leftHanded ? cross(xdir, a) : cross(a, xdir);
-  const behind = f.leftHanded ? cross(a, xdir) : cross(xdir, a);
-  // Where the far end of the groove from the start ahead of the seam lands, in degrees from the seam.
-  const turns = (zHi - zLo) / P;
-  const endAngle = (90 + 360 * (turns - Math.floor(turns))) % 360;
-  const fromBehind = endAngle >= 170 && endAngle < (internal ? 320 : 250);
-  // Further starts in between (never on the seam itself) for the shapes where both of those miss.
+  // A direction `deg` degrees from the seam in the helix's sense.
+  // Exact at quarter turns: OCCT's cut reacts even to a 1e-16 tilt of the start (cos 270° is not 0 in floating point).
   const turned = (deg: number): V => {
     const r = (deg * Math.PI) / 180;
-    return add([xdir[0] * Math.cos(r), xdir[1] * Math.cos(r), xdir[2] * Math.cos(r)], ahead, Math.sin(r));
+    const exact = (v: number) => (Math.abs(v) < 1e-12 ? 0 : Math.abs(Math.abs(v) - 1) < 1e-12 ? Math.sign(v) : v);
+    const [c, sn] = [exact(Math.cos(r)), exact(Math.sin(r))];
+    return add([xdir[0] * c, xdir[1] * c, xdir[2] * c], ahead, sn);
   };
-  const starts = [...(fromBehind ? [behind, ahead] : [ahead, behind]), ...[45, 135, 225, 315].map(turned)];
-  const tag = `${f.id}.thread`;
   const tagged = (s: TopoDS_Shape) => {
     const b = new Body(oc, arena, input.bodyId, s);
-    b.faceTags = b.faces.map(() => [tag]);
+    b.faceTags = b.faces.map(() => [f.tag]);
     return b;
   };
   const cylinder = (r: number, from: number, to: number) =>
     arena.track(arena.track(new oc.BRepPrimAPI_MakeCylinder(axis2(oc, arena, add(o, a, from), a, xdir), r, to - from)).Shape());
   const ring = (rIn: number, rOut: number, from: number, to: number) => boolOp(oc, arena, "cut", cylinder(rOut, from, to), cylinder(rIn, from - 1, to + 1));
 
-  // Profile radii (with clearance) and groove widths at its wide (open) and narrow (deep) side.
-  const e = 0.05 * P;
-  let rWide: number, wWide: number, rNarrow: number, wNarrow: number;
-  if (internal) {
-    const rMinor = internalMinor(spec.d, P) / 2 + c;
-    const depth = R + c - rMinor;
-    rWide = rMinor - e;
-    wWide = 0.75 * P + 2 * e * TAN30;
-    rNarrow = R + c;
-    wNarrow = 0.75 * P - 2 * depth * TAN30;
-  } else {
-    const rMajor = R - c;
-    const rRoot = externalMinor(spec.d, P) / 2 - c;
-    rWide = rMajor + e;
-    wWide = 0.875 * P + 2 * e * TAN30;
-    rNarrow = rRoot;
-    wNarrow = 0.875 * P - 2 * (rMajor - rRoot) * TAN30;
-  }
-
+  const rCrest = shape.crest / 2;
+  const rRoot = shape.root / 2;
+  // The spine runs between the outline's wide side (just past the crest) and the root, as it always has.
+  const rMid = (shape.outline[0]![0] + rRoot) / 2;
   const volume = (sh: TopoDS_Shape) => {
     const props = arena.track(new oc.GProp_GProps());
     oc.BRepGProp.VolumeProperties(sh, props, false, false, false);
     return props.Mass();
   };
-  const groove = (hdir: V): TopoDS_Shape => {
+  // `shift` moves the groove along the axis: start k of a multi-start thread is start 0 shifted by k·P.
+  const groove = (hdir: V, shift = 0, pieces = 0): TopoDS_Shape => {
     try {
-      const start = add(o, a, zLo - P);
-      const spine = helix(oc, arena, start, a, hdir, (rWide + rNarrow) / 2, P, zHi - zLo + 2 * P, !!f.leftHanded);
+      const start = add(o, a, zLo - L + shift);
+      const spine = helix(oc, arena, start, a, hdir, rMid, L, zHi - zLo + 2 * L, !!f.leftHanded, pieces);
       const at = (r: number, z: number): V => add(add(start, hdir, r), a, z);
-      const profile = polygon(oc, arena, [at(rWide, -wWide / 2), at(rNarrow, -wNarrow / 2), at(rNarrow, wNarrow / 2), at(rWide, wWide / 2)]);
+      const profile = polygon(oc, arena, shape.outline.map(([r, z]) => at(r, z)));
       const mk = arena.track(new oc.BRepOffsetAPI_MakePipeShell(spine));
       mk.SetMode(arena.track(new oc.gp_Dir(a[0], a[1], a[2])));
       mk.Add(profile, false, false);
@@ -172,7 +179,7 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
       let swept = arena.track(mk.Shape());
       // Depending on the axis direction the sweep can come out inside-out (negative volume).
       if (volume(swept) < 0) swept = arena.track(swept.Reversed());
-      return boolOp(oc, arena, "common", swept, cylinder(Math.max(rWide, rNarrow) + P, zLo, zHi));
+      return boolOp(oc, arena, "common", swept, cylinder(Math.max(rCrest, rRoot) + P, zLo, zHi));
     } catch (err) {
       throw new FeatureError(`could not build the thread: ${err instanceof FeatureError ? err.message : occtErrorMessage(oc, err)}`);
     }
@@ -181,28 +188,70 @@ export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Bod
   // Bring the face to the thread's own diameters first.
   let body = input;
   if (internal) {
-    const rMinor = internalMinor(spec.d, P) / 2 + c;
     // Drawn at the nominal size (or bigger than the tap drill): fill back to the minor diameter.
-    if (radius > rMinor + 1e-6) body = booleanBodies(oc, arena, body, tagged(ring(rMinor, radius + 0.01, lo, hi)), "fuse");
+    if (radius > rCrest + 1e-6) body = booleanBodies(oc, arena, body, tagged(ring(rCrest, radius + 0.01, lo, hi)), "fuse");
     // A separate cut rather than one fused tool: fusing the swept groove with the bore drops the groove.
-    body = booleanBodies(oc, arena, body, tagged(cylinder(rMinor, zLo, zHi)), "cut");
+    body = booleanBodies(oc, arena, body, tagged(cylinder(rCrest, zLo, zHi)), "cut");
   } else {
-    const rMajor = R - c;
-    if (radius < rMajor - 1e-6) body = booleanBodies(oc, arena, body, tagged(ring(Math.max(radius - 0.01, 0.01), rMajor, lo, hi)), "fuse");
-    if (radius > rMajor + 1e-6) body = booleanBodies(oc, arena, body, tagged(ring(rMajor, radius + 1, lo, hi)), "cut");
+    if (radius < rCrest - 1e-6) body = booleanBodies(oc, arena, body, tagged(ring(Math.max(radius - 0.01, 0.01), rCrest, lo, hi)), "fuse");
+    if (radius > rCrest + 1e-6) body = booleanBodies(oc, arena, body, tagged(ring(rCrest, radius + 1, lo, hi)), "cut");
   }
-  const before = volume(body.shape);
-  let threaded: Body | null = null;
-  for (const hdir of starts) {
-    const g = groove(hdir);
-    const out = booleanBodies(oc, arena, body, tagged(g), "cut");
-    // Most of the groove lies in material; a cut that removed (almost) nothing missed it.
-    if (before - volume(out.shape) > 0.2 * volume(g)) {
-      threaded = out;
-      break;
+  // Each start is its own groove, turned by 360°/starts. They are cut one after the other and,
+  // where OCCT misses a later groove against the earlier ones, all together.
+  // Where the far end of the groove from the start ahead of the seam lands, in degrees from the seam.
+  const turns = (zHi - zLo) / L;
+  const endAngle = (90 + 360 * (turns - Math.floor(turns))) % 360;
+  const fromBehind = endAngle >= 170 && endAngle < (internal ? 320 : 250);
+  // Further starts in between (never on the seam itself) for the shapes where both of those miss.
+  const tries = [...(fromBehind ? [270, 90] : [90, 270]), 45, 135, 225, 315, 20, 160, 200, 340];
+  // Plain cuts at the usual starts first (what has always worked for metric threads), then fuzzy ones.
+  // At most eight tries: a thread that misses that often will not work at another angle either.
+  // Then grooves made of half-turn pieces, which OCCT intersects more reliably than one long face.
+  // Metric single-start threads keep the long groove first (measured over many sizes); the other
+  // forms start with the pieces.
+  const metric = spec.profile === "iso" && spec.starts === 1;
+  const whole = tries.slice(0, metric ? 6 : 2).map((deg) => [deg, 0, 0] as const);
+  const split = tries.slice(0, 2).map((deg) => [deg, 0, 2] as const);
+  const attempts: (readonly [number, number, number])[] = [
+    ...(metric ? [...whole, ...split] : [...split, ...whole]),
+    ...tries.slice(0, 4).map((deg) => [deg, FUZZY, 2] as const),
+  ];
+  const off = (deg: number) => {
+    const at = ((deg % 360) + 360) % 360;
+    return Math.abs(at) < 5 || Math.abs(at - 360) < 5 ? at + 10 : at;
+  };
+  let lastError: unknown = null;
+  /** Cuts the grooves (start angle, axial shift); null when the cut missed them. */
+  const cut = (from: Body, gs: [number, number][], fuzzy: number, pieces: number): Body | null => {
+    try {
+      const grooves = gs.map(([deg, shift]) => groove(turned(off(deg)), shift, pieces));
+      const before = volume(from.shape);
+      const out = booleanBodies(oc, arena, from, grooves.map(tagged), "cut", from.bodyId, fuzzy);
+      // Measured after the cut: measuring the grooves first changes what OCCT's boolean makes of them.
+      const gv = grooves.reduce((sum, g) => sum + volume(g), 0);
+      // Most of the grooves lie in material; a cut that removed (almost) nothing missed them, one that
+      // removed more than them went wrong (it can happen, and leaves bits of the groove outside).
+      const removed = before - volume(out.shape);
+      return removed > 0.2 * gv && removed < 1.02 * gv ? out : null;
+    } catch (e) {
+      lastError = e;
+      return null;
     }
+  };
+  // Start k is start 0 moved k pitches along the axis: the same angle to the seam that worked for it.
+  let threaded: Body | null = null;
+  let found: readonly [number, number, number] | null = null;
+  for (const att of attempts) if ((threaded = cut(body, [[att[0], 0]], att[1], att[2]))) {
+    found = att;
+    break;
   }
-  if (!threaded) throw new FeatureError("could not cut the thread into this face", "try a slightly different length or diameter");
+  for (let k = 1; k < spec.starts && threaded && found; k++) {
+    const from: Body = threaded;
+    threaded = cut(from, [[found[0], k * P]], found[1], found[2]);
+    for (const [deg, fuzzy, pieces] of attempts) if (!threaded) threaded = cut(from, [[deg, k * P]], fuzzy, pieces);
+  }
+  if (!threaded && lastError instanceof FeatureError && !/no solid|failed/.test(lastError.message)) throw lastError;
+  if (!threaded) throw new FeatureError("could not cut the thread into this face", spec.starts > 1 ? "try a slightly different length, or thread only part of the face" : "try a slightly different length or diameter");
   body = threaded;
   return { body, info: { size: spec.size, pitch: P, internal, length } };
 }
@@ -212,14 +261,25 @@ function axis2(oc: OC, arena: Arena, origin: V, dir: V, xdir: V) {
 }
 
 /** Helix on a cylinder of radius `r` around `dir` through `origin`, starting at `origin + xdir·r`. */
-function helix(oc: OC, arena: Arena, origin: V, dir: V, xdir: V, r: number, pitch: number, height: number, left: boolean): TopoDS_Wire {
+/** `pieces` > 0 builds the helix from that many edges per turn (booleans cope better with short faces). */
+function helix(oc: OC, arena: Arena, origin: V, dir: V, xdir: V, r: number, pitch: number, height: number, left: boolean, pieces = 0): TopoDS_Wire {
   const ax3 = arena.track(new oc.gp_Ax3(arena.track(new oc.gp_Pnt(...origin)), arena.track(new oc.gp_Dir(...dir)), arena.track(new oc.gp_Dir(...xdir))));
   const surface = arena.track(new oc.Geom_CylindricalSurface(ax3, r));
   const line = arena.track(new oc.Geom2d_Line(arena.track(new oc.gp_Pnt2d(0, 0)), arena.track(new oc.gp_Dir2d(left ? -2 * Math.PI : 2 * Math.PI, pitch))));
   const span = (height / pitch) * Math.hypot(2 * Math.PI, pitch);
-  const edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(line, surface, 0, span)).Edge());
-  oc.BRepLib.BuildCurves3d(edge);
-  return arena.track(arena.track(new oc.BRepBuilderAPI_MakeWire(edge)).Wire());
+  if (pieces <= 0) {
+    const edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(line, surface, 0, span)).Edge());
+    oc.BRepLib.BuildCurves3d(edge);
+    return arena.track(arena.track(new oc.BRepBuilderAPI_MakeWire(edge)).Wire());
+  }
+  const n = Math.max(1, Math.ceil((height / pitch) * pieces));
+  const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+  for (let k = 0; k < n; k++) {
+    const edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(line, surface, (span * k) / n, (span * (k + 1)) / n)).Edge());
+    oc.BRepLib.BuildCurves3d(edge);
+    mw.Add(edge);
+  }
+  return arena.track(mw.Wire());
 }
 
 function polygon(oc: OC, arena: Arena, pts: V[]): TopoDS_Wire {

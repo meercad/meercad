@@ -80,7 +80,7 @@ export default {
   "Only in test builds. The App Store version hides these packs until they are on sale; switch one off to see the app without it.":
     "Nur in Testversionen. Die App-Store-Version blendet diese Pakete aus, bis sie verkauft werden; schalte eins aus, um die App ohne es zu sehen.",
   "Mechanics": "Mechanik",
-  "Joints and moving parts, gears, interference check": "Gelenke und bewegliche Teile, Zahnräder, Überschneidungsprüfung",
+  "Joints and moving parts, gears, springs, interference check": "Gelenke und bewegliche Teile, Zahnräder, Federn, Überschneidungsprüfung",
   "Scan and mesh": "Scan und Netze",
   "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up, areas from drone photos": "3D-Scan mit Kamera oder LiDAR, Netze in bearbeitbare Teile umwandeln, Netzschnitte nachzeichnen, auf Scans messen, Abweichungs- und Wandstärken-Karte, Netze aufräumen, Gelände aus Drohnenfotos",
   "Technical drawings": "Technische Zeichnungen",

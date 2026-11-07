@@ -1,6 +1,6 @@
 import { ArrowLeftRight, Check, Cog, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef } from "@meercad/schema";
+import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef, type ThreadProfile } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
 import { gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_CUT_TO_LENGTH, STANDARD_DEFAULT_SIZE, STANDARD_LYING, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH, STANDARD_WITH_MOVING } from "@meercad/model";
 
@@ -238,6 +238,8 @@ function handlePick(p: Pick, d: DialogState): void {
         if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
         // A hole goes where the face was tapped.
         if (spec && (g.op === "hole" || g.op === "standard_part" || g.op === "snap_hook") && p.kind === "face" && p.normal) (g as Of<"hole">).points = [holePoint(p.point, p.normal)];
+        // Springs and screws stand where the face was tapped.
+        if (spec && (g.op === "spring" || g.op === "screw") && p.kind === "face" && p.normal) g.center = holePoint(p.point, p.normal);
         // Text starts where the face was tapped.
         if (spec && g.op === "text" && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
         if (spec && (g.op === "label" || g.op === "box" || (g.op === "gridfinity" && !g.baseplate) || (g.op === "wall" && !g.board)) && p.kind === "face" && p.normal) g.position = holePoint(p.point, p.normal);
@@ -503,15 +505,73 @@ function SourceField({ value, onChange }: { value: PatternSource; onChange: (s: 
 }
 
 /** Thread: face, ISO size and pitch, length, printing clearance, hand. */
+export const THREAD_PROFILE_LABELS: [ThreadProfile, string][] = [
+  ["iso", t("Metric (ISO)")],
+  ["trapezoid", t("Trapezoidal")],
+  ["square", t("Square")],
+  ["buttress", t("Buttress")],
+  ["round", t("Round")],
+];
+
+/** Thread form, and for the non-metric forms (or custom sizes) diameter, pitch and starts. */
+function ThreadForm({ profile, diameter, pitch, starts, set, diameterPlaceholder, pitchPlaceholder }: { profile?: ThreadProfile; diameter?: Expr; pitch?: Expr; starts?: Expr; set: (patch: Record<string, unknown>) => void; diameterPlaceholder?: string; pitchPlaceholder?: string }) {
+  return (
+    <>
+      <Field label={t("Thread form")}>
+        <select className="field" value={profile ?? "iso"} onChange={(e) => set({ profile: e.target.value === "iso" ? undefined : e.target.value, pitch: undefined, ...(e.target.value === "iso" ? {} : { size: undefined }) })}>
+          {THREAD_PROFILE_LABELS.map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="row">
+        {diameterPlaceholder !== undefined ? (
+          <Field label={t("Diameter")}>
+            <ExprInput value={diameter} placeholder={diameterPlaceholder} onCommit={(diameter) => set({ diameter })} onLive={(diameter) => set({ diameter })} />
+          </Field>
+        ) : null}
+        <Field label={t("Pitch")}>
+          <ExprInput value={pitch} placeholder={pitchPlaceholder ?? t("auto")} onCommit={(pitch) => set({ pitch })} onLive={(pitch) => set({ pitch })} />
+        </Field>
+        <Field label={t("Starts")}>
+          <ExprInput value={starts} unit="" integer placeholder="1" onCommit={(starts) => set({ starts: starts === 1 ? undefined : starts })} onLive={(starts) => set({ starts })} />
+        </Field>
+      </div>
+    </>
+  );
+}
+
 function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string, unknown>) => void }) {
   const std = f.size ? METRIC_THREADS.find((t) => t.d === parseMetric(f.size!)) : undefined;
   const pitches = std ? [std.pitch, ...std.fine] : [];
   const custom = f.pitch !== undefined && !pitches.includes(f.pitch as number);
   const hasFace = !("face" in f.face) || !!f.face.face;
+  const metric = (f.profile ?? "iso") === "iso" && f.diameter === undefined;
+  if (!metric)
+    return (
+      <>
+        <Field label={t("Hole wall or shaft")}>
+          <SelBox field="face" items={hasFace ? [describeFaceSelector(f.face)] : []} placeholder={t("Pick a round face")} />
+        </Field>
+        <ThreadForm profile={f.profile} diameter={f.diameter} pitch={f.pitch} starts={f.starts} set={set} diameterPlaceholder={t("as drawn")} />
+        <ThreadCommon f={f} set={set} />
+      </>
+    );
   return (
     <>
       <Field label={t("Hole wall or shaft")}>
         <SelBox field="face" items={hasFace ? [describeFaceSelector(f.face)] : []} placeholder={t("Pick a round face")} />
+      </Field>
+      <Field label={t("Thread form")}>
+        <select className="field" value="iso" onChange={(e) => set({ profile: e.target.value === "iso" ? undefined : e.target.value, size: undefined, pitch: undefined })}>
+          {THREAD_PROFILE_LABELS.map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
       </Field>
       <div className="row">
         <Field label={t("Size")}>
@@ -541,6 +601,17 @@ function ThreadFields({ f, set }: { f: Of<"thread">; set: (patch: Record<string,
           <ExprInput value={f.pitch} autoFocus onCommit={(pitch) => set({ pitch })} />
         </Field>
       ) : null}
+      <Field label={t("Starts")}>
+        <ExprInput value={f.starts} unit="" integer placeholder="1" onCommit={(starts) => set({ starts: starts === 1 ? undefined : starts })} />
+      </Field>
+      <ThreadCommon f={f} set={set} />
+    </>
+  );
+}
+
+function ThreadCommon({ f, set }: { f: Of<"thread">; set: (patch: Record<string, unknown>) => void }) {
+  return (
+    <>
       <label className="checkbox">
         <input type="checkbox" checked={f.length === undefined} onChange={(e) => set({ length: e.target.checked ? undefined : 10 })} /> {t("Thread the whole face")}
       </label>
@@ -1012,6 +1083,240 @@ function GearFields({ f, set }: { f: Of<"gear">; set: (patch: Record<string, unk
   );
 }
 
+/** Info the kernel reported for the feature being edited. */
+function useFeatureInfo(id: string): Record<string, number> | undefined {
+  return useApp((s) => s.output?.report.features.find((x) => x.id === id)?.info);
+}
+
+/** Coil: profile, axis, pitch and turns, taper, hand. */
+function CoilFields({ f, set, profileChip, sketches }: { f: Of<"coil">; set: (patch: Record<string, unknown>) => void; profileChip: (p: ProfileRef) => string; sketches: Of<"sketch">[] }) {
+  const features = useApp((s) => s.doc.features);
+  const prof = f.profile;
+  const info = useFeatureInfo(f.id);
+  return (
+    <>
+      <Field label={t("Profile")}>
+        <SelBox field="profile" items={"face" in prof || prof.sketch ? [profileChip(prof)] : []} placeholder={t("Pick sketch regions beside the axis")} onRemove={() => set({ profile: { sketch: "" } })} />
+        {"sketch" in prof && !prof.sketch && sketches.length ? (
+          <select className="field" value="" onChange={(e) => set({ profile: { sketch: e.target.value } })}>
+            <option value="">{t("…or use a whole sketch")}</option>
+            {sketches.map((s) => (
+              <option key={s.id} value={s.id}>
+                {featureName(s)}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </Field>
+      <Field label={t("Axis")}>
+        <SelBox field="axis" items={[describeAxis(f.axis)]} placeholder={t("Pick a line or edge")} />
+        <AxisButtons value={f.axis} onChange={(axis) => set({ axis })} />
+      </Field>
+      <div className="row">
+        <Field label={t("Pitch (rise per turn)")}>
+          <ExprInput value={f.pitch} autoFocus onCommit={(pitch) => set({ pitch })} onLive={(pitch) => set({ pitch })} />
+        </Field>
+        <Field label={t("Turns")}>
+          <ExprInput value={f.turns} unit="" onCommit={(turns) => set({ turns })} onLive={(turns) => set({ turns })} />
+        </Field>
+      </div>
+      <div className="row">
+        <Field label={t("Taper")}>
+          <ExprInput value={f.taper ?? 0} unit="deg" onCommit={(taper) => set({ taper: taper === 0 ? undefined : taper })} onLive={(taper) => set({ taper })} />
+        </Field>
+        <button className={`icon-btn ${f.flip ? "active" : ""}`} title={t("Flip direction")} onClick={() => set({ flip: f.flip ? undefined : true })}>
+          <ArrowLeftRight />
+        </button>
+      </div>
+      <label className="checkbox">
+        <input type="checkbox" checked={!!f.leftHanded} onChange={(e) => set({ leftHanded: e.target.checked || undefined })} /> {t("Left-handed")}
+      </label>
+      <Field label={t("Result")}>
+        <Seg value={f.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+      {f.mode !== "new_body" ? (
+        <Field label={t("Merge scope (optional)")}>
+          <SelBox field="targets" items={(f.targets ?? []).map((t) => partName(t, features))} placeholder={t("All touching parts")} onRemove={(i) => set({ targets: (f.targets ?? []).filter((_, j) => j !== i) })} />
+        </Field>
+      ) : null}
+      {info?.["height"] !== undefined ? (
+        <div className="gear-sizes small">
+          <span>{t("Height")}</span>
+          <b>{mm(info["height"])}</b>
+        </div>
+      ) : null}
+      <p className="muted small">{t("Draw the profile in a sketch on a plane through the axis, beside it (a circle for a spring, a triangle for a thread). Cut into a rod for a custom thread.")}</p>
+    </>
+  );
+}
+
+/** Placement on a plane at a centre point, shared by springs and screws. */
+function PlaceFields({ f, set }: { f: Of<"spring"> | Of<"screw">; set: (patch: Record<string, unknown>) => void }) {
+  return (
+    <>
+      <Field label={t("Plane")}>
+        <SelBox field="plane" items={[describePlane(f.plane ?? { ref: "origin.XY" })]} placeholder={t("Pick a plane or flat face")} />
+        <PlaneButtons value={f.plane ?? { ref: "origin.XY" }} onChange={(plane) => set({ plane })} />
+      </Field>
+      <Field label={t("Centre (in the plane)")}>
+        <div className="row">
+          {[0, 1].map((i) => (
+            <div key={i} style={{ flex: 1 }}>
+              <ExprInput
+                value={f.center?.[i] ?? 0}
+                onCommit={(v) => set({ center: [0, 1].map((j) => (j === i ? v : (f.center?.[j] ?? 0))) })}
+                onLive={(v) => set({ center: [0, 1].map((j) => (j === i ? v : (f.center?.[j] ?? 0))) })}
+              />
+            </div>
+          ))}
+        </div>
+      </Field>
+    </>
+  );
+}
+
+const num = (v: number, digits = 2) => v.toFixed(digits).replace(/\.?0+$/, "");
+
+/** Spring: kind, wire, diameter, coils, length or gap, ends, legs, and its numbers. */
+function SpringFields({ f, set }: { f: Of<"spring">; set: (patch: Record<string, unknown>) => void }) {
+  const info = useFeatureInfo(f.id);
+  return (
+    <>
+      <Seg
+        value={f.kind}
+        options={[["compression", t("Compression")], ["extension", t("Extension")], ["torsion", t("Torsion")]]}
+        onChange={(kind) => set({ kind, ...(kind === "compression" ? { length: f.length ?? 40, gap: undefined, legs: undefined } : { length: undefined, ends: undefined }) })}
+      />
+      <div className="row">
+        <Field label={t("Wire Ø")}>
+          <ExprInput value={f.wire} autoFocus onCommit={(wire) => set({ wire })} onLive={(wire) => set({ wire })} />
+        </Field>
+        <Field label={t("Outside Ø")}>
+          <ExprInput value={f.diameter} onCommit={(diameter) => set({ diameter })} onLive={(diameter) => set({ diameter })} />
+        </Field>
+        <Field label={t("Active coils")}>
+          <ExprInput value={f.coils} unit="" onCommit={(coils) => set({ coils })} onLive={(coils) => set({ coils })} />
+        </Field>
+      </div>
+      {f.kind === "compression" ? (
+        <div className="row">
+          <Field label={t("Free length")}>
+            <ExprInput value={f.length} placeholder={t("3 × diameter")} onCommit={(length) => set({ length })} onLive={(length) => set({ length })} />
+          </Field>
+          <Field label={t("Ends")}>
+            <select className="field" value={f.ends ?? "ground"} onChange={(e) => set({ ends: e.target.value === "ground" ? undefined : e.target.value })}>
+              <option value="ground">{t("Closed and ground")}</option>
+              <option value="closed">{t("Closed")}</option>
+              <option value="open">{t("Open")}</option>
+            </select>
+          </Field>
+        </div>
+      ) : (
+        <div className="row">
+          <Field label={t("Gap between coils")}>
+            <ExprInput value={f.gap} placeholder="0.3" onCommit={(gap) => set({ gap })} onLive={(gap) => set({ gap })} />
+          </Field>
+          {f.kind === "torsion" ? (
+            <Field label={t("Leg length")}>
+              <ExprInput value={f.legs} placeholder={t("outside Ø")} onCommit={(legs) => set({ legs })} onLive={(legs) => set({ legs })} />
+            </Field>
+          ) : null}
+        </div>
+      )}
+      <label className="checkbox">
+        <input type="checkbox" checked={!!f.leftHanded} onChange={(e) => set({ leftHanded: e.target.checked || undefined })} /> {t("Left-handed")}
+      </label>
+      <PlaceFields f={f} set={set} />
+      <Field label={t("Result")}>
+        <Seg value={f.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+      {info ? (
+        <div className="gear-sizes small">
+          <span>{t("Pitch")}</span>
+          <b>{mm(info["pitch"] ?? 0)}</b>
+          <span>{t("Height")}</span>
+          <b>{mm(info["height"] ?? 0)}</b>
+          {f.kind === "compression" ? (
+            <>
+              <span>{t("Solid height")}</span>
+              <b>{mm(info["solidHeight"] ?? 0)}</b>
+            </>
+          ) : null}
+          <span>{f.kind === "torsion" ? t("Rate (spring steel)") : t("Rate (spring steel)")}</span>
+          <b>{f.kind === "torsion" ? `${num(info["rateSteel"] ?? 0, 3)} N·mm/°` : `${num(info["rateSteel"] ?? 0, 2)} N/mm`}</b>
+        </div>
+      ) : null}
+      <p className="muted small">{t("Printed springs are much softer than steel ones: PLA or PETG about 1/50, so use a thicker wire.")}</p>
+    </>
+  );
+}
+
+/** Screw or nut: head, thread form, diameter, pitch, starts, length, printing clearance. */
+function ScrewFields({ f, set }: { f: Of<"screw">; set: (patch: Record<string, unknown>) => void }) {
+  const info = useFeatureInfo(f.id);
+  const nut = f.kind === "nut";
+  const heads: [NonNullable<Of<"screw">["head"]>, string][] = nut
+    ? [["hex", t("Hex")], ["round", t("Round")], ["knob", t("Knurled")]]
+    : [["hex", t("Hex")], ["socket", t("Socket")], ["round", t("Button")], ["knob", t("Knurled")], ["none", t("None (threaded rod)")]];
+  const addNut = () => {
+    if (!commitDialog()) return;
+    const draft = draftFeature("screw", useApp.getState().doc) as Of<"screw">;
+    // The matching nut beside the screw, with the same thread.
+    const cx = typeof f.center?.[0] === "number" ? f.center[0] : 0;
+    const d = typeof f.diameter === "number" ? f.diameter : 8;
+    openDraft({ ...draft, kind: "nut", head: "hex", profile: f.profile, diameter: f.diameter, pitch: f.pitch, starts: f.starts, leftHanded: f.leftHanded, clearance: f.clearance, length: undefined, plane: f.plane, center: [cx + 3 * d, f.center?.[1] ?? 0] } as Feature);
+  };
+  return (
+    <>
+      <Seg value={f.kind} options={[["screw", t("Screw")], ["nut", t("Nut")]]} onChange={(kind) => set({ kind, head: "hex", length: kind === "nut" ? undefined : 25, threadLength: undefined })} />
+      <Field label={nut ? t("Shape") : t("Head")}>
+        <select className="field" value={f.head ?? "hex"} onChange={(e) => set({ head: e.target.value === "hex" ? undefined : e.target.value })}>
+          {heads.map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <ThreadForm profile={f.profile} diameter={f.diameter} pitch={f.pitch} starts={f.starts} set={set} diameterPlaceholder="" pitchPlaceholder={info?.["pitch"] !== undefined ? String(info["pitch"]) : undefined} />
+      <div className="row">
+        <Field label={nut ? t("Height") : t("Length")}>
+          <ExprInput value={f.length} placeholder={nut ? t("0.8 × diameter") : ""} onCommit={(length) => set({ length })} onLive={(length) => set({ length })} />
+        </Field>
+        {!nut ? (
+          <Field label={t("Thread length")}>
+            <ExprInput value={f.threadLength} placeholder={t("all")} onCommit={(threadLength) => set({ threadLength })} onLive={(threadLength) => set({ threadLength })} />
+          </Field>
+        ) : null}
+      </div>
+      <Field label={t("Clearance per side (3D printing)")}>
+        <ExprInput value={f.clearance} placeholder="0" onCommit={(clearance) => set({ clearance: clearance === 0 ? undefined : clearance })} />
+      </Field>
+      <label className="checkbox">
+        <input type="checkbox" checked={!!f.leftHanded} onChange={(e) => set({ leftHanded: e.target.checked || undefined })} /> {t("Left-hand thread")}
+      </label>
+      <PlaceFields f={f} set={set} />
+      <Field label={t("Result")}>
+        <Seg value={f.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+      {info?.["pitch"] !== undefined ? (
+        <div className="gear-sizes small">
+          <span>{t("Pitch")}</span>
+          <b>{mm(info["pitch"])}</b>
+          <span>{t("Height")}</span>
+          <b>{mm(info["height"] ?? 0)}</b>
+        </div>
+      ) : null}
+      <p className="muted small">{t("A screw and a nut with the same thread fit each other. For printing, give both about 0.1–0.2 mm clearance.")}</p>
+      {!nut ? (
+        <button className="btn" onClick={addNut}>
+          {t("Add matching nut")}
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 function Body({ d }: { d: DialogState }) {
   const f = d.feature;
   const set = (patch: Record<string, unknown>) => updateDraft(patch as Partial<Feature>);
@@ -1194,6 +1499,12 @@ function Body({ d }: { d: DialogState }) {
       return <ThreadFields f={f} set={set} />;
     case "gear":
       return <GearFields f={f} set={set} />;
+    case "coil":
+      return <CoilFields f={f} set={set} profileChip={profileChip} sketches={sketches} />;
+    case "spring":
+      return <SpringFields f={f} set={set} />;
+    case "screw":
+      return <ScrewFields f={f} set={set} />;
     case "gridfinity":
       return <GridfinityFields f={f} set={set} />;
     case "wall":

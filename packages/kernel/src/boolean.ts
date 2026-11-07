@@ -13,11 +13,11 @@ import type { OC } from "./occt.js";
 export type BoolOp = "fuse" | "cut" | "common";
 
 /** `target` combined with one tool, or with several in one OCCT call (e.g. all copies of a pattern). */
-export function booleanBodies(oc: OC, arena: Arena, target: Body, tool: Body | readonly Body[], op: BoolOp, resultId = target.bodyId): Body {
+export function booleanBodies(oc: OC, arena: Arena, target: Body, tool: Body | readonly Body[], op: BoolOp, resultId = target.bodyId, fuzzy = 0): Body {
   const tools = Array.isArray(tool) ? tool : [tool as Body];
   const Algo = op === "fuse" ? oc.BRepAlgoAPI_Fuse : op === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
   let algo: InstanceType<typeof Algo>;
-  if (tools.length === 1) algo = arena.track(new Algo(target.shape, tools[0]!.shape));
+  if (tools.length === 1 && !fuzzy) algo = arena.track(new Algo(target.shape, tools[0]!.shape));
   else {
     algo = arena.track(new Algo());
     const list = (shapes: TopoDS_Shape[]) => {
@@ -27,6 +27,8 @@ export function booleanBodies(oc: OC, arena: Arena, target: Body, tool: Body | r
     };
     algo.SetArguments(list([target.shape]));
     algo.SetTools(list(tools.map((t) => t.shape)));
+    // A fuzzy boolean treats nearly touching geometry as touching (threads whose groove grazes a seam).
+    if (fuzzy) algo.SetFuzzyValue(fuzzy);
     algo.Build(arena.track(new oc.Message_ProgressRange()));
   }
   if (!algo.IsDone() || algo.HasErrors()) throw new FeatureError(`boolean ${op} failed`);

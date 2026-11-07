@@ -308,6 +308,10 @@ const MORE: [file: string, name: string, description: string][] = [
   ["40-stackable-ribbed-box", "Stackable ribbed box", "Rim bead, plinth and framed handles; its foot sits in the box below; three sizes"],
   ["41-linear-axis", "Linear axis", "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts"],
   ["42-boxes-and-snap-hooks", "Boxes and snap hooks", "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks"],
+  ["43-springs", "Springs", "Compression, extension and torsion springs from wire, diameter and coils"],
+  ["44-trapezoid-screw-and-nut", "Clamp screw and nut", "A Tr16 screw with a knurled head and its nut, with play for printing"],
+  ["46-coil-thread", "Coil", "A thread of your own profile cut into a rod, and a conical coil"],
+  ["45-jar-with-lid", "Jar with screw lid", "A three-start round thread: the lid closes in a third of a turn"],
 ];
 
 export const EXAMPLES: Example[] = [

@@ -173,6 +173,18 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "thread":
         if ("select" in f.face && f.face.of !== undefined) earlier(f.face.of, at, "selector");
         break;
+      case "coil":
+        if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
+        if ("line" in f.axis) earlier(f.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
+        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        break;
+      case "spring":
+      case "screw":
+        if (f.plane) planeSpec(f.plane, at);
+        if (f.op === "screw" && f.kind === "nut" && f.head === "socket") errors.push(`${at}: nuts are hex, round or knob`);
+        if (f.op === "screw" && f.kind === "nut" && f.threadLength !== undefined) errors.push(`${at}: threadLength is for screws`);
+        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        break;
       case "gear":
         if (f.meshWith) earlier(f.meshWith.gear, at, "meshWith", ["gear"]);
         else if (f.module === undefined) errors.push(`${at}: a gear needs a module (or meshWith)`);

@@ -36,10 +36,16 @@ import {
   Waves,
   PackageOpen,
   FishingHook,
+  Dna,
+  Screw,
+  createLucideIcon,
   type LucideIcon, Trash2 } from "lucide-react";
 import type { EdgeSelector, Feature, FeatureOp, MeercadDocument } from "@meercad/schema";
 import { nextFeatureId, standardShape } from "@meercad/model";
 import { t } from "./i18n";
+
+/** A coil spring (lucide has none). */
+const Spring = createLucideIcon("spring", [["path", { d: "M8 3h8M16 3 7 7l10 3.5L7 14l10 3.5L8 21h8", key: "coil" }]]);
 
 export interface FeatureMeta {
   label: string;
@@ -74,6 +80,9 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   rib: { shortcut: "Shift+B", label: t("Rib"), icon: Slash, hint: t("Stiffening web from an open sketch line to the walls it meets") },
   split: { shortcut: "Shift+K", label: t("Split"), icon: Scissors, hint: t("Cut parts in two at a plane or flat face, e.g. for the printer's build volume") },
   hole: { shortcut: "Shift+H", label: t("Hole"), icon: CircleDot, hint: t("Holes for screws (clearance, counterbore, countersink), threads and heat-set inserts") },
+  coil: { label: t("Coil"), icon: Dna, hint: t("Sweep a profile along a helix round an axis: custom threads, coils, worms, spiral ramps") },
+  spring: { label: t("Spring"), icon: Spring, hint: t("Compression, extension or torsion spring from wire, diameter and coils, with its spring rate") },
+  screw: { label: t("Screw and nut"), icon: Screw, hint: t("Screw, threaded rod or nut of any size and thread form: metric, trapezoidal, square, buttress, round, multi-start") },
   gear: { shortcut: "G", label: t("Gear"), icon: Cog, hint: t("Involute gear, ring gear or rack; adds the mating gear at the right distance") },
   linear_pattern: { shortcut: "L", label: t("Linear pattern"), icon: Grid3x3, hint: t("Repeat features or bodies along a direction") },
   circular_pattern: { shortcut: "O", label: t("Circular pattern"), icon: Orbit, hint: t("Repeat features or bodies around an axis") },
@@ -89,7 +98,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "wall", "label", "box", "snap_hook", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "coil", "rib", "text", "standard_part", "screw", "spring", "gridfinity", "wall", "label", "box", "snap_hook", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -114,6 +123,12 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
     case "thread":
       // Printed threads fit with half the design's fit on their flanks (it can be set to 0 for cut threads).
       return { id, op, face: { face: "" }, clearance: "fit / 2" };
+    case "coil":
+      return { id, op, profile, axis: { ref: "origin.Z" }, pitch: 5, turns: 5, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import") ? "join" : "new_body" };
+    case "spring":
+      return { id, op, kind: "compression", wire: 1.5, diameter: 15, coils: 6, length: 40, plane: { ref: "origin.XY" }, mode: "new_body" };
+    case "screw":
+      return { id, op, kind: "screw", head: "hex", diameter: 8, length: 25, plane: { ref: "origin.XY" }, mode: "new_body" };
     case "gear":
       return { id, op, kind: "spur", module: 1.5, teeth: 20, width: 8, plane: { ref: "origin.XY" }, mode: "new_body" };
     case "linear_pattern":
@@ -260,6 +275,8 @@ export function draftProblem(f: Feature): string | null {
       return f.sketch ? null : t("Pick the rib's line in a sketch");
     case "loft":
       return f.profiles.length >= 2 ? null : t("Pick at least two profiles in order: sketch regions or flat faces");
+    case "coil":
+      return "face" in f.profile || f.profile.sketch ? null : t("Pick the profile: sketch regions beside the axis");
     case "sweep":
       return !("face" in f.profile) && !f.profile.sketch ? t("Pick the profile: sketch regions") : f.path.sketch ? null : t("Pick the path: lines and arcs of a sketch");
     case "hole":
@@ -344,7 +361,7 @@ export function partName(id: string, features: readonly Feature[]): string {
 export function sketchesUsed(features: readonly Feature[]): Set<string> {
   return new Set(
     features.flatMap((f) => {
-      if (f.op === "extrude" || f.op === "revolve") return "sketch" in f.profile ? [f.profile.sketch] : [];
+      if (f.op === "extrude" || f.op === "revolve" || f.op === "coil") return "sketch" in f.profile ? [f.profile.sketch] : [];
       if (f.op === "rib") return [f.sketch];
       if (f.op === "loft") return f.profiles.flatMap((p) => ("sketch" in p ? [p.sketch] : []));
       if (f.op === "sweep") return ["sketch" in f.profile ? f.profile.sketch : "", f.path.sketch].filter(Boolean);

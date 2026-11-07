@@ -13,7 +13,7 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
   {
     title: t("Modeling"),
     rows: [
-      ...TOOLBAR.filter((op) => map[op as Action][0] && (op !== "gear" || hasPack("mechanics"))).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
+      ...TOOLBAR.filter((op) => map[op as Action][0] && ((op !== "gear" && op !== "spring") || hasPack("mechanics"))).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
       [t("Measure"), keys(map, "measure")],
       ...(hasPack("mechanics") ? [[t("Joints"), keys(map, "joints")] as [string, string]] : []),
       [t("Command search"), keys(map, "palette")],

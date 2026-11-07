@@ -5,6 +5,7 @@ import {
   type ExecResult,
   type KernelBackend,
   type ResolvedChamfer,
+  type ResolvedCoil,
   type ResolvedCircularPattern,
   type ResolvedExtrude,
   type ResolvedFeature,
@@ -66,6 +67,8 @@ import { joinPieces } from "./splitjoint.js";
 import { nest, textLoops } from "./text.js";
 import { standardPartBody } from "./standardPart.js";
 import { threadBody } from "./thread.js";
+import { helixWire, springBody } from "./coil.js";
+import { screwBody } from "./screw.js";
 import { textureRecord } from "./texture.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
@@ -156,6 +159,18 @@ export class OcctBackend implements KernelBackend<ModelState> {
         const frame = partner ? partner.frame : planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
         const { body, record } = gearBody(ctx.oc, ctx.arena, f, frame, partner);
         return { ...applyTool(ctx, f.id, body, f.mode, f.targets), gears: new Map(ctx.prev.gears).set(f.id, record) };
+      }
+      case "coil":
+        return coil(f, ctx);
+      case "spring": {
+        const { body, info } = springBody(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx), ctx.warnings);
+        ctx.info = { pitch: round3(info.pitch), totalCoils: round3(info.totalCoils), height: round3(info.height), solidHeight: round3(info.solidHeight), rateSteel: round3(info.rateSteel), meanDiameter: round3(info.meanDiameter) };
+        return applyTool(ctx, f.id, body, f.mode, f.targets);
+      }
+      case "screw": {
+        const { body, info } = screwBody(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx), ctx.warnings);
+        ctx.info = { pitch: info.pitch, height: round3(info.height) };
+        return applyTool(ctx, f.id, body, f.mode, f.targets);
       }
       case "gridfinity": {
         const plate = f.baseplate ? ctx.prev.grids?.get(f.baseplate) : undefined;
@@ -669,6 +684,78 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     tool = new Body(oc, arena, f.id, r.shape);
     tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
   }
+  return applyTool(ctx, f.id, tool, f.mode, f.targets);
+}
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000;
+
+/**
+ * Coil: each profile region swept along a helix round the axis. The helix runs through the region's
+ * centre (its distance from the axis is the radius), so the profile keeps its place and shape.
+ */
+function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena } = ctx;
+  const ax = axis(f.axis, ctx);
+  const dir: Vec3 = f.flip ? [-ax.dir[0], -ax.dir[1], -ax.dir[2]] : ax.dir;
+  if (!(f.pitch > 0)) throw new FeatureError("the pitch must be greater than zero");
+  if (!(f.turns > 0)) throw new FeatureError("the coil needs at least a fraction of a turn");
+  if (f.turns > 500) throw new FeatureError("at most 500 turns");
+  const taper = f.taper ?? 0;
+  if (Math.abs(taper) >= 60) throw new FeatureError("the taper must be between −60° and 60°");
+  const rel = (p: Vec3): Vec3 => [p[0] - ax.origin[0], p[1] - ax.origin[1], p[2] - ax.origin[2]];
+  const dotv = (p: Vec3, q: Vec3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  let rMax = 0;
+  let rMin = Infinity;
+  const make = (face: TopoDS_Shape) => {
+    // Samples of the profile's outline: how far it reaches from the axis and along it.
+    const zs: number[] = [];
+    for (const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE")); ex.More(); ex.Next()) {
+      const c = arena.track(new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(ex.Current()))));
+      for (let k = 0; k <= 16; k++) {
+        const p = arena.track(c.Value(c.FirstParameter() + ((c.LastParameter() - c.FirstParameter()) * k) / 16));
+        const v = rel([p.X(), p.Y(), p.Z()]);
+        const z = dotv(v, dir);
+        const r = Math.hypot(v[0] - dir[0] * z, v[1] - dir[1] * z, v[2] - dir[2] * z);
+        zs.push(z);
+        rMax = Math.max(rMax, r);
+        rMin = Math.min(rMin, r);
+      }
+    }
+    if (rMin < 1e-4) throw new FeatureError("the profile touches or crosses the axis", "draw the profile beside the axis, like half a thread tooth");
+    const height = Math.max(...zs) - Math.min(...zs);
+    if (f.turns > 1 && height >= f.pitch - 1e-6) throw new FeatureError(`the profile is ${height.toFixed(2)} mm tall along the axis, as much as the pitch: the turns would run into each other`, "raise the pitch or make the profile smaller");
+    const cen = centroid(ctx, face);
+    const v = rel(cen);
+    const z = dotv(v, dir);
+    const radial: Vec3 = [v[0] - dir[0] * z, v[1] - dir[1] * z, v[2] - dir[2] * z];
+    const r = Math.hypot(...radial);
+    if (r < 1e-4) throw new FeatureError("the profile's centre lies on the axis", "draw the profile beside the axis");
+    const origin: Vec3 = [ax.origin[0] + dir[0] * z, ax.origin[1] + dir[1] * z, ax.origin[2] + dir[2] * z];
+    const spine = helixWire(oc, arena, { origin, dir, xdir: [radial[0] / r, radial[1] / r, radial[2] / r] }, r, f.pitch, f.turns, !!f.leftHanded, taper);
+    if (taper < 0 && r - f.turns * f.pitch * Math.tan((-taper * Math.PI) / 180) <= rMax - r + 1e-3) throw new FeatureError("the taper narrows the coil onto its axis", "use fewer turns or a smaller taper");
+    let pipe;
+    try {
+      pipe = arena.track(new oc.BRepOffsetAPI_MakePipe(spine, face));
+    } catch (e) {
+      throw new FeatureError(`coil failed: ${occtErrorMessage(oc, e)}`);
+    }
+    if (!pipe.IsDone()) throw new FeatureError("coil failed");
+    let shape = arena.track(pipe.Shape());
+    const props = arena.track(new oc.GProp_GProps());
+    oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
+    if (props.Mass() < 0) shape = arena.track(shape.Reversed());
+    return { shape, first: arena.track(pipe.FirstShape()), last: arena.track(pipe.LastShape()), generated: (s: TopoDS_Shape) => listToArray(arena, pipe.Generated(s)) };
+  };
+  let tool: Body;
+  if ("sketch" in f.profile) {
+    const { sk, regions } = sketchRegions(f.profile, ctx);
+    tool = sweepTool(ctx, f.id, ctx.g.regionFaces(sk.frame, regions), sk.id, make);
+  } else {
+    const r = make(profileFace(f.profile, ctx, "profile"));
+    tool = new Body(oc, arena, f.id, r.shape);
+    tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+  }
+  ctx.info = { height: round3(f.pitch * f.turns), radius: round3(rMax) };
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
 }
 
