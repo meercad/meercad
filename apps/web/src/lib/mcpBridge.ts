@@ -10,7 +10,7 @@ import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument,
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
-import { sketchCurves } from "../components/io";
+import { sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
@@ -365,6 +365,11 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         if (!sketch) throw new Error("dxf/svg export needs a sketch id");
         const curves = sketchCurves(sketch);
         return { files: { [`sketch.${format}`]: toB64(format === "dxf" ? writeDxf(curves) : writeSvg(curves)) } };
+      }
+      if (format === "usdz") {
+        if (p["variants"]) throw new Error("usdz export takes the design as it is, not its variants");
+        const data = await usdzFile({ ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}), ...(typeof p["posed"] === "boolean" ? { posed: p["posed"] } : {}) });
+        return { files: { [`${typeof p["name"] === "string" ? p["name"] : "model"}.usdz`]: toB64(data) } };
       }
       const { files, filaments } = await tools.exportFiles(format as "stl", {
         ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),

@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, History, House, Info, Keyboard, Moon, PanelLeft, Pencil, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, CircleHelp, Download, Ellipsis, FileDown, History, House, Info, Keyboard, Moon, PanelLeft, Pencil, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -6,7 +6,7 @@ import { featureName } from "../lib/features";
 import { useCompact } from "../lib/layout";
 import { askText } from "./Ask";
 import type { MenuEntry } from "./Menu";
-import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile } from "./io";
+import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile, viewInAr } from "./io";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
 import { hasPack } from "../lib/premium";
@@ -62,6 +62,7 @@ export function TopBar() {
       { label: t("Export 3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
       { label: t("Export OBJ (rendering, other 3D tools)"), icon: <FileDown />, onClick: () => void exportMesh("obj") },
       { label: t("Export STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
+      { label: nativeApp ? t("View in AR (real size on the table)") : t("Export USDZ (AR on iPhone and iPad)"), icon: <Rotate3d />, onClick: () => void viewInAr() },
       ...(variants && hasPack("versions")
         ? (["stl", "3mf", "obj", "step"] as const).map((f) => ({ label: t("Export all {n} variants as {format} (zip)", { n: variants, format: f.toUpperCase() }), icon: <FileDown />, onClick: () => void exportVariants(f) }))
         : []),

@@ -1,14 +1,14 @@
 /** File import/export and share links. */
-import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
+import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
-import { applyOp, designOf, motion, nextFeatureId } from "@meercad/model";
+import { applyOp, designOf, motion, nextFeatureId, partMaterial } from "@meercad/model";
 import { threeMfParts } from "../lib/printParts";
 import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
-import { nativeApp, shareFile } from "../lib/native";
+import { nativeApp, shareFile, showInAr } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
 import { t } from "../lib/i18n";
@@ -94,6 +94,53 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg === t("Nothing to export")) return toast(msg, "error");
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: msg }), "error");
+  }
+}
+
+/**
+ * The parts as USDZ for AR: each with its colour and its material's sheen, moved parts where
+ * they are shown, standing on the table in real size (see writeUsdz).
+ */
+export async function usdzFile(opts: { parts?: readonly string[]; posed?: boolean } = {}): Promise<Uint8Array> {
+  const ids = exportIds(opts.parts);
+  if (!ids.length) throw new Error(t("Nothing to export"));
+  const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
+  const meshes = (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m));
+  const doc = currentDoc();
+  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  return writeUsdz(
+    meshes.map((m) => {
+      const look = partMaterial(doc, m.bodyId)?.look;
+      return {
+        positions: m.positions,
+        indices: m.indices,
+        normals: m.normals,
+        name: partName(m.bodyId, doc.features),
+        ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}),
+        ...(look ? { metalness: look.metalness, roughness: look.roughness } : {}),
+      };
+    }),
+  );
+}
+
+/**
+ * The AR preview: on iPhone and iPad the parts stand on the table in real size (AR Quick Look);
+ * on the Mac and in the browser, where there is no AR, the USDZ is saved to open on an iPhone or
+ * iPad (AirDrop, Messages, Files all show it in AR).
+ */
+export async function viewInAr(): Promise<void> {
+  const task = startTask(t("Preparing the AR view"));
+  try {
+    const data = await usdzFile();
+    const name = `${baseName()}.usdz`;
+    task.done();
+    if (nativeApp) return await showInAr(name, data);
+    download(name, data as BlobPart);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    toast(msg === t("Nothing to export") ? msg : t("{format} export failed: {error}", { format: "USDZ", error: msg }), "error");
+  } finally {
+    task.done();
   }
 }
 
