@@ -14,8 +14,7 @@ import { robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
 import { assistantWindow, desktop, extraWindow } from "./persistence";
-import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, releaseProject as releaseTab, scheduleRebuild, toast, undo, useApp } from "../store";
-import { t } from "./i18n";
+import { apply, currentDoc, flushSave, getViewport, goHome, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, freeProject, holdProject, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
 import { jointRange, renderMotionGif, renderMotionSheet, renderShot, type Shot } from "./render";
@@ -165,7 +164,7 @@ async function route(req: BridgeRequest): Promise<unknown> {
     const holder = await a.holder(id);
     if (holder && !holder.user && holder.session !== session && !holder.ended) throw new Error(`${holder.client} is working on this project in its own meerCAD window right now. Pick another project, or wait until it is done.`);
     if (holder?.user) await a.take(id, client);
-    if (useApp.getState().project?.id === id || useApp.getState().tabs.some((x) => x.id === id)) await releaseProject(id, client);
+    if (useApp.getState().project?.id === id || useApp.getState().tabs.some((x) => x.id === id)) await holdProject(id, client);
     // A window left by an assistant that has finished, with this project, is taken over.
     return a.call(await a.open({ session, client, project: id }), req);
   }
@@ -192,20 +191,27 @@ function initUserWindow(): void {
   useApp.subscribe(report);
   report();
   desktop.on("release-project", ({ callId, id, client }) => {
-    void releaseProject(id, client).finally(() => a.released(callId));
+    void holdProject(id, client).finally(() => a.released(callId));
   });
+  desktop.on("project-free", (id) => void freeProject(id));
 }
 
-/** An assistant opens a project this window has open: save it, close its tab, and say where it went. */
-async function releaseProject(id: string, client: string): Promise<void> {
-  const name = useApp.getState().tabs.find((x) => x.id === id)?.name ?? (useApp.getState().project?.id === id ? useApp.getState().project!.name : null);
-  await releaseTab(id);
-  if (name) toast(t("{client} works on {name} in its own window now", { client, name }));
+/** The user takes a project back from the assistant working on it in its own window. */
+export async function takeBack(): Promise<void> {
+  const id = useApp.getState().project?.id;
+  if (!id) return;
+  await desktop?.assistant?.reclaim(id);
+  await freeProject(id);
 }
+/** Brings the assistant's window with the open project to the front. */
+export const showAssistantWindow = () => {
+  const id = useApp.getState().project?.id;
+  if (id) void desktop?.assistant?.focusHolder(id, true);
+};
 
 /** In this window: shows who is working, and locks the app while the request changes things. */
 async function serve(req: BridgeRequest): Promise<unknown> {
-  if (stopped) throw new Error("The user stopped your editing in this window. Ask them before going on.");
+  if (stopped) throw new Error("The user stopped your editing in this window (or took the project back). Ask them before going on.");
   const client = clientLabel(req.client);
   const locks = !READS.has(req.method);
   // Lookups an assistant makes before opening its own window do not flash in the user's.
@@ -242,6 +248,13 @@ function initAssistantWindow(): void {
     stopped = false;
     useApp.setState({ aiSessionEnded: false });
     report();
+  });
+  desktop.on("assistant-stop", () => {
+    // The user took the project back: this window stops and lets it go.
+    stopped = true;
+    unlock();
+    useApp.setState({ aiActivity: null });
+    void flushSave(true).then(() => goHome());
   });
   desktop.on("assistant-ended", () => {
     unlock();

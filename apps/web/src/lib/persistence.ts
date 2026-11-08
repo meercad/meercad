@@ -85,14 +85,18 @@ interface DesktopApi {
     holder(id: string): Promise<{ session: string; client: string; ended: boolean; user: boolean } | null>;
     /** The user's windows save and close the project, for an assistant's window to open it. */
     take(id: string, client: string): Promise<void>;
+    /** The user takes a project back: the assistant's window holding it stops and lets it go. */
+    reclaim(id: string): Promise<void>;
     released(callId: number): void;
-    focusHolder(id: string): Promise<boolean>;
+    /** Brings the other window of the user's with the project to the front (`assistants`: an assistant's window). */
+    focusHolder(id: string, assistants?: boolean): Promise<boolean>;
     ended(session: string): void;
     ready(): void;
     project(id: string | null): void;
     respond(p: { callId: number; result?: unknown; error?: string }): void;
   };
-  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error", fn: (arg: string) => void): () => void;
+  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "project-free" | "error", fn: (arg: string) => void): () => void;
+  on(channel: "assistant-stop", fn: () => void): () => void;
   on(channel: "bridge-request", fn: (arg: { callId: number; req: unknown }) => void): () => void;
   on(channel: "assistant-ended", fn: () => void): () => void;
   on(channel: "assistant-adopted", fn: (arg: { session: string; client: string }) => void): () => void;

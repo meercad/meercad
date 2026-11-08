@@ -86,6 +86,8 @@ interface State {
   aiLock: { client: string } | null;
   /** In an assistant's own window: its session ended (the assistant is gone), the window is the user's now. */
   aiSessionEnded: boolean;
+  /** Projects an assistant works on in its own window (id → its name): shown here, but locked. */
+  aiHeld: Record<string, string>;
   /** Waiting for the user to click a plane/face to start a sketch. */
   pickingSketchPlane: boolean;
 }
@@ -172,6 +174,7 @@ export const useApp = create<State>(() => ({
   aiActivity: null,
   aiLock: null,
   aiSessionEnded: false,
+  aiHeld: {},
   sideOpen: (() => {
     // On a phone the panel is a sheet over the model: it starts closed.
     if (isCompact()) return false;
@@ -289,8 +292,20 @@ function syncDoc(): void {
   scheduleSave();
 }
 
+/** The assistant working on the open project in its own window, if one is: then it cannot be edited here. */
+export function heldBy(): string | null {
+  const id = get().project?.id;
+  return (id && get().aiHeld[id]) || null;
+}
+function refuseHeld(): boolean {
+  const client = heldBy();
+  if (client) toast(t("{client} is working on this model in its own window", { client }), "error");
+  return !!client;
+}
+
 /** Applies Operations-API ops as one undo step. Returns false (and shows why) on failure. */
 export function apply(...ops: DocOp[]): boolean {
+  if (refuseHeld()) return false;
   try {
     docStore.apply(...ops);
     syncDoc();
@@ -303,6 +318,7 @@ export function apply(...ops: DocOp[]): boolean {
 
 /** Like apply, but merges into the previous undo step (for continuous edits such as sketch drags). */
 export function applyQuiet(...ops: DocOp[]): boolean {
+  if (refuseHeld()) return false;
   try {
     docStore.amend(...ops);
     syncDoc();
@@ -315,6 +331,7 @@ export function applyQuiet(...ops: DocOp[]): boolean {
 
 /** Undo; with a feature dialog open it discards that dialog's unsaved change first. */
 export function undo(): void {
+  if (refuseHeld()) return;
   if (get().dialog) {
     cancelDialog();
     toast(t("Undone: unsaved change"));
@@ -328,7 +345,7 @@ export function undo(): void {
 }
 
 export function redo(): void {
-  if (get().dialog || !docStore.canRedo) return;
+  if (refuseHeld() || get().dialog || !docStore.canRedo) return;
   const before = docStore.doc;
   docStore.redo();
   syncDoc();
@@ -761,7 +778,9 @@ export function dropCachedTab(id: string): void {
 export async function openProject(id: string, { force = false } = {}): Promise<void> {
   if (get().project?.id === id && get().screen === "editor") return;
   // An assistant works on it in its own window: show that window rather than editing it in two places.
-  if (!force && desktop?.assistant && (await desktop.assistant.focusHolder(id))) {
+  const holder = !force && desktop?.assistant && !assistantWindow ? await desktop.assistant.holder(id) : null;
+  if (holder && !holder.user && !holder.ended) set((s) => ({ aiHeld: { ...s.aiHeld, [id]: holder.client } }));
+  if (!force && desktop?.assistant && (!holder || holder.user) && (await desktop.assistant.focusHolder(id))) {
     if (get().screen === "editor") history.replaceState(null, "", `#/p/${encodeURIComponent(get().project!.id)}`);
     else history.replaceState(null, "", "#/");
     return;
@@ -911,6 +930,8 @@ export async function flushSave(withThumbnail = false): Promise<void> {
   clearTimeout(saveTimer);
   const p = get().project;
   if (!p || (get().saveState === "saved" && !withThumbnail)) return;
+  // The assistant's window saves it; this window only shows it.
+  if (heldBy()) return;
   set({ saveState: "saving" });
   const thumbnail = snapshot();
   try {
@@ -953,21 +974,33 @@ export function closeTab(id: string, remember = true): void {
   });
 }
 
-/** An assistant opens this project in its own window: save it and close its tab here. */
-export async function releaseProject(id: string): Promise<void> {
-  const tabs = get().tabs;
-  const i = tabs.findIndex((x) => x.id === id);
-  if (get().project?.id === id) {
-    await flushSave(true);
-    const next = tabs[i + 1] ?? tabs[i - 1];
-    tabStores.delete(id);
-    setTabs(get().tabs.filter((x) => x.id !== id));
-    if (next) await openProject(next.id);
-    else goHome();
-  } else {
-    tabStores.delete(id);
-    if (i >= 0) setTabs(tabs.filter((x) => x.id !== id));
-  }
+/**
+ * An assistant opens this project in its own window: it is saved, and from then on shown here
+ * locked (it follows the assistant's saves) until the assistant lets it go or the user takes it back.
+ */
+export async function holdProject(id: string, client: string): Promise<void> {
+  if (get().project?.id === id) await flushSave(true);
+  tabStores.delete(id);
+  set((s) => ({ aiHeld: { ...s.aiHeld, [id]: client } }));
+}
+
+/** The assistant let the project go (or the user took it back): editable here again, as the assistant left it. */
+export async function freeProject(id: string): Promise<void> {
+  if (!get().aiHeld[id]) return;
+  set((s) => {
+    const { [id]: _gone, ...rest } = s.aiHeld;
+    return { aiHeld: rest };
+  });
+  await reloadProject(id);
+}
+
+/** Shows the saved state of the open project again (another window changed it); a background tab just forgets its copy. */
+export async function reloadProject(id: string): Promise<void> {
+  tabStores.delete(id);
+  if (get().project?.id !== id || get().screen !== "editor") return;
+  const p = await loadProject(id).catch(() => undefined);
+  if (!p || get().project?.id !== id) return;
+  loadDoc(p.doc, { id: p.id, name: p.name, folder: p.folder ?? "", updatedAt: p.updatedAt });
 }
 
 export function reopenClosedTab(): void {

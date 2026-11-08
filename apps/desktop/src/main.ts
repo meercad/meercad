@@ -623,6 +623,7 @@ function openAssistantWindow(session: string, client: string): AssistantWindow {
   win.on("closed", () => {
     assistantWindows.delete(id);
     closedSessions.add(session);
+    projectFree(a.project);
     for (const [callId, c] of bridgeCalls) {
       if (c.window !== id) continue;
       bridgeCalls.delete(callId);
@@ -670,11 +671,20 @@ ipcMain.on("assistant:respond", (_e, p: { callId: number; result?: unknown; erro
 ipcMain.on("assistant:ready", (e) => assistantOf(e.sender.id)?.markReady());
 /** The project each of the user's windows shows (by webContents id); assistants' windows keep theirs in AssistantWindow. */
 const userProjects = new Map<number, string | null>();
+/** An assistant's window let a project go: the user's windows that show it locked may edit it again. */
+const projectFree = (id: string | null) => {
+  if (!id) return;
+  for (const [wc] of userProjects) BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.id === wc)?.webContents.send("project-free", id);
+  mainWindow?.webContents.send("project-free", id);
+};
 ipcMain.on("assistant:project", (e, id: unknown) => {
   const project = typeof id === "string" ? id : null;
   const a = assistantOf(e.sender.id);
-  if (a) a.project = project;
-  else {
+  if (a) {
+    const was = a.project;
+    a.project = project;
+    if (was !== project) projectFree(was);
+  } else {
     const wc = e.sender.id;
     if (!userProjects.has(wc)) e.sender.once("destroyed", () => userProjects.delete(wc));
     userProjects.set(wc, project);
@@ -696,10 +706,10 @@ ipcMain.handle("assistant:holder", (e, id: string) => {
   if (!h) return null;
   return h.assistant ? { session: h.assistant.session, client: h.assistant.client, ended: h.assistant.ended, user: false } : { session: "", client: "", ended: false, user: true };
 });
-/** Brings the window that has a project open to the front; false when no other window has it. */
-ipcMain.handle("assistant:focus-holder", (e, id: string) => {
-  const h = holderOf(id, e.sender.id);
-  if (!h) return false;
+/** Brings the other window of the user's (or, `assistants`, the assistant's) that has a project open to the front; false when none has. */
+ipcMain.handle("assistant:focus-holder", (e, p: { id: string; assistants?: boolean }) => {
+  const h = holderOf(p.id, e.sender.id);
+  if (!h || !!h.assistant !== !!p.assistants) return false;
   h.win.show();
   h.win.focus();
   return true;
@@ -722,6 +732,14 @@ ipcMain.handle("assistant:take", async (e, p: { id: string; client: string }) =>
   }
 });
 ipcMain.on("window:released", (_e, callId: number) => releases.get(callId)?.());
+/** The user takes a project back: the assistant's window with it stops and goes to its overview (it reports that). */
+ipcMain.handle("assistant:reclaim", async (e, id: string) => {
+  const h = holderOf(id, e.sender.id);
+  if (!h?.assistant) return;
+  const a = h.assistant;
+  a.win.webContents.send("assistant-stop");
+  for (let i = 0; i < 100 && a.project === id && !a.win.isDestroyed(); i++) await new Promise((r) => setTimeout(r, 100));
+});
 /** A session's MCP server exited: its window says so and is free to use. */
 ipcMain.on("assistant:ended", (_e, session: string) => {
   for (const a of assistantWindows.values())

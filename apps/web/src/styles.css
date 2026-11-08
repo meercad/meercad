@@ -368,6 +368,9 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .ai-lock-bar > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-lock-bar .pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 .ai-lock-bar .btn { flex: none; height: 30px; padding: 0 14px; border-radius: 999px; }
+/* A model an assistant works on in its own window: locked below the top bar, whose tabs stay usable. */
+.ai-held { top: 68px; }
+.ai-held .ai-lock-bar { top: 6px; }
 /* An assistant's own window (Mac): whose it is, small and out of the way. */
 .ai-window-badge { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 60; max-width: calc(100vw - 240px); padding: 3px 12px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--text-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 
