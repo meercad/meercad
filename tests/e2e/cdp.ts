@@ -49,6 +49,8 @@ export class Page {
   }
   async click(x: number, y: number, { button = "left", count = 1 }: { button?: "left" | "right"; count?: number } = {}): Promise<void> {
     await this.move(x, y);
+    // Hover and snapping follow the pointer on the next frame, as with a hand on the mouse.
+    await sleep(60);
     for (let c = 1; c <= count; c++) {
       await this.call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button, buttons: button === "left" ? 1 : 2, clickCount: c });
       await this.call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button, buttons: 0, clickCount: c });

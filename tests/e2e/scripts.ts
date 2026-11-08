@@ -209,7 +209,8 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.option("Top");
     await ui.field("Offset", -10);
     await ui.accept();
-    await ui.sketchOn("Plane 1");
+    // The tag shows the plane by its id.
+    await ui.sketchOn("pl1");
     await ui.circle([0, 0], 16);
     await ui.finishSketch();
     await ui.feature("Create", "Extrude");
@@ -256,6 +257,8 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.finishSketch();
     await ui.feature("Create", "Extrude");
     await ui.option("Remove");
+    // The cut starts out of the face, away from the block (see the preview): flip it in.
+    await ui.press("Flip direction", ".dialog button");
     await ui.field("Distance", 5);
     await ui.accept();
   },

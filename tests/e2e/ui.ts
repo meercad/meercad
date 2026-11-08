@@ -347,9 +347,12 @@ export class Ui {
       await this.key("Enter");
       await sleep(150);
     }
-    if (close) await this.clickSketch(start);
-    await this.key("Escape");
-    await sleep(200);
+    // Open: the chain stays on for more clicks; closed: clicking the start ends it.
+    if (close) {
+      await this.clickSketch(start);
+      await this.key("Escape");
+      await sleep(200);
+    }
   }
 
   /** A regular hexagon (the polygon tool) from its centre and a corner. */
