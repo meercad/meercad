@@ -58,7 +58,12 @@ export function setBridgeEnabled(on: boolean, remember = true): void {
   }
 }
 
+/** Set once the bridge is started: React's development mode runs the effect that starts it twice. */
+let bridgeStarted = false;
+
 export function initBridge(): void {
+  if (bridgeStarted) return;
+  bridgeStarted = true;
   if (assistantWindow) return initAssistantWindow();
   // A test run's window (MEERCAD_MCP_BRIDGE=off) never talks to assistants.
   if (new URLSearchParams(location.search).get("bridge") === "off") return;
@@ -160,7 +165,8 @@ async function route(req: BridgeRequest): Promise<unknown> {
   const session = req.session ?? connectionSession;
   req = { ...req, session };
   const client = clientLabel(req.client);
-  if (OPENS.has(req.method)) {
+  // Importing a design opens it as a new project, like new_project.
+  if (OPENS.has(req.method) || (req.method === "import_file" && /\.(meercad|json)$/i.test(String(req.params["name"] ?? "")))) {
     if (req.method !== "open_project") return a.call(await a.open({ session, client }), req);
     const id = String(req.params["id"]);
     const holder = await a.holder(id);
@@ -276,7 +282,7 @@ function initAssistantWindow(): void {
 }
 
 /** Requests that only look things up: they do not lock the app. */
-const READS = new Set(["status", "get_status", "get_version", "list_projects", "list_folders", "list_examples", "list_materials"]);
+const READS = new Set(["status", "get_status", "get_version", "list_projects", "list_folders", "list_examples", "list_materials", "read_file", "write_file"]);
 /** How long the app stays locked after the assistant's last request: it often thinks a while between two. */
 export const LOCK_IDLE_MS = 12_000;
 let running = 0;
@@ -698,6 +704,13 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       return tools.gearJoints();
     case "import_file":
       return tools.importBytes(String(p["name"]), String(p["base64"]));
+    case "read_file":
+      if (!desktop?.readLocalFile) throw new Error("this meerCAD app cannot read files for the assistant (update it)");
+      return { base64: await desktop.readLocalFile(String(p["path"])) };
+    case "write_file":
+      if (!desktop?.writeLocalFile) throw new Error("this meerCAD app cannot write files for the assistant (update it)");
+      await desktop.writeLocalFile({ path: String(p["path"]), base64: String(p["base64"]) });
+      return { ok: true };
     case "set_visibility":
       needProject();
       return tools.setVisibility(p as { hide?: string[]; show?: string[]; only?: string[]; all?: boolean });

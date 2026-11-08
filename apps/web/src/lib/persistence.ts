@@ -76,6 +76,9 @@ interface DesktopApi {
   };
   editNative(cmd: "cut" | "copy" | "paste" | "selectAll"): Promise<void>;
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
+  /** Files the MCP server cannot reach itself (macOS privacy), as base64; missing in older desktop apps. */
+  readLocalFile?(path: string): Promise<string>;
+  writeLocalFile?(p: { path: string; base64: string }): Promise<void>;
   /** Missing in desktop apps from before sharing. */
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
   /** Assistant sessions' own windows (MCP), see lib/mcpBridge. */
