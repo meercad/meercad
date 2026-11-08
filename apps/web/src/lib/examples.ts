@@ -305,7 +305,7 @@ const MORE: [file: string, name: string, description: string][] = [
   ["39-two-material-grip", "Two-material grip", "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF"],
   ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
-  ["40-stackable-ribbed-box", "Stackable ribbed box", "Sized for DIN A paper (A6, A5, A4): two of a size stand exactly on the next larger one; rim bead, plinth and framed handles"],
+  ["40-stackable-ribbed-box", "Stackable box", "Sized for DIN A paper (A6, A5, A4): two of a size stand exactly on the next larger one; prints without supports"],
   ["41-linear-axis", "Linear axis", "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts"],
   ["42-boxes-and-snap-hooks", "Boxes and snap hooks", "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks"],
   ["43-springs", "Springs", "Compression, extension and torsion springs from wire, diameter and coils"],

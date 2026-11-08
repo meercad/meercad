@@ -15,11 +15,13 @@
   "corner": "8 mm",
   "foot": "5 mm",
   "clearance": "0.4 mm",
-  "handle_len": "depth * 0.5",
+  "handle_len": "min(depth * 0.5, 90 mm)",
   "handle_h": "24 mm",
-  "handle_drop": "lip_h + frame + handle_h / 2 + 1 mm",
-  "rib": "0.8 mm",
-  "spacing": "4 mm",
+  "grip_bridge": "min(30 mm, handle_len / 2)",
+  "grip_rise": "(handle_len - grip_bridge) / 2 + (sqrt(2) - 1) * handle_h / 2",
+  "grip_top": "height - lip_h - frame - 1 mm",
+  "grip_side": "grip_top - grip_rise",
+  "grip_bottom": "grip_side - handle_h / 2",
   "band": "1 mm",
   "lip_h": "4 mm",
   "plinth_h": "6 mm",
@@ -677,6 +679,26 @@
    ]
   },
   {
+   "id": "ch3",
+   "op": "chamfer",
+   "name": "Rim underside slope",
+   "edges": [
+    {
+     "edge": [
+      "ex5.start_cap",
+      "ex5.side[*]"
+     ]
+    },
+    {
+     "edge": [
+      "ex5.start_cap",
+      "fi5.round[*]"
+     ]
+    }
+   ],
+   "distance": "band"
+  },
+  {
    "id": "bo4",
    "op": "boolean",
    "name": "Box with rim",
@@ -1015,7 +1037,7 @@
      ]
     }
    ],
-   "distance": "band * 0.9"
+   "distance": "band"
   },
   {
    "id": "bo6",
@@ -1047,43 +1069,49 @@
      "id": "c1",
      "type": "point",
      "x": -28,
-     "y": 78
+     "y": 65
     },
     {
      "id": "c2",
      "type": "point",
      "x": 28,
-     "y": 78
-    },
-    {
-     "id": "tl",
-     "type": "point",
-     "x": -28,
-     "y": 95
-    },
-    {
-     "id": "tr",
-     "type": "point",
-     "x": 28,
-     "y": 95
+     "y": 65
     },
     {
      "id": "bl",
      "type": "point",
      "x": -28,
-     "y": 61
+     "y": 50
     },
     {
      "id": "br",
      "type": "point",
      "x": 28,
-     "y": 61
+     "y": 50
     },
     {
-     "id": "lt",
-     "type": "line",
-     "p1": "tr",
-     "p2": "tl"
+     "id": "q1",
+     "type": "point",
+     "x": -37,
+     "y": 74
+    },
+    {
+     "id": "q2",
+     "type": "point",
+     "x": 37,
+     "y": 74
+    },
+    {
+     "id": "t1",
+     "type": "point",
+     "x": -15,
+     "y": 92
+    },
+    {
+     "id": "t2",
+     "type": "point",
+     "x": 15,
+     "y": 92
     },
     {
      "id": "lb",
@@ -1096,74 +1124,142 @@
      "type": "arc",
      "center": "c2",
      "start": "br",
-     "end": "tr"
+     "end": "q2"
+    },
+    {
+     "id": "sr",
+     "type": "line",
+     "p1": "q2",
+     "p2": "t2"
+    },
+    {
+     "id": "lt",
+     "type": "line",
+     "p1": "t2",
+     "p2": "t1"
+    },
+    {
+     "id": "sl",
+     "type": "line",
+     "p1": "t1",
+     "p2": "q1"
     },
     {
      "id": "a2",
      "type": "arc",
      "center": "c1",
-     "start": "tl",
+     "start": "q1",
      "end": "bl"
     }
    ],
    "constraints": [
     {
      "id": "k1",
-     "type": "horizontal",
-     "line": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k2",
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "y",
+     "value": "grip_side"
     },
     {
      "id": "k3",
-     "type": "tangent",
-     "a": "a1",
-     "b": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "c2",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
     },
     {
      "id": "k4",
-     "type": "tangent",
-     "a": "a1",
-     "b": "lb"
+     "type": "distance",
+     "a": "origin",
+     "b": "c2",
+     "axis": "y",
+     "value": "grip_side"
     },
     {
      "id": "k5",
-     "type": "tangent",
-     "a": "a2",
-     "b": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "t1",
+     "axis": "x",
+     "value": "grip_bridge / 2 + frame * (sqrt(2) - 1)"
     },
     {
      "id": "k6",
-     "type": "tangent",
-     "a": "a2",
-     "b": "lb"
+     "type": "distance",
+     "a": "origin",
+     "b": "t1",
+     "axis": "y",
+     "value": "grip_top + frame"
     },
     {
      "id": "k7",
-     "type": "radius",
-     "curve": "a1",
-     "value": "(handle_h + 2 * frame) / 2"
+     "type": "distance",
+     "a": "origin",
+     "b": "t2",
+     "axis": "x",
+     "value": "grip_bridge / 2 + frame * (sqrt(2) - 1)"
+    },
+    {
+     "id": "k8",
+     "type": "distance",
+     "a": "origin",
+     "b": "t2",
+     "axis": "y",
+     "value": "grip_top + frame"
     },
     {
      "id": "k9",
-     "type": "distance",
-     "a": "c1",
-     "b": "c2",
-     "axis": "x",
-     "value": "handle_len - handle_h"
+     "type": "tangent",
+     "a": "a1",
+     "b": "sr"
     },
     {
      "id": "k10",
-     "type": "symmetric",
-     "a": "c1",
-     "b": "c2",
-     "axis": "origin.y"
+     "type": "tangent",
+     "a": "a2",
+     "b": "sl"
     },
     {
      "id": "k11",
      "type": "distance",
      "a": "origin",
-     "b": "c1",
+     "b": "bl",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k12",
+     "type": "distance",
+     "a": "origin",
+     "b": "bl",
      "axis": "y",
-     "value": "height - handle_drop"
+     "value": "grip_side - handle_h / 2 - frame"
+    },
+    {
+     "id": "k13",
+     "type": "distance",
+     "a": "origin",
+     "b": "br",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k14",
+     "type": "distance",
+     "a": "origin",
+     "b": "br",
+     "axis": "y",
+     "value": "grip_side - handle_h / 2 - frame"
     }
    ]
   },
@@ -1201,43 +1297,49 @@
      "id": "c1",
      "type": "point",
      "x": -28,
-     "y": 78
+     "y": 65
     },
     {
      "id": "c2",
      "type": "point",
      "x": 28,
-     "y": 78
-    },
-    {
-     "id": "tl",
-     "type": "point",
-     "x": -28,
-     "y": 95
-    },
-    {
-     "id": "tr",
-     "type": "point",
-     "x": 28,
-     "y": 95
+     "y": 65
     },
     {
      "id": "bl",
      "type": "point",
      "x": -28,
-     "y": 61
+     "y": 50
     },
     {
      "id": "br",
      "type": "point",
      "x": 28,
-     "y": 61
+     "y": 50
     },
     {
-     "id": "lt",
-     "type": "line",
-     "p1": "tr",
-     "p2": "tl"
+     "id": "q1",
+     "type": "point",
+     "x": -37,
+     "y": 74
+    },
+    {
+     "id": "q2",
+     "type": "point",
+     "x": 37,
+     "y": 74
+    },
+    {
+     "id": "t1",
+     "type": "point",
+     "x": -15,
+     "y": 92
+    },
+    {
+     "id": "t2",
+     "type": "point",
+     "x": 15,
+     "y": 92
     },
     {
      "id": "lb",
@@ -1250,74 +1352,142 @@
      "type": "arc",
      "center": "c2",
      "start": "br",
-     "end": "tr"
+     "end": "q2"
+    },
+    {
+     "id": "sr",
+     "type": "line",
+     "p1": "q2",
+     "p2": "t2"
+    },
+    {
+     "id": "lt",
+     "type": "line",
+     "p1": "t2",
+     "p2": "t1"
+    },
+    {
+     "id": "sl",
+     "type": "line",
+     "p1": "t1",
+     "p2": "q1"
     },
     {
      "id": "a2",
      "type": "arc",
      "center": "c1",
-     "start": "tl",
+     "start": "q1",
      "end": "bl"
     }
    ],
    "constraints": [
     {
      "id": "k1",
-     "type": "horizontal",
-     "line": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k2",
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "y",
+     "value": "grip_side"
     },
     {
      "id": "k3",
-     "type": "tangent",
-     "a": "a1",
-     "b": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "c2",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
     },
     {
      "id": "k4",
-     "type": "tangent",
-     "a": "a1",
-     "b": "lb"
+     "type": "distance",
+     "a": "origin",
+     "b": "c2",
+     "axis": "y",
+     "value": "grip_side"
     },
     {
      "id": "k5",
-     "type": "tangent",
-     "a": "a2",
-     "b": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "t1",
+     "axis": "x",
+     "value": "grip_bridge / 2 + frame * (sqrt(2) - 1)"
     },
     {
      "id": "k6",
-     "type": "tangent",
-     "a": "a2",
-     "b": "lb"
+     "type": "distance",
+     "a": "origin",
+     "b": "t1",
+     "axis": "y",
+     "value": "grip_top + frame"
     },
     {
      "id": "k7",
-     "type": "radius",
-     "curve": "a1",
-     "value": "(handle_h + 2 * frame) / 2"
+     "type": "distance",
+     "a": "origin",
+     "b": "t2",
+     "axis": "x",
+     "value": "grip_bridge / 2 + frame * (sqrt(2) - 1)"
+    },
+    {
+     "id": "k8",
+     "type": "distance",
+     "a": "origin",
+     "b": "t2",
+     "axis": "y",
+     "value": "grip_top + frame"
     },
     {
      "id": "k9",
-     "type": "distance",
-     "a": "c1",
-     "b": "c2",
-     "axis": "x",
-     "value": "handle_len - handle_h"
+     "type": "tangent",
+     "a": "a1",
+     "b": "sr"
     },
     {
      "id": "k10",
-     "type": "symmetric",
-     "a": "c1",
-     "b": "c2",
-     "axis": "origin.y"
+     "type": "tangent",
+     "a": "a2",
+     "b": "sl"
     },
     {
      "id": "k11",
      "type": "distance",
      "a": "origin",
-     "b": "c1",
+     "b": "bl",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k12",
+     "type": "distance",
+     "a": "origin",
+     "b": "bl",
      "axis": "y",
-     "value": "height - handle_drop"
+     "value": "grip_side - handle_h / 2 - frame"
+    },
+    {
+     "id": "k13",
+     "type": "distance",
+     "a": "origin",
+     "b": "br",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k14",
+     "type": "distance",
+     "a": "origin",
+     "b": "br",
+     "axis": "y",
+     "value": "grip_side - handle_h / 2 - frame"
     }
    ]
   },
@@ -1347,43 +1517,49 @@
      "id": "c1",
      "type": "point",
      "x": -28,
-     "y": 78
+     "y": 65
     },
     {
      "id": "c2",
      "type": "point",
      "x": 28,
-     "y": 78
-    },
-    {
-     "id": "tl",
-     "type": "point",
-     "x": -28,
-     "y": 90
-    },
-    {
-     "id": "tr",
-     "type": "point",
-     "x": 28,
-     "y": 90
+     "y": 65
     },
     {
      "id": "bl",
      "type": "point",
      "x": -28,
-     "y": 66
+     "y": 50
     },
     {
      "id": "br",
      "type": "point",
      "x": 28,
-     "y": 66
+     "y": 50
     },
     {
-     "id": "lt",
-     "type": "line",
-     "p1": "tr",
-     "p2": "tl"
+     "id": "q1",
+     "type": "point",
+     "x": -37,
+     "y": 74
+    },
+    {
+     "id": "q2",
+     "type": "point",
+     "x": 37,
+     "y": 74
+    },
+    {
+     "id": "t1",
+     "type": "point",
+     "x": -15,
+     "y": 92
+    },
+    {
+     "id": "t2",
+     "type": "point",
+     "x": 15,
+     "y": 92
     },
     {
      "id": "lb",
@@ -1396,74 +1572,142 @@
      "type": "arc",
      "center": "c2",
      "start": "br",
-     "end": "tr"
+     "end": "q2"
+    },
+    {
+     "id": "sr",
+     "type": "line",
+     "p1": "q2",
+     "p2": "t2"
+    },
+    {
+     "id": "lt",
+     "type": "line",
+     "p1": "t2",
+     "p2": "t1"
+    },
+    {
+     "id": "sl",
+     "type": "line",
+     "p1": "t1",
+     "p2": "q1"
     },
     {
      "id": "a2",
      "type": "arc",
      "center": "c1",
-     "start": "tl",
+     "start": "q1",
      "end": "bl"
     }
    ],
    "constraints": [
     {
      "id": "k1",
-     "type": "horizontal",
-     "line": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k2",
+     "type": "distance",
+     "a": "origin",
+     "b": "c1",
+     "axis": "y",
+     "value": "grip_side"
     },
     {
      "id": "k3",
-     "type": "tangent",
-     "a": "a1",
-     "b": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "c2",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
     },
     {
      "id": "k4",
-     "type": "tangent",
-     "a": "a1",
-     "b": "lb"
+     "type": "distance",
+     "a": "origin",
+     "b": "c2",
+     "axis": "y",
+     "value": "grip_side"
     },
     {
      "id": "k5",
-     "type": "tangent",
-     "a": "a2",
-     "b": "lt"
+     "type": "distance",
+     "a": "origin",
+     "b": "t1",
+     "axis": "x",
+     "value": "grip_bridge / 2"
     },
     {
      "id": "k6",
-     "type": "tangent",
-     "a": "a2",
-     "b": "lb"
+     "type": "distance",
+     "a": "origin",
+     "b": "t1",
+     "axis": "y",
+     "value": "grip_top"
     },
     {
      "id": "k7",
-     "type": "radius",
-     "curve": "a1",
-     "value": "handle_h / 2"
+     "type": "distance",
+     "a": "origin",
+     "b": "t2",
+     "axis": "x",
+     "value": "grip_bridge / 2"
+    },
+    {
+     "id": "k8",
+     "type": "distance",
+     "a": "origin",
+     "b": "t2",
+     "axis": "y",
+     "value": "grip_top"
     },
     {
      "id": "k9",
-     "type": "distance",
-     "a": "c1",
-     "b": "c2",
-     "axis": "x",
-     "value": "handle_len - handle_h"
+     "type": "tangent",
+     "a": "a1",
+     "b": "sr"
     },
     {
      "id": "k10",
-     "type": "symmetric",
-     "a": "c1",
-     "b": "c2",
-     "axis": "origin.y"
+     "type": "tangent",
+     "a": "a2",
+     "b": "sl"
     },
     {
      "id": "k11",
      "type": "distance",
      "a": "origin",
-     "b": "c1",
+     "b": "bl",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k12",
+     "type": "distance",
+     "a": "origin",
+     "b": "bl",
      "axis": "y",
-     "value": "height - handle_drop"
+     "value": "grip_side - handle_h / 2"
+    },
+    {
+     "id": "k13",
+     "type": "distance",
+     "a": "origin",
+     "b": "br",
+     "axis": "x",
+     "value": "handle_len / 2 - handle_h / 2"
+    },
+    {
+     "id": "k14",
+     "type": "distance",
+     "a": "origin",
+     "b": "br",
+     "axis": "y",
+     "value": "grip_side - handle_h / 2"
     }
    ]
   },
@@ -1496,7 +1740,7 @@
   },
   {
    "id": "fi12",
-   "op": "fillet",
+   "op": "chamfer",
    "name": "Frame edge",
    "edges": [
     {
@@ -1512,8 +1756,7 @@
      ]
     }
    ],
-   "radius": "0.8 mm",
-   "suppressed": false
+   "distance": "band * 0.9"
   },
   {
    "id": "fi13",
@@ -1534,24 +1777,6 @@
     }
    ],
    "radius": "1.2 mm"
-  },
-  {
-   "id": "st1",
-   "op": "texture",
-   "name": "Ribs",
-   "faces": [
-    {
-     "face": "ex1.side[*]"
-    },
-    {
-     "face": "fi1.round[*]"
-    }
-   ],
-   "pattern": "ribs",
-   "depth": "rib",
-   "pitch": "spacing",
-   "suppressed": false,
-   "fade": "0.5 mm"
   }
  ],
  "rollback": null,

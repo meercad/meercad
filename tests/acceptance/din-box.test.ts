@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { clearances } from "@meercad/kernel";
-import { resolveParams } from "@meercad/model";
+import { clearances, exportMeshes } from "@meercad/kernel";
+import { printCheck, resolveParams, SURFACE_OVERHANG } from "@meercad/model";
 import type { Feature, MeercadDocument } from "@meercad/schema";
 import { getOcct, newSession, rect, sketch } from "./helpers.js";
 
@@ -70,4 +70,33 @@ describe("DIN A storage box", () => {
     expect(pair.overlap).toBeLessThan(1e-3);
     expect(pair.distance).toBeGreaterThan(0.9);
   });
+
+  for (const variant of ["A6", "A5", "A4"])
+    it(`${variant} prints upright without supports: only the short flat tops of the grip holes bridge`, async () => {
+      const d = { ...box(), variant };
+      const s = await newSession();
+      const { report } = s.rebuild(d);
+      expect(report.features.filter((f) => f.status !== "ok")).toEqual([]);
+      const [m] = exportMeshes(await getOcct(), s.state!);
+      const check = printCheck(m!.positions, m!.indices, [0, 0, -1], 46);
+      const params = { ...d.params, ...d.variants!.find((v) => v.name === variant)!.params };
+      const { values } = resolveParams(params);
+      const top = values.get("grip_top")!, bridge = values.get("grip_bridge")!;
+      // Outside the flat tops of the grip holes only the 0.1 mm ledge the chamfer leaves under the grip frames.
+      let elsewhere = 0;
+      const where: string[] = [];
+      for (let t = 0; t < check.kind.length; t++) {
+        if (check.kind[t] !== SURFACE_OVERHANG) continue;
+        const p = [0, 1, 2].map((j) => [0, 1, 2].map((k) => m!.positions[m!.indices[t * 3 + j]! * 3 + k]!));
+        const c = [0, 1, 2].map((k) => (p[0]![k]! + p[1]![k]! + p[2]![k]!) / 3);
+        if (Math.abs(c[2]! - top) < 0.5 && Math.abs(c[1]!) < bridge / 2 + 1.5) continue;
+        const u = [0, 1, 2].map((k) => p[1]![k]! - p[0]![k]!), v = [0, 1, 2].map((k) => p[2]![k]! - p[0]![k]!);
+        elsewhere += Math.hypot(u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!) / 2;
+        const A = Math.hypot(u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!) / 2;
+        where.push(`${A.toFixed(2)}@${c.map((x) => x.toFixed(1)).join(",")}`);
+      }
+      where.sort((a, b) => parseFloat(b) - parseFloat(a));
+      expect(elsewhere, where.slice(0, 12).join(" | ") + ` (${where.length})`).toBeLessThan(25);
+      expect(bridge).toBeLessThanOrEqual(30);
+    }, 120_000);
 });
