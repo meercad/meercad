@@ -72,7 +72,7 @@ describe("DIN A storage box", () => {
   });
 
   for (const variant of ["A6", "A5", "A4"])
-    it(`${variant} prints upright without supports: only the short flat tops of the grip holes bridge`, async () => {
+    it(`${variant} prints upright without supports: only the flat tops of the grip holes bridge`, async () => {
       const d = { ...box(), variant };
       const s = await newSession();
       const { report } = s.rebuild(d);
@@ -100,6 +100,6 @@ describe("DIN A storage box", () => {
       }
       where.sort((a, b) => parseFloat(b) - parseFloat(a));
       expect(elsewhere, where.slice(0, 12).join(" | ") + ` (${where.length})`).toBeLessThan(25);
-      expect(bridge).toBeLessThanOrEqual(30);
+      expect(bridge).toBeLessThanOrEqual(62);
     }, 120_000);
 });

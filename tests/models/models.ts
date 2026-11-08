@@ -711,11 +711,11 @@ export const MODELS: TestModel[] = [
   {
     file: "39 Stapelbox",
     name: "Stackable box",
-    look: "A box like a shop storage box, sized for A5 paper: rim bead on top, smooth plinth band at the bottom, smooth walls, framed grip holes on the short ends that are round below and end in 45° slopes and a short flat top above, so it prints upright without supports. Outside 234.4 × 160.7 × 100; A5 paper lies inside with play. Its solid foot fits into the box below with 0.4 mm play and a 45° slope; a 7.6 mm groove across the middle of the foot takes the two touching rims when it stands on two boxes of the next smaller size. A6, A5 and A4 as variants, two of the next smaller size fit exactly on top of one.",
+    look: "A box like a shop storage box, sized for A5 paper: rim bead on top, smooth plinth band at the bottom, smooth walls, framed grip slots on the short ends, round below with small 45° corners up to a flat top that bridges, so it prints upright without supports. Outside 234.4 × 160.7 × 100; A5 paper lies inside with play. Its solid foot fits into the box below with 0.4 mm play and a 45° slope; a 7.6 mm groove across the middle of the foot takes the two touching rims when it stands on two boxes of the next smaller size. A6, A5 and A4 as variants, two of the next smaller size fit exactly on top of one.",
     // Without its sizes as variants, so the plain parameter changes below take effect.
     doc: { ...(JSON.parse(readFileSync(new URL("../../apps/web/src/examples/40-stackable-ribbed-box.meercad", import.meta.url), "utf8")) as MeercadDocument), variants: undefined, variant: undefined },
     // Volume measured once (walls, bead, plinth, frames), kept as a check that nothing moves.
-    expect: { bodies: 1, volume: 418674, size: [234.38, 160.73, 100] },
+    expect: { bodies: 1, volume: 422898, size: [234.38, 160.73, 100] },
     variants: [
       { params: { din: "6", height: "70 mm", handle_h: "20 mm" }, expect: { bodies: 1, size: [160.73, 117.19, 70] } },
       { params: { din: "4", height: "140 mm" }, expect: { bodies: 1, size: [321.46, 234.38, 140] } },
