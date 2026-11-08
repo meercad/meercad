@@ -295,4 +295,70 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Allowance", 0);
     await ui.accept();
   },
+
+  "19 Pfeilradpaar": async (ui) => {
+    await ui.feature("Create", "Gear");
+    await ui.field("Module", 2);
+    await ui.field("Teeth", 20);
+    await ui.field("Width", 12);
+    await ui.field("Helix angle", 30);
+    await ui.check("Herringbone (both hands, no side thrust)");
+    await ui.check("Chamfer tooth ends");
+    await ui.field("Chamfer (45°)", 0.6);
+    await ui.press("Add mating gear", ".dialog button");
+    await ui.until("the mating gear", `s.dialog?.feature.id === "gr2"`);
+    await ui.field("Teeth", 13);
+    await ui.check("Chamfer tooth ends");
+    await ui.field("Chamfer (45°)", 0.6);
+    await ui.accept();
+  },
+
+  "20 Planetengetriebe": async (ui) => {
+    await ui.feature("Create", "Gear");
+    await ui.option("Ring gear");
+    await ui.field("Module", 1);
+    await ui.field("Teeth", 60);
+    await ui.field("Width", 6);
+    await ui.field("Outside diameter", 70);
+    await ui.press("Add mating gear", ".dialog button");
+    await ui.until("planet 1", `s.dialog?.feature.id === "gr2"`);
+    await ui.field("Teeth", 18);
+    await ui.field("Direction from the partner", 0);
+    await ui.accept();
+    // Planets 2 and 3: new gears meshing with the ring, a third of a turn apart.
+    for (const [id, dir] of [["gr3", 120], ["gr4", 240]] as const) {
+      await ui.feature("Create", "Gear");
+      await ui.until(id, `s.dialog?.feature.id === "${id}"`);
+      await ui.choose("Meshes with", "Gear 1");
+      await ui.field("Teeth", 18);
+      await ui.field("Width", 6);
+      await ui.field("Direction from the partner", dir);
+      await ui.accept();
+    }
+    await ui.feature("Create", "Gear");
+    await ui.choose("Meshes with", "Gear 2");
+    await ui.field("Teeth", 24);
+    await ui.field("Width", 6);
+    await ui.field("Direction from the partner", 180);
+    await ui.check("Bore");
+    await ui.field("Diameter", 5);
+    await ui.field("Allowance", 0);
+    await ui.accept();
+  },
+
+  "21 Zahnstange mit Ritzel": async (ui) => {
+    await ui.feature("Create", "Gear");
+    await ui.option("Rack");
+    await ui.field("Module", 1.5);
+    await ui.field("Teeth", 20);
+    await ui.field("Width", 8);
+    await ui.field("Back below the teeth", 6);
+    await ui.press("Add mating gear", ".dialog button");
+    await ui.until("the pinion", `s.dialog?.feature.id === "gr2"`);
+    await ui.field("Teeth", 16);
+    await ui.check("Bore");
+    await ui.field("Diameter", 5);
+    await ui.field("Allowance", 0);
+    await ui.accept();
+  },
 };

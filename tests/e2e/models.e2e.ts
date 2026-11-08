@@ -41,12 +41,16 @@ function check(r: Result, want: Expectation) {
 }
 
 /** What the app shows for the open part: failed features, parts, joint errors. */
-const result = (ui: Ui) =>
-  ui.state<Result>(`({
+const result = async (ui: Ui) => {
+  await ui.settle();
+  // Volumes come in a moment after the shapes (the app measures them in the background).
+  await ui.until("the parts' volumes", "s.output.report.bodies.every((b) => b.volume > 0)", 120000);
+  return ui.state<Result>(`({
     failed: s.output.report.features.filter((f) => f.status !== "ok").map((f) => f.id + ": " + f.message),
     bodies: s.output.report.bodies.map((b) => ({ volume: b.volume, bbox: b.bbox })),
     joints: (s.output.report.joints ?? []).filter((j) => j.error).map((j) => j.id + ": " + j.error),
   })`);
+};
 
 const only = process.env["E2E_ONLY"]?.split(",").map((s) => s.trim().padStart(2, "0"));
 const out = process.env["E2E_OUT"];
