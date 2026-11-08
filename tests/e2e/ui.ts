@@ -221,7 +221,7 @@ export class Ui {
    * {body, index, tags, center, normal} for faces. Only spots where that edge or face is in front
    * count, so the click lands on it as a person's would.
    */
-  async spotOf(kind: "edge" | "face", test: string, any = false): Promise<Vec2> {
+  async spotOf(kind: "edge" | "face", test: string, any = false, faceOnly = false): Promise<Vec2> {
     const at = await this.page.eval<Vec2 | string>(`(() => {
       const v = meercadTest.store.getViewport(), r = v.renderer.domElement.getBoundingClientRect();
       const s = meercadTest.app.getState(), test = (${test});
@@ -235,7 +235,7 @@ export class Ui {
             for (let k = start; k < start + count; k++) points.push([m.edgeLines[k * 3], m.edgeLines[k * 3 + 1], m.edgeLines[k * 3 + 2]]);
             const min = [0, 1, 2].map((i) => Math.min(...points.map((p) => p[i]))), max = [0, 1, 2].map((i) => Math.max(...points.map((p) => p[i])));
             const mid = points[Math.floor(points.length / 2)];
-            if (test({ body: m.bodyId, index, points, min, max, mid })) found.push({ body: m.bodyId, index, spots: points.slice(0, -1).flatMap((p, i) => [0.5, 0.3, 0.7].map((t) => p.map((c, j) => c + (points[i + 1][j] - c) * t))) });
+            if (test({ body: m.bodyId, index, points, min, max, mid })) found.push({ body: m.bodyId, index, spots: points.slice(0, -1).flatMap((p, i) => [0.5, 0.3, 0.7, 0.15, 0.85, 0.1, 0.9, 0.07, 0.93].map((t) => p.map((c, j) => c + (points[i + 1][j] - c) * t))) });
           }
         } else {
           for (let g = 0; g < m.faceRanges.length; g += 3) {
@@ -271,8 +271,12 @@ export class Ui {
           const x = r.left + q[0], y = r.top + q[1];
           if (x < r.left + 120 || y < r.top + 80 || x > r.right - 20 || y > r.bottom - 60) continue;
           if (dlg && x < dlg.right + 8 && y < dlg.bottom + 8) continue;
+          // Not under a value chip or label standing in the view (a click there goes to it).
+          if (document.elementFromPoint(x, y) !== v.renderer.domElement) continue;
+          // Nor on a drag arrow (a fillet's radius, an extrude's distance): a press there drags it.
+          if (v.hitHandle?.(x, y)) continue;
           // What the app would take there, edges winning near them as for a person's click.
-          const hit = v.pick(x, y, new Set(["face", "edge"]));
+          const hit = v.pick(x, y, new Set(${faceOnly ? `["face"]` : `["face", "edge"]`}));
           if (hit && hit.kind === ${JSON.stringify(kind)} && hit.bodyId === f.body && hit[${JSON.stringify(kind)}] === f.index) return [x, y];
         }
       }
@@ -284,15 +288,20 @@ export class Ui {
 
   /** Clicks the model's edge matching `test` (see spotOf); with shift to add to a selection. */
   async clickEdge(test: string): Promise<void> {
+    await this.steady();
     const [x, y] = await this.visibleSpot("edge", test);
     await this.page.click(x, y);
     await sleep(200);
+    // The preview follows each pick; the next aim waits for it, or it lands on what was there.
+    await this.settle();
   }
 
   async clickFace(test: string, { any = false } = {}): Promise<void> {
+    await this.steady();
     const [x, y] = await this.visibleSpot("face", test, any);
     await this.page.click(x, y);
     await sleep(200);
+    await this.settle();
   }
 
   /**
@@ -305,6 +314,7 @@ export class Ui {
       await this.press("Planes", "button[title='Planes']");
       await sleep(400);
     }
+    await this.steady();
     const at = await this.page.eval<Vec2 | null>(`(() => {
       const vp = meercadTest.store.getViewport(), r = vp.renderer.domElement.getBoundingClientRect();
       const o = ${JSON.stringify(origin)}, u = ${JSON.stringify(u)}, v = ${JSON.stringify(v)};
@@ -316,7 +326,8 @@ export class Ui {
         if (x < r.left + 120 || y < r.top + 80 || x > r.right - 20 || y > r.bottom - 60) continue;
         const dlg = document.querySelector(".dialog")?.getBoundingClientRect();
         if (dlg && x < dlg.right + 8 && y < dlg.bottom + 8) continue;
-        const hit = vp.pick(x, y, new Set(["face", "edge", "plane"]));
+        // What a plane field takes there (its picks are planes and faces).
+        const hit = vp.pick(x, y, new Set(["plane", "face"]));
         if (hit?.kind === "plane" && hit.planeId === ${JSON.stringify(id)}) return [x, y];
       }
       return null;
@@ -326,15 +337,28 @@ export class Ui {
     await sleep(250);
   }
 
+  /** Waits until the view stands still (a view change animates the camera for a moment). */
+  async steady(): Promise<void> {
+    const probe = () => this.page.eval<string>(`JSON.stringify(meercadTest.store.getViewport().worldToScreen([0, 0, 0])?.map((v) => Math.round(v)))`);
+    let last = await probe();
+    for (let i = 0; i < 30; i++) {
+      await sleep(120);
+      const now = await probe();
+      if (now === last) return;
+      last = now;
+    }
+  }
+
   /** Clicks a part (any visible face of the body with this id). */
   async clickBody(id: string): Promise<void> {
+    await this.steady();
     const [x, y] = await this.visibleSpot("face", `(f) => f.body === ${JSON.stringify(id)}`, true);
     await this.page.click(x, y);
     await sleep(200);
   }
 
   /** Like spotOf; when the edge or face is hidden from here, turns the view the way a person would. */
-  private async visibleSpot(kind: "edge" | "face", test: string, any = false): Promise<Vec2> {
+  private async visibleSpot(kind: "edge" | "face", test: string, any = false, faceOnly = false): Promise<Vec2> {
     let last: unknown;
     // From where it is, then isometric and turned round in quarter turns (the view cube's buttons).
     for (const v of [null, "Isometric view", "Rotate view 90° left", "Rotate view 90° left", "Rotate view 90° left"]) {
@@ -343,7 +367,7 @@ export class Ui {
         await sleep(700);
       }
       try {
-        return await this.spotOf(kind, test, any);
+        return await this.spotOf(kind, test, any, faceOnly);
       } catch (e) {
         last = e;
         if (!String(e).includes("not visible")) throw e;
@@ -353,7 +377,7 @@ export class Ui {
     for (const k of ["5", "2", "3", "6", "7"] as const) {
       await this.view(k);
       try {
-        return await this.spotOf(kind, test, any);
+        return await this.spotOf(kind, test, any, faceOnly);
       } catch (e) {
         last = e;
         if (!String(e).includes("not visible")) throw e;
@@ -391,8 +415,21 @@ export class Ui {
 
   /** Starts a sketch on a plane: an origin plane from the bar ("Top", "Front", "Right") or another by its tag. */
   async sketchOn(plane: string): Promise<void> {
+    // A plane or feature still selected from before would take the new sketch straight away: Esc clears it.
+    if (await this.state<boolean>("(s.selection.length > 0 || !!s.selectedFeature) && !s.dialog && !s.sketchId")) await this.view("1").then(() => this.key("Escape"));
     await this.press("Sketch", ".rail button");
-    await this.press(plane, ".plane-bar button, .plane-tag", { exact: true });
+    // A plane's tag high above the parts can be out of view: zoom out until it shows, as a person would.
+    const shown = async () => {
+      const at = await this.find(".plane-bar button, .plane-tag", plane, { exact: true });
+      return !!at && (await this.page.eval<boolean>(`${at[0]} > 160 && ${at[1]} > 120 && ${at[0]} < innerWidth - 20 && ${at[1]} < innerHeight - 60`));
+    };
+    for (let i = 0; i < 12 && !(await shown()); i++) {
+      const r = await this.page.eval<{ x: number; y: number }>(`(() => { const r = meercadTest.store.getViewport().renderer.domElement.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+      await this.page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: r.x, y: r.y, deltaX: 0, deltaY: 240 });
+      await sleep(250);
+    }
+    // The origin planes from the bar: their tags in the view can lie under an offset plane's tag.
+    await this.press(plane, ["Top", "Front", "Right"].includes(plane) ? ".plane-bar button" : ".plane-tag", { exact: true });
     await sleep(700);
   }
 
@@ -792,6 +829,9 @@ export class Ui {
   /** Zooms the view in (ticks > 0) or out with the mouse wheel over a point of the model. */
   async zoomAt(p: Vec3, ticks: number): Promise<void> {
     const [x, y] = await this.screenOf(p);
+    // The wheel over a panel scrolls the panel: a point under the dialog is zoomed on beside it.
+    const free = await this.page.eval<boolean>(`document.elementFromPoint(${x}, ${y}) === meercadTest.store.getViewport().renderer.domElement`);
+    if (!free) throw new Error(`point ${p} lies under a panel`);
     for (let i = 0; i < Math.abs(ticks); i++) {
       await this.page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY: ticks > 0 ? -120 : 120 });
       await sleep(80);

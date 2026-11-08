@@ -762,19 +762,45 @@ const EDGE_CENTRED = (body: string, x: number, y: number, z: number) =>
   `(e) => e.body === ${JSON.stringify(body)} && e.max[2] - e.min[2] < 0.01 && Math.abs(e.min[2] - ${z}) < 0.01 && Math.abs((e.min[0] + e.max[0]) / 2 - ${x}) < 0.3 && Math.abs((e.min[1] + e.max[1]) / 2 - ${y}) < 0.3`;
 const deg = (r: number) => +((r * 180) / Math.PI).toFixed(4);
 
-/** Rounds the four vertical corner edges of a part `w` × `d` centred on the origin. */
-async function roundCorners(ui: Ui, body: string, w: number, d: number, radius: number | string) {
+/**
+ * Rounds the four vertical corner edges of a part `w` × `d` round the origin, each looked at from
+ * a side and close up (on a big part they are only a few mm high), around height z.
+ */
+async function roundCorners(ui: Ui, body: string, w: number, d: number, z: number, radius: string, cy = 0) {
   await ui.feature("Modify", "Fillet");
-  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) await ui.clickEdge(BODY_VERTICAL_AT(body, (sx! * w) / 2, (sy! * d) / 2));
+  // Each from above at an angle, turned round (the view cube's quarter turns) until it is in
+  // front, then zoomed in on it.
+  for (const [sx, sy] of [[1, -1], [-1, -1], [-1, 1], [1, 1]] as const) {
+    const at: [number, number, number] = [(sx * w) / 2, cy + (sy * d) / 2, z];
+    const test = BODY_VERTICAL_AT(body, at[0], at[1]);
+    let spot: [number, number] | null = null;
+    let why = "";
+    for (let turns = 0; turns < 4 && !spot; turns++) {
+      await ui.view("1");
+      for (let i = 0; i < turns; i++) {
+        await ui.press("Rotate view 90° left", ".icon-btn");
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      await ui.zoomAt(at, 24).catch(() => undefined);
+      await new Promise((r) => setTimeout(r, 500));
+      const px = await ui.page.eval<number>(`meercadTest.store.getViewport().pixelSize(${JSON.stringify(at)})`);
+      spot = await ui.spotOf("edge", test).catch((e) => ((why = `${String(e).slice(-22)} at ${px.toFixed(3)} mm/px`), null));
+    }
+    if (!spot) throw new Error(`corner ${at} of ${body} not to be picked from any side (${why})`);
+    await ui.page.click(spot[0], spot[1]);
+    await ui.settle();
+  }
   await ui.field("Radius", radius);
   await ui.accept();
 }
 
-/** Bevels the outside bottom edges (four sides, four rounds of radius r) of a ring `w` × `d` round the origin, at height z. */
-async function bevelOutsideBottom(ui: Ui, body: string, w: number, d: number, r: number, z: number, distance: string) {
+/**
+ * Bevels the outside bottom edges of a ring `w` × `d` round the origin at height z: one click on
+ * the front one takes the whole tangent loop (its sides and rounds).
+ */
+async function bevelOutsideBottom(ui: Ui, body: string, d: number, z: number, distance: string) {
   await ui.feature("Modify", "Chamfer");
-  for (const [x, y] of [[0, -d / 2], [w / 2, 0], [0, d / 2], [-w / 2, 0]] as const) await ui.clickEdge(EDGE_CENTRED(body, x, y, z));
-  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) await ui.clickEdge(EDGE_CENTRED(body, sx * (w / 2 - r / 2), sy * (d / 2 - r / 2), z));
+  await ui.clickEdge(EDGE_CENTRED(body, 0, -d / 2, z));
   await ui.field("Distance", distance);
   await ui.accept();
 }
@@ -1016,103 +1042,17 @@ const MORE_SCRIPTS: Record<string, Script> = {
     });
   },
 
-  "39 Stapelbox": async (ui) => {
-    for (const [k, v] of [
-      ["din", 5], ["smallest", 6], ["play", "1 mm"], ["wall", "2.4 mm"], ["corner", "8 mm"], ["foot", "5 mm"], ["clearance", "0.4 mm"], ["band", "1 mm"], ["lip_h", "4 mm"], ["plinth_h", "6 mm"], ["height", "100 mm"],
-      ["paper_long", "1000 mm * 2 ^ (0.25 - din / 2)"], ["paper_short", "1000 mm * 2 ^ (-0.25 - din / 2)"],
-      ["margin", "2 * (play + (corner - wall) * (1 - sqrt(0.5)) + wall + band)"], ["steps", "smallest - din"],
-      ["width", "paper_long + margin * 2 ^ ceil(steps / 2) - 2 * band"], ["depth", "paper_short + margin * 2 ^ floor(steps / 2) - 2 * band"],
-    ] as const) await ui.addVariable(k, v);
-    const { w, d } = STACK;
-    // The bead round the rim and the plinth band first (rings round the box, each rounded and
-    // bevelled underneath), while their edges are still in view; then the box.
-    for (const [k, plane, offset, h, ring] of [[1, "pl1", "height - lip_h", "lip_h", 96], [3, "pl2", "foot + wall + clearance", "plinth_h", 7.8]] as const) {
-      await ui.feature("Create", "Plane");
-      await ui.option("Top");
-      await ui.field("Offset", offset);
-      await ui.accept();
-      await ui.sketchOn(plane);
-      await ui.rectCenter([0, 0], "width + 2 * band", "depth + 2 * band");
-      await ui.finishSketch();
-      await ui.feature("Create", "Extrude");
-      if (k > 1) await ui.option("New");
-      await ui.field("Distance", h);
-      await ui.accept();
-      await roundCorners(ui, `ex${k}`, w + 2, d + 2, "corner + band");
-      await ui.sketchOn(plane);
-      await ui.rectCenter([0, 0], "width - 2 * wall", "depth - 2 * wall");
-      await ui.finishSketch();
-      await ui.feature("Create", "Extrude");
-      await ui.option("New");
-      await ui.field("Distance", k === 1 ? "lip_h + 1 mm" : "plinth_h");
-      await ui.accept();
-      await roundCorners(ui, `ex${k + 1}`, w - 4.8, d - 4.8, "corner - wall");
-      await ui.feature("Modify", "Boolean");
-      await ui.option("Subtract");
-      await ui.clickBody(`ex${k}`);
-      await ui.clickBody(`ex${k + 1}`);
-      await ui.accept();
-      await bevelOutsideBottom(ui, `ex${k}`, w + 2, d + 2, 9, ring, "band");
-    }
-    await ui.feature("Create", "Plane");
-    await ui.option("Top");
-    await ui.field("Offset", "foot");
-    await ui.accept();
-    await ui.sketchOn("pl3");
-    await ui.rectCenter([0, 0], "width", "depth");
-    await ui.finishSketch();
-    await ui.feature("Create", "Extrude");
-    await ui.option("New");
-    await ui.field("Distance", "height - foot");
-    await ui.accept();
-    await roundCorners(ui, "ex5", w, d, "corner");
-    // The slope it stacks on: the bottom's edges bevelled.
-    await ui.feature("Modify", "Chamfer");
-    await ui.clickFace(`(f) => f.body === "ex5" && f.normal[2] < -0.99 && Math.abs(f.center[2] - 5) < 0.01`);
-    await ui.field("Distance", "wall + clearance");
-    await ui.accept();
-    await ui.feature("Modify", "Shell");
-    await ui.clickFace(`(f) => f.body === "ex5" && f.normal[2] > 0.99 && Math.abs(f.center[2] - 100) < 0.01`);
-    await ui.field("Thickness", "wall");
-    await ui.accept();
-    // The solid foot under it, with the groove across.
-    await ui.sketchOn("Top");
-    await ui.rectCenter([0, 0], "width - 2 * (wall + clearance)", "depth - 2 * (wall + clearance)");
-    await ui.finishSketch();
-    await ui.feature("Create", "Extrude");
-    await ui.option("New");
-    await ui.field("Distance", "foot + 1 mm");
-    await ui.accept();
-    await roundCorners(ui, "ex6", w - 5.6, d - 5.6, "corner - wall - clearance");
-    await ui.feature("Modify", "Boolean");
-    await ui.option("Union");
-    await ui.clickBody("ex5");
-    await ui.clickBody("ex6");
-    await ui.accept();
-    await ui.sketchOn("Top");
-    await ui.rectCenter([0, 0], "2 * (band + wall + clearance)", "depth + 10 mm");
-    await ui.finishSketch();
-    await ui.feature("Create", "Extrude");
-    await ui.option("Remove");
-    await ui.field("Distance", "foot");
-    await ui.accept();
-    await ui.feature("Modify", "Fillet");
-    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) await ui.clickEdge(BODY_VERTICAL_AT("ex5", sx! * 3.8, (sy! * (d - 5.6)) / 2));
-    await ui.field("Radius", "corner - wall - clearance");
-    await ui.accept();
-    // Bead and plinth onto the box, the bead's top rounded.
-    await ui.feature("Modify", "Boolean");
-    await ui.option("Union");
-    await ui.clickBody("ex5");
-    await ui.clickBody("ex1");
-    await ui.clickBody("ex3");
-    await ui.accept();
-    await ui.feature("Modify", "Fillet");
-    await ui.clickFace(TOP_FACE(100));
-    await ui.field("Radius", "1.2 mm");
-    await ui.accept();
-  },
 
+};
+
+/**
+ * Models not yet run (todo), as far as they got on 08.11; not in SCRIPTS, so the run lists them as
+ * todo. 40: green on its own, but in the full run the lead screw's plane click (pl1) does not
+ * take and the tap on the plate's end sets the plane instead. 43: the lid's 2 mm corner edges (fillet, as in the original) do not pick yet. 39: the 1 mm
+ * of the rim tool's corners standing out of the bead, and the plinth tool lying flush inside its
+ * ring, do not pick yet (hiding a part from the parts list, as a person would, is the next try).
+ */
+export const PENDING: Record<string, Script> = {
   "40 Linearachse": async (ui) => {
     await ui.addVariable("travel", "240 mm");
     await ui.addVariable("plate", "8 mm");
@@ -1146,7 +1086,6 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await standardPart(ui, "Corner bracket", { size: "2020", turned: -90, ...onTop, places: [[-130, -28]] });
     await standardPart(ui, "Corner bracket", { size: "2020", turned: 90, ...onTop, places: [[130, -28]] });
   },
-
   "43 Boxen und Schnapphaken": async (ui) => {
     await ui.addVariable("wall", "2 mm");
     await ui.addVariable("play", "0.2 mm");
@@ -1188,19 +1127,17 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await ui.option("Top");
     await ui.field("Offset", 25);
     await ui.accept();
-    // From its centre (the rounded case below has no corner there to click), its corners rounded
-    // in the sketch: the plate's own corner edges are only 2 mm high to pick.
+    // From its centre (the rounded case below has no corner there to click).
     await ui.sketchOn("pl1");
     await ui.zoomSketch(110);
     await ui.rectCenter([0, -90], 60, 40);
-    await ui.tool("Tools", "Round a corner");
-    await ui.sketchSize("Radius", 4);
-    for (const c of [[-30, -110], [30, -110], [30, -70], [-30, -70]] as [number, number][]) await ui.clickSketch(c);
     await ui.finishSketch();
     await ui.feature("Create", "Extrude");
     await ui.option("New");
     await ui.field("Distance", "wall");
     await ui.accept();
+    // Its corners, only 2 mm high: each looked at close up.
+    await roundCorners(ui, "ex2", 60, 40, 26, "4", -90);
     // Two hooks under the lid, hanging from the rim's plane, their barbs into the case's long walls.
     const lidTop = `(f) => f.body === "ex2" && f.normal[2] > 0.99`;
     for (const [x, turn] of [[27.8, 0], [-27.8, 180]] as const) {
@@ -1217,6 +1154,123 @@ const MORE_SCRIPTS: Record<string, Script> = {
       await ui.accept();
     }
   },
+  "39 Stapelbox": async (ui) => {
+    // The box by its front: its rim's top lies in one plane with the bead's, where either may answer.
+    const BOX_SIDE = `(f) => f.body === "ex5" && f.normal[1] < -0.99 && f.center[2] > 20`;
+    for (const [k, v] of [
+      ["din", 5], ["smallest", 6], ["play", "1 mm"], ["wall", "2.4 mm"], ["corner", "8 mm"], ["foot", "5 mm"], ["clearance", "0.4 mm"], ["band", "1 mm"], ["lip_h", "4 mm"], ["plinth_h", "6 mm"], ["height", "100 mm"],
+      ["paper_long", "1000 mm * 2 ^ (0.25 - din / 2)"], ["paper_short", "1000 mm * 2 ^ (-0.25 - din / 2)"],
+      ["margin", "2 * (play + (corner - wall) * (1 - sqrt(0.5)) + wall + band)"], ["steps", "smallest - din"],
+      ["width", "paper_long + margin * 2 ^ ceil(steps / 2) - 2 * band"], ["depth", "paper_short + margin * 2 ^ floor(steps / 2) - 2 * band"],
+    ] as const) await ui.addVariable(k, v);
+    const { w, d } = STACK;
+    // The bead round the rim and the plinth band first (rings round the box, rounded and bevelled
+    // underneath), while their edges are still in view; then the box.
+    for (const [k, plane, offset, h, ring] of [[1, "pl1", "height - lip_h", "lip_h", 96], [3, "pl2", "foot + wall + clearance", "plinth_h", 7.8]] as const) {
+      await ui.feature("Create", "Plane");
+      await ui.option("Top");
+      await ui.field("Offset", offset);
+      await ui.accept();
+      await ui.sketchOn(plane);
+      await ui.zoomSketch(w / 2);
+      await ui.rectCenter([0, 0], "width + 2 * band", "depth + 2 * band");
+      await ui.finishSketch();
+      await ui.feature("Create", "Extrude");
+      if (k > 1) await ui.option("New");
+      await ui.field("Distance", h);
+      await ui.accept();
+      await roundCorners(ui, `ex${k}`, w + 2, d + 2, ring + 2, "corner + band");
+      await ui.sketchOn(plane);
+      await ui.zoomSketch(w / 2);
+      await ui.rectCenter([0, 0], "width - 2 * wall", "depth - 2 * wall");
+      await ui.finishSketch();
+      await ui.feature("Create", "Extrude");
+      await ui.option("New");
+      await ui.field("Distance", k === 1 ? "lip_h + 1 mm" : "plinth_h");
+      await ui.accept();
+      // TODO: it stands inside the ring (the rim's tool only 1 mm out of it): its corners do not pick yet.
+      await roundCorners(ui, `ex${k + 1}`, w - 4.8, d - 4.8, ring + (k === 1 ? 4.5 : 6.5), "corner - wall");
+      // TODO: the plinth's tool lies flush inside its ring, top and bottom: it does not pick yet.
+      await ui.feature("Modify", "Boolean");
+      await ui.option("Subtract");
+      await ui.clickBody(`ex${k}`);
+      await ui.clickBody(`ex${k + 1}`);
+      await ui.accept();
+      await bevelOutsideBottom(ui, `ex${k}`, d + 2, ring, "band");
+    }
+    await ui.feature("Create", "Plane");
+    await ui.option("Top");
+    await ui.field("Offset", "foot");
+    await ui.accept();
+    await ui.sketchOn("pl3");
+    await ui.zoomSketch(w / 2);
+    await ui.rectCenter([0, 0], "width", "depth");
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("New");
+    await ui.field("Distance", "height - foot");
+    await ui.accept();
+    await roundCorners(ui, "ex5", w, d, 50, "corner");
+    // The slope it stacks on: the bottom's edges bevelled (one takes the tangent loop).
+    await bevelOutsideBottom(ui, "ex5", d, 5, "wall + clearance");
+    await ui.feature("Modify", "Shell");
+    await ui.clickFace(`(f) => f.body === "ex5" && f.normal[2] > 0.99 && Math.abs(f.center[2] - 100) < 0.01`);
+    await ui.field("Thickness", "wall");
+    await ui.accept();
+    // The solid foot under it, with the groove across.
+    await ui.sketchOn("Top");
+    await ui.zoomSketch(w / 2);
+    await ui.rectCenter([0, 0], "width - 2 * (wall + clearance)", "depth - 2 * (wall + clearance)");
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("New");
+    await ui.field("Distance", "foot + 1 mm");
+    await ui.accept();
+    await roundCorners(ui, "ex6", w - 5.6, d - 5.6, 2.5, "corner - wall - clearance");
+    await ui.feature("Modify", "Boolean");
+    await ui.option("Union");
+    await ui.clickFace(BOX_SIDE, { any: true });
+    await ui.clickBody("ex6");
+    await ui.accept();
+    await ui.sketchOn("Top");
+    await ui.rectCenter([0, 0], "2 * (band + wall + clearance)", "depth + 10 mm");
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("Remove");
+    await ui.field("Distance", "foot");
+    await ui.accept();
+    // The groove's corners in the foot, 5 mm high: from the front and the back, close up (so the
+    // first one's radius arrow does not cover the second).
+    await ui.feature("Modify", "Fillet");
+    for (const [sy, view] of [[-1, "2"], [1, "3"]] as const) {
+      await ui.view(view);
+      await ui.zoomAt([0, (sy * (d - 5.6)) / 2, 2.5], 22);
+      for (const sx of sy < 0 ? [1, -1] : [-1, 1]) {
+        const n = await ui.state<number>("s.dialog.feature.edges.length");
+        await ui.clickEdge(BODY_VERTICAL_AT("ex5", sx * 3.8, (sy * (d - 5.6)) / 2));
+        const now = await ui.state<string>("JSON.stringify(s.dialog.feature.edges)");
+        if (JSON.parse(now).length !== n + 1) throw new Error(`groove corner ${sx}, ${sy} not added: ${now}`);
+      }
+    }
+    await ui.field("Radius", "corner - wall - clearance");
+    await ui.accept();
+    // Bead and plinth onto the box, the bead's top rounded.
+    for (const ring of ["ex1", "ex3"]) {
+      await ui.feature("Modify", "Boolean");
+      await ui.option("Union");
+      await ui.clickFace(BOX_SIDE, { any: true });
+      await ui.clickBody(ring);
+      await ui.accept();
+    }
+    // The rim's top is 3.4 mm wide: looked at close up, so the click lands on it and not its edges.
+    await ui.feature("Modify", "Fillet");
+    await ui.view("1");
+    await ui.zoomAt([0, -d / 2 + 0.5, 100], 12);
+    await ui.clickFace(TOP_FACE(100));
+    await ui.field("Radius", "1.2 mm");
+    await ui.accept();
+  },
+
 };
 
 // With the scripts above (kept apart because they share the helpers in between).
