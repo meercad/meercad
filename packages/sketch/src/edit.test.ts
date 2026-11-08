@@ -175,6 +175,18 @@ describe("offsetCurves", () => {
     expect([Math.min(...ys), Math.max(...ys)]).toEqual([-2, 12]);
   });
 
+  it("offsets a rounded rectangle inwards without redundant constraints", () => {
+    // As the sketch tools do it: a 60 × 40 rectangle, its corners rounded R5, offset 3 inwards.
+    let sk: SketchData = { entities: rect(0, 0, 60, 40), constraints: fixedRect };
+    for (const p of ["p1", "p2", "p3", "p4"]) sk = cornerEdit(sk, positions(sk.entities), p, 5, "fillet");
+    const curves = sk.entities.filter((e) => e.type === "line" || e.type === "arc").map((e) => e.id);
+    const d = offsetCurves(sk, solve(sk).points, curves, -3);
+    const s = solve(d);
+    expect(s.diagnostics.redundant).toEqual([]);
+    const inner = s.curves.filter((c) => c.kind === "arc" && !curves.includes(c.id));
+    expect(inner.map((c) => (c.kind === "arc" ? +c.radius.toFixed(6) : 0))).toEqual([2, 2, 2, 2]);
+  });
+
   it("grows circles and explains errors", () => {
     const es: SketchEntity[] = [{ id: "o", type: "point", x: 0, y: 0 }, { id: "c1", type: "circle", center: "o", radius: 5 }];
     const d = offsetCurves({ entities: es, constraints: [] }, positions(es), ["c1"], 3);

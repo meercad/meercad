@@ -190,19 +190,32 @@ export function offsetCurves(sk: SketchData, positions: ReadonlyMap<string, Vec2
       moved.set(id, nid);
       return nid;
     };
+    // Lines first, so arcs can hold on to the copies of the lines they touch.
+    const lineCopy = new Map<string, string>();
+    for (const { e } of walk) {
+      if (e.type !== "line") continue;
+      const id = fresh(out, "l");
+      lineCopy.set(e.id, id);
+      out.entities.push({ id, type: "line", p1: newPoint(e.p1), p2: newPoint(e.p2) });
+      out.constraints.push({ id: fresh(out, "c"), type: "parallel", a: id, b: e.id });
+      out.constraints.push({ id: fresh(out, "c"), type: "distance", a: `${id}.p1`, b: e.id, value: round(Math.abs(distance)) });
+    }
+    const tangentTo = (arc: string, line: string) => sk.constraints.some((c) => c.type === "tangent" && ((c.a === arc && c.b === line) || (c.a === line && c.b === arc)));
     for (const { e, from } of walk) {
-      if (e.type === "line") {
-        const id = fresh(out, "l");
-        out.entities.push({ id, type: "line", p1: newPoint(e.p1), p2: newPoint(e.p2) });
-        out.constraints.push({ id: fresh(out, "c"), type: "parallel", a: id, b: e.id });
-        out.constraints.push({ id: fresh(out, "c"), type: "distance", a: `${id}.p1`, b: e.id, value: round(Math.abs(distance)) });
-      } else {
+      if (e.type === "line") continue;
+      {
         const c = pos(e.center);
         const r = len(sub(pos(e.start), c));
         const nr = r - (from === e.start ? 1 : -1) * side;
         if (!(nr > 0)) throw new SketchEditError("the offset is larger than a radius: the curve would vanish");
+        // A rounded corner between two lines is rounded again between their copies: its own centre,
+        // tangent to both, with the new radius (sharing the old centre as well fixes its ends twice).
+        // Other arcs keep the centre and get the radius.
+        const touching = walk.filter((w) => w.e.type === "line" && (ends(w.e).includes(e.start) || ends(w.e).includes(e.end)) && tangentTo(e.id, w.e.id)).map((w) => lineCopy.get(w.e.id)!);
+        const corner = touching.length === 2;
         const id = fresh(out, "a");
-        out.entities.push({ id, type: "arc", center: e.center, start: newPoint(e.start), end: newPoint(e.end) });
+        out.entities.push({ id, type: "arc", center: corner ? point(c) : e.center, start: newPoint(e.start), end: newPoint(e.end) });
+        if (corner) for (const l of touching) out.constraints.push({ id: fresh(out, "c"), type: "tangent", a: id, b: l });
         out.constraints.push({ id: fresh(out, "c"), type: "radius", curve: id, value: round(nr) });
       }
     }

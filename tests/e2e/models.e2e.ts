@@ -84,6 +84,8 @@ describe("test models built in the app", () => {
         const dir = out ?? join(app.dir, "..");
         mkdirSync(dir, { recursive: true });
         await app.page.shot(join(dir, `${m.file} FAILED.png`)).catch(() => undefined);
+        // And the design as far as it got, to look at in the app.
+        await ui.state("s.doc").then((d) => writeFileSync(join(dir, `${m.file} FAILED.meercad`), JSON.stringify(d, null, 2))).catch(() => undefined);
         throw e;
       }
       const r = await result(ui);

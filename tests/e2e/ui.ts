@@ -189,7 +189,20 @@ export class Ui {
 
   /** Clicks a point of the open sketch. */
   async clickSketch(uv: Vec2, { free = false } = {}): Promise<void> {
-    const [x, y] = await this.sketchScreen(uv);
+    let [x, y] = await this.sketchScreen(uv);
+    // A constraint symbol can sit on the spot: a person clicks just beside it and the point snaps.
+    if (!free) {
+      const beside = await this.page.eval<Vec2 | null>(`(() => {
+        const c = meercadTest.store.getViewport().renderer.domElement, x = ${x}, y = ${y};
+        for (let d = 0; d <= 8; d += 2) for (let a = 0; a < 8; a++) {
+          const px = x + d * Math.cos((a * Math.PI) / 4), py = y + d * Math.sin((a * Math.PI) / 4);
+          if (document.elementFromPoint(px, py) === c) return [px, py];
+          if (!d) break;
+        }
+        return null;
+      })()`);
+      if (beside) [x, y] = beside;
+    }
     // Alt held places the point freely, off the grid (as the sketch hint says).
     await this.page.click(x, y, { modifiers: free ? 1 : 0 });
     await sleep(150);
@@ -391,6 +404,8 @@ export class Ui {
     if (item) await this.menuItem(label, item);
     else await this.press(label, ".rail button");
     await sleep(200);
+    // The tool starts fresh once the editor has drawn it: a click before that would be dropped.
+    await this.page.eval(`new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok(true))))`);
   }
 
   /** A rectangle from its first corner, with width and height typed. */
@@ -430,6 +445,113 @@ export class Ui {
       await this.key("Escape");
       await sleep(200);
     }
+  }
+
+  /** Moves the pointer over a point of the open sketch (previews and typed values follow it). */
+  async hoverSketch(uv: Vec2): Promise<void> {
+    const [x, y] = await this.sketchScreen(uv);
+    await this.page.move(x, y);
+    await sleep(150);
+  }
+
+  /**
+   * Types exact values into the drawing tool's value fields (width Tab height, radius Tab angle …)
+   * and places the shape with Enter. Values may be expressions with variables: a Tab opens the
+   * fields first, so letters go into them and not to the shortcuts.
+   */
+  async entry(values: (string | number)[]): Promise<void> {
+    await this.key("Tab");
+    const end = Date.now() + 3000;
+    while (!(await this.page.eval<boolean>(`!!document.activeElement?.closest(".draw-entry")`))) {
+      if (Date.now() > end) throw new Error("the value fields did not open");
+      await sleep(80);
+    }
+    for (const [i, v] of values.entries()) {
+      if (i) await this.key("Tab");
+      await this.page.key("Meta+a");
+      if (v !== "") await this.type(String(v));
+    }
+    await this.key("Enter");
+    await sleep(300);
+  }
+
+  /** A rectangle from its centre, width and height typed (numbers or expressions). */
+  async rectCenter(center: Vec2, w: number | string, h: number | string): Promise<void> {
+    await this.tool("Rectangle", "Center rectangle");
+    await this.clickSketch(center);
+    await this.entry([w, h]);
+  }
+
+  /** A line from `a` to `b`; Esc ends it. */
+  async line(a: Vec2, b: Vec2, opts: { free?: boolean } = {}): Promise<void> {
+    await this.tool("Line");
+    await this.clickSketch(a, opts);
+    await this.clickSketch(b, opts);
+    await this.key("Escape");
+    await sleep(150);
+  }
+
+  /** A 3-point arc from `a` to `b`, bulging towards `side`, with its radius (or, for a half circle, its angle) typed. */
+  async arc(a: Vec2, b: Vec2, side: Vec2, size: { radius: number | string } | { angle: number | string }): Promise<void> {
+    await this.tool("Arc", "3-point arc");
+    await this.clickSketch(a);
+    await this.clickSketch(b);
+    await this.hoverSketch(side);
+    await this.entry("radius" in size ? [size.radius] : ["", size.angle]);
+  }
+
+  /** A spline through the points, placed freely (Alt); closed by clicking the first point again. */
+  async spline(points: Vec2[], closed: boolean): Promise<void> {
+    await this.tool("Spline");
+    for (const p of points) await this.clickSketch(p, { free: true });
+    if (closed) await this.clickSketch(points[0]!, { free: true });
+    else await this.key("Enter");
+    await sleep(300);
+  }
+
+  /** Types the size of the sketch's corner and offset tools (its "Radius", "Distance" or "Offset" field). */
+  async sketchSize(label: string, value: number): Promise<void> {
+    const at = await this.page.eval<Vec2 | null>(`(() => {
+      const l = [...document.querySelectorAll("label.row")].find((l) => l.querySelector("span.muted")?.textContent.trim() === ${JSON.stringify(label)} && l.getBoundingClientRect().width > 0);
+      const el = l?.querySelector("input");
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height / 2];
+    })()`);
+    if (!at) throw new Error(`no sketch field "${label}"`);
+    await this.page.click(at[0], at[1]);
+    await sleep(80);
+    // ⌘A does not select in a number field: clear it key by key.
+    for (let i = 0; i < 8; i++) await this.page.key("Backspace");
+    for (let i = 0; i < 8; i++) await this.page.key("Delete");
+    await this.page.type(String(value));
+    await this.page.key("Tab");
+    await sleep(200);
+    const now = await this.page.eval<number>(`meercadTest.sketch.getState().editSize`);
+    if (now !== value) throw new Error(`the sketch field "${label}" holds ${now}, not ${value}`);
+  }
+
+  /**
+   * Clicks what the viewport picks (of `kinds`) near a point of the model, where `test` (source of
+   * a function on the pick) holds: e.g. a finished sketch's curve for a loft profile.
+   */
+  async clickPick(kinds: string[], test: string, near: Vec3): Promise<void> {
+    const at = await this.page.eval<Vec2 | string | null>(`(() => {
+      const v = meercadTest.store.getViewport(), r = v.renderer.domElement.getBoundingClientRect();
+      const q = v.worldToScreen(${JSON.stringify(near)}), test = (${test});
+      if (!q) return null;
+      for (let d = 0; d <= 14; d += 2) for (let a = 0; a < 16; a++) {
+        const x = r.left + q[0] + d * Math.cos((a * Math.PI) / 8), y = r.top + q[1] + d * Math.sin((a * Math.PI) / 8);
+        const hit = v.pick(x, y, new Set(${JSON.stringify(kinds)}));
+        if (hit && test(hit)) return [x, y];
+        if (!d) break;
+      }
+      const hit = v.pick(r.left + q[0], r.top + q[1], new Set(["sketch_curve", "region", "face", "edge", "plane"]));
+      return "there: " + JSON.stringify(hit && { ...hit, point: undefined });
+    })()`);
+    if (typeof at === "string" || !at) throw new Error(`nothing to pick near ${near}: ${test} (${at})`);
+    await this.page.click(at[0], at[1]);
+    await sleep(250);
   }
 
   /** A regular hexagon (the polygon tool) from its centre and a corner. */
