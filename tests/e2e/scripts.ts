@@ -1134,7 +1134,11 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await standardPart(ui, "Lead screw", {
       size: "Tr8x8",
       cutLength: "travel + 20 mm",
-      on: () => ui.clickPlane("pl1", [-130, 0, 30], [0, 60, 0], [0, 0, 25]),
+      // Seen from the side, not edge on from above.
+      on: async () => {
+        await ui.press("Isometric view", ".icon-btn");
+        await ui.clickPlane("pl1", [-130, 0, 30], [0, 60, 0], [0, 0, 25]);
+      },
       tap: () => ui.clickFace(`(f) => f.body === "ex1" && f.normal[0] < -0.99`),
       places: [[-10, "plate + 14 mm"]],
     });
@@ -1184,23 +1188,24 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await ui.option("Top");
     await ui.field("Offset", 25);
     await ui.accept();
+    // From its centre (the rounded case below has no corner there to click), its corners rounded
+    // in the sketch: the plate's own corner edges are only 2 mm high to pick.
     await ui.sketchOn("pl1");
     await ui.zoomSketch(110);
-    await ui.rect([-30, -110], 60, 40);
+    await ui.rectCenter([0, -90], 60, 40);
+    await ui.tool("Tools", "Round a corner");
+    await ui.sketchSize("Radius", 4);
+    for (const c of [[-30, -110], [30, -110], [30, -70], [-30, -70]] as [number, number][]) await ui.clickSketch(c);
     await ui.finishSketch();
     await ui.feature("Create", "Extrude");
     await ui.option("New");
     await ui.field("Distance", "wall");
     await ui.accept();
-    await ui.feature("Modify", "Fillet");
-    for (const [x, y] of [[-30, -110], [30, -110], [30, -70], [-30, -70]]) await ui.clickEdge(BODY_VERTICAL_AT("ex2", x!, y!));
-    await ui.field("Radius", 4);
-    await ui.accept();
     // Two hooks under the lid, hanging from the rim's plane, their barbs into the case's long walls.
     const lidTop = `(f) => f.body === "ex2" && f.normal[2] > 0.99`;
     for (const [x, turn] of [[27.8, 0], [-27.8, 180]] as const) {
       await ui.feature("Create", "Snap hook");
-      await ui.clickPlane("pl1", [0, -90, 25], [70, 0, 0], [0, 45, 0]);
+      await ui.clickPlane("pl1", [0, -20, 25], [120, 0, 0], [0, 120, 0]);
       await ui.clickFace(lidTop, { any: true });
       await ui.fieldN("Places (1)", 0, x);
       await ui.fieldN("Places (1)", 1, -90);

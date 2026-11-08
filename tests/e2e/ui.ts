@@ -235,7 +235,7 @@ export class Ui {
             for (let k = start; k < start + count; k++) points.push([m.edgeLines[k * 3], m.edgeLines[k * 3 + 1], m.edgeLines[k * 3 + 2]]);
             const min = [0, 1, 2].map((i) => Math.min(...points.map((p) => p[i]))), max = [0, 1, 2].map((i) => Math.max(...points.map((p) => p[i])));
             const mid = points[Math.floor(points.length / 2)];
-            if (test({ body: m.bodyId, index, points, min, max, mid })) found.push({ body: m.bodyId, index, spots: points.slice(0, -1).map((p, i) => p.map((c, j) => (c + points[i + 1][j]) / 2)) });
+            if (test({ body: m.bodyId, index, points, min, max, mid })) found.push({ body: m.bodyId, index, spots: points.slice(0, -1).flatMap((p, i) => [0.5, 0.3, 0.7].map((t) => p.map((c, j) => c + (points[i + 1][j] - c) * t))) });
           }
         } else {
           for (let g = 0; g < m.faceRanges.length; g += 3) {
@@ -245,6 +245,11 @@ export class Ui {
             for (let k = start; k + 2 < start + count; k += 3) {
               const tri = [0, 1, 2].map((j) => { const i = m.indices[k + j] * 3; return [m.positions[i], m.positions[i + 1], m.positions[i + 2]]; });
               spots.push([0, 1, 2].map((c) => (tri[0][c] + tri[1][c] + tri[2][c]) / 3));
+              // Big triangles (a plain rectangle is two): more spots across them, as parts may stand on it.
+              for (const [a, b] of [[4, 1], [1, 4], [1, 1], [2, 2], [3, 1], [1, 3]]) {
+                const w = [a / 6, b / 6, 1 - (a + b) / 6];
+                spots.push([0, 1, 2].map((c) => tri[0][c] * w[0] + tri[1][c] * w[1] + tri[2][c] * w[2]));
+              }
             }
             const center = [0, 1, 2].map((c) => spots.reduce((a, p) => a + p[c], 0) / Math.max(1, spots.length));
             const i0 = m.indices[start] * 3, n = [m.normals?.[i0], m.normals?.[i0 + 1], m.normals?.[i0 + 2]];

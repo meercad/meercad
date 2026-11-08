@@ -71,7 +71,8 @@ export class Page {
   }
   /** One key: "Enter", "Escape", "Tab", "Backspace", a character, or with modifiers ("Meta+z"). */
   async key(spec: string): Promise<void> {
-    const parts = spec.split("+");
+    // "+" itself (or "Shift++") is the key, not a separator.
+    const parts = spec.length > 1 && spec.endsWith("++") ? [...spec.slice(0, -2).split("+"), "+"] : spec.length > 1 ? spec.split("+") : [spec];
     const key = parts.pop()!;
     const mods: Record<string, number> = { Alt: 1, Control: 2, Meta: 4, Shift: 8 };
     const modifiers = parts.reduce((m, p) => m | (mods[p] ?? 0), 0);
