@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleHelp, Download, Share, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
+import { Bot, Check, ChevronDown, CircleHelp, Download, Share, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -6,7 +6,7 @@ import { featureName } from "../lib/features";
 import { useCompact } from "../lib/layout";
 import { askText } from "./Ask";
 import type { MenuEntry } from "./Menu";
-import { exportMesh, exportSketch, exportStep, exportVariants, importFile, saveFile, viewInAr } from "./io";
+import { exportMesh, exportRobot, exportSketch, exportStep, exportVariants, importFile, saveFile, viewInAr } from "./io";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
 import { openShare } from "./ShareDialog";
@@ -53,6 +53,7 @@ export function TopBar() {
   const nameBtn = useRef<HTMLButtonElement>(null);
   const units = useApp((s) => s.doc.units ?? "mm");
   const variants = useApp((s) => s.doc.variants?.length ?? 0);
+  const hasJoints = useApp((s) => (s.doc.mechanism?.joints.length ?? 0) > 0);
 
   const fileBtn = useRef<HTMLButtonElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
@@ -66,6 +67,8 @@ export function TopBar() {
     { label: t("3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
     { label: t("OBJ (rendering, other 3D tools)"), icon: <FileDown />, onClick: () => void exportMesh("obj") },
     { label: t("STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
+    // A design with joints can go to a physics simulator as a robot (MuJoCo, mjlab, ROS, Isaac Sim).
+    ...(hasJoints && hasPack("mechanics") ? [{ label: t("Robot (MJCF/URDF for simulation)"), icon: <Bot />, onClick: () => void exportRobot() }] : []),
     // In the apps AR is a top-level entry; the browser hands out the USDZ file instead.
     ...(nativeApp ? [] : [{ label: t("USDZ (AR on iPhone and iPad)"), icon: <Rotate3d />, onClick: () => void viewInAr() }]),
     "sep",

@@ -1,18 +1,18 @@
 /** File import/export and share links. */
-import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type TexturedMesh } from "@meercad/io";
+import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotLink, type RobotPart, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
-import { applyOp, designOf, motion, nextFeatureId, partMaterial } from "@meercad/model";
+import { applyOp, designOf, massOf, materialById, motion, nextFeatureId, partMaterial } from "@meercad/model";
 import { threeMfParts } from "../lib/printParts";
 import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile, showInAr } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
 import { t } from "../lib/i18n";
-import { currentPoses } from "../lib/mechanism";
+import { currentMechanism, currentPoses } from "../lib/mechanism";
 import { sceneryOf } from "../lib/terrain";
 import { exportTexture } from "../lib/meshTexture";
 
@@ -139,6 +139,88 @@ export async function viewInAr(): Promise<void> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     toast(msg === t("Nothing to export") ? msg : t("{format} export failed: {error}", { format: "USDZ", error: msg }), "error");
+  } finally {
+    task.done();
+  }
+}
+
+/** Options of a robot export (MJCF/URDF); the menu uses none of them. */
+export interface RobotExportOptions {
+  /** Model and file name; default the project's name. */
+  name?: string;
+  /** A free joint for links that hang on nothing (a walking robot). Default true. */
+  floating?: boolean;
+  /** Grams per part, e.g. bought motors or printed parts with their infill; others by material. */
+  masses?: Readonly<Record<string, number>>;
+  /** Drive data by joint id (effort, velocity, kp, kv, armature, damping, friction). */
+  actuators?: Readonly<Record<string, RobotActuator>>;
+}
+
+/**
+ * The design as a robot for simulation and robot learning: MJCF (MuJoCo, mjlab) and URDF with one
+ * STL per part (see writeRobot). Parts held by fixed joints become one link, turning and sliding
+ * joints become the robot's joints, each link gets its mass, centre of gravity and inertia. Parts
+ * without a material count as PLA. The parts at rest, the screen's tessellation (light meshes).
+ */
+export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files: Record<string, Uint8Array>; links: RobotLink[]; warnings: string[] }> {
+  await rebuildNow();
+  const out = useApp.getState().output;
+  const doc = currentDoc();
+  const bodies = out?.report.bodies ?? [];
+  if (!out || !bodies.length) throw new Error(t("Nothing to export"));
+  const ids = bodies.map((b) => b.id);
+  const unknown = Object.keys(opts.masses ?? {}).filter((id) => !ids.includes(id));
+  if (unknown.length) throw new Error(t("unknown part {id}", { id: unknown.join(", ") }));
+  const meshes = new Map(out.meshes.map((m) => [m.bodyId, m]));
+  const colors = partColors(doc, ids, true);
+  const pla = materialById("pla")!;
+  const warnings: string[] = [];
+  const plain: string[] = [];
+  const parts: RobotPart[] = [];
+  for (const b of bodies) {
+    const mesh = meshes.get(b.id);
+    if (!mesh || !Number.isFinite(b.volume) || b.volume <= 0) continue;
+    const material = partMaterial(doc, b.id);
+    if (!material && opts.masses?.[b.id] === undefined) plain.push(b.id);
+    const mass = opts.masses?.[b.id] ?? massOf(b.volume, material ?? pla);
+    const [lo, hi] = [b.bbox.min, b.bbox.max];
+    const centroid = b.centroid ?? ([0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as [number, number, number]);
+    // The kernel's moments are of the volume (mm⁵); without them, the box around the part.
+    const [x, y, z] = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+    const k = mass / b.volume;
+    const m = b.inertia;
+    const inertia: RobotPart["inertia"] = m ? [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] : [(mass * (y * y + z * z)) / 12, (mass * (x * x + z * z)) / 12, (mass * (x * x + y * y)) / 12, 0, 0, 0];
+    const color = colors.get(b.id);
+    parts.push({ id: b.id, name: partName(b.id, doc.features), mesh: { positions: mesh.positions, indices: mesh.indices }, ...(color ? { color } : {}), mass, centroid, inertia });
+  }
+  if (plain.length) warnings.push(`${plain.length} parts have no material and count as PLA (${plain.slice(0, 6).join(", ")}${plain.length > 6 ? ", …" : ""})`);
+  const { mech, problems } = currentMechanism();
+  for (const [id, msg] of Object.entries(problems)) warnings.push(`joint ${id} left out: ${msg}`);
+  const name = (opts.name ?? baseName()).replace(/[^\w\-]+/g, "_") || "robot";
+  const r = writeRobot(
+    parts,
+    mech.joints.map((j) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: j.origin, axis: j.axis, ...(j.limits ? { limits: j.limits } : {}) })),
+    mech.couplings.map((c) => ({ driver: c.driver, driven: c.driven, ratio: c.ratio })),
+    { name, ...(opts.floating !== undefined ? { floating: opts.floating } : {}), ...(opts.actuators ? { actuators: opts.actuators } : {}) },
+  );
+  return { files: r.files, links: r.links, warnings: [...warnings, ...r.warnings] };
+}
+
+/** The robot export from the menu: a zip with the MJCF, the URDF and the meshes. */
+export async function exportRobot(): Promise<void> {
+  const task = startTask(t("Preparing the robot for simulation"));
+  try {
+    const { files, links, warnings } = await robotFiles();
+    task.done();
+    download(`${baseName()} robot.zip`, writeZip(files) as BlobPart);
+    const joints = links.filter((l) => l.joint).length;
+    void showNotice({
+      title: t("Robot exported: {links} links, {joints} joints", { links: links.length, joints }),
+      message: `${t("The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; joints without drive data are passive.")}${warnings.length ? `\n\n${warnings.join("\n")}` : ""}`,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    toast(msg === t("Nothing to export") ? msg : t("{format} export failed: {error}", { format: "MJCF/URDF", error: msg }), "error");
   } finally {
     task.done();
   }

@@ -2,7 +2,7 @@
  * Connects the app to a local meerCAD MCP server so assistants like Claude can drive it. The app is
  * the WebSocket client; the server only listens on 127.0.0.1 and checks the page origin.
  */
-import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper } from "@meercad/io";
+import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { DEFAULT_PORT, type BridgeEvent, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
@@ -10,7 +10,7 @@ import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument,
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
-import { sketchCurves, usdzFile } from "../components/io";
+import { robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
 import { assistantWindow, desktop } from "./persistence";
@@ -538,6 +538,16 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       if (p["view"] === "fit") vp.fit();
       else vp.setView(p["view"] as "iso");
       return "ok";
+    }
+    case "export_robot": {
+      needProject();
+      const { files, links, warnings } = await robotFiles({
+        ...(typeof p["name"] === "string" ? { name: p["name"] } : {}),
+        ...(typeof p["floating"] === "boolean" ? { floating: p["floating"] } : {}),
+        ...(p["masses"] && typeof p["masses"] === "object" ? { masses: p["masses"] as Record<string, number> } : {}),
+        ...(p["actuators"] && typeof p["actuators"] === "object" ? { actuators: p["actuators"] as Record<string, RobotActuator> } : {}),
+      });
+      return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])), links, warnings };
     }
     case "export": {
       needProject();

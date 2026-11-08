@@ -15,6 +15,7 @@ export type BridgeMethod =
   | "render_view"
   | "set_view"
   | "export"
+  | "export_robot"
   | "measure"
   | "set_pose"
   | "check_motion"

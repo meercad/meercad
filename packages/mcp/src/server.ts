@@ -5,7 +5,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { randomUUID } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { z } from "zod";
@@ -299,6 +299,41 @@ server.registerTool(
       written.push(target);
     }
     return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
+  }),
+);
+
+server.registerTool(
+  "export_robot",
+  {
+    title: "Export a robot for simulation",
+    description:
+      "Writes the design as a robot for physics simulation and robot learning into the folder `path`: <name>.xml (MJCF for MuJoCo and mjlab), <name>.urdf (ROS, Isaac Sim, PyBullet) and meshes/<part>.stl, in metres, kilograms and radians. Parts held together by fixed joints become one link; each revolute or slider joint becomes a joint with its limits; couplings become MJCF equalities and URDF mimic joints; each link gets mass, centre of gravity and inertia from its parts' materials. Links that hang on nothing get a free joint (floating: false fixes them). `masses` sets real grams per part (bought motors, printed parts with their infill). `actuators` gives drive data per joint id: effort (Nm or N), velocity (rad/s), kp and kv (then the MJCF gets a position actuator, else a torque motor), armature (kg·m²), damping, friction; joints without it stay passive. Returns the links (name, parts, kg, parent, joint) and warnings (loops left out, parts without material, joints without drive data).",
+    inputSchema: {
+      path: z.string().describe("Folder to write into (created if missing)"),
+      name: z.string().optional().describe("Model and file name; default the project's name"),
+      floating: z.boolean().optional(),
+      masses: z.record(z.string(), z.number().positive()).optional().describe("Grams per part id"),
+      actuators: z
+        .record(
+          z.string(),
+          z.object({ effort: z.number().positive().optional(), velocity: z.number().positive().optional(), kp: z.number().positive().optional(), kv: z.number().nonnegative().optional(), armature: z.number().nonnegative().optional(), damping: z.number().nonnegative().optional(), friction: z.number().nonnegative().optional() }),
+        )
+        .optional()
+        .describe("Drive data per joint id"),
+    },
+  },
+  guard(async ({ path, name, floating, masses, actuators }) => {
+    const dir = resolve(path);
+    const r = await call<{ files: Record<string, string>; links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators }, 300_000);
+    const written: string[] = [];
+    for (const [file, b64] of Object.entries(r.files)) {
+      const target = join(dir, file);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, Buffer.from(b64, "base64"));
+      if (!file.startsWith("meshes/")) written.push(target);
+    }
+    const meshes = Object.keys(r.files).filter((f) => f.startsWith("meshes/")).length;
+    return text(JSON.stringify({ wrote: written, meshes: `${meshes} STL files in ${join(dir, "meshes")}`, links: r.links, warnings: r.warnings }, null, 2));
   }),
 );
 

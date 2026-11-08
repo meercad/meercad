@@ -8,3 +8,4 @@ export type { Curve2 } from "./curves.js";
 export { layoutSheet, SHEET_LABELS, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type Sheet, type SheetBomRow, type SheetLabels, type SheetView, type TitleBlock } from "./drawing.js";
 export { writeZip } from "./zip.js";
 export { storedZip, writeUsda, writeUsdz, type UsdzMesh } from "./usdz.js";
+export { writeRobot, type RobotActuator, type RobotCoupling, type RobotExport, type RobotJoint, type RobotLink, type RobotOptions, type RobotPart } from "./robot.js";
