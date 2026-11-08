@@ -10,7 +10,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { MODELS, type Expectation } from "../models/models.js";
 import { startApp, type App } from "./app.js";
 import { SCRIPTS } from "./scripts.js";
@@ -64,6 +64,8 @@ describe("test models built in the app", () => {
     ui = new Ui(app.page);
   });
   afterAll(async () => app?.stop());
+  // Each model in a part of its own, closed afterwards even when a step failed.
+  afterEach(async () => ui?.closePart().catch(() => undefined));
 
   for (const m of picked) {
     const script = SCRIPTS[m.file];
