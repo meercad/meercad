@@ -1,5 +1,5 @@
 /**
- * Builds the terrain test model (tests/corpus/terrain-drone-park.meercad, not shipped) from a
+ * Builds the terrain test model (tests/fixtures/terrain-drone-park.meercad, not shipped) from a
  * terrain GLB made by the photo helper: OpenDroneMap's Aukerman photos, CC0. Adds a few marks and a
  * small cabin standing on the ground, so every terrain tool has something to show.
  * Usage: node scripts/make-terrain-demo.mjs <terrain.glb> <geo JSON from the helper>
@@ -76,5 +76,5 @@ const doc = {
   ],
   rollback: null,
 };
-writeFileSync("tests/corpus/terrain-drone-park.meercad", JSON.stringify(doc));
+writeFileSync("tests/fixtures/terrain-drone-park.meercad", JSON.stringify(doc));
 console.log("written", (JSON.stringify(doc).length / 1e6).toFixed(1), "MB; cabin ground", (ground / 1000).toFixed(2), "m");

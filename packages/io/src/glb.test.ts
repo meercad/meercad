@@ -99,7 +99,7 @@ describe("OBJ with textures", () => {
   });
 
   it("exports the drone example with its texture", () => {
-    const doc = JSON.parse(readFileSync(new URL("../../../tests/corpus/terrain-drone-park.meercad", import.meta.url), "utf8")) as { references: { data: string }[] };
+    const doc = JSON.parse(readFileSync(new URL("../../../tests/fixtures/terrain-drone-park.meercad", import.meta.url), "utf8")) as { references: { data: string }[] };
     const meshes = readGlb(Buffer.from(doc.references[0]!.data, "base64"));
     expect(meshes.length).toBeGreaterThan(0);
     expect(meshes.every((m) => m.uvs && m.image)).toBe(true);
