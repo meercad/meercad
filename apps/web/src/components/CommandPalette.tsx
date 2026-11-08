@@ -6,7 +6,7 @@ import { FEATURES, TOOLBAR } from "../lib/features";
 import { setTool, type SketchTool } from "../sketch/state";
 import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch/actions";
 import { closeSketch, getViewport, goHome, newProject, redo, startFeature, undo, useApp } from "../store";
-import { exportMesh, exportStep, importFile, saveFile, viewInAr } from "./io";
+import { exportMesh, exportRobot, exportStep, importFile, saveFile, viewInAr } from "./io";
 import { nativeApp } from "../lib/native";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
@@ -119,6 +119,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: G.file, label: t("Export STL"), run: () => void exportMesh("stl") },
         { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
         { group: G.file, label: t("Export OBJ"), run: () => void exportMesh("obj") },
+        ...(hasPack("mechanics") && (useApp.getState().doc.mechanism?.joints.length ?? 0) > 0 ? [{ group: G.file, label: t("Export robot (MJCF/URDF for simulation)"), run: () => void exportRobot() }] : []),
         { group: G.file, label: t("Export STEP"), run: () => void exportStep() },
         { group: G.file, label: nativeApp ? t("View in AR (real size on the table)") : t("Export USDZ (AR on iPhone and iPad)"), run: () => void viewInAr() },
         ...(hasPack("drawings") ? [{ group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing }] : []),
