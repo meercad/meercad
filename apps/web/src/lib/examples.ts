@@ -1,5 +1,6 @@
 /** Fully parametric starter models for the home screen. Home shows `name` and `description` through t(). */
 import type { Expr, MeercadDocument, SketchConstraint, SketchEntity } from "@meercad/schema";
+import { packsUsed, type PackId } from "./packUse";
 
 /** Rectangle anchored at the origin with width/height dimensions. */
 function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: SketchEntity[]; constraints: SketchConstraint[] } {
@@ -261,7 +262,12 @@ export interface Example {
   feature?: true;
   /** A large example kept out of the app's code (`doc` is then empty): fetched when it is opened. */
   url?: string;
+  /** The packs a fetched example needs (the others' packs follow from their document). */
+  packs?: PackId[];
 }
+
+/** The premium packs an example needs to be shown and changed. */
+export const examplePacks = (ex: Example): PackId[] => ex.packs ?? packsUsed(ex.doc).map((u) => u.pack);
 
 /**
  * Larger examples as files in src/examples, with the name and line shown for them. Only real designs
@@ -293,7 +299,7 @@ export const EXAMPLES: Example[] = [
   { name: "Storage grid with labels", description: "Bins in a baseplate, with label tabs and two-colour labels", doc: storage, feature: true },
   { name: "Tool wall on openGrid", description: "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins", doc: toolWall, feature: true },
   // Photos: OpenDroneMap's "Aukerman" data set, CC0 (public domain).
-  { name: "Park from drone photos", description: "A terrain from 77 photos, with an area, a path, a note and a stake-out point", thumbnail: "/examples/drone-park.jpg", url: "/examples/drone-park.meercad", doc: { format: "meercad/1", params: {}, features: [], rollback: null } },
+  { name: "Park from drone photos", description: "A terrain from 77 photos, with an area, a path, a note and a stake-out point", thumbnail: "/examples/drone-park.jpg", url: "/examples/drone-park.meercad", packs: ["scan"], doc: { format: "meercad/1", params: {}, features: [], rollback: null } },
   ...MORE.map(([file, name, description]) => {
     const raw = files[`../examples/${file}.meercad`];
     if (!raw) throw new Error(`example ${file} is missing`);

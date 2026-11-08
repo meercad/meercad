@@ -5,7 +5,8 @@ import { showMenu } from "./Menu";
 import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
 import { newProject, openProject, refreshProjects, startTask, toast, useApp } from "../store";
 import type { MeercadDocument } from "@meercad/schema";
-import { EXAMPLES, type Example } from "../lib/examples";
+import { EXAMPLES, examplePacks, type Example } from "../lib/examples";
+import { hasPack, usePremium } from "../lib/premium";
 import { importFile } from "./io";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
@@ -129,6 +130,9 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
 export function Home() {
   const projects = useApp((s) => s.projects);
   const folders = useApp((s) => s.folders);
+  // Only the examples this app can show and change with the packs it has.
+  usePremium();
+  const examples = EXAMPLES.filter((ex) => examplePacks(ex).every(hasPack));
   const folder = useApp((s) => s.folder);
   const prefs = usePrefs();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -305,18 +309,18 @@ export function Home() {
             </div>
           ))}
         </div>
-        {prefs.showExamples ? (
+        {prefs.showExamples && examples.length ? (
           <>
         <button className="home-section-toggle" onClick={() => setPrefs({ examplesOpen: !prefs.examplesOpen })} aria-expanded={prefs.examplesOpen}>
           <ChevronRight className={prefs.examplesOpen ? "open" : ""} />
           <h1>{t("Examples")}</h1>
-          {prefs.examplesOpen ? null : <span className="muted">{EXAMPLES.length}</span>}
+          {prefs.examplesOpen ? null : <span className="muted">{examples.length}</span>}
         </button>
         {prefs.examplesOpen ? (
           <>
         <p className="sub">{t("Fully parametric — open one and change its variables. Hide this section in Settings.")}</p>
         <div className="grid">
-          {EXAMPLES.map((ex) => (
+          {examples.map((ex) => (
             <button className="card" key={ex.name} onClick={() => void openExample(ex)}>
               <div className="thumb">
                 {ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc) ? <img src={ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)!} alt="" /> : <Box size={32} />}
