@@ -13,6 +13,11 @@ const api = {
     set: (choice: number | "auto") => ipcRenderer.invoke("ui:scale:set", choice),
   },
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
+  /** Flags shared by every meerCAD on this Mac (e.g. the tour was seen), read once at start. */
+  shared: {
+    initial: ipcRenderer.sendSync("shared:get") as Record<string, unknown>,
+    set: (key: string, value: unknown) => ipcRenderer.invoke("shared:set", { key, value }),
+  },
   /** Assistant sessions' own windows (MCP): the user's window passes their requests on. */
   assistant: {
     open: (p: { session: string; client: string; project?: string }): Promise<number> => ipcRenderer.invoke("assistant:open", p),

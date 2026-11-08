@@ -5,7 +5,7 @@
  * never touched. Development builds expose `window.meercadTest` to read results back.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -47,6 +47,9 @@ export async function startApp({ keep = false } = {}): Promise<App> {
   const dir = mkdtempSync(join(tmpdir(), "meercad-e2e-"));
   const webPort = await freePort();
   const cdpPort = await freePort();
+  // A Mac where the tour was seen (the flags every meerCAD on the Mac shares, here in the temp folder).
+  mkdirSync(join(dir, "shared"), { recursive: true });
+  writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true }));
   const r = spawnSync("node", ["build.mjs"], { cwd: join(root, "apps/desktop"), stdio: "inherit" });
   if (r.status !== 0) throw new Error("desktop build failed");
 
@@ -59,7 +62,7 @@ export async function startApp({ keep = false } = {}): Promise<App> {
     [".", "--dev", `--user-data-dir=${join(dir, "userdata")}`, `--remote-debugging-port=${cdpPort}`, "--lang=en-US"],
     {
       cwd: join(root, "apps/desktop"),
-      env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off" },
+      env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared") },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -70,12 +73,7 @@ export async function startApp({ keep = false } = {}): Promise<App> {
   const page = await Page.open(target!.webSocketDebuggerUrl);
   await page.call("Runtime.enable");
   await page.call("Page.enable");
-  const loaded = () => waitFor("the app to load", () => page.eval<boolean>("!!window.meercadTest && document.readyState === 'complete'"));
-  await loaded();
-  // A person who has seen the introduction: no tour over the first part.
-  await page.eval(`localStorage.setItem("meercad.tourDone", "1"); location.reload(); true`);
-  await sleep(500);
-  await loaded();
+  await waitFor("the app to load", () => page.eval<boolean>("!!window.meercadTest && document.readyState === 'complete'"));
 
   const stop = async () => {
     electron.kill();

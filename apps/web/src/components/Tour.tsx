@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { rich } from "./Kbd";
 import { t } from "../lib/i18n";
+import { desktop } from "../lib/persistence";
 
 interface Step {
   /** CSS selector of the element to highlight; none = centered card. */
@@ -57,14 +58,20 @@ const STEPS: Step[] = [
 ];
 
 const KEY = "meercad.tourDone";
+/** Seen once on this Mac counts for every meerCAD on it (release, WIP, test copies); elsewhere this app's own storage. */
 export const tourDone = () => {
+  if (desktop?.shared?.initial["tourDone"] === true) return true;
   try {
-    return localStorage.getItem(KEY) === "1";
+    const done = localStorage.getItem(KEY) === "1";
+    // Seen before this was shared: tell the other copies too.
+    if (done && desktop?.shared) void desktop.shared.set("tourDone", true).catch(() => undefined);
+    return done;
   } catch {
     return true;
   }
 };
 const markDone = () => {
+  void desktop?.shared?.set("tourDone", true).catch(() => undefined);
   try {
     localStorage.setItem(KEY, "1");
   } catch {

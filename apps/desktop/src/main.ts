@@ -75,6 +75,27 @@ let settings: Settings = {};
 const projectsDir = () => process.env["MEERCAD_PROJECTS_DIR"] ?? settings.projectsDir ?? defaultProjectsDir();
 const thumbsDir = () => join(app.getPath("userData"), "thumbnails");
 
+/**
+ * What the user has seen, for every meerCAD on this Mac (the release, the WIP build, test copies
+ * with their own app data): one file next to the release's app data, so the tour is not shown
+ * again by each copy. MEERCAD_SHARED_DIR puts it elsewhere (the UI end-to-end run's temp folder).
+ */
+const sharedPath = () => join(process.env["MEERCAD_SHARED_DIR"] ?? (MAS ? app.getPath("userData") : join(app.getPath("appData"), "meerCAD")), "shared.json");
+const readShared = (): Record<string, unknown> => {
+  try {
+    return JSON.parse(readFileSync(sharedPath(), "utf8")) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
+ipcMain.on("shared:get", (e) => void (e.returnValue = readShared()));
+ipcMain.handle("shared:set", async (_e, p: { key: string; value: unknown }) => {
+  if (typeof p?.key !== "string" || !/^[a-zA-Z][\w.]{0,40}$/.test(p.key)) return;
+  const all = { ...readShared(), [p.key]: p.value };
+  await mkdir(dirname(sharedPath()), { recursive: true });
+  await writeFile(sharedPath(), `${JSON.stringify(all, null, 2)}\n`);
+});
+
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
 const MIME: Record<string, string> = {
