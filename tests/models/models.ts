@@ -711,13 +711,14 @@ export const MODELS: TestModel[] = [
   {
     file: "39 Stapelbox",
     name: "Stackable ribbed box",
-    look: "A 220 × 150 × 100 box like a shop storage box: round rim bead on top, smooth plinth band at the bottom, framed handle slots on the short ends, round ribs between. Its foot fits into the box below with 0.4 mm play and a 45° slope; three sizes as variants.",
-    doc: JSON.parse(readFileSync(new URL("./stackable-box.json", import.meta.url), "utf8")) as MeercadDocument,
+    look: "A box like a shop storage box, sized for A5 paper: round rim bead on top, smooth plinth band at the bottom, framed handle slots on the short ends, round ribs between. Outside 234.4 × 160.7 × 100; A5 paper lies inside with play. Its foot fits into the box below with 0.4 mm play and a 45° slope; A6, A5 and A4 as variants, two of the next smaller size fit exactly on top of one.",
+    // Without its sizes as variants, so the plain parameter changes below take effect.
+    doc: { ...(JSON.parse(readFileSync(new URL("../../apps/web/src/examples/40-stackable-ribbed-box.meercad", import.meta.url), "utf8")) as MeercadDocument), variants: undefined, variant: undefined },
     // Volume measured once (walls, bead, plinth, frames), kept as a check that nothing moves.
-    expect: { bodies: 1, volume: 241834, size: [222, 152, 100] },
+    expect: { bodies: 1, volume: 263575, size: [234.38, 160.73, 100] },
     variants: [
-      { params: { width: "150 mm", depth: "100 mm", height: "70 mm", corner: "10 mm", handle_h: "20 mm" }, expect: { bodies: 1, size: [152, 102, 70] } },
-      { params: { width: "250 mm", depth: "180 mm", height: "140 mm", corner: "16 mm" }, expect: { bodies: 1, size: [252, 182, 140] } },
+      { params: { din: "6", height: "70 mm", handle_h: "20 mm" }, expect: { bodies: 1, size: [160.73, 117.19, 70] } },
+      { params: { din: "4", height: "140 mm" }, expect: { bodies: 1, size: [321.46, 234.38, 140] } },
     ],
   },
   {

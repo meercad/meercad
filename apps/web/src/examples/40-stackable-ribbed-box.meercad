@@ -1,11 +1,18 @@
 {
  "format": "meercad/1",
  "params": {
-  "width": "220 mm",
-  "depth": "150 mm",
+  "din": "5",
+  "smallest": "6",
+  "play": "1 mm",
+  "paper_long": "1000 mm * 2 ^ (0.25 - din / 2)",
+  "paper_short": "1000 mm * 2 ^ (-0.25 - din / 2)",
+  "margin": "2 * (play + (corner - wall) * (1 - sqrt(0.5)) + wall + band)",
+  "steps": "smallest - din",
+  "width": "paper_long + margin * 2 ^ ceil(steps / 2) - 2 * band",
+  "depth": "paper_short + margin * 2 ^ floor(steps / 2) - 2 * band",
   "height": "100 mm",
   "wall": "2.4 mm",
-  "corner": "14 mm",
+  "corner": "8 mm",
   "foot": "5 mm",
   "clearance": "0.4 mm",
   "handle_len": "depth * 0.5",
@@ -1561,32 +1568,27 @@
  },
  "variants": [
   {
-   "name": "Small",
+   "name": "A6",
    "params": {
-    "width": "150 mm",
-    "depth": "100 mm",
+    "din": "6",
     "height": "70 mm",
-    "corner": "10 mm",
     "handle_h": "20 mm"
    }
   },
   {
-   "name": "Medium",
+   "name": "A5",
    "params": {
-    "width": "220 mm",
-    "depth": "150 mm",
+    "din": "5",
     "height": "100 mm"
    }
   },
   {
-   "name": "Large",
+   "name": "A4",
    "params": {
-    "width": "250 mm",
-    "depth": "180 mm",
-    "height": "140 mm",
-    "corner": "16 mm"
+    "din": "4",
+    "height": "140 mm"
    }
   }
  ],
- "variant": "Medium"
+ "variant": "A5"
 }
