@@ -72,7 +72,7 @@ describe("DIN A storage box", () => {
   });
 
   for (const variant of ["A6", "A5", "A4"])
-    it(`${variant} prints upright without supports: only the flat tops of the grip holes bridge`, async () => {
+    it(`${variant} prints upright without supports: only the roof of the groove in the foot bridges`, async () => {
       const d = { ...box(), variant };
       const s = await newSession();
       const { report } = s.rebuild(d);
@@ -81,17 +81,15 @@ describe("DIN A storage box", () => {
       const check = printCheck(m!.positions, m!.indices, [0, 0, -1], 46);
       const params = { ...d.params, ...d.variants!.find((v) => v.name === variant)!.params };
       const { values } = resolveParams(params);
-      const top = values.get("grip_top")!, bridge = values.get("grip_bridge")!;
       const foot = values.get("foot")!, groove = values.get("band")! + values.get("wall")! + values.get("clearance")!;
-      // Bridges: the flat tops of the grip holes and the roof of the groove across the foot (7.6 mm
-      // wide). Elsewhere only the 0.1 mm ledge the chamfer leaves under the grip frames.
+      // The only bridge is the roof of the groove across the foot (7.6 mm wide); elsewhere nothing
+      // hangs over.
       let elsewhere = 0;
       const where: string[] = [];
       for (let t = 0; t < check.kind.length; t++) {
         if (check.kind[t] !== SURFACE_OVERHANG) continue;
         const p = [0, 1, 2].map((j) => [0, 1, 2].map((k) => m!.positions[m!.indices[t * 3 + j]! * 3 + k]!));
         const c = [0, 1, 2].map((k) => (p[0]![k]! + p[1]![k]! + p[2]![k]!) / 3);
-        if (Math.abs(c[2]! - top) < 0.5 && Math.abs(c[1]!) < bridge / 2 + 1.5) continue;
         if (Math.abs(c[2]! - foot) < 0.3 && Math.abs(c[0]!) < groove + 0.5) continue;
         const u = [0, 1, 2].map((k) => p[1]![k]! - p[0]![k]!), v = [0, 1, 2].map((k) => p[2]![k]! - p[0]![k]!);
         elsewhere += Math.hypot(u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!) / 2;
@@ -99,7 +97,6 @@ describe("DIN A storage box", () => {
         where.push(`${A.toFixed(2)}@${c.map((x) => x.toFixed(1)).join(",")}`);
       }
       where.sort((a, b) => parseFloat(b) - parseFloat(a));
-      expect(elsewhere, where.slice(0, 12).join(" | ") + ` (${where.length})`).toBeLessThan(25);
-      expect(bridge).toBeLessThanOrEqual(62);
+      expect(elsewhere, where.slice(0, 12).join(" | ") + ` (${where.length})`).toBeLessThan(1);
     }, 120_000);
 });
