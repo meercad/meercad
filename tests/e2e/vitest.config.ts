@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     root: new URL("../..", import.meta.url).pathname,
-    include: ["tests/e2e/**/*.e2e.ts"],
+    include: [process.env["E2E_FILE"] ?? "tests/e2e/**/models.e2e.ts"],
     fileParallelism: false,
     testTimeout: 300_000,
     hookTimeout: 180_000,

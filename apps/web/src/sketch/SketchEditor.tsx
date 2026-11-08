@@ -1377,6 +1377,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
               data-y={l.at[1]}
               className={`${l.dimension ? "sketch-label" : "glyph"} ${ui.selection.some((s) => s.kind === "constraint" && s.id === l.id) ? "sel" : ""} ${conflicting.has(l.id) ? "conflict" : ""}`}
               title={l.title}
+              // While drawing, a click on a dimension or symbol means the spot below it (a midpoint, a centre).
+              style={POINT_TOOLS.has(ui.tool) ? { pointerEvents: "none" } : undefined}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 const t: SketchSel = { kind: "constraint", id: l.id };
@@ -1501,17 +1503,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           {EDIT_TOOLS.has(ui.tool) && ui.tool !== "trim" ? (
             <label className="row" style={{ gap: 6, marginTop: 6 }}>
               <span className="muted">{ui.tool === "fillet" ? t("Radius") : ui.tool === "chamfer" ? t("Distance") : t("Offset")}</span>
-              <input
-                className="field"
-                type="number"
-                step="0.5"
-                style={{ width: 80 }}
-                value={ui.editSize}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  if (Number.isFinite(v)) useSketchUi.setState({ editSize: v });
-                }}
-              />
+              <SizeInput value={ui.editSize} onChange={(editSize) => useSketchUi.setState({ editSize })} />
               <span className="muted">mm</span>
             </label>
           ) : null}
@@ -1522,6 +1514,32 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 }
 
 // ---------------------------------------------------------------- helpers
+
+/**
+ * The corner and offset tools' size. It keeps what is typed as text, so a field cleared to type
+ * anew or a lone "-" on the way to a negative offset stay as they are; numbers go out as typed.
+ */
+function SizeInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    setText((cur) => (Number(cur) === value && cur.trim() ? cur : String(value)));
+  }, [value]);
+  return (
+    <input
+      className="field"
+      type="text"
+      inputMode="decimal"
+      style={{ width: 80 }}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const v = Number(e.target.value.replace(",", "."));
+        if (e.target.value.trim() && Number.isFinite(v)) onChange(v);
+      }}
+      onBlur={() => setText(String(value))}
+    />
+  );
+}
 
 /** Tools whose clicks place points (they show a dot where the next point lands). */
 /** Tools that act on existing geometry under the cursor. */
@@ -1662,7 +1680,11 @@ function curvePointIds(sk: SketchFeature, id: string): string[] {
 }
 
 function connectedCurves(sk: SketchFeature, start: string): string[] {
-  const pts = (id: string) => curvePointIds(sk, id).filter((p) => sk.entities.find((e) => e.id === id)?.type !== "circle" || p !== curvePointIds(sk, id)[0]);
+  // Joined end to end only: concentric arcs share their centre point without being one chain.
+  const pts = (id: string) => {
+    const e = sk.entities.find((x) => x.id === id);
+    return e?.type === "line" ? [e.p1, e.p2] : e?.type === "arc" ? [e.start, e.end] : [];
+  };
   const seen = new Set([start]);
   const queue = [start];
   while (queue.length) {
