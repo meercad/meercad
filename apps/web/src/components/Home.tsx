@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, Pencil, Plus, Trash } from "lucide-react";
-import { useEffect, useState, type DragEvent } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Pencil, Plus, Trash } from "lucide-react";
+import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
+import { EMPTY_SELECTION, clickSelect, keepShown, toggleAll } from "../lib/multiSelect";
 import { askConfirm, askText } from "./Ask";
-import { showMenu } from "./Menu";
+import { showMenu, type MenuEntry } from "./Menu";
 import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
 import { newProject, openProject, refreshProjects, startTask, toast, useApp } from "../store";
 import type { MeercadDocument } from "@meercad/schema";
@@ -57,6 +58,58 @@ function sortProjects(list: ProjectMeta[], s: Sort): ProjectMeta[] {
 
 async function moveTo(id: string, folder: string): Promise<void> {
   await moveProject(id, folder).then(refreshProjects, fail(t("Could not move the part: {msg}")));
+}
+
+/** Moves several parts one after the other; reports the ones that failed together. */
+async function moveMany(ids: readonly string[], folder: string): Promise<void> {
+  let failed = 0;
+  let last = "";
+  for (const id of ids) await moveProject(id, folder).catch((e: unknown) => ((failed += 1), (last = e instanceof Error ? e.message : String(e))));
+  await refreshProjects();
+  const where = folder ? folder.split("/").join(" › ") : t("Your projects");
+  if (failed) toast(tn(failed, "Could not move {n} part: {msg}", "Could not move {n} parts: {msg}", { msg: last }), "error");
+  else toast(tn(ids.length, "Moved {n} part to {folder}", "Moved {n} parts to {folder}", { folder: where }));
+}
+
+/** Asks once for all of them, then deletes them; true when the user agreed. */
+async function deleteMany(ids: readonly string[]): Promise<boolean> {
+  if (!ids.length) return false;
+  const ok = await askConfirm({
+    title: tn(ids.length, "Delete {n} part?", "Delete {n} parts?"),
+    message: desktop ? t("The project files go to the Trash.") : t("The project files are deleted. This cannot be undone."),
+    confirmLabel: tn(ids.length, "Delete {n} part", "Delete {n} parts"),
+    danger: true,
+  });
+  if (!ok) return false;
+  let failed = 0;
+  let last = "";
+  for (const id of ids) await deleteProject(id).catch((e: unknown) => ((failed += 1), (last = e instanceof Error ? e.message : String(e))));
+  await refreshProjects();
+  if (failed) toast(tn(failed, "Could not delete {n} part: {msg}", "Could not delete {n} parts: {msg}", { msg: last }), "error");
+  return true;
+}
+
+/** Folders the parts shown in `current` can move to. */
+function moveTargets(current: string, pick: (folder: string) => void): MenuEntry[] {
+  return ["", ...useApp.getState().folders]
+    .filter((f) => f !== current)
+    .map((f) => ({ label: f ? f.split("/").join(" › ") : t("Your projects"), icon: f ? <Folder /> : <FolderInput />, onClick: () => pick(f) }));
+}
+
+/** The menu for several selected parts (right-click on one of them, or the Move button). */
+function selectionMenu(ids: readonly string[], current: string, x: number, y: number, done: () => void, opts: { above?: boolean; moveOnly?: boolean } = {}): void {
+  const targets = moveTargets(current, (f) => void moveMany(ids, f).then(done));
+  if (opts.moveOnly) return showMenu(x, y, targets.length ? targets : [{ label: t("No other folder yet"), disabled: true }], opts);
+  showMenu(
+    x,
+    y,
+    [
+      { label: tn(ids.length, "Move {n} part to", "Move {n} parts to"), icon: <FolderInput />, disabled: !targets.length, submenu: targets },
+      "sep",
+      { label: tn(ids.length, "Delete {n} part…", "Delete {n} parts…"), icon: <Trash />, danger: true, onClick: () => void deleteMany(ids).then((ok) => ok && done()) },
+    ],
+    opts,
+  );
 }
 
 async function addFolder(): Promise<void> {
@@ -150,13 +203,40 @@ export function Home() {
     projects.filter((p) => (p.folder ?? "") === folder),
     sort,
   );
+  // Selecting several parts: tap/click toggles while `selecting`; Cmd/Ctrl/Shift-click starts it.
+  const [selecting, setSelecting] = useState(false);
+  const [sel, setSel] = useState(EMPTY_SELECTION);
+  const order = here.map((p) => p.id);
+  const orderKey = order.join("\n");
+  const stopSelecting = () => (setSelecting(false), setSel(EMPTY_SELECTION));
+  useEffect(stopSelecting, [folder]);
+  useEffect(() => setSel((s) => keepShown(s, orderKey ? orderKey.split("\n") : [])), [orderKey]);
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || document.querySelector(".ask-backdrop, .modal-backdrop, .menu")) return;
+      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+      if (typing) return;
+      if (e.key === "Escape") return (e.preventDefault(), stopSelecting());
+      if (e.key === "a" && (e.metaKey || e.ctrlKey)) return (e.preventDefault(), setSel((s) => ({ ids: orderKey ? orderKey.split("\n") : [], anchor: s.anchor })));
+      if ((e.key === "Delete" || e.key === "Backspace") && sel.ids.length) return (e.preventDefault(), void deleteMany(sel.ids).then((ok) => ok && stopSelecting()));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selecting, orderKey, sel.ids]);
+  const pickCard = (e: MouseEvent | null, id: string) => {
+    setSelecting(true);
+    setSel((s) => clickSelect(s, order, id, !!e?.shiftKey));
+  };
+  const allSelected = order.length > 0 && order.every((id) => sel.ids.includes(id));
   const dirLabel = sort.key === "name" ? (sort.asc ? t("A to Z") : t("Z to A")) : sort.asc ? t("Oldest first") : t("Newest first");
   const crumbs = [{ path: "", label: t("Your projects") }, ...folder.split("/").filter(Boolean).map((label, i, all) => ({ path: all.slice(0, i + 1).join("/"), label }))];
   const dropOn = async (e: DragEvent, target: string) => {
     e.preventDefault();
     setDropTarget(null);
-    const id = e.dataTransfer.getData(DRAG_TYPE);
-    if (id) await moveTo(id, target);
+    const ids = e.dataTransfer.getData(DRAG_TYPE).split("\n").filter(Boolean);
+    if (ids.length > 1) await moveMany(ids, target).then(stopSelecting);
+    else if (ids[0]) await moveTo(ids[0], target);
   };
   const ago = (time: number) => {
     const s = (Date.now() - time) / 1000;
@@ -182,7 +262,7 @@ export function Home() {
           <Plus /> {t("New part")}
         </button>
       </div>
-      <div className="home-main">
+      <div className={`home-main ${selecting ? "selecting" : ""}`}>
         <div className="home-head">
           <h1 className="crumbs">
             {crumbs.map((c, i) => (
@@ -200,6 +280,20 @@ export function Home() {
             ))}
           </h1>
           <span className="spacer" />
+          {selecting ? (
+            <>
+              <button className="btn" onClick={() => setSel((s) => toggleAll(s, order))} disabled={!order.length}>
+                {allSelected ? t("Select none") : t("Select all")}
+              </button>
+              <button className="btn primary" onClick={stopSelecting} title={t("Done (Esc)")}>
+                {t("Done")}
+              </button>
+            </>
+          ) : (
+            <>
+          <button className="btn" onClick={() => setSelecting(true)} disabled={!order.length} title={t("Select several parts to move or delete them together")}>
+            <ListChecks /> {t("Select")}
+          </button>
           <button
             className="btn"
             title={t("Sort parts")}
@@ -225,6 +319,8 @@ export function Home() {
               <FolderOpen /> {t("Show in Finder")}
             </button>
           ) : null}
+            </>
+          )}
         </div>
         <p className="sub">
           {desktop ? (
@@ -277,34 +373,73 @@ export function Home() {
               </div>
             );
           })}
-          {here.map((p) => (
+          {here.map((p) => {
+            const picked = sel.ids.includes(p.id);
+            return (
             <div
-              className="card"
+              className={`card ${selecting ? "selecting" : ""} ${picked ? "selected" : ""}`}
               key={p.id}
-              role="button"
+              role={selecting ? "checkbox" : "button"}
+              aria-checked={selecting ? picked : undefined}
               tabIndex={0}
               draggable
               onDragStart={(e) => {
-                e.dataTransfer.setData(DRAG_TYPE, p.id);
+                e.dataTransfer.setData(DRAG_TYPE, picked && sel.ids.length > 1 ? sel.ids.join("\n") : p.id);
                 e.dataTransfer.effectAllowed = "move";
               }}
-              onClick={() => void openProject(p.id)}
-              onKeyDown={(e) => e.key === "Enter" && void openProject(p.id)}
-              onContextMenu={(e) => (e.preventDefault(), projectMenu(p, e.clientX, e.clientY))}
+              // Shift-click would select the text on the page as well.
+              onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+              onClick={(e) => (selecting || e.metaKey || e.ctrlKey || e.shiftKey ? pickCard(e, p.id) : void openProject(p.id))}
+              onKeyDown={(e) => {
+                if (selecting && (e.key === " " || e.key === "Enter")) return (e.preventDefault(), pickCard(null, p.id));
+                if (e.key === "Enter") void openProject(p.id);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (picked && sel.ids.length > 1) selectionMenu(sel.ids, folder, e.clientX, e.clientY, stopSelecting);
+                else projectMenu(p, e.clientX, e.clientY);
+              }}
             >
-              <div className="thumb">{p.thumbnail ? <img src={p.thumbnail} alt="" draggable={false} /> : <Box size={32} />}</div>
+              <div className="thumb">
+                {p.thumbnail ? <img src={p.thumbnail} alt="" draggable={false} /> : <Box size={32} />}
+                {selecting ? <span className="pick-mark">{picked ? <CircleCheck /> : <Circle />}</span> : null}
+              </div>
               <div className="meta">
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <b>{p.name}</b>
                   <small>{sort.key === "created" && p.createdAt ? t("Created {when}", { when: ago(p.createdAt) }) : ago(p.updatedAt)}</small>
                 </div>
-                <button className="icon-btn sm" title={t("Part actions")} onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}>
-                  <Ellipsis />
-                </button>
+                {selecting ? null : (
+                  <button className="icon-btn sm" title={t("Part actions")} onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}>
+                    <Ellipsis />
+                  </button>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
+        {selecting ? (
+          <div className="select-bar" role="toolbar" aria-label={t("Selected parts")}>
+            <span className="select-count">{sel.ids.length ? tn(sel.ids.length, "{n} part selected", "{n} parts selected") : t("Choose the parts to move or delete")}</span>
+            <button
+              className="btn"
+              disabled={!sel.ids.length}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                selectionMenu(sel.ids, folder, r.left, r.top - 4, stopSelecting, { above: true, moveOnly: true });
+              }}
+            >
+              <FolderInput /> {t("Move to…")}
+            </button>
+            <button className="btn danger" disabled={!sel.ids.length} onClick={() => void deleteMany(sel.ids).then((ok) => ok && stopSelecting())}>
+              <Trash /> {t("Delete…")}
+            </button>
+            <button className="btn" onClick={stopSelecting}>
+              {t("Done")}
+            </button>
+          </div>
+        ) : null}
         {prefs.showExamples ? (
           <>
         <button className="home-section-toggle" onClick={() => setPrefs({ examplesOpen: !prefs.examplesOpen })} aria-expanded={prefs.examplesOpen}>
