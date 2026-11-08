@@ -15,10 +15,10 @@ const api = {
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
   /** Assistant sessions' own windows (MCP): the user's window passes their requests on. */
   assistant: {
-    open: (p: { session: string; client: string }): Promise<number> => ipcRenderer.invoke("assistant:open", p),
+    open: (p: { session: string; client: string; project?: string }): Promise<number> => ipcRenderer.invoke("assistant:open", p),
     windowOf: (session: string): Promise<number | "closed" | null> => ipcRenderer.invoke("assistant:window", session),
     call: (window: number, req: unknown): Promise<unknown> => ipcRenderer.invoke("assistant:call", { window, req }),
-    holder: (id: string): Promise<{ session: string; client: string } | null> => ipcRenderer.invoke("assistant:holder", id),
+    holder: (id: string): Promise<{ session: string; client: string; ended: boolean } | null> => ipcRenderer.invoke("assistant:holder", id),
     focusHolder: (id: string): Promise<boolean> => ipcRenderer.invoke("assistant:focus-holder", id),
     ended: (session: string) => ipcRenderer.send("assistant:ended", session),
     // In an assistant's window:
@@ -58,7 +58,7 @@ const api = {
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
   /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
   shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
-  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "assistant-ended", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "assistant-ended" | "assistant-adopted", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

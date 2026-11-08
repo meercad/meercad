@@ -84,8 +84,9 @@ describe("MCP bridge hub", () => {
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
     await until(() => b.role === "peer");
     await b.stop();
-    await until(() => app.events.length > 0);
-    expect(app.events[0]).toEqual({ event: "session_ended", session: "B" });
+    expect(app.events).toContainEqual({ event: "hub_session", session: "A" });
+    await until(() => app.events.some((e) => (e as { event: string }).event === "session_ended"));
+    expect(app.events).toContainEqual({ event: "session_ended", session: "B" });
   });
 
   it("a peer takes over when the hub exits, and the app reconnects to it", async () => {

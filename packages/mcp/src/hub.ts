@@ -163,6 +163,8 @@ export function createBridge(o: BridgeOptions) {
         app = ws;
         hello = msg as unknown as BridgeHello;
         log(`app connected (project: ${hello.project ?? "none"})`);
+        // The app learns this server's session, to free its window when this connection ends.
+        ws.send(JSON.stringify({ event: "hub_session", session }));
         return;
       }
       const peerSession = peers.get(ws);

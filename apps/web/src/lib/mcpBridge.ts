@@ -92,6 +92,12 @@ function connect(): void {
   };
   ws.onclose = (e) => {
     socket = null;
+    // The server this window talked to has gone: its session has ended (the others reconnect).
+    if (hubSession) {
+      here.delete(hubSession);
+      desktop?.assistant?.ended(hubSession);
+      hubSession = null;
+    }
     if (!wanted) return setStatus("off");
     setStatus("connecting");
     // Another meerCAD window (e.g. the WIP build next to the release) took the connection: take it back
@@ -110,6 +116,7 @@ function connect(): void {
   ws.onmessage = async (e) => {
     const msg = JSON.parse(String(e.data)) as BridgeRequest | BridgeEvent;
     if ("event" in msg) {
+      if (msg.event === "hub_session") hubSession = msg.session;
       if (msg.event === "session_ended") {
         here.delete(msg.session);
         desktop?.assistant?.ended(msg.session);
@@ -130,6 +137,8 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 
 /** Requests that open a project for the session: where they open decides where the session works. */
 const OPENS = new Set(["open_project", "new_project", "open_example"]);
+/** The session of the MCP server this window is connected to (the hub). */
+let hubSession: string | null = null;
 /** Sessions working in this (the user's) window: they asked to, or opened the project the user has in front. */
 const here = new Set<string>();
 
@@ -147,7 +156,12 @@ async function route(req: BridgeRequest): Promise<unknown> {
     if (req.method === "open_project") {
       const id = String(req.params["id"]);
       const holder = await a.holder(id);
-      if (holder && holder.session !== session) throw new Error(`${holder.client} is working on this project in its own meerCAD window right now. Pick another project, or wait until it is done.`);
+      if (holder && holder.session !== session && !holder.ended) throw new Error(`${holder.client} is working on this project in its own meerCAD window right now. Pick another project, or wait until it is done.`);
+      // A window left by an assistant that has finished is taken over.
+      if (holder) {
+        here.delete(session);
+        return a.call(await a.open({ session, client: clientLabel(req.client), project: id }), req);
+      }
       const s = useApp.getState();
       const inFront = s.screen === "editor" && s.project?.id === id;
       if (!holder && (inFront || req.params["here"] === true)) {
@@ -201,6 +215,13 @@ function initAssistantWindow(): void {
       (err: unknown) => a.respond({ callId, error: errorText(err) }),
     );
   });
+  desktop.on("assistant-adopted", ({ client }) => {
+    // Another assistant session takes over this window (its own one had finished).
+    assistantWindow!.client = client;
+    stopped = false;
+    useApp.setState({ aiSessionEnded: false });
+    report();
+  });
   desktop.on("assistant-ended", () => {
     unlock();
     useApp.setState({ aiActivity: null, aiSessionEnded: true });
@@ -219,7 +240,7 @@ function initAssistantWindow(): void {
 }
 
 /** Requests that only look things up: they do not lock the app. */
-const READS = new Set(["status", "get_version", "list_projects", "list_folders", "list_examples", "list_materials"]);
+const READS = new Set(["status", "get_status", "get_version", "list_projects", "list_folders", "list_examples", "list_materials"]);
 /** How long the app stays locked after the assistant's last request: it often thinks a while between two. */
 export const LOCK_IDLE_MS = 12_000;
 let running = 0;

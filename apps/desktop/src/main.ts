@@ -586,6 +586,8 @@ interface AssistantWindow {
   client: string;
   /** The project it shows. */
   project: string | null;
+  /** Its session's MCP server exited: another session may take the window over. */
+  ended: boolean;
   ready: Promise<void>;
   markReady: () => void;
 }
@@ -614,7 +616,7 @@ function openAssistantWindow(session: string, client: string): AssistantWindow {
   const ready = new Promise<void>((r) => (markReady = r));
   closedSessions.delete(session);
   const win = createWindow({ session, client });
-  const a: AssistantWindow = { win, session, client, project: null, ready, markReady };
+  const a: AssistantWindow = { win, session, client, project: null, ended: false, ready, markReady };
   assistantWindows.set(win.id, a);
   const id = win.id;
   win.on("closed", () => {
@@ -632,7 +634,16 @@ function openAssistantWindow(session: string, client: string): AssistantWindow {
 let bridgeCallSeq = 0;
 const bridgeCalls = new Map<number, { window: number; resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
-ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string }) => {
+ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string; project?: string }) => {
+  // A window whose assistant is gone and that has the project open is taken over, not opened twice.
+  const left = p.project ? [...assistantWindows.values()].find((x) => x.ended && x.project === p.project && !x.win.isDestroyed()) : undefined;
+  if (left && ![...assistantWindows.values()].some((x) => x.session === p.session && !x.win.isDestroyed())) {
+    left.session = String(p.session);
+    left.client = String(p.client || "Assistant");
+    left.ended = false;
+    left.win.webContents.send("assistant-adopted", { session: left.session, client: left.client });
+    return left.win.id;
+  }
   const a = openAssistantWindow(String(p.session), String(p.client || "Assistant"));
   await a.ready;
   return a.win.id;
@@ -663,7 +674,7 @@ ipcMain.on("assistant:project", (e, id: unknown) => {
 /** Which session's window has a project open (other than the asking window). */
 ipcMain.handle("assistant:holder", (e, id: string) => {
   const a = [...assistantWindows.values()].find((x) => x.project === id && !x.win.isDestroyed() && x.win.webContents.id !== e.sender.id);
-  return a ? { session: a.session, client: a.client } : null;
+  return a ? { session: a.session, client: a.client, ended: a.ended } : null;
 });
 /** Brings the window that has a project open to the front; false when no assistant window has it. */
 ipcMain.handle("assistant:focus-holder", (e, id: string) => {
@@ -675,7 +686,11 @@ ipcMain.handle("assistant:focus-holder", (e, id: string) => {
 });
 /** A session's MCP server exited: its window says so and is free to use. */
 ipcMain.on("assistant:ended", (_e, session: string) => {
-  for (const a of assistantWindows.values()) if (a.session === session && !a.win.isDestroyed()) a.win.webContents.send("assistant-ended");
+  for (const a of assistantWindows.values())
+    if (a.session === session && !a.win.isDestroyed()) {
+      a.ended = true;
+      a.win.webContents.send("assistant-ended");
+    }
 });
 
 /** Imports an .meercad file opened from Finder into the projects folder and opens it. */

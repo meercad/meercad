@@ -56,9 +56,9 @@ export interface BridgeRequest {
   session?: string;
 }
 
-/** Sent by the hub, not answered: a session's MCP server exited. */
+/** Sent by the hub, not answered: a session's MCP server exited, or (on connecting) the hub's own session. */
 export interface BridgeEvent {
-  event: "session_ended";
+  event: "session_ended" | "hub_session";
   session: string;
 }
 

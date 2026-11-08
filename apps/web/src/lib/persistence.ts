@@ -78,10 +78,10 @@ interface DesktopApi {
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
   /** Assistant sessions' own windows (MCP), see lib/mcpBridge. */
   assistant?: {
-    open(p: { session: string; client: string }): Promise<number>;
+    open(p: { session: string; client: string; project?: string }): Promise<number>;
     windowOf(session: string): Promise<number | "closed" | null>;
     call(window: number, req: unknown): Promise<unknown>;
-    holder(id: string): Promise<{ session: string; client: string } | null>;
+    holder(id: string): Promise<{ session: string; client: string; ended: boolean } | null>;
     focusHolder(id: string): Promise<boolean>;
     ended(session: string): void;
     ready(): void;
@@ -91,6 +91,7 @@ interface DesktopApi {
   on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error", fn: (arg: string) => void): () => void;
   on(channel: "bridge-request", fn: (arg: { callId: number; req: unknown }) => void): () => void;
   on(channel: "assistant-ended", fn: () => void): () => void;
+  on(channel: "assistant-adopted", fn: (arg: { session: string; client: string }) => void): () => void;
   on(channel: "photos-progress", fn: (arg: { progress: number; step: string }) => void): () => void;
   on(channel: "ui-scale", fn: (arg: UiScale) => void): () => void;
 }
