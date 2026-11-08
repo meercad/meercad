@@ -109,12 +109,22 @@ export class Ui {
 
   /** Accepts the open dialog with its OK button and waits for the rebuild. */
   async accept(): Promise<void> {
-    await this.press("Accept", "button.ok-btn");
-    try {
-      await this.until("the dialog to close", "!s.dialog", 5000);
-    } catch {
-      const why = await this.page.eval<string>(`[...document.querySelectorAll(".dialog .hint, .dialog .problem, .dialog [class*=warn], .dialog [class*=error]")].map((e) => e.textContent.trim()).join(" · ")`);
-      throw new Error(`the dialog does not accept: ${why || "(no reason shown)"}`);
+    // The dialog's verdict follows its preview: let that finish first.
+    await this.settle();
+    // A slow preview can still hold an older verdict: a person looks again and presses once more.
+    for (let i = 0; ; i++) {
+      await this.press("Accept", "button.ok-btn");
+      try {
+        await this.until("the dialog to close", "!s.dialog", 4000);
+        break;
+      } catch {
+        if (i < 2) {
+          await sleep(2000);
+          continue;
+        }
+        const why = await this.page.eval<string>(`[...document.querySelectorAll(".dialog .hint, .dialog .problem, .dialog [class*=warn], .dialog [class*=error]")].map((e) => e.textContent.trim()).join(" · ")`);
+        throw new Error(`the dialog does not accept: ${why || "(no reason shown)"}`);
+      }
     }
     await this.settle();
   }
@@ -245,10 +255,41 @@ export class Ui {
     await sleep(200);
   }
 
-  async clickFace(test: string): Promise<void> {
-    const [x, y] = await this.visibleSpot("face", test);
+  async clickFace(test: string, { any = false } = {}): Promise<void> {
+    const [x, y] = await this.visibleSpot("face", test, any);
     await this.page.click(x, y);
     await sleep(200);
+  }
+
+  /**
+   * Clicks a construction plane where it shows outside the parts: points of the plane `x = at`
+   * (or any plane through `origin` with normal `n`) are tried until the viewport picks that plane.
+   */
+  async clickPlane(id: string, origin: Vec3, u: Vec3, v: Vec3): Promise<void> {
+    // Construction planes show only with the bottom bar's Planes button on.
+    if (!(await this.state<boolean>("s.showPlanes"))) {
+      await this.press("Planes", "button[title='Planes']");
+      await sleep(400);
+    }
+    const at = await this.page.eval<Vec2 | null>(`(() => {
+      const vp = meercadTest.store.getViewport(), r = vp.renderer.domElement.getBoundingClientRect();
+      const o = ${JSON.stringify(origin)}, u = ${JSON.stringify(u)}, v = ${JSON.stringify(v)};
+      for (let a = -1; a <= 1.001; a += 0.1) for (let b = -1; b <= 1.001; b += 0.1) {
+        const p = [0, 1, 2].map((i) => o[i] + u[i] * a + v[i] * b);
+        const q = vp.worldToScreen(p);
+        if (!q) continue;
+        const x = r.left + q[0], y = r.top + q[1];
+        if (x < r.left + 120 || y < r.top + 80 || x > r.right - 20 || y > r.bottom - 60) continue;
+        const dlg = document.querySelector(".dialog")?.getBoundingClientRect();
+        if (dlg && x < dlg.right + 8 && y < dlg.bottom + 8) continue;
+        const hit = vp.pick(x, y, new Set(["face", "edge", "plane"]));
+        if (hit?.kind === "plane" && hit.planeId === ${JSON.stringify(id)}) return [x, y];
+      }
+      return null;
+    })()`);
+    if (!at) throw new Error(`plane ${id} is not where it can be clicked`);
+    await this.page.click(at[0], at[1]);
+    await sleep(250);
   }
 
   /** Clicks a part (any visible face of the body with this id). */
@@ -451,6 +492,22 @@ export class Ui {
     if (!at) throw new Error(`no "${label}" under ${group}`);
     await this.page.click(at[0], at[1]);
     await sleep(200);
+  }
+
+  /** Makes a dialog's pick box active (a click on it), so the next click in the view goes there. */
+  async pickInto(label: string): Promise<void> {
+    const at = await this.fieldAt(label, ".selbox");
+    if (!at) throw new Error(`no pick box "${label}"`);
+    const active = await this.page.eval<boolean>(`[...document.querySelectorAll(".dialog .fld")].find((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)})?.querySelector(".selbox")?.classList.contains("active") ?? false`);
+    if (!active) await this.page.click(at[0], at[1]);
+    await sleep(200);
+  }
+
+  /** Ticks a checkbox in the open dialog unless it is already ticked. */
+  async checkOn(label: string): Promise<void> {
+    const on = await this.page.eval<boolean | null>(`(() => { const l = [...document.querySelectorAll(".dialog label.checkbox")].find((l) => l.textContent.trim() === ${JSON.stringify(label)}); return l ? !!l.querySelector("input")?.checked : null; })()`);
+    if (on === null) throw new Error(`no checkbox "${label}"`);
+    if (!on) await this.check(label);
   }
 
   /** Ticks a checkbox in the open dialog by its text. */
