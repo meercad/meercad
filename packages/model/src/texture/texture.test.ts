@@ -302,6 +302,36 @@ describe("texture displacement", () => {
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
   });
 
+  it("lets triangles run long along straight ribs, so a large part keeps them fine across", () => {
+    // A box wall 230 × 160 × 95 like the A5 storage box: ribs 4 mm apart on the screen budget.
+    const big = () => box(230, 160, 95);
+    const ribs = applyTextures(big(), [layer([0, 1, 2, 3], { pitch: 4 })], planes, DISPLAY_TEXTURE)!;
+    const knurl = applyTextures(big(), [layer([0, 1, 2, 3], { pattern: "knurl", pitch: 4 })], planes, DISPLAY_TEXTURE)!;
+    expect(ribs.indices.length / 3).toBeLessThanOrEqual(DISPLAY_TEXTURE.maxTriangles * 1.25);
+    expect(closedManifold(ribs)).toMatchObject({ open: 0, bad: 0 });
+    // Across the ribs at least five corners per rib (all the same size it was under three); a
+    // pattern that changes both ways cannot.
+    expect(ribs.spacing).toBeLessThanOrEqual(4 / 5);
+    expect(knurl.spacing).toBeGreaterThan(1);
+    // Slanted ribs change along the wall too: no long triangles there.
+    const slanted = applyTextures(big(), [layer([0, 1, 2, 3], { pitch: 4, angle: 30 })], planes, DISPLAY_TEXTURE)!;
+    expect(slanted.spacing).toBeGreaterThan(1);
+  });
+
+  it("keeps the fade at the border as narrow with long triangles along the ribs", () => {
+    // Ribs on the +Y wall of a 100 × 20 × 100 box; the wall's top edge borders the untextured top.
+    const m = applyTextures(box(100, 20, 100), [layer([3], { pitch: 4, fade: 0.5 })], planes, DISPLAY_TEXTURE)!;
+    // Corners on the wall within 1 mm of the top: there must be some, and below 0.5 mm of it they are low.
+    let near = 0;
+    for (let i = 0; i < m.positions.length; i += 3) {
+      const y = m.positions[i + 1]!, z = m.positions[i + 2]!;
+      if (y < 19.99 || z > 100 || z < 99) continue;
+      near++;
+    }
+    expect(near).toBeGreaterThan(50);
+    expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
+  });
+
   it("works for every pattern", () => {
     const img = { width: 2, height: 2, pixels: Uint8Array.from([0, 255, 255, 0]) };
     for (const p of TEXTURE_PATTERNS) {

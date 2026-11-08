@@ -77,6 +77,14 @@ export interface TexturedMesh {
 }
 
 const COS_SMOOTH = Math.cos((30 * Math.PI) / 180);
+/** How much longer than across triangles may run along stripes (ribs), see `alongOf`. */
+const STRETCH = 8;
+
+/** Stripes that run straight along the unrolling axis: the height changes only across them. */
+function stripes(layer: TextureLayer): boolean {
+  if (layer.pattern === "image") return false;
+  return patternPeriods(layer.pattern, layer.image)[1] === 0 && Math.abs(Math.sin((layer.angle * Math.PI) / 180)) < 1e-9;
+}
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -170,29 +178,6 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
   const selected = ranges.filter((r) => r.layer >= 0);
   if (!selected.length) return null;
 
-  // ---- how fine: corners per pitch, coarser if the triangle budget would be exceeded
-  const area = layers.map(() => 0);
-  for (const r of selected)
-    for (let t = 0; t < r.tris.length; t += 3) {
-      const a = P(r.weld[r.tris[t]!]!), b = P(r.weld[r.tris[t + 1]!]!), c = P(r.weld[r.tris[t + 2]!]!);
-      const n = cross(sub(b, a), sub(c, a));
-      area[r.layer]! += Math.hypot(n[0], n[1], n[2]) / 2;
-    }
-  // Pictures: a corner per pixel for export (`samples` 12), a little coarser on screen.
-  const spacing = layers.map((l, i) => {
-    let h = l.pitch / opts.samples;
-    if (l.pattern === "image" && l.image) {
-      const pixel = l.fit ? Math.sqrt(area[i]! / (l.image.width * l.image.height)) : l.pitch / l.image.width;
-      h = l.fit ? (pixel * 12) / opts.samples : Math.min(h, (pixel * 12) / opts.samples);
-    }
-    return Math.max(0.02, h);
-  });
-  // Bisecting longest edges until none is longer than h leaves about 6–12·area/h² triangles (more on round faces meshed in strips).
-  const estimate = layers.reduce((s, _, i) => s + (10 * area[i]!) / spacing[i]! ** 2, 0);
-  // A retry's `coarser` comes on top of the estimate, otherwise the estimate would undo it.
-  const k = Math.max(1, Math.sqrt(estimate / opts.maxTriangles)) * coarser;
-  for (let i = 0; i < spacing.length; i++) spacing[i]! *= k;
-
   // ---- groups of chosen faces joined by smooth edges (per layer), from the original triangles
   const parent = ranges.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
@@ -222,9 +207,102 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
   }
   const groupOf = ranges.map((r, i) => (r.layer < 0 ? -1 : find(i)));
 
+  // ---- stripes (ribs) on unrolled faces change only across: triangles there may run long along
+  // them. Each such face gets the direction the stripes run; edges count their length along it
+  // shortened by STRETCH. Triangles at the border of the texture stay even, so the fade keeps its
+  // width.
+  const alongOf: (V3 | null)[] = ranges.map(() => null);
+  {
+    const byGroup = new Map<number, number[]>();
+    groupOf.forEach((g, i) => {
+      if (g < 0) return;
+      const l = byGroup.get(g);
+      if (l) l.push(i);
+      else byGroup.set(g, [i]);
+    });
+    for (const members of byGroup.values()) {
+      const layer = layers[ranges[members[0]!]!.layer]!;
+      if (!stripes(layer)) continue;
+      const axis = groupAxis(members.map((i) => ranges[i]!), surfaces, layer);
+      if (axis) for (const i of members) alongOf[i] = axis;
+    }
+  }
+  // Edges on the border of the texture (to an untextured face or another group), split along with it.
+  const borderEdge = new Set<number>();
+  const borderAt = new Uint8Array(pos.length / 3);
+  const extraBorder = new Set<number>();
+  {
+    const owner = new Map<number, number>();
+    ranges.forEach((r, ri) => {
+      const g = r.layer < 0 ? -1 : groupOf[ri]!;
+      for (let t = 0; t < r.tris.length; t += 3)
+        for (let k = 0; k < 3; k++) {
+          const a = r.weld[r.tris[t + k]!]!, b = r.weld[r.tris[t + ((k + 1) % 3)]!]!;
+          const key = edgeKey(a, b);
+          const o = owner.get(key);
+          if (o === undefined) owner.set(key, g);
+          else if (o !== g && (o >= 0 || g >= 0)) {
+            borderEdge.add(key);
+            borderAt[a] = 1;
+            borderAt[b] = 1;
+          }
+        }
+    });
+  }
+  const isBorder = (w: number) => w < borderAt.length && borderAt[w] === 1;
+  const markMid = (a: number, b: number, key: number, m: number) => {
+    if (!borderEdge.has(key)) return;
+    borderEdge.add(edgeKey(a, m));
+    borderEdge.add(edgeKey(m, b));
+    extraBorder.add(m);
+  };
+  const onBorder = (w: number) => isBorder(w) || extraBorder.has(w);
+  /** Squared length of edge a–b as the refinement counts it on a face whose stripes run along `along`. */
+  const len2 = (a: number, b: number, along: V3 | null): number => {
+    const dx = pos[a * 3]! - pos[b * 3]!, dy = pos[a * 3 + 1]! - pos[b * 3 + 1]!, dz = pos[a * 3 + 2]! - pos[b * 3 + 2]!;
+    const all = dx * dx + dy * dy + dz * dz;
+    if (!along) return all;
+    const t = dx * along[0] + dy * along[1] + dz * along[2];
+    return all - t * t + (t * t) / (STRETCH * STRETCH);
+  };
+
+  // ---- how fine: corners per pitch, coarser if the triangle budget would be exceeded
+  const area = layers.map(() => 0);
+  // Area where triangles may run long along stripes (they count STRETCH times less).
+  const stretched = layers.map(() => 0);
+  for (const r of selected) {
+    const along = alongOf[ranges.indexOf(r)];
+    for (let t = 0; t < r.tris.length; t += 3) {
+      const a = P(r.weld[r.tris[t]!]!), b = P(r.weld[r.tris[t + 1]!]!), c = P(r.weld[r.tris[t + 2]!]!);
+      const n = cross(sub(b, a), sub(c, a));
+      const A = Math.hypot(n[0], n[1], n[2]) / 2;
+      area[r.layer]! += A;
+      if (along) stretched[r.layer]! += A;
+    }
+  }
+  // Pictures: a corner per pixel for export (`samples` 12), a little coarser on screen.
+  const spacing = layers.map((l, i) => {
+    let h = l.pitch / opts.samples;
+    if (l.pattern === "image" && l.image) {
+      const pixel = l.fit ? Math.sqrt(area[i]! / (l.image.width * l.image.height)) : l.pitch / l.image.width;
+      h = l.fit ? (pixel * 12) / opts.samples : Math.min(h, (pixel * 12) / opts.samples);
+    }
+    return Math.max(0.02, h);
+  });
+  // Bisecting longest edges until none is longer than h leaves about 6–12·area/h² triangles (more on round faces meshed in strips).
+  const estimate = layers.reduce((s, _, i) => s + (10 * (area[i]! - stretched[i]! + stretched[i]! / STRETCH)) / spacing[i]! ** 2, 0);
+  // A retry's `coarser` comes on top of the estimate, otherwise the estimate would undo it.
+  const k = Math.max(1, Math.sqrt(estimate / opts.maxTriangles)) * coarser;
+  for (let i = 0; i < spacing.length; i++) spacing[i]! *= k;
+
+
   const mids = new Map<number, number>();
   // Edges cut for ladders whose other side still has them whole: they split on every face.
-  const preset = ladders(ranges, spacing, surfaces, pos, edgeKey, mids);
+  const rangeAt = new Map(ranges.map((r, i) => [r, i]));
+  const preset = ladders(ranges, spacing, surfaces, pos, edgeKey, mids, (r, a, b) => {
+    const along = alongOf[rangeAt.get(r)!]!;
+    return Math.sqrt(len2(a, b, along && !onBorder(a) && !onBorder(b) ? along : null));
+  }, markMid);
 
   // ---- refine: split every edge of a chosen face that is longer than its layer's spacing
   for (let pass = 0; pass < 40; pass++) {
@@ -247,13 +325,15 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
           }
       if (r.layer < 0) return;
       const h2 = spacing[r.layer]! ** 2;
+      const alongR = alongOf[ri]!;
       // Each triangle's longest edge only (longest-edge bisection keeps the triangles well shaped).
       for (let t = 0; t < r.tris.length; t += 3) {
         let best = -1, bestLen = h2;
+        const w0 = r.weld[r.tris[t]!]!, w1 = r.weld[r.tris[t + 1]!]!, w2 = r.weld[r.tris[t + 2]!]!;
+        const along = alongR && !onBorder(w0) && !onBorder(w1) && !onBorder(w2) ? alongR : null;
         for (let k = 0; k < 3; k++) {
           const a = r.weld[r.tris[t + k]!]!, b = r.weld[r.tris[t + ((k + 1) % 3)]!]!;
-          const dx = pos[a * 3]! - pos[b * 3]!, dy = pos[a * 3 + 1]! - pos[b * 3 + 1]!, dz = pos[a * 3 + 2]! - pos[b * 3 + 2]!;
-          const len = dx * dx + dy * dy + dz * dz;
+          const len = len2(a, b, along);
           if (len > bestLen) {
             bestLen = len;
             best = k;
@@ -281,6 +361,7 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
       if (s?.kind === "cylinder") p = ontoCylinder(p, s);
       pos.push(p[0], p[1], p[2]);
       mids.set(key, m);
+      markMid(a, b, key, m);
       return m;
     };
     for (const r of ranges) {
@@ -554,10 +635,14 @@ function upOn(n: V3): V3 {
   return norm([ref[0] - n[0] * t, ref[1] - n[1] * t, ref[2] - n[2] * t]);
 }
 
-function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], layer: TextureLayer, P: (w: number) => V3, footprint: number): GroupMap {
-  const periods = patternPeriods(layer.pattern, layer.image);
-  const h = prefiltered(footprint / layer.pitch, patternHeight(layer.pattern, { ...(layer.ratio !== undefined ? { ratio: layer.ratio } : {}), ...(layer.seed !== undefined ? { seed: layer.seed } : {}), ...(layer.image ? { image: layer.image } : {}), ...(layer.invert ? { invert: true } : {}) }));
-  const firstNormal = (r: Range): V3 => [r.nrm[0]!, r.nrm[1]!, r.nrm[2]!];
+const firstNormal = (r: Range): V3 => [r.nrm[0]!, r.nrm[1]!, r.nrm[2]!];
+
+/**
+ * The axis a group of faces is unrolled about (`v` runs along it), or null when the group takes the
+ * pattern from three sides: flat faces all facing one way, or round faces about one axis with flat
+ * faces parallel to it.
+ */
+function groupAxis(members: Range[], surfaces: FaceSurface[], layer: TextureLayer): V3 | null {
   const kinds = members.map((r) => surfaces[r.face] ?? { kind: "other" as const });
   const cyl = kinds.find((k) => k.kind === "cylinder") as Extract<FaceSurface, { kind: "cylinder" }> | undefined;
   let axis: V3 | null = null;
@@ -580,6 +665,15 @@ function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], 
       }
     }
   }
+  return axis;
+}
+
+function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], layer: TextureLayer, P: (w: number) => V3, footprint: number): GroupMap {
+  const periods = patternPeriods(layer.pattern, layer.image);
+  const h = prefiltered(footprint / layer.pitch, patternHeight(layer.pattern, { ...(layer.ratio !== undefined ? { ratio: layer.ratio } : {}), ...(layer.seed !== undefined ? { seed: layer.seed } : {}), ...(layer.image ? { image: layer.image } : {}), ...(layer.invert ? { invert: true } : {}) }));
+  const kinds = members.map((r) => surfaces[r.face] ?? { kind: "other" as const });
+  const cyl = kinds.find((k) => k.kind === "cylinder") as Extract<FaceSurface, { kind: "cylinder" }> | undefined;
+  const axis = groupAxis(members, surfaces, layer);
   if (!axis) return boxMapping(layer, h, P);
   const a = axis;
 
@@ -798,18 +892,26 @@ class MinHeap {
  * halving points are the midpoints the refinement afterwards uses too (`mids`), so a neighbour that
  * is no strip (a flat wall), textured or not, splits the shared edge at exactly the same points.
  */
-function ladders(ranges: Range[], spacing: number[], surfaces: FaceSurface[], pos: number[], edgeKey: (a: number, b: number) => number, mids: Map<number, number>): Set<number> {
+function ladders(
+  ranges: Range[],
+  spacing: number[],
+  surfaces: FaceSurface[],
+  pos: number[],
+  edgeKey: (a: number, b: number) => number,
+  mids: Map<number, number>,
+  measure: (r: Range, a: number, b: number) => number,
+  markMid: (a: number, b: number, key: number, m: number) => void,
+): Set<number> {
   const preset = new Set<number>();
-  const dist = (a: number, b: number) => Math.hypot(pos[a * 3]! - pos[b * 3]!, pos[a * 3 + 1]! - pos[b * 3 + 1]!, pos[a * 3 + 2]! - pos[b * 3 + 2]!);
   // Strips: the two longer edges above the spacing and at least five times as long as the third.
   const strips: { r: Range; t: number; apex: number }[] = [];
-  const cutH = new Map<number, { h: number; s: FaceSurface | undefined }>();
+  const cutH = new Map<number, { h: number; s: FaceSurface | undefined; r: Range }>();
   for (const r of ranges) {
     if (r.layer < 0) continue;
     const h = spacing[r.layer]!;
     for (let t = 0; t < r.tris.length; t += 3) {
       const w = [r.weld[r.tris[t]!]!, r.weld[r.tris[t + 1]!]!, r.weld[r.tris[t + 2]!]!];
-      const l = [dist(w[0]!, w[1]!), dist(w[1]!, w[2]!), dist(w[2]!, w[0]!)];
+      const l = [measure(r, w[0]!, w[1]!), measure(r, w[1]!, w[2]!), measure(r, w[2]!, w[0]!)];
       const s = l.indexOf(Math.min(...l));
       const others = [l[(s + 1) % 3]!, l[(s + 2) % 3]!];
       if (!(Math.min(...others) > h && l[s]! < 0.2 * Math.min(...others))) continue;
@@ -820,17 +922,17 @@ function ladders(ranges: Range[], spacing: number[], surfaces: FaceSurface[], po
         if (a !== apex && l[s]! <= h) continue;
         const key = edgeKey(w[a]!, w[b]!);
         const c = cutH.get(key);
-        if (!c || h < c.h) cutH.set(key, { h, s: c?.s ?? surfaces[r.face] });
+        if (!c || h < c.h) cutH.set(key, { h, s: c?.s ?? surfaces[r.face], r: c?.r ?? r });
       }
     }
   }
   if (!strips.length) return preset;
   // The points on each cut edge, from its lower welded corner to its higher one, by halving.
   const points = new Map<number, number[]>();
-  for (const [key, { h, s }] of cutH) {
+  for (const [key, { h, s, r }] of cutH) {
     const a = Math.floor(key / 134217728), b = key % 134217728;
     const halve = (x: number, y: number): number[] => {
-      if (dist(x, y) <= h) return [];
+      if (measure(r, x, y) <= h) return [];
       const k = edgeKey(x, y);
       let m = mids.get(k);
       if (m === undefined) {
@@ -839,6 +941,7 @@ function ladders(ranges: Range[], spacing: number[], surfaces: FaceSurface[], po
         m = pos.length / 3;
         pos.push(p[0], p[1], p[2]);
         mids.set(k, m);
+        markMid(x, y, k, m);
         preset.add(k);
       }
       return [...halve(x, m), m, ...halve(m, y)];
