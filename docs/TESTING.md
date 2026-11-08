@@ -1,20 +1,66 @@
 # Testing meerCAD
 
-meerCAD is tested on three levels. The first two run in seconds and catch most regressions. The
-third one is a person (or an agent driving the app) using the app as a maker would, and it is the
-only one that sees what the model *looks* like. Run all three before a release and after any change
-to the kernel, the viewport or a tool.
+## When what runs
 
-| Level | What it proves | How |
+Not everything can run on every change: all tests take minutes, performance needs a quiet machine,
+and E2E needs the app. So the tests are split into levels, and each moment runs what fits it.
+
+| Level | What it proves | Command | Time (Mac / CI) |
+| --- | --- | --- | --- |
+| Unit | Packages and app logic without the kernel: schema, ops, expressions, solver, readers and writers | part of `pnpm test:quick` | seconds |
+| Integration | The kernel end to end through `KernelSession.rebuild`, the path the app uses: volumes, sizes, topology | `pnpm test:quick` (fast files) and `pnpm test` (all) | ≈ 1 min quick, ≈ 8 min all (4-core runner) |
+| Test models | Real designs from simple to complex rebuild as expected, also after parameter changes | `pnpm test tests/acceptance/models.test.ts` | ≈ 1 min |
+| Performance | Start, open and change times of every test model, mesh sizes, memory, export and import | `pnpm test:perf` | ≈ 4 min (4-core runner) |
+| E2E | The planned models built through the UI of the WIP app, the result compared | `pnpm test:e2e` | long |
+| Hands-on | What only a person sees: looks, touch, Pencil | Checklist below | — |
+
+| Moment | Runs | Where |
 | --- | --- | --- |
-| 1. Unit and acceptance tests | Geometry is right: volumes, sizes, topology, threads, imports, units | `pnpm test` |
-| 2. Test models | Real designs from simple to complex rebuild with the expected result, also after parameter changes | `pnpm test tests/acceptance/models.test.ts` |
-| 3. Hands-on run | Tools, dialogs, picking, keyboard, touch, views and rendering behave as a person expects | Checklist below, in the Mac and iPad apps |
+| Every commit | `pnpm test:quick` (unit + fast integration) | pre-commit hook (`pnpm hooks` once per clone), and any agent before it commits |
+| Pull request, before a merge | `pnpm typecheck`, `pnpm test` (all unit and integration) and the build | CI (`ci.yml`: quick and slow jobs in parallel), and locally before reporting work as done |
+| Change to the kernel, meshing or a slow path | additionally `pnpm test:perf` | locally on the Mac |
+| Release | `pnpm test:release`: licences, typecheck, all tests, performance, build, E2E | on the Mac with the WIP app; CI runs the same without E2E on a `v*` tag (`release.yml`) |
 
-Before reporting work as done: `pnpm typecheck` (every package plus the tests) and `pnpm test`, and
-read the whole output.
+`pnpm test:release` runs every step even when one fails and prints a summary; `--skip e2e` leaves a
+step out. It reports "not ready" while there is no `test:e2e` script.
 
-### MCP tools end to end
+Integration files that take long (over about 10 s on a 4-core runner) are listed in `SLOW` in
+`vitest.config.ts` and only run in `pnpm test`. Move a file there when it gets slow, not out of the
+suite.
+
+**Everything covered.** `tests/coverage.test.ts` fails when a feature op, a document op or an MCP
+tool has no test. MCP tools that run inside the app and are only checked by the E2E run are listed
+there by name (`MCP_E2E_ONLY`), so a new tool is a decision, not an oversight. Line coverage (Nov
+2026): io, kernel, model, schema, sketch over 90 %; the app (`apps/web`) and the viewport under 5 %,
+because they need a browser, which is the E2E run's job.
+
+## Performance tests
+
+`tests/perf/*.perf.ts` (vitest project `perf`, one file at a time):
+
+- `rebuild.perf.ts`: kernel start; for every test model and corpus part the time to open it (fresh
+  session, rebuild and meshes, median of 3), to rebuild without a change, and to change a value
+  (the model's first variant, back and forth); triangles and faces of the result.
+- `memory-io.perf.ts`: WASM memory over ten open/change/close rounds of a big model; STEP, print
+  mesh, 3MF and STL export; reading an STL of a million triangles.
+
+Each value is checked against a budget (what a person still accepts on a Mac; times ×
+`MEERCAD_PERF_SCALE`, 3 on CI) and against `tests/perf/baseline.json`. Times are compared only on
+the machine the baseline was measured on, at most 30 % worse (`MEERCAD_PERF_TOLERANCE`); triangle
+and face counts on every machine, within 10 %. Every run writes `test-results/perf.json` and prints a
+table with the change against the baseline.
+
+After a change that makes things faster on purpose, or on a new Mac, write a new baseline and commit
+it: `MEERCAD_PERF_UPDATE=1 pnpm test:perf`. A slower result is a finding, not a reason to update.
+
+The older scripts in `tests/bench/` are for digging into one question (threads, booleans, native vs
+WASM); they don't check anything.
+
+## Before reporting work as done
+
+`pnpm typecheck` (every package plus the tests) and `pnpm test`, and read the whole output.
+
+## MCP tools end to end
 
 The MCP server and the app talk over port 47821, which an assistant session of the user may hold.
 For a test run, start the server with `MEERCAD_MCP_PORT=47999` (e.g. the WIP's own

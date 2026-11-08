@@ -11,11 +11,15 @@
     "ios": "pnpm --filter meercad-ios sync && pnpm --filter meercad-ios open",
     "build": "pnpm --filter @meercad/web build",
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --project unit --project integration --project integration-slow",
+    "test:quick": "vitest run --project unit --project integration",
+    "test:perf": "vitest run --project perf",
+    "test:release": "node scripts/test-release.mjs",
+    "test:watch": "vitest --project unit --project integration",
     "wip": "node scripts/install-wip.mjs",
     "testflight": "node scripts/testflight.mjs",
-    "mas": "node scripts/mas.mjs"
+    "mas": "node scripts/mas.mjs",
+    "hooks": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
