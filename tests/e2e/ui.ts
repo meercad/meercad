@@ -134,8 +134,8 @@ export class Ui {
         await this.until("the dialog to close", "!s.dialog", 4000);
         break;
       } catch {
-        if (i < 2) {
-          await sleep(2000);
+        if (i < 5) {
+          await sleep(3000);
           continue;
         }
         const why = await this.page.eval<string>(`[...document.querySelectorAll(".dialog .hint, .dialog .problem, .dialog [class*=warn], .dialog [class*=error]")].map((e) => e.textContent.trim()).join(" · ")`);
@@ -324,6 +324,16 @@ export class Ui {
         await this.press(v, ".icon-btn");
         await sleep(700);
       }
+      try {
+        return await this.spotOf(kind, test, any);
+      } catch (e) {
+        last = e;
+        if (!String(e).includes("not visible")) throw e;
+      }
+    }
+    // Faces underneath or behind: the standard views (bottom, front, back, sides).
+    for (const k of ["5", "2", "3", "6", "7"] as const) {
+      await this.view(k);
       try {
         return await this.spotOf(kind, test, any);
       } catch (e) {
@@ -576,6 +586,27 @@ export class Ui {
       if ((await at())?.[2]) return;
     }
     throw new Error(`the choice "${label}" does not stay on`);
+  }
+
+  /**
+   * Leaves the part as a person would before the next: Esc out of any tool, dialog or sketch, then
+   * closes its tab (projects save themselves). Also after a failed step, so the next model starts
+   * clean.
+   */
+  async closePart(): Promise<void> {
+    for (let i = 0; i < 4; i++) {
+      const busy = await this.state<boolean>("!!(s.dialog || s.sketchId || s.pickingSketchPlane)").catch(() => false);
+      if (!busy) break;
+      if (await this.find("button.cancel-btn")) await this.press("Cancel", "button.cancel-btn");
+      else if (await this.state<boolean>("!!s.sketchId")) await this.press("Finish", ".rail button");
+      else await this.key("Escape");
+      await sleep(300);
+    }
+    const close = await this.find("button", "Close tab");
+    if (close) {
+      await this.page.click(...close);
+      await sleep(500);
+    }
   }
 
   // ---------------------------------------------------------------- variables

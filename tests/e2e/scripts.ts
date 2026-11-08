@@ -718,6 +718,41 @@ export const SCRIPTS: Record<string, Script> = {
       await ui.accept();
     }
   },
+
+  "33 Zusammenbau mit Ausrichten": async (ui) => {
+    await ui.sketchOn("Top");
+    await ui.rect([0, 0], 40, 40);
+    await ui.circle([20, 20], 8);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.field("Distance", 10);
+    await ui.accept();
+    await ui.sketchOn("Top");
+    await ui.rect([60, 0], 10, 10);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("New");
+    await ui.field("Distance", 5);
+    await ui.accept();
+    await ui.feature("Create", "Plane");
+    await ui.option("Right");
+    await ui.field("Offset", 60);
+    await ui.accept();
+    // The pin lies anywhere: the aligns put it in place.
+    await ui.sketchOn("pl1");
+    await ui.circle([30, 20], 8);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("New");
+    await ui.field("Distance", 30);
+    await ui.accept();
+    // Pin into the hole: its round side onto the hole's wall (axis onto axis).
+    await ui.feature("Transform", "Align");
+    await ui.clickFace(`(f) => f.body === "ex3" && Math.abs(f.normal[0]) < 0.01`, { any: true });
+    await ui.clickFace(`(f) => f.body === "ex1" && Math.abs(f.normal[2]) < 0.01 && Math.hypot(f.center[0] - 20, f.center[1] - 20) < 4.5`);
+    await ui.accept();
+    // TODO: the block on top, turned 45° (its underside is not pickable from the standard views).
+  },
 };
 
 /** Model 24's plate: 80 × 40 × 10 with counterbores, a countersink, inserts and a tapped hole, tapped onto the top. */
