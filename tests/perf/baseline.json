@@ -7,7 +7,7 @@
    "unit": "faces"
   },
   "corpus box-fillet: open": {
-   "value": 26.8,
+   "value": 6.1,
    "unit": "ms"
   },
   "corpus box-fillet: triangles": {
@@ -23,7 +23,7 @@
    "unit": "faces"
   },
   "corpus mounting-plate: open": {
-   "value": 170,
+   "value": 61.5,
    "unit": "ms"
   },
   "corpus mounting-plate: triangles": {
@@ -35,11 +35,11 @@
    "unit": "ms"
   },
   "export: 3MF": {
-   "value": 246,
+   "value": 200.5,
    "unit": "ms"
   },
   "export: fine print meshes": {
-   "value": 482,
+   "value": 325.5,
    "unit": "ms"
   },
   "export: print mesh triangles": {
@@ -47,15 +47,15 @@
    "unit": "tris"
   },
   "export: STEP": {
-   "value": 26.2,
+   "value": 14.3,
    "unit": "ms"
   },
   "export: STL": {
-   "value": 11.1,
+   "value": 9.3,
    "unit": "ms"
   },
   "import: STL, 1 M triangles": {
-   "value": 108.1,
+   "value": 84.4,
    "unit": "ms"
   },
   "memory: WASM growth over 10 open/change/close rounds": {
@@ -71,7 +71,7 @@
    "unit": "faces"
   },
   "model 01 Wuerfel: open": {
-   "value": 3.6,
+   "value": 1.9,
    "unit": "ms"
   },
   "model 01 Wuerfel: triangles": {
@@ -87,7 +87,7 @@
    "unit": "faces"
   },
   "model 02 Lochplatte: open": {
-   "value": 35.4,
+   "value": 31.9,
    "unit": "ms"
   },
   "model 02 Lochplatte: triangles": {
@@ -103,7 +103,7 @@
    "unit": "faces"
   },
   "model 03 Zylinder gefast: open": {
-   "value": 15.2,
+   "value": 12.8,
    "unit": "ms"
   },
   "model 03 Zylinder gefast: triangles": {
@@ -119,7 +119,7 @@
    "unit": "faces"
   },
   "model 04 Block abgerundet: open": {
-   "value": 19.8,
+   "value": 17.7,
    "unit": "ms"
   },
   "model 04 Block abgerundet: triangles": {
@@ -135,7 +135,7 @@
    "unit": "faces"
   },
   "model 05 Schale offen: open": {
-   "value": 6.7,
+   "value": 5.7,
    "unit": "ms"
   },
   "model 05 Schale offen: triangles": {
@@ -151,7 +151,7 @@
    "unit": "faces"
   },
   "model 06 Rohr gedreht: open": {
-   "value": 15.9,
+   "value": 14.4,
    "unit": "ms"
   },
   "model 06 Rohr gedreht: triangles": {
@@ -163,7 +163,7 @@
    "unit": "ms"
   },
   "model 07 Flansch Lochkreis: change value": {
-   "value": 148.1,
+   "value": 132.5,
    "unit": "ms"
   },
   "model 07 Flansch Lochkreis: faces": {
@@ -171,7 +171,7 @@
    "unit": "faces"
   },
   "model 07 Flansch Lochkreis: open": {
-   "value": 120.8,
+   "value": 105.3,
    "unit": "ms"
   },
   "model 07 Flansch Lochkreis: triangles": {
@@ -187,7 +187,7 @@
    "unit": "faces"
   },
   "model 08 Stiftleiste: open": {
-   "value": 56.1,
+   "value": 51.2,
    "unit": "ms"
   },
   "model 08 Stiftleiste: triangles": {
@@ -203,7 +203,7 @@
    "unit": "faces"
   },
   "model 09 T-Profil gespiegelt: open": {
-   "value": 10.7,
+   "value": 8.4,
    "unit": "ms"
   },
   "model 09 T-Profil gespiegelt: triangles": {
@@ -219,7 +219,7 @@
    "unit": "faces"
   },
   "model 10 Schraube M8: open": {
-   "value": 2075.6,
+   "value": 1948.6,
    "unit": "ms"
   },
   "model 10 Schraube M8: triangles": {
@@ -235,7 +235,7 @@
    "unit": "faces"
   },
   "model 11 Mutter M8: open": {
-   "value": 2502.9,
+   "value": 2448.3,
    "unit": "ms"
   },
   "model 11 Mutter M8: triangles": {
@@ -251,7 +251,7 @@
    "unit": "faces"
   },
   "model 12 Boolesch und Kopie: open": {
-   "value": 13.2,
+   "value": 11.2,
    "unit": "ms"
   },
   "model 12 Boolesch und Kopie: triangles": {
@@ -267,7 +267,7 @@
    "unit": "faces"
   },
   "model 13 Abstandshalter symmetrisch: open": {
-   "value": 6.8,
+   "value": 5.8,
    "unit": "ms"
   },
   "model 13 Abstandshalter symmetrisch: triangles": {
@@ -283,7 +283,7 @@
    "unit": "faces"
   },
   "model 14 Block mit Tasche: open": {
-   "value": 16.2,
+   "value": 14.1,
    "unit": "ms"
   },
   "model 14 Block mit Tasche: triangles": {
@@ -295,7 +295,7 @@
    "unit": "ms"
   },
   "model 15 Zahnrad parametrisch: change value": {
-   "value": 106.3,
+   "value": 97.9,
    "unit": "ms"
   },
   "model 15 Zahnrad parametrisch: faces": {
@@ -303,7 +303,7 @@
    "unit": "faces"
   },
   "model 15 Zahnrad parametrisch: open": {
-   "value": 116.1,
+   "value": 107.2,
    "unit": "ms"
   },
   "model 15 Zahnrad parametrisch: triangles": {
@@ -319,7 +319,7 @@
    "unit": "faces"
   },
   "model 16 Gehaeuse mit Deckel: open": {
-   "value": 139.8,
+   "value": 129.2,
    "unit": "ms"
   },
   "model 16 Gehaeuse mit Deckel: triangles": {
@@ -331,7 +331,7 @@
    "unit": "ms"
   },
   "model 17 Stirnrad: change value": {
-   "value": 290.4,
+   "value": 293.1,
    "unit": "ms"
   },
   "model 17 Stirnrad: faces": {
@@ -339,7 +339,7 @@
    "unit": "faces"
   },
   "model 17 Stirnrad: open": {
-   "value": 281.2,
+   "value": 270.4,
    "unit": "ms"
   },
   "model 17 Stirnrad: triangles": {
@@ -355,7 +355,7 @@
    "unit": "faces"
   },
   "model 18 Zahnradpaar: open": {
-   "value": 612.1,
+   "value": 569.7,
    "unit": "ms"
   },
   "model 18 Zahnradpaar: triangles": {
@@ -371,7 +371,7 @@
    "unit": "faces"
   },
   "model 19 Pfeilradpaar: open": {
-   "value": 7126.2,
+   "value": 6909.9,
    "unit": "ms"
   },
   "model 19 Pfeilradpaar: triangles": {
@@ -387,7 +387,7 @@
    "unit": "faces"
   },
   "model 20 Planetengetriebe: open": {
-   "value": 2417.2,
+   "value": 2273.3,
    "unit": "ms"
   },
   "model 20 Planetengetriebe: triangles": {
@@ -395,7 +395,7 @@
    "unit": "tris"
   },
   "model 20 Planetengetriebe: unchanged": {
-   "value": 0.1,
+   "value": 0,
    "unit": "ms"
   },
   "model 21 Zahnstange mit Ritzel: faces": {
@@ -403,7 +403,7 @@
    "unit": "faces"
   },
   "model 21 Zahnstange mit Ritzel: open": {
-   "value": 264.2,
+   "value": 252.2,
    "unit": "ms"
   },
   "model 21 Zahnstange mit Ritzel: triangles": {
@@ -419,7 +419,7 @@
    "unit": "faces"
   },
   "model 22 Scharnier: open": {
-   "value": 7.4,
+   "value": 6.9,
    "unit": "ms"
   },
   "model 22 Scharnier: triangles": {
@@ -435,7 +435,7 @@
    "unit": "faces"
   },
   "model 23 Viergelenk: open": {
-   "value": 69.6,
+   "value": 65.9,
    "unit": "ms"
   },
   "model 23 Viergelenk: triangles": {
@@ -451,7 +451,7 @@
    "unit": "faces"
   },
   "model 24 Lochplatte mit Normbohrungen: open": {
-   "value": 1581.7,
+   "value": 1521.1,
    "unit": "ms"
   },
   "model 24 Lochplatte mit Normbohrungen: triangles": {
@@ -467,7 +467,7 @@
    "unit": "faces"
   },
   "model 25 Trichter und Rohrbogen: open": {
-   "value": 494.2,
+   "value": 480.8,
    "unit": "ms"
   },
   "model 25 Trichter und Rohrbogen: triangles": {
@@ -483,7 +483,7 @@
    "unit": "faces"
   },
   "model 26 Geteilter Balken: open": {
-   "value": 34.6,
+   "value": 33.7,
    "unit": "ms"
   },
   "model 26 Geteilter Balken: triangles": {
@@ -499,7 +499,7 @@
    "unit": "faces"
   },
   "model 27 Winkel mit Rippen: open": {
-   "value": 39.7,
+   "value": 39.9,
    "unit": "ms"
   },
   "model 27 Winkel mit Rippen: triangles": {
@@ -515,7 +515,7 @@
    "unit": "faces"
   },
   "model 28 Gussform-Deckel mit Schräge: open": {
-   "value": 10,
+   "value": 9.3,
    "unit": "ms"
   },
   "model 28 Gussform-Deckel mit Schräge: triangles": {
@@ -531,7 +531,7 @@
    "unit": "faces"
   },
   "model 29 Namensschild: open": {
-   "value": 1111.9,
+   "value": 1059.9,
    "unit": "ms"
   },
   "model 29 Namensschild: triangles": {
@@ -547,7 +547,7 @@
    "unit": "faces"
   },
   "model 30 Schale mit Skizzen-Werkzeugen: open": {
-   "value": 37.6,
+   "value": 34.9,
    "unit": "ms"
   },
   "model 30 Schale mit Skizzen-Werkzeugen: triangles": {
@@ -563,7 +563,7 @@
    "unit": "faces"
   },
   "model 31 Griff mit Splines: open": {
-   "value": 961.4,
+   "value": 821,
    "unit": "ms"
   },
   "model 31 Griff mit Splines: triangles": {
@@ -579,7 +579,7 @@
    "unit": "faces"
   },
   "model 32 Platte mit Normteilen: open": {
-   "value": 1894.3,
+   "value": 1677,
    "unit": "ms"
   },
   "model 32 Platte mit Normteilen: triangles": {
@@ -595,7 +595,7 @@
    "unit": "faces"
   },
   "model 33 Zusammenbau mit Ausrichten: open": {
-   "value": 18.9,
+   "value": 16.4,
    "unit": "ms"
   },
   "model 33 Zusammenbau mit Ausrichten: triangles": {
@@ -611,7 +611,7 @@
    "unit": "faces"
   },
   "model 34 Auf Maß skaliert: open": {
-   "value": 8.2,
+   "value": 7.3,
    "unit": "ms"
   },
   "model 34 Auf Maß skaliert: triangles": {
@@ -627,7 +627,7 @@
    "unit": "faces"
   },
   "model 35 Halter mit versetzten Flächen: open": {
-   "value": 418.9,
+   "value": 411.6,
    "unit": "ms"
   },
   "model 35 Halter mit versetzten Flächen: triangles": {
@@ -643,7 +643,7 @@
    "unit": "faces"
   },
   "model 36 Gerippte Box: open": {
-   "value": 290.8,
+   "value": 216.6,
    "unit": "ms"
   },
   "model 36 Gerippte Box: triangles": {
@@ -659,7 +659,7 @@
    "unit": "faces"
   },
   "model 37 Gebogener Streifen: open": {
-   "value": 63.9,
+   "value": 57.4,
    "unit": "ms"
   },
   "model 37 Gebogener Streifen: triangles": {
@@ -675,7 +675,7 @@
    "unit": "faces"
   },
   "model 38 Gridfinity-Box mit Etikett: open": {
-   "value": 806.7,
+   "value": 467.3,
    "unit": "ms"
   },
   "model 38 Gridfinity-Box mit Etikett: triangles": {
@@ -687,7 +687,7 @@
    "unit": "ms"
   },
   "model 39 Stapelbox: change value": {
-   "value": 666.2,
+   "value": 623.3,
    "unit": "ms"
   },
   "model 39 Stapelbox: faces": {
@@ -695,7 +695,7 @@
    "unit": "faces"
   },
   "model 39 Stapelbox: open": {
-   "value": 671,
+   "value": 620.2,
    "unit": "ms"
   },
   "model 39 Stapelbox: triangles": {
@@ -707,7 +707,7 @@
    "unit": "ms"
   },
   "model 40 Linearachse: change value": {
-   "value": 1547.3,
+   "value": 506.6,
    "unit": "ms"
   },
   "model 40 Linearachse: faces": {
@@ -715,7 +715,7 @@
    "unit": "faces"
   },
   "model 40 Linearachse: open": {
-   "value": 608.1,
+   "value": 506.8,
    "unit": "ms"
   },
   "model 40 Linearachse: triangles": {
@@ -731,7 +731,7 @@
    "unit": "faces"
   },
   "model 41 Box mit Schnappdeckel: open": {
-   "value": 829.4,
+   "value": 295.2,
    "unit": "ms"
   },
   "model 41 Box mit Schnappdeckel: triangles": {
@@ -747,7 +747,7 @@
    "unit": "faces"
   },
   "model 42 Schraubdose: open": {
-   "value": 1244,
+   "value": 432.8,
    "unit": "ms"
   },
   "model 42 Schraubdose: triangles": {
@@ -763,7 +763,7 @@
    "unit": "faces"
   },
   "model 43 Boxen und Schnapphaken: open": {
-   "value": 2315.9,
+   "value": 822.6,
    "unit": "ms"
   },
   "model 43 Boxen und Schnapphaken: triangles": {
@@ -779,7 +779,7 @@
    "unit": "faces"
   },
   "model 44 Geteilter Balken mit Stiften: open": {
-   "value": 125.2,
+   "value": 48,
    "unit": "ms"
   },
   "model 44 Geteilter Balken mit Stiften: triangles": {
@@ -795,7 +795,7 @@
    "unit": "faces"
   },
   "model 45 Brett mit Schwalbenschwanz: open": {
-   "value": 53.2,
+   "value": 23.9,
    "unit": "ms"
   },
   "model 45 Brett mit Schwalbenschwanz: triangles": {
@@ -807,11 +807,11 @@
    "unit": "ms"
   },
   "startup: OCCT + sketch solver": {
-   "value": 83.8,
+   "value": 75.9,
    "unit": "ms"
   },
   "startup: second sketch solver": {
-   "value": 2.7,
+   "value": 2,
    "unit": "ms"
   }
  }
