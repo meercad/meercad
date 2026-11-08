@@ -60,6 +60,8 @@ export function setBridgeEnabled(on: boolean, remember = true): void {
 
 export function initBridge(): void {
   if (assistantWindow) return initAssistantWindow();
+  // A test run's window (MEERCAD_MCP_BRIDGE=off) never talks to assistants.
+  if (new URLSearchParams(location.search).get("bridge") === "off") return;
   initUserWindow();
   if (extraWindow) return;
   let pref: string | null = null;

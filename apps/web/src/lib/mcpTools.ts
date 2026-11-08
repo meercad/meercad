@@ -10,7 +10,8 @@ import type { MeercadDocument } from "@meercad/schema";
 import { filamentsOf, importFile, meshExportFiles, stepFile, variantFiles, type MeshFormat } from "../components/io";
 import { currentDoc, getViewport, kernel, newProject, rebuildNow, refreshProjects, renameProject, useApp } from "../store";
 import { showDeviation, hideDeviation, useDeviation, TOLERANCE } from "./deviation";
-import { EXAMPLES } from "./examples";
+import { EXAMPLES, examplePacks } from "./examples";
+import { hasPack } from "./premium";
 import { partName } from "./features";
 import { t } from "./i18n";
 import { jointsFromGears } from "./mechanism";
@@ -263,11 +264,15 @@ export async function moveOpenProject(folder: string) {
   return { project: useApp.getState().project };
 }
 
-export const examples = () => EXAMPLES.map((e, i) => ({ id: i, name: e.name, description: e.description }));
+/** The examples the user's app shows: those its packs can show and change. */
+const shownExamples = () => EXAMPLES.filter((e) => examplePacks(e).every(hasPack));
+
+export const examples = () => shownExamples().map((e, i) => ({ id: i, name: e.name, description: e.description }));
 
 /** Opens an example as a new project (a copy: the example itself never changes). */
 export async function openExample(which: number | string) {
-  const ex = typeof which === "number" ? EXAMPLES[which] : EXAMPLES.find((e) => e.name.toLowerCase() === String(which).toLowerCase());
+  const list = shownExamples();
+  const ex = typeof which === "number" ? list[which] : list.find((e) => e.name.toLowerCase() === String(which).toLowerCase());
   if (!ex) throw new Error(`no example ${String(which)}; see list_examples`);
   const doc = ex.url ? ((await (await fetch(ex.url)).json()) as MeercadDocument) : structuredClone(ex.doc);
   await newProject(doc, t(ex.name));

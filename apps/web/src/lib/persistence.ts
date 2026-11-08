@@ -37,6 +37,8 @@ interface DesktopApi {
   isDesktop: true;
   /** The Claude Desktop config file written, or null when Claude Desktop was handed the extension to install. */
   installClaudeDesktop(): Promise<string | null>;
+  /** Flags shared by every meerCAD on this Mac, as read at start, and how to set one. */
+  shared?: { initial: Record<string, unknown>; set(key: string, value: unknown): Promise<void> };
   info(): Promise<{ version: string; projectsDir: string; mcpCommand: { command: string; args: string[]; env?: Record<string, string> }; mas?: boolean; store?: "production" | "sandbox" | null }>;
   projects: {
     list(): Promise<ProjectMeta[]>;

@@ -27,7 +27,8 @@ const WIP = (() => {
     return false;
   }
 })();
-const DEV_URL = "http://localhost:5173";
+// MEERCAD_DEV_URL: another dev server (the UI end-to-end run starts its own on a free port).
+const DEV_URL = process.env["MEERCAD_DEV_URL"] ?? "http://localhost:5173";
 const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dirname, "../../web/dist");
 const mcpServer = app.isPackaged ? join(process.resourcesPath, "mcp", "server.js") : join(__dirname, "../../../packages/mcp/dist/server.js");
 const settingsPath = () => join(app.getPath("userData"), "settings.json");
@@ -73,6 +74,27 @@ function readSettings(): Settings {
 let settings: Settings = {};
 const projectsDir = () => process.env["MEERCAD_PROJECTS_DIR"] ?? settings.projectsDir ?? defaultProjectsDir();
 const thumbsDir = () => join(app.getPath("userData"), "thumbnails");
+
+/**
+ * What the user has seen, for every meerCAD on this Mac (the release, the WIP build, test copies
+ * with their own app data): one file next to the release's app data, so the tour is not shown
+ * again by each copy. MEERCAD_SHARED_DIR puts it elsewhere (the UI end-to-end run's temp folder).
+ */
+const sharedPath = () => join(process.env["MEERCAD_SHARED_DIR"] ?? (MAS ? app.getPath("userData") : join(app.getPath("appData"), "meerCAD")), "shared.json");
+const readShared = (): Record<string, unknown> => {
+  try {
+    return JSON.parse(readFileSync(sharedPath(), "utf8")) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
+ipcMain.on("shared:get", (e) => void (e.returnValue = readShared()));
+ipcMain.handle("shared:set", async (_e, p: { key: string; value: unknown }) => {
+  if (typeof p?.key !== "string" || !/^[a-zA-Z][\w.]{0,40}$/.test(p.key)) return;
+  const all = { ...readShared(), [p.key]: p.value };
+  await mkdir(dirname(sharedPath()), { recursive: true });
+  await writeFile(sharedPath(), `${JSON.stringify(all, null, 2)}\n`);
+});
 
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
@@ -566,7 +588,8 @@ function createWindow(assistant?: { session: string; client: string }, extra = f
   win.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
   });
-  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : extra ? "?window=extra" : "";
+  // MEERCAD_MCP_BRIDGE=off keeps a test run's window away from the user's assistants.
+  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : extra ? "?window=extra" : process.env["MEERCAD_MCP_BRIDGE"] === "off" ? "?bridge=off" : "";
   void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${query}`);
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;

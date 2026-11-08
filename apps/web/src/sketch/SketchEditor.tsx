@@ -241,7 +241,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     for (const [id, q] of pointEntries(sketch, shown)) {
       if (exclude?.has(id)) continue;
       const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
-      if (d < bd) {
+      // A sketch point sitting on the origin wins over the origin itself: a chain started there
+      // closes on its own first point instead of getting a second one tied to the origin.
+      if (d < bd || (best === "origin" && d <= bd + 1e-9)) {
         bd = d;
         best = id;
       }
@@ -393,8 +395,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     if (length !== undefined) bl.constraint({ type: "length", line: l, value: length });
     const ang = Math.abs(Math.atan2(b.pos[1] - a.pos[1], b.pos[0] - a.pos[0]));
     const tolA = (3 * Math.PI) / 180;
-    if (ang < tolA || Math.abs(ang - Math.PI) < tolA) bl.constraint({ type: "horizontal", line: l });
-    else if (Math.abs(ang - Math.PI / 2) < tolA) bl.constraint({ type: "vertical", line: l });
+    // Not when both ends already lie on that origin axis: the constraint would be redundant.
+    const onAxis = (pt: string, axis: "origin.x" | "origin.y") =>
+      pt === "origin" || bl.d.constraints.some((c) => (c.type === "point_on" && c.point === pt && c.curve === axis) || (c.type === "coincident" && ((c.a === pt && c.b === "origin") || (c.b === pt && c.a === "origin"))));
+    if (ang < tolA || Math.abs(ang - Math.PI) < tolA) {
+      if (!(onAxis(p1, "origin.x") && onAxis(p2, "origin.x"))) bl.constraint({ type: "horizontal", line: l });
+    } else if (Math.abs(ang - Math.PI / 2) < tolA) {
+      if (!(onAxis(p1, "origin.y") && onAxis(p2, "origin.y"))) bl.constraint({ type: "vertical", line: l });
+    }
     commit(bl.d);
     return [p1, p2];
   };

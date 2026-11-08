@@ -1,0 +1,87 @@
+/**
+ * Starts a private copy of the Mac app for the UI end-to-end run: its own dev server on a free
+ * port, its own app data and an empty projects folder in a temp directory, no connection to the
+ * user's assistants (MEERCAD_MCP_BRIDGE=off). The user's projects, iCloud and running apps are
+ * never touched. Development builds expose `window.meercadTest` to read results back.
+ */
+import { spawn, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { Page, sleep } from "./cdp.js";
+
+const root = resolve(import.meta.dirname, "../..");
+
+const freePort = () =>
+  new Promise<number>((ok) => {
+    const s = createServer();
+    s.listen(0, "127.0.0.1", () => {
+      const { port } = s.address() as { port: number };
+      s.close(() => ok(port));
+    });
+  });
+
+async function waitFor<T>(what: string, fn: () => Promise<T>, ms = 60000): Promise<T> {
+  const end = Date.now() + ms;
+  for (;;) {
+    try {
+      const v = await fn();
+      if (v) return v;
+    } catch {
+      // not yet
+    }
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await sleep(250);
+  }
+}
+
+export interface App {
+  page: Page;
+  /** The temp folder with the app data and the projects. */
+  dir: string;
+  stop(): Promise<void>;
+}
+
+export async function startApp({ keep = false } = {}): Promise<App> {
+  const dir = mkdtempSync(join(tmpdir(), "meercad-e2e-"));
+  const webPort = await freePort();
+  const cdpPort = await freePort();
+  // A Mac where the tour was seen (the flags every meerCAD on the Mac shares, here in the temp folder).
+  mkdirSync(join(dir, "shared"), { recursive: true });
+  writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true }));
+  const r = spawnSync("node", ["build.mjs"], { cwd: join(root, "apps/desktop"), stdio: "inherit" });
+  if (r.status !== 0) throw new Error("desktop build failed");
+
+  const vite = spawn(join(root, "apps/web/node_modules/.bin/vite"), ["--port", String(webPort), "--strictPort", "--host", "127.0.0.1"], { cwd: join(root, "apps/web"), stdio: ["ignore", "pipe", "pipe"] });
+  const devUrl = `http://127.0.0.1:${webPort}`;
+  await waitFor("the dev server", async () => (await fetch(devUrl)).ok);
+
+  const electron = spawn(
+    join(root, "apps/desktop/node_modules/.bin/electron"),
+    [".", "--dev", `--user-data-dir=${join(dir, "userdata")}`, `--remote-debugging-port=${cdpPort}`, "--lang=en-US",
+      // The window may sit behind the user's: it must keep animating and timing as if in front.
+      "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows"],
+    {
+      cwd: join(root, "apps/desktop"),
+      env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared") },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const target = await waitFor("the app window", async () => {
+    const list = (await (await fetch(`http://127.0.0.1:${cdpPort}/json`)).json()) as { type: string; url: string; webSocketDebuggerUrl: string }[];
+    return list.find((t) => t.type === "page" && t.url.startsWith(devUrl));
+  });
+  const page = await Page.open(target!.webSocketDebuggerUrl);
+  await page.call("Runtime.enable");
+  await page.call("Page.enable");
+  await waitFor("the app to load", () => page.eval<boolean>("!!window.meercadTest && document.readyState === 'complete'"));
+
+  const stop = async () => {
+    electron.kill();
+    vite.kill();
+    await sleep(500);
+    if (!keep) rmSync(dir, { recursive: true, force: true });
+  };
+  return { page, dir, stop };
+}

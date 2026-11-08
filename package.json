@@ -16,6 +16,7 @@
     "test:perf": "vitest run --project perf",
     "test:release": "node scripts/test-release.mjs",
     "test:watch": "vitest --project unit --project integration",
+    "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
     "wip": "node scripts/install-wip.mjs",
     "testflight": "node scripts/testflight.mjs",
     "mas": "node scripts/mas.mjs",
