@@ -12,7 +12,7 @@ import type { PackId } from "./packUse";
 /** What the design keeps doing without the pack, and what only the pack does. */
 const without = (id: PackId): string =>
   ({
-    mechanics: t("Gears, springs and joints are shown and can be moved; changing them needs the Mechanics pack."),
+    mechanics: t("Gears, springs, joints and motions are shown, move and play; changing them needs the Mechanics pack."),
     scan: t("Terrain models are shown; the scan and mesh tools need the Scan and mesh pack."),
     drawings: t("Technical drawings need the Technical drawings pack."),
     versions: t("Variants can be switched; the saved versions stay in the file and are shown with the Versions and variants pack."),

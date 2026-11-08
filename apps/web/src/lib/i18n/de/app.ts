@@ -502,6 +502,7 @@ export default {
   gears: "Zahnräder",
   springs: "Federn",
   joints: "Gelenke",
+  motions: "Bewegungsabläufe",
   "saved versions": "gespeicherte Versionen",
   "terrain models": "Geländemodelle",
   "Without this pack the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.":
@@ -513,8 +514,8 @@ export default {
   "This design uses the packs {packs}": "Dieses Modell nutzt die Pakete {packs}",
   "You can look at it, print it and export it, and change everything else as usual. Saving keeps all of it.":
     "Du kannst es ansehen, drucken und exportieren und alles andere wie gewohnt ändern. Beim Speichern bleibt alles erhalten.",
-  "Gears, springs and joints are shown and can be moved; changing them needs the Mechanics pack.":
-    "Zahnräder, Federn und Gelenke werden angezeigt und lassen sich bewegen; ändern geht mit dem Paket Mechanik.",
+  "Gears, springs, joints and motions are shown, move and play; changing them needs the Mechanics pack.":
+    "Zahnräder, Federn, Gelenke und Bewegungsabläufe werden angezeigt, bewegt und abgespielt; ändern geht mit dem Paket Mechanik.",
   "Terrain models are shown; the scan and mesh tools need the Scan and mesh pack.": "Geländemodelle werden angezeigt; die Scan- und Netzwerkzeuge gibt es mit dem Paket Scan und Netze.",
   "Technical drawings need the Technical drawings pack.": "Technische Zeichnungen gibt es mit dem Paket Technische Zeichnungen.",
   "Variants can be switched; the saved versions stay in the file and are shown with the Versions and variants pack.":
@@ -522,4 +523,12 @@ export default {
   "{name} needs the {pack} pack": "{name} braucht das Paket {pack}",
   "This design came with it, so it stays, builds and exports as it is. Changing it needs the {pack} pack; you can still delete it or change the rest of the design.":
     "Es kam mit dem Modell und bleibt, wird berechnet und exportiert wie es ist. Ändern geht mit dem Paket {pack}; löschen kannst du es trotzdem, und der Rest des Modells bleibt änderbar.",
+  // Basic solids
+  "Basic solid": "Grundkörper",
+  "A box, cylinder or sphere without a sketch: stand-ins, quick assemblies, blocks to cut with": "Quader, Zylinder oder Kugel ohne Skizze: Platzhalter, schnelle Baugruppen, Blöcke zum Ausschneiden",
+  "primitive::Box": "Quader",
+  "primitive::Cylinder": "Zylinder",
+  "primitive::Sphere": "Kugel",
+  "Size {axis}": "Größe {axis}",
+  "Centre {axis}": "Mitte {axis}",
 } as Record<string, string>;

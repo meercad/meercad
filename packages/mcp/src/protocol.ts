@@ -18,6 +18,7 @@ export type BridgeMethod =
   | "measure"
   | "set_pose"
   | "check_motion"
+  | "play_motion"
   | "check_clearance"
   | "render_motion"
   | "drawing"

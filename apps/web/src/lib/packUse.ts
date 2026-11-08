@@ -32,6 +32,7 @@ export function packsUsed(doc: MeercadDocument): PackUse[] {
     else if (f.op === "spring") add("mechanics", "springs");
   }
   if (doc.mechanism?.joints.length) add("mechanics", "joints");
+  if (doc.mechanism?.motions?.length) add("mechanics", "motions");
   if (doc.variants?.length) add("versions", "variants");
   if (doc.versions?.length) add("versions", "saved versions");
   if (doc.references?.length) add("scan", "terrain models");

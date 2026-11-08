@@ -133,8 +133,19 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
     if ("ref" in p && !p.ref.startsWith("origin.")) earlier(p.ref, at, "plane", ["plane"]);
     if ("ref" in p && p.ref.startsWith("origin.") && !["origin.XY", "origin.XZ", "origin.YZ"].includes(p.ref)) errors.push(`${at}: unknown plane "${p.ref}"`);
   };
-  // A body id is a feature id, or a feature id with a copy suffix (pattern copies: "lp1_2").
-  const body = (b: string, at: string) => earlier(seen.has(b) ? b : b.split("_")[0]!, at, "body");
+  // A body id is a feature id, or a feature id with a copy suffix: pattern copies "lp1_2", transform copies
+  // "tr1_ex1", mirror copies "mi1_ex1_1". Feature ids may hold underscores themselves ("tr_knee"), so the
+  // longest earlier feature id the body id starts with is the one that made it.
+  const bodyFeature = (b: string): string => {
+    if (seen.has(b)) return b;
+    const parts = b.split("_");
+    for (let i = parts.length - 1; i > 0; i--) {
+      const prefix = parts.slice(0, i).join("_");
+      if (seen.has(prefix)) return prefix;
+    }
+    return parts[0]!;
+  };
+  const body = (b: string, at: string, what = "body") => earlier(bodyFeature(b), at, what);
   const edgeSelectors = (edges: EdgeSelector | EdgeSelector[], at: string) => {
     for (const sel of asArray(edges)) if ("select" in sel && sel.of !== undefined) earlier(sel.of, at, "selector");
   };
@@ -155,16 +166,16 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
         if (f.op === "extrude" && f.extent === "two_sided" && f.distance2 === undefined) errors.push(`${at}: two_sided extrude needs distance2`);
         if (f.op === "revolve" && "line" in f.axis) earlier(f.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
-        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        for (const t of f.targets ?? []) body(t, at, "target body");
         break;
       case "loft":
         for (const p of f.profiles) if ("sketch" in p) earlier(p.sketch, at, "profile", ["sketch"]);
-        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        for (const t of f.targets ?? []) body(t, at, "target body");
         break;
       case "sweep":
         if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
         earlier(f.path.sketch, at, "path", ["sketch"]);
-        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        for (const t of f.targets ?? []) body(t, at, "target body");
         break;
       case "fillet":
       case "chamfer":
@@ -176,14 +187,14 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "coil":
         if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
         if ("line" in f.axis) earlier(f.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
-        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        for (const t of f.targets ?? []) body(t, at, "target body");
         break;
       case "spring":
       case "screw":
         if (f.plane) planeSpec(f.plane, at);
         if (f.op === "screw" && f.kind === "nut" && f.head === "socket") errors.push(`${at}: nuts are hex, round or knob`);
         if (f.op === "screw" && f.kind === "nut" && f.threadLength !== undefined) errors.push(`${at}: threadLength is for screws`);
-        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        for (const t of f.targets ?? []) body(t, at, "target body");
         break;
       case "gear":
         if (f.meshWith) earlier(f.meshWith.gear, at, "meshWith", ["gear"]);
@@ -192,13 +203,14 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if (f.kind !== "spur" && f.bore) errors.push(`${at}: only spur gears take a bore`);
         if (f.kind !== "spur" && f.hub) errors.push(`${at}: only spur gears take a hub`);
         if (f.kind === "rack" && f.chamfer !== undefined) errors.push(`${at}: racks have no tooth chamfer yet`);
-        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        for (const t of f.targets ?? []) body(t, at, "target body");
         break;
       case "linear_pattern":
       case "circular_pattern":
       case "mirror": {
         const ids = "features" in f.source ? f.source.features : f.source.bodies;
-        for (const s of ids) earlier(s, at, "pattern source");
+        if ("features" in f.source) for (const s of ids) earlier(s, at, "pattern source");
+        else for (const s of ids) body(s, at, "pattern source");
         if (f.op === "mirror") planeSpec(f.plane, at);
         break;
       }
@@ -233,9 +245,15 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         planeSpec(f.plane, at);
         if (f.kind !== "magnet" && !f.size) errors.push(`${at}: a ${f.kind} needs a size`);
         break;
+      case "primitive":
+        if (f.shape === "box" && !f.size) errors.push(`${at}: a box needs a size [x, y, z]`);
+        if (f.shape !== "box" && f.diameter === undefined) errors.push(`${at}: a ${f.shape} needs a diameter`);
+        if (f.shape === "cylinder" && f.height === undefined) errors.push(`${at}: a cylinder needs a height`);
+        for (const t of f.targets ?? []) body(t, at, "target body");
+        break;
       case "text":
         planeSpec(f.plane, at);
-        for (const t of f.targets ?? []) earlier(t, at, "target body");
+        for (const t of f.targets ?? []) body(t, at, "target body");
         break;
       case "gridfinity":
         if (f.plane) planeSpec(f.plane, at);
@@ -327,6 +345,17 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       if (j.a === j.b) errors.push(`${at}: a part cannot be jointed to itself`);
       if (j.a === "ground") errors.push(`${at}: the moving part cannot be the ground`);
       if ("gear" in j.anchor) earlier(j.anchor.gear, at, "gear", ["gear"]);
+    }
+    const motionIds = new Set<string>();
+    for (const m of mech.motions ?? []) {
+      const at = `motion ${m.id}`;
+      if (motionIds.has(m.id)) errors.push(`${at}: duplicate id`);
+      motionIds.add(m.id);
+      for (const k of m.keys) {
+        if (k.at > m.duration + 1e-9) errors.push(`${at}: a moment at ${k.at} s lies after the end (${m.duration} s)`);
+        // Cylindrical joints move as "<id>.turn" and "<id>.slide".
+        for (const j of Object.keys(k.values)) if (!jointIds.has(j.replace(/\.(turn|slide)$/, ""))) errors.push(`${at}: unknown joint "${j}"`);
+      }
     }
     for (const c of mech.couplings ?? []) {
       const at = `coupling ${c.id}`;

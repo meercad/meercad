@@ -15,7 +15,7 @@ import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
-import { checkMotion, clearanceNow, setPose } from "./mechanism";
+import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
 import { jointRange, renderMotionGif, renderMotionSheet, renderShot, type Shot } from "./render";
 import { meshTopology } from "./topology";
 
@@ -178,6 +178,50 @@ function reportInfo(info: Record<string, number>): Record<string, number> {
   return Object.fromEntries(Object.entries(info).filter(([k]) => !/^[oa][xyz]$/.test(k)).map(([k, v]) => [k, +v.toFixed(3)]));
 }
 
+type BodyKey = string;
+/** A body as compared between two rebuilds (rounded like the report). */
+const bodyKey = (b: RebuildOutput["report"]["bodies"][number]): BodyKey => `${b.volume.toFixed(3)}|${b.bbox.min.map((v) => v.toFixed(3))}|${b.bbox.max.map((v) => v.toFixed(3))}|${b.faces}`;
+
+/**
+ * What changed since `before` (the rebuild before an edit): only the steps that are not ok or say
+ * something, new or changed bodies, sketches of the edited steps (and any not solved), joints when
+ * one changed or broke. The full summary of a big design runs to thousands of lines; this keeps the
+ * answer to an edit about the edit. `touched`: ids of the steps the ops added or changed.
+ */
+function briefSummary(out: RebuildOutput, before: RebuildOutput | null | undefined, touched: Set<string>, mechanismChanged: boolean) {
+  const full = summary(out);
+  const prev = new Map((before?.report.bodies ?? []).map((b) => [b.id, bodyKey(b)]));
+  const changed = new Set(out.report.bodies.filter((b) => prev.get(b.id) !== bodyKey(b)).map((b) => b.id));
+  const gone = [...prev.keys()].filter((id) => !out.report.bodies.some((b) => b.id === id));
+  const features = full.features.filter((f) => f.status !== "ok" || "info" in f || "hint" in f || touched.has(f.id));
+  const sketches = full.sketches.filter((s) => !s.ok || touched.has(s.id));
+  const { joints, ...rest } = full;
+  return {
+    ...rest,
+    features,
+    featuresOk: full.features.filter((f) => f.status === "ok").length,
+    bodies: full.bodies.filter((b) => changed.has(b.id)),
+    unchangedBodies: full.bodies.length - changed.size,
+    ...(gone.length ? { removedBodies: gone } : {}),
+    sketches,
+    ...(joints && (mechanismChanged || joints.some((j) => "error" in j)) ? { joints } : {}),
+    note: 'Brief result: steps that are ok and bodies and sketches this change did not touch are left out (get_model or detail:"full" shows everything).',
+  };
+}
+
+/** Ids of the steps a list of ops adds or edits, and whether it changes moving parts. */
+function touchedBy(ops: readonly DocOp[]): { ids: Set<string>; mechanism: boolean } {
+  const ids = new Set<string>();
+  let mechanism = false;
+  for (const op of ops) {
+    if (op.type === "add_features") for (const f of op.features) ids.add(f.id);
+    else if (op.type === "edit_feature" || op.type === "delete_feature" || op.type === "move_feature") ids.add(op.id);
+    else if (op.type === "replace") mechanism = true;
+    if (/joint|coupling|motion/.test(op.type)) mechanism = true;
+  }
+  return { ids, mechanism };
+}
+
 function summary(out: RebuildOutput) {
   const r = out.report;
   const doc = useApp.getState().doc;
@@ -218,6 +262,7 @@ function shotOf(p: Record<string, unknown>): Shot {
     ...(normal ? { section: { normal, offset: sec?.offset ?? 0 } } : {}),
     ...(p["highlight"] ? { highlight: p["highlight"] as Shot["highlight"] & object } : {}),
     ...(p["style"] === "rendered" ? { rendered: true } : {}),
+    ...(p["frame"] && typeof p["frame"] === "object" ? { box: p["frame"] as { min: [number, number, number]; max: [number, number, number] } } : {}),
   };
 }
 
@@ -268,13 +313,20 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const ops = withMotion(tools.restoreElided(p["ops"] as DocOp[], currentDoc()), currentDoc());
       // Validate first so a bad op returns a precise error instead of a toast.
       ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
+      const before = useApp.getState().output;
       if (!apply(...ops)) throw new Error("ops were rejected");
-      return summary(await rebuildNow());
+      const out = await rebuildNow();
+      if (p["detail"] === "full") return summary(out);
+      const t = touchedBy(ops);
+      return briefSummary(out, before, t.ids, t.mechanism);
     }
     case "preview_ops": {
       needProject();
-      const doc = tools.restoreElided(p["ops"] as DocOp[], currentDoc()).reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
-      const result = summary(await kernel.sandbox(doc));
+      const ops = tools.restoreElided(p["ops"] as DocOp[], currentDoc());
+      const doc = ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
+      const sandbox = await kernel.sandbox(doc);
+      const t = touchedBy(ops);
+      const result = p["detail"] === "full" ? summary(sandbox) : briefSummary(sandbox, useApp.getState().output, t.ids, t.mechanism);
       // Show it live; the document itself stays untouched.
       useApp.setState({ proposalDoc: doc });
       scheduleRebuild();
@@ -309,13 +361,15 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "render_motion": {
       needProject();
       await rebuildNow();
-      const joint = String(p["joint"]);
-      const [lo, hi] = jointRange(joint);
+      const motionId = typeof p["motion"] === "string" ? p["motion"] : undefined;
+      if (!motionId && typeof p["joint"] !== "string") throw new Error("give a joint (one joint's move) or a motion (several joints over time)");
+      const joint = String(p["joint"] ?? "");
+      const [lo, hi] = motionId ? [0, 0] : jointRange(joint);
       const from = p["from"] === undefined ? lo : Number(p["from"]);
       const to = p["to"] === undefined ? hi : Number(p["to"]);
-      const sheet = await renderMotionSheet(joint, from, to, p["frames"] === undefined ? 9 : Number(p["frames"]), shotOf(p), p["collisions"] !== false);
+      const sheet = await renderMotionSheet(joint, from, to, p["frames"] === undefined ? 9 : Number(p["frames"]), shotOf(p), p["collisions"] !== false, motionId);
       const video = p["video"] as { frames?: number; width?: number; height?: number } | undefined;
-      const gif = video ? await renderMotionGif(joint, from, to, video.frames ?? 36, { ...shotOf(p), width: video.width ?? 480, height: video.height ?? 360 }) : null;
+      const gif = video ? await renderMotionGif(joint, from, to, video.frames ?? 36, { ...shotOf(p), width: video.width ?? 480, height: video.height ?? 360 }, motionId) : null;
       return { png: sheet.png.slice(sheet.png.indexOf(",") + 1), frames: sheet.frames, ...(gif ? { gif: toB64(gif) } : {}) };
     }
     case "drawing": {
@@ -409,7 +463,20 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "check_motion": {
       needProject();
       await rebuildNow();
+      if (typeof p["motion"] === "string") return checkMotionRun(p["motion"], p["steps"] === undefined ? undefined : Number(p["steps"]));
+      if (typeof p["joint"] !== "string" || p["from"] === undefined || p["to"] === undefined) throw new Error("give a joint with from and to, or a motion");
       return checkMotion(String(p["joint"]), Number(p["from"]), Number(p["to"]), p["steps"] === undefined ? undefined : Number(p["steps"]));
+    }
+    case "play_motion": {
+      needProject();
+      await rebuildNow();
+      if (p["motion"] === null || p["motion"] === undefined) {
+        stopPlaying();
+        return "stopped";
+      }
+      playMotion(String(p["motion"]));
+      const m = motionById(String(p["motion"]));
+      return `playing "${m.name ?? m.id}" in the app (${m.duration} s${m.loop ? ", looping" : ""}); play_motion with motion null stops it`;
     }
     case "measure": {
       needProject();

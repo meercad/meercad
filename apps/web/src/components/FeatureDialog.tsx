@@ -1752,6 +1752,57 @@ function Body({ d }: { d: DialogState }) {
         </>
       );
     }
+    case "primitive": {
+      const c = f.center ?? [0, 0, 0];
+      const size = f.size ?? [20, 20, 20];
+      const setCenter = (k: number, v: string | number) => set({ center: c.map((x, i) => (i === k ? v : x)) as [string | number, string | number, string | number] });
+      return (
+        <>
+          <Field label={t("Shape")}>
+            <Seg
+              value={f.shape}
+              options={[["box", t("primitive::Box")], ["cylinder", t("primitive::Cylinder")], ["sphere", t("primitive::Sphere")]]}
+              onChange={(shape) => set(shape === "box" ? { shape, size: f.size ?? [20, 20, 20], diameter: undefined, height: undefined, axis: undefined } : { shape, diameter: f.diameter ?? 20, height: shape === "cylinder" ? (f.height ?? 20) : undefined, size: undefined, ...(shape === "sphere" ? { axis: undefined } : {}) })}
+            />
+          </Field>
+          {f.shape === "box" ? (
+            <div className="row">
+              {(["X", "Y", "Z"] as const).map((a, k) => (
+                <Field key={a} label={t("Size {axis}", { axis: a })}>
+                  <ExprInput value={size[k]!} onCommit={(v) => set({ size: size.map((x, i) => (i === k ? v : x)) as [string | number, string | number, string | number] })} onLive={(v) => set({ size: size.map((x, i) => (i === k ? v : x)) as [string | number, string | number, string | number] })} />
+                </Field>
+              ))}
+            </div>
+          ) : (
+            <div className="row">
+              <Field label={t("Diameter")}>
+                <ExprInput value={f.diameter ?? 20} onCommit={(diameter) => set({ diameter })} onLive={(diameter) => set({ diameter })} />
+              </Field>
+              {f.shape === "cylinder" ? (
+                <Field label={t("Height")}>
+                  <ExprInput value={f.height ?? 20} onCommit={(height) => set({ height })} onLive={(height) => set({ height })} />
+                </Field>
+              ) : null}
+            </div>
+          )}
+          {f.shape === "cylinder" ? (
+            <Field label={t("Axis")}>
+              <Seg value={f.axis ?? "Z"} options={[["X", "X"], ["Y", "Y"], ["Z", "Z"]]} onChange={(axis) => set({ axis: axis === "Z" ? undefined : axis })} />
+            </Field>
+          ) : null}
+          <div className="row">
+            {(["X", "Y", "Z"] as const).map((a, k) => (
+              <Field key={a} label={t("Centre {axis}", { axis: a })}>
+                <ExprInput value={c[k]!} onCommit={(v) => setCenter(k, v)} onLive={(v) => setCenter(k, v)} />
+              </Field>
+            ))}
+          </div>
+          <Field label={t("Result")}>
+            <Seg value={f.mode} options={MODES} onChange={(mode) => set({ mode })} />
+          </Field>
+        </>
+      );
+    }
     case "text": {
       const pos = f.position ?? [0, 0];
       return (

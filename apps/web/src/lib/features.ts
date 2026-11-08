@@ -32,6 +32,7 @@ import {
   LayoutGrid,
   Grid2x2,
   Tag,
+  Cuboid,
   Rainbow,
   Waves,
   PackageOpen,
@@ -74,6 +75,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   box: { label: t("Box with lid"), icon: PackageOpen, hint: t("Printable box with a snap lid, or a round jar with a screw lid; box and lid as two parts with the right play") },
   snap_hook: { label: t("Snap hook"), icon: FishingHook, hint: t("Snap hooks on a face that click into a window in the other part, with the bending strain checked") },
   wall: { label: t("Wall storage"), icon: Grid2x2, hint: t("Boards for the wall (openGrid, pegboards) and holders that clip into them: hooks, rings, shelves, shelves for Gridfinity bins") },
+  primitive: { label: t("Basic solid"), icon: Cuboid, hint: t("A box, cylinder or sphere without a sketch: stand-ins, quick assemblies, blocks to cut with") },
   label: { label: t("Label"), icon: Tag, hint: t("Printable label with a screw, nut or insert symbol and text, raised or engraved, in one or two colours") },
   text: { shortcut: "Shift+T", label: t("Text"), icon: Type, hint: t("Raised or engraved lettering on a face") },
   offset_face: { shortcut: "Shift+E", label: t("feature::Move face"), icon: ArrowUpToLine, hint: t("Move faces along their normals or up to a plane: thicker walls, tighter holes, a face flush with another") },
@@ -100,7 +102,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "coil", "rib", "text", "standard_part", "screw", "spring", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "coil", "rib", "primitive", "text", "standard_part", "screw", "spring", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -177,6 +179,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
     }
     case "label":
       return { id, op, text: "M3×10", symbol: "screw_socket" };
+    case "primitive":
+      return { id, op, shape: "box", size: [20, 20, 20], center: [0, 0, 10], mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import" || f.op === "primitive") ? "join" : "new_body" };
     case "box":
       return { id, op, lid: "snap", width: 80, depth: 60, height: 40 };
     case "snap_hook":

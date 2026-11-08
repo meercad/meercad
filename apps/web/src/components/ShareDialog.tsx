@@ -23,6 +23,7 @@ const WHAT: Record<string, string> = {
   gears: t("gears"),
   springs: t("springs"),
   joints: t("joints"),
+  motions: t("motions"),
   variants: t("variants"),
   "saved versions": t("saved versions"),
   "terrain models": t("terrain models"),

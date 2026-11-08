@@ -23,6 +23,7 @@ export type ModelAction =
   | "gridfinity"
   | "wall"
   | "label"
+  | "primitive"
   | "box"
   | "snap_hook"
   | "lithophane"
@@ -88,6 +89,7 @@ const BASE: Keymap = {
   gridfinity: [],
   wall: [],
   label: [],
+  primitive: [],
   box: [],
   snap_hook: [],
   lithophane: [],
@@ -370,7 +372,7 @@ export function actionFor<A extends Action>(e: KeyboardEvent, actions: readonly 
 }
 
 export const MODEL_ACTIONS: readonly ModelAction[] = [
-  "sketch", "extrude", "revolve", "loft", "sweep", "rib", "text", "standard_part", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "gear", "coil", "spring", "screw", "hole", "split", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane",
+  "sketch", "extrude", "revolve", "loft", "sweep", "rib", "primitive", "text", "standard_part", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "gear", "coil", "spring", "screw", "hole", "split", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane",
   "measure", "joints", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
 ];
 export const SKETCH_ACTIONS: readonly SketchAction[] = [

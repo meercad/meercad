@@ -27,6 +27,7 @@ import {
   type ResolvedDraft,
   type ResolvedOffsetFace,
   type ResolvedText,
+  type ResolvedPrimitive,
   type ResolvedStandardPart,
   type ResolvedSnapHook,
   type ResolvedAlign,
@@ -139,6 +140,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return { ...ctx.prev, textures: new Map(ctx.prev.textures).set(f.id, textureRecord(f, ctx.prev.bodies)) };
       case "text":
         return textFeature(f, ctx);
+      case "primitive":
+        return primitiveFeature(f, ctx);
       case "standard_part":
         return standardPartFeature(f, ctx);
       case "align":
@@ -910,6 +913,45 @@ function snapHookFeature(f: ResolvedSnapHook, ctx: Ctx): Omit<ModelState, "arena
  * (engraved, from a hair above the surface so the cut opens it). Faces: tx1.top (the letters' tops
  * or the engraving's floor) and tx1.side.
  */
+/**
+ * A box, cylinder or sphere at its centre, tagged by side: box faces by their outward normal
+ * (top +Z, bottom, front −Y, back, left −X, right), a cylinder's round side and its two caps (start
+ * at the low end of the axis), a sphere's one face.
+ */
+function primitiveFeature(f: ResolvedPrimitive, ctx: Ctx): Omit<ModelState, "arena"> {
+  const { oc, arena, g } = ctx;
+  const [cx, cy, cz] = f.center;
+  let shape: TopoDS_Shape;
+  let tag: (normal: Vec3 | null, center: Vec3) => string;
+  if (f.shape === "box") {
+    const [x, y, z] = f.size ?? [0, 0, 0];
+    if (!(x > 0 && y > 0 && z > 0)) throw new FeatureError("a box needs a size greater than zero in X, Y and Z");
+    shape = arena.track(arena.track(new oc.BRepPrimAPI_MakeBox(g.pnt([cx - x / 2, cy - y / 2, cz - z / 2]), g.pnt([cx + x / 2, cy + y / 2, cz + z / 2]))).Shape());
+    const names: [number, number, string][] = [[2, 1, "top"], [2, -1, "bottom"], [1, -1, "front"], [1, 1, "back"], [0, -1, "left"], [0, 1, "right"]];
+    tag = (n) => `${f.id}.${names.find(([k, sgn]) => n && Math.abs(n[k]! - sgn) < 1e-6)?.[2] ?? "side"}`;
+  } else if (f.shape === "cylinder") {
+    const d = f.diameter ?? 0;
+    const h = f.height ?? 0;
+    if (!(d > 0 && h > 0)) throw new FeatureError("a cylinder needs a diameter and a height greater than zero");
+    const k = f.axis === "X" ? 0 : f.axis === "Y" ? 1 : 2;
+    const dir: Vec3 = [0, 0, 0];
+    dir[k] = 1;
+    const base: Vec3 = [cx, cy, cz];
+    base[k] -= h / 2;
+    const ax = arena.track(new oc.gp_Ax2(g.pnt(base), g.dir(dir)));
+    shape = arena.track(arena.track(new oc.BRepPrimAPI_MakeCylinder(ax, d / 2, h)).Shape());
+    tag = (n) => (n && Math.abs(Math.abs(n[k]!) - 1) < 1e-6 ? `${f.id}.${n[k]! < 0 ? "start_cap" : "end_cap"}` : `${f.id}.side`);
+  } else {
+    const d = f.diameter ?? 0;
+    if (!(d > 0)) throw new FeatureError("a sphere needs a diameter greater than zero");
+    shape = arena.track(arena.track(new oc.BRepPrimAPI_MakeSphere(g.pnt([cx, cy, cz]), d / 2)).Shape());
+    tag = () => `${f.id}.side`;
+  }
+  const body = new Body(oc, arena, f.id, shape);
+  body.faceTags = body.faceInfo.map((info) => [tag(info.normal, f.center)]);
+  return applyTool(ctx, f.id, body, f.mode, f.targets);
+}
+
 function textFeature(f: ResolvedText, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena, g } = ctx;
   if (!(f.size > 0)) throw new FeatureError("the text size must be greater than zero");

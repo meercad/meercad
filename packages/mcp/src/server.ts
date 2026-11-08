@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
-import { MCP_NOTES, SYSTEM_PROMPT } from "@meercad/ai/prompt";
+import { FEATURE_NAMES, GUIDE_TEXT, MCP_NOTES, OP_NAMES, schemaFor } from "@meercad/ai/prompt";
 import { read3mf, readObj, writeStl } from "@meercad/io";
 import { gearCalc } from "./gearCalc.js";
 import { DEFAULT_PORT, type BridgeHello, type BridgeMethod, type BridgeResponse } from "./protocol.js";
@@ -197,7 +197,20 @@ const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructio
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
 
-server.registerTool("get_guide", { title: "Modelling guide", description: "How meerCAD documents, sketches, features, face tags and selectors work, with the JSON Schema of every op. Read before editing." }, async () => text(`${SYSTEM_PROMPT.replace("The user previews your changes before accepting them.", "")}\n\n${MCP_NOTES}`));
+server.registerTool(
+  "get_guide",
+  {
+    title: "Modelling guide",
+    description:
+      "How meerCAD documents, sketches, features, face tags and selectors work. Read before editing. Without `schema` it returns the guide and the names of all ops; `schema: [names]` returns the exact JSON Schema of those ops and features (e.g. [\"extrude\", \"set_motion\"]), `schema: [\"all\"]` all of them (long).",
+    inputSchema: { schema: z.array(z.string()).optional().describe("Op or feature names whose JSON Schema you want, or [\"all\"]") },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ schema }) => {
+    if (schema?.length) return text(schemaFor(schema));
+    return text(`${GUIDE_TEXT.replace("The user previews your changes before accepting them.", "")}\n\nOps (type): ${OP_NAMES.join(", ")}\nFeatures (op): ${FEATURE_NAMES.join(", ")}\nFor the exact fields of any of them call get_guide {schema:[names]}.\n\n${MCP_NOTES}`);
+  },
+);
 
 server.registerTool(
   "get_model",
@@ -222,20 +235,20 @@ server.registerTool(
   {
     title: "Change the model",
     description:
-      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling; reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`.",
-    inputSchema: { ops: z.array(op).min(1) },
+      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling, set_motion, delete_motion (moves of several joints over time); reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`. The result is brief: steps that are not ok, new or changed bodies, the sketches of the edited steps; detail \"full\" lists everything.",
+    inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional() },
   },
-  guard(async ({ ops }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops) }))),
+  guard(async ({ ops, detail }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops), detail }))),
 );
 
 server.registerTool(
   "preview_ops",
   {
     title: "Try changes",
-    description: "Shows the model with the ops applied as a live preview in the app (not saved) and returns the rebuild result. Use to try ideas; then apply_ops to keep them or clear_preview.",
-    inputSchema: { ops: z.array(op).min(1) },
+    description: "Shows the model with the ops applied as a live preview in the app (not saved) and returns the rebuild result (brief like apply_ops; detail \"full\" lists everything). Use to try ideas; then apply_ops to keep them or clear_preview.",
+    inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional() },
   },
-  guard(async ({ ops }) => text(await call("preview_ops", { ops: await inlineImportFiles(ops) }))),
+  guard(async ({ ops, detail }) => text(await call("preview_ops", { ops: await inlineImportFiles(ops), detail }))),
 );
 
 server.registerTool("clear_preview", { title: "Clear preview", description: "Removes a preview shown by preview_ops." }, guard(async () => text(await call("clear_preview"))));
@@ -266,6 +279,10 @@ const shot = {
     .optional()
     .describe("Cut the model open: the side the normal points to is removed; the cut faces show red. offset moves the plane along its normal (mm)"),
   highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts drawn orange, faces (selectors) drawn as selected (blue)"),
+  frame: z
+    .object({ min: z.tuple([z.number(), z.number(), z.number()]), max: z.tuple([z.number(), z.number(), z.number()]) })
+    .optional()
+    .describe("Fixed region to frame (mm), instead of fitting the parts as they are posed: pictures of a series line up"),
 };
 
 server.registerTool(
@@ -273,7 +290,7 @@ server.registerTool(
   {
     title: "Look at the model",
     description:
-      "Renders the model as a PNG to check the result: from a standard view or any direction, zoomed onto parts (focus, isolate), cut open by a plane (section, cut faces red) and with parts or faces highlighted. Moving parts show in their current pose (set_pose). Does not move the user's camera. style \"rendered\" makes a presentable picture: parts in their materials (set_material) under studio light with a soft shadow on a ground, no edges; with path the PNG is also written to that file (up to 4096 px a side).",
+      "Renders the model as a PNG to check the result: from a standard view or any direction, zoomed onto parts (focus, isolate), cut open by a plane (section, cut faces red) and with parts or faces highlighted. Moving parts show in their current pose (set_pose); joint symbols and other editing aids are left out. Does not move the user's camera. style \"rendered\" makes a presentable picture: parts in their materials (set_material) under studio light with a soft shadow on a ground, no edges; with path the PNG is also written to that file (up to 4096 px a side).",
     inputSchema: {
       ...shot,
       width: z.number().int().min(64).max(4096).optional(),
@@ -296,9 +313,10 @@ server.registerTool(
   {
     title: "Watch a motion",
     description:
-      "Moves one joint from `from` to `to` (default: its limits, a full turn, or ±20 mm) and returns the poses as one contact-sheet PNG, each frame labelled with the joint value; frames where parts overlap get a red border naming them (collisions: false skips that check, faster). With `video.path` it also writes an animated GIF of the motion there (for people to watch). Takes the same picture options as render_view. The joints go back where they were.",
+      "Moves one joint from `from` to `to` (default: its limits, a full turn, or ±20 mm), or plays a motion (`motion`: several joints over time, see set_motion), and returns the poses as one contact-sheet PNG, each frame labelled with the joint value or the time; frames where parts overlap get a red border naming them (collisions: false skips that check, faster). With `video.path` it also writes an animated GIF there (for people to watch; a motion's GIF runs in its own time). One framing for all frames. Takes the same picture options as render_view. The joints go back where they were.",
     inputSchema: {
-      joint: z.string(),
+      joint: z.string().optional(),
+      motion: z.string().optional().describe("A motion's id instead of a joint"),
       from: z.number().optional(),
       to: z.number().optional(),
       frames: z.number().int().min(2).max(16).optional().describe("Frames on the sheet, default 9"),
@@ -438,7 +456,7 @@ server.registerTool(
   "set_pose",
   {
     title: "Move a mechanism",
-    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached (limits and dead points stop a joint short).",
+    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped.",
     inputSchema: { values: z.record(z.string(), z.number()).describe("joint id → value") },
   },
   guard(async ({ values }) => text(await call("set_pose", { values }))),
@@ -458,11 +476,22 @@ server.registerTool(
   "check_motion",
   {
     title: "Check a motion",
-    description: "Moves one joint from `from` to `to` in `steps` (default 12) and checks the gaps at each: the first value where parts touch (faces against each other: fused when printed in place) or overlap (they collide), the smallest gap per pair of parts and where, and where the joint stopped if a limit or dead point held it. The joints go back where they were afterwards.",
-    inputSchema: { joint: z.string(), from: z.number(), to: z.number(), steps: z.number().int().min(1).max(90).optional() },
+    description:
+      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts that touch on purpose (fixed together, or meeting at the joint they turn on) only count when they overlap. Also the smallest gap per pair of parts and where. The joints go back where they were afterwards.",
+    inputSchema: { joint: z.string().optional(), from: z.number().optional(), to: z.number().optional(), motion: z.string().optional(), steps: z.number().int().min(1).max(240).optional() },
     annotations: { readOnlyHint: true },
   },
-  guard(async ({ joint, from, to, steps }) => text(await call("check_motion", { joint, from, to, steps }))),
+  guard(async ({ joint, from, to, motion, steps }) => text(await call("check_motion", { joint, from, to, motion, steps }))),
+);
+
+server.registerTool(
+  "play_motion",
+  {
+    title: "Play a motion",
+    description: "Plays a motion (several joints over time, see set_motion) in the app so the user can watch it: a loop runs until stopped. motion null stops it.",
+    inputSchema: { motion: z.string().nullable() },
+  },
+  guard(async ({ motion }) => text(await call("play_motion", { motion }))),
 );
 
 server.registerTool(
