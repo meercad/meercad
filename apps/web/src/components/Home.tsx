@@ -309,7 +309,7 @@ export function Home() {
           <>
         <button className="home-section-toggle" onClick={() => setPrefs({ examplesOpen: !prefs.examplesOpen })} aria-expanded={prefs.examplesOpen}>
           <ChevronRight className={prefs.examplesOpen ? "open" : ""} />
-          <h1>{t("Start from an example")}</h1>
+          <h1>{t("Examples")}</h1>
           {prefs.examplesOpen ? null : <span className="muted">{EXAMPLES.length}</span>}
         </button>
         {prefs.examplesOpen ? (

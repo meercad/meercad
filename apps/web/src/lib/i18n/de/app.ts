@@ -72,7 +72,7 @@ export default {
   "Folder actions": "Ordneraktionen",
   "Created {when}": "Erstellt {when}",
   "Part actions": "Teilaktionen",
-  "Start from an example": "Mit einem Beispiel beginnen",
+  Examples: "Beispiele",
   "Fully parametric — open one and change its variables. Hide this section in Settings.": "Voll parametrisch: Öffne eines und ändere seine Variablen. In den Einstellungen lässt sich dieser Bereich ausblenden.",
   "Start page": "Startseite",
   "Show the example models": "Beispielmodelle zeigen",

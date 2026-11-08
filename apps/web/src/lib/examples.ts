@@ -263,44 +263,13 @@ export interface Example {
   url?: string;
 }
 
-/** One example per feature, simple to elaborate: files in src/examples, with the name and line shown for them. */
+/**
+ * Larger examples as files in src/examples, with the name and line shown for them. Only real designs
+ * ship here; the small per-feature demos are test models in tests/corpus (feature-*.meercad.json).
+ */
 // Vite bundles them; the cast keeps the file free of Vite's types (the tests include it too).
 const files = (import.meta as ImportMeta & { glob(pattern: string, opts: object): Record<string, string> }).glob("../examples/*.meercad", { query: "?raw", import: "default", eager: true });
 const MORE: [file: string, name: string, description: string][] = [
-  ["01-cube", "Cube", "Sketch and extrude"],
-  ["02-plate-with-holes", "Plate with holes", "Holes cut through in one sketch"],
-  ["03-chamfered-cylinder", "Chamfered cylinder", "Chamfered edges"],
-  ["04-rounded-block", "Rounded block", "Filleted edges"],
-  ["05-open-shell", "Open shell", "Hollowed out with an open face"],
-  ["06-revolved-tube", "Revolved tube", "A profile turned around an axis"],
-  ["07-bolt-circle-flange", "Bolt circle flange", "Holes in a circular pattern"],
-  ["08-pin-header", "Pin header", "Pins in a linear pattern"],
-  ["09-mirrored-t-profile", "Mirrored T-profile", "Mirror and join"],
-  ["10-m8-bolt", "M8 bolt", "Modelled thread"],
-  ["11-m8-nut", "M8 nut", "Internal thread"],
-  ["12-booleans-and-copies", "Booleans and copies", "Move, copy and combine bodies"],
-  ["13-symmetric-spacer", "Symmetric spacer", "Extruded to both sides"],
-  ["14-block-with-pocket", "Block with pocket", "A pocket cut into a face"],
-  ["15-parametric-gear", "Parametric gear", "A tooth sketch in a circular pattern"],
-  ["16-enclosure-with-lid", "Enclosure with lid", "Shell, screw bosses and a matching lid"],
-  ["17-spur-gear", "Spur gear", "Made with the gear tool"],
-  ["18-pinion-and-gear", "Pinion and gear", "Two gears that turn together"],
-  ["19-herringbone-gears", "Herringbone gears", "Double helical teeth"],
-  ["20-planetary-gearbox", "Planetary gearbox", "Sun, planets and ring turning together"],
-  ["21-rack-and-pinion", "Rack and pinion", "Turning becomes sliding"],
-  ["22-hinge", "Hinge", "A lid that swings on a pin"],
-  ["23-four-bar-linkage", "Four-bar linkage", "Crank, coupler and rocker in motion"],
-  ["24-plate-with-standard-holes", "Plate with standard holes", "Counterbores, countersinks, inserts and tapped holes"],
-  ["25-funnel-and-pipe-bend", "Funnel and pipe bend", "Loft and sweep"],
-  ["26-split-bar", "Split bar", "Cut in two for printing"],
-  ["27-bracket-with-ribs", "Bracket with ribs", "Stiffening ribs"],
-  ["28-drafted-mold-cap", "Drafted mould cap", "Draft angle for releasing from a mould"],
-  ["29-name-tag", "Name tag", "Text on a plate"],
-  ["30-sketch-tools", "Sketch tools", "Pockets and tabs from one sketch each"],
-  ["31-spline-handle", "Spline handle", "Swept along a spline"],
-  ["32-plate-with-standard-parts", "Plate with standard parts", "Screws sitting in their holes"],
-  ["33-assembly-with-align", "Assembly with align", "Parts placed against each other"],
-  ["34-scaled-to-size", "Scaled to size", "A scan scaled to its measured size"],
   ["35-ribbed-storage-box", "Ribbed storage box", "Round ribs as a surface texture on the walls"],
   ["39-two-material-grip", "Two-material grip", "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF"],
   ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
