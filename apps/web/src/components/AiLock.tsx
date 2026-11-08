@@ -1,4 +1,5 @@
-import { stopAssistant } from "../lib/mcpBridge";
+import { assistantStopped, stopAssistant } from "../lib/mcpBridge";
+import { assistantWindow } from "../lib/persistence";
 import { t } from "../lib/i18n";
 import { useApp } from "../store";
 
@@ -9,6 +10,14 @@ import { useApp } from "../store";
 export function AiLock() {
   const lock = useApp((s) => s.aiLock);
   const tool = useApp((s) => s.aiActivity?.tool);
+  const ended = useApp((s) => s.aiSessionEnded);
+  // An assistant's own window says whose it is, also between its requests.
+  if (!lock && assistantWindow)
+    return (
+      <div className="ai-window-badge" role="status">
+        {ended ? t("{client} is done here; the window is yours now", { client: assistantWindow.client }) : assistantStopped() ? t("Stopped: {client} no longer edits in this window", { client: assistantWindow.client }) : t("{client}'s window", { client: assistantWindow.client })}
+      </div>
+    );
   if (!lock) return null;
   return (
     <div className="ai-lock" onContextMenu={(e) => e.preventDefault()}>

@@ -76,7 +76,21 @@ interface DesktopApi {
   saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
   /** Missing in desktop apps from before sharing. */
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
-  on(channel: "menu" | "open-project" | "projects-changed" | "error", fn: (arg: string) => void): () => void;
+  /** Assistant sessions' own windows (MCP), see lib/mcpBridge. */
+  assistant?: {
+    open(p: { session: string; client: string }): Promise<number>;
+    windowOf(session: string): Promise<number | "closed" | null>;
+    call(window: number, req: unknown): Promise<unknown>;
+    holder(id: string): Promise<{ session: string; client: string } | null>;
+    focusHolder(id: string): Promise<boolean>;
+    ended(session: string): void;
+    ready(): void;
+    project(id: string | null): void;
+    respond(p: { callId: number; result?: unknown; error?: string }): void;
+  };
+  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error", fn: (arg: string) => void): () => void;
+  on(channel: "bridge-request", fn: (arg: { callId: number; req: unknown }) => void): () => void;
+  on(channel: "assistant-ended", fn: () => void): () => void;
   on(channel: "photos-progress", fn: (arg: { progress: number; step: string }) => void): () => void;
   on(channel: "ui-scale", fn: (arg: UiScale) => void): () => void;
 }
@@ -90,6 +104,13 @@ export interface UiScale {
 }
 
 export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;
+
+/** This window belongs to an assistant session (MCP): the session and the assistant's name, else null. */
+export const assistantWindow: { session: string; client: string } | null = (() => {
+  const q = new URLSearchParams(location.search);
+  const session = q.get("assistant");
+  return session ? { session, client: q.get("client") || "Assistant" } : null;
+})();
 
 /** Project files on disk: the desktop app's folder, or the iPad app's Documents. */
 export interface FileStore {

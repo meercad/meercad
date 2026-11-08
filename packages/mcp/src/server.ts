@@ -4,15 +4,16 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { FEATURE_NAMES, GUIDE_TEXT, MCP_NOTES, OP_NAMES, schemaFor } from "@meercad/ai/prompt";
 import { read3mf, readObj, writeStl } from "@meercad/io";
 import { gearCalc } from "./gearCalc.js";
-import { DEFAULT_PORT, type BridgeHello, type BridgeMethod, type BridgeResponse } from "./protocol.js";
+import { createBridge } from "./hub.js";
+import { DEFAULT_PORT, type BridgeMethod } from "./protocol.js";
 
 const port = Number(process.env["MEERCAD_MCP_PORT"] ?? DEFAULT_PORT);
 // Only the app may connect: browsers always send Origin, and web pages cannot forge it.
@@ -22,122 +23,13 @@ const originAllowed = (origin: string | undefined) =>
 
 const log = (...a: unknown[]) => console.error("[meercad-mcp]", ...a);
 
-let app: WebSocket | null = null;
-let hello: BridgeHello | null = null;
-let seq = 0;
-const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
-
-/** True while another process holds the bridge port; we keep retrying until it is free. */
-let portBusy = false;
-/** Set once this server handed the port to a newer one: from then on it only waits for it to free up. */
-let yielded = false;
-let bridge: WebSocketServer | null = null;
-
-/**
- * Several clients may start this server (e.g. a chat and a coding session); only one can own the
- * port. The newest wins: a server that finds the port taken asks the owner to step aside, and the
- * app reconnects to it. A server that stepped aside only waits, and takes over again if the port
- * frees up (so the two never trade it back and forth).
- */
-function startBridge(): void {
-  const wss = new WebSocketServer({ host: "127.0.0.1", port, verifyClient: ({ origin }: { origin?: string }) => originAllowed(origin) });
-  wss.on("listening", () => {
-    portBusy = false;
-    bridge = wss;
-    log(`waiting for the meerCAD app on ws://127.0.0.1:${port}`);
-  });
-  wss.on("error", (e: NodeJS.ErrnoException) => {
-    if (e.code === "EADDRINUSE") {
-      if (!portBusy) log(`port ${port} is in use by another meerCAD MCP server; ${yielded ? "waiting" : "asking it to hand over"}`);
-      if (!portBusy && !yielded) askForTakeover();
-      portBusy = true;
-      wss.close();
-      setTimeout(startBridge, yielded ? 2000 : 500).unref();
-      return;
-    }
-    log(`bridge error: ${e.message}`);
-  });
-  wss.on("connection", onConnection);
-}
-
-/** Tells the server that owns the port that a newer one is here. */
-function askForTakeover(): void {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-  ws.on("open", () => {
-    ws.send(JSON.stringify({ takeover: "meercad" }));
-    ws.close();
-  });
-  ws.on("error", () => undefined);
-}
-
-/** A newer server asked for the port: let the app go (it reconnects to the newcomer) and wait. */
-function handOver(): void {
-  log("a newer meerCAD MCP server took over; this one waits until it exits");
-  yielded = true;
-  app?.close(4001, "handed over to a newer assistant session");
-  const wss = bridge;
-  bridge = null;
-  wss?.close(() => setTimeout(startBridge, 2000).unref());
-  for (const c of wss?.clients ?? []) c.terminate();
-}
-
-function onConnection(ws: WebSocket): void {
-  ws.on("message", (raw) => {
-    let msg: BridgeResponse | BridgeHello | { takeover: string };
-    try {
-      msg = JSON.parse(String(raw));
-    } catch {
-      return;
-    }
-    if ("takeover" in msg) return handOver();
-    if ("hello" in msg) {
-      if (app && app !== ws) app.close(4000, "replaced by a newer connection");
-      app = ws;
-      hello = msg;
-      log(`app connected (project: ${msg.project ?? "none"})`);
-      return;
-    }
-    const p = pending.get(msg.id);
-    if (!p) return;
-    pending.delete(msg.id);
-    clearTimeout(p.timer);
-    if ("error" in msg) p.reject(new Error(msg.error));
-    else p.resolve(msg.result);
-  });
-  ws.on("close", () => {
-    if (app === ws) {
-      app = null;
-      hello = null;
-      for (const [id, p] of pending) {
-        clearTimeout(p.timer);
-        p.reject(new Error("the meerCAD app disconnected"));
-        pending.delete(id);
-      }
-    }
-  });
-}
-
-startBridge();
+/** This server's session: the app keeps a window and document per session. */
+const session = randomUUID();
+const bridge = createBridge({ port, session, originAllowed, log });
 
 function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
-  if (!app || app.readyState !== app.OPEN) {
-    if (yielded && portBusy) return Promise.reject(new Error("A newer assistant session is connected to meerCAD now. Use that session, or close it and try again here."));
-    return Promise.reject(
-      new Error(
-        "The meerCAD app is not connected. Open meerCAD and enable 'Connect AI assistants (MCP)' in the toolbar menu, then try again.",
-      ),
-    );
-  }
-  const id = ++seq;
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`${method} timed out`));
-    }, timeoutMs);
-    pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-    const info = server.server.getClientVersion();
-    app!.send(JSON.stringify({ id, method, params, client: info?.title ?? info?.name ?? "Assistant" }));
-  });
+  const info = server.server.getClientVersion();
+  return bridge.call<T>(method, params, timeoutMs, info?.title ?? info?.name ?? "Assistant");
 }
 
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: typeof v === "string" ? v : JSON.stringify(v, null, 2) }] });
@@ -192,7 +84,7 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
   );
 }
 
-const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas)." });
+const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets an own window, so the user can keep working in theirs." });
 
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
@@ -259,13 +151,13 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id (see list_projects); the app switches to it so the user sees your work live.", inputSchema: { id: z.string() } },
-  guard(async ({ id }) => text(await call("open_project", { id }))),
+  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in an own meerCAD window that stays behind the user's, so they can keep working on something else (they can look at it any time); a project the user has open in front of them is worked on right there. All later calls of this session act on it.", inputSchema: { id: z.string(), here: z.boolean().optional().describe("true: work in the user's own meerCAD window (they watch, and cannot edit meanwhile). Default: an own window behind theirs, so the user keeps working in theirs") } },
+  guard(async ({ id, here }) => text(await call("open_project", { id, here }))),
 );
 server.registerTool(
   "new_project",
-  { title: "New project", description: "Creates and opens an empty project.", inputSchema: { name: z.string().optional() } },
-  guard(async ({ name }) => text(await call("new_project", { name }))),
+  { title: "New project", description: "Creates and opens an empty project for this session (in an own window, see open_project).", inputSchema: { name: z.string().optional(), here: z.boolean().optional().describe("true: work in the user's own meerCAD window (they watch, and cannot edit meanwhile). Default: an own window behind theirs, so the user keeps working in theirs") } },
+  guard(async ({ name, here }) => text(await call("new_project", { name, here }))),
 );
 
 const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
@@ -594,7 +486,7 @@ server.registerTool("list_folders", { title: "List folders", description: "The f
 server.registerTool("create_folder", { title: "New folder", description: "Creates a folder for projects inside `parent` (\"\" for the top level).", inputSchema: { parent: z.string().optional(), name: z.string().min(1).max(120) } }, guard(async (a) => text(await call("create_folder", a))));
 server.registerTool("move_project", { title: "Move the project", description: "Moves the open project into a folder (see list_folders; \"\" for the top level).", inputSchema: { folder: z.string() } }, guard(async (a) => text(await call("move_project", a))));
 server.registerTool("list_examples", { title: "Examples", description: "The example designs that come with meerCAD (worked samples of features).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_examples"))));
-server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own.", inputSchema: { id: z.union([z.number().int(), z.string()]) } }, guard(async (a) => text(await call("open_example", a))));
+server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in an own window, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]), here: z.boolean().optional().describe("true: work in the user's own meerCAD window (they watch, and cannot edit meanwhile). Default: an own window behind theirs, so the user keeps working in theirs") } }, guard(async (a) => text(await call("open_example", a))));
 
 server.registerTool(
   "terrain_height",
@@ -616,19 +508,14 @@ server.registerTool(
 
 server.registerTool(
   "status",
-  { title: "Connection status", description: "Whether the meerCAD app is connected, which project is open, and the available projects.", annotations: { readOnlyHint: true } },
+  { title: "Connection status", description: "Whether the meerCAD app is connected, which project this session works on (and whether in its own window or the user's), and the available projects.", annotations: { readOnlyHint: true } },
   async () => {
-    if (!app)
-      return text({
-        connected: false,
-        hint: portBusy
-          ? `Another meerCAD MCP server (e.g. from a different chat or session) is using port ${port}, so the app talks to that one. Close that session or restart this one; this server takes over as soon as the port is free.`
-          : `Open meerCAD and enable 'Allow assistants to control meerCAD' (plug icon). Listening on ws://127.0.0.1:${port}.`,
-      });
+    const st = await bridge.status();
+    if (!st.connected) return text({ connected: false, hint: `Open meerCAD and enable 'Allow assistants to control meerCAD' (plug icon). ${st.role === "peer" ? "Another assistant session's meerCAD MCP server holds the connection; requests go through it." : `Listening on ws://127.0.0.1:${port}.`}` });
     try {
       return text({ connected: true, ...(await call<Record<string, unknown>>("get_status")) });
     } catch {
-      return text({ connected: true, ...hello });
+      return text({ connected: true, ...st.hello });
     }
   },
 );

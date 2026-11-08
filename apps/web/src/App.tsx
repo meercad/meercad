@@ -22,12 +22,12 @@ import { ViewportView } from "./components/ViewportView";
 import { importFile } from "./components/io";
 import { initBridge } from "./lib/mcpBridge";
 import { nativeApp, onFileOpened, Pencil } from "./lib/native";
-import { desktop } from "./lib/persistence";
+import { assistantWindow, desktop } from "./lib/persistence";
 import { setTool, useSketchUi, type SketchTool } from "./sketch/state";
 import { saveFile } from "./components/io";
 import { actionFor, MODEL_ACTIONS, type ModelAction } from "./lib/keymap";
 import type { FeatureOp } from "@meercad/schema";
-import { closeTab, cycleTab, reopenClosedTab, toggleSide } from "./store";
+import { closeTab, cycleTab, dropCachedTab, reopenClosedTab, toggleSide } from "./store";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@meercad/viewport";
@@ -100,7 +100,7 @@ export function App() {
   const [tour, setTour] = useState(false);
   // First time in the editor: offer the introduction tour.
   useEffect(() => {
-    if (screen === "editor" && !tourDone() && !isCompact()) setTour(true);
+    if (screen === "editor" && !tourDone() && !isCompact() && !assistantWindow) setTour(true);
   }, [screen]);
   useEffect(() => {
     const open = () => setGuide((g) => !g);
@@ -149,11 +149,13 @@ export function App() {
     const offOpen = desktop.on("open-project", (id) => void openProject(id));
     const offError = desktop.on("error", (msg) => toast(msg, "error"));
     const offChanged = desktop.on("projects-changed", () => window.dispatchEvent(new Event("meercad:projects-changed")));
+    const offSaved = desktop.on("project-saved", (id) => dropCachedTab(id));
     return () => {
       offMenu();
       offOpen();
       offError();
       offChanged();
+      offSaved();
     };
   }, []);
   // iPad app: .meercad files opened from the Files app, and Apple Pencil double-tap / squeeze,

@@ -13,7 +13,7 @@ import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
-import { createProject, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
+import { assistantWindow, createProject, desktop, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
 import { isCompact } from "./lib/layout";
 import type { PaceCurve, ProgressPoint } from "./lib/eta";
@@ -84,6 +84,8 @@ interface State {
   aiActivity: { client: string; tool: string; at: number } | null;
   /** An assistant is working on the model (MCP): the app takes no input until it is done or stopped. */
   aiLock: { client: string } | null;
+  /** In an assistant's own window: its session ended (the assistant is gone), the window is the user's now. */
+  aiSessionEnded: boolean;
   /** Waiting for the user to click a plane/face to start a sketch. */
   pickingSketchPlane: boolean;
 }
@@ -115,6 +117,8 @@ const tabStores = new Map<string, DocumentStore>();
 const closedTabs: string[] = [];
 
 function loadTabs(): Tab[] {
+  // An assistant's window starts empty and keeps its tabs to itself.
+  if (assistantWindow) return [];
   try {
     return (JSON.parse(localStorage.getItem("meercad.tabs") ?? "[]") as Tab[]).filter((t) => typeof t.id === "string");
   } catch {
@@ -123,6 +127,7 @@ function loadTabs(): Tab[] {
 }
 function setTabs(tabs: Tab[]): void {
   useApp.setState({ tabs });
+  if (assistantWindow) return;
   try {
     localStorage.setItem("meercad.tabs", JSON.stringify(tabs));
   } catch {
@@ -166,6 +171,7 @@ export const useApp = create<State>(() => ({
   pickingSketchPlane: false,
   aiActivity: null,
   aiLock: null,
+  aiSessionEnded: false,
   sideOpen: (() => {
     // On a phone the panel is a sheet over the model: it starts closed.
     if (isCompact()) return false;
@@ -746,8 +752,20 @@ export async function refreshProjects(): Promise<void> {
   if (tabs.length !== get().tabs.length || tabs.some((t, i) => t.name !== get().tabs[i]!.name)) setTabs(tabs);
 }
 
-export async function openProject(id: string): Promise<void> {
+/** Another window saved a project: a copy kept in memory for a tab in the background would be stale. */
+export function dropCachedTab(id: string): void {
+  if (get().project?.id !== id) tabStores.delete(id);
+}
+
+/** `force`: open it even while an assistant's window has it open (the assistant asked for it itself). */
+export async function openProject(id: string, { force = false } = {}): Promise<void> {
   if (get().project?.id === id && get().screen === "editor") return;
+  // An assistant works on it in its own window: show that window rather than editing it in two places.
+  if (!force && desktop?.assistant && (await desktop.assistant.focusHolder(id))) {
+    if (get().screen === "editor") history.replaceState(null, "", `#/p/${encodeURIComponent(get().project!.id)}`);
+    else history.replaceState(null, "", "#/");
+    return;
+  }
   await flushSave(true);
   const cached = tabStores.get(id);
   const tab = get().tabs.find((t) => t.id === id);

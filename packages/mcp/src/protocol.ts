@@ -52,6 +52,14 @@ export interface BridgeRequest {
   params: Record<string, unknown>;
   /** Name of the assistant calling (from the MCP client info), shown in the app. */
   client?: string;
+  /** The MCP server (one per assistant session) that sent it: the app gives each session its own window. */
+  session?: string;
+}
+
+/** Sent by the hub, not answered: a session's MCP server exited. */
+export interface BridgeEvent {
+  event: "session_ended";
+  session: string;
 }
 
 export type BridgeResponse = { id: number; result: unknown } | { id: number; error: string };

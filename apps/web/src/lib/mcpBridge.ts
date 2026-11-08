@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { DEFAULT_PORT, type BridgeRequest } from "@meercad/mcp";
+import { DEFAULT_PORT, type BridgeEvent, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -13,6 +13,7 @@ import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type M
 import { sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
+import { assistantWindow, desktop } from "./persistence";
 import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
@@ -38,6 +39,8 @@ export const onBridgeStatus = (fn: (s: Status) => void) => {
 };
 
 export function setBridgeEnabled(on: boolean, remember = true): void {
+  // An assistant's window gets its requests from the user's window, never over its own connection.
+  if (assistantWindow) return;
   wanted = on;
   if (remember)
     try {
@@ -56,6 +59,7 @@ export function setBridgeEnabled(on: boolean, remember = true): void {
 }
 
 export function initBridge(): void {
+  if (assistantWindow) return initAssistantWindow();
   let pref: string | null = null;
   try {
     pref = localStorage.getItem("meercad.mcp");
@@ -104,19 +108,114 @@ function connect(): void {
   };
   ws.onerror = () => ws.close();
   ws.onmessage = async (e) => {
-    const req = JSON.parse(String(e.data)) as BridgeRequest;
-    const client = clientLabel(req.client);
-    showActivity(client, req.method);
-    const locks = !READS.has(req.method);
-    if (locks) lock(client);
+    const msg = JSON.parse(String(e.data)) as BridgeRequest | BridgeEvent;
+    if ("event" in msg) {
+      if (msg.event === "session_ended") {
+        here.delete(msg.session);
+        desktop?.assistant?.ended(msg.session);
+      }
+      return;
+    }
     try {
-      ws.send(JSON.stringify({ id: req.id, result: await handle(req) }));
+      const result = await route(msg);
+      if (socket === ws) ws.send(JSON.stringify({ id: msg.id, result }));
     } catch (err) {
-      ws.send(JSON.stringify({ id: req.id, error: err instanceof Error ? err.message : String(err) }));
-    } finally {
-      if (locks && socket === ws) release();
+      if (socket === ws) ws.send(JSON.stringify({ id: msg.id, error: errorText(err) }));
     }
   };
+}
+
+/** An error's message, without what Electron adds to errors from another window. */
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err)).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+
+/** Requests that open a project for the session: where they open decides where the session works. */
+const OPENS = new Set(["open_project", "new_project", "open_example"]);
+/** Sessions working in this (the user's) window: they asked to, or opened the project the user has in front. */
+const here = new Set<string>();
+
+/**
+ * Where a request is served. On the Mac every assistant session (one MCP server each) works in a
+ * window of its own, so the user keeps working in theirs: opening a project opens that window
+ * (behind the user's), and from then on the session's requests go there. A session that never
+ * opened a project, or opened the one the user has in front, works here as before.
+ */
+async function route(req: BridgeRequest): Promise<unknown> {
+  const a = desktop?.assistant;
+  const session = req.session;
+  if (!a || !session) return serve(req);
+  if (OPENS.has(req.method)) {
+    if (req.method === "open_project") {
+      const id = String(req.params["id"]);
+      const holder = await a.holder(id);
+      if (holder && holder.session !== session) throw new Error(`${holder.client} is working on this project in its own meerCAD window right now. Pick another project, or wait until it is done.`);
+      const s = useApp.getState();
+      const inFront = s.screen === "editor" && s.project?.id === id;
+      if (!holder && (inFront || req.params["here"] === true)) {
+        here.add(session);
+        return serve(req);
+      }
+    } else if (req.params["here"] === true) {
+      here.add(session);
+      return serve(req);
+    }
+    here.delete(session);
+    return a.call(await a.open({ session, client: clientLabel(req.client) }), req);
+  }
+  if (!here.has(session)) {
+    const win = await a.windowOf(session);
+    if (win === "closed") throw new Error("The user closed your meerCAD window. Open the project again (open_project) to go on.");
+    if (win !== null) return a.call(win, req);
+  }
+  return serve(req);
+}
+
+/** In this window: shows who is working, and locks the app while the request changes things. */
+async function serve(req: BridgeRequest): Promise<unknown> {
+  if (stopped) throw new Error("The user stopped your editing in this window. Ask them before going on.");
+  const client = clientLabel(req.client);
+  showActivity(client, req.method);
+  const locks = !READS.has(req.method);
+  const gen = lockGen;
+  if (locks) lock(client);
+  try {
+    return await handle(req);
+  } finally {
+    if (locks && gen === lockGen) release();
+  }
+}
+
+/** Set in an assistant's window when the user stopped it there. */
+let stopped = false;
+export const assistantStopped = () => stopped;
+
+/**
+ * An assistant session's own window: requests come from the user's window (through the main
+ * process), the window says whose it is, and the main process learns which project it shows.
+ */
+function initAssistantWindow(): void {
+  const a = desktop?.assistant;
+  if (!a || !desktop) return;
+  desktop.on("bridge-request", ({ callId, req }) => {
+    serve(req as BridgeRequest).then(
+      (result) => a.respond({ callId, result }),
+      (err: unknown) => a.respond({ callId, error: errorText(err) }),
+    );
+  });
+  desktop.on("assistant-ended", () => {
+    unlock();
+    useApp.setState({ aiActivity: null, aiSessionEnded: true });
+  });
+  let shown: string | null = null;
+  const report = () => {
+    const project = useApp.getState().project;
+    document.title = `${project?.name ?? "meerCAD"} · ${assistantWindow!.client}`;
+    if ((project?.id ?? null) === shown) return;
+    shown = project?.id ?? null;
+    a.project(shown);
+  };
+  useApp.subscribe(report);
+  report();
+  a.ready();
 }
 
 /** Requests that only look things up: they do not lock the app. */
@@ -124,6 +223,8 @@ const READS = new Set(["status", "get_version", "list_projects", "list_folders",
 /** How long the app stays locked after the assistant's last request: it often thinks a while between two. */
 export const LOCK_IDLE_MS = 12_000;
 let running = 0;
+/** Counts unlocks, so a request that ends after the user stopped the assistant does not count down. */
+let lockGen = 0;
 let lockTimer: number | undefined;
 function lock(client: string): void {
   running++;
@@ -137,6 +238,7 @@ function release(): void {
   lockTimer = window.setTimeout(unlock, LOCK_IDLE_MS);
 }
 function unlock(): void {
+  lockGen++;
   running = 0;
   clearTimeout(lockTimer);
   if (useApp.getState().aiLock) useApp.setState({ aiLock: null });
@@ -147,7 +249,11 @@ function unlock(): void {
  * until it is allowed again with the plug icon (next start it is connected as before).
  */
 export function stopAssistant(): void {
-  setBridgeEnabled(false, false);
+  // In an assistant's own window only that window stops; the other sessions go on.
+  if (assistantWindow) {
+    stopped = true;
+    unlock();
+  } else setBridgeEnabled(false, false);
   clearTimeout(activityTimer);
   useApp.setState({ aiActivity: null });
 }
@@ -299,6 +405,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         project: useApp.getState().project,
         projects: useApp.getState().projects.map(({ id, name }) => ({ id, name })),
         previewing: !!useApp.getState().proposalDoc,
+        // Where this session works: its own window, or the user's (who then cannot edit meanwhile).
+        ...(desktop?.assistant && req.session ? { window: assistantWindow ? "own" : "user's" } : {}),
       };
     }
     case "clear_preview":
@@ -345,7 +453,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       await refreshProjects();
       return useApp.getState().projects.map(({ id, name, updatedAt }) => ({ id, name, updated: new Date(updatedAt).toISOString() }));
     case "open_project":
-      await openProject(String(p["id"]));
+      // Who else has it open was checked when the request was routed.
+      await openProject(String(p["id"]), { force: true });
       return summary(await rebuildNow());
     case "new_project":
       await newProject(emptyDocument(), typeof p["name"] === "string" && p["name"] ? p["name"] : "Untitled part");

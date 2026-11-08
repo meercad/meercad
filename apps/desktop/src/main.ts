@@ -177,12 +177,14 @@ ipcMain.handle("projects:load", async (_e, id: string) => {
   const st = await stat(projectPath(id));
   return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, doc: JSON.parse(await readFile(projectPath(id), "utf8")) };
 });
-ipcMain.handle("projects:save", async (_e, p: { id: string; doc: unknown; thumbnail?: string }) => {
+ipcMain.handle("projects:save", async (e, p: { id: string; doc: unknown; thumbnail?: string }) => {
   await mkdir(dirname(projectPath(p.id)), { recursive: true });
   // Write atomically so a crash never leaves a half-written project.
   const tmp = `${projectPath(p.id)}.tmp`;
   await writeFile(tmp, `${JSON.stringify(p.doc, null, 2)}\n`);
   await rename(tmp, projectPath(p.id));
+  // Other windows drop what they keep of it in memory (a tab in the background).
+  for (const w of BrowserWindow.getAllWindows()) if (w.webContents.id !== e.sender.id) w.webContents.send("project-saved", p.id);
   if (p.thumbnail?.startsWith("data:image/png;base64,")) {
     await mkdir(thumbsDir(), { recursive: true });
     await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
@@ -416,7 +418,7 @@ function watchProjects(): void {
     watcher = watch(projectsDir(), { recursive: true }, (_event, file) => {
       if (file && !String(file).endsWith(".meercad") && extname(String(file)) !== "") return;
       clearTimeout(timer);
-      timer = setTimeout(() => mainWindow?.webContents.send("projects-changed"), 400);
+      timer = setTimeout(() => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send("projects-changed")), 400);
     });
     watcher.on("error", () => undefined);
   } catch {
@@ -533,10 +535,13 @@ ipcMain.handle("ui:scale:set", (_e, choice: unknown) => {
 let mainWindow: BrowserWindow | null = null;
 const pendingOpen: string[] = [];
 
-function createWindow(): BrowserWindow {
+function createWindow(assistant?: { session: string; client: string }): BrowserWindow {
+  // An assistant's window opens a little offset from the user's and stays behind it.
+  const at = assistant && mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
+    ...(at ? { x: at.x + 40 + 24 * (assistantWindows.size % 6), y: at.y + 40 + 24 * (assistantWindows.size % 6), width: at.width, height: at.height } : {}),
     minWidth: 900,
     minHeight: 600,
     title: "meerCAD",
@@ -545,9 +550,10 @@ function createWindow(): BrowserWindow {
     backgroundColor: "#eef0f8",
     icon: join(__dirname, "../build/icon.png"),
     show: false,
-    webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    // An assistant's window works in the background: its timers must not be slowed down there.
+    webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false, ...(assistant ? { backgroundThrottling: false } : {}) },
   });
-  win.once("ready-to-show", () => win.show());
+  win.once("ready-to-show", () => (assistant ? showBehind(win) : win.show()));
   // The interface size follows the display the window is on (when automatic).
   win.webContents.on("did-finish-load", () => applyUiScale(win));
   win.on("moved", () => applyUiScale(win));
@@ -559,12 +565,118 @@ function createWindow(): BrowserWindow {
   win.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
   });
-  void win.loadURL(DEV ? DEV_URL : "app://meercad/");
+  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : "";
+  void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${query}`);
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });
   return win;
 }
+
+// ---------------------------------------------------------------- assistant windows
+
+/**
+ * Every assistant session (one MCP server each) works in a window of its own, so the user keeps
+ * working in theirs. The user's window holds the connection to the MCP server and passes each
+ * session's requests on to its window (see the web app's mcpBridge).
+ */
+interface AssistantWindow {
+  win: BrowserWindow;
+  session: string;
+  client: string;
+  /** The project it shows. */
+  project: string | null;
+  ready: Promise<void>;
+  markReady: () => void;
+}
+const assistantWindows = new Map<number, AssistantWindow>();
+/** Sessions whose window the user closed. */
+const closedSessions = new Set<string>();
+const assistantOf = (webContentsId: number) => [...assistantWindows.values()].find((a) => !a.win.isDestroyed() && a.win.webContents.id === webContentsId);
+const isAssistantWindow = (win: BrowserWindow) => assistantWindows.has(win.id);
+/** The window menu commands and Finder opens go to: the focused one, else the user's. */
+const commandWindow = () => {
+  const f = BrowserWindow.getFocusedWindow();
+  return f && !f.isDestroyed() ? f : mainWindow;
+};
+
+/** Shows a window without taking the focus, behind the window the user works in. */
+function showBehind(win: BrowserWindow): void {
+  const front = BrowserWindow.getFocusedWindow();
+  win.showInactive();
+  if (front && front !== win && !front.isDestroyed()) front.moveTop();
+}
+
+function openAssistantWindow(session: string, client: string): AssistantWindow {
+  const known = [...assistantWindows.values()].find((a) => a.session === session && !a.win.isDestroyed());
+  if (known) return known;
+  let markReady = () => undefined as void;
+  const ready = new Promise<void>((r) => (markReady = r));
+  closedSessions.delete(session);
+  const win = createWindow({ session, client });
+  const a: AssistantWindow = { win, session, client, project: null, ready, markReady };
+  assistantWindows.set(win.id, a);
+  const id = win.id;
+  win.on("closed", () => {
+    assistantWindows.delete(id);
+    closedSessions.add(session);
+    for (const [callId, c] of bridgeCalls) {
+      if (c.window !== id) continue;
+      bridgeCalls.delete(callId);
+      c.reject(new Error("The user closed your meerCAD window. Open the project again (open_project) to go on."));
+    }
+  });
+  return a;
+}
+
+let bridgeCallSeq = 0;
+const bridgeCalls = new Map<number, { window: number; resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+
+ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string }) => {
+  const a = openAssistantWindow(String(p.session), String(p.client || "Assistant"));
+  await a.ready;
+  return a.win.id;
+});
+/** The session's window; "closed" when the user closed it (its requests must not land in the user's window then). */
+ipcMain.handle("assistant:window", (_e, session: string) => [...assistantWindows.values()].find((a) => a.session === session && !a.win.isDestroyed())?.win.id ?? (closedSessions.has(session) ? "closed" : null));
+ipcMain.handle("assistant:call", (_e, p: { window: number; req: unknown }) => {
+  const a = assistantWindows.get(p.window);
+  if (!a || a.win.isDestroyed()) throw new Error("The user closed your meerCAD window. Open the project again (open_project) to go on.");
+  const callId = ++bridgeCallSeq;
+  return new Promise((resolve, reject) => {
+    bridgeCalls.set(callId, { window: p.window, resolve, reject });
+    a.win.webContents.send("bridge-request", { callId, req: p.req });
+  });
+});
+ipcMain.on("assistant:respond", (_e, p: { callId: number; result?: unknown; error?: string }) => {
+  const c = bridgeCalls.get(p.callId);
+  if (!c) return;
+  bridgeCalls.delete(p.callId);
+  if (typeof p.error === "string") c.reject(new Error(p.error));
+  else c.resolve(p.result);
+});
+ipcMain.on("assistant:ready", (e) => assistantOf(e.sender.id)?.markReady());
+ipcMain.on("assistant:project", (e, id: unknown) => {
+  const a = assistantOf(e.sender.id);
+  if (a) a.project = typeof id === "string" ? id : null;
+});
+/** Which session's window has a project open (other than the asking window). */
+ipcMain.handle("assistant:holder", (e, id: string) => {
+  const a = [...assistantWindows.values()].find((x) => x.project === id && !x.win.isDestroyed() && x.win.webContents.id !== e.sender.id);
+  return a ? { session: a.session, client: a.client } : null;
+});
+/** Brings the window that has a project open to the front; false when no assistant window has it. */
+ipcMain.handle("assistant:focus-holder", (e, id: string) => {
+  const a = [...assistantWindows.values()].find((x) => x.project === id && !x.win.isDestroyed() && x.win.webContents.id !== e.sender.id);
+  if (!a) return false;
+  a.win.show();
+  a.win.focus();
+  return true;
+});
+/** A session's MCP server exited: its window says so and is free to use. */
+ipcMain.on("assistant:ended", (_e, session: string) => {
+  for (const a of assistantWindows.values()) if (a.session === session && !a.win.isDestroyed()) a.win.webContents.send("assistant-ended");
+});
 
 /** Imports an .meercad file opened from Finder into the projects folder and opens it. */
 async function openExternalFile(file: string): Promise<void> {
@@ -645,7 +757,7 @@ ipcMain.on("app:language", (_e, l: unknown) => {
 });
 
 function buildMenu(): void {
-  const send = (channel: string, ...args: unknown[]) => () => mainWindow?.webContents.send(channel, ...args);
+  const send = (channel: string, ...args: unknown[]) => () => commandWindow()?.webContents.send(channel, ...args);
   const template: MenuItemConstructorOptions[] = [
     {
       label: app.name,
@@ -765,7 +877,8 @@ else {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
     });
     app.on("activate", () => {
-      if (!BrowserWindow.getAllWindows().length) mainWindow = createWindow();
+      // Assistants' windows do not count: the user gets their own window back.
+      if (!BrowserWindow.getAllWindows().some((w) => !isAssistantWindow(w))) mainWindow = createWindow();
     });
   });
   app.on("window-all-closed", () => {
