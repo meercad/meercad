@@ -72,6 +72,9 @@ describe("meercad files", () => {
     expect(meercadDocument(bytes({ name: "importtest", document: doc }), "t1.meercad")).toEqual({ doc, name: "importtest" });
     expect(meercadDocument(bytes({ format: "meercad/1", features: [] }), "leg.meercad").doc).toEqual({ format: "meercad/1", params: {}, features: [], rollback: null });
   });
+  it("reads a plain list of features", () => {
+    expect(meercadDocument(bytes([{ id: "b1", op: "primitive" }]), "feats.json").doc).toEqual(doc);
+  });
   it("rejects what is no design", () => {
     expect(() => meercadDocument(new TextEncoder().encode("{"), "x.meercad")).toThrow(/not a meerCAD file/);
     expect(() => meercadDocument(bytes({ name: "x" }), "x.meercad")).toThrow(/no features/);
