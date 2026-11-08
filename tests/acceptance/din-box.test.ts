@@ -57,7 +57,7 @@ describe("DIN A storage box", () => {
 
   it("an A5 sheet on the floor clears the walls and the rounded corners", async () => {
     const d = box();
-    const floor = 5 + 2.4 + 0.5; // foot + floor + a little
+    const floor = 5 + 2.4 + 2; // foot + floor + a little
     const sheet: Feature[] = [
       { id: "pl9", op: "plane", base: { ref: "origin.XY" }, offset: floor } as Feature,
       sketch("sk99", { ref: "pl9" }, rect("q", -105, -74, 210, 148)),
@@ -82,7 +82,9 @@ describe("DIN A storage box", () => {
       const params = { ...d.params, ...d.variants!.find((v) => v.name === variant)!.params };
       const { values } = resolveParams(params);
       const top = values.get("grip_top")!, bridge = values.get("grip_bridge")!;
-      // Outside the flat tops of the grip holes only the 0.1 mm ledge the chamfer leaves under the grip frames.
+      const foot = values.get("foot")!, groove = values.get("band")! + values.get("wall")! + values.get("clearance")!;
+      // Bridges: the flat tops of the grip holes and the roof of the groove across the foot (7.6 mm
+      // wide). Elsewhere only the 0.1 mm ledge the chamfer leaves under the grip frames.
       let elsewhere = 0;
       const where: string[] = [];
       for (let t = 0; t < check.kind.length; t++) {
@@ -90,6 +92,7 @@ describe("DIN A storage box", () => {
         const p = [0, 1, 2].map((j) => [0, 1, 2].map((k) => m!.positions[m!.indices[t * 3 + j]! * 3 + k]!));
         const c = [0, 1, 2].map((k) => (p[0]![k]! + p[1]![k]! + p[2]![k]!) / 3);
         if (Math.abs(c[2]! - top) < 0.5 && Math.abs(c[1]!) < bridge / 2 + 1.5) continue;
+        if (Math.abs(c[2]! - foot) < 0.3 && Math.abs(c[0]!) < groove + 0.5) continue;
         const u = [0, 1, 2].map((k) => p[1]![k]! - p[0]![k]!), v = [0, 1, 2].map((k) => p[2]![k]! - p[0]![k]!);
         elsewhere += Math.hypot(u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!) / 2;
         const A = Math.hypot(u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!) / 2;

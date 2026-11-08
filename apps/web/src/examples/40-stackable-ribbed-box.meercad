@@ -199,6 +199,17 @@
    "distance": "wall + clearance"
   },
   {
+   "id": "sh1",
+   "op": "shell",
+   "name": "Hollow",
+   "faces": [
+    {
+     "face": "ex1.end_cap"
+    }
+   ],
+   "thickness": "wall"
+  },
+  {
    "id": "sk2",
    "op": "sketch",
    "name": "Foot",
@@ -357,15 +368,174 @@
    ]
   },
   {
-   "id": "sh1",
-   "op": "shell",
-   "name": "Hollow",
-   "faces": [
+   "id": "sk11",
+   "op": "sketch",
+   "name": "Foot groove",
+   "plane": {
+    "ref": "origin.XY"
+   },
+   "entities": [
     {
-     "face": "ex1.end_cap"
+     "id": "g1",
+     "type": "point",
+     "x": -4,
+     "y": -100
+    },
+    {
+     "id": "g2",
+     "type": "point",
+     "x": 4,
+     "y": -100
+    },
+    {
+     "id": "g3",
+     "type": "point",
+     "x": 4,
+     "y": 100
+    },
+    {
+     "id": "g4",
+     "type": "point",
+     "x": -4,
+     "y": 100
+    },
+    {
+     "id": "n1",
+     "type": "line",
+     "p1": "g1",
+     "p2": "g2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "p1": "g2",
+     "p2": "g3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "p1": "g3",
+     "p2": "g4"
+    },
+    {
+     "id": "n4",
+     "type": "line",
+     "p1": "g4",
+     "p2": "g1"
     }
    ],
-   "thickness": "wall"
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "distance",
+     "a": "origin",
+     "b": "g1",
+     "axis": "x",
+     "value": "band + wall + clearance"
+    },
+    {
+     "id": "c3",
+     "type": "distance",
+     "a": "origin",
+     "b": "g2",
+     "axis": "x",
+     "value": "band + wall + clearance"
+    },
+    {
+     "id": "c5",
+     "type": "distance",
+     "a": "origin",
+     "b": "g3",
+     "axis": "x",
+     "value": "band + wall + clearance"
+    },
+    {
+     "id": "c7",
+     "type": "distance",
+     "a": "origin",
+     "b": "g4",
+     "axis": "x",
+     "value": "band + wall + clearance"
+    },
+    {
+     "id": "c2",
+     "type": "distance",
+     "a": "origin",
+     "b": "g1",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    },
+    {
+     "id": "c4",
+     "type": "distance",
+     "a": "origin",
+     "b": "g2",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    },
+    {
+     "id": "c6",
+     "type": "distance",
+     "a": "origin",
+     "b": "g3",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    },
+    {
+     "id": "c8",
+     "type": "distance",
+     "a": "origin",
+     "b": "g4",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    }
+   ]
+  },
+  {
+   "id": "ex11",
+   "op": "extrude",
+   "name": "Foot groove",
+   "profile": {
+    "sketch": "sk11"
+   },
+   "extent": "blind",
+   "distance": "foot",
+   "mode": "cut",
+   "targets": [
+    "ex1"
+   ]
+  },
+  {
+   "id": "fi17",
+   "op": "fillet",
+   "name": "Foot corners at the groove",
+   "edges": [
+    {
+     "edge": [
+      "ex11.side[sk11.n2]",
+      "ex2.side[sk2.l1]"
+     ]
+    },
+    {
+     "edge": [
+      "ex11.side[sk11.n2]",
+      "ex2.side[sk2.l3]"
+     ]
+    },
+    {
+     "edge": [
+      "ex11.side[sk11.n4]",
+      "ex2.side[sk2.l1]"
+     ]
+    },
+    {
+     "edge": [
+      "ex11.side[sk11.n4]",
+      "ex2.side[sk2.l3]"
+     ]
+    }
+   ],
+   "radius": "corner - wall - clearance"
   },
   {
    "id": "pl2",
