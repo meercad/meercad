@@ -103,6 +103,8 @@ export default {
   "Lid on a pin that swings open": "Deckel auf einem Stift, der aufschwingt",
   "Name plate": "Namensschild",
   "Raised and engraved text": "Erhabener und gravierter Text",
+  "Stackable DIN box": "DIN-Stapelbox",
+  "Parametric for DIN A paper (variable din: 6, 5 or 4 for A6, A5, A4); two of a size stand exactly on the next larger one; prints without supports": "Parametrisch für DIN-A-Papier (Variable din: 6, 5 oder 4 für A6, A5, A4); zwei einer Größe stehen genau auf der nächstgrößeren; druckt ohne Stützen",
   "Import STEP, STL, 3MF, OBJ, DXF, SVG…": "STEP, STL, 3MF, OBJ, DXF, SVG importieren …",
   "View in AR (real size on the table)": "In AR ansehen (echte Größe auf dem Tisch)",
   "Export USDZ (AR on iPhone and iPad)": "USDZ exportieren (AR auf iPhone und iPad)",

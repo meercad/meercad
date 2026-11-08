@@ -34,7 +34,6 @@ export default {
   // Example
   "Ribbed storage box": "Aufbewahrungsbox mit Rippen",
   "Stackable box": "Stapelbox",
-  "Sized for DIN A paper (A6, A5, A4): two of a size stand exactly on the next larger one; prints without supports": "Passt für DIN-A-Papier (A6, A5, A4): zwei einer Größe stehen genau auf einer der nächstgrößeren; druckt ohne Stützen",
   "Round ribs as a surface texture on the walls": "Runde Rippen als Oberflächenstruktur an den Wänden",
   // Help
   "Surface textures": "Oberflächenstrukturen",

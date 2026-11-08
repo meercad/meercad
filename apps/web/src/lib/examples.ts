@@ -266,8 +266,11 @@ export interface Example {
   packs?: PackId[];
 }
 
-/** The premium packs an example needs to be shown and changed. */
-export const examplePacks = (ex: Example): PackId[] => ex.packs ?? packsUsed(ex.doc).map((u) => u.pack);
+/**
+ * The premium packs an example needs to be shown and changed. Variants do not count: without the
+ * pack its variables still change it (a DIN box's `din`).
+ */
+export const examplePacks = (ex: Example): PackId[] => ex.packs ?? packsUsed(ex.doc).map((u) => u.pack).filter((p) => p !== "versions");
 
 /**
  * Larger examples as files in src/examples, with the name and line shown for them. Only real designs
@@ -276,11 +279,11 @@ export const examplePacks = (ex: Example): PackId[] => ex.packs ?? packsUsed(ex.
 // Vite bundles them; the cast keeps the file free of Vite's types (the tests include it too).
 const files = (import.meta as ImportMeta & { glob(pattern: string, opts: object): Record<string, string> }).glob("../examples/*.meercad", { query: "?raw", import: "default", eager: true });
 const MORE: [file: string, name: string, description: string][] = [
+  ["40-stackable-ribbed-box", "Stackable DIN box", "Parametric for DIN A paper (variable din: 6, 5 or 4 for A6, A5, A4); two of a size stand exactly on the next larger one; prints without supports"],
   ["35-ribbed-storage-box", "Ribbed storage box", "Round ribs as a surface texture on the walls"],
   ["39-two-material-grip", "Two-material grip", "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF"],
   ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
-  ["40-stackable-ribbed-box", "Stackable box", "Sized for DIN A paper (A6, A5, A4): two of a size stand exactly on the next larger one; prints without supports"],
   ["41-linear-axis", "Linear axis", "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts"],
   ["42-boxes-and-snap-hooks", "Boxes and snap hooks", "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks"],
   ["43-springs", "Springs", "Compression, extension and torsion springs from wire, diameter and coils"],
