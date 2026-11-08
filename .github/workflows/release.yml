@@ -1,0 +1,27 @@
+name: Release check
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Everything except E2E, which needs the Mac app (run `pnpm test:release` on the Mac for that).
+# Timings on the runner are checked against the budgets × 3, mesh sizes against the baseline.
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      MEERCAD_PERF_SCALE: "3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:release --skip e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: test-results/perf.json

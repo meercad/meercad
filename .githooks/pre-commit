@@ -1,0 +1,6 @@
+#!/bin/sh
+# Quick tests before every commit (turn on once with `pnpm hooks`, skip one commit with --no-verify).
+# Only when code or tests are part of the commit.
+if git diff --cached --name-only | grep -qE '^(packages|apps|tests)/|^vitest\.config\.ts$'; then
+  pnpm test:quick || { echo "pre-commit: quick tests failed (pnpm test:quick)"; exit 1; }
+fi
