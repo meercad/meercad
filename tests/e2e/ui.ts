@@ -283,10 +283,9 @@ export class Ui {
    */
   async clickPlane(id: string, origin: Vec3, u: Vec3, v: Vec3): Promise<void> {
     // Construction planes show only with the bottom bar's Planes button on.
-    if (!(await this.state<boolean>("s.showPlanes"))) {
-      await this.press("Planes", "button[title='Planes']");
-      await sleep(400);
-    }
+    if (!(await this.state<boolean>("s.showPlanes"))) await this.press("Planes", "button[title='Planes']");
+    // Also lets a view change before this finish turning the camera, so the spot found is still the plane.
+    await sleep(600);
     const at = await this.page.eval<Vec2 | null>(`(() => {
       const vp = meercadTest.store.getViewport(), r = vp.renderer.domElement.getBoundingClientRect();
       const o = ${JSON.stringify(origin)}, u = ${JSON.stringify(u)}, v = ${JSON.stringify(v)};
