@@ -107,6 +107,22 @@ export class Ui {
     await sleep(200);
   }
 
+  /** Picks an option in whichever drop-down of the dialog offers it (e.g. a size "M4"). */
+  async chooseAny(option: string): Promise<void> {
+    const ok = await this.page.eval<boolean>(`(() => {
+      for (const sel of document.querySelectorAll(".dialog select")) {
+        const o = [...sel.options].find((o) => o.textContent.trim() === ${JSON.stringify(option)});
+        if (!o) continue;
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(sel, o.value);
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+      return false;
+    })()`);
+    if (!ok) throw new Error(`no drop-down offers "${option}"`);
+    await sleep(200);
+  }
+
   /** Accepts the open dialog with its OK button and waits for the rebuild. */
   async accept(): Promise<void> {
     // The dialog's verdict follows its preview: let that finish first.
@@ -508,6 +524,13 @@ export class Ui {
     const on = await this.page.eval<boolean | null>(`(() => { const l = [...document.querySelectorAll(".dialog label.checkbox")].find((l) => l.textContent.trim() === ${JSON.stringify(label)}); return l ? !!l.querySelector("input")?.checked : null; })()`);
     if (on === null) throw new Error(`no checkbox "${label}"`);
     if (!on) await this.check(label);
+  }
+
+  /** Unticks a checkbox in the open dialog if it is ticked. */
+  async checkOff(label: string): Promise<void> {
+    const on = await this.page.eval<boolean | null>(`(() => { const l = [...document.querySelectorAll(".dialog label.checkbox")].find((l) => l.textContent.trim() === ${JSON.stringify(label)}); return l ? !!l.querySelector("input")?.checked : null; })()`);
+    if (on === null) throw new Error(`no checkbox "${label}"`);
+    if (on) await this.check(label);
   }
 
   /** Ticks a checkbox in the open dialog by its text. */

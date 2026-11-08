@@ -681,7 +681,72 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.option("Dovetail");
     await ui.accept();
   },
+
+  "24 Lochplatte mit Normbohrungen": async (ui) => {
+    await holePlate(ui);
+  },
+
+  "27 Winkel mit Rippen": async (ui) => {
+    await ui.sketchOn("Top");
+    await ui.rect([0, 0], 60, 40);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.field("Distance", 5);
+    await ui.accept();
+    await ui.sketchOn("Top");
+    await ui.rect([0, 0], 5, 40);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("Add");
+    await ui.field("Distance", 40);
+    await ui.accept();
+    for (const [k, y] of [[1, 8], [2, 32]] as const) {
+      await ui.feature("Create", "Plane");
+      await ui.option("Front");
+      await ui.field("Offset", -y);
+      await ui.accept();
+      await ui.sketchOn(`pl${k}`);
+      // Sketch coordinates on this plane: x along X, y up (Z).
+      await ui.tool("Line");
+      await ui.clickSketch([5, 30]);
+      await ui.clickSketch([35, 5]);
+      await ui.key("Escape");
+      await ui.finishSketch();
+      await ui.feature("Create", "Rib");
+      await ui.choose("Lines", `Sketch ${k + 2}`);
+      await ui.field("Thickness", 4);
+      await ui.accept();
+    }
+  },
 };
+
+/** Model 24's plate: 80 × 40 × 10 with counterbores, a countersink, inserts and a tapped hole, tapped onto the top. */
+async function holePlate(ui: Ui) {
+  await ui.sketchOn("Top");
+  await ui.rect([0, 0], 80, 40);
+  await ui.finishSketch();
+  await ui.feature("Create", "Extrude");
+  await ui.field("Distance", 10);
+  await ui.accept();
+  const holes: [string, string, [number, number][], number?][] = [
+    ["Counterbore", "M4", [[10, 10], [10, 30]]],
+    ["Countersink", "M3", [[35, 20]]],
+    ["Insert", "M3", [[55, 10], [55, 30]]],
+    ["Thread", "M5", [[70, 20]], 8],
+  ];
+  for (const [kind, size, points, depth] of holes) {
+    await ui.feature("Modify", "Hole");
+    await ui.chooseAny(kind);
+    await ui.chooseAny(size);
+    // Each tap on the top face places a hole there.
+    for (const [x, y] of points) await ui.clickAt([x, y, 10]);
+    if (depth) {
+      await ui.checkOff("Through all");
+      await ui.field("Depth", depth);
+    }
+    await ui.accept();
+  }
+}
 
 /** A plane `at` mm along X and the Split dialog cutting there (left open for connectors). */
 async function splitAt150(ui: Ui, at = 150) {
