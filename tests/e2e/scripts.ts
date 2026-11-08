@@ -99,6 +99,7 @@ export const SCRIPTS: Record<string, Script> = {
   },
 
   "07 Flansch Lochkreis": async (ui) => {
+    await ui.addVariable("holes", 6);
     await ui.sketchOn("Top");
     await ui.circle([0, 0], 60);
     await ui.circle([0, 0], 20);
@@ -116,7 +117,7 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.feature("Transform", "Circular pattern");
     await ui.check("Extrude 2");
     await ui.option("Z");
-    await ui.field("Count", 6);
+    await ui.field("Count", "holes");
     await ui.accept();
   },
 
@@ -260,6 +261,38 @@ export const SCRIPTS: Record<string, Script> = {
     // The cut starts out of the face, away from the block (see the preview): flip it in.
     await ui.press("Flip direction", ".dialog button");
     await ui.field("Distance", 5);
+    await ui.accept();
+  },
+
+  "17 Stirnrad": async (ui) => {
+    await ui.addVariable("m", 2);
+    await ui.addVariable("z", 20);
+    await ui.feature("Create", "Gear");
+    await ui.field("Module", "m");
+    await ui.field("Teeth", "z");
+    await ui.field("Width", 10);
+    await ui.check("Bore");
+    await ui.field("Diameter", 8);
+    await ui.field("Allowance", 0);
+    await ui.accept();
+  },
+
+  "18 Zahnradpaar": async (ui) => {
+    await ui.feature("Create", "Gear");
+    await ui.field("Module", 1.5);
+    await ui.field("Teeth", 15);
+    await ui.field("Width", 8);
+    await ui.check("Bore");
+    await ui.field("Diameter", 5);
+    await ui.field("Allowance", 0.15);
+    // The mating gear opens in its own dialog, meshing with the first.
+    await ui.press("Add mating gear", ".dialog button");
+    await ui.until("the mating gear", `s.dialog?.feature.id === "gr2"`);
+    await ui.field("Teeth", 30);
+    await ui.field("Direction from the partner", 30);
+    await ui.check("Bore");
+    await ui.field("Diameter", 8);
+    await ui.field("Allowance", 0);
     await ui.accept();
   },
 };

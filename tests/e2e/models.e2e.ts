@@ -40,6 +40,14 @@ function check(r: Result, want: Expectation) {
   }
 }
 
+/** What the app shows for the open part: failed features, parts, joint errors. */
+const result = (ui: Ui) =>
+  ui.state<Result>(`({
+    failed: s.output.report.features.filter((f) => f.status !== "ok").map((f) => f.id + ": " + f.message),
+    bodies: s.output.report.bodies.map((b) => ({ volume: b.volume, bbox: b.bbox })),
+    joints: (s.output.report.joints ?? []).filter((j) => j.error).map((j) => j.id + ": " + j.error),
+  })`);
+
 const only = process.env["E2E_ONLY"]?.split(",").map((s) => s.trim().padStart(2, "0"));
 const out = process.env["E2E_OUT"];
 const picked = MODELS.filter((m) => !only || only.includes(m.file.slice(0, 2)));
@@ -72,11 +80,7 @@ describe("test models built in the app", () => {
         await app.page.shot(join(dir, `${m.file} FAILED.png`)).catch(() => undefined);
         throw e;
       }
-      const r = await ui.state<Result>(`({
-        failed: s.output.report.features.filter((f) => f.status !== "ok").map((f) => f.id + ": " + f.message),
-        bodies: s.output.report.bodies.map((b) => ({ volume: b.volume, bbox: b.bbox })),
-        joints: (s.output.report.joints ?? []).filter((j) => j.error).map((j) => j.id + ": " + j.error),
-      })`);
+      const r = await result(ui);
       if (out) {
         mkdirSync(out, { recursive: true });
         await ui.view("1");
@@ -85,6 +89,13 @@ describe("test models built in the app", () => {
         writeFileSync(join(out, `${m.file}.meercad`), JSON.stringify(await ui.state("s.doc"), null, 2));
       }
       check(r, m.expect);
+      // The model's variants: each variable typed into its row in the Variables panel, the result
+      // checked, the values put back.
+      for (const v of m.variants ?? []) {
+        for (const [k, val] of Object.entries(v.params)) await ui.setVariable(k, val);
+        check(await result(ui), v.expect);
+        for (const k of Object.keys(v.params)) await ui.setVariable(k, m.doc.params[k]!);
+      }
       expect(app.page.takeErrors(), "console errors").toEqual([]);
     });
   }

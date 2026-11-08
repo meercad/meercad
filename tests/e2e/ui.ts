@@ -19,7 +19,12 @@ export class Ui {
       const label = (el) => [el.getAttribute("aria-label"), el.getAttribute("title"), el.textContent].filter(Boolean).map((s) => s.trim());
       const hit = [...document.querySelectorAll(${JSON.stringify(selector)})].filter(ok).find((el) => want === null || label(el).some((s) => exact ? s === want : s.includes(want)));
       if (!hit) return null;
-      const r = hit.getBoundingClientRect();
+      // Below the fold of a long dialog: scrolled to, as a person scrolls the panel.
+      let r = hit.getBoundingClientRect();
+      if (r.bottom > innerHeight - 4 || r.top < 0) {
+        hit.scrollIntoView({ block: "center" });
+        r = hit.getBoundingClientRect();
+      }
       return [r.left + r.width / 2, r.top + r.height / 2];
     })()`);
     return at;
@@ -48,7 +53,11 @@ export class Ui {
       const f = [...document.querySelectorAll(".fld")].find((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)});
       const el = f && f.querySelectorAll(${JSON.stringify(control)})[${n}];
       if (!el) return null;
-      const r = el.getBoundingClientRect();
+      let r = el.getBoundingClientRect();
+      if (r.bottom > innerHeight - 4 || r.top < 0) {
+        el.scrollIntoView({ block: "center" });
+        r = el.getBoundingClientRect();
+      }
       return [r.left + Math.min(r.width / 2, 60), r.top + r.height / 2];
     })()`);
   }
@@ -453,7 +462,11 @@ export class Ui {
       this.page.eval<[number, number, boolean] | null>(`(() => {
         const b = [...document.querySelectorAll(".dialog button")].find((b) => b.textContent.trim() === ${JSON.stringify(label)} && b.getBoundingClientRect().width > 0);
         if (!b) return null;
-        const r = b.getBoundingClientRect();
+        let r = b.getBoundingClientRect();
+        if (r.bottom > innerHeight - 4 || r.top < 0) {
+          b.scrollIntoView({ block: "center" });
+          r = b.getBoundingClientRect();
+        }
         return [r.left + r.width / 2, r.top + r.height / 2, b.classList.contains("on") || b.classList.contains("active") || b.classList.contains("primary") || b.getAttribute("aria-pressed") === "true"];
       })()`);
     for (let i = 0; i < 4; i++) {
@@ -465,6 +478,50 @@ export class Ui {
       if ((await at())?.[2]) return;
     }
     throw new Error(`the choice "${label}" does not stay on`);
+  }
+
+  // ---------------------------------------------------------------- variables
+
+  /** Shows the side panel with history, parts and variables (the top bar's panel button). */
+  async showSide(): Promise<void> {
+    if (await this.find("button", "Add variable")) return;
+    await this.press("Show history, parts and variables", "button.side-toggle");
+    await this.waitFind("button", "Add variable");
+  }
+
+  /** A new variable from the Variables section's +: its name, Tab, its value, Enter. */
+  async addVariable(name: string, expr: string | number): Promise<void> {
+    await this.showSide();
+    await this.press("Add variable", "button");
+    await sleep(200);
+    await this.page.key("Meta+a");
+    await this.type(name);
+    await this.key("Tab");
+    await this.page.key("Meta+a");
+    await this.type(String(expr));
+    await this.key("Enter");
+    await this.until(`variable ${name}`, `${JSON.stringify(name)} in s.doc.params`);
+    await this.settle();
+  }
+
+  /** Types a new value into a variable's row and commits it with Enter. */
+  async setVariable(name: string, expr: string | number): Promise<void> {
+    await this.showSide();
+    const at = await this.page.eval<Vec2 | null>(`(() => {
+      const row = [...document.querySelectorAll(".param-row")].find((r) => r.querySelector(".name-input")?.value === ${JSON.stringify(name)});
+      const el = row?.querySelector("input.expr, .expr-wrap input, input:not(.name-input)");
+      if (!el) return null;
+      el.scrollIntoView({ block: "center" });
+      const r = el.getBoundingClientRect();
+      return [r.left + Math.min(30, r.width / 2), r.top + r.height / 2];
+    })()`);
+    if (!at) throw new Error(`no variable row "${name}"`);
+    await this.page.click(at[0], at[1]);
+    await this.page.key("Meta+a");
+    await this.type(String(expr));
+    await this.key("Enter");
+    await sleep(300);
+    await this.settle();
   }
 
   /** The app's state, read back (development builds only). */
