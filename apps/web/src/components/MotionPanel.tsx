@@ -215,7 +215,8 @@ function nextMotionId(list: readonly Motion[]): string {
  * from its last moment back to its first.
  */
 function MotionsSection() {
-  const motions = useApp((s) => s.doc.mechanism?.motions ?? []);
+  // The fallback stays outside the selector: a new [] on every call would re-render forever.
+  const motions = useApp((s) => s.doc.mechanism?.motions) ?? [];
   const playingMotion = useMotion((s) => s.playingMotion);
   // Without the pack the motions of a shared design play, film and check, but do not change.
   const canEdit = usePack("mechanics");
