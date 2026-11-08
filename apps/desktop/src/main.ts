@@ -535,9 +535,10 @@ ipcMain.handle("ui:scale:set", (_e, choice: unknown) => {
 let mainWindow: BrowserWindow | null = null;
 const pendingOpen: string[] = [];
 
-function createWindow(assistant?: { session: string; client: string }): BrowserWindow {
-  // An assistant's window opens a little offset from the user's and stays behind it.
-  const at = assistant && mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+/** `extra`: another window of the user's (File > New Window), next to the first one. */
+function createWindow(assistant?: { session: string; client: string }, extra = false): BrowserWindow {
+  // An assistant's window (or another one of the user's) opens a little offset from the user's; an assistant's stays behind it.
+  const at = (assistant || extra) && mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -565,7 +566,7 @@ function createWindow(assistant?: { session: string; client: string }): BrowserW
   win.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
   });
-  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : "";
+  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : extra ? "?window=extra" : "";
   void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${query}`);
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
@@ -667,23 +668,60 @@ ipcMain.on("assistant:respond", (_e, p: { callId: number; result?: unknown; erro
   else c.resolve(p.result);
 });
 ipcMain.on("assistant:ready", (e) => assistantOf(e.sender.id)?.markReady());
+/** The project each of the user's windows shows (by webContents id); assistants' windows keep theirs in AssistantWindow. */
+const userProjects = new Map<number, string | null>();
 ipcMain.on("assistant:project", (e, id: unknown) => {
+  const project = typeof id === "string" ? id : null;
   const a = assistantOf(e.sender.id);
-  if (a) a.project = typeof id === "string" ? id : null;
+  if (a) a.project = project;
+  else {
+    const wc = e.sender.id;
+    if (!userProjects.has(wc)) e.sender.once("destroyed", () => userProjects.delete(wc));
+    userProjects.set(wc, project);
+  }
 });
-/** Which session's window has a project open (other than the asking window). */
+/** The window (other than the asking one) that has a project open: an assistant session's, or one of the user's. */
+function holderOf(id: string, except: number): { win: BrowserWindow; assistant: AssistantWindow | null } | null {
+  const a = [...assistantWindows.values()].find((x) => x.project === id && !x.win.isDestroyed() && x.win.webContents.id !== except);
+  if (a) return { win: a.win, assistant: a };
+  for (const [wc, project] of userProjects) {
+    if (project !== id || wc === except) continue;
+    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.id === wc);
+    if (win) return { win, assistant: null };
+  }
+  return null;
+}
 ipcMain.handle("assistant:holder", (e, id: string) => {
-  const a = [...assistantWindows.values()].find((x) => x.project === id && !x.win.isDestroyed() && x.win.webContents.id !== e.sender.id);
-  return a ? { session: a.session, client: a.client, ended: a.ended } : null;
+  const h = holderOf(id, e.sender.id);
+  if (!h) return null;
+  return h.assistant ? { session: h.assistant.session, client: h.assistant.client, ended: h.assistant.ended, user: false } : { session: "", client: "", ended: false, user: true };
 });
-/** Brings the window that has a project open to the front; false when no assistant window has it. */
+/** Brings the window that has a project open to the front; false when no other window has it. */
 ipcMain.handle("assistant:focus-holder", (e, id: string) => {
-  const a = [...assistantWindows.values()].find((x) => x.project === id && !x.win.isDestroyed() && x.win.webContents.id !== e.sender.id);
-  if (!a) return false;
-  a.win.show();
-  a.win.focus();
+  const h = holderOf(id, e.sender.id);
+  if (!h) return false;
+  h.win.show();
+  h.win.focus();
   return true;
 });
+let releaseSeq = 0;
+const releases = new Map<number, () => void>();
+/** An assistant opens a project the user has open: the user's windows save and close it first (its own window gets it). */
+ipcMain.handle("assistant:take", async (e, p: { id: string; client: string }) => {
+  for (const [wc, project] of [...userProjects]) {
+    if (project !== p.id || wc === e.sender.id) continue;
+    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.id === wc);
+    if (!win) continue;
+    const callId = ++releaseSeq;
+    await new Promise<void>((resolve) => {
+      releases.set(callId, resolve);
+      win.webContents.send("release-project", { callId, id: p.id, client: p.client });
+      setTimeout(resolve, 15_000).unref();
+    });
+    releases.delete(callId);
+  }
+});
+ipcMain.on("window:released", (_e, callId: number) => releases.get(callId)?.());
 /** A session's MCP server exited: its window says so and is free to use. */
 ipcMain.on("assistant:ended", (_e, session: string) => {
   for (const a of assistantWindows.values())
@@ -722,6 +760,7 @@ const MENU_DE: Record<string, string> = {
   "Settings…": "Einstellungen …",
   File: "Ablage",
   "New Part": "Neues Teil",
+  "New Window": "Neues Fenster",
   "Open…": "Öffnen …",
   "All Projects": "Alle Projekte",
   "Save Copy As .meercad…": "Kopie als .meercad sichern …",
@@ -794,6 +833,7 @@ function buildMenu(): void {
       label: tr("File"),
       submenu: [
         { label: tr("New Part"), accelerator: "CmdOrCtrl+N", click: send("menu", "new") },
+        { label: tr("New Window"), accelerator: "CmdOrCtrl+Shift+N", click: () => void createWindow(undefined, true) },
         { label: tr("Open…"), accelerator: "CmdOrCtrl+O", click: send("menu", "import") },
         { label: tr("All Projects"), accelerator: "CmdOrCtrl+Shift+H", click: send("menu", "home") },
         { type: "separator" },

@@ -1,4 +1,4 @@
-import { assistantStopped, canMoveAssistant, moveAssistantAway, stopAssistant } from "../lib/mcpBridge";
+import { assistantStopped, stopAssistant } from "../lib/mcpBridge";
 import { assistantWindow } from "../lib/persistence";
 import { t } from "../lib/i18n";
 import { useApp } from "../store";
@@ -27,11 +27,6 @@ export function AiLock() {
           {t("{client} is working on the model", { client: lock.client })}
           {tool ? <span className="muted"> · {tool.replace(/_/g, " ")}</span> : null}
         </span>
-        {canMoveAssistant() ? (
-          <button className="btn" onClick={() => void moveAssistantAway()}>
-            {t("Work on something else")}
-          </button>
-        ) : null}
         <button className="btn primary" onClick={stopAssistant}>
           {t("Stop editing")}
         </button>

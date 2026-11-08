@@ -13,7 +13,7 @@ import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
-import { assistantWindow, createProject, desktop, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
+import { assistantWindow, createProject, desktop, extraWindow, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
 import KernelWorker from "./kernel.worker.ts?worker";
 import { isCompact } from "./lib/layout";
 import type { PaceCurve, ProgressPoint } from "./lib/eta";
@@ -117,8 +117,8 @@ const tabStores = new Map<string, DocumentStore>();
 const closedTabs: string[] = [];
 
 function loadTabs(): Tab[] {
-  // An assistant's window starts empty and keeps its tabs to itself.
-  if (assistantWindow) return [];
+  // An assistant's window, and a second window of the user's, start empty and keep their tabs to themselves.
+  if (assistantWindow || extraWindow) return [];
   try {
     return (JSON.parse(localStorage.getItem("meercad.tabs") ?? "[]") as Tab[]).filter((t) => typeof t.id === "string");
   } catch {
@@ -127,7 +127,7 @@ function loadTabs(): Tab[] {
 }
 function setTabs(tabs: Tab[]): void {
   useApp.setState({ tabs });
-  if (assistantWindow) return;
+  if (assistantWindow || extraWindow) return;
   try {
     localStorage.setItem("meercad.tabs", JSON.stringify(tabs));
   } catch {
@@ -951,6 +951,23 @@ export function closeTab(id: string, remember = true): void {
     if (next) void openProject(next.id);
     else goHome();
   });
+}
+
+/** An assistant opens this project in its own window: save it and close its tab here. */
+export async function releaseProject(id: string): Promise<void> {
+  const tabs = get().tabs;
+  const i = tabs.findIndex((x) => x.id === id);
+  if (get().project?.id === id) {
+    await flushSave(true);
+    const next = tabs[i + 1] ?? tabs[i - 1];
+    tabStores.delete(id);
+    setTabs(get().tabs.filter((x) => x.id !== id));
+    if (next) await openProject(next.id);
+    else goHome();
+  } else {
+    tabStores.delete(id);
+    if (i >= 0) setTabs(tabs.filter((x) => x.id !== id));
+  }
 }
 
 export function reopenClosedTab(): void {

@@ -81,7 +81,11 @@ interface DesktopApi {
     open(p: { session: string; client: string; project?: string }): Promise<number>;
     windowOf(session: string): Promise<number | "closed" | null>;
     call(window: number, req: unknown): Promise<unknown>;
-    holder(id: string): Promise<{ session: string; client: string; ended: boolean } | null>;
+    /** The other window with the project open: an assistant's, or (user: true) one of the user's. */
+    holder(id: string): Promise<{ session: string; client: string; ended: boolean; user: boolean } | null>;
+    /** The user's windows save and close the project, for an assistant's window to open it. */
+    take(id: string, client: string): Promise<void>;
+    released(callId: number): void;
     focusHolder(id: string): Promise<boolean>;
     ended(session: string): void;
     ready(): void;
@@ -92,6 +96,7 @@ interface DesktopApi {
   on(channel: "bridge-request", fn: (arg: { callId: number; req: unknown }) => void): () => void;
   on(channel: "assistant-ended", fn: () => void): () => void;
   on(channel: "assistant-adopted", fn: (arg: { session: string; client: string }) => void): () => void;
+  on(channel: "release-project", fn: (arg: { callId: number; id: string; client: string }) => void): () => void;
   on(channel: "photos-progress", fn: (arg: { progress: number; step: string }) => void): () => void;
   on(channel: "ui-scale", fn: (arg: UiScale) => void): () => void;
 }
@@ -105,6 +110,9 @@ export interface UiScale {
 }
 
 export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;
+
+/** Another window of the user's (File > New Window): it keeps its tabs to itself and leaves assistants to the first window. */
+export const extraWindow = new URLSearchParams(location.search).get("window") === "extra";
 
 /** This window belongs to an assistant session (MCP): the session and the assistant's name, else null. */
 export const assistantWindow: { session: string; client: string } | null = (() => {

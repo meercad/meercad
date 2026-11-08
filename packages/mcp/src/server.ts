@@ -151,13 +151,13 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in an own meerCAD window that stays behind the user's, so they can keep working on something else (they can look at it any time); a project the user has open in front of them is worked on right there. All later calls of this session act on it.", inputSchema: { id: z.string(), here: z.boolean().optional().describe("true: work in the user's own meerCAD window (they watch, and cannot edit meanwhile). Default: an own window behind theirs, so the user keeps working in theirs") } },
-  guard(async ({ id, here }) => text(await call("open_project", { id, here }))),
+  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD window of your own, behind the user's, so they keep working in theirs (they can look at yours any time); a project the user has open moves over to your window. All later calls of this session act on it; before one is open, only lookups work.", inputSchema: { id: z.string() } },
+  guard(async ({ id }) => text(await call("open_project", { id }))),
 );
 server.registerTool(
   "new_project",
-  { title: "New project", description: "Creates and opens an empty project for this session (in an own window, see open_project).", inputSchema: { name: z.string().optional(), here: z.boolean().optional().describe("true: work in the user's own meerCAD window (they watch, and cannot edit meanwhile). Default: an own window behind theirs, so the user keeps working in theirs") } },
-  guard(async ({ name, here }) => text(await call("new_project", { name, here }))),
+  { title: "New project", description: "Creates and opens an empty project for this session (in an own window, see open_project).", inputSchema: { name: z.string().optional() } },
+  guard(async ({ name }) => text(await call("new_project", { name }))),
 );
 
 const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
@@ -521,7 +521,7 @@ server.registerTool("list_folders", { title: "List folders", description: "The f
 server.registerTool("create_folder", { title: "New folder", description: "Creates a folder for projects inside `parent` (\"\" for the top level).", inputSchema: { parent: z.string().optional(), name: z.string().min(1).max(120) } }, guard(async (a) => text(await call("create_folder", a))));
 server.registerTool("move_project", { title: "Move the project", description: "Moves the open project into a folder (see list_folders; \"\" for the top level).", inputSchema: { folder: z.string() } }, guard(async (a) => text(await call("move_project", a))));
 server.registerTool("list_examples", { title: "Examples", description: "The example designs that come with meerCAD (worked samples of features).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_examples"))));
-server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in an own window, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]), here: z.boolean().optional().describe("true: work in the user's own meerCAD window (they watch, and cannot edit meanwhile). Default: an own window behind theirs, so the user keeps working in theirs") } }, guard(async (a) => text(await call("open_example", a))));
+server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in an own window, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]) } }, guard(async (a) => text(await call("open_example", a))));
 
 server.registerTool(
   "terrain_height",
