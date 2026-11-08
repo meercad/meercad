@@ -1,4 +1,4 @@
-import { Check, Cog, Film, Footprints, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
+import { Check, Cog, Eye, EyeOff, Film, Footprints, Link2, Pause, Pencil, Play, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { download } from "./io";
 import { jointRange, renderMotionGif } from "../lib/render";
@@ -11,6 +11,7 @@ import { apply, toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
 import { t, tn } from "../lib/i18n";
 import { usePack } from "../lib/premium";
+import { setPrefs, usePrefs } from "../lib/keymap";
 
 const TYPES: [Joint["type"], string, string?][] = [
   ["revolute", t("joint::Turn")],
@@ -46,6 +47,8 @@ export function MotionPanel() {
   const playing = useMotion((s) => s.playing);
   // Without the pack the joints of a design someone shared are there to look at and move, not to change.
   const canEdit = usePack("mechanics");
+  // Joint symbols in the scene can be switched off to watch the motion alone.
+  const showJoints = usePrefs((s) => s.showJoints);
   const [filming, setFilming] = useState<string | null>(null);
   const film = async (id: string) => {
     setFilming(id);
@@ -81,6 +84,11 @@ export function MotionPanel() {
       <div className="dialog-head">
         <Link2 className="ficon" />
         <h3>{draft && canEdit ? (draft.isNew ? t("New joint") : t("Edit joint")) : t("Joints")}</h3>
+        {joints.length ? (
+          <button className={`icon-btn sm ${showJoints ? "" : "active"}`} title={showJoints ? t("Hide joint symbols") : t("Show joint symbols")} aria-pressed={!showJoints} onClick={() => setPrefs({ showJoints: !showJoints })}>
+            {showJoints ? <Eye /> : <EyeOff />}
+          </button>
+        ) : null}
         <button className="icon-btn sm" title={t("Close")} onClick={close}>
           <X />
         </button>

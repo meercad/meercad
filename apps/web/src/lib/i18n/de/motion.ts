@@ -11,6 +11,8 @@ export default {
   "Edit joint": "Gelenk bearbeiten",
   Joints: "Gelenke",
   Close: "Schließen",
+  "Hide joint symbols": "Gelenk-Symbole ausblenden",
+  "Show joint symbols": "Gelenk-Symbole einblenden",
   "Drag a part to move it. The model itself stays as drawn.": "Zieh ein Teil, um es zu bewegen. Das Modell selbst bleibt, wie es gezeichnet ist.",
   "Joints let parts turn or slide against each other, from where they were drawn. Add one, then drag the part.":
     "Mit Gelenken drehen oder verschieben sich Teile gegeneinander, ausgehend von ihrer gezeichneten Lage. Füg ein Gelenk hinzu und zieh dann das Teil.",
