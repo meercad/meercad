@@ -56,14 +56,17 @@ describe("rebuild performance", () => {
     // Opening: a fresh session each time, like opening the file in a new tab.
     let tris = 0;
     let faces = 0;
-    const open = time(() => {
+    const openOnce = () => {
       const s = new KernelSession(oc, solver);
       const r = s.rebuild(doc);
       expect(r.report.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
       tris = r.meshes.reduce((n, m) => n + m.indices.length / 3, 0);
       faces = r.report.bodies.reduce((n, b) => n + b.faces, 0);
       s.dispose();
-    }, 3);
+    };
+    // Median of 3; small parts are measured again with 9 runs, where one slow run would weigh too much.
+    let open = time(openOnce, 3);
+    if (open.value < 300) open = time(openOnce, 9);
     check(`${name}: open`, open, OPEN_BUDGET[name] ?? BUDGET.open);
     // Counts are the same on every machine: a jump in triangles makes the viewport slow.
     check(`${name}: triangles`, { value: tris, unit: "tris" }, 2_000_000);

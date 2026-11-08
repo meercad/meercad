@@ -39,7 +39,7 @@ because they need a browser, which is the E2E run's job.
 `tests/perf/*.perf.ts` (vitest project `perf`, one file at a time):
 
 - `rebuild.perf.ts`: kernel start; for every test model and corpus part the time to open it (fresh
-  session, rebuild and meshes, median of 3), to rebuild without a change, and to change a value
+  session, rebuild and meshes, median of 3 (9 for parts under 300 ms)), to rebuild without a change, and to change a value
   (the model's first variant, back and forth); triangles and faces of the result.
 - `memory-io.perf.ts`: WASM memory over ten open/change/close rounds of a big model; STEP, print
   mesh, 3MF and STL export; reading an STL of a million triangles.

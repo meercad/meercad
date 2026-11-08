@@ -43,8 +43,8 @@ const baseline: Baseline | null = existsSync(BASELINE_URL) ? (JSON.parse(readFil
 const sameMachine = baseline?.machine === MACHINE;
 const results = new Map<string, Measurement & { budget: number; base?: number }>();
 
-/** Slack on top of the relative tolerance, so tiny values don't flap. */
-const SLACK: Record<Unit, number> = { ms: 5, MB: 8, tris: 0, faces: 0 };
+/** Slack on top of the relative tolerance, so tiny values don't flap (10 ms: a busy machine shifts even short measurements by a few ms). */
+const SLACK: Record<Unit, number> = { ms: 10, MB: 8, tris: 0, faces: 0 };
 
 export const median = (a: readonly number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
 
