@@ -29,7 +29,6 @@ describe("home-screen examples", () => {
     const of = (name: string) => examplePacks(EXAMPLES.find((e) => e.name === name)!);
     expect(of("Mounting plate")).toEqual([]);
     expect(of("Gear pair")).toContain("mechanics");
-    expect(of("Park from drone photos")).toEqual(["scan"]);
   });
 
   it.each(EXAMPLES.filter((e) => !e.url).map((e) => [e.name, e] as const))("%s validates, is fully defined and rebuilds", async (_, ex) => {

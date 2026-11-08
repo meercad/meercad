@@ -298,8 +298,6 @@ export const EXAMPLES: Example[] = [
   { name: "Name plate", description: "Raised and engraved text", doc: namePlate },
   { name: "Storage grid with labels", description: "Bins in a baseplate, with label tabs and two-colour labels", doc: storage, feature: true },
   { name: "Tool wall on openGrid", description: "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins", doc: toolWall, feature: true },
-  // Photos: OpenDroneMap's "Aukerman" data set, CC0 (public domain).
-  { name: "Park from drone photos", description: "A terrain from 77 photos, with an area, a path, a note and a stake-out point", thumbnail: "/examples/drone-park.jpg", url: "/examples/drone-park.meercad", packs: ["scan"], doc: { format: "meercad/1", params: {}, features: [], rollback: null } },
   ...MORE.map(([file, name, description]) => {
     const raw = files[`../examples/${file}.meercad`];
     if (!raw) throw new Error(`example ${file} is missing`);

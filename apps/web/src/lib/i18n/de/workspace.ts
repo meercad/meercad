@@ -459,8 +459,6 @@ export default {
   "Here": "Hier",
   "Opening {name}": "{name} wird geöffnet",
   "Could not open {name}: {error}": "{name} konnte nicht geöffnet werden: {error}",
-  "Park from drone photos": "Park aus Drohnenfotos",
-  "A terrain from 77 photos, with an area, a path, a note and a stake-out point": "Ein Gelände aus 77 Fotos, mit Fläche, Weg, Zettel und Absteckpunkt",
   "Tap the terrain where the note goes.": "Tippe aufs Gelände, wo der Zettel hin soll.",
   "Tap the terrain where the point goes.": "Tippe aufs Gelände, wo der Punkt hin soll.",
   "Tap points on the terrain, then Done.": "Tippe Punkte aufs Gelände, dann auf Fertig.",
