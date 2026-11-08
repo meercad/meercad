@@ -74,7 +74,10 @@ export class Page {
     const mods: Record<string, number> = { Alt: 1, Control: 2, Meta: 4, Shift: 8 };
     const modifiers = parts.reduce((m, p) => m | (mods[p] ?? 0), 0);
     const named: Record<string, [number, string]> = { Enter: [13, "\r"], Escape: [27, ""], Tab: [9, ""], Backspace: [8, ""], Delete: [46, ""], ArrowLeft: [37, ""], ArrowRight: [39, ""], ArrowUp: [38, ""], ArrowDown: [40, ""] };
-    const [code, text] = named[key] ?? [key.toUpperCase().charCodeAt(0), modifiers & ~8 ? "" : key];
+    // Virtual key codes only for letters and digits; other characters come as text alone (a code
+    // like 40 for "(" would be the down arrow).
+    const vk = /^[a-z0-9]$/i.test(key) ? key.toUpperCase().charCodeAt(0) : key === "." ? 190 : key === "-" ? 189 : key === " " ? 32 : 0;
+    const [code, text] = named[key] ?? [vk, modifiers & ~8 ? "" : key];
     const codeName = named[key] ? key : /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : key === "." ? "Period" : key === "-" ? "Minus" : "";
     // On the Mac the editing shortcuts are menu commands; the protocol needs them named.
     const commands = modifiers === 4 ? ({ a: ["selectAll"], z: ["undo"], c: ["copy"], v: ["paste"], x: ["cut"] } as Record<string, string[]>)[key.toLowerCase()] : undefined;

@@ -65,6 +65,18 @@ export class Ui {
     await sleep(200);
   }
 
+  /** Types into the n-th input of a field with several (e.g. X of "Move by (X / Y / Z)"). */
+  async fieldN(label: string, n: number, value: string | number): Promise<void> {
+    const at = await this.fieldAt(label, "input", n);
+    if (!at) throw new Error(`no input ${n} in "${label}"`);
+    await this.page.click(at[0], at[1]);
+    await sleep(80);
+    await this.page.key("Meta+a");
+    await this.page.type(String(value));
+    await this.page.key("Tab");
+    await sleep(200);
+  }
+
   /**
    * Picks an option of a drop-down field. The system menu of a <select> is not part of the page and
    * cannot be clicked through the protocol, so the option is set the way that menu sets it.
@@ -89,6 +101,12 @@ export class Ui {
   /** Accepts the open dialog with its OK button and waits for the rebuild. */
   async accept(): Promise<void> {
     await this.press("Accept", "button.ok-btn");
+    try {
+      await this.until("the dialog to close", "!s.dialog", 5000);
+    } catch {
+      const why = await this.page.eval<string>(`[...document.querySelectorAll(".dialog .hint, .dialog .problem, .dialog [class*=warn], .dialog [class*=error]")].map((e) => e.textContent.trim()).join(" · ")`);
+      throw new Error(`the dialog does not accept: ${why || "(no reason shown)"}`);
+    }
     await this.settle();
   }
 
@@ -119,6 +137,21 @@ export class Ui {
     return this.screenOf([0, 1, 2].map((i) => f.origin[i]! + f.u[i]! * u + f.v[i]! * v) as Vec3);
   }
 
+  /**
+   * Zooms the open sketch with the mouse wheel (over its origin) until `size` mm across fit in
+   * about a third of the window's height, so points that far out are on screen and apart.
+   */
+  async zoomSketch(size: number): Promise<void> {
+    for (let i = 0; i < 40; i++) {
+      const [x0, y0] = await this.sketchScreen([0, 0]);
+      const [x1] = await this.sketchScreen([size, 0]);
+      const px = Math.abs(x1 - x0);
+      if (px > 220 && px < 380) return;
+      await this.page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: x0, y: y0, deltaX: 0, deltaY: px < 220 ? -120 : 120 });
+      await sleep(120);
+    }
+  }
+
   /** Clicks a point of the open sketch. */
   async clickSketch(uv: Vec2): Promise<void> {
     const [x, y] = await this.sketchScreen(uv);
@@ -139,7 +172,7 @@ export class Ui {
    * {body, index, tags, center, normal} for faces. Only spots where that edge or face is in front
    * count, so the click lands on it as a person's would.
    */
-  async spotOf(kind: "edge" | "face", test: string): Promise<Vec2> {
+  async spotOf(kind: "edge" | "face", test: string, any = false): Promise<Vec2> {
     const at = await this.page.eval<Vec2 | string>(`(() => {
       const v = meercadTest.store.getViewport(), r = v.renderer.domElement.getBoundingClientRect();
       const s = meercadTest.app.getState(), test = (${test});
@@ -171,18 +204,23 @@ export class Ui {
         }
       }
       if (!found.length) return "nothing matches";
-      if (found.length > 1) return found.length + " match, want one";
-      const f = found[0];
-      // Spots nearest the middle first.
-      const c = [0, 1, 2].map((j) => f.spots.reduce((a, p) => a + p[j], 0) / f.spots.length);
-      f.spots.sort((a, b) => Math.hypot(...a.map((x, j) => x - c[j])) - Math.hypot(...b.map((x, j) => x - c[j])));
-      for (const p of f.spots) {
-        const q = v.worldToScreen(p);
-        if (!q) continue;
-        const x = r.left + q[0], y = r.top + q[1];
-        if (x < r.left + 120 || y < r.top + 80 || x > r.right - 20 || y > r.bottom - 60) continue;
-        const hit = v.pick(x, y, new Set([${JSON.stringify(kind)}]));
-        if (hit && hit.bodyId === f.body && hit[${JSON.stringify(kind)}] === f.index) return [x, y];
+      if (found.length > 1 && !${any}) return found.length + " match, want one";
+      // The dialog on the left covers part of the view.
+      const dlg = document.querySelector(".dialog")?.getBoundingClientRect();
+      for (const f of found) {
+        // Spots nearest the middle first.
+        const c = [0, 1, 2].map((j) => f.spots.reduce((a, p) => a + p[j], 0) / f.spots.length);
+        f.spots.sort((a, b) => Math.hypot(...a.map((x, j) => x - c[j])) - Math.hypot(...b.map((x, j) => x - c[j])));
+        for (const p of f.spots) {
+          const q = v.worldToScreen(p);
+          if (!q) continue;
+          const x = r.left + q[0], y = r.top + q[1];
+          if (x < r.left + 120 || y < r.top + 80 || x > r.right - 20 || y > r.bottom - 60) continue;
+          if (dlg && x < dlg.right + 8 && y < dlg.bottom + 8) continue;
+          // What the app would take there, edges winning near them as for a person's click.
+          const hit = v.pick(x, y, new Set(["face", "edge"]));
+          if (hit && hit.kind === ${JSON.stringify(kind)} && hit.bodyId === f.body && hit[${JSON.stringify(kind)}] === f.index) return [x, y];
+        }
       }
       return "not visible from here";
     })()`);
@@ -203,8 +241,15 @@ export class Ui {
     await sleep(200);
   }
 
+  /** Clicks a part (any visible face of the body with this id). */
+  async clickBody(id: string): Promise<void> {
+    const [x, y] = await this.visibleSpot("face", `(f) => f.body === ${JSON.stringify(id)}`, true);
+    await this.page.click(x, y);
+    await sleep(200);
+  }
+
   /** Like spotOf; when the edge or face is hidden from here, turns the view the way a person would. */
-  private async visibleSpot(kind: "edge" | "face", test: string): Promise<Vec2> {
+  private async visibleSpot(kind: "edge" | "face", test: string, any = false): Promise<Vec2> {
     let last: unknown;
     // From where it is, then isometric and turned round in quarter turns (the view cube's buttons).
     for (const v of [null, "Isometric view", "Rotate view 90° left", "Rotate view 90° left", "Rotate view 90° left"]) {
@@ -213,7 +258,7 @@ export class Ui {
         await sleep(700);
       }
       try {
-        return await this.spotOf(kind, test);
+        return await this.spotOf(kind, test, any);
       } catch (e) {
         last = e;
         if (!String(e).includes("not visible")) throw e;
@@ -249,10 +294,10 @@ export class Ui {
     await this.settle();
   }
 
-  /** Starts a sketch on an origin plane from the bar ("Top", "Front", "Right"). */
-  async sketchOn(plane: "Top" | "Front" | "Right"): Promise<void> {
+  /** Starts a sketch on a plane: an origin plane from the bar ("Top", "Front", "Right") or another by its tag. */
+  async sketchOn(plane: string): Promise<void> {
     await this.press("Sketch", ".rail button");
-    await this.press(plane, ".plane-bar button");
+    await this.press(plane, ".plane-bar button, .plane-tag", { exact: true });
     await sleep(700);
   }
 
@@ -266,8 +311,8 @@ export class Ui {
 
   /** Picks a tool on the rail; `item` for one inside a group's flyout. */
   async tool(label: string, item?: string): Promise<void> {
-    await this.press(label, ".rail button");
-    if (item) await this.press(item, "[role=menuitem]");
+    if (item) await this.menuItem(label, item);
+    else await this.press(label, ".rail button");
     await sleep(200);
   }
 
@@ -291,6 +336,65 @@ export class Ui {
     await sleep(300);
   }
 
+  /** Lines from `start`, each [length, direction °] typed; closed by clicking the start again. */
+  async polyline(start: Vec2, segments: [number, number][], close = true): Promise<void> {
+    await this.tool("Line");
+    await this.clickSketch(start);
+    for (const [len, angle] of segments) {
+      await this.type(String(len));
+      await this.key("Tab");
+      await this.type(String(angle));
+      await this.key("Enter");
+      await sleep(150);
+    }
+    if (close) await this.clickSketch(start);
+    await this.key("Escape");
+    await sleep(200);
+  }
+
+  /** A regular hexagon (the polygon tool) from its centre and a corner. */
+  async polygon(center: Vec2, corner: Vec2): Promise<void> {
+    await this.tool("More", "Polygon");
+    await this.clickSketch(center);
+    await this.clickSketch(corner);
+    await sleep(200);
+  }
+
+  /**
+   * A dimension: click one entity (or two) at the given sketch points, click where the dimension
+   * goes, type its value.
+   */
+  async dimension(on: Vec2[], place: Vec2, value: number | string): Promise<void> {
+    await this.tool("Dimension");
+    for (const p of on) await this.clickSketch(p);
+    await this.clickSketch(place);
+    // The new dimension opens its value for typing.
+    const end = Date.now() + 4000;
+    while (!(await this.page.eval<boolean>(`document.activeElement?.classList.contains("value-input")`))) {
+      if (Date.now() > end) throw new Error("the dimension did not open its value for typing");
+      await sleep(100);
+    }
+    await this.page.key("Meta+a");
+    await this.type(String(value));
+    await this.key("Enter");
+    await sleep(300);
+  }
+
+  /** Selects sketch entities at the points (Select tool, shift for more) and applies a constraint from the panel. */
+  async constrain(name: string, at: Vec2[]): Promise<void> {
+    await this.tool("Select");
+    for (const [i, p] of at.entries()) {
+      const [x, y] = await this.sketchScreen(p);
+      if (i) {
+        await this.page.call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1, modifiers: 8 });
+        await this.page.call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1, modifiers: 8 });
+      } else await this.page.click(x, y);
+      await sleep(150);
+    }
+    await this.press(name, "button", { exact: false });
+    await sleep(300);
+  }
+
   async finishSketch(): Promise<void> {
     await this.press("Finish", ".rail button");
     await this.until("the sketch to close", "!s.sketchId");
@@ -308,9 +412,29 @@ export class Ui {
 
   /** Opens a feature's dialog from its group on the rail ("Create" › "Extrude"). */
   async feature(group: string, label: string): Promise<void> {
-    await this.press(group, ".rail button");
-    await this.press(label, "[role=menuitem]", { exact: false });
-    await sleep(600);
+    await this.menuItem(group, label);
+    await this.until(`the ${label} dialog`, "!!s.dialog");
+    await sleep(300);
+  }
+
+  /** Opens a rail group's flyout (unless it is open) and clicks the item whose name is `label`. */
+  async menuItem(group: string, label: string): Promise<void> {
+    const item = () =>
+      this.page.eval<Vec2 | null>(`(() => {
+        const el = [...document.querySelectorAll("[role=menuitem]")].find((e) => (e.querySelector(".rail-flyout-label")?.firstChild?.textContent ?? e.textContent).trim() === ${JSON.stringify(label)} && e.getBoundingClientRect().width > 0);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return [r.left + Math.min(40, r.width / 2), r.top + r.height / 2];
+      })()`);
+    let at = await item();
+    if (!at) {
+      await this.press(group, ".rail button");
+      const end = Date.now() + 3000;
+      while (!(at = await item()) && Date.now() < end) await sleep(100);
+    }
+    if (!at) throw new Error(`no "${label}" under ${group}`);
+    await this.page.click(at[0], at[1]);
+    await sleep(200);
   }
 
   /** Ticks a checkbox in the open dialog by its text. */
