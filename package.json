@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
     "wip": "node scripts/install-wip.mjs",
     "testflight": "node scripts/testflight.mjs",
     "mas": "node scripts/mas.mjs"

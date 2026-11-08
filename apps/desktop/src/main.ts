@@ -27,7 +27,8 @@ const WIP = (() => {
     return false;
   }
 })();
-const DEV_URL = "http://localhost:5173";
+// MEERCAD_DEV_URL: another dev server (the UI end-to-end run starts its own on a free port).
+const DEV_URL = process.env["MEERCAD_DEV_URL"] ?? "http://localhost:5173";
 const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dirname, "../../web/dist");
 const mcpServer = app.isPackaged ? join(process.resourcesPath, "mcp", "server.js") : join(__dirname, "../../../packages/mcp/dist/server.js");
 const settingsPath = () => join(app.getPath("userData"), "settings.json");
@@ -565,7 +566,8 @@ function createWindow(assistant?: { session: string; client: string }): BrowserW
   win.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
   });
-  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : "";
+  // MEERCAD_MCP_BRIDGE=off keeps a test run's window away from the user's assistants.
+  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : process.env["MEERCAD_MCP_BRIDGE"] === "off" ? "?bridge=off" : "";
   void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${query}`);
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
