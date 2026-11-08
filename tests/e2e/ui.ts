@@ -66,14 +66,12 @@ export class Ui {
   }
 
   /**
-   * Picks an option of a drop-down field. The system menu of a <select> cannot be clicked through
-   * the protocol, so this focuses it by click and sets the option as the menu would.
+   * Picks an option of a drop-down field. The system menu of a <select> is not part of the page and
+   * cannot be clicked through the protocol, so the option is set the way that menu sets it.
    */
   async choose(label: string, option: string): Promise<void> {
     const at = await this.fieldAt(label, "select");
     if (!at) throw new Error(`no drop-down "${label}"`);
-    await this.page.click(at[0], at[1]);
-    await this.page.key("Escape");
     const ok = await this.page.eval<true | string[]>(`(() => {
       const f = [...document.querySelectorAll(".fld")].find((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)});
       const sel = f.querySelector("select");
@@ -194,19 +192,40 @@ export class Ui {
 
   /** Clicks the model's edge matching `test` (see spotOf); with shift to add to a selection. */
   async clickEdge(test: string): Promise<void> {
-    const [x, y] = await this.spotOf("edge", test);
+    const [x, y] = await this.visibleSpot("edge", test);
     await this.page.click(x, y);
     await sleep(200);
   }
 
   async clickFace(test: string): Promise<void> {
-    const [x, y] = await this.spotOf("face", test);
+    const [x, y] = await this.visibleSpot("face", test);
     await this.page.click(x, y);
     await sleep(200);
   }
 
+  /** Like spotOf; when the edge or face is hidden from here, turns the view the way a person would. */
+  private async visibleSpot(kind: "edge" | "face", test: string): Promise<Vec2> {
+    let last: unknown;
+    // From where it is, then isometric and turned round in quarter turns (the view cube's buttons).
+    for (const v of [null, "Isometric view", "Rotate view 90° left", "Rotate view 90° left", "Rotate view 90° left"]) {
+      if (v) {
+        await this.press(v, ".icon-btn");
+        await sleep(700);
+      }
+      try {
+        return await this.spotOf(kind, test);
+      } catch (e) {
+        last = e;
+        if (!String(e).includes("not visible")) throw e;
+      }
+    }
+    throw last;
+  }
+
   /** A standard view by its key (1 iso, 2 front, … 7 left, Z fit), as a person presses it. */
   async view(k: "1" | "2" | "3" | "4" | "5" | "6" | "7" | "z"): Promise<void> {
+    // Keys go to a focused field; a person first clicks out of it.
+    await this.page.eval(`(document.activeElement instanceof HTMLElement && document.activeElement.blur(), true)`);
     await this.page.key(k);
     await sleep(700);
   }
@@ -274,7 +293,17 @@ export class Ui {
 
   async finishSketch(): Promise<void> {
     await this.press("Finish", ".rail button");
+    await this.until("the sketch to close", "!s.sketchId");
     await this.settle();
+  }
+
+  /** Waits until `expr` (on the app state `s`) holds. */
+  async until(what: string, expr: string, ms = 15000): Promise<void> {
+    const end = Date.now() + ms;
+    while (!(await this.state<boolean>(expr))) {
+      if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+      await sleep(100);
+    }
   }
 
   /** Opens a feature's dialog from its group on the rail ("Create" › "Extrude"). */
@@ -284,9 +313,31 @@ export class Ui {
     await sleep(600);
   }
 
+  /** Ticks a checkbox in the open dialog by its text. */
+  async check(label: string): Promise<void> {
+    await this.press(label, ".dialog label.checkbox", { exact: true });
+  }
+
   /** Clicks a choice button in the open dialog ("Add", "Remove", …). */
   async option(label: string): Promise<void> {
-    await this.press(label, ".feature-dialog button, .dialog button, [role=dialog] button", { exact: true });
+    // A dialog can still set its defaults just after it opens: press until the choice holds.
+    // By the visible text only: a chip's × is also called "Remove".
+    const at = () =>
+      this.page.eval<[number, number, boolean] | null>(`(() => {
+        const b = [...document.querySelectorAll(".dialog button")].find((b) => b.textContent.trim() === ${JSON.stringify(label)} && b.getBoundingClientRect().width > 0);
+        if (!b) return null;
+        const r = b.getBoundingClientRect();
+        return [r.left + r.width / 2, r.top + r.height / 2, b.classList.contains("on") || b.classList.contains("active") || b.classList.contains("primary") || b.getAttribute("aria-pressed") === "true"];
+      })()`);
+    for (let i = 0; i < 4; i++) {
+      const b = await at();
+      if (!b) throw new Error(`no choice "${label}" in the dialog`);
+      if (b[2] && i > 0) return;
+      await this.page.click(b[0], b[1]);
+      await sleep(250);
+      if ((await at())?.[2]) return;
+    }
+    throw new Error(`the choice "${label}" does not stay on`);
   }
 
   /** The app's state, read back (development builds only). */
