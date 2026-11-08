@@ -324,7 +324,9 @@ export function ViewportView() {
     vp.setPoses(poses);
   }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog, placeBody, placeMove]);
   // Joint symbols while the joints panel is open; the one being edited stands out.
+  // Switched off they stay away so the motion shows alone, except for the joint being edited.
   const motionDraft = useMotion((s) => s.draft);
+  const showJoints = usePrefs((s) => s.showJoints);
   useEffect(() => {
     if (!vp) return;
     const joints = doc.mechanism?.joints ?? [];
@@ -335,6 +337,7 @@ export function ViewportView() {
             const f = frames.find((x) => x.id === j.id);
             if (!f || f.error || j.suppressed) return [];
             const active = motionDraft?.joint.id === j.id;
+            if (!showJoints && !active) return [];
             const on = j.b !== "ground" ? { parent: j.b } : {};
             // A cylindrical joint shows a ring to turn it (riding on its slide) and an arrow to slide it.
             if (j.type === "cylindrical")
@@ -346,7 +349,7 @@ export function ViewportView() {
           })
         : [],
     );
-  }, [vp, motionOpen, output, doc.mechanism, motionDraft?.joint.id]);
+  }, [vp, motionOpen, output, doc.mechanism, motionDraft?.joint.id, showJoints]);
   const hasBodies = !!output?.report.bodies.length;
   useEffect(() => vp?.setPlanesVisible(!sketchId && (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base")), [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field]);
   useEffect(() => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"), [vp, pickingPlane, dialog?.field]);
