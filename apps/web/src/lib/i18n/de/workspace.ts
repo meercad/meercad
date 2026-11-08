@@ -229,6 +229,7 @@ export default {
   "{client} is working on the model": "{client} bearbeitet das Modell",
   "Stop editing": "Bearbeitung beenden",
   "{client}'s window": "Fenster von {client}",
+  "Work on something else": "Selbst weiterarbeiten",
   "{client} is done here; the window is yours now": "{client} ist hier fertig; das Fenster gehört jetzt dir",
   "Stopped: {client} no longer edits in this window": "Gestoppt: {client} bearbeitet in diesem Fenster nicht mehr",
   "Surface textures": "Oberflächenstrukturen",

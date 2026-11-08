@@ -14,7 +14,7 @@ import { robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
 import { assistantWindow, desktop } from "./persistence";
-import { apply, currentDoc, getViewport, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
+import { apply, currentDoc, getViewport, goHome, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
 import { jointRange, renderMotionGif, renderMotionSheet, renderShot, type Shot } from "./render";
@@ -87,17 +87,20 @@ function connect(): void {
   const ws = new WebSocket(`ws://127.0.0.1:${bridgePort()}`);
   socket = ws;
   ws.onopen = () => {
+    connectionSession = `connection-${Date.now().toString(36)}`;
     setStatus("connected");
     ws.send(JSON.stringify({ hello: "meercad", version: "0.1.0", project: useApp.getState().project?.name ?? null }));
   };
   ws.onclose = (e) => {
     socket = null;
     // The server this window talked to has gone: its session has ended (the others reconnect).
-    if (hubSession) {
-      here.delete(hubSession);
-      desktop?.assistant?.ended(hubSession);
-      hubSession = null;
+    for (const ended of [hubSession, connectionSession]) {
+      if (!ended) continue;
+      here.delete(ended);
+      desktop?.assistant?.ended(ended);
     }
+    hubSession = null;
+    connectionSession = "";
     if (!wanted) return setStatus("off");
     setStatus("connecting");
     // Another meerCAD window (e.g. the WIP build next to the release) took the connection: take it back
@@ -139,48 +142,93 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 const OPENS = new Set(["open_project", "new_project", "open_example"]);
 /** The session of the MCP server this window is connected to (the hub). */
 let hubSession: string | null = null;
-/** Sessions working in this (the user's) window: they asked to, or opened the project the user has in front. */
-const here = new Set<string>();
+/**
+ * Sessions working in this (the user's) window, and on which project: they asked to, or worked on
+ * the project the user has in front. Bound to the project, not the window: once the user switches
+ * to another project, the session goes on with its own in a window of its own.
+ */
+const here = new Map<string, string>();
+/** Requests from older MCP servers carry no session: the connection stands for one. */
+let connectionSession = "";
 
 /**
  * Where a request is served. On the Mac every assistant session (one MCP server each) works in a
  * window of its own, so the user keeps working in theirs: opening a project opens that window
- * (behind the user's), and from then on the session's requests go there. A session that never
- * opened a project, or opened the one the user has in front, works here as before.
+ * (behind the user's), and from then on the session's requests go there. A session that works on
+ * the project the user has in front works here (the user waits meanwhile, it is the same model),
+ * but only as long as that project stays in front.
  */
 async function route(req: BridgeRequest): Promise<unknown> {
   const a = desktop?.assistant;
-  const session = req.session;
-  if (!a || !session) return serve(req);
+  if (!a) return serve(req);
+  const session = req.session ?? connectionSession;
+  req = { ...req, session };
+  const client = clientLabel(req.client);
+  const front = () => {
+    const s = useApp.getState();
+    return s.screen === "editor" ? (s.project?.id ?? null) : null;
+  };
+  const busyElsewhere = (h: { client: string; ended: boolean } | null, other: boolean) => {
+    if (h && other && !h.ended) throw new Error(`${h.client} is working on this project in its own meerCAD window right now. Pick another project, or wait until it is done.`);
+  };
   if (OPENS.has(req.method)) {
     if (req.method === "open_project") {
       const id = String(req.params["id"]);
       const holder = await a.holder(id);
-      if (holder && holder.session !== session && !holder.ended) throw new Error(`${holder.client} is working on this project in its own meerCAD window right now. Pick another project, or wait until it is done.`);
+      busyElsewhere(holder, !!holder && holder.session !== session);
       // A window left by an assistant that has finished is taken over.
       if (holder) {
         here.delete(session);
-        return a.call(await a.open({ session, client: clientLabel(req.client), project: id }), req);
+        return a.call(await a.open({ session, client, project: id }), req);
       }
-      const s = useApp.getState();
-      const inFront = s.screen === "editor" && s.project?.id === id;
-      if (!holder && (inFront || req.params["here"] === true)) {
-        here.add(session);
+      if (front() === id || req.params["here"] === true) {
+        here.set(session, id);
         return serve(req);
       }
     } else if (req.params["here"] === true) {
-      here.add(session);
-      return serve(req);
+      const result = await serve(req);
+      const id = front();
+      if (id) here.set(session, id);
+      return result;
     }
     here.delete(session);
-    return a.call(await a.open({ session, client: clientLabel(req.client) }), req);
+    return a.call(await a.open({ session, client }), req);
   }
-  if (!here.has(session)) {
-    const win = await a.windowOf(session);
-    if (win === "closed") throw new Error("The user closed your meerCAD window. Open the project again (open_project) to go on.");
-    if (win !== null) return a.call(win, req);
+  const win = await a.windowOf(session);
+  if (win === "closed" && !here.has(session)) throw new Error("The user closed your meerCAD window. Open the project again (open_project) to go on.");
+  // Lookups that touch no model are answered here, without locking anything.
+  if (win === null && !here.has(session) && READS.has(req.method)) return serve(req);
+  const bound = here.get(session);
+  if (bound !== undefined) {
+    if (front() === bound) return serve(req);
+    // The user moved on to another project: the session follows its own into its window.
+    here.delete(session);
+    busyElsewhere(await a.holder(bound), true);
+    const own = await a.open({ session, client, project: bound });
+    await a.call(own, { ...req, method: "open_project", params: { id: bound } });
+    return a.call(own, req);
   }
+  if (typeof win === "number") return a.call(win, req);
+  // A session that has not opened anything works on what the user has open, and stays with it.
+  const id = front();
+  if (id) here.set(session, id);
   return serve(req);
+}
+
+/** Whether an assistant working in the user's window can be moved to a window of its own (Mac). */
+export const canMoveAssistant = () => !!desktop?.assistant && !assistantWindow && here.size > 0;
+
+/**
+ * The user wants to work on something else while an assistant works on the model in front of
+ * them: once its current request is done, the user's window goes to the project overview and the
+ * assistant goes on with its project in a window of its own (see route).
+ */
+export async function moveAssistantAway(): Promise<void> {
+  for (let i = 0; running && i < 600; i++) await new Promise((r) => setTimeout(r, 100));
+  unlock();
+  clearTimeout(activityTimer);
+  useApp.setState({ aiActivity: null });
+  goHome();
 }
 
 /** In this window: shows who is working, and locks the app while the request changes things. */
