@@ -59,7 +59,9 @@ export async function startApp({ keep = false } = {}): Promise<App> {
 
   const electron = spawn(
     join(root, "apps/desktop/node_modules/.bin/electron"),
-    [".", "--dev", `--user-data-dir=${join(dir, "userdata")}`, `--remote-debugging-port=${cdpPort}`, "--lang=en-US"],
+    [".", "--dev", `--user-data-dir=${join(dir, "userdata")}`, `--remote-debugging-port=${cdpPort}`, "--lang=en-US",
+      // The window may sit behind the user's: it must keep animating and timing as if in front.
+      "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows"],
     {
       cwd: join(root, "apps/desktop"),
       env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared") },

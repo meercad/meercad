@@ -47,13 +47,13 @@ export class Page {
   async move(x: number, y: number, buttons = 0): Promise<void> {
     await this.call("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, buttons, ...(buttons ? { button: "left" } : {}) });
   }
-  async click(x: number, y: number, { button = "left", count = 1 }: { button?: "left" | "right"; count?: number } = {}): Promise<void> {
+  async click(x: number, y: number, { button = "left", count = 1, modifiers = 0 }: { button?: "left" | "right"; count?: number; modifiers?: number } = {}): Promise<void> {
     await this.move(x, y);
     // Hover and snapping follow the pointer on the next frame, as with a hand on the mouse.
     await sleep(60);
     for (let c = 1; c <= count; c++) {
-      await this.call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button, buttons: button === "left" ? 1 : 2, clickCount: c });
-      await this.call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button, buttons: 0, clickCount: c });
+      await this.call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button, buttons: button === "left" ? 1 : 2, clickCount: c, modifiers });
+      await this.call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button, buttons: 0, clickCount: c, modifiers });
     }
   }
   /** A held-down left drag through the points, in steps like a hand. */

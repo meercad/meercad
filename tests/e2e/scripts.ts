@@ -361,4 +361,117 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Allowance", 0);
     await ui.accept();
   },
+
+  "15 Zahnrad parametrisch": async (ui) => {
+    await ui.addVariable("teeth", 12);
+    await ui.addVariable("thickness", "6 mm");
+    await ui.sketchOn("Top");
+    await ui.circle([0, 0], 40);
+    await ui.circle([0, 0], 8);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.field("Distance", "thickness");
+    await ui.accept();
+    await ui.sketchOn("Top");
+    // Off the grid: the tooth reaches 1 mm into the wheel.
+    await ui.rect([19, -2], 5, 4, { free: true });
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("Add");
+    await ui.field("Distance", "thickness");
+    await ui.accept();
+    await ui.feature("Transform", "Circular pattern");
+    await ui.check("Extrude 2");
+    await ui.option("Z");
+    await ui.field("Count", "teeth");
+    await ui.accept();
+  },
+
+  "16 Gehaeuse mit Deckel": async (ui) => {
+    await ui.sketchOn("Top");
+    await ui.rect([-40, -25], 80, 50);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.field("Distance", 30);
+    await ui.accept();
+    await ui.feature("Modify", "Fillet");
+    for (const [x, y] of [[-40, -25], [40, -25], [40, 25], [-40, 25]]) await ui.clickEdge(VERTICAL_AT(x!, y!));
+    await ui.field("Radius", 5);
+    await ui.accept();
+    await ui.feature("Modify", "Shell");
+    await ui.clickFace(TOP_FACE(30));
+    await ui.field("Thickness", 2);
+    await ui.accept();
+    await ui.feature("Create", "Plane");
+    await ui.option("Top");
+    await ui.field("Offset", 2);
+    await ui.accept();
+    await ui.sketchOn("pl1");
+    await ui.circle([-32, -17], 6, { free: true });
+    await ui.circle([-32, -17], 2.5, { free: true });
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("Add");
+    await ui.field("Distance", 26);
+    await ui.accept();
+    await ui.feature("Transform", "Linear pattern");
+    await ui.check("Extrude 2");
+    await ui.option("X");
+    await ui.field("Count", 2);
+    await ui.field("Spacing", 64);
+    await ui.check("Second direction");
+    await ui.optionN("Y", 1);
+    await ui.fieldN("Count", 0, 2, 1);
+    await ui.fieldN("Spacing", 0, 34, 1);
+    await ui.accept();
+    await ui.feature("Create", "Plane");
+    await ui.option("Top");
+    await ui.field("Offset", 40);
+    await ui.accept();
+    await ui.sketchOn("pl2");
+    await ui.rect([-40, -25], 80, 50);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("New");
+    await ui.field("Distance", 2);
+    await ui.accept();
+    await ui.feature("Modify", "Fillet");
+    // The lid's corners are only 2 mm tall: zoom in on the lid to hit them.
+    await ui.view("1");
+    await ui.zoomAt([0, 0, 41], 4);
+    for (const [x, y] of [[-40, -25], [40, -25], [40, 25], [-40, 25]]) await ui.clickEdge(`(e) => e.min[2] > 39.9 && ${VERTICAL_AT(x!, y!).slice(7)}`);
+    await ui.field("Radius", 5);
+    await ui.accept();
+  },
+
+  "22 Scharnier": async (ui) => {
+    await ui.sketchOn("Top");
+    await ui.rect([-30, -20], 60, 40);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.field("Distance", 20);
+    await ui.accept();
+    await ui.feature("Create", "Plane");
+    await ui.option("Top");
+    await ui.field("Offset", 20);
+    await ui.accept();
+    await ui.sketchOn("pl1");
+    await ui.rect([-30, -20], 60, 40);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("New");
+    await ui.field("Distance", 3);
+    await ui.accept();
+    await ui.feature("Create", "Plane");
+    await ui.option("Right");
+    await ui.field("Offset", -30);
+    await ui.accept();
+    await ui.sketchOn("pl2");
+    await ui.circle([20, 20], 5);
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("New");
+    await ui.field("Distance", 60);
+    await ui.accept();
+  },
 };

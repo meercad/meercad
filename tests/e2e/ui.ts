@@ -48,9 +48,9 @@ export class Ui {
   }
 
   /** Centre of the control in the dialog field labelled `label` (the n-th such control). */
-  async fieldAt(label: string, control = "input, select, textarea", n = 0): Promise<Vec2 | null> {
+  async fieldAt(label: string, control = "input, select, textarea", n = 0, which = 0): Promise<Vec2 | null> {
     return this.page.eval<Vec2 | null>(`(() => {
-      const f = [...document.querySelectorAll(".fld")].find((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)});
+      const f = [...document.querySelectorAll(".fld")].filter((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)})[${which}];
       const el = f && f.querySelectorAll(${JSON.stringify(control)})[${n}];
       if (!el) return null;
       let r = el.getBoundingClientRect();
@@ -75,8 +75,8 @@ export class Ui {
   }
 
   /** Types into the n-th input of a field with several (e.g. X of "Move by (X / Y / Z)"). */
-  async fieldN(label: string, n: number, value: string | number): Promise<void> {
-    const at = await this.fieldAt(label, "input", n);
+  async fieldN(label: string, n: number, value: string | number, which = 0): Promise<void> {
+    const at = await this.fieldAt(label, "input", n, which);
     if (!at) throw new Error(`no input ${n} in "${label}"`);
     await this.page.click(at[0], at[1]);
     await sleep(80);
@@ -162,9 +162,10 @@ export class Ui {
   }
 
   /** Clicks a point of the open sketch. */
-  async clickSketch(uv: Vec2): Promise<void> {
+  async clickSketch(uv: Vec2, { free = false } = {}): Promise<void> {
     const [x, y] = await this.sketchScreen(uv);
-    await this.page.click(x, y);
+    // Alt held places the point freely, off the grid (as the sketch hint says).
+    await this.page.click(x, y, { modifiers: free ? 1 : 0 });
     await sleep(150);
   }
 
@@ -326,9 +327,9 @@ export class Ui {
   }
 
   /** A rectangle from its first corner, with width and height typed. */
-  async rect(corner: Vec2, w: number, h: number): Promise<void> {
+  async rect(corner: Vec2, w: number, h: number, opts: { free?: boolean } = {}): Promise<void> {
     await this.tool("Rectangle", "Corner rectangle");
-    await this.clickSketch(corner);
+    await this.clickSketch(corner, opts);
     await this.type(String(w));
     await this.key("Tab");
     await this.type(String(h));
@@ -337,9 +338,9 @@ export class Ui {
   }
 
   /** A circle from its centre, with the diameter typed. */
-  async circle(center: Vec2, d: number): Promise<void> {
+  async circle(center: Vec2, d: number, opts: { free?: boolean } = {}): Promise<void> {
     await this.tool("Circle");
-    await this.clickSketch(center);
+    await this.clickSketch(center, opts);
     await this.type(String(d));
     await this.key("Enter");
     await sleep(300);
@@ -443,6 +444,9 @@ export class Ui {
       await this.press(group, ".rail button");
       const end = Date.now() + 3000;
       while (!(at = await item()) && Date.now() < end) await sleep(100);
+      // The flyout slides in: wait until it stands still, then aim.
+      await sleep(300);
+      at = (await item()) ?? at;
     }
     if (!at) throw new Error(`no "${label}" under ${group}`);
     await this.page.click(at[0], at[1]);
@@ -455,6 +459,20 @@ export class Ui {
   }
 
   /** Clicks a choice button in the open dialog ("Add", "Remove", …). */
+  /** The `which`-th choice button with this text (e.g. Y of a second direction). */
+  async optionN(label: string, which: number): Promise<void> {
+    const at = await this.page.eval<Vec2 | null>(`(() => {
+      const b = [...document.querySelectorAll(".dialog button")].filter((b) => b.textContent.trim() === ${JSON.stringify(label)} && b.getBoundingClientRect().width > 0)[${which}];
+      if (!b) return null;
+      b.scrollIntoView({ block: "center" });
+      const r = b.getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height / 2];
+    })()`);
+    if (!at) throw new Error(`no choice "${label}" number ${which + 1}`);
+    await this.page.click(at[0], at[1]);
+    await sleep(250);
+  }
+
   async option(label: string): Promise<void> {
     // A dialog can still set its defaults just after it opens: press until the choice holds.
     // By the visible text only: a chip's × is also called "Remove".
@@ -483,15 +501,22 @@ export class Ui {
   // ---------------------------------------------------------------- variables
 
   /** Shows the side panel with history, parts and variables (the top bar's panel button). */
-  async showSide(): Promise<void> {
-    if (await this.find("button", "Add variable")) return;
+  async showSide(): Promise<boolean> {
+    if (await this.find("button", "Add variable")) return false;
     await this.press("Show history, parts and variables", "button.side-toggle");
     await this.waitFind("button", "Add variable");
+    return true;
+  }
+
+  /** Hides the side panel again (after `showSide` opened it). */
+  async hideSide(): Promise<void> {
+    await this.press("Hide history, parts and variables", "button.side-toggle");
+    await sleep(300);
   }
 
   /** A new variable from the Variables section's +: its name, Tab, its value, Enter. */
   async addVariable(name: string, expr: string | number): Promise<void> {
-    await this.showSide();
+    const opened = await this.showSide();
     await this.press("Add variable", "button");
     await sleep(200);
     await this.page.key("Meta+a");
@@ -502,11 +527,12 @@ export class Ui {
     await this.key("Enter");
     await this.until(`variable ${name}`, `${JSON.stringify(name)} in s.doc.params`);
     await this.settle();
+    if (opened) await this.hideSide();
   }
 
   /** Types a new value into a variable's row and commits it with Enter. */
   async setVariable(name: string, expr: string | number): Promise<void> {
-    await this.showSide();
+    const opened = await this.showSide();
     const at = await this.page.eval<Vec2 | null>(`(() => {
       const row = [...document.querySelectorAll(".param-row")].find((r) => r.querySelector(".name-input")?.value === ${JSON.stringify(name)});
       const el = row?.querySelector("input.expr, .expr-wrap input, input:not(.name-input)");
@@ -522,6 +548,17 @@ export class Ui {
     await this.key("Enter");
     await sleep(300);
     await this.settle();
+    if (opened) await this.hideSide();
+  }
+
+  /** Zooms the view in (ticks > 0) or out with the mouse wheel over a point of the model. */
+  async zoomAt(p: Vec3, ticks: number): Promise<void> {
+    const [x, y] = await this.screenOf(p);
+    for (let i = 0; i < Math.abs(ticks); i++) {
+      await this.page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY: ticks > 0 ? -120 : 120 });
+      await sleep(80);
+    }
+    await sleep(300);
   }
 
   /** The app's state, read back (development builds only). */
