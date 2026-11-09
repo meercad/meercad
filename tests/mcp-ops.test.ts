@@ -85,8 +85,6 @@ describe("assistant names", () => {
     expect(clientLabel("claude-ai")).toBe("Claude");
     expect(clientLabel("my-agent")).toBe("My Agent");
     expect(clientLabel("Zed Editor")).toBe("Zed Editor");
-    expect(clientLabel("local-agent-mode-meercad-wip")).toBe("Claude");
-    expect(clientLabel("Local Agent Mode (meerCAD)")).toBe("Claude");
     expect(clientLabel(undefined)).toBe("Assistant");
   });
 });

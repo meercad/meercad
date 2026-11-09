@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Pencil, Plus, Trash } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Lock, Pencil, Plus, Trash } from "lucide-react";
 import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
 import { EMPTY_SELECTION, clickSelect, keepShown, toggleAll } from "../lib/multiSelect";
 import { askConfirm, askText } from "./Ask";
@@ -412,9 +412,9 @@ export function Home() {
                 {p.thumbnail ? <img src={p.thumbnail} alt="" draggable={false} /> : <Box size={32} />}
                 {selecting ? <span className="pick-mark">{picked ? <CircleCheck /> : <Circle />}</span> : null}
                 {held ? (
-                  <span className={`ai-badge ${held.busy ? "busy" : ""}`} title={t("{client} is working on this in its tab: click to watch", { client: held.client })}>
-                    <AiOrb busy={held.busy} small />
-                    {held.busy ? t("{client} is working", { client: held.client }) : t("Open in {client}'s tab", { client: held.client })}
+                  <span className={`ai-badge ${held.busy ? "busy" : ""}`} title={t("Locked while an assistant works on it: click to open its tab")}>
+                    {held.busy ? <AiOrb busy small /> : <Lock />}
+                    {held.busy ? t("Being worked on") : t("Locked")}
                   </span>
                 ) : null}
               </div>
