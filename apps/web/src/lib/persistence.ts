@@ -35,6 +35,16 @@ export interface TerrainResult {
   geo?: { lat: number; lon: number; alt: number; error: number; cameras: number };
 }
 
+/** An assistant session's tab, as the main process reports it. */
+export interface AssistantTab {
+  session: string;
+  client: string;
+  project: string | null;
+  name: string | null;
+  busy: boolean;
+  tool: string | null;
+}
+
 interface DesktopApi {
   isDesktop: true;
   /** The Claude Desktop config file written, or null when Claude Desktop was handed the extension to install. */
@@ -85,39 +95,37 @@ interface DesktopApi {
   writeLocalFile?(p: { path: string; base64: string }): Promise<void>;
   /** Missing in desktop apps from before sharing. */
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
-  /** The MCP bridge, held by the user's first window (see lib/mcpBridge); missing in older desktop apps. */
+  /** The MCP bridge, held by the window's page (see lib/mcpBridge); missing in older desktop apps. */
   mcp?: {
     status(s: "off" | "connecting" | "connected"): void;
     hostStatus(): Promise<"off" | "connecting" | "connected">;
     setEnabled(on: boolean): Promise<void>;
   };
-  /** Assistant sessions' own windows (MCP), see lib/mcpBridge. */
+  /** Assistant sessions' own tabs (MCP), see lib/mcpBridge. */
   assistant?: {
-    open(p: { session: string; client: string; project?: string }): Promise<number>;
+    open(p: { session: string; client: string }): Promise<number>;
     windowOf(session: string): Promise<number | "closed" | null>;
     call(window: number, req: unknown): Promise<unknown>;
-    /** The other window with the project open: an assistant's, or (user: true) one of the user's. */
-    holder(id: string): Promise<{ session: string; client: string; ended: boolean; user: boolean } | null>;
-    /** The user's windows save and close the project, for an assistant's window to open it. */
-    take(id: string, client: string): Promise<void>;
-    released(callId: number): void;
-    /** Brings the other window of the user's with the project to the front (`assistants`: an assistant's window). */
-    focusHolder(id: string, assistants?: boolean): Promise<boolean>;
-    /** The projects other windows have open (id → the assistant's name, "" for one of the user's windows); missing in older desktop apps. */
-    openElsewhere?(): Promise<Record<string, string>>;
-    ended(session: string): void;
+    /** The assistants' tabs (also sent as "assistant-tabs" when they change). */
+    tabs(): Promise<AssistantTab[]>;
+    /** Lays an assistant's tab over `rect` (CSS pixels of the window's page), or shows none. */
+    show(p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null): void;
+    /** Takes an assistant's tab over: its page saves and goes; its project, for a tab of the user's. */
+    handOver(session: string): Promise<{ id: string; name: string } | null>;
+    // In an assistant's tab:
     ready(): void;
-    project(id: string | null): void;
+    project(p: { id: string; name: string } | null): void;
+    busy(p: { busy: boolean; tool: string | null }): void;
+    stop(): void;
+    released(callId: number): void;
     respond(p: { callId: number; result?: unknown; error?: string }): void;
   };
-  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error", fn: (arg: string) => void): () => void;
-  on(channel: "open-elsewhere", fn: (arg: Record<string, string>) => void): () => void;
+  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "assistant-stop", fn: (arg: string) => void): () => void;
+  on(channel: "assistant-tabs", fn: (arg: AssistantTab[]) => void): () => void;
   on(channel: "mcp-status", fn: (arg: "off" | "connecting" | "connected") => void): () => void;
   on(channel: "mcp-set-enabled", fn: (arg: boolean) => void): () => void;
   on(channel: "bridge-request", fn: (arg: { callId: number; req: unknown }) => void): () => void;
-  on(channel: "assistant-ended", fn: () => void): () => void;
-  on(channel: "assistant-adopted", fn: (arg: { session: string; client: string }) => void): () => void;
-  on(channel: "release-project", fn: (arg: { callId: number; id: string; client: string }) => void): () => void;
+  on(channel: "release-project", fn: (arg: { callId: number }) => void): () => void;
   on(channel: "photos-progress", fn: (arg: { progress: number; step: string }) => void): () => void;
   on(channel: "ui-scale", fn: (arg: UiScale) => void): () => void;
 }
@@ -132,10 +140,7 @@ export interface UiScale {
 
 export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;
 
-/** Another window of the user's (File > New Window): it keeps its tabs to itself and leaves assistants to the first window. */
-export const extraWindow = new URLSearchParams(location.search).get("window") === "extra";
-
-/** This window belongs to an assistant session (MCP): the session and the assistant's name, else null. */
+/** This page is an assistant session's tab (MCP, a view inside the app's window): the session and the assistant's name, else null. */
 export const assistantWindow: { session: string; client: string } | null = (() => {
   const q = new URLSearchParams(location.search);
   const session = q.get("assistant");

@@ -13,7 +13,7 @@ import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
-import { assistantWindow, createProject, desktop, extraWindow, listFolders, listProjects, loadProject, renameProjectFile, saveProject, saveThumbnail, type ProjectMeta } from "./lib/persistence";
+import { assistantWindow, createProject, desktop, listFolders, listProjects, loadProject, renameProjectFile, saveProject, saveThumbnail, type AssistantTab, type ProjectMeta } from "./lib/persistence";
 import { viewIsCurrent } from "./lib/pictureState";
 import KernelWorker from "./kernel.worker.ts?worker";
 import { isCompact } from "./lib/layout";
@@ -41,11 +41,18 @@ export interface Tab {
   folder?: string;
 }
 
+/** An assistant session's tab (Mac app): it works on its project there, the tab is locked for the user. */
+export type { AssistantTab };
+
 interface State {
   screen: "home" | "editor";
   projects: ProjectMeta[];
   /** Open projects, in tab order. */
   tabs: Tab[];
+  /** The assistants' tabs, after the user's (Mac app). */
+  assistantTabs: AssistantTab[];
+  /** The assistant's tab the window shows (its session), instead of Home or a project of the user's. */
+  assistantTab: string | null;
   /** All project folders, and the one the project overview is showing. */
   folders: string[];
   folder: string;
@@ -85,8 +92,6 @@ interface State {
   aiActivity: { client: string; tool: string; at: number } | null;
   /** An assistant is working on the model (MCP): the app takes no input until it is done or stopped. */
   aiLock: { client: string } | null;
-  /** In an assistant's own window: its session ended (the assistant is gone), the window is the user's now. */
-  aiSessionEnded: boolean;
   /** Waiting for the user to click a plane/face to start a sketch. */
   pickingSketchPlane: boolean;
 }
@@ -118,8 +123,8 @@ const tabStores = new Map<string, DocumentStore>();
 const closedTabs: string[] = [];
 
 function loadTabs(): Tab[] {
-  // An assistant's window, and a second window of the user's, start empty and keep their tabs to themselves.
-  if (assistantWindow || extraWindow) return [];
+  // An assistant's tab is a page of its own: it never restores the user's tabs.
+  if (assistantWindow) return [];
   try {
     return (JSON.parse(localStorage.getItem("meercad.tabs") ?? "[]") as Tab[]).filter((t) => typeof t.id === "string");
   } catch {
@@ -128,7 +133,7 @@ function loadTabs(): Tab[] {
 }
 function setTabs(tabs: Tab[]): void {
   useApp.setState({ tabs });
-  if (assistantWindow || extraWindow) return;
+  if (assistantWindow) return;
   try {
     localStorage.setItem("meercad.tabs", JSON.stringify(tabs));
   } catch {
@@ -143,6 +148,8 @@ export const useApp = create<State>(() => ({
   screen: "home",
   projects: [],
   tabs: loadTabs(),
+  assistantTabs: [],
+  assistantTab: null,
   folders: [],
   folder: "",
   project: null,
@@ -172,7 +179,6 @@ export const useApp = create<State>(() => ({
   pickingSketchPlane: false,
   aiActivity: null,
   aiLock: null,
-  aiSessionEnded: false,
   sideOpen: (() => {
     // On a phone the panel is a sheet over the model: it starts closed.
     if (isCompact()) return false;
@@ -782,18 +788,13 @@ export function dropCachedTab(id: string): void {
 }
 
 /**
- * A project is open in one window only: when another window of this app (an assistant's or one of
- * the user's) shows it, that window comes to the front instead. `force`: open it here anyway (an
- * assistant opening a project in its own window; the user's windows have let it go).
+ * Opens a project in a tab. A project an assistant works on is open in its tab only: that tab
+ * comes to the front instead.
  */
-export async function openProject(id: string, { force = false } = {}): Promise<void> {
+export async function openProject(id: string): Promise<void> {
   if (get().project?.id === id && get().screen === "editor") return;
-  const holder = !force && desktop?.assistant ? await desktop.assistant.holder(id) : null;
-  if (holder && (await desktop!.assistant!.focusHolder(id, !holder.user))) {
-    if (get().screen === "editor") history.replaceState(null, "", `#/p/${encodeURIComponent(get().project!.id)}`);
-    else history.replaceState(null, "", "#/");
-    return;
-  }
+  const held = assistantWindow ? undefined : get().assistantTabs.find((a) => a.project === id);
+  if (held) return showAssistantTab(held.session);
   await flushSave(true);
   const cached = tabStores.get(id);
   const tab = get().tabs.find((t) => t.id === id);
@@ -863,6 +864,7 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   if (!get().tabs.some((t) => t.id === meta.id)) setTabs([...get().tabs, { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) }]);
   set({
     screen: "editor",
+    assistantTab: null,
     project: meta,
     dialog: null,
     sketchId: null,
@@ -885,8 +887,60 @@ export function goHome(): void {
   const p = get().project;
   if (p) tabStores.set(p.id, docStore);
   void flushSave(true).then(refreshProjects);
-  set({ screen: "home", project: null, sketchId: null, dialog: null });
+  set({ screen: "home", assistantTab: null, project: null, sketchId: null, dialog: null });
   history.replaceState(null, "", "#/");
+}
+
+// ---------------------------------------------------------------- assistants' tabs
+
+/** Shows an assistant's tab: the project open here stays in its tab in the background. */
+export function showAssistantTab(session: string): void {
+  if (get().assistantTab === session) return;
+  const p = get().project;
+  if (p) tabStores.set(p.id, docStore);
+  // Saves before the project is let go (flushSave reads it right away).
+  void flushSave(true);
+  set({ screen: "home", assistantTab: session, project: null, sketchId: null, dialog: null });
+  history.replaceState(null, "", "#/");
+}
+
+/** Sessions being handed over: their tab disappearing is expected. */
+const handingOver = new Set<string>();
+
+/** The assistants' tabs changed (main process): a closed one that was open falls back to a neighbour or Home. */
+export function setAssistantTabs(list: AssistantTab[]): void {
+  const open = get().assistantTab;
+  set({ assistantTabs: list });
+  if (open && !list.some((a) => a.session === open) && !handingOver.has(open)) leaveAssistantTab();
+}
+
+function leaveAssistantTab(): void {
+  const next = get().tabs.at(-1);
+  if (next) void openProject(next.id);
+  else goHome();
+}
+
+/**
+ * The user takes over an assistant's tab (`keep`: its project stays open in a tab of the user's),
+ * or closes it; also when the assistant's session ended. The assistant's page saves and goes.
+ */
+export async function handOverAssistantTab(session: string, keep = true): Promise<void> {
+  const a = desktop?.assistant;
+  if (!a || handingOver.has(session)) return;
+  handingOver.add(session);
+  try {
+    const project = await a.handOver(session);
+    const wasOpen = get().assistantTab === session;
+    if (project && keep) {
+      // Its copy in memory (if the user had it open before) is stale.
+      tabStores.delete(project.id);
+      if (!get().tabs.some((t) => t.id === project.id)) setTabs([...get().tabs, { id: project.id, name: project.name }]);
+      if (wasOpen) await openProject(project.id);
+    } else if (wasOpen) leaveAssistantTab();
+  } finally {
+    handingOver.delete(session);
+    set({ assistantTabs: get().assistantTabs.filter((x) => x.session !== session) });
+  }
 }
 
 export async function renameProject(name: string): Promise<void> {
@@ -999,8 +1053,8 @@ export function closeTab(id: string, remember = true): void {
 }
 
 /**
- * An assistant opens this project in its own window: it is saved and its tab here closes (the open
- * one switches to its neighbour, or home), so the project is open in one window only.
+ * An assistant opens this project in its own tab: it is saved and the user's tab of it closes (the
+ * open one switches to its neighbour, or home), so the project is open in one tab only.
  */
 export async function releaseProject(id: string): Promise<void> {
   const tabs = get().tabs;
@@ -1022,13 +1076,15 @@ export function reopenClosedTab(): void {
   if (id) void openProject(id);
 }
 
-/** Switches to the next (+1) or previous (-1) tab, wrapping around. */
+/** Switches to the next (+1) or previous (-1) tab, wrapping around; the assistants' tabs come after the user's. */
 export function cycleTab(step: 1 | -1): void {
-  const tabs = get().tabs;
-  if (!tabs.length) return;
-  const i = tabs.findIndex((t) => t.id === get().project?.id);
-  const next = tabs[(i + step + tabs.length) % tabs.length]!;
-  void openProject(next.id);
+  const all = [...get().tabs.map((t) => ({ id: t.id, session: null as string | null })), ...get().assistantTabs.map((a) => ({ id: "", session: a.session as string | null }))];
+  if (!all.length) return;
+  const open = get().assistantTab;
+  const i = all.findIndex((t) => (open ? t.session === open : t.session === null && t.id === get().project?.id));
+  const next = all[(i < 0 && step < 0 ? 0 : i + step + all.length) % all.length]!;
+  if (next.session) showAssistantTab(next.session);
+  else void openProject(next.id);
 }
 
 export function moveTab(id: string, before: string | null): void {

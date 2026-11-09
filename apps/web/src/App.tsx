@@ -27,7 +27,8 @@ import { setTool, useSketchUi, type SketchTool } from "./sketch/state";
 import { saveFile } from "./components/io";
 import { actionFor, MODEL_ACTIONS, MODEL_CONTEXT, type ModelAction } from "./lib/keymap";
 import type { FeatureOp } from "@meercad/schema";
-import { closeTab, cycleTab, dropCachedTab, reopenClosedTab, toggleSide } from "./store";
+import { closeTab, cycleTab, dropCachedTab, handOverAssistantTab, reopenClosedTab, toggleSide } from "./store";
+import { AssistantPane } from "./components/AssistantTab";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, hideSelectedParts, lastStartedFeature, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@meercad/viewport";
@@ -100,6 +101,7 @@ async function route(): Promise<void> {
 
 export function App() {
   const screen = useApp((s) => s.screen);
+  const assistantTab = useApp((s) => s.assistantTab);
   const sideOpen = useApp((s) => s.sideOpen);
   const motionOpen = useMotion((s) => s.open);
   const sheet = useApp((s) => !!s.dialog || s.measure.active) || motionOpen;
@@ -126,6 +128,7 @@ export function App() {
     initBridge();
     if (!desktop) return;
     document.documentElement.classList.add("is-desktop");
+    if (assistantWindow) document.documentElement.classList.add("in-assistant-tab");
     const offMenu = desktop.on("menu", (cmd) => {
       // While an assistant works on the model, the menu commands wait too.
       if (useApp.getState().aiLock && cmd !== "shortcuts") return;
@@ -136,7 +139,7 @@ export function App() {
       else if (cmd === "share" && useApp.getState().project) openShare();
       else if (cmd === "shortcuts") setHelp((h) => !h);
       else if (cmd === "settings") window.dispatchEvent(new Event("meercad:settings"));
-      else if (cmd === "close-tab" && useApp.getState().project) closeTab(useApp.getState().project!.id);
+      else if (cmd === "close-tab") closeCurrentTab();
       else if (cmd === "reopen-tab") reopenClosedTab();
       else if (cmd === "next-tab" || cmd === "prev-tab") cycleTab(cmd === "next-tab" ? 1 : -1);
       else if (cmd === "cut" || cmd === "copy" || cmd === "paste" || cmd === "selectAll" || cmd === "duplicate") {
@@ -205,7 +208,7 @@ export function App() {
       if (!mod) return;
       if (k === "t" && e.shiftKey) return run(reopenClosedTab);
       if (k === "t" && !e.altKey) return run(() => void newProject());
-      if (k === "w" && !e.shiftKey && useApp.getState().project) return run(() => closeTab(useApp.getState().project!.id));
+      if (k === "w" && !e.shiftKey && (useApp.getState().project || useApp.getState().assistantTab)) return run(closeCurrentTab);
       if (e.shiftKey && (e.code === "BracketRight" || e.code === "BracketLeft")) return run(() => cycleTab(e.code === "BracketRight" ? 1 : -1));
       if (e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft")) return run(() => cycleTab(e.key === "ArrowRight" ? 1 : -1));
     };
@@ -316,11 +319,14 @@ export function App() {
   return (
     <>
       <AiLock />
-      {screen === "home" ? (
+      {assistantTab ? (
+        <AssistantPane session={assistantTab} />
+      ) : screen === "home" ? (
         <Home />
       ) : (
         <div className={`app ${sideOpen ? "side-open" : ""} ${sheet ? "has-sheet" : ""}`}>
-          <TopBar />
+          {/* An assistant's tab has its bar at the bottom (AiLock) instead: the window's page shows the tabs above it. */}
+          {assistantWindow ? null : <TopBar />}
           {sideOpen ? <SidePanel /> : null}
           <div className="right">{guide ? <HelpPanel onClose={() => setGuide(false)} onTour={() => (setGuide(false), setTour(true))} onShortcuts={() => setHelp(true)} /> : null}</div>
           <div className="view-wrap" style={{ gridArea: "view", position: "relative", minWidth: 0, minHeight: 0, display: "flex" }}>
@@ -348,6 +354,13 @@ export function App() {
       {debugHud ? <DebugHud /> : null}
     </>
   );
+}
+
+/** ⌘W: closes the open tab, also an assistant's (it stops working on it; its project is saved). */
+function closeCurrentTab(): void {
+  const s = useApp.getState();
+  if (s.assistantTab) void handOverAssistantTab(s.assistantTab, false);
+  else if (s.project) closeTab(s.project.id);
 }
 
 /** Select all, copy, cut, paste or duplicate whole parts (see lib/clipboard). */

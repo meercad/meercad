@@ -2,6 +2,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { contextBridge, ipcRenderer } from "electron";
 
+/** An assistant's tab as the tab strip shows it. */
+export interface AssistantTabInfo {
+  session: string;
+  client: string;
+  project: string | null;
+  name: string | null;
+  busy: boolean;
+  tool: string | null;
+}
+
 const api = {
   isDesktop: true,
   info: () => ipcRenderer.invoke("app:info"),
@@ -15,9 +25,9 @@ const api = {
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
   /** The port this build's MCP server listens on (RC, WIP and the store release each have their own). */
   mcpPort: ipcRenderer.sendSync("mcp:port") as number,
-  /** The MCP bridge, held by the user's first window: its state, and turning it on or off from any window. */
+  /** The MCP bridge, held by the window's page: its state, and turning it on or off from an assistant's tab. */
   mcp: {
-    /** The first window reports its state. */
+    /** The window's page reports its state. */
     status: (s: string) => ipcRenderer.send("mcp:status", s),
     hostStatus: (): Promise<"off" | "connecting" | "connected"> => ipcRenderer.invoke("mcp:host-status"),
     setEnabled: (on: boolean): Promise<void> => ipcRenderer.invoke("mcp:set-enabled", on),
@@ -27,21 +37,23 @@ const api = {
     initial: ipcRenderer.sendSync("shared:get") as Record<string, unknown>,
     set: (key: string, value: unknown) => ipcRenderer.invoke("shared:set", { key, value }),
   },
-  /** Assistant sessions' own windows (MCP): the user's window passes their requests on. */
+  /** Assistant sessions' own tabs (MCP): the window's page passes their requests on to them. */
   assistant: {
-    open: (p: { session: string; client: string; project?: string }): Promise<number> => ipcRenderer.invoke("assistant:open", p),
+    open: (p: { session: string; client: string }): Promise<number> => ipcRenderer.invoke("assistant:open", p),
     windowOf: (session: string): Promise<number | "closed" | null> => ipcRenderer.invoke("assistant:window", session),
     call: (window: number, req: unknown): Promise<unknown> => ipcRenderer.invoke("assistant:call", { window, req }),
-    holder: (id: string): Promise<{ session: string; client: string; ended: boolean; user: boolean } | null> => ipcRenderer.invoke("assistant:holder", id),
-    take: (id: string, client: string): Promise<void> => ipcRenderer.invoke("assistant:take", { id, client }),
-    released: (callId: number) => ipcRenderer.send("window:released", callId),
-    focusHolder: (id: string, assistants = false): Promise<boolean> => ipcRenderer.invoke("assistant:focus-holder", { id, assistants }),
-    /** The projects other windows have open (id → the assistant's name, "" for one of the user's windows). */
-    openElsewhere: (): Promise<Record<string, string>> => ipcRenderer.invoke("assistant:open-elsewhere"),
-    ended: (session: string) => ipcRenderer.send("assistant:ended", session),
-    // In an assistant's window:
+    /** The assistants' tabs (also sent as "assistant-tabs" whenever they change). */
+    tabs: (): Promise<AssistantTabInfo[]> => ipcRenderer.invoke("assistant:tabs"),
+    /** Opens an assistant's tab in the room `rect` leaves (CSS pixels), or none. */
+    show: (p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null) => ipcRenderer.send("assistant:show", p),
+    /** Takes an assistant's tab over: it saves and closes; returns its project for a tab of the user's. */
+    handOver: (session: string): Promise<{ id: string; name: string } | null> => ipcRenderer.invoke("assistant:hand-over", session),
+    // In an assistant's tab:
     ready: () => ipcRenderer.send("assistant:ready"),
-    project: (id: string | null) => ipcRenderer.send("assistant:project", id),
+    project: (p: { id: string; name: string } | null) => ipcRenderer.send("assistant:project", p),
+    busy: (p: { busy: boolean; tool: string | null }) => ipcRenderer.send("assistant:busy", p),
+    stop: () => ipcRenderer.send("assistant:stop"),
+    released: (callId: number) => ipcRenderer.send("window:released", callId),
     respond: (p: { callId: number; result?: unknown; error?: string }) => ipcRenderer.send("assistant:respond", p),
   },
   projects: {
@@ -79,7 +91,7 @@ const api = {
   writeLocalFile: (p: { path: string; base64: string }) => ipcRenderer.invoke("files:write-local", p),
   /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
   shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
-  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "assistant-ended" | "assistant-adopted" | "release-project" | "open-elsewhere" | "mcp-status" | "mcp-set-enabled", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "release-project" | "assistant-tabs" | "assistant-stop" | "mcp-status" | "mcp-set-enabled", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
