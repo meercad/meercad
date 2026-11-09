@@ -14,6 +14,8 @@ interface Prefs {
   keys: KeyScheme;
   mouse: MouseScheme;
   invertZoom: boolean;
+  /** A two-finger swipe on a trackpad orbits (Shift: pans); off, it zooms like a mouse wheel. */
+  swipeOrbits: boolean;
   /** Shortcut badges on tools and menus. */
   showKeys: boolean;
   /** Dimension and size chips on the model. */
@@ -48,13 +50,14 @@ interface Prefs {
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED, printerFit: null, showJoints: true, threeMfMaterials: false };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, swipeOrbits: true, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED, printerFit: null, showJoints: true, threeMfMaterials: false };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
       keys: KEY_SCHEMES.some((s) => s.id === raw.keys) ? raw.keys! : fallback.keys,
       mouse: MOUSE_SCHEMES.some((s) => s.id === raw.mouse) ? raw.mouse! : fallback.mouse,
       invertZoom: raw.invertZoom === true,
+      swipeOrbits: raw.swipeOrbits !== false,
       showKeys: raw.showKeys !== false,
       showValues: raw.showValues !== false,
       colorParts: raw.colorParts !== false,
