@@ -21,25 +21,28 @@ import { adoptSiblingData, carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLe
 const DEV = process.argv.includes("--dev");
 const MAS = process.mas === true;
 /**
- * Which Mac build this is (see CHANNEL_PORTS): "rc", the stable build the maintainer works with
- * (`pnpm rc`), or "wip", the test build agents rebuild at will (`pnpm wip`); both are installed next
- * to each other and to the store release, never self-update and do not claim .meercad files.
+ * Which build this is (see CHANNEL_PORTS): the App Store build is "testflight" or "prod" by its
+ * receipt; "rc" (the stable build the maintainer works with, `pnpm rc`) and "wip" (the test build
+ * agents rebuild at will, `pnpm wip`) are installed next to each other and to the store build, never
+ * self-update and do not claim .meercad files.
  */
 const CHANNEL: Channel = MAS
-  ? "release"
+  ? storeEnvironment() === "sandbox"
+    ? "testflight"
+    : "prod"
   : (() => {
       try {
         const c = (JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { meercadChannel?: string }).meercadChannel;
-        return c === "rc" || c === "wip" ? c : "release";
+        return c === "rc" || c === "wip" ? c : "prod";
       } catch {
-        return "release";
+        return "prod";
       }
     })();
 /** A side-by-side build (RC or WIP): starts on the other builds' projects folder, leaves their files alone. */
-const SIDE_BY_SIDE = CHANNEL !== "release";
+const SIDE_BY_SIDE = CHANNEL === "rc" || CHANNEL === "wip";
 /** The bridge port of this build; the bundled server.js knows the same one. */
 const MCP_PORT = CHANNEL_PORTS[CHANNEL];
-/** This build's name in an assistant's MCP configuration ("meercad", "meercad-wip"). */
+/** This build's name in an assistant's MCP configuration ("meercad", "meercad-rc", …): added next to the others' entries. */
 const MCP_NAME = CHANNEL_MCP_NAMES[CHANNEL];
 /** The app data of the other builds a side-by-side build takes over from on its first start, closest first. */
 const siblingDataDirs = () => (CHANNEL === "rc" ? ["meerCAD WIP", "meerCAD"] : CHANNEL === "wip" ? ["meerCAD RC", "meerCAD"] : []).map((n) => join(app.getPath("appData"), n));
@@ -492,7 +495,8 @@ function watchProjects(): void {
  */
 ipcMain.handle("mcp:install-claude-desktop", async () => {
   if (MAS) {
-    const error = await shell.openPath(join(process.resourcesPath, "meercad.mcpb"));
+    // One extension per store channel, each with its own name and port (see scripts/mas.mjs).
+    const error = await shell.openPath(join(process.resourcesPath, `${MCP_NAME}.mcpb`));
     if (error) throw new Error(error);
     return null;
   }
@@ -517,7 +521,8 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
 });
 /** How an MCP client starts the server: the app's own runtime, or Node for the sandboxed build (whose binary cannot run as Node). */
 function mcpEntry(): { command: string; args: string[]; env?: Record<string, string> } {
-  return MAS ? { command: "node", args: [mcpServer] } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
+  // The App Store build's server.js has no server.json: its port comes with the entry (TestFlight's differs).
+  return MAS ? { command: "node", args: [mcpServer], env: { MEERCAD_MCP_PORT: String(MCP_PORT) } } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
 }
 /**
  * Where an App Store build came from: TestFlight and development installs carry a sandbox receipt
@@ -1004,7 +1009,7 @@ else {
       }
     }
     await renameLegacyFiles(projectsDir(), thumbsDir()).catch(() => 0);
-    if (app.isPackaged && CHANNEL !== "wip" && !MAS) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
+    if (app.isPackaged && CHANNEL === "prod" && !MAS) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
     await findICloud();
     serveApp();
     buildMenu();

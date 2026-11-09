@@ -54,7 +54,7 @@ Signing material stays out of the repo: certificates in the keychain, provisioni
 
 - `pnpm wip` builds the working tree and installs it as *meerCAD WIP* in Applications; `pnpm rc`
   builds `main` as *meerCAD RC*, the stable build next to it. Each has its own app id, app data and
-  MCP port; `pnpm claude-config` adds both to Claude Desktop. See [docs/RELEASE.md](docs/RELEASE.md).
+  MCP port; `pnpm claude-config` adds both to Claude Desktop (`meercad-rc`, `meercad-wip`). See [docs/RELEASE.md](docs/RELEASE.md).
 - `pnpm testflight` uploads iPhone and iPad builds, `pnpm mas` the sandboxed Mac build (same App
   Store record, so one purchase covers every device). `pnpm mas --dev` builds a development-signed
   copy to try the sandbox on this Mac.

@@ -62,7 +62,7 @@ WASM); they don't check anything.
 
 ## MCP tools end to end
 
-Each Mac build has its own bridge port (RC 47822, WIP 47823, App Store 47821, see
+Each Mac build has its own bridge port (App Store 47821, RC 47822, WIP 47823, TestFlight 47824, see
 docs/RELEASE.md), and the user's assistants may hold it. For a test run, start the server with
 `MEERCAD_MCP_PORT=47999` (e.g. the WIP's own `Contents/Resources/mcp/server.js` with
 `ELECTRON_RUN_AS_NODE=1`), set `sessionStorage["meercad.mcp.port"] = "47999"` in the app window

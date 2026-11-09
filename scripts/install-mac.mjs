@@ -7,8 +7,9 @@
  *   meerCAD WIP  the working tree, to try changes in the real app; agents rebuild it at will.
  *
  * Each has its own app id (settings, window state, single-instance lock), its own app data and its
- * own MCP bridge port with its own entry in Claude's configuration ("meercad" for the RC,
- * "meercad-wip" for the WIP; `pnpm claude-config` writes both), so an assistant set up for one never
+ * own MCP bridge port with its own entry in Claude's configuration ("meercad-rc" for the RC,
+ * "meercad-wip" for the WIP, next to the store builds' "meercad" and "meercad-testflight";
+ * `pnpm claude-config` adds both), so an assistant set up for one never
  * drives the other. Both work on the same projects folder (iCloud), never self-update and do not
  * claim .meercad files. On its first start a build takes over the other's projects folder,
  * thumbnails and preferences.

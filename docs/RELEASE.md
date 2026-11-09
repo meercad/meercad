@@ -11,16 +11,27 @@
 | App id | `dev.meercad.app.rc` | `dev.meercad.app.wip` |
 | App data | `~/Library/Application Support/meerCAD RC` | `~/Library/Application Support/meerCAD WIP` |
 | MCP port | 47822 | 47823 |
-| MCP entry in Claude | `meercad` (tools `mcp__meercad__…`) | `meercad-wip` (tools `mcp__meercad-wip__…`) |
+| MCP entry in Claude | `meercad-rc` (tools `mcp__meercad-rc__…`) | `meercad-wip` (tools `mcp__meercad-wip__…`) |
+
+All builds that can be on one Mac, each with its own port and its own entry in Claude, added next to
+the others (the plug icon in the app adds only its own entry and never replaces another):
+
+| Build | Port | Claude entry |
+| --- | --- | --- |
+| App Store (prod) | 47821 | `meercad` |
+| meerCAD RC | 47822 | `meercad-rc` |
+| meerCAD WIP | 47823 | `meercad-wip` |
+| TestFlight on the Mac | 47824 | `meercad-testflight` |
+
+The App Store build tells TestFlight from the store by its receipt and hands Claude Desktop the
+matching extension (`meercad.mcpb` or `meercad-testflight.mcpb`, both built by `pnpm mas`).
 
 Both install to `/Applications`, run at the same time, work on the same projects folder (the
 iCloud folder shared with the iPhone and iPad), never self-update and do not claim `.meercad` files.
-The App Store build (TestFlight, `pnpm mas`) keeps the default port 47821 and its own extension.
-
 Each build ships its port in `Contents/Resources/mcp/server.json`; the app and the MCP server
 started from its bundle both use it, so an assistant set up for one build never drives the other
-(see `CHANNEL_PORTS` in `packages/mcp/src/protocol.ts`). `pnpm claude-config` writes both entries
-into Claude Desktop's configuration (other servers stay, a `.bak` is kept); restart Claude Desktop
+(see `CHANNEL_PORTS` in `packages/mcp/src/protocol.ts`). `pnpm claude-config` adds `meercad-rc` and `meercad-wip`
+to Claude Desktop's configuration (every other server stays, `meercad` too; a `.bak` is kept); restart Claude Desktop
 afterwards. In the app the plug icon shows the entry of the build it runs in.
 
 On its first start a build takes over the other's projects folder, thumbnails and preferences

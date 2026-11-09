@@ -91,32 +91,44 @@ run("pnpm", ["--filter", "@meercad/mcp", "build"]);
 run("node", ["build.mjs"], desktop);
 
 // The MCP server as a Claude Desktop extension: the sandboxed app cannot write Claude's config, so
-// "Add to Claude Desktop" opens this file and Claude installs it (it brings its own Node).
+// "Add to Claude Desktop" opens this file and Claude installs it (it brings its own Node). One per
+// store channel, each with its own name and port, so a TestFlight build is added next to the App
+// Store one instead of replacing it (see CHANNEL_PORTS and CHANNEL_MCP_NAMES in packages/mcp).
 const work = mkdtempSync(join(tmpdir(), "meercad-mas-"));
-const ext = join(work, "extension");
-mkdirSync(join(ext, "server"), { recursive: true });
-copyFileSync(join(root, "packages/mcp/dist/server.js"), join(ext, "server", "server.js"));
-copyFileSync(join(desktop, "build", "icon.png"), join(ext, "icon.png"));
-writeFileSync(
-  join(ext, "manifest.json"),
-  `${JSON.stringify(
-    {
-      manifest_version: "0.3",
-      name: "meercad",
-      display_name: "meerCAD",
-      version: `${VERSION}.0`,
-      description: "Lets Claude design parts in the meerCAD app on this Mac: sketches, features, parameters, renders and exports.",
-      author: { name: "Torben Berger UG (haftungsbeschränkt)" },
-      icon: "icon.png",
-      server: { type: "node", entry_point: "server/server.js", mcp_config: { command: "node", args: ["${__dirname}/server/server.js"] } },
-      compatibility: { platforms: ["darwin"] },
-    },
-    null,
-    2,
-  )}\n`,
-);
-const mcpb = join(work, "meercad.mcpb");
-run("zip", ["-qrX", mcpb, "manifest.json", "icon.png", "server"], ext);
+const protocol = readFileSync(join(root, "packages/mcp/src/protocol.ts"), "utf8");
+const extensions = [
+  { name: "meercad", display: "meerCAD", port: 47821, channel: "prod" },
+  { name: "meercad-testflight", display: "meerCAD TestFlight", port: 47824, channel: "testflight" },
+];
+const mcpbs = [];
+for (const x of extensions) {
+  if (!new RegExp(`\\b${x.channel}: ${x.port}\\b`).test(protocol) && !(x.channel === "prod" && /prod: DEFAULT_PORT/.test(protocol) && /DEFAULT_PORT = 47821/.test(protocol))) fail(`port ${x.port} of ${x.channel} is not the one in packages/mcp/src/protocol.ts`);
+  const ext = join(work, x.name);
+  mkdirSync(join(ext, "server"), { recursive: true });
+  copyFileSync(join(root, "packages/mcp/dist/server.js"), join(ext, "server", "server.js"));
+  copyFileSync(join(desktop, "build", "icon.png"), join(ext, "icon.png"));
+  writeFileSync(
+    join(ext, "manifest.json"),
+    `${JSON.stringify(
+      {
+        manifest_version: "0.3",
+        name: x.name,
+        display_name: x.display,
+        version: `${VERSION}.0`,
+        description: `Lets Claude design parts in the ${x.display} app on this Mac: sketches, features, parameters, renders and exports.`,
+        author: { name: "Torben Berger UG (haftungsbeschränkt)" },
+        icon: "icon.png",
+        server: { type: "node", entry_point: "server/server.js", mcp_config: { command: "node", args: ["${__dirname}/server/server.js"], env: { MEERCAD_MCP_PORT: String(x.port) } } },
+        compatibility: { platforms: ["darwin"] },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const mcpb = join(work, `${x.name}.mcpb`);
+  run("zip", ["-qrX", mcpb, "manifest.json", "icon.png", "server"], ext);
+  mcpbs.push({ from: mcpb, to: `${x.name}.mcpb` });
+}
 
 // Development builds talk to the iCloud development environment.
 let entitlements = "build/entitlements.mas.plist";
@@ -135,7 +147,7 @@ const config = {
   appId: APP_ID,
   directories: { ...pkg.build.directories, output: "release-mas" },
   // The FSL text belongs to the source, not to the App Store app.
-  extraResources: [...pkg.build.extraResources.filter((r) => r.from !== "../../LICENSE"), { from: mcpb, to: "meercad.mcpb" }],
+  extraResources: [...pkg.build.extraResources.filter((r) => r.from !== "../../LICENSE"), ...mcpbs],
   asarUnpack: ["dist/native/**"],
   mac: {
     ...mac,

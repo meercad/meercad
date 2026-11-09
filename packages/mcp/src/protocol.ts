@@ -3,15 +3,19 @@
 export const DEFAULT_PORT = 47821;
 
 /**
- * The Mac builds that can be installed side by side, each with its own bridge port, so an assistant
- * set up for one never drives another: the store release on DEFAULT_PORT, "meerCAD RC" (the stable
- * build the maintainer works with, `pnpm rc`) and "meerCAD WIP" (the build agents rebuild at will,
- * `pnpm wip`) on their own. Each build's server.js finds its port in server.json next to it.
+ * The meerCAD builds that can live on one Mac, each with its own bridge port and its own entry in an
+ * assistant's MCP configuration, so an assistant set up for one never drives another:
+ *   prod        the App Store release (and builds outside the store)
+ *   testflight  the App Store build installed from TestFlight (it tells by its receipt)
+ *   rc          "meerCAD RC", the stable build the maintainer works with (`pnpm rc`)
+ *   wip         "meerCAD WIP", the build agents rebuild at will (`pnpm wip`)
+ * The RC's and WIP's server.js find their port in server.json next to them; the App Store build
+ * ships one Claude extension per store channel with the port in its environment.
  */
-export const CHANNEL_PORTS = { release: DEFAULT_PORT, rc: 47822, wip: 47823 } as const;
+export const CHANNEL_PORTS = { prod: DEFAULT_PORT, rc: 47822, wip: 47823, testflight: 47824 } as const;
 export type Channel = keyof typeof CHANNEL_PORTS;
-/** The server's name in an assistant's MCP configuration: one entry per installed build. */
-export const CHANNEL_MCP_NAMES: Record<Channel, string> = { release: "meercad", rc: "meercad", wip: "meercad-wip" };
+/** The server's name in an assistant's MCP configuration: one entry per build, added next to the others. */
+export const CHANNEL_MCP_NAMES: Record<Channel, string> = { prod: "meercad", testflight: "meercad-testflight", rc: "meercad-rc", wip: "meercad-wip" };
 
 export type BridgeMethod =
   | "get_model"
