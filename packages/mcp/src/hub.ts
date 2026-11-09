@@ -36,7 +36,7 @@ export interface BridgeStatus {
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
 type Response = { id: number; result?: unknown; error?: string };
 
-export const NOT_CONNECTED = "The meerCAD app is not connected. Open meerCAD and enable 'Connect AI assistants (MCP)' in the toolbar menu, then try again.";
+export const NOT_CONNECTED = "The meerCAD app is not connected. Open meerCAD and enable 'Allow assistants to control meerCAD' (plug icon in the top bar), then try again.";
 
 export function createBridge(o: BridgeOptions) {
   const { port, session, log } = o;

@@ -16,6 +16,7 @@ import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, w
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CHANNEL_PORTS, CHANNEL_MCP_NAMES, type Channel } from "@meercad/mcp";
+import { holderOf as holderOfWindow, openElsewhere as openElsewhereOf, type ProjectWindow } from "./openProjects";
 import { adoptSiblingData, carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
 
 const DEV = process.argv.includes("--dev");
@@ -40,8 +41,19 @@ const CHANNEL: Channel = MAS
     })();
 /** A side-by-side build (RC or WIP): starts on the other builds' projects folder, leaves their files alone. */
 const SIDE_BY_SIDE = CHANNEL === "rc" || CHANNEL === "wip";
-/** The bridge port of this build; the bundled server.js knows the same one. */
-const MCP_PORT = CHANNEL_PORTS[CHANNEL];
+/**
+ * The bridge port of this build: the one in the bundled server.json, which the bundled server.js
+ * reads too (a private test copy of a build gets its own there), else its channel's.
+ */
+const MCP_PORT: number = (() => {
+  try {
+    const p = (JSON.parse(readFileSync(join(process.resourcesPath, "mcp", "server.json"), "utf8")) as { port?: unknown }).port;
+    if (app.isPackaged && typeof p === "number" && Number.isInteger(p) && p > 1024 && p < 65536) return p;
+  } catch {
+    // no server.json (App Store build, development)
+  }
+  return CHANNEL_PORTS[CHANNEL];
+})();
 /** This build's name in an assistant's MCP configuration ("meercad", "meercad-rc", …): added next to the others' entries. */
 const MCP_NAME = CHANNEL_MCP_NAMES[CHANNEL];
 /** The app data of the other builds a side-by-side build takes over from on its first start, closest first. */
@@ -110,6 +122,50 @@ const readShared = (): Record<string, unknown> => {
 ipcMain.on("shared:get", (e) => void (e.returnValue = readShared()));
 /** The bridge port the window connects to: this build's own (see CHANNEL_PORTS). */
 ipcMain.on("mcp:port", (e) => void (e.returnValue = MCP_PORT));
+
+/**
+ * Sends a message to every open window (`arg` per window, by its webContents id). Skips windows
+ * that are closing: this runs from close and destroy events, where a send would throw.
+ */
+function sendToAll(channel: string, arg: (wc: number) => unknown): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
+    try {
+      w.webContents.send(channel, arg(w.webContents.id));
+    } catch {
+      // closed meanwhile
+    }
+  }
+}
+
+// ---------------------------------------------------------------- MCP bridge host
+
+/**
+ * The user's first window (mainWindow) holds the connection to the MCP server; every other window
+ * shows its state and turns it on or off through it.
+ */
+type BridgeState = "off" | "connecting" | "connected";
+let bridgeState: BridgeState = "off";
+/** What a window asked for while there was no first window: applied once the new one reports in. */
+let bridgeWanted: boolean | null = null;
+const broadcastBridge = () => sendToAll("mcp-status", () => bridgeState);
+ipcMain.on("mcp:status", (e, s: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || e.sender !== mainWindow.webContents) return;
+  if (s !== "off" && s !== "connecting" && s !== "connected") return;
+  bridgeState = s;
+  broadcastBridge();
+  if (bridgeWanted === null) return;
+  const on = bridgeWanted;
+  bridgeWanted = null;
+  if ((s !== "off") !== on) mainWindow.webContents.send("mcp-set-enabled", on);
+});
+ipcMain.handle("mcp:host-status", () => bridgeState);
+ipcMain.handle("mcp:set-enabled", (_e, on: unknown) => {
+  if (mainWindow && !mainWindow.isDestroyed()) return void mainWindow.webContents.send("mcp-set-enabled", on === true);
+  // The first window was closed: a new one takes the connection over.
+  bridgeWanted = on === true;
+  mainWindow = createWindow();
+});
 ipcMain.handle("shared:set", async (_e, p: { key: string; value: unknown }) => {
   if (typeof p?.key !== "string" || !/^[a-zA-Z][\w.]{0,40}$/.test(p.key)) return;
   const all = { ...readShared(), [p.key]: p.value };
@@ -521,8 +577,9 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
 });
 /** How an MCP client starts the server: the app's own runtime, or Node for the sandboxed build (whose binary cannot run as Node). */
 function mcpEntry(): { command: string; args: string[]; env?: Record<string, string> } {
-  // The App Store build's server.js has no server.json: its port comes with the entry (TestFlight's differs).
-  return MAS ? { command: "node", args: [mcpServer], env: { MEERCAD_MCP_PORT: String(MCP_PORT) } } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
+  // The App Store build's server.js has no server.json: its port comes with the entry (TestFlight's differs),
+  // and the app it opens when an assistant needs it (see packages/mcp/src/launchApp.ts).
+  return MAS ? { command: "node", args: [mcpServer], env: { MEERCAD_MCP_PORT: String(MCP_PORT), MEERCAD_APP: "dev.meercad.app" } } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
 }
 /**
  * Where an App Store build came from: TestFlight and development installs carry a sandbox receipt
@@ -636,7 +693,11 @@ function createWindow(assistant?: { session: string; client: string }, extra = f
   const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : extra ? "?window=extra" : process.env["MEERCAD_MCP_BRIDGE"] === "off" ? "?bridge=off" : "";
   void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${query}`);
   win.on("closed", () => {
-    if (mainWindow === win) mainWindow = null;
+    if (mainWindow !== win) return;
+    mainWindow = null;
+    // Its connection to the assistants went with it.
+    bridgeState = "off";
+    broadcastBridge();
   });
   return win;
 }
@@ -690,7 +751,7 @@ function openAssistantWindow(session: string, client: string): AssistantWindow {
   win.on("closed", () => {
     assistantWindows.delete(id);
     closedSessions.add(session);
-    projectFree(a.project);
+    broadcastOpen();
     for (const [callId, c] of bridgeCalls) {
       if (c.window !== id) continue;
       bridgeCalls.delete(callId);
@@ -711,6 +772,7 @@ ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string
     left.client = String(p.client || "Assistant");
     left.ended = false;
     left.win.webContents.send("assistant-adopted", { session: left.session, client: left.client });
+    broadcastOpen();
     return left.win.id;
   }
   const a = openAssistantWindow(String(p.session), String(p.client || "Assistant"));
@@ -738,35 +800,40 @@ ipcMain.on("assistant:respond", (_e, p: { callId: number; result?: unknown; erro
 ipcMain.on("assistant:ready", (e) => assistantOf(e.sender.id)?.markReady());
 /** The project each of the user's windows shows (by webContents id); assistants' windows keep theirs in AssistantWindow. */
 const userProjects = new Map<number, string | null>();
-/** An assistant's window let a project go: the user's windows that show it locked may edit it again. */
-const projectFree = (id: string | null) => {
-  if (!id) return;
-  for (const [wc] of userProjects) BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.id === wc)?.webContents.send("project-free", id);
-  mainWindow?.webContents.send("project-free", id);
-};
+/** Every window with the project it shows (see openProjects). */
+function projectWindows(): (ProjectWindow & { win: BrowserWindow; a: AssistantWindow | null })[] {
+  const live = (w: BrowserWindow) => !w.isDestroyed() && !w.webContents.isDestroyed();
+  const all = BrowserWindow.getAllWindows().filter(live);
+  const assistants = [...assistantWindows.values()].filter((a) => live(a.win)).map((a) => ({ wc: a.win.webContents.id, project: a.project, assistant: a.client, ended: a.ended, win: a.win, a }));
+  const users = [...userProjects].flatMap(([wc, project]) => {
+    const win = all.find((w) => w.webContents.id === wc);
+    return win ? [{ wc, project, assistant: null, win, a: null }] : [];
+  });
+  return [...users, ...assistants];
+}
+const openElsewhere = (except: number) => openElsewhereOf(projectWindows(), except);
+/** Tells every window which projects the others have open. */
+const broadcastOpen = () => sendToAll("open-elsewhere", (wc) => openElsewhere(wc));
+ipcMain.handle("assistant:open-elsewhere", (e) => openElsewhere(e.sender.id));
 ipcMain.on("assistant:project", (e, id: unknown) => {
   const project = typeof id === "string" ? id : null;
   const a = assistantOf(e.sender.id);
-  if (a) {
-    const was = a.project;
-    a.project = project;
-    if (was !== project) projectFree(was);
-  } else {
+  if (a) a.project = project;
+  else {
     const wc = e.sender.id;
-    if (!userProjects.has(wc)) e.sender.once("destroyed", () => userProjects.delete(wc));
+    if (!userProjects.has(wc))
+      e.sender.once("destroyed", () => {
+        userProjects.delete(wc);
+        broadcastOpen();
+      });
     userProjects.set(wc, project);
   }
+  broadcastOpen();
 });
 /** The window (other than the asking one) that has a project open: an assistant session's, or one of the user's. */
 function holderOf(id: string, except: number): { win: BrowserWindow; assistant: AssistantWindow | null } | null {
-  const a = [...assistantWindows.values()].find((x) => x.project === id && !x.win.isDestroyed() && x.win.webContents.id !== except);
-  if (a) return { win: a.win, assistant: a };
-  for (const [wc, project] of userProjects) {
-    if (project !== id || wc === except) continue;
-    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.id === wc);
-    if (win) return { win, assistant: null };
-  }
-  return null;
+  const h = holderOfWindow(projectWindows(), id, except);
+  return h ? { win: h.win, assistant: h.a } : null;
 }
 ipcMain.handle("assistant:holder", (e, id: string) => {
   const h = holderOf(id, e.sender.id);
@@ -783,10 +850,11 @@ ipcMain.handle("assistant:focus-holder", (e, p: { id: string; assistants?: boole
 });
 let releaseSeq = 0;
 const releases = new Map<number, () => void>();
-/** An assistant opens a project the user has open: the user's windows save and close it first (its own window gets it). */
+/** An assistant opens a project the user has open: the user's windows save it and close its tab first (its own window gets it). */
 ipcMain.handle("assistant:take", async (e, p: { id: string; client: string }) => {
-  for (const [wc, project] of [...userProjects]) {
-    if (project !== p.id || wc === e.sender.id) continue;
+  // Every window of the user's: one may have it in a tab in the background.
+  for (const [wc] of [...userProjects]) {
+    if (wc === e.sender.id) continue;
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.id === wc);
     if (!win) continue;
     const callId = ++releaseSeq;
@@ -799,20 +867,13 @@ ipcMain.handle("assistant:take", async (e, p: { id: string; client: string }) =>
   }
 });
 ipcMain.on("window:released", (_e, callId: number) => releases.get(callId)?.());
-/** The user takes a project back: the assistant's window with it stops and goes to its overview (it reports that). */
-ipcMain.handle("assistant:reclaim", async (e, id: string) => {
-  const h = holderOf(id, e.sender.id);
-  if (!h?.assistant) return;
-  const a = h.assistant;
-  a.win.webContents.send("assistant-stop");
-  for (let i = 0; i < 100 && a.project === id && !a.win.isDestroyed(); i++) await new Promise((r) => setTimeout(r, 100));
-});
 /** A session's MCP server exited: its window says so and is free to use. */
 ipcMain.on("assistant:ended", (_e, session: string) => {
   for (const a of assistantWindows.values())
     if (a.session === session && !a.win.isDestroyed()) {
       a.ended = true;
       a.win.webContents.send("assistant-ended");
+      broadcastOpen();
     }
 });
 
@@ -1020,8 +1081,8 @@ else {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
     });
     app.on("activate", () => {
-      // Assistants' windows do not count: the user gets their own window back.
-      if (!BrowserWindow.getAllWindows().some((w) => !isAssistantWindow(w))) mainWindow = createWindow();
+      // Assistants' and extra windows do not count: the user gets their first window back, and with it the connection to the assistants.
+      if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
     });
   });
   app.on("window-all-closed", () => {

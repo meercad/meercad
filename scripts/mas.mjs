@@ -118,7 +118,7 @@ for (const x of extensions) {
         description: `Lets Claude design parts in the ${x.display} app on this Mac: sketches, features, parameters, renders and exports.`,
         author: { name: "Torben Berger UG (haftungsbeschränkt)" },
         icon: "icon.png",
-        server: { type: "node", entry_point: "server/server.js", mcp_config: { command: "node", args: ["${__dirname}/server/server.js"], env: { MEERCAD_MCP_PORT: String(x.port) } } },
+        server: { type: "node", entry_point: "server/server.js", mcp_config: { command: "node", args: ["${__dirname}/server/server.js"], env: { MEERCAD_MCP_PORT: String(x.port), MEERCAD_APP: "dev.meercad.app" } } },
         compatibility: { platforms: ["darwin"] },
       },
       null,

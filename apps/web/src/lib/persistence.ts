@@ -85,6 +85,12 @@ interface DesktopApi {
   writeLocalFile?(p: { path: string; base64: string }): Promise<void>;
   /** Missing in desktop apps from before sharing. */
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
+  /** The MCP bridge, held by the user's first window (see lib/mcpBridge); missing in older desktop apps. */
+  mcp?: {
+    status(s: "off" | "connecting" | "connected"): void;
+    hostStatus(): Promise<"off" | "connecting" | "connected">;
+    setEnabled(on: boolean): Promise<void>;
+  };
   /** Assistant sessions' own windows (MCP), see lib/mcpBridge. */
   assistant?: {
     open(p: { session: string; client: string; project?: string }): Promise<number>;
@@ -94,18 +100,20 @@ interface DesktopApi {
     holder(id: string): Promise<{ session: string; client: string; ended: boolean; user: boolean } | null>;
     /** The user's windows save and close the project, for an assistant's window to open it. */
     take(id: string, client: string): Promise<void>;
-    /** The user takes a project back: the assistant's window holding it stops and lets it go. */
-    reclaim(id: string): Promise<void>;
     released(callId: number): void;
     /** Brings the other window of the user's with the project to the front (`assistants`: an assistant's window). */
     focusHolder(id: string, assistants?: boolean): Promise<boolean>;
+    /** The projects other windows have open (id → the assistant's name, "" for one of the user's windows); missing in older desktop apps. */
+    openElsewhere?(): Promise<Record<string, string>>;
     ended(session: string): void;
     ready(): void;
     project(id: string | null): void;
     respond(p: { callId: number; result?: unknown; error?: string }): void;
   };
-  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "project-free" | "error", fn: (arg: string) => void): () => void;
-  on(channel: "assistant-stop", fn: () => void): () => void;
+  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error", fn: (arg: string) => void): () => void;
+  on(channel: "open-elsewhere", fn: (arg: Record<string, string>) => void): () => void;
+  on(channel: "mcp-status", fn: (arg: "off" | "connecting" | "connected") => void): () => void;
+  on(channel: "mcp-set-enabled", fn: (arg: boolean) => void): () => void;
   on(channel: "bridge-request", fn: (arg: { callId: number; req: unknown }) => void): () => void;
   on(channel: "assistant-ended", fn: () => void): () => void;
   on(channel: "assistant-adopted", fn: (arg: { session: string; client: string }) => void): () => void;

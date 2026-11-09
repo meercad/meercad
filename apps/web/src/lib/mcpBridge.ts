@@ -14,7 +14,7 @@ import { robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
 import { assistantWindow, desktop, extraWindow } from "./persistence";
-import { apply, currentDoc, flushSave, getViewport, goHome, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, freeProject, holdProject, scheduleRebuild, undo, useApp } from "../store";
+import { apply, currentDoc, flushSave, getViewport, goHome, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, releaseProject, scheduleRebuild, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
 import { jointRange, renderMotionGif, renderMotionSheet, renderShot, type Shot } from "./render";
@@ -28,9 +28,12 @@ let wanted = false;
 let replaced: number[] = [];
 const listeners = new Set<(s: Status) => void>();
 let status: Status = "off";
+/** The user's first window holds the connection; the others show its state and ask it to switch. */
+const hostWindow = !assistantWindow && !extraWindow;
 const setStatus = (s: Status) => {
   status = s;
   for (const fn of listeners) fn(s);
+  if (hostWindow) desktop?.mcp?.status(s);
 };
 export const bridgeStatus = () => status;
 export const onBridgeStatus = (fn: (s: Status) => void) => {
@@ -40,7 +43,8 @@ export const onBridgeStatus = (fn: (s: Status) => void) => {
 
 export function setBridgeEnabled(on: boolean, remember = true): void {
   // An assistant's window gets its requests from the user's first window, never over its own connection; so does a second window of the user's.
-  if (assistantWindow || extraWindow) return;
+  // They switch the first window's connection (the main process opens a new first window if it was closed).
+  if (!hostWindow) return void desktop?.mcp?.setEnabled(on);
   wanted = on;
   if (remember)
     try {
@@ -64,11 +68,17 @@ let bridgeStarted = false;
 export function initBridge(): void {
   if (bridgeStarted) return;
   bridgeStarted = true;
+  if (!hostWindow && desktop?.mcp) {
+    desktop.on("mcp-status", setStatus);
+    void desktop.mcp.hostStatus().then(setStatus);
+  }
   if (assistantWindow) return initAssistantWindow();
   // A test run's window (MEERCAD_MCP_BRIDGE=off) never talks to assistants.
   if (new URLSearchParams(location.search).get("bridge") === "off") return;
   initUserWindow();
   if (extraWindow) return;
+  // Another window switched assistants on or off.
+  desktop?.on("mcp-set-enabled", (on) => setBridgeEnabled(on));
   let pref: string | null = null;
   try {
     pref = localStorage.getItem("meercad.mcp");
@@ -77,6 +87,8 @@ export function initBridge(): void {
   }
   // The Mac app is ready for assistants out of the box (the iPad app has no assistants).
   if (pref !== "0" && (window as { meercadDesktop?: unknown }).meercadDesktop) setBridgeEnabled(true);
+  // Tells the main process (and with it the other windows) the state, and that this window can take requests to switch.
+  else desktop?.mcp?.status(status);
 }
 
 /**
@@ -176,7 +188,8 @@ async function route(req: BridgeRequest): Promise<unknown> {
     const holder = await a.holder(id);
     if (holder && !holder.user && holder.session !== session && !holder.ended) throw new Error(`${holder.client} is working on this project in its own meerCAD window right now. Pick another project, or wait until it is done.`);
     if (holder?.user) await a.take(id, client);
-    if (useApp.getState().project?.id === id || useApp.getState().tabs.some((x) => x.id === id)) await holdProject(id, client);
+    // Its tab here closes too: a project is open in one window only.
+    if (useApp.getState().project?.id === id || useApp.getState().tabs.some((x) => x.id === id)) await releaseProject(id);
     // A window left by an assistant that has finished, with this project, is taken over.
     return a.call(await a.open({ session, client, project: id }), req);
   }
@@ -188,7 +201,7 @@ async function route(req: BridgeRequest): Promise<unknown> {
   throw new Error(`Open the project to work on first (open_project, new_project or open_example): it opens in a meerCAD window of your own, the user keeps working in theirs.${front ? ` The user has "${front.name}" open (id "${front.id}"); open_project with that id moves it over to your window.` : ""}`);
 }
 
-/** Every window of the user's says which project it shows, and gives one up when an assistant opens it. */
+/** Every window of the user's says which project it shows, and closes it when an assistant opens it. */
 function initUserWindow(): void {
   const a = desktop?.assistant;
   if (!a || !desktop) return;
@@ -202,24 +215,10 @@ function initUserWindow(): void {
   };
   useApp.subscribe(report);
   report();
-  desktop.on("release-project", ({ callId, id, client }) => {
-    void holdProject(id, client).finally(() => a.released(callId));
+  desktop.on("release-project", ({ callId, id }) => {
+    void releaseProject(id).finally(() => a.released(callId));
   });
-  desktop.on("project-free", (id) => void freeProject(id));
 }
-
-/** The user takes a project back from the assistant working on it in its own window. */
-export async function takeBack(): Promise<void> {
-  const id = useApp.getState().project?.id;
-  if (!id) return;
-  await desktop?.assistant?.reclaim(id);
-  await freeProject(id);
-}
-/** Brings the assistant's window with the open project to the front. */
-export const showAssistantWindow = () => {
-  const id = useApp.getState().project?.id;
-  if (id) void desktop?.assistant?.focusHolder(id, true);
-};
 
 /** In this window: shows who is working, and locks the app while the request changes things. */
 async function serve(req: BridgeRequest): Promise<unknown> {
@@ -260,13 +259,6 @@ function initAssistantWindow(): void {
     stopped = false;
     useApp.setState({ aiSessionEnded: false });
     report();
-  });
-  desktop.on("assistant-stop", () => {
-    // The user took the project back: this window stops and lets it go.
-    stopped = true;
-    unlock();
-    useApp.setState({ aiActivity: null });
-    void flushSave(true).then(() => goHome());
   });
   desktop.on("assistant-ended", () => {
     unlock();

@@ -15,6 +15,13 @@ const api = {
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
   /** The port this build's MCP server listens on (RC, WIP and the store release each have their own). */
   mcpPort: ipcRenderer.sendSync("mcp:port") as number,
+  /** The MCP bridge, held by the user's first window: its state, and turning it on or off from any window. */
+  mcp: {
+    /** The first window reports its state. */
+    status: (s: string) => ipcRenderer.send("mcp:status", s),
+    hostStatus: (): Promise<"off" | "connecting" | "connected"> => ipcRenderer.invoke("mcp:host-status"),
+    setEnabled: (on: boolean): Promise<void> => ipcRenderer.invoke("mcp:set-enabled", on),
+  },
   /** Flags shared by every meerCAD on this Mac (e.g. the tour was seen), read once at start. */
   shared: {
     initial: ipcRenderer.sendSync("shared:get") as Record<string, unknown>,
@@ -27,9 +34,10 @@ const api = {
     call: (window: number, req: unknown): Promise<unknown> => ipcRenderer.invoke("assistant:call", { window, req }),
     holder: (id: string): Promise<{ session: string; client: string; ended: boolean; user: boolean } | null> => ipcRenderer.invoke("assistant:holder", id),
     take: (id: string, client: string): Promise<void> => ipcRenderer.invoke("assistant:take", { id, client }),
-    reclaim: (id: string): Promise<void> => ipcRenderer.invoke("assistant:reclaim", id),
     released: (callId: number) => ipcRenderer.send("window:released", callId),
     focusHolder: (id: string, assistants = false): Promise<boolean> => ipcRenderer.invoke("assistant:focus-holder", { id, assistants }),
+    /** The projects other windows have open (id → the assistant's name, "" for one of the user's windows). */
+    openElsewhere: (): Promise<Record<string, string>> => ipcRenderer.invoke("assistant:open-elsewhere"),
     ended: (session: string) => ipcRenderer.send("assistant:ended", session),
     // In an assistant's window:
     ready: () => ipcRenderer.send("assistant:ready"),
@@ -71,7 +79,7 @@ const api = {
   writeLocalFile: (p: { path: string; base64: string }) => ipcRenderer.invoke("files:write-local", p),
   /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
   shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
-  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "assistant-ended" | "assistant-adopted" | "release-project" | "project-free" | "assistant-stop", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "assistant-ended" | "assistant-adopted" | "release-project" | "open-elsewhere" | "mcp-status" | "mcp-set-enabled", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

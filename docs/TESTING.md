@@ -68,6 +68,8 @@ docs/RELEASE.md), and the user's assistants may hold it. For a test run, start t
 `ELECTRON_RUN_AS_NODE=1`), set `sessionStorage["meercad.mcp.port"] = "47999"` in the app window
 (through `scripts/drive-app.mjs eval`) and reload it; then drive the tools with an MCP client
 (`@modelcontextprotocol/sdk` client over stdio). The override ends with the window.
+A server whose `MEERCAD_MCP_PORT` is not a build's port never opens an app; set `MEERCAD_NO_LAUNCH=1`
+to keep any other server from opening its app when it finds none connected.
 Check what comes back and the files written (unzip a 3MF, count STEP solids), not only "no error".
 
 ## 1. Unit and acceptance tests
