@@ -85,6 +85,16 @@ describe("hole", () => {
     expect(pair.message).toMatch(/every insert/);
   });
 
+  it("warns where the part is too thin for the insert's length", async () => {
+    const s = await newSession();
+    const thin: Feature[] = [sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 40, 30)), { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 4, mode: "new_body" }];
+    const r = s.rebuild(doc([...thin, hole({ kind: "insert", points: [[20, 15]] })])).report.features.find((f) => f.id === "ho1")!;
+    expect(r.status).toBe("warning");
+    expect(r.message).toMatch(/too thin for the insert: about 4 mm of material, the M3×5.7 insert is 5.7 mm long; use a shorter one \(4 or 3 mm\)/);
+    const short = s.rebuild(doc([...thin, hole({ kind: "insert", length: 3, points: [[20, 15]] })])).report.features.find((f) => f.id === "ho1")!;
+    expect(short.status).toBe("ok");
+  });
+
   it("threads tapped holes", async () => {
     const t = await removed({ kind: "tapped", depth: 8, points: [[20, 15]] });
     expect(t.tags).toContain("ho1.thread");

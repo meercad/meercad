@@ -21,6 +21,7 @@ import {
   type ResolvedSplit,
   holeShape,
   type InsertDims,
+  insertLengths,
   HoleError,
   type ResolvedPlane,
   type ResolvedRevolve,
@@ -1757,16 +1758,13 @@ function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
 function insertWalls(ctx: Ctx, state: Omit<ModelState, "arena">, f: ResolvedHole, frame: PlaneFrame, r: number, ins: InsertDims): void {
   const { oc, arena } = ctx;
   const a: Vec3 = f.flip ? frame.normal : [-frame.normal[0], -frame.normal[1], -frame.normal[2]];
-  const R = r + ins.wall;
-  const ring = Math.PI * (R * R - r * r) * ins.length;
   const volume = (s: TopoDS_Shape) => {
     const props = arena.track(new oc.GProp_GProps());
     oc.BRepGProp.VolumeProperties(s, props, false, false, false);
     return Math.abs(props.Mass());
   };
-  const thin: number[] = [];
-  f.points.forEach((p, k) => {
-    const c = toWorld(frame, p);
+  /** Material within radius R of the axis, as deep as the insert. */
+  const material = (c: Vec3, R: number) => {
     const ax = arena.track(new oc.gp_Ax2(arena.track(new oc.gp_Pnt(...c)), arena.track(new oc.gp_Dir(...a))));
     const probe = arena.track(arena.track(new oc.BRepPrimAPI_MakeCylinder(ax, R, ins.length)).Shape());
     const pb = bounds(oc, arena, probe);
@@ -1776,12 +1774,29 @@ function insertWalls(ctx: Ctx, state: Omit<ModelState, "arena">, f: ResolvedHole
       const common = arena.track(new oc.BRepAlgoAPI_Common(b.shape, probe));
       if (common.IsDone() && !common.HasErrors()) inside += volume(arena.track(common.Shape()));
     }
+    return inside;
+  };
+  const annulus = (R: number) => Math.PI * (R * R - r * r);
+  const shallow: { k: number; depth: number }[] = [];
+  const thin: number[] = [];
+  f.points.forEach((p, k) => {
+    const c = toWorld(frame, p);
+    // Right beside the hole: the material must reach as deep as the insert.
+    const near = r + 0.3;
+    const depth = material(c, near) / annulus(near);
     // A little slack for the faceted volume integral.
-    if (inside < ring * 0.98) thin.push(k + 1);
+    if (depth < ins.length * 0.98) shallow.push({ k: k + 1, depth });
+    else if (material(c, r + ins.wall) < annulus(r + ins.wall) * ins.length * 0.98) thin.push(k + 1);
   });
-  if (!thin.length) return;
-  const which = f.points.length === 1 ? "the insert" : thin.length === f.points.length ? "every insert" : `insert${thin.length === 1 ? "" : "s"} ${thin.join(", ")}`;
-  ctx.warnings.push(`the wall around ${which} is thinner than the ${ins.wall} mm an ${ins.size} insert needs: move it away from the edge or make the part thicker`);
+  const which = (ks: number[]) => (f.points.length === 1 ? "the insert" : ks.length === f.points.length ? "every insert" : `insert${ks.length === 1 ? "" : "s"} ${ks.join(", ")}`);
+  if (shallow.length) {
+    const least = Math.min(...shallow.map((x) => x.depth));
+    const shorter = insertLengths(ins.size).filter((l) => l < ins.length && l <= least + 1e-6);
+    ctx.warnings.push(
+      `the part is too thin for ${which(shallow.map((x) => x.k))}: about ${+least.toFixed(1)} mm of material, the ${ins.size}×${ins.length} insert is ${ins.length} mm long; ${shorter.length ? `use a shorter one (${shorter.join(" or ")} mm) or ` : ""}make the part thicker`,
+    );
+  }
+  if (thin.length) ctx.warnings.push(`the wall around ${which(thin)} is thinner than the ${ins.wall} mm an ${ins.size} insert needs: move it away from the edge`);
 }
 
 /**
