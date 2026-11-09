@@ -152,6 +152,15 @@ what it must come out as.
   screenshots with `node scripts/drive-app.mjs` (eval / shot). There is no browser version: in a
   plain browser the interface only says it runs as the app. Check once with a narrow window (phone
   layout).
+- **Test projects stay out of the user's list.** The WIP saves to the user's real projects folder
+  (iCloud, shared with the RC and the iPad). What an assistant creates there over MCP
+  (`open_example`, `new_project`, `import_file`) goes instead to the WIP's own test folder
+  (`~/Library/Application Support/meerCAD WIP/Test projects`, ids `.tests/…`, not in the overview,
+  dropped after a week untouched). Only `keep: true` (or `move_project`) puts a project into the
+  user's projects, for work meant for them (e.g. importing their own files). Projects made by
+  clicking through the WIP's interface (`drive-app.mjs`, `meercadTest.store.newProject`) do land in
+  the user's folder: test those in an own app copy with `MEERCAD_PROJECTS_DIR`, or move what you
+  made to the Trash before reporting.
 - **iPad:** build and install the iOS app (`apps/ios`). Every check below runs on the iPad with touch
   and Pencil and no keyboard as well.
 - In development builds `window.meercadTest` gives scripts the document, the result and the store

@@ -60,7 +60,7 @@ interface DesktopApi {
     save(p: { id: string; doc: MeercadDocument; thumbnail?: string }): Promise<void>;
     /** Stores a project's picture without touching its file. */
     thumbnail(p: { id: string; thumbnail: string }): Promise<void>;
-    create(p: { name: string; doc: MeercadDocument; folder?: string }): Promise<ProjectMeta>;
+    create(p: { name: string; doc: MeercadDocument; folder?: string; test?: boolean }): Promise<ProjectMeta>;
     rename(p: { id: string; name: string }): Promise<{ id: string; name: string; folder: string }>;
     move(p: { id: string; folder: string }): Promise<{ id: string; name: string; folder: string }>;
     folders(): Promise<string[]>;
@@ -165,8 +165,26 @@ export async function loadProject(id: string): Promise<Project | undefined> {
   return files.projects.load(id);
 }
 
+/**
+ * While an assistant's request runs that may create a project (open_example, new_project,
+ * import_file without `keep`): the Mac's WIP build puts what it creates in its test folder rather
+ * than the user's projects folder. Other builds ignore it.
+ */
+let creatingTest = 0;
+export async function asTestProjects<T>(on: boolean, fn: () => Promise<T>): Promise<T> {
+  if (!on) return fn();
+  creatingTest++;
+  try {
+    return await fn();
+  } finally {
+    creatingTest--;
+  }
+}
+/** A test project's id (see asTestProjects): in the WIP's own folder, not in the user's list. */
+export const isTestProject = (id: string) => id.startsWith(".tests/");
+
 export async function createProject(name: string, doc: MeercadDocument, folder = ""): Promise<ProjectMeta> {
-  return files.projects.create({ name, doc, folder });
+  return files.projects.create({ name, doc, folder, ...(creatingTest > 0 ? { test: true } : {}) });
 }
 
 export async function saveProject(p: Project): Promise<void> {

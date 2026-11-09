@@ -217,8 +217,8 @@ server.registerTool(
 );
 server.registerTool(
   "new_project",
-  { title: "New project", description: "Creates and opens an empty project for this session (in a tab of your own, see open_project).", inputSchema: { name: z.string().optional() } },
-  guard(async ({ name }) => text(await call("new_project", { name }))),
+  { title: "New project", description: "Creates and opens an empty project for this session (in a tab of your own, see open_project).", inputSchema: { name: z.string().optional(), keep: z.boolean().optional().describe("WIP test build only: true saves the new project in the user's projects; without it, it goes to the build's own test folder (never in the user's list) so test runs leave nothing behind") } },
+  guard(async ({ name, keep }) => text(await call("new_project", { name, keep }))),
 );
 
 const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
@@ -575,17 +575,17 @@ server.registerTool(
   {
     title: "Import a file",
     description: "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project (opened in this session's tab; no project needs to be open first). (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ; replace {path} and add_features {path, ids?} take the design or features of a .meercad file into the open project.)",
-    inputSchema: { path: z.string() },
+    inputSchema: { path: z.string(), keep: z.boolean().optional().describe("WIP test build only: true saves the new project in the user's projects; without it, it goes to the build's own test folder (never in the user's list) so test runs leave nothing behind") },
   },
-  guard(async ({ path }) => {
+  guard(async ({ path, keep }) => {
     const file = resolve(path);
     const data = await readFile(file);
     // A design comes in as it is saved (also from a wrapped {name, document} file).
     if ([".meercad", ".json"].includes(extname(file).toLowerCase())) {
       const { doc, name } = meercadDocument(data, file);
-      return text(await call("import_file", { name: `${name ?? basename(file, extname(file))}.meercad`, base64: Buffer.from(JSON.stringify(doc)).toString("base64") }, 300_000));
+      return text(await call("import_file", { name: `${name ?? basename(file, extname(file))}.meercad`, base64: Buffer.from(JSON.stringify(doc)).toString("base64"), keep }, 300_000));
     }
-    return text(await call("import_file", { name: basename(file), base64: data.toString("base64") }, 300_000));
+    return text(await call("import_file", { name: basename(file), base64: data.toString("base64"), keep }, 300_000));
   }),
 );
 
@@ -600,7 +600,7 @@ server.registerTool("list_folders", { title: "List folders", description: "The f
 server.registerTool("create_folder", { title: "New folder", description: "Creates a folder for projects inside `parent` (\"\" for the top level).", inputSchema: { parent: z.string().optional(), name: z.string().min(1).max(120) } }, guard(async (a) => text(await call("create_folder", a))));
 server.registerTool("move_project", { title: "Move the project", description: "Moves the open project into a folder (see list_folders; \"\" for the top level).", inputSchema: { folder: z.string() } }, guard(async (a) => text(await call("move_project", a))));
 server.registerTool("list_examples", { title: "Examples", description: "The example designs that come with meerCAD (finished designs to open and change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_examples"))));
-server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in a tab of your own, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]) } }, guard(async (a) => text(await call("open_example", a))));
+server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in a tab of your own, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]), keep: z.boolean().optional().describe("WIP test build only: true saves the new project in the user's projects; without it, it goes to the build's own test folder (never in the user's list) so test runs leave nothing behind") } }, guard(async (a) => text(await call("open_example", a))));
 
 server.registerTool(
   "terrain_height",
