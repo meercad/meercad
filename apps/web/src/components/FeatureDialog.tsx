@@ -254,7 +254,10 @@ function handlePick(p: Pick, d: DialogState): void {
         if (g.op === "cable") {
           if (p.kind !== "face" || p.bodyId === g.id) break;
           const r = (v: number) => Math.round(v * 100) / 100;
-          g.points = [...g.points, { at: [r(p.point[0]), r(p.point[1]), r(p.point[2])], on: p.bodyId }];
+          // The cable lies on the face, not half in it: its centre a radius off along the normal.
+          const off = g.shape === "ribbon" ? cable.RIBBON_THICKNESS / 2 : typeof g.diameter === "number" ? g.diameter / 2 : 0;
+          const n = p.normal ?? [0, 0, 0];
+          g.points = [...g.points, { at: [r(p.point[0] + n[0] * off), r(p.point[1] + n[1] * off), r(p.point[2] + n[2] * off)], on: p.bodyId }];
           break;
         }
         // Points are the tap projected onto the hole's plane (u, v are the same on parallel faces).
@@ -1181,7 +1184,7 @@ function CableFields({ f, set }: { f: Of<"cable">; set: (patch: Record<string, u
           <div key={i} className="cable-point">
             <div className="cable-xyz">
               {([0, 1, 2] as const).map((k) => (
-                <ExprInput key={k} value={pt.at[k]} onCommit={(v) => setPoint(i, { at: pt.at.map((q, j) => (j === k ? v : q)) as [Expr, Expr, Expr] })} />
+                <ExprInput key={k} value={pt.at[k]} quiet onCommit={(v) => setPoint(i, { at: pt.at.map((q, j) => (j === k ? v : q)) as [Expr, Expr, Expr] })} />
               ))}
             </div>
             <div className="row" style={{ gap: 4, alignItems: "center" }}>
