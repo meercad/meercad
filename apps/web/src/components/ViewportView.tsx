@@ -844,7 +844,7 @@ export function ViewportView() {
               ["wireframe", t("Wireframe")],
               ["rendered", t("Rendered")],
             ];
-            showMenu(r.left - 220, r.top, [
+            showMenu(r.left - 6, r.top, [
               ...modes.map(([m, label]) => ({ label: `${check(vp?.mode === m)}${label}`, onClick: () => (vp?.setDisplayMode(m), setMode(m)) })),
               "sep" as const,
               {
@@ -859,7 +859,7 @@ export function ViewportView() {
               { label: `${check(showValues)}${t("Dimensions on the model")}`, onClick: () => setPrefs({ showValues: !showValues }) },
               { label: `${check(colorParts)}${t("A colour for each part")}`, onClick: () => setPrefs({ colorParts: !colorParts }) },
               ...(hasTextures ? [{ label: `${check(showTextures)}${t("Surface textures")}`, onClick: () => setPrefs({ showTextures: !showTextures }) }] : []),
-            ]);
+            ], { alignRight: true });
           }}
         >
           <SlidersHorizontal />

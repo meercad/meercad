@@ -103,7 +103,7 @@ export function TopBar() {
     })),
   ];
   const fileItems = (): MenuEntry[] => [
-    { label: t("Import STEP, STL, 3MF, OBJ, DXF, SVG…"), icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
+    { label: t("Import…"), title: t("STEP, STL, 3MF, OBJ, DXF or SVG"), icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
     { label: t("Export"), icon: <FileDown />, submenu: exportItems() },
     ...(nativeApp ? [{ label: t("View in AR (real size on the table)"), icon: <Rotate3d />, onClick: () => void viewInAr() }] : []),
     {
@@ -130,12 +130,15 @@ export function TopBar() {
   };
   const openFile = () => {
     const r = fileBtn.current!.getBoundingClientRect();
-    showMenu(r.right - 240, r.bottom + 6, fileItems());
+    showMenu(r.right, r.bottom + 6, fileItems(), { alignRight: true });
   };
   const openMore = () => {
     const r = moreBtn.current!.getBoundingClientRect();
     // The phone has no File button: its items come first here.
-    showMenu(r.right - 240, r.bottom + 6, [
+    showMenu(
+      r.right,
+      r.bottom + 6,
+      [
       ...(compact ? [...fileItems(), "sep" as const] : []),
       { label: t("View"), icon: <Eye />, submenu: viewItems() },
       { label: t("Settings…"), icon: <Settings />, kbd: "Mod+,", onClick: () => window.dispatchEvent(new Event("meercad:settings")) },
@@ -143,7 +146,9 @@ export function TopBar() {
       ...(compact ? [] : [{ label: t("Keyboard shortcuts"), icon: <Keyboard />, kbd: "?", onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" })) }]),
       "sep",
       { label: t("About meerCAD, privacy & licences"), icon: <Info />, onClick: () => window.dispatchEvent(new CustomEvent("meercad:about")) },
-    ]);
+      ],
+      { alignRight: true },
+    );
   };
 
   // Phone: the project name stands in for the tab strip and switches between open projects.
