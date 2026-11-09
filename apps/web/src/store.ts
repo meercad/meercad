@@ -16,6 +16,8 @@ import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { assistantWindow, createProject, desktop, listFolders, listProjects, loadProject, renameProjectFile, saveProject, saveThumbnail, type AssistantTab, type ProjectMeta } from "./lib/persistence";
 import { viewIsCurrent } from "./lib/pictureState";
 import KernelWorker from "./kernel.worker.ts?worker";
+import kernelBuild from "./kernel.worker.ts?worker&url";
+import { outputKey, readOutput, writeOutput, type MeshOptions } from "./lib/openCache";
 import { isCompact } from "./lib/layout";
 import type { PaceCurve, ProgressPoint } from "./lib/eta";
 import { t } from "./lib/i18n";
@@ -116,7 +118,10 @@ export const kernel = new KernelClient(new KernelWorker({ name: wantThreads && c
 export const spareKernel = () => new KernelClient(new KernelWorker({ name: "kernel-spare" }));
 // Touch screens are tablets: meshing is a large share of every rebuild there, and the screen is
 // held close but small, so looser tolerances (about half the triangles) are hard to see.
-if (matchMedia("(pointer: coarse)").matches) void kernel.configure(2);
+const meshCoarse = matchMedia("(pointer: coarse)").matches ? 2 : 1;
+if (meshCoarse !== 1) void kernel.configure(meshCoarse);
+/** How the editor's kernel meshes parts: a kept result (openCache) is only used for the same. */
+export const editorMeshOptions = (): MeshOptions => ({ build: kernelBuild, coarse: meshCoarse, textures: usePrefs.getState().showTextures });
 let docStore = new DocumentStore();
 /** Each open tab keeps its document and undo history in memory while it is in the background. */
 const tabStores = new Map<string, DocumentStore>();
@@ -268,16 +273,21 @@ export function startTask(label: string, progress: number | null = null, options
  */
 function rebuildTask(): { onProgress: RebuildProgress; done(): void } {
   let task: ReturnType<typeof startTask> | null = null;
+  // The tab this rebuild is for: another tab brought to the front meanwhile shows its own progress,
+  // not this one's (this one shows on its tab).
+  const store = docStore;
+  const project = get().project?.id;
+  const ours = () => docStore === store;
   return {
     onProgress: ({ index, total, feature }) => {
-      if (!get().output) return set({ buildProgress: { index, total, feature } });
-      task ??= startTask(t("Rebuilding"));
-      const f = docStore.doc.features.find((x) => x.id === feature);
+      if (ours() && !get().output) return set({ buildProgress: { index, total, feature } });
+      task ??= startTask(t("Rebuilding"), null, project ? { project } : {});
+      const f = store.doc.features.find((x) => x.id === feature);
       task.update(index / Math.max(1, total), t("{feature} ({n} of {total})", { feature: f ? featureName(f) : feature, n: index + 1, total }));
     },
     done: () => {
       task?.done();
-      if (get().buildProgress) set({ buildProgress: null });
+      if (ours() && get().buildProgress) set({ buildProgress: null });
     },
   };
 }
@@ -385,12 +395,14 @@ export async function rebuildNow(): Promise<RebuildOutput> {
   set({ building: true });
   for (;;) {
     const task = rebuildTask();
+    const doc = docStore.doc;
     try {
-      const output = await kernel.rebuild(docStore.doc, { textures: usePrefs.getState().showTextures, onProgress: task.onProgress });
-      if (!get().dialog && !get().proposalDoc) {
+      const output = await kernel.rebuild(doc, { textures: usePrefs.getState().showTextures, onProgress: task.onProgress });
+      if (!get().dialog && !get().proposalDoc && docStore.doc === doc) {
         set({ output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
         shownDoc = docStore.doc;
         scheduleThumbnail();
+        scheduleOutputCache();
       }
       set({ building: false });
       return output;
@@ -503,12 +515,16 @@ export function scheduleRebuild(): void {
     const textures = usePrefs.getState().showTextures;
     const textured = doc.features.some((f) => (f.op === "texture" || f.op === "lithophane") && !f.suppressed);
     const quick = textures && !draftTextures && textured;
+    // The tab this rebuild is for: its result is not shown if another tab came to the front meanwhile.
+    const store = docStore;
     const show = (output: RebuildOutput, final: boolean) => {
+      if (docStore !== store) return;
       set(preview ? { output, previewing: true, building: !final } : { output, baseOutput: output, previewing: false, building: !final, selection: remapSelection(get().selection, get().baseOutput, output) });
       if (!preview && final) {
         shownDoc = doc;
         scheduleThumbnail();
         fillBodyProps(output);
+        scheduleOutputCache();
       }
       // Once per session: a slow textured part gets the hint that textures can be hidden while editing.
       if (final && textures && textured && !texturesHinted && performance.now() - t0 > SLOW_TEXTURE_MS) {
@@ -870,6 +886,8 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
     sketchId: null,
     selection: [],
     output: null,
+    // A rebuild still running for the tab left behind reports on that tab, not here.
+    buildProgress: null,
     hidden: new Set(),
     measure: { active: false, picks: [], result: null },
     proposalDoc: null,
@@ -878,7 +896,38 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   });
   syncDoc();
   set({ saveState: "saved" });
+  showKeptOutput(meta.id);
   void notePacks(meta.id, doc);
+}
+
+/**
+ * Shows what the project looked like when it was last built here (openCache), while the kernel
+ * builds it again; only for exactly the same document, and only until the real result is there.
+ */
+function showKeptOutput(project: string): void {
+  const store = docStore;
+  const doc = store.doc;
+  if (!doc.features.length) return;
+  void readOutput(project, outputKey(doc, editorMeshOptions())).then((kept) => {
+    if (!kept || docStore !== store || store.doc !== doc || get().output || get().dialog || get().proposalDoc) return;
+    set({ output: kept, baseOutput: kept, previewing: false, buildProgress: null });
+  });
+}
+
+/** After a finished rebuild the result is kept for the next opening (openCache), once things are quiet. */
+let outputCacheTimer: number | undefined;
+function scheduleOutputCache(): void {
+  const project = get().project?.id;
+  const store = docStore;
+  const doc = store.doc;
+  if (!project) return;
+  clearTimeout(outputCacheTimer);
+  outputCacheTimer = window.setTimeout(() => {
+    // Still this project's latest result (with volumes and areas filled in by now)?
+    if (docStore !== store || store.doc !== doc || shownDoc !== doc || get().previewing) return;
+    const output = get().baseOutput;
+    if (output) void writeOutput(project, outputKey(doc, editorMeshOptions()), output);
+  }, 1500);
 }
 
 export const undoAvailable = () => docStore.canUndo;
