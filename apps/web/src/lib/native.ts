@@ -201,6 +201,15 @@ async function readThumb(id: string): Promise<string | undefined> {
   }
 }
 
+/** When the picture was written, where the file system says. */
+async function thumbTime(id: string): Promise<number | undefined> {
+  try {
+    return (await Filesystem.stat({ path: thumbPath(id), directory: LIB })).mtime;
+  } catch {
+    return undefined;
+  }
+}
+
 async function moveThumb(from: string, to: string): Promise<void> {
   if (!(await thumbExists(thumbPath(from)))) return;
   await Filesystem.deleteFile({ path: thumbPath(to), directory: LIB }).catch(() => undefined);
@@ -262,7 +271,8 @@ export const nativeFiles: FileStore | undefined = nativeApp
             (await projectFiles(r)).map(async ({ id, file }) => {
               const st = await Filesystem.stat(at(r, file));
               const thumbnail = await readThumb(id);
-              return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, ...(st.ctime ? { createdAt: st.ctime } : {}), ...(thumbnail ? { thumbnail } : {}) };
+              const thumbnailAt = thumbnail ? await thumbTime(id) : undefined;
+              return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, ...(st.ctime ? { createdAt: st.ctime } : {}), ...(thumbnail ? { thumbnail, ...(thumbnailAt !== undefined ? { thumbnailAt } : {}) } : {}) };
             }),
           );
           return out.sort((a, b) => b.updatedAt - a.updatedAt);

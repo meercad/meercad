@@ -152,12 +152,14 @@ async function listProjects() {
       const id = toId(rel);
       const st = await stat(join(projectsDir(), rel));
       let thumbnail: string | undefined;
+      let thumbnailAt: number | undefined;
       try {
         thumbnail = `data:image/png;base64,${(await readFile(thumbPath(id))).toString("base64")}`;
+        thumbnailAt = (await stat(thumbPath(id))).mtimeMs;
       } catch {
         thumbnail = undefined;
       }
-      return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, createdAt: st.birthtimeMs, ...(thumbnail ? { thumbnail } : {}) };
+      return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, createdAt: st.birthtimeMs, ...(thumbnail ? { thumbnail, thumbnailAt } : {}) };
     }),
   );
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -212,10 +214,12 @@ ipcMain.handle("projects:save", async (e, p: { id: string; doc: unknown; thumbna
     await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
   }
 });
-ipcMain.handle("projects:thumbnail", async (_e, p: { id: string; thumbnail: string }) => {
+ipcMain.handle("projects:thumbnail", async (e, p: { id: string; thumbnail: string }) => {
   if (!p.thumbnail.startsWith("data:image/png;base64,") || !existsSync(projectPath(p.id))) return;
   await mkdir(thumbsDir(), { recursive: true });
   await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
+  // An overview open in another window shows the new picture.
+  for (const w of BrowserWindow.getAllWindows()) if (w.webContents.id !== e.sender.id) w.webContents.send("projects-changed");
 });
 ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown; folder?: string }) => {
   const id = await uniqueId(p.name, p.folder ?? "");

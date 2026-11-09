@@ -13,7 +13,8 @@ import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
-import { assistantWindow, createProject, desktop, extraWindow, listFolders, listProjects, loadProject, renameProjectFile, saveProject, type ProjectMeta } from "./lib/persistence";
+import { assistantWindow, createProject, desktop, extraWindow, listFolders, listProjects, loadProject, renameProjectFile, saveProject, saveThumbnail, type ProjectMeta } from "./lib/persistence";
+import { viewIsCurrent } from "./lib/pictureState";
 import KernelWorker from "./kernel.worker.ts?worker";
 import { isCompact } from "./lib/layout";
 import type { PaceCurve, ProgressPoint } from "./lib/eta";
@@ -397,7 +398,11 @@ export async function rebuildNow(): Promise<RebuildOutput> {
     const task = rebuildTask();
     try {
       const output = await kernel.rebuild(docStore.doc, { textures: usePrefs.getState().showTextures, onProgress: task.onProgress });
-      if (!get().dialog && !get().proposalDoc) set({ output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
+      if (!get().dialog && !get().proposalDoc) {
+        set({ output, baseOutput: output, previewing: false, selection: remapSelection(get().selection, get().baseOutput, output) });
+        shownDoc = docStore.doc;
+        scheduleThumbnail();
+      }
       set({ building: false });
       return output;
     } catch (e) {
@@ -512,6 +517,7 @@ export function scheduleRebuild(): void {
     const show = (output: RebuildOutput, final: boolean) => {
       set(preview ? { output, previewing: true, building: !final } : { output, baseOutput: output, previewing: false, building: !final, selection: remapSelection(get().selection, get().baseOutput, output) });
       if (!preview && final) {
+        shownDoc = doc;
         scheduleThumbnail();
         fillBodyProps(output);
       }
@@ -845,8 +851,9 @@ export async function newProject(doc: MeercadDocument = emptyDocument(), name = 
 }
 
 function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore): void {
-  // Refresh the project's picture once per opening, after the first rebuild.
-  thumbFor = null;
+  // Nothing of this project is on screen until its first rebuild ends.
+  shownDoc = null;
+  thumbDoc = null;
   const leaving = get().project;
   if (leaving) tabStores.set(leaving.id, docStore);
   docStore = store ?? new DocumentStore(doc);
@@ -902,23 +909,37 @@ function scheduleSave(): void {
   saveTimer = window.setTimeout(() => void flushSave(), 800);
 }
 
-/** Projects get a picture once the model has been built, even if nothing was changed yet. */
+/** The document whose final rebuild the view shows (pictureState.ts). */
+let shownDoc: MeercadDocument | null = null;
+/** The document the open project's saved picture shows. */
+let thumbDoc: MeercadDocument | null = null;
+
+/**
+ * After every finished rebuild the project's picture is brought up to date (a save during a long
+ * rebuild leaves it out, see pictureState.ts), also when nothing was changed yet.
+ */
 let thumbTimer: number | undefined;
-let thumbFor: string | null = null;
 function scheduleThumbnail(): void {
   const p = get().project;
-  if (!p || thumbFor === p.id) return;
+  if (!p || thumbDoc === docStore.doc) return;
   clearTimeout(thumbTimer);
   thumbTimer = window.setTimeout(() => {
-    if (get().project?.id !== p.id || get().sketchId || get().dialog) return;
-    thumbFor = p.id;
-    void flushSave(true);
+    if (get().project?.id !== p.id || get().sketchId || get().dialog || heldBy() || thumbDoc === docStore.doc) return;
+    // A pending save takes the picture along.
+    if (get().saveState !== "saved") return void flushSave();
+    const doc = docStore.doc;
+    const thumbnail = snapshot();
+    if (!thumbnail) return;
+    thumbDoc = doc;
+    saveThumbnail(p.id, thumbnail).catch(() => undefined);
   }, 1200);
 }
 
 function snapshot(): string | undefined {
   // Without its terrain while that is still being read: the picture waits for the next save.
   if (viewportRef?.sceneryLoading) return undefined;
+  // Still rebuilding: the view shows an earlier state, or nothing yet.
+  if (!viewIsCurrent({ shown: shownDoc, current: docStore.doc, previewing: get().previewing || !!get().proposalDoc })) return undefined;
   try {
     return viewportRef?.snapshot(480, 360, true);
   } catch {
@@ -934,9 +955,11 @@ export async function flushSave(withThumbnail = false): Promise<void> {
   // The assistant's window saves it; this window only shows it.
   if (heldBy()) return;
   set({ saveState: "saving" });
+  const doc = docStore.doc;
   const thumbnail = snapshot();
   try {
-    await saveProject({ ...p, updatedAt: Date.now(), doc: docStore.doc, ...(thumbnail ? { thumbnail } : {}) });
+    await saveProject({ ...p, updatedAt: Date.now(), doc, ...(thumbnail ? { thumbnail } : {}) });
+    if (thumbnail && get().project?.id === p.id) thumbDoc = doc;
     set({ saveState: "saved" });
   } catch (e) {
     set({ saveState: "unsaved" });
