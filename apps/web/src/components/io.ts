@@ -422,13 +422,18 @@ export async function importFile(file?: File | null, opts: { seeThrough?: boolea
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const base = file.name.replace(/\.\w+$/, "");
   if (ext === "meercad" || ext === "json") {
-    const v = validateDocument(JSON.parse(await file.text()));
+    const json = JSON.parse(await file.text()) as unknown;
+    // A design some scripts write wrapped as {name, document} comes in too.
+    const inner = json && typeof json === "object" && !("format" in json) && "document" in json ? (json as { name?: unknown; document: unknown }) : null;
+    const raw = inner ? inner.document : json;
+    // Files written by scripts may leave out what an empty design has.
+    const v = validateDocument(raw && typeof raw === "object" ? { params: {}, rollback: null, ...raw } : raw);
     if (!v.ok) {
       toast(t("Not a valid meerCAD file: {error}", { error: String(v.errors[0]) }), "error");
       return false;
     }
     await flushSave();
-    await newProject(v.value, base);
+    await newProject(v.value, inner && typeof inner.name === "string" && inner.name ? inner.name : base);
     return true;
   }
   if (!["step", "stp", "stl", "3mf", "obj", "dxf", "svg"].includes(ext)) {

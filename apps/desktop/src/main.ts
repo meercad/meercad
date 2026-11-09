@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, normalize, relative, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
 
@@ -272,6 +272,21 @@ ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | str
   if (r.canceled || !r.filePath) return null;
   await writeFile(r.filePath, typeof p.data === "string" ? p.data : Buffer.from(p.data));
   return r.filePath;
+});
+/**
+ * Files the MCP server asks for but may not open itself: macOS lets a process into Documents,
+ * Desktop, Downloads and iCloud Drive only with the user's OK, and the server, running in the
+ * background, waits for it in vain. This app has that OK (or asks for it in front).
+ */
+const localFile = (path: unknown) => {
+  if (typeof path !== "string" || !isAbsolute(path)) throw new Error("an absolute path is needed");
+  return normalize(path);
+};
+ipcMain.handle("files:read-local", async (_e, path: unknown) => (await readFile(localFile(path))).toString("base64"));
+ipcMain.handle("files:write-local", async (_e, p: { path: unknown; base64: unknown }) => {
+  const file = localFile(p.path);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, Buffer.from(String(p.base64), "base64"));
 });
 /**
  * Shares a file through the system's share menu (AirDrop, Messages, Mail …) at the pointer, or at

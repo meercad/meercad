@@ -5,14 +5,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { z } from "zod";
 import { FEATURE_NAMES, GUIDE_TEXT, MCP_NOTES, OP_NAMES, schemaFor } from "@meercad/ai/prompt";
 import { read3mf, readObj, writeStl } from "@meercad/io";
 import { gearCalc } from "./gearCalc.js";
 import { createBridge } from "./hub.js";
+import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
+import { meercadDocument } from "./meercadFile.js";
 import { DEFAULT_PORT, type BridgeMethod } from "./protocol.js";
 
 const port = Number(process.env["MEERCAD_MCP_PORT"] ?? DEFAULT_PORT);
@@ -32,6 +32,15 @@ function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown>
   return bridge.call<T>(method, params, timeoutMs, info?.title ?? info?.name ?? "Assistant");
 }
 
+/** The app reads and writes the files this server may not reach (see localFiles). */
+const appFiles: AppFiles = {
+  read: async (path) => Buffer.from((await call<{ base64: string }>("read_file", { path }, 40_000)).base64, "base64"),
+  write: async (path, data) => void (await call("write_file", { path, base64: Buffer.from(data).toString("base64") }, 40_000)),
+};
+const readFile = (path: string) => readLocal(path, appFiles);
+const writeFile = (path: string, data: Uint8Array) => writeLocal(path, data, appFiles);
+const resolve = localPath;
+
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: typeof v === "string" ? v : JSON.stringify(v, null, 2) }] });
 const guard =
   <A,>(fn: (a: A) => Promise<ReturnType<typeof text> | { content: unknown[] }>) =>
@@ -44,21 +53,23 @@ const guard =
   };
 
 /**
- * Import features may name a local file in `path` instead of carrying it as base64 in `data`: this
- * server runs on the user's computer, so it reads the file and fills in `data`, `fileName` and
- * `format` (from the extension) before the ops reach the app. 3MF and OBJ meshes go in as STL, one
- * feature per object (ids get a suffix from the second one on).
+ * Ops may name a local file in `path` instead of carrying its contents: this server runs on the
+ * user's computer, so it reads the file before the ops reach the app.
+ * - import features: fills in `data`, `fileName` and `format` (from the extension); 3MF and OBJ
+ *   meshes go in as STL, one feature per object (ids get a suffix from the second one on);
+ * - set_reference: reads the .glb;
+ * - replace {path}: the design in a .meercad file becomes the document;
+ * - add_features {path, ids?}: adds that file's features (only `ids`, in the file's order, if given).
  */
 async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
-  // (also: set_reference with `path` reads the .glb)
   const inline = async (f: Record<string, unknown>): Promise<Record<string, unknown>[]> => {
     if (f["op"] !== "import" || typeof f["path"] !== "string") return [f];
-    const path = resolve(f["path"].replace(/^~(?=\/|$)/, homedir()));
+    const path = resolve(f["path"]);
     let bytes: Buffer;
     try {
       bytes = await readFile(path);
-    } catch {
-      throw new Error(`import ${String(f["id"] ?? "")}: cannot read the file "${path}"`);
+    } catch (e) {
+      throw new Error(`import ${String(f["id"] ?? "")}: ${e instanceof Error ? e.message : String(e)}`);
     }
     const ext = extname(path).toLowerCase();
     const { path: _path, ...rest } = f;
@@ -71,14 +82,25 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
     if (!format) throw new Error(`import ${String(f["id"] ?? "")}: unknown file type "${ext}" (use .step, .stp, .stl, .3mf or .obj, or set format)`);
     return [{ ...rest, format, fileName: name, data: bytes.toString("base64") }];
   };
-  const reference = async (o: Record<string, unknown>) => {
+  const fromFile = async (o: Record<string, unknown>): Promise<Record<string, unknown>> => {
     const r = o["reference"] as Record<string, unknown> | undefined;
-    if (o["type"] !== "set_reference" || !r || typeof r["path"] !== "string") return o;
-    const path = resolve(r["path"].replace(/^~(?=\/|$)/, homedir()));
-    const { path: _p, ...rest } = r;
-    return { ...o, reference: { ...rest, data: (await readFile(path)).toString("base64") } };
+    if (o["type"] === "set_reference" && r && typeof r["path"] === "string") {
+      const { path: _p, ...rest } = r;
+      return { ...o, reference: { ...rest, data: (await readFile(r["path"])).toString("base64") } };
+    }
+    if ((o["type"] !== "replace" && o["type"] !== "add_features") || typeof o["path"] !== "string") return o;
+    const file = resolve(o["path"]);
+    const { doc } = meercadDocument(await readFile(file), file);
+    const { path: _p, ids, ...rest } = o;
+    if (o["type"] === "replace") return { ...rest, doc };
+    const all = doc["features"] as Record<string, unknown>[];
+    if (ids !== undefined && !(Array.isArray(ids) && ids.every((x) => typeof x === "string"))) throw new Error("add_features: ids must be a list of feature ids");
+    const want = ids as string[] | undefined;
+    const missing = (want ?? []).filter((id) => !all.some((f) => f["id"] === id));
+    if (missing.length) throw new Error(`add_features: "${file}" has no feature ${missing.join(", ")}; it has ${all.map((f) => String(f["id"])).join(", ")}`);
+    return { ...rest, features: want ? all.filter((f) => want.includes(String(f["id"]))) : all };
   };
-  ops = await Promise.all(ops.map(reference));
+  ops = await Promise.all(ops.map(fromFile));
   return Promise.all(
     ops.map(async (o) => (o["type"] === "add_features" && Array.isArray(o["features"]) ? { ...o, features: (await Promise.all((o["features"] as Record<string, unknown>[]).map(inline))).flat() } : o)),
   );
@@ -127,7 +149,7 @@ server.registerTool(
   {
     title: "Change the model",
     description:
-      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling, set_motion, delete_motion (moves of several joints over time); reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`. The result is brief: steps that are not ok, new or changed bodies, the sketches of the edited steps; detail \"full\" lists everything.",
+      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling, set_motion, delete_motion (moves of several joints over time); reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`; replace may give `path` (a .meercad file) instead of `doc`, add_features may give `path` (a .meercad file, or a .json file with a list of features) instead of `features` to add that file's features (`ids`: only these, in the file's order). The result is brief: steps that are not ok, new or changed bodies, the sketches of the edited steps; detail \"full\" lists everything.",
     inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional() },
   },
   guard(async ({ ops, detail }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops), detail }))),
@@ -195,8 +217,8 @@ server.registerTool(
   guard(async (a) => {
     const { path, ...shotArgs } = a;
     const r = await call<{ png: string }>("render_view", shotArgs);
-    if (path) await writeFile(resolve(path), Buffer.from(r.png, "base64"));
-    return { content: [{ type: "image", data: r.png, mimeType: "image/png" }, ...(path ? [{ type: "text" as const, text: `wrote ${resolve(path)}` }] : [])] };
+    const out = path ? await writeFile(path, Buffer.from(r.png, "base64")) : null;
+    return { content: [{ type: "image", data: r.png, mimeType: "image/png" }, ...(out ? [{ type: "text" as const, text: `wrote ${out}` }] : [])] };
   }),
 );
 
@@ -329,7 +351,6 @@ server.registerTool(
     const written: string[] = [];
     for (const [file, b64] of Object.entries(r.files)) {
       const target = join(dir, file);
-      await mkdir(dirname(target), { recursive: true });
       await writeFile(target, Buffer.from(b64, "base64"));
       if (!file.startsWith("meshes/")) written.push(target);
     }
@@ -501,12 +522,17 @@ server.registerTool(
   "import_file",
   {
     title: "Import a file",
-    description: "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project. (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ.)",
+    description: "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project (opened in this session's window; no project needs to be open first). (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ; replace {path} and add_features {path, ids?} take the design or features of a .meercad file into the open project.)",
     inputSchema: { path: z.string() },
   },
   guard(async ({ path }) => {
-    const file = resolve(path.replace(/^~(?=\/|$)/, homedir()));
+    const file = resolve(path);
     const data = await readFile(file);
+    // A design comes in as it is saved (also from a wrapped {name, document} file).
+    if ([".meercad", ".json"].includes(extname(file).toLowerCase())) {
+      const { doc, name } = meercadDocument(data, file);
+      return text(await call("import_file", { name: `${name ?? basename(file, extname(file))}.meercad`, base64: Buffer.from(JSON.stringify(doc)).toString("base64") }, 300_000));
+    }
     return text(await call("import_file", { name: basename(file), base64: data.toString("base64") }, 300_000));
   }),
 );
@@ -539,7 +565,7 @@ server.registerTool(
 server.registerTool(
   "photo_terrain",
   { title: "Terrain from drone photos", description: "Builds a textured terrain model from a folder of overlapping photos on this Mac (Apple photogrammetry; true size and north from their GPS) and adds it to the open design. Takes several minutes; the app shows progress.", inputSchema: { folder: z.string() } },
-  guard(async ({ folder }) => text(await call("photo_terrain", { folder: resolve(folder.replace(/^~(?=\/|$)/, homedir())) }, 3_600_000))),
+  guard(async ({ folder }) => text(await call("photo_terrain", { folder: resolve(folder) }, 3_600_000))),
 );
 
 server.registerTool(

@@ -45,7 +45,9 @@ export type BridgeMethod =
   | "terrain_height"
   | "place_on_terrain"
   | "photo_terrain"
-  | "list_materials";
+  | "list_materials"
+  | "read_file"
+  | "write_file";
 
 export interface BridgeRequest {
   id: number;

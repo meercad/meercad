@@ -64,6 +64,9 @@ const api = {
   /** The system's text editing in the focused field: cut, copy, paste, selectAll. */
   editNative: (cmd: string) => ipcRenderer.invoke("edit:native", cmd),
   saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
+  /** A file the MCP server may not reach (macOS guards Documents, Desktop …; this app has the user's OK): absolute paths, base64. */
+  readLocalFile: (path: string) => ipcRenderer.invoke("files:read-local", path),
+  writeLocalFile: (p: { path: string; base64: string }) => ipcRenderer.invoke("files:write-local", p),
   /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
   shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
   on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "assistant-ended" | "assistant-adopted" | "release-project" | "project-free" | "assistant-stop", fn: (arg: any) => void) => {
