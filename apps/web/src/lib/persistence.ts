@@ -5,6 +5,7 @@
 import type { MeercadDocument } from "@meercad/schema";
 import { nativeFiles } from "./native";
 import { t } from "./i18n";
+import { dropOutput } from "./openCache";
 
 export interface ProjectMeta {
   id: string;
@@ -206,6 +207,7 @@ export async function renameProjectFile(id: string, name: string): Promise<Proje
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  void dropOutput(id);
   return files.projects.delete(id);
 }
 

@@ -1029,7 +1029,7 @@ function LoadingOverlay() {
   const features = useApp((s) => s.doc.features.length);
   const progress = useApp((s) => s.buildProgress);
   const doc = useApp((s) => s.doc);
-  const text = kernelState.error ? null : !kernelState.ready ? t("Starting the geometry engine…") : !hasOutput && features ? tn(features, "Building the model · {n} feature", "Building the model · {n} features") : null;
+  const text = kernelState.error ? null : !kernelState.ready && !hasOutput ? t("Starting the geometry engine…") : !hasOutput && features ? tn(features, "Building the model · {n} feature", "Building the model · {n} features") : null;
   if (!text) return null;
   // Which step the first build is at, once the kernel reports it.
   const step = kernelState.ready && progress ? doc.features.find((f) => f.id === progress.feature) : undefined;

@@ -13,7 +13,8 @@
 import type { KernelClient, RebuildOutput } from "@meercad/kernel/client";
 import type { MeercadDocument } from "@meercad/schema";
 import { LOOK_VERSION, Viewport } from "@meercad/viewport";
-import { refreshProjects, spareKernel, useApp } from "../store";
+import { editorMeshOptions, refreshProjects, spareKernel, useApp } from "../store";
+import { outputKey, writeOutput } from "./openCache";
 import { usePrefs } from "./keymap";
 import { meshBodyIds } from "./meshParts";
 import { partColors } from "./partColors";
@@ -181,6 +182,10 @@ async function fillMissingThumbnails(): Promise<void> {
         const project = await loadProject(next.id);
         if (!project) continue;
         const output = await build(project.doc, PROJECT_LIMIT_MS);
+        // Built the way the editor builds it (sandbox: textures on, fine meshes): kept, so the
+        // project opens at once (openCache).
+        const opts = editorMeshOptions();
+        if (opts.coarse === 1 && opts.textures) void writeOutput(project.id, outputKey(project.doc, opts), output);
         // Nothing to picture (an empty part): remembered like a failure, until the file changes.
         if (!output.meshes.length && !project.doc.references?.length) {
           markFailed(next);

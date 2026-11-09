@@ -53,6 +53,15 @@ table with the change against the baseline.
 After a change that makes things faster on purpose, or on a new Mac, write a new baseline and commit
 it: `MEERCAD_PERF_UPDATE=1 pnpm test:perf`. A slower result is a finding, not a reason to update.
 
+Opening a design the app has built before does not wait for the kernel: the last result (report
+and meshes) is kept per project in IndexedDB (`apps/web/src/lib/openCache.ts`, 768 MB on a Mac,
+256 MB on touch devices, least recently used first out) and shown at once while the kernel builds
+it again in the background. It is used only for exactly the same document, mesh settings and
+kernel build. `rebuild.perf.ts` measures the kernel path, which is what a first opening costs.
+To see where an opening's time goes, `tests/bench/open-profile.ts` (kernel vs. meshing per model,
+`MEERCAD_PROFILE_DIR` adds a folder of `.meercad` files) and `tests/bench/mesh-breakdown.ts`
+(meshing per part and face kind) help.
+
 The older scripts in `tests/bench/` are for digging into one question (threads, booleans, native vs
 WASM); they don't check anything.
 
