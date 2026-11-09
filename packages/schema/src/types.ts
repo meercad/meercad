@@ -532,14 +532,23 @@ export interface TextFeature extends FeatureBase {
  * baseplate comes apart along the lines between cells into pieces that each fit the print bed
  * (parts `gf1_A1`, `gf1_A2`, … rows A, B, … from the front, columns from the left), borders included.
  * `magnets` / `screws` add the holes of the standard in the bin's feet or the baseplate's cells.
+ * `pocket` makes a solid bin with a nest for a part (e.g. a 3D scan): the part sinks into the bin's top
+ * by `sink` of its height, with `clearance` play all round, optionally with a finger `grip` groove
+ * across it. Without `units` and `height` the bin takes the fewest cells and height units that hold
+ * it, turned on its plane to fit best; it is built round the part where the part lies (`position`
+ * is ignored), the bin's rim at the part's sinking line.
  * Faces: gf1.foot, gf1.floor, gf1.wall, gf1.inner, gf1.lip, gf1.top, gf1.divider, gf1.scoop,
- * gf1.tab (top of the label tabs), gf1.tab_under, gf1.pocket (baseplate), gf1.bottom, gf1.hole.
+ * gf1.tab (top of the label tabs), gf1.tab_under, gf1.pocket (baseplate), gf1.bottom, gf1.hole,
+ * gf1.nest (a bin's nest for a part), gf1.grip.
  */
 export interface GridfinityFeature extends FeatureBase {
   op: "gridfinity";
   kind: "bin" | "baseplate";
-  /** Grid cells along x and y (42 mm each). A baseplate with `drawer` takes as many as fit. */
-  units: [Expr, Expr];
+  /**
+   * Grid cells along x and y (42 mm each). A baseplate with `drawer` takes as many as fit; a bin with
+   * a `pocket` as few as hold the part when left out. Required otherwise.
+   */
+  units?: [Expr, Expr];
   /** Bin height in 7 mm units, default 3. */
   height?: Expr;
   /** Bin wall thickness, default 1.2 mm. */
@@ -584,6 +593,21 @@ export interface GridfinityFeature extends FeatureBase {
   baseplate?: string;
   /** Bin in a baseplate: the baseplate cell under the bin's lower-left cell, from [0, 0]. */
   cell?: [Expr, Expr];
+  /** Bin: a nest for a part in the bin's solid top (the bin is solid; dividers, scoop and tab are left out). */
+  pocket?: GridfinityPocket;
+}
+
+/**
+ * The nest for a part in a Gridfinity bin: the part's underside up to `sink` (percent of its height,
+ * default 50) widened by `clearance` (mm, default 0.5) all round, open upwards so the part lifts
+ * straight out. `grip` adds a finger groove across the part's middle.
+ */
+export interface GridfinityPocket {
+  /** The part to hold (any part; usually an imported scan). Stays in the model, untouched. */
+  body: string;
+  sink?: Expr;
+  clearance?: Expr;
+  grip?: boolean;
 }
 
 /**

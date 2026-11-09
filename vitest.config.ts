@@ -22,6 +22,7 @@ export const SLOW = [
   "tests/acceptance/gridfinity-area.test.ts",
   "tests/acceptance/joints.test.ts",
   "tests/acceptance/models.test.ts",
+  "tests/acceptance/scan-bin.test.ts",
   "tests/acceptance/screw.test.ts",
   "tests/acceptance/thread.test.ts",
   "tests/acceptance/threads.test.ts",

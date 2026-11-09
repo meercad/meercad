@@ -39,6 +39,11 @@ import {
   type ResolvedShell,
   type ResolvedSketch,
   type ResolvedTransform,
+  type ResolvedGridfinity,
+  type BinPlan,
+  GRIDFINITY,
+  planScanBin,
+  ScanBinError,
 } from "@meercad/model";
 import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type LoftFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef, type SweepFeature } from "@meercad/schema";
 import {
@@ -61,7 +66,7 @@ import { Body, listToArray } from "./body.js";
 import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
-import { areaPlateBodies, gridfinityBody, labelBodies, type OutlineRegion } from "./gridfinity.js";
+import { areaPlateBodies, gridfinityBody, labelBodies, type BinPocket, type OutlineRegion } from "./gridfinity.js";
 import { boxBodies, snapHookTools } from "./closures.js";
 import { wallBody } from "./wall.js";
 import { lithophaneBody } from "./lithophane.js";
@@ -201,8 +206,15 @@ export class OcctBackend implements KernelBackend<ModelState> {
           for (const b of out.bodies) bodies.set(b.bodyId, b);
           return { ...ctx.prev, bodies, grids: new Map(ctx.prev.grids ?? []).set(f.id, out.record) };
         }
-        const frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
-        const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings);
+        let frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
+        const pocket = f.kind === "bin" && f.pocket ? pocketFor(f, frame, ctx) : undefined;
+        if (pocket) {
+          // Built round the part: the bin's rim at the part's sinking line.
+          const lift = pocket.plan.rim - pocket.plan.height * GRIDFINITY.unit;
+          frame = { ...frame, origin: frame.origin.map((v, k) => v + frame.normal[k]! * lift) as Vec3 };
+          ctx.info = { width: pocket.plan.units[0], depth: pocket.plan.units[1], height: pocket.plan.height, pocketDepth: round3(pocket.plan.depth), angle: round3((pocket.plan.angle * 180) / Math.PI) };
+        }
+        const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings, pocket);
         const bodies = new Map(ctx.prev.bodies).set(f.id, body);
         return { ...ctx.prev, bodies, ...(record ? { grids: new Map(ctx.prev.grids ?? []).set(f.id, record) } : {}) };
       }
@@ -1878,6 +1890,36 @@ function bendFeature(f: ResolvedBend, ctx: Ctx): Omit<ModelState, "arena"> {
   ctx.warnings.push(...bent[0]!.warnings);
   ctx.info = bendInfoRecord(bent[0]!.info);
   return { ...ctx.prev, bodies };
+}
+
+/**
+ * The plan of a bin with a nest for a part (model/scanbin.ts): the part's triangles in the plane's
+ * frame, and the nest as a solid in the bin's local frame.
+ */
+function pocketFor(f: ResolvedGridfinity, frame: PlaneFrame, ctx: Ctx): BinPocket {
+  const p = f.pocket!;
+  const part = ctx.prev.bodies.get(p.body);
+  if (!part) throw new FeatureError(`part "${p.body}" not found`, "pick the part the bin should hold");
+  const bb = bounds(ctx.oc, ctx.arena, part.shape);
+  const diag = Math.hypot(bb.max[0]! - bb.min[0]!, bb.max[1]! - bb.min[1]!, bb.max[2]! - bb.min[2]!);
+  const world = part.sourceMesh ?? surfaceTriangles(ctx, part, Math.max(0.05, Math.min(0.2, diag / 500)));
+  const local = new Float64Array(world.length);
+  const { origin: o, u, v, normal: n } = frame;
+  for (let i = 0; i < world.length; i += 3) {
+    const x = world[i]! - o[0], y = world[i + 1]! - o[1], z = world[i + 2]! - o[2];
+    local[i] = x * u[0] + y * u[1] + z * u[2];
+    local[i + 1] = x * v[0] + y * v[1] + z * v[2];
+    local[i + 2] = x * n[0] + y * n[1] + z * n[2];
+  }
+  let plan: BinPlan;
+  try {
+    plan = planScanBin({ corners: local, sink: p.sink, clearance: p.clearance, grip: p.grip, ...(f.autoUnits ? {} : { units: f.units }), ...(f.autoHeight ? {} : { height: f.height }) });
+  } catch (e) {
+    if (e instanceof ScanBinError) throw new FeatureError(e.message);
+    throw e;
+  }
+  const tool = meshSolid(ctx, `nest-${f.id}`, writeStl([{ positions: plan.tool, indices: Uint32Array.from({ length: plan.tool.length / 3 }, (_, i) => i) }]), "the nest", true);
+  return { plan, tool };
 }
 
 /** A body's surface as triangle corners, within `tolerance` of its faces. */

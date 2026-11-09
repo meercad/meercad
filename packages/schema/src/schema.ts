@@ -289,8 +289,9 @@ export const definitions: Record<string, Json> = {
         position: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
         baseplate: id,
         cell: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
+        pocket: obj({ body: id, sink: ref("expr"), clearance: ref("expr"), grip: bool }, ["body"]),
       },
-      ["kind", "units"],
+      ["kind"],
     ),
     box: feature(
       "box",

@@ -7,7 +7,7 @@
  * bin's inside is one loft from its floor up through the stacking lip, cut out in one go.
  */
 
-import { FeatureError, GRIDFINITY as G, GridfinityError, areaPlan, labelSymbol, pieceName, type GridArea, type ResolvedGridfinity, type ResolvedLabel } from "@meercad/model";
+import { FeatureError, GRIDFINITY as G, type BinPlan, GridfinityError, areaPlan, labelSymbol, pieceName, type GridArea, type ResolvedGridfinity, type ResolvedLabel } from "@meercad/model";
 import { toWorld, type PlaneFrame, type Vec3 } from "@meercad/sketch";
 import type { TopoDS_Shape } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
@@ -24,6 +24,12 @@ export interface GridRecord {
   units: [number, number];
   /** Height of the pockets' floor above the plane. */
   floor: number;
+}
+
+/** A bin's nest for a part: its plan and the nest's solid in the bin's local frame. */
+export interface BinPocket {
+  plan: BinPlan;
+  tool: TopoDS_Shape;
 }
 
 const inBox = (p: Vec3, b: Box3, eps = 1e-3) => p.every((v, i) => v >= b.min[i]! - eps && v <= b.max[i]! + eps);
@@ -46,11 +52,18 @@ const checked = <T>(fn: () => T): T => {
 
 // ---------------------------------------------------------------- bin
 
-export function gridfinityBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame: PlaneFrame, plate: GridRecord | undefined, warnings: string[]): { body: Body; record?: GridRecord } {
-  return f.kind === "bin" ? { body: binBody(oc, arena, f, frame, plate, warnings) } : plateBody(oc, arena, f, frame);
+export function gridfinityBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame: PlaneFrame, plate: GridRecord | undefined, warnings: string[], pocket?: BinPocket): { body: Body; record?: GridRecord } {
+  if (f.kind !== "bin") return plateBody(oc, arena, f, frame);
+  if (!pocket) return { body: binBody(oc, arena, f, frame, plate, warnings) };
+  // A nest for a part: a solid bin of the planned size, the nest cut into its top.
+  const plan = pocket.plan;
+  const g: ResolvedGridfinity = { ...f, units: plan.units, height: plan.height, solid: true, dividers: [0, 0], position: plan.center };
+  delete g.scoop;
+  delete g.tab;
+  return { body: binBody(oc, arena, g, frame, plate, warnings, pocket) };
 }
 
-function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame, plate: GridRecord | undefined, warnings: string[]): Body {
+function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame, plate: GridRecord | undefined, warnings: string[], pocket?: BinPocket): Body {
   const b = new Builder(oc, arena);
   const [nx, ny] = f.units;
   const W = nx * G.pitch - G.gap, D = ny * G.pitch - G.gap, R = G.binRadius;
@@ -101,6 +114,11 @@ function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame
           if (f.screws) cuts.push(b.cylinderZ(x, y, G.screwDiameter / 2, -1, screwDepth));
         }
   if (f.screws && screwDepth < G.screwDepth) warnings.push(`the screw holes are ${screwDepth.toFixed(1)} mm deep: raise the floor for the full ${G.screwDepth} mm`);
+  const grip = pocket?.plan.grip;
+  if (pocket) {
+    cuts.push(pocket.tool);
+    if (grip) cuts.push(b.cylinderY(grip.x, grip.z, grip.radius, grip.y0, grip.y1));
+  }
   shape = b.bool("cut", shape, cuts);
 
   // Compartments: dividers, scoops at the front, label tabs at the back.
@@ -160,8 +178,12 @@ function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame
       }
     }
   }
-  shape = b.unify(b.bool("fuse", shape, adds));
+  // A nest's thousands of triangles stay as they are (merging them would take long and gain little).
+  shape = adds.length ? b.bool("fuse", shape, adds) : shape;
+  if (!pocket) shape = b.unify(shape);
   const local = new Body(oc, arena, f.id, shape);
+  const nest = pocket?.plan.footprint;
+  const reach = (pocket?.plan.cell ?? 0) * 3 + (f.pocket?.clearance ?? 0);
   const name = (p: string) => [`${f.id}.${p}`];
   local.faceTags = local.faces.map((_, i) => {
     const p = local.facePoints[i]!;
@@ -170,6 +192,9 @@ function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame
     if (holes.some(([x, y]) => Math.hypot(p[0] - x, p[1] - y) < magnetD / 2 + 1e-3) && p[2] < Math.max(magnetDepth, screwDepth) + 1e-3) return name("hole");
     if (down && Math.abs(p[2]) < 1e-6) return name("bottom");
     if (p[2] < G.footHeight + 1e-6 && (down || toOutline(p[0], p[1], W, D, R) > 1e-3)) return name("foot");
+    // The groove is the only curved face below the rim (feet and holes are named above).
+    if (grip && !n && p[2] < H) return name("grip");
+    if (nest && p[2] < H - 1e-6 && p[0] > nest.min[0] - reach && p[0] < nest.max[0] + reach && p[1] > nest.min[1] - reach && p[1] < nest.max[1] + reach) return name("nest");
     if (up && Math.abs(p[2] - floor) < 1e-6 && !f.solid) return name("floor");
     // A tab's top runs on over the dividers' tops in one face: tabs first.
     const onTop = up && Math.abs(p[2] - H) < 1e-6;
@@ -191,7 +216,7 @@ function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame
     frame = { ...plate.frame, origin: toWorld(plate.frame, [0, 0]).map((v, k) => v + plate.frame.normal[k]! * plate.floor) as Vec3 };
     position = [plate.position[0] + (ci + nx / 2 - px / 2) * G.pitch, plate.position[1] + (cj + ny / 2 - py / 2) * G.pitch];
   }
-  return b.place(local, b.placement(frame, position), f.id);
+  return b.place(local, b.placement(frame, position, pocket && !plate ? (pocket.plan.angle * 180) / Math.PI : 0), f.id);
 }
 
 // ---------------------------------------------------------------- baseplate

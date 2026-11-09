@@ -78,8 +78,13 @@ export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "de
 export type ResolvedPrimitive = Omit<PrimitiveFeature, "size" | "diameter" | "height" | "center"> & { size?: [number, number, number]; diameter?: number; height?: number; center: [number, number, number] };
 export type ResolvedGridfinity = Omit<
   GridfinityFeature,
-  "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell" | "gap" | "bed"
+  "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell" | "gap" | "bed" | "pocket"
 > & {
+  /** A bin's nest for a part: `sink` as a share (0..1), `clearance` in mm. */
+  pocket?: { body: string; sink: number; clearance: number; grip: boolean };
+  /** A pocket bin without `units` / `height`: sized round the part by the kernel. */
+  autoUnits?: boolean;
+  autoHeight?: boolean;
   gap?: number;
   /** The print bed: its size, and what is left of it less the margin. */
   bed?: { size: [number, number]; usable: [number, number] };
@@ -364,11 +369,21 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         return n;
       };
       const pair = (field: string, p: [Expr, Expr]) => [ev(`${field}[0]`, p[0]), ev(`${field}[1]`, p[1])] as [number, number];
-      const { tab, ...rest } = f;
+      const { tab, pocket, ...rest } = f;
+      const auto = f.kind === "bin" && !!pocket;
+      if (!f.units && !auto && !(f.kind === "baseplate" && (f.drawer || f.outline))) throw new ExprError("units: required");
       return {
         ...rest,
-        units: [int("units[0]", f.units[0], 1, 30), int("units[1]", f.units[1], 1, 30)],
+        // Baseplates in a drawer or outline count their cells themselves; pocket bins are sized in the kernel.
+        units: f.units ? [int("units[0]", f.units[0], 1, 30), int("units[1]", f.units[1], 1, 30)] : [1, 1],
         height: f.height === undefined ? 3 : int("height", f.height, 1, 40),
+        ...(pocket && f.kind === "bin"
+          ? {
+              pocket: { body: pocket.body, sink: (opt("pocket.sink", pocket.sink) ?? 50) / 100, clearance: opt("pocket.clearance", pocket.clearance) ?? 0.5, grip: !!pocket.grip },
+              ...(f.units ? {} : { autoUnits: true }),
+              ...(f.height === undefined ? { autoHeight: true } : {}),
+            }
+          : {}),
         wall: opt("wall", f.wall),
         floor: opt("floor", f.floor),
         dividers: f.dividers ? [int("dividers[0]", f.dividers[0], 0, 50), int("dividers[1]", f.dividers[1], 0, 50)] : [0, 0],
@@ -498,6 +513,10 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
   if (f.op === "gridfinity" && g["bed"]) {
     const bed = g["bed"] as Record<string, Expr[] | string>;
     for (const k of ["size", "margin"]) if (Array.isArray(bed[k])) bed[k] = (bed[k] as Expr[]).map(fn);
+  }
+  if (f.op === "gridfinity" && g["pocket"]) {
+    const pocket = g["pocket"] as Record<string, Expr>;
+    for (const k of ["sink", "clearance"]) if (pocket[k] !== undefined) pocket[k] = fn(pocket[k]);
   }
   if (f.op === "gridfinity" && g["tab"]) {
     const tab = g["tab"] as Record<string, Expr>;
