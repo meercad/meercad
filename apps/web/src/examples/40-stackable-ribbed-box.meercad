@@ -1373,17 +1373,6 @@
   }
  ],
  "rollback": null,
- "materials": [
-  {
-   "id": "anthrazit",
-   "name": "PLA matt anthrazit",
-   "base": "plamatte",
-   "color": "#3a3b3d"
-  }
- ],
- "partMaterials": {
-  "ex1": "anthrazit"
- },
  "variants": [
   {
    "name": "A6",
