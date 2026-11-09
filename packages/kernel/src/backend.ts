@@ -59,7 +59,7 @@ import { Body, listToArray } from "./body.js";
 import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
-import { gridfinityBody, labelBodies } from "./gridfinity.js";
+import { areaPlateBodies, gridfinityBody, labelBodies, type OutlineRegion } from "./gridfinity.js";
 import { boxBodies, snapHookTools } from "./closures.js";
 import { wallBody } from "./wall.js";
 import { lithophaneBody } from "./lithophane.js";
@@ -179,6 +179,20 @@ export class OcctBackend implements KernelBackend<ModelState> {
       case "gridfinity": {
         const plate = f.baseplate ? ctx.prev.grids?.get(f.baseplate) : undefined;
         if (f.baseplate && !plate) throw new FeatureError(`baseplate "${f.baseplate}" not found`);
+        if (f.kind === "baseplate" && (f.outline || f.bed || f.drawer)) {
+          let frame: PlaneFrame;
+          let outline: OutlineRegion[] | undefined;
+          if (f.outline) {
+            const { sk, regions } = sketchRegions(f.outline, ctx);
+            frame = sk.frame;
+            outline = regions.map((r) => ({ outer: r.polygons[0]!.map((p) => [p[0], p[1]] as [number, number]), holes: r.polygons.slice(1).map((h) => h.map((p) => [p[0], p[1]] as [number, number])) }));
+          } else frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
+          const out = areaPlateBodies(ctx.oc, ctx.arena, f, frame, outline, ctx.warnings);
+          ctx.info = out.info;
+          const bodies = new Map(ctx.prev.bodies);
+          for (const b of out.bodies) bodies.set(b.bodyId, b);
+          return { ...ctx.prev, bodies, grids: new Map(ctx.prev.grids ?? []).set(f.id, out.record) };
+        }
         const frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
         const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings);
         const bodies = new Map(ctx.prev.bodies).set(f.id, body);

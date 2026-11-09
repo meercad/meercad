@@ -27,6 +27,12 @@ export class Body implements Topology {
   sourceMesh: Float32Array | null = null;
   /** The import feature whose file `sourceMesh` comes from (triangle i is the file's triangle i). */
   sourceFeature: string | null = null;
+  /**
+   * Looser display tessellation for this body (a factor like the session's `meshCoarse`): set by
+   * generators of very large, detailed parts (a baseplate for a whole floor) so the view stays
+   * light. Export meshes are not affected.
+   */
+  displayCoarse = 1;
   private samples: { faces: Vec3[]; edges: Vec3[] } | null = null;
 
   constructor(

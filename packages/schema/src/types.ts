@@ -526,7 +526,10 @@ export interface TextFeature extends FeatureBase {
  * foot per cell, hollow with `wall` thick walls unless `solid`, `dividers` walls across x and y,
  * a `scoop` (finger slide, radius) at the front of each compartment and a label `tab` at its back.
  * `baseplate` puts the bin into an earlier baseplate at `cell` (its lower-left cell, from 0).
- * Baseplate: `units` cells, or as many as fit a `drawer` (width, depth) with the rest as border.
+ * Baseplate: `units` cells, or as many as fit a `drawer` (width, depth) or a closed sketch `outline`
+ * (any shape, on the sketch's plane), the rest of the area filled with a solid border. With `bed` the
+ * baseplate comes apart along the lines between cells into pieces that each fit the print bed
+ * (parts `gf1_A1`, `gf1_A2`, … rows A, B, … from the front, columns from the left), borders included.
  * `magnets` / `screws` add the holes of the standard in the bin's feet or the baseplate's cells.
  * Faces: gf1.foot, gf1.floor, gf1.wall, gf1.inner, gf1.lip, gf1.top, gf1.divider, gf1.scoop,
  * gf1.tab (top of the label tabs), gf1.tab_under, gf1.pocket (baseplate), gf1.bottom, gf1.hole.
@@ -564,6 +567,12 @@ export interface GridfinityFeature extends FeatureBase {
   magnetDepth?: Expr;
   /** Baseplate: fill a drawer of this inside size (mm); the grid is centred, the rest is border. */
   drawer?: [Expr, Expr];
+  /** Baseplate: fill this closed outline of a sketch (the plate lies on the sketch's plane). */
+  outline?: { sketch: string; regions?: "all" | string[] };
+  /** Baseplate in a drawer or outline: gap to its edge all round, default 0.5 mm. */
+  gap?: Expr;
+  /** Baseplate: cut it into pieces for this print bed (see GridfinityBed). */
+  bed?: GridfinityBed;
   /** Default origin.XY. With `baseplate`, the baseplate's plane. */
   plane?: PlaneSpec;
   /** Centre of the footprint in plane coordinates, default [0, 0]. Ignored with `baseplate`. */
@@ -572,6 +581,17 @@ export interface GridfinityFeature extends FeatureBase {
   baseplate?: string;
   /** Bin in a baseplate: the baseplate cell under the bin's lower-left cell, from [0, 0]. */
   cell?: [Expr, Expr];
+}
+
+/**
+ * The print bed a baseplate is cut up for: a printer profile (`printer`, an id from the model's
+ * PRINTERS such as "bambu-h2s" or "prusa-xl") or its `size` (width, depth), less `margin`: mm that
+ * cannot be printed on across the width and across the depth (e.g. [0, 20] for 2 cm at the back).
+ */
+export interface GridfinityBed {
+  printer?: string;
+  size?: [Expr, Expr];
+  margin?: [Expr, Expr];
 }
 
 /**

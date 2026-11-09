@@ -104,11 +104,14 @@ export class Builder {
     if (!loft.IsDone()) throw new FeatureError("could not build a sloped profile");
     return this.t(loft.Shape());
   }
-  /** A copy of a shape moved by (dx, dy, dz). */
-  moved(s: TopoDS_Shape, dx: number, dy: number, dz: number): TopoDS_Shape {
+  /**
+   * A copy of a shape moved by (dx, dy, dz). With `copy` false the copy shares the original's
+   * geometry (and its tessellation) and only carries the move.
+   */
+  moved(s: TopoDS_Shape, dx: number, dy: number, dz: number, copy = true): TopoDS_Shape {
     const tr = this.t(new this.oc.gp_Trsf());
     tr.SetTranslation(this.t(new this.oc.gp_Vec(dx, dy, dz)));
-    return this.t(this.t(new this.oc.BRepBuilderAPI_Transform(s, tr, true, false)).Shape());
+    return this.t(this.t(new this.oc.BRepBuilderAPI_Transform(s, tr, copy, false)).Shape());
   }
   /** A copy of a shape turned about the x axis by `deg` degrees, then moved by (0, dy, dz). */
   turnedX(s: TopoDS_Shape, deg: number, dy: number, dz: number): TopoDS_Shape {
@@ -179,6 +182,89 @@ export class Builder {
     if (!algo.IsDone() || algo.HasErrors()) throw new FeatureError(`could not ${kind === "fuse" ? "join" : "cut"} the shape`);
     return this.t(algo.Shape());
   }
+  /**
+   * Joins shapes that only touch along shared faces ("BOPAlgo_GlueFull": whole faces in common,
+   * "BOPAlgo_GlueShift": parts of faces), much faster than a general fuse.
+   */
+  glue(target: TopoDS_Shape, tools: TopoDS_Shape[], mode: "BOPAlgo_GlueFull" | "BOPAlgo_GlueShift"): TopoDS_Shape {
+    const { oc } = this;
+    const algo = this.t(new oc.BRepAlgoAPI_Fuse());
+    const list = (shapes: TopoDS_Shape[]) => {
+      const l = this.t(new oc.NCollection_List_TopoDS_Shape());
+      for (const s of shapes) l.Append(s);
+      return l;
+    };
+    algo.SetArguments(list([target]));
+    algo.SetTools(list(tools));
+    algo.SetGlue(mode as never);
+    algo.Build(this.t(new oc.Message_ProgressRange()));
+    if (!algo.IsDone() || algo.HasErrors()) throw new FeatureError("could not join the shape");
+    return this.t(algo.Shape());
+  }
+  /** The common part of two shapes. */
+  common(a: TopoDS_Shape, b: TopoDS_Shape): TopoDS_Shape {
+    const { oc } = this;
+    const algo = this.t(new oc.BRepAlgoAPI_Common(a, b));
+    if (!algo.IsDone() || algo.HasErrors()) throw new FeatureError("could not intersect the shape");
+    return this.t(algo.Shape());
+  }
+  /** The solids of a shape, one by one. */
+  solids(s: TopoDS_Shape): TopoDS_Shape[] {
+    const out: TopoDS_Shape[] = [];
+    for (const e = this.t(new this.oc.TopExp_Explorer(s, "TopAbs_SOLID" as never, "TopAbs_SHAPE" as never)); e.More(); e.Next()) out.push(this.t(e.Current()));
+    return out;
+  }
+  volume(s: TopoDS_Shape): number {
+    const props = this.t(new this.oc.GProp_GProps());
+    this.oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    return Math.abs(props.Mass());
+  }
+  /**
+   * A closed polygon region (outer loop and holes, at z = 0) as a solid from z0 to z1, its outline
+   * moved `inset` inwards (round at convex corners).
+   */
+  regionSolid(outer: [number, number][], holes: [number, number][][], inset: number, z0: number, z1: number): TopoDS_Shape {
+    const { oc } = this;
+    const prism = (w: TopoDS_Wire) => {
+      const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(w, true)).Face());
+      return this.t(this.t(new oc.BRepPrimAPI_MakePrism(face, this.t(new oc.gp_Vec(0, 0, z1 - z0)), false, true)).Shape());
+    };
+    const area = (s: TopoDS_Shape) => this.volume(s) / (z1 - z0);
+    // Each loop on its own (inwards: the outer loop shrinks, holes grow), then holes cut from the outer.
+    const loop = (pts: [number, number][], grow: boolean): TopoDS_Shape[] => {
+      const w = this.polyWire(pts, z0);
+      if (inset <= 1e-9) return [prism(w)];
+      const base = prism(w);
+      const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(w, true)).Face());
+      const out: TopoDS_Shape[] = [];
+      for (const sign of [-1, 1]) {
+        const mk = this.t(new oc.BRepOffsetAPI_MakeOffset(face, "GeomAbs_Arc" as never, false));
+        try {
+          mk.Perform(sign * inset, 0);
+        } catch {
+          continue;
+        }
+        if (!mk.IsDone()) continue;
+        const wires: TopoDS_Shape[] = [];
+        for (const e = this.t(new oc.TopExp_Explorer(this.t(mk.Shape()), "TopAbs_WIRE" as never, "TopAbs_SHAPE" as never)); e.More(); e.Next()) wires.push(this.t(e.Current()));
+        const solids = wires.map((x) => prism(this.t(oc.TopoDS.Wire(x))));
+        const a = solids.reduce((n, x) => n + area(x), 0);
+        // The right sign makes the outer loop smaller and a hole larger.
+        if (grow ? a > area(base) : a < area(base)) {
+          out.push(...solids);
+          break;
+        }
+      }
+      if (!out.length && !grow) return [];
+      if (!out.length) throw new FeatureError("could not offset the outline by the gap");
+      return out;
+    };
+    const outerSolids = loop(outer, false);
+    if (!outerSolids.length) return this.compound([]);
+    const holeSolids = holes.flatMap((h) => loop(h, true));
+    const merged = outerSolids.length > 1 ? this.bool("fuse", outerSolids[0]!, outerSolids.slice(1)) : outerSolids[0]!;
+    return this.bool("cut", merged, holeSolids);
+  }
   unify(s: TopoDS_Shape): TopoDS_Shape {
     const u = this.t(new this.oc.ShapeUpgrade_UnifySameDomain(s, true, true, false));
     u.Build();
@@ -203,9 +289,12 @@ export class Builder {
     tr.SetDisplacement(from, to);
     return tr;
   }
-  /** The local body moved by `trsf`, its face names carried along. */
-  place(local: Body, trsf: gp_Trsf, id: string): Body {
-    const tr = this.t(new this.oc.BRepBuilderAPI_Transform(local.shape, trsf, true, false));
+  /**
+   * The local body moved by `trsf`, its face names carried along. With `copy` false the placed body
+   * shares the local one's geometry (bodies made from the same shape are then meshed once).
+   */
+  place(local: Body, trsf: gp_Trsf, id: string, copy = true): Body {
+    const tr = this.t(new this.oc.BRepBuilderAPI_Transform(local.shape, trsf, copy, false));
     const out = new Body(this.oc, this.arena, id, this.t(tr.Shape()));
     const tags: string[][] = out.faces.map(() => []);
     local.faces.forEach((face, i) => {
