@@ -147,6 +147,7 @@ export default {
   Export: "Exportieren",
   "STL (3D printing)": "STL (3D-Druck)",
   "3MF (3D printing)": "3MF (3D-Druck)",
+  "3MF with materials and colours": "3MF mit Materialien und Farben",
   "OBJ (rendering, other 3D tools)": "OBJ (Rendern, andere 3D-Programme)",
   "STEP (CAD exchange)": "STEP (CAD-Austausch)",
   "USDZ (AR on iPhone and iPad)": "USDZ (AR auf iPhone und iPad)",

@@ -591,6 +591,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(typeof p["posed"] === "boolean" ? { posed: p["posed"] } : {}),
         ...(p["variants"] ? { variants: true } : {}),
         ...(typeof p["name"] === "string" ? { name: p["name"] } : {}),
+        ...(typeof p["materials"] === "boolean" ? { materials: p["materials"] } : {}),
       });
       return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])), ...(filaments ? { filaments } : {}) };
     }

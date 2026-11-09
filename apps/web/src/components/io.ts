@@ -71,7 +71,7 @@ function exportIds(parts?: readonly string[]): string[] {
  * coarser), named `name`.ext; OBJ also takes the visible terrains and scans with their pictures.
  * `posed` (default) takes moved parts where they are shown. `moved` tells whether any were.
  */
-export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[] }> {
+export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string; materials?: boolean } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[] }> {
   const name = opts.name ?? baseName();
   const ids = exportIds(opts.parts);
   const surroundings = format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
@@ -79,7 +79,7 @@ export async function meshExportFiles(format: MeshFormat, opts: { parts?: readon
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
   const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
   if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes };
-  return { files: { [`${name}.${format}`]: meshFile(format, meshes) }, moved: poses.size > 0, meshes };
+  return { files: { [`${name}.${format}`]: meshFile(format, meshes, opts.materials) }, moved: poses.size > 0, meshes };
 }
 
 export async function exportMesh(format: MeshFormat): Promise<void> {
@@ -268,14 +268,17 @@ export function objExport(name: string, meshes: readonly BodyMesh[], surrounding
   return objFiles(name, [...objParts(meshes), ...(surroundings ? surroundingMeshes() : [])]);
 }
 
-/** After a 3MF with several filaments: which slot gets which material, to set up in the slicer. */
-/** The filaments a 3MF of these parts asks for, in slot order (material and colour). */
-export function filamentsOf(meshes: readonly BodyMesh[]) {
+/** Whether a 3MF carries materials, colours and filaments: `materials` if given, else the setting (default off). */
+export const threeMfMaterials = (materials?: boolean) => materials ?? usePrefs.getState().threeMfMaterials;
+
+/** The filaments a 3MF of these parts asks for, in slot order (material and colour); none without materials. */
+export function filamentsOf(meshes: readonly BodyMesh[], materials?: boolean) {
   const doc = currentDoc();
   const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
-  return filamentSlots(threeMfParts(doc, meshes, colors)).filaments;
+  return filamentSlots(threeMfParts(doc, meshes, colors, threeMfMaterials(materials))).filaments;
 }
 
+/** After a 3MF with several filaments: which slot gets which material, to set up in the slicer. */
 function tellFilaments(meshes: readonly BodyMesh[]): void {
   const filaments = filamentsOf(meshes);
   if (filaments.length < 2) return;
@@ -283,13 +286,13 @@ function tellFilaments(meshes: readonly BodyMesh[]): void {
   void showNotice({ title: t("{n} filaments assigned", { n: filaments.length }), message: `${lines.join("\n")}\n\n${t("Load these filaments in the slicer in this order; each part is already assigned to its filament.")}` });
 }
 
-/** Parts as an STL, or a 3MF or OBJ with their names and colours. */
-function meshFile(format: MeshFormat, meshes: BodyMesh[]): Uint8Array {
+/** Parts as an STL, or a 3MF or OBJ with their names and colours (3MF: see threeMfMaterials). */
+function meshFile(format: MeshFormat, meshes: BodyMesh[], materials?: boolean): Uint8Array {
   if (format === "stl") return writeStl(meshes);
   const { doc } = useApp.getState();
   const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
   if (format === "obj") return new TextEncoder().encode(writeObj(objParts(meshes)));
-  return write3mf(threeMfParts(doc, meshes, colors));
+  return write3mf(threeMfParts(doc, meshes, colors, threeMfMaterials(materials)));
 }
 
 /**
@@ -312,7 +315,7 @@ export async function exportVariants(format: MeshFormat | "step"): Promise<void>
  * Every variant as a file of its own ("holder-Pipe 25.stl", …). The kernel builds each variant in
  * turn; afterwards the design is built as it is again.
  */
-export async function variantFiles(format: MeshFormat | "step", progress?: (k: number, n: number) => void, parts?: readonly string[]): Promise<Record<string, Uint8Array>> {
+export async function variantFiles(format: MeshFormat | "step", progress?: (k: number, n: number) => void, parts?: readonly string[], materials?: boolean): Promise<Record<string, Uint8Array>> {
   const doc = currentDoc();
   const variants = doc.variants ?? [];
   if (!variants.length) throw new Error(t("This design has no variants"));
@@ -331,7 +334,7 @@ export async function variantFiles(format: MeshFormat | "step", progress?: (k: n
       if (format === "obj") {
         const obj = objExport(`${safe(baseName())}-${safe(v.name)}`, await kernel.exportMeshes(ids), false);
         Object.assign(files, obj);
-      } else files[file] = format === "step" ? await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id))) : meshFile(format, await kernel.exportMeshes(ids));
+      } else files[file] = format === "step" ? await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id))) : meshFile(format, await kernel.exportMeshes(ids), materials);
     }
     return files;
   } finally {
