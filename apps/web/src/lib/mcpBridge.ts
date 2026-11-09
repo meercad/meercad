@@ -582,6 +582,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(typeof p["floating"] === "boolean" ? { floating: p["floating"] } : {}),
         ...(p["masses"] && typeof p["masses"] === "object" ? { masses: p["masses"] as Record<string, number> } : {}),
         ...(p["actuators"] && typeof p["actuators"] === "object" ? { actuators: p["actuators"] as Record<string, RobotActuator> } : {}),
+        ...(p["collision"] === "mesh" || p["collision"] === "shapes" ? { collision: p["collision"] } : {}),
       });
       return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])), links, warnings };
     }

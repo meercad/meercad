@@ -307,7 +307,7 @@ server.registerTool(
   {
     title: "Export a robot for simulation",
     description:
-      "Writes the design as a robot for physics simulation and robot learning into the folder `path`: <name>.xml (MJCF for MuJoCo and mjlab), <name>.urdf (ROS, Isaac Sim, PyBullet) and meshes/<part>.stl, in metres, kilograms and radians. Parts held together by fixed joints become one link; each revolute or slider joint becomes a joint with its limits; couplings become MJCF equalities and URDF mimic joints; each link gets mass, centre of gravity and inertia from its parts' materials. Links that hang on nothing get a free joint (floating: false fixes them). `masses` sets real grams per part (bought motors, printed parts with their infill). `actuators` gives drive data per joint id: effort (Nm or N), velocity (rad/s), kp and kv (then the MJCF gets a position actuator, else a torque motor), armature (kg·m²), damping, friction; joints without it stay passive. Returns the links (name, parts, kg, parent, joint) and warnings (loops left out, parts without material, joints without drive data).",
+      "Writes the design as a robot for physics simulation and robot learning into the folder `path`: <name>.xml (MJCF for MuJoCo and mjlab), <name>.urdf (ROS, Isaac Sim, PyBullet) and meshes/<part>.stl, in metres, kilograms and radians. Parts held together by fixed joints become one link; each revolute or slider joint becomes a joint with its limits; couplings become MJCF equalities and URDF mimic joints; each link gets mass, centre of gravity and inertia from its parts' materials. Each part collides as one simple shape (collision: \"shapes\", default): the box, cylinder or sphere of least volume around it, turned with the part, which Isaac Sim/PhysX and MuJoCo simulate fast and stably (the meshes stay the visuals); collision: \"mesh\" collides with the triangles instead. Links that hang on nothing get a free joint (floating: false fixes them). `masses` sets real grams per part (bought motors, printed parts with their infill). `actuators` gives drive data per joint id: effort (Nm or N), velocity (rad/s), kp and kv (then the MJCF gets a position actuator, else a torque motor), armature (kg·m²), damping, friction; joints without it stay passive. Returns the links (name, parts, kg, parent, joint) and warnings (loops left out, parts without material, joints without drive data, parts their collision shape fits badly).",
     inputSchema: {
       path: z.string().describe("Folder to write into (created if missing)"),
       name: z.string().optional().describe("Model and file name; default the project's name"),
@@ -320,11 +320,12 @@ server.registerTool(
         )
         .optional()
         .describe("Drive data per joint id"),
+      collision: z.enum(["shapes", "mesh"]).optional().describe('What links collide with: "shapes" (default, one box/cylinder/sphere per part) or "mesh"'),
     },
   },
-  guard(async ({ path, name, floating, masses, actuators }) => {
+  guard(async ({ path, name, floating, masses, actuators, collision }) => {
     const dir = resolve(path);
-    const r = await call<{ files: Record<string, string>; links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators }, 300_000);
+    const r = await call<{ files: Record<string, string>; links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision }, 300_000);
     const written: string[] = [];
     for (const [file, b64] of Object.entries(r.files)) {
       const target = join(dir, file);
