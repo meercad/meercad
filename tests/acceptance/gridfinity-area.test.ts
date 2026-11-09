@@ -10,7 +10,8 @@ const size = (b: RebuildReport["bodies"][number]) => [0, 1, 2].map((i) => b.bbox
 
 async function build(features: Feature[]) {
   const d = doc(features);
-  expect(validateDocument(d).errors ?? []).toEqual([]);
+  const v = validateDocument(d);
+  expect(v.ok ? [] : v.errors).toEqual([]);
   const s = await newSession();
   return { ...s.rebuild(d), session: s };
 }
@@ -110,6 +111,6 @@ describe("gridfinity baseplate for an area, cut for the print bed", () => {
     expect(small.report.features[0]!.status).toBe("error");
     expect(small.report.features[0]!.message).toMatch(/too small/);
     const v = validateDocument(doc([plate({ bed: {} })]));
-    expect(v.errors.join(" ")).toMatch(/printer or a size/);
+    expect(v.ok ? "" : v.errors.join(" ")).toMatch(/printer or a size/);
   });
 });
