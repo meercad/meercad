@@ -27,7 +27,7 @@ import { setTool, useSketchUi, type SketchTool } from "./sketch/state";
 import { saveFile } from "./components/io";
 import { actionFor, MODEL_ACTIONS, MODEL_CONTEXT, type ModelAction } from "./lib/keymap";
 import type { FeatureOp } from "@meercad/schema";
-import { closeTab, cycleTab, dropCachedTab, reloadProject, reopenClosedTab, toggleSide } from "./store";
+import { closeTab, cycleTab, dropCachedTab, reopenClosedTab, toggleSide } from "./store";
 import { cancelDialog, commitDialog, editFeature, getViewport, goHome, hideSelectedParts, lastStartedFeature, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@meercad/viewport";
@@ -157,8 +157,8 @@ export function App() {
     const offOpen = desktop.on("open-project", (id) => void openProject(id));
     const offError = desktop.on("error", (msg) => toast(msg, "error"));
     const offChanged = desktop.on("projects-changed", () => window.dispatchEvent(new Event("meercad:projects-changed")));
-    // A project an assistant works on in its own window follows its saves here.
-    const offSaved = desktop.on("project-saved", (id) => (useApp.getState().aiHeld[id] ? void reloadProject(id) : dropCachedTab(id)));
+    // Another window saved a project: a copy kept here for a background tab is stale.
+    const offSaved = desktop.on("project-saved", (id) => dropCachedTab(id));
     return () => {
       offMenu();
       offOpen();

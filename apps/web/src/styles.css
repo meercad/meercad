@@ -375,9 +375,6 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .ai-lock-bar > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-lock-bar .pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 .ai-lock-bar .btn { flex: none; height: 30px; padding: 0 14px; border-radius: 999px; }
-/* A model an assistant works on in its own window: locked below the top bar, whose tabs stay usable. */
-.ai-held { top: 68px; }
-.ai-held .ai-lock-bar { top: 6px; }
 /* An assistant's own window (Mac): whose it is, small and out of the way. */
 .ai-window-badge { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 60; max-width: calc(100vw - 240px); padding: 3px 12px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--text-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 
@@ -754,6 +751,9 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 .pick-mark { position: absolute; top: 8px; left: 8px; display: flex; border-radius: 999px; background: color-mix(in srgb, var(--panel) 85%, transparent); color: var(--muted); }
 .pick-mark svg { width: 24px; height: 24px; }
 .card.selected .pick-mark { color: var(--accent-text); background: var(--accent); }
+/* A project open in another window (an assistant's or the user's): a click shows that window. */
+.open-elsewhere { position: absolute; top: 8px; right: 8px; display: flex; padding: 4px; border-radius: 999px; background: color-mix(in srgb, var(--panel) 85%, transparent); color: var(--muted); }
+.open-elsewhere svg { width: 14px; height: 14px; }
 .select-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(16px, calc(env(safe-area-inset-bottom) + 10px)); z-index: 40; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; width: max-content; max-width: calc(100vw - 24px); padding: 8px 8px 8px 16px; border-radius: 26px; background: var(--panel); border: 1px solid var(--border-strong); box-shadow: var(--shadow); animation: select-bar-in 0.14s ease-out; }
 @keyframes select-bar-in { from { opacity: 0; transform: translate(-50%, 6px); } }
 .home-main.selecting { padding-bottom: 140px; }
