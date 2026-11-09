@@ -39,7 +39,8 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
 }
 
 /** A box that takes picks in the viewport for `field` while active. */
-function PickBox({ field, items, placeholder, onRemove }: { field: string; items: string[]; placeholder: string; onRemove?: (i: number) => void }) {
+/** A selection field filled by tapping in the viewport (parts, faces), shared by the storage dialogs. */
+export function PickBox({ field, items, placeholder, onRemove }: { field: string; items: string[]; placeholder: string; onRemove?: (i: number) => void }) {
   const active = useApp((s) => s.dialog?.field === field);
   return (
     <div className={`selbox ${active ? "active" : ""}`} onClick={() => setDialogField(active ? null : field)} role="button" tabIndex={0}>

@@ -267,6 +267,11 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if (f.kind === "bin" && (f.outline || f.bed || f.fill !== undefined)) errors.push(`${at}: outline, fill and bed are for baseplates`);
         if (f.outline) earlier(f.outline.sketch, at, "outline", ["sketch"]);
         if (f.outline && f.drawer) errors.push(`${at}: give a drawer or an outline, not both`);
+        if (f.pocket) {
+          if (f.kind !== "bin") errors.push(`${at}: pocket is for bins`);
+          else body(f.pocket.body, at, "pocket body");
+        }
+        if (!f.units && !(f.kind === "bin" && f.pocket) && !(f.kind === "baseplate" && (f.drawer || f.outline))) errors.push(`${at}: units are required`);
         break;
       case "box":
         if (f.plane) planeSpec(f.plane, at);

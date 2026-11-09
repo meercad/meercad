@@ -217,6 +217,12 @@ function handlePick(p: Pick, d: DialogState): void {
         if (b) (g as Of<"mesh_convert">).body = b;
         break;
       }
+      case "pocket": {
+        // The part a Gridfinity bin holds (not the bin itself).
+        const b = bodyOf(p);
+        if (b && g.op === "gridfinity" && b !== g.id) g.pocket = { ...g.pocket, body: b };
+        break;
+      }
       case "tools": {
         const b = bodyOf(p);
         if (b && b !== (g as Of<"boolean">).target) (g as Of<"boolean">).tools = toggle((g as Of<"boolean">).tools, b);

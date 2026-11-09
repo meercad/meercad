@@ -217,7 +217,7 @@ function freeWallCell(doc: MeercadDocument, board: Extract<Feature, { op: "wall"
   for (const f of doc.features)
     if (f.op === "wall" && f.board === board.id) {
       const [ci, cj] = [n(f.cell?.[0], 0), n(f.cell?.[1], 0)];
-      for (let i = 0; i < n(f.units[0], 1); i++) for (let j = 0; j < n(f.units[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
+      for (let i = 0; i < n(f.units?.[0], 1); i++) for (let j = 0; j < n(f.units?.[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
     }
   for (let j = by - 1; j >= 0; j--) for (let i = 0; i < bx; i++) if (!taken.has(`${i},${j}`)) return [i, j];
   return [0, 0];
@@ -226,12 +226,12 @@ function freeWallCell(doc: MeercadDocument, board: Extract<Feature, { op: "wall"
 /** The first cell of a baseplate that no bin stands on yet (row by row), or [0, 0] when it is full. */
 function freeCell(doc: MeercadDocument, plate: Extract<Feature, { op: "gridfinity" }>): [number, number] {
   const n = (e: unknown, d: number) => (typeof e === "number" ? e : d);
-  const [px, py] = plate.drawer ? [0, 0] : [n(plate.units[0], 1), n(plate.units[1], 1)];
+  const [px, py] = plate.drawer || !plate.units ? [0, 0] : [n(plate.units[0], 1), n(plate.units[1], 1)];
   const taken = new Set<string>();
   for (const f of doc.features)
     if (f.op === "gridfinity" && f.baseplate === plate.id) {
       const [ci, cj] = [n(f.cell?.[0], 0), n(f.cell?.[1], 0)];
-      for (let i = 0; i < n(f.units[0], 1); i++) for (let j = 0; j < n(f.units[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
+      for (let i = 0; i < n(f.units?.[0], 1); i++) for (let j = 0; j < n(f.units?.[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
     }
   for (let j = 0; j < py; j++) for (let i = 0; i < px; i++) if (!taken.has(`${i},${j}`)) return [i, j];
   return [0, 0];
@@ -264,6 +264,8 @@ export function draftProblem(f: Feature): string | null {
       return f.data ? null : t("Choose a file");
     case "mesh_convert":
       return f.body ? null : t("Select a mesh part");
+    case "gridfinity":
+      return f.pocket && !f.pocket.body ? t("Pick the part the bin should hold") : null;
     case "scale":
       return f.bodies.length ? null : t("Pick the parts to scale");
     case "bend":
@@ -327,7 +329,8 @@ export function featureName(f: Feature): string {
     }
   }
   // Bins and baseplates by their size ("Bin 2×1×3", "Baseplate 4×3"), labels by their text.
-  if (!f.name && f.op === "gridfinity" && typeof f.units[0] === "number" && typeof f.units[1] === "number")
+  if (!f.name && f.op === "gridfinity" && f.pocket && !f.units) return t("Bin for a part");
+  if (!f.name && f.op === "gridfinity" && typeof f.units?.[0] === "number" && typeof f.units[1] === "number")
     return f.kind === "bin" ? `${t("Bin")} ${f.units[0]}×${f.units[1]}×${typeof f.height === "number" ? f.height : 3}` : f.drawer || f.outline ? `${t("Baseplate")} ${f.id.replace(/^\D+/, "")}` : `${t("Baseplate")} ${f.units[0]}×${f.units[1]}`;
   // Boxes by their size ("Box 80×60×40", "Jar ⌀60×50").
   if (!f.name && f.op === "box" && typeof f.width === "number" && typeof f.height === "number")

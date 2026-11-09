@@ -1,4 +1,4 @@
-import { Image as PictureIcon, ImageOff, ArrowDownToLine, ClipboardPaste, CopyPlus, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, TriangleAlert, UserCheck, Weight, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, LayoutGrid, ClipboardPaste, CopyPlus, Bot, Highlighter, ChevronRight, Eraser, Ghost, Palette, RotateCcw, Shapes, Wand2, Copy, Eye, EyeOff, FileDown, Folder, FolderPlus, Layers, Link2, Map as MapIcon, MapPin, Ruler, StickyNote, Pencil, Plus, Search, SkipBack, SkipForward, Trash, ShieldCheck, TriangleAlert, UserCheck, Weight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
@@ -28,6 +28,7 @@ import { copyParts, hasClip, pasteParts, selectedParts, selectParts } from "../l
 import { cleanUpMenu } from "./TerrainTools";
 import { startMarking, startScaling } from "../lib/terrainDraw";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
+import { binForPart } from "../lib/partBin";
 import { openMeshRepair } from "../lib/meshRepair";
 import { lang, t, tn } from "../lib/i18n";
 
@@ -491,6 +492,7 @@ function Bodies() {
               return sw ? [{ label: sw.label, icon: sw.shown ? <ImageOff /> : <PictureIcon />, onClick: sw.onClick }] : [];
             })(),
             ...terrainItems(id, { set: <ArrowDownToLine />, place: <MapPin /> }),
+            { label: t("Gridfinity bin for this part"), icon: <LayoutGrid />, onClick: () => binForPart(id) },
             ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
             { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id) },
