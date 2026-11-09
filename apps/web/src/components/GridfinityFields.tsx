@@ -4,6 +4,7 @@
  * Every change rebuilds the preview straight away; − / + buttons step counts without typing.
  */
 import { Minus, Plus, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { checkInterference } from "../lib/interference";
 import type { ReactNode } from "react";
 import type { Expr, Feature } from "@meercad/schema";
@@ -78,7 +79,7 @@ interface Preset {
   patch: Partial<Of<"gridfinity">>;
 }
 
-const CLEAR: Partial<Of<"gridfinity">> = { units: [1, 1], height: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, magnets: undefined, screws: undefined, drawer: undefined, floor: undefined, wall: undefined };
+const CLEAR: Partial<Of<"gridfinity">> = { units: [1, 1], height: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, magnets: undefined, screws: undefined, drawer: undefined, outline: undefined, gap: undefined, bed: undefined, floor: undefined, wall: undefined };
 
 /** Ready-made starting points: a click sets every value; each stays editable. */
 const PRESETS: Preset[] = [
@@ -88,7 +89,34 @@ const PRESETS: Preset[] = [
   { label: t("Screw sorter 2×2"), patch: { kind: "bin", units: [2, 2], height: 3, dividers: [3, 3], scoop: 6 } },
   { label: t("Baseplate 4×3, magnets"), patch: { kind: "baseplate", units: [4, 3], magnets: true } },
   { label: t("Baseplate for a drawer"), patch: { kind: "baseplate", units: [1, 1], drawer: [400, 300] } },
+  { label: t("Floor 3 m × 1.5 m, cut for the print bed"), patch: { kind: "baseplate", units: [1, 1], drawer: [3000, 1500], bed: { size: [256, 256] } } },
 ];
+
+/** The print bed a baseplate is cut up for, unless changed. */
+const DEFAULT_BED: [number, number] = [256, 256];
+
+/** Examples to start from, in a menu: picking one sets every value, each stays editable. */
+export function Examples<P>({ items, onPick }: { items: { label: string; patch: P }[]; onPick: (patch: P) => void }) {
+  return (
+    <Field label={t("Start from an example")}>
+      <select
+        className="field"
+        value=""
+        onChange={(e) => {
+          const item = items[Number(e.target.value)];
+          if (item) onPick(item.patch);
+        }}
+      >
+        <option value="">{t("Pick an example…")}</option>
+        {items.map((p, i) => (
+          <option key={p.label} value={i}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
 
 export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
   const features = useApp((s) => s.doc.features);
@@ -98,7 +126,21 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
   const height = num(f.height, 3);
   const pair = (k: "units" | "dividers" | "cell" | "drawer" | "position", i: number, v: Expr, base: [Expr, Expr]) => set({ [k]: base.map((x, j) => (j === i ? v : x)) });
   const div = f.dividers ?? [0, 0];
-  const usePreset = (p: Preset) => set({ ...CLEAR, ...(p.patch.kind === "baseplate" ? { baseplate: undefined, cell: undefined } : {}), ...p.patch });
+  const usePreset = (patch: Preset["patch"]) => {
+    setWantOutline(false);
+    set({ ...CLEAR, ...(patch.kind === "baseplate" ? { baseplate: undefined, cell: undefined } : {}), ...patch });
+  };
+  const sketches = features.filter((x): x is Of<"sketch"> => x.op === "sketch");
+  // The mode follows the feature (presets change it too); "outline" before a sketch is picked is kept here.
+  const [wantOutline, setWantOutline] = useState(false);
+  const mode: "cells" | "area" | "outline" = f.outline ? "outline" : f.drawer ? "area" : wantOutline ? "outline" : "cells";
+  const pickMode = (m: typeof mode) => {
+    setWantOutline(m === "outline");
+    if (m === "cells") set({ drawer: undefined, outline: undefined, gap: undefined });
+    else if (m === "area") set({ drawer: f.drawer ?? [400, 300], outline: undefined });
+    else set({ drawer: undefined, outline: sketches.length ? { sketch: (sketches.find((x) => x.id === f.outline?.sketch) ?? sketches[sketches.length - 1]!).id } : undefined, plane: undefined, position: undefined });
+  };
+  const kernelInfo = useApp((s) => s.output?.report.features.find((x) => x.id === f.id)?.info);
 
   // What the numbers come to.
   let info = "";
@@ -108,8 +150,13 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
       const c = compartments(units, height, [num(div[0], 0), num(div[1], 0)], num(f.wall, GRIDFINITY.wall), num(f.dividerThickness ?? f.wall, GRIDFINITY.wall), num(f.floor, height >= 2 ? GRIDFINITY.binFloor : GRIDFINITY.footHeight + 0.85));
       info = t("{w} × {d} × {h} outside ({lip} with the lip)", { w: mm(s.width), d: mm(s.depth), h: mm(s.rim), lip: mm(s.top) });
       if (!f.solid) info += ` · ${c.count > 1 ? t("{n} compartments of {w} × {d}", { n: c.count, w: mm(c.width), d: mm(c.depth) }) : t("inside {w} × {d}", { w: mm(c.width), d: mm(c.depth) })}`;
+    } else if ((f.outline || f.bed) && kernelInfo?.["cells"] !== undefined) {
+      const k = kernelInfo;
+      info = t("{n} cells ({x} × {y}) on {w} × {d}", { n: k["cells"]!, x: k["cellsX"]!, y: k["cellsY"]!, w: mm(k["width"]!), d: mm(k["depth"]!) });
+      if (k["borderX"] !== undefined) info += ` · ${t("border {bx} and {by}", { bx: mm(k["borderX"]), by: mm(k["borderY"]!) })}`;
+      if (f.bed) info += ` · ${t("{n} pieces, the largest {w} × {d}", { n: k["pieces"]!, w: mm(k["largestX"]!), d: mm(k["largestY"]!) })}`;
     } else if (f.drawer) {
-      const fit = drawerFit([num(f.drawer[0], 400), num(f.drawer[1], 300)]);
+      const fit = drawerFit([num(f.drawer[0], 400), num(f.drawer[1], 300)], num(f.gap, 0.5));
       info = t("{x} × {y} cells, border {bx} and {by}", { x: fit.units[0], y: fit.units[1], bx: mm(fit.border[0]), by: mm(fit.border[1]) });
     } else info = t("{w} × {d} outside", { w: mm(units[0] * GRIDFINITY.pitch), d: mm(units[1] * GRIDFINITY.pitch) });
   } catch (e) {
@@ -118,33 +165,45 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
 
   return (
     <>
-      <div className="preset-row" style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {PRESETS.map((p) => (
-          <button key={p.label} className="btn" style={{ height: 28 }} onClick={() => usePreset(p)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Examples items={PRESETS} onPick={usePreset} />
       <Seg
         value={f.kind}
         options={[["bin", t("Bin")], ["baseplate", t("Baseplate")]]}
-        onChange={(kind) => set(kind === "bin" ? { kind } : { kind, baseplate: undefined, cell: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, height: undefined })}
+        onChange={(kind) => set(kind === "bin" ? { kind, drawer: undefined, outline: undefined, gap: undefined, bed: undefined } : { kind, baseplate: undefined, cell: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, height: undefined })}
       />
-      {!bin ? (
-        <label className="checkbox">
-          <input type="checkbox" checked={!!f.drawer} onChange={(e) => set({ drawer: e.target.checked ? [400, 300] : undefined })} /> {t("Fill a drawer")}
-        </label>
-      ) : null}
-      {!bin && f.drawer ? (
+      {!bin ? <Seg value={mode} options={[["cells", t("Cells")], ["area", t("Floor area")], ["outline", t("Drawn outline")]]} onChange={pickMode} /> : null}
+      {!bin && mode === "area" ? (
         <div className="row">
-          <Field label={t("Drawer width")}>
-            <ExprInput value={f.drawer[0]} onCommit={(v) => pair("drawer", 0, v, f.drawer!)} onLive={(v) => pair("drawer", 0, v, f.drawer!)} />
+          <Field label={t("Area width")}>
+            <ExprInput value={f.drawer?.[0] ?? 400} onCommit={(v) => pair("drawer", 0, v, f.drawer ?? [400, 300])} onLive={(v) => pair("drawer", 0, v, f.drawer ?? [400, 300])} />
           </Field>
-          <Field label={t("Drawer depth")}>
-            <ExprInput value={f.drawer[1]} onCommit={(v) => pair("drawer", 1, v, f.drawer!)} onLive={(v) => pair("drawer", 1, v, f.drawer!)} />
+          <Field label={t("Area depth")}>
+            <ExprInput value={f.drawer?.[1] ?? 300} onCommit={(v) => pair("drawer", 1, v, f.drawer ?? [400, 300])} onLive={(v) => pair("drawer", 1, v, f.drawer ?? [400, 300])} />
           </Field>
         </div>
-      ) : (
+      ) : null}
+      {!bin && mode === "outline" ? (
+        sketches.length ? (
+          <Field label={t("Outline (sketch)")}>
+            <select className="field" value={f.outline?.sketch ?? ""} onChange={(e) => set({ outline: e.target.value ? { sketch: e.target.value } : undefined })}>
+              {f.outline ? null : <option value="">{t("Pick a sketch")}</option>}
+              {sketches.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {featureName(x)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <p className="muted small">{t("Draw the area's outline in a sketch first (any closed shape, holes too), then pick it here.")}</p>
+        )
+      ) : null}
+      {!bin && mode !== "cells" ? (
+        <Field label={t("Gap to the edge")}>
+          <ExprInput value={f.gap} placeholder="0.5" onCommit={(gap) => set({ gap })} />
+        </Field>
+      ) : null}
+      {bin || mode === "cells" ? (
         <div className="row">
           <Field label={t("Cells wide")}>
             <Count value={f.units[0]} min={1} max={30} onChange={(v) => pair("units", 0, v, f.units)} />
@@ -153,7 +212,33 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
             <Count value={f.units[1]} min={1} max={30} onChange={(v) => pair("units", 1, v, f.units)} />
           </Field>
         </div>
-      )}
+      ) : null}
+      {!bin ? (
+        <label className="checkbox">
+          <input type="checkbox" checked={!!f.bed} onChange={(e) => set({ bed: e.target.checked ? { size: DEFAULT_BED } : undefined })} /> {t("Cut into pieces for the print bed")}
+        </label>
+      ) : null}
+      {!bin && f.bed ? (
+        <>
+          <div className="row">
+            <Field label={t("Bed width")}>
+              <ExprInput value={f.bed.size[0]} onCommit={(v) => set({ bed: { ...f.bed, size: [v, f.bed!.size[1]] } })} />
+            </Field>
+            <Field label={t("Bed depth")}>
+              <ExprInput value={f.bed.size[1]} onCommit={(v) => set({ bed: { ...f.bed, size: [f.bed!.size[0], v] } })} />
+            </Field>
+          </div>
+          <div className="row">
+            <Field label={t("Unusable width")}>
+              <ExprInput value={f.bed.margin?.[0]} placeholder="0" onCommit={(v) => set({ bed: { ...f.bed, margin: [v, f.bed?.margin?.[1] ?? 0] } })} />
+            </Field>
+            <Field label={t("Unusable depth")}>
+              <ExprInput value={f.bed.margin?.[1]} placeholder="0" onCommit={(v) => set({ bed: { ...f.bed, margin: [f.bed?.margin?.[0] ?? 0, v] } })} />
+            </Field>
+          </div>
+          <p className="muted small">{t("What of the bed cannot be printed on, e.g. 20 mm depth when the back 2 cm are taken. The plate comes apart between cells; the pieces are parts A1, A2, … (rows from the front): export them together as one 3MF.")}</p>
+        </>
+      ) : null}
       {bin ? (
         <div className="row">
           <Field label={t("Height (units)")}>
@@ -251,7 +336,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
           <ShieldCheck /> {t("Check fit")}
         </button>
         </>
-      ) : (
+      ) : !bin && f.outline ? null : (
         <>
           <Field label={t("On")}>
             <PlaneBox value={describePlane(f.plane ?? { ref: "origin.XY" })} placeholder={t("Tap a plane or flat face where it stands")} />
@@ -266,7 +351,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
           </div>
         </>
       )}
-      <p className="muted small">{bin ? t("Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.") : t("Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one.")}</p>
+      <p className="muted small">{bin ? t("Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.") : t("Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and a solid border round them.")}</p>
     </>
   );
 }
@@ -292,13 +377,7 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
   const symbol = f.symbol ?? "none";
   return (
     <>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {LABEL_PRESETS.map((p) => (
-          <button key={p.label} className="btn" style={{ height: 28 }} onClick={() => set(p.patch)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Examples items={LABEL_PRESETS} onPick={(patch) => set(patch)} />
       <Field label={t("Symbol")}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           <button className={`btn ${symbol === "none" ? "primary" : ""}`} style={{ height: 32 }} onClick={() => set({ symbol: undefined })}>

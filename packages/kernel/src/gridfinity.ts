@@ -7,7 +7,7 @@
  * bin's inside is one loft from its floor up through the stacking lip, cut out in one go.
  */
 
-import { FeatureError, GRIDFINITY as G, GridfinityError, drawerFit, labelSymbol, type ResolvedGridfinity, type ResolvedLabel } from "@meercad/model";
+import { FeatureError, GRIDFINITY as G, GridfinityError, areaPlan, labelSymbol, pieceName, type GridArea, type ResolvedGridfinity, type ResolvedLabel } from "@meercad/model";
 import { toWorld, type PlaneFrame, type Vec3 } from "@meercad/sketch";
 import type { TopoDS_Shape } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
@@ -198,13 +198,9 @@ function binBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame0: PlaneFrame
 
 function plateBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame: PlaneFrame): { body: Body; record: GridRecord } {
   const b = new Builder(oc, arena);
-  let units = f.units;
-  let outer: [number, number] = [units[0] * G.pitch, units[1] * G.pitch];
-  if (f.drawer) {
-    const fit = checked(() => drawerFit(f.drawer!));
-    units = fit.units;
-    outer = fit.outer;
-  }
+  // A plain grid of `units` (drawers, outlines and print beds go to areaPlateBodies).
+  const units = f.units;
+  const outer: [number, number] = [units[0] * G.pitch, units[1] * G.pitch];
   const [nx, ny] = units;
   const holes = !!(f.magnets || f.screws);
   const floor = f.floor ?? (holes ? G.plateFloorWithHoles : 0);
@@ -255,6 +251,223 @@ function plateBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame: PlaneFram
   const body = b.place(local, b.placement(frame, f.position), f.id);
   return { body, record: { frame, position: f.position, units, floor } };
 }
+
+// ---------------------------------------------------------------- baseplate for an area, in pieces
+
+/** A closed region of a sketch: outer loop (counter-clockwise) and holes, in the sketch's plane. */
+export interface OutlineRegion {
+  outer: [number, number][];
+  holes: [number, number][][];
+}
+
+/**
+ * A baseplate filling a rectangle (its `units`, or a `drawer`) or sketch outlines, the rest of the
+ * area a solid border at the plate's height, cut along the lines between cells into pieces that
+ * fit the print bed. Every piece is a part: the feature id alone, or `gf1_A1`, `gf1_A2`, … with
+ * rows from the front and columns from the left. Face names as a baseplate's, plus gf1.joint
+ * where two pieces meet.
+ */
+export function areaPlateBodies(
+  oc: OC,
+  arena: Arena,
+  f: ResolvedGridfinity,
+  frame: PlaneFrame,
+  outline: OutlineRegion[] | undefined,
+  warnings: string[],
+): { bodies: Body[]; record: GridRecord; info: Record<string, number> } {
+  const b = new Builder(oc, arena);
+  // Outlines without repeated points (a closing point equal to the first, short arc steps).
+  const clean = (l: [number, number][]) => l.filter((p, i) => Math.hypot(p[0] - l[(i + 1) % l.length]![0], p[1] - l[(i + 1) % l.length]![1]) > 1e-6);
+  outline = outline?.map((r) => ({ outer: clean(r.outer), holes: r.holes.map(clean).filter((h) => h.length >= 3) })).filter((r) => r.outer.length >= 3);
+  if (outline && !outline.length) throw new FeatureError("the outline has no closed area");
+  const gap = f.gap ?? 0.5;
+  if (gap < 0 || gap > 20) throw new FeatureError("the gap to the edge must be between 0 and 20 mm");
+  const area: GridArea = outline
+    ? { loops: outline.flatMap((r) => [r.outer, ...r.holes]), gap }
+    : f.drawer
+      ? { rect: [f.drawer[0] - 2 * gap, f.drawer[1] - 2 * gap] }
+      : { rect: [f.units[0] * G.pitch, f.units[1] * G.pitch] };
+  const plan = checked(() => areaPlan(area, f.bed?.usable));
+  const holes = !!(f.magnets || f.screws);
+  const floor = f.floor ?? (holes ? G.plateFloorWithHoles : 0);
+  const magnetD = f.magnetDiameter ?? G.magnetDiameter, magnetDepth = f.magnetDepth ?? G.magnetDepth;
+  if (floor < 0) throw new FeatureError("the floor cannot be negative");
+  if (f.magnets && floor < magnetDepth + 0.4) throw new FeatureError(`magnets need a floor of at least ${(magnetDepth + 0.4).toFixed(1)} mm`);
+  if (f.screws && floor < G.plateScrewHead / 2 - G.plateScrewDiameter / 2 + 0.5) throw new FeatureError("countersunk screws need a floor of at least 2.3 mm");
+  const top = floor + G.pocketHeight;
+
+  // The whole plate's outline as one solid, cut into tiles below.
+  const whole = outline
+    ? (() => {
+        const parts = outline.map((r) => b.regionSolid(r.outer, r.holes, gap, 0, top)).filter((x) => b.volume(x) > 1e-6);
+        if (!parts.length) throw new FeatureError("the outline is too small for the gap");
+        return parts.length > 1 ? b.bool("fuse", parts[0]!, parts.slice(1)) : parts[0]!;
+      })()
+    : b.block(0, 0, plan.max[0] - plan.min[0], plan.max[1] - plan.min[1], G.plateRadius, 0, top);
+
+  // One pocket (with its holes), copied into every cell.
+  const profile: [number, number][] = G.pocket.map(([z, d]) => [floor + z, d] as [number, number]);
+  if (floor <= 0) profile.unshift([-0.5, G.pocket[0]![1]]);
+  profile.push([top + 0.5, -0.5]);
+  const cellTools: TopoDS_Shape[] = [b.profileSolid(0, 0, G.pitch, G.pitch, G.plateRadius, profile)];
+  const holeAt: Vec3[] = [];
+  if (f.magnets)
+    for (const sx of [-1, 1])
+      for (const sy of [-1, 1]) {
+        cellTools.push(b.cylinderZ(sx * G.holeOffset, sy * G.holeOffset, magnetD / 2, floor - magnetDepth, floor + 0.5));
+        holeAt.push([sx * G.holeOffset, sy * G.holeOffset, magnetD / 2]);
+      }
+  if (f.screws) {
+    const k = G.plateScrewHead / 2 - G.plateScrewDiameter / 2;
+    cellTools.push(b.cylinderZ(0, 0, G.plateScrewDiameter / 2, -1, floor + 0.5), b.coneZ(0, 0, G.plateScrewDiameter / 2, G.plateScrewHead / 2 + 0.5, floor - k, floor + 0.5));
+    holeAt.push([0, 0, G.plateScrewHead / 2]);
+  }
+  // One cell of the plate: a 42 mm square block with its pocket and holes, copied into every cell
+  // (whole cells share their side faces, so gluing them is far faster than cutting pockets).
+  const cell = b.bool("cut", b.block(0, 0, G.pitch, G.pitch, 0, 0, top), cellTools);
+  const present = new Set(plan.cells.map(([i, j]) => `${i},${j}`));
+  const centre = (i: number, j: number): [number, number] => [plan.origin[0] + (i + 0.5) * G.pitch, plan.origin[1] + (j + 0.5) * G.pitch];
+  const cellAt = (x: number, y: number) => [Math.floor((x - plan.origin[0]) / G.pitch), Math.floor((y - plan.origin[1]) / G.pitch)] as const;
+
+  const [xs, ys] = plan.cuts;
+  const inner = (v: number, cuts: number[]) => cuts.slice(1, -1).some((c) => Math.abs(v - c) < 1e-6);
+  const name = (p: string) => [`${f.id}.${p}`];
+  const tag = (body: Body) => {
+    body.faceTags = body.faces.map((_, i) => {
+      const p = body.facePoints[i]!;
+      const n = body.faceInfo[i]!.normal;
+      const [ci, cj] = cellAt(p[0], p[1]);
+      const inCell = present.has(`${ci},${cj}`);
+      if (inCell && p[2] < floor - 1e-6) {
+        const [cx, cy] = centre(ci, cj);
+        if (holeAt.some(([x, y, r]) => Math.hypot(p[0] - cx - x, p[1] - cy - y) < r + 1e-3)) return name("hole");
+      }
+      if (n && n[2] < -0.99 && Math.abs(p[2]) < 1e-6) return name("bottom");
+      if (n && n[2] > 0.99 && Math.abs(p[2] - top) < 1e-6) return name("top");
+      if (n && Math.abs(n[2]) < 1e-6 && ((Math.abs(n[0]) > 0.99 && inner(p[0], xs)) || (Math.abs(n[1]) > 0.99 && inner(p[1], ys)))) return name("joint");
+      if (n && n[2] > 0.99 && Math.abs(p[2] - floor) < 1e-6 && floor > 0) return name("floor");
+      // Pockets (and the walls of their holes) lie inside their cell.
+      if (inCell) return name("pocket");
+      return name("side");
+    });
+    return body;
+  };
+
+  // Pieces: the tile's cells glued together, and the rest of the tile (the border) joined to them.
+  // Rectangles repeat, so a tile equal to an earlier one is that one moved (and meshed only once).
+  const cache = new Map<string, { shape: TopoDS_Shape; x0: number; y0: number }>();
+  const gx0 = plan.origin[0], gx1 = plan.origin[0] + plan.units[0] * G.pitch;
+  const gy0 = plan.origin[1], gy1 = plan.origin[1] + plan.units[1] * G.pitch;
+  const rect = outline ? null : { w: plan.max[0] - plan.min[0], d: plan.max[1] - plan.min[1] };
+  // A cell whose square reaches past the plate's rounded corners (no border there) is clipped.
+  const clipped = (x: number, y: number) =>
+    rect !== null && [[x, y], [x + G.pitch, y], [x, y + G.pitch], [x + G.pitch, y + G.pitch]].some(([px, py]) => {
+      const qx = Math.abs(px!) - (rect.w / 2 - G.plateRadius), qy = Math.abs(py!) - (rect.d / 2 - G.plateRadius);
+      return qx > 1e-6 && qy > 1e-6 && Math.hypot(qx, qy) > G.plateRadius + 1e-6;
+    });
+  // A piece is its own shape, or (`key`) a copy of an earlier one moved by dx, dy.
+  const pieces: { col: number; row: number; shape: TopoDS_Shape; key: string | null; dx: number; dy: number }[] = [];
+  for (let c = 0; c < xs.length - 1; c++)
+    for (let r = 0; r < ys.length - 1; r++) {
+      const x0 = xs[c]!, x1 = xs[c + 1]!, y0 = ys[r]!, y1 = ys[r + 1]!;
+      const key = outline
+        ? null
+        : [x1 - x0, y1 - y0, Math.max(gx0, x0) - x0, Math.min(gx1, x1) - x0, Math.max(gy0, y0) - y0, Math.min(gy1, y1) - y0, c === 0, c === xs.length - 2, r === 0, r === ys.length - 2].map((v) => (typeof v === "number" ? v.toFixed(4) : v)).join("|");
+      const hit = key ? cache.get(key) : undefined;
+      if (hit) {
+        pieces.push({ col: c, row: r, shape: hit.shape, key, dx: x0 - hit.x0, dy: y0 - hit.y0 });
+        continue;
+      }
+      const single = xs.length === 2 && ys.length === 2;
+      const region = single ? whole : b.common(whole, b.block((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, 0, -1, top + 1));
+      if (b.volume(region) < 1e-3) continue;
+      const inTile = plan.cells.filter(([i, j]) => {
+        const [cx, cy] = centre(i, j);
+        return cx > x0 && cx < x1 && cy > y0 && cy < y1;
+      });
+      const cells = inTile.map(([i, j]) => {
+        const [cx, cy] = centre(i, j);
+        const copy = b.moved(cell, cx, cy, 0, false);
+        return clipped(cx - G.pitch / 2, cy - G.pitch / 2) ? b.common(copy, region) : copy;
+      });
+      // The border: the tile less its cells' squares (row by row, runs of neighbouring cells as one box).
+      const boxes: TopoDS_Shape[] = [];
+      const rows = new Map<number, number[]>();
+      for (const [i, j] of inTile) rows.set(j, [...(rows.get(j) ?? []), i]);
+      for (const [j, is] of rows) {
+        is.sort((a, z) => a - z);
+        for (let k = 0; k < is.length; ) {
+          let e = k;
+          while (e + 1 < is.length && is[e + 1] === is[e]! + 1) e++;
+          const xa = plan.origin[0] + is[k]! * G.pitch, xb = plan.origin[0] + (is[e]! + 1) * G.pitch, ya = plan.origin[1] + j * G.pitch;
+          boxes.push(b.block((xa + xb) / 2, ya + G.pitch / 2, xb - xa, G.pitch, 0, -1, top + 1));
+          k = e + 1;
+        }
+      }
+      const border = boxes.length ? b.bool("cut", region, boxes) : region;
+      const borderParts = b.solids(border).filter((x) => b.volume(x) > 1e-3);
+      let shape: TopoDS_Shape;
+      if (!cells.length) shape = border;
+      else {
+        let grid = cells.length > 1 ? b.glue(cells[0]!, cells.slice(1), "BOPAlgo_GlueFull") : cells[0]!;
+        if (borderParts.length) grid = b.glue(grid, borderParts, "BOPAlgo_GlueShift");
+        shape = b.unify(grid);
+      }
+      if (key) cache.set(key, { shape, x0, y0 });
+      pieces.push({ col: c, row: r, shape, key, dx: 0, dy: 0 });
+    }
+
+  // Parts: one per piece (a piece an outline splits in two gives two). Copies share the tagged
+  // local body of the piece they copy and are only placed further along.
+  const locals = new Map<string, Body[]>();
+  const made: { name: string; local: Body; dx: number; dy: number }[] = [];
+  for (const p of pieces) {
+    let ls = p.key ? locals.get(p.key) : undefined;
+    if (!ls) {
+      const solids = outline ? b.solids(p.shape).filter((x) => b.volume(x) > 1e-3) : [p.shape];
+      ls = solids.map((x) => tag(new Body(oc, arena, f.id, x)));
+      if (p.key) locals.set(p.key, ls);
+    }
+    ls.forEach((local, k) => made.push({ name: `${pieceName(p.col, p.row)}${k ? `_${k + 1}` : ""}`, local, dx: p.dx, dy: p.dy }));
+  }
+  if (!made.length) throw new FeatureError("the baseplate has no material left");
+  const position: [number, number] = outline ? [0, 0] : f.position;
+  const trsf = b.placement(frame, position);
+  const bodies = made.map((m) => {
+    let t = trsf;
+    if (m.dx || m.dy) {
+      const shift = arena.track(new oc.gp_Trsf());
+      shift.SetTranslation(arena.track(new oc.gp_Vec(m.dx, m.dy, 0)));
+      t = arena.track(trsf.Multiplied(shift));
+    }
+    return b.place(m.local, t, made.length > 1 ? `${f.id}_${m.name}` : f.id, false);
+  });
+  // Hundreds of pockets: a lighter view (each pocket's rounded corners in fewer steps).
+  if (plan.cells.length > 150) for (const body of bodies) body.displayCoarse = 4;
+  // Export: 0.02 mm (0.25 rad) is far below what a printer resolves and needs about a third of the
+  // usual triangles (a 3 m × 1.5 m floor stays a file a slicer opens).
+  for (const body of bodies) body.exportTolerance = { linear: 0.02, angular: 0.25 };
+  const plate = [plan.max[0] - plan.min[0], plan.max[1] - plan.min[1]];
+  if (f.bed && plan.turned) warnings.push("the pieces fit the print bed turned by 90°");
+  const grid: [number, number] = [plan.origin[0] + (plan.units[0] * G.pitch) / 2 + position[0], plan.origin[1] + (plan.units[1] * G.pitch) / 2 + position[1]];
+  const info: Record<string, number> = {
+    cells: plan.cells.length,
+    cellsX: plan.units[0],
+    cellsY: plan.units[1],
+    pieces: made.length,
+    width: round3(plate[0]!),
+    depth: round3(plate[1]!),
+    largestX: round3(Math.max(...xs.slice(1).map((x, i) => x - xs[i]!))),
+    largestY: round3(Math.max(...ys.slice(1).map((y, i) => y - ys[i]!))),
+  };
+  if (!outline) {
+    info["borderX"] = round3(gx0 - plan.min[0]);
+    info["borderY"] = round3(gy0 - plan.min[1]);
+  }
+  return { bodies, record: { frame, position: grid, units: plan.units, floor }, info };
+}
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
 // ---------------------------------------------------------------- labels
 

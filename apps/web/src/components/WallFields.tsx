@@ -11,7 +11,7 @@ import { describePlane } from "../lib/topology";
 import { featureName, WALL_ACCESSORIES } from "../lib/features";
 import { useApp } from "../store";
 import { ExprInput } from "./ExprInput";
-import { Count, Field, mm, num, PlaneBox, Seg } from "./GridfinityFields";
+import { Count, Examples, Field, mm, num, PlaneBox, Seg } from "./GridfinityFields";
 import { t } from "../lib/i18n";
 
 type Wall = Extract<Feature, { op: "wall" }>;
@@ -70,13 +70,7 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
 
   return (
     <>
-      <div className="preset-row" style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {PRESETS.map((p) => (
-          <button key={p.label} className="btn" style={{ height: 28 }} onClick={() => usePreset(p.patch)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Examples items={PRESETS} onPick={usePreset} />
       <Seg value={f.system} options={[["opengrid", "openGrid"], ["pegboard", t("Pegboard")]]} onChange={(system) => set({ ...CLEAR, system, board: undefined, cell: undefined, ...(holder ? { accessory: acc === "screw" ? undefined : f.accessory } : {}) })} />
       <Seg value={f.kind} options={[["board", t("Board")], ["holder", t("Holder")]]} onChange={(kind) => set(kind === "board" ? { kind, board: undefined, cell: undefined, accessory: undefined, plate: undefined, depth: undefined, size: undefined } : { kind, screws: undefined, units: [1, 1] })} />
       {og && !board ? (

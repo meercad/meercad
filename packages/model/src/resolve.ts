@@ -78,8 +78,11 @@ export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "de
 export type ResolvedPrimitive = Omit<PrimitiveFeature, "size" | "diameter" | "height" | "center"> & { size?: [number, number, number]; diameter?: number; height?: number; center: [number, number, number] };
 export type ResolvedGridfinity = Omit<
   GridfinityFeature,
-  "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell"
+  "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell" | "gap" | "bed"
 > & {
+  gap?: number;
+  /** The print bed: its size, and what is left of it less the margin. */
+  bed?: { size: [number, number]; usable: [number, number] };
   units: [number, number];
   height: number;
   wall?: number;
@@ -374,6 +377,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         magnetDiameter: opt("magnetDiameter", f.magnetDiameter),
         magnetDepth: opt("magnetDepth", f.magnetDepth),
         drawer: f.drawer ? pair("drawer", f.drawer) : undefined,
+        gap: opt("gap", f.gap),
+        bed: f.bed ? resolveBed(f.bed, pair) : undefined,
         position: f.position ? pair("position", f.position) : [0, 0],
         cell: f.cell ? [int("cell[0]", f.cell[0], 0, 100), int("cell[1]", f.cell[1], 0, 100)] : [0, 0],
       };
@@ -472,7 +477,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     primitive: ["diameter", "height"],
     standard_part: ["length", "diameter", "height", "angle"],
     cable: ["diameter", "conductors", "bendRadius", "slack"],
-    gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],
+    gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth", "gap"],
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
     box: ["width", "depth", "height", "wall", "floor", "corner", "lidThickness", "clearance", "snap", "lipHeight", "pitch", "neck", "starts"],
     snap_hook: ["angle", "length", "thickness", "width", "overhang", "insertAngle", "retainAngle", "clearance"],
@@ -489,6 +494,10 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
   if (f.op === "text" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "primitive") for (const k of ["size", "center"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
   if (f.op === "gridfinity") for (const k of ["units", "dividers", "drawer", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
+  if (f.op === "gridfinity" && g["bed"]) {
+    const bed = g["bed"] as Record<string, Expr[] | string>;
+    for (const k of ["size", "margin"]) if (Array.isArray(bed[k])) bed[k] = (bed[k] as Expr[]).map(fn);
+  }
   if (f.op === "gridfinity" && g["tab"]) {
     const tab = g["tab"] as Record<string, Expr>;
     for (const k of ["width", "angle"]) if (tab[k] !== undefined) tab[k] = fn(tab[k]);
@@ -523,4 +532,12 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     for (const c of g["constraints"] as { value?: Expr }[]) if (c.value !== undefined) c.value = fn(c.value);
   }
   return g as unknown as Feature;
+}
+
+/** A baseplate's print bed: its size less the margin that cannot be printed on. */
+function resolveBed(bed: NonNullable<GridfinityFeature["bed"]>, pair: (field: string, p: [Expr, Expr]) => [number, number]): NonNullable<ResolvedGridfinity["bed"]> {
+  const size = pair("bed.size", bed.size);
+  const margin = bed.margin ? pair("bed.margin", bed.margin) : [0, 0];
+  if (margin.some((m) => m < 0)) throw new ExprError("bed.margin: must not be negative");
+  return { size, usable: [size[0] - margin[0]!, size[1] - margin[1]!] };
 }

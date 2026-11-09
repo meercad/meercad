@@ -99,7 +99,8 @@ export function exportTolerance(diag: number): { linear: number; angular: number
 export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse = 1, exact = false): BodyMesh {
   if (body.sourceMesh) return sourceMeshOf(body, body.sourceMesh);
   const diag = Math.hypot(...bbox.max.map((v, i) => v - bbox.min[i]!));
-  const { linear, angular } = exact ? exportTolerance(diag) : { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
+  if (!exact) coarse *= body.displayCoarse;
+  const { linear, angular } = exact ? (body.exportTolerance ?? exportTolerance(diag)) : { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
 
   const faceByHash = new Map<number, number>();
   body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));
