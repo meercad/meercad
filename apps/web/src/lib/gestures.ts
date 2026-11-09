@@ -158,3 +158,43 @@ export function installLongPressMenus(): () => void {
     window.removeEventListener("click", click, true);
   };
 }
+
+/**
+ * Click handlers for a button that has to answer the first tap. iOS sometimes swallows the click
+ * after a finger tap, when the page changes right then (in a sketch: the rebuild after a line, the
+ * value chips moving), and only a second tap clicks; "Done" then looked dead. A finger or pen
+ * lift on the button runs it if no click follows within a moment; a late click is not run twice.
+ */
+export function sureTap(run: () => void): { onClick: () => void; onPointerDown: (e: { pointerType: string; clientX: number; clientY: number }) => void; onPointerUp: (e: { pointerType: string; clientX: number; clientY: number }) => void; onPointerCancel: () => void } {
+  let down: { x: number; y: number } | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // When the lift ran it, the click that may still come late must not run it again.
+  let liftRanAt = -Infinity;
+  const fire = () => {
+    clearTimeout(timer);
+    run();
+  };
+  return {
+    onPointerDown: (e) => {
+      down = e.pointerType === "mouse" ? null : { x: e.clientX, y: e.clientY };
+    },
+    onPointerUp: (e) => {
+      const d = down;
+      down = null;
+      if (!d || e.pointerType === "mouse" || Math.hypot(e.clientX - d.x, e.clientY - d.y) > SLOP) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        liftRanAt = performance.now();
+        run();
+      }, 400);
+    },
+    onPointerCancel: () => {
+      down = null;
+      clearTimeout(timer);
+    },
+    onClick: () => {
+      if (performance.now() - liftRanAt < 1500) return;
+      fire();
+    },
+  };
+}

@@ -55,6 +55,7 @@ import { buildTerrain, canBuildTerrain } from "../lib/terrain";
 import { canScanSpaces, scanArea, scanRoom } from "../lib/roomScan";
 import { t } from "../lib/i18n";
 import { usePack } from "../lib/premium";
+import { sureTap } from "../lib/gestures";
 
 /** Whether this device can scan objects (iPhone/iPad with LiDAR). */
 function useCanScan(): boolean {
@@ -82,6 +83,9 @@ interface RailGroup {
   tools: RailTool[];
 }
 type RailEntry = RailTool | RailGroup | "sep";
+
+/** Finishing a sketch has to answer the first tap (see sureTap). */
+const finishTap = sureTap(closeSketch);
 
 const isGroup = (e: RailEntry): e is RailGroup => typeof e === "object" && "tools" in e;
 
@@ -302,7 +306,7 @@ export function Toolbar() {
               className={`tool ${e.active ? "active" : ""} ${e.primary ? "primary" : ""}`}
               title={`${e.label}${e.hint ? ` — ${e.hint}` : ""}`}
               onPointerEnter={() => hover(null)}
-              onClick={() => run(e)}
+              {...(e.id === "finish" ? finishTap : { onClick: () => run(e) })}
             >
               <e.icon />
               <span>{e.label}</span>
