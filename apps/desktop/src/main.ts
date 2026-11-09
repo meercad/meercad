@@ -15,18 +15,34 @@ import { homedir } from "node:os";
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
+import { CHANNEL_PORTS, CHANNEL_MCP_NAMES, type Channel } from "@meercad/mcp";
+import { adoptSiblingData, carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
 
 const DEV = process.argv.includes("--dev");
 const MAS = process.mas === true;
-/** "wip" for the local test build that lives next to the release (built by `pnpm wip`); it never self-updates. */
-const WIP = (() => {
-  try {
-    return (JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { meercadChannel?: string }).meercadChannel === "wip";
-  } catch {
-    return false;
-  }
-})();
+/**
+ * Which Mac build this is (see CHANNEL_PORTS): "rc", the stable build the maintainer works with
+ * (`pnpm rc`), or "wip", the test build agents rebuild at will (`pnpm wip`); both are installed next
+ * to each other and to the store release, never self-update and do not claim .meercad files.
+ */
+const CHANNEL: Channel = MAS
+  ? "release"
+  : (() => {
+      try {
+        const c = (JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { meercadChannel?: string }).meercadChannel;
+        return c === "rc" || c === "wip" ? c : "release";
+      } catch {
+        return "release";
+      }
+    })();
+/** A side-by-side build (RC or WIP): starts on the other builds' projects folder, leaves their files alone. */
+const SIDE_BY_SIDE = CHANNEL !== "release";
+/** The bridge port of this build; the bundled server.js knows the same one. */
+const MCP_PORT = CHANNEL_PORTS[CHANNEL];
+/** This build's name in an assistant's MCP configuration ("meercad", "meercad-wip"). */
+const MCP_NAME = CHANNEL_MCP_NAMES[CHANNEL];
+/** The app data of the other builds a side-by-side build takes over from on its first start, closest first. */
+const siblingDataDirs = () => (CHANNEL === "rc" ? ["meerCAD WIP", "meerCAD"] : CHANNEL === "wip" ? ["meerCAD RC", "meerCAD"] : []).map((n) => join(app.getPath("appData"), n));
 // MEERCAD_DEV_URL: another dev server (the UI end-to-end run starts its own on a free port).
 const DEV_URL = process.env["MEERCAD_DEV_URL"] ?? "http://localhost:5173";
 const webRoot = app.isPackaged ? join(process.resourcesPath, "web") : join(__dirname, "../../web/dist");
@@ -89,6 +105,8 @@ const readShared = (): Record<string, unknown> => {
   }
 };
 ipcMain.on("shared:get", (e) => void (e.returnValue = readShared()));
+/** The bridge port the window connects to: this build's own (see CHANNEL_PORTS). */
+ipcMain.on("mcp:port", (e) => void (e.returnValue = MCP_PORT));
 ipcMain.handle("shared:set", async (_e, p: { key: string; value: unknown }) => {
   if (typeof p?.key !== "string" || !/^[a-zA-Z][\w.]{0,40}$/.test(p.key)) return;
   const all = { ...readShared(), [p.key]: p.value };
@@ -489,7 +507,7 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
     }
     await writeFile(`${file}.bak`, raw);
   }
-  const servers: Record<string, unknown> = { ...config.mcpServers, meercad: mcpEntry() };
+  const servers: Record<string, unknown> = { ...config.mcpServers, [MCP_NAME]: mcpEntry() };
   // The entry from before the rename would start an app that no longer exists.
   delete servers["leocad"];
   config.mcpServers = servers;
@@ -521,6 +539,8 @@ ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
   projectsDir: projectsDir(),
   mcpCommand: mcpEntry(),
+  mcpName: MCP_NAME,
+  channel: CHANNEL,
   mas: MAS,
   store: storeEnvironment(),
 }));
@@ -955,25 +975,28 @@ else {
   });
   void app.whenReady().then(async () => {
     // Coming from the app's earlier name: keep its projects folder, thumbnails and files.
-    if (!WIP && !MAS) await carryOverAppData(settingsPath(), thumbsDir()).catch(() => undefined);
+    if (!SIDE_BY_SIDE) await carryOverAppData(settingsPath(), thumbsDir()).catch(() => undefined);
+    // A side-by-side build's first start continues where its sibling left off: projects folder,
+    // thumbnails and the window's preferences (switching from the WIP to the RC keeps everything).
+    if (SIDE_BY_SIDE) await adoptSiblingData(app.getPath("userData"), siblingDataDirs()).catch(() => undefined);
     settings = readSettings();
     // Reopen access to a folder picked in an earlier session (held for the app's lifetime).
     if (MAS && settings.projectsBookmark) app.startAccessingSecurityScopedResource(settings.projectsBookmark);
-    // The WIP build starts on the same projects folder as the installed release.
-    if (WIP && !settings.projectsDir) {
-      for (const name of ["meerCAD", "leocad"]) {
+    // Otherwise it starts on the same projects folder as an installed sibling.
+    if (SIDE_BY_SIDE && !settings.projectsDir) {
+      for (const dir of [...siblingDataDirs(), join(app.getPath("appData"), "leocad")]) {
         try {
-          const release = JSON.parse(readFileSync(join(app.getPath("appData"), name, "settings.json"), "utf8")) as Settings;
-          if (release.projectsDir) {
-            settings = { ...settings, projectsDir: release.projectsDir };
+          const other = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8")) as Settings;
+          if (other.projectsDir) {
+            settings = { ...settings, projectsDir: other.projectsDir };
             break;
           }
         } catch {
-          // no release installed: the first-run folder picker asks
+          // not installed: the first-run folder picker asks
         }
       }
     }
-    if (!WIP && !MAS && !process.env["MEERCAD_PROJECTS_DIR"]) {
+    if (!SIDE_BY_SIDE && !process.env["MEERCAD_PROJECTS_DIR"]) {
       const moved = await moveLegacyDefaultFolder(settings.projectsDir, defaultProjectsDir(), thumbsDir()).catch(() => null);
       if (moved) {
         settings = { ...settings, projectsDir: moved };
@@ -981,7 +1004,7 @@ else {
       }
     }
     await renameLegacyFiles(projectsDir(), thumbsDir()).catch(() => 0);
-    if (app.isPackaged && !WIP && !MAS) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
+    if (app.isPackaged && CHANNEL !== "wip" && !MAS) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
     await findICloud();
     serveApp();
     buildMenu();

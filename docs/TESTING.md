@@ -62,11 +62,12 @@ WASM); they don't check anything.
 
 ## MCP tools end to end
 
-The MCP server and the app talk over port 47821, which an assistant session of the user may hold.
-For a test run, start the server with `MEERCAD_MCP_PORT=47999` (e.g. the WIP's own
-`Contents/Resources/mcp/server.js` with `ELECTRON_RUN_AS_NODE=1`), set
-`localStorage["meercad.mcp.port"] = "47999"` in the app window (through `scripts/drive-app.mjs eval`)
-and reload it; then drive the tools with an MCP client (`@modelcontextprotocol/sdk` client over stdio).
+Each Mac build has its own bridge port (RC 47822, WIP 47823, App Store 47821, see
+docs/RELEASE.md), and the user's assistants may hold it. For a test run, start the server with
+`MEERCAD_MCP_PORT=47999` (e.g. the WIP's own `Contents/Resources/mcp/server.js` with
+`ELECTRON_RUN_AS_NODE=1`), set `sessionStorage["meercad.mcp.port"] = "47999"` in the app window
+(through `scripts/drive-app.mjs eval`) and reload it; then drive the tools with an MCP client
+(`@modelcontextprotocol/sdk` client over stdio). The override ends with the window.
 Check what comes back and the files written (unzip a 3MF, count STEP solids), not only "no error".
 
 ## 1. Unit and acceptance tests
@@ -132,7 +133,7 @@ To look at them in the app, write them as files:
 MEERCAD_MODELS_OUT="$HOME/Documents/meerCAD/Test models" pnpm test tests/acceptance/models.test.ts
 ```
 
-Use the projects folder the Mac app shows in Settings (the WIP build uses the release's folder). The
+Use the projects folder the Mac app shows in Settings (the WIP and the RC share one folder). The
 files appear as a folder on the overview. Open each one and compare it with its `look` text, from
 every side (see "Looking at a result" below).
 
@@ -143,7 +144,8 @@ what it must come out as.
 
 ### Setup
 
-- **Mac:** `pnpm wip` installs "meerCAD WIP" next to the release. An agent starts it with
+- **Mac:** `pnpm wip` installs "meerCAD WIP" next to the user's "meerCAD RC" (never rebuild or
+  quit the RC, see docs/RELEASE.md). An agent starts it with
   `"/Applications/meerCAD WIP.app/Contents/MacOS/meerCAD WIP" --remote-debugging-port=9334` and clicks, reads and takes
   screenshots with `node scripts/drive-app.mjs` (eval / shot). There is no browser version: in a
   plain browser the interface only says it runs as the app. Check once with a narrow window (phone

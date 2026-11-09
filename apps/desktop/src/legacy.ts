@@ -1,6 +1,7 @@
 /**
  * One-time carry-over from before the app was renamed (leocad → meerCAD): the old app's settings and
- * thumbnails, `.leocad` project files, and its entry in Claude Desktop's MCP configuration.
+ * thumbnails, `.leocad` project files, and its entry in Claude Desktop's MCP configuration; and the
+ * first start of a side-by-side build (RC, WIP) from its sibling.
  */
 import { app } from "electron";
 import { createHash } from "node:crypto";
@@ -91,4 +92,22 @@ export async function fixClaudeConfig(entry: { command: string; args: string[]; 
   servers["meercad"] ??= entry;
   await writeFile(`${file}.bak`, raw);
   await writeFile(file, `${JSON.stringify({ ...config, mcpServers: servers }, null, 2)}\n`);
+}
+
+/**
+ * First start of a side-by-side build (RC or WIP): copies settings (projects folder), thumbnails and
+ * the window's local storage (preferences) from the first sibling build that has them, so switching
+ * from one to the other loses nothing. Does nothing once this build has settings of its own.
+ */
+export async function adoptSiblingData(userData: string, siblings: string[]): Promise<string | null> {
+  if (existsSync(join(userData, "settings.json"))) return null;
+  const from = siblings.find((d) => existsSync(join(d, "settings.json")));
+  if (!from) return null;
+  await mkdir(userData, { recursive: true });
+  for (const part of ["thumbnails", "Local Storage"]) {
+    if (existsSync(join(from, part)) && !existsSync(join(userData, part))) await cp(join(from, part), join(userData, part), { recursive: true });
+  }
+  // Last: its presence marks the carry-over as done.
+  await copyFile(join(from, "settings.json"), join(userData, "settings.json"));
+  return from;
 }

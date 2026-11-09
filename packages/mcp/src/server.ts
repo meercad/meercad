@@ -5,7 +5,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { FEATURE_NAMES, GUIDE_TEXT, MCP_NOTES, OP_NAMES, schemaFor } from "@meercad/ai/prompt";
 import { read3mf, readObj, writeStl } from "@meercad/io";
@@ -16,7 +18,16 @@ import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js
 import { meercadDocument } from "./meercadFile.js";
 import { DEFAULT_PORT, type BridgeMethod } from "./protocol.js";
 
-const port = Number(process.env["MEERCAD_MCP_PORT"] ?? DEFAULT_PORT);
+/** The port of the build this server ships in (server.json next to it, see CHANNEL_PORTS); MEERCAD_MCP_PORT wins (test runs). */
+function bundledPort(): number | undefined {
+  try {
+    const p = (JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "server.json"), "utf8")) as { port?: unknown }).port;
+    return typeof p === "number" && Number.isInteger(p) ? p : undefined;
+  } catch {
+    return undefined;
+  }
+}
+const port = Number(process.env["MEERCAD_MCP_PORT"] ?? bundledPort() ?? DEFAULT_PORT);
 // Only the app may connect: browsers always send Origin, and web pages cannot forge it.
 const extraOrigins = (process.env["MEERCAD_ORIGINS"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const originAllowed = (origin: string | undefined) =>

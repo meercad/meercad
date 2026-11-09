@@ -13,6 +13,8 @@ const api = {
     set: (choice: number | "auto") => ipcRenderer.invoke("ui:scale:set", choice),
   },
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
+  /** The port this build's MCP server listens on (RC, WIP and the store release each have their own). */
+  mcpPort: ipcRenderer.sendSync("mcp:port") as number,
   /** Flags shared by every meerCAD on this Mac (e.g. the tour was seen), read once at start. */
   shared: {
     initial: ipcRenderer.sendSync("shared:get") as Record<string, unknown>,

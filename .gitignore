@@ -10,6 +10,7 @@ packages/mcp/dist/
 apps/desktop/release/
 apps/desktop/release-wip/
 apps/desktop/release-wip-*/
+apps/desktop/release-rc/
 apps/desktop/release-mas/
 apps/desktop/dist/
 *.tgz

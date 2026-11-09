@@ -20,6 +20,9 @@ importers:
 
   apps/desktop:
     devDependencies:
+      '@meercad/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2

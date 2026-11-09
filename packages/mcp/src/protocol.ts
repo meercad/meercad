@@ -2,6 +2,17 @@
 
 export const DEFAULT_PORT = 47821;
 
+/**
+ * The Mac builds that can be installed side by side, each with its own bridge port, so an assistant
+ * set up for one never drives another: the store release on DEFAULT_PORT, "meerCAD RC" (the stable
+ * build the maintainer works with, `pnpm rc`) and "meerCAD WIP" (the build agents rebuild at will,
+ * `pnpm wip`) on their own. Each build's server.js finds its port in server.json next to it.
+ */
+export const CHANNEL_PORTS = { release: DEFAULT_PORT, rc: 47822, wip: 47823 } as const;
+export type Channel = keyof typeof CHANNEL_PORTS;
+/** The server's name in an assistant's MCP configuration: one entry per installed build. */
+export const CHANNEL_MCP_NAMES: Record<Channel, string> = { release: "meercad", rc: "meercad", wip: "meercad-wip" };
+
 export type BridgeMethod =
   | "get_model"
   | "get_sketch"

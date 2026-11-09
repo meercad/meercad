@@ -17,7 +17,9 @@
     "test:release": "node scripts/test-release.mjs",
     "test:watch": "vitest --project unit --project integration",
     "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
-    "wip": "node scripts/install-wip.mjs",
+    "wip": "node scripts/install-mac.mjs wip",
+    "rc": "node scripts/install-mac.mjs rc",
+    "claude-config": "node scripts/claude-config.mjs",
     "testflight": "node scripts/testflight.mjs",
     "mas": "node scripts/mas.mjs",
     "hooks": "git config core.hooksPath .githooks"

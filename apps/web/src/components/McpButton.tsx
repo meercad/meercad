@@ -12,12 +12,14 @@ export function McpButton() {
   const [status, setStatus] = useState(bridgeStatus());
   const [open, setOpen] = useState(false);
   const [mas, setMas] = useState(false);
+  const [name, setName] = useState("meercad");
   const [cmd, setCmd] = useState<{ command: string; args: string[]; env?: Record<string, string> }>({ command: "node", args: ["<path to meerCAD>/packages/mcp/dist/server.js"] });
   useEffect(() => {
     const off = onBridgeStatus(setStatus);
     void desktop?.info().then((i) => {
       setCmd(i.mcpCommand);
       setMas(i.mas === true);
+      if (i.mcpName) setName(i.mcpName);
     });
     return () => void off();
   }, []);
@@ -27,7 +29,7 @@ export function McpButton() {
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [open]);
-  const config = JSON.stringify({ mcpServers: { meercad: cmd } }, null, 2);
+  const config = JSON.stringify({ mcpServers: { [name]: cmd } }, null, 2);
   return (
     <>
       <button className={`icon-btn ${status === "connected" ? "active" : ""}`} title={t("AI assistants (MCP): {status}", { status: status === "connected" ? t("connected") : status === "connecting" ? t("connecting") : t("off") })} onClick={() => setOpen(true)}>
@@ -89,7 +91,7 @@ export function McpButton() {
                   <Copy /> {t("Copy configuration")}
                 </button>
                 <span className="muted" style={{ fontSize: 12 }}>
-                  Claude Code: <span className="mono">claude mcp add meercad {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
+                  Claude Code: <span className="mono">claude mcp add {name} {cmd.env ? Object.entries(cmd.env).map(([k, v]) => `-e ${k}=${v} `).join("") : ""}-- "{cmd.command}" {cmd.args.map((a) => `"${a}"`).join(" ")}</span>
                 </span>
               </div>
               {status === "connected" ? (

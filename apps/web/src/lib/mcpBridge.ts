@@ -79,15 +79,19 @@ export function initBridge(): void {
   if (pref !== "0" && (window as { meercadDesktop?: unknown }).meercadDesktop) setBridgeEnabled(true);
 }
 
-/** The bridge port: the default, or for test runs the one in localStorage "meercad.mcp.port" (a server started with MEERCAD_MCP_PORT). */
+/**
+ * The bridge port: this desktop build's own (the RC, the WIP and the store release each have one,
+ * see CHANNEL_PORTS), or for a test run the one in sessionStorage "meercad.mcp.port" (a server
+ * started with MEERCAD_MCP_PORT). Session storage, so a test override never outlives the window.
+ */
 function bridgePort(): number {
   try {
-    const p = Number(localStorage.getItem("meercad.mcp.port"));
+    const p = Number(sessionStorage.getItem("meercad.mcp.port"));
     if (Number.isInteger(p) && p > 1024 && p < 65536) return p;
   } catch {
     // default
   }
-  return DEFAULT_PORT;
+  return desktop?.mcpPort ?? DEFAULT_PORT;
 }
 
 function connect(): void {

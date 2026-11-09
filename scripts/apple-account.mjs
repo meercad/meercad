@@ -33,7 +33,7 @@ const oldBundle = /PRODUCT_BUNDLE_IDENTIFIER = ([\w.-]+);/.exec(xcode)?.[1];
 if (!oldTeam || !oldBundle) throw new Error(`no team or bundle id in ${xcodePath}`);
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-/** Replaces whole identifiers only, so "dev.meercad.app" does not touch "dev.meercad.app.wip". */
+/** Replaces whole identifiers only, so "dev.meercad.app" does not touch "dev.meercad.app.wip" or ".rc". */
 const swap = (text, from, to) => text.replace(new RegExp(`(?<![\\w.~-])${escape(from)}(?![\\w-]|\\.\\w)`, "g"), to);
 const cloudPath = (id) => `iCloud~${id.replaceAll(".", "~")}`;
 
@@ -46,13 +46,14 @@ const files = [
   "apps/desktop/package.json",
   "apps/desktop/build/entitlements.mas.plist",
   "apps/desktop/src/main.ts",
-  "scripts/install-wip.mjs",
+  "scripts/install-mac.mjs",
 ];
 for (const file of files) {
   const before = readFileSync(join(root, file), "utf8");
   let text = swap(before, `${oldTeam}.${oldBundle}`, `${team}.${bundle}`);
   text = swap(text, `iCloud.${oldBundle}`, `iCloud.${bundle}`);
   text = swap(text, `${oldBundle}.wip`, `${bundle}.wip`);
+  text = swap(text, `${oldBundle}.rc`, `${bundle}.rc`);
   text = swap(text, oldBundle, bundle);
   text = text.replaceAll(cloudPath(oldBundle), cloudPath(bundle));
   text = swap(text, oldTeam, team);

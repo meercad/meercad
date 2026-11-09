@@ -52,8 +52,9 @@ Signing material stays out of the repo: certificates in the keychain, provisioni
 `~/.appstoreconnect/certs/`, the App Store Connect API key and the app's Apple ID in
 `~/.appstoreconnect/`. Team and bundle id live in the Xcode project.
 
-- `pnpm wip` builds the working tree and installs it as *meerCAD WIP* in Applications, next to any
-  installed meerCAD.
+- `pnpm wip` builds the working tree and installs it as *meerCAD WIP* in Applications; `pnpm rc`
+  builds `main` as *meerCAD RC*, the stable build next to it. Each has its own app id, app data and
+  MCP port; `pnpm claude-config` adds both to Claude Desktop. See [docs/RELEASE.md](docs/RELEASE.md).
 - `pnpm testflight` uploads iPhone and iPad builds, `pnpm mas` the sandboxed Mac build (same App
   Store record, so one purchase covers every device). `pnpm mas --dev` builds a development-signed
   copy to try the sandbox on this Mac.
