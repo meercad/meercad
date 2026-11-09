@@ -41,7 +41,7 @@ describe("cable", () => {
   it("explains bends tighter than the cable allows and plugs past the next point", async () => {
     const s = await newSession();
     const tight = s.rebuild(doc([{ id: "cab1", op: "cable", points: [{ at: [0, 0, 0] }, { at: [20, 0, 0] }, { at: [20, 8, 0] }, { at: [0, 8, 0] }], diameter: 2, bendRadius: 15 }])).report;
-    expect(info(tight, "cab1").warnings?.join(" ") ?? info(tight, "cab1").message).toMatch(/bend radius/);
+    expect(info(tight, "cab1").message).toMatch(/bend radius/);
     const past = s.rebuild(doc([{ id: "cab1", op: "cable", points: [{ at: [0, 0, 0] }, { at: [5, 0, 0] }], diameter: 2, start: { kind: "xt60" } }])).report;
     expect(info(past, "cab1").status).toBe("error");
     expect(info(past, "cab1").message).toMatch(/plug reaches past/);

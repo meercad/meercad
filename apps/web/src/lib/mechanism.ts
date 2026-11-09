@@ -3,7 +3,7 @@
  * the last rebuild), the joint values being shown (view state, not saved, no undo), dragging parts,
  * and the joint being drawn up in the joints panel.
  */
-import { evaluate, fitExpr, linkage, MeshCollider, meshesCollide, motion } from "@meercad/model";
+import { cable, evaluate, fitExpr, linkage, MeshCollider, meshesCollide, motion, resolveFeature } from "@meercad/model";
 import type { Coupling, Joint, JointAnchor, Motion } from "@meercad/schema";
 import type { Pick, Ray } from "@meercad/viewport";
 import { create } from "zustand";
@@ -38,7 +38,9 @@ export const useMotion = create<{
   blocked: string[];
   /** Pairs of parts that run into each other in the shown pose (and did not touch as drawn). */
   hits: [string, string][];
-}>(() => ({ open: false, free: {}, draft: null, playing: null, playingMotion: null, check: null, tick: 0, blocked: [], hits: [] }));
+  /** Cables in the shown pose: stretched, bent too tight or running into parts. */
+  cables: cable.CableState[];
+}>(() => ({ open: false, free: {}, draft: null, playing: null, playingMotion: null, check: null, tick: 0, blocked: [], hits: [], cables: [] }));
 
 // ---------------------------------------------------------------- closed loops
 
@@ -316,7 +318,9 @@ function meshSlack(m: BodyMesh): number {
 
 /** Parts that run into each other in the current pose, leaving out contacts that exist as drawn. */
 function findHits(): [string, string][] {
-  const meshes = useApp.getState().output?.meshes ?? [];
+  // Cables bend with the parts: they are checked on their own (see cableStates).
+  const cableIds = new Set(cableRigs().map((r) => r.id));
+  const meshes = (useApp.getState().output?.meshes ?? []).filter((m) => !cableIds.has(m.bodyId));
   const poses = currentPoses();
   if (!poses.size || !meshes.length) return [];
   if (rest?.meshes !== meshes) rest = { meshes, touching: new Map() };
@@ -357,6 +361,8 @@ function scheduleHits(): void {
     const hits = s.open ? findHits() : [];
     const same = hits.length === s.hits.length && hits.every(([a, b], i) => s.hits[i]![0] === a && s.hits[i]![1] === b);
     if (!same) useMotion.setState({ hits });
+    const cables = s.open ? cableStates() : [];
+    if (JSON.stringify(cables) !== JSON.stringify(s.cables)) useMotion.setState({ cables });
   }, Math.max(0, 60 - (performance.now() - lastHitCheck)));
 }
 useMotion.subscribe((s, prev) => {
@@ -365,6 +371,79 @@ useMotion.subscribe((s, prev) => {
 useApp.subscribe((s, prev) => {
   if (s.output !== prev.output && useMotion.getState().open) scheduleHits();
 });
+
+// ---------------------------------------------------------------- cables
+
+/** Cables of the design as built (rigs to lay them again in a pose), worked out once per result. */
+let rigs: { output: unknown; list: cable.CableRig[]; errors: Record<string, string> } | null = null;
+export function cableRigs(): cable.CableRig[] {
+  return rigsNow().list;
+}
+function rigsNow(): NonNullable<typeof rigs> {
+  const s = useApp.getState();
+  if (rigs?.output === s.output) return rigs;
+  const built = new Set(s.output?.report.bodies.map((b) => b.id) ?? []);
+  const scope = new Map(Object.entries(s.output?.report.params ?? {}));
+  const list: cable.CableRig[] = [];
+  const errors: Record<string, string> = {};
+  for (const f of s.doc.features) {
+    if (f.op !== "cable" || f.suppressed || !built.has(f.id)) continue;
+    try {
+      const r = resolveFeature(f, scope);
+      if (r.op === "cable") list.push(cable.cableRig(r));
+    } catch (e) {
+      errors[f.id] = (e as Error).message;
+    }
+  }
+  return (rigs = { output: s.output, list, errors });
+}
+
+/** Whether a cable has a point on a part that moves (only those need laying again). */
+export const cableMoves = (r: cable.CableRig, poses: ReadonlyMap<string, motion.Mat4>) => r.points.some((p) => !!p.on && !!poses.get(p.on) && motion.isMoved(poses.get(p.on)!));
+
+/** Each cable in the pose shown now: length needed against its length, tightest bend, parts it runs into. */
+export function cableStates(poses: ReadonlyMap<string, motion.Mat4> = currentPoses()): cable.CableState[] {
+  const list = cableRigs();
+  if (!list.length) return [];
+  const ids = new Set(list.map((r) => r.id));
+  const bodies: cable.CollisionBody[] = (useApp.getState().output?.meshes ?? [])
+    .filter((m) => !ids.has(m.bodyId))
+    .map((m) => {
+      const pose = poses.get(m.bodyId);
+      return { id: m.bodyId, collider: colliderOf(m), ...(pose ? { pose } : {}), still: !pose || !motion.isMoved(pose), inset: 1.5 * meshSlack(m) };
+    });
+  return list.map((r) => cable.checkCable(r, poses, bodies).state);
+}
+
+/** The cables that bend in the pose shown now, as meshes to draw instead of their parts as built. */
+export function posedCables(poses: ReadonlyMap<string, motion.Mat4>): { bodyId: string; mesh: cable.CableMesh; trouble: boolean }[] {
+  const states = useMotion.getState().cables;
+  return cableRigs()
+    .filter((r) => cableMoves(r, poses))
+    .flatMap((r) => {
+      try {
+        const st = states.find((c) => c.id === r.id);
+        return [{ bodyId: r.id, mesh: cable.cableMesh(cable.layInPose(r, poses), r.spec), trouble: !!st && cable.cableTrouble(st) }];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** Cable states for assistants: numbers rounded, a line on each. */
+export function cableReport(states: cable.CableState[] = cableStates()) {
+  return states.map((c) => ({
+    cable: c.id,
+    ok: !cable.cableTrouble(c),
+    needed: +c.needed.toFixed(2),
+    length: +c.available.toFixed(2),
+    stretch: +Math.max(0, c.stretch).toFixed(2),
+    minRadius: Number.isFinite(c.minRadius) ? +c.minRadius.toFixed(2) : null,
+    bendRadius: c.bendRadius,
+    hits: c.hits,
+    note: cable.describeCable(c),
+  }));
+}
 
 // ---------------------------------------------------------------- editing joints
 
@@ -629,10 +708,12 @@ export async function checkMotionRun(id: string, frames = 24): Promise<{
   collisions: { at: number; a: string; b: string; overlap: number }[];
   held: { at: number; joint: string; wanted: number; got: number }[];
   smallest: { a: string; b: string; distance: number; at: number }[];
+  cables?: CableRun[];
 }> {
   openForCheck();
   stopPlaying();
   const m = motionById(id);
+  const cables = new CableWatch();
   const before = jointValues();
   const free = { ...useMotion.getState().free };
   const touching = designedContacts();
@@ -644,6 +725,7 @@ export async function checkMotionRun(id: string, frames = 24): Promise<{
     for (const at of times) {
       const t3 = +at.toFixed(3);
       for (const h of showMotionAt(m, at)) held.push({ at: t3, ...h });
+      cables.add(t3);
       for (const c of (await clearanceNow()).pairs) {
         if (c.overlap > 1e-3) collisions.push({ at: t3, a: c.a, b: c.b, overlap: +c.overlap.toFixed(3) });
         const key = `${c.a}|${c.b}`;
@@ -658,7 +740,7 @@ export async function checkMotionRun(id: string, frames = 24): Promise<{
     useMotion.setState({ free });
     for (const [jid, v] of Object.entries(before)) if (v) setJointValue(jid, v);
   }
-  return { frames: times.length, collisions, held, smallest: [...smallest.values()].sort((x, y) => x.distance - y.distance).slice(0, 12) };
+  return { frames: times.length, collisions, held, smallest: [...smallest.values()].sort((x, y) => x.distance - y.distance).slice(0, 12), ...cables.result() };
 }
 
 // ---------------------------------------------------------------- clearance
@@ -695,7 +777,8 @@ export async function checkClearance(): Promise<void> {
   if (!moving.length) return toast(t("No part moves yet: add a joint first"));
   useMotion.setState({ check: { running: true, free, results: [] } });
   try {
-    const results = await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2));
+    const cables = new Set(cableRigs().map((r) => r.id));
+    const results = (await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2))).filter((c) => !cables.has(c.a) && !cables.has(c.b));
     useMotion.setState({ check: { running: false, free, results: results.sort((x, y) => x.distance - y.distance || y.overlap - x.overlap) } });
   } catch (e) {
     useMotion.setState({ check: { running: false, free, results: [], error: (e as Error).message } });
@@ -711,7 +794,7 @@ export function openForCheck(): void {
 }
 
 /** Sets joint values one after another (driven joints move their drivers); the parts move in the app. */
-export function setPose(values: Readonly<Record<string, number>>): { values: Record<string, number>; reached: boolean; problems: Record<string, string> } {
+export function setPose(values: Readonly<Record<string, number>>): { values: Record<string, number>; reached: boolean; problems: Record<string, string>; cables?: ReturnType<typeof cableReport> } {
   openForCheck();
   stopPlaying();
   const { mech, problems } = currentMechanism();
@@ -728,7 +811,45 @@ export function setPose(values: Readonly<Record<string, number>>): { values: Rec
       const lim = mech.joint(id)?.limits;
       problems[id] = lim && ((now[id] ?? 0) <= lim[0] + 1e-6 || (now[id] ?? 0) >= lim[1] - 1e-6) ? `held at its limit ${+(now[id] ?? 0).toFixed(3)} (limits ${lim[0]} to ${lim[1]}), asked ${v}` : `stopped at ${+(now[id] ?? 0).toFixed(3)}, asked ${v}`;
     }
-  return { values: now, reached, problems };
+  const cables = cableReport();
+  return { values: now, reached, problems, ...(cables.length ? { cables } : {}) };
+}
+
+/** How each cable fared over a run of poses: where it first got into trouble, its most stretch and tightest bend. */
+export interface CableRun {
+  cable: string;
+  ok: boolean;
+  /** Joint value or time of the first pose with trouble, and what it was. */
+  first: { at: number; note: string } | null;
+  maxStretch: number;
+  maxStretchAt: number;
+  minRadius: number | null;
+  bendRadius: number;
+  hits: string[];
+}
+
+class CableWatch {
+  private runs = new Map<string, CableRun>();
+  add(at: number): void {
+    for (const c of cableStates()) {
+      const r = this.runs.get(c.id) ?? { cable: c.id, ok: true, first: null, maxStretch: -Infinity, maxStretchAt: at, minRadius: null, bendRadius: c.bendRadius, hits: [] };
+      if (cable.cableTrouble(c)) {
+        r.ok = false;
+        r.first ??= { at, note: cable.describeCable(c) };
+      }
+      if (c.stretch > r.maxStretch) {
+        r.maxStretch = c.stretch;
+        r.maxStretchAt = at;
+      }
+      if (Number.isFinite(c.minRadius) && (r.minRadius === null || c.minRadius < r.minRadius)) r.minRadius = +c.minRadius.toFixed(2);
+      for (const h of c.hits) if (!r.hits.includes(h)) r.hits.push(h);
+      this.runs.set(c.id, r);
+    }
+  }
+  result(): { cables?: CableRun[] } {
+    const list = [...this.runs.values()].map((r) => ({ ...r, maxStretch: +Math.max(0, r.maxStretch).toFixed(2) }));
+    return list.length ? { cables: list } : {};
+  }
 }
 
 /** Gaps between moving parts and what they come near, in the pose shown now. */
@@ -739,7 +860,14 @@ export async function clearanceNow(): Promise<{ wanted: number; pairs: Clearance
   if (!moving.length) throw new Error("no part moves: add joints first");
   const want = wantedClearance();
   const pairs = await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2));
-  return { wanted: want, pairs: pairs.map(({ points: _p, ...rest }) => rest).sort((x, y) => x.distance - y.distance) };
+  const cables = new Set(cableRigs().map((r) => r.id));
+  return {
+    wanted: want,
+    pairs: pairs
+      .filter((c) => !cables.has(c.a) && !cables.has(c.b))
+      .map(({ points: _p, ...rest }) => rest)
+      .sort((x, y) => x.distance - y.distance),
+  };
 }
 
 /**
@@ -751,6 +879,7 @@ export async function checkMotion(joint: string, from: number, to: number, steps
   firstContact: { value: number; a: string; b: string; kind: "touch" | "overlap"; overlap: number } | null;
   smallest: { a: string; b: string; distance: number; at: number }[];
   stoppedAt: number | null;
+  cables?: CableRun[];
 }> {
   openForCheck();
   const before = jointValues();
@@ -760,6 +889,7 @@ export async function checkMotion(joint: string, from: number, to: number, steps
   let stoppedAt: number | null = null;
   const smallest = new Map<string, { a: string; b: string; distance: number; at: number }>();
   const touching = designedContacts();
+  const cables = new CableWatch();
   try {
     for (let k = 0; k <= n; k++) {
       const v = from + ((to - from) * k) / n;
@@ -767,6 +897,7 @@ export async function checkMotion(joint: string, from: number, to: number, steps
         stoppedAt = jointValues()[joint] ?? v;
         break;
       }
+      cables.add(+v.toFixed(3));
       for (const c of (await clearanceNow()).pairs) {
         const key = `${c.a}|${c.b}`;
         const cur = smallest.get(key);
@@ -782,5 +913,5 @@ export async function checkMotion(joint: string, from: number, to: number, steps
     useMotion.setState({ free });
     for (const [id, v] of Object.entries(before)) if (v) setJointValue(id, v);
   }
-  return { steps: n, firstContact, smallest: [...smallest.values()].sort((x, y) => x.distance - y.distance), stoppedAt };
+  return { steps: n, firstContact, smallest: [...smallest.values()].sort((x, y) => x.distance - y.distance), stoppedAt, ...cables.result() };
 }

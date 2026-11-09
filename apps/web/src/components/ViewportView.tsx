@@ -1,4 +1,5 @@
-import { currentPoses, joinedParts, jointPick, partDrag, useMotion } from "../lib/mechanism";
+import { currentPoses, joinedParts, jointPick, partDrag, posedCables, useMotion } from "../lib/mechanism";
+import { cable } from "@meercad/model";
 import { materialName, partLooks } from "../lib/materials";
 import { RenderBar } from "./RenderBar";
 import { openMaterialPicker } from "./MaterialPicker";
@@ -60,6 +61,7 @@ const EMPTY_SCENE: SceneData = { bodies: [], sketches: [], planes: [], reference
 
 const NO_HITS: [string, string][] = [];
 const NO_PARTS: string[] = [];
+const NO_CABLES: cable.CableState[] = [];
 const HIT_COLOR = "#d93f3f";
 
 export function ViewportView() {
@@ -177,12 +179,14 @@ export function ViewportView() {
   // So do parts that cannot move further this way (links in line, a joint at its limit).
   const hits = useMotion((s) => (s.open ? s.hits : NO_HITS));
   const blocked = useMotion((s) => (s.open ? s.blocked : NO_PARTS));
+  // So do cables stretched, bent too tight or running into a part, and the parts they run into.
+  const cables = useMotion((s) => (s.open ? s.cables : NO_CABLES));
   useEffect(() => {
     if (!vp) return;
     const colors = partColors(doc, output?.report.bodies.map((b) => b.id) ?? [], colorParts);
-    const red = [...hits.flat(), ...blocked];
+    const red = [...hits.flat(), ...blocked, ...cables.filter(cable.cableTrouble).flatMap((c) => [c.id, ...c.hits])];
     vp.setBodyColors(red.length ? new Map([...colors, ...red.map((id): [string, string] => [id, HIT_COLOR])]) : colors);
-  }, [vp, doc, output, colorParts, hits, blocked]);
+  }, [vp, doc, output, colorParts, hits, blocked, cables]);
   // Materials give parts their finish (PBR).
   useEffect(() => {
     if (!vp) return;
@@ -322,7 +326,9 @@ export function ViewportView() {
     const poses = currentPoses();
     if (placeBody && placeMove) for (const id of joinedParts(placeBody)) poses.set(id, new THREE.Matrix4().makeTranslation(...placeMove).toArray());
     vp.setPoses(poses);
-  }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog, placeBody, placeMove]);
+    // Cables fixed to moving parts bend along with them.
+    vp.setBentParts(posedCables(poses).map((c) => ({ bodyId: c.bodyId, ...c.mesh, ...(c.trouble ? { color: HIT_COLOR } : {}) })));
+  }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog, placeBody, placeMove, cables]);
   // Joint symbols while the joints panel is open; the one being edited stands out.
   // Switched off they stay away so the motion shows alone, except for the joint being edited.
   const motionDraft = useMotion((s) => s.draft);

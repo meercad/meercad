@@ -698,6 +698,7 @@ function firstField(op: FeatureOp): string | null {
       gear: "plane",
       coil: "profile",
       spring: "plane",
+      cable: "points",
       screw: "plane",
       hole: "plane",
       standard_part: "plane",

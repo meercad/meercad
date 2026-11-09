@@ -55,7 +55,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   `set_part_list {groups?, order?}` (null clears). `replace` sends the whole document; one without
   `versions` keeps the saved versions and their blobs.
 - **features** — run in order. Ops: `sketch`, `plane`, `extrude`, `revolve`, `fillet`, `chamfer`, `shell`,
-  `thread`, `coil`, `spring`, `screw`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
+  `thread`, `coil`, `spring`, `screw`, `cable`, `linear_pattern`, `circular_pattern`, `mirror`, `boolean`, `transform`, `delete`, `import`,
   `gridfinity`, `label`, `box`, `snap_hook`, `bend`, `texture`, `lithophane` (and more: see the schema).
 - **Ops for materials** (Operations API): `set_material {part, material}` (null for none),
   `define_material {material}` (adds or replaces an own material by id), `delete_material {id}`
@@ -72,6 +72,12 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
 - **spring** — `{ "op": "spring", "kind": "compression", "wire": 1.5, "diameter": 15, "coils": 6, "length": 40, "mode": "new_body" }`
   a coil spring standing on `plane` at `center`: compression (`ends` `ground` (default), `closed`,
   `open`), extension (loops at both ends, `gap` between coils) or torsion (`legs`).
+- **cable** — `{ "op": "cable", "points": [{ "at": [0, 0, 0] }, { "at": [60, 0, 20], "on": "arm" }], "diameter": 2.6, "end": { "kind": "xt30" } }`
+  a cable through points in model coordinates, round (`diameter`) or `"shape": "ribbon"`
+  (`conductors`, 1.27 mm pitch); `material` `silicone` (default), `pvc`, `ptfe` sets its density
+  and default `bendRadius`; `slack` is extra length. A point with `on` is fixed to that part and
+  moves with it; the app checks the cable in every pose (stretched, bent too tight, collisions).
+  Plugs on `start` / `end`: `jst_xh`, `jst_ph`, `jst_sh`, `dupont` (`pins`), `xt30`, `xt60`, `idc`.
 - **screw** — `{ "op": "screw", "kind": "screw", "head": "hex", "diameter": 8, "length": 25, "mode": "new_body" }`
   a screw (heads `hex`, `socket`, `round`, `knob`, `none` for a threaded rod) or `"kind": "nut"`
   (`hex`, `round`, `knob`) with any thread (`profile`, `pitch`, `starts`, `clearance`, `leftHanded`).
