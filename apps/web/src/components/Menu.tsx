@@ -9,6 +9,8 @@ export interface MenuItem {
   kbd?: string;
   /** Short text on the right, e.g. the current choice of a submenu ("mm"). */
   hint?: string;
+  /** Tooltip with more detail than fits on one line (e.g. the importable formats). */
+  title?: string;
   disabled?: boolean;
   danger?: boolean;
   onClick?: () => void;
@@ -17,11 +19,14 @@ export interface MenuItem {
 }
 export type MenuEntry = MenuItem | "sep";
 
-type OpenMenu = { x: number; y: number; items: MenuEntry[]; above?: boolean };
+type OpenMenu = { x: number; y: number; items: MenuEntry[]; above?: boolean; alignRight?: boolean };
 let openMenu: ((m: OpenMenu | null) => void) | null = null;
 
-/** Opens a context menu at screen coordinates; `above` puts its bottom edge at `y` (bars at the bottom). */
-export function showMenu(x: number, y: number, items: MenuEntry[], opts: { above?: boolean } = {}): void {
+/**
+ * Opens a context menu at screen coordinates; `above` puts its bottom edge at `y` (bars at the bottom),
+ * `alignRight` its right edge at `x` (buttons at the right end of a bar), whatever width the entries need.
+ */
+export function showMenu(x: number, y: number, items: MenuEntry[], opts: { above?: boolean; alignRight?: boolean } = {}): void {
   openMenu?.({ x, y, items, ...opts });
 }
 
@@ -59,7 +64,8 @@ export function MenuHost() {
     if (!stack.length) rootWidth.current = r.width;
     const top = menu.above ? menu.y - r.height : menu.y;
     // A submenu keeps the top edge of its parent (bottom edge for menus that open upwards), so it doesn't jump.
-    setPos({ left: Math.max(8, Math.min(menu.x, innerWidth - r.width - 8)), top: Math.max(8, Math.min(top, innerHeight - r.height - 8)) });
+    const left = menu.alignRight ? menu.x - r.width : menu.x;
+    setPos({ left: Math.max(8, Math.min(left, innerWidth - r.width - 8)), top: Math.max(8, Math.min(top, innerHeight - r.height - 8)) });
   }, [menu, stack]);
   useEffect(() => {
     if (!menu) return;
@@ -94,7 +100,7 @@ export function MenuHost() {
         <>
           <button className="menu-back" role="menuitem" onClick={() => setStack((s) => s.slice(0, -1))}>
             <ChevronLeft />
-            {parent.label}
+            <span className="menu-label">{parent.label}</span>
           </button>
           <hr />
         </>
@@ -107,6 +113,7 @@ export function MenuHost() {
             key={`${stack.length}-${i}`}
             role="menuitem"
             aria-haspopup={it.submenu ? "menu" : undefined}
+            title={it.title}
             disabled={it.disabled || (it.submenu && !tidy(it.submenu).length)}
             style={it.danger ? { color: "var(--err)" } : undefined}
             onClick={() => {
@@ -116,7 +123,7 @@ export function MenuHost() {
             }}
           >
             {it.icon}
-            {it.label}
+            <span className="menu-label">{it.label}</span>
             {it.hint ? <span className="menu-hint">{it.hint}</span> : null}
             {it.kbd ? <Kbd k={it.kbd} /> : null}
             {it.submenu ? <ChevronRight className="menu-more" /> : null}

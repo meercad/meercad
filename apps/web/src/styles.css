@@ -268,18 +268,21 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .measure-card td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 560; }
 
 /* context menu */
-.menu { position: fixed; min-width: 200px; max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--shadow); z-index: 50; }
+.menu { position: fixed; min-width: 200px; width: max-content; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--shadow); z-index: 50; }
 .menu button { display: flex; width: 100%; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: none; background: none; border-radius: 6px; text-align: left; }
 /* Hover only with a pointer that hovers: on touch it would stick to wherever the finger last was. */
 @media (hover: hover) { .menu button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); } }
 .menu button:active:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .menu button:disabled { opacity: 0.4; }
-.menu button svg { width: 15px; height: 15px; }
+.menu button svg { width: 15px; height: 15px; flex: none; }
+/* One line per entry: the label takes what is left and ends in "…" only when the screen is too narrow. */
+.menu .menu-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu .menu-hint, .menu button .kbd, .menu button kbd { flex: none; }
 .menu button kbd { margin-left: auto; font: 11px var(--mono); color: var(--muted); }
 .menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 2px; }
 .menu .menu-back { font-weight: 600; }
 .menu .menu-icon-gap { width: 15px; flex: none; }
-.menu .menu-hint { margin-left: auto; padding-left: 12px; color: var(--muted); font-size: 12px; }
+.menu .menu-hint { margin-left: auto; padding-left: 12px; white-space: nowrap; color: var(--muted); font-size: 12px; }
 .menu .menu-hint + .menu-more, .menu kbd + .menu-more, .menu .kbd + .menu-more { margin-left: 4px; }
 .menu .menu-more { margin-left: auto; color: var(--muted); }
 .menu-anchor { position: relative; }
@@ -340,7 +343,8 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .tool { position: relative; }
 .tool .kbd { position: absolute; top: 2px; right: 3px; min-width: 13px; height: 13px; padding: 0 3px; font-size: 8.5px; border-bottom-width: 1px; opacity: 0.85; }
 .tool.primary .kbd { color: var(--accent); }
-.menu button .kbd { margin-left: auto; }
+.menu button .kbd { margin-left: auto; padding-inline: 5px; }
+.menu .menu-label + .kbd { margin-left: 16px; }
 .quick-actions { position: absolute; display: flex; gap: 2px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); z-index: 4; animation: pop 0.12s ease-out; }
 .quick-actions .qa { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 54px; padding: 5px 6px 4px; border: none; border-radius: 7px; background: none; color: var(--text-2); font-size: 10.5px; position: relative; }
 .quick-actions .qa:hover { background: var(--accent-soft); color: var(--accent); }
