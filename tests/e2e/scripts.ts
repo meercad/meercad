@@ -582,31 +582,6 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.accept();
   },
 
-  "36 Gerippte Box": async (ui) => {
-    await ui.sketchOn("Top");
-    await ui.rect([-40, -30], 80, 60);
-    await ui.finishSketch();
-    await ui.feature("Create", "Extrude");
-    await ui.field("Distance", 50);
-    await ui.accept();
-    await ui.feature("Modify", "Fillet");
-    for (const [x, y] of [[-40, -30], [40, -30], [40, 30], [-40, 30]]) await ui.clickEdge(VERTICAL_AT(x!, y!));
-    await ui.field("Radius", 8);
-    await ui.accept();
-    await ui.feature("Modify", "Shell");
-    await ui.clickFace(TOP_FACE(50));
-    await ui.field("Thickness", 2);
-    await ui.accept();
-    await ui.feature("Modify", "Surface texture");
-    // The four sides and the four rounds outside.
-    for (const [nx, ny] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) await ui.clickFace(`(f) => f.normal[0] * ${nx} + f.normal[1] * ${ny} > 0.99 && (${nx} ? Math.abs(f.center[0]) > 39.5 : Math.abs(f.center[1]) > 29.5)`);
-    for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) await ui.clickFace(`(f) => Math.abs(f.normal[2]) < 0.01 && Math.sign(f.center[0]) === ${x} && Math.sign(f.center[1]) === ${y} && Math.abs(f.center[0]) > 33 && Math.abs(f.center[1]) > 23 && f.normal[0] * ${x} + f.normal[1] * ${y} > 0.5`);
-    await ui.option("Round ribs");
-    await ui.field("Depth", 0.8);
-    await ui.field("Spacing", 4);
-    await ui.accept();
-  },
-
   "37 Gebogener Streifen": async (ui) => {
     await ui.sketchOn("Top");
     await ui.rect([0, -5], 100, 10);

@@ -1,5 +1,4 @@
-import type { ResolvedTexture } from "@meercad/model";
-import type { BooleanMode } from "@meercad/schema";
+import type { BooleanMode, FaceSelector, TextureImage } from "@meercad/schema";
 import type { PlaneFrame, Region, SolvedSketch } from "@meercad/sketch";
 import type { Arena } from "./arena.js";
 import type { Body } from "./body.js";
@@ -26,9 +25,29 @@ export interface ReferenceMesh {
   indices: Uint32Array;
 }
 
-/** A texture step: the part as it was then, and the face indices on it (see texture.ts). */
+/**
+ * A height picture laid on faces of a part (a lithophane's picture face): which faces (found again
+ * by `faces` when the part changes later), how high, and the picture itself (see texture.ts).
+ */
+export interface PictureSpec {
+  /** Id of the step that laid it. */
+  id: string;
+  faces: FaceSelector[];
+  /** mm the brightest part stands out (negative: cut in). */
+  depth: number;
+  /** Repeat of the picture on free-form faces, mm. */
+  pitch: number;
+  angle: number;
+  /** Fade at the border, mm (0: none). */
+  fade?: number;
+  image: TextureImage;
+  /** Dark high instead of bright. */
+  invert?: boolean;
+}
+
+/** A picture on a part: the part as it was then, and the face indices on it (see texture.ts). */
 export interface TextureRecord {
-  feature: ResolvedTexture;
+  feature: PictureSpec;
   body: Body;
   faces: number[];
   /** Which way the picture's top points, for a lithophane's picture (world). */
@@ -47,7 +66,7 @@ export interface ModelState {
   readonly grids?: ReadonlyMap<string, GridRecord>;
   /** Wall boards by feature id, for holders mounted on them (absent in older states). */
   readonly walls?: ReadonlyMap<string, WallRecord>;
-  /** Surface textures by feature id; they change only the triangles, never the solid. */
+  /** Height pictures by feature id; they change only the triangles, never the solid. */
   readonly textures?: ReadonlyMap<string, TextureRecord>;
   /** Objects created by the feature that produced this state. */
   readonly arena: Arena;

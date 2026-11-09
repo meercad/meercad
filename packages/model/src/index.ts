@@ -21,5 +21,5 @@ export * from "./wall.js";
 export * from "./bend.js";
 export * as cable from "./cable.js";
 export * from "./printability.js";
-export * from "./texture/patterns.js";
+export * from "./texture/picture.js";
 export * from "./texture/displace.js";

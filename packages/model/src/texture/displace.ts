@@ -1,20 +1,20 @@
 /**
- * Surface textures on a tessellated part: the triangles of the chosen faces are refined until no
- * edge is longer than a fraction of the pattern's pitch, then every new corner moves along the
- * surface normal by the pattern's height there. The refinement splits each edge by itself (a long
+ * A height picture on a tessellated part (a lithophane's picture face): the triangles of the chosen
+ * faces are refined until no edge is longer than about a pixel, then every new corner moves along
+ * the surface normal by the picture's height there. The refinement splits each edge by itself (a long
  * edge is halved, whichever triangle sees it), so triangles of neighbouring faces split along with
  * it and the surface stays closed: no cracks, no T-junctions, every edge shared by two triangles.
  *
- * The pattern is laid out per group of chosen faces joined by smooth edges:
- * - flat and round faces about one axis (a wall, a tube, a box's walls with rounded corners) are
- *   unrolled: across runs round the axis, along runs up it; a group that closes on itself gets a
- *   pitch that fits a whole number of times around;
- * - other faces (spheres, free-form) take the pattern from three sides, blended by the normal.
- * At the border to faces without texture and at sharp edges between textured faces the height fades
- * to zero over `fade` mm. Pure TypeScript; runs in the kernel worker.
+ * The picture is laid out per group of chosen faces joined by smooth edges:
+ * - flat and round faces about one axis (a plate, a bent plate, a tube) are unrolled and the
+ *   picture covers them once: across runs round the axis, along runs up it; round a group that
+ *   closes on itself the picture's sides join;
+ * - other faces (spheres, free-form) take the picture, repeated every `pitch`, from three sides,
+ *   blended by the normal.
+ * At the border to faces without the picture and at sharp edges the height fades to zero over
+ * `fade` mm. Pure TypeScript; runs in the kernel worker.
  */
-import type { TexturePattern } from "@meercad/schema";
-import { fitWrap, imageFit, patternHeight, patternPeriods, type HeightImage } from "./patterns.js";
+import { imageFit, imageTiled, type HeightImage } from "./picture.js";
 
 type V3 = [number, number, number];
 
@@ -33,26 +33,24 @@ export interface TexturableMesh {
 export type FaceSurface = { kind: "plane" } | { kind: "cylinder"; origin: V3; axis: V3; radius: number } | { kind: "other" };
 
 export interface TextureLayer {
-  /** Face indices the texture lies on. */
+  /** Face indices the picture lies on. */
   faces: number[];
-  pattern: TexturePattern;
+  /** Height of the picture's brightest part, mm: positive raises it out of the face, negative cuts it in. */
   depth: number;
+  /** Size of one repeat where the picture is repeated (free-form faces), mm. */
   pitch: number;
+  /** Turns a repeated picture, degrees. */
   angle: number;
-  ratio?: number;
   /** mm; undefined: half the pitch, at most 2 mm. */
   fade?: number;
-  seed?: number;
-  image?: HeightImage;
-  /** The picture covers the faces once (see TextureFeature.fit). */
-  fit?: boolean;
+  image: HeightImage;
   /** Which way the picture's top points (world): flat faces take it laid onto them, round faces orient their axis by it. */
   up?: V3;
   invert?: boolean;
 }
 
 export interface TextureOptions {
-  /** Refinement: corners per pitch (the longest edge is pitch ÷ this). */
+  /** Refinement: 12 gives a corner per pixel of the picture, fewer a coarser surface. */
   samples: number;
   /** Upper bound on the number of new triangles; the refinement gets coarser to stay below it. */
   maxTriangles: number;
@@ -77,14 +75,6 @@ export interface TexturedMesh {
 }
 
 const COS_SMOOTH = Math.cos((30 * Math.PI) / 180);
-/** How much longer than across triangles may run along stripes (ribs), see `alongOf`. */
-const STRETCH = 8;
-
-/** Stripes that run straight along the unrolling axis: the height changes only across them. */
-function stripes(layer: TextureLayer): boolean {
-  if (layer.pattern === "image") return false;
-  return patternPeriods(layer.pattern, layer.image)[1] === 0 && Math.abs(Math.sin((layer.angle * Math.PI) / 180)) < 1e-9;
-}
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -207,26 +197,6 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
   }
   const groupOf = ranges.map((r, i) => (r.layer < 0 ? -1 : find(i)));
 
-  // ---- stripes (ribs) on unrolled faces change only across: triangles there may run long along
-  // them. Each such face gets the direction the stripes run; edges count their length along it
-  // shortened by STRETCH. Triangles at the border of the texture stay even, so the fade keeps its
-  // width.
-  const alongOf: (V3 | null)[] = ranges.map(() => null);
-  {
-    const byGroup = new Map<number, number[]>();
-    groupOf.forEach((g, i) => {
-      if (g < 0) return;
-      const l = byGroup.get(g);
-      if (l) l.push(i);
-      else byGroup.set(g, [i]);
-    });
-    for (const members of byGroup.values()) {
-      const layer = layers[ranges[members[0]!]!.layer]!;
-      if (!stripes(layer)) continue;
-      const axis = groupAxis(members.map((i) => ranges[i]!), surfaces, layer);
-      if (axis) for (const i of members) alongOf[i] = axis;
-    }
-  }
   // Edges on the border of the texture (to an untextured face or another group), split along with it.
   const borderEdge = new Set<number>();
   const borderAt = new Uint8Array(pos.length / 3);
@@ -256,41 +226,29 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
     borderEdge.add(edgeKey(m, b));
     extraBorder.add(m);
   };
-  const onBorder = (w: number) => isBorder(w) || extraBorder.has(w);
-  /** Squared length of edge a–b as the refinement counts it on a face whose stripes run along `along`. */
-  const len2 = (a: number, b: number, along: V3 | null): number => {
+  /** Squared length of edge a–b. */
+  const len2 = (a: number, b: number): number => {
     const dx = pos[a * 3]! - pos[b * 3]!, dy = pos[a * 3 + 1]! - pos[b * 3 + 1]!, dz = pos[a * 3 + 2]! - pos[b * 3 + 2]!;
-    const all = dx * dx + dy * dy + dz * dz;
-    if (!along) return all;
-    const t = dx * along[0] + dy * along[1] + dz * along[2];
-    return all - t * t + (t * t) / (STRETCH * STRETCH);
+    return dx * dx + dy * dy + dz * dz;
   };
 
-  // ---- how fine: corners per pitch, coarser if the triangle budget would be exceeded
+  // ---- how fine: about a corner per pixel, coarser if the triangle budget would be exceeded
   const area = layers.map(() => 0);
-  // Area where triangles may run long along stripes (they count STRETCH times less).
-  const stretched = layers.map(() => 0);
   for (const r of selected) {
-    const along = alongOf[ranges.indexOf(r)];
     for (let t = 0; t < r.tris.length; t += 3) {
       const a = P(r.weld[r.tris[t]!]!), b = P(r.weld[r.tris[t + 1]!]!), c = P(r.weld[r.tris[t + 2]!]!);
       const n = cross(sub(b, a), sub(c, a));
       const A = Math.hypot(n[0], n[1], n[2]) / 2;
       area[r.layer]! += A;
-      if (along) stretched[r.layer]! += A;
     }
   }
-  // Pictures: a corner per pixel for export (`samples` 12), a little coarser on screen.
+  // A corner per pixel for export (`samples` 12), a little coarser on screen.
   const spacing = layers.map((l, i) => {
-    let h = l.pitch / opts.samples;
-    if (l.pattern === "image" && l.image) {
-      const pixel = l.fit ? Math.sqrt(area[i]! / (l.image.width * l.image.height)) : l.pitch / l.image.width;
-      h = l.fit ? (pixel * 12) / opts.samples : Math.min(h, (pixel * 12) / opts.samples);
-    }
-    return Math.max(0.02, h);
+    const pixel = Math.sqrt(area[i]! / (l.image.width * l.image.height));
+    return Math.max(0.02, (pixel * 12) / opts.samples);
   });
   // Bisecting longest edges until none is longer than h leaves about 6–12·area/h² triangles (more on round faces meshed in strips).
-  const estimate = layers.reduce((s, _, i) => s + (10 * (area[i]! - stretched[i]! + stretched[i]! / STRETCH)) / spacing[i]! ** 2, 0);
+  const estimate = layers.reduce((s, _, i) => s + (10 * area[i]!) / spacing[i]! ** 2, 0);
   // A retry's `coarser` comes on top of the estimate, otherwise the estimate would undo it.
   const k = Math.max(1, Math.sqrt(estimate / opts.maxTriangles)) * coarser;
   for (let i = 0; i < spacing.length; i++) spacing[i]! *= k;
@@ -300,8 +258,7 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
   // Edges cut for ladders whose other side still has them whole: they split on every face.
   const rangeAt = new Map(ranges.map((r, i) => [r, i]));
   const preset = ladders(ranges, spacing, surfaces, pos, edgeKey, mids, (r, a, b) => {
-    const along = alongOf[rangeAt.get(r)!]!;
-    return Math.sqrt(len2(a, b, along && !onBorder(a) && !onBorder(b) ? along : null));
+    return Math.sqrt(len2(a, b));
   }, markMid);
 
   // ---- refine: split every edge of a chosen face that is longer than its layer's spacing
@@ -325,15 +282,12 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
           }
       if (r.layer < 0) return;
       const h2 = spacing[r.layer]! ** 2;
-      const alongR = alongOf[ri]!;
       // Each triangle's longest edge only (longest-edge bisection keeps the triangles well shaped).
       for (let t = 0; t < r.tris.length; t += 3) {
         let best = -1, bestLen = h2;
-        const w0 = r.weld[r.tris[t]!]!, w1 = r.weld[r.tris[t + 1]!]!, w2 = r.weld[r.tris[t + 2]!]!;
-        const along = alongR && !onBorder(w0) && !onBorder(w1) && !onBorder(w2) ? alongR : null;
         for (let k = 0; k < 3; k++) {
           const a = r.weld[r.tris[t + k]!]!, b = r.weld[r.tris[t + ((k + 1) % 3)]!]!;
-          const len = len2(a, b, along);
+          const len = len2(a, b);
           if (len > bestLen) {
             bestLen = len;
             best = k;
@@ -470,7 +424,7 @@ function texturize(mesh: TexturableMesh, layers: TextureLayer[], surfaces: FaceS
   });
   for (let w = 0; w < nW; w++) if (used[w] === 3) pinned[w] = 1;
 
-  // ---- the pattern's coordinates per group
+  // ---- the picture's coordinates per group
   const groups = new Map<number, GroupMap>();
   for (const g of new Set(groupOf.filter((g) => g >= 0))) {
     const members = ranges.map((r, i) => i).filter((i) => groupOf[i] === g);
@@ -639,7 +593,7 @@ const firstNormal = (r: Range): V3 => [r.nrm[0]!, r.nrm[1]!, r.nrm[2]!];
 
 /**
  * The axis a group of faces is unrolled about (`v` runs along it), or null when the group takes the
- * pattern from three sides: flat faces all facing one way, or round faces about one axis with flat
+ * picture from three sides: flat faces all facing one way, or round faces about one axis with flat
  * faces parallel to it.
  */
 function groupAxis(members: Range[], surfaces: FaceSurface[], layer: TextureLayer): V3 | null {
@@ -669,12 +623,10 @@ function groupAxis(members: Range[], surfaces: FaceSurface[], layer: TextureLaye
 }
 
 function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], layer: TextureLayer, P: (w: number) => V3, footprint: number): GroupMap {
-  const periods = patternPeriods(layer.pattern, layer.image);
-  const h = prefiltered(footprint / layer.pitch, patternHeight(layer.pattern, { ...(layer.ratio !== undefined ? { ratio: layer.ratio } : {}), ...(layer.seed !== undefined ? { seed: layer.seed } : {}), ...(layer.image ? { image: layer.image } : {}), ...(layer.invert ? { invert: true } : {}) }));
   const kinds = members.map((r) => surfaces[r.face] ?? { kind: "other" as const });
   const cyl = kinds.find((k) => k.kind === "cylinder") as Extract<FaceSurface, { kind: "cylinder" }> | undefined;
   const axis = groupAxis(members, surfaces, layer);
-  if (!axis) return boxMapping(layer, h, P);
+  if (!axis) return boxMapping(layer, prefiltered(footprint / layer.pitch, imageTiled(layer.image, layer.invert)), P);
   const a = axis;
 
   // Unrolled coordinates: `u` round the axis (or across a flat face), `v` along it.
@@ -771,52 +723,25 @@ function groupMapping(members: Range[], ids: number[], surfaces: FaceSurface[], 
     vmin = Math.min(vmin, v);
     vmax = Math.max(vmax, v);
   }
-  if (layer.fit && layer.image) {
-    // The picture once over the group: left to right across, top to bottom down the axis; round a
-    // closed group its sides join.
-    const closed = perimeter > 0;
-    const du = closed ? perimeter : umax - umin || 1, dv = vmax - vmin || 1;
-    const fit = imageFit(layer.image, layer.invert, closed);
-    const r = footprint / 3;
-    const rs = r / du, rt = r / dv;
-    const hf = (s: number, t: number) => (2 * fit(s, t) + fit(s + rs, t) + fit(s - rs, t) + fit(s, t + rt) + fit(s, t - rt)) / 6;
-    return {
-      height(w, ri) {
-        const i = rangeIndex.get(ri) ?? 0;
-        const p = P(w);
-        return hf((localU[i]!(p) + offset[i]! - umin) / du, (vmax - dot(p, a)) / dv);
-      },
-    };
-  }
-  let pitch = layer.pitch, angle = layer.angle, u0: number, v0 = (vmin + vmax) / 2;
-  if (perimeter > 0) {
-    ({ pitch, angle } = fitWrap(perimeter, layer.pitch, layer.angle, periods[0], periods[1]));
-    u0 = umin;
-  } else {
-    const width = umax - umin;
-    const straight = Math.abs(Math.sin((layer.angle * Math.PI) / 180)) < 1e-6;
-    const repeats = width / (layer.pitch * periods[0]);
-    if (straight && repeats >= 1.5) {
-      // Whole repeats across: the pattern starts and ends the same way at both sides.
-      pitch = width / (Math.round(repeats) * periods[0]);
-      u0 = umin;
-    } else u0 = (umin + umax) / 2;
-  }
-  const rad = (angle * Math.PI) / 180;
-  const ca = Math.cos(rad) / pitch, sa = Math.sin(rad) / pitch;
+  // The picture once over the group: left to right across, top to bottom down the axis; round a
+  // closed group its sides join.
+  const closed = perimeter > 0;
+  const du = closed ? perimeter : umax - umin || 1, dv = vmax - vmin || 1;
+  const fit = imageFit(layer.image, layer.invert, closed);
+  const r = footprint / 3;
+  const rs = r / du, rt = r / dv;
+  const hf = (s: number, t: number) => (2 * fit(s, t) + fit(s + rs, t) + fit(s - rs, t) + fit(s, t + rt) + fit(s, t - rt)) / 6;
   return {
     height(w, ri) {
       const i = rangeIndex.get(ri) ?? 0;
       const p = P(w);
-      const u = (localU[i]!(p) + offset[i]! - u0);
-      const v = dot(p, a) - v0;
-      return h(u * ca + v * sa, -u * sa + v * ca);
+      return hf((localU[i]!(p) + offset[i]! - umin) / du, (vmax - dot(p, a)) / dv);
     },
   };
 }
 
 /**
- * The pattern averaged over the patch a corner stands for (`size` in pattern units, the spacing of
+ * The picture averaged over the patch a corner stands for (`size` in repeats, the spacing of
  * the corners): grooves and edges finer than the triangles then come out evenly instead of
  * appearing at some corners and missing between others.
  */
@@ -825,7 +750,7 @@ function prefiltered(size: number, h: (a: number, b: number) => number): (a: num
   return (a, b) => (2 * h(a, b) + h(a + r, b) + h(a - r, b) + h(a, b + r) + h(a, b - r)) / 6;
 }
 
-/** Free-form faces: the pattern seen from the three axes, blended by how much the face looks along each. */
+/** Free-form faces: the repeated picture seen from the three axes, blended by how much the face looks along each. */
 function boxMapping(layer: TextureLayer, h: (a: number, b: number) => number, P: (w: number) => V3): GroupMap {
   const rad = (layer.angle * Math.PI) / 180;
   const ca = Math.cos(rad) / layer.pitch, sa = Math.sin(rad) / layer.pitch;

@@ -23,7 +23,7 @@ export interface BodyMesh {
    * texture follow the part.
    */
   source?: { feature: string; flipped: boolean };
-  /** The triangles carry a surface texture (finer than the faces, moved off the smooth surface). */
+  /** The triangles carry a height picture (a lithophane: finer than the faces, moved off the smooth surface). */
   textured?: boolean;
 }
 

@@ -638,22 +638,6 @@
    "value": 0,
    "unit": "ms"
   },
-  "model 36 Gerippte Box: faces": {
-   "value": 19,
-   "unit": "faces"
-  },
-  "model 36 Gerippte Box: open": {
-   "value": 216.6,
-   "unit": "ms"
-  },
-  "model 36 Gerippte Box: triangles": {
-   "value": 130348,
-   "unit": "tris"
-  },
-  "model 36 Gerippte Box: unchanged": {
-   "value": 0,
-   "unit": "ms"
-  },
   "model 37 Gebogener Streifen: faces": {
    "value": 716,
    "unit": "faces"

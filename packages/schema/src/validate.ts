@@ -117,9 +117,42 @@ function checkSketch(sk: SketchFeature, at: string, errors: string[]): void {
 /** Formats written by earlier versions, read as the current one. */
 export const LEGACY_FORMATS: readonly string[] = ["leocad/1"];
 
+/** Steps earlier versions had and this one no longer offers ("texture": the surface pattern). */
+export const REMOVED_OPS: readonly string[] = ["texture"];
+
+/**
+ * A design without the steps of REMOVED_OPS, and the ids of those it dropped. They only ever changed
+ * the look of faces, never the solid, so no later step depends on them; a rollback to one of them
+ * moves back to the step before. Anything that is not a design comes back as it was.
+ */
+export function withoutRemovedFeatures<T>(input: T): { doc: T; removed: string[] } {
+  const d = input as { features?: unknown; rollback?: unknown } | null;
+  if (!d || typeof d !== "object" || !Array.isArray(d.features)) return { doc: input, removed: [] };
+  const gone = (f: unknown) => !!f && typeof f === "object" && REMOVED_OPS.includes((f as { op?: unknown }).op as string);
+  const features = d.features as unknown[];
+  if (!features.some(gone)) return { doc: input, removed: [] };
+  const removed: string[] = [];
+  const kept: unknown[] = [];
+  let rollback = d.rollback;
+  for (const f of features) {
+    if (!gone(f)) {
+      kept.push(f);
+      continue;
+    }
+    const id = (f as { id?: unknown }).id;
+    if (typeof id === "string") removed.push(id);
+    if (id !== undefined && id === rollback) {
+      const before = kept[kept.length - 1] as { id?: unknown } | undefined;
+      rollback = before && typeof before.id === "string" ? before.id : null;
+    }
+  }
+  return { doc: { ...d, features: kept, ...("rollback" in d ? { rollback } : {}) } as T, removed };
+}
+
 export function validateDocument(input: unknown): Validation<MeercadDocument> {
   // Files from before the rename (leocad) are the same format under another name.
   if (input && typeof input === "object" && LEGACY_FORMATS.includes((input as { format?: unknown }).format as string)) input = { ...input, format: FORMAT };
+  input = withoutRemovedFeatures(input).doc;
   if (!checkDocumentShape(input)) return { ok: false, errors: formatErrors(checkDocumentShape.errors) };
   const doc = input as MeercadDocument;
   const errors: string[] = [];
@@ -223,11 +256,6 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         break;
       case "offset_face":
         if (f.upTo) planeSpec(f.upTo, at);
-        break;
-      case "texture":
-        if (f.pattern === "image" && !f.image) errors.push(`${at}: pattern "image" needs an image`);
-        if (f.image && !f.image.pixels.startsWith("blob:") && f.image.pixels.length !== Math.ceil((f.image.width * f.image.height) / 3) * 4)
-          errors.push(`${at}: image.pixels must hold width × height bytes (base64)`);
         break;
       case "lithophane":
         if (f.plane) planeSpec(f.plane, at);

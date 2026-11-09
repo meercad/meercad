@@ -31,7 +31,7 @@ interface Prefs {
   /** The example models on the start page, and whether that section is folded open. */
   showExamples: boolean;
   examplesOpen: boolean;
-  /** Surface textures on screen; off makes editing a textured part quicker (exports keep them). */
+  /** Lithophane pictures on screen; off makes editing such a part quicker (exports keep them). */
   showTextures: boolean;
   /** The printer's build volume (mm); null turns the "too big for the bed" warning off. */
   printBed: Bed | null;

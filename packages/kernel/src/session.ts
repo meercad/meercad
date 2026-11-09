@@ -122,7 +122,7 @@ export class KernelSession {
     };
   }
 
-  /** A body's display mesh with its surface textures, if it has any (cached while they stay the same). */
+  /** A body's display mesh with its height pictures (lithophanes), if it has any (cached while they stay the same). */
   private withTextures(state: ModelState, body: Body, mesh: BodyMesh, summary: BodySummary, draft: boolean): BodyMesh {
     const tex = texturesOf(state, body);
     if (!tex) return mesh;

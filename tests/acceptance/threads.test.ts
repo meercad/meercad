@@ -10,7 +10,7 @@ describe("multi-threaded OCCT build", () => {
     // Springs and coils are long helical sweeps (minutes for both builds); coil.test.ts covers them.
     const helical = (e: (typeof EXAMPLES)[number]) => e.doc.features.some((f) => f.op === "coil" || f.op === "spring");
     for (const ex of EXAMPLES.filter((e) => !e.url && !helical(e))) {
-      // Only the solids are compared: meshing (surface textures above all) would just cost time.
+      // Only the solids are compared: meshing would just cost time.
       const a = st.rebuild(ex.doc, { mesh: false }).report.bodies[0]!;
       const b = mt.rebuild(ex.doc, { mesh: false }).report.bodies[0]!;
       expect(b.faces, ex.name).toBe(a.faces);
