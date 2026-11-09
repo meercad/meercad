@@ -8,8 +8,7 @@ import { useState } from "react";
 import { checkInterference } from "../lib/interference";
 import type { ReactNode } from "react";
 import type { Expr, Feature } from "@meercad/schema";
-import { binSize, compartments, drawerFit, GRIDFINITY, LABEL_SYMBOL_NAMES, LABEL_SYMBOLS, labelSymbol, PRINTERS, type LabelSymbolKind, type PrinterProfile } from "@meercad/model";
-import { usePrefs } from "../lib/keymap";
+import { binSize, compartments, drawerFit, GRIDFINITY, LABEL_SYMBOL_NAMES, LABEL_SYMBOLS, labelSymbol, type LabelSymbolKind } from "@meercad/model";
 import { describePlane } from "../lib/topology";
 import { featureName } from "../lib/features";
 import { setDialogField, useApp } from "../store";
@@ -90,12 +89,34 @@ const PRESETS: Preset[] = [
   { label: t("Screw sorter 2×2"), patch: { kind: "bin", units: [2, 2], height: 3, dividers: [3, 3], scoop: 6 } },
   { label: t("Baseplate 4×3, magnets"), patch: { kind: "baseplate", units: [4, 3], magnets: true } },
   { label: t("Baseplate for a drawer"), patch: { kind: "baseplate", units: [1, 1], drawer: [400, 300] } },
-  { label: t("Floor 3 m × 1.5 m, cut for the printer"), patch: { kind: "baseplate", units: [1, 1], drawer: [3000, 1500], bed: { printer: "bambu-h2s" } } },
+  { label: t("Floor 3 m × 1.5 m, cut for the print bed"), patch: { kind: "baseplate", units: [1, 1], drawer: [3000, 1500], bed: { size: [256, 256] } } },
 ];
 
-/** A printer's name in the lists: brand and model, or just its size. */
-const printerLabel = (p: PrinterProfile) => (p.brand === "Other" ? `${p.bed[0]} × ${p.bed[1]} mm` : `${p.name} (${p.bed[0]} × ${p.bed[1]} mm)`);
-const BRANDS = ["Bambu Lab", "Prusa", "Other"] as const;
+/** The print bed a baseplate is cut up for, unless changed. */
+const DEFAULT_BED: [number, number] = [256, 256];
+
+/** Examples to start from, in a menu: picking one sets every value, each stays editable. */
+export function Examples<P>({ items, onPick }: { items: { label: string; patch: P }[]; onPick: (patch: P) => void }) {
+  return (
+    <Field label={t("Start from an example")}>
+      <select
+        className="field"
+        value=""
+        onChange={(e) => {
+          const item = items[Number(e.target.value)];
+          if (item) onPick(item.patch);
+        }}
+      >
+        <option value="">{t("Pick an example…")}</option>
+        {items.map((p, i) => (
+          <option key={p.label} value={i}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
 
 export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
   const features = useApp((s) => s.doc.features);
@@ -105,9 +126,9 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
   const height = num(f.height, 3);
   const pair = (k: "units" | "dividers" | "cell" | "drawer" | "position", i: number, v: Expr, base: [Expr, Expr]) => set({ [k]: base.map((x, j) => (j === i ? v : x)) });
   const div = f.dividers ?? [0, 0];
-  const usePreset = (p: Preset) => {
+  const usePreset = (patch: Preset["patch"]) => {
     setWantOutline(false);
-    set({ ...CLEAR, ...(p.patch.kind === "baseplate" ? { baseplate: undefined, cell: undefined } : {}), ...p.patch });
+    set({ ...CLEAR, ...(patch.kind === "baseplate" ? { baseplate: undefined, cell: undefined } : {}), ...patch });
   };
   const sketches = features.filter((x): x is Of<"sketch"> => x.op === "sketch");
   // The mode follows the feature (presets change it too); "outline" before a sketch is picked is kept here.
@@ -118,11 +139,6 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
     if (m === "cells") set({ drawer: undefined, outline: undefined, gap: undefined });
     else if (m === "area") set({ drawer: f.drawer ?? [400, 300], outline: undefined });
     else set({ drawer: undefined, outline: sketches.length ? { sketch: (sketches.find((x) => x.id === f.outline?.sketch) ?? sketches[sketches.length - 1]!).id } : undefined, plane: undefined, position: undefined });
-  };
-  const printBed = usePrefs((p) => p.printBed);
-  const firstBed = (): NonNullable<Of<"gridfinity">["bed"]> => {
-    const p = printBed ? PRINTERS.find((x) => x.bed.every((v, i) => v === printBed[i])) : undefined;
-    return p ? { printer: p.id } : printBed ? { size: [printBed[0], printBed[1]] } : { printer: "bambu-x1" };
   };
   const kernelInfo = useApp((s) => s.output?.report.features.find((x) => x.id === f.id)?.info);
 
@@ -149,13 +165,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
 
   return (
     <>
-      <div className="preset-row" style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {PRESETS.map((p) => (
-          <button key={p.label} className="btn" style={{ height: 28 }} onClick={() => usePreset(p)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Examples items={PRESETS} onPick={usePreset} />
       <Seg
         value={f.kind}
         options={[["bin", t("Bin")], ["baseplate", t("Baseplate")]]}
@@ -205,43 +215,19 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
       ) : null}
       {!bin ? (
         <label className="checkbox">
-          <input type="checkbox" checked={!!f.bed} onChange={(e) => set({ bed: e.target.checked ? firstBed() : undefined })} /> {t("Cut into pieces for the print bed")}
+          <input type="checkbox" checked={!!f.bed} onChange={(e) => set({ bed: e.target.checked ? { size: DEFAULT_BED } : undefined })} /> {t("Cut into pieces for the print bed")}
         </label>
       ) : null}
       {!bin && f.bed ? (
         <>
-          <Field label={t("Printer")}>
-            <select
-              className="field"
-              value={f.bed.printer ?? ""}
-              onChange={(e) => {
-                const id = e.target.value;
-                const cur = PRINTERS.find((p) => p.id === f.bed?.printer);
-                set({ bed: id ? { printer: id, margin: f.bed?.margin } : { size: f.bed?.size ?? (cur ? [cur.bed[0], cur.bed[1]] : [256, 256]), margin: f.bed?.margin } });
-              }}
-            >
-              {BRANDS.map((brand) => (
-                <optgroup key={brand} label={brand === "Other" ? t("Other printers") : brand}>
-                  {PRINTERS.filter((p) => p.brand === brand).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {printerLabel(p)}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-              <option value="">{t("Custom size")}</option>
-            </select>
-          </Field>
-          {!f.bed.printer ? (
-            <div className="row">
-              <Field label={t("Bed width")}>
-                <ExprInput value={f.bed.size?.[0] ?? 256} onCommit={(v) => set({ bed: { ...f.bed, size: [v, f.bed?.size?.[1] ?? 256] } })} />
-              </Field>
-              <Field label={t("Bed depth")}>
-                <ExprInput value={f.bed.size?.[1] ?? 256} onCommit={(v) => set({ bed: { ...f.bed, size: [f.bed?.size?.[0] ?? 256, v] } })} />
-              </Field>
-            </div>
-          ) : null}
+          <div className="row">
+            <Field label={t("Bed width")}>
+              <ExprInput value={f.bed.size[0]} onCommit={(v) => set({ bed: { ...f.bed, size: [v, f.bed!.size[1]] } })} />
+            </Field>
+            <Field label={t("Bed depth")}>
+              <ExprInput value={f.bed.size[1]} onCommit={(v) => set({ bed: { ...f.bed, size: [f.bed!.size[0], v] } })} />
+            </Field>
+          </div>
           <div className="row">
             <Field label={t("Unusable width")}>
               <ExprInput value={f.bed.margin?.[0]} placeholder="0" onCommit={(v) => set({ bed: { ...f.bed, margin: [v, f.bed?.margin?.[1] ?? 0] } })} />
@@ -391,13 +377,7 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
   const symbol = f.symbol ?? "none";
   return (
     <>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {LABEL_PRESETS.map((p) => (
-          <button key={p.label} className="btn" style={{ height: 28 }} onClick={() => set(p.patch)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Examples items={LABEL_PRESETS} onPick={(patch) => set(patch)} />
       <Field label={t("Symbol")}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           <button className={`btn ${symbol === "none" ? "primary" : ""}`} style={{ height: 32 }} onClick={() => set({ symbol: undefined })}>

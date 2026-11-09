@@ -267,7 +267,6 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         if (f.kind === "bin" && (f.outline || f.bed)) errors.push(`${at}: outline and bed are for baseplates`);
         if (f.outline) earlier(f.outline.sketch, at, "outline", ["sketch"]);
         if (f.outline && f.drawer) errors.push(`${at}: give a drawer or an outline, not both`);
-        if (f.bed && !f.bed.printer && !f.bed.size) errors.push(`${at}: the bed needs a printer or a size`);
         break;
       case "box":
         if (f.plane) planeSpec(f.plane, at);

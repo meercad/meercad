@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { areaPlan, GridfinityError, pieceName, splitLine, type Poly2 } from "./gridfinity.js";
-import { PRINTERS, printerById, usableBed } from "./printers.js";
 
 const P = 42;
 const widths = (cuts: number[]) => cuts.slice(1).map((c, i) => +(c - cuts[i]!).toFixed(6));
@@ -25,7 +24,7 @@ describe("splitLine", () => {
 
 describe("areaPlan", () => {
   it("fills a 3 m × 1.5 m area centred, cut for a Bambu H2S", () => {
-    const plan = areaPlan({ rect: [2999, 1499] }, usableBed([340, 320]));
+    const plan = areaPlan({ rect: [2999, 1499] }, [340, 320]);
     expect(plan.units).toEqual([71, 35]);
     expect(plan.cells).toHaveLength(71 * 35);
     expect(plan.origin[0]).toBeCloseTo(-71 * 21, 9);
@@ -39,8 +38,8 @@ describe("areaPlan", () => {
     expect((xs.length - 1) * (ys.length - 1)).toBe(50);
   });
   it("takes a margin off the bed (2 cm at the back) and needs more pieces", () => {
-    const full = areaPlan({ rect: [2999, 1499] }, usableBed([360, 360]));
-    const less = areaPlan({ rect: [2999, 1499] }, usableBed([360, 360], [0, 20]));
+    const full = areaPlan({ rect: [2999, 1499] }, [360, 360]);
+    const less = areaPlan({ rect: [2999, 1499] }, [360, 340]);
     const n = (p: typeof full) => (p.cuts[0].length - 1) * (p.cuts[1].length - 1);
     expect(n(less)).toBeGreaterThanOrEqual(n(full));
     for (const d of widths(less.cuts[less.turned ? 0 : 1])) expect(d).toBeLessThanOrEqual(340 + 1e-9);
@@ -75,12 +74,7 @@ describe("areaPlan", () => {
   });
 });
 
-describe("printer profiles", () => {
-  it("knows the Bambu H2S and the Prusa XL", () => {
-    expect(printerById("bambu-h2s")!.bed).toEqual([340, 320, 340]);
-    expect(printerById("prusa-xl")!.bed).toEqual([360, 360, 360]);
-    expect(new Set(PRINTERS.map((p) => p.id)).size).toBe(PRINTERS.length);
-  });
+describe("pieces", () => {
   it("names pieces by row letter and column number", () => {
     expect(pieceName(0, 0)).toBe("A1");
     expect(pieceName(2, 1)).toBe("B3");

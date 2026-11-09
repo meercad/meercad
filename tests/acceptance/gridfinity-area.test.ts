@@ -50,10 +50,10 @@ describe("gridfinity baseplate for an area, cut for the print bed", () => {
     for (const t of ["bp1.pocket", "bp1.joint", "bp1.side", "bp1.top"]) expect(tags).toContain(t);
   });
 
-  it("uses a printer profile less an unusable margin (2 cm at the back)", async () => {
-    // 329 × 309 fits the H2S's 340 × 320 in one piece; 300 mm usable depth does not.
-    const h2s = await build([plate({ drawer: [330, 310], bed: { printer: "bambu-h2s" } })]);
-    const less = await build([plate({ drawer: [330, 310], bed: { printer: "bambu-h2s", margin: [0, 20] } })]);
+  it("takes an unusable margin off the bed (2 cm at the back)", async () => {
+    // 329 × 309 fits a 340 × 320 bed in one piece; 300 mm usable depth does not.
+    const h2s = await build([plate({ drawer: [330, 310], bed: { size: [340, 320] } })]);
+    const less = await build([plate({ drawer: [330, 310], bed: { size: [340, 320], margin: [0, 20] } })]);
     ok(h2s.report);
     ok(less.report);
     expect(h2s.report.bodies.map((b) => b.id)).toEqual(["bp1"]);
@@ -110,7 +110,7 @@ describe("gridfinity baseplate for an area, cut for the print bed", () => {
     const small = await build([plate({ drawer: [500, 300], bed: { size: [40, 40] } })]);
     expect(small.report.features[0]!.status).toBe("error");
     expect(small.report.features[0]!.message).toMatch(/too small/);
-    const v = validateDocument(doc([plate({ bed: {} })]));
-    expect(v.ok ? "" : v.errors.join(" ")).toMatch(/printer or a size/);
+    const v = validateDocument(doc([plate({ bed: {} as never })]));
+    expect(v.ok ? "" : v.errors.join(" ")).toMatch(/size/);
   });
 });

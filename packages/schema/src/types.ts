@@ -584,13 +584,12 @@ export interface GridfinityFeature extends FeatureBase {
 }
 
 /**
- * The print bed a baseplate is cut up for: a printer profile (`printer`, an id from the model's
- * PRINTERS such as "bambu-h2s" or "prusa-xl") or its `size` (width, depth), less `margin`: mm that
- * cannot be printed on across the width and across the depth (e.g. [0, 20] for 2 cm at the back).
+ * The print bed a baseplate is cut up for: its `size` (width, depth; 256 × 256 when made in the
+ * app) less `margin`: mm that cannot be printed on across the width and across the depth (e.g.
+ * [0, 20] for 2 cm at the back).
  */
 export interface GridfinityBed {
-  printer?: string;
-  size?: [Expr, Expr];
+  size: [Expr, Expr];
   margin?: [Expr, Expr];
 }
 

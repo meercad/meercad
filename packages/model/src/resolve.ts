@@ -37,7 +37,6 @@ import type {
   TransformFeature,
 } from "@meercad/schema";
 import { evaluate, ExprError } from "./expr.js";
-import { printerById, usableBed } from "./printers.js";
 import { boxDefaults, snapHookDefaults, type ResolvedBox, type ResolvedSnapHook } from "./closures.js";
 
 /** `T` with the expression fields `K` evaluated to numbers. */
@@ -80,8 +79,8 @@ export type ResolvedGridfinity = Omit<
   "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell" | "gap" | "bed"
 > & {
   gap?: number;
-  /** The usable bed: printer or size, less the margin. */
-  bed?: { printer?: string; size: [number, number]; usable: [number, number] };
+  /** The print bed: its size, and what is left of it less the margin. */
+  bed?: { size: [number, number]; usable: [number, number] };
   units: [number, number];
   height: number;
   wall?: number;
@@ -495,12 +494,10 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
   return g as unknown as Feature;
 }
 
-/** A baseplate's print bed: the printer's size (or the one given), less the margin. */
+/** A baseplate's print bed: its size less the margin that cannot be printed on. */
 function resolveBed(bed: NonNullable<GridfinityFeature["bed"]>, pair: (field: string, p: [Expr, Expr]) => [number, number]): NonNullable<ResolvedGridfinity["bed"]> {
-  const printer = printerById(bed.printer);
-  if (bed.printer && !printer && !bed.size) throw new ExprError(`bed.printer: no printer "${bed.printer}"`);
-  const size: [number, number] = bed.size ? pair("bed.size", bed.size) : [printer!.bed[0], printer!.bed[1]];
+  const size = pair("bed.size", bed.size);
   const margin = bed.margin ? pair("bed.margin", bed.margin) : [0, 0];
   if (margin.some((m) => m < 0)) throw new ExprError("bed.margin: must not be negative");
-  return { ...(bed.printer ? { printer: bed.printer } : {}), size, usable: usableBed(size, margin) };
+  return { size, usable: [size[0] - margin[0]!, size[1] - margin[1]!] };
 }

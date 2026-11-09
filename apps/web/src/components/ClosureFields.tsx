@@ -13,6 +13,7 @@ import { describePlane } from "../lib/topology";
 import { partName } from "../lib/features";
 import { setDialogField, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
+import { Examples } from "./GridfinityFields";
 import { t, tn } from "../lib/i18n";
 
 type Of<O extends Feature["op"]> = Extract<Feature, { op: O }>;
@@ -115,13 +116,7 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
 
   return (
     <>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {BOX_PRESETS.map((p) => (
-          <button key={p.label} className="btn" style={{ height: 28 }} onClick={() => set({ ...BOX_CLEAR, ...p.patch })}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Examples items={BOX_PRESETS} onPick={(patch) => set({ ...BOX_CLEAR, ...patch })} />
       <Seg
         value={f.lid}
         options={[["snap", t("Snap lid")], ["screw", t("Screw lid")]]}
@@ -238,13 +233,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
   const angle = num(f.angle, 0);
   return (
     <>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {HOOK_PRESETS.map((p) => (
-          <button key={p.label} className="btn" style={{ height: 28 }} onClick={() => set(p.patch)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Examples items={HOOK_PRESETS} onPick={(patch) => set(patch)} />
       <div className="row">
         <Field label={t("Length")}>
           <ExprInput value={f.length} placeholder={String(SNAP_HOOK.length)} onCommit={(length) => set({ length })} onLive={(length) => set({ length })} />

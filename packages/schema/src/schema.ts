@@ -278,7 +278,7 @@ export const definitions: Record<string, Json> = {
         drawer: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
         outline: obj({ sketch: id, regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })) }, ["sketch"]),
         gap: ref("expr"),
-        bed: obj({ printer: { type: "string", maxLength: 64 }, size: arr(ref("expr"), { minItems: 2, maxItems: 2 }), margin: arr(ref("expr"), { minItems: 2, maxItems: 2 }) }, []),
+        bed: obj({ size: arr(ref("expr"), { minItems: 2, maxItems: 2 }), margin: arr(ref("expr"), { minItems: 2, maxItems: 2 }) }, ["size"]),
         plane: ref("planeSpec"),
         position: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
         baseplate: id,

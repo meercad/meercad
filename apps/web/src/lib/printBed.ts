@@ -4,12 +4,16 @@
  * (turned in right angles only: a part that fits only diagonally still counts as too big).
  */
 
-import { PRINTERS, printerName } from "@meercad/model";
-
 export type Bed = [number, number, number];
 
-/** Build volumes of common printers (mm, width × depth × height), from the model's printer profiles. */
-export const BED_PRESETS: { id: string; label: string; size: Bed }[] = PRINTERS.map((p) => ({ id: p.id, label: p.brand === "Other" ? p.bed.join(" × ") : `${printerName(p)} · ${p.bed.join(" × ")}`, size: [...p.bed] as Bed }));
+/** Common build volumes (mm, width × depth × height). */
+export const BED_PRESETS: { id: string; label: string; size: Bed }[] = [
+  { id: "256", label: "256 × 256 × 256", size: [256, 256, 256] },
+  { id: "250", label: "250 × 210 × 220", size: [250, 210, 220] },
+  { id: "220", label: "220 × 220 × 250", size: [220, 220, 250] },
+  { id: "180", label: "180 × 180 × 180", size: [180, 180, 180] },
+  { id: "350", label: "350 × 350 × 350", size: [350, 350, 350] },
+];
 export const DEFAULT_BED: Bed = [256, 256, 256];
 
 export function partSize(bbox: { min: readonly number[]; max: readonly number[] }): Bed {
