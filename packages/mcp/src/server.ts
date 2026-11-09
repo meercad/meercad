@@ -37,7 +37,7 @@ const originAllowed = (origin: string | undefined) =>
 
 const log = (...a: unknown[]) => console.error("[meercad-mcp]", ...a);
 
-/** This server's session: the app keeps a window and document per session. */
+/** This server's session: the app keeps a tab and document per session. */
 const session = randomUUID();
 const bridge = createBridge({ port, session, originAllowed, log });
 
@@ -145,7 +145,7 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
   );
 }
 
-const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets an own window, so the user can keep working in theirs." });
+const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets a tab of its own, locked for the user, who keeps working in their other tabs." });
 
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
@@ -212,12 +212,12 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD window of your own, behind the user's, so they keep working in theirs (they can look at yours any time); a project the user has open moves over to your window. All later calls of this session act on it; before one is open, only lookups work.", inputSchema: { id: z.string() } },
+  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. All later calls of this session act on it; before one is open, only lookups work.", inputSchema: { id: z.string() } },
   guard(async ({ id }) => text(await call("open_project", { id }))),
 );
 server.registerTool(
   "new_project",
-  { title: "New project", description: "Creates and opens an empty project for this session (in an own window, see open_project).", inputSchema: { name: z.string().optional() } },
+  { title: "New project", description: "Creates and opens an empty project for this session (in a tab of your own, see open_project).", inputSchema: { name: z.string().optional() } },
   guard(async ({ name }) => text(await call("new_project", { name }))),
 );
 
@@ -573,7 +573,7 @@ server.registerTool(
   "import_file",
   {
     title: "Import a file",
-    description: "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project (opened in this session's window; no project needs to be open first). (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ; replace {path} and add_features {path, ids?} take the design or features of a .meercad file into the open project.)",
+    description: "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project (opened in this session's tab; no project needs to be open first). (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ; replace {path} and add_features {path, ids?} take the design or features of a .meercad file into the open project.)",
     inputSchema: { path: z.string() },
   },
   guard(async ({ path }) => {
@@ -599,7 +599,7 @@ server.registerTool("list_folders", { title: "List folders", description: "The f
 server.registerTool("create_folder", { title: "New folder", description: "Creates a folder for projects inside `parent` (\"\" for the top level).", inputSchema: { parent: z.string().optional(), name: z.string().min(1).max(120) } }, guard(async (a) => text(await call("create_folder", a))));
 server.registerTool("move_project", { title: "Move the project", description: "Moves the open project into a folder (see list_folders; \"\" for the top level).", inputSchema: { folder: z.string() } }, guard(async (a) => text(await call("move_project", a))));
 server.registerTool("list_examples", { title: "Examples", description: "The example designs that come with meerCAD (finished designs to open and change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_examples"))));
-server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in an own window, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]) } }, guard(async (a) => text(await call("open_example", a))));
+server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in a tab of your own, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]) } }, guard(async (a) => text(await call("open_example", a))));
 
 server.registerTool(
   "terrain_height",
@@ -621,7 +621,7 @@ server.registerTool(
 
 server.registerTool(
   "status",
-  { title: "Connection status", description: "Whether the meerCAD app is connected, which project this session works on (and whether in its own window or the user's), and the available projects.", annotations: { readOnlyHint: true } },
+  { title: "Connection status", description: "Whether the meerCAD app is connected, which project this session works on (and whether in its own tab or the user's), and the available projects.", annotations: { readOnlyHint: true } },
   async () => {
     let st = await bridge.status();
     // Not connected: open the app (if this server knows which) and wait for it.

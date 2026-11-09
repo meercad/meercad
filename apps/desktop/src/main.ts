@@ -7,7 +7,7 @@
  * security-scoped bookmark, iCloud Drive is found through the system, and Claude gets meerCAD as an
  * extension instead of an entry written into its config.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, screen, ShareMenu, shell, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, screen, ShareMenu, shell, WebContentsView, type MenuItemConstructorOptions, type WebContents } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
@@ -16,7 +16,6 @@ import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, w
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CHANNEL_PORTS, CHANNEL_MCP_NAMES, type Channel } from "@meercad/mcp";
-import { holderOf as holderOfWindow, openElsewhere as openElsewhereOf, type ProjectWindow } from "./openProjects";
 import { adoptSiblingData, carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
 
 const DEV = process.argv.includes("--dev");
@@ -123,26 +122,37 @@ ipcMain.on("shared:get", (e) => void (e.returnValue = readShared()));
 /** The bridge port the window connects to: this build's own (see CHANNEL_PORTS). */
 ipcMain.on("mcp:port", (e) => void (e.returnValue = MCP_PORT));
 
+/** Every page of the app: the window's, and each assistant's tab (a view inside the window). */
+function allContents(): WebContents[] {
+  const list: WebContents[] = [];
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) list.push(mainWindow.webContents);
+  for (const a of assistantViews.values()) if (!a.view.webContents.isDestroyed()) list.push(a.view.webContents);
+  return list;
+}
+
 /**
- * Sends a message to every open window (`arg` per window, by its webContents id). Skips windows
- * that are closing: this runs from close and destroy events, where a send would throw.
+ * Sends a message to every page (`arg` per page, by its webContents id). Skips pages that are
+ * closing: this runs from close and destroy events, where a send would throw.
  */
-function sendToAll(channel: string, arg: (wc: number) => unknown): void {
-  for (const w of BrowserWindow.getAllWindows()) {
-    if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
+function sendToAll(channel: string, arg: (wc: number) => unknown, except?: number): void {
+  for (const wc of allContents()) {
+    if (wc.id === except) continue;
     try {
-      w.webContents.send(channel, arg(w.webContents.id));
+      wc.send(channel, arg(wc.id));
     } catch {
       // closed meanwhile
     }
   }
 }
 
+/** The window a page is in (an assistant's tab is a view inside the app's one window). */
+const windowFor = (wc: WebContents): BrowserWindow | null => BrowserWindow.fromWebContents(wc) ?? (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null);
+
 // ---------------------------------------------------------------- MCP bridge host
 
 /**
- * The user's first window (mainWindow) holds the connection to the MCP server; every other window
- * shows its state and turns it on or off through it.
+ * The app's window (mainWindow) holds the connection to the MCP server; the assistants' tabs show
+ * its state and turn it on or off through it.
  */
 type BridgeState = "off" | "connecting" | "connected";
 let bridgeState: BridgeState = "off";
@@ -285,7 +295,7 @@ ipcMain.handle("projects:save", async (e, p: { id: string; doc: unknown; thumbna
   await writeFile(tmp, `${JSON.stringify(p.doc, null, 2)}\n`);
   await rename(tmp, projectPath(p.id));
   // Other windows drop what they keep of it in memory (a tab in the background).
-  for (const w of BrowserWindow.getAllWindows()) if (w.webContents.id !== e.sender.id) w.webContents.send("project-saved", p.id);
+  sendToAll("project-saved", () => p.id, e.sender.id);
   if (p.thumbnail?.startsWith("data:image/png;base64,")) {
     await mkdir(thumbsDir(), { recursive: true });
     await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
@@ -296,7 +306,7 @@ ipcMain.handle("projects:thumbnail", async (e, p: { id: string; thumbnail: strin
   await mkdir(thumbsDir(), { recursive: true });
   await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
   // An overview open in another window shows the new picture.
-  for (const w of BrowserWindow.getAllWindows()) if (w.webContents.id !== e.sender.id) w.webContents.send("projects-changed");
+  sendToAll("projects-changed", () => undefined, e.sender.id);
 });
 ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown; folder?: string }) => {
   const id = await uniqueId(p.name, p.folder ?? "");
@@ -348,7 +358,7 @@ ipcMain.handle("projects:reveal", (_e, p?: string | { folder: string }) =>
   typeof p === "string" ? shell.showItemInFolder(projectPath(p)) : shell.openPath(folderPath(p?.folder ?? "")),
 );
 ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
+  const win = windowFor(e.sender);
   const r = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath("downloads"), p.name), ...(p.filters ? { filters: p.filters } : {}) });
   if (r.canceled || !r.filePath) return null;
   await writeFile(r.filePath, typeof p.data === "string" ? p.data : Buffer.from(p.data));
@@ -375,7 +385,7 @@ ipcMain.handle("files:write-local", async (_e, p: { path: unknown; base64: unkno
  * there is no share menu (not macOS) the file is shown in the file manager instead.
  */
 ipcMain.handle("files:share", async (e, p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
+  const win = windowFor(e.sender);
   const dir = await mkdtemp(join(app.getPath("temp"), "meercad-share-"));
   const file = join(dir, safeName(p.name, "design.meercad"));
   await writeFile(file, typeof p.data === "string" ? p.data : Buffer.from(p.data));
@@ -399,7 +409,7 @@ ipcMain.handle("files:share", async (e, p: { name: string; data: Uint8Array | st
 let photoBuild: ChildProcess | null = null;
 ipcMain.handle("photos:build", async (e, given?: unknown) => {
   if (photoBuild) throw new Error("busy");
-  const win = BrowserWindow.fromWebContents(e.sender);
+  const win = windowFor(e.sender);
   // MEERCAD_PHOTOS_DIR skips the folder dialog (automated tests of the whole build in the app).
   // An assistant (MCP) names the folder itself.
   const folder = (typeof given === "string" && given) || process.env["MEERCAD_PHOTOS_DIR"] || (await dialog.showOpenDialog(win!, { properties: ["openDirectory"], message: lang === "de" ? "Ordner mit den Fotos" : "Folder with the photos" })).filePaths[0];
@@ -463,7 +473,7 @@ ipcMain.handle("storage:status", async () => {
 /** Bookmarks of folders picked in this session (App Store build), saved once one becomes the projects folder. */
 const picked = new Map<string, string>();
 ipcMain.handle("storage:choose", async (e) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
+  const win = windowFor(e.sender);
   const r = await dialog.showOpenDialog(win!, {
     title: tr("Choose a folder for your meerCAD projects"),
     buttonLabel: tr("Use this folder"),
@@ -536,7 +546,7 @@ function watchProjects(): void {
     watcher = watch(projectsDir(), { recursive: true }, (_event, file) => {
       if (file && !String(file).endsWith(".meercad") && extname(String(file)) !== "") return;
       clearTimeout(timer);
-      timer = setTimeout(() => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send("projects-changed")), 400);
+      timer = setTimeout(() => sendToAll("projects-changed", () => undefined), 400);
     });
     watcher.on("error", () => undefined);
   } catch {
@@ -626,8 +636,12 @@ function autoUiScale(win: BrowserWindow): number {
 const uiScaleOf = (win: BrowserWindow) => settings.uiScale ?? autoUiScale(win);
 function applyUiScale(win: BrowserWindow): void {
   const f = uiScaleOf(win);
-  if (Math.abs(win.webContents.getZoomFactor() - f) > 1e-3) win.webContents.setZoomFactor(f);
-  win.webContents.send("ui-scale", uiScaleState(win));
+  // The assistants' tabs in the window take its size too.
+  for (const wc of win === mainWindow ? allContents() : [win.webContents]) {
+    if (Math.abs(wc.getZoomFactor() - f) > 1e-3) wc.setZoomFactor(f);
+    wc.send("ui-scale", uiScaleState(win));
+  }
+  placeAssistants();
 }
 const uiScaleState = (win: BrowserWindow) => ({ choice: settings.uiScale ?? "auto", auto: autoUiScale(win), current: uiScaleOf(win), steps: UI_SCALES });
 async function setUiScale(choice: number | "auto"): Promise<void> {
@@ -646,26 +660,37 @@ function stepUiScale(dir: 1 | -1): void {
   if (next !== undefined) void setUiScale(next);
 }
 ipcMain.handle("ui:scale", (e) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
+  const win = windowFor(e.sender);
   return win ? uiScaleState(win) : null;
 });
 ipcMain.handle("ui:scale:set", (_e, choice: unknown) => {
   if (choice === "auto" || (typeof choice === "number" && Number.isFinite(choice))) return setUiScale(choice);
 });
 
-// ---------------------------------------------------------------- windows
+// ---------------------------------------------------------------- the window
 
+/** The app's one window: Home and the user's tabs, and the assistants' tabs as views inside it. */
 let mainWindow: BrowserWindow | null = null;
 const pendingOpen: string[] = [];
 
-/** `extra`: another window of the user's (File > New Window), next to the first one. */
-function createWindow(assistant?: { session: string; client: string }, extra = false): BrowserWindow {
-  // An assistant's window (or another one of the user's) opens a little offset from the user's; an assistant's stays behind it.
-  const at = (assistant || extra) && mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+/** The page's settings, also for the assistants' tabs. */
+const webPreferences = (assistant: boolean) => ({ preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false, ...(assistant ? { backgroundThrottling: false } : {}) });
+
+/** External links open in the browser; the app never navigates away from itself. */
+function guardNavigation(wc: WebContents): void {
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  wc.on("will-navigate", (e, url) => {
+    if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
+  });
+}
+
+function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
-    ...(at ? { x: at.x + 40 + 24 * (assistantWindows.size % 6), y: at.y + 40 + 24 * (assistantWindows.size % 6), width: at.width, height: at.height } : {}),
     minWidth: 900,
     minHeight: 600,
     title: "meerCAD",
@@ -674,120 +699,142 @@ function createWindow(assistant?: { session: string; client: string }, extra = f
     backgroundColor: "#eef0f8",
     icon: join(__dirname, "../build/icon.png"),
     show: false,
-    // An assistant's window works in the background: its timers must not be slowed down there.
-    webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false, ...(assistant ? { backgroundThrottling: false } : {}) },
+    webPreferences: webPreferences(false),
   });
-  win.once("ready-to-show", () => (assistant ? showBehind(win) : win.show()));
+  win.once("ready-to-show", () => win.show());
   // The interface size follows the display the window is on (when automatic).
   win.webContents.on("did-finish-load", () => applyUiScale(win));
   win.on("moved", () => applyUiScale(win));
-  // External links open in the browser; the app never navigates away from itself.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  win.webContents.on("will-navigate", (e, url) => {
-    if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
-  });
+  win.on("resize", placeAssistants);
+  guardNavigation(win.webContents);
   // MEERCAD_MCP_BRIDGE=off keeps a test run's window away from the user's assistants.
-  const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : extra ? "?window=extra" : process.env["MEERCAD_MCP_BRIDGE"] === "off" ? "?bridge=off" : "";
-  void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${query}`);
+  void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${process.env["MEERCAD_MCP_BRIDGE"] === "off" ? "?bridge=off" : ""}`);
   win.on("closed", () => {
+    // The assistants' tabs go with it (their sessions learn that the user closed them).
+    for (const a of [...assistantViews.values()]) closeView(a);
     if (mainWindow !== win) return;
     mainWindow = null;
     // Its connection to the assistants went with it.
     bridgeState = "off";
-    broadcastBridge();
   });
   return win;
 }
 
-// ---------------------------------------------------------------- assistant windows
+// ---------------------------------------------------------------- assistants' tabs
 
 /**
- * Every assistant session (one MCP server each) works in a window of its own, so the user keeps
- * working in theirs. The user's window holds the connection to the MCP server and passes each
- * session's requests on to its window (see the web app's mcpBridge).
+ * Every assistant session (one MCP server each) works in a tab of its own in the app's window: a
+ * page of its own (a view laid over the window's page below the tab strip while that tab is the
+ * open one, hidden otherwise), so the user keeps working on Home and in their tabs meanwhile. The
+ * window's page holds the connection to the MCP server and passes each session's requests on to
+ * its tab (see the web app's mcpBridge); it draws the tab strip, with the assistants' tabs in it.
  */
-interface AssistantWindow {
-  win: BrowserWindow;
+interface AssistantView {
+  view: WebContentsView;
   session: string;
   client: string;
-  /** The project it shows. */
+  /** The project it has open, and its name. */
   project: string | null;
-  /** Its session's MCP server exited: another session may take the window over. */
-  ended: boolean;
+  name: string | null;
+  /** It is working right now, and on which tool. */
+  busy: boolean;
+  tool: string | null;
   ready: Promise<void>;
   markReady: () => void;
 }
-const assistantWindows = new Map<number, AssistantWindow>();
-/** Sessions whose window the user closed. */
+/** By the view's webContents id. */
+const assistantViews = new Map<number, AssistantView>();
+/** Sessions whose tab the user closed or took over. */
 const closedSessions = new Set<string>();
-const assistantOf = (webContentsId: number) => [...assistantWindows.values()].find((a) => !a.win.isDestroyed() && a.win.webContents.id === webContentsId);
-const isAssistantWindow = (win: BrowserWindow) => assistantWindows.has(win.id);
-/** The window menu commands and Finder opens go to: the focused one, else the user's. */
-const commandWindow = () => {
-  const f = BrowserWindow.getFocusedWindow();
-  return f && !f.isDestroyed() ? f : mainWindow;
-};
+const assistantOf = (webContentsId: number) => assistantViews.get(webContentsId);
+/** Menu commands and Finder opens go to the window's page. */
+const commandWindow = () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null);
 
-/** Shows a window without taking the focus, behind the window the user works in. */
-function showBehind(win: BrowserWindow): void {
-  const front = BrowserWindow.getFocusedWindow();
-  win.showInactive();
-  if (front && front !== win && !front.isDestroyed()) front.moveTop();
+/** What the tab strip shows of the assistants' tabs. */
+const assistantTabs = () => [...assistantViews.values()].filter((a) => !a.view.webContents.isDestroyed()).map((a) => ({ session: a.session, client: a.client, project: a.project, name: a.name, busy: a.busy, tool: a.tool }));
+const broadcastTabs = () => mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed() && mainWindow.webContents.send("assistant-tabs", assistantTabs());
+
+/** The open assistant tab (by session) and where the window's page leaves room for it (CSS pixels). */
+let shown: { session: string; rect: { x: number; y: number; width: number; height: number } } | null = null;
+/** Lays the open assistant tab over its room in the page; the others stay hidden (and keep working). */
+function placeAssistants(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const zoom = mainWindow.webContents.getZoomFactor();
+  const [w, h] = mainWindow.getContentSize() as [number, number];
+  // Before the page said where: everything below the top bar.
+  const r = shown?.rect ?? { x: 0, y: 44, width: w / zoom, height: h / zoom - 44 };
+  const bounds = { x: Math.round(r.x * zoom), y: Math.round(r.y * zoom), width: Math.max(1, Math.round(r.width * zoom)), height: Math.max(1, Math.round(r.height * zoom)) };
+  for (const a of assistantViews.values()) {
+    if (a.view.webContents.isDestroyed()) continue;
+    a.view.setBounds(bounds);
+    a.view.setVisible(a.session === shown?.session);
+  }
 }
 
-function openAssistantWindow(session: string, client: string): AssistantWindow {
-  const known = [...assistantWindows.values()].find((a) => a.session === session && !a.win.isDestroyed());
+function openAssistantView(session: string, client: string): AssistantView {
+  const known = [...assistantViews.values()].find((a) => a.session === session && !a.view.webContents.isDestroyed());
   if (known) return known;
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error("meerCAD's window is closed.");
   let markReady = () => undefined as void;
   const ready = new Promise<void>((r) => (markReady = r));
   closedSessions.delete(session);
-  const win = createWindow({ session, client });
-  const a: AssistantWindow = { win, session, client, project: null, ended: false, ready, markReady };
-  assistantWindows.set(win.id, a);
-  const id = win.id;
-  win.on("closed", () => {
-    assistantWindows.delete(id);
+  // It works in the background: its timers and drawing must not be slowed down there.
+  const view = new WebContentsView({ webPreferences: webPreferences(true) });
+  view.setBackgroundColor("#eef0f8");
+  view.setVisible(false);
+  mainWindow.contentView.addChildView(view);
+  const wc = view.webContents;
+  const a: AssistantView = { view, session, client, project: null, name: null, busy: false, tool: null, ready, markReady };
+  assistantViews.set(wc.id, a);
+  placeAssistants();
+  guardNavigation(wc);
+  wc.on("did-finish-load", () => mainWindow && !mainWindow.isDestroyed() && wc.setZoomFactor(uiScaleOf(mainWindow)));
+  const id = wc.id;
+  wc.once("destroyed", () => {
+    assistantViews.delete(id);
     closedSessions.add(session);
-    broadcastOpen();
+    if (shown?.session === session) shown = null;
+    broadcastTabs();
     for (const [callId, c] of bridgeCalls) {
       if (c.window !== id) continue;
       bridgeCalls.delete(callId);
-      c.reject(new Error("The user closed your meerCAD window. Open the project again (open_project) to go on."));
+      c.reject(new Error(CLOSED));
     }
   });
+  void wc.loadURL(`${DEV ? DEV_URL : "app://meercad/"}?assistant=${encodeURIComponent(session)}&client=${encodeURIComponent(client)}`);
+  broadcastTabs();
   return a;
+}
+
+const CLOSED = "The user closed your meerCAD tab or took the project over. Open the project again (open_project) to go on.";
+
+/** Closes an assistant's tab (its page goes; its session's later requests get CLOSED). */
+function closeView(a: AssistantView): void {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(a.view);
+  } catch {
+    // the window is gone
+  }
+  if (!a.view.webContents.isDestroyed()) a.view.webContents.close();
 }
 
 let bridgeCallSeq = 0;
 const bridgeCalls = new Map<number, { window: number; resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
-ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string; project?: string }) => {
-  // A window whose assistant is gone and that has the project open is taken over, not opened twice.
-  const left = p.project ? [...assistantWindows.values()].find((x) => x.ended && x.project === p.project && !x.win.isDestroyed()) : undefined;
-  if (left && ![...assistantWindows.values()].some((x) => x.session === p.session && !x.win.isDestroyed())) {
-    left.session = String(p.session);
-    left.client = String(p.client || "Assistant");
-    left.ended = false;
-    left.win.webContents.send("assistant-adopted", { session: left.session, client: left.client });
-    broadcastOpen();
-    return left.win.id;
-  }
-  const a = openAssistantWindow(String(p.session), String(p.client || "Assistant"));
+ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string }) => {
+  const a = openAssistantView(String(p.session), String(p.client || "Assistant"));
   await a.ready;
-  return a.win.id;
+  return a.view.webContents.id;
 });
-/** The session's window; "closed" when the user closed it (its requests must not land in the user's window then). */
-ipcMain.handle("assistant:window", (_e, session: string) => [...assistantWindows.values()].find((a) => a.session === session && !a.win.isDestroyed())?.win.id ?? (closedSessions.has(session) ? "closed" : null));
+/** The session's tab; "closed" when the user closed it (its requests must not land in the user's page then). */
+ipcMain.handle("assistant:window", (_e, session: string) => [...assistantViews.values()].find((a) => a.session === session && !a.view.webContents.isDestroyed())?.view.webContents.id ?? (closedSessions.has(session) ? "closed" : null));
 ipcMain.handle("assistant:call", (_e, p: { window: number; req: unknown }) => {
-  const a = assistantWindows.get(p.window);
-  if (!a || a.win.isDestroyed()) throw new Error("The user closed your meerCAD window. Open the project again (open_project) to go on.");
+  const a = assistantViews.get(p.window);
+  if (!a || a.view.webContents.isDestroyed()) throw new Error(CLOSED);
   const callId = ++bridgeCallSeq;
   return new Promise((resolve, reject) => {
     bridgeCalls.set(callId, { window: p.window, resolve, reject });
-    a.win.webContents.send("bridge-request", { callId, req: p.req });
+    a.view.webContents.send("bridge-request", { callId, req: p.req });
   });
 });
 ipcMain.on("assistant:respond", (_e, p: { callId: number; result?: unknown; error?: string }) => {
@@ -798,83 +845,57 @@ ipcMain.on("assistant:respond", (_e, p: { callId: number; result?: unknown; erro
   else c.resolve(p.result);
 });
 ipcMain.on("assistant:ready", (e) => assistantOf(e.sender.id)?.markReady());
-/** The project each of the user's windows shows (by webContents id); assistants' windows keep theirs in AssistantWindow. */
-const userProjects = new Map<number, string | null>();
-/** Every window with the project it shows (see openProjects). */
-function projectWindows(): (ProjectWindow & { win: BrowserWindow; a: AssistantWindow | null })[] {
-  const live = (w: BrowserWindow) => !w.isDestroyed() && !w.webContents.isDestroyed();
-  const all = BrowserWindow.getAllWindows().filter(live);
-  const assistants = [...assistantWindows.values()].filter((a) => live(a.win)).map((a) => ({ wc: a.win.webContents.id, project: a.project, assistant: a.client, ended: a.ended, win: a.win, a }));
-  const users = [...userProjects].flatMap(([wc, project]) => {
-    const win = all.find((w) => w.webContents.id === wc);
-    return win ? [{ wc, project, assistant: null, win, a: null }] : [];
-  });
-  return [...users, ...assistants];
-}
-const openElsewhere = (except: number) => openElsewhereOf(projectWindows(), except);
-/** Tells every window which projects the others have open. */
-const broadcastOpen = () => sendToAll("open-elsewhere", (wc) => openElsewhere(wc));
-ipcMain.handle("assistant:open-elsewhere", (e) => openElsewhere(e.sender.id));
-ipcMain.on("assistant:project", (e, id: unknown) => {
-  const project = typeof id === "string" ? id : null;
+ipcMain.handle("assistant:tabs", () => assistantTabs());
+/** An assistant's tab says which project it has open. */
+ipcMain.on("assistant:project", (e, p: unknown) => {
   const a = assistantOf(e.sender.id);
-  if (a) a.project = project;
-  else {
-    const wc = e.sender.id;
-    if (!userProjects.has(wc))
-      e.sender.once("destroyed", () => {
-        userProjects.delete(wc);
-        broadcastOpen();
-      });
-    userProjects.set(wc, project);
-  }
-  broadcastOpen();
+  if (!a) return;
+  const { id, name } = (p ?? {}) as { id?: unknown; name?: unknown };
+  a.project = typeof id === "string" ? id : null;
+  a.name = typeof name === "string" ? name : null;
+  broadcastTabs();
 });
-/** The window (other than the asking one) that has a project open: an assistant session's, or one of the user's. */
-function holderOf(id: string, except: number): { win: BrowserWindow; assistant: AssistantWindow | null } | null {
-  const h = holderOfWindow(projectWindows(), id, except);
-  return h ? { win: h.win, assistant: h.a } : null;
-}
-ipcMain.handle("assistant:holder", (e, id: string) => {
-  const h = holderOf(id, e.sender.id);
-  if (!h) return null;
-  return h.assistant ? { session: h.assistant.session, client: h.assistant.client, ended: h.assistant.ended, user: false } : { session: "", client: "", ended: false, user: true };
+/** An assistant's tab says whether it is working, and on what. */
+ipcMain.on("assistant:busy", (e, p: unknown) => {
+  const a = assistantOf(e.sender.id);
+  if (!a) return;
+  const { busy, tool } = (p ?? {}) as { busy?: unknown; tool?: unknown };
+  a.busy = busy === true;
+  a.tool = typeof tool === "string" ? tool : null;
+  broadcastTabs();
 });
-/** Brings the other window of the user's (or, `assistants`, the assistant's) that has a project open to the front; false when none has. */
-ipcMain.handle("assistant:focus-holder", (e, p: { id: string; assistants?: boolean }) => {
-  const h = holderOf(p.id, e.sender.id);
-  if (!h || !!h.assistant !== !!p.assistants) return false;
-  h.win.show();
-  h.win.focus();
-  return true;
+/** The window's page opens an assistant's tab (rect: its room in the page) or one of its own (null). */
+ipcMain.on("assistant:show", (e, p: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || e.sender !== mainWindow.webContents) return;
+  const q = p as { session?: unknown; rect?: { x: number; y: number; width: number; height: number } } | null;
+  shown = q && typeof q.session === "string" && q.rect ? { session: q.session, rect: q.rect } : null;
+  placeAssistants();
 });
 let releaseSeq = 0;
 const releases = new Map<number, () => void>();
-/** An assistant opens a project the user has open: the user's windows save it and close its tab first (its own window gets it). */
-ipcMain.handle("assistant:take", async (e, p: { id: string; client: string }) => {
-  // Every window of the user's: one may have it in a tab in the background.
-  for (const [wc] of [...userProjects]) {
-    if (wc === e.sender.id) continue;
-    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.id === wc);
-    if (!win) continue;
-    const callId = ++releaseSeq;
-    await new Promise<void>((resolve) => {
-      releases.set(callId, resolve);
-      win.webContents.send("release-project", { callId, id: p.id, client: p.client });
-      setTimeout(resolve, 15_000).unref();
-    });
-    releases.delete(callId);
-  }
-});
 ipcMain.on("window:released", (_e, callId: number) => releases.get(callId)?.());
-/** A session's MCP server exited: its window says so and is free to use. */
-ipcMain.on("assistant:ended", (_e, session: string) => {
-  for (const a of assistantWindows.values())
-    if (a.session === session && !a.win.isDestroyed()) {
-      a.ended = true;
-      a.win.webContents.send("assistant-ended");
-      broadcastOpen();
-    }
+/**
+ * The user takes an assistant's tab over (or closes it), or its session ended: its page saves the
+ * project and goes. Returns the project, which the window's page opens as a tab of the user's.
+ */
+ipcMain.handle("assistant:hand-over", async (_e, session: string) => {
+  const a = [...assistantViews.values()].find((x) => x.session === session && !x.view.webContents.isDestroyed());
+  if (!a) return null;
+  const callId = ++releaseSeq;
+  await new Promise<void>((resolve) => {
+    releases.set(callId, resolve);
+    a.view.webContents.send("release-project", { callId });
+    setTimeout(resolve, 15_000).unref();
+  });
+  releases.delete(callId);
+  const project = a.project ? { id: a.project, name: a.name ?? a.project } : null;
+  closeView(a);
+  return project;
+});
+/** The Stop button in an assistant's tab: the window's page takes the tab over. */
+ipcMain.on("assistant:stop", (e) => {
+  const a = assistantOf(e.sender.id);
+  if (a && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("assistant-stop", a.session);
 });
 
 /** Imports an .meercad file opened from Finder into the projects folder and opens it. */
@@ -906,7 +927,6 @@ const MENU_DE: Record<string, string> = {
   "Settings…": "Einstellungen …",
   File: "Ablage",
   "New Part": "Neues Teil",
-  "New Window": "Neues Fenster",
   "Open…": "Öffnen …",
   "All Projects": "Alle Projekte",
   "Save Copy As .meercad…": "Kopie als .meercad sichern …",
@@ -979,7 +999,6 @@ function buildMenu(): void {
       label: tr("File"),
       submenu: [
         { label: tr("New Part"), accelerator: "CmdOrCtrl+N", click: send("menu", "new") },
-        { label: tr("New Window"), accelerator: "CmdOrCtrl+Shift+N", click: () => void createWindow(undefined, true) },
         { label: tr("Open…"), accelerator: "CmdOrCtrl+O", click: send("menu", "import") },
         { label: tr("All Projects"), accelerator: "CmdOrCtrl+Shift+H", click: send("menu", "home") },
         { type: "separator" },
@@ -1075,13 +1094,13 @@ else {
     serveApp();
     buildMenu();
     mainWindow = createWindow();
-    screen.on("display-metrics-changed", () => BrowserWindow.getAllWindows().forEach(applyUiScale));
+    screen.on("display-metrics-changed", () => mainWindow && !mainWindow.isDestroyed() && applyUiScale(mainWindow));
     watchProjects();
     mainWindow.webContents.once("did-finish-load", () => {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
     });
     app.on("activate", () => {
-      // Assistants' and extra windows do not count: the user gets their first window back, and with it the connection to the assistants.
+      // The user gets the window back, and with it the connection to the assistants.
       if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
     });
   });

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Lock, Pencil, Plus, Trash } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Pencil, Plus, Trash } from "lucide-react";
 import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
 import { EMPTY_SELECTION, clickSelect, keepShown, toggleAll } from "../lib/multiSelect";
 import { askConfirm, askText } from "./Ask";
@@ -9,7 +9,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import { EXAMPLES, examplePacks, type Example } from "../lib/examples";
 import { hasPack, usePremium } from "../lib/premium";
 import { importFile } from "./io";
-import { useOpenElsewhere } from "../lib/openElsewhere";
+import { AiOrb } from "./AiOrb";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
 import { exampleThumbnail, fillThumbnails } from "../lib/thumbnails";
@@ -211,7 +211,8 @@ export function Home() {
   // Selecting several parts: tap/click toggles while `selecting`; Cmd/Ctrl/Shift-click starts it.
   const [selecting, setSelecting] = useState(false);
   const [sel, setSel] = useState(EMPTY_SELECTION);
-  const openElsewhere = useOpenElsewhere();
+  // Projects an assistant works on in its tab: a click opens that tab.
+  const assistantTabs = useApp((s) => s.assistantTabs);
   const order = here.map((p) => p.id);
   const orderKey = order.join("\n");
   const stopSelecting = () => (setSelecting(false), setSel(EMPTY_SELECTION));
@@ -381,7 +382,7 @@ export function Home() {
           })}
           {here.map((p) => {
             const picked = sel.ids.includes(p.id);
-            const elsewhere = openElsewhere[p.id];
+            const held = assistantTabs.find((a) => a.project === p.id);
             return (
             <div
               className={`card ${selecting ? "selecting" : ""} ${picked ? "selected" : ""}`}
@@ -410,10 +411,10 @@ export function Home() {
               <div className="thumb">
                 {p.thumbnail ? <img src={p.thumbnail} alt="" draggable={false} /> : <Box size={32} />}
                 {selecting ? <span className="pick-mark">{picked ? <CircleCheck /> : <Circle />}</span> : null}
-                {elsewhere !== undefined ? (
-                  // Open in another window: a click brings that window to the front.
-                  <span className="open-elsewhere" title={elsewhere ? t("Open in {client}'s window", { client: elsewhere }) : t("Open in another window")}>
-                    <Lock />
+                {held ? (
+                  <span className={`ai-badge ${held.busy ? "busy" : ""}`} title={t("{client} is working on this in its tab: click to watch", { client: held.client })}>
+                    <AiOrb busy={held.busy} small />
+                    {held.busy ? t("{client} is working", { client: held.client }) : t("Open in {client}'s tab", { client: held.client })}
                   </span>
                 ) : null}
               </div>

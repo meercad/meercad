@@ -1,31 +1,35 @@
-import { assistantStopped, stopAssistant } from "../lib/mcpBridge";
+import { stopAssistant } from "../lib/mcpBridge";
 import { assistantWindow } from "../lib/persistence";
 import { t } from "../lib/i18n";
 import { useApp } from "../store";
+import { AiOrb, toolLabel } from "./AiOrb";
+import { AssistantBar } from "./AssistantTab";
 
 /**
- * While an assistant works on the model (MCP), a layer over the whole app takes clicks and touches,
- * and a bar says who is working and offers to stop it. Keys are held back in mcpBridge.
+ * While an assistant works on the model (MCP), a layer over the app takes clicks and touches. An
+ * assistant's own tab (Mac app) is locked all the time, glowing while it works, with a bar that says
+ * what it does and offers Take over; elsewhere (the web app) a bar says who is working and offers to
+ * stop it. Keys are held back in mcpBridge.
  */
 export function AiLock() {
   const lock = useApp((s) => s.aiLock);
   const tool = useApp((s) => s.aiActivity?.tool);
-  const ended = useApp((s) => s.aiSessionEnded);
-  // An assistant's own window says whose it is, also between its requests.
-  if (!lock && assistantWindow)
+  if (assistantWindow)
     return (
-      <div className="ai-window-badge" role="status">
-        {ended ? t("{client} is done here; the window is yours now", { client: assistantWindow.client }) : assistantStopped() ? t("Stopped: {client} no longer edits in this window", { client: assistantWindow.client }) : t("{client}'s window", { client: assistantWindow.client })}
-      </div>
+      <>
+        <div className={`ai-lock in-tab ${lock ? "busy" : ""}`} onContextMenu={(e) => e.preventDefault()} />
+        <AssistantBar />
+      </>
     );
   if (!lock) return null;
+  const doing = toolLabel(tool);
   return (
     <div className="ai-lock" onContextMenu={(e) => e.preventDefault()}>
       <div className="ai-lock-bar" role="status">
-        <span className="pulse" />
+        <AiOrb busy />
         <span>
-          {t("{client} is working on the model", { client: lock.client })}
-          {tool ? <span className="muted"> · {tool.replace(/_/g, " ")}</span> : null}
+          <b>{t("{client} is working on the model", { client: lock.client })}</b>
+          {doing ? <span className="muted"> · {doing}</span> : null}
         </span>
         <button className="btn primary" onClick={stopAssistant}>
           {t("Stop editing")}

@@ -1,4 +1,5 @@
 import { currentPoses, joinedParts, jointPick, partDrag, posedCables, useMotion } from "../lib/mechanism";
+import { AiOrb, toolLabel } from "./AiOrb";
 import { cable } from "@meercad/model";
 import { materialName, partLooks } from "../lib/materials";
 import { RenderBar } from "./RenderBar";
@@ -996,10 +997,10 @@ function AiActivity() {
   if (!activity && !previewing) return null;
   return (
     <div className="ai-activity">
-      <span className="pulse" />
+      <AiOrb busy={!!activity} small />
       {activity ? (
         <span>
-          <b>{activity.client}</b> · {activity.tool.replace(/_/g, " ")}
+          <b>{activity.client}</b> · {toolLabel(activity.tool)}
         </span>
       ) : null}
       {previewing ? (
