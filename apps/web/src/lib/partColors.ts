@@ -3,10 +3,11 @@ import { partMaterial } from "@meercad/model";
 import type { MeercadDocument } from "@meercad/schema";
 
 /**
- * The usual part grey (the viewport's own, a tick lighter than before) and one purple for every
- * further part, so parts tell apart without the model turning colourful.
+ * The usual part grey (the viewport's own, a tick lighter than before) and one clear, saturated
+ * purple, well apart from the selection blue, for every further part, so parts tell apart without
+ * the model turning colourful.
  */
-export const PART_PALETTE = ["#7a7f86", "#8a63d2"] as const;
+export const PART_PALETTE = ["#7a7f86", "#9b5de5"] as const;
 
 /**
  * Colour of every part ("#rrggbb" by body id): the one picked for it, else its material's own

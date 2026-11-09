@@ -235,7 +235,7 @@ export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom
  * Version of how parts are drawn (colours, light, background). Saved pictures of an older look are
  * made again, so the overview matches the editor; raise it whenever the look changes.
  */
-export const LOOK_VERSION = 4;
+export const LOOK_VERSION = 5;
 
 const C = {
   /** Parts without a colour of their own: a dark grey; a lighter one on the dark background. */
