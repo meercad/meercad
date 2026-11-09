@@ -72,11 +72,11 @@ const programKey = (m: THREE.MeshPhysicalMaterial) => `${!!m.envMap}|${m.clearco
 export function paintBackdrop(g: CanvasRenderingContext2D, width: number, height: number, dark: boolean): void {
   const grad = g.createLinearGradient(0, 0, 0, height);
   if (dark) {
-    grad.addColorStop(0, "#3b3e44");
-    grad.addColorStop(1, "#17181b");
+    grad.addColorStop(0, "#3a404b");
+    grad.addColorStop(1, "#16191e");
   } else {
-    grad.addColorStop(0, "#f6f7f8");
-    grad.addColorStop(1, "#d6d9dd");
+    grad.addColorStop(0, "#fbfcfd");
+    grad.addColorStop(1, "#d5dbe3");
   }
   g.fillStyle = grad;
   g.fillRect(0, 0, width, height);
