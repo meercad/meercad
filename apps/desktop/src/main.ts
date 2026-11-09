@@ -223,8 +223,23 @@ function checkRel(rel: string, what: string): string[] {
   if (parts.some((p) => !SEGMENT.test(p) || p.startsWith(".") || p.trim() !== p || !p)) throw new Error(`invalid ${what} "${rel}"`);
   return parts;
 }
-const projectPath = (id: string) => `${join(projectsDir(), ...checkRel(id, "project name"))}.meercad`;
-const folderPath = (folder: string) => (folder ? join(projectsDir(), ...checkRel(folder, "folder name")) : projectsDir());
+/**
+ * Test projects: what an assistant creates in the WIP build (open_example, new_project, import_file
+ * without `keep`) goes to a folder of this build's own, not the user's projects folder (shared with
+ * the user's other builds and iCloud), so test runs leave nothing in the user's list. Their ids
+ * start with TEST_FOLDER, which no user folder can (a leading "." is refused).
+ */
+const TEST_FOLDER = ".tests";
+const TEST_PROJECTS = CHANNEL === "wip";
+const testProjectsDir = () => join(app.getPath("userData"), "Test projects");
+const isTest = (rel: string) => rel === TEST_FOLDER || rel.startsWith(`${TEST_FOLDER}/`);
+/** The file system path of a project id or folder ("a/b"; "" is the top level). */
+function pathOf(rel: string, what: string): string {
+  if (isTest(rel)) return rel === TEST_FOLDER ? testProjectsDir() : join(testProjectsDir(), ...checkRel(rel.slice(TEST_FOLDER.length + 1), what));
+  return rel ? join(projectsDir(), ...checkRel(rel, what)) : projectsDir();
+}
+const projectPath = (id: string) => `${pathOf(id, "project name")}.meercad`;
+const folderPath = (folder: string) => pathOf(folder, "folder name");
 const joinId = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
 const folderOf = (id: string) => (id.includes("/") ? id.slice(0, id.lastIndexOf("/")) : "");
 const nameOf = (id: string) => id.slice(id.lastIndexOf("/") + 1);
@@ -308,8 +323,10 @@ ipcMain.handle("projects:thumbnail", async (e, p: { id: string; thumbnail: strin
   // An overview open in another window shows the new picture.
   sendToAll("projects-changed", () => undefined, e.sender.id);
 });
-ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown; folder?: string }) => {
-  const id = await uniqueId(p.name, p.folder ?? "");
+ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown; folder?: string; test?: boolean }) => {
+  // Only an assistant's request makes a test project: anything else next to one goes to the top level.
+  const folder = p.test && TEST_PROJECTS ? TEST_FOLDER : isTest(p.folder ?? "") ? "" : (p.folder ?? "");
+  const id = await uniqueId(p.name, folder);
   await mkdir(dirname(projectPath(id)), { recursive: true });
   await writeFile(projectPath(id), `${JSON.stringify(p.doc, null, 2)}\n`);
   return { id, name: nameOf(id), folder: folderOf(id), updatedAt: Date.now(), createdAt: Date.now() };
@@ -496,6 +513,16 @@ async function projectFiles(root: string, rel = ""): Promise<string[]> {
     else if (entry.name.endsWith(".meercad")) out.push(r);
   }
   return out;
+}
+/** Test projects untouched for a week go (with their pictures): a thread that ran then has ended. */
+async function dropOldTestProjects(): Promise<void> {
+  const before = Date.now() - 7 * 24 * 3600_000;
+  for (const rel of await projectFiles(testProjectsDir())) {
+    const id = `${TEST_FOLDER}/${toId(rel)}`;
+    if ((await stat(projectPath(id))).mtimeMs > before) continue;
+    await rm(thumbPath(id), { force: true });
+    await rm(projectPath(id), { force: true });
+  }
 }
 ipcMain.handle("storage:count", async () => (await projectFiles(projectsDir())).length);
 /** Switches the projects folder, optionally moving the existing projects (and their subfolders) along. */
@@ -1089,6 +1116,7 @@ else {
       }
     }
     await renameLegacyFiles(projectsDir(), thumbsDir()).catch(() => 0);
+    if (TEST_PROJECTS) void dropOldTestProjects().catch(() => undefined);
     if (app.isPackaged && CHANNEL === "prod" && !MAS) void fixClaudeConfig(mcpEntry()).catch(() => undefined);
     await findICloud();
     serveApp();

@@ -13,7 +13,7 @@ import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type M
 import { robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
-import { assistantWindow, desktop } from "./persistence";
+import { asTestProjects, assistantWindow, desktop, isTestProject } from "./persistence";
 import { apply, currentDoc, flushSave, getViewport, goHome, handOverAssistantTab, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, releaseProject, scheduleRebuild, setAssistantTabs, showAssistantTab, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
@@ -157,6 +157,17 @@ function connect(): void {
 
 /** An error's message, without what Electron adds to errors from another window. */
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err)).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+
+/**
+ * A request that may create a project: without `keep`, the WIP build keeps it in its test folder
+ * (see asTestProjects), and the answer says so.
+ */
+async function created(p: Record<string, unknown>, fn: () => Promise<unknown>): Promise<unknown> {
+  const r = await asTestProjects(p["keep"] !== true, fn);
+  const id = useApp.getState().project?.id;
+  if (!id || !isTestProject(id) || !r || typeof r !== "object") return r;
+  return { ...r, note: "This is a test project: it is saved in the WIP build's own test folder, not in the user's projects, and goes after a week. Call again with keep: true (or move_project) to put a project into the user's projects." };
+}
 
 /** Requests that open a project for the session: where they open decides where the session works. */
 const OPENS = new Set(["open_project", "new_project", "open_example"]);
@@ -498,8 +509,10 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       await openProject(String(p["id"]));
       return summary(await rebuildNow());
     case "new_project":
-      await newProject(emptyDocument(), typeof p["name"] === "string" && p["name"] ? p["name"] : "Untitled part");
-      return { project: useApp.getState().project };
+      return created(p, async () => {
+        await newProject(emptyDocument(), typeof p["name"] === "string" && p["name"] ? p["name"] : "Untitled part");
+        return { project: useApp.getState().project };
+      });
     case "render_view": {
       needProject();
       await rebuildNow();
@@ -683,7 +696,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       return tools.gearJoints();
     case "import_file":
-      return tools.importBytes(String(p["name"]), String(p["base64"]));
+      return created(p, () => tools.importBytes(String(p["name"]), String(p["base64"])));
     case "read_file":
       if (!desktop?.readLocalFile) throw new Error("this meerCAD app cannot read files for the assistant (update it)");
       return { base64: await desktop.readLocalFile(String(p["path"])) };
@@ -707,7 +720,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "list_examples":
       return tools.examples();
     case "open_example":
-      return tools.openExample(typeof p["id"] === "number" ? p["id"] : String(p["id"]));
+      return created(p, () => tools.openExample(typeof p["id"] === "number" ? p["id"] : String(p["id"])));
     case "terrain_height":
       needProject();
       return tools.terrainHeights((p["points"] as [number, number][] | undefined) ?? []);
