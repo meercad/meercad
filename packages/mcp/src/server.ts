@@ -216,6 +216,14 @@ server.registerTool(
   guard(async ({ id }) => text(await call("open_project", { id }))),
 );
 server.registerTool(
+  "close_project",
+  {
+    title: "Close project",
+    description: "Hands this session's project back to the user: it is saved, your meerCAD tab closes and the project opens unlocked in a tab of theirs. Call it when you are done with a project or wait for the user (a tab with no requests for 10 minutes goes back to them on its own). open_project to work on it again later.",
+  },
+  guard(async () => text(await call("close_project"))),
+);
+server.registerTool(
   "new_project",
   { title: "New project", description: "Creates and opens an empty project for this session (in a tab of your own, see open_project).", inputSchema: { name: z.string().optional(), keep: z.boolean().optional().describe("WIP test build only: true saves the new project in the user's projects; without it, it goes to the build's own test folder (never in the user's list) so test runs leave nothing behind") } },
   guard(async ({ name, keep }) => text(await call("new_project", { name, keep }))),

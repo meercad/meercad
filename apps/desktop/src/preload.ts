@@ -40,14 +40,14 @@ const api = {
   /** Assistant sessions' own tabs (MCP): the window's page passes their requests on to them. */
   assistant: {
     open: (p: { session: string; client: string }): Promise<number> => ipcRenderer.invoke("assistant:open", p),
-    windowOf: (session: string): Promise<number | "closed" | null> => ipcRenderer.invoke("assistant:window", session),
+    windowOf: (session: string): Promise<number | "closed" | "released" | "idle" | null> => ipcRenderer.invoke("assistant:window", session),
     call: (window: number, req: unknown): Promise<unknown> => ipcRenderer.invoke("assistant:call", { window, req }),
     /** The assistants' tabs (also sent as "assistant-tabs" whenever they change). */
     tabs: (): Promise<AssistantTabInfo[]> => ipcRenderer.invoke("assistant:tabs"),
     /** Opens an assistant's tab in the room `rect` leaves (CSS pixels), or none. */
     show: (p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null) => ipcRenderer.send("assistant:show", p),
     /** Takes an assistant's tab over: it saves and closes; returns its project for a tab of the user's. */
-    handOver: (session: string): Promise<{ id: string; name: string } | null> => ipcRenderer.invoke("assistant:hand-over", session),
+    handOver: (session: string, why?: "closed" | "released" | "idle"): Promise<{ id: string; name: string } | null> => ipcRenderer.invoke("assistant:hand-over", session, why),
     // In an assistant's tab:
     ready: () => ipcRenderer.send("assistant:ready"),
     project: (p: { id: string; name: string } | null) => ipcRenderer.send("assistant:project", p),
@@ -91,7 +91,7 @@ const api = {
   writeLocalFile: (p: { path: string; base64: string }) => ipcRenderer.invoke("files:write-local", p),
   /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
   shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
-  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "release-project" | "assistant-tabs" | "assistant-stop" | "mcp-status" | "mcp-set-enabled", fn: (arg: any) => void) => {
+  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "release-project" | "assistant-tabs" | "assistant-stop" | "assistant-idle" | "mcp-status" | "mcp-set-enabled", fn: (arg: any) => void) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

@@ -73,6 +73,22 @@ describe("MCP bridge hub", () => {
     expect(app.seen.find((s) => s.session === "B")?.params).toEqual({ full: true });
   });
 
+  it("sends a peer's close_project with its own session, so the app frees that session's tab only", async () => {
+    const port = nextPort++;
+    const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
+    stops.push(a.stop);
+    await until(() => a.role === "hub");
+    const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
+    stops.push(b.stop);
+    await until(() => b.role === "peer");
+    const app = fakeApp(port);
+    stops.push(app.close);
+    await until(async () => (await b.status()).connected);
+
+    expect(await b.call("close_project")).toEqual({ method: "close_project", session: "B" });
+    expect(app.seen.filter((s) => s.method === "close_project").map((s) => s.session)).toEqual(["B"]);
+  });
+
   it("tells the app when a peer's session ends", async () => {
     const port = nextPort++;
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });

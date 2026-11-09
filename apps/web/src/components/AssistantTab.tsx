@@ -7,6 +7,7 @@
  */
 import { House } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { ASSISTANT_IDLE_MS } from "@meercad/mcp";
 import { stopAssistant } from "../lib/mcpBridge";
 import { assistantWindow, desktop } from "../lib/persistence";
 import { t } from "../lib/i18n";
@@ -76,7 +77,7 @@ export function AssistantBar() {
               {doing}
             </span>
           ) : (
-            <span>{busy ? t("Working…") : t("Waiting for the next step · locked for you while {client} has it", { client })}</span>
+            <span>{busy ? t("Working…") : t("Waiting for the next step · yours again after {min} minutes without one", { min: ASSISTANT_IDLE_MS / 60_000 })}</span>
           )}
           {project ? <span className="muted"> · {project.name}</span> : null}
         </small>

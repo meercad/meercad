@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { DEFAULT_PORT, type BridgeEvent, type BridgeRequest } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, DEFAULT_PORT, type BridgeEvent, type BridgeRequest } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -204,7 +204,14 @@ async function route(req: BridgeRequest): Promise<unknown> {
     return a.call(tab, req);
   }
   const tab = await a.windowOf(session);
+  if (req.method === "close_project") {
+    if (typeof tab !== "number") return { closed: false, note: "This session has no project open: nothing to close." };
+    const held = useApp.getState().assistantTabs.find((x) => x.session === session);
+    await handOverAssistantTab(session, true, "released");
+    return { closed: true, project: held?.project ? { id: held.project, name: held.name } : null, note: "Saved and handed back to the user: it is open, unlocked, in a tab of theirs. open_project to work on it again." };
+  }
   if (typeof tab === "number") return a.call(tab, req);
+  if (tab === "idle") throw new Error(`Your meerCAD tab went back to the user after ${Math.round(LOCK_RELEASE_MIN)} minutes without a request, so they can work on the project. Open it again (open_project) to go on; the user may have changed it meanwhile.`);
   if (tab === "closed") throw new Error("The user took the project over or closed your meerCAD tab. Open the project again (open_project) to go on, or ask the user first.");
   if (READS.has(req.method)) return serve(req);
   const front = useApp.getState().screen === "editor" ? useApp.getState().project : null;
@@ -219,6 +226,8 @@ function initUserWindow(): void {
   void a.tabs().then(setAssistantTabs);
   // The Take over button in an assistant's tab.
   desktop.on("assistant-stop", (session: string) => void handOverAssistantTab(session));
+  // A tab whose session has made no request for a while (main process, see ASSISTANT_IDLE_MS).
+  desktop.on("assistant-idle", (session: string) => void handOverAssistantTab(session, true, "idle"));
 }
 
 /** In this page: shows who is working, and locks the app while the request changes things. */
@@ -271,6 +280,9 @@ function initAssistantWindow(): void {
   report();
   a.ready();
 }
+
+/** Minutes after which an idle assistant's tab goes back to the user (in its answer). */
+const LOCK_RELEASE_MIN = ASSISTANT_IDLE_MS / 60_000;
 
 /** Requests that only look things up: they do not lock the app. */
 const READS = new Set(["status", "get_status", "get_version", "list_projects", "list_folders", "list_examples", "list_materials", "read_file", "write_file"]);
@@ -504,6 +516,10 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "list_projects":
       await refreshProjects();
       return useApp.getState().projects.map(({ id, name, updatedAt }) => ({ id, name, updated: new Date(updatedAt).toISOString() }));
+    case "close_project":
+      // The web app (no tabs of the assistants'): the app is the user's again right away.
+      unlock();
+      return { closed: true, note: "The app is free for the user again." };
     case "open_project":
       // Who else has it open was checked when the request was routed.
       await openProject(String(p["id"]));

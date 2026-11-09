@@ -1,10 +1,10 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Lock, Pencil, Plus, Trash } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Lock, LockOpen, Pencil, Plus, Trash } from "lucide-react";
 import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
 import { EMPTY_SELECTION, clickSelect, keepShown, toggleAll } from "../lib/multiSelect";
 import { askConfirm, askText } from "./Ask";
 import { showMenu, type MenuEntry } from "./Menu";
 import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
-import { newProject, openProject, refreshProjects, startTask, toast, useApp } from "../store";
+import { handOverAssistantTab, newProject, openProject, refreshProjects, startTask, toast, useApp } from "../store";
 import type { MeercadDocument } from "@meercad/schema";
 import { EXAMPLES, examplePacks, type Example } from "../lib/examples";
 import { hasPack, usePremium } from "../lib/premium";
@@ -424,6 +424,19 @@ export function Home() {
                     {held.busy ? <AiOrb busy small /> : <Lock />}
                     {held.busy ? t("Being worked on") : t("Locked")}
                   </span>
+                ) : null}
+                {held && !selecting ? (
+                  <button
+                    className="btn sm ai-release"
+                    title={t("{client} stops working on it; the project opens in a tab of yours", { client: held.client })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handOverAssistantTab(held.session).then(() => openProject(p.id));
+                    }}
+                  >
+                    <LockOpen />
+                    {t("Take over")}
+                  </button>
                 ) : null}
               </div>
               <div className="meta">
