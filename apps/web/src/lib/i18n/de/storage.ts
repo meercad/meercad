@@ -24,6 +24,8 @@ export default {
   "Pick an example…": "Beispiel wählen …",
   "{n} cells ({x} × {y}) on {w} × {d}": "{n} Felder ({x} × {y}) auf {w} × {d}",
   "border {bx} and {by}": "Rand {bx} und {by}",
+  "left empty {bx} and {by}": "frei gelassen {bx} und {by}",
+  "Fill the rest with a solid border": "Rest mit massivem Rand füllen",
   "{n} pieces, the largest {w} × {d}": "{n} Teile, das größte {w} × {d}",
   "Cells": "Felder",
   "Floor area": "Fläche",
@@ -69,7 +71,7 @@ export default {
   "Cell (row)": "Feld (Reihe)",
   "Tap a plane or flat face where it stands": "Tippe auf eine Ebene oder ebene Fläche, auf der sie steht",
   "Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.": "Boxen messen 42 mm pro Feld und 7 mm pro Höheneinheit, mit 0.25 mm Spiel rundum in der Grundplatte. Das Ergebnis ist ein normales Teil: du kannst Kanten abrunden oder hineinschneiden.",
-  "Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and a solid border round them.": "Grundplatten halten Boxen in 42-mm-Feldern. Ohne Boden drucken sie am schnellsten; Magnete und Schrauben brauchen einen. Eine Fläche oder gezeichnete Kontur bekommt so viele ganze Felder, wie hineinpassen, und ringsum einen massiven Rand als Füllstück.",
+  "Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and, if you like, a solid border round them.": "Grundplatten halten Boxen in 42-mm-Feldern. Ohne Boden drucken sie am schnellsten; Magnete und Schrauben brauchen einen. Eine Fläche oder gezeichnete Kontur bekommt so viele ganze Felder, wie hineinpassen, und auf Wunsch ringsum einen massiven Rand als Füllstück.",
   "Tab of a 1-cell bin": "Leiste einer 1er-Box",
   "Wide tab": "Breite Leiste",
   "Drawer front": "Schubladenfront",
@@ -82,7 +84,7 @@ export default {
   // components/Help.tsx
   "Storage bins and labels": "Sortierboxen und Etiketten",
   "**Create → Storage bin** makes bins and baseplates for the open Gridfinity grid (42 mm cells, 7 mm height units). Start from a preset, then change cells, height, dividers, scoop, label tab, stacking lip and magnet or screw holes; − and + step the counts.": "**Erstellen → Sortierbox** macht Boxen und Grundplatten für das offene Gridfinity-Raster (42-mm-Felder, 7-mm-Höheneinheiten). Fang mit einer Vorlage an und ändere dann Felder, Höhe, Trennwände, Griffmulde, Beschriftungsleiste, Stapelrand und Magnet- oder Schraubenlöcher; − und + zählen hoch und runter.",
-  "A baseplate fills a drawer or any area when you give its size, or a shape you drew in a sketch; the rest becomes a solid border. **Cut into pieces for the print bed** splits it between cells into parts that fit your print bed (256 × 256 mm unless you change it, less what of the bed you cannot use). Bins pick a baseplate and a cell to stand in, and **Check fit** confirms that nothing overlaps.": "Eine Grundplatte füllt eine Schublade oder jede Fläche, wenn du ihre Maße angibst, oder eine Form, die du in einer Skizze gezeichnet hast; der Rest wird ein massiver Rand. **In Teile fürs Druckbett zerlegen** teilt sie zwischen den Feldern in Teile, die auf dein Druckbett passen (256 × 256 mm, solange du nichts änderst, abzüglich des Bereichs, den du nicht nutzen kannst). Boxen wählen eine Grundplatte und ein Feld, in dem sie stehen, und **Passung prüfen** bestätigt, dass sich nichts überschneidet.",
+  "A baseplate fills a drawer or any area when you give its size, or a shape you drew in a sketch; the rest becomes a solid border or stays empty. **Cut into pieces for the print bed** splits it between cells into parts that fit your print bed (256 × 256 mm unless you change it, less what of the bed you cannot use). Bins pick a baseplate and a cell to stand in, and **Check fit** confirms that nothing overlaps.": "Eine Grundplatte füllt eine Schublade oder jede Fläche, wenn du ihre Maße angibst, oder eine Form, die du in einer Skizze gezeichnet hast; der Rest wird ein massiver Rand oder bleibt frei. **In Teile fürs Druckbett zerlegen** teilt sie zwischen den Feldern in Teile, die auf dein Druckbett passen (256 × 256 mm, solange du nichts änderst, abzüglich des Bereichs, den du nicht nutzen kannst). Boxen wählen eine Grundplatte und ein Feld, in dem sie stehen, und **Passung prüfen** bestätigt, dass sich nichts überschneidet.",
   "**Create → Label** makes a printable label with a screw, nut, washer or insert symbol and text like `M3×10`. Tap a bin's label tab to put it there; **Two colours** makes the marking its own part for a second colour.": "**Erstellen → Etikett** macht ein druckbares Etikett mit Schrauben-, Mutter-, Scheiben- oder Einsatz-Symbol und Text wie `M3×10`. Tippe auf die Beschriftungsleiste einer Box, um es dorthin zu setzen; **Zweifarbig** macht die Beschriftung zu einem eigenen Teil für eine zweite Farbe.",
   "Both are ordinary parts: round their edges, cut into them or write on them.": "Beides sind normale Teile: du kannst Kanten abrunden, hineinschneiden oder darauf schreiben.",
   // lib/examples.ts

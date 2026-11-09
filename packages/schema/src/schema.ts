@@ -283,6 +283,7 @@ export const definitions: Record<string, Json> = {
         drawer: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
         outline: obj({ sketch: id, regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })) }, ["sketch"]),
         gap: ref("expr"),
+        fill: bool,
         bed: obj({ size: arr(ref("expr"), { minItems: 2, maxItems: 2 }), margin: arr(ref("expr"), { minItems: 2, maxItems: 2 }) }, ["size"]),
         plane: ref("planeSpec"),
         position: arr(ref("expr"), { minItems: 2, maxItems: 2 }),

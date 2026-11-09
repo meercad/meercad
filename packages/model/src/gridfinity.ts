@@ -207,10 +207,11 @@ export function splitLine(a: number, b: number, origin: number, L: number): numb
 
 /**
  * How a baseplate fills an area: whole cells (centred in a rectangle; in an outline placed so the
- * most fit, centred among equals), the rest of the area as a solid border (the fillers), and with a
- * `bed` (usable width and depth) the cuts that part it into pieces that each fit on it.
+ * most fit, centred among equals), the rest of the area as a solid border (the fillers; without
+ * `fill` the plate ends at its cells), and with a `bed` (usable width and depth) the cuts that part
+ * it into pieces that each fit on it.
  */
-export function areaPlan(area: GridArea, bed?: readonly [number, number]): AreaPlan {
+export function areaPlan(area: GridArea, bed?: readonly [number, number], fill = true): AreaPlan {
   const P = GRIDFINITY.pitch;
   let min: [number, number], max: [number, number], origin: [number, number], units: [number, number], cells: [number, number][];
   if ("rect" in area) {
@@ -253,6 +254,11 @@ export function areaPlan(area: GridArea, bed?: readonly [number, number]): AreaP
     origin = [best.ox + i0 * P, best.oy + j0 * P];
     units = [i1 - i0 + 1, j1 - j0 + 1];
     cells = best.cells.map(([i, j]) => [i - i0, j - j0]);
+  }
+  // Without the border the plate is just its cells: pieces are measured from the grid's edge.
+  if (!fill) {
+    min = [origin[0], origin[1]];
+    max = [origin[0] + units[0] * P, origin[1] + units[1] * P];
   }
   let cuts: [number[], number[]] = [[min[0], max[0]], [min[1], max[1]]];
   let turned = false;

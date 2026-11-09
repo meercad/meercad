@@ -287,7 +287,8 @@ export function areaPlateBodies(
     : f.drawer
       ? { rect: [f.drawer[0] - 2 * gap, f.drawer[1] - 2 * gap] }
       : { rect: [f.units[0] * G.pitch, f.units[1] * G.pitch] };
-  const plan = checked(() => areaPlan(area, f.bed?.usable));
+  const fill = f.fill !== false;
+  const plan = checked(() => areaPlan(area, f.bed?.usable, fill));
   const holes = !!(f.magnets || f.screws);
   const floor = f.floor ?? (holes ? G.plateFloorWithHoles : 0);
   const magnetD = f.magnetDiameter ?? G.magnetDiameter, magnetDepth = f.magnetDepth ?? G.magnetDepth;
@@ -296,8 +297,11 @@ export function areaPlateBodies(
   if (f.screws && floor < G.plateScrewHead / 2 - G.plateScrewDiameter / 2 + 0.5) throw new FeatureError("countersunk screws need a floor of at least 2.3 mm");
   const top = floor + G.pocketHeight;
 
-  // The whole plate's outline as one solid, cut into tiles below.
-  const whole = outline
+  // The whole plate's outline as one solid, cut into tiles below (without the border: none for an
+  // outline, where the plate is just its cells, and the grid's rounded rectangle for a rectangle).
+  const whole = outline && !fill
+    ? null
+    : outline
     ? (() => {
         const parts = outline.map((r) => b.regionSolid(r.outer, r.holes, gap, 0, top)).filter((x) => b.volume(x) > 1e-6);
         if (!parts.length) throw new FeatureError("the outline is too small for the gap");
@@ -379,8 +383,8 @@ export function areaPlateBodies(
         continue;
       }
       const single = xs.length === 2 && ys.length === 2;
-      const region = single ? whole : b.common(whole, b.block((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, 0, -1, top + 1));
-      if (b.volume(region) < 1e-3) continue;
+      const region = !whole ? null : single ? whole : b.common(whole, b.block((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, 0, -1, top + 1));
+      if (region && b.volume(region) < 1e-3) continue;
       const inTile = plan.cells.filter(([i, j]) => {
         const [cx, cy] = centre(i, j);
         return cx > x0 && cx < x1 && cy > y0 && cy < y1;
@@ -388,7 +392,7 @@ export function areaPlateBodies(
       const cells = inTile.map(([i, j]) => {
         const [cx, cy] = centre(i, j);
         const copy = b.moved(cell, cx, cy, 0, false);
-        return clipped(cx - G.pitch / 2, cy - G.pitch / 2) ? b.common(copy, region) : copy;
+        return region && clipped(cx - G.pitch / 2, cy - G.pitch / 2) ? b.common(copy, region) : copy;
       });
       // The border: the tile less its cells' squares (row by row, runs of neighbouring cells as one box).
       const boxes: TopoDS_Shape[] = [];
@@ -404,10 +408,13 @@ export function areaPlateBodies(
           k = e + 1;
         }
       }
-      const border = boxes.length ? b.bool("cut", region, boxes) : region;
-      const borderParts = b.solids(border).filter((x) => b.volume(x) > 1e-3);
+      const border = !fill || !region ? null : boxes.length ? b.bool("cut", region, boxes) : region;
+      const borderParts = border ? b.solids(border).filter((x) => b.volume(x) > 1e-3) : [];
       let shape: TopoDS_Shape;
-      if (!cells.length) shape = border;
+      if (!cells.length) {
+        if (!border || !borderParts.length) continue;
+        shape = border;
+      }
       else {
         let grid = cells.length > 1 ? b.glue(cells[0]!, cells.slice(1), "BOPAlgo_GlueFull") : cells[0]!;
         if (borderParts.length) grid = b.glue(grid, borderParts, "BOPAlgo_GlueShift");
@@ -460,9 +467,10 @@ export function areaPlateBodies(
     largestX: round3(Math.max(...xs.slice(1).map((x, i) => x - xs[i]!))),
     largestY: round3(Math.max(...ys.slice(1).map((y, i) => y - ys[i]!))),
   };
-  if (!outline) {
-    info["borderX"] = round3(gx0 - plan.min[0]);
-    info["borderY"] = round3(gy0 - plan.min[1]);
+  // The rest beside the cells, filled or left empty.
+  if ("rect" in area) {
+    info["borderX"] = round3((area.rect[0] - plan.units[0] * G.pitch) / 2);
+    info["borderY"] = round3((area.rect[1] - plan.units[1] * G.pitch) / 2);
   }
   return { bodies, record: { frame, position: grid, units: plan.units, floor }, info };
 }

@@ -79,7 +79,7 @@ interface Preset {
   patch: Partial<Of<"gridfinity">>;
 }
 
-const CLEAR: Partial<Of<"gridfinity">> = { units: [1, 1], height: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, magnets: undefined, screws: undefined, drawer: undefined, outline: undefined, gap: undefined, bed: undefined, floor: undefined, wall: undefined };
+const CLEAR: Partial<Of<"gridfinity">> = { units: [1, 1], height: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, magnets: undefined, screws: undefined, drawer: undefined, outline: undefined, gap: undefined, fill: undefined, bed: undefined, floor: undefined, wall: undefined };
 
 /** Ready-made starting points: a click sets every value; each stays editable. */
 const PRESETS: Preset[] = [
@@ -136,7 +136,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
   const mode: "cells" | "area" | "outline" = f.outline ? "outline" : f.drawer ? "area" : wantOutline ? "outline" : "cells";
   const pickMode = (m: typeof mode) => {
     setWantOutline(m === "outline");
-    if (m === "cells") set({ drawer: undefined, outline: undefined, gap: undefined });
+    if (m === "cells") set({ drawer: undefined, outline: undefined, gap: undefined, fill: undefined });
     else if (m === "area") set({ drawer: f.drawer ?? [400, 300], outline: undefined });
     else set({ drawer: undefined, outline: sketches.length ? { sketch: (sketches.find((x) => x.id === f.outline?.sketch) ?? sketches[sketches.length - 1]!).id } : undefined, plane: undefined, position: undefined });
   };
@@ -153,7 +153,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
     } else if ((f.outline || f.bed) && kernelInfo?.["cells"] !== undefined) {
       const k = kernelInfo;
       info = t("{n} cells ({x} × {y}) on {w} × {d}", { n: k["cells"]!, x: k["cellsX"]!, y: k["cellsY"]!, w: mm(k["width"]!), d: mm(k["depth"]!) });
-      if (k["borderX"] !== undefined) info += ` · ${t("border {bx} and {by}", { bx: mm(k["borderX"]), by: mm(k["borderY"]!) })}`;
+      if (k["borderX"] !== undefined) info += ` · ${t(f.fill === false ? "left empty {bx} and {by}" : "border {bx} and {by}", { bx: mm(k["borderX"]), by: mm(k["borderY"]!) })}`;
       if (f.bed) info += ` · ${t("{n} pieces, the largest {w} × {d}", { n: k["pieces"]!, w: mm(k["largestX"]!), d: mm(k["largestY"]!) })}`;
     } else if (f.drawer) {
       const fit = drawerFit([num(f.drawer[0], 400), num(f.drawer[1], 300)], num(f.gap, 0.5));
@@ -169,7 +169,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
       <Seg
         value={f.kind}
         options={[["bin", t("Bin")], ["baseplate", t("Baseplate")]]}
-        onChange={(kind) => set(kind === "bin" ? { kind, drawer: undefined, outline: undefined, gap: undefined, bed: undefined } : { kind, baseplate: undefined, cell: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, height: undefined })}
+        onChange={(kind) => set(kind === "bin" ? { kind, drawer: undefined, outline: undefined, gap: undefined, fill: undefined, bed: undefined } : { kind, baseplate: undefined, cell: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, height: undefined })}
       />
       {!bin ? <Seg value={mode} options={[["cells", t("Cells")], ["area", t("Floor area")], ["outline", t("Drawn outline")]]} onChange={pickMode} /> : null}
       {!bin && mode === "area" ? (
@@ -199,9 +199,14 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
         )
       ) : null}
       {!bin && mode !== "cells" ? (
-        <Field label={t("Gap to the edge")}>
-          <ExprInput value={f.gap} placeholder="0.5" onCommit={(gap) => set({ gap })} />
-        </Field>
+        <>
+          <Field label={t("Gap to the edge")}>
+            <ExprInput value={f.gap} placeholder="0.5" onCommit={(gap) => set({ gap })} />
+          </Field>
+          <label className="checkbox">
+            <input type="checkbox" checked={f.fill !== false} onChange={(e) => set({ fill: e.target.checked ? undefined : false })} /> {t("Fill the rest with a solid border")}
+          </label>
+        </>
       ) : null}
       {bin || mode === "cells" ? (
         <div className="row">
@@ -351,7 +356,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
           </div>
         </>
       )}
-      <p className="muted small">{bin ? t("Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.") : t("Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and a solid border round them.")}</p>
+      <p className="muted small">{bin ? t("Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.") : t("Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and, if you like, a solid border round them.")}</p>
     </>
   );
 }

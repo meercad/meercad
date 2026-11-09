@@ -527,7 +527,8 @@ export interface TextFeature extends FeatureBase {
  * a `scoop` (finger slide, radius) at the front of each compartment and a label `tab` at its back.
  * `baseplate` puts the bin into an earlier baseplate at `cell` (its lower-left cell, from 0).
  * Baseplate: `units` cells, or as many as fit a `drawer` (width, depth) or a closed sketch `outline`
- * (any shape, on the sketch's plane), the rest of the area filled with a solid border. With `bed` the
+ * (any shape, on the sketch's plane), the rest of the area filled with a solid border (`fill: false`
+ * leaves it empty). With `bed` the
  * baseplate comes apart along the lines between cells into pieces that each fit the print bed
  * (parts `gf1_A1`, `gf1_A2`, … rows A, B, … from the front, columns from the left), borders included.
  * `magnets` / `screws` add the holes of the standard in the bin's feet or the baseplate's cells.
@@ -571,6 +572,8 @@ export interface GridfinityFeature extends FeatureBase {
   outline?: { sketch: string; regions?: "all" | string[] };
   /** Baseplate in a drawer or outline: gap to its edge all round, default 0.5 mm. */
   gap?: Expr;
+  /** Baseplate in a drawer or outline: fill the rest round the cells with a solid border (default true); false leaves it empty. */
+  fill?: boolean;
   /** Baseplate: cut it into pieces for this print bed (see GridfinityBed). */
   bed?: GridfinityBed;
   /** Default origin.XY. With `baseplate`, the baseplate's plane. */
