@@ -1,8 +1,8 @@
 /**
- * Moving project files and folders to the Trash. The system call (shell.trashItem) sometimes refuses
- * an item in iCloud Drive with "you don't have the required permission" while the file is fine, for
- * example while iCloud is still busy with it during a delete of many parts. The same item can be
- * trashed a moment later, or moved into the Trash folder directly.
+ * Moving project files and folders to the Trash. The system call (shell.trashItem) refuses files in
+ * iCloud Drive that another app wrote (they carry its com.apple.provenance, e.g. parts synced from the
+ * iPhone/iPad or written by another meerCAD build) with "you don't have the required permission";
+ * moving them into iCloud Drive's Trash folder ourselves works.
  */
 import { existsSync } from "node:fs";
 import { mkdir, rename } from "node:fs/promises";
@@ -26,32 +26,21 @@ export function freeName(dir: string, name: string): string {
 }
 
 /**
- * Moves `path` to the Trash with `trashItem`; when that fails, tries again after a short wait and
- * then moves the item into the Trash folder itself. Throws the system's error when all of that fails
- * (the App Store build cannot reach the Trash folder), so the caller still reports it.
+ * Moves `path` to the Trash with `trashItem`; when the system refuses, moves the item into the Trash
+ * folder itself. Throws the system's error when that fails too (the App Store build cannot reach the
+ * Trash folder), so the caller still reports it.
  */
-export async function moveToTrash(
-  path: string,
-  trashItem: (path: string) => Promise<void>,
-  opts: { retries?: number; waitMs?: number; home?: string } = {},
-): Promise<void> {
-  const { retries = 2, waitMs = 400, home } = opts;
-  let first: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      await trashItem(path);
-      return;
-    } catch (e) {
-      first ??= e;
-      if (!existsSync(path)) return; // gone after all
-      if (attempt < retries) await new Promise((r) => setTimeout(r, waitMs * (attempt + 1)));
-    }
-  }
+export async function moveToTrash(path: string, trashItem: (path: string) => Promise<void>, home?: string): Promise<void> {
   try {
-    const dir = trashDirFor(path, home);
-    await mkdir(dir, { recursive: true });
-    await rename(path, freeName(dir, basename(path)));
-  } catch {
-    throw first;
+    await trashItem(path);
+  } catch (e) {
+    if (!existsSync(path)) return; // gone after all
+    try {
+      const dir = trashDirFor(path, home);
+      await mkdir(dir, { recursive: true });
+      await rename(path, freeName(dir, basename(path)));
+    } catch {
+      throw e;
+    }
   }
 }
