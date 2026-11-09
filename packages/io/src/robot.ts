@@ -77,7 +77,15 @@ export interface RobotOptions {
   floating?: boolean;
   /** Actuators by joint id. */
   actuators?: Readonly<Record<string, RobotActuator>>;
+  /**
+   * What links collide with: "shapes" (default) one box, cylinder or sphere per part, which Isaac
+   * Sim, PhysX and MuJoCo simulate fast and stably; "mesh" the part's triangles (the simulator
+   * takes their convex hull).
+   */
+  collision?: RobotCollision;
 }
+
+export type RobotCollision = "shapes" | "mesh";
 
 export interface RobotLink {
   name: string;
@@ -156,6 +164,9 @@ function inFrame(mesh: TriangleMesh, frame: V3): TriangleMesh {
   return { positions: p, indices: mesh.indices };
 }
 
+/** A shape this many times the part's volume fits it badly (an L-bracket in its box is about 3–4). */
+const LOOSE_FIT = 3;
+
 /** mm two boxes must overlap by before their links stop colliding with each other. */
 const OVERLAP = 0.5;
 
@@ -171,6 +182,198 @@ function boxOf(parts: readonly RobotPart[]): { min: V3; max: V3 } | null {
         if (v > max[d]!) max[d] = v;
       }
   return min[0] <= max[0] ? { min, max } : null;
+}
+
+// ---------- simple collision shapes ----------
+
+/**
+ * A primitive standing in for a part in collision: Isaac Sim, PhysX and MuJoCo collide boxes,
+ * cylinders and spheres fast and stably, where a mesh becomes a convex hull or a slow decomposition.
+ */
+export interface CollisionShape {
+  type: "box" | "cylinder" | "sphere";
+  /** Centre, model coordinates, mm. */
+  center: V3;
+  /** Rotation, row-major, columns = the shape's own X, Y, Z in model coordinates (a cylinder runs along its Z). */
+  rotation: number[];
+  /** Half sizes (box), [radius, half length] (cylinder), [radius] (sphere), mm. */
+  size: number[];
+  /** The shape's volume over the part's (1 = a perfect fit). */
+  fill: number;
+}
+
+/** Eigenvectors of a symmetric 3×3 matrix (row-major) by Jacobi rotations, as columns of a row-major matrix. */
+function eigenvectors(a: number[]): number[] {
+  const m = [...a];
+  const v = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  for (let sweep = 0; sweep < 50; sweep++) {
+    const off = m[1]! ** 2 + m[2]! ** 2 + m[5]! ** 2;
+    if (off < 1e-30 * (m[0]! ** 2 + m[4]! ** 2 + m[8]! ** 2 + 1e-300)) break;
+    for (const [p, q] of [[0, 1], [0, 2], [1, 2]] as const) {
+      const apq = m[p * 3 + q]!;
+      if (Math.abs(apq) < 1e-300) continue;
+      const theta = (m[q * 3 + q]! - m[p * 3 + p]!) / (2 * apq);
+      const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      const c = 1 / Math.sqrt(t * t + 1);
+      const s = t * c;
+      for (let k = 0; k < 3; k++) {
+        const [mkp, mkq] = [m[k * 3 + p]!, m[k * 3 + q]!];
+        m[k * 3 + p] = c * mkp - s * mkq;
+        m[k * 3 + q] = s * mkp + c * mkq;
+      }
+      for (let k = 0; k < 3; k++) {
+        const [mpk, mqk] = [m[p * 3 + k]!, m[q * 3 + k]!];
+        m[p * 3 + k] = c * mpk - s * mqk;
+        m[q * 3 + k] = s * mpk + c * mqk;
+      }
+      for (let k = 0; k < 3; k++) {
+        const [vkp, vkq] = [v[k * 3 + p]!, v[k * 3 + q]!];
+        v[k * 3 + p] = c * vkp - s * vkq;
+        v[k * 3 + q] = s * vkp + c * vkq;
+      }
+    }
+  }
+  return v;
+}
+
+const det3 = (r: number[]) => r[0]! * (r[4]! * r[8]! - r[5]! * r[7]!) - r[1]! * (r[3]! * r[8]! - r[5]! * r[6]!) + r[2]! * (r[3]! * r[7]! - r[4]! * r[6]!);
+
+/** Volume enclosed by a closed mesh, mm³ (absolute; 0 for an open or empty one). */
+function meshVolume(mesh: TriangleMesh): number {
+  const p = mesh.positions;
+  let v = 0;
+  for (let i = 0; i + 2 < mesh.indices.length; i += 3) {
+    const [a, b, c] = [mesh.indices[i]! * 3, mesh.indices[i + 1]! * 3, mesh.indices[i + 2]! * 3];
+    v += p[a]! * (p[b + 1]! * p[c + 2]! - p[b + 2]! * p[c + 1]!) - p[a + 1]! * (p[b]! * p[c + 2]! - p[b + 2]! * p[c]!) + p[a + 2]! * (p[b]! * p[c + 1]! - p[b + 1]! * p[c]!);
+  }
+  return Math.abs(v / 6);
+}
+
+/** Thinnest half size a shape gets, mm (a flat sketch face still collides). */
+const MIN_HALF = 0.01;
+
+/**
+ * The box, cylinder or sphere of least volume around the part's triangles, tried along the model
+ * axes and along the part's own main axes (a part turned at an angle gets a turned box). Null
+ * without triangles.
+ */
+export function fitCollisionShape(mesh: TriangleMesh): CollisionShape | null {
+  const p = mesh.positions;
+  const n = p.length / 3;
+  if (n < 1) return null;
+  // Main axes: the covariance of the surface, each triangle weighted by its area.
+  const mean: V3 = [0, 0, 0];
+  let area = 0;
+  const tris: { a: number; c: V3; v: V3[] }[] = [];
+  for (let i = 0; i + 2 < mesh.indices.length; i += 3) {
+    const v = [0, 1, 2].map((k) => {
+      const o = mesh.indices[i + k]! * 3;
+      return [p[o]!, p[o + 1]!, p[o + 2]!] as V3;
+    });
+    const [e1, e2] = [[0, 1, 2].map((d) => v[1]![d]! - v[0]![d]!), [0, 1, 2].map((d) => v[2]![d]! - v[0]![d]!)];
+    const a = Math.hypot(e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!, e1[0]! * e2[1]! - e1[1]! * e2[0]!) / 2;
+    if (!(a > 0)) continue;
+    const c: V3 = [0, 1, 2].map((d) => (v[0]![d]! + v[1]![d]! + v[2]![d]!) / 3) as V3;
+    tris.push({ a, c, v });
+    area += a;
+    for (let d = 0; d < 3; d++) mean[d]! += a * c[d]!;
+  }
+  const frames: number[][] = [[1, 0, 0, 0, 1, 0, 0, 0, 1]];
+  if (area > 0) {
+    for (let d = 0; d < 3; d++) mean[d]! /= area;
+    const cov = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (const t of tris)
+      for (let r = 0; r < 3; r++)
+        for (let s = 0; s < 3; s++) {
+          // ∫ over the triangle of (x−m)(x−m)ᵀ: (9 c cᵀ + Σ vᵢvᵢᵀ) · A/12, about the mean.
+          let sum = 9 * (t.c[r]! - mean[r]!) * (t.c[s]! - mean[s]!);
+          for (const v of t.v) sum += (v[r]! - mean[r]!) * (v[s]! - mean[s]!);
+          cov[r * 3 + s]! += (t.a / 12) * sum;
+        }
+    const e = eigenvectors(cov);
+    if (det3(e) < 0) for (const k of [2, 5, 8]) e[k] = -e[k]!;
+    frames.push(e);
+  }
+
+  const solid = meshVolume(mesh);
+  let best: Omit<CollisionShape, "fill"> & { volume: number } = { type: "box", center: [0, 0, 0], rotation: frames[0]!, size: [0, 0, 0], volume: Infinity };
+  for (const r of frames) {
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    const local = new Float64Array(p.length);
+    for (let i = 0; i < p.length; i += 3)
+      for (let k = 0; k < 3; k++) {
+        const u = p[i]! * r[k]! + p[i + 1]! * r[3 + k]! + p[i + 2]! * r[6 + k]!;
+        local[i + k] = u;
+        if (u < lo[k]!) lo[k] = u;
+        if (u > hi[k]!) hi[k] = u;
+      }
+    const mid = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2);
+    const half = [0, 1, 2].map((k) => Math.max((hi[k]! - lo[k]!) / 2, MIN_HALF));
+    const toModel = (c: number[]): V3 => [0, 1, 2].map((d) => r[d * 3]! * c[0]! + r[d * 3 + 1]! * c[1]! + r[d * 3 + 2]! * c[2]!) as V3;
+    const boxVolume = 8 * half[0]! * half[1]! * half[2]!;
+    if (boxVolume < best.volume * (1 - 1e-6)) best = { type: "box", center: toModel(mid), rotation: r, size: half, volume: boxVolume };
+    for (let k = 0; k < 3; k++) {
+      const [u, w] = [(k + 1) % 3, (k + 2) % 3];
+      let r2 = 0;
+      for (let i = 0; i < p.length; i += 3) r2 = Math.max(r2, (local[i + u]! - mid[u]!) ** 2 + (local[i + w]! - mid[w]!) ** 2);
+      const radius = Math.max(Math.sqrt(r2), MIN_HALF);
+      const volume = Math.PI * radius * radius * 2 * half[k]!;
+      // Columns u, w, k: the cylinder runs along its own Z, still a right-handed frame.
+      const rot = [0, 1, 2].flatMap((d) => [r[d * 3 + u]!, r[d * 3 + w]!, r[d * 3 + k]!]);
+      if (volume < best.volume * (1 - 1e-6)) best = { type: "cylinder", center: toModel(mid), rotation: rot, size: [radius, half[k]!], volume };
+    }
+    if (r === frames[0]) {
+      let r2 = 0;
+      for (let i = 0; i < p.length; i += 3) r2 = Math.max(r2, (local[i]! - mid[0]!) ** 2 + (local[i + 1]! - mid[1]!) ** 2 + (local[i + 2]! - mid[2]!) ** 2);
+      const radius = Math.max(Math.sqrt(r2), MIN_HALF);
+      const volume = (4 / 3) * Math.PI * radius ** 3;
+      if (volume < best.volume * (1 - 1e-6)) best = { type: "sphere", center: toModel(mid), rotation: frames[0]!, size: [radius], volume };
+    }
+  }
+  const { volume, ...shape } = best;
+  return { ...shape, fill: solid > 0 ? volume / solid : Infinity };
+}
+
+/** The box around a shape, model mm. */
+function shapeBox(s: CollisionShape): { min: V3; max: V3 } {
+  const r = s.rotation;
+  const ext = [0, 1, 2].map((d) => {
+    const row = [r[d * 3]!, r[d * 3 + 1]!, r[d * 3 + 2]!];
+    if (s.type === "sphere") return s.size[0]!;
+    if (s.type === "box") return Math.abs(row[0]!) * s.size[0]! + Math.abs(row[1]!) * s.size[1]! + Math.abs(row[2]!) * s.size[2]!;
+    return Math.abs(row[2]!) * s.size[1]! + Math.sqrt(Math.max(0, 1 - row[2]! ** 2)) * s.size[0]!;
+  });
+  return { min: [0, 1, 2].map((d) => s.center[d]! - ext[d]!) as V3, max: [0, 1, 2].map((d) => s.center[d]! + ext[d]!) as V3 };
+}
+
+/** MJCF quaternion "w x y z" of a rotation matrix. */
+function quat(r: number[]): number[] {
+  const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = r as [number, number, number, number, number, number, number, number, number];
+  const tr = m00 + m11 + m22;
+  let q: number[];
+  if (tr > 0) {
+    const s = Math.sqrt(tr + 1) * 2;
+    q = [s / 4, (m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s];
+  } else if (m00 > m11 && m00 > m22) {
+    const s = Math.sqrt(1 + m00 - m11 - m22) * 2;
+    q = [(m21 - m12) / s, s / 4, (m01 + m10) / s, (m02 + m20) / s];
+  } else if (m11 > m22) {
+    const s = Math.sqrt(1 + m11 - m00 - m22) * 2;
+    q = [(m02 - m20) / s, (m01 + m10) / s, s / 4, (m12 + m21) / s];
+  } else {
+    const s = Math.sqrt(1 + m22 - m00 - m11) * 2;
+    q = [(m10 - m01) / s, (m02 + m20) / s, (m12 + m21) / s, s / 4];
+  }
+  const len = Math.hypot(...q);
+  return q.map((x) => x / len);
+}
+
+/** URDF roll, pitch, yaw (R = Rz(yaw)·Ry(pitch)·Rx(roll)) of a rotation matrix. */
+function rpy(r: number[]): V3 {
+  const pitch = Math.asin(Math.max(-1, Math.min(1, -r[6]!)));
+  if (Math.abs(Math.cos(pitch)) > 1e-9) return [Math.atan2(r[7]!, r[8]!), pitch, Math.atan2(r[3]!, r[0]!)];
+  return [0, pitch, Math.atan2(-r[1]!, r[4]!)];
 }
 
 interface Link {
@@ -291,6 +494,22 @@ export function writeRobot(parts: readonly RobotPart[], joints: readonly RobotJo
       files[`meshes/${n}.stl`] = writeStl([inFrame(p.mesh, l.frame)], `meerCAD ${n} (metres)`);
     }
 
+  // One simple shape per part to collide with; parts a box fits badly (an L-bracket, a frame) say so.
+  const shapes = options.collision === "mesh" ? null : new Map<string, CollisionShape>();
+  if (shapes) {
+    const loose: string[] = [];
+    for (const l of links)
+      for (const p of l.parts) {
+        const s = fitCollisionShape(p.mesh);
+        if (!s) continue;
+        shapes.set(p.id, s);
+        if (s.fill > LOOSE_FIT) loose.push(`${p.name ?? p.id} (${s.type}, ${Number.isFinite(s.fill) ? `${s.fill.toFixed(1)}×` : "open mesh"})`);
+      }
+    if (loose.length) warnings.push(`${loose.length} parts fill their collision shape poorly: ${loose.slice(0, 6).join(", ")}${loose.length > 6 ? ", …" : ""}; they collide where they are hollow or open. collision: "mesh" uses the triangles instead`);
+  }
+  /** A shape's centre in a link frame, metres. */
+  const shapePos = (s: CollisionShape, l: Link): V3 => [0, 1, 2].map((d) => (s.center[d]! - l.frame[d]!) / 1000) as V3;
+
   const rad = (j: RobotJoint, v: number) => (j.type === "revolute" ? (v * Math.PI) / 180 : v / 1000);
   const rel = (l: Link): V3 => {
     const pf = l.parent && l.parent !== WORLD ? l.parent.frame : ([0, 0, 0] as V3);
@@ -321,16 +540,28 @@ export function writeRobot(parts: readonly RobotPart[], joints: readonly RobotJo
     }
     const m = inertial(l);
     mj.push(`${indent(depth + 1)}<inertial pos="${vec(m.pos)}" mass="${num(m.mass)}" fullinertia="${vec(m.full)}"/>`);
-    for (const p of l.parts) mj.push(`${indent(depth + 1)}<geom name="${meshName.get(p.id)}" type="mesh" mesh="${meshName.get(p.id)}" rgba="${rgba(p.color)}"/>`);
+    for (const p of l.parts) mj.push(`${indent(depth + 1)}<geom name="${meshName.get(p.id)}"${shapes ? ` class="visual"` : ""} type="mesh" mesh="${meshName.get(p.id)}" rgba="${rgba(p.color)}"/>`);
+    for (const p of l.parts) {
+      const s = shapes?.get(p.id);
+      if (!s) continue;
+      const size = s.type === "sphere" ? [s.size[0]!] : s.type === "cylinder" ? [s.size[0]!, s.size[1]!] : s.size;
+      const q = s.type === "sphere" ? "" : ` quat="${vec(quat(s.rotation))}"`;
+      mj.push(`${indent(depth + 1)}<geom name="${meshName.get(p.id)}_collision" class="collision" type="${s.type}" size="${vec(size.map((v) => v / 1000))}" pos="${vec(shapePos(s, l))}"${q}/>`);
+    }
     for (const c of l.children) writeBody(c, depth + 1, false);
     mj.push(`${indent(depth)}</body>`);
   };
   mj.push(`<mujoco model="${esc(options.name)}">`);
-  mj.push(`  ${comment("Written by meerCAD. Units: metres, kilograms, radians. Meshes in meshes/, one per part.")}`);
+  mj.push(`  ${comment(`Written by meerCAD. Units: metres, kilograms, radians. Meshes in meshes/, one per part. Collision: ${shapes ? "one box, cylinder or sphere per part" : "the meshes"}.`)}`);
   mj.push(`  <compiler angle="radian" meshdir="meshes" autolimits="true"/>`);
   mj.push(`  <option timestep="0.002" integrator="implicitfast"/>`);
   mj.push(`  <default>`);
   mj.push(`    <geom contype="1" conaffinity="1" condim="3" friction="0.8 0.02 0.01"/>`);
+  if (shapes) {
+    // The meshes are seen, the simple shapes collide (shown in group 3).
+    mj.push(`    <default class="visual"><geom contype="0" conaffinity="0" group="2"/></default>`);
+    mj.push(`    <default class="collision"><geom group="3" rgba="0.55 0.6 0.7 0.35"/></default>`);
+  }
   mj.push(`  </default>`);
   mj.push(`  <asset>`);
   for (const [, n] of meshName) mj.push(`    <mesh name="${n}" file="${n}.stl"/>`);
@@ -344,7 +575,21 @@ export function writeRobot(parts: readonly RobotPart[], joints: readonly RobotJo
   // Simulators collide meshes by their convex hulls: a foot's hull swallows the ankle above it. Links
   // whose boxes already overlap at rest would push each other apart at the first step, so they do not
   // collide with each other (parent and child never do in MuJoCo).
-  const boxes = new Map(links.map((l) => [l, boxOf(l.parts)]));
+  const boxes = new Map(
+    links.map((l) => {
+      const b = boxOf(l.parts);
+      for (const p of l.parts) {
+        const s = shapes?.get(p.id);
+        if (!s || !b) continue;
+        const sb = shapeBox(s);
+        for (let d = 0; d < 3; d++) {
+          b.min[d] = Math.min(b.min[d]!, sb.min[d]!);
+          b.max[d] = Math.max(b.max[d]!, sb.max[d]!);
+        }
+      }
+      return [l, b];
+    }),
+  );
   const excluded: [Link, Link][] = [];
   for (let i = 0; i < links.length; i++)
     for (let k = i + 1; k < links.length; k++) {
@@ -389,7 +634,7 @@ export function writeRobot(parts: readonly RobotPart[], joints: readonly RobotJo
   const ur: string[] = [];
   ur.push(`<?xml version="1.0"?>`);
   ur.push(`<robot name="${esc(options.name)}">`);
-  ur.push(`  ${comment("Written by meerCAD. Units: metres, kilograms, radians. Meshes in meshes/, one per part.")}`);
+  ur.push(`  ${comment(`Written by meerCAD. Units: metres, kilograms, radians. Meshes in meshes/, one per part. Collision: ${shapes ? "one box, cylinder or sphere per part" : "the meshes"}.`)}`);
   const urdfRoots = roots.filter((r) => !r.grounded);
   const needsWorld = onGround.length > 0 || roots.some((r) => r.grounded);
   if (needsWorld) ur.push(`  <link name="${WORLD}"/>`);
@@ -411,9 +656,18 @@ export function writeRobot(parts: readonly RobotPart[], joints: readonly RobotJo
       ur.push(`      <geometry><mesh filename="${file}"/></geometry>`);
       ur.push(`      <material name="${meshName.get(p.id)}"><color rgba="${rgba(p.color)}"/></material>`);
       ur.push(`    </visual>`);
-      ur.push(`    <collision>`);
-      ur.push(`      <origin xyz="0 0 0" rpy="0 0 0"/>`);
-      ur.push(`      <geometry><mesh filename="${file}"/></geometry>`);
+      const s = shapes?.get(p.id);
+      if (shapes && !s) continue;
+      ur.push(`    <collision name="${meshName.get(p.id)}_collision">`);
+      if (s) {
+        const mm = (v: number) => num(v / 1000);
+        ur.push(`      <origin xyz="${vec(shapePos(s, l))}" rpy="${vec(s.type === "sphere" ? [0, 0, 0] : rpy(s.rotation))}"/>`);
+        const g = s.type === "box" ? `<box size="${vec(s.size.map((v) => (2 * v) / 1000))}"/>` : s.type === "cylinder" ? `<cylinder radius="${mm(s.size[0]!)}" length="${mm(2 * s.size[1]!)}"/>` : `<sphere radius="${mm(s.size[0]!)}"/>`;
+        ur.push(`      <geometry>${g}</geometry>`);
+      } else {
+        ur.push(`      <origin xyz="0 0 0" rpy="0 0 0"/>`);
+        ur.push(`      <geometry><mesh filename="${file}"/></geometry>`);
+      }
       ur.push(`    </collision>`);
     }
     ur.push(`  </link>`);
