@@ -1198,14 +1198,9 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .ai-lock-bar b { font-weight: 650; }
 
 /* An assistant's tab in the tab strip: warm tint, its name, a lock. */
-.tab.ai-tab { background: color-mix(in srgb, #d97757 9%, transparent); color: var(--text); }
-.tab.ai-tab:hover { background: color-mix(in srgb, #d97757 15%, transparent); }
-.tab.ai-tab.active { background: color-mix(in srgb, #d97757 13%, var(--panel)); box-shadow: 0 1px 3px rgb(20 20 50 / 0.12), inset 0 0 0 1px color-mix(in srgb, #d97757 50%, var(--glass-border)); }
 .tab.ai-tab.busy::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 3px; height: 2px; border-radius: 1px; background: linear-gradient(90deg, transparent, #d97757, #7c78ff, transparent) no-repeat; background-size: 45% 100%; animation: ai-sweep 1.5s ease-in-out infinite; }
 .tab.ai-tab { flex: 0 0 auto; max-width: 300px; overflow: hidden; }
 .tab.ai-tab .tab-name { flex: 1 1 auto; min-width: 0; }
-.tab-who { flex: 0 2 auto; min-width: 0; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; color: #c0603f; }
-html[data-theme="dark"] .tab-who { color: #f0a483; }
 .tab-lock { flex: none; width: 12px; height: 12px; color: var(--muted); }
 @keyframes ai-sweep { from { background-position: -60% 0; } to { background-position: 160% 0; } }
 
