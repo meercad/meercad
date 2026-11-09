@@ -235,12 +235,12 @@ export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom
  * Version of how parts are drawn (colours, light, background). Saved pictures of an older look are
  * made again, so the overview matches the editor; raise it whenever the look changes.
  */
-export const LOOK_VERSION = 3;
+export const LOOK_VERSION = 4;
 
 const C = {
   /** Parts without a colour of their own: a dark grey; a lighter one on the dark background. */
-  face: new THREE.Color(0x6c7178),
-  faceDark: new THREE.Color(0x8e939a),
+  face: new THREE.Color(0x7a7f86),
+  faceDark: new THREE.Color(0x989da4),
   faceHover: new THREE.Color(0x8fb8ff),
   faceSel: new THREE.Color(0x5b9bff),
   edge: new THREE.Color(0x1b1d21),
