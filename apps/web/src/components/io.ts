@@ -1,5 +1,5 @@
 /** File import/export and share links. */
-import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotLink, type RobotPart, type TexturedMesh } from "@meercad/io";
+import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotCollision, type RobotLink, type RobotPart, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
@@ -154,12 +154,15 @@ export interface RobotExportOptions {
   masses?: Readonly<Record<string, number>>;
   /** Drive data by joint id (effort, velocity, kp, kv, armature, damping, friction). */
   actuators?: Readonly<Record<string, RobotActuator>>;
+  /** "shapes" (default): one box, cylinder or sphere per part to collide with; "mesh": the triangles. */
+  collision?: RobotCollision;
 }
 
 /**
  * The design as a robot for simulation and robot learning: MJCF (MuJoCo, mjlab) and URDF with one
  * STL per part (see writeRobot). Parts held by fixed joints become one link, turning and sliding
- * joints become the robot's joints, each link gets its mass, centre of gravity and inertia. Parts
+ * joints become the robot's joints, each link gets its mass, centre of gravity and inertia, each
+ * part a simple collision shape (box, cylinder or sphere) unless the meshes are asked for. Parts
  * without a material count as PLA. The parts at rest, the screen's tessellation (light meshes).
  */
 export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files: Record<string, Uint8Array>; links: RobotLink[]; warnings: string[] }> {
@@ -201,7 +204,7 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
     parts,
     mech.joints.map((j) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: j.origin, axis: j.axis, ...(j.limits ? { limits: j.limits } : {}) })),
     mech.couplings.map((c) => ({ driver: c.driver, driven: c.driven, ratio: c.ratio })),
-    { name, ...(opts.floating !== undefined ? { floating: opts.floating } : {}), ...(opts.actuators ? { actuators: opts.actuators } : {}) },
+    { name, ...(opts.floating !== undefined ? { floating: opts.floating } : {}), ...(opts.actuators ? { actuators: opts.actuators } : {}), ...(opts.collision ? { collision: opts.collision } : {}) },
   );
   return { files: r.files, links: r.links, warnings: [...warnings, ...r.warnings] };
 }
@@ -216,7 +219,7 @@ export async function exportRobot(): Promise<void> {
     const joints = links.filter((l) => l.joint).length;
     void showNotice({
       title: t("Robot exported: {links} links, {joints} joints", { links: links.length, joints }),
-      message: `${t("The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; joints without drive data are passive.")}${warnings.length ? `\n\n${warnings.join("\n")}` : ""}`,
+      message: `${t("The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; each part collides as a box, cylinder or sphere; joints without drive data are passive.")}${warnings.length ? `\n\n${warnings.join("\n")}` : ""}`,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

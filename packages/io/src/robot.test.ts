@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { writeRobot, type RobotJoint, type RobotPart } from "./index.js";
+import { fitCollisionShape, writeRobot, type RobotJoint, type RobotPart } from "./index.js";
+import type { TriangleMesh } from "./stl.js";
 
 /** An axis-aligned box part from `min` to `max` (mm), 1 g/cm³: mass, centre and inertia as meerCAD reports them. */
 function box(id: string, min: [number, number, number], max: [number, number, number], color?: string): RobotPart {
@@ -22,6 +23,29 @@ function box(id: string, min: [number, number, number], max: [number, number, nu
     centroid: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2],
     inertia: [(mass * (b * b + c * c)) / 12, (mass * (a * a + c * c)) / 12, (mass * (a * a + b * b)) / 12, 0, 0, 0],
   };
+}
+
+/** A closed cylinder of radius r from z0 to z1 about the Z axis through (cx, cy), `n` sides. */
+function cylinderMesh(r: number, z0: number, z1: number, n = 48, cx = 0, cy = 0): TriangleMesh {
+  const pos: number[] = [cx, cy, z0, cx, cy, z1];
+  const idx: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n;
+    pos.push(cx + r * Math.cos(a), cy + r * Math.sin(a), z0, cx + r * Math.cos(a), cy + r * Math.sin(a), z1);
+  }
+  for (let i = 0; i < n; i++) {
+    const [b0, t0, b1, t1] = [2 + 2 * i, 3 + 2 * i, 2 + 2 * ((i + 1) % n), 3 + 2 * ((i + 1) % n)];
+    idx.push(0, b1, b0, 1, t0, t1, b0, b1, t1, b0, t1, t0);
+  }
+  return { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
+}
+
+/** Points of a mesh turned by `deg` about Z. */
+function turnedZ(m: TriangleMesh, deg: number): TriangleMesh {
+  const [c, s] = [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)];
+  const p = new Float32Array(m.positions);
+  for (let i = 0; i < p.length; i += 3) [p[i], p[i + 1]] = [c * m.positions[i]! - s * m.positions[i + 1]!, s * m.positions[i]! + c * m.positions[i + 1]!];
+  return { positions: p, indices: m.indices };
 }
 
 const text = (files: Record<string, Uint8Array>, name: string) => new TextDecoder().decode(files[name]!);
@@ -159,6 +183,85 @@ describe("writeRobot", () => {
     const { parts, joints } = pendulum();
     const r = writeRobot(parts, joints.map((j) => (j.id === "hinge" ? { ...j, id: "hinge.turn" } : j)), [], { name: "n" });
     expect(r.links.find((l) => l.parts.includes("arm"))!.joint).toBe("hinge_turn");
+  });
+
+  it("fits a box to a box, along the model axes", () => {
+    const s = fitCollisionShape(box("b", [0, 0, 0], [40, 20, 10]).mesh)!;
+    expect(s.type).toBe("box");
+    expect(s.center).toEqual([20, 10, 5]);
+    expect(s.size).toEqual([20, 10, 5]);
+    expect(s.rotation).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+    expect(s.fill).toBeCloseTo(1, 6);
+  });
+
+  it("fits a turned box with a turned box", () => {
+    const s = fitCollisionShape(turnedZ(box("b", [-40, -10, 0], [40, 10, 10]).mesh, 30))!;
+    expect(s.type).toBe("box");
+    expect([...s.size].sort((a, b) => a - b).map((v) => +v.toFixed(3))).toEqual([5, 10, 40]);
+    // The long side runs at 30° in the XY plane.
+    const cols = [0, 1, 2].map((k) => [s.rotation[k]!, s.rotation[3 + k]!, s.rotation[6 + k]!]);
+    const long = cols[s.size.indexOf(Math.max(...s.size))]!;
+    expect(Math.abs(long[0]! * Math.cos(Math.PI / 6) + long[1]! * Math.sin(Math.PI / 6))).toBeCloseTo(1, 4);
+  });
+
+  it("fits a cylinder to a round part, along its axis", () => {
+    const s = fitCollisionShape(cylinderMesh(15, 0, 60, 48, 5, -5))!;
+    expect(s.type).toBe("cylinder");
+    expect(s.size[0]).toBeCloseTo(15, 3);
+    expect(s.size[1]).toBeCloseTo(30, 3);
+    expect(s.center.map((v) => +v.toFixed(3))).toEqual([5, -5, 30]);
+    expect(Math.abs(s.rotation[8]!)).toBeCloseTo(1, 6); // its Z is the model's Z
+    expect(s.fill).toBeLessThan(1.01);
+    // A flat disc too (a wheel): the axis is the short side.
+    const wheel = fitCollisionShape(turnedZ(cylinderMesh(40, -4, 4), 0))!;
+    expect(wheel.type).toBe("cylinder");
+    expect(wheel.size[1]).toBeCloseTo(4, 3);
+  });
+
+  it("collides links with simple shapes in MJCF and URDF, meshes stay the visuals", () => {
+    const parts = [box("base", [-50, -50, 0], [50, 50, 20]), { ...box("wheel", [0, 0, 0], [1, 1, 1]), mesh: cylinderMesh(30, 20, 30) }];
+    const joints: RobotJoint[] = [{ id: "spin", type: "revolute", a: "wheel", b: "base", origin: [0, 0, 20], axis: [0, 0, 1] }];
+    const r = writeRobot(parts, joints, [], { name: "w" });
+    const mj = text(r.files, "w.xml");
+    expect(mj).toContain(`<geom name="base" class="visual" type="mesh"`);
+    expect(mj).toContain(`<geom name="base_collision" class="collision" type="box" size="0.05 0.05 0.01" pos="0 0 0.01" quat="1 0 0 0"/>`);
+    // The wheel's frame is its joint at z 20 mm: its cylinder stands 5 mm above it.
+    expect(attr(mj, "geom", "wheel_collision", "type")).toBe("cylinder");
+    expect(attr(mj, "geom", "wheel_collision", "pos")).toBe("0 0 0.005");
+    const [radius, half] = attr(mj, "geom", "wheel_collision", "size")!.split(" ").map(Number);
+    expect(radius).toBeCloseTo(0.03, 5);
+    expect(half).toBeCloseTo(0.005, 5);
+    const ur = text(r.files, "w.urdf");
+    expect(ur).toMatch(/<collision name="base_collision">\s*<origin xyz="0 0 0.01" rpy="0 0 0"\/>\s*<geometry><box size="0.1 0.1 0.02"\/><\/geometry>/);
+    expect(ur).toMatch(/<collision name="wheel_collision">\s*<origin xyz="0 0 0.005" rpy="[^"]*"\/>\s*<geometry><cylinder radius="0.03" length="0.01"\/><\/geometry>/);
+    expect(ur).toContain(`<mesh filename="meshes/wheel.stl"/>`); // the visual
+    expect(ur.match(/<collision /g)!.length).toBe(2);
+  });
+
+  it("says which parts their shape fits badly, and collides with meshes on request", () => {
+    // An L: two bars, its box three times its volume and more.
+    const a = box("a", [0, 0, 0], [100, 10, 10]);
+    const b = box("b", [0, 10, 0], [10, 100, 10]);
+    const l: RobotPart = { ...a, id: "L", name: "Bracket", mesh: { positions: new Float32Array([...a.mesh.positions, ...b.mesh.positions]), indices: new Uint32Array([...a.mesh.indices, ...[...b.mesh.indices].map((i) => i + 8)]) } };
+    expect(writeRobot([l], [], [], { name: "l" }).warnings.join(" ")).toMatch(/Bracket \(box, [\d.]+×\)/);
+    const mesh = writeRobot([l], [], [], { name: "l", collision: "mesh" });
+    expect(text(mesh.files, "l.urdf")).toMatch(/<collision name="L_collision">\s*<origin xyz="0 0 0" rpy="0 0 0"\/>\s*<geometry><mesh filename="meshes\/L.stl"\/>/);
+    expect(text(mesh.files, "l.xml")).not.toContain("_collision");
+    expect(mesh.warnings.join(" ")).not.toContain("poorly");
+  });
+
+  it("writes a turned shape's rotation the same way in MJCF and URDF", () => {
+    const p = { ...box("bar", [0, 0, 0], [1, 1, 1]), mesh: turnedZ(box("x", [-40, -5, -5], [40, 5, 5]).mesh, 30) };
+    const r = writeRobot([p], [], [], { name: "t" });
+    const [w, , , z] = attr(text(r.files, "t.xml"), "geom", "bar_collision", "quat")!.split(" ").map(Number);
+    const rpy = /<collision name="bar_collision">\s*<origin xyz="[^"]*" rpy="([^"]*)"/.exec(text(r.files, "t.urdf"))![1]!.split(" ").map(Number);
+    // Both describe a turn about Z (by 30°, or 30° plus a half turn that maps the box onto itself).
+    const turnMj = (2 * Math.atan2(z!, w!) * 180) / Math.PI;
+    expect(Math.abs(rpy[0]!) % Math.PI).toBeCloseTo(0, 4);
+    expect(Math.abs(rpy[1]!) % Math.PI).toBeCloseTo(0, 4);
+    const mod = (v: number) => ((v % 180) + 180) % 180;
+    expect(mod(turnMj)).toBeCloseTo(30, 2);
+    expect(mod((rpy[2]! * 180) / Math.PI + (Math.abs(rpy[0]!) > 1 ? 180 : 0))).toBeCloseTo(30, 2);
   });
 
   it("loads in MuJoCo when it is installed", () => {

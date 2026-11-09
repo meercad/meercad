@@ -140,7 +140,7 @@ export default {
   "Export robot (MJCF/URDF for simulation)": "Roboter exportieren (MJCF/URDF für Simulation)",
   "Preparing the robot for simulation": "Roboter für die Simulation wird vorbereitet",
   "Robot exported: {links} links, {joints} joints": "Roboter exportiert: {links} Glieder, {joints} Gelenke",
-  "The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; joints without drive data are passive.": "Das Zip enthält eine MJCF-Datei für MuJoCo und mjlab, eine URDF für ROS und Isaac Sim und je Teil ein Netz. Die Massen kommen aus den Materialien der Teile; Gelenke ohne Antriebsdaten sind passiv.",
+  "The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; each part collides as a box, cylinder or sphere; joints without drive data are passive.": "Das Zip enthält eine MJCF-Datei für MuJoCo und mjlab, eine URDF für ROS und Isaac Sim und je Teil ein Netz. Die Massen kommen aus den Materialien der Teile; jedes Teil kollidiert als Quader, Zylinder oder Kugel; Gelenke ohne Antriebsdaten sind passiv.",
   "Technical drawing (PDF, DXF)…": "Technische Zeichnung (PDF, DXF) …",
   "Millimetres (this design)": "Millimeter (dieses Modell)",
   "Inches (this design)": "Zoll (dieses Modell)",
