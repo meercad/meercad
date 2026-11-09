@@ -20,12 +20,15 @@ import { InlineInput } from "../components/InlineValues";
 import { actionFor, SKETCH_ACTIONS, usePrefs } from "../lib/keymap";
 import { activeSketch, applyConstraint, CONSTRAINT_TOOLS, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
 import { GLYPH } from "./icons";
-import { Press } from "../lib/gestures";
+import { Press, sureTap } from "../lib/gestures";
 import { ValueInput } from "../components/ValueInput";
 import { getSolver } from "./solver";
 import { chainAt, meshSections, traceSections } from "./section";
 import { usePack } from "../lib/premium";
 import { sameSel, setSketchSelection, setTool, useSketchUi, type SketchSel, type SketchTool } from "./state";
+
+/** "Done" in the phone header: answers the first tap, also while the sketch is still rebuilding. */
+const doneTap = sureTap(closeSketch);
 
 type Draft = Pick<SketchFeature, "entities" | "constraints">;
 type NewEntity = SketchEntity extends infer E ? (E extends unknown ? Omit<E, "id"> : never) : never;
@@ -1446,7 +1449,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
               {!diag ? t("Solving…") : !diag.ok ? t("Over-constrained") : diag.dof === 0 ? t("Fully defined") : tn(diag.dof, "one::{n} DOF left", "{n} DOF left")}
             </span>
             {/* Phone: finishing sits up here, where iOS puts "Done", not at the end of the scrolling bar. */}
-            <button className="btn primary phone-only sketch-done" onClick={closeSketch}>
+            <button className="btn primary phone-only sketch-done" {...doneTap}>
               {t("Done")}
             </button>
           </div>
