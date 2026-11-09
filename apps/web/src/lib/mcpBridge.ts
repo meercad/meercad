@@ -28,9 +28,12 @@ let wanted = false;
 let replaced: number[] = [];
 const listeners = new Set<(s: Status) => void>();
 let status: Status = "off";
+/** The user's first window holds the connection; the others show its state and ask it to switch. */
+const hostWindow = !assistantWindow && !extraWindow;
 const setStatus = (s: Status) => {
   status = s;
   for (const fn of listeners) fn(s);
+  if (hostWindow) desktop?.mcp?.status(s);
 };
 export const bridgeStatus = () => status;
 export const onBridgeStatus = (fn: (s: Status) => void) => {
@@ -40,7 +43,8 @@ export const onBridgeStatus = (fn: (s: Status) => void) => {
 
 export function setBridgeEnabled(on: boolean, remember = true): void {
   // An assistant's window gets its requests from the user's first window, never over its own connection; so does a second window of the user's.
-  if (assistantWindow || extraWindow) return;
+  // They switch the first window's connection (the main process opens a new first window if it was closed).
+  if (!hostWindow) return void desktop?.mcp?.setEnabled(on);
   wanted = on;
   if (remember)
     try {
@@ -64,11 +68,17 @@ let bridgeStarted = false;
 export function initBridge(): void {
   if (bridgeStarted) return;
   bridgeStarted = true;
+  if (!hostWindow && desktop?.mcp) {
+    desktop.on("mcp-status", setStatus);
+    void desktop.mcp.hostStatus().then(setStatus);
+  }
   if (assistantWindow) return initAssistantWindow();
   // A test run's window (MEERCAD_MCP_BRIDGE=off) never talks to assistants.
   if (new URLSearchParams(location.search).get("bridge") === "off") return;
   initUserWindow();
   if (extraWindow) return;
+  // Another window switched assistants on or off.
+  desktop?.on("mcp-set-enabled", (on) => setBridgeEnabled(on));
   let pref: string | null = null;
   try {
     pref = localStorage.getItem("meercad.mcp");
@@ -77,6 +87,8 @@ export function initBridge(): void {
   }
   // The Mac app is ready for assistants out of the box (the iPad app has no assistants).
   if (pref !== "0" && (window as { meercadDesktop?: unknown }).meercadDesktop) setBridgeEnabled(true);
+  // Tells the main process (and with it the other windows) the state, and that this window can take requests to switch.
+  else desktop?.mcp?.status(status);
 }
 
 /**

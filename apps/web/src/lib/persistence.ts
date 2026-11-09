@@ -85,6 +85,12 @@ interface DesktopApi {
   writeLocalFile?(p: { path: string; base64: string }): Promise<void>;
   /** Missing in desktop apps from before sharing. */
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
+  /** The MCP bridge, held by the user's first window (see lib/mcpBridge); missing in older desktop apps. */
+  mcp?: {
+    status(s: "off" | "connecting" | "connected"): void;
+    hostStatus(): Promise<"off" | "connecting" | "connected">;
+    setEnabled(on: boolean): Promise<void>;
+  };
   /** Assistant sessions' own windows (MCP), see lib/mcpBridge. */
   assistant?: {
     open(p: { session: string; client: string; project?: string }): Promise<number>;
@@ -106,6 +112,8 @@ interface DesktopApi {
   };
   on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "project-free" | "error", fn: (arg: string) => void): () => void;
   on(channel: "assistant-stop", fn: () => void): () => void;
+  on(channel: "mcp-status", fn: (arg: "off" | "connecting" | "connected") => void): () => void;
+  on(channel: "mcp-set-enabled", fn: (arg: boolean) => void): () => void;
   on(channel: "bridge-request", fn: (arg: { callId: number; req: unknown }) => void): () => void;
   on(channel: "assistant-ended", fn: () => void): () => void;
   on(channel: "assistant-adopted", fn: (arg: { session: string; client: string }) => void): () => void;

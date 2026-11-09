@@ -13,7 +13,9 @@ import { FEATURE_NAMES, GUIDE_TEXT, MCP_NOTES, OP_NAMES, schemaFor } from "@meer
 import { read3mf, readObj, writeStl } from "@meercad/io";
 import { gearCalc } from "./gearCalc.js";
 import { insertSizes } from "./insertSizes.js";
-import { createBridge } from "./hub.js";
+import { spawn } from "node:child_process";
+import { createBridge, NOT_CONNECTED } from "./hub.js";
+import { appTarget, createLauncher } from "./launchApp.js";
 import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
 import { meercadDocument } from "./meercadFile.js";
 import { DEFAULT_PORT, type BridgeMethod } from "./protocol.js";
@@ -39,9 +41,32 @@ const log = (...a: unknown[]) => console.error("[meercad-mcp]", ...a);
 const session = randomUUID();
 const bridge = createBridge({ port, session, originAllowed, log });
 
-function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
+/** Opens the app this server belongs to when an assistant needs it (see launchApp). */
+const launcher = createLauncher({
+  target: appTarget({ serverPath: fileURLToPath(import.meta.url), env: process.env, port, platform: process.platform }),
+  open: (args) => spawn("open", args, { stdio: "ignore", detached: true }).on("error", (e) => log(`open: ${e.message}`)).unref(),
+  connected: async () => (await bridge.status()).connected,
+  log,
+});
+const NOT_CONNECTED_OPENED = "meerCAD was opened but has not connected yet. Ask the user to enable 'Allow assistants to control meerCAD' (plug icon in the top bar), then try again.";
+
+/** Opens the app if it is not connected; throws if it still is not. */
+async function ensureApp(): Promise<void> {
+  const { connected, opened } = await launcher.ensure();
+  if (!connected) throw new Error(opened ? NOT_CONNECTED_OPENED : NOT_CONNECTED);
+}
+
+async function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
   const info = server.server.getClientVersion();
-  return bridge.call<T>(method, params, timeoutMs, info?.title ?? info?.name ?? "Assistant");
+  const send = () => bridge.call<T>(method, params, timeoutMs, info?.title ?? info?.name ?? "Assistant");
+  try {
+    return await send();
+  } catch (e) {
+    // The app is not running (or not connected): open it, so the user sees the work, and try once more.
+    if (!(e instanceof Error) || e.message !== NOT_CONNECTED) throw e;
+    await ensureApp();
+    return send();
+  }
 }
 
 /** The app reads and writes the files this server may not reach (see localFiles). */
@@ -596,7 +621,9 @@ server.registerTool(
   "status",
   { title: "Connection status", description: "Whether the meerCAD app is connected, which project this session works on (and whether in its own window or the user's), and the available projects.", annotations: { readOnlyHint: true } },
   async () => {
-    const st = await bridge.status();
+    let st = await bridge.status();
+    // Not connected: open the app (if this server knows which) and wait for it.
+    if (!st.connected && st.role !== "starting" && (await launcher.ensure()).connected) st = await bridge.status();
     if (!st.connected) return text({ connected: false, hint: `Open meerCAD and enable 'Allow assistants to control meerCAD' (plug icon). ${st.role === "peer" ? "Another assistant session's meerCAD MCP server holds the connection; requests go through it." : `Listening on ws://127.0.0.1:${port}.`}` });
     try {
       return text({ connected: true, ...(await call<Record<string, unknown>>("get_status")) });

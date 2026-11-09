@@ -110,6 +110,37 @@ const readShared = (): Record<string, unknown> => {
 ipcMain.on("shared:get", (e) => void (e.returnValue = readShared()));
 /** The bridge port the window connects to: this build's own (see CHANNEL_PORTS). */
 ipcMain.on("mcp:port", (e) => void (e.returnValue = MCP_PORT));
+
+// ---------------------------------------------------------------- MCP bridge host
+
+/**
+ * The user's first window (mainWindow) holds the connection to the MCP server; every other window
+ * shows its state and turns it on or off through it.
+ */
+type BridgeState = "off" | "connecting" | "connected";
+let bridgeState: BridgeState = "off";
+/** What a window asked for while there was no first window: applied once the new one reports in. */
+let bridgeWanted: boolean | null = null;
+const broadcastBridge = () => {
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send("mcp-status", bridgeState);
+};
+ipcMain.on("mcp:status", (e, s: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || e.sender !== mainWindow.webContents) return;
+  if (s !== "off" && s !== "connecting" && s !== "connected") return;
+  bridgeState = s;
+  broadcastBridge();
+  if (bridgeWanted === null) return;
+  const on = bridgeWanted;
+  bridgeWanted = null;
+  if ((s !== "off") !== on) mainWindow.webContents.send("mcp-set-enabled", on);
+});
+ipcMain.handle("mcp:host-status", () => bridgeState);
+ipcMain.handle("mcp:set-enabled", (_e, on: unknown) => {
+  if (mainWindow && !mainWindow.isDestroyed()) return void mainWindow.webContents.send("mcp-set-enabled", on === true);
+  // The first window was closed: a new one takes the connection over.
+  bridgeWanted = on === true;
+  mainWindow = createWindow();
+});
 ipcMain.handle("shared:set", async (_e, p: { key: string; value: unknown }) => {
   if (typeof p?.key !== "string" || !/^[a-zA-Z][\w.]{0,40}$/.test(p.key)) return;
   const all = { ...readShared(), [p.key]: p.value };
@@ -521,8 +552,9 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
 });
 /** How an MCP client starts the server: the app's own runtime, or Node for the sandboxed build (whose binary cannot run as Node). */
 function mcpEntry(): { command: string; args: string[]; env?: Record<string, string> } {
-  // The App Store build's server.js has no server.json: its port comes with the entry (TestFlight's differs).
-  return MAS ? { command: "node", args: [mcpServer], env: { MEERCAD_MCP_PORT: String(MCP_PORT) } } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
+  // The App Store build's server.js has no server.json: its port comes with the entry (TestFlight's differs),
+  // and the app it opens when an assistant needs it (see packages/mcp/src/launchApp.ts).
+  return MAS ? { command: "node", args: [mcpServer], env: { MEERCAD_MCP_PORT: String(MCP_PORT), MEERCAD_APP: "dev.meercad.app" } } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
 }
 /**
  * Where an App Store build came from: TestFlight and development installs carry a sandbox receipt
@@ -636,7 +668,11 @@ function createWindow(assistant?: { session: string; client: string }, extra = f
   const query = assistant ? `?assistant=${encodeURIComponent(assistant.session)}&client=${encodeURIComponent(assistant.client)}` : extra ? "?window=extra" : process.env["MEERCAD_MCP_BRIDGE"] === "off" ? "?bridge=off" : "";
   void win.loadURL(`${DEV ? DEV_URL : "app://meercad/"}${query}`);
   win.on("closed", () => {
-    if (mainWindow === win) mainWindow = null;
+    if (mainWindow !== win) return;
+    mainWindow = null;
+    // Its connection to the assistants went with it.
+    bridgeState = "off";
+    broadcastBridge();
   });
   return win;
 }
@@ -1020,8 +1056,8 @@ else {
       for (const f of pendingOpen.splice(0)) void openExternalFile(f);
     });
     app.on("activate", () => {
-      // Assistants' windows do not count: the user gets their own window back.
-      if (!BrowserWindow.getAllWindows().some((w) => !isAssistantWindow(w))) mainWindow = createWindow();
+      // Assistants' and extra windows do not count: the user gets their first window back, and with it the connection to the assistants.
+      if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
     });
   });
   app.on("window-all-closed", () => {
