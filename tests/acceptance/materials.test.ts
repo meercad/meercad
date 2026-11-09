@@ -66,5 +66,16 @@ describe("materials for a two-material print", () => {
     // And it reads back as the same three parts.
     const back = read3mf(file);
     expect(back.map((m) => m.name)).toEqual(meshParts.map((m) => m.name));
+
+    // Without materials (the app's default): plain named parts, nothing for a slicer to map.
+    const plainParts = threeMfParts(d, out.meshes, colors, false);
+    expect(filamentSlots(plainParts).filaments).toEqual([]);
+    const plain = unzipSync(write3mf(plainParts));
+    const plainModel = strFromU8(plain["3D/3dmodel.model"]!);
+    expect(plainModel).not.toContain("basematerials");
+    expect(plainModel).not.toContain("pid=");
+    expect(plain["Metadata/Slic3r_PE_model.config"]).toBeUndefined();
+    expect(plain["Metadata/model_settings.config"]).toBeUndefined();
+    expect(read3mf(write3mf(plainParts)).map((m) => m.name)).toEqual(meshParts.map((m) => m.name));
   });
 });

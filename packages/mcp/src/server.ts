@@ -336,7 +336,7 @@ server.registerTool(
   {
     title: "Export a file",
     description:
-      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and materials (3mf assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant).",
+      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant).",
     inputSchema: {
       format: z.enum(["stl", "3mf", "obj", "step", "usdz", "dxf", "svg", "meercad"]),
       path: z.string().describe("Absolute or relative output path"),
@@ -344,12 +344,13 @@ server.registerTool(
       parts: z.array(z.string()).optional().describe("Part ids; default every part not hidden"),
       posed: z.boolean().optional(),
       variants: z.boolean().optional(),
+      materials: z.boolean().optional().describe("3mf: include materials, colours and filament slots (default: the app's setting, off)"),
     },
   },
-  guard(async ({ format, path, sketch, parts, posed, variants }) => {
+  guard(async ({ format, path, sketch, parts, posed, variants, materials }) => {
     const out = resolve(path);
     const name = basename(out).replace(/\.[^.]+$/, "");
-    const r = await call<{ files: Record<string, string>; filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name }, 300_000);
+    const r = await call<{ files: Record<string, string>; filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials }, 300_000);
     const files = Object.entries(r.files);
     const written: string[] = [];
     for (const [file, b64] of files) {

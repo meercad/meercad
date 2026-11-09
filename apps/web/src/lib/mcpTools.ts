@@ -214,15 +214,17 @@ export interface ExportOptions {
   posed?: boolean;
   variants?: boolean;
   name?: string;
+  /** 3MF: materials, colours and filament slots; default the app's setting (off). */
+  materials?: boolean;
 }
 
 /** The files of an export as the app makes them: names, colours, materials and filaments, visible parts, poses, variants. */
 export async function exportFiles(format: MeshFormat | "step", o: ExportOptions): Promise<{ files: Record<string, Uint8Array>; filaments?: { slot: number; material?: string; color: string }[] }> {
   await rebuildNow();
-  if (o.variants) return { files: await variantFiles(format, undefined, o.parts) };
+  if (o.variants) return { files: await variantFiles(format, undefined, o.parts, o.materials) };
   if (format === "step") return { files: { [`${o.name ?? "model"}.step`]: (await stepFile({ ...(o.parts ? { parts: o.parts } : {}), ...(o.posed !== undefined ? { posed: o.posed } : {}) })).data } };
-  const r = await meshExportFiles(format, { ...(o.parts ? { parts: o.parts } : {}), ...(o.posed !== undefined ? { posed: o.posed } : {}), ...(o.name ? { name: o.name } : {}) });
-  const filaments = format === "3mf" ? filamentsOf(r.meshes) : [];
+  const r = await meshExportFiles(format, { ...(o.parts ? { parts: o.parts } : {}), ...(o.posed !== undefined ? { posed: o.posed } : {}), ...(o.name ? { name: o.name } : {}), ...(o.materials !== undefined ? { materials: o.materials } : {}) });
+  const filaments = format === "3mf" ? filamentsOf(r.meshes, o.materials) : [];
   return { files: r.files, ...(filaments.length > 1 ? { filaments: filaments.map((f, i) => ({ slot: i + 1, ...f })) } : {}) };
 }
 

@@ -429,6 +429,7 @@ export default {
   "Gap per side between parts that fit into each other, measured with the fit test part. Holes, bores, threads and moving parts use it as “fit”.": "Spalt je Seite zwischen Teilen, die ineinander passen, gemessen mit dem Testteil. Bohrungen, Wellenbohrungen, Gewinde und bewegliche Teile nutzen ihn als „fit“.",
   "Fit options": "Spiel-Optionen",
   "Fit of my printer": "Spiel meines Druckers",
+  "3MF with materials and colours (slicers then ask which filament each one is)": "3MF mit Materialien und Farben (der Slicer fragt dann, welches Filament jeweils gemeint ist)",
   "The gap per side your printer needs between parts that fit into each other. Print the test part, push the pin into its holes and enter the smallest number where it slides in without wobbling. New designs start with it; holes, bores, threads and moving parts use it as “fit”.": "Der Spalt je Seite, den dein Drucker zwischen ineinander passenden Teilen braucht. Drucke das Testteil, stecke den Stift in die Löcher und trage die kleinste Zahl ein, bei der er ohne Kraft und ohne Wackeln hineingleitet. Neue Designs starten damit; Bohrungen, Wellenbohrungen, Gewinde und bewegliche Teile nutzen ihn als „fit“.",
   "Metric (ISO)": "Metrisch (ISO)",
   "Trapezoidal": "Trapez",

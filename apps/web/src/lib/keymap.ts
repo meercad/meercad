@@ -37,13 +37,18 @@ interface Prefs {
   printerFit: number | null;
   /** Joint symbols (axes, turn rings, slide arrows) in the scene while the joints panel is open; off shows the motion alone. */
   showJoints: boolean;
+  /**
+   * 3MF exports carry the parts' materials, colours and filament slots. Off (default): plain
+   * parts with their names, so a slicer (Bambu Studio) does not ask to map filaments on import.
+   */
+  threeMfMaterials: boolean;
 }
 
 
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED, printerFit: null, showJoints: true };
+  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED, printerFit: null, showJoints: true, threeMfMaterials: false };
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
     return {
@@ -62,6 +67,7 @@ function load(): Prefs {
       printBed: validBed(raw.printBed) === undefined ? fallback.printBed : validBed(raw.printBed)!,
       printerFit: typeof raw.printerFit === "number" && raw.printerFit >= 0 && raw.printerFit <= 1 ? raw.printerFit : null,
       showJoints: raw.showJoints !== false,
+      threeMfMaterials: raw.threeMfMaterials === true,
     };
   } catch {
     return fallback;

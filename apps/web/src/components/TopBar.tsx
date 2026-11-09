@@ -74,6 +74,7 @@ export function TopBar() {
   const exportItems = (): MenuEntry[] => [
     { label: t("STL (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("stl") },
     { label: t("3MF (3D printing)"), icon: <FileDown />, onClick: () => void exportMesh("3mf") },
+    { label: t("3MF with materials and colours"), icon: on(usePrefs.getState().threeMfMaterials), onClick: () => setPrefs({ threeMfMaterials: !usePrefs.getState().threeMfMaterials }) },
     { label: t("OBJ (rendering, other 3D tools)"), icon: <FileDown />, onClick: () => void exportMesh("obj") },
     { label: t("STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
     // A design with joints can go to a physics simulator as a robot (MuJoCo, mjlab, ROS, Isaac Sim).

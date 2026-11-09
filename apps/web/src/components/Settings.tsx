@@ -257,6 +257,10 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
               {t("Print the fit test part…")}
             </button>
           </p>
+          <label className="check">
+            <input type="checkbox" checked={prefs.threeMfMaterials} onChange={(e) => setPrefs({ threeMfMaterials: e.target.checked })} />
+            {t("3MF with materials and colours (slicers then ask which filament each one is)")}
+          </label>
         </PrintBedSection>
 
         <section>
