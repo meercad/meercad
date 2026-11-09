@@ -354,43 +354,58 @@ const bodyKey = (b: RebuildOutput["report"]["bodies"][number]): BodyKey => `${b.
 
 /**
  * What changed since `before` (the rebuild before an edit): only the steps that are not ok or say
- * something, new or changed bodies, sketches of the edited steps (and any not solved), joints when
- * one changed or broke. The full summary of a big design runs to thousands of lines; this keeps the
+ * something, new or changed bodies, sketches of the edited steps (and any not solved), the joints
+ * the ops set or that broke, the params when the ops changed one. The full summary of a big design runs to thousands of lines; this keeps the
  * answer to an edit about the edit. `touched`: ids of the steps the ops added or changed.
  */
-function briefSummary(out: RebuildOutput, before: RebuildOutput | null | undefined, touched: Set<string>, mechanismChanged: boolean) {
+function briefSummary(out: RebuildOutput, before: RebuildOutput | null | undefined, touched: Set<string>, shown: Shown) {
   const full = summary(out);
   const prev = new Map((before?.report.bodies ?? []).map((b) => [b.id, bodyKey(b)]));
   const changed = new Set(out.report.bodies.filter((b) => prev.get(b.id) !== bodyKey(b)).map((b) => b.id));
   const gone = [...prev.keys()].filter((id) => !out.report.bodies.some((b) => b.id === id));
   const features = full.features.filter((f) => f.status !== "ok" || "info" in f || "hint" in f || touched.has(f.id));
   const sketches = full.sketches.filter((s) => !s.ok || touched.has(s.id));
-  const { joints, ...rest } = full;
+  const { joints: allJoints, params, ...rest } = full;
+  // Joints the ops set (or all, after a replace), and any that broke.
+  const joints = allJoints?.filter((j) => shown.all || shown.ids.has(j.id) || "error" in j);
   return {
     ...rest,
+    // Params only when the ops changed one: they are in get_model, and the assistant knows what it set.
+    ...(shown.params ? { params } : {}),
     features,
     featuresOk: full.features.filter((f) => f.status === "ok").length,
     bodies: full.bodies.filter((b) => changed.has(b.id)),
     unchangedBodies: full.bodies.length - changed.size,
     ...(gone.length ? { removedBodies: gone } : {}),
     sketches,
-    ...(joints && (mechanismChanged || joints.some((j) => "error" in j)) ? { joints } : {}),
-    note: 'Brief result: steps that are ok and bodies and sketches this change did not touch are left out (get_model or detail:"full" shows everything).',
+    ...(joints?.length ? { joints } : {}),
   };
 }
 
-/** Ids of the steps a list of ops adds or edits, and whether it changes moving parts. */
-function touchedBy(ops: readonly DocOp[]): { ids: Set<string>; mechanism: boolean } {
+/** What the brief result shows beyond the steps: the joints the ops set (all of them after a replace, coupling or motion) and the params when the ops changed one. */
+interface Shown {
+  ids: Set<string>;
+  all: boolean;
+  params: boolean;
+}
+
+/** Ids of the steps a list of ops adds or edits, and what else the brief result shows (see Shown). */
+function touchedBy(ops: readonly DocOp[]): { ids: Set<string>; shown: Shown } {
   const ids = new Set<string>();
-  let mechanism = false;
+  const shown: Shown = { ids: new Set(), all: false, params: false };
   for (const op of ops) {
     if (op.type === "add_features") for (const f of op.features) ids.add(f.id);
     else if (op.type === "edit_feature" || op.type === "delete_feature" || op.type === "move_feature") ids.add(op.id);
-    else if (op.type === "replace") mechanism = true;
-    if (/joint|coupling|motion/.test(op.type)) mechanism = true;
+    else if (op.type === "replace") shown.all = shown.params = true;
+    else if (op.type === "set_joint") shown.ids.add(op.joint.id);
+    else if (op.type === "set_coupling" || op.type === "set_motion") shown.all = true;
+    if (/param|variant|version|fit|units/.test(op.type)) shown.params = true;
   }
-  return { ids, mechanism };
+  return { ids, shown };
 }
+
+/** The brief result after undo, redo or opening a project: what is not ok, the bodies that changed (all of them when nothing was built before). */
+const briefAfter = (out: RebuildOutput, before: RebuildOutput | null | undefined) => briefSummary(out, before, new Set(), { ids: new Set(), all: false, params: !before });
 
 function summary(out: RebuildOutput) {
   const r = out.report;
@@ -415,6 +430,12 @@ function summary(out: RebuildOutput) {
     ...(r.joints.length ? { joints: r.joints.map((j) => ({ id: j.id, ...(j.error ? { error: j.error } : { origin: j.origin.map((v) => +v.toFixed(3)), axis: j.axis.map((v) => +v.toFixed(4)) }) })) } : {}),
     ...(r.gears.length ? { gears: r.gears.map((g) => ({ ...g, radius: Number.isFinite(g.radius) ? +g.radius.toFixed(4) : null, origin: g.origin.map((v) => +v.toFixed(3)), axis: g.axis.map((v) => +v.toFixed(4)) })) } : {}),
   };
+}
+
+/** The rebuild in get_model: steps that are ok are counted, not listed (the document lists them). */
+function modelSummary(out: RebuildOutput) {
+  const full = summary(out);
+  return { ...full, features: full.features.filter((f) => f.status !== "ok" || "info" in f || "hint" in f), featuresOk: full.features.filter((f) => f.status === "ok").length };
 }
 
 /** Picture options from a tool call (render_view, render_motion). */
@@ -455,7 +476,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       {
         // Versions are listed by name; their states would only fill the assistant's context.
         const doc = currentDoc();
-        return { project: useApp.getState().project, document: p["full"] ? designOf(doc) : tools.lightDocument(doc), ...(doc.versions ? { versions: doc.versions.map((v) => ({ name: v.name, at: new Date(v.at).toISOString() })) } : {}), rebuild: summary(await rebuildNow()) };
+        return { project: useApp.getState().project, document: p["full"] ? designOf(doc) : tools.lightDocument(doc), ...(doc.versions ? { versions: doc.versions.map((v) => ({ name: v.name, at: new Date(v.at).toISOString() })) } : {}), rebuild: modelSummary(await rebuildNow()) };
       }
     case "get_sketch": {
       needProject();
@@ -467,7 +488,9 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       await refreshProjects();
       return {
         project: useApp.getState().project,
-        projects: useApp.getState().projects.map(({ id, name }) => ({ id, name })),
+        // The newest few: the whole list (list_projects) runs to hundreds of entries.
+        recentProjects: [...useApp.getState().projects].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5).map(({ id, name }) => ({ id, name })),
+        projectCount: useApp.getState().projects.length,
         previewing: !!useApp.getState().proposalDoc,
         // Where this session works: its own tab, or none yet (then `userProject` is what the user has open).
         ...(desktop?.assistant ? (assistantWindow ? { tab: "own" } : { tab: "none yet: open_project, new_project or open_example opens one", userProject: useApp.getState().project, project: null }) : {}),
@@ -490,7 +513,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const out = await rebuildNow();
       if (p["detail"] === "full") return summary(out);
       const t = touchedBy(ops);
-      return briefSummary(out, before, t.ids, t.mechanism);
+      return briefSummary(out, before, t.ids, t.shown);
     }
     case "preview_ops": {
       needProject();
@@ -498,21 +521,25 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       const doc = ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       const sandbox = await kernel.sandbox(doc);
       const t = touchedBy(ops);
-      const result = p["detail"] === "full" ? summary(sandbox) : briefSummary(sandbox, useApp.getState().output, t.ids, t.mechanism);
+      const result = p["detail"] === "full" ? summary(sandbox) : briefSummary(sandbox, useApp.getState().output, t.ids, t.shown);
       // Show it live; the document itself stays untouched.
       useApp.setState({ proposalDoc: doc });
       scheduleRebuild();
       return result;
     }
-    case "undo":
+    case "undo": {
       needProject();
       useApp.setState({ proposalDoc: null });
+      const before = useApp.getState().output;
       undo();
-      return summary(await rebuildNow());
-    case "redo":
+      return briefAfter(await rebuildNow(), before);
+    }
+    case "redo": {
       needProject();
+      const before = useApp.getState().output;
       redo();
-      return summary(await rebuildNow());
+      return briefAfter(await rebuildNow(), before);
+    }
     case "list_projects":
       await refreshProjects();
       return useApp.getState().projects.map(({ id, name, updatedAt }) => ({ id, name, updated: new Date(updatedAt).toISOString() }));
@@ -523,7 +550,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "open_project":
       // Who else has it open was checked when the request was routed.
       await openProject(String(p["id"]));
-      return summary(await rebuildNow());
+      return briefAfter(await rebuildNow(), null);
     case "new_project":
       return created(p, async () => {
         await newProject(emptyDocument(), typeof p["name"] === "string" && p["name"] ? p["name"] : "Untitled part");

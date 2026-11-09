@@ -2162,7 +2162,11 @@ export class Viewport {
       }
     }
     const prev = this.renderer.getSize(new THREE.Vector2());
+    const prevRatio = this.renderer.getPixelRatio();
     this.persp.clearViewOffset();
+    // The picture has the size asked for: on a Retina screen the screen's pixel ratio doubled it
+    // (four times the pixels, and the tokens an assistant pays to look at it).
+    this.renderer.setPixelRatio(1);
     this.renderer.setSize(o.width, o.height, false);
     const aspect = o.width / o.height;
     const saved = { aspect: this.persp.aspect, fov: this.persp.fov, pos: this.persp.position.clone(), quat: this.persp.quaternion.clone(), up: this.persp.up.clone() };
@@ -2191,6 +2195,7 @@ export class Viewport {
     this.persp.fov = saved.fov;
     this.persp.updateProjectionMatrix();
     this.persp.updateMatrixWorld();
+    this.renderer.setPixelRatio(prevRatio);
     this.renderer.setSize(prev.x, prev.y, false);
     this.applyInset();
     for (const cap of caps) {
