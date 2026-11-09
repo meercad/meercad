@@ -3,16 +3,16 @@ import { partMaterial } from "@meercad/model";
 import type { MeercadDocument } from "@meercad/schema";
 
 /**
- * The usual part grey (the viewport's own, a tick lighter than before) and one clear, saturated
- * purple, well apart from the selection blue, for every further part, so parts tell apart without
- * the model turning colourful.
+ * The usual part grey (the viewport's own, a tick lighter than before) and one fresh petrol, well apart
+ * from the grey and the selection blue on light and dark backgrounds, for every further part, so
+ * parts tell apart without the model turning colourful.
  */
-export const PART_PALETTE = ["#7a7f86", "#9b5de5"] as const;
+export const PART_PALETTE = ["#7a7f86", "#2a9d8f"] as const;
 
 /**
  * Colour of every part ("#rrggbb" by body id): the one picked for it, else its material's own
  * colour (carbon, wood, metal, an own material's), else in parts-list order the grey for the first
- * part and the purple for all others.
+ * part and the petrol for all others.
  */
 export function partColors(doc: MeercadDocument, bodyIds: readonly string[], auto: boolean): Map<string, string> {
   const out = new Map<string, string>();
