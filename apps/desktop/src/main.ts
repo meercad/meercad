@@ -17,6 +17,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep 
 import { pathToFileURL } from "node:url";
 import { CHANNEL_PORTS, CHANNEL_MCP_NAMES, type Channel } from "@meercad/mcp";
 import { adoptSiblingData, carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
+import { moveToTrash } from "./trash";
 
 const DEV = process.argv.includes("--dev");
 const MAS = process.mas === true;
@@ -328,7 +329,7 @@ ipcMain.handle("projects:move", async (_e, p: { id: string; folder: string }) =>
 });
 ipcMain.handle("projects:delete", async (_e, id: string) => {
   // Move to the Trash rather than deleting for good.
-  await shell.trashItem(projectPath(id));
+  await moveToTrash(projectPath(id), (p) => shell.trashItem(p));
   await rm(thumbPath(id), { force: true });
 });
 ipcMain.handle("folders:create", async (_e, p: { parent: string; name: string }) => {
@@ -352,7 +353,7 @@ ipcMain.handle("folders:rename", async (_e, p: { folder: string; name: string })
 ipcMain.handle("folders:delete", async (_e, folder: string) => {
   // Trash the folder with everything in it; the renderer confirms first.
   for (const rel of await projectFiles(folderPath(folder))) await rm(thumbPath(`${folder}/${toId(rel)}`), { force: true });
-  await shell.trashItem(folderPath(folder));
+  await moveToTrash(folderPath(folder), (p) => shell.trashItem(p));
 });
 ipcMain.handle("projects:reveal", (_e, p?: string | { folder: string }) =>
   typeof p === "string" ? shell.showItemInFolder(projectPath(p)) : shell.openPath(folderPath(p?.folder ?? "")),
