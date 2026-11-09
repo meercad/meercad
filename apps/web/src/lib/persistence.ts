@@ -15,6 +15,8 @@ export interface ProjectMeta {
   /** When the project was created (the file's birth time), where the file system knows it. */
   createdAt?: number;
   thumbnail?: string;
+  /** When the picture was written; a picture older than the file shows an earlier state. */
+  thumbnailAt?: number;
 }
 export interface Project extends ProjectMeta {
   doc: MeercadDocument;
