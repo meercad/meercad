@@ -52,7 +52,7 @@ async function build(doc: MeercadDocument, limit: number): Promise<RebuildOutput
   }
 }
 
-/** Projects that could not be pictured, by id, with the file's time then. */
+/** Projects that could not be pictured (or show nothing), by id, with the file's time then. */
 function failed(): Record<string, number> {
   try {
     return JSON.parse(localStorage.getItem(FAILED_KEY) ?? "{}") as Record<string, number>;
@@ -151,7 +151,11 @@ async function fillMissingThumbnails(): Promise<void> {
         const project = await loadProject(next.id);
         if (!project) continue;
         const output = await build(project.doc, PROJECT_LIMIT_MS);
-        if (!output.meshes.length && !project.doc.references?.length) continue;
+        // Nothing to picture (an empty part): remembered like a failure, until the file changes.
+        if (!output.meshes.length && !project.doc.references?.length) {
+          markFailed(next);
+          continue;
+        }
         if (!vp) {
           host = document.createElement("div");
           host.style.cssText = "position:fixed;left:-10000px;top:0;width:480px;height:360px;pointer-events:none";
