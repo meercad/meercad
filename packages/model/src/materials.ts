@@ -82,9 +82,9 @@ export const MATERIALS: readonly Material[] = [
   { id: "copper", name: "Copper", density: 8.96, kind: "metal", look: { color: "#c47a52", roughness: 0.3, metalness: 1 }, notes: "Conducts heat and electricity best." },
   { id: "wood", name: "Wood (beech)", density: 0.72, kind: "other", look: { color: "#d3a978", roughness: 0.8, metalness: 0 }, notes: "Hard, fine-grained wood." },
   { id: "plywood", name: "Plywood", density: 0.6, kind: "other", look: { color: "#dcbd8f", roughness: 0.85, metalness: 0 }, notes: "Layered sheet wood for laser cutting and boxes." },
-  // Cables: the whole cable's density, copper included (typical gauges; thin wires weigh less per volume).
-  { id: "cablesilicone", name: "Cable (silicone)", density: 2.8, kind: "other", look: { color: "#d8453b", roughness: 0.7, metalness: 0, sheen: 0.3 }, notes: "Silicone insulated stranded wire: very flexible, for moving parts." },
-  { id: "cablepvc", name: "Cable (PVC)", density: 2.9, kind: "other", look: { color: "#2b2d30", roughness: 0.45, metalness: 0 }, notes: "PVC insulated wire or sheathed cable: stiffer, for fixed runs." },
+  // Cables: the whole cable's density, copper included (typical gauges; thin wires weigh less per volume). Silicone and PVC come in every colour: the part's own.
+  { id: "cablesilicone", name: "Cable (silicone)", density: 2.8, kind: "other", look: { roughness: 0.7, metalness: 0, sheen: 0.3 }, notes: "Silicone insulated stranded wire: very flexible, for moving parts." },
+  { id: "cablepvc", name: "Cable (PVC)", density: 2.9, kind: "other", look: { roughness: 0.45, metalness: 0 }, notes: "PVC insulated wire or sheathed cable: stiffer, for fixed runs." },
   { id: "cableptfe", name: "Cable (PTFE)", density: 3.6, kind: "other", look: { color: "#f1efe8", roughness: 0.3, metalness: 0 }, notes: "PTFE (Teflon) insulated wire: thin walls, heat resistant, stiff." },
   { id: "cableribbon", name: "Ribbon cable", density: 1.9, kind: "other", look: { color: "#a8acb0", roughness: 0.5, metalness: 0 }, notes: "Grey PVC flat cable, 1.27 mm pitch, 28 AWG." },
   { id: "acrylic", name: "Acrylic (PMMA)", density: 1.18, kind: "other", look: { color: "#f1f5f7", roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, transmission: 0.9 }, notes: "Clear sheet for laser cutting and covers." },

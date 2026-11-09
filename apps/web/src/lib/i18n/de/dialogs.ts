@@ -494,7 +494,6 @@ export default {
   "PVC": "PVC",
   "PTFE": "PTFE",
   "Smallest bend radius": "Kleinster Biegeradius",
-  "{n} × diameter": "{n} × Durchmesser",
   "Slack": "Spiel",
   "Points ({n})": "Punkte ({n})",
   "Tap parts where the cable runs": "Teile antippen, über die das Kabel läuft",

@@ -236,7 +236,8 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .gear-sizes span { color: var(--text-2); }
 .gear-sizes b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .cable-point { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border, rgba(127,127,127,.2)); }
-.cable-point .row > * { min-width: 0; flex: 1; }
+.cable-point .row > select { min-width: 0; flex: 1; }
+.cable-xyz { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .cable-point .row > .icon-btn { flex: 0 0 auto; }
 .cable-states { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
 .cable-states p { margin: 0; }

@@ -1169,7 +1169,7 @@ function CableFields({ f, set }: { f: Of<"cable">; set: (patch: Record<string, u
       </div>
       <div className="row">
         <Field label={t("Smallest bend radius")}>
-          <ExprInput value={f.bendRadius ?? ""} placeholder={ribbon ? "3" : t("{n} × diameter", { n: cable.CABLE_MATERIALS[f.material ?? "silicone"].bend })} onCommit={(v) => set({ bendRadius: v === "" ? undefined : v })} />
+          <ExprInput value={f.bendRadius ?? ""} placeholder={ribbon ? "3" : `${cable.CABLE_MATERIALS[f.material ?? "silicone"].bend} × Ø`} onCommit={(v) => set({ bendRadius: v === "" ? undefined : v })} />
         </Field>
         <Field label={t("Slack")}>
           <ExprInput value={f.slack ?? ""} placeholder="0" onCommit={(v) => set({ slack: v === "" ? undefined : v })} />
@@ -1179,10 +1179,20 @@ function CableFields({ f, set }: { f: Of<"cable">; set: (patch: Record<string, u
         <SelBox field="points" items={f.points.length ? [tn(f.points.length, "{n} point: tap a part to add", "{n} points: tap a part to add")] : []} placeholder={t("Tap parts where the cable runs")} />
         {f.points.map((pt, i) => (
           <div key={i} className="cable-point">
-            <div className="row" style={{ gap: 4, alignItems: "center" }}>
+            <div className="cable-xyz">
               {([0, 1, 2] as const).map((k) => (
                 <ExprInput key={k} value={pt.at[k]} onCommit={(v) => setPoint(i, { at: pt.at.map((q, j) => (j === k ? v : q)) as [Expr, Expr, Expr] })} />
               ))}
+            </div>
+            <div className="row" style={{ gap: 4, alignItems: "center" }}>
+              <select className="field small" value={pt.on ?? ""} onChange={(e) => setPoint(i, { on: e.target.value || undefined })}>
+                <option value="">{t("Fixed in place")}</option>
+                {[...new Set([...bodies, ...(pt.on ? [pt.on] : [])])].map((b) => (
+                  <option key={b} value={b}>
+                    {t("Moves with {part}", { part: partName(b, features) })}
+                  </option>
+                ))}
+              </select>
               <button className="icon-btn sm" title={t("Earlier")} disabled={i === 0} onClick={() => move(i, -1)}>
                 ↑
               </button>
@@ -1190,14 +1200,6 @@ function CableFields({ f, set }: { f: Of<"cable">; set: (patch: Record<string, u
                 <X />
               </button>
             </div>
-            <select className="field small" value={pt.on ?? ""} onChange={(e) => setPoint(i, { on: e.target.value || undefined })}>
-              <option value="">{t("Fixed in place")}</option>
-              {[...new Set([...bodies, ...(pt.on ? [pt.on] : [])])].map((b) => (
-                <option key={b} value={b}>
-                  {t("Moves with {part}", { part: partName(b, features) })}
-                </option>
-              ))}
-            </select>
           </div>
         ))}
         <button className="btn" onClick={addPoint}>
