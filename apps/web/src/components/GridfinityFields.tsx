@@ -10,7 +10,8 @@ import type { ReactNode } from "react";
 import type { Expr, Feature } from "@meercad/schema";
 import { binSize, compartments, drawerFit, GRIDFINITY, LABEL_SYMBOL_NAMES, LABEL_SYMBOLS, labelSymbol, type LabelSymbolKind } from "@meercad/model";
 import { describePlane } from "../lib/topology";
-import { featureName } from "../lib/features";
+import { featureName, partName } from "../lib/features";
+import { PickBox } from "./ClosureFields";
 import { setDialogField, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
 import { t } from "../lib/i18n";
@@ -79,7 +80,7 @@ interface Preset {
   patch: Partial<Of<"gridfinity">>;
 }
 
-const CLEAR: Partial<Of<"gridfinity">> = { units: [1, 1], height: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, magnets: undefined, screws: undefined, drawer: undefined, outline: undefined, gap: undefined, fill: undefined, bed: undefined, floor: undefined, wall: undefined };
+const CLEAR: Partial<Of<"gridfinity">> = { units: [1, 1], height: undefined, pocket: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, magnets: undefined, screws: undefined, drawer: undefined, outline: undefined, gap: undefined, fill: undefined, bed: undefined, floor: undefined, wall: undefined };
 
 /** Ready-made starting points: a click sets every value; each stays editable. */
 const PRESETS: Preset[] = [
@@ -120,9 +121,16 @@ export function Examples<P>({ items, onPick }: { items: { label: string; patch: 
 
 export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
   const features = useApp((s) => s.doc.features);
+  const kernelInfo = useApp((s) => s.output?.report.features.find((x) => x.id === f.id)?.info);
+  if (f.kind === "bin" && f.pocket) return <PartBinFields f={f} set={set} info={kernelInfo} />;
+  return <GridFields f={f} set={set} features={features} kernelInfo={kernelInfo} />;
+}
+
+function GridFields({ f, set, features, kernelInfo }: { f: Of<"gridfinity">; set: SetFn; features: readonly Feature[]; kernelInfo: Record<string, number> | undefined }) {
   const plates = features.filter((x): x is Of<"gridfinity"> => x.op === "gridfinity" && x.kind === "baseplate" && x.id !== f.id);
   const bin = f.kind === "bin";
-  const units: [number, number] = [num(f.units[0], 1), num(f.units[1], 1)];
+  const fu = f.units ?? [1, 1];
+  const units: [number, number] = [num(fu[0], 1), num(fu[1], 1)];
   const height = num(f.height, 3);
   const pair = (k: "units" | "dividers" | "cell" | "drawer" | "position", i: number, v: Expr, base: [Expr, Expr]) => set({ [k]: base.map((x, j) => (j === i ? v : x)) });
   const div = f.dividers ?? [0, 0];
@@ -140,7 +148,6 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
     else if (m === "area") set({ drawer: f.drawer ?? [400, 300], outline: undefined });
     else set({ drawer: undefined, outline: sketches.length ? { sketch: (sketches.find((x) => x.id === f.outline?.sketch) ?? sketches[sketches.length - 1]!).id } : undefined, plane: undefined, position: undefined });
   };
-  const kernelInfo = useApp((s) => s.output?.report.features.find((x) => x.id === f.id)?.info);
 
   // What the numbers come to.
   let info = "";
@@ -166,11 +173,7 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
   return (
     <>
       <Examples items={PRESETS} onPick={usePreset} />
-      <Seg
-        value={f.kind}
-        options={[["bin", t("Bin")], ["baseplate", t("Baseplate")]]}
-        onChange={(kind) => set(kind === "bin" ? { kind, drawer: undefined, outline: undefined, gap: undefined, fill: undefined, bed: undefined } : { kind, baseplate: undefined, cell: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, height: undefined })}
-      />
+      <KindSeg f={f} set={set} />
       {!bin ? <Seg value={mode} options={[["cells", t("Cells")], ["area", t("Floor area")], ["outline", t("Drawn outline")]]} onChange={pickMode} /> : null}
       {!bin && mode === "area" ? (
         <div className="row">
@@ -211,10 +214,10 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
       {bin || mode === "cells" ? (
         <div className="row">
           <Field label={t("Cells wide")}>
-            <Count value={f.units[0]} min={1} max={30} onChange={(v) => pair("units", 0, v, f.units)} />
+            <Count value={fu[0]} min={1} max={30} onChange={(v) => pair("units", 0, v, fu)} />
           </Field>
           <Field label={t("Cells deep")}>
-            <Count value={f.units[1]} min={1} max={30} onChange={(v) => pair("units", 1, v, f.units)} />
+            <Count value={fu[1]} min={1} max={30} onChange={(v) => pair("units", 1, v, fu)} />
           </Field>
         </div>
       ) : null}
@@ -357,6 +360,112 @@ export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }
         </>
       )}
       <p className="muted small">{bin ? t("Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.") : t("Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and, if you like, a solid border round them.")}</p>
+    </>
+  );
+}
+
+/** Bin, baseplate, or a bin with a nest for a part (a scan or any other part). */
+function KindSeg({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
+  const value = f.kind === "bin" && f.pocket ? "part" : f.kind;
+  return (
+    <Seg
+      value={value}
+      options={[["bin", t("Bin")], ["baseplate", t("Baseplate")], ["part", t("For a part")]]}
+      onChange={(kind) => {
+        if (kind === value) return;
+        if (kind === "part") {
+          // Sized round the part; the part is tapped in the viewport next.
+          set({ kind: "bin", pocket: { body: "" }, units: undefined, height: undefined, dividers: undefined, scoop: undefined, tab: undefined, solid: undefined, wall: undefined, floor: undefined, position: undefined, drawer: undefined, outline: undefined, gap: undefined, fill: undefined, bed: undefined });
+          setDialogField("pocket");
+        } else if (kind === "bin") set({ kind, pocket: undefined, units: f.units ?? [1, 1], height: f.height ?? 3, drawer: undefined, outline: undefined, gap: undefined, fill: undefined, bed: undefined });
+        else set({ kind, pocket: undefined, units: f.units ?? [1, 1], baseplate: undefined, cell: undefined, dividers: undefined, scoop: undefined, tab: undefined, lip: undefined, solid: undefined, height: undefined });
+      }}
+    />
+  );
+}
+
+/**
+ * A bin with a nest for a part: the part sinks in by a share of its height with some play, the bin
+ * takes as few cells as hold it (or fixed sizes) and is built where the part lies.
+ */
+function PartBinFields({ f, set, info }: { f: Of<"gridfinity">; set: SetFn; info: Record<string, number> | undefined }) {
+  const features = useApp((s) => s.doc.features);
+  const plates = features.filter((x): x is Of<"gridfinity"> => x.op === "gridfinity" && x.kind === "baseplate");
+  const p = f.pocket!;
+  const auto = !f.units;
+  const setPocket = (patch: Partial<NonNullable<Of<"gridfinity">["pocket"]>>) => set({ pocket: { ...p, ...patch } });
+  const sizeText = info?.["width"] !== undefined
+    ? t("{x} × {y} cells, {h} units high · nest {d} deep", { x: info["width"]!, y: info["depth"]!, h: info["height"]!, d: mm(info["pocketDepth"]!) }) + (info["angle"] ? ` · ${t("turned {a}°", { a: +info["angle"].toFixed(1) })}` : "")
+    : "";
+  return (
+    <>
+      <KindSeg f={f} set={set} />
+      <Field label={t("Part to hold")}>
+        <PickBox field="pocket" items={p.body ? [partName(p.body, features)] : []} placeholder={t("Tap the part (e.g. a scan)")} onRemove={() => setPocket({ body: "" })} />
+      </Field>
+      <div className="row">
+        <Field label={t("Sinks in (% of its height)")}>
+          <ExprInput value={p.sink ?? 50} unit="" placeholder="50" onCommit={(sink) => setPocket({ sink: sink === 50 ? undefined : sink })} />
+        </Field>
+        <Field label={t("Play")}>
+          <ExprInput value={p.clearance} placeholder="0.5" onCommit={(clearance) => setPocket({ clearance })} />
+        </Field>
+      </div>
+      <label className="checkbox">
+        <input type="checkbox" checked={!!p.grip} onChange={(e) => setPocket({ grip: e.target.checked || undefined })} /> {t("Finger grip across the part")}
+      </label>
+      <label className="checkbox">
+        <input type="checkbox" checked={auto} onChange={(e) => set(e.target.checked ? { units: undefined, height: undefined } : { units: [info?.["width"] ?? 1, info?.["depth"] ?? 1], height: info?.["height"] ?? 3 })} /> {t("Size to fit the part")}
+      </label>
+      {!auto ? (
+        <div className="row">
+          <Field label={t("Cells wide")}>
+            <Count value={f.units![0]} min={1} max={30} onChange={(v) => set({ units: [v, f.units![1]] })} />
+          </Field>
+          <Field label={t("Cells deep")}>
+            <Count value={f.units![1]} min={1} max={30} onChange={(v) => set({ units: [f.units![0], v] })} />
+          </Field>
+          <Field label={t("Height (units)")}>
+            <Count value={f.height ?? 3} min={1} max={40} onChange={(height) => set({ height })} />
+          </Field>
+        </div>
+      ) : null}
+      {sizeText ? <p className="muted small">{sizeText}</p> : null}
+      <div className="row">
+        <label className="checkbox">
+          <input type="checkbox" checked={f.lip !== false} onChange={(e) => set({ lip: e.target.checked ? undefined : false })} /> {t("Stacking lip")}
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={!!f.magnets} onChange={(e) => set({ magnets: e.target.checked || undefined })} /> {t("Magnet holes")}
+        </label>
+      </div>
+      {plates.length ? (
+        <Field label={t("Stands in")}>
+          <select className="field" value={f.baseplate ?? ""} onChange={(e) => set(e.target.value ? { baseplate: e.target.value, cell: f.cell ?? [0, 0], plane: undefined } : { baseplate: undefined, cell: undefined })}>
+            <option value="">{t("Nothing (built round the part)")}</option>
+            {plates.map((x) => (
+              <option key={x.id} value={x.id}>
+                {featureName(x)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      {f.baseplate ? (
+        <div className="row">
+          <Field label={t("Cell (column)")}>
+            <Count value={f.cell?.[0] ?? 0} min={0} max={100} onChange={(v) => set({ cell: [v, f.cell?.[1] ?? 0] })} />
+          </Field>
+          <Field label={t("Cell (row)")}>
+            <Count value={f.cell?.[1] ?? 0} min={0} max={100} onChange={(v) => set({ cell: [f.cell?.[0] ?? 0, v] })} />
+          </Field>
+        </div>
+      ) : (
+        <Field label={t("Stands on")}>
+          <PlaneBox value={describePlane(f.plane ?? { ref: "origin.XY" })} placeholder={t("Tap a plane or flat face where it stands")} />
+        </Field>
+      )}
+      <p className="muted small">{t("The part sinks into the bin's solid top; the nest follows its underside and opens upwards, so it lifts straight out. The bin is built where the part lies, turned to need the fewest cells. Turn or lay the part down first to choose which side goes in. Making the nest takes a few seconds.")}</p>
     </>
   );
 }

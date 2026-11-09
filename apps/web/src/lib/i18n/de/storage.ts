@@ -147,4 +147,22 @@ export default {
   "Tool wall on openGrid": "Werkzeugwand mit openGrid",
   "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins": "Eine Platte mit Haken, Ring, Ablage und einer Ablage für Gridfinity-Boxen",
   "A snap {w} square, {t} deep, screwed to the wall through its middle": "Ein Snap, {w} im Quadrat und {t} tief, mittig an die Wand geschraubt",
+  // components/GridfinityFields.tsx: bins for a part
+  "For a part": "Für ein Teil",
+  "Part to hold": "Teil, das hineinkommt",
+  "Tap the part (e.g. a scan)": "Tippe auf das Teil (z. B. einen Scan)",
+  "Sinks in (% of its height)": "Versinkt (% seiner Höhe)",
+  "Finger grip across the part": "Fingermulde quer über das Teil",
+  "Size to fit the part": "Größe passend zum Teil",
+  "{x} × {y} cells, {h} units high · nest {d} deep": "{x} × {y} Felder, {h} Einheiten hoch · Aussparung {d} tief",
+  "turned {a}°": "um {a}° gedreht",
+  "Nothing (built round the part)": "Nichts (um das Teil herum gebaut)",
+  "Stands on": "Steht auf",
+  "The part sinks into the bin's solid top; the nest follows its underside and opens upwards, so it lifts straight out. The bin is built where the part lies, turned to need the fewest cells. Turn or lay the part down first to choose which side goes in. Making the nest takes a few seconds.": "Das Teil versinkt in der vollen Oberseite der Box; die Aussparung folgt seiner Unterseite und ist nach oben offen, so lässt es sich gerade herausheben. Die Box entsteht dort, wo das Teil liegt, so gedreht, dass sie möglichst wenige Felder braucht. Dreh oder leg das Teil vorher hin, um zu wählen, welche Seite nach unten kommt. Die Aussparung zu berechnen dauert ein paar Sekunden.",
+  // lib/features.ts, context menus
+  "Pick the part the bin should hold": "Wähle das Teil, das in die Box kommt",
+  "Bin for a part": "Box für ein Teil",
+  "Gridfinity bin for this part": "Gridfinity-Box für dieses Teil",
+  // components/Help.tsx
+  "**A bin for a part**: right-click or long-press a part (a scan, a tool) and choose **Gridfinity bin for this part**, or pick **For a part** in the bin dialog. The part sinks into the bin's top by half its height with 0.5 mm play; the bin takes as few cells as hold it, turned if that saves cells. Set how deep it sinks, the play and a finger grip across the part.": "**Eine Box für ein Teil**: Rechtsklick oder langes Drücken auf ein Teil (einen Scan, ein Werkzeug) und **Gridfinity-Box für dieses Teil** wählen, oder im Box-Dialog **Für ein Teil**. Das Teil versinkt zur Hälfte seiner Höhe mit 0,5 mm Spiel in der Oberseite der Box; die Box nimmt so wenige Felder wie nötig, gedreht, wenn das Felder spart. Einstellbar sind, wie tief es versinkt, das Spiel und eine Fingermulde quer über das Teil.",
 };

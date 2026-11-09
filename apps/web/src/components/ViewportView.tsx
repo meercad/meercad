@@ -17,8 +17,9 @@ import { copyParts, hasClip, pasteParts, selectAll, selectedParts, selectParts }
 import { addMarkPoint, beginStroke, endStroke, extendStroke, clearTerrainMeasure, finishMarking, marksForView, measurePoint, startMarking, useTerrainDraw, useTerrainMeasure } from "../lib/terrainDraw";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasure } from "../lib/scanMeasure";
-import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Printer, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, Waves, Weight, X } from "lucide-react";
+import { Image as PictureIcon, ImageOff, ArrowDownToLine, LayoutGrid, Box, BoxSelect, ClipboardPaste, CopyPlus, CircleDot, Copy, Eraser, Eye, EyeOff, Focus, Ghost, Highlighter, Layers, MapPin, Move3d, StickyNote, Palette, Pencil, PencilLine, Printer, Ruler, Scan, ScanSearch, Shapes, SlidersHorizontal, Trash, Wand2, Waves, Weight, X } from "lucide-react";
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
+import { binForPart } from "../lib/partBin";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
 import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
@@ -697,6 +698,7 @@ export function ViewportView() {
         "sep" as const,
         printItem(pick.bodyId),
         { label: t("Lay on this face"), icon: <ArrowDownToLine />, onClick: () => layOnFace(pick.bodyId, pick.face, pick.normal ?? pick.surface) },
+        { label: t("Gridfinity bin for this part"), icon: <LayoutGrid />, onClick: () => binForPart(pick.bodyId) },
         ...(hasPack("scan")
           ? [
               "sep" as const,

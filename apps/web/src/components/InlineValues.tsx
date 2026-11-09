@@ -132,10 +132,12 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
           pairItem("height", at(b.max[0]! + 3, mid(1), b.max[2]!), "↕ ", h, " mm", (height) => edit({ height })),
         ];
       }
-      if (f.drawer) return [];
+      // A bin sized round its part has no numbers to drag (they follow the part).
+      if (f.drawer || !f.units) return [];
+      const units = f.units;
       const items = [
-        pairItem("units_x", at(mid(0), b.min[1]! - 4, b.min[2]!), "▦ ", f.units[0], "", (v) => edit({ units: [v, f.units[1]] })),
-        pairItem("units_y", at(b.max[0]! + 4, mid(1), b.min[2]!), "▦ ", f.units[1], "", (v) => edit({ units: [f.units[0], v] })),
+        pairItem("units_x", at(mid(0), b.min[1]! - 4, b.min[2]!), "▦ ", units[0], "", (v) => edit({ units: [v, units[1]] })),
+        pairItem("units_y", at(b.max[0]! + 4, mid(1), b.min[2]!), "▦ ", units[1], "", (v) => edit({ units: [units[0], v] })),
       ];
       if (f.kind === "bin") items.push(pairItem("height", at(b.max[0]!, b.min[1]!, b.max[2]!), "↕ ", f.height ?? 3, "", (height) => edit({ height })));
       return items;
