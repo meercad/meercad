@@ -23,6 +23,8 @@ import { importFile } from "./components/io";
 import { initBridge } from "./lib/mcpBridge";
 import { nativeApp, onFileOpened, Pencil } from "./lib/native";
 import { assistantWindow, desktop } from "./lib/persistence";
+import { startBackgroundPictures } from "./lib/thumbnails";
+import { EXAMPLES } from "./lib/examples";
 import { setTool, useSketchUi, type SketchTool } from "./sketch/state";
 import { saveFile } from "./components/io";
 import { actionFor, MODEL_ACTIONS, MODEL_CONTEXT, type ModelAction } from "./lib/keymap";
@@ -122,6 +124,10 @@ export function App() {
     const onHash = () => void route();
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  // Missing and outdated project pictures are made in the background from the start (one window does it).
+  useEffect(() => {
+    if (!assistantWindow) startBackgroundPictures(EXAMPLES);
   }, []);
   useEffect(() => {
     void route();

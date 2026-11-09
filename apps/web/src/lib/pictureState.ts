@@ -33,11 +33,48 @@ export interface PictureMeta {
 }
 
 /**
- * The overview makes a new picture: there is none, or it was written before the file was last
- * changed. A save writes the file first and its picture right after, so a current picture is never
- * older than its file.
+ * Whether a picture's pixels (RGBA) show nothing at all. Such pictures were saved before
+ * 2026-11-09 while the view was still empty, and copying the app's data to the RC gave them a new
+ * date, so their age alone does not show that they are wrong.
  */
-export function needsPicture(p: PictureMeta): boolean {
-  if (!p.thumbnail) return true;
+export function blankPixels(rgba: ArrayLike<number>): boolean {
+  for (let i = 3; i < rgba.length; i += 4) if (rgba[i] !== 0) return false;
+  return true;
+}
+
+/**
+ * The overview makes a new picture: there is none, it shows nothing (`blank`, see blankPixels), or
+ * it was written before the file was last changed. A save writes the file first and its picture
+ * right after, so a current picture is never older than its file.
+ */
+export function needsPicture(p: PictureMeta, blank = false): boolean {
+  if (!p.thumbnail || blank) return true;
   return p.thumbnailAt !== undefined && p.thumbnailAt < p.updatedAt;
+}
+
+/**
+ * The overview's background pictures, one run at a time: the user's projects first, then the
+ * examples. Some examples take longer than the time limit to build in the background kernel (coil,
+ * springs), and while they went first a project's picture could wait minutes, or never come when
+ * the overview was left before. A call during a run asks for one more run after it, so a project
+ * added or changed meanwhile still gets its picture.
+ */
+export function pictureRunner(steps: { projects: () => Promise<void>; examples: () => Promise<void> }): () => Promise<void> {
+  let running: Promise<void> | null = null;
+  let again = false;
+  const run = async (): Promise<void> => {
+    do {
+      again = false;
+      await steps.projects();
+      await steps.examples();
+    } while (again);
+  };
+  return () => {
+    if (running) {
+      again = true;
+      return running;
+    }
+    running = run().finally(() => (running = null));
+    return running;
+  };
 }
