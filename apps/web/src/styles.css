@@ -1237,3 +1237,7 @@ html.in-assistant-tab .ai-activity { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .ai-orb.busy, .ai-lock.in-tab.busy, .assistant-bar.busy::after, .tab.ai-tab.busy::after { animation: none; }
 }
+
+/* Home: a project an assistant has open in its tab can be taken back from its card. */
+.ai-release { position: absolute; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 5px; padding: 3px 10px 3px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--text); border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); box-shadow: 0 2px 8px rgb(20 20 50 / 0.12); }
+.ai-release svg { width: 13px; height: 13px; }

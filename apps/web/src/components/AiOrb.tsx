@@ -11,6 +11,7 @@ export function toolLabel(tool: string | null | undefined): string | null {
     undo: t("Undoing a step"),
     redo: t("Redoing a step"),
     open_project: t("Opening the project"),
+    close_project: t("Handing the project back"),
     new_project: t("Starting a new part"),
     open_example: t("Opening an example"),
     import_file: t("Importing a file"),

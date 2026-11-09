@@ -26,6 +26,7 @@ export type BridgeMethod =
   | "redo"
   | "list_projects"
   | "open_project"
+  | "close_project"
   | "new_project"
   | "render_view"
   | "set_view"
@@ -73,6 +74,24 @@ export interface BridgeRequest {
   /** The MCP server (one per assistant session) that sent it: the app gives each session its own window. */
   session?: string;
 }
+
+/**
+ * An assistant's tab (Mac app) goes back to the user when its session has made no request for this
+ * long: a chat or coding session keeps its MCP server running for hours, and its tab would stay
+ * locked all that time. The assistant opens the project again to go on (see close_project).
+ */
+export const ASSISTANT_IDLE_MS = 10 * 60_000;
+
+/**
+ * The assistants' tabs to hand back to the user now: idle for `idleMs` since their last request,
+ * not working and with no request waiting for an answer.
+ */
+export function idleAssistants<T extends { lastCall: number; busy: boolean; pending: number }>(tabs: Iterable<T>, now: number, idleMs = ASSISTANT_IDLE_MS): T[] {
+  return [...tabs].filter((a) => !a.busy && a.pending === 0 && now - a.lastCall >= idleMs);
+}
+
+/** Why a session has no tab any more: the user closed or took it over, the assistant closed it (close_project), or it sat idle. */
+export type EndedTab = "closed" | "released" | "idle";
 
 /** Sent by the hub, not answered: a session's MCP server exited, or (on connecting) the hub's own session. */
 export interface BridgeEvent {

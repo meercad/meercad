@@ -922,14 +922,15 @@ function leaveAssistantTab(): void {
 
 /**
  * The user takes over an assistant's tab (`keep`: its project stays open in a tab of the user's),
- * or closes it; also when the assistant's session ended. The assistant's page saves and goes.
+ * or closes it; also when the assistant's session ended, it closed the project itself (close_project,
+ * `why` "released") or sat idle ("idle"). The assistant's page saves and goes.
  */
-export async function handOverAssistantTab(session: string, keep = true): Promise<void> {
+export async function handOverAssistantTab(session: string, keep = true, why: "closed" | "released" | "idle" = "closed"): Promise<void> {
   const a = desktop?.assistant;
   if (!a || handingOver.has(session)) return;
   handingOver.add(session);
   try {
-    const project = await a.handOver(session);
+    const project = await a.handOver(session, why);
     const wasOpen = get().assistantTab === session;
     if (project && keep) {
       // Its copy in memory (if the user had it open before) is stale.

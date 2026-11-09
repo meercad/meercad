@@ -15,7 +15,7 @@ import { homedir } from "node:os";
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CHANNEL_PORTS, CHANNEL_MCP_NAMES, type Channel } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, CHANNEL_PORTS, CHANNEL_MCP_NAMES, idleAssistants, type Channel, type EndedTab } from "@meercad/mcp";
 import { adoptSiblingData, carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
 import { moveToTrash } from "./trash";
 
@@ -767,13 +767,17 @@ interface AssistantView {
   /** It is working right now, and on which tool. */
   busy: boolean;
   tool: string | null;
+  /** When its session last made a request (see idleAssistants). */
+  lastCall: number;
+  /** The window's page was asked to hand it back for being idle. */
+  idleSent: boolean;
   ready: Promise<void>;
   markReady: () => void;
 }
 /** By the view's webContents id. */
 const assistantViews = new Map<number, AssistantView>();
-/** Sessions whose tab the user closed or took over. */
-const closedSessions = new Set<string>();
+/** Sessions whose tab went, and why (their later requests get an answer that says so). */
+const endedSessions = new Map<string, EndedTab>();
 const assistantOf = (webContentsId: number) => assistantViews.get(webContentsId);
 /** Menu commands and Finder opens go to the window's page. */
 const commandWindow = () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null);
@@ -805,14 +809,14 @@ function openAssistantView(session: string, client: string): AssistantView {
   if (!mainWindow || mainWindow.isDestroyed()) throw new Error("meerCAD's window is closed.");
   let markReady = () => undefined as void;
   const ready = new Promise<void>((r) => (markReady = r));
-  closedSessions.delete(session);
+  endedSessions.delete(session);
   // It works in the background: its timers and drawing must not be slowed down there.
   const view = new WebContentsView({ webPreferences: webPreferences(true) });
   view.setBackgroundColor("#eef0f8");
   view.setVisible(false);
   mainWindow.contentView.addChildView(view);
   const wc = view.webContents;
-  const a: AssistantView = { view, session, client, project: null, name: null, busy: false, tool: null, ready, markReady };
+  const a: AssistantView = { view, session, client, project: null, name: null, busy: false, tool: null, lastCall: Date.now(), idleSent: false, ready, markReady };
   assistantViews.set(wc.id, a);
   placeAssistants();
   guardNavigation(wc);
@@ -820,7 +824,7 @@ function openAssistantView(session: string, client: string): AssistantView {
   const id = wc.id;
   wc.once("destroyed", () => {
     assistantViews.delete(id);
-    closedSessions.add(session);
+    if (!endedSessions.has(session)) endedSessions.set(session, "closed");
     if (shown?.session === session) shown = null;
     broadcastTabs();
     for (const [callId, c] of bridgeCalls) {
@@ -855,10 +859,12 @@ ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string
   return a.view.webContents.id;
 });
 /** The session's tab; "closed" when the user closed it (its requests must not land in the user's page then). */
-ipcMain.handle("assistant:window", (_e, session: string) => [...assistantViews.values()].find((a) => a.session === session && !a.view.webContents.isDestroyed())?.view.webContents.id ?? (closedSessions.has(session) ? "closed" : null));
+ipcMain.handle("assistant:window", (_e, session: string) => [...assistantViews.values()].find((a) => a.session === session && !a.view.webContents.isDestroyed())?.view.webContents.id ?? endedSessions.get(session) ?? null);
 ipcMain.handle("assistant:call", (_e, p: { window: number; req: unknown }) => {
   const a = assistantViews.get(p.window);
   if (!a || a.view.webContents.isDestroyed()) throw new Error(CLOSED);
+  a.lastCall = Date.now();
+  a.idleSent = false;
   const callId = ++bridgeCallSeq;
   return new Promise((resolve, reject) => {
     bridgeCalls.set(callId, { window: p.window, resolve, reject });
@@ -906,9 +912,10 @@ ipcMain.on("window:released", (_e, callId: number) => releases.get(callId)?.());
  * The user takes an assistant's tab over (or closes it), or its session ended: its page saves the
  * project and goes. Returns the project, which the window's page opens as a tab of the user's.
  */
-ipcMain.handle("assistant:hand-over", async (_e, session: string) => {
+ipcMain.handle("assistant:hand-over", async (_e, session: string, why?: unknown) => {
   const a = [...assistantViews.values()].find((x) => x.session === session && !x.view.webContents.isDestroyed());
   if (!a) return null;
+  endedSessions.set(session, why === "released" || why === "idle" ? why : "closed");
   const callId = ++releaseSeq;
   await new Promise<void>((resolve) => {
     releases.set(callId, resolve);
@@ -920,6 +927,28 @@ ipcMain.handle("assistant:hand-over", async (_e, session: string) => {
   closeView(a);
   return project;
 });
+/**
+ * A tab whose session has made no request for a while goes back to the user (the window's page
+ * hands it over): an assistant's session often stays open for hours after its last call.
+ * MEERCAD_ASSISTANT_IDLE_MS shortens it for test runs.
+ */
+const ASSISTANT_IDLE: number = (() => {
+  const v = Number(process.env["MEERCAD_ASSISTANT_IDLE_MS"]);
+  return Number.isFinite(v) && v >= 1000 ? v : ASSISTANT_IDLE_MS;
+})();
+setInterval(
+  () => {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+    const live = [...assistantViews.values()].filter((a) => !a.view.webContents.isDestroyed() && !a.idleSent);
+    const pending = (a: AssistantView) => [...bridgeCalls.values()].filter((c) => c.window === a.view.webContents.id).length;
+    for (const a of idleAssistants(live.map((a) => ({ a, lastCall: a.lastCall, busy: a.busy, pending: pending(a) })), Date.now(), ASSISTANT_IDLE)) {
+      a.a.idleSent = true;
+      mainWindow.webContents.send("assistant-idle", a.a.session);
+    }
+  },
+  Math.min(30_000, Math.max(1000, ASSISTANT_IDLE / 4)),
+).unref();
+
 /** The Stop button in an assistant's tab: the window's page takes the tab over. */
 ipcMain.on("assistant:stop", (e) => {
   const a = assistantOf(e.sender.id);

@@ -104,14 +104,17 @@ interface DesktopApi {
   /** Assistant sessions' own tabs (MCP), see lib/mcpBridge. */
   assistant?: {
     open(p: { session: string; client: string }): Promise<number>;
-    windowOf(session: string): Promise<number | "closed" | null>;
+    windowOf(session: string): Promise<number | "closed" | "released" | "idle" | null>;
     call(window: number, req: unknown): Promise<unknown>;
     /** The assistants' tabs (also sent as "assistant-tabs" when they change). */
     tabs(): Promise<AssistantTab[]>;
     /** Lays an assistant's tab over `rect` (CSS pixels of the window's page), or shows none. */
     show(p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null): void;
-    /** Takes an assistant's tab over: its page saves and goes; its project, for a tab of the user's. */
-    handOver(session: string): Promise<{ id: string; name: string } | null>;
+    /**
+     * Takes an assistant's tab over: its page saves and goes; its project, for a tab of the user's.
+     * `why`: the user did (closed), the assistant itself (released, close_project) or it sat idle.
+     */
+    handOver(session: string, why?: "closed" | "released" | "idle"): Promise<{ id: string; name: string } | null>;
     // In an assistant's tab:
     ready(): void;
     project(p: { id: string; name: string } | null): void;
@@ -120,7 +123,7 @@ interface DesktopApi {
     released(callId: number): void;
     respond(p: { callId: number; result?: unknown; error?: string }): void;
   };
-  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "assistant-stop", fn: (arg: string) => void): () => void;
+  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "assistant-stop" | "assistant-idle", fn: (arg: string) => void): () => void;
   on(channel: "assistant-tabs", fn: (arg: AssistantTab[]) => void): () => void;
   on(channel: "mcp-status", fn: (arg: "off" | "connecting" | "connected") => void): () => void;
   on(channel: "mcp-set-enabled", fn: (arg: boolean) => void): () => void;
