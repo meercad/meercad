@@ -1,265 +1,14 @@
 /**
- * Shortcut and mouse presets. Every handler and every shortcut badge reads from here, so switching a
- * preset in Settings changes both what keys do and what the UI shows.
+ * The chosen control scheme and the other preferences. The schemes themselves (every key and mouse
+ * binding) live in ./controls; handlers and badges go through the helpers here, so switching a
+ * scheme in Settings changes what keys and clicks do and what the UI shows.
  */
 import { create } from "zustand";
 import type { Navigation } from "@meercad/viewport";
-import type { SketchTool } from "../sketch/state";
-import { t } from "./i18n";
+import { actionIn, KEY_SCHEMES, keymapFor, MOUSE_SCHEMES, mouseFor, type Action, type KeyScheme, type MouseScheme, type RightClick } from "./controls";
 import { DEFAULT_BED, validBed, type Bed } from "./printBed";
 
-export type ModelAction =
-  | "sketch"
-  | "extrude"
-  | "revolve"
-  | "loft"
-  | "split"
-  | "rib"
-  | "draft"
-  | "offset_face"
-  | "texture"
-  | "text"
-  | "standard_part"
-  | "gridfinity"
-  | "wall"
-  | "label"
-  | "primitive"
-  | "box"
-  | "snap_hook"
-  | "lithophane"
-  | "align"
-  | "scale"
-  | "bend"
-  | "sweep"
-  | "fillet"
-  | "chamfer"
-  | "shell"
-  | "thread"
-  | "gear"
-  | "coil"
-  | "spring"
-  | "cable"
-  | "screw"
-  | "hole"
-  | "transform"
-  | "linear_pattern"
-  | "circular_pattern"
-  | "mirror"
-  | "boolean"
-  | "plane"
-  | "measure"
-  | "joints"
-  | "palette"
-  | "fit"
-  | "normal"
-  | "view.iso"
-  | "view.front"
-  | "view.back"
-  | "view.top"
-  | "view.bottom"
-  | "view.right"
-  | "view.left";
-export type SketchAction = `sketch.${Exclude<SketchTool, "select">}` | "sketch.construction";
-export type Action = ModelAction | SketchAction;
-
-/** Bindings like "E", "Shift+E", "Mod+1", "Num7". An empty list leaves the action unbound. */
-export type Keymap = Record<Action, string[]>;
-
-const BASE: Keymap = {
-  sketch: ["S"],
-  extrude: ["E"],
-  revolve: ["V"],
-  loft: ["Shift+L"],
-  sweep: ["W"],
-  fillet: ["F"],
-  chamfer: ["C"],
-  shell: ["H"],
-  thread: ["T"],
-  gear: ["G"],
-  coil: [],
-  spring: [],
-  cable: [],
-  screw: [],
-  hole: ["Shift+H"],
-  split: ["Shift+K"],
-  rib: ["Shift+B"],
-  draft: ["Shift+D"],
-  offset_face: ["Shift+E"],
-  texture: [],
-  text: ["Shift+T"],
-  standard_part: ["Shift+P"],
-  gridfinity: [],
-  wall: [],
-  label: [],
-  primitive: [],
-  box: [],
-  snap_hook: [],
-  lithophane: [],
-  align: ["Shift+A"],
-  scale: [],
-  bend: [],
-  transform: ["M"],
-  linear_pattern: ["L"],
-  circular_pattern: ["O"],
-  mirror: ["I"],
-  boolean: ["B"],
-  plane: ["N"],
-  measure: ["Shift+M"],
-  joints: ["J"],
-  palette: ["X", "Mod+F"],
-  fit: ["Z"],
-  normal: ["Space"],
-  "view.iso": ["Mod+1", "1"],
-  "view.front": ["Mod+2", "2"],
-  "view.back": ["Mod+3", "3"],
-  "view.top": ["Mod+4", "4"],
-  "view.bottom": ["Mod+5", "5"],
-  "view.right": ["Mod+6", "6"],
-  "view.left": ["Mod+7", "7"],
-  "sketch.line": ["L"],
-  "sketch.rect": ["R"],
-  "sketch.rect_center": ["Shift+R"],
-  "sketch.circle": ["C"],
-  "sketch.arc": ["A"],
-  "sketch.arc_center": ["Shift+A"],
-  "sketch.polygon": ["G"],
-  "sketch.spline": ["S"],
-  "sketch.point": ["P"],
-  "sketch.trim": ["T"],
-  "sketch.fillet": ["Shift+F"],
-  "sketch.chamfer": ["Shift+B"],
-  "sketch.offset": ["Shift+O"],
-  "sketch.pattern": ["Shift+G"],
-  "sketch.dimension": ["D"],
-  "sketch.project": ["U"],
-  "sketch.section": [],
-  "sketch.construction": ["X"],
-};
-
-export type KeyScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blender";
-export type MouseScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blender" | "trackpad";
-
-export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Keymap }[] = [
-  { id: "meercad", label: "meerCAD", note: t("Single letters for every tool, ⌘1–7 for views."), map: BASE },
-  {
-    id: "fusion",
-    label: "Fusion 360",
-    note: t("S opens command search, P projects edges, F6 fits the view."),
-    map: { ...BASE, sketch: [], palette: ["S", "Mod+F"], fit: ["F6"], "sketch.project": ["P"], "sketch.point": [] },
-  },
-  {
-    id: "onshape",
-    label: "Onshape",
-    note: t("Shift+letter for features, Shift+1–7 for views, F fits, N looks normal to a face."),
-    map: {
-      ...BASE,
-      sketch: ["Shift+S"],
-      extrude: ["Shift+E"],
-      revolve: ["Shift+W"],
-      fillet: ["Shift+F"],
-      plane: [],
-      fit: ["F"],
-      normal: ["N"],
-      "view.front": ["Shift+1"],
-      "view.back": ["Shift+2"],
-      "view.left": ["Shift+3"],
-      "view.right": ["Shift+4"],
-      "view.top": ["Shift+5"],
-      "view.bottom": ["Shift+6"],
-      "view.iso": ["Shift+7"],
-      "sketch.rect": ["G"],
-      "sketch.rect_center": ["R"],
-      "sketch.polygon": [],
-      "sketch.trim": ["M"],
-      "sketch.construction": ["Q"],
-    },
-  },
-  {
-    id: "solidworks",
-    label: "SolidWorks",
-    note: t("Ctrl+1–7 for views, Ctrl+8 normal to, F fits."),
-    map: {
-      ...BASE,
-      fillet: [],
-      fit: ["F"],
-      normal: ["Mod+8"],
-      "view.front": ["Mod+1"],
-      "view.back": ["Mod+2"],
-      "view.left": ["Mod+3"],
-      "view.right": ["Mod+4"],
-      "view.top": ["Mod+5"],
-      "view.bottom": ["Mod+6"],
-      "view.iso": ["Mod+7"],
-    },
-  },
-  {
-    id: "blender",
-    label: "Blender",
-    note: t("Numpad views (Ctrl for the opposite side), Home fits."),
-    map: {
-      ...BASE,
-      fit: ["Home"],
-      "view.front": ["Num1"],
-      "view.back": ["Mod+Num1"],
-      "view.right": ["Num3"],
-      "view.left": ["Mod+Num3"],
-      "view.top": ["Num7"],
-      "view.bottom": ["Mod+Num7"],
-      "view.iso": ["Num0"],
-    },
-  },
-];
-
-export const MOUSE_SCHEMES: { id: MouseScheme; label: string; orbit: string; pan: string; zoom: string; nav: Navigation }[] = [
-  {
-    id: "meercad",
-    label: "meerCAD",
-    orbit: t("Right drag"),
-    pan: t("Middle drag or Shift + right drag"),
-    zoom: t("Wheel"),
-    nav: { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "shift" }], zoom: [] },
-  },
-  {
-    id: "fusion",
-    label: "Fusion 360",
-    orbit: t("Shift + middle drag"),
-    pan: t("Middle drag"),
-    zoom: t("Wheel"),
-    nav: { orbit: [{ button: "middle", mod: "shift" }], pan: [{ button: "middle" }], zoom: [] },
-  },
-  {
-    id: "onshape",
-    label: "Onshape",
-    orbit: t("Right drag"),
-    pan: t("Middle drag or Ctrl + right drag"),
-    zoom: t("Wheel"),
-    nav: { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "ctrl" }], zoom: [] },
-  },
-  {
-    id: "solidworks",
-    label: "SolidWorks",
-    orbit: t("Middle drag"),
-    pan: t("Ctrl + middle drag"),
-    zoom: t("Wheel or Shift + middle drag"),
-    nav: { orbit: [{ button: "middle" }], pan: [{ button: "middle", mod: "ctrl" }], zoom: [{ button: "middle", mod: "shift" }] },
-  },
-  {
-    id: "blender",
-    label: "Blender",
-    orbit: t("Middle drag"),
-    pan: t("Shift + middle drag"),
-    zoom: t("Wheel or Ctrl + middle drag"),
-    nav: { orbit: [{ button: "middle" }], pan: [{ button: "middle", mod: "shift" }], zoom: [{ button: "middle", mod: "ctrl" }] },
-  },
-  {
-    id: "trackpad",
-    label: t("Trackpad / no middle button"),
-    orbit: t("Right drag (two-finger click-drag)"),
-    pan: t("Shift + right drag"),
-    zoom: t("Pinch or Alt + right drag"),
-    nav: { orbit: [{ button: "right" }], pan: [{ button: "right", mod: "shift" }], zoom: [{ button: "right", mod: "alt" }] },
-  },
-];
+export * from "./controls";
 
 interface Prefs {
   keys: KeyScheme;
@@ -335,8 +84,10 @@ export function setPrefs(p: Partial<Prefs>): void {
   }
 }
 
-export const keymapFor = (scheme: KeyScheme): Keymap => KEY_SCHEMES.find((s) => s.id === scheme)!.map;
-export const navigationFor = (scheme: MouseScheme): Navigation => MOUSE_SCHEMES.find((s) => s.id === scheme)!.nav;
+export const navigationFor = (scheme: MouseScheme): Navigation => mouseFor(scheme).nav;
+
+/** What a right click without dragging does in the active scheme. */
+export const rightClick = (): RightClick => mouseFor(usePrefs.getState().mouse).rightClick;
 
 /** The primary shortcut for an action in the active preset, for badges and tooltips. */
 export function keyFor(action: Action): string | undefined {
@@ -349,38 +100,7 @@ export function useKey(action: Action): string | undefined {
   return keymapFor(scheme)[action][0];
 }
 
-function eventKey(e: KeyboardEvent): string {
-  if (e.code.startsWith("Key")) return e.code.slice(3);
-  if (e.code.startsWith("Digit")) return e.code.slice(5);
-  if (e.code.startsWith("Numpad") && /\d$/.test(e.code)) return `Num${e.code.slice(6)}`;
-  if (e.code === "Space") return "Space";
-  return e.key.length === 1 ? e.key.toUpperCase() : e.key;
-}
-
-/** Whether a key event is exactly this binding (modifiers must match too). */
-export function matches(e: KeyboardEvent, binding: string): boolean {
-  const parts = binding.split("+");
-  const key = parts.pop()!;
-  const mods = new Set(parts);
-  return (
-    eventKey(e) === key &&
-    (e.metaKey || e.ctrlKey) === mods.has("Mod") &&
-    e.shiftKey === mods.has("Shift") &&
-    e.altKey === mods.has("Alt")
-  );
-}
-
 /** The first action among `actions` that this event triggers in the active preset. */
 export function actionFor<A extends Action>(e: KeyboardEvent, actions: readonly A[]): A | undefined {
-  const map = keymapFor(usePrefs.getState().keys);
-  return actions.find((a) => map[a].some((b) => matches(e, b)));
+  return actionIn(keymapFor(usePrefs.getState().keys), e, actions);
 }
-
-export const MODEL_ACTIONS: readonly ModelAction[] = [
-  "sketch", "extrude", "revolve", "loft", "sweep", "rib", "primitive", "text", "standard_part", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "texture", "thread", "gear", "coil", "spring", "cable", "screw", "hole", "split", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane",
-  "measure", "joints", "palette", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
-];
-export const SKETCH_ACTIONS: readonly SketchAction[] = [
-  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.spline", "sketch.point", "sketch.trim", "sketch.fillet", "sketch.chamfer", "sketch.offset", "sketch.pattern",
-  "sketch.dimension", "sketch.project", "sketch.section", "sketch.construction",
-];

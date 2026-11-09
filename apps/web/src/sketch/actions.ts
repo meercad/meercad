@@ -2,6 +2,7 @@
 import type { ComponentType, SVGProps } from "react";
 import type { ConstraintType, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import { t } from "../lib/i18n";
+import type { ConstraintKind } from "../lib/controls";
 import { apply, applyQuiet, currentDoc, toast, useApp } from "../store";
 import { Coincident, Collinear, Concentric, EqualIcon, Fix, Horizontal, Midpoint, Parallel, Perpendicular, Symmetric, Tangent, Vertical } from "./icons";
 import { setSketchSelection, useSketchUi, type SketchSel } from "./state";
@@ -39,19 +40,19 @@ export let externalKinds = new Map<string, string>();
 export const setExternalKinds = (m: Map<string, string>) => (externalKinds = m);
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
-export const CONSTRAINT_TOOLS: { type: string; icon: Icon; label: string; key?: string; hint: string }[] = [
-  { type: "coincident", icon: Coincident, label: t("Coincident"), key: "Shift+N", hint: t("two points, or a point and a curve") },
-  { type: "hv", icon: Horizontal, label: t("Horiz./Vert."), key: "Shift+V", hint: t("lines or two points; picks the nearest axis") },
+export const CONSTRAINT_TOOLS: { type: ConstraintKind; icon: Icon; label: string; hint: string }[] = [
+  { type: "coincident", icon: Coincident, label: t("Coincident"), hint: t("two points, or a point and a curve") },
+  { type: "hv", icon: Horizontal, label: t("Horiz./Vert."), hint: t("lines or two points; picks the nearest axis") },
   { type: "vertical", icon: Vertical, label: t("Vertical"), hint: t("lines or two points") },
-  { type: "parallel", icon: Parallel, label: t("Parallel"), key: "Shift+A", hint: t("two lines") },
-  { type: "perpendicular", icon: Perpendicular, label: t("Perpendicular"), key: "Shift+P", hint: t("two lines") },
-  { type: "tangent", icon: Tangent, label: t("Tangent"), key: "Shift+T", hint: t("a line and an arc/circle, two arcs, or a spline and a curve at its end") },
-  { type: "equal", icon: EqualIcon, label: t("Equal"), key: "Shift+E", hint: t("lines or circles/arcs") },
-  { type: "concentric", icon: Concentric, label: t("Concentric"), key: "Shift+C", hint: t("two circles/arcs") },
-  { type: "midpoint", icon: Midpoint, label: t("Midpoint"), key: "Shift+M", hint: t("a point and a line") },
+  { type: "parallel", icon: Parallel, label: t("Parallel"), hint: t("two lines") },
+  { type: "perpendicular", icon: Perpendicular, label: t("Perpendicular"), hint: t("two lines") },
+  { type: "tangent", icon: Tangent, label: t("Tangent"), hint: t("a line and an arc/circle, two arcs, or a spline and a curve at its end") },
+  { type: "equal", icon: EqualIcon, label: t("Equal"), hint: t("lines or circles/arcs") },
+  { type: "concentric", icon: Concentric, label: t("Concentric"), hint: t("two circles/arcs") },
+  { type: "midpoint", icon: Midpoint, label: t("Midpoint"), hint: t("a point and a line") },
   { type: "collinear", icon: Collinear, label: t("Collinear"), hint: t("two lines") },
-  { type: "symmetric", icon: Symmetric, label: t("Symmetric"), key: "Shift+S", hint: t("two points and a line") },
-  { type: "fix", icon: Fix, label: t("Lock"), key: "Shift+L", hint: t("points or curves") },
+  { type: "symmetric", icon: Symmetric, label: t("Symmetric"), hint: t("two points and a line") },
+  { type: "fix", icon: Fix, label: t("Lock"), hint: t("points or curves") },
 ];
 
 /** Creates constraints of `type` from the current selection. */

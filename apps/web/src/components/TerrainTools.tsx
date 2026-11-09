@@ -13,6 +13,7 @@ import { useApp } from "../store";
 import { showMenu } from "./Menu";
 import { touchOnly } from "../lib/keyboard";
 import { t } from "../lib/i18n";
+import { actionFor, COMMON_ACTIONS } from "../lib/keymap";
 
 /** The clean-up tools for a terrain or scanned area, as a menu. */
 export function cleanUpMenu(ref: string, x: number, y: number): void {
@@ -32,14 +33,15 @@ export function TerrainHud() {
   const place = useTerrainPlace();
   const measure = useTerrainMeasure();
   const features = useApp((s) => s.doc.features);
-  // Keys while drawing: Enter finishes, Esc cancels, Backspace takes the last point back.
+  // Keys while drawing (from the control scheme): confirm finishes, cancel cancels, delete takes the last point back.
   useEffect(() => {
     if (!draw.kind) return;
     const keys = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement | null)?.closest("input, textarea")) return;
-      if (e.key === "Enter") finishMarking();
-      else if (e.key === "Escape") cancelMarking();
-      else if (e.key === "Backspace") undoMarkPoint();
+      const action = actionFor(e, COMMON_ACTIONS);
+      if (action === "confirm") finishMarking();
+      else if (action === "cancel") cancelMarking();
+      else if (action === "delete") undoMarkPoint();
       else return;
       e.preventDefault();
       e.stopPropagation();

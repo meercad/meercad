@@ -1,5 +1,5 @@
-import { Bot, Check, ChevronDown, CircleHelp, Download, Share, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
-import { setPrefs, usePrefs } from "../lib/keymap";
+import { Bot, Check, Search, ChevronDown, CircleHelp, Download, Share, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
+import { setPrefs, useKey, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
 import { featureName } from "../lib/features";
@@ -40,6 +40,8 @@ export function toggleTheme(): void {
   }
 }
 
+export const openPalette = (): void => void window.dispatchEvent(new Event("meercad:palette"));
+
 export function TopBar() {
   const sideOpen = useApp((s) => s.sideOpen);
   const canUndo = useApp((s) => s.canUndo);
@@ -54,6 +56,13 @@ export function TopBar() {
   const units = useApp((s) => s.doc.units ?? "mm");
   const variants = useApp((s) => s.doc.variants?.length ?? 0);
   const hasJoints = useApp((s) => (s.doc.mechanism?.joints.length ?? 0) > 0);
+  const searchKey = useKey("palette");
+  // Command search for every tool and command; on touch screens this button is the way in.
+  const searchBtn = (
+    <button className="icon-btn" onClick={openPalette} title={searchKey ? t("Search commands ({key})", { key: searchKey }) : t("Search commands")} aria-label={t("Search commands")}>
+      <Search />
+    </button>
+  );
 
   const fileBtn = useRef<HTMLButtonElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
@@ -162,6 +171,7 @@ export function TopBar() {
           <ChevronDown />
         </button>
         <span className="spacer" />
+        {searchBtn}
         <button className="icon-btn" onClick={undo} disabled={!canUndo && !inDialog} title={t("Undo")}>
           <Undo2 />
         </button>
@@ -183,6 +193,7 @@ export function TopBar() {
         <House />
       </button>
       <TabStrip />
+      {searchBtn}
       <button className="icon-btn" onClick={undo} disabled={!canUndo && !inDialog} title={t("Undo (⌘Z, or tap with two fingers)")}>
         <Undo2 />
       </button>

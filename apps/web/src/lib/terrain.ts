@@ -18,6 +18,7 @@ import { nativeApp } from "./native";
 import { desktop, type TerrainResult } from "./persistence";
 import { t } from "./i18n";
 import { PHOTOGRAMMETRY } from "./eta";
+import { actionFor, COMMON_ACTIONS } from "./keymap";
 
 interface TerrainPlugin {
   build(): Promise<(TerrainResult & { path: string; folder: string }) | { cancelled: true }>;
@@ -188,7 +189,7 @@ export function setOnTerrain(body: string): void {
 export function startPlacing(body: string): void {
   useTerrainPlace.setState({ body, move: null });
   const keys = (e: KeyboardEvent) => {
-    if (e.key === "Escape") useTerrainPlace.setState({ body: null, move: null });
+    if (actionFor(e, COMMON_ACTIONS) === "cancel") useTerrainPlace.setState({ body: null, move: null });
     // Arrow keys raise and lower it: 10 mm a step, 100 mm with Shift.
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();

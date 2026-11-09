@@ -12,6 +12,7 @@ import { apply, currentDoc, toast, useApp } from "../store";
 import { partName } from "./features";
 import { joinedParts } from "./mechanism";
 import { t } from "./i18n";
+import { actionFor, COMMON_ACTIONS } from "./keymap";
 
 type V3 = [number, number, number];
 
@@ -212,7 +213,7 @@ export function pickFaceToLay(on = true): void {
   usePrintCheck.setState({ picking: on });
   if (!on) return;
   const keys = (e: KeyboardEvent) => {
-    if (e.key === "Escape") usePrintCheck.setState({ picking: false });
+    if (actionFor(e, COMMON_ACTIONS) === "cancel") usePrintCheck.setState({ picking: false });
   };
   window.addEventListener("keydown", keys, true);
   const stop = usePrintCheck.subscribe((s) => {

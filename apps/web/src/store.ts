@@ -590,8 +590,25 @@ export function selectionOnMesh(): boolean {
   return s.selection.some((p) => (p.kind === "face" || p.kind === "edge") && meshParts.has(p.bodyId));
 }
 
+/** Hides the parts (and sketches) the selection touches. */
+export function hideSelectedParts(): void {
+  const s = get();
+  const ids = new Set<string>();
+  for (const p of s.selection) {
+    if (p.kind === "face" || p.kind === "edge") ids.add(p.bodyId);
+    else if (p.kind === "region" || p.kind === "sketch_curve") ids.add(p.sketchId);
+  }
+  if (!ids.size) return;
+  set({ hidden: new Set([...s.hidden, ...ids]), selection: [] });
+}
+
+let lastStarted: FeatureOp | null = null;
+/** The tool started last, for "repeat last command". */
+export const lastStartedFeature = (): FeatureOp | null => lastStarted;
+
 export function startFeature(op: FeatureOp): void {
   const s = get();
+  lastStarted = op;
   if (s.dialog) cancelDialog();
   if (FACE_TOOLS.has(op) && selectionOnMesh()) {
     if (op === "sketch") set({ selection: [] });
