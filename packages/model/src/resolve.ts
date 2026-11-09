@@ -67,7 +67,7 @@ export type ResolvedGear = R<
   bore?: { diameter: number; allowance?: number; shape?: "round" | "d_flat" | "hex"; flat?: number };
   hub?: { diameter: number; length: number; side?: "front" | "back" | "both" };
 };
-export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number };
+export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance" | "length"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number; length?: number };
 export type ResolvedRib = R<RibFeature, "thickness">;
 export type ResolvedDraft = R<DraftFeature, "angle">;
 export type ResolvedOffsetFace = R<OffsetFaceFeature, "distance">;
@@ -282,6 +282,7 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         diameter: opt("diameter", f.diameter),
         depth: opt("depth", f.depth),
         allowance: opt("allowance", f.allowance),
+        length: opt("length", f.length),
       };
     case "split": {
       const { connectors: c, ...rest } = f;
@@ -468,7 +469,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     circular_pattern: ["count", "angle"],
     mesh_convert: ["tolerance", "angle"],
     bend: ["angle", "radius", "gap", "tolerance"],
-    hole: ["diameter", "depth", "allowance"],
+    hole: ["diameter", "depth", "allowance", "length"],
     rib: ["thickness"],
     draft: ["angle"],
     offset_face: ["distance"],

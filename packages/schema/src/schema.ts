@@ -609,6 +609,8 @@ export const definitions: Record<string, Json> = {
         fit: { enum: ["close", "normal", "loose"] },
         depth: ref("expr"),
         allowance: ref("expr"),
+        length: ref("expr"),
+        withInserts: bool,
         flip: bool,
       },
       ["plane", "points", "kind"],
