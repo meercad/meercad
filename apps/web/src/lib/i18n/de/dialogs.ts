@@ -512,4 +512,6 @@ export default {
   "bent to {r}, allowed {min}": "auf {r} gebogen, erlaubt {min}",
   "runs into {parts}": "läuft in {parts}",
   "fine, {mm} to spare": "in Ordnung, {mm} Reserve",
+  "Cable on a swinging arm": "Kabel an einem Schwenkarm",
+  "A cable with an XT30 and a JST plug that follows the arm; swing it far and it gets stretched": "Ein Kabel mit XT30- und JST-Stecker, das dem Arm folgt; weit geschwenkt wird es gedehnt",
 };

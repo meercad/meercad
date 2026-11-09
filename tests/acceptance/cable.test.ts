@@ -31,8 +31,12 @@ describe("cable", () => {
     const bb = plugged.bodies[0]!.bbox;
     expect(bb.min[0]).toBeCloseTo(0, 3);
     expect(bb.max[0]).toBeCloseTo(80, 3);
-    // The XT30 housing is wider than the cable.
+    // The XT30 housing is wider than the cable; plugs and cable are one solid.
     expect(bb.max[1] - bb.min[1]).toBeCloseTo(10.2, 2);
+    const cableOnly = Math.PI * 1.3 ** 2 * plugged.features[0]!.info!["length"]!;
+    const housings = 10.2 * 5.2 * 15.5 + (2.5 * 3 + 2.4) * 5.75 * 7;
+    // (the cable reaches 1 mm into each plug)
+    expect(Math.abs(plugged.bodies[0]!.volume - (cableOnly + housings - 2 * Math.PI * 1.3 ** 2)) / plugged.bodies[0]!.volume).toBeLessThan(0.01);
     const ribbon = s.rebuild(doc([{ id: "cab1", op: "cable", shape: "ribbon", conductors: 10, points: [{ at: [0, 0, 0] }, { at: [50, 0, 0] }, { at: [80, 30, 0] }], end: { kind: "idc" } }])).report;
     ok(ribbon);
     expect(ribbon.bodies[0]!.volume).toBeGreaterThan(12.7 * 0.9 * 80);

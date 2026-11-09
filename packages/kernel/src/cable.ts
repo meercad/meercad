@@ -40,7 +40,8 @@ export function cableBody(oc: OC, arena: Arena, f: ResolvedCable, warnings: stri
   layout.line.forEach((p, i) => pts.SetValue(i + 1, pnt(p)));
   let spine: TopoDS_Wire;
   try {
-    const fit = arena.track(new oc.GeomAPI_PointsToBSpline(pts, 3, 8, "GeomAbs_C2" as never, 1e-3));
+    // Cubic: higher degrees sweep into surfaces the plugs' booleans fail on (an empty solid).
+    const fit = arena.track(new oc.GeomAPI_PointsToBSpline(pts, 3, 3, "GeomAbs_C2" as never, 1e-3));
     const edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(arena.track(fit.Curve()) as never)).Edge());
     spine = arena.track(arena.track(new oc.BRepBuilderAPI_MakeWire(edge)).Wire());
   } catch (e) {
@@ -73,12 +74,17 @@ export function cableBody(oc: OC, arena: Arena, f: ResolvedCable, warnings: stri
     mk.Build();
     if (!mk.IsDone()) throw new FeatureError("could not sweep the cable", "a cable too thick for a tight bend crosses itself: move the points apart");
     mk.MakeSolid();
-    shape = arena.track(mk.Shape());
+    // A swept solid can come out inside-out, which booleans reject (the plugs would fuse into nothing):
+    // orient it and copy it onto fresh topology.
+    const solids = arena.track(new oc.TopExp_Explorer(arena.track(mk.Shape()), "TopAbs_SOLID" as never));
+    if (!solids.More()) throw new FeatureError("could not sweep the cable");
+    const solid = arena.track(oc.TopoDS.Solid(arena.track(solids.Current())));
+    oc.BRepLib.OrientClosedSolid(solid);
+    shape = arena.track(arena.track(new oc.BRepBuilderAPI_Transform(solid, arena.track(new oc.gp_Trsf()), true, false)).Shape());
   } catch (e) {
     if (e instanceof FeatureError) throw e;
     throw new FeatureError(`could not sweep the cable: ${occtErrorMessage(oc, e)}`, "a cable too thick for a tight bend crosses itself: move the points apart");
   }
-  if (volumeOf(oc, arena, shape) < 0) shape = arena.track(shape.Reversed());
 
   for (const plug of layout.plugs) {
     const up = cross(plug.dir, plug.across);
@@ -86,7 +92,16 @@ export function cableBody(oc: OC, arena: Arena, f: ResolvedCable, warnings: stri
     // Local X along the plug, Y across, Z = X × Y up.
     const ax = arena.track(new oc.gp_Ax2(pnt(corner), dirOf(up), dirOf(plug.dir)));
     const box = arena.track(arena.track(new oc.BRepPrimAPI_MakeBox(ax, plug.size.length, plug.size.width, plug.size.height)).Shape());
-    const fuse = arena.track(new oc.BRepAlgoAPI_Fuse(shape, box));
+    const fuse = arena.track(new oc.BRepAlgoAPI_Fuse());
+    const list = (x: TopoDS_Shape) => {
+      const l = arena.track(new oc.NCollection_List_TopoDS_Shape());
+      l.Append(x);
+      return l;
+    };
+    fuse.SetArguments(list(shape));
+    fuse.SetTools(list(box));
+    fuse.SetFuzzyValue(1e-4);
+    fuse.Build(arena.track(new oc.Message_ProgressRange()));
     if (!fuse.IsDone() || fuse.HasErrors()) throw new FeatureError(`could not put the ${plug.size.label} plug on the cable`);
     shape = arena.track(fuse.Shape());
   }

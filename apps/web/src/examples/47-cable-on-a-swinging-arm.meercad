@@ -1,0 +1,58 @@
+{
+ "format": "meercad/1",
+ "params": {
+  "wire": "2.6 mm",
+  "slack": "10 mm"
+ },
+ "features": [
+  {
+   "id": "base",
+   "op": "primitive",
+   "name": "Base",
+   "shape": "box",
+   "size": [40, 40, 60],
+   "center": [0, 0, 30],
+   "mode": "new_body"
+  },
+  {
+   "id": "arm",
+   "op": "primitive",
+   "name": "Arm",
+   "shape": "box",
+   "size": [140, 20, 10],
+   "center": [50, 0, 65],
+   "mode": "new_body"
+  },
+  {
+   "id": "cab1",
+   "op": "cable",
+   "name": "Motor cable",
+   "points": [
+    { "at": [-20, 0, 20], "on": "base" },
+    { "at": [-45, 0, 55] },
+    { "at": [-15, 0, 85], "on": "arm" },
+    { "at": [80, 0, 90], "on": "arm" },
+    { "at": [100, 0, 70], "on": "arm" }
+   ],
+   "diameter": "wire",
+   "material": "silicone",
+   "slack": "slack",
+   "start": { "kind": "xt30" },
+   "end": { "kind": "jst_xh", "pins": 3 }
+  }
+ ],
+ "mechanism": {
+  "joints": [
+   {
+    "id": "j1",
+    "name": "Arm swing",
+    "type": "revolute",
+    "a": "arm",
+    "b": "base",
+    "anchor": { "axis": { "ref": "origin.Z" } },
+    "limits": [-150, 150]
+   }
+  ]
+ },
+ "rollback": null
+}
