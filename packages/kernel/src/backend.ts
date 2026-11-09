@@ -20,6 +20,7 @@ import {
   type ResolvedHole,
   type ResolvedSplit,
   holeShape,
+  type InsertDims,
   HoleError,
   type ResolvedPlane,
   type ResolvedRevolve,
@@ -1709,7 +1710,7 @@ function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
   if (!f.points.length) throw new FeatureError("place at least one hole");
   let shape;
   try {
-    shape = holeShape(f.kind, { size: f.size, diameter: f.diameter, fit: f.fit, depth: f.depth, allowance: f.allowance });
+    shape = holeShape(f.kind, { size: f.size, diameter: f.diameter, fit: f.fit, depth: f.depth, allowance: f.allowance, length: f.length });
   } catch (e) {
     if (e instanceof HoleError) throw new FeatureError(e.message);
     throw e;
@@ -1732,7 +1733,55 @@ function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
     }
     next = { ...next, bodies };
   }
+  if (shape.insert) {
+    insertWalls(ctx, next, f, frame, shape.diameter / 2, shape.insert);
+    if (f.withInserts) {
+      // The inserts as parts of their own, flush in their holes: "ho1_insert", "ho1_insert_2", …
+      const part = standardShape("insert", { size: shape.insert.size, length: shape.insert.length });
+      const bodies = new Map(next.bodies);
+      f.points.forEach((p, k) => {
+        const id = `${f.id}_insert${k === 0 ? "" : `_${k + 1}`}`;
+        bodies.set(id, standardPartBody(ctx.oc, ctx.arena, id, { ...frame, origin: toWorld(frame, p) }, [0, 0], part, !!f.flip));
+      });
+      next = { ...next, bodies };
+    }
+  }
   return next;
+}
+
+/**
+ * Warns where the wall around an insert's hole is thinner than the insert needs (it would bulge
+ * or crack when melted in): a cylinder as wide as hole plus wall, as deep as the insert, must lie
+ * in the material all round the hole.
+ */
+function insertWalls(ctx: Ctx, state: Omit<ModelState, "arena">, f: ResolvedHole, frame: PlaneFrame, r: number, ins: InsertDims): void {
+  const { oc, arena } = ctx;
+  const a: Vec3 = f.flip ? frame.normal : [-frame.normal[0], -frame.normal[1], -frame.normal[2]];
+  const R = r + ins.wall;
+  const ring = Math.PI * (R * R - r * r) * ins.length;
+  const volume = (s: TopoDS_Shape) => {
+    const props = arena.track(new oc.GProp_GProps());
+    oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    return Math.abs(props.Mass());
+  };
+  const thin: number[] = [];
+  f.points.forEach((p, k) => {
+    const c = toWorld(frame, p);
+    const ax = arena.track(new oc.gp_Ax2(arena.track(new oc.gp_Pnt(...c)), arena.track(new oc.gp_Dir(...a))));
+    const probe = arena.track(arena.track(new oc.BRepPrimAPI_MakeCylinder(ax, R, ins.length)).Shape());
+    const pb = bounds(oc, arena, probe);
+    let inside = 0;
+    for (const b of state.bodies.values()) {
+      if (b.bodyId.startsWith(`${f.id}_insert`) || !boundsOverlap(bounds(oc, arena, b.shape), pb)) continue;
+      const common = arena.track(new oc.BRepAlgoAPI_Common(b.shape, probe));
+      if (common.IsDone() && !common.HasErrors()) inside += volume(arena.track(common.Shape()));
+    }
+    // A little slack for the faceted volume integral.
+    if (inside < ring * 0.98) thin.push(k + 1);
+  });
+  if (!thin.length) return;
+  const which = f.points.length === 1 ? "the insert" : thin.length === f.points.length ? "every insert" : `insert${thin.length === 1 ? "" : "s"} ${thin.join(", ")}`;
+  ctx.warnings.push(`the wall around ${which} is thinner than the ${ins.wall} mm an ${ins.size} insert needs: move it away from the edge or make the part thicker`);
 }
 
 /**

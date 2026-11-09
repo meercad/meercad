@@ -102,6 +102,7 @@ const guides = (): { section: string; guides: Guide[] }[] => [
             {li(t("Extrude [E]: New / Add / Remove / Intersect, blind, symmetric, two directions or through all."))}
             {li(t("Revolve [V] around an axis, line or edge. Fillet [F], Chamfer [C], Shell [H]."))}
             {li(t("Patterns [L] / [O] and Mirror [I] copy extrudes/revolves or whole parts. Boolean [B] combines parts. Plane [N] adds offset construction planes."))}
+            {li(t("**Modify → Hole** with **Insert** makes holes for heat-set threaded inserts (M2–M10): pick the length, tap the face, or tap an edge to put the hole far enough in. **Also place the inserts** adds them as parts to the parts list; a warning shows where the wall around an insert is too thin."))}
             {li(t("Dialogs preview live; [↵] accepts, [Esc] cancels. Drag the arrows in the viewport to set distances."))}
           </ul>
         ),

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { FEATURE_NAMES, GUIDE_TEXT, MCP_NOTES, OP_NAMES, schemaFor } from "@meercad/ai/prompt";
 import { read3mf, readObj, writeStl } from "@meercad/io";
 import { gearCalc } from "./gearCalc.js";
+import { insertSizes } from "./insertSizes.js";
 import { createBridge } from "./hub.js";
 import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
 import { meercadDocument } from "./meercadFile.js";
@@ -399,6 +400,18 @@ server.registerTool(
     annotations: { readOnlyHint: true },
   },
   async (a) => text(gearCalc(a)),
+);
+
+server.registerTool(
+  "insert_sizes",
+  {
+    title: "Heat-set insert sizes",
+    description:
+      "Heat-set threaded inserts for printed parts (M2–M10): the lengths each size comes in, the hole to melt it into, its outside, the thinnest wall around it, and from that the smallest boss diameter, edge distance and spacing. Use it to plan bosses and hole positions before adding a hole feature with kind \"insert\".",
+    inputSchema: { size: z.string().optional().describe("One size, e.g. \"M3\"; default all") },
+    annotations: { readOnlyHint: true },
+  },
+  async (a) => text(insertSizes(a)),
 );
 
 server.registerTool(

@@ -365,6 +365,16 @@ export function partName(id: string, features: readonly Feature[]): string {
       // the generic name below
     }
   }
+  // Inserts a hole places in itself: named by what they are ("M3×5.7 heat-set insert (2)").
+  const insert = /^insert(?:_(\d+))?$/.exec(rest);
+  if (insert && best.op === "hole" && best.kind === "insert") {
+    try {
+      const s = standardShape("insert", { size: best.size, length: typeof best.length === "number" ? best.length : undefined });
+      return `${s.labelText ? t(s.labelText.text, s.labelText.values) : s.label}${insert[1] ? ` (${insert[1]})` : ""}`;
+    } catch {
+      // the generic name below
+    }
+  }
   if (best.op === "box" && rest === "lid") return t("Lid of {name}", { name: featureName(best) });
   if (/^\d+$/.test(rest)) return `${featureName(best)} (${rest})`;
   // Copies of several parts carry the copied part's id: "lp1_ex2_3".

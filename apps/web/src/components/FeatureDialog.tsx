@@ -2,7 +2,7 @@ import { ArrowLeftRight, Check, Cog, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef, type ThreadProfile } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
-import { cable, gearDims, HOLE_SIZES, INSERT_SIZES, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_CUT_TO_LENGTH, STANDARD_DEFAULT_SIZE, STANDARD_LYING, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH, STANDARD_WITH_MOVING } from "@meercad/model";
+import { cable, gearDims, HOLE_SIZES, INSERT_SIZES, insertDims, insertLengths, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_CUT_TO_LENGTH, STANDARD_DEFAULT_SIZE, STANDARD_LYING, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH, STANDARD_WITH_MOVING } from "@meercad/model";
 
 /** The standard parts in the picker, by what they are for. */
 const STANDARD_GROUPS: [string, (keyof typeof STANDARD_NAMES)[]][] = [
@@ -13,6 +13,7 @@ const STANDARD_GROUPS: [string, (keyof typeof STANDARD_NAMES)[]][] = [
 ];
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
+import { edgeInset, holeBesideEdge } from "../lib/holes";
 import { gearParams, pairInfo } from "../lib/gears";
 import { joinedParts } from "../lib/mechanism";
 import { bendDefaults, bendInfo, describeBend, gapProblem, partsBox, unbentBox } from "../lib/bend";
@@ -62,7 +63,8 @@ export function pickKindsFor(d: DialogState | null): Set<PickKind> {
     base: ["plane", "face"],
     neutral: ["plane", "face"],
     upTo: ["plane", "face"],
-    points: ["face"],
+    // Holes also go beside a tapped edge, the right distance in.
+    points: op === "hole" ? ["face", "edge"] : ["face"],
     catchIn: ["face", "edge"],
   };
   if (op === "linear_pattern" && d.field === "direction") return new Set(map["direction"]);
@@ -258,6 +260,15 @@ function handlePick(p: Pick, d: DialogState): void {
           const off = g.shape === "ribbon" ? cable.RIBBON_THICKNESS / 2 : typeof g.diameter === "number" ? g.diameter / 2 : 0;
           const n = p.normal ?? [0, 0, 0];
           g.points = [...g.points, { at: [r(p.point[0] + n[0] * off), r(p.point[1] + n[1] * off), r(p.point[2] + n[2] * off)], on: p.bodyId }];
+          break;
+        }
+        // A tapped edge puts a hole beside it, as far in as the wall to the edge needs.
+        if (g.op === "hole" && p.kind === "edge") {
+          const mesh = meshes.find((m) => m.bodyId === p.bodyId);
+          const inset = edgeInset(g);
+          const tag = "face" in g.plane && "face" in g.plane.face ? g.plane.face.face : undefined;
+          const at = mesh && inset !== undefined ? holeBesideEdge(mesh, p.edge, p.point, inset, tag) : null;
+          if (at) g.points = [...g.points, holePoint(at.point, at.normal)];
           break;
         }
         // Points are the tap projected onto the hole's plane (u, v are the same on parallel faces).
@@ -784,7 +795,8 @@ function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unk
       <Field label={t("Hole")}>
         <select className="field" value={f.kind} onChange={(e) => {
           const kind = e.target.value as Of<"hole">["kind"];
-          set(kind === "simple" ? { kind, size: undefined, fit: undefined, diameter: f.diameter ?? 5, allowance: f.allowance ?? "2 * fit" } : { kind, diameter: undefined, size: (kind === "insert" ? INSERT_SIZES : HOLE_SIZES).includes(f.size ?? "") ? f.size : "M3", ...(kind === "insert" ? { depth: undefined } : {}) });
+          const leave = kind === "insert" ? {} : { length: undefined, withInserts: undefined };
+          set(kind === "simple" ? { kind, size: undefined, fit: undefined, diameter: f.diameter ?? 5, allowance: f.allowance ?? "2 * fit", ...leave } : { kind, diameter: undefined, size: (kind === "insert" ? INSERT_SIZES : HOLE_SIZES).includes(f.size ?? "") ? f.size : "M3", ...(kind === "insert" ? { depth: undefined, length: undefined } : leave) });
         }}>
           {HOLE_KINDS.map(([k, label]) => (
             <option key={k} value={k}>
@@ -800,7 +812,7 @@ function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unk
           </Field>
         ) : (
           <Field label={f.kind === "insert" ? t("Insert") : t("Screw")}>
-            <select className="field" value={f.size ?? "M3"} onChange={(e) => set({ size: e.target.value })}>
+            <select className="field" value={f.size ?? "M3"} onChange={(e) => set({ size: e.target.value, ...(f.kind === "insert" ? { length: undefined } : {}) })}>
               {sizes.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -809,6 +821,7 @@ function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unk
             </select>
           </Field>
         )}
+        {f.kind === "insert" ? <InsertLength size={f.size ?? "M3"} length={f.length} set={set} /> : null}
         {screw ? (
           <Field label={t("Fit")}>
             <select className="field" value={f.fit ?? "normal"} onChange={(e) => set({ fit: e.target.value === "normal" ? undefined : e.target.value })}>
@@ -823,7 +836,7 @@ function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unk
         <SelBox field="plane" items={[describePlane(f.plane)]} placeholder={t("Tap a flat face where the hole goes")} />
       </Field>
       <Field label={t("Holes ({n})", { n: f.points.length })}>
-        <SelBox field="points" items={f.points.length ? [tn(f.points.length, "{n} point: tap the face to add", "{n} points: tap the face to add")] : []} placeholder={t("Tap the face to place holes")} />
+        <SelBox field="points" items={f.points.length ? [tn(f.points.length, "{n} point: tap the face to add", "{n} points: tap the face to add")] : []} placeholder={t("Tap the face to place holes, or an edge for a hole beside it")} />
         {f.points.map((pt, i) => (
           <div className="row" key={i}>
             {[0, 1].map((k) => (
@@ -855,9 +868,14 @@ function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unk
           <ArrowLeftRight />
         </button>
       </div>
+      {f.kind === "insert" ? (
+        <label className="checkbox">
+          <input type="checkbox" checked={!!f.withInserts} onChange={(e) => set({ withInserts: e.target.checked ? true : undefined })} /> {t("Also place the inserts (parts list)")}
+        </label>
+      ) : null}
       <p className="muted small">
         {f.kind === "insert"
-          ? t("Sized for common heat-set inserts for plastic; check your inserts' recommended hole.")
+          ? insertNote(f.size ?? "M3", typeof f.length === "number" ? f.length : undefined)
           : f.kind === "tapped"
             ? t("Tap drill size with a modelled thread; printed threads often want 0.1–0.2 mm allowance.")
             : t("Clearance holes follow ISO 273, counterbores fit socket head cap screws, countersinks 90° flat head screws.")}
@@ -865,6 +883,37 @@ function HoleFields({ f, set }: { f: Of<"hole">; set: (patch: Record<string, unk
       </p>
     </>
   );
+}
+
+/** An insert's length, from the lengths its size comes in (the usual one first). */
+function InsertLength({ size, length, set }: { size: string; length: Of<"hole">["length"]; set: (patch: Record<string, unknown>) => void }) {
+  const lengths = insertLengths(size);
+  if (lengths.length < 2) return null;
+  return (
+    <Field label={t("Length")}>
+      <select className="field" value={String(typeof length === "number" ? length : lengths[0])} onChange={(e) => {
+        const l = Number(e.target.value);
+        set({ length: l === lengths[0] ? undefined : l });
+      }}>
+        {lengths.map((l, i) => (
+          <option key={l} value={l}>
+            {i === 0 ? t("{length} mm (standard)", { length: l }) : t("{length} mm (short)", { length: l })}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
+/** What the hole is sized for: the insert's outside, the hole and the wall it needs. */
+function insertNote(size: string, length: number | undefined): string {
+  try {
+    const d = insertDims(size, length);
+    if (d) return t("{size}×{length} insert: hole Ø{hole}, insert Ø{outer} outside, keep at least {wall} mm of wall around it. Sized as the common makers recommend; check your inserts' data.", { size, length: d.length, hole: d.hole, outer: d.outer, wall: d.wall });
+  } catch {
+    // an unknown length: the rebuild says so
+  }
+  return t("Sized for common heat-set inserts for plastic; check your inserts' recommended hole.");
 }
 
 const EMPTY_PARAMS: Record<string, number> = {};
@@ -1809,7 +1858,7 @@ function Body({ d }: { d: DialogState }) {
           <div className="row">
             {sizes.length ? (
               <Field label={t("Size")}>
-                <select className="field" value={f.size ?? ""} onChange={(e) => set({ size: e.target.value })}>
+                <select className="field" value={f.size ?? ""} onChange={(e) => set({ size: e.target.value, ...(f.kind === "insert" ? { length: undefined } : {}) })}>
                   {sizes.map((s) => (
                     <option key={s} value={s}>
                       {s}
@@ -1829,6 +1878,7 @@ function Body({ d }: { d: DialogState }) {
                 </select>
               </Field>
             ) : null}
+            {f.kind === "insert" ? <InsertLength size={f.size ?? "M3"} length={f.length} set={set} /> : null}
             {STANDARD_CUT_TO_LENGTH.includes(f.kind) ? (
               <Field label={t("Length")}>
                 <ExprInput value={f.length ?? 200} onCommit={(length) => set({ length })} />

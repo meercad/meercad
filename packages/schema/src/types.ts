@@ -980,6 +980,13 @@ export interface HoleFeature extends FeatureBase {
   depth?: Expr;
   /** Added to every diameter for printed parts, mm. */
   allowance?: Expr;
+  /**
+   * Inserts: their length, one of the lengths the size comes in (M3: 5.7, 4 or 3 mm); default the
+   * usual one. The rebuild warns where the wall around an insert is thinner than it needs.
+   */
+  length?: Expr;
+  /** Inserts: also place the inserts as parts (`ho1_insert`, `ho1_insert_2`, …) for the parts list. */
+  withInserts?: boolean;
   flip?: boolean;
 }
 

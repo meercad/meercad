@@ -5,7 +5,7 @@
  * not modelled (as drawings show them); sizes are the nominal dimensions.
  */
 import type { DocOp, Expr, Mechanism, MeercadDocument, StandardPartFeature } from "@meercad/schema";
-import { INSERT_SIZES, insertDims } from "./holes.js";
+import { INSERT_SIZES, insertDims, InsertError, insertLabel } from "./holes.js";
 
 export type StandardKind = "socket_screw" | "countersunk_screw" | "hex_screw" | "set_screw" | "hex_nut" | "washer" | "insert" | "bearing" | "magnet" | "profile" | "corner_bracket" | "t_nut" | "linear_bearing" | "shaft" | "lead_screw" | "rail";
 
@@ -235,6 +235,9 @@ export interface StandardShape {
 
 export class StandardPartError extends Error {}
 
+/** The thread inside an insert, as the model shows it: the nominal diameter's radius. */
+const insertBore = (size: string): number => Number(size.slice(1)) / 2;
+
 const rect = (w: number, l: number): [number, number][] => [[-w / 2, -l / 2], [w / 2, -l / 2], [w / 2, l / 2], [-w / 2, l / 2]];
 
 export function standardShape(kind: StandardKind, o: { size?: string | undefined; length?: number | undefined; diameter?: number | undefined; height?: number | undefined; moving?: boolean | undefined }): StandardShape {
@@ -280,11 +283,16 @@ export function standardShape(kind: StandardKind, o: { size?: string | undefined
       return { rings: [{ r: s.d / 2, hole: 0, from: -L, to: 0 }], socket: { key: s.key, depth: Math.min(s.t, L * 0.8), top: 0 }, label: `${o.size}×${L} ISO 4026` };
     }
     case "insert": {
-      const ins = o.size ? insertDims(o.size) : undefined;
+      let ins;
+      try {
+        ins = o.size ? insertDims(o.size, o.length) : undefined;
+      } catch (e) {
+        if (e instanceof InsertError) throw new StandardPartError(e.message);
+        throw e;
+      }
       if (!ins) throw new StandardPartError(`unknown size "${o.size ?? ""}": use one of ${INSERT_SIZES.join(", ")}`);
-      const d = Number(o.size!.slice(1));
-      // Melted into its hole, flush with the face.
-      return { rings: [{ r: ins.outer / 2, hole: d / 2, from: -ins.length, to: 0 }], label: `${o.size} insert ${ins.outer}×${ins.length}` };
+      // Melted into its hole, flush with the face: as wide as the hole, so it does not collide with the part.
+      return { rings: [{ r: ins.hole / 2, hole: insertBore(ins.size), from: -ins.length, to: 0 }], label: insertLabel(ins), labelText: { text: "{size}×{length} heat-set insert", values: { size: ins.size, length: ins.length } } };
     }
     case "hex_nut": {
       const n = need(NUTS);
