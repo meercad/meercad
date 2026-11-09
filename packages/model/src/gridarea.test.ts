@@ -68,6 +68,14 @@ describe("areaPlan", () => {
     const plan = areaPlan({ loops: [outer, hole], gap: 0 });
     expect(plan.cells).toHaveLength(24);
   });
+  it("without the border measures the pieces from the grid's edge", () => {
+    const plan = areaPlan({ rect: [499, 299] }, [256, 256], false);
+    expect(plan.min).toEqual([-231, -147]);
+    expect(plan.max).toEqual([231, 147]);
+    // 11 cells: 6 + 5 fit two pieces once the 18.5 mm borders are gone (three with them).
+    expect(plan.cuts[0]).toHaveLength(3);
+    expect(areaPlan({ rect: [499, 299] }, [256, 256]).cuts[0]).toHaveLength(4);
+  });
   it("says when nothing fits", () => {
     expect(() => areaPlan({ rect: [30, 300] })).toThrow(GridfinityError);
     expect(() => areaPlan({ rect: [400, 400] }, [30, 30])).toThrow(GridfinityError);

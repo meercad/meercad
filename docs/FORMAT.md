@@ -95,7 +95,7 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   `{ "kind": "baseplate", "units": [4, 3] }` is the grid to stand them on; `drawer: [w, d]` fits as
   many cells as a drawer (or any area) takes and fills the rest with a solid border, `outline:
   { "sketch": "sk1" }` does the same for a closed shape drawn in a sketch (on its plane), `gap` is
-  the play to the edge (default 0.5 mm); `magnets` / `screws` add the holes (and a 3.4 mm floor).
+  the play to the edge (default 0.5 mm), `fill: false` leaves the rest beside the cells empty; `magnets` / `screws` add the holes (and a 3.4 mm floor).
   `bed: { "size": [256, 256] }` (with `"margin": [x, y]` for what of the bed cannot be used, e.g.
   `[0, 20]` for 2 cm at the back) cuts the baseplate between cells into pieces that each fit: parts
   `gf1_A1`, `gf1_A2`, … (rows from the front, columns from the left), with the border on the edge pieces.

@@ -29,7 +29,7 @@ describe("gridfinity baseplate for an area, cut for the print bed", () => {
     const { report, meshes } = await build([plate({ drawer: [500, 300], bed: { size: [256, 256] } })]);
     ok(report);
     const pieces = report.bodies.filter((b) => b.id.startsWith("bp1_"));
-    // 11 × 7 cells in 499 × 299 (18.5 and 3.5 mm border): 256 mm takes 6 cells, or 5 with a
+    // 11 × 7 cells in 499 × 299 (18.5 and 2.5 mm border): 256 mm takes 6 cells, or 5 with a
     // border, so three columns; two rows.
     expect(pieces.map((b) => b.id).sort()).toEqual(["bp1_A1", "bp1_A2", "bp1_A3", "bp1_B1", "bp1_B2", "bp1_B3"]);
     for (const p of pieces) {
@@ -87,6 +87,38 @@ describe("gridfinity baseplate for an area, cut for the print bed", () => {
     const total = pieces.reduce((s, b) => s + b.volume, 0);
     expect(total).toBeLessThan(pocketFree);
     expect(total).toBeGreaterThan(pocketFree - 20 * 42 * 42 * G.pocketHeight);
+  });
+
+  it("leaves the rest empty without the border: the plate ends at its cells", async () => {
+    const { report } = await build([plate({ drawer: [500, 300], fill: false, bed: { size: [256, 256] } })]);
+    ok(report);
+    const pieces = report.bodies.filter((b) => b.id.startsWith("bp1"));
+    const xs = pieces.flatMap((b) => [b.bbox.min[0], b.bbox.max[0]]), ys = pieces.flatMap((b) => [b.bbox.min[1], b.bbox.max[1]]);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(11 * 42, 6);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(7 * 42, 6);
+    // Without the 18.5 mm borders the 11 columns fit two pieces wide.
+    expect(pieces.map((b) => b.id).sort()).toEqual(["bp1_A1", "bp1_A2", "bp1_B1", "bp1_B2"]);
+    expect(report.features.find((f) => f.id === "bp1")!.info).toMatchObject({ cells: 77, borderX: 18.5, borderY: 2.5 });
+    // The same cells as with the border, less the border's material.
+    const filled = await build([plate({ drawer: [500, 300], bed: { size: [256, 256] } })]);
+    const vol = (r: RebuildReport) => r.bodies.reduce((n, b) => n + b.volume, 0);
+    const border = (499 * 299 - 462 * 294) * G.pocketHeight;
+    expect(vol(filled.report) - vol(report)).toBeCloseTo(border, -1);
+  });
+
+  it("an outline without the border is just its cells", async () => {
+    const L: [number, number][] = [[0, 0], [300, 0], [300, 100], [150, 100], [150, 200], [0, 200]];
+    const { report } = await build([sketch("sk1", { ref: "origin.XY" }, polygon("l", L)), plate({ outline: { sketch: "sk1" }, fill: false })]);
+    ok(report);
+    const one = 42 * 42 * G.pocketHeight;
+    const total = report.bodies.reduce((n, b) => n + b.volume, 0);
+    expect(report.features.find((f) => f.id === "bp1")!.info!["cells"]).toBe(20);
+    // 20 cells' frames: less than 20 solid squares, and nothing outside them.
+    expect(total).toBeLessThan(20 * one);
+    for (const b of report.bodies) {
+      expect(b.bbox.min[0]).toBeGreaterThanOrEqual(0.5 - 1e-3);
+      expect(b.bbox.max[0]).toBeLessThanOrEqual(299.5 + 1e-3);
+    }
   });
 
   it("holds a bin in a cell of a cut-up baseplate", async () => {
