@@ -324,7 +324,7 @@ export function featureName(f: Feature): string {
   }
   // Bins and baseplates by their size ("Bin 2×1×3", "Baseplate 4×3"), labels by their text.
   if (!f.name && f.op === "gridfinity" && typeof f.units[0] === "number" && typeof f.units[1] === "number")
-    return f.kind === "bin" ? `${t("Bin")} ${f.units[0]}×${f.units[1]}×${typeof f.height === "number" ? f.height : 3}` : f.drawer ? `${t("Baseplate")} ${f.id.replace(/^\D+/, "")}` : `${t("Baseplate")} ${f.units[0]}×${f.units[1]}`;
+    return f.kind === "bin" ? `${t("Bin")} ${f.units[0]}×${f.units[1]}×${typeof f.height === "number" ? f.height : 3}` : f.drawer || f.outline ? `${t("Baseplate")} ${f.id.replace(/^\D+/, "")}` : `${t("Baseplate")} ${f.units[0]}×${f.units[1]}`;
   // Boxes by their size ("Box 80×60×40", "Jar ⌀60×50").
   if (!f.name && f.op === "box" && typeof f.width === "number" && typeof f.height === "number")
     return f.lid === "screw" || f.shape === "round"

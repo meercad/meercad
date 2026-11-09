@@ -90,13 +90,16 @@ export function exportMeshes(oc: OC, state: ModelState, bodyIds?: string[]): Bod
   try {
     const bodies = [...state.bodies.values()].filter((b) => !bodyIds || bodyIds.includes(b.bodyId));
     if (!bodies.length) throw new Error("nothing to export");
-    return bodies.map((b) => {
+    const out = bodies.map((b) => {
       const mesh = meshBody(oc, b, bounds(oc, arena, b.shape), 1, true);
-      // The fine triangulation stays on the shape otherwise, and later display meshes would reuse it.
-      oc.BRepTools.Clean(b.shape, true);
       const tex = texturesOf(state, b);
       return tex ? texturedMesh(oc, b, mesh, tex.layers, "export") : mesh;
     });
+    // The fine triangulation stays on the shapes otherwise, and later display meshes would reuse it.
+    // (Cleaned only now: bodies that share their geometry, such as equal baseplate pieces, are
+    // triangulated once.)
+    for (const b of bodies) oc.BRepTools.Clean(b.shape, true);
+    return out;
   } finally {
     arena.dispose();
   }

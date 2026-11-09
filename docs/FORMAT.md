@@ -87,9 +87,16 @@ stays editable. The authoritative JSON Schema is `documentSchema` in
   stacking lip 4.4 mm above the rim (`"lip": false` leaves it off), optional `solid`, `dividers`
   (walls across x and y), `scoop` (finger-slide radius) and label `tab` (`width`, `angle`, `style`).
   `{ "kind": "baseplate", "units": [4, 3] }` is the grid to stand them on; `drawer: [w, d]` fits as
-  many cells as a drawer takes and fills the rest with a border; `magnets` / `screws` add the holes
-  (and a 3.4 mm floor). A bin with `"baseplate": "gf1", "cell": [i, j]` stands in that baseplate.
-  Faces: `gf1.foot`, `.floor`, `.wall`, `.inner`, `.lip`, `.top`, `.divider`, `.scoop`, `.tab`, `.pocket`, `.hole`, `.bottom`.
+  many cells as a drawer (or any area) takes and fills the rest with a solid border, `outline:
+  { "sketch": "sk1" }` does the same for a closed shape drawn in a sketch (on its plane), `gap` is
+  the play to the edge (default 0.5 mm); `magnets` / `screws` add the holes (and a 3.4 mm floor).
+  `bed: { "printer": "bambu-h2s" }` (or `"size": [w, d]`, and `"margin": [x, y]` for what of the bed
+  cannot be used, e.g. `[0, 20]` for 2 cm at the back) cuts the baseplate between cells into pieces
+  that each fit: parts `gf1_A1`, `gf1_A2`, … (rows from the front, columns from the left), with the
+  border on the edge pieces. Printer ids: `bambu-h2s`, `bambu-h2d`, `bambu-x1`, `bambu-a1mini`,
+  `prusa-xl`, `prusa-coreone-l`, `prusa-coreone`, `prusa-mk4`, `prusa-mini`, `generic-220`, `generic-350`.
+  A bin with `"baseplate": "gf1", "cell": [i, j]` stands in that baseplate.
+  Faces: `gf1.foot`, `.floor`, `.wall`, `.inner`, `.lip`, `.top`, `.divider`, `.scoop`, `.tab`, `.pocket`, `.hole`, `.bottom`, `.side`, `.joint` (where pieces meet).
 - **wall** — wall storage built as ordinary parts, flat for printing (back on the plane, front +z,
   y up the wall): `{ "op": "wall", "system": "opengrid", "kind": "board", "units": [4, 4] }` is an
   openGrid board (28 mm cells, `variant` `"full"` 6.8 mm or `"lite"` 4 mm, `screws` adds countersunk

@@ -338,7 +338,10 @@ const pct = (f: number) => `${Math.round(f * 100)} %`;
 function PrintBedSection({ children }: { children?: ReactNode }) {
   const bed = usePrefs((p) => p.printBed);
   const [custom, setCustom] = useState(false);
-  const preset = bed && !custom ? BED_PRESETS.find((p) => p.size.every((v, i) => v === bed[i])) : undefined;
+  // Printers of the same size share a setting: the one picked here is shown, else the first.
+  const [picked, setPicked] = useState<string>();
+  const same = (p: (typeof BED_PRESETS)[number]) => !!bed && p.size.every((v, i) => v === bed[i]);
+  const preset = bed && !custom ? (BED_PRESETS.find((p) => p.id === picked && same(p)) ?? BED_PRESETS.find(same)) : undefined;
   const shown = bed ?? DEFAULT_BED;
   const setAxis = (i: number, v: number) => {
     if (!(v >= 10 && v <= 5000)) return;
@@ -362,6 +365,7 @@ function PrintBedSection({ children }: { children?: ReactNode }) {
               onChange={(e) => {
                 const p = BED_PRESETS.find((x) => x.id === e.target.value);
                 setCustom(!p);
+                setPicked(p?.id);
                 if (p) setPrefs({ printBed: p.size });
               }}
             >

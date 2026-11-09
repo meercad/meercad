@@ -81,34 +81,45 @@ export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
     ? `<m:pbmetallicdisplayproperties id="${lookId}">${bases.map((b) => `<m:pbmetallic name="${escapeXml(b.name)}" metallicness="${num(b.look?.metalness ?? 0)}" roughness="${num(b.look?.roughness ?? 0.5)}"/>`).join("")}</m:pbmetallicdisplayproperties>`
     : "";
   const materials = bases.length ? `${looks}<basematerials id="${matId}"${withLooks ? ` displaypropertiesid="${lookId}"` : ""}>${bases.map((b) => `<base name="${escapeXml(b.name)}" displaycolor="${b.color}FF"/>`).join("")}</basematerials>` : "";
+  // The model is written in pieces (a few thousand lines each): one string for a floor of
+  // millions of triangles would pass the longest string JavaScript can hold.
+  const chunks: Uint8Array[] = [];
+  const out = (lines: string[]) => {
+    for (let i = 0; i < lines.length; i += 20000) chunks.push(strToU8(lines.slice(i, i + 20000).join("")));
+  };
   const triangleCounts: number[] = [];
-  const objects = meshes
-    .map((m, i) => {
-      const map = new Map<string, number>();
-      const verts: string[] = [];
-      const remap = new Uint32Array(m.positions.length / 3);
-      for (let v = 0; v < remap.length; v++) {
-        const x = m.positions[v * 3]!, y = m.positions[v * 3 + 1]!, z = m.positions[v * 3 + 2]!;
-        const key = `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
-        let idx = map.get(key);
-        if (idx === undefined) {
-          idx = verts.length;
-          map.set(key, idx);
-          verts.push(`<vertex x="${x}" y="${y}" z="${z}"/>`);
-        }
-        remap[v] = idx;
+  const objectChunks = (m: Mesh3mf, i: number) => {
+    const map = new Map<string, number>();
+    const verts: string[] = [];
+    const remap = new Uint32Array(m.positions.length / 3);
+    for (let v = 0; v < remap.length; v++) {
+      const x = m.positions[v * 3]!, y = m.positions[v * 3 + 1]!, z = m.positions[v * 3 + 2]!;
+      const key = `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
+      let idx = map.get(key);
+      if (idx === undefined) {
+        idx = verts.length;
+        map.set(key, idx);
+        verts.push(`<vertex x="${x}" y="${y}" z="${z}"/>`);
       }
-      const tris: string[] = [];
-      for (let t = 0; t < m.indices.length; t += 3) {
-        const [a, b, c] = [remap[m.indices[t]!]!, remap[m.indices[t + 1]!]!, remap[m.indices[t + 2]!]!];
-        if (a !== b && b !== c && a !== c) tris.push(`<triangle v1="${a}" v2="${b}" v3="${c}"/>`);
-      }
-      triangleCounts.push(tris.length);
-      const k = baseOf[i]!;
-      const material = k >= 0 ? ` pid="${matId}" pindex="${k}"` : "";
-      return `<object id="${i + 1}" type="model" name="${escapeXml(m.name ?? `Body ${i + 1}`)}"${material}><mesh><vertices>${verts.join("")}</vertices><triangles>${tris.join("")}</triangles></mesh></object>`;
-    })
-    .join("");
+      remap[v] = idx;
+    }
+    const tris: string[] = [];
+    for (let t = 0; t < m.indices.length; t += 3) {
+      const [a, b, c] = [remap[m.indices[t]!]!, remap[m.indices[t + 1]!]!, remap[m.indices[t + 2]!]!];
+      if (a !== b && b !== c && a !== c) tris.push(`<triangle v1="${a}" v2="${b}" v3="${c}"/>`);
+    }
+    triangleCounts.push(tris.length);
+    const k = baseOf[i]!;
+    const material = k >= 0 ? ` pid="${matId}" pindex="${k}"` : "";
+    out([`<object id="${i + 1}" type="model" name="${escapeXml(m.name ?? `Body ${i + 1}`)}"${material}><mesh><vertices>`]);
+    out(verts);
+    out(["</vertices><triangles>"]);
+    out(tris);
+    out(["</triangles></mesh></object>"]);
+  };
+  const ns = withLooks ? ` xmlns:m="${XMLNS_MATERIAL}"` : "";
+  out([`<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"${ns}><metadata name="Application">meerCAD</metadata><resources>${materials}`]);
+  meshes.forEach(objectChunks);
   const items = meshes.map((_, i) => `<item objectid="${i + 1}"/>`).join("");
   const { filaments, slot } = filamentSlots(meshes);
   const slicers: Record<string, Uint8Array> = {};
@@ -122,8 +133,13 @@ export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
     slicers["Metadata/Slic3r_PE_model.config"] = strToU8(`<?xml version="1.0" encoding="UTF-8"?><config>${prusa}</config>`);
     slicers["Metadata/model_settings.config"] = strToU8(`<?xml version="1.0" encoding="UTF-8"?><config>${bambu}</config>`);
   }
-  const ns = withLooks ? ` xmlns:m="${XMLNS_MATERIAL}"` : "";
-  const model = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"${ns}><metadata name="Application">meerCAD</metadata><resources>${materials}${objects}</resources><build>${items}</build></model>`;
+  out([`</resources><build>${items}</build></model>`]);
+  const model = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  for (const c of chunks) {
+    model.set(c, at);
+    at += c.length;
+  }
   return zipSync({
     "[Content_Types].xml": strToU8(
       `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,
@@ -131,7 +147,7 @@ export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
     "_rels/.rels": strToU8(
       `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`,
     ),
-    "3D/3dmodel.model": strToU8(model),
+    "3D/3dmodel.model": model,
     ...slicers,
   });
 }

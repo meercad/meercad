@@ -33,6 +33,12 @@ export class Body implements Topology {
    * light. Export meshes are not affected.
    */
   displayCoarse = 1;
+  /**
+   * Export tolerances for this body instead of the usual print quality (see exportTolerance): for
+   * parts whose small rounds do not need it and that would otherwise make files of many millions
+   * of triangles.
+   */
+  exportTolerance: { linear: number; angular: number } | null = null;
   private samples: { faces: Vec3[]; edges: Vec3[] } | null = null;
 
   constructor(

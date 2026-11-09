@@ -444,6 +444,9 @@ export function areaPlateBodies(
   });
   // Hundreds of pockets: a lighter view (each pocket's rounded corners in fewer steps).
   if (plan.cells.length > 150) for (const body of bodies) body.displayCoarse = 4;
+  // Export: 0.02 mm (0.25 rad) is far below what a printer resolves and needs about a third of the
+  // usual triangles (a 3 m × 1.5 m floor stays a file a slicer opens).
+  for (const body of bodies) body.exportTolerance = { linear: 0.02, angular: 0.25 };
   const plate = [plan.max[0] - plan.min[0], plan.max[1] - plan.min[1]];
   if (f.bed && plan.turned) warnings.push("the pieces fit the print bed turned by 90°");
   const grid: [number, number] = [plan.origin[0] + (plan.units[0] * G.pitch) / 2 + position[0], plan.origin[1] + (plan.units[1] * G.pitch) / 2 + position[1]];
