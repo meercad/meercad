@@ -9,6 +9,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { WheelClassifier } from "./wheel.js";
 import { applyLook, drawSwatches, paintBackdrop, PLAIN_LOOK, RenderedStage, studioEnvironment, TEXTURED_LOOK, type BodyLook, type SwatchSpec } from "./looks.js";
 
 export type { BodyLook, SwatchSpec } from "./looks.js";
@@ -380,6 +381,8 @@ export class Viewport {
     // Mouse buttons are assigned per press from the navigation preset (see setNavigation).
     this.renderer.domElement.addEventListener("pointerdown", (e) => this.assignButtons(e), { capture: true });
     this.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
+    // Trackpad swipes orbit and pan before OrbitControls would zoom with them (see ./wheel).
+    this.renderer.domElement.addEventListener("wheel", (e) => this.trackpadWheel(e), { capture: true, passive: false });
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -396,10 +399,40 @@ export class Viewport {
   private looks = new Map<string, BodyLook>();
   private navigation: Navigation = { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "shift" }], zoom: [] };
 
-  /** Which mouse button (plus modifier) orbits, pans and zooms. Left always selects. */
-  setNavigation(nav: Navigation, invertZoom = false): void {
+  private wheel = new WheelClassifier();
+  private swipeOrbits = true;
+
+  /**
+   * Which mouse button (plus modifier) orbits, pans and zooms. Left always selects. `swipeOrbits`:
+   * a two-finger swipe on a trackpad orbits (Shift: pans); off, it zooms like a wheel.
+   */
+  setNavigation(nav: Navigation, invertZoom = false, swipeOrbits = true): void {
     this.navigation = nav;
     this.controls.zoomSpeed = invertZoom ? -1 : 1;
+    this.swipeOrbits = swipeOrbits;
+  }
+
+  /** Orbits or pans for a trackpad swipe; zooming (wheel, pinch, Ctrl + swipe) stays with OrbitControls. */
+  private trackpadWheel(e: WheelEvent): void {
+    const c = this.controls;
+    if (!c.enabled) return;
+    const gesture = this.wheel.classify(e, this.swipeOrbits);
+    if (gesture === "zoom") return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    // Mid-drag the buttons own the camera.
+    if ((c as unknown as { state: number }).state !== -1) return;
+    const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
+    // Deltas are scroll offsets (the content moves the other way), so the model follows the fingers
+    // as it follows a drag.
+    const [dx, dy] = [-e.deltaX * scale, -e.deltaY * scale];
+    const h = this.renderer.domElement.clientHeight || 1;
+    if (gesture === "orbit") {
+      c.rotateLeft((2 * Math.PI * dx * c.rotateSpeed) / h);
+      c.rotateUp((2 * Math.PI * dy * c.rotateSpeed) / h);
+    } else {
+      c.pan(dx * c.panSpeed, dy * c.panSpeed);
+    }
   }
 
   private assignButtons(e: PointerEvent): void {

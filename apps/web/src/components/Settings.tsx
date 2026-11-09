@@ -149,6 +149,10 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input type="checkbox" checked={prefs.invertZoom} onChange={(e) => setPrefs({ invertZoom: e.target.checked })} />
             {t("Reverse zoom direction (scroll up zooms out)")}
           </label>
+          <label className="check">
+            <input type="checkbox" checked={prefs.swipeOrbits} onChange={(e) => setPrefs({ swipeOrbits: e.target.checked })} />
+            {t("Trackpad: two-finger swipe rotates, Shift + swipe pans, pinch or Ctrl + swipe zooms")}
+          </label>
         </section>
 
         <section>

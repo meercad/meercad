@@ -36,6 +36,7 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         body: (
           <ul>
             {li(t("**Rotate**: right-drag (or drag the view cube) · **Pan**: middle-drag or Shift + right-drag · **Zoom**: wheel, towards the cursor."))}
+            {li(t("**Trackpad**: swipe with two fingers to rotate, Shift + swipe to pan, pinch or Ctrl + swipe to zoom."))}
             {li(t("View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. [Mod+1]–[Mod+7] pick standard views, [Space] over a face looks straight at it, [Z] fits all."))}
             {li(t("The box icon at the bottom right switches perspective / orthographic."))}
           </ul>

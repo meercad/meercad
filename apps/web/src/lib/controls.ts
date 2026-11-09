@@ -367,9 +367,9 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
   {
     id: "trackpad",
     label: t("Trackpad / no middle button"),
-    orbit: t("Right drag (two-finger click-drag)"),
-    pan: t("Shift + right drag"),
-    zoom: t("Pinch or Alt + right drag"),
+    orbit: t("Two-finger swipe or right drag"),
+    pan: t("Shift + two-finger swipe or Shift + right drag"),
+    zoom: t("Pinch, Ctrl + two-finger swipe or Alt + right drag"),
     nav: { orbit: [{ button: "right" }], pan: [{ button: "right", mod: "shift" }], zoom: [{ button: "right", mod: "alt" }] },
     rightClick: "menu",
   },
