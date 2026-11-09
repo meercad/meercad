@@ -1,11 +1,11 @@
-/** Command search (X / ⌘F): every action with its shortcut, fuzzy-filtered. */
+/** Command search (key from the control scheme, or the search button): every action with its shortcut, fuzzy-filtered. */
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureOp } from "@meercad/schema";
 import { FEATURES, TOOLBAR } from "../lib/features";
 import { setTool, type SketchTool } from "../sketch/state";
 import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch/actions";
-import { closeSketch, getViewport, goHome, newProject, redo, startFeature, undo, useApp } from "../store";
+import { closeSketch, getViewport, goHome, hideSelectedParts, lastStartedFeature, newProject, redo, startFeature, undo, useApp } from "../store";
 import { exportMesh, exportRobot, exportStep, importFile, saveFile, viewInAr } from "./io";
 import { nativeApp } from "../lib/native";
 import { openDrawing } from "./DrawingDialog";
@@ -14,7 +14,10 @@ import { hasPack, usePremium } from "../lib/premium";
 import { openShare } from "./ShareDialog";
 import { checkInterference } from "../lib/interference";
 import { Kbd } from "./Kbd";
-import { keyFor, usePrefs, type Action } from "../lib/keymap";
+import { CONTROL_SCHEMES, keyFor, setPrefs, usePrefs, type Action } from "../lib/keymap";
+import { selectAll } from "../lib/clipboard";
+import { deleteModelSelection } from "../lib/deletion";
+import { toggleJoints } from "../lib/mechanism";
 import { toggleTheme } from "./TopBar";
 import { desktop } from "../lib/persistence";
 import { t } from "../lib/i18n";
@@ -96,11 +99,20 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
     const list: Command[] = [];
     if (screen === "editor" && sketchId) {
       for (const [tool, label] of SKETCH_TOOLS) if (tool !== "section" || hasPack("scan")) list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
-      for (const c of CONSTRAINT_TOOLS) list.push({ group: G.constraint, label: c.label, ...(c.key ? { kbd: c.key } : {}), run: () => applyConstraint(c.type) });
+      for (const c of CONSTRAINT_TOOLS) list.push({ group: G.constraint, label: c.label, ...kbd(`constraint.${c.type}`), run: () => applyConstraint(c.type) });
       list.push({ group: G.sketch, label: t("Toggle construction"), ...kbd("sketch.construction"), run: toggleConstruction }, { group: G.sketch, label: t("Finish sketch"), kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {
       for (const op of TOOLBAR) if ((op !== "gear" && op !== "spring") || hasPack("mechanics")) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
       list.push({ group: G.modeling, label: t("Measure"), ...kbd("measure"), run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
+      const last = lastStartedFeature();
+      if (last) list.push({ group: G.modeling, label: t("Repeat: {name}", { name: FEATURES[last].label }), ...kbd("repeat"), run: () => startFeature(last) });
+      if (hasPack("mechanics")) list.push({ group: G.modeling, label: t("Joints"), ...kbd("joints"), run: toggleJoints });
+      list.push(
+        { group: G.edit, label: t("Select all parts"), ...kbd("select_all"), run: selectAll },
+        { group: G.edit, label: t("Delete selection"), ...kbd("delete"), run: () => void deleteModelSelection() },
+        { group: G.view, label: t("Hide selected parts"), ...kbd("hide"), run: hideSelectedParts },
+        { group: G.view, label: t("Show all hidden parts"), ...kbd("unhide_all"), run: () => useApp.setState({ hidden: new Set() }) },
+      );
     }
     if (screen === "editor") {
       list.push(
@@ -138,6 +150,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       { group: G.help, label: t("Introduction tour"), run: onTour },
       { group: G.help, label: t("Settings"), kbd: "Mod+,", run: () => window.dispatchEvent(new Event("meercad:settings")) },
       { group: G.help, label: t("Toggle dark mode"), run: toggleTheme },
+      ...CONTROL_SCHEMES.map((c) => ({ group: G.help, label: t("Control scheme: {name}", { name: c.label }), run: () => setPrefs({ keys: c.keys, mouse: c.mouse }) })),
     );
     return list;
   }, [sketchId, screen, keys, onHelp, onShortcuts, onTour, packs]);

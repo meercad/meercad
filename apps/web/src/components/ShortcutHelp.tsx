@@ -5,6 +5,9 @@ import { Kbd } from "./Kbd";
 import { t } from "../lib/i18n";
 import { hasPack } from "../lib/premium";
 
+/** A key binding ("Shift+R", "Mod+Num1", "Escape", "?"), as opposed to a described gesture. */
+const isBinding = (part: string) => /^((Mod|Shift|Alt)\+)*([^\s]|Enter|Escape|Esc|Delete|Del|Backspace|Space|Home|Tab|F\d{1,2}|Num\d)$/.test(part);
+
 /** "L / R / Shift+R" for several actions; unbound ones show as "–". */
 const keys = (map: Keymap, ...actions: Action[]) => actions.map((a) => map[a][0] ?? "–").join(" / ");
 
@@ -17,6 +20,7 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
       [t("Measure"), keys(map, "measure")],
       ...(hasPack("mechanics") ? [[t("Joints"), keys(map, "joints")] as [string, string]] : []),
       [t("Command search"), keys(map, "palette")],
+      ...(map.repeat[0] ? [[t("Repeat last command"), keys(map, "repeat")] as [string, string]] : []),
       [t("Import file"), "Mod+O"],
     ],
   },
@@ -27,7 +31,7 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
       [t("Extrude a sketch region"), t("drag arrow")],
       [t("Fillet selected edges"), t("drag arrow")],
       [t("Edit feature under cursor"), t("double-click")],
-      [t("Context actions"), t("right-click")],
+      [mouse.rightClick === "confirm" ? t("Finish the tool (else context actions)") : t("Context actions"), t("right-click")],
       [t("Add to selection"), t("Shift+click")],
     ],
   },
@@ -42,6 +46,7 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
       [t("Iso / Front / Back"), keys(map, "view.iso", "view.front", "view.back")],
       [t("Top / Bottom"), keys(map, "view.top", "view.bottom")],
       [t("Right / Left"), keys(map, "view.right", "view.left")],
+      ...(map.hide[0] ? [[t("Hide selected / show all"), keys(map, "hide", "unhide_all")] as [string, string]] : []),
     ],
   },
   {
@@ -53,13 +58,14 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
       [t("Trim / Dimension / Project edges"), keys(map, "sketch.trim", "sketch.dimension", "sketch.project")],
       [t("Round / Bevel a corner / Offset / Repeat"), keys(map, "sketch.fillet", "sketch.chamfer", "sketch.offset", "sketch.pattern")],
       [t("Construction toggle"), keys(map, "sketch.construction")],
-      [t("Horizontal or vertical (nearest)"), "Shift+V"],
-      [t("Coincident / Concentric"), "Shift+N / Shift+C"],
-      [t("Parallel / Perpendicular"), "Shift+A / Shift+P"],
-      [t("Tangent / Equal / Midpoint"), "Shift+T / Shift+E / Shift+M"],
-      [t("Symmetric / Lock"), "Shift+S / Shift+L"],
-      [t("Select all"), "Mod+A"],
-      [t("Finish sketch"), "Enter"],
+      [t("Horizontal or vertical (nearest)"), keys(map, "constraint.hv")],
+      [t("Coincident / Concentric"), keys(map, "constraint.coincident", "constraint.concentric")],
+      [t("Parallel / Perpendicular"), keys(map, "constraint.parallel", "constraint.perpendicular")],
+      [t("Tangent / Equal / Midpoint"), keys(map, "constraint.tangent", "constraint.equal", "constraint.midpoint")],
+      [t("Symmetric / Lock"), keys(map, "constraint.symmetric", "constraint.fix")],
+      [t("Select all"), keys(map, "select_all")],
+      [t("Finish sketch"), keys(map, "confirm")],
+      ...(mouse.rightClick === "confirm" ? [[t("End the line, then the tool, then the sketch"), t("right-click")] as [string, string]] : []),
     ],
   },
   {
@@ -67,9 +73,9 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
     rows: [
       [t("Undo / Redo"), "Mod+Z / Shift+Mod+Z"],
       [t("Undo / Redo on iPhone and iPad"), t("2-finger tap or 3-finger swipe left / 3-finger tap or swipe right")],
-      [t("Confirm tool"), t("Enter / click empty space")],
-      [t("Cancel / clear selection"), "Esc"],
-      [t("Delete"), "Del"],
+      [t("Confirm tool"), `${keys(map, "confirm")} / ${mouse.rightClick === "confirm" ? t("right-click") : t("click empty space")}`],
+      [t("Cancel / clear selection"), keys(map, "cancel")],
+      [t("Delete"), map.delete.join(" / ")],
       [t("Show this help"), "?"],
       [t("Settings"), "Mod+,"],
     ],
@@ -101,7 +107,7 @@ export function ShortcutHelp({ onClose }: { onClose: () => void }) {
                     {k.split(" / ").map((part, i) => (
                       <span key={i}>
                         {i ? " " : ""}
-                        {/[a-z]-?[a-z]|click|drag|wheel/i.test(part) && part.length > 3 && !part.startsWith("Mod") && !part.startsWith("Shift+R") ? <span className="muted">{part}</span> : <Kbd k={part} />}
+                        {isBinding(part) ? <Kbd k={part} /> : <span className="muted">{part}</span>}
                       </span>
                     ))}
                   </span>

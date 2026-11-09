@@ -1,8 +1,8 @@
-/** Settings (⌘,): mouse navigation and shortcut presets, and where projects are stored. */
-import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
+/** Settings (⌘,): control scheme (mouse and keys), and where projects are stored. */
+import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Gamepad2, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
-import { KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
+import { CONTROL_SCHEMES, KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { iCloudFolder, nativeApp, storageKind } from "../lib/native";
 import { desktop, type UiScale } from "../lib/persistence";
 import { PACKS, setPack, usePremium } from "../lib/premium";
@@ -106,6 +106,23 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
 
         <section>
           <h3>
+            <Gamepad2 /> {t("Control scheme")}
+          </h3>
+          <p className="muted">{t("Keys, mouse buttons and the right click in one go. Below you can still mix them.")}</p>
+          <div className="seg">
+            {CONTROL_SCHEMES.map((c) => {
+              const on = prefs.keys === c.keys && prefs.mouse === c.mouse;
+              return (
+                <button key={c.id} className={on ? "on" : ""} onClick={() => setPrefs({ keys: c.keys, mouse: c.mouse })} aria-pressed={on}>
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section>
+          <h3>
             <Mouse /> {t("Mouse navigation")}
           </h3>
           <p className="muted">{t("Left click always selects. Pick the scheme your hands already know.")}</p>
@@ -121,6 +138,9 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
                 </span>
                 <span>
                   <em>{t("Zoom")}</em> {m.zoom}
+                </span>
+                <span>
+                  <em>{t("Right click")}</em> {m.rightClick === "confirm" ? t("finishes the tool") : t("menu")}
                 </span>
               </button>
             ))}

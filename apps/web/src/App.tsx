@@ -16,7 +16,7 @@ import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Tour, tourDone } from "./components/Tour";
 import { Toasts } from "./components/Toasts";
-import { TopBar } from "./components/TopBar";
+import { openPalette, TopBar } from "./components/TopBar";
 import { Toolbar } from "./components/Toolbar";
 import { ViewportView } from "./components/ViewportView";
 import { importFile } from "./components/io";
@@ -25,10 +25,10 @@ import { nativeApp, onFileOpened, Pencil } from "./lib/native";
 import { assistantWindow, desktop } from "./lib/persistence";
 import { setTool, useSketchUi, type SketchTool } from "./sketch/state";
 import { saveFile } from "./components/io";
-import { actionFor, MODEL_ACTIONS, type ModelAction } from "./lib/keymap";
+import { actionFor, MODEL_ACTIONS, MODEL_CONTEXT, type ModelAction } from "./lib/keymap";
 import type { FeatureOp } from "@meercad/schema";
 import { closeTab, cycleTab, dropCachedTab, reloadProject, reopenClosedTab, toggleSide } from "./store";
-import { cancelDialog, commitDialog, editFeature, getViewport, goHome, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
+import { cancelDialog, commitDialog, editFeature, getViewport, goHome, hideSelectedParts, lastStartedFeature, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@meercad/viewport";
 import { CommandPalette } from "./components/CommandPalette";
@@ -58,7 +58,15 @@ function runModelAction(action: ModelAction): void {
   if (action.startsWith("view.")) return vp?.setView(action.slice(5) as StandardView);
   switch (action) {
     case "palette":
-      return void window.dispatchEvent(new Event("meercad:palette"));
+      return openPalette();
+    case "repeat": {
+      const op = lastStartedFeature();
+      return op ? startFeature(op) : undefined;
+    }
+    case "hide":
+      return hideSelectedParts();
+    case "unhide_all":
+      return useApp.setState({ hidden: new Set() });
     case "fit":
       return vp?.fit();
     case "normal":
@@ -257,7 +265,10 @@ export function App() {
         return;
       }
       if (typing || s.sketchId) return;
-      if (e.key === "Escape") {
+      // Every key goes through the active control scheme (lib/controls).
+      const action = actionFor(e, MODEL_CONTEXT);
+      if (!action) return;
+      if (action === "cancel") {
         if (s.dialog) return cancelDialog();
         if (s.pickingSketchPlane) return useApp.setState({ pickingSketchPlane: false });
         if (s.measure.active) return useApp.setState({ measure: { active: false, picks: [], result: null } });
@@ -265,18 +276,23 @@ export function App() {
         if (useMotion.getState().open) return toggleJoints();
         return useApp.setState({ selection: [], selectedFeature: null });
       }
-      if (e.key === "Enter" && s.dialog) return void commitDialog();
+      if (action === "confirm" && s.dialog) return void commitDialog();
       if (s.dialog) return;
-      if (e.key === "Delete" || e.key === "Backspace") {
+      if (action === "delete") {
+        e.preventDefault();
         if (s.selection.length || s.selectedFeature) void deleteModelSelection();
         return;
       }
-      if (e.key === "Enter" && s.selectedFeature) return editFeature(s.selectedFeature);
-      const action = actionFor(e, MODEL_ACTIONS);
-      if (action) {
-        e.preventDefault();
-        runModelAction(action);
+      if (action === "confirm") {
+        if (s.selectedFeature) editFeature(s.selectedFeature);
+        return;
       }
+      if (action === "select_all") {
+        e.preventDefault();
+        return partCommand("selectAll");
+      }
+      e.preventDefault();
+      runModelAction(action);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

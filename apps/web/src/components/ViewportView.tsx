@@ -21,7 +21,7 @@ import { Image as PictureIcon, ImageOff, ArrowDownToLine, Box, BoxSelect, Clipbo
 import { convertMeshPart, rebuildMeshPart } from "../lib/meshConvert";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteBodies, deleteModelSelection } from "../lib/deletion";
-import { navigationFor, setPrefs, useKey, usePrefs } from "../lib/keymap";
+import { navigationFor, rightClick, setPrefs, useKey, usePrefs } from "../lib/keymap";
 import { withKey } from "./Kbd";
 import { isCompact, usePhoneSheets } from "../lib/layout";
 import type { FeatureOp } from "@meercad/schema";
@@ -63,6 +63,16 @@ const NO_HITS: [string, string][] = [];
 const NO_PARTS: string[] = [];
 const NO_CABLES: cable.CableState[] = [];
 const HIT_COLOR = "#d93f3f";
+
+/** In a scheme where a right click confirms: finishes the open tool or the measurement. False when nothing ran. */
+function confirmByRightClick(): boolean {
+  if (rightClick() !== "confirm") return false;
+  const s = useApp.getState();
+  if (s.dialog) commitDialog();
+  else if (s.measure.active) useApp.setState({ measure: { active: false, picks: [], result: null } });
+  else return false;
+  return true;
+}
 
 export function ViewportView() {
   const host = useRef<HTMLDivElement>(null);
@@ -516,7 +526,7 @@ export function ViewportView() {
       if (boxNow || boxRef.current) return finishBox(e.shiftKey);
       if (!d || useApp.getState().sketchId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
       const pick = vp.pick(e.clientX, e.clientY, kinds());
-      if (d.button === 2) return contextMenu(pick, e.clientX, e.clientY);
+      if (d.button === 2) return confirmByRightClick() ? undefined : contextMenu(pick, e.clientX, e.clientY);
       if (d.button !== 0) return;
       // The second click of a double-click on a face selects its part right away: going through
       // the face again and then the part made the highlight and the steps list flicker.

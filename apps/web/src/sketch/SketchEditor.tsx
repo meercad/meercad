@@ -17,7 +17,7 @@ import { Kbd } from "../components/Kbd";
 import { t, tn } from "../lib/i18n";
 import { docUnit, fmtLen, inUnit, lengthExpr } from "../lib/units";
 import { InlineInput } from "../components/InlineValues";
-import { actionFor, SKETCH_ACTIONS, usePrefs } from "../lib/keymap";
+import { actionFor, keyFor, rightClick, SKETCH_CONTEXT, usePrefs } from "../lib/keymap";
 import { activeSketch, applyConstraint, CONSTRAINT_TOOLS, deleteSelection, freshId, selectAll, setExternalKinds, toggleConstruction, writeSketch } from "./actions";
 import { GLYPH } from "./icons";
 import { Press, sureTap } from "../lib/gestures";
@@ -817,12 +817,32 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     rerender();
   };
 
+  /**
+   * A right click in a scheme where it confirms: finishes what is being drawn (a spline is kept, a
+   * line chain ends), then puts the tool down, then closes the sketch, one step per click.
+   */
+  const confirmStep = () => {
+    const tool = useSketchUi.getState().tool;
+    if (tool === "spline" && ts.points.length >= 2) return finishSpline();
+    if (ts.points.length || ts.dimFirst) {
+      ts.points = [];
+      ts.dimFirst = null;
+      setEntry(null);
+      setTip(null);
+      return rerender();
+    }
+    if (tool !== "select") return setTool("select");
+    closeSketch();
+  };
+
   // ---------------------------------------------------------------- pointer handling
   const gesture = useRef<{
     down: { x: number; y: number; p: Vec2; target: SketchSel | null; moved: boolean; started: boolean } | null;
     dragState: { ids: string[]; start: Vec2; origin: Map<string, Vec2>; solved: SolvedSketch | null } | null;
     box: { a: Vec2; b: Vec2 } | null;
-  }>({ down: null, dragState: null, box: null });
+    /** Where the right button went down: released there, it is a right click (not a drag). */
+    right: { x: number; y: number } | null;
+  }>({ down: null, dragState: null, box: null, right: null });
   const pressRef = useRef(new Press(() => {}));
   // Moves are handled once per frame by whichever onMove the latest render installed.
   const moveRef = useRef<(e: PointerEvent) => void>(() => {});
@@ -955,6 +975,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     const onDown = (e: PointerEvent) => {
       moveFrame.flush();
+      if (e.pointerType === "mouse" && e.button === 2) g.right = { x: e.clientX, y: e.clientY };
       if (e.pointerType !== "mouse") press.down(e);
       if (e.pointerType === "touch") {
         touches.add(e.pointerId);
@@ -998,6 +1019,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
 
     const onUp = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button === 2) {
+        const r = g.right;
+        g.right = null;
+        if (r && Math.hypot(e.clientX - r.x, e.clientY - r.y) <= 4 && rightClick() === "confirm") confirmStep();
+        return;
+      }
       if (e.pointerType !== "touch") moveFrame.flush();
       const r = e.pointerType === "mouse" ? null : press.up(e);
       if (e.pointerType === "touch") touches.delete(e.pointerId);
@@ -1231,14 +1258,13 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-      const k = e.key.toLowerCase();
-      if (e.metaKey || e.ctrlKey) {
-        if (k === "a") {
-          e.preventDefault();
-          selectAll();
-        }
-        return;
+      // Every key goes through the active control scheme (lib/controls).
+      const action = actionFor(e, SKETCH_CONTEXT);
+      if (action === "select_all") {
+        e.preventDefault();
+        return selectAll();
       }
+      if (e.metaKey || e.ctrlKey) return;
       // Typing a number while drawing opens exact-value fields at the cursor.
       const fields = ENTRY_FIELDS[useSketchUi.getState().tool];
       const needed = ENTRY_AFTER_TWO.has(useSketchUi.getState().tool) ? 2 : 1;
@@ -1252,15 +1278,13 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         });
         return;
       }
-      // Tools follow the active shortcut preset; constraints use Shift + letter.
-      const action = actionFor(e, SKETCH_ACTIONS);
+      if (!action) return;
       if (action === "sketch.construction") return toggleConstruction();
-      if (action) return setTool(action.slice(7) as SketchTool);
-      const cmap: Record<string, string> = { a: "parallel", c: "concentric", e: "equal", v: "hv", n: "coincident", l: "fix", m: "midpoint", p: "perpendicular", s: "symmetric", t: "tangent" };
-      if (e.shiftKey && cmap[k]) return applyConstraint(cmap[k]!);
-      // Enter or Esc ends a spline being drawn (keeping it).
-      if ((e.key === "Enter" || e.key === "Escape") && useSketchUi.getState().tool === "spline" && ts.points.length >= 2) return finishSpline();
-      if (e.key === "Escape") {
+      if (action.startsWith("sketch.")) return setTool(action.slice(7) as SketchTool);
+      if (action.startsWith("constraint.")) return applyConstraint(action.slice(11));
+      // Confirm or cancel ends a spline being drawn (keeping it).
+      if ((action === "confirm" || action === "cancel") && useSketchUi.getState().tool === "spline" && ts.points.length >= 2) return finishSpline();
+      if (action === "cancel") {
         if (ts.points.length || ts.dimFirst) {
           ts.points = [];
           ts.dimFirst = null;
@@ -1272,8 +1296,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         if (useSketchUi.getState().selection.length) return setSketchSelection([]);
         return closeSketch();
       }
-      if (e.key === "Enter") return closeSketch();
-      if (e.key === "Delete" || e.key === "Backspace") return deleteSelection();
+      if (action === "confirm") return closeSketch();
+      if (action === "delete") return deleteSelection();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1436,7 +1460,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           <button key={c.type} onClick={() => applyConstraint(c.type)} title={`${c.label} — ${c.hint}`}>
             <c.icon />
             <span>{c.label}</span>
-            {c.key ? <Kbd k={c.key} /> : null}
+            {keyFor(`constraint.${c.type}`) ? <Kbd k={keyFor(`constraint.${c.type}`)!} /> : null}
           </button>
         ))}
       </div>
