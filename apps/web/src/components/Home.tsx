@@ -10,6 +10,8 @@ import { EXAMPLES, examplePacks, type Example } from "../lib/examples";
 import { hasPack, usePremium } from "../lib/premium";
 import { importFile } from "./io";
 import { AiOrb } from "./AiOrb";
+import { McpButton } from "./McpButton";
+import { nativeApp } from "../lib/native";
 import { toggleTheme } from "./TopBar";
 import { TabStrip } from "./Tabs";
 import { exampleThumbnail, fillThumbnails } from "../lib/thumbnails";
@@ -259,6 +261,12 @@ export function Home() {
           {t("Projects")}
         </span>
         <TabStrip />
+        {/* Assistants can be switched on before a project is open; they open or create one themselves. */}
+        {nativeApp ? null : (
+          <span className="mcp-anchor">
+            <McpButton />
+          </span>
+        )}
         <button className="btn" onClick={toggleTheme}>
           {t("Theme")}
         </button>
