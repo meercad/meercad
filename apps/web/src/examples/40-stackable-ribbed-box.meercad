@@ -17,7 +17,9 @@
   "clearance": "0.4 mm",
   "band": "1 mm",
   "lip_h": "4 mm",
-  "plinth_h": "6 mm"
+  "plinth_h": "6 mm",
+  "rim_round": "1.2 mm",
+  "groove_h": "foot + 2 * clearance + rim_round * (2 - sqrt(2))"
  },
  "features": [
   {
@@ -528,6 +530,291 @@
     }
    ],
    "radius": "corner - wall - clearance"
+  },
+  {
+   "id": "sk12",
+   "op": "sketch",
+   "name": "Wider groove into the bottom",
+   "plane": {
+    "ref": "pl1"
+   },
+   "entities": [
+    {
+     "id": "g1",
+     "type": "point",
+     "x": -4,
+     "y": -100
+    },
+    {
+     "id": "g2",
+     "type": "point",
+     "x": 4,
+     "y": -100
+    },
+    {
+     "id": "g3",
+     "type": "point",
+     "x": 4,
+     "y": 100
+    },
+    {
+     "id": "g4",
+     "type": "point",
+     "x": -4,
+     "y": 100
+    },
+    {
+     "id": "n1",
+     "type": "line",
+     "p1": "g1",
+     "p2": "g2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "p1": "g2",
+     "p2": "g3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "p1": "g3",
+     "p2": "g4"
+    },
+    {
+     "id": "n4",
+     "type": "line",
+     "p1": "g4",
+     "p2": "g1"
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "distance",
+     "a": "origin",
+     "b": "g1",
+     "axis": "x",
+     "value": "band + corner + clearance"
+    },
+    {
+     "id": "c3",
+     "type": "distance",
+     "a": "origin",
+     "b": "g2",
+     "axis": "x",
+     "value": "band + corner + clearance"
+    },
+    {
+     "id": "c5",
+     "type": "distance",
+     "a": "origin",
+     "b": "g3",
+     "axis": "x",
+     "value": "band + corner + clearance"
+    },
+    {
+     "id": "c7",
+     "type": "distance",
+     "a": "origin",
+     "b": "g4",
+     "axis": "x",
+     "value": "band + corner + clearance"
+    },
+    {
+     "id": "c2",
+     "type": "distance",
+     "a": "origin",
+     "b": "g1",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    },
+    {
+     "id": "c4",
+     "type": "distance",
+     "a": "origin",
+     "b": "g2",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    },
+    {
+     "id": "c6",
+     "type": "distance",
+     "a": "origin",
+     "b": "g3",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    },
+    {
+     "id": "c8",
+     "type": "distance",
+     "a": "origin",
+     "b": "g4",
+     "axis": "y",
+     "value": "depth / 2 + 5 mm"
+    }
+   ]
+  },
+  {
+   "id": "ex12",
+   "op": "extrude",
+   "name": "Wider groove into the bottom",
+   "profile": {
+    "sketch": "sk12"
+   },
+   "extent": "blind",
+   "distance": "groove_h - foot",
+   "mode": "cut",
+   "targets": [
+    "ex1"
+   ]
+  },
+  {
+   "id": "pl4",
+   "op": "plane",
+   "name": "Inside floor",
+   "base": {
+    "ref": "origin.XY"
+   },
+   "offset": "foot + wall"
+  },
+  {
+   "id": "sk13",
+   "op": "sketch",
+   "name": "Rib over the groove",
+   "plane": {
+    "ref": "pl4"
+   },
+   "entities": [
+    {
+     "id": "g1",
+     "type": "point",
+     "x": -4,
+     "y": -100
+    },
+    {
+     "id": "g2",
+     "type": "point",
+     "x": 4,
+     "y": -100
+    },
+    {
+     "id": "g3",
+     "type": "point",
+     "x": 4,
+     "y": 100
+    },
+    {
+     "id": "g4",
+     "type": "point",
+     "x": -4,
+     "y": 100
+    },
+    {
+     "id": "n1",
+     "type": "line",
+     "p1": "g1",
+     "p2": "g2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "p1": "g2",
+     "p2": "g3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "p1": "g3",
+     "p2": "g4"
+    },
+    {
+     "id": "n4",
+     "type": "line",
+     "p1": "g4",
+     "p2": "g1"
+    }
+   ],
+   "constraints": [
+    {
+     "id": "c1",
+     "type": "distance",
+     "a": "origin",
+     "b": "g1",
+     "axis": "x",
+     "value": "band + corner + clearance + wall"
+    },
+    {
+     "id": "c3",
+     "type": "distance",
+     "a": "origin",
+     "b": "g2",
+     "axis": "x",
+     "value": "band + corner + clearance + wall"
+    },
+    {
+     "id": "c5",
+     "type": "distance",
+     "a": "origin",
+     "b": "g3",
+     "axis": "x",
+     "value": "band + corner + clearance + wall"
+    },
+    {
+     "id": "c7",
+     "type": "distance",
+     "a": "origin",
+     "b": "g4",
+     "axis": "x",
+     "value": "band + corner + clearance + wall"
+    },
+    {
+     "id": "c2",
+     "type": "distance",
+     "a": "origin",
+     "b": "g1",
+     "axis": "y",
+     "value": "depth / 2 - wall / 2"
+    },
+    {
+     "id": "c4",
+     "type": "distance",
+     "a": "origin",
+     "b": "g2",
+     "axis": "y",
+     "value": "depth / 2 - wall / 2"
+    },
+    {
+     "id": "c6",
+     "type": "distance",
+     "a": "origin",
+     "b": "g3",
+     "axis": "y",
+     "value": "depth / 2 - wall / 2"
+    },
+    {
+     "id": "c8",
+     "type": "distance",
+     "a": "origin",
+     "b": "g4",
+     "axis": "y",
+     "value": "depth / 2 - wall / 2"
+    }
+   ]
+  },
+  {
+   "id": "ex13",
+   "op": "extrude",
+   "name": "Rib over the groove",
+   "profile": {
+    "sketch": "sk13"
+   },
+   "extent": "blind",
+   "distance": "groove_h - foot",
+   "mode": "join",
+   "targets": [
+    "ex1"
+   ]
   },
   {
    "id": "pl2",
@@ -1222,7 +1509,7 @@
      "face": "end_cap"
     }
    },
-   "radius": "1.2 mm"
+   "radius": "rim_round"
   }
  ],
  "rollback": null,

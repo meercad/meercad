@@ -1162,6 +1162,7 @@ export const PENDING: Record<string, Script> = {
       ["paper_long", "1000 mm * 2 ^ (0.25 - din / 2)"], ["paper_short", "1000 mm * 2 ^ (-0.25 - din / 2)"],
       ["margin", "2 * (play + (corner - wall) * (1 - sqrt(0.5)) + wall + band)"], ["steps", "smallest - din"],
       ["width", "paper_long + margin * 2 ^ ceil(steps / 2) - 2 * band"], ["depth", "paper_short + margin * 2 ^ floor(steps / 2) - 2 * band"],
+      ["rim_round", "1.2 mm"], ["groove_h", "foot + 2 * clearance + rim_round * (2 - sqrt(2))"],
     ] as const) await ui.addVariable(k, v);
     const { w, d } = STACK;
     // The bead round the rim and the plinth band first (rings round the box, rounded and bevelled
@@ -1254,6 +1255,29 @@ export const PENDING: Record<string, Script> = {
     }
     await ui.field("Radius", "corner - wall - clearance");
     await ui.accept();
+    // Above the foot the groove widens into the box's bottom, room for the rounded corners of two
+    // smaller boxes below, and a rib on the floor inside keeps the floor whole over it.
+    await ui.view("1");
+    await ui.sketchOn("pl3");
+    await ui.zoomSketch(w / 2);
+    await ui.rectCenter([0, 0], "2 * (band + corner + clearance)", "depth + 10 mm");
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("Remove");
+    await ui.field("Distance", "groove_h - foot");
+    await ui.accept();
+    await ui.feature("Create", "Plane");
+    await ui.option("Top");
+    await ui.field("Offset", "foot + wall");
+    await ui.accept();
+    await ui.sketchOn("pl4");
+    await ui.zoomSketch(w / 2);
+    await ui.rectCenter([0, 0], "2 * (band + corner + clearance + wall)", "depth - wall");
+    await ui.finishSketch();
+    await ui.feature("Create", "Extrude");
+    await ui.option("Add");
+    await ui.field("Distance", "groove_h - foot");
+    await ui.accept();
     // Bead and plinth onto the box, the bead's top rounded.
     for (const ring of ["ex1", "ex3"]) {
       await ui.feature("Modify", "Boolean");
@@ -1267,7 +1291,7 @@ export const PENDING: Record<string, Script> = {
     await ui.view("1");
     await ui.zoomAt([0, -d / 2 + 0.5, 100], 12);
     await ui.clickFace(TOP_FACE(100));
-    await ui.field("Radius", "1.2 mm");
+    await ui.field("Radius", "rim_round");
     await ui.accept();
   },
 
