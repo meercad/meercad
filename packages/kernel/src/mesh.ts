@@ -174,7 +174,8 @@ export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
   const box = new oc.Bnd_Box();
   try {
     if (props) {
-      oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, false);
+      if (body.preciseProps) oc.BRepGProp.VolumeProperties(body.shape, vol, 1e-5, false, false);
+      else oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, false);
       oc.BRepGProp.SurfaceProperties(body.shape, surf, false, false);
     }
     // The plain box can be millimetres too big around threads and other spline faces; mesh parts

@@ -101,6 +101,11 @@ export const definitions: Record<string, Json> = {
   ),
   patternSource: oneOf(obj({ features: arr(id, { minItems: 1 }) }, ["features"]), obj({ bodies: arr(id, { minItems: 1 }) }, ["bodies"])),
   mode: { enum: ["new_body", "join", "cut", "intersect"] },
+  cableConnector: obj(
+    { kind: { enum: ["jst_xh", "jst_ph", "jst_sh", "dupont", "xt30", "xt60", "idc"] }, pins: ref("expr") },
+    ["kind"],
+    "Plug on a cable end: JST XH (2.5 mm), PH (2.0 mm), SH (1.0 mm), Dupont (2.54 mm), XT30, XT60 or an IDC ribbon plug; its mating face is on the end point.",
+  ),
   entity: tagged("type", {
     point: obj({ id, type: { const: "point" }, x: num, y: num, ...construction }, ["id", "type", "x", "y"]),
     line: obj({ id, type: { const: "line" }, p1: id, p2: id, ...construction }, ["id", "type", "p1", "p2"]),
@@ -571,6 +576,24 @@ export const definitions: Record<string, Json> = {
       ["bodies"],
     ),
     delete: feature("delete", { bodies: arr(id, { minItems: 1 }) }, ["bodies"]),
+    cable: feature(
+      "cable",
+      {
+        points: arr(
+          obj({ at: arr(ref("expr"), { minItems: 3, maxItems: 3 }), on: id }, ["at"], "Point in model coordinates (mm); `on`: body id of the part it is fixed to (moves with it)."),
+          { minItems: 2, maxItems: 200 },
+        ),
+        shape: { enum: ["round", "ribbon"] },
+        diameter: ref("expr"),
+        conductors: ref("expr"),
+        material: { enum: ["silicone", "pvc", "ptfe"] },
+        bendRadius: ref("expr"),
+        slack: ref("expr"),
+        start: ref("cableConnector"),
+        end: ref("cableConnector"),
+      },
+      ["points"],
+    ),
     hole: feature(
       "hole",
       {

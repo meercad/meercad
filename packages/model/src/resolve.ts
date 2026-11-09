@@ -27,6 +27,8 @@ import type {
   LinearPatternFeature,
   MeshConvertFeature,
   BendFeature,
+  CableFeature,
+  CableConnector,
   PlaneFeature,
   RevolveFeature,
   ShellFeature,
@@ -131,7 +133,18 @@ export type ResolvedBend = R<BendFeature, "angle" | "radius" | "gap" | "toleranc
 export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
 /** A texture with its numbers worked out; `fade` stays undefined for the default (half the pitch, at most 2 mm). */
 export type ResolvedTexture = Omit<TextureFeature, "depth" | "pitch" | "angle" | "ratio" | "fade"> & { depth: number; pitch: number; angle: number; ratio?: number; fade?: number };
+export type ResolvedCableConnector = Omit<CableConnector, "pins"> & { pins?: number };
+export type ResolvedCable = Omit<CableFeature, "points" | "diameter" | "conductors" | "bendRadius" | "slack" | "start" | "end"> & {
+  points: { at: [number, number, number]; on?: string }[];
+  diameter?: number;
+  conductors?: number;
+  bendRadius?: number;
+  slack?: number;
+  start?: ResolvedCableConnector;
+  end?: ResolvedCableConnector;
+};
 export type ResolvedFeature =
+  | ResolvedCable
   | ResolvedTexture
   | ResolvedTransform
   | ResolvedSketch
@@ -294,6 +307,25 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return { ...f, factor: ev("factor", f.factor) };
     case "align":
       return { ...f, offset: opt("offset", f.offset), angle: opt("angle", f.angle) };
+    case "cable": {
+      const plug = (k: "start" | "end"): ResolvedCableConnector | undefined => {
+        const c = f[k];
+        return c ? { kind: c.kind, ...(c.pins !== undefined ? { pins: count(`${k}.pins`, c.pins)! } : {}) } : undefined;
+      };
+      const start = plug("start");
+      const end = plug("end");
+      const { start: _s, end: _e, ...rest } = f;
+      return {
+        ...rest,
+        points: f.points.map((p, i) => ({ ...p, at: [ev(`points[${i}].at[0]`, p.at[0]), ev(`points[${i}].at[1]`, p.at[1]), ev(`points[${i}].at[2]`, p.at[2])] as [number, number, number] })),
+        diameter: opt("diameter", f.diameter),
+        conductors: count("conductors", f.conductors),
+        bendRadius: opt("bendRadius", f.bendRadius),
+        slack: opt("slack", f.slack),
+        ...(start ? { start } : {}),
+        ...(end ? { end } : {}),
+      };
+    }
     case "standard_part":
       return {
         ...f,
@@ -439,6 +471,7 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     text: ["size", "angle", "depth"],
     primitive: ["diameter", "height"],
     standard_part: ["length", "diameter", "height", "angle"],
+    cable: ["diameter", "conductors", "bendRadius", "slack"],
     gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth"],
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
     box: ["width", "depth", "height", "wall", "floor", "corner", "lidThickness", "clearance", "snap", "lipHeight", "pitch", "neck", "starts"],
@@ -467,6 +500,13 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
   if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
+  if (f.op === "cable") {
+    for (const p of g["points"] as { at: Expr[] }[]) p.at = p.at.map(fn);
+    for (const k of ["start", "end"]) {
+      const c = g[k] as { pins?: Expr } | undefined;
+      if (c?.pins !== undefined) c.pins = fn(c.pins);
+    }
+  }
   if ((f.op === "spring" || f.op === "screw") && Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
   if (f.op === "gear") {
     if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);

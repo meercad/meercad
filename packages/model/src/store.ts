@@ -298,6 +298,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     coil: "co",
     spring: "spr",
     screw: "scr",
+    cable: "cab",
     linear_pattern: "lp",
     circular_pattern: "cp",
     mirror: "mi",

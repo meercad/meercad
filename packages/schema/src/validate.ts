@@ -306,6 +306,11 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
         for (const b of f.bodies) body(b, at);
         if (f.mode === "bend" ? f.angle === undefined && f.radius === undefined : f.radius === undefined) errors.push(`${at}: ${f.mode === "bend" ? "a bend needs an angle or a radius" : `${f.mode} needs a radius`}`);
         break;
+      case "cable":
+        if (f.shape === "ribbon" ? f.diameter !== undefined : f.diameter === undefined) errors.push(`${at}: ${f.shape === "ribbon" ? "a ribbon cable takes conductors, not a diameter" : "a round cable needs a diameter"}`);
+        if (f.shape !== "ribbon" && f.conductors !== undefined) errors.push(`${at}: conductors are for ribbon cables`);
+        for (const end of [f.start, f.end]) if (end && (end.kind === "xt30" || end.kind === "xt60") && end.pins !== undefined) errors.push(`${at}: ${end.kind} plugs have two contacts`);
+        break;
       case "hole":
         planeSpec(f.plane, at);
         if (f.kind === "simple" ? f.diameter === undefined : !f.size) errors.push(`${at}: a ${f.kind} hole needs ${f.kind === "simple" ? "a diameter" : "a size such as M3"}`);

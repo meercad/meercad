@@ -71,6 +71,7 @@ import { standardPartBody } from "./standardPart.js";
 import { threadBody } from "./thread.js";
 import { helixWire, springBody } from "./coil.js";
 import { screwBody } from "./screw.js";
+import { cableBody } from "./cable.js";
 import { textureRecord } from "./texture.js";
 import { occtErrorMessage, type OC } from "./occt.js";
 import type { ModelState, SketchResult, ToolRecord } from "./state.js";
@@ -175,6 +176,11 @@ export class OcctBackend implements KernelBackend<ModelState> {
         const { body, info } = screwBody(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx), ctx.warnings);
         ctx.info = { pitch: info.pitch, height: round3(info.height) };
         return applyTool(ctx, f.id, body, f.mode, f.targets);
+      }
+      case "cable": {
+        const { body, info } = cableBody(ctx.oc, ctx.arena, f, ctx.warnings);
+        ctx.info = { length: round3(info.length), mass: round3(info.mass), bendRadius: round3(info.bendRadius), ...(Number.isFinite(info.minRadius) ? { minRadius: round3(info.minRadius) } : {}) };
+        return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body) };
       }
       case "gridfinity": {
         const plate = f.baseplate ? ctx.prev.grids?.get(f.baseplate) : undefined;
