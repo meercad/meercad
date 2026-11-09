@@ -43,13 +43,29 @@ export function blankPixels(rgba: ArrayLike<number>): boolean {
 }
 
 /**
- * The overview makes a new picture: there is none, it shows nothing (`blank`, see blankPixels), or
- * it was written before the file was last changed. A save writes the file first and its picture
- * right after, so a current picture is never older than its file.
+ * The overview makes a new picture: there is none, it shows nothing (`blank`, see blankPixels), it
+ * was written before the file was last changed, or before `lookSince` (when this app first drew
+ * parts in their current colours, see lookSince). A save writes the file first and its picture right
+ * after, so a current picture is never older than its file.
  */
-export function needsPicture(p: PictureMeta, blank = false): boolean {
+export function needsPicture(p: PictureMeta, blank = false, lookSince = 0): boolean {
   if (!p.thumbnail || blank) return true;
-  return p.thumbnailAt !== undefined && p.thumbnailAt < p.updatedAt;
+  return p.thumbnailAt !== undefined && (p.thumbnailAt < p.updatedAt || p.thumbnailAt < lookSince);
+}
+
+/** What lookSince remembers: the look's version and when this app first drew it. */
+export interface LookMark {
+  version: number;
+  since: number;
+}
+
+/**
+ * When this app first drew parts in look `version` (see LOOK_VERSION in the viewport): pictures
+ * written before then show the old colours and are made again. `stored` is the mark kept from
+ * before; the mark to keep is returned with the time (a new one when the look changed).
+ */
+export function lookSince(stored: LookMark | null, version: number, now: number): LookMark {
+  return stored && stored.version === version ? stored : { version, since: now };
 }
 
 /**

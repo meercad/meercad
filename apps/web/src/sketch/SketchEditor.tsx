@@ -49,7 +49,7 @@ interface Snap {
   guides?: [Vec2, Vec2][];
 }
 
-const COLORS = { under: 0x2266dd, full: 0x16a34a, construction: 0x8aa4c8, external: 0xa35cff, sel: 0xff7a1a, hover: 0x2e7dff, preview: 0x1a5fd6, conflict: 0xd93f3f, snap: 0xf08c00, guide: 0x8a94a6, section: 0xe8590c };
+const COLORS = { under: 0x1f6fe5, full: 0x16a34a, construction: 0x8aa4c8, external: 0xa35cff, sel: 0xff7a1a, hover: 0x2e7dff, preview: 0x1a5fd6, conflict: 0xd93f3f, snap: 0xf08c00, guide: 0x8a94a6, section: 0xe8590c };
 
 export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketchId: string }) {
   const doc = useApp((s) => s.doc);
@@ -186,7 +186,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (r.depth % 2 === 0) continue;
       const shape = new THREE.Shape(r.polygons[0]!.map(([x, y]) => new THREE.Vector2(x, y)));
       for (const h of r.polygons.slice(1)) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
-      const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: COLORS.under, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
+      const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: 0x5c9dff, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
       m.renderOrder = 20;
       group.add(m);
     }

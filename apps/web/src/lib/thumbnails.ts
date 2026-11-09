@@ -1,7 +1,8 @@
 /**
  * Pictures for projects that have none, or an outdated one: files put into the projects folder from
  * outside (Finder, iCloud, an assistant), never opened here, changed elsewhere (the iPad, another
- * meerCAD copy), saved while their rebuild was still running, or empty (see pictureState.ts). From
+ * meerCAD copy), saved while their rebuild was still running, empty, or drawn in an older look (see
+ * pictureState.ts). From
  * the app's start, each one is rebuilt and pictured off screen, one at a time, before the examples'
  * pictures.
  *
@@ -11,7 +12,7 @@
  */
 import type { KernelClient, RebuildOutput } from "@meercad/kernel/client";
 import type { MeercadDocument } from "@meercad/schema";
-import { Viewport } from "@meercad/viewport";
+import { LOOK_VERSION, Viewport } from "@meercad/viewport";
 import { refreshProjects, spareKernel, useApp } from "../store";
 import { usePrefs } from "./keymap";
 import { meshBodyIds } from "./meshParts";
@@ -19,7 +20,7 @@ import { partColors } from "./partColors";
 import { partLooks } from "./materials";
 import { sceneryOf } from "./terrain";
 import { loadProject, saveThumbnail, type ProjectMeta } from "./persistence";
-import { blankPixels, needsPicture, pictureRunner } from "./pictureState";
+import { blankPixels, lookSince, needsPicture, pictureRunner, type LookMark } from "./pictureState";
 
 /** A project gets a few minutes (the background kernel has one thread); an example a minute. */
 const PROJECT_LIMIT_MS = 180_000;
@@ -27,6 +28,35 @@ const EXAMPLE_LIMIT_MS = 60_000;
 /** Examples that took too long, by content key: not tried again (they ship with the app). */
 const EXAMPLES_FAILED_KEY = "meercad.example-no-picture";
 const FAILED_KEY = "meercad.no-picture";
+const LOOK_KEY = "meercad.picture-look";
+
+/** Since when pictures show the current look (see lookSince); older ones are made again. */
+let lookTime: number | null = null;
+function currentLookSince(): number {
+  if (lookTime !== null) return lookTime;
+  let stored: LookMark | null = null;
+  try {
+    stored = JSON.parse(localStorage.getItem(LOOK_KEY) ?? "null") as LookMark | null;
+  } catch {
+    // Unreadable: taken as a new look.
+  }
+  const mark = lookSince(stored, LOOK_VERSION, Date.now());
+  try {
+    if (mark !== stored) {
+      localStorage.setItem(LOOK_KEY, JSON.stringify(mark));
+      // The examples' pictures of the old look are not needed any more.
+      const old: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith("meercad.example-thumb.") && !k.endsWith(`.v${LOOK_VERSION}`)) old.push(k);
+      }
+      old.forEach((k) => localStorage.removeItem(k));
+    }
+  } catch {
+    // Without storage the pictures are made again next time too.
+  }
+  return (lookTime = mark.since);
+}
 
 let spare: KernelClient | null = null;
 function endSpare(): void {
@@ -144,7 +174,7 @@ async function fillMissingThumbnails(): Promise<void> {
       const s = useApp.getState();
       const gaveUp = failed();
       // The project open in the editor gets its picture from there.
-      const next = s.projects.find((p) => p.id !== s.project?.id && needsPicture(p, blank.get(p.thumbnail ?? "") ?? false) && !tried.has(triedKey(p)) && gaveUp[p.id] !== p.updatedAt);
+      const next = s.projects.find((p) => p.id !== s.project?.id && needsPicture(p, blank.get(p.thumbnail ?? "") ?? false, currentLookSince()) && !tried.has(triedKey(p)) && gaveUp[p.id] !== p.updatedAt);
       if (!next) return;
       tried.add(triedKey(next));
       try {
@@ -192,7 +222,8 @@ const exampleShots = new Map<string, string>();
 const keyOf = (name: string, doc: MeercadDocument) => {
   let h = 0;
   for (const ch of JSON.stringify(doc)) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0;
-  return `meercad.example-thumb.${name}.${(h >>> 0).toString(36)}`;
+  // The look's version too: a picture of an older look is made again.
+  return `meercad.example-thumb.${name}.${(h >>> 0).toString(36)}.v${LOOK_VERSION}`;
 };
 
 export function exampleThumbnail(name: string, doc: MeercadDocument): string | null {

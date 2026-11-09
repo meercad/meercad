@@ -231,19 +231,31 @@ export type DisplayMode = "shaded_edges" | "shaded" | "wireframe" | "xray" | "hi
 
 export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom" | "iso";
 
+/**
+ * Version of how parts are drawn (colours, light, background). Saved pictures of an older look are
+ * made again, so the overview matches the editor; raise it whenever the look changes.
+ */
+export const LOOK_VERSION = 2;
+
 const C = {
-  face: new THREE.Color(0xc4cfdc),
+  /** Parts without a colour of their own: a dark grey; a lighter one on the dark background. */
+  face: new THREE.Color(0x6c7178),
+  faceDark: new THREE.Color(0x8e939a),
   faceHover: new THREE.Color(0xa9c8f5),
   faceSel: new THREE.Color(0x5b9bff),
-  edge: new THREE.Color(0x26303d),
+  edge: new THREE.Color(0x1b1d21),
   edgeHover: new THREE.Color(0x2e7dff),
   edgeSel: new THREE.Color(0xff7a1a),
-  sketch: 0x2266dd,
+  sketch: 0x1f6fe5,
   sketchConstruction: 0x8aa4c8,
   sketchExternal: 0xb36bff,
-  region: 0x5b9bff,
-  plane: 0x7fa7e0,
+  /** Sketch areas and planes: a see-through light blue with blue rims. */
+  region: 0x5c9dff,
+  plane: 0x5c9dff,
 };
+
+/** A sketch's closed areas, neither hovered nor selected. */
+const REGION_OPACITY = 0.2;
 
 interface BodyObj {
   mesh: ViewMesh;
@@ -895,7 +907,7 @@ export class Viewport {
         for (const h of r.polygons.slice(1)) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
         const mesh = new THREE.Mesh(
           new THREE.ShapeGeometry(shape),
-          new THREE.MeshBasicMaterial({ color: C.region, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false }),
+          new THREE.MeshBasicMaterial({ color: C.region, transparent: true, opacity: REGION_OPACITY, side: THREE.DoubleSide, depthWrite: false }),
         );
         mesh.renderOrder = 4;
         mesh.userData = { sketch: s.id, region: r.key };
@@ -915,13 +927,13 @@ export class Viewport {
       const color = p.color ?? C.plane;
       const fill = new THREE.Mesh(
         new THREE.PlaneGeometry(s, s),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.04, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false }),
       );
       fill.position.set(s / 2, s / 2, 0);
       fill.userData = { plane: p.id };
       const border = new THREE.LineLoop(
         new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(s, 0, 0), new THREE.Vector3(s, s, 0), new THREE.Vector3(0, s, 0)]),
-        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.4 }),
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }),
       );
       border.userData = { plane: p.id, border: true };
       g.add(fill, border);
@@ -1238,6 +1250,9 @@ export class Viewport {
     if (dark === this.dark) return;
     this.dark = dark;
     this.stage.setDark(dark);
+    // Parts without a colour of their own are drawn lighter on the dark background.
+    for (const b of this.bodies) b.painted = undefined;
+    this.paint();
     this.changed = true;
   }
 
@@ -1471,7 +1486,7 @@ export class Viewport {
       b.painted = key;
       const fc = b.faces.geometry.getAttribute("color") as THREE.BufferAttribute;
       const idx = b.mesh.indices;
-      const base = b.textured ? WHITE : (this.bodyColors.get(id) ?? C.face);
+      const base = b.textured ? WHITE : (this.bodyColors.get(id) ?? (this.dark ? C.faceDark : C.face));
       const wholeColor = sf.size || se.size ? C.faceSel : hovered ? C.faceHover : base;
       const faceColor = (f: number) => (whole ? wholeColor : sf.has(f) ? C.faceSel : hovered?.kind === "face" && hovered.face === f ? C.faceHover : base);
       for (let t = 0; t < b.triFace.length; t++) {
@@ -1494,7 +1509,7 @@ export class Viewport {
       if (region !== undefined && o instanceof THREE.Mesh) {
         const sel = this.selected.some((s) => s.kind === "region" && s.sketchId === sketch && s.key === region);
         const hov = this.hover?.kind === "region" && this.hover.sketchId === sketch && this.hover.key === region;
-        (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.45 : hov ? 0.25 : 0.08;
+        (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.5 : hov ? 0.32 : REGION_OPACITY;
       }
       if (curve !== undefined && o instanceof THREE.Line) {
         const sel = this.selected.some((s) => s.kind === "sketch_curve" && s.sketchId === sketch && s.curveId === curve);
@@ -1511,8 +1526,8 @@ export class Viewport {
       const sel = this.selected.some((s) => s.kind === "plane" && s.planeId === plane);
       const hov = this.hover?.kind === "plane" && this.hover.planeId === plane;
       const mat = o.material as THREE.Material;
-      if (border) mat.opacity = sel || hov ? 1 : strong ? 0.85 : 0.4;
-      else mat.opacity = sel ? 0.38 : hov ? (strong ? 0.4 : 0.18) : strong ? 0.13 : 0.04;
+      if (border) mat.opacity = sel || hov ? 1 : strong ? 0.9 : 0.55;
+      else mat.opacity = sel ? 0.38 : hov ? (strong ? 0.4 : 0.2) : strong ? 0.16 : 0.06;
     });
   }
 

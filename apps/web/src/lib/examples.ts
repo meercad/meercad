@@ -294,9 +294,9 @@ const MORE: [file: string, name: string, description: string][] = [
 ];
 
 export const EXAMPLES: Example[] = [
-  { name: "Mounting plate", description: "Holes, countersinks, rounded corners", thumbnail: "/examples/mounting-plate.png", doc: bracket },
-  { name: "Project box", description: "Shelled enclosure with fillets", thumbnail: "/examples/project-box.png", doc: box },
-  { name: "Flange", description: "Circular bolt pattern", thumbnail: "/examples/flange.png", doc: flange },
+  { name: "Mounting plate", description: "Holes, countersinks, rounded corners", doc: bracket },
+  { name: "Project box", description: "Shelled enclosure with fillets", doc: box },
+  { name: "Flange", description: "Circular bolt pattern", doc: flange },
   { name: "Gear pair", description: "Meshing gears that turn together", doc: gearPair },
   { name: "Hinged box", description: "Lid on a pin that swings open", doc: hingedBox },
   { name: "Name plate", description: "Raised and engraved text", doc: namePlate },

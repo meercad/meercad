@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyDocument, type MeercadDocument } from "@meercad/schema";
 import { describe, expect, it, vi } from "vitest";
-import { blankPixels, needsPicture, pictureRunner, viewIsCurrent } from "../apps/web/src/lib/pictureState";
+import { blankPixels, lookSince, needsPicture, pictureRunner, viewIsCurrent } from "../apps/web/src/lib/pictureState";
 
 vi.mock("electron", () => ({ app: { getPath: () => tmpdir() } }));
 const { adoptSiblingData } = await import("../apps/desktop/src/legacy");
@@ -36,6 +36,20 @@ describe("project pictures", () => {
     expect(needsPicture({ updatedAt: 5000, thumbnail: "data:", thumbnailAt: 1000 })).toBe(true);
     // Stores that do not say when the picture was written keep it.
     expect(needsPicture({ updatedAt: 5000, thumbnail: "data:" })).toBe(false);
+  });
+
+  it("are made again when parts are drawn in new colours", () => {
+    // First start with the new look: pictures written before it are redone, newer ones kept.
+    const first = lookSince({ version: 1, since: 10 }, 2, 3000);
+    expect(first).toEqual({ version: 2, since: 3000 });
+    expect(lookSince(null, 2, 3000)).toEqual({ version: 2, since: 3000 });
+    expect(needsPicture({ updatedAt: 1000, thumbnail: "data:", thumbnailAt: 1000.5 }, false, first.since)).toBe(true);
+    expect(needsPicture({ updatedAt: 1000, thumbnail: "data:", thumbnailAt: 3500 }, false, first.since)).toBe(false);
+    // Later starts keep the first time, so the new pictures stay.
+    const stored = { version: 2, since: 3000 };
+    expect(lookSince(stored, 2, 9000)).toBe(stored);
+    // Without a picture date nothing can be told: kept, as before.
+    expect(needsPicture({ updatedAt: 1000, thumbnail: "data:" }, false, first.since)).toBe(false);
   });
 
   /**

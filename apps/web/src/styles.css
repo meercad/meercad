@@ -15,12 +15,12 @@
   --err: #d93f3f;
   --err-soft: #fdecec;
   --warn-soft: #fff6e0;
-  --sketch: #2266dd;
+  --sketch: #1f6fe5;
   --shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 8px 24px rgb(16 24 40 / 0.1);
   --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.08);
   --radius: 8px;
-  --viewport-a: #f7f9fc;
-  --viewport-b: #e3e9f1;
+  --viewport-a: #f1f2f4;
+  --viewport-b: #dcdee2;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   color-scheme: light;
@@ -39,8 +39,8 @@
     --accent-soft: #24224a;
     --err-soft: #3a1d1f;
     --warn-soft: #3a2e14;
-    --viewport-a: #1c2129;
-    --viewport-b: #11151b;
+    --viewport-a: #2a2c31;
+    --viewport-b: #18191c;
     color-scheme: dark;
   }
 }
@@ -57,8 +57,8 @@
   --accent-soft: #24224a;
   --err-soft: #3a1d1f;
   --warn-soft: #3a2e14;
-  --viewport-a: #1c2129;
-  --viewport-b: #11151b;
+  --viewport-a: #2a2c31;
+  --viewport-b: #18191c;
   color-scheme: dark;
 }
 
@@ -475,7 +475,8 @@ body { background: var(--scene); }
 /* full-bleed layout */
 .app { display: block; position: relative; width: 100vw; height: 100vh; overflow: hidden; }
 .app > .view-wrap { position: absolute !important; inset: 0; }
-.view { background: var(--scene); }
+/* The 3D view: a calm neutral grey, so dark grey parts and blue sketches stand out. */
+.view { background: radial-gradient(ellipse at 50% 30%, var(--viewport-a), var(--viewport-b)); }
 .topbar { position: absolute; top: 10px; left: 10px; right: 10px; height: 52px; border-radius: var(--radius-lg); padding: 0 10px 0 12px; z-index: 12; }
 .toolbar { position: absolute; top: 72px; left: 300px; max-width: calc(100vw - 310px); width: max-content; border-radius: var(--radius-lg); padding: 5px 6px; z-index: 11; }
 .side { position: absolute; top: 72px; left: 10px; bottom: 10px; width: 280px; border-radius: var(--radius-lg); z-index: 10; overflow: hidden; }
