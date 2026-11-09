@@ -58,8 +58,7 @@ describe("DIN A storage box", () => {
 
   it("an A5 sheet on the floor clears the walls and the rounded corners", async () => {
     const d = box();
-    // On the rib over the groove (its top 1.5 mm above the floor) with a little room.
-    const floor = 5 + 2.4 + 1.503 + 1;
+    const floor = 5 + 2.4 + 2; // foot + floor + a little
     const sheet: Feature[] = [
       { id: "pl9", op: "plane", base: { ref: "origin.XY" }, offset: floor } as Feature,
       sketch("sk99", { ref: "pl9" }, rect("q", -105, -74, 210, 148)),
@@ -113,8 +112,8 @@ describe("DIN A storage box", () => {
         [small, [0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, -half, 0, 0, 1]],
         [small, [0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, half, 0, 0, 1]],
       ], h);
-      // Foot (5 mm) plus the slope settling on the rounded rim: 6.1 mm either way.
-      expect(one.sink).toBeCloseTo(6.103, 2);
+      // Foot (5 mm) plus the play (0.4 mm) the slope settles by on the rim's sharp inner edge, either way.
+      expect(one.sink).toBeCloseTo(5.4, 2);
       expect(two.sink).toBeCloseTo(one.sink, 2);
       // It rests on the outer rims, never in the middle where the two lower boxes meet.
       for (const p of two.at) expect(Math.abs(p[0]!), JSON.stringify(two.at)).toBeGreaterThan(20);
