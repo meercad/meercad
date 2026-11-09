@@ -303,7 +303,7 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .card .thumb { aspect-ratio: 4 / 3; background: radial-gradient(ellipse at 50% 35%, var(--viewport-a), var(--viewport-b)); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .card .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .card .meta { padding: 10px 12px; display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--border); }
-.card .meta b { font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .meta b { display: block; font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .meta small { color: var(--muted); display: block; }
 .card.new .thumb { background: var(--accent-soft); color: var(--accent); }
 .card.new .thumb svg { width: 36px; height: 36px; }
