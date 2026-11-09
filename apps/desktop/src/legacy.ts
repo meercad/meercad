@@ -20,7 +20,7 @@ export async function carryOverAppData(settingsPath: string, thumbsDir: string):
   await mkdir(dirname(settingsPath), { recursive: true });
   await copyFile(old, settingsPath);
   const oldThumbs = join(oldUserData(), "thumbnails");
-  if (existsSync(oldThumbs) && !existsSync(thumbsDir)) await cp(oldThumbs, thumbsDir, { recursive: true });
+  if (existsSync(oldThumbs) && !existsSync(thumbsDir)) await cp(oldThumbs, thumbsDir, { recursive: true, preserveTimestamps: true });
 }
 
 /**
@@ -104,8 +104,9 @@ export async function adoptSiblingData(userData: string, siblings: string[]): Pr
   const from = siblings.find((d) => existsSync(join(d, "settings.json")));
   if (!from) return null;
   await mkdir(userData, { recursive: true });
+  // Pictures keep their dates: one older than its project file is made again (pictureState.ts).
   for (const part of ["thumbnails", "Local Storage"]) {
-    if (existsSync(join(from, part)) && !existsSync(join(userData, part))) await cp(join(from, part), join(userData, part), { recursive: true });
+    if (existsSync(join(from, part)) && !existsSync(join(userData, part))) await cp(join(from, part), join(userData, part), { recursive: true, preserveTimestamps: true });
   }
   // Last: its presence marks the carry-over as done.
   await copyFile(join(from, "settings.json"), join(userData, "settings.json"));
