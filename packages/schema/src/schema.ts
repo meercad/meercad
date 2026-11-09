@@ -383,27 +383,6 @@ export const definitions: Record<string, Json> = {
     ),
     draft: feature("draft", { faces: arr(ref("faceSelector"), { minItems: 1 }), angle: ref("expr"), neutral: ref("planeSpec"), flip: bool }, ["faces", "angle", "neutral"]),
     offset_face: feature("offset_face", { faces: arr(ref("faceSelector"), { minItems: 1 }), distance: ref("expr"), upTo: ref("planeSpec") }, ["faces", "distance"]),
-    texture: feature(
-      "texture",
-      {
-        faces: arr(ref("faceSelector"), { minItems: 1 }),
-        pattern: { enum: ["ribs", "ribs_square", "ribs_v", "knurl", "cross_knurl", "hex", "dots", "waves", "brick", "wood", "leather", "weave", "image"] },
-        depth: ref("expr"),
-        pitch: ref("expr"),
-        angle: ref("expr"),
-        ratio: ref("expr"),
-        fade: ref("expr"),
-        seed: { type: "integer", minimum: 0, maximum: 1000000 },
-        image: obj(
-          { width: { type: "integer", minimum: 1, maximum: 1024 }, height: { type: "integer", minimum: 1, maximum: 1024 }, pixels: { type: "string", maxLength: 2 * 1024 * 1024 } },
-          ["width", "height", "pixels"],
-          "Greyscale heights: width × height bytes row by row from the top (0 low, 255 high), base64.",
-        ),
-        fit: bool,
-        invert: bool,
-      },
-      ["faces", "pattern", "depth", "pitch"],
-    ),
     lithophane: feature(
       "lithophane",
       {

@@ -1,4 +1,4 @@
-import type { Expr, MeercadDocument } from "@meercad/schema";
+import { withoutRemovedFeatures, type Expr, type MeercadDocument } from "@meercad/schema";
 import { resolveParams } from "./expr.js";
 import { FIT_VAR, fitExpr } from "./fit.js";
 import { hashString } from "./hash.js";
@@ -84,6 +84,8 @@ export class RebuildEngine<S> {
   /** `onFeature` is told before each feature that has to be computed (not those taken from cache). */
   rebuild(doc: MeercadDocument, onFeature?: (index: number, total: number, id: string) => void): RebuildResult<S> {
     const t0 = performance.now();
+    // A file from an earlier version may hold steps this one no longer has: they are left out.
+    doc = withoutRemovedFeatures(doc).doc;
     const { values, errors } = resolveParams(effectiveParams(doc));
     const statuses: FeatureStatus[] = [];
     let state = this.root;

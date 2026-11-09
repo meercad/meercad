@@ -10,10 +10,10 @@ import { describePlane } from "../lib/topology";
 import { heightImageFromFile, heightImageUrl } from "../lib/textureImage";
 import { toast } from "../store";
 import { PlaneBox } from "./GridfinityFields";
-import { SliderValue } from "./TextureFields";
+import { SliderValue } from "./SliderValue";
 import { ExprInput } from "./ExprInput";
 import { t } from "../lib/i18n";
-import "./texture.css";
+import "./lithophane.css";
 
 type Of<O extends Feature["op"]> = Extract<Feature, { op: O }>;
 type SetFn = (patch: Record<string, unknown>) => void;

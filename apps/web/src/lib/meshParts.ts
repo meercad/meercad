@@ -16,7 +16,7 @@ export function meshBodyIds(features: readonly Feature[], meshes: readonly { bod
 }
 
 /** Feature tools that work on single faces or edges, which mesh parts do not offer. */
-export const FACE_TOOLS = new Set(["fillet", "chamfer", "shell", "thread", "hole", "extrude", "sketch", "plane", "texture"]);
+export const FACE_TOOLS = new Set(["fillet", "chamfer", "shell", "thread", "hole", "extrude", "sketch", "plane"]);
 
 /** Why a mesh part's faces cannot be picked; names the way to editable faces when that is offered. */
 export const meshHint = (convertible: boolean): string =>

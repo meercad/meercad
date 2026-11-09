@@ -1,7 +1,6 @@
 /**
- * A picture chosen for a custom surface texture or a lithophane, made into the greyscale heights
- * the document keeps (see TextureImage): at most `max` pixels on its long side (256 for a texture,
- * more for a lithophane's photo), bright = high. `stretch` spreads the brightness over the whole
+ * A photo chosen for a lithophane, made into the greyscale heights the document keeps (see
+ * TextureImage): at most `max` pixels on its long side (default 256), bright = high. `stretch` spreads the brightness over the whole
  * range (the darkest percent black, the brightest white), which photos usually need.
  */
 import type { TextureImage } from "@meercad/schema";

@@ -5,7 +5,8 @@
     "length": "120 mm",
     "sleeve": "26 mm",
     "grip": "60 mm",
-    "start": "30 mm"
+    "start": "30 mm",
+    "grooves": "12"
   },
   "features": [
     {
@@ -124,17 +125,76 @@
       "mode": "new_body"
     },
     {
-      "id": "tx1",
-      "op": "texture",
-      "name": "Knurled grip",
-      "faces": [
+      "id": "sk3",
+      "op": "sketch",
+      "name": "Groove",
+      "plane": {
+        "ref": "pl1"
+      },
+      "entities": [
         {
-          "face": "ex2.side[sk2.c2]"
+          "id": "p0",
+          "type": "point",
+          "x": 13,
+          "y": 0
+        },
+        {
+          "id": "c1",
+          "type": "circle",
+          "center": "p0",
+          "radius": 1.2
         }
       ],
-      "pattern": "knurl",
-      "depth": 0.6,
-      "pitch": 3
+      "constraints": [
+        {
+          "id": "k0",
+          "type": "diameter",
+          "curve": "c1",
+          "value": "2.4 mm"
+        },
+        {
+          "id": "k1",
+          "type": "horizontal_points",
+          "a": "p0",
+          "b": "origin"
+        },
+        {
+          "id": "k2",
+          "type": "distance",
+          "a": "origin",
+          "b": "p0",
+          "value": "sleeve / 2",
+          "axis": "x"
+        }
+      ]
+    },
+    {
+      "id": "ex3",
+      "op": "extrude",
+      "name": "Groove",
+      "profile": {
+        "sketch": "sk3"
+      },
+      "extent": "blind",
+      "distance": "grip",
+      "mode": "cut",
+      "targets": [
+        "ex2"
+      ]
+    },
+    {
+      "id": "cp1",
+      "op": "circular_pattern",
+      "name": "Grooves round the grip",
+      "source": {
+        "features": [
+          "ex3"
+        ]
+      },
+      "axis": {
+        "ref": "origin.Z"
+      },
+      "count": "grooves"
     }
   ],
   "rollback": null,

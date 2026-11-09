@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { TEXTURE_PATTERNS } from "@meercad/schema";
 import { applyTextures, DISPLAY_TEXTURE, EXPORT_TEXTURE, type FaceSurface, type TexturableMesh, type TextureLayer, type TexturedMesh } from "./displace.js";
-import { decodeHeightImage, fitWrap, patternHeight, patternPeriods, PATTERNS } from "./patterns.js";
+import { decodeHeightImage, imageFit, imageTiled, type HeightImage } from "./picture.js";
 
 type V3 = [number, number, number];
 
@@ -99,92 +98,54 @@ function volume(m: TexturedMesh): number {
   return v / 6;
 }
 
-const layer = (faces: number[], extra: Partial<TextureLayer> = {}): TextureLayer => ({ faces, pattern: "ribs", depth: 0.5, pitch: 3, angle: 0, ...extra });
+/** A `w` × `h` picture with brightness from `f(x, y)` (0–1, row 0 at the top). */
+function picture(w: number, h: number, f: (x: number, y: number) => number): HeightImage {
+  const pixels = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) pixels[y * w + x] = Math.round(255 * f(x, y));
+  return { width: w, height: h, pixels };
+}
+/** Bright and dark columns, two pixels each. */
+const stripes = picture(16, 16, (x) => (Math.floor(x / 2) % 2 ? 1 : 0));
+const white = picture(8, 8, () => 1);
+
+const layer = (faces: number[], extra: Partial<TextureLayer> = {}): TextureLayer => ({ faces, depth: 0.5, pitch: 3, angle: 0, image: stripes, ...extra });
 const planes: FaceSurface[] = Array.from({ length: 6 }, () => ({ kind: "plane" }));
 
-describe("texture patterns", () => {
-  it("stay between 0 and 1 and repeat after their periods", () => {
-    for (const p of TEXTURE_PATTERNS) {
-      const img = { width: 4, height: 2, pixels: Uint8Array.from([0, 64, 128, 255, 255, 128, 64, 0]) };
-      const h = patternHeight(p, { seed: 3, image: img });
-      const [pa, pb] = patternPeriods(p, img);
-      for (let i = 0; i < 400; i++) {
-        const a = Math.sin(i * 12.9898) * 7.3, b = Math.cos(i * 78.233) * 5.1;
-        const v = h(a, b);
-        expect(v, `${p} at ${a},${b}`).toBeGreaterThanOrEqual(0);
-        expect(v, `${p} at ${a},${b}`).toBeLessThanOrEqual(1);
-        expect(h(a + pa, b), `${p} repeats across`).toBeCloseTo(v, 6);
-        if (pb > 0) expect(h(a, b + pb), `${p} repeats along`).toBeCloseTo(v, 6);
-        else expect(h(a, b + 1.7), `${p} does not change along`).toBeCloseTo(v, 9);
-      }
-    }
-  });
-
-  it("have a sensible shape", () => {
-    const ribs = patternHeight("ribs");
-    expect(ribs(0, 0)).toBe(0);
-    expect(ribs(0.5, 0)).toBe(1);
-    expect(patternHeight("ribs", { invert: true })(0.5, 0)).toBe(0);
-    expect(patternHeight("ribs_v")(0.25, 0)).toBeCloseTo(0.5, 9);
-    expect(patternHeight("cross_knurl")(0.5, 0.5)).toBe(1);
-    // A hex cell is high in its middle and low on the border between cells.
-    expect(patternHeight("hex")(0, 0)).toBe(1);
-    expect(patternHeight("hex")(0.5, 0)).toBe(0);
-    expect(patternHeight("dots")(0, 0)).toBe(1);
-    expect(patternHeight("dots")(0.5, 0)).toBe(0);
-    // A different seed gives a different leather.
-    const l1 = patternHeight("leather", { seed: 1 }), l2 = patternHeight("leather", { seed: 2 });
-    let diff = 0;
-    for (let i = 0; i < 50; i++) diff += Math.abs(l1(i * 0.37, i * 0.21) - l2(i * 0.37, i * 0.21));
-    expect(diff).toBeGreaterThan(1);
-    // Every pattern has a default pitch and depth.
-    for (const p of TEXTURE_PATTERNS) expect(PATTERNS[p].pitch).toBeGreaterThan(0);
-  });
-
+describe("height pictures", () => {
   it("reads a picture's heights", () => {
     const img = decodeHeightImage({ width: 2, height: 1, pixels: btoa(String.fromCharCode(0, 255)) });
     expect([...img.pixels]).toEqual([0, 255]);
-    const h = patternHeight("image", { image: img });
-    // Pixel centres at a = 0.25 and 0.75.
-    expect(h(0.25, 0.25)).toBeCloseTo(0, 6);
-    expect(h(0.75, 0.25)).toBeCloseTo(1, 6);
+    const fit = imageFit(img);
+    expect(fit(0.25, 0.5)).toBeCloseTo(0, 6);
+    expect(fit(0.75, 0.5)).toBeCloseTo(1, 6);
+    expect(imageFit(img, true)(0.75, 0.5)).toBeCloseTo(0, 6);
   });
 
-  it("fits whole repeats round a circumference", () => {
-    const f = fitWrap(100, 3, 0, 1, 0);
-    expect(100 / f.pitch).toBeCloseTo(33, 9);
-    const g = fitWrap(100, 5, 20, 1, 1);
-    const t = (g.angle * Math.PI) / 180;
-    const whole = (x: number) => Math.abs(x - Math.round(x));
-    expect(whole((100 * Math.cos(t)) / g.pitch)).toBeCloseTo(0, 6);
-    expect(whole((100 * Math.sin(t)) / g.pitch)).toBeCloseTo(0, 6);
-    expect(g.angle).toBeGreaterThan(15);
-    expect(g.angle).toBeLessThan(25);
+  it("repeats a tiled picture and joins the sides of a wrapped one", () => {
+    const h = imageTiled(stripes);
+    for (const [a, b] of [[0.3, 0.2], [0.7, 0.9]] as const) expect(h(a + 1, b)).toBeCloseTo(h(a, b), 9);
+    const wrapped = imageFit(stripes, false, true);
+    expect(wrapped(1.01, 0.5)).toBeCloseTo(wrapped(0.01, 0.5), 9);
   });
 });
 
-describe("texture displacement", () => {
-  it("keeps a box closed and manifold with ribs on two walls, and moves them by the depth", () => {
-    const m = applyTextures(box(30, 20, 10), [layer([2, 1])], planes, DISPLAY_TEXTURE)!;
+describe("height picture displacement", () => {
+  it("keeps a box closed and manifold with the picture on a wall, and moves it by the depth", () => {
+    const m = applyTextures(box(30, 20, 10), [layer([2], { image: white, fade: 1 })], planes, DISPLAY_TEXTURE)!;
     expect(m).not.toBeNull();
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
     expect(m.faceRanges.length).toBe(18);
-    // The −Y wall's ribs stand out to −0.5 and nothing goes beyond the depth.
-    let minY = Infinity, maxX = -Infinity;
-    for (let i = 0; i < m.positions.length; i += 3) {
-      minY = Math.min(minY, m.positions[i + 1]!);
-      maxX = Math.max(maxX, m.positions[i]!);
-    }
+    // A white picture raises the −Y wall by the full depth, away from the border.
+    let minY = Infinity;
+    for (let i = 0; i < m.positions.length; i += 3) minY = Math.min(minY, m.positions[i + 1]!);
     expect(minY).toBeCloseTo(-0.5, 2);
-    expect(maxX).toBeCloseTo(30.5, 2);
-    // Ribs add volume (about the area under round ribs ≈ π/4 · 0.9 of the wall times the depth, less the fade).
     const added = volume(m) - 30 * 20 * 10;
-    expect(added).toBeGreaterThan(0.3 * 0.5 * (30 * 10 + 20 * 10));
-    expect(added).toBeLessThan(0.75 * 0.5 * (30 * 10 + 20 * 10));
+    expect(added).toBeGreaterThan(0.5 * 0.7 * 30 * 10);
+    expect(added).toBeLessThan(0.5 * 30 * 10);
   });
 
   it("cuts into the face for a negative depth", () => {
-    const m = applyTextures(box(30, 20, 10), [layer([5], { pattern: "hex", depth: -0.4, pitch: 5 })], planes, DISPLAY_TEXTURE)!;
+    const m = applyTextures(box(30, 20, 10), [layer([5], { depth: -0.4 })], planes, DISPLAY_TEXTURE)!;
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
     let maxZ = -Infinity, minZ = Infinity;
     for (let i = 2; i < m.positions.length; i += 3) {
@@ -194,13 +155,13 @@ describe("texture displacement", () => {
       }
     }
     expect(maxZ).toBeCloseTo(10, 6);
-    expect(minZ).toBeCloseTo(9.6, 2);
+    expect(minZ).toBeLessThan(9.7);
+    expect(minZ).toBeGreaterThan(9.6 - 1e-6);
     expect(volume(m)).toBeLessThan(6000);
   });
 
   it("fades to the smooth face at the border", () => {
-    const m = applyTextures(box(30, 20, 10), [layer([2], { fade: 2 })], planes, DISPLAY_TEXTURE)!;
-    // Corners on the border of the −Y wall (x = 0 or 30, z = 0 or 10) stay on the wall.
+    const m = applyTextures(box(30, 20, 10), [layer([2], { image: white, fade: 2 })], planes, DISPLAY_TEXTURE)!;
     for (let i = 0; i < m.positions.length; i += 3) {
       const [x, y, z] = [m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!];
       if (y < 0.001 && (x < 1e-4 || x > 30 - 1e-4 || z < 1e-4 || z > 10 - 1e-4)) expect(y).toBeCloseTo(0, 6);
@@ -210,11 +171,10 @@ describe("texture displacement", () => {
     }
   });
 
-  it("wraps round a cylinder without a seam and stays closed", () => {
+  it("wraps a picture round a cylinder without a seam and stays closed", () => {
     const { mesh, surfaces } = cylinder(10, 20);
-    const m = applyTextures(mesh, [layer([0], { pattern: "knurl", depth: 0.4, pitch: 2 })], surfaces, DISPLAY_TEXTURE)!;
+    const m = applyTextures(mesh, [layer([0], { depth: 0.4, fade: 0 })], surfaces, DISPLAY_TEXTURE)!;
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
-    // Away from the ends, every point lies between the radius and radius + depth.
     let maxR = 0;
     for (let i = 0; i < m.positions.length; i += 3) {
       const r = Math.hypot(m.positions[i]!, m.positions[i + 1]!);
@@ -228,28 +188,9 @@ describe("texture displacement", () => {
     expect(maxR).toBeGreaterThan(10.35);
   });
 
-  it("puts ribs on a cylinder as whole ribs round it", () => {
-    const { mesh, surfaces } = cylinder(10, 20, 64);
-    const m = applyTextures(mesh, [layer([0], { pitch: 3, fade: 0 })], surfaces, { samples: 12, maxTriangles: 1e6 })!;
-    // Count the ribs round the middle: peaks of the radius along the circle at z = 10.
-    const ring = new Map<number, number>();
-    for (let i = 0; i < m.positions.length; i += 3) {
-      if (Math.abs(m.positions[i + 2]! - 10) > 0.3) continue;
-      const a = Math.round(((Math.atan2(m.positions[i + 1]!, m.positions[i]!) + Math.PI) / (2 * Math.PI)) * 2000);
-      ring.set(a, Math.max(ring.get(a) ?? 0, Math.hypot(m.positions[i]!, m.positions[i + 1]!)));
-    }
-    const sorted = [...ring].sort((x, y) => x[0] - y[0]).map(([, r]) => r);
-    let ribs = 0;
-    for (let i = 0; i < sorted.length; i++) {
-      const prev = sorted[(i + sorted.length - 1) % sorted.length]!;
-      if (sorted[i]! > 10.25 && prev <= 10.25) ribs++;
-    }
-    expect(ribs).toBe(Math.round((2 * Math.PI * 10) / 3));
-  });
-
   it("stays below the triangle budget and leaves other faces alone", () => {
-    const base = box(100, 100, 50);
-    const m = applyTextures(base, [layer([5], { pitch: 0.5 })], planes, { samples: 8, maxTriangles: 50_000 })!;
+    const fine = picture(400, 400, (x, y) => ((x + y) % 7) / 6);
+    const m = applyTextures(box(100, 100, 50), [layer([5], { image: fine })], planes, { samples: 8, maxTriangles: 50_000 })!;
     expect(m.indices.length / 3).toBeLessThanOrEqual(50_000);
     expect(m.indices.length / 3).toBeGreaterThan(25_000);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
@@ -258,89 +199,35 @@ describe("texture displacement", () => {
   });
 
   it("refines a round face meshed in thin strips without multiplying the triangles", () => {
-    // 200 strips 0.25 mm wide and 50 mm tall, as the kernel meshes a fillet: ladders, not fans.
+    // 200 strips 0.25 mm wide and 50 mm tall, as the kernel meshes a curved plate: ladders, not fans.
     const { mesh, surfaces } = cylinder(8, 50, 200);
     const t0 = performance.now();
-    const m = applyTextures(mesh, [layer([0], { pitch: 4 })], surfaces, { samples: 8, maxTriangles: 1e7 })!;
+    const m = applyTextures(mesh, [layer([0], { image: picture(150, 150, (x) => (x % 10) / 9) })], surfaces, { samples: 8, maxTriangles: 1e7 })!;
     const area = 2 * Math.PI * 8 * 50;
-    expect(m.indices.length / 3).toBeLessThan((12 * area) / 0.5 ** 2);
+    expect(m.indices.length / 3).toBeLessThan((12 * area) / m.spacing ** 2);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
     // Guards against the refinement blowing up (once minutes), with room for a loaded machine.
     expect(performance.now() - t0).toBeLessThan(15000);
   });
 
-  it("refines a round face in strips wider than the spacing (export meshing) to the intended density", () => {
-    // A 26 × 60 mm grip meshed for export: 126 strips 0.65 mm wide, knurled at a 3 mm pitch.
+  it("puts about a corner on each pixel for export", () => {
+    const img = picture(120, 60, (x, y) => ((x * 3 + y) % 5) / 4);
     const { mesh, surfaces } = cylinder(13, 60, 126);
-    const t0 = performance.now();
-    const m = applyTextures(mesh, [layer([0], { pattern: "knurl", depth: 0.6, pitch: 3 })], surfaces, EXPORT_TEXTURE)!;
-    const spacing = 3 / EXPORT_TEXTURE.samples;
-    const triangles = m.indices.length / 3 - 2 * 126;
-    // Every edge at most the spacing needs about 6 × area / spacing² triangles; it once made 29×.
-    expect(triangles).toBeLessThan((10 * 2 * Math.PI * 13 * 60) / spacing ** 2);
+    const m = applyTextures(mesh, [layer([0], { image: img })], surfaces, EXPORT_TEXTURE)!;
+    const pixel = Math.sqrt((2 * Math.PI * 13 * 60) / (img.width * img.height));
+    expect(m.spacing).toBeLessThanOrEqual(pixel * 1.01);
     expect(m.indices.length / 3).toBeLessThan(EXPORT_TEXTURE.maxTriangles);
-    expect(m.spacing).toBeCloseTo(spacing, 6);
-    expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
-    // Guards against the refinement blowing up (once minutes), with room for a loaded machine.
-    expect(performance.now() - t0).toBeLessThan(30000);
-  });
-
-  it("holds the triangle budget over the whole part", () => {
-    const { mesh, surfaces } = cylinder(13, 60, 126);
-    const m = applyTextures(mesh, [layer([0], { pattern: "knurl", pitch: 3 })], surfaces, { samples: 12, maxTriangles: 100_000 })!;
-    expect(m.indices.length / 3).toBeLessThanOrEqual(100_000);
-    expect(m.indices.length / 3).toBeGreaterThan(40_000);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
   });
 
   it("makes a retry coarser when the first try overshoots the budget", () => {
-    // A wall in 40 wide strips: the estimate is low, the first try makes about 113k triangles.
-    // The retry once came out the same (the estimate undid its coarser spacing) and ran four times.
     const { mesh, surfaces } = cylinder(30, 100, 40);
-    const m = applyTextures(mesh, [layer([0], { pitch: 4 })], surfaces, { samples: 8, maxTriangles: 100_000 })!;
+    const m = applyTextures(mesh, [layer([0], { image: picture(300, 300, (x) => (x % 4) / 3) })], surfaces, { samples: 8, maxTriangles: 100_000 })!;
     expect(m.indices.length / 3).toBeLessThanOrEqual(100_000);
     expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
   });
 
-  it("lets triangles run long along straight ribs, so a large part keeps them fine across", () => {
-    // A box wall 230 × 160 × 95 like the A5 storage box: ribs 4 mm apart on the screen budget.
-    const big = () => box(230, 160, 95);
-    const ribs = applyTextures(big(), [layer([0, 1, 2, 3], { pitch: 4 })], planes, DISPLAY_TEXTURE)!;
-    const knurl = applyTextures(big(), [layer([0, 1, 2, 3], { pattern: "knurl", pitch: 4 })], planes, DISPLAY_TEXTURE)!;
-    expect(ribs.indices.length / 3).toBeLessThanOrEqual(DISPLAY_TEXTURE.maxTriangles * 1.25);
-    expect(closedManifold(ribs)).toMatchObject({ open: 0, bad: 0 });
-    // Across the ribs at least five corners per rib (all the same size it was under three); a
-    // pattern that changes both ways cannot.
-    expect(ribs.spacing).toBeLessThanOrEqual(4 / 5);
-    expect(knurl.spacing).toBeGreaterThan(1);
-    // Slanted ribs change along the wall too: no long triangles there.
-    const slanted = applyTextures(big(), [layer([0, 1, 2, 3], { pitch: 4, angle: 30 })], planes, DISPLAY_TEXTURE)!;
-    expect(slanted.spacing).toBeGreaterThan(1);
-  });
-
-  it("keeps the fade at the border as narrow with long triangles along the ribs", () => {
-    // Ribs on the +Y wall of a 100 × 20 × 100 box; the wall's top edge borders the untextured top.
-    const m = applyTextures(box(100, 20, 100), [layer([3], { pitch: 4, fade: 0.5 })], planes, DISPLAY_TEXTURE)!;
-    // Corners on the wall within 1 mm of the top: there must be some, and below 0.5 mm of it they are low.
-    let near = 0;
-    for (let i = 0; i < m.positions.length; i += 3) {
-      const y = m.positions[i + 1]!, z = m.positions[i + 2]!;
-      if (y < 19.99 || z > 100 || z < 99) continue;
-      near++;
-    }
-    expect(near).toBeGreaterThan(50);
-    expect(closedManifold(m)).toMatchObject({ open: 0, bad: 0 });
-  });
-
-  it("works for every pattern", () => {
-    const img = { width: 2, height: 2, pixels: Uint8Array.from([0, 255, 255, 0]) };
-    for (const p of TEXTURE_PATTERNS) {
-      const m = applyTextures(box(20, 20, 20), [layer([0, 2, 5], { pattern: p, pitch: 4, seed: 5, image: img })], planes, DISPLAY_TEXTURE)!;
-      expect(closedManifold(m), p).toMatchObject({ open: 0, bad: 0 });
-    }
-  });
-
-  it("returns nothing when no face is textured", () => {
+  it("returns nothing when no face has the picture", () => {
     expect(applyTextures(box(1, 1, 1), [layer([9])], planes, DISPLAY_TEXTURE)).toBeNull();
   });
 });

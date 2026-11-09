@@ -86,7 +86,7 @@ export function ViewportView() {
   const showSketches = useApp((s) => s.showSketches);
   const showValues = usePrefs((s) => s.showValues);
   const showTextures = usePrefs((s) => s.showTextures);
-  const hasTextures = useApp((s) => s.doc.features.some((f) => (f.op === "texture" || f.op === "lithophane") && !f.suppressed));
+  const hasTextures = useApp((s) => s.doc.features.some((f) => f.op === "lithophane" && !f.suppressed));
   const colorParts = usePrefs((s) => s.colorParts);
   const sketchId = useApp((s) => s.sketchId);
   const dialog = useApp((s) => s.dialog);
@@ -821,7 +821,7 @@ export function ViewportView() {
       <MeshRepairCard />
       <div className="status-pill" title={kernelState.error ?? ""}>
         {slowBuild ? <span className="spinner sm" aria-hidden /> : <span className={`dot ${!kernelState.ready || busy ? "busy" : ""}`} style={kernelState.error ? { background: "var(--err)" } : undefined} />}
-        {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}${hasTextures && !showTextures ? ` · ${t("textures hidden")}` : ""}` : t("Ready"))}
+        {kernelState.error ?? (!kernelState.ready ? kernelState.info : slowBuild ? t("Rebuilding…") : output ? `${tn(output.report.bodies.length, "{n} part", "{n} parts")} · ${t("rebuild {ms} ms", { ms: output.report.rebuildMs.toFixed(0) })}${previewing ? ` · ${t("preview")}` : ""}${hasTextures && !showTextures ? ` · ${t("pictures hidden")}` : ""}` : t("Ready"))}
       </div>
       <div className="view-controls">
         <SnapControls viewport={vp} />
@@ -858,7 +858,7 @@ export function ViewportView() {
               { label: `${check(showSketches)}${t("Sketches")}`, onClick: () => useApp.setState({ showSketches: !showSketches }) },
               { label: `${check(showValues)}${t("Dimensions on the model")}`, onClick: () => setPrefs({ showValues: !showValues }) },
               { label: `${check(colorParts)}${t("A colour for each part")}`, onClick: () => setPrefs({ colorParts: !colorParts }) },
-              ...(hasTextures ? [{ label: `${check(showTextures)}${t("Surface textures")}`, onClick: () => setPrefs({ showTextures: !showTextures }) }] : []),
+              ...(hasTextures ? [{ label: `${check(showTextures)}${t("Lithophane pictures")}`, onClick: () => setPrefs({ showTextures: !showTextures }) }] : []),
             ]);
           }}
         >
@@ -900,7 +900,7 @@ export function ViewportView() {
         </button>
         {/* Textures cost time on every rebuild: hidden, editing a textured part is quicker (exports keep them). */}
         {hasTextures ? (
-          <button className={`icon-btn sm phone-hide ${showTextures ? "active" : ""}`} title={showTextures ? t("Hide surface textures while editing (rebuilds faster; exports keep them)") : t("Show surface textures")} onClick={() => setPrefs({ showTextures: !showTextures })}>
+          <button className={`icon-btn sm phone-hide ${showTextures ? "active" : ""}`} title={showTextures ? t("Hide lithophane pictures while editing (rebuilds faster; exports keep them)") : t("Show lithophane pictures")} onClick={() => setPrefs({ showTextures: !showTextures })}>
             <Waves />
           </button>
         ) : null}

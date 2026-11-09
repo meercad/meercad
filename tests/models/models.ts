@@ -671,22 +671,6 @@ export const MODELS: TestModel[] = [
     expect: { bodies: 1, volume: 50 * 20 * 14 - PI * 3.9 ** 2 * 14, size: [50, 20, 14] },
   },
   {
-    file: "36 Gerippte Box",
-    name: "Ribbed storage box (surface texture)",
-    look: "An open 80 × 60 × 50 box, 2 mm walls, round upright corners (r 8), with round vertical ribs 0.8 mm high every 4 mm on its walls and corners. The ribs are a finish: the volume is the smooth box's.",
-    doc: doc(
-      [
-        sketch("sk1", { ref: "origin.XY" }, rect("l", -40, -30, 80, 60)),
-        { id: "ex1", op: "extrude", name: "Box", profile: { sketch: "sk1" }, extent: "blind", distance: 50, mode: "new_body" },
-        { id: "fi1", op: "fillet", name: "Round corners", edges: ["l1|l2", "l2|l3", "l3|l4", "l4|l1"].map((p) => ({ edge: p.split("|").map((c) => `ex1.side[sk1.${c}]`) as [string, string] })), radius: 8 },
-        { id: "sh1", op: "shell", name: "Hollow", faces: [{ face: "ex1.end_cap" }], thickness: 2 },
-        { id: "st1", op: "texture", name: "Ribs", faces: [{ face: "ex1.side[*]" }, { face: "fi1.round[*]" }], pattern: "ribs", depth: 0.8, pitch: 4 },
-      ],
-    ),
-    // Outside minus inside: rounded rectangles (corner r 8 outside, 6 inside), floor 2 mm.
-    expect: { bodies: 1, volume: (80 * 60 - (4 - PI) * 64) * 50 - (76 * 56 - (4 - PI) * 36) * 48, size: [80, 60, 50] },
-  },
-  {
     file: "37 Gebogener Streifen",
     name: "Strip bent through 90°",
     look: "A 100 × 10 × 2 strip bent round the Y axis through 90°: one leg flat, the bend round, the far end pointing up. Bending keeps its volume.",

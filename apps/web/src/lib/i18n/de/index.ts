@@ -9,9 +9,9 @@ import motion from "./motion";
 import printability from "./printability";
 import sketch from "./sketch";
 import storage from "./storage";
-import texture from "./texture";
+import lithophane from "./lithophane";
 import workspace from "./workspace";
 
-export const DE_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>> = { app, bend, closures, controls, dialogs, materials, motion, printability, sketch, storage, texture, workspace };
+export const DE_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>> = { app, bend, closures, controls, dialogs, lithophane, materials, motion, printability, sketch, storage, workspace };
 
 export const DE: Readonly<Record<string, string>> = Object.assign({}, ...Object.values(DE_PARTS));

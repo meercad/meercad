@@ -2,7 +2,7 @@
 import { create } from "zustand";
 import { KernelClient, SupersededError, type Measurement, type RebuildOutput, type RebuildProgress } from "@meercad/kernel/client";
 import { DocumentStore, OpError, withMotion } from "@meercad/model";
-import { emptyDocument, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
+import { emptyDocument, withoutRemovedFeatures, type DocOp, type Feature, type FeatureOp, type MeercadDocument, type PlaneSpec } from "@meercad/schema";
 import { planeSpecForPick, setFeatureLabels } from "./lib/topology";
 import { usePrefs } from "./lib/keymap";
 import { FACE_TOOLS, meshBodyIds, meshHint } from "./lib/meshParts";
@@ -476,7 +476,7 @@ usePrefs.subscribe((p, prev) => {
 /** Counts rebuild requests, so a fine texture that a newer edit overtook is not shown. */
 let rebuildGeneration = 0;
 
-/** While a surface texture's value is being dragged: textures are made coarse and quick; letting go makes them fine again. */
+/** While a lithophane value is being dragged: its picture is made coarse and quick; letting go makes it fine again. */
 export function setDraftTextures(on: boolean): void {
   if (draftTextures === on) return;
   draftTextures = on;
@@ -498,10 +498,10 @@ export function scheduleRebuild(): void {
     rebuildsPending++;
     const task = rebuildTask();
     const gen = ++rebuildGeneration;
-    // Surface textures take a while at full detail: the part shows first with a coarse texture,
+    // Lithophane pictures take a while at full detail: the part shows first with a coarse picture,
     // and the fine one follows (the geometry is not computed again for it).
     const textures = usePrefs.getState().showTextures;
-    const textured = doc.features.some((f) => (f.op === "texture" || f.op === "lithophane") && !f.suppressed);
+    const textured = doc.features.some((f) => f.op === "lithophane" && !f.suppressed);
     const quick = textures && !draftTextures && textured;
     const show = (output: RebuildOutput, final: boolean) => {
       set(preview ? { output, previewing: true, building: !final } : { output, baseOutput: output, previewing: false, building: !final, selection: remapSelection(get().selection, get().baseOutput, output) });
@@ -513,7 +513,7 @@ export function scheduleRebuild(): void {
       // Once per session: a slow textured part gets the hint that textures can be hidden while editing.
       if (final && textures && textured && !texturesHinted && performance.now() - t0 > SLOW_TEXTURE_MS) {
         texturesHinted = true;
-        toast(t("Surface textures slow down rebuilding. Hide them while you edit with the texture button at the bottom right; exports keep them."));
+        toast(t("Lithophane pictures slow down rebuilding. Hide them while you edit with the wave button at the bottom right; exports keep them."));
       }
     };
     // Volume and area (integrals over every face) follow once the new shape is on screen.
@@ -854,6 +854,13 @@ export async function newProject(doc: MeercadDocument = emptyDocument(), name = 
 }
 
 function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore): void {
+  // Steps an earlier version had and this one no longer offers (the surface texture) are left out;
+  // the next save writes the design without them.
+  const cleaned = store ? { doc, removed: [] } : withoutRemovedFeatures(doc);
+  if (cleaned.removed.length) {
+    doc = cleaned.doc;
+    toast(t("This design had a surface texture. meerCAD no longer has it, so the part now shows smooth."), "info");
+  }
   // Nothing of this project is on screen until its first rebuild ends.
   shownDoc = null;
   thumbDoc = null;

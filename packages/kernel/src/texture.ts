@@ -1,30 +1,17 @@
 /**
- * Surface textures in the kernel: the texture step checks its faces and remembers them; meshing
- * then refines and displaces those faces' triangles (see model/texture). The solid itself never
- * changes, so volume, mass, STEP and later steps see the smooth part.
+ * Height pictures in the kernel (a lithophane's picture face): the step that lays one remembers its
+ * faces; meshing then refines and displaces those faces' triangles (see model/texture). The solid
+ * itself never changes, so volume, mass, STEP and later steps see the smooth part.
  */
 import { resolveFaces } from "@meercad/naming";
-import { applyTextures, decodeHeightImage, DISPLAY_TEXTURE, DRAFT_TEXTURE, EXPORT_TEXTURE, FeatureError, type FaceSurface, type ResolvedTexture, type TextureLayer } from "@meercad/model";
+import { applyTextures, decodeHeightImage, DISPLAY_TEXTURE, DRAFT_TEXTURE, EXPORT_TEXTURE, type FaceSurface, type TextureLayer } from "@meercad/model";
 import { Arena } from "./arena.js";
 import type { Body } from "./body.js";
 import type { BodyMesh } from "./mesh.js";
 import type { OC } from "./occt.js";
-import type { ModelState, TextureRecord } from "./state.js";
+import type { ModelState } from "./state.js";
 
-/** The texture step: its faces must exist and belong to one part. */
-export function textureRecord(f: ResolvedTexture, bodies: ReadonlyMap<string, Body>): TextureRecord {
-  if (!f.faces.length) throw new FeatureError("select the faces to texture");
-  const refs = f.faces.flatMap((s) => resolveFaces(s, [...bodies.values()]));
-  const ids = new Set(refs.map((r) => r.body));
-  if (ids.size !== 1) throw new FeatureError(ids.size ? "the faces must belong to one part" : "face selector matches no face");
-  const body = bodies.get([...ids][0]!)!;
-  if (f.pitch <= 0) throw new FeatureError("the pitch must be larger than zero");
-  if (f.depth === 0) throw new FeatureError("the depth must not be zero");
-  if (f.pattern === "image" && !f.image) throw new FeatureError('pattern "image" needs a picture');
-  return { feature: f, body, faces: [...new Set(refs.flatMap((r) => r.faces))] };
-}
-
-/** The textures on a body at the end of a rebuild: faces found again if the part changed since. */
+/** The pictures on a body at the end of a rebuild: faces found again if the part changed since. */
 export function texturesOf(state: ModelState, body: Body): { layers: TextureLayer[]; sig: string } | null {
   const layers: TextureLayer[] = [];
   const sig: unknown[] = [];
@@ -42,19 +29,15 @@ export function texturesOf(state: ModelState, body: Body): { layers: TextureLaye
     const f = rec.feature;
     layers.push({
       faces,
-      pattern: f.pattern,
       depth: f.depth,
       pitch: f.pitch,
       angle: f.angle,
-      ...(f.ratio !== undefined ? { ratio: f.ratio } : {}),
       ...(f.fade !== undefined ? { fade: f.fade } : {}),
-      ...(f.seed !== undefined ? { seed: f.seed } : {}),
-      ...(f.image ? { image: decodeHeightImage(f.image) } : {}),
-      ...(f.fit ? { fit: true } : {}),
+      image: decodeHeightImage(f.image),
       ...(rec.up ? { up: rec.up } : {}),
       ...(f.invert ? { invert: true } : {}),
     });
-    sig.push(faces, f.pattern, f.depth, f.pitch, f.angle, f.ratio, f.fade, f.seed, f.invert, f.fit, rec.up, f.image ? [f.image.width, f.image.height, f.image.pixels] : null);
+    sig.push(faces, f.depth, f.pitch, f.angle, f.fade, f.invert, rec.up, [f.image.width, f.image.height, f.image.pixels]);
   }
   return layers.length ? { layers, sig: JSON.stringify(sig) } : null;
 }

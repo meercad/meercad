@@ -28,7 +28,6 @@ import { GridfinityFields, LabelFields } from "./GridfinityFields";
 import { BoxFields, SnapHookFields } from "./ClosureFields";
 import { WallFields } from "./WallFields";
 import { LithophaneFields } from "./LithophaneFields";
-import { TextureFields } from "./TextureFields";
 import { Kbd } from "./Kbd";
 import { t, tn } from "../lib/i18n";
 
@@ -2095,8 +2094,6 @@ function Body({ d }: { d: DialogState }) {
           <p className="muted small">{f.upTo ? t("Flat faces parallel to the plane move onto it, or stop short of it by the gap.") : t("Positive moves the faces out of the part (it grows there), negative into it. A hole wall moved out makes the hole tighter.")}</p>
         </>
       );
-    case "texture":
-      return <TextureFields f={f} set={set} faces={<SelBox field="faces" items={f.faces.map(describeFaceSelector)} placeholder={t("Pick faces")} onRemove={(i) => set({ faces: f.faces.filter((_, j) => j !== i) })} />} />;
     case "rib": {
       const sk = sketches.find((x) => x.id === f.sketch);
       const name = sk ? featureName(sk) : f.sketch;

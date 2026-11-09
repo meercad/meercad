@@ -1,18 +1,18 @@
 /**
  * Lithophanes and reliefs from a picture: a plate (flat, or bent round the plane's normal) with the
- * picture laid on its picture face as a fitted picture texture (see texture.ts and model/texture).
- * The solid is the plain plate; the texture moves the picture face's triangles by the picture's
+ * picture laid on its picture face as a height picture (see texture.ts and model/texture).
+ * The solid is the plain plate; the picture moves the picture face's triangles by the picture's
  * brightness. With a frame, the plate is built at the full thickness and the picture area recessed
  * to the thinnest thickness, so the picture rises from the recess up to the frame's top.
  */
-import { decodeHeightImage, FeatureError, type ResolvedLithophane, type ResolvedTexture } from "@meercad/model";
+import { decodeHeightImage, FeatureError, type ResolvedLithophane } from "@meercad/model";
 import type { PlaneFrame, Vec3 } from "@meercad/sketch";
 import type { TopoDS_Shape } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
 import { Body } from "./body.js";
 import { Builder } from "./builder.js";
 import type { OC } from "./occt.js";
-import type { TextureRecord } from "./state.js";
+import type { PictureSpec, TextureRecord } from "./state.js";
 
 export function lithophaneBody(oc: OC, arena: Arena, f: ResolvedLithophane, frame: PlaneFrame): { body: Body; texture: TextureRecord } {
   const b = new Builder(oc, arena);
@@ -86,18 +86,15 @@ export function lithophaneBody(oc: OC, arena: Arena, f: ResolvedLithophane, fram
   const n = frame.normal, u = frame.u;
   const v: Vec3 = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
   const up: Vec3 = upLocal[2] === 1 ? [...n] : v;
-  const texture: ResolvedTexture = {
+  const texture: PictureSpec = {
     id: f.id,
-    op: "texture",
     faces: [{ face: `${f.id}.picture` }],
-    pattern: "image",
     // Within a frame the picture stays a hair under its top, so the recess walls keep some height.
     depth: fw > 0 ? d - 0.01 : d,
     pitch: W,
     angle: 0,
     fade: 0,
     image: f.image,
-    fit: true,
     // The picture keeps bright = high; a lithophane wants dark = thick.
     ...((f.kind === "lithophane") !== !!f.invert ? { invert: true } : {}),
   };

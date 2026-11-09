@@ -280,8 +280,7 @@ export const examplePacks = (ex: Example): PackId[] => ex.packs ?? packsUsed(ex.
 const files = (import.meta as ImportMeta & { glob(pattern: string, opts: object): Record<string, string> }).glob("../examples/*.meercad", { query: "?raw", import: "default", eager: true });
 const MORE: [file: string, name: string, description: string][] = [
   ["40-stackable-ribbed-box", "Stackable DIN box", "Parametric for DIN A paper (variable din: 6, 5 or 4 for A6, A5, A4); two of a size stand exactly on the next larger one; prints without supports"],
-  ["35-ribbed-storage-box", "Ribbed storage box", "Round ribs as a surface texture on the walls"],
-  ["39-two-material-grip", "Two-material grip", "A PLA handle with a knurled TPU sleeve: two filaments in one 3MF"],
+  ["39-two-material-grip", "Two-material grip", "A PLA handle with a grooved TPU sleeve: two filaments in one 3MF"],
   ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
   ["41-linear-axis", "Linear axis", "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts"],
