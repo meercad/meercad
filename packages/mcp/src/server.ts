@@ -80,7 +80,8 @@ const readFile = (path: string) => readLocal(path, appFiles);
 const writeFile = (path: string, data: Uint8Array) => writeLocal(path, data, appFiles);
 const resolve = localPath;
 
-const text = (v: unknown) => ({ content: [{ type: "text" as const, text: typeof v === "string" ? v : JSON.stringify(v, null, 2) }] });
+// Compact JSON: indenting doubled the size of every answer (and with it the tokens an assistant pays for).
+const text = (v: unknown) => ({ content: [{ type: "text" as const, text: typeof v === "string" ? v : JSON.stringify(v) }] });
 const guard =
   <A,>(fn: (a: A) => Promise<ReturnType<typeof text> | { content: unknown[] }>) =>
   async (a: A) => {
@@ -150,6 +151,46 @@ const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructio
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
 
+const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
+const shot = {
+  view: view.optional(),
+  direction: z.tuple([z.number(), z.number(), z.number()]).optional().describe("Where the camera is, seen from the model (Z up, front is -Y), e.g. [-1,-1,0.6] from front-left above, [0,0,-1] from below; overrides view"),
+  focus: z.array(z.string()).optional().describe("Part ids to zoom onto"),
+  isolate: z.boolean().optional().describe("With focus: hide all other parts"),
+  section: z
+    .object({ plane: z.enum(["XY", "XZ", "YZ"]).optional(), normal: z.tuple([z.number(), z.number(), z.number()]).optional(), offset: z.number().optional() })
+    .optional()
+    .describe("Cut the model open: the side the normal points to is removed; the cut faces show red. offset moves the plane along its normal (mm)"),
+  highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts drawn orange, faces (selectors) drawn as selected (blue)"),
+  frame: z
+    .object({ min: z.tuple([z.number(), z.number(), z.number()]), max: z.tuple([z.number(), z.number(), z.number()]) })
+    .optional()
+    .describe("Fixed region to frame (mm), instead of fitting the parts as they are posed: pictures of a series line up"),
+};
+
+const lookShape = z.object({ ...shot, width: z.number().int().min(64).max(2048).optional(), height: z.number().int().min(64).max(2048).optional() }).strict();
+/** apply_ops / preview_ops `look`: the picture of the result comes with the answer, one call instead of two. */
+const look = z
+  .record(z.string(), z.unknown())
+  .optional()
+  .describe("Also return a picture of the result: render_view's options (e.g. {view:\"iso\"}, default 800×600); saves a render_view call");
+
+/** The answer to apply_ops / preview_ops, with the picture asked for in `look`. */
+async function changed(method: "apply_ops" | "preview_ops", ops: Record<string, unknown>[], detail: string | undefined, shotArgs: Record<string, unknown> | undefined) {
+  // Checked first (a bad look must not leave the ops applied with an error), here: the tool's schema keeps it a plain object so the tool list stays short.
+  const parsed = shotArgs ? lookShape.safeParse(shotArgs) : null;
+  if (parsed && !parsed.success) throw new Error(`look: ${parsed.error.issues.map((i) => `${i.path.join(".") || "look"}: ${i.message}`).join("; ")} (render_view's options); nothing was changed`);
+  const result = await call(method, { ops: await inlineImportFiles(ops), detail });
+  if (!parsed) return text(result);
+  try {
+    const r = await call<{ png: string }>("render_view", { width: 800, height: 600, ...parsed.data });
+    return { content: [text(result).content[0]!, { type: "image" as const, data: r.png, mimeType: "image/png" }] };
+  } catch (e) {
+    // The change went through: say so, and why there is no picture.
+    return { content: [text(result).content[0]!, { type: "text" as const, text: `no picture: ${e instanceof Error ? e.message : String(e)}` }] };
+  }
+}
+
 server.registerTool(
   "get_guide",
   {
@@ -188,10 +229,10 @@ server.registerTool(
   {
     title: "Change the model",
     description:
-      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling, set_motion, delete_motion (moves of several joints over time); reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`; replace may give `path` (a .meercad file) instead of `doc`, add_features may give `path` (a .meercad file, or a .json file with a list of features) instead of `features` to add that file's features (`ids`: only these, in the file's order). The result is brief: steps that are not ok, new or changed bodies, the sketches of the edited steps; detail \"full\" lists everything.",
-    inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional() },
+      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling, set_motion, delete_motion (moves of several joints over time); reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`; replace may give `path` (a .meercad file) instead of `doc`, add_features may give `path` (a .meercad file, or a .json file with a list of features) instead of `features` to add that file's features (`ids`: only these, in the file's order). The result is brief: steps that are not ok, new or changed bodies, the sketches of the edited steps, the joints and params set; detail \"full\" lists everything. Put everything you already know into one call (a whole part: its sketches, features and joints): each call costs a round trip. `look` returns a picture of the result with the answer (instead of a render_view call after it).",
+    inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional(), look },
   },
-  guard(async ({ ops, detail }) => text(await call("apply_ops", { ops: await inlineImportFiles(ops), detail }))),
+  guard(async ({ ops, detail, look }) => changed("apply_ops", ops, detail, look)),
 );
 
 server.registerTool(
@@ -199,9 +240,9 @@ server.registerTool(
   {
     title: "Try changes",
     description: "Shows the model with the ops applied as a live preview in the app (not saved) and returns the rebuild result (brief like apply_ops; detail \"full\" lists everything). Use to try ideas; then apply_ops to keep them or clear_preview.",
-    inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional() },
+    inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional(), look },
   },
-  guard(async ({ ops, detail }) => text(await call("preview_ops", { ops: await inlineImportFiles(ops), detail }))),
+  guard(async ({ ops, detail, look }) => changed("preview_ops", ops, detail, look)),
 );
 
 server.registerTool("clear_preview", { title: "Clear preview", description: "Removes a preview shown by preview_ops." }, guard(async () => text(await call("clear_preview"))));
@@ -229,22 +270,6 @@ server.registerTool(
   guard(async ({ name, keep }) => text(await call("new_project", { name, keep }))),
 );
 
-const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
-const shot = {
-  view: view.optional(),
-  direction: z.tuple([z.number(), z.number(), z.number()]).optional().describe("Where the camera is, seen from the model (Z up, front is -Y), e.g. [-1,-1,0.6] from front-left above, [0,0,-1] from below; overrides view"),
-  focus: z.array(z.string()).optional().describe("Part ids to zoom onto"),
-  isolate: z.boolean().optional().describe("With focus: hide all other parts"),
-  section: z
-    .object({ plane: z.enum(["XY", "XZ", "YZ"]).optional(), normal: z.tuple([z.number(), z.number(), z.number()]).optional(), offset: z.number().optional() })
-    .optional()
-    .describe("Cut the model open: the side the normal points to is removed; the cut faces show red. offset moves the plane along its normal (mm)"),
-  highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts drawn orange, faces (selectors) drawn as selected (blue)"),
-  frame: z
-    .object({ min: z.tuple([z.number(), z.number(), z.number()]), max: z.tuple([z.number(), z.number(), z.number()]) })
-    .optional()
-    .describe("Fixed region to frame (mm), instead of fitting the parts as they are posed: pictures of a series line up"),
-};
 
 server.registerTool(
   "render_view",
@@ -403,7 +428,7 @@ server.registerTool(
       if (!file.startsWith("meshes/")) written.push(target);
     }
     const meshes = Object.keys(r.files).filter((f) => f.startsWith("meshes/")).length;
-    return text(JSON.stringify({ wrote: written, meshes: `${meshes} STL files in ${join(dir, "meshes")}`, links: r.links, warnings: r.warnings }, null, 2));
+    return text({ wrote: written, meshes: `${meshes} STL files in ${join(dir, "meshes")}`, links: r.links, warnings: r.warnings });
   }),
 );
 
@@ -630,7 +655,7 @@ server.registerTool(
 
 server.registerTool(
   "status",
-  { title: "Connection status", description: "Whether the meerCAD app is connected, which project this session works on (and whether in its own tab or the user's), and the available projects.", annotations: { readOnlyHint: true } },
+  { title: "Connection status", description: "Whether the meerCAD app is connected, which project this session works on (and whether in its own tab or the user's), and the newest projects (list_projects lists all).", annotations: { readOnlyHint: true } },
   async () => {
     let st = await bridge.status();
     // Not connected: open the app (if this server knows which) and wait for it.
