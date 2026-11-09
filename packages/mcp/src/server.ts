@@ -15,7 +15,7 @@ import { gearCalc } from "./gearCalc.js";
 import { insertSizes } from "./insertSizes.js";
 import { spawn } from "node:child_process";
 import { createBridge, NOT_CONNECTED } from "./hub.js";
-import { appTarget, createLauncher } from "./launchApp.js";
+import { appTarget, createLauncher, launchEnv } from "./launchApp.js";
 import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
 import { meercadDocument } from "./meercadFile.js";
 import { DEFAULT_PORT, type BridgeMethod } from "./protocol.js";
@@ -44,7 +44,9 @@ const bridge = createBridge({ port, session, originAllowed, log });
 /** Opens the app this server belongs to when an assistant needs it (see launchApp). */
 const launcher = createLauncher({
   target: appTarget({ serverPath: fileURLToPath(import.meta.url), env: process.env, port, platform: process.platform }),
-  open: (args) => spawn("open", args, { stdio: "ignore", detached: true }).on("error", (e) => log(`open: ${e.message}`)).unref(),
+  // `open` hands its environment to the app: without ELECTRON_RUN_AS_NODE (the RC's and WIP's servers
+  // run on the app's own binary with it) the app would start as plain Node and quit at once.
+  open: (args) => spawn("open", args, { stdio: "ignore", detached: true, env: launchEnv(process.env) }).on("error", (e) => log(`open: ${e.message}`)).unref(),
   connected: async () => (await bridge.status()).connected,
   log,
 });

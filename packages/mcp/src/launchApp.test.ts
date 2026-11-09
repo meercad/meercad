@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appTarget, createLauncher, openArgs, STORE_BUNDLE_ID } from "./launchApp.js";
+import { appTarget, createLauncher, launchEnv, openArgs, STORE_BUNDLE_ID } from "./launchApp.js";
 
 const mac = { platform: "darwin", env: {}, port: 47823 };
 
@@ -23,6 +23,9 @@ describe("which app the MCP server opens", () => {
     expect(appTarget({ ...mac, serverPath: wip, env: { MEERCAD_MCP_PORT: "47821", MEERCAD_APP: "dev.meercad.app" } })).toEqual({ path: "/Applications/meerCAD WIP.app" });
     expect(appTarget({ ...mac, platform: "linux", serverPath: wip })).toBeNull();
   });
+  it("opens the app without the server's own environment (it would start as plain Node)", () => {
+    expect(launchEnv({ PATH: "/bin", HOME: "/h", ELECTRON_RUN_AS_NODE: "1", MEERCAD_MCP_PORT: "47821", MEERCAD_APP: "x", U: undefined })).toEqual({ PATH: "/bin", HOME: "/h" });
+  });
   it("opens in the background", () => {
     expect(openArgs({ path: "/A.app" })).toEqual(["-g", "/A.app"]);
     expect(openArgs({ bundleId: "x.y" })).toEqual(["-g", "-b", "x.y"]);
@@ -33,7 +36,7 @@ describe("app launcher", () => {
   it("opens once, waits until connected, and shares the wait", async () => {
     const opened: string[][] = [];
     let polls = 0;
-    const l = createLauncher({ target: { path: "/A.app" }, open: (a) => opened.push(a), connected: async () => ++polls > 3, pollMs: 1 });
+    const l = createLauncher({ target: { path: "/A.app" }, open: (a) => opened.push(a), connected: async () => ++polls > 3, pollMs: 1, graceMs: 0 });
     const [a, b] = await Promise.all([l.ensure(), l.ensure()]);
     expect(a).toEqual({ connected: true, opened: true });
     expect(b).toEqual({ connected: true, opened: true });
@@ -42,10 +45,19 @@ describe("app launcher", () => {
   it("gives up after the wait and does not open again right away", async () => {
     const opened: string[][] = [];
     let t = 0;
-    const l = createLauncher({ target: { bundleId: "x" }, open: (a) => opened.push(a), connected: async () => false, pollMs: 1, waitMs: 50, now: () => (t += 10) });
+    const l = createLauncher({ target: { bundleId: "x" }, open: (a) => opened.push(a), connected: async () => false, pollMs: 1, waitMs: 50, againMs: 100, graceMs: 0, now: () => (t += 10) });
     expect(await l.ensure()).toEqual({ connected: false, opened: true });
+    // The pause counts from the end of the wait, which took longer than the pause itself.
     expect(await l.ensure()).toEqual({ connected: false, opened: true });
     expect(opened.length).toBe(1);
+    t += 200;
+    await l.ensure();
+    expect(opened.length).toBe(2);
+  });
+  it("does not open an app that reconnects by itself within the grace time", async () => {
+    let polls = 0;
+    const l = createLauncher({ target: { path: "/A.app" }, open: () => expect.fail("opened"), connected: async () => ++polls > 2, pollMs: 1, graceMs: 1000 });
+    expect((await l.ensure()).connected).toBe(true);
   });
   it("does nothing without a target", async () => {
     const l = createLauncher({ target: null, open: () => expect.fail("opened"), connected: async () => false });
