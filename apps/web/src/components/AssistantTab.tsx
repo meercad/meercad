@@ -54,9 +54,10 @@ export function AssistantPane({ session }: { session: string }) {
       gone = true;
       ro.disconnect();
       window.removeEventListener("resize", place);
-      a.show(null);
     };
   }, [session, covered]);
+  // Hidden when this pane goes or shows another tab (not when a dialog opens: it is pictured first).
+  useEffect(() => () => desktop?.assistant?.show(null), [session]);
   return (
     <div className="assistant-pane">
       <header className={`topbar ${desktop ? "desktop" : ""}`}>
