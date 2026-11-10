@@ -31,24 +31,45 @@ export function cableBody(oc: OC, arena: Arena, f: ResolvedCable, warnings: stri
     throw e;
   }
   const { spec } = rig;
-  // A coarser sampling for the spine: the B-spline through the samples is smooth anyway.
+  // A coarse sampling will do: the sweep follows the exact pieces, the samples only set the section's turn at the start.
   const layout = cable.layCable(spec, f.points.map((p) => p.at), rig.ends, Math.max(1, rig.rest.length / 300, spec.width));
   const pnt = (p: V) => arena.track(new oc.gp_Pnt(...p));
   const dirOf = (v: V) => arena.track(new oc.gp_Dir(...v));
 
-  const pts = arena.track(new oc.NCollection_Array1_gp_Pnt(1, layout.line.length));
-  layout.line.forEach((p, i) => pts.SetValue(i + 1, pnt(p)));
   let spine: TopoDS_Wire;
   try {
-    // Cubic: higher degrees sweep into surfaces the plugs' booleans fail on (an empty solid).
-    const fit = arena.track(new oc.GeomAPI_PointsToBSpline(pts, 3, 3, "GeomAbs_C2" as never, 1e-3));
-    const edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(arena.track(fit.Curve()) as never)).Edge());
+    // The centre line exactly, as one cubic B-spline: each Hermite piece of the layout is a Bézier
+    // segment, the knots spaced by the chords so the pieces join with the same tangent (C1). A
+    // spline fitted through hundreds of samples instead had many tiny spans: the sweep along it
+    // failed or came out as a surface that took a minute to mesh.
+    const { nodes, nodeTangents: tan } = layout;
+    const n = nodes.length - 1;
+    const poles = arena.track(new oc.NCollection_Array1_gp_Pnt(1, 3 * n + 1));
+    const knots = arena.track(new oc.NCollection_Array1_double(1, n + 1));
+    const mults = arena.track(new oc.NCollection_Array1_int(1, n + 1));
+    let u = 0;
+    knots.SetValue(1, 0);
+    poles.SetValue(1, pnt(nodes[0]!));
+    for (let i = 0; i < n; i++) {
+      const [p0, p1] = [nodes[i]!, nodes[i + 1]!];
+      const h = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+      poles.SetValue(3 * i + 2, pnt(add(p0, tan[i]!, h / 3)));
+      poles.SetValue(3 * i + 3, pnt(add(p1, tan[i + 1]!, -h / 3)));
+      poles.SetValue(3 * i + 4, pnt(p1));
+      u += h;
+      knots.SetValue(i + 2, u);
+    }
+    for (let i = 1; i <= n + 1; i++) mults.SetValue(i, i === 1 || i === n + 1 ? 4 : 3);
+    const curve = arena.track(new oc.Geom_BSplineCurve(poles, knots, mults, 3, false));
+    // Down to C1 where the pieces join smoothly (always, unless the tolerance says otherwise).
+    for (let i = n; i >= 2; i--) curve.RemoveKnot(i, 2, 1e-7);
+    const edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(curve as never)).Edge());
     spine = arena.track(arena.track(new oc.BRepBuilderAPI_MakeWire(edge)).Wire());
   } catch (e) {
     throw new FeatureError(`could not lay the cable: ${occtErrorMessage(oc, e)}`);
   }
 
-  // The section at the start, square to the spine's own start (the fitted spline's, not the samples').
+  // The section at the start, square to the spine's own start.
   const p0 = layout.line[0]!;
   const t0 = spineStart(oc, arena, spine) ?? layout.tangent[0]!;
   const a0 = unitV(add(layout.across[0]!, t0, -dotV(layout.across[0]!, t0)));
@@ -69,7 +90,11 @@ export function cableBody(oc: OC, arena: Arena, f: ResolvedCable, warnings: stri
   let shape: TopoDS_Shape;
   try {
     const mk = arena.track(new oc.BRepOffsetAPI_MakePipeShell(spine));
-    mk.SetMode(false); // corrected Frenet: turns the section as little as possible
+    // Discrete trihedron: turns the section as little as possible, like corrected Frenet, but
+    // stays exact where the spine runs straight. Corrected Frenet has no curvature to go by there
+    // and approximates the swept surface badly: a straight cable along Z came out as a surface
+    // that meshing never finished (the app hung), slanted straight cables failed to sweep at all.
+    mk.SetDiscreteMode();
     mk.Add(profile, false, false);
     mk.Build();
     if (!mk.IsDone()) throw new FeatureError("could not sweep the cable", "a cable too thick for a tight bend crosses itself: move the points apart");
@@ -108,6 +133,9 @@ export function cableBody(oc: OC, arena: Arena, f: ResolvedCable, warnings: stri
 
   const body = new Body(oc, arena, f.id, shape);
   body.preciseProps = true;
+  // A thin tube needs no 100 facets round (the usual 0.06 rad): a quarter of that still looks
+  // round and meshes several times faster (a robot with two dozen cables). Exports stay exact.
+  body.displayCoarse = 4;
   body.faceTags = body.faces.map(() => [`${f.id}.cable`]);
   const density = materialById(spec.material)?.density ?? 0;
   const info: CableInfo = { length: rig.rest.length, minRadius: rig.rest.minRadius, bendRadius: spec.bendRadius, mass: (volumeOf(oc, arena, shape) / 1000) * density };
