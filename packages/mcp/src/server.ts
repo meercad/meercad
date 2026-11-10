@@ -18,6 +18,7 @@ import { createBridge, NOT_CONNECTED } from "./hub.js";
 import { appTarget, createLauncher, launchEnv } from "./launchApp.js";
 import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
 import { meercadDocument } from "./meercadFile.js";
+import { STALE_NOTE, staleCheck } from "./staleServer.js";
 import { DEFAULT_PORT, stagedRequests, type BridgeMethod, type ExportedFiles } from "./protocol.js";
 
 /** The port of the build this server ships in (server.json next to it, see CHANNEL_PORTS); MEERCAD_MCP_PORT wins (test runs). */
@@ -111,13 +112,17 @@ async function eachFile(r: ExportedFiles, each: (name: string, data: Buffer) => 
 
 // Compact JSON: indenting doubled the size of every answer (and with it the tokens an assistant pays for).
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: typeof v === "string" ? v : JSON.stringify(v) }] });
+/** True once meerCAD was updated under this running server (see staleServer). */
+const stale = staleCheck(fileURLToPath(import.meta.url));
+const withStaleNote = <R extends { content: unknown[] }>(r: R): R => (stale() ? { ...r, content: [...r.content, { type: "text", text: STALE_NOTE }] } : r);
+
 const guard =
   <A,>(fn: (a: A) => Promise<ReturnType<typeof text> | { content: unknown[] }>) =>
   async (a: A) => {
     try {
-      return (await fn(a)) as ReturnType<typeof text>;
+      return withStaleNote((await fn(a)) as ReturnType<typeof text>);
     } catch (e) {
-      return { ...text(e instanceof Error ? e.message : String(e)), isError: true };
+      return withStaleNote({ ...text(e instanceof Error ? e.message : String(e)), isError: true });
     }
   };
 
@@ -175,7 +180,7 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
   );
 }
 
-const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets a tab of its own, locked for the user, who keeps working in their other tabs." });
+const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets a tab of its own, locked for the user, who keeps working in their other tabs; close_project releases the lock and hands the project back." });
 
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
@@ -229,10 +234,10 @@ server.registerTool(
     inputSchema: { schema: z.array(z.string()).optional().describe("Op or feature names whose JSON Schema you want, or [\"all\"]") },
     annotations: { readOnlyHint: true },
   },
-  async ({ schema }) => {
+  guard(async ({ schema }) => {
     if (schema?.length) return text(schemaFor(schema));
     return text(`${GUIDE_TEXT.replace("The user previews your changes before accepting them.", "")}\n\nOps (type): ${OP_NAMES.join(", ")}\nFeatures (op): ${FEATURE_NAMES.join(", ")}\nFor the exact fields of any of them call get_guide {schema:[names]}.\n\n${MCP_NOTES}`);
-  },
+  }),
 );
 
 server.registerTool(
@@ -288,8 +293,8 @@ server.registerTool(
 server.registerTool(
   "close_project",
   {
-    title: "Close project",
-    description: "Hands this session's project back to the user: it is saved, your meerCAD tab closes and the project opens unlocked in a tab of theirs. Call it when you are done with a project or wait for the user (a tab with no requests for 10 minutes goes back to them on its own). open_project to work on it again later.",
+    title: "Close project (release the lock)",
+    description: "Releases the lock on this session's project and hands it back to the user (ends the assistant mode for it, unlocks it): it is saved, your meerCAD tab closes and the project opens unlocked in a tab of theirs. Call it when you are done with a project, wait for the user, or the user asks you to release, unlock or give back the project (a tab with no requests for 10 minutes goes back to them on its own). open_project to work on it again later.",
   },
   guard(async () => text(await call("close_project"))),
 );
@@ -685,7 +690,7 @@ server.registerTool(
 server.registerTool(
   "status",
   { title: "Connection status", description: "Whether the meerCAD app is connected, which project this session works on (and whether in its own tab or the user's), and the newest projects (list_projects lists all).", annotations: { readOnlyHint: true } },
-  async () => {
+  guard(async () => {
     let st = await bridge.status();
     // Not connected: open the app (if this server knows which) and wait for it.
     if (!st.connected && st.role !== "starting" && (await launcher.ensure()).connected) st = await bridge.status();
@@ -695,7 +700,7 @@ server.registerTool(
     } catch {
       return text({ connected: true, ...st.hello });
     }
-  },
+  }),
 );
 
 await server.connect(new StdioServerTransport());

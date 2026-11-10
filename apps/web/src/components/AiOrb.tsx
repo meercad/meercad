@@ -1,4 +1,4 @@
-/** How the app shows an assistant at work (MCP): a turning mark, and its tool calls in words. */
+/** How the app shows an assistant at work (MCP): a living mark, and its tool calls in words. */
 import { t } from "../lib/i18n";
 
 /** What an assistant's tool call does, in words for the user. */
@@ -41,7 +41,13 @@ export function toolLabel(tool: string | null | undefined): string | null {
   return words[tool] ?? tool.replace(/_/g, " ");
 }
 
-/** A round, slowly turning mark for an assistant at work (still while it waits). */
+/** A round mark for an assistant: soft colours drift and swirl inside it while it works, held still while it waits. */
 export function AiOrb({ busy, small = false }: { busy: boolean; small?: boolean }) {
-  return <span className={`ai-orb ${busy ? "busy" : ""} ${small ? "sm" : ""}`} aria-hidden="true" />;
+  return (
+    <span className={`ai-orb ${busy ? "busy" : ""} ${small ? "sm" : ""}`} aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
+  );
 }
