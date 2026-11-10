@@ -120,6 +120,25 @@ describe("kernel client", () => {
       expect(third.meshes[0]).toBe(a);
     });
 
+    it("starts over in a fresh kernel when asked and the running one holds too much (iPad)", async () => {
+      const old = new FakeWorker((req) => built(req.seq, 1.5 * GB));
+      const fresh = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, 0.2 * GB) : { type: "configured", seq: req.seq }));
+      const client = new KernelClient(old as unknown as Worker);
+      await client.configure(2);
+      const make = () => fresh as unknown as Worker;
+      // Nothing built yet: nothing to give back.
+      expect(client.restartIfAbove(GB, make)).toBe(false);
+      await client.rebuild(doc(1));
+      expect(client.restartIfAbove(2 * GB, make)).toBe(false);
+      expect(client.restartIfAbove(GB, make)).toBe(true);
+      expect(old.terminated).toBe(true);
+      // The fresh kernel meshes as the old one did, builds the next design from scratch and is small again.
+      expect(fresh.sent[0]).toMatchObject({ type: "configure", meshCoarse: 2 });
+      await client.rebuild(doc(2));
+      expect(fresh.sent[1]).toMatchObject({ type: "rebuild", doc: { name: "d2" } });
+      expect(client.restartIfAbove(GB, make)).toBe(false);
+    });
+
     it("gives the fresh kernel a change made while it warmed up before it takes over", async () => {
       const old = new FakeWorker((req) => built(req.seq, 3 * GB));
       let release: (() => void) | null = null;

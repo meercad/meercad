@@ -121,6 +121,14 @@ export const kernel = new KernelClient(
   // no room for two kernels at once.
   desktop ? { worker: () => new KernelWorker({ name: kernelName }), ...renewAt() } : undefined,
 );
+/**
+ * iPad and iPhone: before another design is built, a kernel still holding more than this starts over
+ * fresh (KernelClient.restartIfAbove); it would otherwise keep what the last design took, and two
+ * big designs one after the other outgrow the page.
+ */
+const RESTART_ABOVE = 600 * 2 ** 20;
+/** The project the editor's kernel was last given. */
+let kernelProject: string | null = null;
 /** For test runs: localStorage "meercad.kernel.renew" (MB) makes the fresh kernel take over that early. */
 function renewAt(): { above?: number; grown?: number } {
   try {
@@ -898,6 +906,9 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   thumbDoc = null;
   const leaving = get().project;
   if (leaving) tabStores.set(leaving.id, docStore);
+  // The same design again (back from the overview) is built from what the kernel kept.
+  if (!desktop && kernelProject !== meta.id) kernel.restartIfAbove(RESTART_ABOVE, () => new KernelWorker({ name: kernelName }));
+  kernelProject = meta.id;
   docStore = store ?? new DocumentStore(doc);
   tabStores.set(meta.id, docStore);
   if (!get().tabs.some((t) => t.id === meta.id)) setTabs([...get().tabs, { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) }]);

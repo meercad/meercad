@@ -239,6 +239,28 @@ export class KernelClient {
   }
 
   /**
+   * Starts over in a fresh kernel from `worker` when this one holds more than `above` bytes, and says
+   * whether it did. For the iPad and iPhone, where a second kernel does not fit (see Renewal): before
+   * another design is built there, since OCCT does not give back what the last one took and the
+   * kernels of two big designs one after the other outgrow the page. Requests still open reject with
+   * SupersededError; the fresh kernel knows no design until the next rebuild.
+   */
+  restartIfAbove(above: number, worker: () => Worker): boolean {
+    if (this.memory.now <= above) return false;
+    this.spare?.worker.terminate();
+    this.spare = null;
+    this.worker.terminate();
+    for (const p of this.pending.values()) p.reject(new SupersededError());
+    this.pending.clear();
+    this.lastRebuild = null;
+    this.memory = { start: 0, now: 0 };
+    this.attach(worker());
+    if (this.coarse !== null) this.worker.postMessage({ type: "configure", seq: ++this.seq, meshCoarse: this.coarse } satisfies WorkerRequest);
+    this.renewed++;
+    return true;
+  }
+
+  /**
    * Rebuilds the document. Older rebuilds still queued reject with SupersededError. `props: false`
    * leaves out volume and surface area (NaN), which are slow to integrate on curved parts.
    */
