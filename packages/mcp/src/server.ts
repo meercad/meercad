@@ -412,7 +412,7 @@ server.registerTool(
   guard(async ({ format, path, sketch, parts, posed, variants, materials }) => {
     const out = resolve(path);
     const name = basename(out).replace(/\.[^.]+$/, "");
-    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials }, 300_000);
+    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials, stage: true }, 300_000);
     const count = namesOf(r).length;
     const written: string[] = [];
     await eachFile(r, async (file, data) => {
@@ -449,7 +449,7 @@ server.registerTool(
   },
   guard(async ({ path, name, floating, masses, actuators, collision }) => {
     const dir = resolve(path);
-    const r = await call<ExportedFiles & { links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision }, 300_000);
+    const r = await call<ExportedFiles & { links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision, stage: true }, 300_000);
     const written: string[] = [];
     await eachFile(r, async (file, data) => {
       const target = join(dir, file);
