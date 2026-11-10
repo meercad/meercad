@@ -205,13 +205,15 @@ export interface Clearance {
 
 /**
  * Gaps between parts placed by `poses` (column-major 4×4 by body id; others at rest), for every
- * pair where at least one part is in `moving` and their boxes come within `within` mm.
+ * pair where at least one part is in `moving` and their boxes come within `within` mm. Parts in
+ * `skip` are left out: cables bend with the parts (the app checks them on their own), and their
+ * swept surfaces touch the parts they plug into, which made every pose an expensive boolean.
  */
-export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2): Clearance[] {
+export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2, skip: readonly string[] = []): Clearance[] {
   const arena = new Arena();
   try {
     const shapes = new Map<string, TopoDS_Shape>();
-    for (const [id, body] of state.bodies) shapes.set(id, placed(oc, arena, body.shape, poses[id]));
+    for (const [id, body] of state.bodies) if (!skip.includes(id)) shapes.set(id, placed(oc, arena, body.shape, poses[id]));
     const box = new Map([...shapes].map(([id, s]) => [id, bounds(oc, arena, s)]));
     const grow = (b: ReturnType<typeof bounds>) => ({ min: b.min.map((v) => v - within) as typeof b.min, max: b.max.map((v) => v + within) as typeof b.max });
     const ids = [...shapes.keys()];

@@ -144,8 +144,9 @@ export class KernelClient {
     return r.meshes;
   }
 
-  async clearances(moving: string[], poses: Record<string, number[]>, within?: number): Promise<Clearance[]> {
-    const r = await this.send({ type: "clearance", moving, poses, ...(within !== undefined ? { within } : {}) });
+  /** `skip`: parts left out altogether (cables, which bend with the parts and are checked on their own). */
+  async clearances(moving: string[], poses: Record<string, number[]>, within?: number, skip?: string[]): Promise<Clearance[]> {
+    const r = await this.send({ type: "clearance", moving, poses, ...(within !== undefined ? { within } : {}), ...(skip?.length ? { skip } : {}) });
     if (r.type !== "clearances") throw new Error("unexpected response");
     return r.result;
   }

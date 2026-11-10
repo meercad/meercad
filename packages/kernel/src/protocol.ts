@@ -20,7 +20,7 @@ export type WorkerRequest =
   | { type: "props"; seq: number }
   | { type: "measure"; seq: number; a: PickRef; b?: PickRef }
   /** Gaps between parts in a pose of the mechanism (see tools.clearances). */
-  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number }
+  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number; skip?: string[] }
   /** Views for a technical drawing, with hidden lines (see drawing.ts). */
   /** `doc` builds the drawing from that document instead of the open one (threads simplified, see model/drawing). */
   | { type: "drawing"; seq: number; views: ViewName[]; bodies?: string[]; doc?: MeercadDocument };

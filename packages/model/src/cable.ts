@@ -476,7 +476,10 @@ export const cableTrouble = (s: CableState) => !!s.error || isStretched(s) || is
 
 export interface CollisionBody {
   id: string;
-  collider: MeshCollider;
+  /** The part's tree, or how to make it (only made when the boxes meet). */
+  collider: MeshCollider | (() => MeshCollider);
+  /** The part's box at rest, when known without the tree. */
+  box?: Box;
   pose?: Mat4;
   /** The part stands still (at rest); the cable may lie on it near points fixed in place. */
   still: boolean;
@@ -502,9 +505,17 @@ export function checkCable(rig: CableRig, poses: ReadonlyMap<string, Mat4>, bodi
     const margin = Math.max(3, 2 * Math.max(rig.spec.width, rig.spec.thickness));
     const box = boundsOf(layout.line, Math.max(rig.spec.width, rig.spec.thickness) / 2);
     let whole: MeshCollider | null = null;
+    // Half the section plus the longest step between samples: no stretch of the cable reaches farther from its samples.
+    let step = 0;
+    for (let i = 1; i < layout.line.length; i++) step = Math.max(step, Math.hypot(layout.line[i]![0] - layout.line[i - 1]![0], layout.line[i]![1] - layout.line[i - 1]![1], layout.line[i]![2] - layout.line[i - 1]![2]));
+    const reach = Math.max(rig.spec.width, rig.spec.thickness) / 2 + step;
     for (const b of bodies) {
       if (b.id === rig.id) continue;
-      if (!boxesMeet(box, placedBounds(b.collider, b.pose))) continue;
+      const bb = placedBounds(b.box ?? treeOf(b).root, b.pose);
+      if (!boxesMeet(box, bb)) continue;
+      // The cable's own samples near the part's box at all? A long cable's box takes in half the
+      // assembly, and the part's tree (slow to build) is only needed where the cable comes close.
+      if (!layout.line.some((p) => p[0] >= bb.min[0] - reach && p[0] <= bb.max[0] + reach && p[1] >= bb.min[1] - reach && p[1] <= bb.max[1] + reach && p[2] >= bb.min[2] - reach && p[2] <= bb.max[2] + reach)) continue;
       // Stretches near points this part may touch.
       const near = rig.points.flatMap((p, k) => (p.on === b.id || (!p.on && b.still) ? [layout.pointArc[k]!] : []));
       let c: MeshCollider;
@@ -515,7 +526,7 @@ export function checkCable(rig: CableRig, poses: ReadonlyMap<string, Mat4>, bodi
         if (!m.indices.length) continue;
         c = colliderOf(m);
       }
-      if (meshesCollide(c, b.collider, IDENTITY, b.pose ?? IDENTITY, b.inset ?? 0.01)) hits.push(b.id);
+      if (meshesCollide(c, treeOf(b), IDENTITY, b.pose ?? IDENTITY, b.inset ?? 0.01)) hits.push(b.id);
     }
   }
   return {
@@ -525,6 +536,7 @@ export function checkCable(rig: CableRig, poses: ReadonlyMap<string, Mat4>, bodi
 }
 
 const colliderOf = (m: CableMesh) => new MeshCollider(m.positions, m.indices);
+const treeOf = (b: CollisionBody) => (typeof b.collider === "function" ? b.collider() : b.collider);
 
 type Box = { min: V3; max: V3 };
 function boundsOf(pts: readonly V3[], pad: number): Box {
@@ -537,8 +549,7 @@ function boundsOf(pts: readonly V3[], pad: number): Box {
     }
   return { min, max };
 }
-function placedBounds(c: MeshCollider, pose: Mat4 | undefined): Box {
-  const r = c.root;
+function placedBounds(r: Box, pose: Mat4 | undefined): Box {
   const corners: V3[] = [];
   for (let k = 0; k < 8; k++) corners.push(transformPoint(pose ?? IDENTITY, [k & 1 ? r.max[0] : r.min[0], k & 2 ? r.max[1] : r.min[1], k & 4 ? r.max[2] : r.min[2]]));
   return boundsOf(corners, 0);

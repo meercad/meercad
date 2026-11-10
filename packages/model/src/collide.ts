@@ -53,8 +53,10 @@ export class MeshCollider {
     this.placed = new Float64Array(n * 9);
     this.stamp = new Uint32Array(n);
     // Corners at the same place (faces of a B-rep part keep their own vertices) share one normal.
-    const key = (o: number) => `${Math.round(this.tri[o]! * 1e5)},${Math.round(this.tri[o + 1]! * 1e5)},${Math.round(this.tri[o + 2]! * 1e5)}`;
-    const sum = new Map<string, [number, number, number]>();
+    const corner = pointIds(this.tri, n * 3);
+    let points = 0;
+    for (let c = 0; c < n * 3; c++) if (corner[c]! >= points) points = corner[c]! + 1;
+    const sums = new Float64Array(points * 3);
     for (let t = 0; t < n; t++) {
       const o = t * 9;
       const T = this.tri;
@@ -64,24 +66,63 @@ export class MeshCollider {
       const l = Math.hypot(nx, ny, nz);
       if (!l) continue;
       // Each face counts once per point, whatever its size.
-      for (let k = 0; k < 9; k += 3) {
-        const s = sum.get(key(o + k)) ?? sum.set(key(o + k), [0, 0, 0]).get(key(o + k))!;
-        s[0] += nx / l;
-        s[1] += ny / l;
-        s[2] += nz / l;
+      for (let k = 0; k < 3; k++) {
+        const q = corner[t * 3 + k]! * 3;
+        sums[q] = sums[q]! + nx / l;
+        sums[q + 1] = sums[q + 1]! + ny / l;
+        sums[q + 2] = sums[q + 2]! + nz / l;
       }
     }
     this.inward = new Float32Array(n * 9);
-    for (let t = 0; t < n * 9; t += 3) {
-      const s = sum.get(key(t));
-      const l = s ? Math.hypot(s[0], s[1], s[2]) : 0;
-      if (l) for (let a = 0; a < 3; a++) this.inward[t + a] = -s![a]! / l;
+    for (let c = 0; c < n * 3; c++) {
+      const q = corner[c]! * 3;
+      const l = Math.hypot(sums[q]!, sums[q + 1]!, sums[q + 2]!);
+      if (l) for (let a = 0; a < 3; a++) this.inward[c * 3 + a] = -sums[q + a]! / l;
     }
   }
 
   get triangles(): number {
     return this.stamp.length;
   }
+}
+
+/**
+ * The same number for corners at the same place (to 0.01 µm), counting from 0: an open-addressing
+ * table over the rounded coordinates. String keys in a Map took several seconds for a few million
+ * triangles, the bulk of building the trees of a large assembly.
+ */
+function pointIds(xyz: Float64Array, count: number): Uint32Array {
+  let cap = 1;
+  while (cap < count * 2) cap <<= 1;
+  const mask = cap - 1;
+  const keys = new Int32Array(cap * 3);
+  const slot = new Int32Array(cap).fill(-1);
+  const out = new Uint32Array(count);
+  let next = 0;
+  for (let c = 0; c < count; c++) {
+    // Rounded to 1e-5 mm; `| 0` wraps beyond ±21 m, which only ever merges points 43 m apart.
+    const x = Math.round(xyz[c * 3]! * 1e5) | 0;
+    const y = Math.round(xyz[c * 3 + 1]! * 1e5) | 0;
+    const z = Math.round(xyz[c * 3 + 2]! * 1e5) | 0;
+    let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & mask;
+    for (;;) {
+      const id = slot[h]!;
+      if (id < 0) {
+        slot[h] = next;
+        keys[h * 3] = x;
+        keys[h * 3 + 1] = y;
+        keys[h * 3 + 2] = z;
+        out[c] = next++;
+        break;
+      }
+      if (keys[h * 3] === x && keys[h * 3 + 1] === y && keys[h * 3 + 2] === z) {
+        out[c] = id;
+        break;
+      }
+      h = (h + 1) & mask;
+    }
+  }
+  return out;
 }
 
 function build(tri: Float64Array, order: Uint32Array, start: number, count: number, centre: Float64Array): Node {
@@ -101,12 +142,36 @@ function build(tri: Float64Array, order: Uint32Array, start: number, count: numb
   // Split the longest side at the median of the triangle centres.
   const ext = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
   const axis = ext[0]! >= ext[1]! && ext[0]! >= ext[2]! ? 0 : ext[1]! >= ext[2]! ? 1 : 2;
-  const part = Array.from(order.subarray(start, start + count)).sort((p, q) => centre[p * 3 + axis]! - centre[q * 3 + axis]!);
-  order.set(part, start);
+  // Partitioned round the median only (no full sort): linear per level.
   const half = count >> 1;
+  selectNth(order, start, start + count - 1, start + half, centre, axis);
   node.left = build(tri, order, start, half, centre);
   node.right = build(tri, order, start + half, count - half, centre);
   return node;
+}
+
+/** Reorders order[lo..hi] so the k-th holds the triangle it would in sorted order, smaller centres before it, larger after (Hoare's select). */
+function selectNth(order: Uint32Array, lo: number, hi: number, k: number, centre: Float64Array, axis: number): void {
+  const at = (i: number) => centre[order[i]! * 3 + axis]!;
+  while (hi > lo) {
+    const pivot = at((lo + hi) >> 1);
+    let i = lo;
+    let j = hi;
+    while (i <= j) {
+      while (at(i) < pivot) i++;
+      while (at(j) > pivot) j--;
+      if (i <= j) {
+        const t = order[i]!;
+        order[i] = order[j]!;
+        order[j] = t;
+        i++;
+        j--;
+      }
+    }
+    if (k <= j) hi = j;
+    else if (k >= i) lo = i;
+    else return;
+  }
 }
 
 let tests = 0;

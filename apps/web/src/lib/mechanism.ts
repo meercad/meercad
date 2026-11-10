@@ -285,12 +285,33 @@ export function joinedParts(part: string, joints: readonly Joint[] = currentDoc(
 
 const colliders = new WeakMap<BodyMesh, MeshCollider>();
 const colliderOf = (m: BodyMesh) => colliders.get(m) ?? colliders.set(m, new MeshCollider(m.positions, m.indices)).get(m)!;
+/**
+ * A mesh's box at rest, straight from its vertices: cheap, so the trees (slow to build for a few
+ * hundred parts with millions of triangles) are made only for parts whose boxes meet.
+ */
+const restBoxes = new WeakMap<BodyMesh, { min: motion.V3; max: motion.V3 }>();
+function restBox(m: BodyMesh): { min: motion.V3; max: motion.V3 } {
+  const hit = restBoxes.get(m);
+  if (hit) return hit;
+  const min: motion.V3 = [Infinity, Infinity, Infinity];
+  const max: motion.V3 = [-Infinity, -Infinity, -Infinity];
+  const p = m.positions;
+  for (let i = 0; i < p.length; i += 3)
+    for (let k = 0; k < 3; k++) {
+      const v = p[i + k]!;
+      if (v < min[k]!) min[k] = v;
+      if (v > max[k]!) max[k] = v;
+    }
+  const box = { min, max };
+  restBoxes.set(m, box);
+  return box;
+}
 /** Whether a pair touches as drawn, by the meshes of one result: those contacts are designed (a pin in its hole). */
 let rest: { meshes: BodyMesh[]; touching: Map<string, boolean> } | null = null;
 
 /** Box of a mesh in a pose. */
 function placedBox(m: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3; max: motion.V3 } {
-  const r = colliderOf(m).root;
+  const r = restBox(m);
   const min: motion.V3 = [Infinity, Infinity, Infinity];
   const max: motion.V3 = [-Infinity, -Infinity, -Infinity];
   for (let c = 0; c < 8; c++) {
@@ -311,7 +332,7 @@ function placedBox(m: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3
  * meshes (see store).
  */
 function meshSlack(m: BodyMesh): number {
-  const r = colliderOf(m).root;
+  const r = restBox(m);
   const diag = Math.hypot(r.max[0] - r.min[0], r.max[1] - r.min[1], r.max[2] - r.min[2]);
   return Math.max(0.01, diag * 5e-4) * (matchMedia("(pointer: coarse)").matches ? 2 : 1);
 }
@@ -379,6 +400,8 @@ let rigs: { output: unknown; list: cable.CableRig[]; errors: Record<string, stri
 export function cableRigs(): cable.CableRig[] {
   return rigsNow().list;
 }
+/** Ids of the cable parts in the design (built or not): left out of the kernel's gap checks. */
+const cableIds = () => useApp.getState().doc.features.filter((f) => f.op === "cable").map((f) => f.id);
 function rigsNow(): NonNullable<typeof rigs> {
   const s = useApp.getState();
   if (rigs?.output === s.output) return rigs;
@@ -410,7 +433,7 @@ export function cableStates(poses: ReadonlyMap<string, motion.Mat4> = currentPos
     .filter((m) => !ids.has(m.bodyId))
     .map((m) => {
       const pose = poses.get(m.bodyId);
-      return { id: m.bodyId, collider: colliderOf(m), ...(pose ? { pose } : {}), still: !pose || !motion.isMoved(pose), inset: 1.5 * meshSlack(m) };
+      return { id: m.bodyId, collider: () => colliderOf(m), box: restBox(m), ...(pose ? { pose } : {}), still: !pose || !motion.isMoved(pose), inset: 1.5 * meshSlack(m) };
     });
   return list.map((r) => cable.checkCable(r, poses, bodies).state);
 }
@@ -777,8 +800,7 @@ export async function checkClearance(): Promise<void> {
   if (!moving.length) return toast(t("No part moves yet: add a joint first"));
   useMotion.setState({ check: { running: true, free, results: [] } });
   try {
-    const cables = new Set(cableRigs().map((r) => r.id));
-    const results = (await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2))).filter((c) => !cables.has(c.a) && !cables.has(c.b));
+    const results = await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2), cableIds());
     useMotion.setState({ check: { running: false, free, results: results.sort((x, y) => x.distance - y.distance || y.overlap - x.overlap) } });
   } catch (e) {
     useMotion.setState({ check: { running: false, free, results: [], error: (e as Error).message } });
@@ -859,12 +881,10 @@ export async function clearanceNow(): Promise<{ wanted: number; pairs: Clearance
   const moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
   if (!moving.length) throw new Error("no part moves: add joints first");
   const want = wantedClearance();
-  const pairs = await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2));
-  const cables = new Set(cableRigs().map((r) => r.id));
+  const pairs = await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2), cableIds());
   return {
     wanted: want,
     pairs: pairs
-      .filter((c) => !cables.has(c.a) && !cables.has(c.b))
       .map(({ points: _p, ...rest }) => rest)
       .sort((x, y) => x.distance - y.distance),
   };
