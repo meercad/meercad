@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { ASSISTANT_IDLE_MS, DEFAULT_PORT, PROJECT_PARAM, STAGE_KEEP_MS, chooseTab, exportTransport, newTabKey, tabOfSession, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, DEFAULT_PORT, PROJECT_PARAM, ago, STAGE_KEEP_MS, chooseTab, exportTransport, newTabKey, openBlock, openBlockMessage, tabOfSession, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, versionFile, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -186,6 +186,8 @@ async function handOverSession(session: string): Promise<void> {
 const opening = new Set<string>();
 /** The tab key a session last opened a project in, by session and by session + project (for the answers after a tab went). */
 const lastTab = new Map<string, string>();
+/** When each tab (by key) last got a request: the refusal of a second open says how long ago. */
+const lastCall = new Map<string, number>();
 
 /** A tab named for the assistant: the project and its id. */
 const tabLabel = (t: AssistantTab) => `"${t.name ?? t.project ?? "nothing yet"}"${t.project ? ` (id "${t.project}")` : ""}`;
@@ -220,6 +222,7 @@ async function route(req: BridgeRequest): Promise<unknown> {
   /** Opens (or reuses) the tab `key` and serves the request there; the answer names the project for later calls. */
   const openIn = async (key: string, before?: () => Promise<void>, front = false) => {
     opening.add(key);
+    lastCall.set(key, Date.now());
     try {
       await before?.();
       const tab = await a.open({ session: key, client });
@@ -237,14 +240,24 @@ async function route(req: BridgeRequest): Promise<unknown> {
       opening.delete(key);
     }
   };
-  const freshKey = () => (perProject ? newTabKey(session, [...tabs.map((t) => t.session), ...opening]) : session);
+  // A tab of the session left without a project (an open that failed) is reused.
+  const freshKey = () => (perProject ? (mine.find((t) => t.project === null && !opening.has(t.session))?.session ?? newTabKey(session, [...tabs.map((t) => t.session), ...opening])) : session);
   // Importing a design opens it as a new project, like new_project.
   if (OPENS.has(req.method) || (req.method === "import_file" && /\.(meercad|json)$/i.test(String(req.params["name"] ?? "")))) {
-    if (req.method !== "open_project") return openIn(freshKey());
-    const id = String(req.params["id"]);
-    const holder = tabs.find((x) => x.project === id && !tabOfSession(x.session, session));
-    if (holder) throw new Error(`${holder.client} is working on this project in its own meerCAD tab right now. Pick another project, or wait until it is done.`);
-    const key = perProject ? (mine.find((t) => t.project === id)?.session ?? freshKey()) : session;
+    const id = req.method === "open_project" ? String(req.params["id"]) : undefined;
+    const holder = id === undefined ? undefined : tabs.find((x) => x.project === id && !tabOfSession(x.session, session));
+    if (holder) {
+      const since = lastCall.get(holder.session);
+      throw new Error(`${holder.client} is working on this project in its own meerCAD tab right now${since ? ` (last call ${ago(Date.now() - since)} ago)` : ""}. Pick another project, or wait until it is done: the project is freed when that session calls close_project, after ${Math.round(LOCK_RELEASE_MIN)} minutes without a call, or when the user clicks Take over in its tab.`);
+    }
+    // One project at a time per session: the chats sharing a session cannot be told apart (see openBlock).
+    const block = openBlock(tabs, session, opening, id);
+    if (block) {
+      const since = "tab" in block ? lastCall.get(block.tab.session) : undefined;
+      throw new Error(openBlockMessage(block, since === undefined ? undefined : Date.now() - since, ASSISTANT_IDLE_MS));
+    }
+    if (id === undefined) return openIn(freshKey());
+    const key = perProject ? freshKey() : session;
     // The user's tab of it closes: a project is open in one tab only. Was it the one in front, the assistant's tab comes to the front instead.
     const s = useApp.getState();
     const front = s.screen === "editor" && s.project?.id === id;
@@ -272,7 +285,10 @@ async function route(req: BridgeRequest): Promise<unknown> {
     await handOverAssistantTab(pick.tab.session, true, "released");
     return { closed: true, project: pick.tab.project ? { id: pick.tab.project, name: pick.tab.name } : null, note: "Saved and handed back to the user: it is open, unlocked, in a tab of theirs. open_project to work on it again." };
   }
-  if (typeof tab === "number" && "tab" in pick) return a.call(tab, req);
+  if (typeof tab === "number" && "tab" in pick) {
+    lastCall.set(pick.tab.session, Date.now());
+    return a.call(tab, req);
+  }
   if (tab === "idle") throw new Error(`Your meerCAD tab went back to the user after ${Math.round(LOCK_RELEASE_MIN)} minutes without a request, so they can work on the project. Open it again (open_project) to go on; the user may have changed it meanwhile.`);
   if (tab === "closed") throw new Error("The user took the project over or closed your meerCAD tab. Open the project again (open_project) to go on, or ask the user first.");
   if ("project" in pick) {
