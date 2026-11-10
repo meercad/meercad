@@ -10,7 +10,7 @@ import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument,
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
-import { robotFiles, sketchCurves, usdzFile } from "../components/io";
+import { filamentsOf, openInSlicer, robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
 import { asTestProjects, assistantWindow, desktop, isTestProject } from "./persistence";
@@ -642,6 +642,19 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(p["collision"] === "mesh" || p["collision"] === "shapes" ? { collision: p["collision"] } : {}),
       });
       return { ...exportedFiles(files), links, warnings };
+    }
+    case "send_to_slicer": {
+      needProject();
+      await rebuildNow();
+      const slicer = p["slicer"] === "bambu" || p["slicer"] === "prusa" ? p["slicer"] : undefined;
+      const materials = typeof p["materials"] === "boolean" ? p["materials"] : undefined;
+      const r = await openInSlicer(slicer, {
+        ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
+        ...(typeof p["posed"] === "boolean" ? { posed: p["posed"] } : {}),
+        ...(materials !== undefined ? { materials } : {}),
+      });
+      const filaments = filamentsOf(r.meshes, materials);
+      return { slicer: r.slicer, file: r.file, moved: r.moved, ...(filaments.length > 1 ? { filaments: filaments.map((f, i) => ({ slot: i + 1, ...f })) } : {}) };
     }
     case "export": {
       needProject();

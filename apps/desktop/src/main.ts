@@ -8,7 +8,7 @@
  * extension instead of an entry written into its config.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, protocol, screen, ShareMenu, shell, WebContentsView, type MenuItemConstructorOptions, type WebContents } from "electron";
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
@@ -17,6 +17,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep 
 import { pathToFileURL } from "node:url";
 import { ASSISTANT_IDLE_MS, CHANNEL_PORTS, CHANNEL_MCP_NAMES, idleAssistants, type Channel, type EndedTab } from "@meercad/mcp";
 import { adoptSiblingData, carryOverAppData, fixClaudeConfig, LEGACY_EXT, moveLegacyDefaultFolder, renameLegacyFiles } from "./legacy";
+import { clearOldSends, findSlicer, SLICERS, writeSend, type SlicerId } from "./slicers";
 import { moveToTrash } from "./trash";
 
 const DEV = process.argv.includes("--dev");
@@ -418,6 +419,19 @@ ipcMain.handle("files:share", async (e, p: { name: string; data: Uint8Array | st
       callback: () => resolve(),
     });
   });
+});
+/** The installed slicers a model can be sent to (see slicers.ts), Bambu Studio first. */
+const slicerApp = (url: string) => app.getApplicationInfoForProtocol(url).then((i) => i.path || null);
+const installedSlicers = async () =>
+  process.platform !== "darwin" ? [] : (await Promise.all(SLICERS.map(async (s) => ({ id: s.id, name: s.name, path: await findSlicer(s, slicerApp) })))).filter((s) => s.path);
+ipcMain.handle("slicers:list", async () => (await installedSlicers()).map(({ id, name }) => ({ id, name })));
+/** Opens a file (a 3MF) in an installed slicer: written to a temporary folder, cleared away later. */
+ipcMain.handle("slicers:open", async (_e, p: { slicer: SlicerId; name: string; data: Uint8Array }) => {
+  const slicer = (await installedSlicers()).find((s) => s.id === p.slicer);
+  if (!slicer) throw new Error(`${SLICERS.find((s) => s.id === p.slicer)?.name ?? String(p.slicer)} is not installed`);
+  const file = await writeSend(app.getPath("temp"), p.name, Buffer.from(p.data));
+  await new Promise<void>((resolve, reject) => execFile("/usr/bin/open", ["-a", slicer.path!, file], (err, _out, stderr) => (err ? reject(new Error(stderr.trim() || err.message)) : resolve())));
+  return { slicer: slicer.name, file };
 });
 /**
  * A textured model of an area from a folder of photos (a drone flight), built by the native helper
@@ -1122,6 +1136,8 @@ else {
     // thumbnails and the window's preferences (switching from the WIP to the RC keeps everything).
     if (SIDE_BY_SIDE) await adoptSiblingData(app.getPath("userData"), siblingDataDirs()).catch(() => undefined);
     settings = readSettings();
+    // Files sent to a slicer in an earlier session.
+    void clearOldSends(app.getPath("temp"));
     // Reopen access to a folder picked in an earlier session (held for the app's lifetime).
     if (MAS && settings.projectsBookmark) app.startAccessingSecurityScopedResource(settings.projectsBookmark);
     // Otherwise it starts on the same projects folder as an installed sibling.

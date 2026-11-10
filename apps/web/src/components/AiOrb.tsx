@@ -26,6 +26,7 @@ export function toolLabel(tool: string | null | undefined): string | null {
     export: t("Exporting"),
     export_drawing: t("Making a drawing"),
     export_robot: t("Exporting a robot"),
+    send_to_slicer: t("Sending to the slicer"),
     play_motion: t("Playing the motion"),
     set_pose: t("Moving the joints"),
     check_motion: t("Checking the motion"),

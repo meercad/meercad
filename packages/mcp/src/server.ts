@@ -427,6 +427,25 @@ server.registerTool(
 );
 
 server.registerTool(
+  "send_to_slicer",
+  {
+    title: "Open the model in a slicer",
+    description:
+      "Opens the model in a slicer installed on this Mac, ready to slice and print: the parts not hidden (or `parts`) as a 3MF, as the app's export makes it (materials as in export), moved parts where they are shown (posed: false takes them at rest). slicer: \"bambu\" (Bambu Studio) or \"prusa\" (PrusaSlicer); default the first installed, Bambu Studio before PrusaSlicer. The 3MF goes to a temporary file the app clears away later; use export for a file to keep. Fails when the slicer is not installed (only the Mac app can send).",
+    inputSchema: {
+      slicer: z.enum(["bambu", "prusa"]).optional(),
+      parts: z.array(z.string()).optional().describe("Part ids; default every part not hidden"),
+      posed: z.boolean().optional(),
+      materials: z.boolean().optional().describe("Include materials, colours and filament slots (default: the app's setting, off)"),
+    },
+  },
+  guard(async ({ slicer, parts, posed, materials }) => {
+    const r = await call<{ slicer: string; file: string; moved: boolean; filaments?: { slot: number; material?: string; color: string }[] }>("send_to_slicer", { slicer, parts, posed, materials }, 300_000);
+    return text(`opened ${r.file} in ${r.slicer}${r.moved ? " (moved parts where they are shown)" : ""}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
+  }),
+);
+
+server.registerTool(
   "export_robot",
   {
     title: "Export a robot for simulation",

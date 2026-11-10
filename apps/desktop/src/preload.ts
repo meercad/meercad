@@ -89,6 +89,11 @@ const api = {
   /** A file the MCP server may not reach (macOS guards Documents, Desktop …; this app has the user's OK): absolute paths, base64. */
   readLocalFile: (path: string) => ipcRenderer.invoke("files:read-local", path),
   writeLocalFile: (p: { path: string; base64: string }) => ipcRenderer.invoke("files:write-local", p),
+  /** Slicers installed on this Mac (Bambu Studio, PrusaSlicer), and opening a 3MF in one. */
+  slicers: {
+    list: (): Promise<{ id: "bambu" | "prusa"; name: string }[]> => ipcRenderer.invoke("slicers:list"),
+    open: (p: { slicer: "bambu" | "prusa"; name: string; data: Uint8Array }): Promise<{ slicer: string; file: string }> => ipcRenderer.invoke("slicers:open", p),
+  },
   /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
   shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
   on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "release-project" | "assistant-tabs" | "assistant-stop" | "assistant-idle" | "mcp-status" | "mcp-set-enabled", fn: (arg: any) => void) => {

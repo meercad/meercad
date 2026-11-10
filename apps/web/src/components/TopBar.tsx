@@ -1,4 +1,4 @@
-import { Bot, Check, Search, ChevronDown, CircleHelp, Download, Share, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
+import { Bot, Check, Search, ChevronDown, CircleHelp, Download, Share, Ellipsis, Eye, FileDown, FileText, History, House, Info, Keyboard, Layers, PanelLeft, Pencil, PenLine, Rotate3d, Plus, Printer, Redo2, Ruler, Settings, Undo2, Upload, X } from "lucide-react";
 import { setPrefs, useKey, usePrefs } from "../lib/keymap";
 import { useRef } from "react";
 import { closeTab, goHome, newProject, openProject, redo, renameProject, setDesignUnits, toggleSide, undo, useApp } from "../store";
@@ -6,7 +6,8 @@ import { featureName } from "../lib/features";
 import { useCompact } from "../lib/layout";
 import { askText } from "./Ask";
 import type { MenuEntry } from "./Menu";
-import { exportMesh, exportRobot, exportSketch, exportStep, exportVariants, importFile, saveFile, viewInAr } from "./io";
+import { exportMesh, exportRobot, exportSketch, exportStep, exportVariants, importFile, saveFile, sendToSlicer, viewInAr } from "./io";
+import { useSlicers } from "../lib/slicers";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
 import { openShare } from "./ShareDialog";
@@ -56,6 +57,7 @@ export function TopBar() {
   const units = useApp((s) => s.doc.units ?? "mm");
   const variants = useApp((s) => s.doc.variants?.length ?? 0);
   const hasJoints = useApp((s) => (s.doc.mechanism?.joints.length ?? 0) > 0);
+  const slicers = useSlicers((s) => s.slicers);
   const searchKey = useKey("palette");
   // Command search for every tool and command; on touch screens this button is the way in.
   const searchBtn = (
@@ -105,6 +107,8 @@ export function TopBar() {
   const fileItems = (): MenuEntry[] => [
     { label: t("Import…"), title: t("STEP, STL, 3MF, OBJ, DXF or SVG"), icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
     { label: t("Export"), icon: <FileDown />, submenu: exportItems() },
+    // Straight into a slicer installed on this Mac (Bambu Studio first), as a 3MF.
+    ...slicers.map((sl) => ({ label: t("Send to {name}", { name: sl.name }), title: t("Opens the model as a 3MF in {name}", { name: sl.name }), icon: <Printer />, onClick: () => void sendToSlicer(sl.id) })),
     ...(nativeApp ? [{ label: t("View in AR (real size on the table)"), icon: <Rotate3d />, onClick: () => void viewInAr() }] : []),
     {
       label: t("Units"),
