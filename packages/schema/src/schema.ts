@@ -711,7 +711,7 @@ export const docOpSchema = {
     set_variant: obj({ type: true, name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") }, rename: VARIANT_NAME }, ["name", "params"]),
     delete_variant: obj({ type: true, name: VARIANT_NAME }, ["name"]),
     use_variant: obj({ type: true, name: oneOf({ type: "null" }, VARIANT_NAME) }, ["name"]),
-    save_version: obj({ type: true, name: VERSION_NAME }, ["name"]),
+    save_version: obj({ type: true, name: VERSION_NAME, doc: { type: "object" }, at: { type: "number" } }, ["name"]),
     restore_version: obj({ type: true, name: VERSION_NAME }, ["name"]),
     rename_version: obj({ type: true, name: VERSION_NAME, to: VERSION_NAME }, ["name", "to"]),
     delete_version: obj({ type: true, name: VERSION_NAME }, ["name"]),

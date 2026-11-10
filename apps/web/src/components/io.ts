@@ -5,9 +5,9 @@ import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
-import { applyOp, designOf, massOf, materialById, motion, nextFeatureId, partMaterial } from "@meercad/model";
+import { applyOp, designOf, freeVersionName, massOf, materialById, motion, nextFeatureId, partMaterial, restored, versionChanges, versionFile } from "@meercad/model";
 import { threeMfParts } from "../lib/printParts";
-import { emptyDocument, validateDocument, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
+import { emptyDocument, validateDocument, type DocOp, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { nativeApp, shareFile, showInAr } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
@@ -421,6 +421,90 @@ export function saveFile(): void {
   download(`${baseName()}.meercad`, JSON.stringify(currentDoc(), null, 2));
 }
 
+/**
+ * The design in a .meercad file's text. A design some scripts write wrapped as {name, document}
+ * comes in too, and what an empty design has may be left out. Throws when it is not a valid file.
+ */
+export function readDesignFile(text: string): { doc: MeercadDocument; name?: string } {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw new Error(t("Not a valid meerCAD file: {error}", { error: (e as Error).message }));
+  }
+  const inner = json && typeof json === "object" && !("format" in json) && "document" in json ? (json as { name?: unknown; document: unknown }) : null;
+  const raw = inner ? inner.document : json;
+  const v = validateDocument(raw && typeof raw === "object" ? { params: {}, rollback: null, ...raw } : raw);
+  if (!v.ok) throw new Error(t("Not a valid meerCAD file: {error}", { error: String(v.errors[0]) }));
+  return { doc: v.value, ...(inner && typeof inner.name === "string" && inner.name ? { name: inner.name } : {}) };
+}
+
+/** A version's name as part of a file name. */
+const fileSafe = (name: string) => name.replace(/[/\\:*?"<>|]+/g, "-").trim() || "version";
+
+/**
+ * Saves a version as a project file of its own, to a place the user picks (a save dialog on the
+ * Mac, the share sheet on the iPad: "Save to Files"). Any meerCAD opens the file as a project, and
+ * "From file…" in Versions brings it back in as a version.
+ */
+export function saveVersionFile(name: string): void {
+  try {
+    download(`${baseName()} - ${fileSafe(name)}.meercad`, JSON.stringify(versionFile(currentDoc(), name), null, 2));
+  } catch (e) {
+    toast((e as Error).message, "error");
+  }
+}
+
+/**
+ * Brings a .meercad file in as versions of the open design, which itself stays as it is: the
+ * versions saved in the file (a whole project backed up), then the design the file holds (a
+ * version saved as a file), unless one of its versions is that design already. Names already
+ * taken get a number. Returns the names of the new versions (none when nothing came in).
+ */
+export async function importVersionFile(file?: File | null): Promise<string[]> {
+  file ??= await pickFile(".meercad,.json");
+  if (!file) return [];
+  let read: { doc: MeercadDocument; name?: string };
+  try {
+    read = readDesignFile(await file.text());
+  } catch (e) {
+    toast((e as Error).message, "error");
+    return [];
+  }
+  const from = read.doc;
+  const ops: DocOp[] = [];
+  let doc = currentDoc();
+  const add = (name: string, at: number, design: MeercadDocument) => {
+    // A backup brought in twice adds nothing: a version of that name holding that design is there.
+    const held = doc.versions?.find((v) => v.name === name);
+    if (held && unchanged(versionChanges(held.state, design))) return;
+    const op: DocOp = { type: "save_version", name: freeVersionName(doc, name), at, doc: designOf(design) };
+    doc = applyOp(doc, op);
+    ops.push(op);
+  };
+  try {
+    for (const v of from.versions ?? []) add(v.name, v.at, restored(from, v));
+    const same = (from.versions ?? []).some((v) => unchanged(versionChanges(v.state, from)));
+    if (!same) {
+      // A file saved from Versions is named "<project> - <version>": the version's name is the rest.
+      const base = file.name.replace(/\.\w+$/, "");
+      const prefix = `${baseName()} - `;
+      add(read.name ?? (base.startsWith(prefix) && base.length > prefix.length ? base.slice(prefix.length) : base), file.lastModified || Date.now(), from);
+    }
+  } catch (e) {
+    toast(t("Could not bring in {name}: {error}", { name: file.name, error: (e as Error).message }), "error");
+    return [];
+  }
+  if (!ops.length) {
+    toast(t("Every version in {name} is here already", { name: file.name }), "info");
+    return [];
+  }
+  if (!apply(...ops)) return [];
+  return ops.map((o) => (o as { name: string }).name);
+}
+
+const unchanged = (c: { added: string[]; changed: string[]; removed: string[]; other: boolean }) => !c.added.length && !c.changed.length && !c.removed.length && !c.other;
+
 function pickFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
@@ -452,18 +536,15 @@ export async function importFile(file?: File | null, opts: { seeThrough?: boolea
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const base = file.name.replace(/\.\w+$/, "");
   if (ext === "meercad" || ext === "json") {
-    const json = JSON.parse(await file.text()) as unknown;
-    // A design some scripts write wrapped as {name, document} comes in too.
-    const inner = json && typeof json === "object" && !("format" in json) && "document" in json ? (json as { name?: unknown; document: unknown }) : null;
-    const raw = inner ? inner.document : json;
-    // Files written by scripts may leave out what an empty design has.
-    const v = validateDocument(raw && typeof raw === "object" ? { params: {}, rollback: null, ...raw } : raw);
-    if (!v.ok) {
-      toast(t("Not a valid meerCAD file: {error}", { error: String(v.errors[0]) }), "error");
+    let read: { doc: MeercadDocument; name?: string };
+    try {
+      read = readDesignFile(await file.text());
+    } catch (e) {
+      toast((e as Error).message, "error");
       return false;
     }
     await flushSave();
-    await newProject(v.value, inner && typeof inner.name === "string" && inner.name ? inner.name : base);
+    await newProject(read.doc, read.name ?? base);
     return true;
   }
   if (!["step", "stp", "stl", "3mf", "obj", "dxf", "svg"].includes(ext)) {

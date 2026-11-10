@@ -13,7 +13,7 @@ export * from "./drawing.js";
 export * from "./materials.js";
 export * from "./standardParts.js";
 export { MeshCollider, meshesCollide, rayDistance, signedDistance } from "./collide.js";
-export { blobKey, designOf, restored, versionChanges } from "./versions.js";
+export { blobKey, designOf, freeVersionName, restored, versionChanges, versionFile } from "./versions.js";
 export * from "./gridfinity.js";
 export * from "./scanbin.js";
 export * from "./closures.js";
