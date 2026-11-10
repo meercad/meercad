@@ -18,7 +18,7 @@ import { createBridge, NOT_CONNECTED } from "./hub.js";
 import { appTarget, createLauncher, launchEnv } from "./launchApp.js";
 import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
 import { meercadDocument } from "./meercadFile.js";
-import { DEFAULT_PORT, type BridgeMethod } from "./protocol.js";
+import { DEFAULT_PORT, stagedRequests, type BridgeMethod, type ExportedFiles } from "./protocol.js";
 
 /** The port of the build this server ships in (server.json next to it, see CHANNEL_PORTS); MEERCAD_MCP_PORT wins (test runs). */
 function bundledPort(): number | undefined {
@@ -79,6 +79,35 @@ const appFiles: AppFiles = {
 const readFile = (path: string) => readLocal(path, appFiles);
 const writeFile = (path: string, data: Uint8Array) => writeLocal(path, data, appFiles);
 const resolve = localPath;
+
+/** The names of an export's files. */
+const namesOf = (r: ExportedFiles) => [...Object.keys(r.files), ...Object.keys(r.staged?.sizes ?? {})];
+
+/**
+ * Hands each file of an export to `each`; big exports wait in the app (see STAGE_OVER) and are
+ * fetched piece by piece, each file whole before the next.
+ */
+async function eachFile(r: ExportedFiles, each: (name: string, data: Buffer) => Promise<void>): Promise<void> {
+  for (const [name, b64] of Object.entries(r.files)) await each(name, Buffer.from(b64, "base64"));
+  const st = r.staged;
+  if (!st) return;
+  try {
+    const parts = new Map<string, Buffer[]>();
+    for (const pieces of stagedRequests(st.sizes)) {
+      const { data } = await call<{ data: string[] }>("staged_files", { token: st.token, pieces });
+      for (const [i, piece] of pieces.entries()) {
+        const got = [...(parts.get(piece.name) ?? []), Buffer.from(data[i] ?? "", "base64")];
+        if (piece.offset + piece.length < st.sizes[piece.name]!) parts.set(piece.name, got);
+        else {
+          parts.delete(piece.name);
+          await each(piece.name, Buffer.concat(got));
+        }
+      }
+    }
+  } finally {
+    await call("staged_files", { token: st.token, done: true }).catch(() => undefined);
+  }
+}
 
 // Compact JSON: indenting doubled the size of every answer (and with it the tokens an assistant pays for).
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: typeof v === "string" ? v : JSON.stringify(v) }] });
@@ -383,16 +412,16 @@ server.registerTool(
   guard(async ({ format, path, sketch, parts, posed, variants, materials }) => {
     const out = resolve(path);
     const name = basename(out).replace(/\.[^.]+$/, "");
-    const r = await call<{ files: Record<string, string>; filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials }, 300_000);
-    const files = Object.entries(r.files);
+    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials }, 300_000);
+    const count = namesOf(r).length;
     const written: string[] = [];
-    for (const [file, b64] of files) {
+    await eachFile(r, async (file, data) => {
       // One file goes to `path`; the main file of several goes there and the rest next to it.
-      const main = files.length === 1 || (!variants && file.toLowerCase().endsWith(`.${format}`));
+      const main = count === 1 || (!variants && file.toLowerCase().endsWith(`.${format}`));
       const target = main && !variants ? out : join(variants ? (extname(out) ? dirname(out) : out) : dirname(out), file);
-      await writeFile(target, Buffer.from(b64, "base64"));
+      await writeFile(target, data);
       written.push(target);
-    }
+    });
     return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
   }),
 );
@@ -420,14 +449,14 @@ server.registerTool(
   },
   guard(async ({ path, name, floating, masses, actuators, collision }) => {
     const dir = resolve(path);
-    const r = await call<{ files: Record<string, string>; links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision }, 300_000);
+    const r = await call<ExportedFiles & { links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision }, 300_000);
     const written: string[] = [];
-    for (const [file, b64] of Object.entries(r.files)) {
+    await eachFile(r, async (file, data) => {
       const target = join(dir, file);
-      await writeFile(target, Buffer.from(b64, "base64"));
+      await writeFile(target, data);
       if (!file.startsWith("meshes/")) written.push(target);
-    }
-    const meshes = Object.keys(r.files).filter((f) => f.startsWith("meshes/")).length;
+    });
+    const meshes = namesOf(r).filter((f) => f.startsWith("meshes/")).length;
     return text({ wrote: written, meshes: `${meshes} STL files in ${join(dir, "meshes")}`, links: r.links, warnings: r.warnings });
   }),
 );

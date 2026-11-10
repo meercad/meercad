@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { ASSISTANT_IDLE_MS, DEFAULT_PORT, type BridgeEvent, type BridgeRequest } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, DEFAULT_PORT, STAGE_KEEP_MS, STAGE_OVER, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -468,6 +468,23 @@ const toB64 = (u: Uint8Array | string) => {
   return btoa(s);
 };
 
+/** Big exports waiting for the server to fetch them piece by piece (staged_files), by token. */
+const staged = new Map<string, { files: Record<string, Uint8Array>; timer: number }>();
+const keepStaged = (token: string) => window.setTimeout(() => staged.delete(token), STAGE_KEEP_MS);
+
+/**
+ * An export's files for the server: base64 in the answer, or above STAGE_OVER bytes kept here for
+ * staged_files, since one message over the bridge may not hold hundreds of MB.
+ */
+function exportedFiles(files: Record<string, Uint8Array | string>): ExportedFiles {
+  const bytes = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, typeof v === "string" ? new TextEncoder().encode(v) : v]));
+  const total = Object.values(bytes).reduce((n, b) => n + b.length, 0);
+  if (total <= STAGE_OVER) return { files: Object.fromEntries(Object.entries(bytes).map(([k, v]) => [k, toB64(v)])) };
+  const token = crypto.randomUUID();
+  staged.set(token, { files: bytes, timer: keepStaged(token) });
+  return { files: {}, staged: { token, sizes: Object.fromEntries(Object.entries(bytes).map(([k, v]) => [k, v.length])) } };
+}
+
 async function handle(req: BridgeRequest): Promise<unknown> {
   const p = req.params;
   switch (req.method) {
@@ -624,7 +641,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(p["actuators"] && typeof p["actuators"] === "object" ? { actuators: p["actuators"] as Record<string, RobotActuator> } : {}),
         ...(p["collision"] === "mesh" || p["collision"] === "shapes" ? { collision: p["collision"] } : {}),
       });
-      return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])), links, warnings };
+      return { ...exportedFiles(files), links, warnings };
     }
     case "export": {
       needProject();
@@ -649,7 +666,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(typeof p["name"] === "string" ? { name: p["name"] } : {}),
         ...(typeof p["materials"] === "boolean" ? { materials: p["materials"] } : {}),
       });
-      return { files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, toB64(v)])), ...(filaments ? { filaments } : {}) };
+      return { ...exportedFiles(files), ...(filaments ? { filaments } : {}) };
     }
     case "list_materials": {
       const doc = currentDoc();
@@ -740,6 +757,24 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       return tools.gearJoints();
     case "import_file":
       return created(p, () => tools.importBytes(String(p["name"]), String(p["base64"])));
+    case "staged_files": {
+      const token = String(p["token"]);
+      const s = staged.get(token);
+      if (!s) throw new Error("the exported files are no longer here (fetched already, or older than 10 minutes): export again");
+      window.clearTimeout(s.timer);
+      if (p["done"]) {
+        staged.delete(token);
+        return { ok: true };
+      }
+      s.timer = keepStaged(token);
+      return {
+        data: (p["pieces"] as FilePiece[]).map(({ name, offset, length }) => {
+          const file = s.files[name];
+          if (!file) throw new Error(`no exported file "${name}"`);
+          return toB64(file.subarray(offset, offset + length));
+        }),
+      };
+    }
     case "read_file":
       if (!desktop?.readLocalFile) throw new Error("this meerCAD app cannot read files for the assistant (update it)");
       return { base64: await desktop.readLocalFile(String(p["path"])) };
