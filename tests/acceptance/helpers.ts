@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { KernelSession, loadOcct, type OC } from "@meercad/kernel";
 import type { Feature, MeercadDocument, PlaneSpec, SketchEntity, SketchFeature } from "@meercad/schema";
 import { SketchSolver } from "@meercad/sketch";
+import { nudged, sameModel } from "../incremental-check.js";
 
 let occt: Promise<OC> | null = null;
 let solver: Promise<SketchSolver> | null = null;
@@ -44,3 +45,46 @@ export function circle(id: string, x: number, y: number, r: number): SketchEntit
 export function sketch(id: string, plane: PlaneSpec, entities: SketchEntity[], constraints: SketchFeature["constraints"] = []): SketchFeature {
   return { id, op: "sketch", plane, entities, constraints };
 }
+
+/**
+ * For the checks that a rebuild which keeps earlier results gives the model built from scratch.
+ */
+/** Changes each step in turn (and back), comparing with a build from scratch each time; throws on a difference. */
+export async function checkEveryStep(base: MeercadDocument, name: string): Promise<{ steps: number; computed: number; scratch: number }> {
+  // A kernel of its own: OCCT keeps memory of every cut and join, and the many builds from scratch
+  // here would fill the kernel the other tests share.
+  const oc = await loadOcct();
+  const solver = await getSolver();
+  const newSession = () => new KernelSession(oc, solver);
+  const session = newSession();
+  session.rebuild(base, { props: false });
+  let current = base;
+  let computed = 0, scratch = 0, steps = 0;
+  for (const f of base.features) {
+    for (const next of [nudged(current, f.id), base]) {
+      current = next;
+      session.rebuild(current, { props: false, onFeature: () => computed++ });
+      const fresh = newSession();
+      fresh.rebuild(current, { props: false, mesh: false, onFeature: () => scratch++ });
+      const diff = sameModel(oc, session.state!, fresh.state!);
+      if (diff) throw new Error(`${name}: after changing ${f.id}: ${diff}`);
+      fresh.dispose();
+      steps++;
+    }
+  }
+  // A preview next to the open design takes results over the same way and leaves the design alone.
+  const last = base.features.at(-1);
+  if (last) {
+    const tried = nudged(base, base.features[0]!.id);
+    session.preview(tried, { props: false });
+    session.rebuild(base, { props: false });
+    const fresh = newSession();
+    fresh.rebuild(base, { props: false, mesh: false });
+    const diff = sameModel(oc, session.state!, fresh.state!);
+    if (diff) throw new Error(`${name}: after a preview: ${diff}`);
+    fresh.dispose();
+  }
+  session.dispose();
+  return { steps, computed, scratch };
+}
+

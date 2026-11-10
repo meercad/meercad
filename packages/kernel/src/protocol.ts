@@ -7,7 +7,8 @@ import type { DrawingView, ViewName } from "./drawing.js";
 export type WorkerRequest =
   /** `props: false` skips volume and surface area (previews while dragging). */
   /** `draft`: lithophane pictures coarse and quick (while a value is being dragged); `textures: false` shows parts smooth. */
-  | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean; props?: boolean; draft?: boolean; textures?: boolean }
+  /** `fresh`: send every mesh in full, also those the page already has (see KeptMesh). */
+  | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean; props?: boolean; draft?: boolean; textures?: boolean; fresh?: boolean }
   /** Rebuild of a changed copy (AI previews, thumbnails) next to the open design: shares its cached steps, never changes them. */
   | { type: "sandbox"; seq: number; doc: MeercadDocument }
   /** `parts`: names and colours to write with each part (XCAF), by body id. */
@@ -20,23 +21,33 @@ export type WorkerRequest =
   | { type: "props"; seq: number }
   | { type: "measure"; seq: number; a: PickRef; b?: PickRef }
   /** Gaps between parts in a pose of the mechanism (see tools.clearances). */
-  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number; skip?: string[]; rigid?: Record<string, number> }
+  /** `box`, `budgetMs`: see ClearanceLimits; the answer's `left` counts the pairs there was no time for. */
+  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number; skip?: string[]; rigid?: Record<string, number>; box?: { min: [number, number, number]; max: [number, number, number] }; budgetMs?: number }
   /** Views for a technical drawing, with hidden lines (see drawing.ts). */
   /** `doc` builds the drawing from that document instead of the open one (threads simplified, see model/drawing). */
   | { type: "drawing"; seq: number; views: ViewName[]; bodies?: string[]; doc?: MeercadDocument };
+
+/**
+ * In a main-session rebuild: the part's mesh is the very one sent with the previous rebuild (the part
+ * did not change), so it is not copied over again. The client puts that mesh back in.
+ */
+export interface KeptMesh {
+  bodyId: string;
+  kept: true;
+}
 
 export type WorkerResponse =
   | { type: "ready"; initMs: number; threads: boolean }
   | { type: "fatal"; message: string }
   /** OCCT broke (a WebAssembly runtime error) while handling `seq`: the worker must be replaced. */
   | { type: "crashed"; seq: number; message: string; threads: boolean }
-  | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] }
+  | { type: "rebuilt"; seq: number; report: RebuildReport; meshes: (BodyMesh | KeptMesh)[]; references: ReferenceView[] }
   /** A rebuild is about to compute feature `index` of `total` (features from cache are skipped). */
   | { type: "progress"; seq: number; index: number; total: number; feature: string }
   | { type: "exported"; seq: number; data: Uint8Array }
   | { type: "exported_mesh"; seq: number; meshes: BodyMesh[] }
   | { type: "measured"; seq: number; result: Measurement }
-  | { type: "clearances"; seq: number; result: Clearance[] }
+  | { type: "clearances"; seq: number; result: Clearance[]; left?: number }
   | { type: "drawn"; seq: number; views: DrawingView[] }
   | { type: "configured"; seq: number }
   | { type: "props"; seq: number; bodies: BodySummary[] }

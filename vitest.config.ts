@@ -20,6 +20,7 @@ export const SLOW = [
   "tests/acceptance/gear.test.ts",
   "tests/acceptance/gridfinity.test.ts",
   "tests/acceptance/gridfinity-area.test.ts",
+  "tests/acceptance/incremental-all.test.ts",
   "tests/acceptance/joints.test.ts",
   "tests/acceptance/models.test.ts",
   "tests/acceptance/scan-bin.test.ts",

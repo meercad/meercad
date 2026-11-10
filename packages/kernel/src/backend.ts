@@ -1,5 +1,5 @@
 import { parseStl, writeStl } from "@meercad/io";
-import { propagateTags, resolveEdges, resolveFaces, ResolveError, selectorForEdge } from "@meercad/naming";
+import { propagateTags, type resolveEdges, ResolveError, selectorForEdge } from "@meercad/naming";
 import {
   FeatureError,
   type ExecResult,
@@ -44,6 +44,7 @@ import {
   GRIDFINITY,
   planScanBin,
   ScanBinError,
+  type Footprint,
 } from "@meercad/model";
 import { asArray, type AxisRef, type FaceSelector, type BooleanFeature, type BooleanMode, type ImportFeature, type LoftFeature, type MirrorFeature, type PatternSource, type PlaneSpec, type ProfileRef, type SweepFeature } from "@meercad/schema";
 import {
@@ -62,8 +63,10 @@ import {
 } from "@meercad/sketch";
 import type { TopoDS_Edge, TopoDS_Face, TopoDS_Shape, TopoDS_Vertex, TopoDS_Wire, gp_Trsf } from "replicad-opencascadejs";
 import { Arena } from "./arena.js";
+import { copyMap, trackState } from "./tracking.js";
+import { edgesIn, facesIn, partsReaching, reach } from "./lookup.js";
 import { Body, listToArray } from "./body.js";
-import { booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
+import { bodyBounds, booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import { areaPlateBodies, gridfinityBody, labelBodies, type BinPocket, type OutlineRegion } from "./gridfinity.js";
@@ -91,7 +94,12 @@ interface Ctx {
   prev: ModelState;
   warnings: string[];
   info?: Record<string, number>;
+  /** What this step made on another state before (see KernelBackend.execute); `kept` once a part of it is used again. */
+  earlier?: { state: ModelState; kept: boolean };
 }
+
+/** For a moved or copied part: the part it was made from and how (see transformBody). */
+const movedFrom = new WeakMap<Body, { source: Body; how: string }>();
 
 export class OcctBackend implements KernelBackend<ModelState> {
   constructor(
@@ -107,14 +115,26 @@ export class OcctBackend implements KernelBackend<ModelState> {
     state.arena.dispose();
   }
 
-  execute(f: ResolvedFeature, prev: ModelState): ExecResult<ModelState> {
+  execute(f: ResolvedFeature, prev: ModelState, note?: (footprint: Footprint<ModelState>) => void, earlier?: ModelState): ExecResult<ModelState> {
     const arena = new Arena();
-    const ctx: Ctx = { oc: this.oc, arena, g: new Geom(this.oc, arena), prev, warnings: [] };
+    // Noting what the step reads, so a later rebuild can take its result over (tracking.ts).
+    const tracked = note ? trackState(prev) : null;
+    const ctx: Ctx = { oc: this.oc, arena, g: new Geom(this.oc, arena), prev: tracked?.view ?? prev, warnings: [], ...(earlier ? { earlier: { state: earlier, kept: false } } : {}) };
     try {
-      const next = this.run(f, ctx);
-      return { state: { ...next, arena }, warnings: ctx.warnings, ...(ctx.info ? { info: ctx.info } : {}) };
+      const state = { ...this.run(f, ctx), arena };
+      arena.trim();
+      if (ctx.earlier?.kept) arena.adopt(earlier!.arena);
+      if (tracked) {
+        const fp = tracked.finish(state);
+        if (fp) note!(fp);
+      }
+      return { state, warnings: ctx.warnings, ...(ctx.info ? { info: ctx.info } : {}), ...(ctx.earlier?.kept ? { keepsEarlier: true } : {}) };
     } catch (e) {
       arena.dispose();
+      if (tracked) {
+        const fp = tracked.finish(null);
+        if (fp) note!(fp);
+      }
       if (e instanceof FeatureError) throw e;
       if (e instanceof ResolveError || e instanceof SketchSolveError) throw new FeatureError(e.message);
       throw new FeatureError(`kernel error: ${occtErrorMessage(this.oc, e)}`);
@@ -160,14 +180,14 @@ export class OcctBackend implements KernelBackend<ModelState> {
         return shell(f, ctx);
       case "thread": {
         const { body } = threadBody(ctx.oc, ctx.arena, ctx.prev.bodies, f);
-        return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+        return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(body.bodyId, body) };
       }
       case "gear": {
         const partner = f.meshWith ? ctx.prev.gears.get(f.meshWith.gear) : undefined;
         if (f.meshWith && !partner) throw new FeatureError(`gear "${f.meshWith.gear}" not found`);
         const frame = partner ? partner.frame : planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
         const { body, record } = gearBody(ctx.oc, ctx.arena, f, frame, partner);
-        return { ...applyTool(ctx, f.id, body, f.mode, f.targets), gears: new Map(ctx.prev.gears).set(f.id, record) };
+        return { ...applyTool(ctx, f.id, body, f.mode, f.targets), gears: copyMap(ctx.prev.gears).set(f.id, record) };
       }
       case "coil":
         return coil(f, ctx);
@@ -184,7 +204,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
       case "cable": {
         const { body, info } = cableBody(ctx.oc, ctx.arena, f, ctx.warnings);
         ctx.info = { length: round3(info.length), mass: round3(info.mass), bendRadius: round3(info.bendRadius), ...(Number.isFinite(info.minRadius) ? { minRadius: round3(info.minRadius) } : {}) };
-        return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body) };
+        return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(f.id, body) };
       }
       case "gridfinity": {
         const plate = f.baseplate ? ctx.prev.grids?.get(f.baseplate) : undefined;
@@ -199,9 +219,9 @@ export class OcctBackend implements KernelBackend<ModelState> {
           } else frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
           const out = areaPlateBodies(ctx.oc, ctx.arena, f, frame, outline, ctx.warnings);
           ctx.info = out.info;
-          const bodies = new Map(ctx.prev.bodies);
+          const bodies = copyMap(ctx.prev.bodies);
           for (const b of out.bodies) bodies.set(b.bodyId, b);
-          return { ...ctx.prev, bodies, grids: new Map(ctx.prev.grids ?? []).set(f.id, out.record) };
+          return { ...ctx.prev, bodies, grids: copyMap(ctx.prev.grids).set(f.id, out.record) };
         }
         let frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
         const pocket = f.kind === "bin" && f.pocket ? pocketFor(f, frame, ctx) : undefined;
@@ -212,28 +232,28 @@ export class OcctBackend implements KernelBackend<ModelState> {
           ctx.info = { width: pocket.plan.units[0], depth: pocket.plan.units[1], height: pocket.plan.height, pocketDepth: round3(pocket.plan.depth), angle: round3((pocket.plan.angle * 180) / Math.PI) };
         }
         const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings, pocket);
-        const bodies = new Map(ctx.prev.bodies).set(f.id, body);
-        return { ...ctx.prev, bodies, ...(record ? { grids: new Map(ctx.prev.grids ?? []).set(f.id, record) } : {}) };
+        const bodies = copyMap(ctx.prev.bodies).set(f.id, body);
+        return { ...ctx.prev, bodies, ...(record ? { grids: copyMap(ctx.prev.grids).set(f.id, record) } : {}) };
       }
       case "wall": {
         const board = f.board ? ctx.prev.walls?.get(f.board) : undefined;
         if (f.board && !board) throw new FeatureError(`board "${f.board}" not found`);
         const frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
         const { body, record } = wallBody(ctx.oc, ctx.arena, f, frame, board, ctx.warnings);
-        const bodies = new Map(ctx.prev.bodies).set(f.id, body);
-        return { ...ctx.prev, bodies, ...(record ? { walls: new Map(ctx.prev.walls ?? []).set(f.id, record) } : {}) };
+        const bodies = copyMap(ctx.prev.bodies).set(f.id, body);
+        return { ...ctx.prev, bodies, ...(record ? { walls: copyMap(ctx.prev.walls).set(f.id, record) } : {}) };
       }
       case "lithophane": {
         const { body, texture } = lithophaneBody(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx));
-        return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body), textures: new Map(ctx.prev.textures).set(f.id, texture) };
+        return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(f.id, body), textures: copyMap(ctx.prev.textures).set(f.id, texture) };
       }
       case "label": {
-        const bodies = new Map(ctx.prev.bodies);
+        const bodies = copyMap(ctx.prev.bodies);
         for (const b of labelBodies(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx), ctx.warnings)) bodies.set(b.bodyId, b);
         return { ...ctx.prev, bodies };
       }
       case "box": {
-        const bodies = new Map(ctx.prev.bodies);
+        const bodies = copyMap(ctx.prev.bodies);
         for (const b of boxBodies(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx))) bodies.set(b.bodyId, b);
         return { ...ctx.prev, bodies };
       }
@@ -248,7 +268,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
       case "transform":
         return transformFeature(f, ctx);
       case "delete": {
-        const bodies = new Map(ctx.prev.bodies);
+        const bodies = copyMap(ctx.prev.bodies);
         for (const id of f.bodies) if (!bodies.delete(id)) throw new FeatureError(`body "${id}" not found`);
         return { ...ctx.prev, bodies };
       }
@@ -271,7 +291,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
     if (solved.diagnostics.message) ctx.warnings.push(solved.diagnostics.message);
     if (solved.diagnostics.redundant.length) ctx.warnings.push(`redundant constraints: ${solved.diagnostics.redundant.join(", ")}`);
     const result: SketchResult = { id: f.id, frame, solved, regions: findRegions(solved.curves) };
-    return { ...ctx.prev, sketches: new Map(ctx.prev.sketches).set(f.id, result) };
+    return { ...ctx.prev, sketches: copyMap(ctx.prev.sketches).set(f.id, result) };
   }
 }
 
@@ -283,7 +303,7 @@ function planeFrame(spec: PlaneSpec, ctx: Ctx): PlaneFrame {
     if (!named) throw new FeatureError(`plane "${spec.ref}" not found`);
     return named;
   }
-  const refs = resolveFaces(spec.face, [...ctx.prev.bodies.values()]);
+  const refs = facesIn(ctx.prev.bodies, spec.face);
   const faces = refs.flatMap((r) => r.faces.map((fi) => ({ body: ctx.prev.bodies.get(r.body)!, fi })));
   if (!faces.length) throw new FeatureError("face selector matches no face");
   const planes = faces.map(({ body, fi }) => ({ info: body.faceInfo[fi]!, point: body.facePoints[fi]! }));
@@ -311,7 +331,7 @@ function axis(ref: AxisRef, ctx: Ctx): { origin: Vec3; dir: Vec3 } {
     const b = toWorld(sk.frame, curve.b);
     return { origin: a, dir: unit([b[0] - a[0], b[1] - a[1], b[2] - a[2]]) };
   }
-  const er = resolveEdges([ref.edge], [...ctx.prev.bodies.values()]);
+  const er = edgesIn(ctx.prev.bodies, [ref.edge]);
   if (er.edges.length !== 1) throw new FeatureError("axis edge selector must match exactly one edge");
   const edge = ctx.prev.bodies.get(er.body)!.edges[er.edges[0]!]!;
   const c = ctx.arena.track(new ctx.oc.BRepAdaptor_Curve(edge));
@@ -330,7 +350,7 @@ function axis(ref: AxisRef, ctx: Ctx): { origin: Vec3; dir: Vec3 } {
 }
 
 function project(id: string, edges: Parameters<typeof resolveEdges>[0], construction: boolean, frame: PlaneFrame, ctx: Ctx): SolvedCurve[] {
-  const ref = resolveEdges(edges, [...ctx.prev.bodies.values()]);
+  const ref = edgesIn(ctx.prev.bodies, edges);
   const body = ctx.prev.bodies.get(ref.body)!;
   return ref.edges.map((ei, k) => {
     const cid = `${id}.${k}`;
@@ -377,19 +397,14 @@ const unit = (v: Vec3): Vec3 => {
 };
 
 function modelSize(ctx: Ctx): number {
-  let size = 100;
-  for (const b of ctx.prev.bodies.values()) {
-    const bb = bounds(ctx.oc, ctx.arena, b.shape);
-    size = Math.max(size, ...bb.max.map(Math.abs), ...bb.min.map(Math.abs));
-  }
-  return size * 4;
+  return reach(ctx.oc, ctx.prev.bodies) * 4;
 }
 
 // ---------------------------------------------------------------- features
 
 function plane(f: ResolvedPlane, ctx: Ctx): Omit<ModelState, "arena"> {
   const frame = offsetFrame(planeFrame(f.base, ctx), f.offset, f.angle ?? 0);
-  return { ...ctx.prev, planes: new Map(ctx.prev.planes).set(f.id, frame) };
+  return { ...ctx.prev, planes: copyMap(ctx.prev.planes).set(f.id, frame) };
 }
 
 /** Tags the solid of a sweep from history and fuses multiple region solids into one tool. */
@@ -421,7 +436,7 @@ function sweepTool(
  * along its surface instead (outward adds material, inward with `flip` cuts it away).
  */
 function extrudeFace(f: ResolvedExtrude & { profile: { face: FaceSelector } }, ctx: Ctx): Omit<ModelState, "arena"> {
-  const refs = resolveFaces(f.profile.face, [...ctx.prev.bodies.values()]);
+  const refs = facesIn(ctx.prev.bodies, f.profile.face);
   if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new FeatureError("push/pull needs exactly one face");
   const body = ctx.prev.bodies.get(refs[0]!.body)!;
   const fi = refs[0]!.faces[0]!;
@@ -552,7 +567,7 @@ function profileFace(p: ProfileRef, ctx: Ctx, what: string): TopoDS_Face {
     if (regions.length !== 1) throw new FeatureError(`${what}: sketch "${sk.id}" has ${regions.length} closed regions, pick one`);
     return ctx.g.regionFaces(sk.frame, regions)[0]!.face;
   }
-  const refs = resolveFaces(p.face, [...ctx.prev.bodies.values()]);
+  const refs = facesIn(ctx.prev.bodies, p.face);
   if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new FeatureError(`${what}: pick exactly one face`);
   const body = ctx.prev.bodies.get(refs[0]!.body)!;
   const fi = refs[0]!.faces[0]!;
@@ -802,11 +817,11 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
 function scaleFeature(f: ResolvedScale, ctx: Ctx): Omit<ModelState, "arena"> {
   if (!(f.factor > 0)) throw new FeatureError("the scale factor must be greater than zero");
   if (!f.bodies.length) throw new FeatureError("pick the parts to scale");
-  const bodies = new Map(ctx.prev.bodies);
+  const bodies = copyMap(ctx.prev.bodies);
   for (const id of f.bodies) {
     const body = bodies.get(id);
     if (!body) throw new FeatureError(`part "${id}" not found`);
-    const b = bounds(ctx.oc, ctx.arena, body.shape);
+    const b = bodyBounds(ctx.oc, body);
     const c: Vec3 = f.center === "origin" ? [0, 0, 0] : [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2];
     const t = ctx.arena.track(new ctx.oc.gp_Trsf());
     t.SetScale(ctx.g.pnt(c), f.factor);
@@ -817,7 +832,7 @@ function scaleFeature(f: ResolvedScale, ctx: Ctx): Omit<ModelState, "arena"> {
 
 /** A flat face's plane (point, outward normal) or a round face's axis, and the part it belongs to. */
 function faceGeometry(sel: FaceSelector, round: boolean, ctx: Ctx, what: string): { body: string; origin: Vec3; dir: Vec3 } {
-  const refs = resolveFaces(sel, [...ctx.prev.bodies.values()]);
+  const refs = facesIn(ctx.prev.bodies, sel);
   if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new FeatureError(`${what}: pick exactly one face`);
   const body = ctx.prev.bodies.get(refs[0]!.body)!;
   const fi = refs[0]!.faces[0]!;
@@ -873,9 +888,9 @@ function alignFeature(f: ResolvedAlign, ctx: Ctx): Omit<ModelState, "arena"> {
   if (f.angle) {
     const spin = ctx.g.rotation([p[0] + move[0], p[1] + move[1], p[2] + move[2]], n, f.angle);
     spin.Multiply(combined);
-    return moveBodies(ctx, { id: f.id, bodies } as ResolvedTransform, new Map(ctx.prev.bodies), spin);
+    return moveBodies(ctx, { id: f.id, bodies } as ResolvedTransform, copyMap(ctx.prev.bodies), spin);
   }
-  return moveBodies(ctx, { id: f.id, bodies } as ResolvedTransform, new Map(ctx.prev.bodies), combined);
+  return moveBodies(ctx, { id: f.id, bodies } as ResolvedTransform, copyMap(ctx.prev.bodies), combined);
 }
 
 /** Standard parts: one new part per point (ids np1, np1_2, …). */
@@ -892,7 +907,7 @@ function standardPartFeature(f: ResolvedStandardPart, ctx: Ctx): Omit<ModelState
   // Rails and brackets lie along u; `angle` turns them in the plane.
   const rad = ((f.angle ?? 0) * Math.PI) / 180, co = Math.cos(rad), si = Math.sin(rad);
   const turned = rad ? { ...plane, u: [0, 1, 2].map((i) => plane.u[i]! * co + plane.v[i]! * si) as Vec3, v: [0, 1, 2].map((i) => plane.v[i]! * co - plane.u[i]! * si) as Vec3 } : plane;
-  const bodies = new Map(ctx.prev.bodies);
+  const bodies = copyMap(ctx.prev.bodies);
   f.points.forEach((p, k) => {
     const id = k === 0 ? f.id : `${f.id}_${k + 1}`;
     // The point is in the plane as it is; only the part is turned about it.
@@ -912,11 +927,11 @@ function snapHookFeature(f: ResolvedSnapHook, ctx: Ctx): Omit<ModelState, "arena
   const frame = planeFrame(f.plane, ctx);
   const { hooks, windows } = snapHookTools(ctx.oc, ctx.arena, f, frame, ctx.warnings);
   const catchIn = f.catchIn ?? [];
-  const bodies = new Map(ctx.prev.bodies);
+  const bodies = copyMap(ctx.prev.bodies);
   for (const id of catchIn) {
     const target = bodies.get(id);
     if (!target) throw new FeatureError(`part "${id}" not found`);
-    if (!boundsOverlap(bounds(ctx.oc, ctx.arena, target.shape), bounds(ctx.oc, ctx.arena, windows.shape))) {
+    if (!boundsOverlap(bodyBounds(ctx.oc, target), bodyBounds(ctx.oc, windows))) {
       ctx.warnings.push(`the hooks' barbs do not reach "${id}": no window cut`);
       continue;
     }
@@ -926,10 +941,10 @@ function snapHookFeature(f: ResolvedSnapHook, ctx: Ctx): Omit<ModelState, "arena
   const mode = f.mode ?? "join";
   let targets = f.targets;
   if (!targets?.length && mode !== "new_body") {
-    if ("face" in f.plane) targets = [...new Set(resolveFaces(f.plane.face, [...bodies.values()]).map((r) => r.body))].filter((id) => !catchIn.includes(id));
+    if ("face" in f.plane) targets = [...new Set(facesIn(bodies, f.plane.face).map((r) => r.body))].filter((id) => !catchIn.includes(id));
     else {
-      const tb = bounds(ctx.oc, ctx.arena, hooks.shape);
-      targets = [...bodies.values()].filter((b) => !catchIn.includes(b.bodyId) && boundsOverlap(bounds(ctx.oc, ctx.arena, b.shape), tb)).map((b) => b.bodyId);
+      const tb = bodyBounds(ctx.oc, hooks);
+      targets = partsReaching(ctx.oc, bodies, tb, (id) => catchIn.includes(id)).map((b) => b.bodyId);
     }
     if (!targets.length) {
       if (mode === "join") ctx.warnings.push("nothing to join; created a new body");
@@ -1043,7 +1058,7 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena, g } = ctx;
   if (!(Math.abs(f.angle) > 0) || Math.abs(f.angle) >= 45) throw new FeatureError("the draft angle must be between 0 and 45 degrees");
   if (!f.faces.length) throw new FeatureError("select the faces to draft");
-  const refs = f.faces.flatMap((s) => resolveFaces(s, [...ctx.prev.bodies.values()]));
+  const refs = f.faces.flatMap((s) => facesIn(ctx.prev.bodies, s));
   const bodyIds = new Set(refs.map((r) => r.body));
   if (bodyIds.size !== 1) throw new FeatureError("draft faces must belong to one part");
   const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
@@ -1071,7 +1086,7 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
     return listToArray(arena, mk.Modified(face)).map((s) => body.faceIndex(s)).filter((i) => i >= 0);
   });
   body.faceTags = propagateTags(input.faceTags, body.faces.length, { descendants, generated: [] }, `${f.id}.face`).tags;
-  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+  return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(body.bodyId, body) };
 }
 
 /**
@@ -1085,7 +1100,7 @@ const OVERLAP = 1e-3;
 function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena, g } = ctx;
   if (!f.faces.length) throw new FeatureError("select the faces to move");
-  const refs = f.faces.flatMap((s) => resolveFaces(s, [...ctx.prev.bodies.values()]));
+  const refs = f.faces.flatMap((s) => facesIn(ctx.prev.bodies, s));
   const bodyIds = new Set(refs.map((r) => r.body));
   if (bodyIds.size !== 1) throw new FeatureError("the faces must belong to one part");
   const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
@@ -1153,7 +1168,7 @@ function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> 
     const tool = slabs.length === 1 ? slabs[0]! : booleanBodies(oc, arena, slabs[0]!, slabs.slice(1), "fuse", f.id);
     body = booleanBodies(oc, arena, body, tool, sign > 0 ? "fuse" : "cut");
   }
-  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+  return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(body.bodyId, body) };
 }
 
 /**
@@ -1199,7 +1214,7 @@ function rib(f: ResolvedRib, ctx: Ctx): Omit<ModelState, "arena"> {
     return arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face());
   };
   // A piece closed in by walls stays within the parts' bounds; an open one runs out to the slab's end.
-  const pb = parts.map((p) => bounds(oc, arena, p.shape));
+  const pb = parts.map((p) => bodyBounds(oc, p));
   const lo = [0, 1, 2].map((k) => Math.min(...pb.map((b) => b.min[k]!)) - 1e-3);
   const hi = [0, 1, 2].map((k) => Math.max(...pb.map((b) => b.max[k]!)) + 1e-3);
   const within = (s: TopoDS_Shape) => {
@@ -1260,7 +1275,7 @@ function split(f: ResolvedSplit, ctx: Ctx): Omit<ModelState, "arena"> {
     return b;
   };
   const front = box(1), back = box(-1);
-  const bodies = new Map(ctx.prev.bodies);
+  const bodies = copyMap(ctx.prev.bodies);
   const chosen = f.bodies.length ? f.bodies : [...bodies.keys()];
   const keep = f.keep ?? "both";
   let crossed = 0;
@@ -1302,6 +1317,23 @@ function split(f: ResolvedSplit, ctx: Ctx): Omit<ModelState, "arena"> {
 
 /** Copy of a body under a transform; tags get `suffix` appended (for pattern instances). */
 function transformBody(ctx: Ctx, body: Body, trsf: gp_Trsf, id: string, suffix = ""): Body {
+  // The same part moved the same way as when this step last ran: that result again, the very same
+  // object, so a move of many parts does not hand on new parts (and new meshes) for all of them
+  // when one of them changed.
+  let how = `${id}|${suffix}`;
+  for (let r = 1; r <= 3; r++) for (let c = 1; c <= 4; c++) how += `|${trsf.Value(r, c)}`;
+  const before = ctx.earlier?.state.bodies.get(id);
+  const made = before && movedFrom.get(before);
+  if (before && made && made.source === body && made.how === how) {
+    ctx.earlier!.kept = true;
+    return before;
+  }
+  const out = moved(ctx, body, trsf, id, suffix);
+  movedFrom.set(out, { source: body, how });
+  return out;
+}
+
+function moved(ctx: Ctx, body: Body, trsf: gp_Trsf, id: string, suffix: string): Body {
   const t = ctx.g.transform(body.shape, trsf);
   const out = new Body(ctx.oc, ctx.arena, id, t.shape);
   const tags: string[][] = out.faces.map(() => []);
@@ -1329,8 +1361,8 @@ function transformBody(ctx: Ctx, body: Body, trsf: gp_Trsf, id: string, suffix =
 
 /** Combines a tool solid with the model according to the boolean mode. */
 function applyTool(ctx: Ctx, featureId: string, tool: Body, mode: BooleanMode, targets?: string[], newBodyId = featureId): Omit<ModelState, "arena"> {
-  const bodies = new Map(ctx.prev.bodies);
-  const tools = new Map(ctx.prev.tools).set(featureId, { mode, body: tool } satisfies ToolRecord);
+  const bodies = copyMap(ctx.prev.bodies);
+  const tools = copyMap(ctx.prev.tools).set(featureId, { mode, body: tool } satisfies ToolRecord);
   if (mode === "new_body") {
     let body = tool;
     if (newBodyId !== tool.bodyId) {
@@ -1340,14 +1372,14 @@ function applyTool(ctx: Ctx, featureId: string, tool: Body, mode: BooleanMode, t
     bodies.set(newBodyId, body);
     return { ...ctx.prev, bodies, tools };
   }
-  const tb = bounds(ctx.oc, ctx.arena, tool.shape);
+  const tb = bodyBounds(ctx.oc, tool);
   const candidates = targets?.length
     ? targets.map((t) => {
         const b = bodies.get(t);
         if (!b) throw new FeatureError(`target body "${t}" not found`);
         return b;
       })
-    : [...bodies.values()].filter((b) => boundsOverlap(bounds(ctx.oc, ctx.arena, b.shape), tb));
+    : partsReaching(ctx.oc, bodies, tb);
   if (!candidates.length) {
     if (mode === "join") {
       ctx.warnings.push("nothing to join; created a new body");
@@ -1384,7 +1416,7 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
   const size = f.op === "fillet" ? f.radius : f.distance;
   const what = f.op === "fillet" ? "fillet radius" : "chamfer distance";
   if (!(size > 0)) throw new FeatureError(`${what} must be greater than zero`);
-  const ref = resolveEdges(asArray(f.edges), [...ctx.prev.bodies.values()]);
+  const ref = edgesIn(ctx.prev.bodies, asArray(f.edges));
   const input = ctx.prev.bodies.get(ref.body)!;
 
   // Variable rounding: from `radius` at one end of each edge to `radius2` at the other.
@@ -1436,14 +1468,14 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
     }
   }
   body.faceTags = propagateTags(input.faceTags, body.faces.length, { descendants, generated }, `${f.id}.blend`).tags;
-  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+  return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(body.bodyId, body) };
 }
 
 function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena } = ctx;
   if (!(f.thickness > 0)) throw new FeatureError("shell thickness must be greater than zero");
   if (!f.faces.length) throw new FeatureError("select at least one face to remove");
-  const refs = f.faces.flatMap((s) => resolveFaces(s, [...ctx.prev.bodies.values()]));
+  const refs = f.faces.flatMap((s) => facesIn(ctx.prev.bodies, s));
   const bodyIds = new Set(refs.map((r) => r.body));
   if (bodyIds.size !== 1) throw new FeatureError("shell faces must belong to one body");
   const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
@@ -1473,7 +1505,7 @@ function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
     }
   });
   body.faceTags = propagateTags(input.faceTags, body.faces.length, { descendants, generated }, `${f.id}.face`).tags;
-  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+  return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(body.bodyId, body) };
 }
 
 function pattern(f: ResolvedLinearPattern | ResolvedCircularPattern | MirrorFeature, ctx: Ctx): Omit<ModelState, "arena"> {
@@ -1532,7 +1564,7 @@ function replicate(ctx: Ctx, featureId: string, source: PatternSource, transform
       transforms.forEach((t, k) => {
         const newId = source.bodies.length > 1 ? `${featureId}_${bid}_${k + 1}` : `${featureId}_${k + 1}`;
         const copy = transformBody(ctx, body, t, newId, `@${featureId}.${k + 1}`);
-        step((c) => ({ ...c.prev, bodies: new Map(c.prev.bodies).set(newId, copy) }));
+        step((c) => ({ ...c.prev, bodies: copyMap(c.prev.bodies).set(newId, copy) }));
       });
     }
   }
@@ -1546,17 +1578,14 @@ function replicate(ctx: Ctx, featureId: string, source: PatternSource, transform
  */
 function applyCopies(ctx: Ctx, copies: Body[], mode: BooleanMode): Omit<ModelState, "arena"> | null {
   if (mode !== "cut" && mode !== "join") return null;
-  const bodies = [...ctx.prev.bodies.values()];
-  const boxes = bodies.map((b) => bounds(ctx.oc, ctx.arena, b.shape));
   const groups = new Map<Body, Body[]>();
   for (const copy of copies) {
-    const tb = bounds(ctx.oc, ctx.arena, copy.shape);
-    const hit = bodies.filter((_, i) => boundsOverlap(boxes[i]!, tb));
+    const hit = partsReaching(ctx.oc, ctx.prev.bodies, bodyBounds(ctx.oc, copy));
     if (!hit.length || (mode === "join" && hit.length > 1)) return null;
     for (const b of hit) groups.set(b, [...(groups.get(b) ?? []), copy]);
   }
   if (mode === "join" && groups.size > 1) return null;
-  const next = new Map(ctx.prev.bodies);
+  const next = copyMap(ctx.prev.bodies);
   try {
     for (const [target, tools] of groups) next.set(target.bodyId, booleanBodies(ctx.oc, ctx.arena, target, tools, mode === "cut" ? "cut" : "fuse"));
   } catch (e) {
@@ -1567,7 +1596,7 @@ function applyCopies(ctx: Ctx, copies: Body[], mode: BooleanMode): Omit<ModelSta
 }
 
 function booleanFeature(f: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> {
-  const bodies = new Map(ctx.prev.bodies);
+  const bodies = copyMap(ctx.prev.bodies);
   const get = (id: string) => {
     const b = bodies.get(id);
     if (!b) throw new FeatureError(`body "${id}" not found`);
@@ -1599,7 +1628,7 @@ function transformFeature(f: ResolvedTransform, ctx: Ctx): Omit<ModelState, "are
     const ax = axis(f.rotate.axis, ctx);
     combined.Multiply(ctx.g.rotation(ax.origin, ax.dir, f.rotate.angle));
   }
-  return moveBodies(ctx, f, new Map(ctx.prev.bodies), combined);
+  return moveBodies(ctx, f, copyMap(ctx.prev.bodies), combined);
 }
 
 function moveBodies(ctx: Ctx, f: ResolvedTransform, bodies: Map<string, Body>, trsf: gp_Trsf): Omit<ModelState, "arena"> {
@@ -1629,7 +1658,7 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
       body.sourceMesh = corners;
       body.sourceFeature = f.id;
     }
-    return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(f.id, body) };
+    return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(f.id, body) };
   }
   const path = `/import-${f.id}.step`;
   oc.FS.writeFile(path, bytes);
@@ -1642,7 +1671,7 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     if (f.split) for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID")); e.More(); e.Next()) solids.push(arena.track(e.Current()));
     // One part, or (split) one per solid: an assembly from another CAD tool keeps its parts apart.
     const pieces = solids.length > 1 ? solids : [shape];
-    const bodies = new Map(ctx.prev.bodies);
+    const bodies = copyMap(ctx.prev.bodies);
     pieces.forEach((s, k) => {
       const id = k === 0 ? f.id : `${f.id}_${k + 1}`;
       const body = new Body(oc, arena, id, s);
@@ -1733,7 +1762,7 @@ function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
   if (shape.thread) {
     // One thread per bore, found by its wall near the hole's centre line.
     const a: Vec3 = f.flip ? frame.normal : [-frame.normal[0], -frame.normal[1], -frame.normal[2]];
-    const bodies = new Map(next.bodies);
+    const bodies = copyMap(next.bodies);
     for (const [u, v] of f.points) {
       const c = toWorld(frame, [u, v]);
       const t = through ? 0.5 : Math.min(depth / 2, 0.5);
@@ -1748,7 +1777,7 @@ function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
     if (f.withInserts) {
       // The inserts as parts of their own, flush in their holes: "ho1_insert", "ho1_insert_2", …
       const part = standardShape("insert", { size: shape.insert.size, length: shape.insert.length });
-      const bodies = new Map(next.bodies);
+      const bodies = copyMap(next.bodies);
       f.points.forEach((p, k) => {
         const id = `${f.id}_insert${k === 0 ? "" : `_${k + 1}`}`;
         bodies.set(id, standardPartBody(ctx.oc, ctx.arena, id, { ...frame, origin: toWorld(frame, p) }, [0, 0], part, !!f.flip));
@@ -1778,8 +1807,8 @@ function insertWalls(ctx: Ctx, state: Omit<ModelState, "arena">, f: ResolvedHole
     const probe = arena.track(arena.track(new oc.BRepPrimAPI_MakeCylinder(ax, R, ins.length)).Shape());
     const pb = bounds(oc, arena, probe);
     let inside = 0;
-    for (const b of state.bodies.values()) {
-      if (b.bodyId.startsWith(`${f.id}_insert`) || !boundsOverlap(bounds(oc, arena, b.shape), pb)) continue;
+    const own = `${f.id}_insert`;
+    for (const b of partsReaching(oc, state.bodies, pb, (id) => id.startsWith(own))) {
       const common = arena.track(new oc.BRepAlgoAPI_Common(b.shape, probe));
       if (common.IsDone() && !common.HasErrors()) inside += volume(arena.track(common.Shape()));
     }
@@ -1836,7 +1865,7 @@ function meshConvertFeature(f: ResolvedMeshConvert, ctx: Ctx): Omit<ModelState, 
   });
   const parts = (["plane", "cylinder", "cone", "sphere"] as const).filter((k) => r.counts[k]).map((k) => `${r.counts[k]} ${k}${r.counts[k] === 1 ? "" : "s"}`);
   if (r.counts.facet) ctx.warnings.push(`${r.counts.facet} triangles match no surface and stay flat facets (found ${parts.join(", ") || "no surfaces"})`);
-  return { ...ctx.prev, bodies: new Map(ctx.prev.bodies).set(body.bodyId, body) };
+  return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(body.bodyId, body) };
 }
 
 /**
@@ -1854,7 +1883,7 @@ function bendFeature(f: ResolvedBend, ctx: Ctx): Omit<ModelState, "arena"> {
   });
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const b of inputs) {
-    const bb = bounds(oc, arena, b.shape);
+    const bb = bodyBounds(oc, b);
     for (let k = 0; k < 3; k++) {
       lo[k] = Math.min(lo[k]!, bb.min[k]!);
       hi[k] = Math.max(hi[k]!, bb.max[k]!);
@@ -1873,7 +1902,7 @@ function bendFeature(f: ResolvedBend, ctx: Ctx): Omit<ModelState, "arena"> {
     if (e instanceof BendError) throw new FeatureError(e.message, e.hint);
     throw e;
   }
-  const bodies = new Map(ctx.prev.bodies);
+  const bodies = copyMap(ctx.prev.bodies);
   bent.forEach((m, k) => {
     const id = inputs[k]!.bodyId;
     const n = m.corners.length / 9;
@@ -1897,7 +1926,7 @@ function pocketFor(f: ResolvedGridfinity, frame: PlaneFrame, ctx: Ctx): BinPocke
   const p = f.pocket!;
   const part = ctx.prev.bodies.get(p.body);
   if (!part) throw new FeatureError(`part "${p.body}" not found`, "pick the part the bin should hold");
-  const bb = bounds(ctx.oc, ctx.arena, part.shape);
+  const bb = bodyBounds(ctx.oc, part);
   const diag = Math.hypot(bb.max[0]! - bb.min[0]!, bb.max[1]! - bb.min[1]!, bb.max[2]! - bb.min[2]!);
   const world = part.sourceMesh ?? surfaceTriangles(ctx, part, Math.max(0.05, Math.min(0.2, diag / 500)));
   const local = new Float64Array(world.length);

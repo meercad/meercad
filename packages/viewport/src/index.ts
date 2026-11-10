@@ -641,7 +641,21 @@ export class Viewport {
   }
 
   private rebuildBodies(data: SceneData): void {
-    for (const b of this.bodies) {
+    // A part whose mesh is the very same object as before keeps its geometry: a change to one part
+    // of a big design (or a scene change without a new build) does not upload every part again.
+    const old = new Map<ViewMesh, BodyObj>();
+    for (const b of this.bodies) old.set(b.mesh, b);
+    const next: BodyObj[] = [];
+    for (const m of data.bodies) {
+      if (data.hiddenBodies?.has(m.bodyId)) continue;
+      const ghost = !!data.ghostBodies?.has(m.bodyId);
+      const kept = old.get(m);
+      if (kept && kept.ghost === ghost) {
+        old.delete(m);
+        next.push(kept);
+      } else next.push(this.buildBody(m, ghost));
+    }
+    for (const b of old.values()) {
       b.faces.geometry.dispose();
       b.edges.geometry.dispose();
       (b.faces.material as THREE.Material).dispose();
@@ -649,7 +663,7 @@ export class Viewport {
       for (const o of b.group.children) if (o.userData["heat"]) disposeTree(o);
     }
     this.bodiesGroup.clear();
-    this.bodies = data.bodies.filter((m) => !data.hiddenBodies?.has(m.bodyId)).map((m) => this.buildBody(m, !!data.ghostBodies?.has(m.bodyId)));
+    this.bodies = next;
     if (this.heat.size) this.attachHeat();
     for (const b of this.bodies) this.bodiesGroup.add(b.group);
     this.applyPoses();

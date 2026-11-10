@@ -19,13 +19,34 @@ export interface ExecResult<S> {
   warnings?: string[];
   /** Numbers about the result for the interface (e.g. what a bend comes to). */
   info?: Record<string, number>;
+  /** The state uses objects of the `earlier` state handed to `execute`: that state must not be disposed apart from it. */
+  keepsEarlier?: boolean;
+}
+
+/**
+ * What one run of a step read of the state before it, and what it changed: lets the engine reuse
+ * the step's result on another state where all it read is the same (a change further up the
+ * timeline that did not touch this step's parts).
+ */
+export interface Footprint<S> {
+  /**
+   * The step's result on `prev` without running it, sharing the resources of the run it was noted
+   * from; null when the step read something that differs in `prev`. A step that failed gives `prev`.
+   */
+  replay(prev: S): S | null;
 }
 
 /** What the rebuild engine needs from a geometry kernel. States must be treated as immutable. */
 export interface KernelBackend<S> {
   initialState(): S;
-  /** Must leave `prev` untouched and release its own temporaries when it throws. */
-  execute(feature: ResolvedFeature, prev: S): ExecResult<S>;
+  /**
+   * Must leave `prev` untouched and release its own temporaries when it throws. With `note`, a
+   * backend that can tell what the step read hands over its Footprint (also when the step fails).
+   * `earlier`: the result this very step (same definition) had on another state, of which the
+   * backend may keep what is still right (the parts a move did not have to move again); it then
+   * says so with `keepsEarlier` and the new state owns the earlier one's resources.
+   */
+  execute(feature: ResolvedFeature, prev: S, note?: (footprint: Footprint<S>) => void, earlier?: S): ExecResult<S>;
   /** Releases resources owned by `state` (but not those it shares with earlier states). */
   dispose(state: S): void;
 }
@@ -56,8 +77,13 @@ export interface RebuildResult<S> {
 
 interface CacheEntry<S> {
   key: string;
+  /** Hash of the step alone (not of the steps before it). */
+  own: string;
   state: S;
+  /** The state the step was run on. */
+  prev: S;
   status: FeatureStatus;
+  footprint?: Footprint<S>;
 }
 
 /**
@@ -118,6 +144,10 @@ export class RebuildEngine<S> {
     let firstRecomputed = -1;
     let rolledBack = false;
     let i = 0;
+    // From the first changed step on, the earlier entries by step id: a later step whose own
+    // definition is unchanged and that read nothing that changed takes its result from there.
+    let stale: Map<string, CacheEntry<S>> | null = null;
+    const adopted = new Set<CacheEntry<S>>();
 
     for (const f of doc.features) {
       if (rolledBack) {
@@ -133,28 +163,45 @@ export class RebuildEngine<S> {
           resolveError = e instanceof Error ? e.message : String(e);
         }
       }
-      key = hashString(`${key}|${f.suppressed ? `S:${f.id}` : resolved ? JSON.stringify(resolved) : `E:${f.id}:${resolveError}`}`);
+      const def = f.suppressed ? `S:${f.id}` : resolved ? JSON.stringify(resolved) : `E:${f.id}:${resolveError}`;
+      key = hashString(`${key}|${def}`);
+      const self = hashString(def);
 
       const hit = firstRecomputed === -1 ? this.cache[i] : undefined;
+      if (!(hit && hit.key === key) && firstRecomputed === -1) {
+        firstRecomputed = i;
+        stale = new Map(this.cache.slice(i).map((e) => [e.status.id, e]));
+        // A fork leaves the cache as it is and only looks at its entries.
+        if (!own) this.cache.length = i;
+      }
+      const old = stale?.get(f.id);
+      const replayed = old && old.own === self && old.footprint && !adopted.has(old) ? old.footprint.replay(state) : null;
       if (hit && hit.key === key) {
         state = hit.state;
         statuses.push({ ...hit.status, ms: 0, cached: true });
+      } else if (replayed && old) {
+        // Unchanged step on unchanged parts: its earlier result, laid on the new state.
+        // The result's resources stay the earlier entry's: a fork has nothing of its own to release here.
+        adopted.add(old);
+        if (!own) this.cache[i] = { key, own: self, state: replayed, prev: state, status: old.status, footprint: old.footprint! };
+        statuses.push({ ...old.status, ms: 0, cached: true });
+        state = replayed;
       } else {
-        if (firstRecomputed === -1) {
-          firstRecomputed = i;
-          if (!own) this.evictFrom(i);
-        }
         if (!f.suppressed && resolved) onFeature?.(i, doc.features.length, f.id);
         const tf = performance.now();
         let status: FeatureStatus;
         let next = state;
+        let footprint: Footprint<S> | undefined;
         if (f.suppressed) {
           status = { id: f.id, status: "suppressed", ms: 0, cached: false };
         } else if (!resolved) {
           status = { id: f.id, status: "error", message: resolveError ?? "unresolved", ms: 0, cached: false };
         } else {
           try {
-            const r = this.backend.execute(resolved, state);
+            // Not for a fork: its states are released on their own, the cache's must stay.
+            const earlier = !own && old && old.own === self && !adopted.has(old) && old.state !== old.prev ? old.state : undefined;
+            const r = this.backend.execute(resolved, state, (fp) => (footprint = fp), earlier);
+            if (r.keepsEarlier && old) adopted.add(old);
             next = r.state;
             status = r.warnings?.length
               ? { id: f.id, status: "warning", message: r.warnings.join("; "), ms: 0, cached: false }
@@ -173,13 +220,19 @@ export class RebuildEngine<S> {
         }
         status.ms = performance.now() - tf;
         if (own) own.push({ state: next, prev: state });
-        else this.cache[i] = { key, state: next, status };
+        else this.cache[i] = { key, own: self, state: next, prev: state, status, ...(footprint ? { footprint } : {}) };
         state = next;
         statuses.push(status);
       }
       i++;
       if (doc.rollback === f.id) rolledBack = true;
     }
+    // Earlier results nobody took over: newest first, as later states may use what earlier ones made.
+    if (stale && !own) {
+      for (const e of [...stale.values()].reverse()) if (!adopted.has(e) && e.state !== e.prev) this.backend.dispose(e.state);
+    }
+    // Entries past the end (steps deleted at the end of the timeline, or rolled back) stay as they
+    // were when nothing changed before them; after a change they belong to the stale ones above.
 
     return {
       state,
@@ -200,8 +253,7 @@ export class RebuildEngine<S> {
     // Dispose newest first: later states may reference objects created by earlier ones, never the reverse.
     for (let j = this.cache.length - 1; j >= index; j--) {
       const entry = this.cache[j]!;
-      const prev = j > 0 ? this.cache[j - 1]!.state : this.root;
-      if (entry.state !== prev) this.backend.dispose(entry.state);
+      if (entry.state !== entry.prev) this.backend.dispose(entry.state);
     }
     this.cache.length = Math.min(this.cache.length, index);
   }

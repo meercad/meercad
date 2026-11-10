@@ -2,6 +2,7 @@ import { SketchSolver } from "@meercad/sketch";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import { crashOf, loadOcct, occtErrorMessage, type OC } from "./occt.js";
 import { KernelSession } from "./session.js";
+import type { BodyMesh } from "./mesh.js";
 import { clearances, exportMeshes, exportStep, measure } from "./tools.js";
 import { drawingViews } from "./drawing.js";
 
@@ -25,6 +26,8 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
   let busy = false;
   const now = () => performance.timeOrigin + performance.now();
   const received = new Map<number, number>();
+  /** Meshes sent with the last main-session rebuild: an unchanged part is not copied again (KeptMesh). */
+  let lastSent = new Set<BodyMesh>();
 
   scope.addEventListener("message", (e) => {
     const req = e.data;
@@ -87,7 +90,10 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
           onFeature: (index, total, feature) => scope.postMessage({ type: "progress", seq: req.seq, index, total, feature }),
         });
         r.report.timing = { recv: received.get(req.seq) ?? start, start, post: now() };
-        post({ type: "rebuilt", seq: req.seq, ...r });
+        r.report.kernelMemory = oc!.wasmMemory.buffer.byteLength;
+        const before = req.fresh ? new Set<BodyMesh>() : lastSent;
+        lastSent = new Set(r.meshes);
+        post({ type: "rebuilt", seq: req.seq, ...r, meshes: r.meshes.map((m) => (before.has(m) ? { bodyId: m.bodyId, kept: true as const } : m)) });
         break;
       }
       case "sandbox": {
@@ -102,7 +108,8 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
       }
       case "export_mesh": {
         const meshes = exportMeshes(oc!, session!.state!, req.bodies);
-        post({ type: "exported_mesh", seq: req.seq, meshes }, meshes.flatMap((m) => [m.positions.buffer, m.normals.buffer, m.indices.buffer]));
+        // Copied, not handed over: the kernel keeps the meshes for the next export (see exportMeshes).
+        post({ type: "exported_mesh", seq: req.seq, meshes });
         break;
       }
       case "configure":
@@ -113,7 +120,11 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
         post({ type: "props", seq: req.seq, bodies: session!.bodyProps() });
         break;
       case "clearance":
-        post({ type: "clearances", seq: req.seq, result: clearances(oc!, session!.state!, req.moving, req.poses, req.within, req.skip, req.rigid) });
+      {
+        const limits = { ...(req.box ? { box: req.box } : {}), ...(req.budgetMs !== undefined ? { budgetMs: req.budgetMs } : {}), left: 0 };
+        const result = clearances(oc!, session!.state!, req.moving, req.poses, req.within, req.skip, req.rigid, limits);
+        post({ type: "clearances", seq: req.seq, result, ...(limits.left ? { left: limits.left } : {}) });
+      }
         break;
       case "drawing": {
         if (!req.doc) {
