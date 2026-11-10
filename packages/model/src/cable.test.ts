@@ -123,6 +123,16 @@ describe("cable while parts move", () => {
     expect(clear.state.hits).toEqual([]);
   });
 
+  it("builds a part's tree only where the cable comes near it", () => {
+    // An L-shaped cable: a part in the empty corner lies inside the cable's box but far from it.
+    const ell = cableRig(round([{ at: [0, 0, 0] }, { at: [100, 0, 0] }, { at: [100, 100, 0] }]));
+    let built = 0;
+    const lazy = (id: string, min: V3, max: V3) => ({ id, collider: () => (built++, boxMesh(min, max)), box: { min, max }, still: true });
+    const { state } = checkCable(ell, new Map(), [lazy("corner", [10, 60, -5], [40, 90, 5]), lazy("wall", [40, -15, -5], [45, 5, 20])]);
+    expect(state.hits).toEqual(["wall"]);
+    expect(built).toBe(1);
+  });
+
   it("gives the cable its cable material", () => {
     const doc = { features: [{ id: "cab1", op: "cable" as const, points: [{ at: [0, 0, 0] as [number, number, number] }, { at: [1, 0, 0] as [number, number, number] }], diameter: 2, material: "pvc" as const }] };
     expect(partMaterial(doc, "cab1")?.id).toBe("cablepvc");

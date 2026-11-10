@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { RebuildReport } from "@meercad/kernel";
+import { clearances, type RebuildReport } from "@meercad/kernel";
 import type { Feature } from "@meercad/schema";
-import { doc, newSession } from "./helpers.js";
+import { doc, getOcct, newSession } from "./helpers.js";
 
 const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
 const info = (r: RebuildReport, id: string) => r.features.find((f) => f.id === id)!;
@@ -86,5 +86,18 @@ describe("cable", () => {
     // Swept along the exact centre line: the volume is the section times the length (plugs aside).
     const bare = s.rebuild(doc([{ id: "cab1", op: "cable", points: route.map((at) => ({ at })), diameter: 2.2, bendRadius: 6 }])).report;
     expect(bare.bodies[0]!.volume / (Math.PI * 1.1 ** 2 * bare.features[0]!.info!["length"]!)).toBeCloseTo(1, 2);
+  });
+
+  it("leaves cables out of the gap check between moving parts when asked", async () => {
+    const s = await newSession();
+    // A cable plugged against a block: touching, which the gap check would work out with a boolean in every pose.
+    const { report } = s.rebuild(doc([
+      { id: "bx", op: "primitive", shape: "box", size: [20, 20, 20], center: [-10, 0, 0], mode: "new_body" },
+      { id: "cab1", op: "cable", points: [{ at: [0, 0, 0] }, { at: [40, 0, 0] }], diameter: 2, start: { kind: "jst_xh", pins: 3 } },
+    ] as Feature[]));
+    ok(report);
+    const oc = await getOcct();
+    expect(clearances(oc, s.state!, ["bx"], {}, 2).some((c) => c.b === "cab1" || c.a === "cab1")).toBe(true);
+    expect(clearances(oc, s.state!, ["bx"], {}, 2, ["cab1"])).toEqual([]);
   });
 });

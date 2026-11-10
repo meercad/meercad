@@ -187,19 +187,27 @@ const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructio
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
 
+/**
+ * Points as plain arrays of numbers with a fixed length, never z.tuple: a tuple becomes a JSON
+ * Schema with `items` as a list (draft 7), which MCP clients reject ("items must be
+ * object,boolean"), and they then refuse the whole tool.
+ */
+const vec3 = z.array(z.number()).length(3);
+const vec2 = z.array(z.number()).length(2);
+
 const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
 const shot = {
   view: view.optional(),
-  direction: z.tuple([z.number(), z.number(), z.number()]).optional().describe("Where the camera is, seen from the model (Z up, front is -Y), e.g. [-1,-1,0.6] from front-left above, [0,0,-1] from below; overrides view"),
+  direction: vec3.optional().describe("Where the camera is, seen from the model (Z up, front is -Y), e.g. [-1,-1,0.6] from front-left above, [0,0,-1] from below; overrides view"),
   focus: z.array(z.string()).optional().describe("Part ids to zoom onto"),
   isolate: z.boolean().optional().describe("With focus: hide all other parts"),
   section: z
-    .object({ plane: z.enum(["XY", "XZ", "YZ"]).optional(), normal: z.tuple([z.number(), z.number(), z.number()]).optional(), offset: z.number().optional() })
+    .object({ plane: z.enum(["XY", "XZ", "YZ"]).optional(), normal: vec3.optional(), offset: z.number().optional() })
     .optional()
     .describe("Cut the model open: the side the normal points to is removed; the cut faces show red. offset moves the plane along its normal (mm)"),
   highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts drawn orange, faces (selectors) drawn as selected (blue)"),
   frame: z
-    .object({ min: z.tuple([z.number(), z.number(), z.number()]), max: z.tuple([z.number(), z.number(), z.number()]) })
+    .object({ min: vec3, max: vec3 })
     .optional()
     .describe("Fixed region to frame (mm), instead of fitting the parts as they are posed: pictures of a series line up"),
 };
@@ -611,7 +619,7 @@ server.registerTool(
   {
     title: "Printability",
     description: "Checks how a part prints on an FDM printer as it stands (bed under its lowest point, -Z down): area hanging over more steeply than limit degrees from vertical (default 45), a rough support volume (mm³) and the area on the bed, plus the best way up found (least support). turn: \"best\" or a direction [x,y,z] that should face the bed turns the part first (added as move steps; it lands on Z = 0 where it stood). The colour map stays shown (red needs support, blue on the bed, green fine) unless show: false.",
-    inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), z.tuple([z.number(), z.number(), z.number()])]).optional() },
+    inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), vec3]).optional() },
   },
   guard(async (a) => text(await call("print_check", a, 300_000))),
 );
@@ -647,7 +655,7 @@ server.registerTool(
   {
     title: "Measure on a scan",
     description: "On a mesh part, fits the plane, cylinder, cone or sphere the surface follows at a point (within tolerance mm, default 0.1) and gives its sizes; with `other` (a second point, on the same or another part) also the distance and angle between the two shapes.",
-    inputSchema: { part: z.string(), point: z.tuple([z.number(), z.number(), z.number()]), other: z.object({ part: z.string().optional(), point: z.tuple([z.number(), z.number(), z.number()]) }).optional(), tolerance: z.number().positive().optional() },
+    inputSchema: { part: z.string(), point: vec3, other: z.object({ part: z.string().optional(), point: vec3 }).optional(), tolerance: z.number().positive().optional() },
     annotations: { readOnlyHint: true },
   },
   guard(async (a) => text(await call("measure_scan", a))),
@@ -693,13 +701,13 @@ server.registerTool("open_example", { title: "Open an example", description: "Op
 
 server.registerTool(
   "terrain_height",
-  { title: "Ground height", description: "The extent of the shown terrains (models from drone photos, scanned areas) and their ground heights at x/y points in design coordinates (mm); null where there is no terrain.", inputSchema: { points: z.array(z.tuple([z.number(), z.number()])).max(500).optional() }, annotations: { readOnlyHint: true } },
+  { title: "Ground height", description: "The extent of the shown terrains (models from drone photos, scanned areas) and their ground heights at x/y points in design coordinates (mm); null where there is no terrain.", inputSchema: { points: z.array(vec2).max(500).optional() }, annotations: { readOnlyHint: true } },
   guard(async (a) => text(await call("terrain_height", a))),
 );
 
 server.registerTool(
   "place_on_terrain",
-  { title: "Stand a part on the terrain", description: "Moves a part so its lowest point sits on the terrain: where it is, or at `at` (x/y, mm), raised by `offset` mm. One undo step (a move step).", inputSchema: { part: z.string(), at: z.tuple([z.number(), z.number()]).optional(), offset: z.number().optional() } },
+  { title: "Stand a part on the terrain", description: "Moves a part so its lowest point sits on the terrain: where it is, or at `at` (x/y, mm), raised by `offset` mm. One undo step (a move step).", inputSchema: { part: z.string(), at: vec2.optional(), offset: z.number().optional() } },
   guard(async (a) => text(await call("place_on_terrain", a))),
 );
 

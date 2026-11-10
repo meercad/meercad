@@ -118,7 +118,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
         post({ type: "props", seq: req.seq, bodies: session!.bodyProps() });
         break;
       case "clearance":
-        post({ type: "clearances", seq: req.seq, result: clearances(oc!, session!.state!, req.moving, req.poses, req.within) });
+        post({ type: "clearances", seq: req.seq, result: clearances(oc!, session!.state!, req.moving, req.poses, req.within, req.skip) });
         break;
       case "drawing": {
         if (!req.doc) {
