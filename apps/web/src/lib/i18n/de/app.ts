@@ -235,6 +235,7 @@ export default {
   "Its texture was removed, as it belonged to the old triangles.": "Die Textur wurde entfernt, weil sie zu den alten Dreiecken gehörte.",
   "Show without texture": "Ohne Textur zeigen",
   "Exported as a zip: the OBJ with its materials and pictures": "Als Zip exportiert: das OBJ mit seinen Materialien und Bildern",
+  "Cables left out ({n}): they are not printed. To export them, show only them.": "Kabel weggelassen ({n}): Sie werden nicht gedruckt. Zum Exportieren nur sie einblenden.",
   "Export STEP": "STEP exportieren",
   "Technical drawing (PDF, SVG, DXF)": "Technische Zeichnung (PDF, SVG, DXF)",
   "Check whether parts overlap (interference)": "Prüfen, ob Teile sich überschneiden (Überschneidung)",

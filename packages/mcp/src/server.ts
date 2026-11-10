@@ -482,7 +482,7 @@ server.registerTool(
   {
     title: "Export a file",
     description:
-      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant). meercad writes the whole project with its saved versions; with `version` only that saved version, as a project file of its own (a backup kept outside the app; apply_ops save_version with `path` brings it back in as a version, and any meerCAD opens it as a project).",
+      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`; stl and 3mf leave cables out, as they are not printed, unless `parts` names them), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant). meercad writes the whole project with its saved versions; with `version` only that saved version, as a project file of its own (a backup kept outside the app; apply_ops save_version with `path` brings it back in as a version, and any meerCAD opens it as a project).",
     inputSchema: {
       format: z.enum(["stl", "3mf", "obj", "step", "usdz", "dxf", "svg", "meercad"]),
       path: z.string().describe("Absolute or relative output path"),
@@ -497,7 +497,7 @@ server.registerTool(
   guard(async ({ format, path, sketch, parts, posed, variants, materials, version }) => {
     const out = resolve(path);
     const name = basename(out).replace(/\.[^.]+$/, "");
-    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials, version, stage: true });
+    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[]; cablesLeftOut?: string[] }>("export", { format, sketch, parts, posed, variants, name, materials, version, stage: true });
     const count = namesOf(r).length;
     const written: string[] = [];
     await eachFile(r, async (file, data) => {
@@ -507,7 +507,8 @@ server.registerTool(
       await writeFile(target, data);
       written.push(target);
     });
-    return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
+    const left = r.cablesLeftOut?.length ? `; cables left out (not printed; name them in parts to export them): ${r.cablesLeftOut.length}` : "";
+    return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}${left}`);
   }),
 );
 
@@ -516,7 +517,7 @@ server.registerTool(
   {
     title: "Open the model in a slicer",
     description:
-      "Opens the model in a slicer installed on this Mac, ready to slice and print: the parts not hidden (or `parts`) as a 3MF, as the app's export makes it (materials as in export), moved parts where they are shown (posed: false takes them at rest). slicer: \"bambu\" (Bambu Studio) or \"prusa\" (PrusaSlicer); default the first installed, Bambu Studio before PrusaSlicer. The 3MF goes to a temporary file the app clears away later; use export for a file to keep. Fails when the slicer is not installed (only the Mac app can send).",
+      "Opens the model in a slicer installed on this Mac, ready to slice and print: the parts not hidden (or `parts`; cables only when `parts` names them) as a 3MF, as the app's export makes it (materials as in export), moved parts where they are shown (posed: false takes them at rest). slicer: \"bambu\" (Bambu Studio) or \"prusa\" (PrusaSlicer); default the first installed, Bambu Studio before PrusaSlicer. The 3MF goes to a temporary file the app clears away later; use export for a file to keep. Fails when the slicer is not installed (only the Mac app can send).",
     inputSchema: {
       slicer: z.enum(["bambu", "prusa"]).optional(),
       parts: z.array(z.string()).optional().describe("Part ids; default every part not hidden"),
@@ -525,8 +526,9 @@ server.registerTool(
     },
   },
   guard(async ({ slicer, parts, posed, materials }) => {
-    const r = await call<{ slicer: string; file: string; moved: boolean; filaments?: { slot: number; material?: string; color: string }[] }>("send_to_slicer", { slicer, parts, posed, materials });
-    return text(`opened ${r.file} in ${r.slicer}${r.moved ? " (moved parts where they are shown)" : ""}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
+    const r = await call<{ slicer: string; file: string; moved: boolean; filaments?: { slot: number; material?: string; color: string }[]; cablesLeftOut?: string[] }>("send_to_slicer", { slicer, parts, posed, materials });
+    const left = r.cablesLeftOut?.length ? `; cables left out (not printed): ${r.cablesLeftOut.length}` : "";
+    return text(`opened ${r.file} in ${r.slicer}${r.moved ? " (moved parts where they are shown)" : ""}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}${left}`);
   }),
 );
 

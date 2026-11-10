@@ -134,8 +134,12 @@ export function cableBody(oc: OC, arena: Arena, f: ResolvedCable, warnings: stri
   const body = new Body(oc, arena, f.id, shape);
   body.preciseProps = true;
   // A thin tube needs no 100 facets round (the usual 0.06 rad): a quarter of that still looks
-  // round and meshes several times faster (a robot with two dozen cables). Exports stay exact.
+  // round and meshes several times faster (a robot with two dozen cables).
   body.displayCoarse = 4;
+  // Export: 0.02 mm and 0.2 rad (about 30 facets round, under 0.02 mm off a 3 mm tube) instead of
+  // print quality's 0.05 rad. At print quality two dozen cables of a robot made more triangles than
+  // its 560 other parts together (5.2 of 9.7 million) and two thirds of the export time (86 of 133 s).
+  body.exportTolerance = { linear: 0.02, angular: 0.2 };
   body.faceTags = body.faces.map(() => [`${f.id}.cable`]);
   const density = materialById(spec.material)?.density ?? 0;
   const info: CableInfo = { length: rig.rest.length, minRadius: rig.rest.minRadius, bendRadius: spec.bendRadius, mass: (volumeOf(oc, arena, shape) / 1000) * density };
