@@ -6,7 +6,8 @@ import { FEATURES, TOOLBAR } from "../lib/features";
 import { setTool, type SketchTool } from "../sketch/state";
 import { applyConstraint, CONSTRAINT_TOOLS, toggleConstruction } from "../sketch/actions";
 import { closeSketch, getViewport, goHome, hideSelectedParts, lastStartedFeature, newProject, redo, startFeature, undo, useApp } from "../store";
-import { exportMesh, exportRobot, exportStep, importFile, saveFile, viewInAr } from "./io";
+import { exportMesh, exportRobot, exportStep, importFile, saveFile, sendToSlicer, viewInAr } from "./io";
+import { useSlicers } from "../lib/slicers";
 import { nativeApp } from "../lib/native";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
@@ -130,6 +131,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: G.view, label: t("Toggle planes"), run: () => useApp.setState((s) => ({ showPlanes: !s.showPlanes })) },
         { group: G.file, label: t("Export STL"), run: () => void exportMesh("stl") },
         { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
+        ...useSlicers.getState().slicers.map((sl) => ({ group: G.file, label: t("Send to {name}", { name: sl.name }), run: () => void sendToSlicer(sl.id) })),
         { group: G.file, label: t("Export OBJ"), run: () => void exportMesh("obj") },
         ...(hasPack("mechanics") && (useApp.getState().doc.mechanism?.joints.length ?? 0) > 0 ? [{ group: G.file, label: t("Export robot (MJCF/URDF for simulation)"), run: () => void exportRobot() }] : []),
         { group: G.file, label: t("Export STEP"), run: () => void exportStep() },

@@ -32,6 +32,7 @@ export type BridgeMethod =
   | "set_view"
   | "export"
   | "export_robot"
+  | "send_to_slicer"
   | "measure"
   | "set_pose"
   | "check_motion"

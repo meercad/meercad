@@ -94,6 +94,11 @@ interface DesktopApi {
   /** Files the MCP server cannot reach itself (macOS privacy), as base64; missing in older desktop apps. */
   readLocalFile?(path: string): Promise<string>;
   writeLocalFile?(p: { path: string; base64: string }): Promise<void>;
+  /** Slicers installed on this Mac and opening a 3MF in one (see lib/slicers); missing in older desktop apps. */
+  slicers?: {
+    list(): Promise<{ id: "bambu" | "prusa"; name: string }[]>;
+    open(p: { slicer: "bambu" | "prusa"; name: string; data: Uint8Array }): Promise<{ slicer: string; file: string }>;
+  };
   /** Missing in desktop apps from before sharing. */
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
   /** The MCP bridge, held by the window's page (see lib/mcpBridge); missing in older desktop apps. */

@@ -15,6 +15,7 @@ import { t } from "../lib/i18n";
 import { currentMechanism, currentPoses } from "../lib/mechanism";
 import { sceneryOf } from "../lib/terrain";
 import { exportTexture } from "../lib/meshTexture";
+import { refreshSlicers, slicerFor, type SlicerId } from "../lib/slicers";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   stl: { name: t("STL mesh"), extensions: ["stl"] },
@@ -94,6 +95,32 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg === t("Nothing to export")) return toast(msg, "error");
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: msg }), "error");
+  }
+}
+
+/**
+ * Opens the model in a slicer installed on this Mac: the parts as a 3MF (as Export makes it, with
+ * materials if the setting is on), written to a temporary file the slicer opens. `slicer`: which
+ * one, default the first installed (Bambu Studio before PrusaSlicer).
+ */
+export async function openInSlicer(slicer?: SlicerId, opts: { parts?: readonly string[]; posed?: boolean; materials?: boolean } = {}): Promise<{ slicer: string; file: string; moved: boolean; meshes: BodyMesh[] }> {
+  const target = slicerFor(slicer) ?? ((await refreshSlicers()), slicerFor(slicer));
+  if (!target || !desktop?.slicers) throw new Error(slicer ? t("{name} is not installed on this Mac", { name: slicer === "bambu" ? "Bambu Studio" : "PrusaSlicer" }) : t("No slicer installed (Bambu Studio or PrusaSlicer)"));
+  const { files, moved, meshes } = await meshExportFiles("3mf", opts);
+  const [name, data] = Object.entries(files)[0]!;
+  const r = await desktop.slicers.open({ slicer: target.id, name, data });
+  return { ...r, moved, meshes };
+}
+
+/** The menu's "Send to …": the model opens in the slicer, with a word on what went. */
+export async function sendToSlicer(slicer: SlicerId): Promise<void> {
+  try {
+    const { slicer: name, moved, meshes } = await openInSlicer(slicer);
+    toast(moved ? t("Sent to {name}, moved parts where they are now", { name }) : t("Sent to {name}", { name }));
+    tellFilaments(meshes);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    toast(msg === t("Nothing to export") ? msg : t("Could not send to the slicer: {error}", { error: msg }), "error");
   }
 }
 
