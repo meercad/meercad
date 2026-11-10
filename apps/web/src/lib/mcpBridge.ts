@@ -445,7 +445,11 @@ function briefSummary(out: RebuildOutput, before: RebuildOutput | null | undefin
   const prev = new Map((before?.report.bodies ?? []).map((b) => [b.id, bodyKey(b)]));
   const changed = new Set(out.report.bodies.filter((b) => prev.get(b.id) !== bodyKey(b)).map((b) => b.id));
   const gone = [...prev.keys()].filter((id) => !out.report.bodies.some((b) => b.id === id));
-  const features = full.features.filter((f) => f.status !== "ok" || "info" in f || "hint" in f || touched.has(f.id));
+  // Steps switched off (or after the rollback bar) are only named when the ops were about them:
+  // a big design has a hundred of them, the same in every answer.
+  const quiet = (f: { status: string }) => f.status === "ok" || f.status === "suppressed" || f.status === "rolled_back";
+  const features = full.features.filter((f) => !quiet(f) || "info" in f || "hint" in f || touched.has(f.id));
+  const off = full.features.filter((f) => f.status === "suppressed" || f.status === "rolled_back").length;
   const sketches = full.sketches.filter((s) => !s.ok || touched.has(s.id));
   const { joints: allJoints, params, ...rest } = full;
   // Joints the ops set (or all, after a replace), and any that broke.
@@ -456,6 +460,7 @@ function briefSummary(out: RebuildOutput, before: RebuildOutput | null | undefin
     ...(shown.params ? { params } : {}),
     features,
     featuresOk: full.features.filter((f) => f.status === "ok").length,
+    ...(off ? { featuresOff: off } : {}),
     bodies: full.bodies.filter((b) => changed.has(b.id)),
     unchangedBodies: full.bodies.length - changed.size,
     ...(gone.length ? { removedBodies: gone } : {}),
@@ -486,8 +491,21 @@ function touchedBy(ops: readonly DocOp[]): { ids: Set<string>; shown: Shown } {
   return { ids, shown };
 }
 
-/** The brief result after undo, redo or opening a project: what is not ok, the bodies that changed (all of them when nothing was built before). */
+/** The brief result after undo or redo: what is not ok, and the bodies that changed. */
 const briefAfter = (out: RebuildOutput, before: RebuildOutput | null | undefined) => briefSummary(out, before, new Set(), { ids: new Set(), all: false, params: !before });
+
+/**
+ * The answer to opening a project: how big it is and what is not in order. The parts and steps
+ * themselves are in get_model (a big design's parts alone ran to a hundred thousand characters here).
+ */
+function openSummary(out: RebuildOutput) {
+  const { bodies, unchangedBodies: _u, params: _p, ...rest } = briefSummary(out, out, new Set(), { ids: new Set(), all: false, params: false });
+  void bodies;
+  return { project: useApp.getState().project, ...rest, parts: out.report.bodies.length, note: "get_model lists the steps, parts and params." };
+}
+
+/** Ops that only file the design away or rename what was filed: the model itself stays as it is. */
+const VERSION_OPS = new Set(["save_version", "rename_version", "delete_version"]);
 
 function summary(out: RebuildOutput) {
   const r = out.report;
@@ -572,6 +590,9 @@ function exportedFiles(files: Record<string, Uint8Array | string>, p: Record<str
   return { files: {}, staged: { token, sizes: Object.fromEntries(Object.entries(bytes).map(([k, v]) => [k, v.length])) } };
 }
 
+/** For test and timing runs in development builds: what a request from an assistant does in this page, without a server. */
+export const testCall = (method: string, params: Record<string, unknown> = {}): Promise<unknown> => handle({ id: 0, method, params } as unknown as BridgeRequest);
+
 async function handle(req: BridgeRequest): Promise<unknown> {
   const p = req.params;
   switch (req.method) {
@@ -614,6 +635,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
       const before = useApp.getState().output;
       if (!apply(...ops)) throw new Error("ops were rejected");
+      // Nothing to build after saving a version: the answer is there at once.
+      if (ops.length && ops.every((op) => VERSION_OPS.has(op.type)) && p["detail"] !== "full") return { ok: true, versions: (currentDoc().versions ?? []).map((v) => v.name) };
       const out = await rebuildNow();
       if (p["detail"] === "full") return summary(out);
       const t = touchedBy(ops);
@@ -654,7 +677,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "open_project":
       // Who else has it open was checked when the request was routed.
       await openProject(String(p["id"]));
-      return briefAfter(await rebuildNow(), null);
+      return openSummary(await rebuildNow());
     case "new_project":
       return created(p, async () => {
         await newProject(emptyDocument(), typeof p["name"] === "string" && p["name"] ? p["name"] : "Untitled part");
@@ -836,7 +859,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       return { name: p["name"], document: tools.versionDocument(String(p["name"])) };
     case "check_interference":
       needProject();
-      return tools.interference();
+      return tools.interference({ ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}), ...(p["box"] && typeof p["box"] === "object" ? { box: p["box"] as { min: [number, number, number]; max: [number, number, number] } } : {}), ...(typeof p["seconds"] === "number" ? { seconds: p["seconds"] } : {}) });
     case "wall_thickness":
       needProject();
       return tools.wallThickness(String(p["part"]), p["minWall"] === undefined ? 1 : Number(p["minWall"]), p["show"] !== false);

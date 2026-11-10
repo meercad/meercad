@@ -113,7 +113,23 @@ function threadsOff(): boolean {
 }
 // OCCT broke on a model (seen with large booleans in the multi-threaded build): carry on in a fresh,
 // single-threaded kernel, which builds the same models with more room.
-export const kernel = new KernelClient(new KernelWorker({ name: wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel" }), () => new KernelWorker({ name: "kernel" }));
+const kernelName = wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel";
+export const kernel = new KernelClient(
+  new KernelWorker({ name: kernelName }),
+  () => new KernelWorker({ name: "kernel" }),
+  // On the Mac a fresh kernel takes over before the running one is full (see Renewal); the iPad has
+  // no room for two kernels at once.
+  desktop ? { worker: () => new KernelWorker({ name: kernelName }), ...renewAt() } : undefined,
+);
+/** For test runs: localStorage "meercad.kernel.renew" (MB) makes the fresh kernel take over that early. */
+function renewAt(): { above?: number; grown?: number } {
+  try {
+    const mb = Number(localStorage.getItem("meercad.kernel.renew"));
+    return mb > 0 ? { above: mb * 2 ** 20, grown: 0 } : {};
+  } catch {
+    return {};
+  }
+}
 /** A second, single-threaded kernel for background work that must never hold up the editor. */
 export const spareKernel = () => new KernelClient(new KernelWorker({ name: "kernel-spare" }));
 // Touch screens are tablets: meshing is a large share of every rebuild there, and the screen is

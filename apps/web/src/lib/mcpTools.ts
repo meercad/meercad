@@ -68,15 +68,22 @@ const needPart = (id: string) => {
 // ---------------------------------------------------------------- checks
 
 /** Every part against every other, where they are modelled: overlaps with their volume, and touching pairs. */
-export async function interference() {
+/**
+ * `parts`: only pairs with one of these; `box`: only parts reaching into it. A design of hundreds
+ * of parts has thousands of pairs: what is not done after `seconds` is counted, not waited for.
+ */
+export async function interference(opts: { parts?: string[]; box?: { min: Vec3; max: Vec3 }; seconds?: number } = {}) {
   const out = await rebuildNow();
   const ids = out.report.bodies.map((b) => b.id);
   if (ids.length < 2) return { overlaps: [], touching: [], note: "only one part" };
-  const pairs = await kernel.clearances(ids, {}, 0);
+  const unknown = opts.parts?.filter((id) => !ids.includes(id)) ?? [];
+  if (unknown.length) throw new Error(`no part ${unknown.map((id) => `"${id}"`).join(", ")}`);
+  const { pairs, left } = await kernel.overlaps(opts.parts?.length ? opts.parts : ids, { ...(opts.box ? { box: opts.box } : {}), budgetMs: (opts.seconds ?? 120) * 1000 });
   const name = (id: string) => partName(id, currentDoc().features);
   return {
     overlaps: pairs.filter((p) => p.overlap > 1e-3).sort((a, b) => b.overlap - a.overlap).map((p) => ({ a: p.a, b: p.b, names: [name(p.a), name(p.b)], overlapMm3: round(p.overlap) })),
     touching: pairs.filter((p) => p.overlap <= 1e-3 && p.distance < 1e-4).map((p) => [p.a, p.b]),
+    ...(left ? { unchecked: left, note: `Out of time: ${left} pairs of parts close to each other were not checked. Narrow the check with parts (ids) or box ({min, max}), or give it more seconds.` } : {}),
   };
 }
 

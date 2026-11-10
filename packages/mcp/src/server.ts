@@ -73,7 +73,11 @@ const addressed = new AsyncLocalStorage<string | undefined>();
  */
 const LONG = 900_000;
 
-async function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
+/**
+ * Every call may wait that long by default: one that is quick by itself (a picture, a lookup in the
+ * open project) still waits in the app behind a rebuild that is running, and used to give up there.
+ */
+async function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = LONG): Promise<T> {
   const project = addressed.getStore();
   if (project !== undefined && params[PROJECT_PARAM] === undefined) params = { ...params, [PROJECT_PARAM]: project };
   const info = server.server.getClientVersion();
@@ -366,7 +370,7 @@ server.registerTool(
   "close_project",
   {
     title: "Close project (release the lock)",
-    description: "Releases the lock on this session's project and hands it back to the user (ends the assistant mode for it, unlocks it): it is saved, your meerCAD tab closes and the project opens unlocked in a tab of theirs. Call it when you are done with a project, wait for the user, or the user asks you to release, unlock or give back the project (a tab with no requests for 10 minutes goes back to them on its own). open_project to work on it again later.",
+    description: "Releases the lock on this session's project and hands it back to the user (ends the assistant mode for it, unlocks it): it is saved, your meerCAD tab closes and the project opens unlocked in a tab of theirs. Call it when you are done with a project, wait for the user, or the user asks you to release, unlock or give back the project (a tab with no requests for 30 minutes goes back to them on its own). open_project to work on it again later.",
   },
   guard(async () => text(await call("close_project"))),
 );
@@ -662,8 +666,13 @@ server.registerTool(
 
 server.registerTool(
   "check_interference",
-  { title: "Check for overlaps", description: "Every part against every other where they are modelled (no joints needed): pairs that overlap with the shared volume (mm³), and pairs that only touch.", annotations: { readOnlyHint: true } },
-  guard(async () => text(await call("check_interference", {}, 300_000))),
+  {
+    title: "Check for overlaps",
+    description: "Every part against every other where they are modelled (no joints needed): pairs that overlap with the shared volume (mm³), and pairs that only touch. In a design of hundreds of parts narrow it: `parts` checks only pairs with one of these parts, `box` only the parts reaching into it. What is not checked after `seconds` (default 120) is counted in `unchecked` instead of waited for.",
+    inputSchema: { parts: z.array(z.string()).optional(), box: z.object({ min: vec3, max: vec3 }).optional(), seconds: z.number().min(1).max(800).optional() },
+    annotations: { readOnlyHint: true },
+  },
+  guard(async (a) => text(await call("check_interference", a, LONG))),
 );
 
 server.registerTool(
