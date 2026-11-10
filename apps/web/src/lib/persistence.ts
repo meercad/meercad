@@ -116,6 +116,8 @@ interface DesktopApi {
     tabs(): Promise<AssistantTab[]>;
     /** Lays an assistant's tab over `rect` (CSS pixels of the window's page), or shows none. */
     show(p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null): void;
+    /** A picture of the open assistant's tab (PNG data URL), shown in its room while a dialog covers it. */
+    snapshot(session: string): Promise<string | null>;
     /**
      * Takes an assistant's tab over: its page saves and goes; its project, for a tab of the user's.
      * `why`: the user did (closed), the assistant itself (released, close_project) or it sat idle.

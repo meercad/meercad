@@ -46,6 +46,8 @@ const api = {
     tabs: (): Promise<AssistantTabInfo[]> => ipcRenderer.invoke("assistant:tabs"),
     /** Opens an assistant's tab in the room `rect` leaves (CSS pixels), or none. */
     show: (p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null) => ipcRenderer.send("assistant:show", p),
+    /** A picture of the open assistant's tab (PNG data URL), shown in its room while a dialog covers it. */
+    snapshot: (session: string): Promise<string | null> => ipcRenderer.invoke("assistant:snapshot", session),
     /** Takes an assistant's tab over: it saves and closes; returns its project for a tab of the user's. */
     handOver: (session: string, why?: "closed" | "released" | "idle"): Promise<{ id: string; name: string } | null> => ipcRenderer.invoke("assistant:hand-over", session, why),
     // In an assistant's tab:

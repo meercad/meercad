@@ -1233,6 +1233,7 @@ html[data-compact] .deviation-card { left: 6px; right: 6px; bottom: 76px; width:
 .assistant-pane { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: var(--scene); }
 .assistant-slot { position: absolute; top: 72px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 13px; }
 .assistant-slot .ai-orb { --s: 34px; }
+.assistant-still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }
 
 /* An assistant's tab: no top bar of its own (the window's is above it), panels move up, the tools are hidden. */
 html.in-assistant-tab .toolbar { display: none; }
