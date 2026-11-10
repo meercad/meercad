@@ -162,11 +162,13 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
       const { path: _p, ...rest } = r;
       return { ...o, reference: { ...rest, data: (await readFile(r["path"])).toString("base64") } };
     }
-    if ((o["type"] !== "replace" && o["type"] !== "add_features") || typeof o["path"] !== "string") return o;
+    if ((o["type"] !== "replace" && o["type"] !== "add_features" && o["type"] !== "save_version") || typeof o["path"] !== "string") return o;
     const file = resolve(o["path"]);
     const { doc } = meercadDocument(await readFile(file), file);
     const { path: _p, ids, ...rest } = o;
     if (o["type"] === "replace") return { ...rest, doc };
+    // A backup brought back in: the file's design becomes a version (its own versions stay out).
+    if (o["type"] === "save_version") return { ...rest, doc: { ...doc, versions: undefined, blobs: undefined } };
     const all = doc["features"] as Record<string, unknown>[];
     if (ids !== undefined && !(Array.isArray(ids) && ids.every((x) => typeof x === "string"))) throw new Error("add_features: ids must be a list of feature ids");
     const want = ids as string[] | undefined;
@@ -263,7 +265,7 @@ server.registerTool(
   {
     title: "Change the model",
     description:
-      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling, set_motion, delete_motion (moves of several joints over time); reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version; replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`; replace may give `path` (a .meercad file) instead of `doc`, add_features may give `path` (a .meercad file, or a .json file with a list of features) instead of `features` to add that file's features (`ids`: only these, in the file's order). The result is brief: steps that are not ok, new or changed bodies, the sketches of the edited steps, the joints and params set; detail \"full\" lists everything. Put everything you already know into one call (a whole part: its sketches, features and joints): each call costs a round trip. `look` returns a picture of the result with the answer (instead of a render_view call after it).",
+      "Applies Operations-API ops atomically as one undo step and returns the rebuild result; rejected ops leave the model unchanged. Ops: add_features, edit_feature, delete_feature, move_feature, set_param, rename_param, set_rollback; parts: set_material, set_part_color, set_see_through, set_part_list (folders, order), set_units, set_fit (the design's fit: gap per side for printed fits, usable as `fit` in every expression); joints: set_joint, delete_joint, set_coupling, delete_coupling, set_motion, delete_motion (moves of several joints over time); reference models (terrains, scans): set_reference, delete_reference; variants: set_variant, delete_variant, use_variant; versions: save_version, restore_version, rename_version, delete_version (save_version may give `path`, a .meercad file such as a version saved with export, to bring that file's design in as a version; the design stays as it is); replace (whole document; saved versions are kept). The changes apply at once (no confirmation step), undo reverts them. An import feature may give `path` (a file on this computer) instead of base64 `data`, a reference may give `path` (a .glb) instead of `data`; replace may give `path` (a .meercad file) instead of `doc`, add_features may give `path` (a .meercad file, or a .json file with a list of features) instead of `features` to add that file's features (`ids`: only these, in the file's order). The result is brief: steps that are not ok, new or changed bodies, the sketches of the edited steps, the joints and params set; detail \"full\" lists everything. Put everything you already know into one call (a whole part: its sketches, features and joints): each call costs a round trip. `look` returns a picture of the result with the answer (instead of a render_view call after it).",
     inputSchema: { ops: z.array(op).min(1), detail: z.enum(["brief", "full"]).optional(), look },
   },
   guard(async ({ ops, detail, look }) => changed("apply_ops", ops, detail, look)),
@@ -403,7 +405,7 @@ server.registerTool(
   {
     title: "Export a file",
     description:
-      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant).",
+      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant). meercad writes the whole project with its saved versions; with `version` only that saved version, as a project file of its own (a backup kept outside the app; apply_ops save_version with `path` brings it back in as a version, and any meerCAD opens it as a project).",
     inputSchema: {
       format: z.enum(["stl", "3mf", "obj", "step", "usdz", "dxf", "svg", "meercad"]),
       path: z.string().describe("Absolute or relative output path"),
@@ -412,12 +414,13 @@ server.registerTool(
       posed: z.boolean().optional(),
       variants: z.boolean().optional(),
       materials: z.boolean().optional().describe("3mf: include materials, colours and filament slots (default: the app's setting, off)"),
+      version: z.string().optional().describe("meercad: write only this saved version (see versions in get_model)"),
     },
   },
-  guard(async ({ format, path, sketch, parts, posed, variants, materials }) => {
+  guard(async ({ format, path, sketch, parts, posed, variants, materials, version }) => {
     const out = resolve(path);
     const name = basename(out).replace(/\.[^.]+$/, "");
-    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials, stage: true }, 300_000);
+    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials, version, stage: true }, 300_000);
     const count = namesOf(r).length;
     const written: string[] = [];
     await eachFile(r, async (file, data) => {

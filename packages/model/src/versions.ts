@@ -78,6 +78,24 @@ export function restored(doc: MeercadDocument, version: Version): MeercadDocumen
   return { ...state, format: doc.format, ...(doc.versions ? { versions: doc.versions } : {}), ...(doc.blobs ? { blobs: doc.blobs } : {}) };
 }
 
+/**
+ * A version as a project file of its own (for a backup outside the app): the design as it was, with
+ * its imports filled in, without the other versions. Any meerCAD opens it as a project.
+ */
+export function versionFile(doc: MeercadDocument, name: string): MeercadDocument {
+  const v = doc.versions?.find((x) => x.name === name);
+  if (!v) throw new Error(`unknown version "${name}"; saved: ${(doc.versions ?? []).map((x) => `"${x.name}"`).join(", ") || "none"}`);
+  return designOf(restored(doc, v));
+}
+
+/** A name for a version not taken yet: `name`, else "name (2)", "name (3)", … */
+export function freeVersionName(doc: MeercadDocument, name: string): string {
+  const taken = new Set((doc.versions ?? []).map((v) => v.name));
+  const base = name.slice(0, 72);
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) if (!taken.has(`${base} (${n})`)) return `${base} (${n})`;
+}
+
 /** Drops blobs no version refers to any more. */
 export function pruneBlobs(doc: MeercadDocument): void {
   if (!doc.blobs) return;

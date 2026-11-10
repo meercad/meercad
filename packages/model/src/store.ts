@@ -3,7 +3,7 @@ import { emptyDocument, validateDocument, validateOp, type DocOp, type Expr, typ
 import { renameInExpr } from "./expr.js";
 import { FIT_VAR } from "./fit.js";
 import { mapFeatureExprs } from "./resolve.js";
-import { pruneBlobs, restored, snapshot } from "./versions.js";
+import { designOf, pruneBlobs, restored, snapshot } from "./versions.js";
 
 export class OpError extends Error {}
 
@@ -200,7 +200,8 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     }
     case "save_version": {
       const blobs = { ...(next.blobs ?? {}) };
-      const v = snapshot(next, op.name, Date.now(), blobs);
+      // A design brought in from a file is checked like a replace, and saved as it is.
+      const v = snapshot(op.doc ? checked(designOf(op.doc)) : next, op.name, op.at ?? Date.now(), blobs);
       next.versions = [...(next.versions ?? []).filter((x) => x.name !== op.name), v];
       next.blobs = blobs;
       pruneBlobs(next);

@@ -1388,8 +1388,12 @@ export type DocOp =
   | { type: "delete_variant"; name: string }
   /** Puts a variant in use, or null for the values in `params`. */
   | { type: "use_variant"; name: string | null }
-  /** Saves the design as it is now under a name (replacing a version of that name). */
-  | { type: "save_version"; name: string }
+  /**
+   * Saves the design as it is now under a name (replacing a version of that name). With `doc` it
+   * saves that design instead (a backup file brought back in; its own versions are not taken),
+   * `at` keeps when it was saved (default now).
+   */
+  | { type: "save_version"; name: string; doc?: MeercadDocument; at?: number }
   /** Makes a saved version the design again; the versions themselves stay. */
   | { type: "restore_version"; name: string }
   | { type: "rename_version"; name: string; to: string }

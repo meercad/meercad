@@ -6,7 +6,7 @@ import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, wri
 import type { RebuildOutput } from "@meercad/kernel/client";
 import { ASSISTANT_IDLE_MS, DEFAULT_PORT, STAGE_KEEP_MS, exportTransport, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
-import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, withMotion } from "@meercad/model";
+import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, versionFile, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
 import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
@@ -665,7 +665,10 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       await rebuildNow();
       const format = String(p["format"]);
-      if (format === "meercad") return { files: { "model.meercad": toB64(JSON.stringify(currentDoc(), null, 2)) } };
+      if (format === "meercad") {
+        const version = typeof p["version"] === "string" ? p["version"] : null;
+        return { files: { "model.meercad": toB64(JSON.stringify(version ? versionFile(currentDoc(), version) : currentDoc(), null, 2)) } };
+      }
       if (format === "dxf" || format === "svg") {
         const sketch = String(p["sketch"] ?? "");
         if (!sketch) throw new Error("dxf/svg export needs a sketch id");

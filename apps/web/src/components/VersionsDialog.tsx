@@ -1,14 +1,16 @@
 /**
  * Versions: named states of the design, saved in the file. Each can be looked at in the viewport
  * (a preview, the design untouched), restored (the design as it is now is saved first if no
- * version holds it), renamed or deleted.
+ * version holds it), renamed, deleted or saved as a file of its own (a backup outside the app);
+ * "From file…" brings such a file (or a whole project file's versions) back in as versions.
  */
-import { Eye, History, Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import { Download, Eye, FileUp, History, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { applyOp, designOf, versionChanges } from "@meercad/model";
 import type { Version } from "@meercad/schema";
 import { apply, currentDoc, scheduleRebuild, toast, useApp } from "../store";
 import { t, tn } from "../lib/i18n";
+import { importVersionFile, saveVersionFile } from "./io";
 
 /** Opens the versions dialog (from menus and the command palette). */
 export const openVersions = () => window.dispatchEvent(new Event("meercad:versions"));
@@ -84,6 +86,11 @@ export function VersionsDialog() {
       toast(kept ? t("Restored “{name}”", { name: v.name }) : t("Restored “{name}”; the design before is kept as a version", { name: v.name }));
     }
   };
+  const fromFile = async () => {
+    const names = await importVersionFile();
+    if (names.length === 1) toast(t("Brought in as version “{name}”", { name: names[0]! }));
+    else if (names.length) toast(tn(names.length, "Brought in {n} version", "Brought in {n} versions"));
+  };
   const rename = () => {
     if (!editing) return;
     const to = editing.to.trim();
@@ -101,10 +108,14 @@ export function VersionsDialog() {
           </button>
         </header>
         <p className="muted small">{t("Save the design as it is now under a name, to come back to it later. Versions are kept in the project file.")}</p>
-        <div className="row" style={{ gap: 8 }}>
-          <input className="field" style={{ flex: 1 }} value={name} placeholder={nextName(versions)} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
+        <p className="muted small">{t("To keep one somewhere else as well, save it as a file of its own; From file… brings such a file back in as a version.")}</p>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <input className="field" style={{ flex: 1, minWidth: 160 }} value={name} placeholder={nextName(versions)} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
           <button className="btn primary" onClick={save}>
             <History /> {t("Save version")}
+          </button>
+          <button className="btn" onClick={() => void fromFile()} title={t("Bring a saved .meercad file in as a version")}>
+            <FileUp /> {t("From file…")}
           </button>
         </div>
         {versions.length ? (
@@ -127,6 +138,9 @@ export function VersionsDialog() {
                   </button>
                   <button className="icon-btn" title={t("Restore")} onClick={() => restore(v)}>
                     <RotateCcw />
+                  </button>
+                  <button className="icon-btn" title={t("Save as a file…")} onClick={() => saveVersionFile(v.name)}>
+                    <Download />
                   </button>
                   <button className="icon-btn" title={t("Rename")} onClick={() => setEditing({ name: v.name, to: v.name })}>
                     <Pencil />
