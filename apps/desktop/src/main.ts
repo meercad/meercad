@@ -834,6 +834,15 @@ function openAssistantView(session: string, client: string): AssistantView {
   assistantViews.set(wc.id, a);
   placeAssistants();
   guardNavigation(wc);
+  // Its page holds keys back (it is the assistant's); ⌘, still opens the settings, in the window's page.
+  wc.on("before-input-event", (e, input) => {
+    if (input.type !== "keyDown" || input.key !== "," || !(input.meta || input.control) || input.shift || input.alt) return;
+    e.preventDefault();
+    const w = commandWindow();
+    if (!w) return;
+    w.webContents.focus();
+    w.webContents.send("menu", "settings");
+  });
   wc.on("did-finish-load", () => mainWindow && !mainWindow.isDestroyed() && wc.setZoomFactor(uiScaleOf(mainWindow)));
   const id = wc.id;
   wc.once("destroyed", () => {
@@ -918,6 +927,13 @@ ipcMain.on("assistant:show", (e, p: unknown) => {
   const q = p as { session?: unknown; rect?: { x: number; y: number; width: number; height: number } } | null;
   shown = q && typeof q.session === "string" && q.rect ? { session: q.session, rect: q.rect } : null;
   placeAssistants();
+});
+ipcMain.handle("assistant:snapshot", async (e, session: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || e.sender !== mainWindow.webContents) return null;
+  const a = [...assistantViews.values()].find((x) => x.session === session && !x.view.webContents.isDestroyed());
+  if (!a || !a.view.getVisible()) return null;
+  const img = await a.view.webContents.capturePage();
+  return img.isEmpty() ? null : img.toDataURL();
 });
 let releaseSeq = 0;
 const releases = new Map<number, () => void>();

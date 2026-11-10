@@ -6,7 +6,7 @@
  * assistant is doing and lets the user take over (AssistantBar).
  */
 import { House } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ASSISTANT_IDLE_MS } from "@meercad/mcp";
 import { stopAssistant } from "../lib/mcpBridge";
 import { assistantWindow, desktop } from "../lib/persistence";
@@ -20,24 +20,43 @@ import { TabStrip } from "./Tabs";
 export function AssistantPane({ session }: { session: string }) {
   const slot = useRef<HTMLDivElement>(null);
   const tab = useApp((s) => s.assistantTabs.find((a) => a.session === session));
+  // The assistant's page lies over this page, above anything drawn here: while a dialog or menu of
+  // this page is open (settings, about, the MCP dialog, a tab's menu…), a picture of it stands in.
+  const covered = useCovered();
+  const [still, setStill] = useState<string | null>(null);
   useEffect(() => {
     const el = slot.current;
     const a = desktop?.assistant;
     if (!el || !a) return;
+    let gone = false;
     const place = () => {
+      if (covered) return;
       const r = el.getBoundingClientRect();
       a.show({ session, rect: { x: r.left, y: r.top, width: r.width, height: r.height } });
     };
-    place();
+    if (covered)
+      void a
+        .snapshot(session)
+        .catch(() => null)
+        .then((img) => {
+          if (gone) return;
+          setStill(img);
+          a.show(null);
+        });
+    else {
+      setStill(null);
+      place();
+    }
     const ro = new ResizeObserver(place);
     ro.observe(el);
     window.addEventListener("resize", place);
     return () => {
+      gone = true;
       ro.disconnect();
       window.removeEventListener("resize", place);
       a.show(null);
     };
-  }, [session]);
+  }, [session, covered]);
   return (
     <div className="assistant-pane">
       <header className={`topbar ${desktop ? "desktop" : ""}`}>
@@ -51,11 +70,33 @@ export function AssistantPane({ session }: { session: string }) {
       </header>
       {/* The assistant's page is laid over this room; until it has loaded, this shows. */}
       <div className="assistant-slot" ref={slot}>
-        <AiOrb busy />
-        <span>{t("{client} is opening the project…", { client: tab?.client ?? "Claude" })}</span>
+        {still ? (
+          <img className="assistant-still" src={still} alt="" draggable={false} />
+        ) : covered ? null : (
+          <>
+            <AiOrb busy />
+            <span>{t("{client} is opening the project…", { client: tab?.client ?? "Claude" })}</span>
+          </>
+        )}
       </div>
     </div>
   );
+}
+
+/** Dialogs and menus of the window's page, which the assistant's tab must make way for. */
+const COVERS = ".modal-backdrop, .menu";
+
+/** A dialog or menu is open on this page. */
+function useCovered(): boolean {
+  const [covered, setCovered] = useState(() => !!document.querySelector(COVERS));
+  useEffect(() => {
+    const check = () => setCovered(!!document.querySelector(COVERS));
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: true });
+    check();
+    return () => mo.disconnect();
+  }, []);
+  return covered;
 }
 
 /** In an assistant's tab: who is working and on what, and Take over. */
