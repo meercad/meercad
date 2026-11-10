@@ -24,10 +24,10 @@ export interface Pack {
 
 /** Names are English; Settings translates them with t(). */
 export const PACKS: Pack[] = [
-  { id: "mechanics", name: "Mechanics", contents: "Joints and moving parts, gears, springs, interference check" },
+  { id: "mechanics", name: "Mechanics and robotics", contents: "Joints and moving parts, motions with collision check, gears, springs, interference check, robot export (MJCF/URDF)" },
   { id: "scan", name: "Scan and mesh", contents: "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up, areas from drone photos" },
   { id: "drawings", name: "Technical drawings", contents: "Drawings as PDF, SVG and DXF" },
-  { id: "versions", name: "Versions and variants", contents: "Named versions in the file, variants, exporting all variants" },
+  { id: "versions", name: "Versions and variants", contents: "Named versions in the file, versions as backup files, variants, exporting all variants" },
 ];
 
 const STORAGE_KEY = "meercad.packs";
