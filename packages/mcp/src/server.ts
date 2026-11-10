@@ -482,7 +482,7 @@ server.registerTool(
   {
     title: "Export a file",
     description:
-      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`; stl and 3mf leave cables out, as they are not printed, unless `parts` names them), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant). meercad writes the whole project with its saved versions; with `version` only that saved version, as a project file of its own (a backup kept outside the app; apply_ops save_version with `path` brings it back in as a version, and any meerCAD opens it as a project).",
+      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant). meercad writes the whole project with its saved versions; with `version` only that saved version, as a project file of its own (a backup kept outside the app; apply_ops save_version with `path` brings it back in as a version, and any meerCAD opens it as a project).",
     inputSchema: {
       format: z.enum(["stl", "3mf", "obj", "step", "usdz", "dxf", "svg", "meercad"]),
       path: z.string().describe("Absolute or relative output path"),
@@ -517,7 +517,7 @@ server.registerTool(
   {
     title: "Open the model in a slicer",
     description:
-      "Opens the model in a slicer installed on this Mac, ready to slice and print: the parts not hidden (or `parts`; cables only when `parts` names them) as a 3MF, as the app's export makes it (materials as in export), moved parts where they are shown (posed: false takes them at rest). slicer: \"bambu\" (Bambu Studio) or \"prusa\" (PrusaSlicer); default the first installed, Bambu Studio before PrusaSlicer. The 3MF goes to a temporary file the app clears away later; use export for a file to keep. Fails when the slicer is not installed (only the Mac app can send).",
+      "Opens the model in a slicer installed on this Mac, ready to slice and print: the parts not hidden (or `parts`) as a 3MF, as the app's export makes it (materials as in export), moved parts where they are shown (posed: false takes them at rest). slicer: \"bambu\" (Bambu Studio) or \"prusa\" (PrusaSlicer); default the first installed, Bambu Studio before PrusaSlicer. The 3MF goes to a temporary file the app clears away later; use export for a file to keep. Fails when the slicer is not installed (only the Mac app can send).",
     inputSchema: {
       slicer: z.enum(["bambu", "prusa"]).optional(),
       parts: z.array(z.string()).optional().describe("Part ids; default every part not hidden"),
@@ -625,7 +625,7 @@ server.registerTool(
   "set_pose",
   {
     title: "Move a mechanism",
-    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped. Cables report the length they need against their length, their tightest bend and parts they run into.",
+    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped.",
     inputSchema: { values: z.record(z.string(), z.number()).describe("joint id → value") },
   },
   guard(async ({ values }) => text(await call("set_pose", { values }, LONG))),
@@ -646,7 +646,7 @@ server.registerTool(
   {
     title: "Check a motion",
     description:
-      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts held together by fixed joints are left out (they never move against each other; check_interference finds overlaps at rest); parts meeting at the joint they turn on only count when they overlap. Also the smallest gap per pair of parts and where, and for each cable whether it got stretched, bent too tight or ran into a part (first pose with trouble, most stretch, tightest bend). The joints go back where they were afterwards.",
+      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts held together by fixed joints are left out (they never move against each other; check_interference finds overlaps at rest); parts meeting at the joint they turn on only count when they overlap. Also the smallest gap per pair of parts and where. The joints go back where they were afterwards.",
     inputSchema: { joint: z.string().optional(), from: z.number().optional(), to: z.number().optional(), motion: z.string().optional(), steps: z.number().int().min(1).max(240).optional() },
     annotations: { readOnlyHint: true },
   },

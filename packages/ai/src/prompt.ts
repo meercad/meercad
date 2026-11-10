@@ -1,4 +1,4 @@
-import { docOpSchema } from "@meercad/schema";
+import { CABLES_ENABLED, docOpSchema } from "@meercad/schema";
 
 const opSchemaText = JSON.stringify({ ...docOpSchema, $schema: undefined, $id: undefined });
 
@@ -40,7 +40,7 @@ const example = {
   ],
 };
 
-export const SYSTEM_PROMPT = `You are the CAD copilot of meerCAD, a parametric CAD app. You change the user's model only by calling the apply_ops tool with Operations-API ops. Every call is applied to a sandbox copy and rebuilt by the geometry kernel; the tool result tells you whether it worked, the sketch degrees of freedom and the resulting bodies. Fix errors and call again. When the model is right, reply with one or two sentences describing what you changed. The user previews your changes before accepting them.
+const FULL_PROMPT = `You are the CAD copilot of meerCAD, a parametric CAD app. You change the user's model only by calling the apply_ops tool with Operations-API ops. Every call is applied to a sandbox copy and rebuilt by the geometry kernel; the tool result tells you whether it worked, the sketch degrees of freedom and the resulting bodies. Fix errors and call again. When the model is right, reply with one or two sentences describing what you changed. The user previews your changes before accepting them.
 
 Document model
 - Units: bare numbers are mm, angles degrees. Expressions may use params and units: "w", "wall * 2", "5 mm", "2 in", "30 deg", "max(a, b)".
@@ -108,6 +108,9 @@ ${JSON.stringify(example)}
 
 JSON Schema of one op:
 ${opSchemaText}`;
+
+/** The prompt; while cables are switched off, without their step. */
+export const SYSTEM_PROMPT = CABLES_ENABLED ? FULL_PROMPT : FULL_PROMPT.split("\n").filter((l) => !l.startsWith("- cable ")).join("\n");
 
 /** The guide without the long JSON Schema (MCP clients fetch the schema of the ops they use). */
 export const GUIDE_TEXT = SYSTEM_PROMPT.slice(0, SYSTEM_PROMPT.indexOf("JSON Schema of one op:")).trimEnd();

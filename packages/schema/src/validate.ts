@@ -121,6 +121,19 @@ export const LEGACY_FORMATS: readonly string[] = ["leocad/1"];
 export const REMOVED_OPS: readonly string[] = ["texture"];
 
 /**
+ * Whether cables are offered. While they are switched off, designs that hold cable steps still open
+ * and keep them as they are (nothing is removed from the file), but the steps are not built, not
+ * shown and cannot be added or changed. Switch back on to bring the feature back as it was.
+ */
+export const CABLES_ENABLED = false;
+
+/** Steps this version keeps in a design but does not build or offer (see CABLES_ENABLED). */
+export const PAUSED_OPS: readonly string[] = CABLES_ENABLED ? [] : ["cable"];
+
+/** Whether a step is kept in the design but switched off in this version. */
+export const isPausedOp = (op: unknown): boolean => PAUSED_OPS.includes(op as string);
+
+/**
  * A design without the steps of REMOVED_OPS, and the ids of those it dropped. They only ever changed
  * the look of faces, never the solid, so no later step depends on them; a rollback to one of them
  * moves back to the step before. Anything that is not a design comes back as it was.

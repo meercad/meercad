@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { clearances, type RebuildReport } from "@meercad/kernel";
-import type { Feature } from "@meercad/schema";
+import { CABLES_ENABLED, type Feature } from "@meercad/schema";
 import { doc, getOcct, newSession } from "./helpers.js";
 
 const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
 const info = (r: RebuildReport, id: string) => r.features.find((f) => f.id === id)!;
 
-describe("cable", () => {
+describe.skipIf(!CABLES_ENABLED)("cable", () => {
   it("lays a round cable through 3D points as a part of its own, with length and mass", async () => {
     const s = await newSession();
     const f: Feature[] = [{ id: "cab1", op: "cable", points: [{ at: [0, 0, 0] }, { at: [60, 0, 20] }, { at: [120, 40, 20] }], diameter: 3, material: "pvc" }];

@@ -7,7 +7,7 @@ import { hasPack, usePack } from "../lib/premium";
 import { evaluate, formatInertia, formatMass, massOf, massProperties, partMaterial, referencedNames } from "@meercad/model";
 import { materialName } from "../lib/materials";
 import { openMaterialPicker } from "./MaterialPicker";
-import type { Expr, Feature, ReferenceModel } from "@meercad/schema";
+import { isPausedOp, type Expr, type Feature, type ReferenceModel } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp } from "../store";
@@ -186,6 +186,8 @@ function FeatureList() {
           </span>
         </li>
         {doc.features.map((f, i) => {
+          // Steps switched off in this version stay in the design but are not listed.
+          if (isPausedOp(f.op)) return null;
           const st = status.get(f.id);
           const Icon = FEATURES[f.op].icon;
           const rolledBack = i > rollbackIndex;

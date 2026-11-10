@@ -42,7 +42,7 @@ import {
   createLucideIcon,
   Image as ImageIcon,
   type LucideIcon, Trash2 } from "lucide-react";
-import type { EdgeSelector, Feature, FeatureOp, MeercadDocument } from "@meercad/schema";
+import { isPausedOp, type EdgeSelector, type Feature, type FeatureOp, type MeercadDocument } from "@meercad/schema";
 import { nextFeatureId, standardShape } from "@meercad/model";
 import { t } from "./i18n";
 
@@ -102,7 +102,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "coil", "rib", "primitive", "text", "standard_part", "screw", "spring", "cable", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "coil", "rib", "primitive", "text", "standard_part", "screw", "spring", "cable", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"].filter((op) => !isPausedOp(op)) as FeatureOp[];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {

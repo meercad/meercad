@@ -1,4 +1,4 @@
-import { withoutRemovedFeatures, type Expr, type MeercadDocument } from "@meercad/schema";
+import { isPausedOp, withoutRemovedFeatures, type Expr, type MeercadDocument } from "@meercad/schema";
 import { resolveParams } from "./expr.js";
 import { FIT_VAR, fitExpr } from "./fit.js";
 import { hashString } from "./hash.js";
@@ -154,16 +154,18 @@ export class RebuildEngine<S> {
         statuses.push({ id: f.id, status: "rolled_back", ms: 0, cached: false });
         continue;
       }
+      // Steps switched off in this version (cables) are kept in the design but built as if suppressed.
+      const off = f.suppressed || isPausedOp(f.op);
       let resolved: ResolvedFeature | null = null;
       let resolveError: string | null = null;
-      if (!f.suppressed) {
+      if (!off) {
         try {
           resolved = resolveFeature(f, values);
         } catch (e) {
           resolveError = e instanceof Error ? e.message : String(e);
         }
       }
-      const def = f.suppressed ? `S:${f.id}` : resolved ? JSON.stringify(resolved) : `E:${f.id}:${resolveError}`;
+      const def = off ? `S:${f.id}` : resolved ? JSON.stringify(resolved) : `E:${f.id}:${resolveError}`;
       key = hashString(`${key}|${def}`);
       const self = hashString(def);
 
@@ -187,12 +189,12 @@ export class RebuildEngine<S> {
         statuses.push({ ...old.status, ms: 0, cached: true });
         state = replayed;
       } else {
-        if (!f.suppressed && resolved) onFeature?.(i, doc.features.length, f.id);
+        if (!off && resolved) onFeature?.(i, doc.features.length, f.id);
         const tf = performance.now();
         let status: FeatureStatus;
         let next = state;
         let footprint: Footprint<S> | undefined;
-        if (f.suppressed) {
+        if (off) {
           status = { id: f.id, status: "suppressed", ms: 0, cached: false };
         } else if (!resolved) {
           status = { id: f.id, status: "error", message: resolveError ?? "unresolved", ms: 0, cached: false };
