@@ -15,5 +15,8 @@
   { "id": "sk3", "op": "sketch", "name": "Ramp profile", "plane": { "ref": "origin.XZ" }, "entities": [{ "id": "r1c", "type": "point", "x": 40, "y": 1 }, { "id": "r1", "type": "circle", "center": "r1c", "radius": 1 }], "constraints": [] },
   { "id": "co2", "op": "coil", "name": "Conical coil", "profile": { "sketch": "sk3" }, "axis": { "ref": "origin.Z" }, "pitch": "4 mm", "turns": 6, "taper": -25, "mode": "new_body" }
  ],
- "rollback": null
+ "rollback": null,
+ "partColors": {
+  "co2": "#bcc0c5"
+ }
 }

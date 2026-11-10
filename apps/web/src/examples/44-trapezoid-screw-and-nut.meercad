@@ -30,5 +30,8 @@
    "mode": "new_body"
   }
  ],
- "rollback": null
+ "rollback": null,
+ "partColors": {
+  "scr2": "#bcc0c5"
+ }
 }

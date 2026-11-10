@@ -42,5 +42,9 @@
    "mode": "new_body"
   }
  ],
- "rollback": null
+ "rollback": null,
+ "partColors": {
+  "spr2": "#bcc0c5",
+  "spr3": "#5a5f66"
+ }
 }

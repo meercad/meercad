@@ -29,6 +29,17 @@ function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: 
   return { entities, constraints };
 }
 
+/**
+ * Grey tones for the parts of a multi-part example after the first (which keeps the usual part grey):
+ * lighter, darker and in between in turn, so neighbouring parts tell apart on the light and the dark
+ * background and the black edges still show. Written into the examples' own part colours, so only
+ * the examples look like this; the colours of the user's own parts stay as they are.
+ */
+export const EXAMPLE_GREYS = ["#bcc0c5", "#5a5f66", "#9da2a8"] as const;
+
+/** Part colours for the given parts, the grey tones in turn. */
+export const exampleGreys = (...ids: string[]): Record<string, string> => Object.fromEntries(ids.map((id, i) => [id, EXAMPLE_GREYS[i % EXAMPLE_GREYS.length]!]));
+
 const plate = rect("width", "depth", true, 60, 40);
 const bracket: MeercadDocument = {
   format: "meercad/1",
@@ -155,6 +166,7 @@ const gearPair: MeercadDocument = {
     ],
     couplings: [{ id: "c1", driver: "j1", driven: "j2", ratio: "-pinion / wheel" }],
   },
+  partColors: exampleGreys("gr2"),
   rollback: null,
 };
 
@@ -193,6 +205,7 @@ const hingedBox: MeercadDocument = {
       { id: "j2", name: "Lid", type: "revolute", a: "ex2", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.c1]" } }, limits: [0, 110] },
     ],
   },
+  partColors: exampleGreys("ex2", "ex3"),
   rollback: null,
 };
 
@@ -227,7 +240,7 @@ const storage: MeercadDocument = {
     { id: "lb2", op: "label", name: "Nut label", plane: { face: { face: "gf2.tab" } }, position: [-0.4, -8.6], text: "M3", symbol: "nut", style: "engraved", separate: true },
     { id: "lb3", op: "label", name: "Insert label", plane: { face: { face: "gf3.tab" } }, position: [42, -8.6], width: 34, text: "M3", symbol: "insert" },
   ],
-  partColors: { lb2_mark: "#2b2b2b" },
+  partColors: { ...exampleGreys("gf2", "gf3", "gf4", "lb1", "lb2", "lb3"), lb2_mark: "#2b2b2b" },
   rollback: null,
 };
 
@@ -249,6 +262,7 @@ const toolWall: MeercadDocument = {
     { id: "pl1", op: "plane", name: "Shelf floor", base: { ref: "origin.XZ" }, angle: 180, offset: 68 },
     { id: "gf1", op: "gridfinity", name: "Bin", kind: "bin", units: [1, 1], height: 3, scoop: 8, tab: {}, plane: { ref: "pl1" }, position: [-63, -29.5] },
   ],
+  partColors: exampleGreys("wl2", "wl3", "wl4", "wl5", "wl6", "gf1"),
   rollback: null,
 };
 

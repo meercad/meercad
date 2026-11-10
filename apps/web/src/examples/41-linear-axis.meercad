@@ -237,5 +237,15 @@
     "ratio": 0.022222222222222223
    }
   ]
+ },
+ "partColors": {
+  "np1": "#bcc0c5",
+  "np1_carriage": "#5a5f66",
+  "np2": "#9da2a8",
+  "np2_nut": "#bcc0c5",
+  "np3": "#5a5f66",
+  "np3_2": "#9da2a8",
+  "np4": "#bcc0c5",
+  "np5": "#5a5f66"
  }
 }
