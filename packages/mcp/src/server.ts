@@ -70,6 +70,9 @@ const addressed = new AsyncLocalStorage<string | undefined>();
  * used to give up after 60 s while the app went on working, and the next calls waited behind it.
  * Opening Mini v4 in a fresh app took over 5 minutes (2026-11-10). The client never waits that
  * long (see patience): this is only how long a run may go on before the server gives up on it.
+ * Exports and print checks too: the first 3MF of Mini v4 meshes every part in print quality
+ * (over 3 minutes in a fresh app, more while the Mac is busy or the call waits behind a rebuild),
+ * and gave up after 5 minutes while the app went on (2026-11-11).
  */
 const LONG = 900_000;
 
@@ -479,7 +482,7 @@ server.registerTool(
   {
     title: "Export a file",
     description:
-      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant). meercad writes the whole project with its saved versions; with `version` only that saved version, as a project file of its own (a backup kept outside the app; apply_ops save_version with `path` brings it back in as a version, and any meerCAD opens it as a project).",
+      "Exports the model (stl, 3mf, obj, step, usdz) or a sketch (dxf, svg; needs sketch) to a file path on this computer, as the app's own export does: the parts not hidden (or `parts`; stl and 3mf leave cables out, as they are not printed, unless `parts` names them), with their names, colours and materials (3mf: plain named parts by default, as the app's setting is off, so slicers import it without asking to map filaments; materials: true adds materials and colours and assigns parts with different materials or colours to different filaments, slots, for multi-material slicers; usdz is for AR Quick Look on iPhone and iPad: real size, standing on its lowest point), moved parts where they are shown (posed: false takes them at rest). obj also takes the visible terrains and scans with their textures: their .mtl and pictures are written next to the .obj. variants: true writes one file per variant into the folder of `path` (named after the project and variant). meercad writes the whole project with its saved versions; with `version` only that saved version, as a project file of its own (a backup kept outside the app; apply_ops save_version with `path` brings it back in as a version, and any meerCAD opens it as a project).",
     inputSchema: {
       format: z.enum(["stl", "3mf", "obj", "step", "usdz", "dxf", "svg", "meercad"]),
       path: z.string().describe("Absolute or relative output path"),
@@ -494,7 +497,7 @@ server.registerTool(
   guard(async ({ format, path, sketch, parts, posed, variants, materials, version }) => {
     const out = resolve(path);
     const name = basename(out).replace(/\.[^.]+$/, "");
-    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials, version, stage: true }, 300_000);
+    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[]; cablesLeftOut?: string[] }>("export", { format, sketch, parts, posed, variants, name, materials, version, stage: true });
     const count = namesOf(r).length;
     const written: string[] = [];
     await eachFile(r, async (file, data) => {
@@ -504,7 +507,8 @@ server.registerTool(
       await writeFile(target, data);
       written.push(target);
     });
-    return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
+    const left = r.cablesLeftOut?.length ? `; cables left out (not printed; name them in parts to export them): ${r.cablesLeftOut.length}` : "";
+    return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}${left}`);
   }),
 );
 
@@ -513,7 +517,7 @@ server.registerTool(
   {
     title: "Open the model in a slicer",
     description:
-      "Opens the model in a slicer installed on this Mac, ready to slice and print: the parts not hidden (or `parts`) as a 3MF, as the app's export makes it (materials as in export), moved parts where they are shown (posed: false takes them at rest). slicer: \"bambu\" (Bambu Studio) or \"prusa\" (PrusaSlicer); default the first installed, Bambu Studio before PrusaSlicer. The 3MF goes to a temporary file the app clears away later; use export for a file to keep. Fails when the slicer is not installed (only the Mac app can send).",
+      "Opens the model in a slicer installed on this Mac, ready to slice and print: the parts not hidden (or `parts`; cables only when `parts` names them) as a 3MF, as the app's export makes it (materials as in export), moved parts where they are shown (posed: false takes them at rest). slicer: \"bambu\" (Bambu Studio) or \"prusa\" (PrusaSlicer); default the first installed, Bambu Studio before PrusaSlicer. The 3MF goes to a temporary file the app clears away later; use export for a file to keep. Fails when the slicer is not installed (only the Mac app can send).",
     inputSchema: {
       slicer: z.enum(["bambu", "prusa"]).optional(),
       parts: z.array(z.string()).optional().describe("Part ids; default every part not hidden"),
@@ -522,8 +526,9 @@ server.registerTool(
     },
   },
   guard(async ({ slicer, parts, posed, materials }) => {
-    const r = await call<{ slicer: string; file: string; moved: boolean; filaments?: { slot: number; material?: string; color: string }[] }>("send_to_slicer", { slicer, parts, posed, materials }, 300_000);
-    return text(`opened ${r.file} in ${r.slicer}${r.moved ? " (moved parts where they are shown)" : ""}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
+    const r = await call<{ slicer: string; file: string; moved: boolean; filaments?: { slot: number; material?: string; color: string }[]; cablesLeftOut?: string[] }>("send_to_slicer", { slicer, parts, posed, materials });
+    const left = r.cablesLeftOut?.length ? `; cables left out (not printed): ${r.cablesLeftOut.length}` : "";
+    return text(`opened ${r.file} in ${r.slicer}${r.moved ? " (moved parts where they are shown)" : ""}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}${left}`);
   }),
 );
 
@@ -550,7 +555,7 @@ server.registerTool(
   },
   guard(async ({ path, name, floating, masses, actuators, collision }) => {
     const dir = resolve(path);
-    const r = await call<ExportedFiles & { links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision, stage: true }, 300_000);
+    const r = await call<ExportedFiles & { links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision, stage: true });
     const written: string[] = [];
     await eachFile(r, async (file, data) => {
       const target = join(dir, file);
@@ -682,7 +687,7 @@ server.registerTool(
     description: "Measures a part's walls (rays into the material from all over the surface) against the wall a printer needs (minWall, default 1 mm): the thinnest wall and where, and the share of the surface thinner than minWall. The colour map stays shown in the app (red thin → green) unless show: false.",
     inputSchema: { part: z.string(), minWall: z.number().positive().optional(), show: z.boolean().optional() },
   },
-  guard(async (a) => text(await call("wall_thickness", a, 300_000))),
+  guard(async (a) => text(await call("wall_thickness", a))),
 );
 
 server.registerTool(
@@ -692,7 +697,7 @@ server.registerTool(
     description: "Checks how a part prints on an FDM printer as it stands (bed under its lowest point, -Z down): area hanging over more steeply than limit degrees from vertical (default 45), a rough support volume (mm³) and the area on the bed, plus the best way up found (least support). turn: \"best\" or a direction [x,y,z] that should face the bed turns the part first (added as move steps; it lands on Z = 0 where it stood). The colour map stays shown (red needs support, blue on the bed, green fine) unless show: false.",
     inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), vec3]).optional() },
   },
-  guard(async (a) => text(await call("print_check", a, 300_000))),
+  guard(async (a) => text(await call("print_check", a))),
 );
 
 server.registerTool(
@@ -702,7 +707,7 @@ server.registerTool(
     description: "How far a part's surface is from a mesh part (e.g. the scan it was modelled after): smallest and largest distance (mm, negative inside) and the share within the tolerance. The colour map stays shown unless show: false.",
     inputSchema: { part: z.string(), mesh: z.string(), show: z.boolean().optional() },
   },
-  guard(async (a) => text(await call("deviation", a, 300_000))),
+  guard(async (a) => text(await call("deviation", a))),
 );
 
 server.registerTool(
@@ -712,13 +717,13 @@ server.registerTool(
     description: "Cleans up an imported mesh part (STL/3MF/OBJ/scan): removes loose pieces, closes holes, and with reduce (a tolerance in mm, e.g. 0.05) uses fewer triangles. One undo step; a scan's texture is dropped as it belongs to the old triangles.",
     inputSchema: { part: z.string(), removePieces: z.boolean().optional(), fillHoles: z.boolean().optional(), reduce: z.number().positive().optional() },
   },
-  guard(async (a) => text(await call("repair_mesh", a, 300_000))),
+  guard(async (a) => text(await call("repair_mesh", a))),
 );
 
 server.registerTool(
   "rebuild_mesh",
   { title: "Rebuild a mesh with features", description: "Fits sketches and extrudes to a mesh part (planes and cylinders it is made of) and adds them as editable steps with parameters; the mesh stays, hidden, to compare (deviation).", inputSchema: { part: z.string() } },
-  guard(async (a) => text(await call("rebuild_mesh", a, 300_000))),
+  guard(async (a) => text(await call("rebuild_mesh", a))),
 );
 
 server.registerTool(
@@ -751,9 +756,9 @@ server.registerTool(
     // A design comes in as it is saved (also from a wrapped {name, document} file).
     if ([".meercad", ".json"].includes(extname(file).toLowerCase())) {
       const { doc, name } = meercadDocument(data, file);
-      return text(await call("import_file", { name: `${name ?? basename(file, extname(file))}.meercad`, base64: Buffer.from(JSON.stringify(doc)).toString("base64"), keep }, 300_000));
+      return text(await call("import_file", { name: `${name ?? basename(file, extname(file))}.meercad`, base64: Buffer.from(JSON.stringify(doc)).toString("base64"), keep }));
     }
-    return text(await call("import_file", { name: basename(file), base64: data.toString("base64"), keep }, 300_000));
+    return text(await call("import_file", { name: basename(file), base64: data.toString("base64"), keep }));
   }),
 );
 

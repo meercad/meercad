@@ -764,7 +764,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(materials !== undefined ? { materials } : {}),
       });
       const filaments = filamentsOf(r.meshes, materials);
-      return { slicer: r.slicer, file: r.file, moved: r.moved, ...(filaments.length > 1 ? { filaments: filaments.map((f, i) => ({ slot: i + 1, ...f })) } : {}) };
+      return { slicer: r.slicer, file: r.file, moved: r.moved, ...(filaments.length > 1 ? { filaments: filaments.map((f, i) => ({ slot: i + 1, ...f })) } : {}), ...(r.cables.length ? { cablesLeftOut: r.cables } : {}) };
     }
     case "export": {
       needProject();
@@ -785,14 +785,14 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         const data = await usdzFile({ ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}), ...(typeof p["posed"] === "boolean" ? { posed: p["posed"] } : {}) });
         return { files: { [`${typeof p["name"] === "string" ? p["name"] : "model"}.usdz`]: toB64(data) } };
       }
-      const { files, filaments } = await tools.exportFiles(format as "stl", {
+      const { files, filaments, cablesLeftOut } = await tools.exportFiles(format as "stl", {
         ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
         ...(typeof p["posed"] === "boolean" ? { posed: p["posed"] } : {}),
         ...(p["variants"] ? { variants: true } : {}),
         ...(typeof p["name"] === "string" ? { name: p["name"] } : {}),
         ...(typeof p["materials"] === "boolean" ? { materials: p["materials"] } : {}),
       });
-      return { ...exportedFiles(files, p), ...(filaments ? { filaments } : {}) };
+      return { ...exportedFiles(files, p), ...(filaments ? { filaments } : {}), ...(cablesLeftOut ? { cablesLeftOut } : {}) };
     }
     case "list_materials": {
       const doc = currentDoc();
