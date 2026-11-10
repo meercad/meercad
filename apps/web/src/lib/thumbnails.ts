@@ -9,6 +9,14 @@
  * They are built in a kernel of their own, so a project that takes minutes to rebuild never holds up
  * the editor; a picture taking longer than its limit ends that kernel.
  * A project that could not be pictured is not tried again until its file changes.
+ *
+ * On the iPad and iPhone the page has room for one big kernel only: OCCT keeps the memory of every
+ * cut and join (docs/REBUILD.md), and a page that grows past the system's limit is ended and loaded
+ * again. A big design (Emil, 1100 steps) took 1.5 GB in the background kernel and as much again in
+ * the editor's when it was opened meanwhile, and the app died. There (see `oneKernel`) a picture is
+ * made in the background only while no project is open, only for designs of up to `BIG_STEPS` steps
+ * (a bigger one gets its picture from the editor when it is opened), and the background kernel is
+ * ended after each project. Opening a project stops a background build at once; it is tried again later.
  */
 import type { KernelClient, RebuildOutput } from "@meercad/kernel/client";
 import type { MeercadDocument } from "@meercad/schema";
@@ -20,12 +28,14 @@ import { meshBodyIds } from "./meshParts";
 import { partColors } from "./partColors";
 import { partLooks } from "./materials";
 import { sceneryOf } from "./terrain";
-import { loadProject, saveThumbnail, type ProjectMeta } from "./persistence";
-import { blankPixels, lookSince, needsPicture, pictureRunner, type LookMark } from "./pictureState";
+import { desktop, loadProject, saveThumbnail, type ProjectMeta } from "./persistence";
+import { backgroundBuildAllowed, blankPixels, lookSince, needsPicture, pictureRunner, type LookMark } from "./pictureState";
 
 /** A project gets a few minutes (the background kernel has one thread); an example a minute. */
 const PROJECT_LIMIT_MS = 180_000;
 const EXAMPLE_LIMIT_MS = 60_000;
+/** iPad and iPhone: no room for the background kernel next to the editor's (see above). */
+const oneKernel = !desktop;
 /** Examples that took too long, by content key: not tried again (they ship with the app). */
 const EXAMPLES_FAILED_KEY = "meercad.example-no-picture";
 const FAILED_KEY = "meercad.no-picture";
@@ -64,8 +74,18 @@ function endSpare(): void {
   spare?.terminate();
   spare = null;
 }
-/** Rebuilds `doc` in the background kernel; rejects after `limit` ms. */
+/** A background build given up for the editor (oneKernel): not a failure, the project is tried again. */
+class Stopped extends Error {
+  constructor() {
+    super("stopped for the editor");
+  }
+}
+/** Ends the running background build, if any, with Stopped. */
+let stopBuild: (() => void) | null = null;
+const editorOpen = () => useApp.getState().project !== null;
+/** Rebuilds `doc` in the background kernel; rejects after `limit` ms, or with Stopped (see oneKernel). */
 async function build(doc: MeercadDocument, limit: number): Promise<RebuildOutput> {
+  if (!backgroundBuildAllowed(doc, { oneKernel, editorOpen: editorOpen() })) throw new Stopped();
   spare ??= spareKernel();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -76,10 +96,15 @@ async function build(doc: MeercadDocument, limit: number): Promise<RebuildOutput
           endSpare();
           reject(new Error(`took longer than ${limit / 1000} s`));
         }, limit);
+        stopBuild = () => {
+          endSpare();
+          reject(new Stopped());
+        };
       }),
     ]);
   } finally {
     clearTimeout(timer);
+    stopBuild = null;
   }
 }
 
@@ -129,7 +154,14 @@ export function startBackgroundPictures(examples: readonly ExampleDoc[]): void {
   started = true;
   if (examplesToPicture.list.length === 0) examplesToPicture = { list: examples, done: () => undefined };
   let seen = useApp.getState().projects;
+  let open = editorOpen();
   useApp.subscribe((s) => {
+    if (oneKernel && (s.project !== null) !== open) {
+      open = s.project !== null;
+      // The editor's kernel needs the room now; back on the overview, the pictures go on.
+      if (open) stopBuild?.();
+      else void runPictures();
+    }
     if (s.projects === seen) return;
     seen = s.projects;
     void runPictures();
@@ -181,7 +213,15 @@ async function fillMissingThumbnails(): Promise<void> {
       try {
         const project = await loadProject(next.id);
         if (!project) continue;
+        if (oneKernel && editorOpen()) {
+          // Tried again once the editor is closed.
+          tried.delete(triedKey(next));
+          return;
+        }
+        if (!backgroundBuildAllowed(project.doc, { oneKernel, editorOpen: false })) continue;
         const output = await build(project.doc, PROJECT_LIMIT_MS);
+        // Its memory is not given back (see oneKernel): the next one starts in a fresh kernel.
+        if (oneKernel) endSpare();
         // Built the way the editor builds it (sandbox: textures on, fine meshes): kept, so the
         // project opens at once (openCache).
         const opts = editorMeshOptions();
@@ -208,6 +248,10 @@ async function fillMissingThumbnails(): Promise<void> {
         await saveThumbnail(next.id, thumbnail);
         useApp.setState((st) => ({ projects: st.projects.map((p) => (p.id === next.id ? { ...p, thumbnail, thumbnailAt: Date.now() } : p)) }));
       } catch (e) {
+        if (e instanceof Stopped) {
+          tried.delete(triedKey(next));
+          return;
+        }
         // A broken or very slow file stays without one.
         markFailed(next);
         console.warn(`no picture for ${next.id}:`, e);
@@ -291,6 +335,7 @@ async function fillExampleThumbnails(examples: readonly { name: string; thumbnai
         }
         done();
       } catch (e) {
+        if (e instanceof Stopped) return;
         exampleFailed(key);
         console.warn(`no picture for example ${ex.name}:`, e);
       }

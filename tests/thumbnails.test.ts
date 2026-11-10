@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyDocument, type MeercadDocument } from "@meercad/schema";
 import { describe, expect, it, vi } from "vitest";
-import { blankPixels, lookSince, needsPicture, pictureRunner, viewIsCurrent } from "../apps/web/src/lib/pictureState";
+import { BIG_STEPS, backgroundBuildAllowed, blankPixels, lookSince, needsPicture, pictureRunner, viewIsCurrent } from "../apps/web/src/lib/pictureState";
 
 vi.mock("electron", () => ({ app: { getPath: () => tmpdir() } }));
 const { adoptSiblingData } = await import("../apps/desktop/src/legacy");
@@ -107,5 +107,20 @@ describe("project pictures", () => {
     finishExamples();
     await Promise.all([first, second]);
     expect(log).toEqual(["projects 1", "examples 1", "projects 2", "examples 2"]);
+  });
+
+  /**
+   * The iPad app died when Emil (1129 steps) was opened: the overview was building it for its picture
+   * in the background kernel (1.5 GB) while the editor built it once more in its own, and the page
+   * grew past what the system allows it.
+   */
+  it("on the iPad and iPhone are built in the background only for small designs and with no project open", () => {
+    const steps = (n: number) => ({ features: Array.from({ length: n }, () => ({}) as MeercadDocument["features"][number]) });
+    const big = steps(BIG_STEPS + 1);
+    const small = steps(BIG_STEPS);
+    expect(backgroundBuildAllowed(big, { oneKernel: false, editorOpen: true })).toBe(true);
+    expect(backgroundBuildAllowed(small, { oneKernel: true, editorOpen: false })).toBe(true);
+    expect(backgroundBuildAllowed(small, { oneKernel: true, editorOpen: true })).toBe(false);
+    expect(backgroundBuildAllowed(big, { oneKernel: true, editorOpen: false })).toBe(false);
   });
 });

@@ -94,3 +94,20 @@ export function pictureRunner(steps: { projects: () => Promise<void>; examples: 
     return running;
   };
 }
+
+/**
+ * Designs with more steps than this are not built in the background on the iPad and iPhone: the
+ * kernel keeps about 1 MB per step of a big design (docs/REBUILD.md), and the page has room for one
+ * such kernel only, the editor's.
+ */
+export const BIG_STEPS = 300;
+
+/**
+ * Whether the overview may build `doc` in its background kernel now. Where there is room for one
+ * kernel only (`oneKernel`: iPad and iPhone), not while a project is open in the editor, and not a
+ * big design (BIG_STEPS), which gets its picture when it is opened.
+ */
+export function backgroundBuildAllowed(doc: Pick<MeercadDocument, "features">, at: { oneKernel: boolean; editorOpen: boolean }): boolean {
+  if (!at.oneKernel) return true;
+  return !at.editorOpen && doc.features.length <= BIG_STEPS;
+}

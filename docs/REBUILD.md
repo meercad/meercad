@@ -60,6 +60,27 @@ What is done about it:
   breaks while nearly full is replaced by one of the same kind, not by the single-threaded one.
   The iPad has no room for two kernels and keeps the old behaviour.
 
+### iPad and iPhone: one big kernel at a time
+
+The page of the iOS app is ended by the system once it grows past a few GB, and the app then loads
+again: "dies when Emil is opened" (2026-11-10). Measured in the iPad simulator with the robot design
+(footprint of the web process): the overview alone went to 2.6 GB, opening the design right after
+start to over 4 GB. The overview was building the design in its background kernel for a picture
+(pictures are kept per device, so every change on the Mac asks for a new one there) while the editor
+built it once more in its own, 1.5 GB each.
+
+So on the iPad and iPhone (`oneKernel` in `apps/web/src/lib/thumbnails.ts`):
+
+- The overview builds a design for its picture only while no project is open, and only when it has
+  at most `BIG_STEPS` (300) steps; a bigger one gets its picture from the editor when it is opened.
+- Opening a project stops a background build at once (it is tried again later, not marked as
+  failed), and the background kernel is ended after each project, since it keeps what it took.
+- Before the editor builds another design, a kernel still holding more than 600 MB starts over
+  fresh (`KernelClient.restartIfAbove`); the same design again, back from the overview, keeps it.
+
+`tests/bench/open-memory.ts file` gives the kernel heap of a first build and the size of the meshes
+sent to the page (robot: 1.66 GB with threads, 1.48 GB without; meshes only 60 MB).
+
 Open: a build of OCCT of our own without the leak (would also help the iPad and halve the memory
 of a first build), and building independent parts in several kernels at once when a design is
 opened.
