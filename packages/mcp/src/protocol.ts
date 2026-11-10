@@ -75,6 +75,46 @@ export interface BridgeRequest {
   client?: string;
   /** The MCP server (one per assistant session) that sent it: the app gives each session its own window. */
   session?: string;
+  /**
+   * "project": the server knows `params.project` (see PROJECT_PARAM), and the app gives its session
+   * one tab per project. Older servers send nothing: one tab per session, opening replaces its project.
+   */
+  tabs?: "project";
+}
+
+/**
+ * The project a request acts on, in its params: one MCP server can serve several chats at once
+ * (Claude Desktop starts one for all of them), each working on a project of its own. The app keeps
+ * a tab per project of a session and sends the request to the one with this project.
+ */
+export const PROJECT_PARAM = "project";
+
+/**
+ * The key of a session's tab: the session for its first tab, `<session>~<n>` for more (one per
+ * project, see PROJECT_PARAM). The app's main process knows keys only, as the sessions of its tabs.
+ */
+export const tabOfSession = (key: string, session: string) => key === session || key.startsWith(`${session}~`);
+
+/** A key for a new tab of `session` that none of `taken` has. */
+export function newTabKey(session: string, taken: Iterable<string>): string {
+  const used = new Set(taken);
+  if (!used.has(session)) return session;
+  let n = 2;
+  while (used.has(`${session}~${n}`)) n++;
+  return `${session}~${n}`;
+}
+
+/** Which of a session's tabs a request goes to (`project`: the project it names, see PROJECT_PARAM). */
+export type TabChoice<T> = { tab: T } | { none: "open" } | { none: "project"; project: string } | { several: T[] };
+
+export function chooseTab<T extends { session: string; project: string | null }>(tabs: readonly T[], session: string, project?: string): TabChoice<T> {
+  const own = tabs.filter((t) => tabOfSession(t.session, session));
+  if (project !== undefined) {
+    const t = own.find((x) => x.project === project);
+    return t ? { tab: t } : { none: "project", project };
+  }
+  if (own.length === 1) return { tab: own[0]! };
+  return own.length ? { several: own } : { none: "open" };
 }
 
 /**
