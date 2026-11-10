@@ -78,6 +78,9 @@ So on the iPad and iPhone (`oneKernel` in `apps/web/src/lib/thumbnails.ts`):
 - Before the editor builds another design, a kernel still holding more than 600 MB starts over
   fresh (`KernelClient.restartIfAbove`); the same design again, back from the overview, keeps it.
 
+Same steps afterwards (fresh install, opening the design 20 s after start): 2.1 GB at most instead
+of 4.1 GB, the design shown in full.
+
 `tests/bench/open-memory.ts file` gives the kernel heap of a first build and the size of the meshes
 sent to the page (robot: 1.66 GB with threads, 1.48 GB without; meshes only 60 MB).
 
