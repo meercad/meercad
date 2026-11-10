@@ -149,6 +149,7 @@ export default {
   "3MF (3D printing)": "3MF (3D-Druck)",
   "3MF with materials and colours": "3MF mit Materialien und Farben",
   "Send to {name}": "An {name} senden",
+  "Send to slicer": "An Slicer senden",
   "Opens the model as a 3MF in {name}": "Öffnet das Modell als 3MF in {name}",
   "Sent to {name}": "An {name} gesendet",
   "Sent to {name}, moved parts where they are now": "An {name} gesendet, bewegte Teile an ihrer jetzigen Stelle",

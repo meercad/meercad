@@ -107,8 +107,10 @@ export function TopBar() {
   const fileItems = (): MenuEntry[] => [
     { label: t("Import…"), title: t("STEP, STL, 3MF, OBJ, DXF or SVG"), icon: <Upload />, kbd: "Mod+O", onClick: () => void importFile() },
     { label: t("Export"), icon: <FileDown />, submenu: exportItems() },
-    // Straight into a slicer installed on this Mac (Bambu Studio first), as a 3MF.
-    ...slicers.map((sl) => ({ label: t("Send to {name}", { name: sl.name }), title: t("Opens the model as a 3MF in {name}", { name: sl.name }), icon: <Printer />, onClick: () => void sendToSlicer(sl.id) })),
+    // Straight into a slicer installed on this Mac, as a 3MF: one submenu, Bambu Studio first; hidden without one.
+    ...(slicers.length
+      ? [{ label: t("Send to slicer"), icon: <Printer />, submenu: slicers.map((sl) => ({ label: sl.name, title: t("Opens the model as a 3MF in {name}", { name: sl.name }), icon: <Printer />, onClick: () => void sendToSlicer(sl.id) })) }]
+      : []),
     ...(nativeApp ? [{ label: t("View in AR (real size on the table)"), icon: <Rotate3d />, onClick: () => void viewInAr() }] : []),
     {
       label: t("Units"),
