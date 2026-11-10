@@ -8,7 +8,7 @@ export type WorkerRequest =
   /** `props: false` skips volume and surface area (previews while dragging). */
   /** `draft`: lithophane pictures coarse and quick (while a value is being dragged); `textures: false` shows parts smooth. */
   | { type: "rebuild"; seq: number; doc: MeercadDocument; mesh?: boolean; props?: boolean; draft?: boolean; textures?: boolean }
-  /** Rebuild in a throw-away session (AI sandbox, previews); never touches the main session's cache. */
+  /** Rebuild of a changed copy (AI previews, thumbnails) next to the open design: shares its cached steps, never changes them. */
   | { type: "sandbox"; seq: number; doc: MeercadDocument }
   /** `parts`: names and colours to write with each part (XCAF), by body id. */
   | { type: "export_step"; seq: number; bodies?: string[]; parts?: StepPart[] }
@@ -20,7 +20,7 @@ export type WorkerRequest =
   | { type: "props"; seq: number }
   | { type: "measure"; seq: number; a: PickRef; b?: PickRef }
   /** Gaps between parts in a pose of the mechanism (see tools.clearances). */
-  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number; skip?: string[] }
+  | { type: "clearance"; seq: number; moving: string[]; poses: Record<string, number[]>; within?: number; skip?: string[]; rigid?: Record<string, number> }
   /** Views for a technical drawing, with hidden lines (see drawing.ts). */
   /** `doc` builds the drawing from that document instead of the open one (threads simplified, see model/drawing). */
   | { type: "drawing"; seq: number; views: ViewName[]; bodies?: string[]; doc?: MeercadDocument };

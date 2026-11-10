@@ -402,6 +402,11 @@ export function cableRigs(): cable.CableRig[] {
 }
 /** Ids of the cable parts in the design (built or not): left out of the kernel's gap checks. */
 const cableIds = () => useApp.getState().doc.features.filter((f) => f.op === "cable").map((f) => f.id);
+/**
+ * Parts held together by fixed joints (see motion.rigidGroups): the kernel's gap checks leave
+ * their pairs out. In Mini v4 they were half of all pairs near each other, every one a boolean.
+ */
+const rigidParts = () => motion.rigidGroups(useApp.getState().doc.mechanism?.joints ?? []);
 function rigsNow(): NonNullable<typeof rigs> {
   const s = useApp.getState();
   if (rigs?.output === s.output) return rigs;
@@ -800,7 +805,7 @@ export async function checkClearance(): Promise<void> {
   if (!moving.length) return toast(t("No part moves yet: add a joint first"));
   useMotion.setState({ check: { running: true, free, results: [] } });
   try {
-    const results = await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2), cableIds());
+    const results = await kernel.clearances(moving, Object.fromEntries(poses), Math.max(2, wantedClearance() * 2), cableIds(), rigidParts());
     useMotion.setState({ check: { running: false, free, results: results.sort((x, y) => x.distance - y.distance || y.overlap - x.overlap) } });
   } catch (e) {
     useMotion.setState({ check: { running: false, free, results: [], error: (e as Error).message } });
@@ -881,7 +886,7 @@ export async function clearanceNow(): Promise<{ wanted: number; pairs: Clearance
   const moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
   if (!moving.length) throw new Error("no part moves: add joints first");
   const want = wantedClearance();
-  const pairs = await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2), cableIds());
+  const pairs = await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2), cableIds(), rigidParts());
   return {
     wanted: want,
     pairs: pairs

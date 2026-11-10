@@ -110,6 +110,31 @@ describe("RebuildEngine", () => {
     expect(k.runs).toEqual([]);
   });
 
+  it("previews a change next to the cache without touching it", () => {
+    const k = fake();
+    const e = new RebuildEngine(k);
+    e.rebuild(doc(10));
+    k.runs.length = 0;
+    const f = e.fork(doc(10, 3));
+    // Only the changed fillet is built; sketch and extrude come from the cache.
+    expect(k.runs).toEqual(["fi1"]);
+    expect(f.firstRecomputed).toBe(2);
+    expect(f.state).toEqual(["sk1", "ex1", "fi1"]);
+    f.release();
+    expect(k.disposed).toBe(1);
+    // The cache still holds the original design whole.
+    k.runs.length = 0;
+    expect(e.rebuild(doc(10)).firstRecomputed).toBe(-1);
+    expect(k.runs).toEqual([]);
+    // A failing preview releases what it built, and the cache stays.
+    k.runs.length = 0;
+    const bad = e.fork(doc(12, 9));
+    expect(k.runs).toEqual(["ex1", "fi1"]);
+    bad.release();
+    expect(k.disposed).toBe(2);
+    expect(e.rebuild(doc(10)).firstRecomputed).toBe(-1);
+  });
+
   it("reports errors with hints and passes state through", () => {
     const r = new RebuildEngine(fake()).rebuild(doc(10, 9));
     expect(r.features[2]).toMatchObject({ status: "error", message: "radius too large", hint: "try ≤ 5" });
