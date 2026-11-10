@@ -63,6 +63,13 @@ async function ensureApp(): Promise<void> {
 /** The project the tool call being served names (see PROJECT_PARAM): every request it makes goes to that project's tab. */
 const addressed = new AsyncLocalStorage<string | undefined>();
 
+/**
+ * For calls that rebuild or check a whole design: opening a big one (Mini v4: 900 steps, 580 parts)
+ * takes over a minute, a change near its end 20 s, a motion check one gap check per pose. They
+ * used to give up after 60 s while the app went on working, and the next calls waited behind it.
+ */
+const LONG = 300_000;
+
 async function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
   const project = addressed.getStore();
   if (project !== undefined && params[PROJECT_PARAM] === undefined) params = { ...params, [PROJECT_PARAM]: project };
@@ -258,7 +265,7 @@ async function changed(method: "apply_ops" | "preview_ops", ops: Record<string, 
   // Checked first (a bad look must not leave the ops applied with an error), here: the tool's schema keeps it a plain object so the tool list stays short.
   const parsed = shotArgs ? lookShape.safeParse(shotArgs) : null;
   if (parsed && !parsed.success) throw new Error(`look: ${parsed.error.issues.map((i) => `${i.path.join(".") || "look"}: ${i.message}`).join("; ")} (render_view's options); nothing was changed`);
-  const result = await call(method, { ops: await inlineImportFiles(ops), detail });
+  const result = await call(method, { ops: await inlineImportFiles(ops), detail }, LONG);
   if (!parsed) return text(result);
   try {
     const r = await call<{ png: string }>("render_view", { width: 800, height: 600, ...parsed.data });
@@ -293,13 +300,13 @@ server.registerTool(
     inputSchema: { full: z.boolean().optional() },
     annotations: { readOnlyHint: true },
   },
-  guard(async ({ full }) => text(await call("get_model", { full }))),
+  guard(async ({ full }) => text(await call("get_model", { full }, LONG))),
 );
 
 server.registerTool(
   "get_sketch",
   { title: "Solved sketch", description: "Solved geometry of a sketch: points, curves, closed regions (keys usable in extrude profiles), DOF and conflicts.", inputSchema: { id: z.string() }, annotations: { readOnlyHint: true } },
-  guard(async ({ id }) => text(await call("get_sketch", { id }))),
+  guard(async ({ id }) => text(await call("get_sketch", { id }, LONG))),
 );
 
 server.registerTool(
@@ -325,14 +332,14 @@ server.registerTool(
 
 server.registerTool("clear_preview", { title: "Clear preview", description: "Removes a preview shown by preview_ops." }, guard(async () => text(await call("clear_preview"))));
 
-server.registerTool("undo", { title: "Undo", description: "Undoes the last change." }, guard(async () => text(await call("undo"))));
-server.registerTool("redo", { title: "Redo", description: "Redoes the last undone change." }, guard(async () => text(await call("redo"))));
+server.registerTool("undo", { title: "Undo", description: "Undoes the last change." }, guard(async () => text(await call("undo", {}, LONG))));
+server.registerTool("redo", { title: "Redo", description: "Redoes the last undone change." }, guard(async () => text(await call("redo", {}, LONG))));
 
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
   { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Each project gets a tab of its own: pass its id as `project` with your later calls (other chats may work in other projects over the same connection); before one is open, only lookups work.", inputSchema: { id: z.string() } },
-  guard(async ({ id }) => text(await call("open_project", { id }))),
+  guard(async ({ id }) => text(await call("open_project", { id }, LONG))),
 );
 server.registerTool(
   "close_project",
@@ -391,7 +398,7 @@ server.registerTool(
     },
   },
   guard(async ({ video, ...a }) => {
-    const r = await call<{ png: string; frames: unknown; gif?: string }>("render_motion", { ...a, ...(video ? { video: { frames: video.frames, width: video.width, height: video.height } } : {}) });
+    const r = await call<{ png: string; frames: unknown; gif?: string }>("render_motion", { ...a, ...(video ? { video: { frames: video.frames, width: video.width, height: video.height } } : {}) }, LONG);
     const content: ({ type: "image"; data: string; mimeType: string } | { type: "text"; text: string })[] = [{ type: "image", data: r.png, mimeType: "image/png" }];
     let note = JSON.stringify({ frames: r.frames });
     if (video && r.gif) {
@@ -424,7 +431,7 @@ server.registerTool(
     },
   },
   guard(async ({ path, ...a }) => {
-    const r = await call<{ file: string; png: string; scale: string; paper: string; views: string[]; parts: unknown[] }>("drawing", a);
+    const r = await call<{ file: string; png: string; scale: string; paper: string; views: string[]; parts: unknown[] }>("drawing", a, LONG);
     let note = JSON.stringify({ scale: r.scale, paper: r.paper, views: r.views, parts: r.parts });
     if (path) {
       const out = resolve(path);
@@ -549,7 +556,7 @@ server.registerTool(
     inputSchema: { a: selector, b: selector.optional() },
     annotations: { readOnlyHint: true },
   },
-  guard(async ({ a, b }) => text(await call("measure", { a, b }))),
+  guard(async ({ a, b }) => text(await call("measure", { a, b }, LONG))),
 );
 
 server.registerTool(
@@ -591,17 +598,17 @@ server.registerTool(
     description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped. Cables report the length they need against their length, their tightest bend and parts they run into.",
     inputSchema: { values: z.record(z.string(), z.number()).describe("joint id → value") },
   },
-  guard(async ({ values }) => text(await call("set_pose", { values }))),
+  guard(async ({ values }) => text(await call("set_pose", { values }, LONG))),
 );
 
 server.registerTool(
   "check_clearance",
   {
     title: "Check clearance",
-    description: "In the pose shown now: the gap between every moving part and the parts near it (mm), and the overlapping volume where they collide (mm³), with the wanted print-in-place gap (mechanism.clearance; default the design's fit, at least 0.3 mm).",
+    description: "In the pose shown now: the gap between every moving part and the parts near it (mm), and the overlapping volume where they collide (mm³), with the wanted print-in-place gap (mechanism.clearance; default the design's fit, at least 0.3 mm). Parts held together by fixed joints never move against each other and are left out (check_interference finds overlaps at rest).",
     annotations: { readOnlyHint: true },
   },
-  guard(async () => text(await call("check_clearance"))),
+  guard(async () => text(await call("check_clearance", {}, LONG))),
 );
 
 server.registerTool(
@@ -609,11 +616,11 @@ server.registerTool(
   {
     title: "Check a motion",
     description:
-      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts that touch on purpose (fixed together, or meeting at the joint they turn on) only count when they overlap. Also the smallest gap per pair of parts and where, and for each cable whether it got stretched, bent too tight or ran into a part (first pose with trouble, most stretch, tightest bend). The joints go back where they were afterwards.",
+      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts held together by fixed joints are left out (they never move against each other; check_interference finds overlaps at rest); parts meeting at the joint they turn on only count when they overlap. Also the smallest gap per pair of parts and where, and for each cable whether it got stretched, bent too tight or ran into a part (first pose with trouble, most stretch, tightest bend). The joints go back where they were afterwards.",
     inputSchema: { joint: z.string().optional(), from: z.number().optional(), to: z.number().optional(), motion: z.string().optional(), steps: z.number().int().min(1).max(240).optional() },
     annotations: { readOnlyHint: true },
   },
-  guard(async ({ joint, from, to, motion, steps }) => text(await call("check_motion", { joint, from, to, motion, steps }))),
+  guard(async ({ joint, from, to, motion, steps }) => text(await call("check_motion", { joint, from, to, motion, steps }, LONG))),
 );
 
 server.registerTool(
@@ -731,7 +738,7 @@ server.registerTool("list_folders", { title: "List folders", description: "The f
 server.registerTool("create_folder", { title: "New folder", description: "Creates a folder for projects inside `parent` (\"\" for the top level).", inputSchema: { parent: z.string().optional(), name: z.string().min(1).max(120) } }, guard(async (a) => text(await call("create_folder", a))));
 server.registerTool("move_project", { title: "Move the project", description: "Moves the open project into a folder (see list_folders; \"\" for the top level).", inputSchema: { folder: z.string() } }, guard(async (a) => text(await call("move_project", a))));
 server.registerTool("list_examples", { title: "Examples", description: "The example designs that come with meerCAD (finished designs to open and change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_examples"))));
-server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in a tab of your own, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]), keep: z.boolean().optional().describe("WIP test build only: true saves the new project in the user's projects; without it, it goes to the build's own test folder (never in the user's list) so test runs leave nothing behind") } }, guard(async (a) => text(await call("open_example", a))));
+server.registerTool("open_example", { title: "Open an example", description: "Opens an example (id or name from list_examples) as a new project of its own (in a tab of your own, see open_project).", inputSchema: { id: z.union([z.number().int(), z.string()]), keep: z.boolean().optional().describe("WIP test build only: true saves the new project in the user's projects; without it, it goes to the build's own test folder (never in the user's list) so test runs leave nothing behind") } }, guard(async (a) => text(await call("open_example", a, LONG))));
 
 server.registerTool(
   "terrain_height",

@@ -20,5 +20,8 @@ describe("interference of all parts", () => {
     expect(pair("ex2", "ex3")!.distance).toBeLessThan(1e-6);
     // Parts far apart are not even compared.
     expect(pair("ex1", "ex4")).toBeUndefined();
+    // Parts held together (fixed joints) are left out: they never move against each other.
+    const held = await clearances(await getOcct(), s.state!, ["ex1", "ex2", "ex3", "ex4"], {}, 0, [], { ex1: 0, ex2: 0, ex3: 1 });
+    expect(held.map((p) => [p.a, p.b])).toEqual([["ex2", "ex3"]]);
   });
 });

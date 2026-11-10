@@ -91,13 +91,8 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
         break;
       }
       case "sandbox": {
-        const sandbox = new KernelSession(oc!, solver!);
-        try {
-          const r = sandbox.rebuild(req.doc);
-          post({ type: "rebuilt", seq: req.seq, ...r });
-        } finally {
-          sandbox.dispose();
-        }
+        // Next to the open design: what it shares with it is not built again (a whole Mini v4 takes over a minute).
+        post({ type: "rebuilt", seq: req.seq, ...session!.preview(req.doc) });
         break;
       }
       case "export_step": {
@@ -118,7 +113,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
         post({ type: "props", seq: req.seq, bodies: session!.bodyProps() });
         break;
       case "clearance":
-        post({ type: "clearances", seq: req.seq, result: clearances(oc!, session!.state!, req.moving, req.poses, req.within, req.skip) });
+        post({ type: "clearances", seq: req.seq, result: clearances(oc!, session!.state!, req.moving, req.poses, req.within, req.skip, req.rigid) });
         break;
       case "drawing": {
         if (!req.doc) {

@@ -83,6 +83,31 @@ export class RebuildEngine<S> {
 
   /** `onFeature` is told before each feature that has to be computed (not those taken from cache). */
   rebuild(doc: MeercadDocument, onFeature?: (index: number, total: number, id: string) => void): RebuildResult<S> {
+    return this.run(doc, onFeature, null);
+  }
+
+  /**
+   * Builds `doc` next to the cached one without changing the cache (a preview of a change): the
+   * features the two share from the start come from the cache, only the rest are computed. The
+   * caller must `release` the result when done with it; the cached states stay.
+   */
+  fork(doc: MeercadDocument, onFeature?: (index: number, total: number, id: string) => void): RebuildResult<S> & { release: () => void } {
+    const own: { state: S; prev: S }[] = [];
+    const release = () => {
+      // Newest first, as in evictFrom.
+      for (let j = own.length - 1; j >= 0; j--) if (own[j]!.state !== own[j]!.prev) this.backend.dispose(own[j]!.state);
+      own.length = 0;
+    };
+    try {
+      return { ...this.run(doc, onFeature, own), release };
+    } catch (e) {
+      release();
+      throw e;
+    }
+  }
+
+  /** `own`: a fork's states, kept apart from the cache (null: the cache is updated). */
+  private run(doc: MeercadDocument, onFeature: ((index: number, total: number, id: string) => void) | undefined, own: { state: S; prev: S }[] | null): RebuildResult<S> {
     const t0 = performance.now();
     // A file from an earlier version may hold steps this one no longer has: they are left out.
     doc = withoutRemovedFeatures(doc).doc;
@@ -117,7 +142,7 @@ export class RebuildEngine<S> {
       } else {
         if (firstRecomputed === -1) {
           firstRecomputed = i;
-          this.evictFrom(i);
+          if (!own) this.evictFrom(i);
         }
         if (!f.suppressed && resolved) onFeature?.(i, doc.features.length, f.id);
         const tf = performance.now();
@@ -147,7 +172,8 @@ export class RebuildEngine<S> {
           }
         }
         status.ms = performance.now() - tf;
-        this.cache[i] = { key, state: next, status };
+        if (own) own.push({ state: next, prev: state });
+        else this.cache[i] = { key, state: next, status };
         state = next;
         statuses.push(status);
       }

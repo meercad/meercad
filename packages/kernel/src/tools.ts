@@ -208,8 +208,10 @@ export interface Clearance {
  * pair where at least one part is in `moving` and their boxes come within `within` mm. Parts in
  * `skip` are left out: cables bend with the parts (the app checks them on their own), and their
  * swept surfaces touch the parts they plug into, which made every pose an expensive boolean.
+ * Parts with the same number in `rigid` are held together (fixed joints) and never move against
+ * each other: their pairs are left out too (a screw in its servo, a servo on its link).
  */
-export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2, skip: readonly string[] = []): Clearance[] {
+export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2, skip: readonly string[] = [], rigid: Readonly<Record<string, number>> = {}): Clearance[] {
   const arena = new Arena();
   try {
     const shapes = new Map<string, TopoDS_Shape>();
@@ -223,6 +225,7 @@ export function clearances(oc: OC, state: ModelState, moving: readonly string[],
         const a = ids[i]!;
         const b = ids[j]!;
         if (!moving.includes(a) && !moving.includes(b)) continue;
+        if (rigid[a] !== undefined && rigid[a] === rigid[b]) continue;
         if (!boundsOverlap(grow(box.get(a)!), box.get(b)!)) continue;
         const A = shapes.get(a)!;
         const B = shapes.get(b)!;

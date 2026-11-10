@@ -1,4 +1,4 @@
-import { RebuildEngine, type FeatureStatus } from "@meercad/model";
+import { RebuildEngine, type FeatureStatus, type RebuildResult } from "@meercad/model";
 import type { MeercadDocument } from "@meercad/schema";
 import type { PlaneFrame, SketchSolver, SolveDiagnostics, SolvedCurve, Vec2 } from "@meercad/sketch";
 import { OcctBackend } from "./backend.js";
@@ -58,6 +58,15 @@ export interface RebuildTiming {
   received: number;
 }
 
+interface RebuildOptions {
+  mesh?: boolean;
+  props?: boolean;
+  draft?: boolean;
+  textures?: boolean;
+  onFeature?: (index: number, total: number, id: string) => void;
+}
+type RebuildOut = { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] };
+
 /** One open document in the kernel: incremental rebuild plus per-body tessellation cache. */
 export class KernelSession {
   private readonly engine: RebuildEngine<ModelState>;
@@ -75,9 +84,27 @@ export class KernelSession {
     this.engine = new RebuildEngine(new OcctBackend(oc, solver));
   }
 
-  rebuild(doc: MeercadDocument, opts: { mesh?: boolean; props?: boolean; draft?: boolean; textures?: boolean; onFeature?: (index: number, total: number, id: string) => void } = {}): { report: RebuildReport; meshes: BodyMesh[]; references: ReferenceView[] } {
+  rebuild(doc: MeercadDocument, opts: RebuildOptions = {}): RebuildOut {
     const r = this.engine.rebuild(doc, opts.onFeature);
     this.last = r.state;
+    return this.output(doc, r, opts);
+  }
+
+  /**
+   * Builds `doc` as a preview next to the open document, which stays as it is: what the two share
+   * from the first feature on is taken from this session (states and meshes), so trying a change
+   * near the end of a long design costs about as much as making it.
+   */
+  preview(doc: MeercadDocument, opts: RebuildOptions = {}): RebuildOut {
+    const r = this.engine.fork(doc, opts.onFeature);
+    try {
+      return this.output(doc, r, opts);
+    } finally {
+      r.release();
+    }
+  }
+
+  private output(doc: MeercadDocument, r: RebuildResult<ModelState>, opts: RebuildOptions): RebuildOut {
     const t = performance.now();
     const meshes: BodyMesh[] = [];
     const bodies: BodySummary[] = [];

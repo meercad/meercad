@@ -73,3 +73,22 @@ describe("motions over time", () => {
     expect(motion.motionTimes({ duration: 2 }, 3)).toEqual([0, 1, 2]);
   });
 });
+
+describe("rigidGroups", () => {
+  it("groups parts held together by fixed joints, the ground's ones together", () => {
+    const g = motion.rigidGroups([
+      { type: "fixed", a: "screw", b: "servo" },
+      { type: "fixed", a: "servo", b: "link" },
+      { type: "revolute", a: "link", b: "body" },
+      { type: "fixed", a: "body", b: "ground" },
+      { type: "fixed", a: "stand", b: "ground" },
+      { type: "fixed", a: "gone", b: "link", suppressed: true },
+    ]);
+    expect(g["screw"]).toBe(g["link"]);
+    expect(g["servo"]).toBe(g["link"]);
+    expect(g["body"]).toBe(g["stand"]);
+    expect(g["link"]).not.toBe(g["body"]);
+    expect(g["gone"]).toBeUndefined();
+    expect(g["ground"]).toBeUndefined();
+  });
+});

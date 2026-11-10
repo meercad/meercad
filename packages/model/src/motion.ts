@@ -37,6 +37,36 @@ export const SLIDE = ".slide";
 /** The part between a cylindrical joint's turn and slide (not a body of the model). */
 export const cylindricalCarrier = (id: string) => `${id}~carrier`;
 
+/**
+ * Parts held together by fixed joints, as a group number per part (parts fixed to the ground share
+ * one): parts of one group never move against each other, so gap checks can leave their pairs out.
+ * Parts in no fixed joint are not listed.
+ */
+export function rigidGroups(joints: readonly { type: string; a: string; b: string; suppressed?: boolean }[]): Record<string, number> {
+  const up = new Map<string, string>();
+  const root = (x: string): string => {
+    let r = x;
+    while (up.has(r) && up.get(r) !== r) r = up.get(r)!;
+    up.set(x, r);
+    return r;
+  };
+  for (const j of joints) {
+    if (j.type !== "fixed" || j.suppressed) continue;
+    for (const p of [j.a, j.b]) if (!up.has(p)) up.set(p, p);
+    const [ra, rb] = [root(j.a), root(j.b)];
+    if (ra !== rb) up.set(ra, rb);
+  }
+  const numbers = new Map<string, number>();
+  const out: Record<string, number> = {};
+  for (const p of up.keys()) {
+    if (p === "ground") continue;
+    const r = root(p);
+    if (!numbers.has(r)) numbers.set(r, numbers.size);
+    out[p] = numbers.get(r)!;
+  }
+  return out;
+}
+
 export interface MotionCoupling {
   driver: string;
   driven: string;
