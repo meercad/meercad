@@ -197,5 +197,8 @@
    "clearance": "play"
   }
  ],
- "rollback": null
+ "rollback": null,
+ "partColors": {
+  "ex2": "#bcc0c5"
+ }
 }

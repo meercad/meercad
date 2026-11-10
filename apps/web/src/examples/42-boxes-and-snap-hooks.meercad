@@ -294,5 +294,12 @@
    "clearance": "play"
   }
  ],
- "rollback": null
+ "rollback": null,
+ "partColors": {
+  "bx1_lid": "#bcc0c5",
+  "bx2": "#5a5f66",
+  "bx2_lid": "#9da2a8",
+  "ex1": "#bcc0c5",
+  "ex2": "#5a5f66"
+ }
 }
