@@ -175,6 +175,13 @@ export interface CableLayout {
   /** Arc position of each point the cable runs through (ends: 0 and `length`). */
   pointArc: number[];
   plugs: PlacedPlug[];
+  /**
+   * The centre line exactly: cubic Hermite pieces between `nodes` (the points, the ends moved to the
+   * plugs' backs) with unit `nodeTangents`, piece i parametrised over the chord to the next node.
+   * The kernel sweeps along this curve; `line` samples it.
+   */
+  nodes: V3[];
+  nodeTangents: V3[];
 }
 
 /** How far the cable runs inside a plug, so plug and cable join into one solid. */
@@ -269,7 +276,7 @@ export function layCable(spec: CableSpec, points: readonly V3[], ends: CableEnds
     const c2 = dot(v2, v2);
     acr.push(across(T[i]!, c2 > 1e-18 ? reflect(rL, v2, c2) : rL));
   }
-  return { line, arc, tangent: T, across: acr, length: s + inside, minRadius, minRadiusArc, pointArc, plugs };
+  return { line, arc, tangent: T, across: acr, length: s + inside, minRadius, minRadiusArc, pointArc, plugs, nodes: q, nodeTangents: tan };
 }
 
 // ---------------------------------------------------------------- mesh

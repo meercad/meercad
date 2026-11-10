@@ -50,4 +50,41 @@ describe("cable", () => {
     expect(info(past, "cab1").status).toBe("error");
     expect(info(past, "cab1").message).toMatch(/plug reaches past/);
   });
+
+  it("sweeps straight cables in any direction and curved ones with straight ends, and meshes them quickly", async () => {
+    const s = await newSession();
+    // A straight cable along Z (plugged or not) used to sweep into a surface that meshing never
+    // finished, and slanted straight cables failed to sweep at all.
+    const dirs: [number, number, number][] = [[0, 0, 1], [0, 0, -1], [0.3, 0.5, -0.8], [1, 0, 0.2], [1, 0, 0]];
+    for (const [i, d] of dirs.entries()) {
+      const l = 24.6 / Math.hypot(...d);
+      for (const plugged of [false, true]) {
+        const f: Feature = {
+          id: "cab1",
+          op: "cable",
+          points: [{ at: [10, 20, 30] }, { at: [10 + d[0] * l, 20 + d[1] * l, 30 + d[2] * l] }],
+          diameter: 2.2,
+          bendRadius: 6,
+          slack: 15,
+          ...(plugged ? { start: { kind: "jst_xh", pins: 3 }, end: { kind: "jst_xh", pins: 3 } } : {}),
+        } as Feature;
+        const t = performance.now();
+        const { report, meshes } = s.rebuild(doc([f]));
+        ok(report);
+        expect(meshes[0]!.indices.length, `direction ${i}`).toBeGreaterThan(0);
+        expect(performance.now() - t, `direction ${i}`).toBeLessThan(5000);
+        if (!plugged) expect(report.bodies[0]!.volume / (Math.PI * 1.1 ** 2 * 24.6)).toBeCloseTo(1, 3);
+      }
+    }
+    // A cable that winds round in 3D, with 20 mm straight behind each plug.
+    const route: [number, number, number][] = [[0, 0, 0], [0, 0, 20], [8, 4, 32], [20, 0, 38], [30, -10, 34], [34, -20, 22], [34, -20, 2]];
+    const t = performance.now();
+    const curved = s.rebuild(doc([{ id: "cab1", op: "cable", points: route.map((at) => ({ at })), diameter: 2.2, bendRadius: 6, start: { kind: "jst_xh", pins: 3 }, end: { kind: "jst_ph", pins: 2 } }]));
+    ok(curved.report);
+    expect(curved.meshes[0]!.indices.length).toBeGreaterThan(0);
+    expect(performance.now() - t).toBeLessThan(5000);
+    // Swept along the exact centre line: the volume is the section times the length (plugs aside).
+    const bare = s.rebuild(doc([{ id: "cab1", op: "cable", points: route.map((at) => ({ at })), diameter: 2.2, bendRadius: 6 }])).report;
+    expect(bare.bodies[0]!.volume / (Math.PI * 1.1 ** 2 * bare.features[0]!.info!["length"]!)).toBeCloseTo(1, 2);
+  });
 });
