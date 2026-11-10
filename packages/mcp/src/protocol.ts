@@ -120,6 +120,11 @@ export interface BridgeHello {
 export const STAGE_OVER = 16 * 1024 * 1024;
 /** Bytes per staged_files request at most (about 21 MB as base64). */
 export const STAGE_PIECE = 16 * 1024 * 1024;
+/**
+ * Without staging, an export must fit one bridge message: base64 adds a third, so above this many
+ * bytes it would pass the hub's 100 MiB and break the connection.
+ */
+export const INLINE_MAX = 72 * 1024 * 1024;
 /** How long the app keeps staged files that nobody fetches. */
 export const STAGE_KEEP_MS = 10 * 60_000;
 
@@ -127,6 +132,18 @@ export const STAGE_KEEP_MS = 10 * 60_000;
 export interface ExportedFiles {
   files: Record<string, string>;
   staged?: { token: string; sizes: Record<string, number> };
+}
+
+/**
+ * How the app hands over an export of `total` bytes. `stages` says whether the server asked for
+ * staging (`stage: true` in its request): a server from before staged_files only reads `files`, so
+ * staged files would vanish and it would report writing nothing. Such a server gets the files
+ * inline while they fit one message, and above that an error asking to restart it.
+ */
+export function exportTransport(total: number, stages: boolean): "inline" | "stage" | "too_big" {
+  if (total <= STAGE_OVER) return "inline";
+  if (stages) return "stage";
+  return total <= INLINE_MAX ? "inline" : "too_big";
 }
 
 /** Bytes `offset` to `offset + length` of a staged file. */

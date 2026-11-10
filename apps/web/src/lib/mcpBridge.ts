@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { ASSISTANT_IDLE_MS, DEFAULT_PORT, STAGE_KEEP_MS, STAGE_OVER, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, DEFAULT_PORT, STAGE_KEEP_MS, exportTransport, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -476,10 +476,15 @@ const keepStaged = (token: string) => window.setTimeout(() => staged.delete(toke
  * An export's files for the server: base64 in the answer, or above STAGE_OVER bytes kept here for
  * staged_files, since one message over the bridge may not hold hundreds of MB.
  */
-function exportedFiles(files: Record<string, Uint8Array | string>): ExportedFiles {
+function exportedFiles(files: Record<string, Uint8Array | string>, p: Record<string, unknown>): ExportedFiles {
   const bytes = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, typeof v === "string" ? new TextEncoder().encode(v) : v]));
   const total = Object.values(bytes).reduce((n, b) => n + b.length, 0);
-  if (total <= STAGE_OVER) return { files: Object.fromEntries(Object.entries(bytes).map(([k, v]) => [k, toB64(v)])) };
+  const how = exportTransport(total, p["stage"] === true);
+  if (how === "inline") return { files: Object.fromEntries(Object.entries(bytes).map(([k, v]) => [k, toB64(v)])) };
+  if (how === "too_big")
+    throw new Error(
+      `this export is ${Math.round(total / 1e6)} MB, too big for the meerCAD MCP server that is running: it is older than this app. Quit and reopen the assistant app (e.g. Claude Desktop) so it starts the current server, then export again`,
+    );
   const token = crypto.randomUUID();
   staged.set(token, { files: bytes, timer: keepStaged(token) });
   return { files: {}, staged: { token, sizes: Object.fromEntries(Object.entries(bytes).map(([k, v]) => [k, v.length])) } };
@@ -641,7 +646,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(p["actuators"] && typeof p["actuators"] === "object" ? { actuators: p["actuators"] as Record<string, RobotActuator> } : {}),
         ...(p["collision"] === "mesh" || p["collision"] === "shapes" ? { collision: p["collision"] } : {}),
       });
-      return { ...exportedFiles(files), links, warnings };
+      return { ...exportedFiles(files, p), links, warnings };
     }
     case "export": {
       needProject();
@@ -666,7 +671,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(typeof p["name"] === "string" ? { name: p["name"] } : {}),
         ...(typeof p["materials"] === "boolean" ? { materials: p["materials"] } : {}),
       });
-      return { ...exportedFiles(files), ...(filaments ? { filaments } : {}) };
+      return { ...exportedFiles(files, p), ...(filaments ? { filaments } : {}) };
     }
     case "list_materials": {
       const doc = currentDoc();
