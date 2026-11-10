@@ -63,7 +63,8 @@ export type BridgeMethod =
   | "photo_terrain"
   | "list_materials"
   | "read_file"
-  | "write_file";
+  | "write_file"
+  | "staged_files";
 
 export interface BridgeRequest {
   id: number;
@@ -106,4 +107,57 @@ export interface BridgeHello {
   hello: "meercad";
   version: string;
   project: string | null;
+}
+
+// ---------------------------------------------------------------- big exports
+
+/**
+ * Exported files travel as base64 in JSON over the bridge, and the hub takes WebSocket messages of
+ * at most 100 MiB (the `ws` default); a robot of a few hundred parts runs to hundreds of MB of STL.
+ * Above this many bytes in all, the app keeps the files (staged) and the server fetches them in
+ * pieces with staged_files.
+ */
+export const STAGE_OVER = 16 * 1024 * 1024;
+/** Bytes per staged_files request at most (about 21 MB as base64). */
+export const STAGE_PIECE = 16 * 1024 * 1024;
+/** How long the app keeps staged files that nobody fetches. */
+export const STAGE_KEEP_MS = 10 * 60_000;
+
+/** An export's files: base64 by name, or (big ones) staged in the app under a token, with their sizes in bytes. */
+export interface ExportedFiles {
+  files: Record<string, string>;
+  staged?: { token: string; sizes: Record<string, number> };
+}
+
+/** Bytes `offset` to `offset + length` of a staged file. */
+export interface FilePiece {
+  name: string;
+  offset: number;
+  length: number;
+}
+
+/**
+ * The staged_files requests that fetch files of these sizes: in file order, a file bigger than
+ * `piece` split into pieces of that size, and pieces grouped up to `piece` bytes per request.
+ */
+export function stagedRequests(sizes: Record<string, number>, piece = STAGE_PIECE): FilePiece[][] {
+  const requests: FilePiece[][] = [];
+  let batch: FilePiece[] = [];
+  let bytes = 0;
+  for (const [name, size] of Object.entries(sizes)) {
+    let offset = 0;
+    do {
+      const length = Math.min(piece, size - offset);
+      if (batch.length && bytes + length > piece) {
+        requests.push(batch);
+        batch = [];
+        bytes = 0;
+      }
+      batch.push({ name, offset, length });
+      bytes += length;
+      offset += length;
+    } while (offset < size);
+  }
+  if (batch.length) requests.push(batch);
+  return requests;
 }
