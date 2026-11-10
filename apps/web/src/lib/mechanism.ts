@@ -749,12 +749,21 @@ export async function checkMotionRun(id: string, frames = 24): Promise<{
   const held: { at: number; joint: string; wanted: number; got: number }[] = [];
   const smallest = new Map<string, { a: string; b: string; distance: number; at: number }>();
   const times = motion.motionTimes(m, Math.max(2, Math.min(240, Math.round(frames))));
+  let base: Map<string, number[]> | null = null;
+  let overlapping: Clearance[] = [];
   try {
     for (const at of times) {
       const t3 = +at.toFixed(3);
       for (const h of showMotionAt(m, at)) held.push({ at: t3, ...h });
       cables.add(t3);
-      for (const c of (await clearanceNow()).pairs) {
+      // All pairs at the first frame, then only those that moved against each other since; parts
+      // that overlapped then and still sit the same way overlap in this frame too.
+      const now = await clearanceNow(base ?? undefined);
+      if (!base) {
+        base = new Map(currentPoses());
+        overlapping = now.pairs.filter((c) => c.overlap > 1e-3);
+      } else for (const c of overlapping) if (now.together?.[c.a] === now.together?.[c.b]) collisions.push({ at: t3, a: c.a, b: c.b, overlap: +c.overlap.toFixed(3) });
+      for (const c of now.pairs) {
         if (c.overlap > 1e-3) collisions.push({ at: t3, a: c.a, b: c.b, overlap: +c.overlap.toFixed(3) });
         const key = `${c.a}|${c.b}`;
         // Parts that touch by design (a servo on its link) are no news; their overlaps still count.
@@ -879,19 +888,59 @@ class CableWatch {
   }
 }
 
-/** Gaps between moving parts and what they come near, in the pose shown now. */
-export async function clearanceNow(): Promise<{ wanted: number; pairs: Clearance[] }> {
+/**
+ * Which parts have moved together since the poses `base`: parts with the same number have kept
+ * their place relative to each other, so the gap between them is what it was then. A check of a
+ * motion looks at every pair once and after that only at pairs that moved against each other (one
+ * joint of a robot moves a few parts against the rest; checking all its parts at every step took
+ * minutes).
+ */
+function movedTogether(base: ReadonlyMap<string, number[]>, now: ReadonlyMap<string, number[]>): Record<string, number> {
+  const groups = new Map<string, number>();
+  const out: Record<string, number> = {};
+  for (const b of useApp.getState().output?.report.bodies ?? []) {
+    const p0 = (base.get(b.id) ?? motion.IDENTITY) as motion.Mat4;
+    const p1 = (now.get(b.id) ?? motion.IDENTITY) as motion.Mat4;
+    // The move since then, in the world: p1 · p0⁻¹ (poses are rigid: the inverse is the transpose and the shift turned back).
+    const inv: motion.Mat4 = [p0[0]!, p0[4]!, p0[8]!, 0, p0[1]!, p0[5]!, p0[9]!, 0, p0[2]!, p0[6]!, p0[10]!, 0, -(p0[0]! * p0[12]! + p0[1]! * p0[13]! + p0[2]! * p0[14]!), -(p0[4]! * p0[12]! + p0[5]! * p0[13]! + p0[6]! * p0[14]!), -(p0[8]! * p0[12]! + p0[9]! * p0[13]! + p0[10]! * p0[14]!), 1];
+    const key = motion.multiply(p1, inv).map((v) => (Math.abs(v) < 5e-7 ? 0 : v).toFixed(6)).join();
+    if (!groups.has(key)) groups.set(key, groups.size);
+    out[b.id] = groups.get(key)!;
+  }
+  return out;
+}
+
+/**
+ * Gaps between moving parts and what they come near, in the pose shown now. With `since` (the
+ * poses of an earlier check in the same run) only pairs that moved against each other since then.
+ */
+export async function clearanceNow(since?: ReadonlyMap<string, number[]>): Promise<{ wanted: number; pairs: Clearance[]; together?: Record<string, number> }> {
   openForCheck();
   const { mech } = currentMechanism();
-  const moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
+  let moving = [...new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a))];
   if (!moving.length) throw new Error("no part moves: add joints first");
   const want = wantedClearance();
-  const pairs = await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2), cableIds(), rigidParts());
+  let rigid = rigidParts();
+  let together: Record<string, number> | undefined;
+  if (since) {
+    together = movedTogether(since, currentPoses());
+    const sizes = new Map<number, number>();
+    for (const g of Object.values(together)) sizes.set(g, (sizes.get(g) ?? 0) + 1);
+    if (sizes.size < 2) return { wanted: want, pairs: [], together };
+    // Every pair across two groups has one part outside the biggest group.
+    const biggest = [...sizes].sort((a, b) => b[1] - a[1])[0]![0];
+    moving = Object.keys(together).filter((id) => together![id] !== biggest);
+    rigid = together;
+  }
+  // As without `since`: a pair counts only when one of the two is a part that a joint moves.
+  const jointed = new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a));
+  const pairs = (await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2), cableIds(), rigid)).filter((c) => jointed.has(c.a) || jointed.has(c.b));
   return {
     wanted: want,
     pairs: pairs
       .map(({ points: _p, ...rest }) => rest)
       .sort((x, y) => x.distance - y.distance),
+    ...(together ? { together } : {}),
   };
 }
 
@@ -915,6 +964,7 @@ export async function checkMotion(joint: string, from: number, to: number, steps
   const smallest = new Map<string, { a: string; b: string; distance: number; at: number }>();
   const touching = designedContacts();
   const cables = new CableWatch();
+  let base: Map<string, number[]> | null = null;
   try {
     for (let k = 0; k <= n; k++) {
       const v = from + ((to - from) * k) / n;
@@ -923,7 +973,10 @@ export async function checkMotion(joint: string, from: number, to: number, steps
         break;
       }
       cables.add(+v.toFixed(3));
-      for (const c of (await clearanceNow()).pairs) {
+      // All pairs at the first pose, then only those that moved against each other since.
+      const pairs = (await clearanceNow(base ?? undefined)).pairs;
+      base ??= new Map(currentPoses());
+      for (const c of pairs) {
         const key = `${c.a}|${c.b}`;
         const cur = smallest.get(key);
         if (!cur || c.distance < cur.distance) smallest.set(key, { a: c.a, b: c.b, distance: c.distance, at: v });

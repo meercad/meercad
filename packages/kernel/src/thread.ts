@@ -6,7 +6,7 @@
  */
 
 import { FeatureError, grooveShape, threadSpec, type ResolvedThread, type ThreadProfile } from "@meercad/model";
-import { resolveFaces } from "@meercad/naming";
+import { facesIn } from "./lookup.js";
 import type { TopoDS_Shape, TopoDS_Wire } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
 import { Body } from "./body.js";
@@ -26,7 +26,7 @@ export interface ThreadInfo {
 }
 
 export function threadBody(oc: OC, arena: Arena, bodies: ReadonlyMap<string, Body>, f: ResolvedThread): { body: Body; info: ThreadInfo } {
-  const refs = resolveFaces(f.face, [...bodies.values()]);
+  const refs = facesIn(bodies, f.face);
   const count = refs.reduce((n, r) => n + r.faces.length, 0);
   if (count !== 1) throw new FeatureError(`the face selector matches ${count} faces; pick exactly one cylindrical face`);
   const input = bodies.get(refs[0]!.body)!;

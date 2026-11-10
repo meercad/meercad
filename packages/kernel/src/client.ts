@@ -1,6 +1,6 @@
 import type { MeercadDocument } from "@meercad/schema";
 import type { BodyMesh, BodySummary } from "./mesh.js";
-import type { WorkerRequest, WorkerResponse } from "./protocol.js";
+import type { KeptMesh, WorkerRequest, WorkerResponse } from "./protocol.js";
 import type { RebuildReport, ReferenceView } from "./session.js";
 import type { Clearance, Measurement, PickRef, StepPart } from "./tools.js";
 import type { DrawingView, ViewName } from "./drawing.js";
@@ -25,6 +25,40 @@ type Pending = { req: WorkerRequest; retried: boolean; resolve: (r: WorkerRespon
 type Distribute<T> = T extends unknown ? Omit<T, "seq"> : never;
 
 /**
+ * Starting a fresh kernel before the running one is full. OCCT keeps some memory of every cut and
+ * join for good (about 1 MB per step of a big design), so over a long session the kernel's 4 GB fill
+ * up, and a kernel that breaks in the middle of a request costs that request and a whole rebuild.
+ * Instead a second worker builds the open design in the background and takes over between two
+ * requests; nothing is waited for. Only where there is room for two kernels at once (the Mac).
+ */
+export interface Renewal {
+  /** A worker like the running one. */
+  worker: () => Worker;
+  /** Renew once the kernel's memory is above this (bytes; default 2.6 GB) … */
+  above?: number;
+  /** … and has grown by this much since the design was first built in it (bytes; default 600 MB). */
+  grown?: number;
+}
+const GB = 2 ** 30;
+
+/** A kernel being warmed up to take over (see Renewal). */
+interface Spare {
+  worker: Worker;
+  /** The rebuild it has finished, and the one it is working on. */
+  built: WorkerRequest | null;
+  building: WorkerRequest | null;
+  meshes: BodyMesh[];
+  memory: number;
+}
+
+const sameArray = (a: ArrayLike<number>, b: ArrayLike<number>) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+const sameMesh = (a: BodyMesh, b: BodyMesh) => sameArray(a.indices, b.indices) && sameArray(a.positions, b.positions) && sameArray(a.faceRanges, b.faceRanges) && sameArray(a.edgeLines, b.edgeLines);
+
+/**
  * Main-thread handle to the kernel worker. When OCCT breaks inside the worker (a WebAssembly runtime
  * error, after which its memory cannot be trusted), `replace` gives a new worker: the open requests
  * go to it once more, after the last document so exports and measuring still have a model. A
@@ -40,10 +74,22 @@ export class KernelClient {
   readonly ready: Promise<{ initMs: number; threads: boolean }>;
   private onReady!: (v: { initMs: number; threads: boolean }) => void;
   private onFatal!: (e: Error) => void;
+  /**
+   * The meshes of the last main-session rebuild by body id, to put back the ones the worker only
+   * names as unchanged (KeptMesh); null when they are not known, then the next rebuild asks for all.
+   */
+  private known: Map<string, BodyMesh> | null = new Map();
+  /** The kernel's memory (bytes) after the first rebuild in this worker and after the latest. */
+  private memory = { start: 0, now: 0 };
+  private spare: Spare | null = null;
+  private coarse: number | null = null;
+  /** How often a fresh kernel has taken over (see Renewal). */
+  renewed = 0;
 
   constructor(
     worker: Worker,
     private readonly replace?: (crashed: { threads: boolean; message: string }) => Worker,
+    private readonly renewal?: Renewal,
   ) {
     this.ready = new Promise((res, rej) => {
       this.onReady = res;
@@ -54,6 +100,8 @@ export class KernelClient {
 
   private attach(worker: Worker): void {
     this.worker = worker;
+    // A new worker has sent nothing yet, so it names no mesh as kept.
+    this.known = new Map();
     worker.addEventListener("message", (e: MessageEvent<WorkerResponse>) => {
       if (worker !== this.worker) return;
       this.lastReceived = performance.timeOrigin + performance.now();
@@ -68,6 +116,17 @@ export class KernelClient {
       }
       if (msg.type === "crashed") return this.crashed(msg);
       const p = this.pending.get(msg.seq);
+      if (msg.type === "rebuilt" && (!p || p.req.type === "rebuild")) {
+        // Every main-session result moves the known meshes on, also one nobody waits for any more.
+        const meshes = this.restore(msg.meshes);
+        if (!meshes) {
+          this.pending.delete(msg.seq);
+          return p?.reject(new Error("the geometry kernel's meshes got out of step; build again"));
+        }
+        msg.meshes = meshes;
+        const memory = msg.report.kernelMemory;
+        if (memory) this.memory = { start: this.memory.start || memory, now: memory };
+      }
       if (!p) return;
       if (msg.type === "progress") return p.onProgress?.({ index: msg.index, total: msg.total, feature: msg.feature });
       this.pending.delete(msg.seq);
@@ -76,7 +135,79 @@ export class KernelClient {
         if (msg.type === "rebuilt" && p.req.type === "rebuild") this.lastRebuild = p.req;
         p.resolve(msg);
       }
+      if (this.spare) this.takeOver();
+      else this.renew();
     });
+  }
+
+  /** Starts warming up a fresh kernel once this one's memory has grown far enough (see Renewal). */
+  private renew(): void {
+    const r = this.renewal;
+    if (!r || this.spare || !this.lastRebuild) return;
+    if (this.memory.now < (r.above ?? 2.6 * GB) || this.memory.now - this.memory.start < (r.grown ?? 0.6 * GB)) return;
+    const worker = r.worker();
+    const spare: Spare = { worker, built: null, building: null, meshes: [], memory: 0 };
+    this.spare = spare;
+    worker.addEventListener("message", (e: MessageEvent<WorkerResponse>) => {
+      if (this.spare !== spare) return;
+      const msg = e.data;
+      if (msg.type === "fatal" || msg.type === "crashed" || msg.type === "failed") {
+        // No fresh kernel this time: go on in the running one, and try again when it has grown more.
+        worker.terminate();
+        this.spare = null;
+        this.memory.start = this.memory.now;
+        return;
+      }
+      if (msg.type !== "rebuilt") return;
+      spare.built = spare.building;
+      spare.building = null;
+      spare.meshes = msg.meshes as BodyMesh[];
+      spare.memory = msg.report.kernelMemory ?? 0;
+      this.takeOver();
+    });
+    if (this.coarse !== null) worker.postMessage({ type: "configure", seq: -1, meshCoarse: this.coarse } satisfies WorkerRequest);
+    this.warm(spare);
+  }
+
+  private warm(spare: Spare): void {
+    spare.building = this.lastRebuild;
+    spare.worker.postMessage({ ...this.lastRebuild!, seq: -1, fresh: true });
+  }
+
+  /** The warmed-up kernel takes over, between two requests and once it holds the design as it is now. */
+  private takeOver(): void {
+    const spare = this.spare;
+    if (!spare || !spare.built || spare.building || this.pending.size) return;
+    if (spare.built !== this.lastRebuild) return this.warm(spare);
+    const before = this.known;
+    this.spare = null;
+    this.worker.terminate();
+    this.attach(spare.worker);
+    // Its meshes are the ones it will name as kept. A part whose mesh came out the same keeps the
+    // object the page already shows, so the view does not load every part again.
+    this.known = new Map(
+      spare.meshes.map((m) => {
+        const had = before?.get(m.bodyId);
+        return [m.bodyId, had && sameMesh(had, m) ? had : m];
+      }),
+    );
+    this.memory = { start: spare.memory, now: spare.memory };
+    this.renewed++;
+  }
+
+  private restore(list: (BodyMesh | KeptMesh)[]): BodyMesh[] | null {
+    const known = this.known;
+    const out: BodyMesh[] = [];
+    for (const m of list) {
+      const mesh = "kept" in m ? known?.get(m.bodyId) : m;
+      if (!mesh) {
+        this.known = null;
+        return null;
+      }
+      out.push(mesh);
+    }
+    this.known = new Map(out.map((m) => [m.bodyId, m]));
+    return out;
   }
 
   private crashed(msg: Extract<WorkerResponse, { type: "crashed" }>): void {
@@ -88,7 +219,14 @@ export class KernelClient {
     }
     console.warn(`geometry kernel broke (${msg.message}); starting a new one`);
     this.worker.terminate();
-    this.attach(this.replace({ threads: msg.threads, message: msg.message }));
+    this.spare?.worker.terminate();
+    this.spare = null;
+    // A kernel that broke when it was nearly full ran out of memory: a fresh one of the same kind
+    // has room again. Otherwise the model broke OCCT, and `replace` gives a kernel that copes better.
+    const full = this.renewal && this.memory.now > 3.2 * GB;
+    this.memory = { start: 0, now: 0 };
+    this.attach(full ? this.renewal!.worker() : this.replace({ threads: msg.threads, message: msg.message }));
+    if (this.coarse !== null) this.worker.postMessage({ type: "configure", seq: ++this.seq, meshCoarse: this.coarse } satisfies WorkerRequest);
     if (culprit?.retried) {
       this.pending.delete(msg.seq);
       culprit.reject(new Error(`the geometry kernel broke: ${msg.message}`));
@@ -106,21 +244,23 @@ export class KernelClient {
    */
   async rebuild(doc: MeercadDocument, opts: { props?: boolean; draft?: boolean; textures?: boolean; onProgress?: RebuildProgress } = {}): Promise<RebuildOutput> {
     const sent = performance.timeOrigin + performance.now();
-    const r = await this.send({ type: "rebuild", doc: design(doc), ...(opts.props === false ? { props: false } : {}), ...(opts.draft ? { draft: true } : {}), ...(opts.textures === false ? { textures: false } : {}) }, opts.onProgress);
+    const r = await this.send({ type: "rebuild", doc: design(doc), ...(this.known ? {} : { fresh: true }), ...(opts.props === false ? { props: false } : {}), ...(opts.draft ? { draft: true } : {}), ...(opts.textures === false ? { textures: false } : {}) }, opts.onProgress);
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     if (r.report.timing) r.report.timing = { ...r.report.timing, sent, received: this.lastReceived };
-    return { report: r.report, meshes: r.meshes, references: r.references };
+    return { report: r.report, meshes: r.meshes as BodyMesh[], references: r.references };
   }
 
   /** Rebuilds without touching the main session (AI proposals, feature previews). */
   async sandbox(doc: MeercadDocument): Promise<RebuildOutput> {
     const r = await this.send({ type: "sandbox", doc: design(doc) });
     if (r.type !== "rebuilt") throw new Error("unexpected response");
-    return { report: r.report, meshes: r.meshes, references: r.references };
+    // A sandbox session never names a mesh as kept.
+    return { report: r.report, meshes: r.meshes as BodyMesh[], references: r.references };
   }
 
   /** Loosens tessellation by `meshCoarse` for all later rebuilds. */
   async configure(meshCoarse: number): Promise<void> {
+    this.coarse = meshCoarse;
     await this.send({ type: "configure", meshCoarse });
   }
 
@@ -148,6 +288,17 @@ export class KernelClient {
    * `skip`: parts left out altogether (cables, which bend with the parts and are checked on their
    * own). `rigid`: parts with the same number are held together; their pairs are left out.
    */
+  /**
+   * Overlaps of parts where they are modelled, for a big design: only pairs with one of `parts` (all
+   * when left out), only parts reaching into `box`, and at most `budgetMs` of work; `left` counts
+   * the pairs there was no time for.
+   */
+  async overlaps(parts: string[], limits: { box?: { min: [number, number, number]; max: [number, number, number] }; budgetMs?: number } = {}): Promise<{ pairs: Clearance[]; left: number }> {
+    const r = await this.send({ type: "clearance", moving: parts, poses: {}, within: 0, ...limits });
+    if (r.type !== "clearances") throw new Error("unexpected response");
+    return { pairs: r.result, left: r.left ?? 0 };
+  }
+
   async clearances(moving: string[], poses: Record<string, number[]>, within?: number, skip?: string[], rigid?: Record<string, number>): Promise<Clearance[]> {
     const r = await this.send({ type: "clearance", moving, poses, ...(within !== undefined ? { within } : {}), ...(skip?.length ? { skip } : {}), ...(rigid && Object.keys(rigid).length ? { rigid } : {}) });
     if (r.type !== "clearances") throw new Error("unexpected response");

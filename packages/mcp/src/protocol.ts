@@ -122,7 +122,7 @@ export function chooseTab<T extends { session: string; project: string | null }>
  * long: a chat or coding session keeps its MCP server running for hours, and its tab would stay
  * locked all that time. The assistant opens the project again to go on (see close_project).
  */
-export const ASSISTANT_IDLE_MS = 10 * 60_000;
+export const ASSISTANT_IDLE_MS = 30 * 60_000;
 
 /**
  * What stands in the way of a session opening a project: one project at a time per session.

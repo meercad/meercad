@@ -6,7 +6,7 @@
 import { propagateTags } from "@meercad/naming";
 import { FeatureError } from "@meercad/model";
 import type { TopoDS_Face, TopoDS_Shape } from "replicad-opencascadejs";
-import type { Arena } from "./arena.js";
+import { Arena } from "./arena.js";
 import { Body, listToArray } from "./body.js";
 import type { OC } from "./occt.js";
 
@@ -37,6 +37,9 @@ export function booleanBodies(oc: OC, arena: Arena, target: Body, tool: Body | r
     throw new FeatureError(op === "common" ? "the bodies do not overlap" : `boolean ${op} produced no solid`);
   }
   const pre = new Body(oc, arena, resultId, raw);
+  // A cut that takes nothing away (the tool only reaches into the part's box) leaves the part as
+  // it is, the very same object: steps after it that read the part need not be run again.
+  if (op === "cut" && resultId === target.bodyId && pre.faces.length === target.faces.length && target.faces.every((face) => !algo.IsDeleted(face) && !listToArray(arena, algo.Modified(face)).length)) return target;
   const descend = (b: Body) =>
     b.faces.map((face) => {
       if (algo.IsDeleted(face)) return [];
@@ -111,6 +114,26 @@ export function bounds(oc: OC, arena: Arena, s: TopoDS_Shape): { min: [number, n
   const lo = arena.track(box.CornerMin());
   const hi = arena.track(box.CornerMax());
   return { min: [lo.X(), lo.Y(), lo.Z()], max: [hi.X(), hi.Y(), hi.Z()] };
+}
+
+const bodyBoxes = new WeakMap<Body, ReturnType<typeof bounds>>();
+
+/**
+ * A part's bounding box, worked out once per part: a part never changes once made, and steps that
+ * cut or join wherever their tool reaches look at the boxes of all parts of a big design every time.
+ */
+export function bodyBounds(oc: OC, body: Body): ReturnType<typeof bounds> {
+  let box = bodyBoxes.get(body);
+  if (!box) {
+    const arena = new Arena();
+    try {
+      box = bounds(oc, arena, body.shape);
+    } finally {
+      arena.dispose();
+    }
+    bodyBoxes.set(body, box);
+  }
+  return box;
 }
 
 export function boundsOverlap(a: ReturnType<typeof bounds>, b: ReturnType<typeof bounds>, eps = 1e-6): boolean {

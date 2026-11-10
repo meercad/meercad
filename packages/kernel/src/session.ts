@@ -43,6 +43,8 @@ export interface RebuildReport {
   gears: GearView[];
   /** Wall-clock milestones (ms since the epoch, comparable across threads) for diagnostics. */
   timing?: Partial<RebuildTiming>;
+  /** Size of the kernel's memory after this rebuild (bytes; of 4 GB it can have), see Renewal in client.ts. */
+  kernelMemory?: number;
 }
 
 export interface RebuildTiming {

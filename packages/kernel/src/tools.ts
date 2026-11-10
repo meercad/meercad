@@ -84,21 +84,42 @@ function exportStepParts(oc: OC, arena: Arena, bodies: readonly Body[], parts: r
   return data.slice();
 }
 
-/** Print/CNC-quality triangles of the last rebuild's bodies, for STL and 3MF export. */
+/**
+ * Export meshes by part, with the height pictures they were made with: a part that has not changed
+ * since the last export is not meshed again (a design of some hundred parts took half a minute per
+ * export, however little had changed). Parts never change once made, so the part itself is the key.
+ */
+const exported = new WeakMap<Body, { sig: string; mesh: BodyMesh }>();
+/** Above this many bytes per export nothing is kept: the meshes would fill the kernel's memory. */
+const KEEP_EXPORT_BYTES = 1.5 * 2 ** 30;
+const meshBytes = (m: BodyMesh) => m.positions.byteLength + m.normals.byteLength + m.indices.byteLength + m.edgeLines.byteLength;
+
+/**
+ * Print/CNC-quality triangles of the last rebuild's bodies, for STL and 3MF export. The meshes are
+ * kept for the next export (see `exported`): the caller must not hand their buffers away.
+ */
 export function exportMeshes(oc: OC, state: ModelState, bodyIds?: string[]): BodyMesh[] {
   const arena = new Arena();
   try {
     const bodies = [...state.bodies.values()].filter((b) => !bodyIds || bodyIds.includes(b.bodyId));
     if (!bodies.length) throw new Error("nothing to export");
+    const meshed: Body[] = [];
     const out = bodies.map((b) => {
-      const mesh = meshBody(oc, b, bounds(oc, arena, b.shape), 1, true);
       const tex = texturesOf(state, b);
-      return tex ? texturedMesh(oc, b, mesh, tex.layers, "export") : mesh;
+      const sig = tex?.sig ?? "";
+      const kept = exported.get(b);
+      if (kept?.sig === sig) return kept.mesh;
+      const mesh = meshBody(oc, b, bounds(oc, arena, b.shape), 1, true);
+      meshed.push(b);
+      const made = tex ? texturedMesh(oc, b, mesh, tex.layers, "export") : mesh;
+      exported.set(b, { sig, mesh: made });
+      return made;
     });
     // The fine triangulation stays on the shapes otherwise, and later display meshes would reuse it.
     // (Cleaned only now: bodies that share their geometry, such as equal baseplate pieces, are
     // triangulated once.)
-    for (const b of bodies) oc.BRepTools.Clean(b.shape, true);
+    for (const b of meshed) oc.BRepTools.Clean(b.shape, true);
+    if (out.reduce((n, m) => n + meshBytes(m), 0) > KEEP_EXPORT_BYTES) for (const b of bodies) exported.delete(b);
     return out;
   } finally {
     arena.dispose();
@@ -211,22 +232,39 @@ export interface Clearance {
  * Parts with the same number in `rigid` are held together (fixed joints) and never move against
  * each other: their pairs are left out too (a screw in its servo, a servo on its link).
  */
-export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2, skip: readonly string[] = [], rigid: Readonly<Record<string, number>> = {}): Clearance[] {
+/**
+ * Limits for a check of a big design: only pairs with a part reaching into `box`, and at most
+ * `budgetMs` of work. `left` is set to the number of pairs that were not looked at for lack of time.
+ */
+export interface ClearanceLimits {
+  box?: { min: [number, number, number]; max: [number, number, number] };
+  budgetMs?: number;
+  left?: number;
+}
+
+export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2, skip: readonly string[] = [], rigid: Readonly<Record<string, number>> = {}, limits: ClearanceLimits = {}): Clearance[] {
   const arena = new Arena();
   try {
     const shapes = new Map<string, TopoDS_Shape>();
     for (const [id, body] of state.bodies) if (!skip.includes(id)) shapes.set(id, placed(oc, arena, body.shape, poses[id]));
     const box = new Map([...shapes].map(([id, s]) => [id, bounds(oc, arena, s)]));
     const grow = (b: ReturnType<typeof bounds>) => ({ min: b.min.map((v) => v - within) as typeof b.min, max: b.max.map((v) => v + within) as typeof b.max });
-    const ids = [...shapes.keys()];
+    const ids = [...shapes.keys()].filter((id) => !limits.box || boundsOverlap(box.get(id)!, limits.box));
     const out: Clearance[] = [];
+    const mover = new Set(moving);
+    const started = performance.now();
+    limits.left = 0;
     for (let i = 0; i < ids.length; i++)
       for (let j = i + 1; j < ids.length; j++) {
         const a = ids[i]!;
         const b = ids[j]!;
-        if (!moving.includes(a) && !moving.includes(b)) continue;
+        if (!mover.has(a) && !mover.has(b)) continue;
         if (rigid[a] !== undefined && rigid[a] === rigid[b]) continue;
         if (!boundsOverlap(grow(box.get(a)!), box.get(b)!)) continue;
+        if (limits.budgetMs !== undefined && performance.now() - started > limits.budgetMs) {
+          limits.left++;
+          continue;
+        }
         const A = shapes.get(a)!;
         const B = shapes.get(b)!;
         const d = arena.track(new oc.BRepExtrema_DistShapeShape(A, B));

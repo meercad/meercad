@@ -11,8 +11,8 @@ import { installKeyboardDetection } from "./lib/keyboard";
 installLongPressMenus();
 // Development builds expose the stores so test runs can read the document and the result (docs/TESTING.md).
 if (import.meta.env.DEV)
-  void Promise.all([import("./store"), import("./sketch/state")]).then(([store, sketch]) => {
-    (window as unknown as { meercadTest: unknown }).meercadTest = { app: store.useApp, sketch: sketch.useSketchUi, store };
+  void Promise.all([import("./store"), import("./sketch/state"), import("./lib/mcpBridge")]).then(([store, sketch, bridge]) => {
+    (window as unknown as { meercadTest: unknown }).meercadTest = { app: store.useApp, sketch: sketch.useSketchUi, store, mcp: bridge.testCall };
   });
 installKeyboardDetection();
 

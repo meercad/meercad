@@ -47,7 +47,7 @@ describe("one open project per session", () => {
     expect(msg).toContain('"Box" (id "p1")');
     expect(msg).toContain("last call 2 min ago");
     expect(msg).toContain("close_project");
-    expect(msg).toContain("10 minutes");
+    expect(msg).toContain("30 minutes");
     expect(msg).toContain("cannot tell the chats");
     // new_project / open_example: no target.
     expect(openBlock([tab("a~2", "p1")], "a", [])).toEqual({ tab: tab("a~2", "p1"), same: false });
