@@ -125,6 +125,45 @@ export function chooseTab<T extends { session: string; project: string | null }>
 export const ASSISTANT_IDLE_MS = 10 * 60_000;
 
 /**
+ * What stands in the way of a session opening a project: one project at a time per session.
+ * Claude Desktop runs one MCP server for all of its chats, so the app cannot tell those chats apart:
+ * a second chat opening a project next to the first one's would have every call without (or with
+ * a wrong) project land in the other chat's project. So while a tab of the session is open (it goes
+ * after ASSISTANT_IDLE_MS without a request, or with close_project), opening is refused and the
+ * answer says why. `opening`: tab keys being opened right now. `target`: the project to open, if known.
+ */
+export type OpenBlock<T> = { tab: T; same: boolean } | { opening: true } | null;
+
+export function openBlock<T extends { session: string; project: string | null }>(tabs: readonly T[], session: string, opening: Iterable<string>, target?: string): OpenBlock<T> {
+  const own = tabs.filter((t) => tabOfSession(t.session, session));
+  const held = own.find((t) => t.project !== null && t.project === target) ?? own.find((t) => t.project !== null);
+  if (held) return { tab: held, same: target !== undefined && held.project === target };
+  // A tab without a project (an open that failed) blocks nothing: the next open reuses it.
+  if ([...opening].some((k) => tabOfSession(k, session))) return { opening: true };
+  return null;
+}
+
+/** "12 s", "3 min": how long ago `at` was. */
+export const ago = (ms: number) => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.round(ms / 60_000)} min`);
+
+/**
+ * The refusal for an open that openBlock stopped: who holds what, why only one project at a time
+ * works, and how it is freed. `lastCallMs`: how long ago the holding tab got its last request.
+ */
+export function openBlockMessage(block: NonNullable<OpenBlock<{ project: string | null; name?: string | null }>>, lastCallMs?: number, idleMs = ASSISTANT_IDLE_MS): string {
+  const idleMin = Math.round(idleMs / 60_000);
+  const why = "meerCAD cannot tell the chats on one connection apart (Claude Desktop runs a single meerCAD connection for all of its chats), so it allows one open project per connection: with two, calls of one chat could land in the other's project.";
+  const free = `It is freed when that chat calls close_project, after ${idleMin} minutes without a call, or when the user clicks Take over in its meerCAD tab.`;
+  if ("opening" in block) return `Another chat on this meerCAD connection is opening a project right now. ${why} ${free} Tell the user, or try again later.`;
+  const t = block.tab;
+  const label = `"${t.name ?? t.project}" (id "${t.project}")`;
+  const last = lastCallMs !== undefined ? ` (last call ${ago(lastCallMs)} ago)` : "";
+  if (block.same)
+    return `Project ${label} is already open over this meerCAD connection${last}. If this chat opened it, just go on: it is still open, pass project: "${t.project}" with your calls. If not, another chat is working on it right now: don't change it, tell the user. ${why} ${free}`;
+  return `Another chat is already working on project ${label} over this meerCAD connection${last}, so no second project can be opened now. ${why} If ${label} is your own and you are done with it, call close_project with project: "${t.project}" first, then open again. Otherwise tell the user that another chat is busy in meerCAD and wait. ${free}`;
+}
+
+/**
  * The assistants' tabs to hand back to the user now: idle for `idleMs` since their last request,
  * not working and with no request waiting for an answer.
  */

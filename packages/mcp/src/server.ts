@@ -199,7 +199,7 @@ const server = new McpServer(
   { name: "meercad", version: "0.1.0" },
   {
     instructions:
-      "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets a tab of its own, locked for the user, who keeps working in their other tabs; close_project releases the lock and hands the project back. Several chats may share this connection, each on a project of its own: pass the project's id as `project` with every call (open_project, new_project and open_example return it), so your calls never land in another chat's project.",
+      "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets a tab of its own, locked for the user, who keeps working in their other tabs; close_project releases the lock and hands the project back. Several chats may share this connection, and meerCAD cannot tell them apart: one project is open per connection at a time, so while another chat works on one, opening a project is refused (the answer says which and how it is freed). Pass the project's id as `project` with every call (open_project, new_project and open_example return it), and call close_project when you are done so other chats can work.",
   },
 );
 
@@ -338,7 +338,7 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Each project gets a tab of its own: pass its id as `project` with your later calls (other chats may work in other projects over the same connection); before one is open, only lookups work.", inputSchema: { id: z.string() } },
+  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Pass its id as `project` with your later calls; before one is open, only lookups work. One project is open per connection at a time: while another chat (or this one) has one open, this is refused with who holds it; close_project frees it.", inputSchema: { id: z.string() } },
   guard(async ({ id }) => text(await call("open_project", { id }, LONG))),
 );
 server.registerTool(

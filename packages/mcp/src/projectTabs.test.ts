@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseTab, newTabKey, tabOfSession } from "./protocol.js";
+import { chooseTab, newTabKey, openBlock, openBlockMessage, tabOfSession } from "./protocol.js";
 
 describe("a session's tabs, one per project", () => {
   const tab = (session: string, project: string | null) => ({ session, project });
@@ -27,5 +27,40 @@ describe("a session's tabs, one per project", () => {
     expect(chooseTab([tab("a", "p1"), tab("b", "p2")], "a")).toEqual({ tab: tab("a", "p1") });
     expect(chooseTab([tab("a", "p1"), tab("a~2", "p2")], "a")).toEqual({ several: [tab("a", "p1"), tab("a~2", "p2")] });
     expect(chooseTab([tab("b", "p2")], "a")).toEqual({ none: "open" });
+  });
+});
+
+describe("one open project per session", () => {
+  const tab = (session: string, project: string | null, name: string | null = null) => ({ session, project, name });
+
+  it("lets a session open a project while it has none, and ignores other sessions' tabs", () => {
+    expect(openBlock([], "a", [])).toBeNull();
+    expect(openBlock([tab("b", "p1")], "a", [], "p2")).toBeNull();
+    // A tab left without a project (an open that failed) blocks nothing.
+    expect(openBlock([tab("a", null)], "a", [], "p1")).toBeNull();
+  });
+
+  it("refuses a second project while the session has one open, naming it and how it is freed", () => {
+    const block = openBlock([tab("a", "p1", "Box")], "a", [], "p2");
+    expect(block).toEqual({ tab: tab("a", "p1", "Box"), same: false });
+    const msg = openBlockMessage(block!, 90_000);
+    expect(msg).toContain('"Box" (id "p1")');
+    expect(msg).toContain("last call 2 min ago");
+    expect(msg).toContain("close_project");
+    expect(msg).toContain("10 minutes");
+    expect(msg).toContain("cannot tell the chats");
+    // new_project / open_example: no target.
+    expect(openBlock([tab("a~2", "p1")], "a", [])).toEqual({ tab: tab("a~2", "p1"), same: false });
+  });
+
+  it("refuses opening the open project again, telling its own chat to just go on", () => {
+    const block = openBlock([tab("a", "p1", "Box")], "a", [], "p1");
+    expect(block).toEqual({ tab: tab("a", "p1", "Box"), same: true });
+    expect(openBlockMessage(block!)).toContain("If this chat opened it, just go on");
+  });
+
+  it("refuses while another open of the session is under way", () => {
+    expect(openBlock([], "a", ["a~2"], "p1")).toEqual({ opening: true });
+    expect(openBlock([], "a", ["b"], "p1")).toBeNull();
   });
 });
