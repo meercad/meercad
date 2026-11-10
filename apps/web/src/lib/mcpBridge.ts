@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { ASSISTANT_IDLE_MS, DEFAULT_PORT, STAGE_KEEP_MS, exportTransport, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, DEFAULT_PORT, PROJECT_PARAM, STAGE_KEEP_MS, chooseTab, exportTransport, newTabKey, tabOfSession, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, versionFile, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -13,7 +13,7 @@ import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type M
 import { filamentsOf, openInSlicer, robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
 import { clientLabel } from "./mcpClient";
-import { asTestProjects, assistantWindow, desktop, isTestProject } from "./persistence";
+import { asTestProjects, assistantWindow, desktop, isTestProject, type AssistantTab } from "./persistence";
 import { apply, currentDoc, flushSave, getViewport, goHome, handOverAssistantTab, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, releaseProject, scheduleRebuild, setAssistantTabs, showAssistantTab, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
 import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
@@ -120,7 +120,7 @@ function connect(): void {
     // The server this page talked to has gone: its session has ended (the others reconnect), its tab is the user's now.
     for (const ended of [hubSession, connectionSession]) {
       if (!ended) continue;
-      void handOverAssistantTab(ended);
+      void handOverSession(ended);
     }
     hubSession = null;
     connectionSession = "";
@@ -143,7 +143,7 @@ function connect(): void {
     const msg = JSON.parse(String(e.data)) as BridgeRequest | BridgeEvent;
     if ("event" in msg) {
       if (msg.event === "hub_session") hubSession = msg.session;
-      if (msg.event === "session_ended") void handOverAssistantTab(msg.session);
+      if (msg.event === "session_ended") void handOverSession(msg.session);
       return;
     }
     try {
@@ -176,43 +176,109 @@ let hubSession: string | null = null;
 /** Requests from older MCP servers carry no session: the connection stands for one. */
 let connectionSession = "";
 
+/** A session's MCP server went: all of its tabs (one per project, see PROJECT_PARAM) go back to the user. */
+async function handOverSession(session: string): Promise<void> {
+  const keys = new Set([session, ...((await desktop?.assistant?.tabs()) ?? []).map((t) => t.session).filter((k) => tabOfSession(k, session))]);
+  await Promise.all([...keys].map((k) => handOverAssistantTab(k)));
+}
+
+/** Keys of tabs being opened right now: two opens at once must not pick the same one. */
+const opening = new Set<string>();
+/** The tab key a session last opened a project in, by session and by session + project (for the answers after a tab went). */
+const lastTab = new Map<string, string>();
+
+/** A tab named for the assistant: the project and its id. */
+const tabLabel = (t: AssistantTab) => `"${t.name ?? t.project ?? "nothing yet"}"${t.project ? ` (id "${t.project}")` : ""}`;
+
+/** Requests that need no project: with several tabs and no project named, the user's page answers them. */
+const PROJECTLESS = new Set(["get_status", "list_projects", "list_folders", "list_examples", "read_file", "write_file"]);
+
 /**
  * Where a request is served. On the Mac every assistant session (one MCP server each) works in a
  * tab of its own (a page of its own inside the window, locked for the user) and never in the
  * user's: opening a project opens that tab (without bringing it to the front), and from then on
  * the session's requests go there. A project the user has open in a tab goes over to the
  * assistant's tab (saved first). Before a session has opened anything, only lookups are answered.
+ *
+ * One MCP server may serve several chats at once (Claude Desktop starts one for all of them). A
+ * current server (`tabs: "project"`) gets a tab per project: each request names its project
+ * (PROJECT_PARAM) and goes to that tab, so one chat opening a project never moves another chat's
+ * calls over to it. Older servers keep one tab per session, whose project an open replaces.
  */
 async function route(req: BridgeRequest): Promise<unknown> {
   const a = desktop?.assistant;
-  if (!a) return serve(req);
+  const named = req.params[PROJECT_PARAM];
+  const project = typeof named === "string" && named ? named : undefined;
+  const { [PROJECT_PARAM]: _named, ...params } = req.params;
+  if (!a) return serve({ ...req, params });
   const session = req.session ?? connectionSession;
-  req = { ...req, session };
+  const perProject = req.tabs === "project";
+  req = { ...req, session, params };
   const client = clientLabel(req.client);
+  const tabs = await a.tabs();
+  const mine = tabs.filter((t) => tabOfSession(t.session, session));
+  /** Opens (or reuses) the tab `key` and serves the request there; the answer names the project for later calls. */
+  const openIn = async (key: string, before?: () => Promise<void>, front = false) => {
+    opening.add(key);
+    try {
+      await before?.();
+      const tab = await a.open({ session: key, client });
+      if (front) showAssistantTab(key);
+      const result = await a.call(tab, req);
+      const now = (await a.tabs()).find((t) => t.session === key);
+      if (now?.project) {
+        lastTab.set(session, key);
+        lastTab.set(`${session}\n${now.project}`, key);
+      }
+      if (!perProject || !now?.project || !result || typeof result !== "object" || Array.isArray(result)) return result;
+      const r = result as Record<string, unknown>;
+      return { ...r, ...("project" in r ? {} : { project: { id: now.project, name: now.name } }), ...(mine.some((t) => t.session !== key) ? { hint: `You have more than one project open now: pass project: "${now.project}" with every call for this one.` } : {}) };
+    } finally {
+      opening.delete(key);
+    }
+  };
+  const freshKey = () => (perProject ? newTabKey(session, [...tabs.map((t) => t.session), ...opening]) : session);
   // Importing a design opens it as a new project, like new_project.
   if (OPENS.has(req.method) || (req.method === "import_file" && /\.(meercad|json)$/i.test(String(req.params["name"] ?? "")))) {
-    if (req.method !== "open_project") return a.call(await a.open({ session, client }), req);
+    if (req.method !== "open_project") return openIn(freshKey());
     const id = String(req.params["id"]);
-    const holder = useApp.getState().assistantTabs.find((x) => x.project === id && x.session !== session);
+    const holder = tabs.find((x) => x.project === id && !tabOfSession(x.session, session));
     if (holder) throw new Error(`${holder.client} is working on this project in its own meerCAD tab right now. Pick another project, or wait until it is done.`);
+    const key = perProject ? (mine.find((t) => t.project === id)?.session ?? freshKey()) : session;
     // The user's tab of it closes: a project is open in one tab only. Was it the one in front, the assistant's tab comes to the front instead.
     const s = useApp.getState();
     const front = s.screen === "editor" && s.project?.id === id;
-    if (s.project?.id === id || s.tabs.some((x) => x.id === id)) await releaseProject(id);
-    const tab = await a.open({ session, client });
-    if (front) showAssistantTab(session);
-    return a.call(tab, req);
+    return openIn(
+      key,
+      async () => {
+        if (s.project?.id === id || s.tabs.some((x) => x.id === id)) await releaseProject(id);
+      },
+      front,
+    );
   }
-  const tab = await a.windowOf(session);
+  const pick = chooseTab(tabs, session, perProject ? project : undefined);
+  if ("several" in pick) {
+    if (PROJECTLESS.has(req.method)) {
+      const r = await serve(req);
+      return req.method === "get_status" && r && typeof r === "object" ? { ...r, project: null, tab: "several: pass project with your calls", projects: pick.several.map((t) => ({ id: t.project, name: t.name })) } : r;
+    }
+    throw new Error(`You have ${pick.several.length} projects open in meerCAD tabs of yours: ${pick.several.map(tabLabel).join(", ")}. Pass project: "<id>" with the call to say which one it is for.`);
+  }
+  // With no tab to go to: the one it had (its answer says why it went).
+  const key = "tab" in pick ? pick.tab.session : "project" in pick ? lastTab.get(`${session}\n${pick.project}`) : (lastTab.get(session) ?? session);
+  const tab = key ? await a.windowOf(key) : null;
   if (req.method === "close_project") {
-    if (typeof tab !== "number") return { closed: false, note: "This session has no project open: nothing to close." };
-    const held = useApp.getState().assistantTabs.find((x) => x.session === session);
-    await handOverAssistantTab(session, true, "released");
-    return { closed: true, project: held?.project ? { id: held.project, name: held.name } : null, note: "Saved and handed back to the user: it is open, unlocked, in a tab of theirs. open_project to work on it again." };
+    if (typeof tab !== "number" || !("tab" in pick)) return { closed: false, note: "project" in pick ? `Project "${pick.project}" is not open in a meerCAD tab of yours: nothing to close.` : "This session has no project open: nothing to close." };
+    await handOverAssistantTab(pick.tab.session, true, "released");
+    return { closed: true, project: pick.tab.project ? { id: pick.tab.project, name: pick.tab.name } : null, note: "Saved and handed back to the user: it is open, unlocked, in a tab of theirs. open_project to work on it again." };
   }
-  if (typeof tab === "number") return a.call(tab, req);
+  if (typeof tab === "number" && "tab" in pick) return a.call(tab, req);
   if (tab === "idle") throw new Error(`Your meerCAD tab went back to the user after ${Math.round(LOCK_RELEASE_MIN)} minutes without a request, so they can work on the project. Open it again (open_project) to go on; the user may have changed it meanwhile.`);
   if (tab === "closed") throw new Error("The user took the project over or closed your meerCAD tab. Open the project again (open_project) to go on, or ask the user first.");
+  if ("project" in pick) {
+    if (PROJECTLESS.has(req.method)) return serve(req);
+    throw new Error(`Project "${pick.project}" is not open in a meerCAD tab of yours. Open it first (open_project)${mine.length ? `; yours are ${mine.map(tabLabel).join(", ")}` : ""}.`);
+  }
   if (READS.has(req.method)) return serve(req);
   const front = useApp.getState().screen === "editor" ? useApp.getState().project : null;
   throw new Error(`Open the project to work on first (open_project, new_project or open_example): it opens in a meerCAD tab of your own, the user keeps working in theirs.${front ? ` The user has "${front.name}" open (id "${front.id}"); open_project with that id moves it over to your tab.` : ""}`);

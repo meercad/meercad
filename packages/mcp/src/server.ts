@@ -4,6 +4,7 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
@@ -19,7 +20,7 @@ import { appTarget, createLauncher, launchEnv } from "./launchApp.js";
 import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
 import { meercadDocument } from "./meercadFile.js";
 import { STALE_NOTE, staleCheck } from "./staleServer.js";
-import { DEFAULT_PORT, stagedRequests, type BridgeMethod, type ExportedFiles } from "./protocol.js";
+import { DEFAULT_PORT, PROJECT_PARAM, stagedRequests, type BridgeMethod, type ExportedFiles } from "./protocol.js";
 
 /** The port of the build this server ships in (server.json next to it, see CHANNEL_PORTS); MEERCAD_MCP_PORT wins (test runs). */
 function bundledPort(): number | undefined {
@@ -59,7 +60,12 @@ async function ensureApp(): Promise<void> {
   if (!connected) throw new Error(opened ? NOT_CONNECTED_OPENED : NOT_CONNECTED);
 }
 
+/** The project the tool call being served names (see PROJECT_PARAM): every request it makes goes to that project's tab. */
+const addressed = new AsyncLocalStorage<string | undefined>();
+
 async function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
+  const project = addressed.getStore();
+  if (project !== undefined && params[PROJECT_PARAM] === undefined) params = { ...params, [PROJECT_PARAM]: project };
   const info = server.server.getClientVersion();
   const send = () => bridge.call<T>(method, params, timeoutMs, info?.title ?? info?.name ?? "Assistant");
   try {
@@ -182,7 +188,35 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
   );
 }
 
-const server = new McpServer({ name: "meercad", version: "0.1.0" }, { instructions: "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets a tab of its own, locked for the user, who keeps working in their other tabs; close_project releases the lock and hands the project back." });
+const server = new McpServer(
+  { name: "meercad", version: "0.1.0" },
+  {
+    instructions:
+      "Parametric CAD. Call get_guide once before modelling; change the model only with apply_ops (or preview_ops to try ideas). Open the project you work on with open_project / new_project: it gets a tab of its own, locked for the user, who keeps working in their other tabs; close_project releases the lock and hands the project back. Several chats may share this connection, each on a project of its own: pass the project's id as `project` with every call (open_project, new_project and open_example return it), so your calls never land in another chat's project.",
+  },
+);
+
+/**
+ * Tools that act on the open project take `project` (its id, see PROJECT_PARAM): one server can
+ * serve several chats at once, and the app sends each call to the tab of the project it names.
+ * Lookups and the tools that open a project do without.
+ */
+const UNADDRESSED = new Set(["get_guide", "gear_calc", "insert_sizes", "list_projects", "open_project", "new_project", "list_examples", "open_example", "list_folders", "create_folder"]);
+const projectParam = z.string().min(1).optional().describe("Id of the project this call acts on (open_project, new_project and open_example return it). Pass it every time: other chats may work in other projects over the same connection. Without it, the call goes to your only open project.");
+{
+  type Handler = (...a: unknown[]) => unknown;
+  type Config = { inputSchema?: Record<string, unknown> } & Record<string, unknown>;
+  const register = server.registerTool.bind(server) as unknown as (name: string, config: Config, cb: Handler) => unknown;
+  (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) => {
+    if (UNADDRESSED.has(name)) return register(name, config, cb);
+    const takes = !!config.inputSchema;
+    // A tool without input gets its handler called with (extra) only, one with input with (args, extra).
+    return register(name, { ...config, inputSchema: { ...config.inputSchema, [PROJECT_PARAM]: projectParam } }, (args, extra) => {
+      const { [PROJECT_PARAM]: project, ...rest } = args as Record<string, unknown>;
+      return addressed.run(typeof project === "string" ? project : undefined, () => (takes ? cb(rest, extra) : cb(extra)));
+    });
+  };
+}
 
 const op = z.record(z.string(), z.unknown()).describe("One Operations-API op, see get_guide");
 const selector = z.record(z.string(), z.unknown());
@@ -297,7 +331,7 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. All later calls of this session act on it; before one is open, only lookups work.", inputSchema: { id: z.string() } },
+  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Each project gets a tab of its own: pass its id as `project` with your later calls (other chats may work in other projects over the same connection); before one is open, only lookups work.", inputSchema: { id: z.string() } },
   guard(async ({ id }) => text(await call("open_project", { id }))),
 );
 server.registerTool(

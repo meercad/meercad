@@ -226,7 +226,8 @@ export function createBridge(o: BridgeOptions) {
         reject(new Error(`${method} timed out`));
       }, timeoutMs);
       pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-      ws.send(JSON.stringify({ id, method, params, client, session }));
+      // tabs: this server knows params.project, so the app may give the session a tab per project.
+      ws.send(JSON.stringify({ id, method, params, client, session, tabs: "project" }));
     });
   }
 
