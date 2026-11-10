@@ -20,6 +20,7 @@ import { appTarget, createLauncher, launchEnv } from "./launchApp.js";
 import { localPath, readLocal, writeLocal, type AppFiles } from "./localFiles.js";
 import { meercadDocument } from "./meercadFile.js";
 import { STALE_NOTE, staleCheck } from "./staleServer.js";
+import { callKey, createPatience } from "./patience.js";
 import { DEFAULT_PORT, PROJECT_PARAM, stagedRequests, type BridgeMethod, type ExportedFiles } from "./protocol.js";
 
 /** The port of the build this server ships in (server.json next to it, see CHANNEL_PORTS); MEERCAD_MCP_PORT wins (test runs). */
@@ -67,8 +68,10 @@ const addressed = new AsyncLocalStorage<string | undefined>();
  * For calls that rebuild or check a whole design: opening a big one (Mini v4: 900 steps, 580 parts)
  * takes over a minute, a change near its end 20 s, a motion check one gap check per pose. They
  * used to give up after 60 s while the app went on working, and the next calls waited behind it.
+ * Opening Mini v4 in a fresh app took over 5 minutes (2026-11-10). The client never waits that
+ * long (see patience): this is only how long a run may go on before the server gives up on it.
  */
-const LONG = 300_000;
+const LONG = 900_000;
 
 async function call<T = unknown>(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<T> {
   const project = addressed.getStore();
@@ -208,6 +211,22 @@ const server = new McpServer(
  * serve several chats at once, and the app sends each call to the tab of the project it names.
  * Lookups and the tools that open a project do without.
  */
+/**
+ * How long a tool call may take before it answers that the work goes on (see patience): below the
+ * ~80 s after which some clients give up and restart this server. MEERCAD_MCP_ANSWER_MS for tests.
+ */
+const ANSWER_WITHIN_MS = (() => {
+  const v = Number(process.env["MEERCAD_MCP_ANSWER_MS"]);
+  return Number.isFinite(v) && v >= 100 ? v : 50_000;
+})();
+const patience = createPatience({ answerWithinMs: ANSWER_WITHIN_MS, keepMs: 10 * 60_000 });
+const stillWorking = (tool: string, ms: number) =>
+  text({
+    stillWorking: true,
+    tool,
+    seconds: Math.round(ms / 1000),
+    note: `meerCAD is still working on this ${tool} call (big designs take a while). It keeps running and your project stays open in your tab: call ${tool} again with exactly the same arguments to get its result (that waits for this run instead of starting another one). Calls to other tools wait until it is done.`,
+  });
 const UNADDRESSED = new Set(["get_guide", "gear_calc", "insert_sizes", "list_projects", "open_project", "new_project", "list_examples", "open_example", "list_folders", "create_folder"]);
 const projectParam = z.string().min(1).optional().describe("Id of the project this call acts on (open_project, new_project and open_example return it). Pass it every time: other chats may work in other projects over the same connection. Without it, the call goes to your only open project.");
 {
@@ -215,12 +234,14 @@ const projectParam = z.string().min(1).optional().describe("Id of the project th
   type Config = { inputSchema?: Record<string, unknown> } & Record<string, unknown>;
   const register = server.registerTool.bind(server) as unknown as (name: string, config: Config, cb: Handler) => unknown;
   (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) => {
-    if (UNADDRESSED.has(name)) return register(name, config, cb);
     const takes = !!config.inputSchema;
+    // Every call answers in time (see patience); the same call again picks up its result.
+    const patiently = (args: unknown, run: () => unknown) => patience.run(callKey(name, args), async () => run(), (ms) => stillWorking(name, ms));
+    if (UNADDRESSED.has(name)) return register(name, config, (...a) => patiently(takes ? a[0] : {}, () => cb(...a)));
     // A tool without input gets its handler called with (extra) only, one with input with (args, extra).
     return register(name, { ...config, inputSchema: { ...config.inputSchema, [PROJECT_PARAM]: projectParam } }, (args, extra) => {
       const { [PROJECT_PARAM]: project, ...rest } = args as Record<string, unknown>;
-      return addressed.run(typeof project === "string" ? project : undefined, () => (takes ? cb(rest, extra) : cb(extra)));
+      return patiently(args, () => addressed.run(typeof project === "string" ? project : undefined, () => (takes ? cb(rest, extra) : cb(extra))));
     });
   };
 }
