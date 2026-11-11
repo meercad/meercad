@@ -329,7 +329,7 @@ export class Viewport {
   handles: Handle[] = [];
   private handleGroup = new THREE.Group();
   private jointGroup = new THREE.Group();
-  private activeHandle: { h: Handle; value: number; pointer: number } | null = null;
+  private activeHandle: { h: Handle; value: number; start: number; pointer: number } | null = null;
   private hoverHandle: string | null = null;
   /** Reports the value being dragged and its screen position (for a value tooltip). */
   onHandleDrag: ((h: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
@@ -1715,6 +1715,21 @@ export class Viewport {
       "pointerdown",
       (e) => {
         if (e.button !== 0 || (e.pointerType === "touch" && this.penSeen)) return;
+        // A second finger while one drags an arrow: the two fingers pinch or pan the view, so the
+        // drag is called off and the value goes back to where it was (a pinch over a selected face
+        // changed its thickness).
+        const active = this.activeHandle;
+        if (active && e.pointerId !== active.pointer) {
+          this.activeHandle = null;
+          dragTo.cancel();
+          el.style.cursor = "";
+          if (el.hasPointerCapture(active.pointer)) el.releasePointerCapture(active.pointer);
+          this.onHandleDrag?.(null, active.start, null);
+          if (active.value !== active.start) active.h.onDrag(active.start);
+          active.h.onEnd(active.start);
+          this.drawHandles();
+          return;
+        }
         const h = this.hitHandle(e.clientX, e.clientY, e.pointerType === "touch" ? 30 : 18);
         if (!h) return;
         if (lastClick && performance.now() - lastClick.at < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 6) return;
@@ -1725,7 +1740,7 @@ export class Viewport {
         const t = this.axisParam(h, e.clientX, e.clientY);
         // Offset between where the arrow was grabbed and its value, so it does not jump.
         grab = (t ?? 0) - (h.value + this.handleBase(h));
-        this.activeHandle = { h, value: h.value, pointer: e.pointerId };
+        this.activeHandle = { h, value: h.value, start: h.value, pointer: e.pointerId };
         h.onStart?.();
       },
       { capture: true },
