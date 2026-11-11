@@ -83,7 +83,8 @@ describe("MCP server", () => {
   it("lists every tool with a title, a description and an input schema", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    for (const want of ["get_guide", "get_model", "apply_ops", "preview_ops", "export", "measure", "render_view", "open_project", "new_project", "close_project", "gear_calc", "insert_sizes", "status", "undo", "redo"]) expect(names).toContain(want);
+    // One string, so tests/coverage.test.ts does not take this list for tests of each tool.
+    for (const want of "get_guide get_model apply_ops preview_ops export measure render_view open_project new_project close_project gear_calc insert_sizes status undo redo".split(" ")) expect(names).toContain(want);
     expect(new Set(names).size).toBe(names.length);
     for (const t of tools) {
       expect(t.description?.length, t.name).toBeGreaterThan(10);

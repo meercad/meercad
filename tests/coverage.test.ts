@@ -44,8 +44,8 @@ const mcpTools = [...read("packages/mcp/src/server.ts").matchAll(/registerTool\(
  * the WIP app (`pnpm test:e2e`). Take a tool off this list once a unit or integration test calls it.
  */
 const MCP_E2E_ONLY = [
-  "apply_ops", "check_clearance", "check_interference", "check_motion", "clear_preview", "create_folder", "deviation",
-  "export_drawing", "export_robot", "get_guide", "get_sketch", "get_version", "import_file", "joints_from_gears",
+  "check_clearance", "check_interference", "check_motion", "clear_preview", "create_folder", "deviation",
+  "export_drawing", "export_robot", "get_sketch", "get_version", "import_file", "joints_from_gears",
   "list_examples", "list_folders", "list_materials", "list_projects", "measure", "measure_scan", "move_project",
   "new_project", "open_example", "open_project", "photo_terrain", "place_on_terrain", "play_motion", "preview_ops",
   "print_check", "rebuild_mesh", "redo", "rename_project", "render_motion", "render_view", "repair_mesh", "set_pose",
