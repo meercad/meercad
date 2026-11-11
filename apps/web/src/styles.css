@@ -889,6 +889,9 @@ button.link-row:hover { background: color-mix(in srgb, var(--accent) 12%, transp
 @keyframes loading-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 /* An app, not a page: double clicks and drags never select text, except in fields and texts meant to be read or copied. */
 body { -webkit-user-select: none; user-select: none; }
+/* An app does not zoom its own interface: two quick taps (or a pinch outside the model) must never
+   scale the page, on iPad also with a trackpad or Pencil, where "pointer: coarse" does not hold. */
+html { touch-action: manipulation; }
 input, textarea, [contenteditable="true"], .doc, .licence-text, .selectable { -webkit-user-select: text; user-select: text; }
 /* Touch and Pencil: finger-sized targets, no text selection or callout on long press (it opens
    the context menu instead), and 16px fields so Safari does not zoom in on focus. */
@@ -985,7 +988,7 @@ html[data-compact] .app.has-sheet .toolbar.rail { display: none; }
 
 /* parts, history and variables: a sheet over the lower part of the model */
 html[data-compact] .side { top: auto; left: 6px; right: 6px; bottom: calc(var(--bar) + 12px); width: auto; height: auto; max-height: 52%; border-radius: 20px; animation: sheet-in 0.2s ease-out; }
-html[data-compact] .sheet-grip { display: flex; justify-content: center; align-items: center; width: 100%; height: 22px; flex: none; padding: 0; border: 0; background: none; }
+html[data-compact] .sheet-grip { display: flex; justify-content: center; align-items: center; width: 100%; height: 30px; touch-action: none; flex: none; padding: 0; border: 0; background: none; }
 html[data-compact] .sheet-grip i { width: 40px; height: 5px; border-radius: 3px; background: var(--border-strong); }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(16px); } }
 
