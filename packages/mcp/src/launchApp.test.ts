@@ -8,7 +8,7 @@ describe("which app the MCP server opens", () => {
     expect(appTarget({ ...mac, serverPath: "/Applications/meerCAD WIP.app/Contents/Resources/mcp/server.js" })).toEqual({ path: "/Applications/meerCAD WIP.app" });
   });
   it("takes MEERCAD_APP as a path or a bundle id", () => {
-    expect(appTarget({ ...mac, serverPath: "/x/server/server.js", env: { MEERCAD_APP: "dev.meercad.app" } })).toEqual({ bundleId: "dev.meercad.app" });
+    expect(appTarget({ ...mac, serverPath: "/x/server/server.js", env: { MEERCAD_APP: "app.meercad" } })).toEqual({ bundleId: "app.meercad" });
     expect(appTarget({ ...mac, serverPath: "/x/server/server.js", env: { MEERCAD_APP: "/Applications/meerCAD.app" } })).toEqual({ path: "/Applications/meerCAD.app" });
   });
   it("falls back to the store app on the store ports, nothing for a dev checkout", () => {
@@ -20,7 +20,7 @@ describe("which app the MCP server opens", () => {
     const wip = "/Applications/meerCAD WIP.app/Contents/Resources/mcp/server.js";
     expect(appTarget({ ...mac, serverPath: wip, env: { MEERCAD_NO_LAUNCH: "1" } })).toBeNull();
     expect(appTarget({ ...mac, serverPath: wip, env: { MEERCAD_MCP_PORT: "47999" } })).toBeNull();
-    expect(appTarget({ ...mac, serverPath: wip, env: { MEERCAD_MCP_PORT: "47821", MEERCAD_APP: "dev.meercad.app" } })).toEqual({ path: "/Applications/meerCAD WIP.app" });
+    expect(appTarget({ ...mac, serverPath: wip, env: { MEERCAD_MCP_PORT: "47821", MEERCAD_APP: "app.meercad" } })).toEqual({ path: "/Applications/meerCAD WIP.app" });
     expect(appTarget({ ...mac, platform: "linux", serverPath: wip })).toBeNull();
   });
   it("opens the app without the server's own environment (it would start as plain Node)", () => {

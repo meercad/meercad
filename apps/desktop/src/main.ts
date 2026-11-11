@@ -73,7 +73,7 @@ const defaultProjectsDir = () => join(app.getPath("documents"), "meerCAD");
 let iCloudDir: string | null = null;
 async function findICloud(): Promise<void> {
   if (!MAS) {
-    const container = join(homedir(), "Library", "Mobile Documents", "iCloud~dev~meercad~app");
+    const container = join(homedir(), "Library", "Mobile Documents", "iCloud~app~meercad");
     iCloudDir = existsSync(container) ? join(container, "Documents") : null;
     return;
   }
@@ -670,7 +670,7 @@ ipcMain.handle("mcp:install-claude-desktop", async () => {
 function mcpEntry(): { command: string; args: string[]; env?: Record<string, string> } {
   // The App Store build's server.js has no server.json: its port comes with the entry (TestFlight's differs),
   // and the app it opens when an assistant needs it (see packages/mcp/src/launchApp.ts).
-  return MAS ? { command: "node", args: [mcpServer], env: { MEERCAD_MCP_PORT: String(MCP_PORT), MEERCAD_APP: "dev.meercad.app" } } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
+  return MAS ? { command: "node", args: [mcpServer], env: { MEERCAD_MCP_PORT: String(MCP_PORT), MEERCAD_APP: "app.meercad" } } : { command: process.execPath, args: [mcpServer], env: { ELECTRON_RUN_AS_NODE: "1" } };
 }
 /**
  * Where an App Store build came from: TestFlight and development installs carry a sandbox receipt

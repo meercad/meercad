@@ -1,5 +1,5 @@
 {
-  "appId": "dev.meercad.app",
+  "appId": "app.meercad",
   "appName": "meerCAD",
   "webDir": "../web/dist",
   "ios": {

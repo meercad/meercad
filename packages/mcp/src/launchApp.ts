@@ -8,7 +8,7 @@ import { CHANNEL_PORTS } from "./protocol.js";
 export type AppTarget = { path: string } | { bundleId: string };
 
 /** The App Store build's bundle id (the release and TestFlight). */
-export const STORE_BUNDLE_ID = "dev.meercad.app";
+export const STORE_BUNDLE_ID = "app.meercad";
 
 /**
  * Which app this server belongs to: the bundle it ships in (RC, WIP, a local release), else
@@ -23,7 +23,7 @@ export function appTarget(o: { serverPath: string; env: Record<string, string | 
   const bundle = /^(.*?\.app)\/Contents\/Resources\/mcp\//.exec(o.serverPath);
   if (bundle) return { path: bundle[1]! };
   const app = o.env["MEERCAD_APP"]?.trim();
-  // An absolute path is a bundle on disk; anything else a bundle id (which ends in ".app" too, e.g. dev.meercad.app).
+  // An absolute path is a bundle on disk; anything else a bundle id (which ends in ".app" too, e.g. app.meercad).
   if (app) return app.startsWith("/") ? { path: app } : { bundleId: app };
   if (o.port === CHANNEL_PORTS.prod || o.port === CHANNEL_PORTS.testflight) return { bundleId: STORE_BUNDLE_ID };
   return null;
