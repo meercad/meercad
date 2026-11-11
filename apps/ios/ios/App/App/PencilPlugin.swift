@@ -60,6 +60,16 @@ class AppViewController: CAPBridgeViewController {
     }
 
     override open func capacitorDidLoad() {
+        // An app's interface never zooms: two quick taps zoomed it like a web page, and it stayed
+        // zoomed until the app was restarted. The page's viewport says the same (index.html).
+        webView?.scrollView.minimumZoomScale = 1
+        webView?.scrollView.maximumZoomScale = 1
+        webView?.scrollView.bouncesZoom = false
+        // Started by the UI tests (apps/ios/uitests): the page shows its state to them (lib/uitestProbe.ts).
+        // (Here, not in webViewConfiguration: Capacitor replaces that configuration's script controller.)
+        if ProcessInfo.processInfo.arguments.contains("-meercadUITest") {
+            webView?.configuration.userContentController.addUserScript(WKUserScript(source: "window.__meercadUITest = true; try { localStorage.setItem(\"meercad.tourDone\", \"1\") } catch (e) {}", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         bridge?.registerPluginInstance(PencilPlugin())
         bridge?.registerPluginInstance(ScanPlugin())
         bridge?.registerPluginInstance(TerrainPlugin())

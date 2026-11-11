@@ -7,12 +7,15 @@ import { desktop } from "./lib/persistence";
 import { nativeApp } from "./lib/native";
 import { installLongPressMenus } from "./lib/gestures";
 import { installKeyboardDetection } from "./lib/keyboard";
+import { installProbe, uiTesting } from "./lib/uitestProbe";
 
 installLongPressMenus();
 // Development builds expose the stores so test runs can read the document and the result (docs/TESTING.md).
-if (import.meta.env.DEV)
+// So does an iOS app started by a UI test, which also reads the state from an accessibility label.
+if (import.meta.env.DEV || uiTesting())
   void Promise.all([import("./store"), import("./sketch/state"), import("./lib/mcpBridge")]).then(([store, sketch, bridge]) => {
     (window as unknown as { meercadTest: unknown }).meercadTest = { app: store.useApp, sketch: sketch.useSketchUi, store, mcp: bridge.testCall };
+    if (uiTesting()) installProbe(store.useApp, store.rebuilding);
   });
 installKeyboardDetection();
 
