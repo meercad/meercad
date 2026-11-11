@@ -7,6 +7,7 @@ import type { Expr } from "@meercad/schema";
 
 // Lengths normalise to mm, angles to degrees.
 const UNITS: Record<string, number> = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8, deg: 1, rad: 180 / Math.PI };
+const RAD = Math.PI / 180;
 const CONSTANTS: Record<string, number> = { pi: Math.PI };
 const FUNCTIONS: Record<string, (...a: number[]) => number> = {
   min: Math.min,
@@ -16,9 +17,15 @@ const FUNCTIONS: Record<string, (...a: number[]) => number> = {
   round: Math.round,
   floor: Math.floor,
   ceil: Math.ceil,
-  sin: Math.sin,
-  cos: Math.cos,
-  tan: Math.tan,
+  // Angles are degrees everywhere in a design (`30 deg` and `0.5 rad` both normalise to degrees),
+  // so the angle functions take and give degrees too: sin(30) = 0.5, atan(1) = 45.
+  sin: (d) => Math.sin(d * RAD),
+  cos: (d) => Math.cos(d * RAD),
+  tan: (d) => Math.tan(d * RAD),
+  asin: (v) => Math.asin(v) / RAD,
+  acos: (v) => Math.acos(v) / RAD,
+  atan: (v) => Math.atan(v) / RAD,
+  atan2: (y, x) => Math.atan2(y, x) / RAD,
 };
 
 export class ExprError extends Error {}
