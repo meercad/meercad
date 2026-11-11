@@ -11,6 +11,11 @@ export class Page {
   private pending = new Map<number, Pending>();
   /** Console errors and uncaught exceptions seen since the last `takeErrors()`. */
   errors: string[] = [];
+  private listeners = new Map<string, ((params: any) => void)[]>();
+  /** Calls `fn` on every event `method` of the protocol. */
+  on(method: string, fn: (params: any) => void): void {
+    this.listeners.set(method, [...(this.listeners.get(method) ?? []), fn]);
+  }
 
   static async open(wsUrl: string): Promise<Page> {
     const ws = new WebSocket(wsUrl);
@@ -20,6 +25,7 @@ export class Page {
   constructor(private ws: WebSocket) {
     ws.addEventListener("message", (e) => {
       const m = JSON.parse(String(e.data));
+      if (m.method) for (const fn of this.listeners.get(m.method) ?? []) fn(m.params);
       if (m.id && this.pending.has(m.id)) {
         const { ok, fail } = this.pending.get(m.id)!;
         this.pending.delete(m.id);
@@ -91,6 +97,24 @@ export class Page {
   /** Types text key by key (as a keyboard does, so key handlers see every key). */
   async type(text: string): Promise<void> {
     for (const ch of text) await this.key(ch);
+  }
+  /**
+   * Answers the next file picker the page opens with these files, as a person picks them in the
+   * dialog; `open` is what opens it (a click, a key).
+   */
+  async chooseFiles(files: string[], open: () => Promise<void>): Promise<void> {
+    await this.call("Page.setInterceptFileChooserDialog", { enabled: true });
+    const chosen = new Promise<void>((ok, fail) => {
+      const timer = setTimeout(() => fail(new Error("no file picker opened")), 15000);
+      this.on("Page.fileChooserOpened", (p: { backendNodeId: number }) => {
+        clearTimeout(timer);
+        this.call("DOM.setFileInputFiles", { files, backendNodeId: p.backendNodeId }).then(() => ok(), fail);
+      });
+    });
+    await open();
+    await chosen;
+    this.listeners.delete("Page.fileChooserOpened");
+    await this.call("Page.setInterceptFileChooserDialog", { enabled: false });
   }
   async shot(file: string): Promise<void> {
     const { data } = await this.call("Page.captureScreenshot", { format: "png" });
