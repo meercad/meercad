@@ -19,6 +19,11 @@
  * only for designs of up to `BIG_STEPS` steps (a bigger one gets its picture from the editor when it
  * is opened); the kernel starts over once the pictures have taken `PICTURES_KERNEL_MAX`. A picture
  * whose build took the page down is not tried again until its file changes (`BUILDING_KEY`).
+ *
+ * Before anything is built, the picture kept next to the project's file is looked at (written by
+ * whichever device pictured it last, see sharedPicture.ts): if it shows the file as it is now, in
+ * the current look, it is taken as it is. So a project changed on the Mac is not built again on
+ * the iPad (nor a big one left without a picture there) just for its picture.
  */
 import type { KernelClient, RebuildOutput } from "@meercad/kernel/client";
 import type { MeercadDocument } from "@meercad/schema";
@@ -30,7 +35,7 @@ import { meshBodyIds } from "./meshParts";
 import { partColors } from "./partColors";
 import { partLooks } from "./materials";
 import { sceneryOf } from "./terrain";
-import { desktop, loadProject, saveThumbnail, type ProjectMeta } from "./persistence";
+import { desktop, loadProject, saveThumbnail, takeSharedThumbnail, type ProjectMeta } from "./persistence";
 import { BIG_FILE_BYTES, backgroundBuildAllowed, blankPixels, lookSince, needsPicture, pictureRunner, type LookMark } from "./pictureState";
 
 /** A project gets a few minutes (the background kernel has one thread); an example a minute. */
@@ -249,6 +254,17 @@ async function fillMissingThumbnails(): Promise<void> {
       const next = s.projects.find((p) => p.id !== s.project?.id && needsPicture(p, blank.get(p.thumbnail ?? "") ?? false, currentLookSince()) && !tried.has(triedKey(p)) && gaveUp[p.id] !== p.updatedAt);
       if (!next) return;
       tried.add(triedKey(next));
+      if (oneKernel && editorOpen()) {
+        // Tried again once the editor is closed.
+        tried.delete(triedKey(next));
+        return;
+      }
+      // Pictured on another device (iCloud) and not changed since: taken as it is, nothing built.
+      const shared = await takeSharedThumbnail(next.id).catch(() => null);
+      if (shared) {
+        useApp.setState((st) => ({ projects: st.projects.map((p) => (p.id === next.id ? { ...p, thumbnail: shared, thumbnailAt: Date.now() } : p)) }));
+        continue;
+      }
       // Too big to be read here at all; its picture comes from the editor.
       if (oneKernel && (next.size ?? 0) > BIG_FILE_BYTES) continue;
       try {

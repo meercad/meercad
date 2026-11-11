@@ -249,6 +249,38 @@ const toId = (rel: string) => rel.split(sep).join("/").replace(/\.meercad$/, "")
 
 const thumbPath = (id: string) => join(thumbsDir(), `${createHash("sha1").update(projectPath(id)).digest("hex")}.png`);
 
+/**
+ * A project's picture also next to its file (".Bracket.meercad-preview"), so that it travels with
+ * the project through iCloud and other devices need not build the model again for it: JSON with
+ * the file's size and SHA-256 when pictured, the look (LOOK_VERSION) and the PNG. Same format as
+ * on the iPad (apps/web/src/lib/sharedPicture.ts).
+ */
+const sidecarPath = (id: string) => join(dirname(projectPath(id)), `.${nameOf(id)}.meercad-preview`);
+const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+/** Writes the picture next to the file, for `bytes`, the file as it is now. Never fails. */
+async function writeSidecar(id: string, thumbnail: string, look: number, bytes: Buffer): Promise<void> {
+  try {
+    const text = JSON.stringify({ v: 1, size: bytes.length, sha256: sha256(bytes), look, png: thumbnail.slice(22) });
+    const tmp = `${sidecarPath(id)}.tmp`;
+    await writeFile(tmp, text);
+    await rename(tmp, sidecarPath(id));
+  } catch (e) {
+    console.warn(`picture next to ${id} not written:`, e);
+  }
+}
+/** The picture next to the file if it shows the file as it is now, else null. */
+async function readSidecar(id: string): Promise<{ thumbnail: string; look: number } | null> {
+  try {
+    const o = JSON.parse(await readFile(sidecarPath(id), "utf8")) as { v?: unknown; size?: unknown; sha256?: unknown; look?: unknown; png?: unknown };
+    if (o.v !== 1 || typeof o.size !== "number" || typeof o.sha256 !== "string" || typeof o.look !== "number" || typeof o.png !== "string" || !o.png) return null;
+    if ((await stat(projectPath(id))).size !== o.size) return null;
+    if (sha256(await readFile(projectPath(id))) !== o.sha256) return null;
+    return { thumbnail: `data:image/png;base64,${o.png}`, look: o.look };
+  } catch {
+    return null;
+  }
+}
+
 async function listProjects() {
   await mkdir(projectsDir(), { recursive: true });
   const out = await Promise.all(
@@ -297,6 +329,7 @@ async function moveProject(from: string, to: string): Promise<void> {
   await mkdir(dirname(projectPath(to)), { recursive: true });
   await rename(projectPath(from), projectPath(to));
   if (existsSync(thumbPath(from))) await rename(thumbPath(from), thumbPath(to));
+  if (existsSync(sidecarPath(from))) await rename(sidecarPath(from), sidecarPath(to)).catch(() => undefined);
 }
 
 ipcMain.handle("projects:list", () => listProjects());
@@ -305,26 +338,30 @@ ipcMain.handle("projects:load", async (_e, id: string) => {
   const st = await stat(projectPath(id));
   return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtimeMs, doc: JSON.parse(await readFile(projectPath(id), "utf8")) };
 });
-ipcMain.handle("projects:save", async (e, p: { id: string; doc: unknown; thumbnail?: string }) => {
+ipcMain.handle("projects:save", async (e, p: { id: string; doc: unknown; thumbnail?: string; look?: number }) => {
   await mkdir(dirname(projectPath(p.id)), { recursive: true });
   // Write atomically so a crash never leaves a half-written project.
   const tmp = `${projectPath(p.id)}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(p.doc, null, 2)}\n`);
+  const bytes = Buffer.from(`${JSON.stringify(p.doc, null, 2)}\n`);
+  await writeFile(tmp, bytes);
   await rename(tmp, projectPath(p.id));
   // Other windows drop what they keep of it in memory (a tab in the background).
   sendToAll("project-saved", () => p.id, e.sender.id);
   if (p.thumbnail?.startsWith("data:image/png;base64,")) {
     await mkdir(thumbsDir(), { recursive: true });
     await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
+    if (p.look !== undefined) await writeSidecar(p.id, p.thumbnail, p.look, bytes);
   }
 });
-ipcMain.handle("projects:thumbnail", async (e, p: { id: string; thumbnail: string }) => {
+ipcMain.handle("projects:thumbnail", async (e, p: { id: string; thumbnail: string; look?: number; local?: boolean }) => {
   if (!p.thumbnail.startsWith("data:image/png;base64,") || !existsSync(projectPath(p.id))) return;
   await mkdir(thumbsDir(), { recursive: true });
   await writeFile(thumbPath(p.id), Buffer.from(p.thumbnail.slice(22), "base64"));
+  if (!p.local && p.look !== undefined) await writeSidecar(p.id, p.thumbnail, p.look, await readFile(projectPath(p.id)));
   // An overview open in another window shows the new picture.
   sendToAll("projects-changed", () => undefined, e.sender.id);
 });
+ipcMain.handle("projects:shared-thumbnail", (_e, id: string) => readSidecar(id));
 ipcMain.handle("projects:create", async (_e, p: { name: string; doc: unknown; folder?: string; test?: boolean }) => {
   // Only an assistant's request makes a test project: anything else next to one goes to the top level.
   const folder = p.test && TEST_PROJECTS ? TEST_FOLDER : isTest(p.folder ?? "") ? "" : (p.folder ?? "");
@@ -349,6 +386,7 @@ ipcMain.handle("projects:delete", async (_e, id: string) => {
   // Move to the Trash rather than deleting for good.
   await moveToTrash(projectPath(id), (p) => shell.trashItem(p));
   await rm(thumbPath(id), { force: true });
+  await rm(sidecarPath(id), { force: true });
 });
 ipcMain.handle("folders:create", async (_e, p: { parent: string; name: string }) => {
   const base = safeName(p.name, "New folder");
@@ -536,6 +574,7 @@ async function dropOldTestProjects(): Promise<void> {
     const id = `${TEST_FOLDER}/${toId(rel)}`;
     if ((await stat(projectPath(id))).mtimeMs > before) continue;
     await rm(thumbPath(id), { force: true });
+    await rm(sidecarPath(id), { force: true });
     await rm(projectPath(id), { force: true });
   }
 }

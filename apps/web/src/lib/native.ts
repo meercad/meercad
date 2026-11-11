@@ -2,8 +2,9 @@
  * The iPad and iPhone app (Capacitor shell, apps/ios). Projects are plain .meercad files, either in
  * the app's iCloud Drive folder ("iCloud Drive › meerCAD", the same projects on every device and
  * the Mac) or in its Documents folder ("On My iPad › meerCAD", this device only); folders there are
- * real folders, like in the desktop app. Thumbnails live in Library, out of sight. Exports go
- * through the share sheet instead of a download.
+ * real folders, like in the desktop app. Thumbnails live in Library, out of sight, and a copy next
+ * to each file (see sharedPicture.ts), so other devices need not build the model again for it.
+ * Exports go through the share sheet instead of a download.
  */
 import { App } from "@capacitor/app";
 import { Capacitor, registerPlugin } from "@capacitor/core";
@@ -12,6 +13,7 @@ import { Share } from "@capacitor/share";
 import type { MeercadDocument } from "@meercad/schema";
 import type { FileStore, Project, ProjectMeta } from "./persistence";
 import { t } from "./i18n";
+import { formatSidecar, parseSidecar, sha256Hex, sidecarName, sidecarShows } from "./sharedPicture";
 
 export const nativeApp = Capacitor.isNativePlatform();
 
@@ -221,6 +223,53 @@ async function moveProject(r: Root, from: string, to: string): Promise<void> {
   await ensureDir(r, folderOf(to));
   await Filesystem.rename(renameOpts(r, projectPath(from), projectPath(to)));
   await moveThumb(from, to);
+  if (await exists(r, sidecarPath(from))) await Filesystem.rename(renameOpts(r, sidecarPath(from), sidecarPath(to))).catch(() => undefined);
+}
+
+/** The picture next to a project's file (see sharedPicture.ts). */
+const sidecarPath = (id: string) => joinId(folderOf(id), sidecarName(nameOf(id) + EXT));
+
+/** A project file's bytes, read by the web view (see readDoc); in iCloud fetched first. */
+async function fileBytes(r: Root, id: string): Promise<Uint8Array> {
+  const where = at(r, projectPath(id));
+  if (r.kind === "icloud") await ICloud.download({ url: where.path });
+  try {
+    const uri = where.directory ? (await Filesystem.getUri({ path: where.path, directory: where.directory })).uri : where.path;
+    const res = await fetch(Capacitor.convertFileSrc(uri));
+    if (res.ok) return new Uint8Array(await res.arrayBuffer());
+  } catch {
+    // read through the plugin
+  }
+  const b64 = (await Filesystem.readFile(where)).data as string;
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+/** Keeps the picture next to the project's file, for `bytes`, the file as it is now. Never fails. */
+async function writeSidecar(r: Root, id: string, thumbnail: string, look: number, bytes: Uint8Array): Promise<void> {
+  try {
+    const sha256 = await sha256Hex(bytes);
+    if (!sha256) return;
+    await Filesystem.writeFile({ ...at(r, sidecarPath(id)), data: formatSidecar({ size: bytes.length, sha256, look, thumbnail }), encoding: Encoding.UTF8, recursive: true });
+  } catch (e) {
+    console.warn(`picture next to ${id} not written: ${String(e)}`);
+  }
+}
+
+/** The picture next to the project's file if it shows the file as it is now (see sharedPicture.ts). */
+async function readSidecar(r: Root, id: string): Promise<{ thumbnail: string; look: number } | null> {
+  const where = at(r, sidecarPath(id));
+  if (r.kind === "icloud") await ICloud.download({ url: where.path, timeout: 20 }).catch(() => undefined);
+  let text: string;
+  try {
+    text = (await Filesystem.readFile({ ...where, encoding: Encoding.UTF8 })).data as string;
+  } catch {
+    return null;
+  }
+  const shared = parseSidecar(text);
+  if (!shared) return null;
+  const bytes = await fileBytes(r, id);
+  const sha256 = shared.size === bytes.length ? await sha256Hex(bytes) : null;
+  return sha256 && sidecarShows(shared, { size: bytes.length, sha256 }) ? { thumbnail: shared.thumbnail, look: shared.look } : null;
 }
 
 const writeDoc = (r: Root, id: string, text: string) => Filesystem.writeFile({ ...at(r, projectPath(id)), data: text, encoding: Encoding.UTF8, recursive: true });
@@ -297,14 +346,25 @@ export const nativeFiles: FileStore | undefined = nativeApp
           const st = await Filesystem.stat(at(r, projectPath(id)));
           return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, size: st.size, doc };
         },
-        async save(p: { id: string; doc: MeercadDocument; thumbnail?: string }): Promise<void> {
-          await writeDoc(await root(), p.id, docText(p.doc));
+        async save(p: { id: string; doc: MeercadDocument; thumbnail?: string; look?: number }): Promise<void> {
+          const r = await root();
+          const text = docText(p.doc);
+          await writeDoc(r, p.id, text);
           if (p.thumbnail?.startsWith("data:image/png;base64,")) {
             await Filesystem.writeFile({ path: thumbPath(p.id), directory: LIB, data: p.thumbnail.slice(22), recursive: true });
+            if (p.look !== undefined) await writeSidecar(r, p.id, p.thumbnail, p.look, new TextEncoder().encode(text));
           }
         },
-        async thumbnail(p: { id: string; thumbnail: string }): Promise<void> {
-          if (p.thumbnail.startsWith("data:image/png;base64,")) await Filesystem.writeFile({ path: thumbPath(p.id), directory: LIB, data: p.thumbnail.slice(22), recursive: true });
+        async thumbnail(p: { id: string; thumbnail: string; look?: number; local?: boolean }): Promise<void> {
+          if (!p.thumbnail.startsWith("data:image/png;base64,")) return;
+          await Filesystem.writeFile({ path: thumbPath(p.id), directory: LIB, data: p.thumbnail.slice(22), recursive: true });
+          if (p.local || p.look === undefined) return;
+          const r = await root();
+          const bytes = await fileBytes(r, p.id).catch(() => null);
+          if (bytes) await writeSidecar(r, p.id, p.thumbnail, p.look, bytes);
+        },
+        async sharedThumbnail(id: string) {
+          return readSidecar(await root(), id).catch(() => null);
         },
         async create(p: { name: string; doc: MeercadDocument; folder?: string }): Promise<ProjectMeta> {
           const r = await root();
@@ -327,8 +387,10 @@ export const nativeFiles: FileStore | undefined = nativeApp
         },
         folders: async () => folderList(await root()),
         async delete(id: string): Promise<void> {
-          await Filesystem.deleteFile(at(await root(), projectPath(id)));
+          const r = await root();
+          await Filesystem.deleteFile(at(r, projectPath(id)));
           await Filesystem.deleteFile({ path: thumbPath(id), directory: LIB }).catch(() => undefined);
+          await Filesystem.deleteFile(at(r, sidecarPath(id))).catch(() => undefined);
         },
       },
       folders: {
