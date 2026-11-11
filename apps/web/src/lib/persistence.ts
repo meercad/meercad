@@ -6,6 +6,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import { nativeFiles } from "./native";
 import { t } from "./i18n";
 import { dropOutput } from "./openCache";
+import { LOOK_VERSION } from "@meercad/viewport";
 
 export interface ProjectMeta {
   id: string;
@@ -60,9 +61,18 @@ interface DesktopApi {
   projects: {
     list(): Promise<ProjectMeta[]>;
     load(id: string): Promise<Project>;
-    save(p: { id: string; doc: MeercadDocument; thumbnail?: string }): Promise<void>;
-    /** Stores a project's picture without touching its file. */
-    thumbnail(p: { id: string; thumbnail: string }): Promise<void>;
+    /** `look`: the look the picture shows (LOOK_VERSION), kept with it next to the file (see sharedPicture.ts). */
+    save(p: { id: string; doc: MeercadDocument; thumbnail?: string; look?: number }): Promise<void>;
+    /**
+     * Stores a project's picture without touching its file; also next to the file (see
+     * sharedPicture.ts), unless `local` (a picture just taken from there).
+     */
+    thumbnail(p: { id: string; thumbnail: string; look?: number; local?: boolean }): Promise<void>;
+    /**
+     * The picture kept next to the project's file (see sharedPicture.ts) if it shows the file as it
+     * is now, else null. Missing in older desktop apps.
+     */
+    sharedThumbnail?(id: string): Promise<{ thumbnail: string; look: number } | null>;
     create(p: { name: string; doc: MeercadDocument; folder?: string; test?: boolean }): Promise<ProjectMeta>;
     rename(p: { id: string; name: string }): Promise<{ id: string; name: string; folder: string }>;
     move(p: { id: string; folder: string }): Promise<{ id: string; name: string; folder: string }>;
@@ -201,12 +211,23 @@ export async function createProject(name: string, doc: MeercadDocument, folder =
 }
 
 export async function saveProject(p: Project): Promise<void> {
-  return files.projects.save({ id: p.id, doc: p.doc, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
+  return files.projects.save({ id: p.id, doc: p.doc, ...(p.thumbnail ? { thumbnail: p.thumbnail, look: LOOK_VERSION } : {}) });
 }
 
 /** Stores a picture for a project that has none, leaving the project itself (and its date) alone. */
 export async function saveThumbnail(id: string, thumbnail: string): Promise<void> {
-  return files.projects.thumbnail({ id, thumbnail });
+  return files.projects.thumbnail({ id, thumbnail, look: LOOK_VERSION });
+}
+
+/**
+ * The picture another device left next to the project's file, if it shows the file as it is now in
+ * the current look (see sharedPicture.ts); it is then kept in this app's data too. Null otherwise.
+ */
+export async function takeSharedThumbnail(id: string): Promise<string | null> {
+  const shared = await files.projects.sharedThumbnail?.(id).catch(() => null);
+  if (!shared || shared.look !== LOOK_VERSION) return null;
+  await files.projects.thumbnail({ id, thumbnail: shared.thumbnail, local: true });
+  return shared.thumbnail;
 }
 
 /** Renames a project; in the desktop app this renames the file, so the id changes. */

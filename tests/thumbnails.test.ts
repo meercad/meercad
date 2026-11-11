@@ -132,3 +132,39 @@ describe("project pictures", () => {
     expect(kernelKindFor(10, { mobile: false, threads: false })).toBe("kernel");
   });
 });
+
+/**
+ * A project's picture travels with it through iCloud (".Name.meercad-preview" next to the file):
+ * another device takes it only while the file is still the one pictured.
+ */
+describe("pictures next to the project file", async () => {
+  const { formatSidecar, parseSidecar, sha256Hex, sidecarName, sidecarShows } = await import("../apps/web/src/lib/sharedPicture");
+  const { createHash } = await import("node:crypto");
+  const file = new TextEncoder().encode(`${JSON.stringify(emptyDocument(), null, 2)}\n`);
+
+  it("are named after the file and hidden", () => {
+    expect(sidecarName("Bracket.meercad")).toBe(".Bracket.meercad-preview");
+  });
+
+  it("hash the file as the Mac does", async () => {
+    expect(await sha256Hex(file)).toBe(createHash("sha256").update(file).digest("hex"));
+  });
+
+  it("are taken only for the file as it was pictured", async () => {
+    const sha256 = (await sha256Hex(file))!;
+    const text = formatSidecar({ size: file.length, sha256, look: 7, thumbnail: "data:image/png;base64,AAAA" });
+    const p = parseSidecar(text)!;
+    expect(p).toEqual({ size: file.length, sha256, look: 7, thumbnail: "data:image/png;base64,AAAA" });
+    expect(sidecarShows(p, { size: file.length, sha256 })).toBe(true);
+    // Changed since (on another device): made again.
+    const changed = new TextEncoder().encode(`${JSON.stringify({ ...emptyDocument(), params: { w: "2 mm" } }, null, 2)}\n`);
+    expect(sidecarShows(p, { size: changed.length, sha256: (await sha256Hex(changed))! })).toBe(false);
+    expect(sidecarShows(p, { size: file.length, sha256: "0".repeat(64) })).toBe(false);
+  });
+
+  it("from another version or broken are not read", () => {
+    expect(parseSidecar("not json")).toBeNull();
+    expect(parseSidecar(JSON.stringify({ v: 2, size: 1, sha256: "a", look: 7, png: "AAAA" }))).toBeNull();
+    expect(parseSidecar(JSON.stringify({ v: 1, size: 1, sha256: "a", look: 7, png: "" }))).toBeNull();
+  });
+});
