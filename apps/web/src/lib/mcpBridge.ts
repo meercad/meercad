@@ -864,7 +864,11 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       return tools.interference({ ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}), ...(p["box"] && typeof p["box"] === "object" ? { box: p["box"] as { min: [number, number, number]; max: [number, number, number] } } : {}), ...(typeof p["seconds"] === "number" ? { seconds: p["seconds"] } : {}) });
     case "wall_thickness":
       needProject();
-      return tools.wallThickness(String(p["part"]), p["minWall"] === undefined ? 1 : Number(p["minWall"]), p["show"] !== false);
+      return tools.wallThickness(String(p["part"]), p["minWall"] === undefined ? 1 : Number(p["minWall"]), {
+        show: p["show"] !== false,
+        ...(p["quality"] === "fast" || p["quality"] === "fine" ? { quality: p["quality"] } : {}),
+        ...(p["box"] && typeof p["box"] === "object" ? { box: p["box"] as { min: [number, number, number]; max: [number, number, number] } } : {}),
+      });
     case "print_check":
       needProject();
       return tools.printCheck(String(p["part"]), { ...(p["limit"] !== undefined ? { limit: Number(p["limit"]) } : {}), show: p["show"] !== false, ...(p["turn"] !== undefined ? { turn: p["turn"] as "best" | [number, number, number] } : {}) });

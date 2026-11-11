@@ -4,27 +4,12 @@
  * the wall there. Red where it is thinner than the wall a printer needs, through yellow to green
  * at three times that. Kept up to date while the part changes, until it is closed.
  */
-import { MeshCollider, rayDistance } from "@meercad/model";
-import type { BodyMesh } from "@meercad/kernel";
 import { create } from "zustand";
 import { startTask, useApp } from "../store";
-import { refine } from "./deviation";
 import { t } from "./i18n";
+import { measureWalls, type ThicknessStats, type WallMeasure } from "./wallMeasure";
 
-export interface ThicknessStats {
-  /**
-   * The thinnest wall, ignoring the thinnest half percent of the surface: rays from slivers at sharp
-   * edges hit the neighbouring face at once and would report walls of nothing.
-   */
-  min: number;
-  /** The smallest value measured at all. */
-  absoluteMin?: number;
-  /** Share of the surface thinner than `minWall`. */
-  thin: number;
-  minWall: number;
-  /** Where the wall is thinnest (a point on the surface). */
-  at?: [number, number, number];
-}
+export { measureWalls, thinSpots, WALL_SAMPLES, type ThicknessStats, type ThinSpot, type WallMeasure } from "./wallMeasure";
 
 export const useThickness = create<{ body: string | null; minWall: number; maps: Map<string, { positions: Float32Array; colors: Float32Array }>; stats: ThicknessStats | null; error?: string }>(() => ({
   body: null,
@@ -47,8 +32,15 @@ export function setMinWall(minWall: number): void {
   void update();
 }
 
-const colliders = new WeakMap<BodyMesh, MeshCollider>();
 let run = 0;
+
+/** Shows a measurement taken already as the colour map of `body`. */
+export function showMeasured(body: string, m: WallMeasure): void {
+  run++;
+  const colors = new Float32Array(m.wall.length * 9);
+  for (let k = 0; k < m.wall.length; k++) for (let c = 0; c < 3; c++) colorFor(m.wall[k]!, m.stats.minWall, colors, k * 9 + c * 3);
+  useThickness.setState({ body, minWall: m.stats.minWall, maps: new Map([[body, { positions: m.positions, colors }]]), stats: m.stats, error: undefined });
+}
 
 async function update(): Promise<void> {
   const me = ++run;
@@ -56,67 +48,14 @@ async function update(): Promise<void> {
   if (!body) return;
   const part = useApp.getState().output?.meshes.find((m) => m.bodyId === body);
   if (!part) return useThickness.setState({ maps: new Map(), stats: null, error: "gone" });
-  const collider = colliders.get(part) ?? colliders.set(part, new MeshCollider(part.positions, part.indices)).get(part)!;
-  // A ray per triangle: fewer samples than the deviation map needs, walls change slowly.
-  const positions = refine(part, 40_000);
-  const n = positions.length / 9;
-  // Inside-out meshes (some STL files) would shoot every ray out of the part.
-  let volume = 0;
-  for (let k = 0; k < n; k++) {
-    const o = k * 9;
-    const [ax, ay, az, bx, by, bz, cx, cy, cz] = Array.from(positions.subarray(o, o + 9));
-    volume += ax! * (by! * cz! - bz! * cy!) - ay! * (bx! * cz! - bz! * cx!) + az! * (bx! * cy! - by! * cx!);
-  }
-  const into = volume < 0 ? 1 : -1;
-  const wall = new Float64Array(n);
-  let area = 0;
-  let thinArea = 0;
-  let min = Infinity;
-  const samples: { d: number; a: number; c: [number, number, number] }[] = [];
   const task = startTask(t("Measuring the wall thickness"));
+  let m: WallMeasure | null;
   try {
-    let slice = performance.now();
-    for (let k = 0; k < n; k++) {
-      if ((k & 511) === 0 && performance.now() - slice > 25) {
-        task.update(k / n);
-        await new Promise<void>((r) => {
-          const c = new MessageChannel();
-          c.port1.onmessage = () => r();
-          c.port2.postMessage(0);
-        });
-        if (me !== run) return;
-        slice = performance.now();
-      }
-      const o = k * 9;
-      const P = positions;
-      const ux = P[o + 3]! - P[o]!, uy = P[o + 4]! - P[o + 1]!, uz = P[o + 5]! - P[o + 2]!;
-      const vx = P[o + 6]! - P[o]!, vy = P[o + 7]! - P[o + 1]!, vz = P[o + 8]! - P[o + 2]!;
-      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      const l = Math.hypot(nx, ny, nz);
-      if (!l) {
-        wall[k] = NaN;
-        continue;
-      }
-      const c: [number, number, number] = [(P[o]! + P[o + 3]! + P[o + 6]!) / 3, (P[o + 1]! + P[o + 4]! + P[o + 7]!) / 3, (P[o + 2]! + P[o + 5]! + P[o + 8]!) / 3];
-      const d = rayDistance(collider, c, [(into * nx) / l, (into * ny) / l, (into * nz) / l], 1e-4);
-      // A ray that never comes out again started on an open edge of the mesh: no value.
-      wall[k] = Number.isFinite(d) ? d : NaN;
-      if (!Number.isFinite(d)) continue;
-      area += l / 2;
-      if (d < minWall) thinArea += l / 2;
-      if (d < min) min = d;
-      samples.push({ d, a: l / 2, c });
-    }
+    m = await measureWalls(part, minWall, { aborted: () => me !== run, progress: (f) => task.update(f) });
   } finally {
     task.done();
   }
-  // The thinnest wall that covers more than a speck of the surface.
-  samples.sort((x, y) => x.d - y.d);
-  let acc = 0;
-  const robust = samples.find((x) => (acc += x.a) > area * 0.005) ?? samples[0];
-  const colors = new Float32Array(n * 9);
-  for (let k = 0; k < n; k++) for (let c = 0; c < 3; c++) colorFor(wall[k]!, minWall, colors, k * 9 + c * 3);
-  useThickness.setState({ maps: new Map([[body, { positions, colors }]]), stats: { min: robust ? robust.d : min, absoluteMin: min, thin: area ? thinArea / area : 0, minWall, ...(robust ? { at: robust.c } : {}) }, error: undefined });
+  if (m && me === run) showMeasured(body, m);
 }
 
 // Red below the minimum wall, then yellow, green from three times it; grey where nothing was measured.

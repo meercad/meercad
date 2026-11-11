@@ -8,7 +8,7 @@ import { compareShapes, nearestTriangle, shapeAt, shapeValues } from "@meercad/k
 import { restored } from "@meercad/model";
 import type { MeercadDocument } from "@meercad/schema";
 import { filamentsOf, importFile, meshExportFiles, stepFile, variantFiles, type MeshFormat } from "../components/io";
-import { currentDoc, getViewport, kernel, newProject, rebuildNow, refreshProjects, renameProject, useApp } from "../store";
+import { currentDoc, getViewport, kernel, newProject, rebuildNow, refreshProjects, renameProject, startTask, useApp } from "../store";
 import { showDeviation, hideDeviation, useDeviation, TOLERANCE } from "./deviation";
 import { EXAMPLES, examplePacks } from "./examples";
 import { hasPack } from "./premium";
@@ -20,7 +20,7 @@ import { importOf, runMeshRepair, useMeshRepair } from "./meshRepair";
 import { createFolder, listFolders, moveProject } from "./persistence";
 import { scanOf } from "./scanMeasure";
 import { placeAt, setOnTerrain, useTerrainPlace } from "./terrain";
-import { hideThickness, setMinWall, showThickness, useThickness } from "./thickness";
+import { hideThickness, measureWalls, showMeasured, useThickness, WALL_SAMPLES } from "./thickness";
 import { checkPart, hidePrintCheck, layDown, setOverhangLimit, showPrintCheck } from "./printability";
 
 type Vec3 = [number, number, number];
@@ -88,19 +88,40 @@ export async function interference(opts: { parts?: string[]; box?: { min: Vec3; 
 }
 
 /** Wall thickness of a part against the wall a printer needs; the colour map stays shown unless `show` is false. */
-export async function wallThickness(part: string, minWall = 1, show = true) {
+export async function wallThickness(part: string, minWall = 1, o: { show?: boolean; quality?: "fine" | "fast"; box?: { min: Vec3; max: Vec3 } } = {}) {
   await rebuildNow();
   needPart(part);
-  useThickness.setState({ stats: null, error: undefined });
-  setMinWall(minWall);
-  showThickness(part);
-  const stats = await wait(() => {
-    const s = useThickness.getState();
-    if (s.error) throw new Error(s.error);
-    return s.stats && s.stats.minWall === minWall && s.body === part ? s.stats : null;
-  });
-  if (!show) hideThickness();
-  return { part, minWall, thinnestMm: Number.isFinite(stats.min) ? round(stats.min) : null, ...(stats.absoluteMin !== undefined && Number.isFinite(stats.absoluteMin) ? { smallestRayMm: round(stats.absoluteMin) } : {}), ...(stats.at ? { thinnestAt: vec(stats.at) } : {}), shareThinnerThanMinWall: round(stats.thin, 4), shown: show };
+  const mesh = useApp.getState().output?.meshes.find((m) => m.bodyId === part);
+  if (!mesh) throw new Error(`part "${part}" has no shape to measure`);
+  const show = o.show !== false;
+  // Measured here, not through the colour map: that one waited at most two minutes for the map
+  // and started over on every rebuild, which a big design (Emil, 2026-11-11) did not get through.
+  const task = startTask(t("Measuring the wall thickness"));
+  let m: Awaited<ReturnType<typeof measureWalls>>;
+  try {
+    m = await measureWalls(mesh, minWall, { samples: WALL_SAMPLES[o.quality ?? "fine"], ...(o.box ? { box: o.box } : {}), progress: (f) => task.update(f) });
+  } finally {
+    task.done();
+  }
+  if (!m) throw new Error("the measurement was stopped");
+  if (show) {
+    hideDeviation();
+    hidePrintCheck();
+    showMeasured(part, m);
+  } else if (useThickness.getState().body === part) hideThickness();
+  const stats = m.stats;
+  return {
+    part,
+    minWall,
+    ...(o.quality === "fast" ? { quality: "fast" } : {}),
+    ...(o.box ? { box: o.box } : {}),
+    thinnestMm: Number.isFinite(stats.min) ? round(stats.min) : null,
+    ...(stats.absoluteMin !== undefined && Number.isFinite(stats.absoluteMin) ? { smallestRayMm: round(stats.absoluteMin) } : {}),
+    ...(stats.at ? { thinnestAt: vec(stats.at) } : {}),
+    shareThinnerThanMinWall: round(stats.thin, 4),
+    thinSpots: m.spots.map((p) => ({ at: vec(p.at), mm: round(p.mm), areaMm2: round(p.areaMm2, 1) })),
+    shown: show,
+  };
 }
 
 /**
