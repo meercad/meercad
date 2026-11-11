@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { ASSISTANT_IDLE_MS, DEFAULT_PORT, PROJECT_PARAM, ago, STAGE_KEEP_MS, chooseTab, exportTransport, newTabKey, openBlock, openBlockMessage, tabOfSession, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, DEFAULT_PORT, PROJECT_PARAM, ago, STAGE_KEEP_MS, chooseTab, exportTransport, mayTakeOver, newTabKey, openBlock, openBlockMessage, tabOfSession, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, versionFile, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -16,7 +16,7 @@ import { clientLabel } from "./mcpClient";
 import { asTestProjects, assistantWindow, desktop, isTestProject, type AssistantTab } from "./persistence";
 import { apply, currentDoc, flushSave, getViewport, goHome, handOverAssistantTab, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, releaseProject, scheduleRebuild, setAssistantTabs, showAssistantTab, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
-import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
+import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying, sweepCheck, type SweepJoint } from "./mechanism";
 import { jointRange, renderMotionGif, renderMotionSheet, renderShot, type Shot } from "./render";
 import { meshTopology } from "./topology";
 
@@ -248,7 +248,12 @@ async function route(req: BridgeRequest): Promise<unknown> {
     const holder = id === undefined ? undefined : tabs.find((x) => x.project === id && !tabOfSession(x.session, session));
     if (holder) {
       const since = lastCall.get(holder.session);
-      throw new Error(`${holder.client} is working on this project in its own meerCAD tab right now${since ? ` (last call ${ago(Date.now() - since)} ago)` : ""}. Pick another project, or wait until it is done: the project is freed when that session calls close_project, after ${Math.round(LOCK_RELEASE_MIN)} minutes without a call, or when the user clicks Take over in its tab.`);
+      const may = mayTakeOver(holder.client === client, since === undefined ? undefined : Date.now() - since);
+      if (req.params["takeover"] === true && may) await handOverAssistantTab(holder.session, true, "released");
+      else {
+        const hint = may ? ` If that is your own session from before a lost connection, open_project with takeover: true takes the project over.` : "";
+        throw new Error(`${holder.client} is working on this project in its own meerCAD tab right now${since ? ` (last call ${ago(Date.now() - since)} ago)` : ""}. Pick another project, or wait until it is done: the project is freed when that session calls close_project, after ${Math.round(LOCK_RELEASE_MIN)} minutes without a call, or when the user clicks Take over in its tab.${hint}`);
+      }
     }
     // One project at a time per session: the chats sharing a session cannot be told apart (see openBlock).
     const block = openBlock(tabs, session, opening, id);
@@ -750,6 +755,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(p["masses"] && typeof p["masses"] === "object" ? { masses: p["masses"] as Record<string, number> } : {}),
         ...(p["actuators"] && typeof p["actuators"] === "object" ? { actuators: p["actuators"] as Record<string, RobotActuator> } : {}),
         ...(p["collision"] === "mesh" || p["collision"] === "shapes" ? { collision: p["collision"] } : {}),
+        ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
+        ...(Array.isArray(p["exclude"]) ? { exclude: p["exclude"] as string[] } : {}),
       });
       return { ...exportedFiles(files, p), links, warnings };
     }
@@ -825,6 +832,18 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       await rebuildNow();
       if (typeof p["motion"] === "string") return checkMotionRun(p["motion"], p["steps"] === undefined ? undefined : Number(p["steps"]));
+      // The sweep for big designs: several joints, chosen parts, fasteners left out, one line per pair.
+      if (Array.isArray(p["joints"]) || ["parts", "against", "fasteners", "touchBelow", "most"].some((k) => p[k] !== undefined)) {
+        const joints = Array.isArray(p["joints"]) ? (p["joints"] as SweepJoint[]) : typeof p["joint"] === "string" ? [{ joint: p["joint"], ...(p["from"] !== undefined ? { from: Number(p["from"]) } : {}), ...(p["to"] !== undefined ? { to: Number(p["to"]) } : {}), ...(p["steps"] !== undefined ? { steps: Number(p["steps"]) } : {}) }] : [];
+        return sweepCheck({
+          joints,
+          ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
+          ...(Array.isArray(p["against"]) ? { against: p["against"] as string[] } : {}),
+          ...(typeof p["fasteners"] === "boolean" ? { fasteners: p["fasteners"] } : {}),
+          ...(typeof p["touchBelow"] === "number" ? { touchBelow: p["touchBelow"] } : {}),
+          ...(typeof p["most"] === "number" ? { most: p["most"] } : {}),
+        });
+      }
       if (typeof p["joint"] !== "string" || p["from"] === undefined || p["to"] === undefined) throw new Error("give a joint with from and to, or a motion");
       return checkMotion(String(p["joint"]), Number(p["from"]), Number(p["to"]), p["steps"] === undefined ? undefined : Number(p["steps"]));
     }
@@ -862,10 +881,14 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       return tools.interference({ ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}), ...(p["box"] && typeof p["box"] === "object" ? { box: p["box"] as { min: [number, number, number]; max: [number, number, number] } } : {}), ...(typeof p["seconds"] === "number" ? { seconds: p["seconds"] } : {}) });
     case "wall_thickness":
       needProject();
-      return tools.wallThickness(String(p["part"]), p["minWall"] === undefined ? 1 : Number(p["minWall"]), p["show"] !== false);
+      return tools.wallThickness(String(p["part"]), p["minWall"] === undefined ? 1 : Number(p["minWall"]), {
+        show: p["show"] !== false,
+        ...(p["quality"] === "fast" || p["quality"] === "fine" ? { quality: p["quality"] } : {}),
+        ...(p["box"] && typeof p["box"] === "object" ? { box: p["box"] as { min: [number, number, number]; max: [number, number, number] } } : {}),
+      });
     case "print_check":
       needProject();
-      return tools.printCheck(String(p["part"]), { ...(p["limit"] !== undefined ? { limit: Number(p["limit"]) } : {}), show: p["show"] !== false, ...(p["turn"] !== undefined ? { turn: p["turn"] as "best" | [number, number, number] } : {}) });
+      return tools.printCheck(String(p["part"]), { ...(p["limit"] !== undefined ? { limit: Number(p["limit"]) } : {}), show: p["show"] !== false, ...(p["turn"] !== undefined ? { turn: p["turn"] as "best" | [number, number, number] } : {}), ...(p["down"] !== undefined ? { down: p["down"] as [number, number, number] | FaceSelector } : {}) });
     case "deviation":
       needProject();
       return tools.deviation(String(p["part"]), String(p["mesh"]), p["show"] !== false);

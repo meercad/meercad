@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { printCheck, rankOrientations, SURFACE_OVERHANG, SURFACE_PLATE, turnPoint, turnsToLay } from "./printability.js";
+import { MeshCollider, rayDistance } from "./collide.js";
+import { printCheck, rankOrientations, supportDetails, SURFACE_OVERHANG, SURFACE_PLATE, turnPoint, turnsToLay } from "./printability.js";
 
 /** A box from `lo` to `hi` as an outward-facing triangle mesh, appended to `m`. */
 function box(m: { p: number[]; i: number[] }, lo: number[], hi: number[], inward = false) {
@@ -100,5 +101,38 @@ describe("turnsToLay", () => {
       expect(p[2]).toBeCloseTo(-1, 6);
     }
     expect(turnsToLay([0, 0, -1])).toEqual({ aboutZ: 0, aboutX: 0 });
+  });
+});
+
+describe("supportDetails", () => {
+  const details = (m: { p: number[]; i: number[] }, down: [number, number, number] = [0, 0, -1]) => {
+    const c = new MeshCollider(m.p, m.i);
+    return supportDetails(m.p, m.i, printCheck(m.p, m.i, down), down, (o, d) => rayDistance(c, o, d, 1e-6));
+  };
+  it("the ceiling of a closed cavity is inside and stands on the part", () => {
+    const m = box(box(mesh(), [0, 0, 0], [20, 20, 20]), [5, 5, 5], [15, 15, 15], true);
+    const r = details(m);
+    expect(r.outsideMm2).toBe(0);
+    expect(r.insideMm2).toBeCloseTo(100, 6);
+    expect(r.onPartMm2).toBeCloseTo(100, 6);
+    expect(r.flattestDeg).toBeCloseTo(0, 6);
+    expect(r.regions).toHaveLength(1);
+    expect(r.regions[0]!.outside).toBe(false);
+    expect(r.regions[0]!.spanMm).toBeCloseTo(Math.hypot(10, 10), 6);
+  });
+  it("a plate held up in the air is outside, its support on the plate", () => {
+    const m = box(box(mesh(), [0, 0, 0], [2, 2, 2]), [10, 0, 10], [40, 10, 12]);
+    const r = details(m);
+    expect(r.outsideMm2).toBeCloseTo(300, 6);
+    expect(r.insideMm2).toBe(0);
+    expect(r.onPartMm2).toBe(0);
+    expect(r.regions[0]!.areaMm2).toBeCloseTo(300, 6);
+    expect(r.regions[0]!.outside).toBe(true);
+  });
+  it("turned the other way the cube's top lies on the plate and nothing hangs over", () => {
+    const m = box(mesh(), [0, 0, 0], [10, 10, 10]);
+    const r = details(m, [0, 0, 1]);
+    expect(r.regions).toEqual([]);
+    expect(r.flattestDeg).toBeNull();
   });
 });

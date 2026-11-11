@@ -30,21 +30,26 @@ export interface PrintStats {
   best: { down: V3; supportVolume: number; overhangArea: number; plateArea: number; height: number } | null;
 }
 
-export const usePrintCheck = create<{ body: string | null; picking: boolean; limit: number; maps: Map<string, { positions: Float32Array; colors: Float32Array }>; stats: PrintStats | null; error?: string }>(() => ({
+/** As it stands: -Z onto the plate. */
+const AS_IT_STANDS: V3 = [0, 0, -1];
+
+export const usePrintCheck = create<{ body: string | null; picking: boolean; limit: number; down: V3; maps: Map<string, { positions: Float32Array; colors: Float32Array }>; stats: PrintStats | null; error?: string }>(() => ({
   body: null,
   picking: false,
   limit: 45,
+  down: AS_IT_STANDS,
   maps: new Map(),
   stats: null,
 }));
 
-export function showPrintCheck(body: string): void {
-  usePrintCheck.setState({ body, stats: null, error: undefined });
+/** Shows the print check of a part, printed with `down` onto the plate (default as it stands). */
+export function showPrintCheck(body: string, down: V3 = AS_IT_STANDS): void {
+  usePrintCheck.setState({ body, down, stats: null, error: undefined });
   update();
 }
 
 export function hidePrintCheck(): void {
-  usePrintCheck.setState({ body: null, picking: false, maps: new Map(), stats: null, error: undefined });
+  usePrintCheck.setState({ body: null, picking: false, down: AS_IT_STANDS, maps: new Map(), stats: null, error: undefined });
 }
 
 export function setOverhangLimit(limit: number): void {
@@ -54,14 +59,16 @@ export function setOverhangLimit(limit: number): void {
 
 const meshOf = (body: string): BodyMesh | undefined => useApp.getState().output?.meshes.find((m) => m.bodyId === body);
 
-/** The print check of a part as it stands (down = -Z), and the best orientation found. */
-export function checkPart(body: string, limit = usePrintCheck.getState().limit): { check: PrintCheck; stats: PrintStats } | null {
+/** The print check of a part as it stands (or printed with `down` onto the plate), and the best orientation found. */
+export function checkPart(body: string, limit = usePrintCheck.getState().limit, down: V3 = AS_IT_STANDS): { check: PrintCheck; stats: PrintStats } | null {
   const m = meshOf(body);
   if (!m) return null;
-  const check = printCheck(m.positions, m.indices, [0, 0, -1], limit);
+  const check = printCheck(m.positions, m.indices, down, limit);
   const [best] = rankOrientations(m.positions, m.indices, limit);
+  const l = Math.hypot(...down) || 1;
+  const same = best ? (best.down[0] * down[0] + best.down[1] * down[1] + best.down[2] * down[2]) / l > 0.9999 : true;
   // Only worth suggesting when it saves a noticeable share of the support (or of the overhang).
-  const better = best && best.down[2] > -0.9999 && best.check.supportVolume < check.supportVolume * 0.9 - 1 ? best : null;
+  const better = best && !same && best.check.supportVolume < check.supportVolume * 0.9 - 1 ? best : null;
   return {
     check,
     stats: {
@@ -77,10 +84,10 @@ export function checkPart(body: string, limit = usePrintCheck.getState().limit):
 }
 
 function update(): void {
-  const { body, limit } = usePrintCheck.getState();
+  const { body, limit, down } = usePrintCheck.getState();
   if (!body) return;
   const m = meshOf(body);
-  const r = m ? checkPart(body, limit) : null;
+  const r = m ? checkPart(body, limit, down) : null;
   if (!m || !r) return usePrintCheck.setState({ maps: new Map(), stats: null, error: "gone" });
   const n = r.check.kind.length;
   const positions = new Float32Array(n * 9);

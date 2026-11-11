@@ -5,10 +5,11 @@
  * and folders, examples, terrains. Each runs the app's own code, so the user sees what happens.
  */
 import { compareShapes, nearestTriangle, shapeAt, shapeValues } from "@meercad/kernel/fit";
-import { restored } from "@meercad/model";
-import type { MeercadDocument } from "@meercad/schema";
+import { MeshCollider, rayDistance, restored, supportDetails } from "@meercad/model";
+import type { FaceSelector, MeercadDocument } from "@meercad/schema";
+import { resolveFaces } from "@meercad/naming";
 import { filamentsOf, importFile, meshExportFiles, stepFile, variantFiles, type MeshFormat } from "../components/io";
-import { currentDoc, getViewport, kernel, newProject, rebuildNow, refreshProjects, renameProject, useApp } from "../store";
+import { currentDoc, getViewport, kernel, newProject, rebuildNow, refreshProjects, renameProject, startTask, useApp } from "../store";
 import { showDeviation, hideDeviation, useDeviation, TOLERANCE } from "./deviation";
 import { EXAMPLES, examplePacks } from "./examples";
 import { hasPack } from "./premium";
@@ -20,8 +21,9 @@ import { importOf, runMeshRepair, useMeshRepair } from "./meshRepair";
 import { createFolder, listFolders, moveProject } from "./persistence";
 import { scanOf } from "./scanMeasure";
 import { placeAt, setOnTerrain, useTerrainPlace } from "./terrain";
-import { hideThickness, setMinWall, showThickness, useThickness } from "./thickness";
-import { checkPart, hidePrintCheck, layDown, setOverhangLimit, showPrintCheck } from "./printability";
+import { hideThickness, measureWalls, showMeasured, useThickness, WALL_SAMPLES } from "./thickness";
+import { checkPart, faceNormal, hidePrintCheck, layDown, setOverhangLimit, showPrintCheck } from "./printability";
+import { meshTopology } from "./topology";
 
 type Vec3 = [number, number, number];
 const round = (v: number, d = 3) => +v.toFixed(d);
@@ -88,30 +90,55 @@ export async function interference(opts: { parts?: string[]; box?: { min: Vec3; 
 }
 
 /** Wall thickness of a part against the wall a printer needs; the colour map stays shown unless `show` is false. */
-export async function wallThickness(part: string, minWall = 1, show = true) {
+export async function wallThickness(part: string, minWall = 1, o: { show?: boolean; quality?: "fine" | "fast"; box?: { min: Vec3; max: Vec3 } } = {}) {
   await rebuildNow();
   needPart(part);
-  useThickness.setState({ stats: null, error: undefined });
-  setMinWall(minWall);
-  showThickness(part);
-  const stats = await wait(() => {
-    const s = useThickness.getState();
-    if (s.error) throw new Error(s.error);
-    return s.stats && s.stats.minWall === minWall && s.body === part ? s.stats : null;
-  });
-  if (!show) hideThickness();
-  return { part, minWall, thinnestMm: Number.isFinite(stats.min) ? round(stats.min) : null, ...(stats.absoluteMin !== undefined && Number.isFinite(stats.absoluteMin) ? { smallestRayMm: round(stats.absoluteMin) } : {}), ...(stats.at ? { thinnestAt: vec(stats.at) } : {}), shareThinnerThanMinWall: round(stats.thin, 4), shown: show };
+  const mesh = useApp.getState().output?.meshes.find((m) => m.bodyId === part);
+  if (!mesh) throw new Error(`part "${part}" has no shape to measure`);
+  const show = o.show !== false;
+  // Measured here, not through the colour map: that one waited at most two minutes for the map
+  // and started over on every rebuild, which a big design (Emil, 2026-11-11) did not get through.
+  const task = startTask(t("Measuring the wall thickness"));
+  let m: Awaited<ReturnType<typeof measureWalls>>;
+  try {
+    m = await measureWalls(mesh, minWall, { samples: WALL_SAMPLES[o.quality ?? "fine"], ...(o.box ? { box: o.box } : {}), progress: (f) => task.update(f) });
+  } finally {
+    task.done();
+  }
+  if (!m) throw new Error("the measurement was stopped");
+  if (show) {
+    hideDeviation();
+    hidePrintCheck();
+    showMeasured(part, m);
+  } else if (useThickness.getState().body === part) hideThickness();
+  const stats = m.stats;
+  return {
+    part,
+    minWall,
+    ...(o.quality === "fast" ? { quality: "fast" } : {}),
+    ...(o.box ? { box: o.box } : {}),
+    thinnestMm: Number.isFinite(stats.min) ? round(stats.min) : null,
+    ...(stats.absoluteMin !== undefined && Number.isFinite(stats.absoluteMin) ? { smallestRayMm: round(stats.absoluteMin) } : {}),
+    ...(stats.at ? { thinnestAt: vec(stats.at) } : {}),
+    shareThinnerThanMinWall: round(stats.thin, 4),
+    thinSpots: m.spots.map((p) => ({ at: vec(p.at), mm: round(p.mm), areaMm2: round(p.areaMm2, 1) })),
+    shown: show,
+  };
 }
 
 /**
  * Printability of a part on an FDM printer as it stands (down = -Z): overhangs steeper than `limit`
  * degrees from vertical, rough support volume, and the best way up found. `turn` turns it first:
- * "best", or the direction (in the part's coordinates now) that should go onto the bed.
+ * "best", or the direction (in the part's coordinates now) that should go onto the bed. `down`
+ * checks another way up without turning the part: a direction, or a flat face that lies on the bed.
+ * Then also where the support goes: open to the outside or inside holes and pockets, standing on
+ * the part, and the pieces of overhang.
  */
-export async function printCheck(part: string, opts: { limit?: number; show?: boolean; turn?: "best" | Vec3 }) {
+export async function printCheck(part: string, opts: { limit?: number; show?: boolean; turn?: "best" | Vec3; down?: Vec3 | FaceSelector }) {
   await rebuildNow();
   needPart(part);
   const limit = opts.limit ?? 45;
+  if (opts.turn && opts.down) throw new Error("give turn (turns the part) or down (checks a way up without turning it), not both");
   let turned: Awaited<ReturnType<typeof said>> | undefined;
   if (opts.turn) {
     const down = opts.turn === "best" ? checkPart(part, limit)?.stats.best?.down : opts.turn;
@@ -119,27 +146,50 @@ export async function printCheck(part: string, opts: { limit?: number; show?: bo
     if (!down) turned.messages.push({ text: "already the best way up", error: false });
     await rebuildNow();
   }
-  const r = checkPart(part, limit);
+  const down: Vec3 = Array.isArray(opts.down) ? opts.down : opts.down ? downOnto(part, opts.down) : [0, 0, -1];
+  if (Math.hypot(...down) < 1e-9) throw new Error("down must not be [0, 0, 0]");
+  const r = checkPart(part, limit, down);
   if (!r) throw new Error(`no part "${part}"`);
   if (opts.show !== false) {
     hideThickness();
     hideDeviation();
     setOverhangLimit(limit);
-    showPrintCheck(part);
+    showPrintCheck(part, down);
   } else hidePrintCheck();
   const s = r.stats;
+  const mesh = useApp.getState().output!.meshes.find((m) => m.bodyId === part)!;
+  const collider = new MeshCollider(mesh.positions, mesh.indices);
+  const where = supportDetails(mesh.positions, mesh.indices, r.check, down, (o, d) => rayDistance(collider, o, d, 1e-6));
   return {
     part,
+    ...(opts.down ? { down: vec(down) } : {}),
     limitDeg: limit,
     overhangMm2: round(s.overhangArea, 1),
     overhangShare: round(s.overhangShare, 4),
     supportMm3: round(s.supportVolume, 0),
+    supportOutsideMm2: round(where.outsideMm2, 1),
+    supportInsideMm2: round(where.insideMm2, 1),
+    supportOnPartMm2: round(where.onPartMm2, 1),
+    ...(where.flattestDeg !== null ? { flattestOverhangDeg: round(where.flattestDeg, 1) } : {}),
+    overhangs: where.regions.slice(0, 8).map((g) => ({ areaMm2: round(g.areaMm2, 1), spanMm: round(g.spanMm, 1), at: vec(g.at), flattestDeg: round(g.flattestDeg, 1), outside: g.outside })),
+    ...(where.regions.length > 8 ? { moreOverhangs: where.regions.length - 8 } : {}),
     onBedMm2: round(s.plateArea, 1),
     heightMm: round(s.height, 2),
-    best: s.best ? { down: vec(s.best.down), supportMm3: round(s.best.supportVolume, 0), onBedMm2: round(s.best.plateArea, 1), heightMm: round(s.best.height, 2) } : "as it stands",
+    best: s.best ? { down: vec(s.best.down), supportMm3: round(s.best.supportVolume, 0), onBedMm2: round(s.best.plateArea, 1), heightMm: round(s.best.height, 2) } : opts.down ? "this way up" : "as it stands",
     ...(turned ? { turned: turned.messages } : {}),
     shown: opts.show !== false,
   };
+}
+
+/** The direction that puts a flat face of the part on the bed: the face's outward normal. */
+function downOnto(part: string, sel: FaceSelector): Vec3 {
+  const meshes = useApp.getState().output?.meshes ?? [];
+  const hits = resolveFaces(sel, meshes.map(meshTopology)).filter((h) => h.body === part);
+  const face = hits[0]?.faces[0];
+  if (face === undefined) throw new Error(`down: the selector matches no face of "${part}"`);
+  const n = faceNormal(part, face);
+  if (!n) throw new Error("down: that face is not flat; give a direction instead");
+  return n;
 }
 
 /** How far a part's surface is from a mesh (a scan it was modelled after). */

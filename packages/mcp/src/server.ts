@@ -268,13 +268,13 @@ const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
 const shot = {
   view: view.optional(),
   direction: vec3.optional().describe("Where the camera is, seen from the model (Z up, front is -Y), e.g. [-1,-1,0.6] from front-left above, [0,0,-1] from below; overrides view"),
-  focus: z.array(z.string()).optional().describe("Part ids to zoom onto"),
+  focus: z.array(z.string()).optional().describe("Part ids or folder names of the parts list to zoom onto"),
   isolate: z.boolean().optional().describe("With focus: hide all other parts"),
   section: z
     .object({ plane: z.enum(["XY", "XZ", "YZ"]).optional(), normal: vec3.optional(), offset: z.number().optional() })
     .optional()
     .describe("Cut the model open: the side the normal points to is removed; the cut faces show red. offset moves the plane along its normal (mm)"),
-  highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts drawn orange, faces (selectors) drawn as selected (blue)"),
+  highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts (ids or folder names) drawn orange, faces (selectors) drawn as selected (blue)"),
   frame: z
     .object({ min: vec3, max: vec3 })
     .optional()
@@ -366,8 +366,8 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Pass its id as `project` with your later calls; before one is open, only lookups work. One project is open per connection at a time: while another chat (or this one) has one open, this is refused with who holds it; close_project frees it.", inputSchema: { id: z.string() } },
-  guard(async ({ id }) => text(await call("open_project", { id }, LONG))),
+  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Pass its id as `project` with your later calls; before one is open, only lookups work. One project is open per connection at a time: while another chat (or this one) has one open, this is refused with who holds it; close_project frees it. takeover: true takes a project from another session's tab when that session is of the same assistant app (your own from before a lost connection) or has made no call for 5 minutes; its tab goes back to the user first.", inputSchema: { id: z.string(), takeover: z.boolean().optional() } },
+  guard(async ({ id, takeover }) => text(await call("open_project", { id, ...(takeover ? { takeover } : {}) }, LONG))),
 );
 server.registerTool(
   "close_project",
@@ -537,7 +537,7 @@ server.registerTool(
   {
     title: "Export a robot for simulation",
     description:
-      "Writes the design as a robot for physics simulation and robot learning into the folder `path`: <name>.xml (MJCF for MuJoCo and mjlab), <name>.urdf (ROS, Isaac Sim, PyBullet) and meshes/<part>.stl, in metres, kilograms and radians. Parts held together by fixed joints become one link; each revolute or slider joint becomes a joint with its limits; couplings become MJCF equalities and URDF mimic joints; each link gets mass, centre of gravity and inertia from its parts' materials. Each part collides as one simple shape (collision: \"shapes\", default): the box, cylinder or sphere of least volume around it, turned with the part, which Isaac Sim/PhysX and MuJoCo simulate fast and stably (the meshes stay the visuals); collision: \"mesh\" collides with the triangles instead. Links that hang on nothing get a free joint (floating: false fixes them). `masses` sets real grams per part (bought motors, printed parts with their infill). `actuators` gives drive data per joint id: effort (Nm or N), velocity (rad/s), kp and kv (then the MJCF gets a position actuator, else a torque motor), armature (kg·m²), damping, friction; joints without it stay passive. Returns the links (name, parts, kg, parent, joint) and warnings (loops left out, parts without material, joints without drive data, parts their collision shape fits badly).",
+      "Writes the design as a robot for physics simulation and robot learning into the folder `path`: <name>.xml (MJCF for MuJoCo and mjlab), <name>.urdf (ROS, Isaac Sim, PyBullet) and meshes/<part>.stl, in metres, kilograms and radians. Parts held together by fixed joints become one link; each revolute or slider joint becomes a joint with its limits; couplings become MJCF equalities and URDF mimic joints; each link gets mass, centre of gravity and inertia from its parts' materials. Each part collides as one simple shape (collision: \"shapes\", default): the box, cylinder or sphere of least volume around it, turned with the part, which Isaac Sim/PhysX and MuJoCo simulate fast and stably (the meshes stay the visuals); collision: \"mesh\" collides with the triangles instead. Links that hang on nothing get a free joint (floating: false fixes them). `masses` sets real grams per part (bought motors, printed parts with their infill). `actuators` gives drive data per joint id: effort (Nm or N), velocity (rad/s), kp and kv (then the MJCF gets a position actuator, else a torque motor), armature (kg·m²), damping, friction; joints without it stay passive. It takes the parts shown (see set_visibility) without cables, `parts` names the parts to take instead (cables too when named), `exclude` leaves more out; joints to a part left out go with it. Returns the links (name, parts, kg, parent, joint) and warnings (loops left out, parts without material, joints without drive data, parts their collision shape fits badly).",
     inputSchema: {
       path: z.string().describe("Folder to write into (created if missing)"),
       name: z.string().optional().describe("Model and file name; default the project's name"),
@@ -551,11 +551,13 @@ server.registerTool(
         .optional()
         .describe("Drive data per joint id"),
       collision: z.enum(["shapes", "mesh"]).optional().describe('What links collide with: "shapes" (default, one box/cylinder/sphere per part) or "mesh"'),
+      parts: z.array(z.string()).optional().describe("Only these parts; default the parts shown, without cables"),
+      exclude: z.array(z.string()).optional().describe("Parts to leave out"),
     },
   },
-  guard(async ({ path, name, floating, masses, actuators, collision }) => {
+  guard(async ({ path, name, floating, masses, actuators, collision, parts, exclude }) => {
     const dir = resolve(path);
-    const r = await call<ExportedFiles & { links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision, stage: true });
+    const r = await call<ExportedFiles & { links: { name: string; parts: string[]; mass: number; parent: string | null; joint: string | null }[]; warnings: string[] }>("export_robot", { name, floating, masses, actuators, collision, parts, exclude, stage: true });
     const written: string[] = [];
     await eachFile(r, async (file, data) => {
       const target = join(dir, file);
@@ -625,7 +627,7 @@ server.registerTool(
   "set_pose",
   {
     title: "Move a mechanism",
-    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped.",
+    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns the value of every joint that can move (fixed joints are only counted, in fixedLeftOut) and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped.",
     inputSchema: { values: z.record(z.string(), z.number()).describe("joint id → value") },
   },
   guard(async ({ values }) => text(await call("set_pose", { values }, LONG))),
@@ -646,11 +648,23 @@ server.registerTool(
   {
     title: "Check a motion",
     description:
-      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts held together by fixed joints are left out (they never move against each other; check_interference finds overlaps at rest); parts meeting at the joint they turn on only count when they overlap. Also the smallest gap per pair of parts and where. The joints go back where they were afterwards.",
-    inputSchema: { joint: z.string().optional(), from: z.number().optional(), to: z.number().optional(), motion: z.string().optional(), steps: z.number().int().min(1).max(240).optional() },
+      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts held together by fixed joints are left out (they never move against each other; check_interference finds overlaps at rest); parts meeting at the joint they turn on only count when they overlap. Also the smallest gap per pair of parts and where. The joints go back where they were afterwards.\n\nFor big designs (hundreds of parts) sweep instead: `joints` takes one to three joints at once, each {joint, from?, to?, steps?} (default its limits; with several joints every combination of their steps, at most 600 poses). `parts` are checked against `against` (default: the parts the joints move against all others); fasteners (screws, nuts, washers, inserts, also copies) are left out unless fasteners: true; overlaps under touchBelow mm³ (default 0.1: slivers of turned round shapes at hubs) count as touching. Only those parts take part, so it is much faster. The answer is short: per pair of parts the first pose where they collide, the largest overlap (mm³) with its pose and about where, the smallest gap and its pose; collisions largest first, then the closest pairs that do not collide (`most` of each, default 12). Giving parts, against, fasteners, touchBelow or most with a single joint sweeps too.",
+    inputSchema: {
+      joint: z.string().optional(),
+      from: z.number().optional(),
+      to: z.number().optional(),
+      motion: z.string().optional(),
+      steps: z.number().int().min(1).max(240).optional(),
+      joints: z.array(z.object({ joint: z.string(), from: z.number().optional(), to: z.number().optional(), steps: z.number().int().min(1).max(120).optional() })).min(1).max(3).optional(),
+      parts: z.array(z.string()).optional(),
+      against: z.array(z.string()).optional(),
+      fasteners: z.boolean().optional(),
+      touchBelow: z.number().min(0).optional(),
+      most: z.number().int().min(1).max(200).optional(),
+    },
     annotations: { readOnlyHint: true },
   },
-  guard(async ({ joint, from, to, motion, steps }) => text(await call("check_motion", { joint, from, to, motion, steps }, LONG))),
+  guard(async (a) => text(await call("check_motion", a, LONG))),
 );
 
 server.registerTool(
@@ -684,8 +698,8 @@ server.registerTool(
   "wall_thickness",
   {
     title: "Wall thickness",
-    description: "Measures a part's walls (rays into the material from all over the surface) against the wall a printer needs (minWall, default 1 mm): the thinnest wall and where, and the share of the surface thinner than minWall. The colour map stays shown in the app (red thin → green) unless show: false.",
-    inputSchema: { part: z.string(), minWall: z.number().positive().optional(), show: z.boolean().optional() },
+    description: "Measures a part's walls (rays into the material from all over the surface) against the wall a printer needs (minWall, default 1 mm): the thinnest wall and where, the share of the surface thinner than minWall, and the thin spots (each place thinner than minWall: its thinnest point, that wall, the area). quality: \"fast\" shoots a fifth of the rays (a quick check after a change; it can miss small spots). box measures only the surface inside it (the part still counts whole as material). The colour map stays shown in the app (red thin → green) unless show: false.",
+    inputSchema: { part: z.string(), minWall: z.number().positive().optional(), show: z.boolean().optional(), quality: z.enum(["fine", "fast"]).optional(), box: z.object({ min: vec3, max: vec3 }).optional() },
   },
   guard(async (a) => text(await call("wall_thickness", a))),
 );
@@ -694,8 +708,8 @@ server.registerTool(
   "print_check",
   {
     title: "Printability",
-    description: "Checks how a part prints on an FDM printer as it stands (bed under its lowest point, -Z down): area hanging over more steeply than limit degrees from vertical (default 45), a rough support volume (mm³) and the area on the bed, plus the best way up found (least support). turn: \"best\" or a direction [x,y,z] that should face the bed turns the part first (added as move steps; it lands on Z = 0 where it stood). The colour map stays shown (red needs support, blue on the bed, green fine) unless show: false.",
-    inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), vec3]).optional() },
+    description: "Checks how a part prints on an FDM printer as it stands (bed under its lowest point, -Z down): area hanging over more steeply than limit degrees from vertical (default 45), a rough support volume (mm³) and the area on the bed, plus the best way up found (least support). Where the support goes: supportOutsideMm2 (open to the outside, where scars show), supportInsideMm2 (in holes, pockets, cavities), supportOnPartMm2 (standing on the part, not the bed), the flattest overhang's angle to the bed (0 = flat ceiling) and the pieces of overhang (area, span across the print direction, a point, outside or not). down: a direction [x,y,z] or a flat face (selector) that goes onto the bed checks that way up without changing the design (pick it by layer direction and load, not only by support). turn: \"best\" or a direction turns the part first (added as move steps; it lands on Z = 0 where it stood). The colour map stays shown (red needs support, blue on the bed, green fine) unless show: false.",
+    inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), vec3]).optional(), down: z.union([vec3, selector]).optional() },
   },
   guard(async (a) => text(await call("print_check", a))),
 );

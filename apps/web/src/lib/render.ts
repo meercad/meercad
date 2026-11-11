@@ -9,6 +9,7 @@ import type { FaceSelector } from "@meercad/schema";
 import type { Pick, StandardView } from "@meercad/viewport";
 import { getViewport, useApp } from "../store";
 import { partName } from "./features";
+import { partsNamed } from "./partNames";
 import { clearanceNow, currentMechanism, currentPoses, jointValues, motionById, openForCheck, restPose, setJointValue, showMotionAt, stopPlaying, useMotion } from "./mechanism";
 import { motion as kin } from "@meercad/model";
 import { meshTopology } from "./topology";
@@ -55,9 +56,20 @@ function facePicks(selectors: readonly FaceSelector[]): Pick[] {
   return picks;
 }
 
-function renderOptions(s: Shot, box?: { min: V3; max: V3 }) {
-  const bodies = new Set(useApp.getState().output?.report.bodies.map((b) => b.id) ?? []);
-  for (const id of [...(s.focus ?? []), ...(s.highlight?.parts ?? [])]) if (!bodies.has(id)) throw new Error(`no part "${id}"`);
+/** The shot with folder names in focus and highlight turned into their parts (see partsNamed). */
+function resolveShot(s: Shot): Shot {
+  const st = useApp.getState();
+  const ids = st.output?.report.bodies.map((b) => b.id) ?? [];
+  const groups = st.doc.partGroups ?? [];
+  return {
+    ...s,
+    ...(s.focus ? { focus: partsNamed(s.focus, ids, groups) } : {}),
+    ...(s.highlight?.parts ? { highlight: { ...s.highlight, parts: partsNamed(s.highlight.parts, ids, groups) } } : {}),
+  };
+}
+
+function renderOptions(shot: Shot, box?: { min: V3; max: V3 }) {
+  const s = resolveShot(shot);
   return {
     width: Math.round(s.width ?? 800),
     height: Math.round(s.height ?? 600),
@@ -105,7 +117,8 @@ function motionSteps(id: string, times: number[]): Step[] {
  * Takes the parts through `steps`, picturing each pose with one camera for all (framing every
  * pose), and puts the joints back afterwards. `each` gets each frame.
  */
-async function framesOf(steps: Step[], shot: Shot, each: (url: string, i: number) => Promise<void>): Promise<void> {
+async function framesOf(steps: Step[], asked: Shot, each: (url: string, i: number) => Promise<void>): Promise<void> {
+  const shot = resolveShot(asked);
   openForCheck();
   stopPlaying();
   const vp = viewport();

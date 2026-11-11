@@ -125,6 +125,17 @@ export function chooseTab<T extends { session: string; project: string | null }>
 export const ASSISTANT_IDLE_MS = 30 * 60_000;
 
 /**
+ * Whether open_project with takeover may take a project from another session's tab: from a session
+ * of the same assistant app (most likely this one's before a lost connection: the old server never
+ * ended, its tab kept the project for half an hour, 2026-11-11), or from one that has made no
+ * request for TAKEOVER_IDLE_MS. Another assistant's work in progress stays untouched.
+ */
+export const TAKEOVER_IDLE_MS = 5 * 60_000;
+export function mayTakeOver(sameClient: boolean, idleMs: number | undefined): boolean {
+  return sameClient || idleMs === undefined || idleMs >= TAKEOVER_IDLE_MS;
+}
+
+/**
  * What stands in the way of a session opening a project: one project at a time per session.
  * Claude Desktop runs one MCP server for all of its chats, so the app cannot tell those chats apart:
  * a second chat opening a project next to the first one's would have every call without (or with
