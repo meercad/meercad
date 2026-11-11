@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseTab, newTabKey, openBlock, openBlockMessage, tabOfSession } from "./protocol.js";
+import { chooseTab, mayTakeOver, newTabKey, openBlock, openBlockMessage, TAKEOVER_IDLE_MS, tabOfSession } from "./protocol.js";
 
 describe("a session's tabs, one per project", () => {
   const tab = (session: string, project: string | null) => ({ session, project });
@@ -62,5 +62,14 @@ describe("one open project per session", () => {
   it("refuses while another open of the session is under way", () => {
     expect(openBlock([], "a", ["a~2"], "p1")).toEqual({ opening: true });
     expect(openBlock([], "a", ["b"], "p1")).toBeNull();
+  });
+});
+
+describe("taking a project over (open_project takeover)", () => {
+  it("from the same assistant app at once, from another one only once it has been quiet", () => {
+    expect(mayTakeOver(true, 1000)).toBe(true);
+    expect(mayTakeOver(false, 1000)).toBe(false);
+    expect(mayTakeOver(false, TAKEOVER_IDLE_MS)).toBe(true);
+    expect(mayTakeOver(false, undefined)).toBe(true);
   });
 });

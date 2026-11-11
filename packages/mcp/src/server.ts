@@ -366,8 +366,8 @@ server.registerTool("redo", { title: "Redo", description: "Redoes the last undon
 server.registerTool("list_projects", { title: "List projects", description: "Saved projects (id, name, last change).", annotations: { readOnlyHint: true } }, guard(async () => text(await call("list_projects"))));
 server.registerTool(
   "open_project",
-  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Pass its id as `project` with your later calls; before one is open, only lookups work. One project is open per connection at a time: while another chat (or this one) has one open, this is refused with who holds it; close_project frees it.", inputSchema: { id: z.string() } },
-  guard(async ({ id }) => text(await call("open_project", { id }, LONG))),
+  { title: "Open project", description: "Opens a saved project by id (see list_projects) for this session. It opens in a meerCAD tab of your own in the background, locked for the user, so they keep working in their other tabs (they can watch yours any time); a project the user has open in a tab moves over to yours. Pass its id as `project` with your later calls; before one is open, only lookups work. One project is open per connection at a time: while another chat (or this one) has one open, this is refused with who holds it; close_project frees it. takeover: true takes a project from another session's tab when that session is of the same assistant app (your own from before a lost connection) or has made no call for 5 minutes; its tab goes back to the user first.", inputSchema: { id: z.string(), takeover: z.boolean().optional() } },
+  guard(async ({ id, takeover }) => text(await call("open_project", { id, ...(takeover ? { takeover } : {}) }, LONG))),
 );
 server.registerTool(
   "close_project",

@@ -4,7 +4,7 @@
  */
 import { layoutSheet, writeDxf, writeSheetDxf, writeSheetPdf, writeSheetSvg, writeSvg, type Paper, type RobotActuator } from "@meercad/io";
 import type { RebuildOutput } from "@meercad/kernel/client";
-import { ASSISTANT_IDLE_MS, DEFAULT_PORT, PROJECT_PARAM, ago, STAGE_KEEP_MS, chooseTab, exportTransport, newTabKey, openBlock, openBlockMessage, tabOfSession, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
+import { ASSISTANT_IDLE_MS, DEFAULT_PORT, PROJECT_PARAM, ago, STAGE_KEEP_MS, chooseTab, exportTransport, mayTakeOver, newTabKey, openBlock, openBlockMessage, tabOfSession, type BridgeEvent, type BridgeRequest, type ExportedFiles, type FilePiece } from "@meercad/mcp";
 import { resolveEdges, resolveFaces } from "@meercad/naming";
 import { applyOp, billOfMaterials, designOf, documentMaterials, drawingDocument, massOf, massProperties, partMaterial, versionFile, withMotion } from "@meercad/model";
 import type { ViewName } from "@meercad/kernel/client";
@@ -248,7 +248,12 @@ async function route(req: BridgeRequest): Promise<unknown> {
     const holder = id === undefined ? undefined : tabs.find((x) => x.project === id && !tabOfSession(x.session, session));
     if (holder) {
       const since = lastCall.get(holder.session);
-      throw new Error(`${holder.client} is working on this project in its own meerCAD tab right now${since ? ` (last call ${ago(Date.now() - since)} ago)` : ""}. Pick another project, or wait until it is done: the project is freed when that session calls close_project, after ${Math.round(LOCK_RELEASE_MIN)} minutes without a call, or when the user clicks Take over in its tab.`);
+      const may = mayTakeOver(holder.client === client, since === undefined ? undefined : Date.now() - since);
+      if (req.params["takeover"] === true && may) await handOverAssistantTab(holder.session, true, "released");
+      else {
+        const hint = may ? ` If that is your own session from before a lost connection, open_project with takeover: true takes the project over.` : "";
+        throw new Error(`${holder.client} is working on this project in its own meerCAD tab right now${since ? ` (last call ${ago(Date.now() - since)} ago)` : ""}. Pick another project, or wait until it is done: the project is freed when that session calls close_project, after ${Math.round(LOCK_RELEASE_MIN)} minutes without a call, or when the user clicks Take over in its tab.${hint}`);
+      }
     }
     // One project at a time per session: the chats sharing a session cannot be told apart (see openBlock).
     const block = openBlock(tabs, session, opening, id);
