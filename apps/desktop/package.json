@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "build": {
-    "appId": "dev.meercad.app",
+    "appId": "app.meercad",
     "productName": "meerCAD",
     "copyright": "meerCAD contributors",
     "directories": {

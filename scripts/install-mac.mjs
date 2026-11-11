@@ -26,8 +26,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CHANNELS = {
-  rc: { appId: "dev.meercad.app.rc", name: "meerCAD RC", icon: "build/icon.png", port: 47822 },
-  wip: { appId: "dev.meercad.app.wip", name: "meerCAD WIP", icon: "build/icon-wip.png", port: 47823 },
+  rc: { appId: "app.meercad.rc", name: "meerCAD RC", icon: "build/icon.png", port: 47822 },
+  wip: { appId: "app.meercad.wip", name: "meerCAD WIP", icon: "build/icon-wip.png", port: 47823 },
 };
 const channel = process.argv[2];
 const c = CHANNELS[channel];

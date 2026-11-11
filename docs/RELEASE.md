@@ -8,7 +8,7 @@
 | Built from | a clean `main`, only together with an upload (below) | any working tree, any time |
 | Command | `pnpm rc` | `pnpm wip` |
 | Who rebuilds it | the release flow, never an agent on its own | agents and threads, whenever they need it |
-| App id | `dev.meercad.app.rc` | `dev.meercad.app.wip` |
+| App id | `app.meercad.rc` | `app.meercad.wip` |
 | App data | `~/Library/Application Support/meerCAD RC` | `~/Library/Application Support/meerCAD WIP` |
 | MCP port | 47822 | 47823 |
 | MCP entry in Claude | `meercad-rc` (tools `mcp__meercad-rc__…`) | `meercad-wip` (tools `mcp__meercad-wip__…`) |

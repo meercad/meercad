@@ -10,7 +10,7 @@
  * in ~/.appstoreconnect/certs/, and the new team's API key and app id in ~/.appstoreconnect/meercad.json.
  * iCloud containers cannot move between teams: files in the old container stay with the old app.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -47,8 +47,13 @@ const files = [
   "apps/desktop/build/entitlements.mas.plist",
   "apps/desktop/src/main.ts",
   "scripts/install-mac.mjs",
+  "scripts/mas.mjs",
+  "packages/mcp/src/launchApp.ts",
+  "packages/mcp/src/launchApp.test.ts",
 ];
 for (const file of files) {
+  // Generated files (capacitor.config.json in the Xcode project) exist only after a sync.
+  if (!existsSync(join(root, file))) continue;
   const before = readFileSync(join(root, file), "utf8");
   let text = swap(before, `${oldTeam}.${oldBundle}`, `${team}.${bundle}`);
   text = swap(text, `iCloud.${oldBundle}`, `iCloud.${bundle}`);
