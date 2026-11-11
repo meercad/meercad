@@ -22,7 +22,9 @@ const packName = (id: PackId) => t(PACKS.find((p) => p.id === id)!.name);
 
 /** The note for a design, or null when every pack it uses is on here. */
 export function packNote(doc: MeercadDocument): { title: string; message: string } | null {
-  const missing = missingPacks(doc);
+  // Variants switch without the pack, so a design whose only use of it is variants (the DIN box
+  // example) needs no note; saved versions do, as they stay hidden.
+  const missing = missingPacks(doc).filter((m) => m.pack !== "versions" || Boolean(doc.versions?.length));
   if (!missing.length) return null;
   const title = missing.length === 1 ? t("This design uses the {pack} pack", { pack: packName(missing[0]!.pack) }) : t("This design uses the packs {packs}", { packs: missing.map((m) => packName(m.pack)).join(", ") });
   const message = [t("You can look at it, print it and export it, and change everything else as usual. Saving keeps all of it."), ...missing.map((m) => without(m.pack))].join("\n\n");
