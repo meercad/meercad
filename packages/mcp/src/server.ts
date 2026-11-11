@@ -625,7 +625,7 @@ server.registerTool(
   "set_pose",
   {
     title: "Move a mechanism",
-    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns every joint's value and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped.",
+    description: "Sets joint values (degrees for revolute joints, mm for sliders; driven joints move their drivers, linkages follow) and shows the pose in the app. Returns the value of every joint that can move (fixed joints are only counted, in fixedLeftOut) and whether all were reached; a joint a limit or dead point stopped short is named in problems with where it stopped.",
     inputSchema: { values: z.record(z.string(), z.number()).describe("joint id → value") },
   },
   guard(async ({ values }) => text(await call("set_pose", { values }, LONG))),

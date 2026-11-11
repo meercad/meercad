@@ -830,7 +830,7 @@ export function openForCheck(): void {
 }
 
 /** Sets joint values one after another (driven joints move their drivers); the parts move in the app. */
-export function setPose(values: Readonly<Record<string, number>>): { values: Record<string, number>; reached: boolean; problems: Record<string, string>; cables?: ReturnType<typeof cableReport> } {
+export function setPose(values: Readonly<Record<string, number>>): { values: Record<string, number>; fixedLeftOut?: number; reached: boolean; problems: Record<string, string>; cables?: ReturnType<typeof cableReport> } {
   openForCheck();
   stopPlaying();
   const { mech, problems } = currentMechanism();
@@ -848,7 +848,11 @@ export function setPose(values: Readonly<Record<string, number>>): { values: Rec
       problems[id] = lim && ((now[id] ?? 0) <= lim[0] + 1e-6 || (now[id] ?? 0) >= lim[1] - 1e-6) ? `held at its limit ${+(now[id] ?? 0).toFixed(3)} (limits ${lim[0]} to ${lim[1]}), asked ${v}` : `stopped at ${+(now[id] ?? 0).toFixed(3)}, asked ${v}`;
     }
   const cables = cableReport();
-  return { values: now, reached, problems, ...(cables.length ? { cables } : {}) };
+  // Fixed joints never move: in a design of hundreds of parts they would bury the joints that do.
+  const fixed = new Set(mech.joints.filter((j) => j.type === "fixed").map((j) => j.id));
+  const shown = Object.fromEntries(Object.entries(now).filter(([id]) => !fixed.has(id) || id in values));
+  const fixedLeftOut = Object.keys(now).length - Object.keys(shown).length;
+  return { values: shown, ...(fixedLeftOut ? { fixedLeftOut } : {}), reached, problems, ...(cables.length ? { cables } : {}) };
 }
 
 /** How each cable fared over a run of poses: where it first got into trouble, its most stretch and tightest bend. */
