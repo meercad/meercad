@@ -104,23 +104,23 @@ final class TouchTests: XCTestCase {
         g.press(forDuration: 0.05, thenDragTo: g.withOffset(CGVector(dx: 0, dy: 120)))
         m.waitFor("a swipe down to close the parts sheet") { !$0.sideOpen }
 
-        // Open again, then start a step: its dialog takes the place of the sheet.
+        // Open again, then edit a step from the history: its dialog takes the place of the sheet.
         m.tap("Parts")
         m.waitFor("the parts sheet to open") { $0.sideOpen }
-        m.tap("Extrude")
-        let dialog = m.waitFor("the extrude dialog") { $0.dialog != nil }
+        m.editRow("Countersinks")
+        let dialog = m.waitFor("the chamfer dialog") { $0.dialog != nil }
         XCTAssertFalse(dialog.sideOpen, "the parts sheet stayed open over the dialog")
+        if let d = dialog.rect("dialog"), let side = dialog.rect("side") { XCTAssertFalse(d.intersects(side), "the parts sheet covers the dialog") }
         m.tap("Cancel")
         m.waitFor("the dialog to close") { $0.dialog == nil }
 
-        // Open again, then edit a sketch from the history: the sheet goes, the sketch is free.
+        // Open again, then edit a sketch from it: the sheet goes, the sketch is free.
         m.tap("Parts")
         m.waitFor("the parts sheet to open") { $0.sideOpen }
-        let holes = m.element("Holes")
-        XCTAssertTrue(holes.waitForExistence(timeout: 5))
-        holes.doubleTap()
-        let sketching = m.waitFor("the sketch to open", timeout: 20) { $0.sketch != nil || $0.dialog != nil }
+        m.editRow("Plate outline")
+        let sketching = m.waitFor("the sketch to open", timeout: 20) { $0.sketch != nil }
         XCTAssertFalse(sketching.sideOpen, "the parts sheet stayed open in the sketch")
+        XCTAssertNil(sketching.rect("side"), "the parts sheet still covers the sketch")
     }
 
     /// Found 2026-11-11 in the iPad Simulator: the tool wall example once failed with

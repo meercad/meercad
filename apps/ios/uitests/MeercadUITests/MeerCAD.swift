@@ -58,7 +58,13 @@ final class MeerCAD {
     func launch() {
         app.launch()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 60), "the app's page did not appear")
-        _ = waitFor("the page to start", timeout: 60) { _ in true }
+        // A cold start after a fresh install can take a while in a busy Simulator; launch once more if
+        // the page never reports.
+        if !waitQuietly(90) {
+            app.terminate()
+            app.launch()
+        }
+        _ = waitFor("the page to start", timeout: 90) { _ in true }
     }
 
     var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
@@ -74,6 +80,15 @@ final class MeerCAD {
         guard el.exists else { return nil }
         let text = String(el.label.dropFirst("UITEST ".count))
         return try? JSONDecoder().decode(Probe.self, from: Data(text.utf8))
+    }
+
+    private func waitQuietly(_ seconds: TimeInterval) -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        while Date() < end {
+            if probe() != nil { return true }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        return false
     }
 
     /// Waits until the page's state passes `ok`, failing the test with `what` after `timeout`.
@@ -133,6 +148,21 @@ final class MeerCAD {
 
     func screenSize() -> CGSize { app.webViews.firstMatch.frame.size }
 
+    /// Edits a step in the history list the touch way: a long press opens its menu, then Edit.
+    func editRow(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        let row = element(name)
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "no step \(name) in the history", file: file, line: line)
+        row.press(forDuration: 0.9)
+        Thread.sleep(forTimeInterval: 0.4)
+        // The menu opens at the row: its Edit is the "Edit" nearest to it.
+        let y = row.frame.midY
+        let edit = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Edit")).allElementsBoundByIndex
+            .filter { $0.isHittable && $0.frame.height > 20 }
+            .min { abs($0.frame.midY - y) < abs($1.frame.midY - y) }
+        XCTAssertNotNil(edit, "no Edit in the step's menu", file: file, line: line)
+        edit?.tap()
+    }
+
     // MARK: flows
 
     /// From the overview, opens an example as a new part and waits for it to build.
@@ -149,7 +179,7 @@ final class MeerCAD {
             tap("Examples", file: file, line: line)
             card = exampleCard()
         }
-        if !card.isHittable { app.swipeUp() }
+        for _ in 0..<12 where card.exists && !card.isHittable { app.webViews.firstMatch.swipeUp(velocity: .slow) }
         XCTAssertTrue(card.waitForExistence(timeout: 10), "no example \(name)", file: file, line: line)
         card.tap()
         waitFor("the example to open", timeout: 60, file: file, line: line) { $0.screen == "editor" && !$0.bodies.isEmpty }
