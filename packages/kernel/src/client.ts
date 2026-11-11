@@ -85,6 +85,10 @@ export class KernelClient {
   private coarse: number | null = null;
   /** How often a fresh kernel has taken over (see Renewal). */
   renewed = 0;
+  /** The kernel's memory after the latest rebuild (bytes; 0 before the first). */
+  get memoryUsed(): number {
+    return this.memory.now;
+  }
 
   constructor(
     worker: Worker,
@@ -124,9 +128,10 @@ export class KernelClient {
           return p?.reject(new Error("the geometry kernel's meshes got out of step; build again"));
         }
         msg.meshes = meshes;
-        const memory = msg.report.kernelMemory;
-        if (memory) this.memory = { start: this.memory.start || memory, now: memory };
       }
+      // The worker's memory, whichever session built (previews and pictures too).
+      const memory = msg.type === "rebuilt" ? msg.report.kernelMemory : undefined;
+      if (memory) this.memory = { start: this.memory.start || memory, now: memory };
       if (!p) return;
       if (msg.type === "progress") return p.onProgress?.({ index: msg.index, total: msg.total, feature: msg.feature });
       this.pending.delete(msg.seq);
@@ -247,6 +252,15 @@ export class KernelClient {
    */
   restartIfAbove(above: number, worker: () => Worker): boolean {
     if (this.memory.now <= above) return false;
+    this.restart(worker());
+    return true;
+  }
+
+  /**
+   * Goes on in `worker` from now on, e.g. a kernel of another kind (single-threaded for a big design
+   * on the iPad). As restartIfAbove: requests still open reject with SupersededError.
+   */
+  restart(worker: Worker): void {
     this.spare?.worker.terminate();
     this.spare = null;
     this.worker.terminate();
@@ -254,10 +268,9 @@ export class KernelClient {
     this.pending.clear();
     this.lastRebuild = null;
     this.memory = { start: 0, now: 0 };
-    this.attach(worker());
+    this.attach(worker);
     if (this.coarse !== null) this.worker.postMessage({ type: "configure", seq: ++this.seq, meshCoarse: this.coarse } satisfies WorkerRequest);
     this.renewed++;
-    return true;
   }
 
   /**

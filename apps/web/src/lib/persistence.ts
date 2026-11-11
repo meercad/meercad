@@ -18,6 +18,8 @@ export interface ProjectMeta {
   thumbnail?: string;
   /** When the picture was written; a picture older than the file shows an earlier state. */
   thumbnailAt?: number;
+  /** The file's size in bytes, where the store says (the iPad: big designs are not built in the background). */
+  size?: number;
 }
 export interface Project extends ProjectMeta {
   doc: MeercadDocument;

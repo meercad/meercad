@@ -226,11 +226,25 @@ async function moveProject(r: Root, from: string, to: string): Promise<void> {
 const writeDoc = (r: Root, id: string, text: string) => Filesystem.writeFile({ ...at(r, projectPath(id)), data: text, encoding: Encoding.UTF8, recursive: true });
 const docText = (doc: unknown) => `${JSON.stringify(doc, null, 2)}\n`;
 
-/** A project's text; in iCloud it is fetched first if it is only in the cloud so far. */
-async function readDoc(r: Root, id: string): Promise<string> {
+/**
+ * A project's design; in iCloud the file is fetched first if it is only in the cloud so far.
+ *
+ * Read by the web view itself (the file URL Capacitor serves to the page), not through the plugin:
+ * the plugin hands the whole text over as one escaped string in a message, and for a design of
+ * 40 MB (the robot) the page then held several copies at once, over 1 GB for a moment, which the
+ * iPhone did not allow it. The plugin is the way back should the web view not reach the file.
+ */
+async function readDoc(r: Root, id: string): Promise<MeercadDocument> {
   const where = at(r, projectPath(id));
   if (r.kind === "icloud") await ICloud.download({ url: where.path });
-  return (await Filesystem.readFile({ ...where, encoding: Encoding.UTF8 })).data as string;
+  try {
+    const uri = where.directory ? (await Filesystem.getUri({ path: where.path, directory: where.directory })).uri : where.path;
+    const res = await fetch(Capacitor.convertFileSrc(uri));
+    if (res.ok) return (await res.json()) as MeercadDocument;
+  } catch {
+    // Read through the plugin below.
+  }
+  return JSON.parse((await Filesystem.readFile({ ...where, encoding: Encoding.UTF8 })).data as string) as MeercadDocument;
 }
 
 /**
@@ -250,7 +264,7 @@ export async function switchStorage(to: "local" | "icloud"): Promise<{ moved: nu
       skipped++;
       continue;
     }
-    await writeDoc(target, id, await readDoc(from, id));
+    await writeDoc(target, id, docText(await readDoc(from, id)));
     await Filesystem.deleteFile(at(from, projectPath(id)));
     moved++;
   }
@@ -272,16 +286,16 @@ export const nativeFiles: FileStore | undefined = nativeApp
               const st = await Filesystem.stat(at(r, file));
               const thumbnail = await readThumb(id);
               const thumbnailAt = thumbnail ? await thumbTime(id) : undefined;
-              return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, ...(st.ctime ? { createdAt: st.ctime } : {}), ...(thumbnail ? { thumbnail, ...(thumbnailAt !== undefined ? { thumbnailAt } : {}) } : {}) };
+              return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, size: st.size, ...(st.ctime ? { createdAt: st.ctime } : {}), ...(thumbnail ? { thumbnail, ...(thumbnailAt !== undefined ? { thumbnailAt } : {}) } : {}) };
             }),
           );
           return out.sort((a, b) => b.updatedAt - a.updatedAt);
         },
         async load(id: string): Promise<Project> {
           const r = await root();
-          const text = await readDoc(r, id);
+          const doc = await readDoc(r, id);
           const st = await Filesystem.stat(at(r, projectPath(id)));
-          return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, doc: JSON.parse(text) as MeercadDocument };
+          return { id, name: nameOf(id), folder: folderOf(id), updatedAt: st.mtime, size: st.size, doc };
         },
         async save(p: { id: string; doc: MeercadDocument; thumbnail?: string }): Promise<void> {
           await writeDoc(await root(), p.id, docText(p.doc));

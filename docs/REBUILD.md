@@ -81,12 +81,32 @@ So on the iPad and iPhone (`oneKernel` in `apps/web/src/lib/thumbnails.ts`):
 Same steps afterwards (fresh install, opening the design 20 s after start): 2.1 GB at most instead
 of 4.1 GB, the design shown in full.
 
-`tests/bench/open-memory.ts file` gives the kernel heap of a first build and the size of the meshes
-sent to the page (robot: 1.66 GB with threads, 1.48 GB without; meshes only 60 MB).
+That was not enough on a real iPhone (2026-11-11, robot then 1062 steps in a 42 MB file): it broke
+off at the end and loaded again, over and over. Two more things grew the page:
 
-Open: a build of OCCT of our own without the leak (would also help the iPad and halve the memory
-of a first build), and building independent parts in several kernels at once when a design is
-opened.
+- **Threads.** Each OCCT thread keeps memory of its own: the robot took 1.9 to 2.3 GB in the
+  threaded kernel and 1.1 GB without threads, in about the same time on the Mac (37 s against
+  27 to 40 s; meshing is faster with threads, the cuts are not). On the iPad and iPhone a design of
+  more than `BIG_STEPS` steps is built without threads (`kernelKindFor` in `pictureState.ts`; the
+  editor's kernel is swapped when such a design is opened, `KernelClient.restart`).
+- **Reading the file.** The Filesystem plugin hands a file over as one escaped string in a message;
+  for 42 MB the page held several copies at once. Projects are now read by the web view itself
+  (`fetch` of `Capacitor.convertFileSrc`, `readDoc` in `native.ts`), and the overview does not read
+  files over 8 MB at all for a picture (`BIG_FILE_BYTES`). The background kernel also starts over
+  once the examples' pictures have taken 300 MB.
+
+iPhone simulator, opening the robot 20 s after a fresh start: 2.3 to 2.5 GB before, 1.6 GB after.
+
+The heap a kernel reports (`wasmMemory.buffer.byteLength`) is what it has reserved, not what it
+uses: OCCT's allocator takes memory in large steps, so the same build reports 1.6 to 2.4 GB. Compare
+the process (`footprint`, or the RSS in `heap.ts`) instead.
+
+`tests/bench/open-memory.ts file [--threads] [--by-step]` gives the kernel heap of a first build and
+the size of the meshes sent to the page (robot: meshes only 56 MB).
+
+Open: a build of OCCT of our own without the leak. Native OCCT 7.9 (Homebrew) keeps nothing of a cut
+or a meshing done 3000 times; the WebAssembly package keeps 250 KB per cut of two boxes and 20 KB per
+meshed box. Also building independent parts in several kernels at once when a design is opened.
 
 ## For assistants (MCP)
 

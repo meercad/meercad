@@ -98,7 +98,9 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
       }
       case "sandbox": {
         // Next to the open design: what it shares with it is not built again (a whole Mini v4 takes over a minute).
-        post({ type: "rebuilt", seq: req.seq, ...session!.preview(req.doc) });
+        const r = session!.preview(req.doc);
+        r.report.kernelMemory = oc!.wasmMemory.buffer.byteLength;
+        post({ type: "rebuilt", seq: req.seq, ...r });
         break;
       }
       case "export_step": {

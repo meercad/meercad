@@ -29,11 +29,13 @@ import { partColors } from "./partColors";
 import { partLooks } from "./materials";
 import { sceneryOf } from "./terrain";
 import { desktop, loadProject, saveThumbnail, type ProjectMeta } from "./persistence";
-import { backgroundBuildAllowed, blankPixels, lookSince, needsPicture, pictureRunner, type LookMark } from "./pictureState";
+import { BIG_FILE_BYTES, backgroundBuildAllowed, blankPixels, lookSince, needsPicture, pictureRunner, type LookMark } from "./pictureState";
 
 /** A project gets a few minutes (the background kernel has one thread); an example a minute. */
 const PROJECT_LIMIT_MS = 180_000;
 const EXAMPLE_LIMIT_MS = 60_000;
+/** iPad and iPhone: the background kernel starts over once the examples have taken this much. */
+const EXAMPLES_KERNEL_MAX = 300 * 2 ** 20;
 /** iPad and iPhone: no room for the background kernel next to the editor's (see above). */
 const oneKernel = !desktop;
 /** Examples that took too long, by content key: not tried again (they ship with the app). */
@@ -210,6 +212,8 @@ async function fillMissingThumbnails(): Promise<void> {
       const next = s.projects.find((p) => p.id !== s.project?.id && needsPicture(p, blank.get(p.thumbnail ?? "") ?? false, currentLookSince()) && !tried.has(triedKey(p)) && gaveUp[p.id] !== p.updatedAt);
       if (!next) return;
       tried.add(triedKey(next));
+      // Too big to be read here at all; its picture comes from the editor.
+      if (oneKernel && (next.size ?? 0) > BIG_FILE_BYTES) continue;
       try {
         const project = await loadProject(next.id);
         if (!project) continue;
@@ -316,6 +320,8 @@ async function fillExampleThumbnails(examples: readonly { name: string; thumbnai
       if (examplesFailed().includes(key)) continue;
       try {
         const output = await build(ex.doc, EXAMPLE_LIMIT_MS);
+        // The examples are small, but what they take adds up (see oneKernel).
+        if (oneKernel && (spare?.memoryUsed ?? 0) > EXAMPLES_KERNEL_MAX) endSpare();
         if (!output.meshes.length) continue;
         if (!vp) {
           host = document.createElement("div");

@@ -14,7 +14,7 @@ import type { Pick, Viewport } from "@meercad/viewport";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { assistantWindow, createProject, desktop, listFolders, listProjects, loadProject, renameProjectFile, saveProject, saveThumbnail, type AssistantTab, type ProjectMeta } from "./lib/persistence";
-import { viewIsCurrent } from "./lib/pictureState";
+import { kernelKindFor, viewIsCurrent, type KernelKind } from "./lib/pictureState";
 import KernelWorker from "./kernel.worker.ts?worker";
 import kernelBuild from "./kernel.worker.ts?worker&url";
 import { outputKey, readOutput, writeOutput, type MeshOptions } from "./lib/openCache";
@@ -127,8 +127,9 @@ export const kernel = new KernelClient(
  * big designs one after the other outgrow the page.
  */
 const RESTART_ABOVE = 600 * 2 ** 20;
-/** The project the editor's kernel was last given. */
+/** The project the editor's kernel was last given, and the kind it is of (see kernelKindFor). */
 let kernelProject: string | null = null;
+let kernelKind: KernelKind = kernelName;
 /** For test runs: localStorage "meercad.kernel.renew" (MB) makes the fresh kernel take over that early. */
 function renewAt(): { above?: number; grown?: number } {
   try {
@@ -907,7 +908,12 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   const leaving = get().project;
   if (leaving) tabStores.set(leaving.id, docStore);
   // The same design again (back from the overview) is built from what the kernel kept.
-  if (!desktop && kernelProject !== meta.id) kernel.restartIfAbove(RESTART_ABOVE, () => new KernelWorker({ name: kernelName }));
+  if (!desktop) {
+    const kind = kernelKindFor(doc.features.length, { mobile: true, threads: kernelName === "kernel-threads" });
+    if (kind !== kernelKind) kernel.restart(new KernelWorker({ name: kind }));
+    else if (kernelProject !== meta.id) kernel.restartIfAbove(RESTART_ABOVE, () => new KernelWorker({ name: kind }));
+    kernelKind = kind;
+  }
   kernelProject = meta.id;
   docStore = store ?? new DocumentStore(doc);
   tabStores.set(meta.id, docStore);
