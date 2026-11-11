@@ -14,7 +14,7 @@ import type { Pick, Viewport } from "@meercad/viewport";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { assistantWindow, createProject, desktop, listFolders, listProjects, loadProject, renameProjectFile, saveProject, saveThumbnail, type AssistantTab, type ProjectMeta } from "./lib/persistence";
-import { kernelKindFor, viewIsCurrent, type KernelKind } from "./lib/pictureState";
+import { BIG_STEPS, kernelKindFor, viewIsCurrent, type KernelKind } from "./lib/pictureState";
 import KernelWorker from "./kernel.worker.ts?worker";
 import kernelBuild from "./kernel.worker.ts?worker&url";
 import { outputKey, readOutput, writeOutput, type MeshOptions } from "./lib/openCache";
@@ -954,13 +954,20 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
 }
 
 /**
+ * Whether a design's last result is kept for its next opening. Not a big design's on the iPad and
+ * iPhone: the kept result and the new one are both in memory for a moment (and a copy while it is
+ * written), which the page has no room for next to the kernel of such a design.
+ */
+const keepsOutput = (doc: MeercadDocument) => !!desktop || doc.features.length <= BIG_STEPS;
+
+/**
  * Shows what the project looked like when it was last built here (openCache), while the kernel
  * builds it again; only for exactly the same document, and only until the real result is there.
  */
 function showKeptOutput(project: string): void {
   const store = docStore;
   const doc = store.doc;
-  if (!doc.features.length) return;
+  if (!doc.features.length || !keepsOutput(doc)) return;
   void readOutput(project, outputKey(doc, editorMeshOptions())).then((kept) => {
     if (!kept || docStore !== store || store.doc !== doc || get().output || get().dialog || get().proposalDoc) return;
     set({ output: kept, baseOutput: kept, previewing: false, buildProgress: null });
@@ -973,7 +980,7 @@ function scheduleOutputCache(): void {
   const project = get().project?.id;
   const store = docStore;
   const doc = store.doc;
-  if (!project) return;
+  if (!project || !keepsOutput(doc)) return;
   clearTimeout(outputCacheTimer);
   outputCacheTimer = window.setTimeout(() => {
     // Still this project's latest result (with volumes and areas filled in by now)?

@@ -117,6 +117,14 @@ app's console comes with `xcrun devicectl device process launch --console`):
   objects of which 1.5 million were never used again. `Body` now frees them at once: 540 MB to
   283 MB of JavaScript, 390 MB less for the process (`tests/bench/kernel-objects.ts`). This helps
   the Mac as well.
+- **Edges only when asked for.** A long design keeps every step's parts, and a part cut thirty
+  times is there thirty times: the robot kept 141 000 faces and 346 000 edges, its final parts have
+  10 000 and 22 000. `Body` now works out its edges, their index and the faces at each edge when
+  first asked (few parts ever are), and the shape index is a number per shape: 283 MB to 143 MB of
+  JavaScript. All in all the process needs 1.29 GB for the robot instead of 1.95 GB.
+- **One result at a time.** A big design's last result is not kept for its next opening on the
+  iPad and iPhone (`keepsOutput` in the store): shown first and then replaced, both were in memory.
+- After all this the iPhone showed the robot in full with 250 MB to spare.
 - **iCloud.** Opening waited for the newest version of a file the Mac kept saving, 30 s, and then
   failed. A file that is on the device in an older version now opens as it is (`ICloudPlugin`), and
   reading shows as a task ("Opening …").

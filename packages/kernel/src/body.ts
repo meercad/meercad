@@ -14,10 +14,14 @@ import type { OC } from "./occt.js";
  */
 export class Body implements Topology {
   readonly faces: TopoDS_Face[];
-  readonly edges: TopoDS_Edge[];
-  readonly edgeFaces: number[][];
   private readonly faceMap: ShapeIndex;
-  private readonly edgeMap: ShapeIndex;
+  /**
+   * The edges, their index and the faces at each edge: worked out when first asked for. A long
+   * design keeps every step's parts (a part cut thirty times is there thirty times), and most of
+   * them are never asked for their edges: the robot design kept 346 000 edges of which its final
+   * parts have 22 000.
+   */
+  private edgeData: { edges: TopoDS_Edge[]; map: ShapeIndex; faces: number[][] } | null = null;
   private info: FaceInfo[] | null = null;
   /**
    * For a body made from an imported mesh: its triangles (corner positions in triangle order, one
@@ -55,19 +59,33 @@ export class Body implements Topology {
     // at once: a state keeps its shapes for as long as the design is open (Arena.trim), and a big
     // design (1100 steps) held 1.5 million of these for nothing, 350 MB of the kernel worker.
     [this.faceMap, this.faces] = indexShapes(oc, arena, shape, "TopAbs_FACE", (s) => oc.TopoDS.Face(s));
-    [this.edgeMap, this.edges] = indexShapes(oc, arena, shape, "TopAbs_EDGE", (s) => oc.TopoDS.Edge(s));
-    this.edgeFaces = this.edges.map(() => []);
+  }
+
+  private get edgeIndexed(): { edges: TopoDS_Edge[]; map: ShapeIndex; faces: number[][] } {
+    if (this.edgeData) return this.edgeData;
+    const { oc } = this;
+    const [map, edges] = indexShapes(oc, this.arena, this.shape, "TopAbs_EDGE", (s) => oc.TopoDS.Edge(s));
+    const faces: number[][] = edges.map(() => []);
     this.faces.forEach((face, fi) => {
       const ex = new oc.TopExp_Explorer(face, "TopAbs_EDGE");
       for (; ex.More(); ex.Next()) {
         const edge = ex.Current();
-        const ei = this.edgeIndex(edge);
+        const adj = faces[map.find(edge)];
         edge.delete();
-        const adj = this.edgeFaces[ei];
         if (adj && !adj.includes(fi)) adj.push(fi);
       }
       ex.delete();
     });
+    return (this.edgeData = { edges, map, faces });
+  }
+
+  get edges(): TopoDS_Edge[] {
+    return this.edgeIndexed.edges;
+  }
+
+  /** The faces (indices) meeting at each edge. */
+  get edgeFaces(): number[][] {
+    return this.edgeIndexed.faces;
   }
 
   /** 0-based face index of a sub-shape of this body, or -1. */
@@ -76,7 +94,7 @@ export class Body implements Topology {
   }
 
   edgeIndex(s: TopoDS_Shape): number {
-    return this.edgeMap.find(s);
+    return this.edgeIndexed.map.find(s);
   }
 
   /** A point inside each face (triangle centroid) and on each edge (polyline midpoint). */
@@ -152,27 +170,36 @@ function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
   }
 }
 
-/** Index of distinct shapes with `IsSame` semantics (same TShape and location, any orientation). */
+/**
+ * Index of distinct shapes with `IsSame` semantics (same TShape and location, any orientation).
+ * Kept small (a number per shape, a list only where hashes meet): there is one per part of every step.
+ */
 class ShapeIndex {
-  private buckets = new Map<number, { shape: TopoDS_Shape; index: number }[]>();
-  private count = 0;
+  private readonly shapes: TopoDS_Shape[] = [];
+  private readonly byHash = new Map<number, number | number[]>();
 
   constructor(private readonly oc: OC) {}
 
   /** Adds the shape if new; returns its 0-based index. */
   add(s: TopoDS_Shape): number {
     const h = this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND);
-    let bucket = this.buckets.get(h);
-    if (!bucket) this.buckets.set(h, (bucket = []));
-    const hit = bucket.find((b) => b.shape.IsSame(s));
-    if (hit) return hit.index;
-    bucket.push({ shape: s, index: this.count });
-    return this.count++;
+    const at = this.byHash.get(h);
+    if (at === undefined) {
+      this.byHash.set(h, this.shapes.length);
+      return this.shapes.push(s) - 1;
+    }
+    const hit = typeof at === "number" ? (this.shapes[at]!.IsSame(s) ? at : -1) : (at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1);
+    if (hit !== -1) return hit;
+    if (typeof at === "number") this.byHash.set(h, [at, this.shapes.length]);
+    else at.push(this.shapes.length);
+    return this.shapes.push(s) - 1;
   }
 
   find(s: TopoDS_Shape): number {
-    const bucket = this.buckets.get(this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND));
-    return bucket?.find((b) => b.shape.IsSame(s))?.index ?? -1;
+    const at = this.byHash.get(this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND));
+    if (at === undefined) return -1;
+    if (typeof at === "number") return this.shapes[at]!.IsSame(s) ? at : -1;
+    return at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1;
   }
 }
 
