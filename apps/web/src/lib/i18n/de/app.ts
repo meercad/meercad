@@ -17,6 +17,7 @@ export default {
   "Rebuild failed: {msg}": "Neu berechnen fehlgeschlagen: {msg}",
   "Project not found": "Projekt nicht gefunden",
   "Opening {name} …": "{name} wird geöffnet …",
+  "{name} did not fit into this device's memory and was closed. Tap it to try again.": "{name} hat nicht in den Speicher dieses Geräts gepasst und wurde geschlossen. Zum erneuten Versuch antippen.",
   "This design now uses inches": "Dieses Modell verwendet jetzt Zoll",
   "This design now uses millimetres": "Dieses Modell verwendet jetzt Millimeter",
   "Untitled part": "Unbenanntes Teil",
