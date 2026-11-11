@@ -37,7 +37,9 @@ public class ICloudPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     /// Makes sure a file is on this device: starts the download if it is only in the cloud and
-    /// waits for it (up to `timeout` seconds, default 30).
+    /// waits for it (up to `timeout` seconds, default 30). A file that is here in an older version
+    /// is read as it is while the newer one comes in: a design the Mac saves again and again (an
+    /// assistant at work) was otherwise never current, and opening it waited and then failed.
     @objc func download(_ call: CAPPluginCall) {
         guard let s = call.getString("url"), let url = URL(string: s) else { return call.reject("missing url") }
         let timeout = call.getDouble("timeout") ?? 30
@@ -57,6 +59,8 @@ public class ICloudPlugin: CAPPlugin, CAPBridgedPlugin {
             } catch {
                 return call.reject("could not download \(url.lastPathComponent): \(error.localizedDescription)")
             }
+            let values = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+            if values?.ubiquitousItemDownloadingStatus == .downloaded && !fm.fileExists(atPath: placeholder.path) { return call.resolve() }
             let end = Date().addingTimeInterval(timeout)
             while Date() < end {
                 if current() { return call.resolve() }

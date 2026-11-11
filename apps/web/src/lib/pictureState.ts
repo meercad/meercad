@@ -117,16 +117,20 @@ export function backgroundBuildAllowed(doc: Pick<MeercadDocument, "features">, a
   return !at.editorOpen && doc.features.length <= BIG_STEPS;
 }
 
-/** The two kinds of kernel: OCCT built with threads (parallel meshing and booleans) or without. */
-export type KernelKind = "kernel" | "kernel-threads";
+/**
+ * The kinds of kernel: OCCT built with threads (parallel meshing and booleans), without, and without
+ * but with its memory taken at once ("kernel-reserve", see reserveHeap in the kernel).
+ */
+export type KernelKind = "kernel" | "kernel-threads" | "kernel-reserve";
 
 /**
  * Which kernel the editor builds a design of `steps` steps in. On the iPad and iPhone a big design
- * (BIG_STEPS) is built without threads: each thread keeps memory of its own, and the robot design
- * (1062 steps) took 1.9 to 2.3 GB with threads against 1.1 GB without, for 30 % more time; the
- * page then outgrew what the iPhone allows it and was loaded again, over and over.
+ * (BIG_STEPS) is built without threads and in memory taken at once: each thread keeps memory of its
+ * own (the robot design, 1062 steps, took 1.9 to 2.3 GB with threads against 1.1 GB without, for
+ * 30 % more time), and a memory that grows is copied there. Either way the page outgrew what the
+ * iPhone allows it and was loaded again, over and over.
  */
 export function kernelKindFor(steps: number, at: { mobile: boolean; threads: boolean }): KernelKind {
-  if (!at.threads) return "kernel";
-  return at.mobile && steps > BIG_STEPS ? "kernel" : "kernel-threads";
+  if (at.mobile && steps > BIG_STEPS) return "kernel-reserve";
+  return at.threads ? "kernel-threads" : at.mobile ? "kernel-reserve" : "kernel";
 }

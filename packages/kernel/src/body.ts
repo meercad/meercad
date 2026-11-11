@@ -13,8 +13,8 @@ import type { OC } from "./occt.js";
  * shape's indexed face/edge maps, so they are stable for a given shape.
  */
 export class Body implements Topology {
-  readonly faces: TopoDS_Face[] = [];
-  readonly edges: TopoDS_Edge[] = [];
+  readonly faces: TopoDS_Face[];
+  readonly edges: TopoDS_Edge[];
   readonly edgeFaces: number[][];
   private readonly faceMap: ShapeIndex;
   private readonly edgeMap: ShapeIndex;
@@ -51,19 +51,22 @@ export class Body implements Topology {
     /** Set exactly once by the creating feature via `setTags`. */
     public faceTags: string[][] = [],
   ) {
-    let unique: TopoDS_Shape[];
-    [this.faceMap, unique] = indexShapes(oc, arena, shape, "TopAbs_FACE");
-    for (const s of unique) this.faces.push(arena.track(oc.TopoDS.Face(s)));
-    [this.edgeMap, unique] = indexShapes(oc, arena, shape, "TopAbs_EDGE");
-    for (const s of unique) this.edges.push(arena.track(oc.TopoDS.Edge(s)));
+    // Only the faces and edges themselves are kept. What an explorer hands out on the way is freed
+    // at once: a state keeps its shapes for as long as the design is open (Arena.trim), and a big
+    // design (1100 steps) held 1.5 million of these for nothing, 350 MB of the kernel worker.
+    [this.faceMap, this.faces] = indexShapes(oc, arena, shape, "TopAbs_FACE", (s) => oc.TopoDS.Face(s));
+    [this.edgeMap, this.edges] = indexShapes(oc, arena, shape, "TopAbs_EDGE", (s) => oc.TopoDS.Edge(s));
     this.edgeFaces = this.edges.map(() => []);
     this.faces.forEach((face, fi) => {
-      const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE"));
+      const ex = new oc.TopExp_Explorer(face, "TopAbs_EDGE");
       for (; ex.More(); ex.Next()) {
-        const ei = this.edgeIndex(arena.track(ex.Current()));
+        const edge = ex.Current();
+        const ei = this.edgeIndex(edge);
+        edge.delete();
         const adj = this.edgeFaces[ei];
         if (adj && !adj.includes(fi)) adj.push(fi);
       }
+      ex.delete();
     });
   }
 
@@ -174,14 +177,21 @@ class ShapeIndex {
 }
 
 /** Index of the distinct sub-shapes of a type, plus those shapes in index order. */
-function indexShapes(oc: OC, arena: Arena, shape: TopoDS_Shape, type: "TopAbs_FACE" | "TopAbs_EDGE"): [ShapeIndex, TopoDS_Shape[]] {
+/** The distinct faces or edges of a shape in the order an explorer meets them, as `cast` makes them, and their index. */
+function indexShapes<T extends TopoDS_Shape>(oc: OC, arena: Arena, shape: TopoDS_Shape, type: "TopAbs_FACE" | "TopAbs_EDGE", cast: (s: TopoDS_Shape) => T): [ShapeIndex, T[]] {
   const index = new ShapeIndex(oc);
-  const unique: TopoDS_Shape[] = [];
-  const ex = arena.track(new oc.TopExp_Explorer(shape, type));
+  const unique: T[] = [];
+  const ex = new oc.TopExp_Explorer(shape, type);
   for (; ex.More(); ex.Next()) {
-    const s = arena.track(ex.Current());
-    if (index.add(s) === unique.length) unique.push(s);
+    const s = ex.Current();
+    if (index.find(s) === -1) {
+      const typed = arena.track(cast(s));
+      index.add(typed);
+      unique.push(typed);
+    }
+    s.delete();
   }
+  ex.delete();
   return [index, unique];
 }
 

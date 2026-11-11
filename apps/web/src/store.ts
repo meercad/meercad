@@ -113,10 +113,10 @@ function threadsOff(): boolean {
 }
 // OCCT broke on a model (seen with large booleans in the multi-threaded build): carry on in a fresh,
 // single-threaded kernel, which builds the same models with more room.
-const kernelName = wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel";
+const kernelName: KernelKind = wantThreads && crossOriginIsolated ? "kernel-threads" : desktop ? "kernel" : "kernel-reserve";
 export const kernel = new KernelClient(
   new KernelWorker({ name: kernelName }),
-  () => new KernelWorker({ name: "kernel" }),
+  () => new KernelWorker({ name: desktop ? "kernel" : "kernel-reserve" }),
   // On the Mac a fresh kernel takes over before the running one is full (see Renewal); the iPad has
   // no room for two kernels at once.
   desktop ? { worker: () => new KernelWorker({ name: kernelName }), ...renewAt() } : undefined,
@@ -853,7 +853,11 @@ export async function openProject(id: string): Promise<void> {
     history.replaceState(null, "", `#/p/${encodeURIComponent(id)}`);
     return;
   }
-  const p = await loadProject(id).catch(() => undefined);
+  // Reading can take a while (a big design, or one still coming from iCloud): shown as a task.
+  const reading = startTask(t("Opening {name} …", { name: id.split("/").pop() ?? id }));
+  const p = await loadProject(id)
+    .catch(() => undefined)
+    .finally(() => reading.done());
   if (!p) {
     toast(t("Project not found"), "error");
     closeTab(id, false);

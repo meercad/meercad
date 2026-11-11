@@ -125,8 +125,9 @@ describe("project pictures", () => {
   });
 
   it("of big designs are made in a kernel without threads on the iPad and iPhone, as the editor builds them", () => {
-    expect(kernelKindFor(BIG_STEPS + 1, { mobile: true, threads: true })).toBe("kernel");
+    expect(kernelKindFor(BIG_STEPS + 1, { mobile: true, threads: true })).toBe("kernel-reserve");
     expect(kernelKindFor(BIG_STEPS, { mobile: true, threads: true })).toBe("kernel-threads");
+    expect(kernelKindFor(BIG_STEPS, { mobile: true, threads: false })).toBe("kernel-reserve");
     expect(kernelKindFor(BIG_STEPS + 1, { mobile: false, threads: true })).toBe("kernel-threads");
     expect(kernelKindFor(10, { mobile: false, threads: false })).toBe("kernel");
   });

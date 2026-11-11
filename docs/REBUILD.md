@@ -103,6 +103,24 @@ pictures are built in the editor's own kernel while no project is open, which st
 have taken 600 MB (`freshKernelIfAbove`), and a picture whose build took the page down is not tried
 again until its file changes (`meercad.picture-building` in the web storage).
 
+What finally let the robot open on the iPhone (measured there with a debug build over Wi-Fi; the
+app's console comes with `xcrun devicectl device process launch --console`):
+
+- **The limit.** The page is ended at about 1.6 GB above its idle size (an iPhone 18 Pro Max with
+  12 GB; found by filling memory until it died). There is no crash report for it.
+- **Growing memory is copied.** A WebAssembly memory that grows is copied on the iPhone, so at 1 GB
+  it is there twice for a moment. The kernel without threads now takes 1.5 GB at once while it is
+  small (`reserveHeap`, worker name "kernel-reserve"); memory not written to costs nothing
+  (measured: the full 1.55 GB stayed free). The build then ran through every time.
+- **Wrapper objects.** After that the robot sat 50 MB below the limit. Half a GB of the kernel
+  worker was JavaScript: every state kept the shape wrappers its explorers had handed out, 2 million
+  objects of which 1.5 million were never used again. `Body` now frees them at once: 540 MB to
+  283 MB of JavaScript, 390 MB less for the process (`tests/bench/kernel-objects.ts`). This helps
+  the Mac as well.
+- **iCloud.** Opening waited for the newest version of a file the Mac kept saving, 30 s, and then
+  failed. A file that is on the device in an older version now opens as it is (`ICloudPlugin`), and
+  reading shows as a task ("Opening …").
+
 The heap a kernel reports (`wasmMemory.buffer.byteLength`) is what it has reserved, not what it
 uses: OCCT's allocator takes memory in large steps, so the same build reports 1.6 to 2.4 GB. Compare
 the process (`footprint`, or the RSS in `heap.ts`) instead.
