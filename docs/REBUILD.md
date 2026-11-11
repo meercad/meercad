@@ -73,20 +73,72 @@ So on the iPad and iPhone (`oneKernel` in `apps/web/src/lib/thumbnails.ts`):
 
 - The overview builds a design for its picture only while no project is open, and only when it has
   at most `BIG_STEPS` (300) steps; a bigger one gets its picture from the editor when it is opened.
-- Opening a project stops a background build at once (it is tried again later, not marked as
-  failed), and the background kernel is ended after each project, since it keeps what it took.
+- Opening a project stops waiting for a picture (it is tried again later, not marked as failed).
 - Before the editor builds another design, a kernel still holding more than 600 MB starts over
   fresh (`KernelClient.restartIfAbove`); the same design again, back from the overview, keeps it.
 
 Same steps afterwards (fresh install, opening the design 20 s after start): 2.1 GB at most instead
 of 4.1 GB, the design shown in full.
 
-`tests/bench/open-memory.ts file` gives the kernel heap of a first build and the size of the meshes
-sent to the page (robot: 1.66 GB with threads, 1.48 GB without; meshes only 60 MB).
+That was not enough on a real iPhone (2026-11-11, robot then 1062 steps in a 42 MB file): it broke
+off at the end and loaded again, over and over. Two more things grew the page:
 
-Open: a build of OCCT of our own without the leak (would also help the iPad and halve the memory
-of a first build), and building independent parts in several kernels at once when a design is
-opened.
+- **Threads.** Each OCCT thread keeps memory of its own: the robot took 1.9 to 2.3 GB in the
+  threaded kernel and 1.1 GB without threads, in about the same time on the Mac (37 s against
+  27 to 40 s; meshing is faster with threads, the cuts are not). On the iPad and iPhone a design of
+  more than `BIG_STEPS` steps is built without threads (`kernelKindFor` in `pictureState.ts`; the
+  editor's kernel is swapped when such a design is opened, `KernelClient.restart`).
+- **Reading the file.** The Filesystem plugin hands a file over as one escaped string in a message;
+  for 42 MB the page held several copies at once. Projects are now read by the web view itself
+  (`fetch` of `Capacitor.convertFileSrc`, `readDoc` in `native.ts`), and the overview does not read
+  files over 8 MB at all for a picture (`BIG_FILE_BYTES`).
+
+iPhone simulator, opening the robot 20 s after a fresh start: 2.3 to 2.5 GB before, 1.6 GB after.
+
+On the real iPhone the app then went round in circles already in the overview: a second kernel for
+a picture, even of a box of 7 steps, took the page down (OCCT takes memory in blocks of up to a GB:
+that box with a shell and three roundings goes from 100 MB to over 1 GB of kernel heap), the page
+loaded again and wanted the same picture. On the iPad and iPhone there is now never a second kernel:
+pictures are built in the editor's own kernel while no project is open, which starts over once they
+have taken 600 MB (`freshKernelIfAbove`), and a picture whose build took the page down is not tried
+again until its file changes (`meercad.picture-building` in the web storage).
+
+What finally let the robot open on the iPhone (measured there with a debug build over Wi-Fi; the
+app's console comes with `xcrun devicectl device process launch --console`):
+
+- **The limit.** The page is ended at about 1.6 GB above its idle size (an iPhone 18 Pro Max with
+  12 GB; found by filling memory until it died). There is no crash report for it.
+- **Growing memory is copied.** A WebAssembly memory that grows is copied on the iPhone, so at 1 GB
+  it is there twice for a moment. The kernel without threads now takes 1.5 GB at once while it is
+  small (`reserveHeap`, worker name "kernel-reserve"); memory not written to costs nothing
+  (measured: the full 1.55 GB stayed free). The build then ran through every time.
+- **Wrapper objects.** After that the robot sat 50 MB below the limit. Half a GB of the kernel
+  worker was JavaScript: every state kept the shape wrappers its explorers had handed out, 2 million
+  objects of which 1.5 million were never used again. `Body` now frees them at once: 540 MB to
+  283 MB of JavaScript, 390 MB less for the process (`tests/bench/kernel-objects.ts`). This helps
+  the Mac as well.
+- **Edges only when asked for.** A long design keeps every step's parts, and a part cut thirty
+  times is there thirty times: the robot kept 141 000 faces and 346 000 edges, its final parts have
+  10 000 and 22 000. `Body` now works out its edges, their index and the faces at each edge when
+  first asked (few parts ever are), and the shape index is a number per shape: 283 MB to 143 MB of
+  JavaScript. All in all the process needs 1.29 GB for the robot instead of 1.95 GB.
+- **One result at a time.** A big design's last result is not kept for its next opening on the
+  iPad and iPhone (`keepsOutput` in the store): shown first and then replaced, both were in memory.
+- After all this the iPhone showed the robot in full with 250 MB to spare.
+- **iCloud.** Opening waited for the newest version of a file the Mac kept saving, 30 s, and then
+  failed. A file that is on the device in an older version now opens as it is (`ICloudPlugin`), and
+  reading shows as a task ("Opening …").
+
+The heap a kernel reports (`wasmMemory.buffer.byteLength`) is what it has reserved, not what it
+uses: OCCT's allocator takes memory in large steps, so the same build reports 1.6 to 2.4 GB. Compare
+the process (`footprint`, or the RSS in `heap.ts`) instead.
+
+`tests/bench/open-memory.ts file [--threads] [--by-step]` gives the kernel heap of a first build and
+the size of the meshes sent to the page (robot: meshes only 56 MB).
+
+Open: a build of OCCT of our own without the leak. Native OCCT 7.9 (Homebrew) keeps nothing of a cut
+or a meshing done 3000 times; the WebAssembly package keeps 250 KB per cut of two boxes and 20 KB per
+meshed box. Also building independent parts in several kernels at once when a design is opened.
 
 ## For assistants (MCP)
 

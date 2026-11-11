@@ -121,7 +121,7 @@ describe("kernel client", () => {
     });
 
     it("starts over in a fresh kernel when asked and the running one holds too much (iPad)", async () => {
-      const old = new FakeWorker((req) => built(req.seq, 1.5 * GB));
+      const old = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, 1.5 * GB) : { type: "configured", seq: req.seq }));
       const fresh = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, 0.2 * GB) : { type: "configured", seq: req.seq }));
       const client = new KernelClient(old as unknown as Worker);
       await client.configure(2);

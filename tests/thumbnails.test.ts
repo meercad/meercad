@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyDocument, type MeercadDocument } from "@meercad/schema";
 import { describe, expect, it, vi } from "vitest";
-import { BIG_STEPS, backgroundBuildAllowed, blankPixels, lookSince, needsPicture, pictureRunner, viewIsCurrent } from "../apps/web/src/lib/pictureState";
+import { BIG_STEPS, backgroundBuildAllowed, kernelKindFor, blankPixels, lookSince, needsPicture, pictureRunner, viewIsCurrent } from "../apps/web/src/lib/pictureState";
 
 vi.mock("electron", () => ({ app: { getPath: () => tmpdir() } }));
 const { adoptSiblingData } = await import("../apps/desktop/src/legacy");
@@ -122,5 +122,13 @@ describe("project pictures", () => {
     expect(backgroundBuildAllowed(small, { oneKernel: true, editorOpen: false })).toBe(true);
     expect(backgroundBuildAllowed(small, { oneKernel: true, editorOpen: true })).toBe(false);
     expect(backgroundBuildAllowed(big, { oneKernel: true, editorOpen: false })).toBe(false);
+  });
+
+  it("of big designs are made in a kernel without threads on the iPad and iPhone, as the editor builds them", () => {
+    expect(kernelKindFor(BIG_STEPS + 1, { mobile: true, threads: true })).toBe("kernel-reserve");
+    expect(kernelKindFor(BIG_STEPS, { mobile: true, threads: true })).toBe("kernel-threads");
+    expect(kernelKindFor(BIG_STEPS, { mobile: true, threads: false })).toBe("kernel-reserve");
+    expect(kernelKindFor(BIG_STEPS + 1, { mobile: false, threads: true })).toBe("kernel-threads");
+    expect(kernelKindFor(10, { mobile: false, threads: false })).toBe("kernel");
   });
 });

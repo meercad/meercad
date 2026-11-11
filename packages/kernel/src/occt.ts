@@ -30,6 +30,28 @@ function exposeSharedArrayBuffer(): void {
   scope.SharedArrayBuffer = new WebAssembly.Memory({ initial: 0, maximum: 0, shared: true }).buffer.constructor;
 }
 
+/**
+ * Makes the module's memory `bytes` big at once (less if that much is refused), and says how big.
+ *
+ * On the iPhone and iPad growing a WebAssembly memory copies it: at 1 GB it is there twice for a
+ * moment, the page passes what the system allows it (about 1.6 GB above its idle size, measured on
+ * an iPhone 18 Pro Max) and is ended. A big design therefore died near the end of its first build,
+ * whatever else was saved. Memory that is reserved but not yet written to costs nothing, so the
+ * kernel takes its room while it is still small and never grows again below that size. (The
+ * threaded build shares its memory, which is never moved, and needs none of this.)
+ */
+export function reserveHeap(oc: OC, bytes: number): number {
+  const m = oc as unknown as { _emscripten_builtin_malloc?: (n: number) => number; _emscripten_builtin_free?: (p: number) => void; wasmMemory: { buffer: ArrayBuffer } };
+  if (!m._emscripten_builtin_malloc || !m._emscripten_builtin_free) return 0;
+  for (let n = bytes; n >= 256 * 2 ** 20; n -= 256 * 2 ** 20) {
+    const p = m._emscripten_builtin_malloc(n);
+    if (!p) continue;
+    m._emscripten_builtin_free(p);
+    return m.wasmMemory.buffer.byteLength;
+  }
+  return 0;
+}
+
 const crashes = new WeakMap<OC, string>();
 
 /**

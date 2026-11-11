@@ -1,6 +1,6 @@
 import { SketchSolver } from "@meercad/sketch";
 import type { WorkerRequest, WorkerResponse } from "./protocol.js";
-import { crashOf, loadOcct, occtErrorMessage, type OC } from "./occt.js";
+import { crashOf, loadOcct, occtErrorMessage, reserveHeap, type OC } from "./occt.js";
 import { KernelSession } from "./session.js";
 import type { BodyMesh } from "./mesh.js";
 import { clearances, exportMeshes, exportStep, measure } from "./tools.js";
@@ -18,7 +18,7 @@ interface WorkerScope {
  * `wasm.occtThreads` asks for the multi-threaded OCCT build (the page must be cross-origin
  * isolated); if it fails to start, the worker falls back to the single-threaded `wasm.occt`.
  */
-export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occtThreads?: string; planegcs?: string } = {}): void {
+export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occtThreads?: string; planegcs?: string; /** Bytes the single-threaded kernel takes at once (see reserveHeap). */ reserve?: number } = {}): void {
   let oc: OC | null = null;
   let solver: SketchSolver | null = null;
   let session: KernelSession | null = null;
@@ -98,7 +98,9 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
       }
       case "sandbox": {
         // Next to the open design: what it shares with it is not built again (a whole Mini v4 takes over a minute).
-        post({ type: "rebuilt", seq: req.seq, ...session!.preview(req.doc) });
+        const r = session!.preview(req.doc);
+        r.report.kernelMemory = oc!.wasmMemory.buffer.byteLength;
+        post({ type: "rebuilt", seq: req.seq, ...r });
         break;
       }
       case "export_step": {
@@ -157,6 +159,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
   Promise.all([occt, SketchSolver.create(wasm.planegcs)]).then(
     ([loaded, s]) => {
       oc = loaded;
+      if (wasm.reserve && !threads) reserveHeap(loaded, wasm.reserve);
       solver = s;
       session = new KernelSession(loaded, s);
       scope.postMessage({ type: "ready", initMs: performance.now() - t0, threads });

@@ -16,6 +16,7 @@ export default {
   change: "Änderung",
   "Rebuild failed: {msg}": "Neu berechnen fehlgeschlagen: {msg}",
   "Project not found": "Projekt nicht gefunden",
+  "Opening {name} …": "{name} wird geöffnet …",
   "This design now uses inches": "Dieses Modell verwendet jetzt Zoll",
   "This design now uses millimetres": "Dieses Modell verwendet jetzt Millimeter",
   "Untitled part": "Unbenanntes Teil",

@@ -14,7 +14,7 @@ import type { Pick, Viewport } from "@meercad/viewport";
 import { frameFromPlane, toSketch } from "@meercad/sketch";
 import { draftFeature, draftProblem, featureName } from "./lib/features";
 import { assistantWindow, createProject, desktop, listFolders, listProjects, loadProject, renameProjectFile, saveProject, saveThumbnail, type AssistantTab, type ProjectMeta } from "./lib/persistence";
-import { viewIsCurrent } from "./lib/pictureState";
+import { BIG_STEPS, kernelKindFor, viewIsCurrent, type KernelKind } from "./lib/pictureState";
 import KernelWorker from "./kernel.worker.ts?worker";
 import kernelBuild from "./kernel.worker.ts?worker&url";
 import { outputKey, readOutput, writeOutput, type MeshOptions } from "./lib/openCache";
@@ -113,10 +113,10 @@ function threadsOff(): boolean {
 }
 // OCCT broke on a model (seen with large booleans in the multi-threaded build): carry on in a fresh,
 // single-threaded kernel, which builds the same models with more room.
-const kernelName = wantThreads && crossOriginIsolated ? "kernel-threads" : "kernel";
+const kernelName: KernelKind = wantThreads && crossOriginIsolated ? "kernel-threads" : desktop ? "kernel" : "kernel-reserve";
 export const kernel = new KernelClient(
   new KernelWorker({ name: kernelName }),
-  () => new KernelWorker({ name: "kernel" }),
+  () => new KernelWorker({ name: desktop ? "kernel" : "kernel-reserve" }),
   // On the Mac a fresh kernel takes over before the running one is full (see Renewal); the iPad has
   // no room for two kernels at once.
   desktop ? { worker: () => new KernelWorker({ name: kernelName }), ...renewAt() } : undefined,
@@ -127,8 +127,18 @@ export const kernel = new KernelClient(
  * big designs one after the other outgrow the page.
  */
 const RESTART_ABOVE = 600 * 2 ** 20;
-/** The project the editor's kernel was last given. */
+/** The project the editor's kernel was last given, and the kind it is of (see kernelKindFor). */
 let kernelProject: string | null = null;
+let kernelKind: KernelKind = kernelName;
+/**
+ * iPad and iPhone: starts the editor's kernel over when it holds more than `above`, after the
+ * overview has built pictures in it (no second kernel fits there, see thumbnails.ts). Only while no
+ * project is open.
+ */
+export function freshKernelIfAbove(above: number): void {
+  if (get().project) return;
+  if (kernel.restartIfAbove(above, () => new KernelWorker({ name: kernelKind }))) kernelProject = null;
+}
 /** For test runs: localStorage "meercad.kernel.renew" (MB) makes the fresh kernel take over that early. */
 function renewAt(): { above?: number; grown?: number } {
   try {
@@ -843,7 +853,11 @@ export async function openProject(id: string): Promise<void> {
     history.replaceState(null, "", `#/p/${encodeURIComponent(id)}`);
     return;
   }
-  const p = await loadProject(id).catch(() => undefined);
+  // Reading can take a while (a big design, or one still coming from iCloud): shown as a task.
+  const reading = startTask(t("Opening {name} …", { name: id.split("/").pop() ?? id }));
+  const p = await loadProject(id)
+    .catch(() => undefined)
+    .finally(() => reading.done());
   if (!p) {
     toast(t("Project not found"), "error");
     closeTab(id, false);
@@ -907,7 +921,12 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   const leaving = get().project;
   if (leaving) tabStores.set(leaving.id, docStore);
   // The same design again (back from the overview) is built from what the kernel kept.
-  if (!desktop && kernelProject !== meta.id) kernel.restartIfAbove(RESTART_ABOVE, () => new KernelWorker({ name: kernelName }));
+  if (!desktop) {
+    const kind = kernelKindFor(doc.features.length, { mobile: true, threads: kernelName === "kernel-threads" });
+    if (kind !== kernelKind) kernel.restart(new KernelWorker({ name: kind }));
+    else if (kernelProject !== meta.id) kernel.restartIfAbove(RESTART_ABOVE, () => new KernelWorker({ name: kind }));
+    kernelKind = kind;
+  }
   kernelProject = meta.id;
   docStore = store ?? new DocumentStore(doc);
   tabStores.set(meta.id, docStore);
@@ -935,13 +954,20 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
 }
 
 /**
+ * Whether a design's last result is kept for its next opening. Not a big design's on the iPad and
+ * iPhone: the kept result and the new one are both in memory for a moment (and a copy while it is
+ * written), which the page has no room for next to the kernel of such a design.
+ */
+const keepsOutput = (doc: MeercadDocument) => !!desktop || doc.features.length <= BIG_STEPS;
+
+/**
  * Shows what the project looked like when it was last built here (openCache), while the kernel
  * builds it again; only for exactly the same document, and only until the real result is there.
  */
 function showKeptOutput(project: string): void {
   const store = docStore;
   const doc = store.doc;
-  if (!doc.features.length) return;
+  if (!doc.features.length || !keepsOutput(doc)) return;
   void readOutput(project, outputKey(doc, editorMeshOptions())).then((kept) => {
     if (!kept || docStore !== store || store.doc !== doc || get().output || get().dialog || get().proposalDoc) return;
     set({ output: kept, baseOutput: kept, previewing: false, buildProgress: null });
@@ -954,7 +980,7 @@ function scheduleOutputCache(): void {
   const project = get().project?.id;
   const store = docStore;
   const doc = store.doc;
-  if (!project) return;
+  if (!project || !keepsOutput(doc)) return;
   clearTimeout(outputCacheTimer);
   outputCacheTimer = window.setTimeout(() => {
     // Still this project's latest result (with volumes and areas filled in by now)?
