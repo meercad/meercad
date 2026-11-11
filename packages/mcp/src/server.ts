@@ -648,11 +648,23 @@ server.registerTool(
   {
     title: "Check a motion",
     description:
-      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts held together by fixed joints are left out (they never move against each other; check_interference finds overlaps at rest); parts meeting at the joint they turn on only count when they overlap. Also the smallest gap per pair of parts and where. The joints go back where they were afterwards.",
-    inputSchema: { joint: z.string().optional(), from: z.number().optional(), to: z.number().optional(), motion: z.string().optional(), steps: z.number().int().min(1).max(240).optional() },
+      "Moves one joint from `from` to `to` in `steps` (default 12), or runs a motion (`motion`, steps = frames over one run, default 24), and checks the gaps at each pose: for a joint the first value where parts touch (faces against each other: fused when printed in place) or overlap (collide), for a motion every pose where parts collide and every joint a limit held short. Parts held together by fixed joints are left out (they never move against each other; check_interference finds overlaps at rest); parts meeting at the joint they turn on only count when they overlap. Also the smallest gap per pair of parts and where. The joints go back where they were afterwards.\n\nFor big designs (hundreds of parts) sweep instead: `joints` takes one to three joints at once, each {joint, from?, to?, steps?} (default its limits; with several joints every combination of their steps, at most 600 poses). `parts` are checked against `against` (default: the parts the joints move against all others); fasteners (screws, nuts, washers, inserts, also copies) are left out unless fasteners: true; overlaps under touchBelow mm³ (default 0.1: slivers of turned round shapes at hubs) count as touching. Only those parts take part, so it is much faster. The answer is short: per pair of parts the first pose where they collide, the largest overlap (mm³) with its pose and about where, the smallest gap and its pose; collisions largest first, then the closest pairs that do not collide (`most` of each, default 12). Giving parts, against, fasteners, touchBelow or most with a single joint sweeps too.",
+    inputSchema: {
+      joint: z.string().optional(),
+      from: z.number().optional(),
+      to: z.number().optional(),
+      motion: z.string().optional(),
+      steps: z.number().int().min(1).max(240).optional(),
+      joints: z.array(z.object({ joint: z.string(), from: z.number().optional(), to: z.number().optional(), steps: z.number().int().min(1).max(120).optional() })).min(1).max(3).optional(),
+      parts: z.array(z.string()).optional(),
+      against: z.array(z.string()).optional(),
+      fasteners: z.boolean().optional(),
+      touchBelow: z.number().min(0).optional(),
+      most: z.number().int().min(1).max(200).optional(),
+    },
     annotations: { readOnlyHint: true },
   },
-  guard(async ({ joint, from, to, motion, steps }) => text(await call("check_motion", { joint, from, to, motion, steps }, LONG))),
+  guard(async (a) => text(await call("check_motion", a, LONG))),
 );
 
 server.registerTool(

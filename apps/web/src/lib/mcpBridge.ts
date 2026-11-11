@@ -16,7 +16,7 @@ import { clientLabel } from "./mcpClient";
 import { asTestProjects, assistantWindow, desktop, isTestProject, type AssistantTab } from "./persistence";
 import { apply, currentDoc, flushSave, getViewport, goHome, handOverAssistantTab, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, releaseProject, scheduleRebuild, setAssistantTabs, showAssistantTab, undo, useApp } from "../store";
 import type { StandardView } from "@meercad/viewport";
-import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying } from "./mechanism";
+import { checkMotion, checkMotionRun, clearanceNow, motionById, playMotion, setPose, stopPlaying, sweepCheck, type SweepJoint } from "./mechanism";
 import { jointRange, renderMotionGif, renderMotionSheet, renderShot, type Shot } from "./render";
 import { meshTopology } from "./topology";
 
@@ -832,6 +832,18 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       await rebuildNow();
       if (typeof p["motion"] === "string") return checkMotionRun(p["motion"], p["steps"] === undefined ? undefined : Number(p["steps"]));
+      // The sweep for big designs: several joints, chosen parts, fasteners left out, one line per pair.
+      if (Array.isArray(p["joints"]) || ["parts", "against", "fasteners", "touchBelow", "most"].some((k) => p[k] !== undefined)) {
+        const joints = Array.isArray(p["joints"]) ? (p["joints"] as SweepJoint[]) : typeof p["joint"] === "string" ? [{ joint: p["joint"], ...(p["from"] !== undefined ? { from: Number(p["from"]) } : {}), ...(p["to"] !== undefined ? { to: Number(p["to"]) } : {}), ...(p["steps"] !== undefined ? { steps: Number(p["steps"]) } : {}) }] : [];
+        return sweepCheck({
+          joints,
+          ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
+          ...(Array.isArray(p["against"]) ? { against: p["against"] as string[] } : {}),
+          ...(typeof p["fasteners"] === "boolean" ? { fasteners: p["fasteners"] } : {}),
+          ...(typeof p["touchBelow"] === "number" ? { touchBelow: p["touchBelow"] } : {}),
+          ...(typeof p["most"] === "number" ? { most: p["most"] } : {}),
+        });
+      }
       if (typeof p["joint"] !== "string" || p["from"] === undefined || p["to"] === undefined) throw new Error("give a joint with from and to, or a motion");
       return checkMotion(String(p["joint"]), Number(p["from"]), Number(p["to"]), p["steps"] === undefined ? undefined : Number(p["steps"]));
     }

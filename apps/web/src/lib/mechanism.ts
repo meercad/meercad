@@ -10,6 +10,7 @@ import { create } from "zustand";
 import type { BodyMesh, Clearance } from "@meercad/kernel";
 import { apply, currentDoc, kernel, toast, useApp } from "../store";
 import { edgeSelectorForPick, faceSelectorForPick } from "./topology";
+import { isFastener } from "./features";
 import { t } from "./i18n";
 
 export type JointField = "a" | "b" | "anchor";
@@ -996,4 +997,158 @@ export async function checkMotion(joint: string, from: number, to: number, steps
     for (const [id, v] of Object.entries(before)) if (v) setJointValue(id, v);
   }
   return { steps: n, firstContact, smallest: [...smallest.values()].sort((x, y) => x.distance - y.distance), stoppedAt, ...cables.result() };
+}
+
+/** A joint swept by sweepCheck: between from and to (default its limits) in steps. */
+export interface SweepJoint {
+  joint: string;
+  from?: number;
+  to?: number;
+  steps?: number;
+}
+
+/** What sweepCheck found for one pair of parts over all poses. */
+export interface SweepPair {
+  a: string;
+  b: string;
+  /** The first pose where they overlap by more than touchBelow (null: never). */
+  firstCollision: number | Record<string, number> | null;
+  /** Their largest overlap, mm³, the pose and about where (between their closest points). */
+  maxOverlapMm3: number;
+  maxOverlapAt?: number | Record<string, number>;
+  where?: [number, number, number];
+  /** Their smallest gap over all poses and where it was. */
+  minDistance: number;
+  minDistanceAt: number | Record<string, number>;
+}
+
+const MAX_SWEEP_POSES = 600;
+
+/**
+ * Sweeps one to three joints over their ranges (every combination of their steps) and checks the
+ * parts that move against the parts around them. For a big design: `parts` (default the parts the
+ * joints move) only against `against` (default all others), fasteners (screws, nuts, inserts) left
+ * out unless `fasteners`, overlaps under `touchBelow` mm³ counted as touching (turned round shapes
+ * give slivers of 0.04 to 0.1 mm³ at hubs). Only the parts named take part in the gap checks; after
+ * the first pose only pairs that moved against each other are measured again. The answer is one
+ * line per pair: the first pose where it collides, the largest overlap with where, the smallest gap.
+ * The joints go back where they were.
+ */
+export async function sweepCheck(o: { joints: SweepJoint[]; parts?: string[]; against?: string[]; fasteners?: boolean; touchBelow?: number; most?: number }): Promise<{
+  poses: number;
+  parts: number;
+  against: number;
+  leftOut: { fasteners: number; cables: number };
+  collisions: SweepPair[];
+  closest: SweepPair[];
+  held: { joint: string; at: number | Record<string, number>; got: number }[];
+  cables?: CableRun[];
+}> {
+  openForCheck();
+  stopPlaying();
+  const { mech, problems } = currentMechanism();
+  if (!o.joints.length || o.joints.length > 3) throw new Error("joints: one to three joints");
+  const ranges = o.joints.map((s) => {
+    const j = mech.joint(s.joint);
+    if (!j) throw new Error(`no joint "${s.joint}"${problems[s.joint] ? `: ${problems[s.joint]}` : ""}`);
+    const [lo, hi] = j.limits ?? (j.type === "revolute" ? [0, 360] : [-20, 20]);
+    const from = s.from ?? lo;
+    const to = s.to ?? hi;
+    const n = Math.max(1, Math.min(120, Math.round(s.steps ?? (o.joints.length === 1 ? 12 : 6))));
+    return { id: s.joint, values: Array.from({ length: n + 1 }, (_, k) => +(from + ((to - from) * k) / n).toFixed(4)) };
+  });
+  const total = ranges.reduce((p, r) => p * r.values.length, 1);
+  if (total > MAX_SWEEP_POSES) throw new Error(`${total} poses are too many (at most ${MAX_SWEEP_POSES}): fewer steps`);
+  const combos: number[][] = [[]];
+  for (const r of ranges) combos.splice(0, combos.length, ...combos.flatMap((c) => r.values.map((v) => [...c, v])));
+  const label = (c: number[]) => (c.length === 1 ? c[0]! : Object.fromEntries(ranges.map((r, i) => [r.id, c[i]!])));
+
+  const doc = currentDoc();
+  const all = (useApp.getState().output?.report.bodies ?? []).map((b) => b.id);
+  const known = new Set(all);
+  for (const id of [...(o.parts ?? []), ...(o.against ?? [])]) if (!known.has(id)) throw new Error(`no part "${id}"`);
+  const cables = new Set(cableIds());
+  const fasteners = o.fasteners ? new Set<string>() : new Set(all.filter((id) => isFastener(id, doc.features)));
+  const usable = (id: string) => !cables.has(id) && !fasteners.has(id);
+
+  const before = jointValues();
+  const free = { ...useMotion.getState().free };
+  const touchBelow = o.touchBelow ?? 0.1;
+  const touching = designedContacts();
+  const watch = new CableWatch();
+  const pairs = new Map<string, SweepPair>();
+  /** Pairs measured after the first pose: they moved against each other. */
+  const movedApart = new Set<string>();
+  const held: { joint: string; at: number | Record<string, number>; got: number }[] = [];
+  const within = Math.max(2, wantedClearance() * 2);
+  let movers: string[] = [];
+  let others: string[] = [];
+  try {
+    // The parts the joints move: those whose place changes between the ends of their ranges.
+    const poseAt = (c: number[]) => {
+      ranges.forEach((r, i) => setJointValue(r.id, c[i]!));
+      return new Map(currentPoses());
+    };
+    const first = poseAt(ranges.map((r) => r.values[0]!));
+    const last = poseAt(ranges.map((r) => r.values[r.values.length - 1]!));
+    const mid = poseAt(ranges.map((r) => r.values[Math.floor(r.values.length / 2)]!));
+    const same = (x?: number[], y?: number[]) => (x ?? motion.IDENTITY).every((v, i) => Math.abs(v - ((y ?? motion.IDENTITY)[i] ?? 0)) < 1e-6);
+    const moved = all.filter((id) => !same(first.get(id), last.get(id)) || !same(first.get(id), mid.get(id)));
+    movers = (o.parts ?? moved).filter(usable);
+    if (!movers.length) throw new Error(o.parts ? "no part left to check (cables and fasteners are left out)" : "the joints move no part over these ranges");
+    const mover = new Set(movers);
+    others = (o.against ?? all.filter((id) => !mover.has(id))).filter((id) => usable(id) && !mover.has(id));
+    const taking = new Set([...movers, ...others]);
+    const skip = all.filter((id) => !taking.has(id));
+    let base: Map<string, number[]> | null = null;
+    let firstDone = false;
+    for (const c of combos) {
+      ranges.forEach((r, i) => {
+        if (!setJointValue(r.id, c[i]!) || Math.abs((jointValues()[r.id] ?? 0) - c[i]!) > 1e-3) held.push({ joint: r.id, at: label(c), got: +(jointValues()[r.id] ?? 0).toFixed(3) });
+      });
+      watch.add(c[0]!);
+      const poses = currentPoses();
+      // At the first pose every pair; after that only pairs that moved against each other since.
+      const rigid = base ? movedTogether(base, poses) : rigidParts();
+      const found = await kernel.clearances(movers, Object.fromEntries(poses), within, skip, rigid);
+      base ??= new Map(poses);
+      for (const f of found) {
+        if (!mover.has(f.a) && !mover.has(f.b)) continue;
+        const key = [f.a, f.b].sort().join("|");
+        if (firstDone) movedApart.add(key);
+        const designed = touching.has(key);
+        const p = pairs.get(key) ?? { a: f.a, b: f.b, firstCollision: null, maxOverlapMm3: 0, minDistance: Infinity, minDistanceAt: label(c) };
+        if (f.distance < p.minDistance) {
+          p.minDistance = +f.distance.toFixed(3);
+          p.minDistanceAt = label(c);
+        }
+        if (f.overlap > p.maxOverlapMm3) {
+          p.maxOverlapMm3 = +f.overlap.toFixed(3);
+          p.maxOverlapAt = label(c);
+          if (f.points) p.where = [0, 1, 2].map((k) => +((f.points![0][k]! + f.points![1][k]!) / 2).toFixed(2)) as [number, number, number];
+        }
+        if (p.firstCollision === null && f.overlap >= touchBelow) p.firstCollision = label(c);
+        if (!designed || f.overlap > 0) pairs.set(key, p);
+      }
+      firstDone = true;
+    }
+  } finally {
+    restPose();
+    useMotion.setState({ free });
+    for (const [id, v] of Object.entries(before)) if (v) setJointValue(id, v);
+  }
+  const most = o.most ?? 12;
+  // Two moving parts that kept their places to each other (a servo and its bracket on one link) are no news.
+  const mover = new Set(movers);
+  const list = [...pairs.entries()].filter(([key, p]) => !(mover.has(p.a) && mover.has(p.b)) || movedApart.has(key)).map(([, p]) => p);
+  return {
+    poses: combos.length,
+    parts: movers.length,
+    against: others.length,
+    leftOut: { fasteners: fasteners.size, cables: cables.size },
+    collisions: list.filter((p) => p.maxOverlapMm3 >= touchBelow).sort((x, y) => y.maxOverlapMm3 - x.maxOverlapMm3).slice(0, most),
+    closest: list.filter((p) => p.maxOverlapMm3 < touchBelow && !touching.has([p.a, p.b].sort().join("|"))).sort((x, y) => x.minDistance - y.minDistance).slice(0, most),
+    held: held.slice(0, most),
+    ...watch.result(),
+  };
 }

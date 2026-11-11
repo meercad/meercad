@@ -379,6 +379,26 @@ export function partName(id: string, features: readonly Feature[]): string {
   return `${featureName(best)} (${partName(of!, features)}${n ? ` ${n}` : ""})`;
 }
 
+const FASTENERS = new Set(["socket_screw", "countersunk_screw", "hex_screw", "set_screw", "hex_nut", "washer", "insert", "t_nut"]);
+
+/**
+ * Whether a part is a fastener: a screw, nut, washer or insert (a standard part, a screw, an insert
+ * a hole places), or a copy of one by a pattern or mirror. Checks of moving designs leave them out
+ * on request: every screw in its thread showed up as a collision (Emil, 560 parts, 2026-11-11).
+ */
+export function isFastener(id: string, features: readonly Feature[]): boolean {
+  let best: Feature | undefined;
+  for (const f of features) if ((id === f.id || id.startsWith(`${f.id}_`)) && f.id.length > (best?.id.length ?? 0)) best = f;
+  if (!best) return false;
+  if (best.op === "screw") return true;
+  if (best.op === "standard_part") return FASTENERS.has(best.kind);
+  const rest = id.slice(best.id.length + 1);
+  if (best.op === "hole") return /^insert(?:_\d+)?$/.test(rest);
+  // A copy carries the copied part's id: "lp1_ex2_3" is a copy of ex2.
+  const of = /^(.*?)(?:_\d+)?$/.exec(rest)?.[1];
+  return !!of && of !== id && isFastener(of, features);
+}
+
 /** Sketches that a feature builds on (they are hidden once used, like a consumed profile). */
 export function sketchesUsed(features: readonly Feature[]): Set<string> {
   return new Set(
