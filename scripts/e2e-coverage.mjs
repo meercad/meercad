@@ -24,9 +24,10 @@ for (const f of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
     const rel = path.startsWith(root) ? path.slice(root.length) : `apps/web${path}`;
     if (!/\.(tsx?|jsx?)$/.test(rel) || rel.includes("node_modules")) continue;
     // Block coverage: a function's ranges in order, inner ranges overriding outer ones.
-    const len = Math.max(...s.functions.flatMap((fn) => fn.ranges.map((r) => r.endOffset)));
+    // The module's code without its inline source map (written by tests/e2e/app.ts).
+    const len = s.codeLength ?? Math.max(...s.functions.flatMap((fn) => fn.ranges.map((r) => r.endOffset)));
     const ran = new Uint8Array(len);
-    for (const fn of s.functions) for (const r of fn.ranges) ran.fill(r.count > 0 ? 1 : 0, r.startOffset, r.endOffset);
+    for (const fn of s.functions) for (const r of fn.ranges) ran.fill(r.count > 0 ? 1 : 0, r.startOffset, Math.min(r.endOffset, len));
     const old = files.get(rel);
     if (!old) files.set(rel, { ran, len });
     else {

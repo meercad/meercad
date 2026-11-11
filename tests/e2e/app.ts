@@ -92,9 +92,17 @@ export async function startApp({ keep = false } = {}): Promise<App> {
       try {
         const { result } = (await page.call("Profiler.takePreciseCoverage")) as { result: { url: string; functions: { ranges: { startOffset: number; endOffset: number; count: number }[] }[] }[] };
         const own = result.filter((r) => r.url.startsWith(devUrl) && /\/(src|@fs)\//.test(r.url) && !r.url.includes("node_modules"));
+        // Each module's code ends where its inline source map starts; the map must not count as code.
+        const scripts = await Promise.all(
+          own.map(async (r) => {
+            const text = await (await fetch(r.url)).text().catch(() => "");
+            const at = text.lastIndexOf("\n//# sourceMappingURL=");
+            return { ...r, codeLength: at > 0 ? at : text.length || undefined };
+          }),
+        );
         const out = join(root, "test-results/e2e-coverage");
         mkdirSync(out, { recursive: true });
-        writeFileSync(join(out, `${Date.now()}-${process.pid}.json`), JSON.stringify({ devUrl, scripts: own }));
+        writeFileSync(join(out, `${Date.now()}-${process.pid}.json`), JSON.stringify({ devUrl, scripts }));
       } catch (e) {
         console.warn("E2E coverage not written:", e);
       }
