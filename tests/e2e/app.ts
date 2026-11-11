@@ -40,6 +40,8 @@ export interface App {
   page: Page;
   /** The temp folder with the app data and the projects. */
   dir: string;
+  /** Where exports land (instead of a save dialog). */
+  saved: string;
   stop(): Promise<void>;
 }
 
@@ -49,6 +51,8 @@ export async function startApp({ keep = false } = {}): Promise<App> {
   const cdpPort = await freePort();
   // A Mac where the tour was seen (the flags every meerCAD on the Mac shares, here in the temp folder).
   mkdirSync(join(dir, "shared"), { recursive: true });
+  // Exports are saved here without the save dialog (see files:save in apps/desktop).
+  mkdirSync(join(dir, "saved"), { recursive: true });
   writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true }));
   const r = spawnSync("node", ["build.mjs"], { cwd: join(root, "apps/desktop"), stdio: "inherit" });
   if (r.status !== 0) throw new Error("desktop build failed");
@@ -64,7 +68,7 @@ export async function startApp({ keep = false } = {}): Promise<App> {
       "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows"],
     {
       cwd: join(root, "apps/desktop"),
-      env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared") },
+      env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared"), MEERCAD_E2E_SAVE_DIR: join(dir, "saved") },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -112,5 +116,5 @@ export async function startApp({ keep = false } = {}): Promise<App> {
     await sleep(500);
     if (!keep) rmSync(dir, { recursive: true, force: true });
   };
-  return { page, dir, stop };
+  return { page, dir, saved: join(dir, "saved"), stop };
 }
