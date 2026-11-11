@@ -76,8 +76,29 @@ export async function startApp({ keep = false } = {}): Promise<App> {
   await page.call("Runtime.enable");
   await page.call("Page.enable");
   await waitFor("the app to load", () => page.eval<boolean>("!!window.meercadTest && document.readyState === 'complete'"));
+  // E2E_COVERAGE=1: which of the app's code the run executes (`node scripts/e2e-coverage.mjs`).
+  // Counting starts before the page's scripts load, so the page loads once more.
+  const coverage = !!process.env["E2E_COVERAGE"];
+  if (coverage) {
+    await page.call("Profiler.enable");
+    await page.call("Profiler.startPreciseCoverage", { callCount: false, detailed: true });
+    await page.call("Page.reload", { ignoreCache: true });
+    await sleep(500);
+    await waitFor("the app to load again", () => page.eval<boolean>("!!window.meercadTest && document.readyState === 'complete'"));
+  }
 
   const stop = async () => {
+    if (coverage) {
+      try {
+        const { result } = (await page.call("Profiler.takePreciseCoverage")) as { result: { url: string; functions: { ranges: { startOffset: number; endOffset: number; count: number }[] }[] }[] };
+        const own = result.filter((r) => r.url.startsWith(devUrl) && /\/(src|@fs)\//.test(r.url) && !r.url.includes("node_modules"));
+        const out = join(root, "test-results/e2e-coverage");
+        mkdirSync(out, { recursive: true });
+        writeFileSync(join(out, `${Date.now()}-${process.pid}.json`), JSON.stringify({ devUrl, scripts: own }));
+      } catch (e) {
+        console.warn("E2E coverage not written:", e);
+      }
+    }
     electron.kill();
     vite.kill();
     await sleep(500);
