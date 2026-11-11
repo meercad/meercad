@@ -241,8 +241,8 @@ async function readDoc(r: Root, id: string): Promise<MeercadDocument> {
     const uri = where.directory ? (await Filesystem.getUri({ path: where.path, directory: where.directory })).uri : where.path;
     const res = await fetch(Capacitor.convertFileSrc(uri));
     if (res.ok) return (await res.json()) as MeercadDocument;
-  } catch {
-    // Read through the plugin below.
+  } catch (e) {
+    console.warn(`reading ${id} in the web view failed, reading it through the plugin: ${String(e)}`);
   }
   return JSON.parse((await Filesystem.readFile({ ...where, encoding: Encoding.UTF8 })).data as string) as MeercadDocument;
 }

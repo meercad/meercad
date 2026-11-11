@@ -73,8 +73,7 @@ So on the iPad and iPhone (`oneKernel` in `apps/web/src/lib/thumbnails.ts`):
 
 - The overview builds a design for its picture only while no project is open, and only when it has
   at most `BIG_STEPS` (300) steps; a bigger one gets its picture from the editor when it is opened.
-- Opening a project stops a background build at once (it is tried again later, not marked as
-  failed), and the background kernel is ended after each project, since it keeps what it took.
+- Opening a project stops waiting for a picture (it is tried again later, not marked as failed).
 - Before the editor builds another design, a kernel still holding more than 600 MB starts over
   fresh (`KernelClient.restartIfAbove`); the same design again, back from the overview, keeps it.
 
@@ -92,10 +91,17 @@ off at the end and loaded again, over and over. Two more things grew the page:
 - **Reading the file.** The Filesystem plugin hands a file over as one escaped string in a message;
   for 42 MB the page held several copies at once. Projects are now read by the web view itself
   (`fetch` of `Capacitor.convertFileSrc`, `readDoc` in `native.ts`), and the overview does not read
-  files over 8 MB at all for a picture (`BIG_FILE_BYTES`). The background kernel also starts over
-  once the examples' pictures have taken 300 MB.
+  files over 8 MB at all for a picture (`BIG_FILE_BYTES`).
 
 iPhone simulator, opening the robot 20 s after a fresh start: 2.3 to 2.5 GB before, 1.6 GB after.
+
+On the real iPhone the app then went round in circles already in the overview: a second kernel for
+a picture, even of a box of 7 steps, took the page down (OCCT takes memory in blocks of up to a GB:
+that box with a shell and three roundings goes from 100 MB to over 1 GB of kernel heap), the page
+loaded again and wanted the same picture. On the iPad and iPhone there is now never a second kernel:
+pictures are built in the editor's own kernel while no project is open, which starts over once they
+have taken 600 MB (`freshKernelIfAbove`), and a picture whose build took the page down is not tried
+again until its file changes (`meercad.picture-building` in the web storage).
 
 The heap a kernel reports (`wasmMemory.buffer.byteLength`) is what it has reserved, not what it
 uses: OCCT's allocator takes memory in large steps, so the same build reports 1.6 to 2.4 GB. Compare

@@ -130,6 +130,15 @@ const RESTART_ABOVE = 600 * 2 ** 20;
 /** The project the editor's kernel was last given, and the kind it is of (see kernelKindFor). */
 let kernelProject: string | null = null;
 let kernelKind: KernelKind = kernelName;
+/**
+ * iPad and iPhone: starts the editor's kernel over when it holds more than `above`, after the
+ * overview has built pictures in it (no second kernel fits there, see thumbnails.ts). Only while no
+ * project is open.
+ */
+export function freshKernelIfAbove(above: number): void {
+  if (get().project) return;
+  if (kernel.restartIfAbove(above, () => new KernelWorker({ name: kernelKind }))) kernelProject = null;
+}
 /** For test runs: localStorage "meercad.kernel.renew" (MB) makes the fresh kernel take over that early. */
 function renewAt(): { above?: number; grown?: number } {
   try {
