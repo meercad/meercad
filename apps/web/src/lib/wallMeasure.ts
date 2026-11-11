@@ -67,9 +67,12 @@ export async function measureWalls(
   let min = Infinity;
   const samples: { d: number; a: number; c: [number, number, number] }[] = [];
   let slice = performance.now();
-  for (let k = 0; k < n; k++) {
+  // A mesh finer than the samples asked for (a detailed part): every stride-th triangle, its area
+  // standing for the ones skipped, so a quick check stays quick on any part.
+  const stride = Math.max(1, Math.floor(n / (o.samples ?? WALL_SAMPLES.fine)));
+  for (let k = 0, i = 0; k < n; k += stride, i++) {
     // Hand the app back its time now and then; a message (not a timer) so a window in the background goes on.
-    if ((k & 511) === 0 && performance.now() - slice > 25) {
+    if ((i & 511) === 0 && performance.now() - slice > 25) {
       o.progress?.(k / n);
       await new Promise<void>((r) => {
         const c = new MessageChannel();
@@ -92,10 +95,10 @@ export async function measureWalls(
     // A ray that never comes out again started on an open edge of the mesh: no value.
     if (!Number.isFinite(d)) continue;
     wall[k] = d;
-    area += l / 2;
-    if (d < minWall) thinArea += l / 2;
+    area += (l / 2) * stride;
+    if (d < minWall) thinArea += (l / 2) * stride;
     if (d < min) min = d;
-    samples.push({ d, a: l / 2, c });
+    samples.push({ d, a: (l / 2) * stride, c });
   }
   // The thinnest wall that covers more than a speck of the surface.
   samples.sort((x, y) => x.d - y.d);

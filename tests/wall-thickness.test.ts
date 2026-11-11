@@ -44,3 +44,15 @@ describe("wall thickness", () => {
     ]);
   });
 });
+
+describe("wall thickness on a fine mesh", () => {
+  it("a quick check measures a share of the triangles and keeps the areas", async () => {
+    const plate = box([0, 0, 0], [20, 20, 0.6]);
+    const fine = await measureWalls(plate, 1, { samples: 4000 });
+    const quick = await measureWalls(plate, 1, { samples: 1000 });
+    const measured = (m: typeof fine) => [...m!.wall].filter((d) => !Number.isNaN(d)).length;
+    expect(measured(quick)).toBeLessThan(measured(fine));
+    expect(quick!.stats.thin).toBeCloseTo(fine!.stats.thin, 1);
+    expect(quick!.stats.min).toBeCloseTo(0.6, 1);
+  });
+});
