@@ -696,8 +696,8 @@ server.registerTool(
   "print_check",
   {
     title: "Printability",
-    description: "Checks how a part prints on an FDM printer as it stands (bed under its lowest point, -Z down): area hanging over more steeply than limit degrees from vertical (default 45), a rough support volume (mm³) and the area on the bed, plus the best way up found (least support). turn: \"best\" or a direction [x,y,z] that should face the bed turns the part first (added as move steps; it lands on Z = 0 where it stood). The colour map stays shown (red needs support, blue on the bed, green fine) unless show: false.",
-    inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), vec3]).optional() },
+    description: "Checks how a part prints on an FDM printer as it stands (bed under its lowest point, -Z down): area hanging over more steeply than limit degrees from vertical (default 45), a rough support volume (mm³) and the area on the bed, plus the best way up found (least support). Where the support goes: supportOutsideMm2 (open to the outside, where scars show), supportInsideMm2 (in holes, pockets, cavities), supportOnPartMm2 (standing on the part, not the bed), the flattest overhang's angle to the bed (0 = flat ceiling) and the pieces of overhang (area, span across the print direction, a point, outside or not). down: a direction [x,y,z] or a flat face (selector) that goes onto the bed checks that way up without changing the design (pick it by layer direction and load, not only by support). turn: \"best\" or a direction turns the part first (added as move steps; it lands on Z = 0 where it stood). The colour map stays shown (red needs support, blue on the bed, green fine) unless show: false.",
+    inputSchema: { part: z.string(), limit: z.number().min(0).max(89).optional(), show: z.boolean().optional(), turn: z.union([z.literal("best"), vec3]).optional(), down: z.union([vec3, selector]).optional() },
   },
   guard(async (a) => text(await call("print_check", a))),
 );

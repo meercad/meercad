@@ -181,3 +181,118 @@ export function turnPoint(p: V3, aboutZ: number, aboutX: number): V3 {
   const z1 = p[2];
   return [x1, y1 * Math.cos(x) - z1 * Math.sin(x), y1 * Math.sin(x) + z1 * Math.cos(x)];
 }
+
+/** A connected piece of surface that needs support. */
+export interface OverhangRegion {
+  areaMm2: number;
+  /** Its longest extent across the print direction (how far it bridges or hangs out), mm. */
+  spanMm: number;
+  /** A point of it (the centre of its largest triangle). */
+  at: V3;
+  /** Its flattest triangle's angle to the plate, degrees (0: a flat ceiling). */
+  flattestDeg: number;
+  /** Most of it is open to the outside (false: in a hole, a pocket or under other parts of the part). */
+  outside: boolean;
+}
+
+export interface SupportDetails {
+  /** Overhang area that is open to the outside: support scars show there. */
+  outsideMm2: number;
+  /** Overhang area inside holes, pockets and cavities. */
+  insideMm2: number;
+  /** Overhang area whose support stands on the part itself rather than the plate. */
+  onPartMm2: number;
+  /** The flattest overhang's angle to the plate, degrees (null without overhangs). */
+  flattestDeg: number | null;
+  /** The pieces of overhang, largest first. */
+  regions: OverhangRegion[];
+}
+
+/** Directions spread evenly over a sphere (golden spiral). */
+const SPHERE: V3[] = Array.from({ length: 48 }, (_, k) => {
+  const z = 1 - (2 * (k + 0.5)) / 48;
+  const r = Math.sqrt(1 - z * z);
+  const a = k * Math.PI * (3 - Math.sqrt(5));
+  return [r * Math.cos(a), r * Math.sin(a), z] as V3;
+});
+
+/**
+ * Where the support of a print check goes (see printCheck, same mesh, `down` and limit): which
+ * overhangs are open to the outside and which lie inside holes and pockets (rays from the face
+ * over its half of the sky: most leaving the part means outside), which have the part itself
+ * under them, and the connected pieces with their area, span and flattest angle.
+ * `ray(origin, direction)` says how far a ray runs before it meets the part (Infinity: never).
+ */
+export function supportDetails(positions: ArrayLike<number>, indices: ArrayLike<number>, check: PrintCheck, down: V3, ray: (o: V3, d: V3) => number): SupportDetails {
+  const d = norm(down);
+  const P = positions;
+  const sign = outwardSign(P, indices);
+  const n = check.kind.length;
+  const out: SupportDetails = { outsideMm2: 0, insideMm2: 0, onPartMm2: 0, flattestDeg: null, regions: [] };
+  // Overhang triangles grouped by shared corners (corners matched by position: meshes may repeat them per face).
+  const key = (v: number) => `${Math.round(P[v * 3]! * 1e3)},${Math.round(P[v * 3 + 1]! * 1e3)},${Math.round(P[v * 3 + 2]! * 1e3)}`;
+  const parent = new Map<number, number>();
+  const find = (x: number): number => {
+    while (parent.get(x) !== x) {
+      const p = parent.get(parent.get(x)!)!;
+      parent.set(x, p);
+      x = p;
+    }
+    return x;
+  };
+  const byCorner = new Map<string, number>();
+  const info = new Map<number, { a: number; c: V3; deg: number; outside: boolean }>();
+  for (let t = 0; t < n; t++) {
+    if (check.kind[t] !== SURFACE_OVERHANG) continue;
+    const { n: nn, a, c } = triangle(P, indices, t, sign);
+    const deg = (Math.acos(Math.min(1, Math.max(-1, dot(nn, d)))) * 180) / Math.PI;
+    const from: V3 = [c[0] + nn[0] * 1e-3, c[1] + nn[1] * 1e-3, c[2] + nn[2] * 1e-3];
+    let open = 0;
+    let tried = 0;
+    for (const s of SPHERE) {
+      if (dot(s, nn) < 0.05) continue;
+      tried++;
+      if (!Number.isFinite(ray(from, s))) open++;
+    }
+    const outside = tried === 0 || open / tried >= 0.5;
+    if (outside) out.outsideMm2 += a;
+    else out.insideMm2 += a;
+    if (Number.isFinite(ray(from, d))) out.onPartMm2 += a;
+    out.flattestDeg = out.flattestDeg === null ? deg : Math.min(out.flattestDeg, deg);
+    info.set(t, { a, c, deg, outside });
+    parent.set(t, t);
+    for (let k = 0; k < 3; k++) {
+      const ck = key(indices[t * 3 + k]!);
+      const other = byCorner.get(ck);
+      if (other === undefined) byCorner.set(ck, t);
+      else parent.set(find(t), find(other));
+    }
+  }
+  // Each piece: its area, extent across the print direction, a point and how it lies.
+  const u = norm(Math.abs(d[0]) < 0.9 ? [0, -d[2], d[1]] : [-d[2], 0, d[0]]);
+  const w: V3 = [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]];
+  const groups = new Map<number, { a: number; outA: number; lo: [number, number]; hi: [number, number]; big: number; at: V3; deg: number }>();
+  for (const [t, x] of info) {
+    const r = find(t);
+    const g = groups.get(r) ?? { a: 0, outA: 0, lo: [Infinity, Infinity], hi: [-Infinity, -Infinity], big: -1, at: x.c, deg: 180 };
+    g.a += x.a;
+    if (x.outside) g.outA += x.a;
+    for (let k = 0; k < 3; k++) {
+      const v = indices[t * 3 + k]! * 3;
+      const p: V3 = [P[v]!, P[v + 1]!, P[v + 2]!];
+      const pu = dot(p, u), pw = dot(p, w);
+      g.lo = [Math.min(g.lo[0], pu), Math.min(g.lo[1], pw)];
+      g.hi = [Math.max(g.hi[0], pu), Math.max(g.hi[1], pw)];
+    }
+    if (x.a > g.big) {
+      g.big = x.a;
+      g.at = x.c;
+    }
+    g.deg = Math.min(g.deg, x.deg);
+    groups.set(r, g);
+  }
+  out.regions = [...groups.values()]
+    .map((g) => ({ areaMm2: g.a, spanMm: Math.hypot(g.hi[0] - g.lo[0], g.hi[1] - g.lo[1]), at: g.at, flattestDeg: g.deg, outside: g.outA >= g.a / 2 }))
+    .sort((x, y) => y.areaMm2 - x.areaMm2);
+  return out;
+}
