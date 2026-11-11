@@ -200,6 +200,10 @@ export interface RobotExportOptions {
   actuators?: Readonly<Record<string, RobotActuator>>;
   /** "shapes" (default): one box, cylinder or sphere per part to collide with; "mesh": the triangles. */
   collision?: RobotCollision;
+  /** Only these parts (cables too when named); default every part shown, cables left out. */
+  parts?: readonly string[];
+  /** Parts to leave out as well. */
+  exclude?: readonly string[];
 }
 
 /**
@@ -215,9 +219,15 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
   const doc = currentDoc();
   const bodies = out?.report.bodies ?? [];
   if (!out || !bodies.length) throw new Error(t("Nothing to export"));
-  const ids = bodies.map((b) => b.id);
-  const unknown = Object.keys(opts.masses ?? {}).filter((id) => !ids.includes(id));
+  const all = bodies.map((b) => b.id);
+  const unknown = [...Object.keys(opts.masses ?? {}), ...(opts.exclude ?? [])].filter((id) => !all.includes(id));
   if (unknown.length) throw new Error(t("unknown part {id}", { id: unknown.join(", ") }));
+  // The parts shown (or named), without cables: two dozen cables hanging on nothing would fall out of the robot.
+  const { ids: taken, cables } = printIds(exportIds(opts.parts), opts.parts);
+  const ids = taken.filter((id) => !opts.exclude?.includes(id));
+  if (!ids.length) throw new Error(t("Nothing to export"));
+  const keep = new Set(ids);
+  const left = new Set(all.filter((id) => !keep.has(id)));
   const meshes = new Map(out.meshes.map((m) => [m.bodyId, m]));
   const colors = partColors(doc, ids, true);
   const pla = materialById("pla")!;
@@ -226,7 +236,7 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
   const parts: RobotPart[] = [];
   for (const b of bodies) {
     const mesh = meshes.get(b.id);
-    if (!mesh || !Number.isFinite(b.volume) || b.volume <= 0) continue;
+    if (!keep.has(b.id) || !mesh || !Number.isFinite(b.volume) || b.volume <= 0) continue;
     const material = partMaterial(doc, b.id);
     if (!material && opts.masses?.[b.id] === undefined) plain.push(b.id);
     const mass = opts.masses?.[b.id] ?? massOf(b.volume, material ?? pla);
@@ -241,13 +251,18 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
     parts.push({ id: b.id, name: partName(b.id, doc.features), mesh: { positions: mesh.positions, indices: mesh.indices }, ...(color ? { color } : {}), mass, centroid, inertia });
   }
   if (plain.length) warnings.push(`${plain.length} parts have no material and count as PLA (${plain.slice(0, 6).join(", ")}${plain.length > 6 ? ", …" : ""})`);
+  if (cables.length) warnings.push(`${cables.length} cables left out (name them in parts to take them)`);
+  const hiddenOut = all.filter((id) => left.has(id) && !cables.includes(id)).length;
+  if (hiddenOut && !opts.parts) warnings.push(`${hiddenOut} parts hidden or excluded, left out`);
   const { mech, problems } = currentMechanism();
   for (const [id, msg] of Object.entries(problems)) warnings.push(`joint ${id} left out: ${msg}`);
   const name = (opts.name ?? baseName()).replace(/[^\w\-]+/g, "_") || "robot";
+  // Joints to a part left out go with it (carriers of cylindrical joints are no parts and stay).
+  const joints = mech.joints.filter((j) => !left.has(j.a) && !left.has(j.b));
   const r = writeRobot(
     parts,
-    mech.joints.map((j) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: j.origin, axis: j.axis, ...(j.limits ? { limits: j.limits } : {}) })),
-    mech.couplings.map((c) => ({ driver: c.driver, driven: c.driven, ratio: c.ratio })),
+    joints.map((j) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: j.origin, axis: j.axis, ...(j.limits ? { limits: j.limits } : {}) })),
+    mech.couplings.filter((c) => joints.some((j) => j.id === c.driver) && joints.some((j) => j.id === c.driven)).map((c) => ({ driver: c.driver, driven: c.driven, ratio: c.ratio })),
     { name, ...(opts.floating !== undefined ? { floating: opts.floating } : {}), ...(opts.actuators ? { actuators: opts.actuators } : {}), ...(opts.collision ? { collision: opts.collision } : {}) },
   );
   return { files: r.files, links: r.links, warnings: [...warnings, ...r.warnings] };

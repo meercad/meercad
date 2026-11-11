@@ -750,6 +750,8 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         ...(p["masses"] && typeof p["masses"] === "object" ? { masses: p["masses"] as Record<string, number> } : {}),
         ...(p["actuators"] && typeof p["actuators"] === "object" ? { actuators: p["actuators"] as Record<string, RobotActuator> } : {}),
         ...(p["collision"] === "mesh" || p["collision"] === "shapes" ? { collision: p["collision"] } : {}),
+        ...(Array.isArray(p["parts"]) ? { parts: p["parts"] as string[] } : {}),
+        ...(Array.isArray(p["exclude"]) ? { exclude: p["exclude"] as string[] } : {}),
       });
       return { ...exportedFiles(files, p), links, warnings };
     }
