@@ -20,6 +20,18 @@ modifications is permitted.
 - **PlaneGCS** — 2D constraint solver from FreeCAD, licensed LGPL-2.0-or-later and used under LGPL-2.1. Source: https://github.com/FreeCAD/FreeCAD (src/Mod/Sketcher/App/planegcs)
   WebAssembly build `@salusoft89/planegcs` (1.3.0): https://github.com/Salusoft89/planegcs
 
+## Compiled into the WebAssembly modules and the iOS app
+
+Their licence texts are in `licenses/embedded/` and in the app's licence page.
+
+- **Eigen** (linear algebra, inside the PlaneGCS module), Mozilla Public License 2.0. Source: https://gitlab.com/libeigen/eigen
+- **Boost** (inside the PlaneGCS module), Boost Software License 1.0. Source: https://www.boost.org
+- **Emscripten** runtime (both modules), MIT or University of Illinois/NCSA. Source: https://github.com/emscripten-core/emscripten
+- **musl** C library (both modules), MIT. Source: https://musl.libc.org
+- **libc++** (both modules), Apache-2.0 with LLVM exceptions. Source: https://github.com/llvm/llvm-project
+- **Open CASCADE exception** to the LGPL 2.1, which applies to OCCT.
+- **Cordova** compatibility layer of Capacitor (`Cordova.framework`, iOS app), derived from Apache Cordova, Apache License 2.0. Source: https://github.com/ionic-team/capacitor
+
 Electron additionally ships Chromium's licenses in `LICENSES.chromium.html` inside the app bundle.
 
 ## Open hardware standards
@@ -27,6 +39,12 @@ Electron additionally ships Chromium's licenses in `LICENSES.chromium.html` insi
 The wall storage tool builds openGrid boards and snaps from the published dimensions of openGrid by David D,
 licensed CC BY 4.0: https://github.com/openGrid-3D/openGrid-docs and https://www.printables.com/model/1214361.
 The geometry is meerCAD's own code; no openGrid files are included.
+
+The storage grid tool follows the published dimensions of Gridfinity by Zack Freedman (released under the MIT
+license). The geometry is meerCAD's own code; no Gridfinity files are included.
+
+The fonts embedded for raised and engraved text are Roboto and Roboto Mono (Copyright 2011 The Roboto Project Authors),
+SIL Open Font License 1.1.
 
 ## All components
 
