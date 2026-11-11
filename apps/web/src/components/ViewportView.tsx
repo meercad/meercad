@@ -1037,7 +1037,7 @@ function LoadingOverlay() {
     <div className="loading-overlay" role="status" aria-live="polite">
       <div className="loading-card">
         <span className="spinner" aria-hidden />
-        <span>
+        <span className="loading-text">
           {text}
           {progress && kernelState.ready ? (
             <>

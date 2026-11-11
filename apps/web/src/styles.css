@@ -1106,6 +1106,8 @@ html[data-compact] .sketch-done { margin-left: auto; height: 34px; padding: 0 14
 .task-bar.indeterminate .task-fill { position: absolute; width: 35%; animation: task-slide 1.1s ease-in-out infinite; }
 @keyframes task-slide { from { left: -35%; } to { left: 100%; } }
 /* The first build's step and bar in the loading card. */
+/* Fixed width: the card stays put while step names and counts change length. */
+.loading-text { width: 300px; max-width: calc(100vw - 96px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .loading-step { display: block; margin-top: 4px; font-size: 12px; font-weight: 400; color: var(--text-2); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .loading-bar { margin-top: 8px; background: var(--panel-2); }
 /* Deviation from a mesh: scale and numbers. */
