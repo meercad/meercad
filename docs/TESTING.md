@@ -12,6 +12,7 @@ and E2E needs the app. So the tests are split into levels, and each moment runs 
 | Test models | Real designs from simple to complex rebuild as expected, also after parameter changes | `pnpm test tests/acceptance/models.test.ts` | ≈ 1 min |
 | Performance | Start, open and change times of every test model, mesh sizes, memory, export and import | `pnpm test:perf` | ≈ 4 min (4-core runner) |
 | E2E | The planned models built through the UI of the WIP app, the result compared | `pnpm test:e2e` | long |
+| iPhone/iPad | Touch in the real iOS app in the Simulator: taps, double taps, drags, pinches, sheets | `pnpm test:ios` | ≈ 10 min per device |
 | Hands-on | What only a person sees: looks, touch, Pencil | Checklist below | — |
 
 | Moment | Runs | Where |
@@ -33,6 +34,30 @@ tool has no test. MCP tools that run inside the app and are only checked by the 
 there by name (`MCP_E2E_ONLY`), so a new tool is a decision, not an oversight. Line coverage (Nov
 2026): io, kernel, model, schema, sketch over 90 %; the app (`apps/web`) and the viewport under 5 %,
 because they need a browser, which is the E2E run's job.
+
+## Coverage
+
+`npx vitest run --project unit --project integration --project integration-slow --coverage.enabled
+--coverage.include='packages/*/src/**' --coverage.include='apps/web/src/**'` measures the unit and
+integration tests (Nov 2026: io 97 %, model 95 %, schema 95 %, sketch 94 %, kernel 91 %, MCP 55 %;
+the interface only runs in the E2E runs). `E2E_COVERAGE=1 pnpm test:e2e` records which of the app's
+code a Mac E2E run executed; `node scripts/e2e-coverage.mjs [--files]` prints it per folder and file.
+
+Known answers live in `tests/acceptance/reference-values.test.ts` (sizes, booleans, fillets and
+chamfers by formula, mass, STL/3MF/STEP read back), `packages/sketch/src/constraints.test.ts` (every
+constraint) and `packages/model/src/expr.test.ts` (formulas and units).
+
+## iPhone and iPad (`pnpm test:ios`)
+
+`apps/ios/uitests` is an XCUITest project of its own. `scripts/test-ios.mjs` builds the web app and
+the iOS app for the Simulator, installs it fresh on its own simulators ("meerCAD UITest iPad" and
+"… iPhone", created on first use; never the simulators a person or another run uses) and runs
+`TouchTests` with real touches. Started with `-meercadUITest`, the app shows its state to the tests
+in a hidden text (`apps/web/src/lib/uitestProbe.ts`): zoom, open sheets, steps, variables, part sizes,
+errors. Failures keep a screenshot in `test-results/ios/<device>.xcresult`.
+
+On the iPad a double tap near the top edge resizes the app's window (iPadOS), so touch tests stay
+below 60 pt.
 
 ## Performance tests
 
