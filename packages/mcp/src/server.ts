@@ -268,13 +268,13 @@ const view = z.enum(["iso", "front", "back", "left", "right", "top", "bottom"]);
 const shot = {
   view: view.optional(),
   direction: vec3.optional().describe("Where the camera is, seen from the model (Z up, front is -Y), e.g. [-1,-1,0.6] from front-left above, [0,0,-1] from below; overrides view"),
-  focus: z.array(z.string()).optional().describe("Part ids to zoom onto"),
+  focus: z.array(z.string()).optional().describe("Part ids or folder names of the parts list to zoom onto"),
   isolate: z.boolean().optional().describe("With focus: hide all other parts"),
   section: z
     .object({ plane: z.enum(["XY", "XZ", "YZ"]).optional(), normal: vec3.optional(), offset: z.number().optional() })
     .optional()
     .describe("Cut the model open: the side the normal points to is removed; the cut faces show red. offset moves the plane along its normal (mm)"),
-  highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts drawn orange, faces (selectors) drawn as selected (blue)"),
+  highlight: z.object({ parts: z.array(z.string()).optional(), faces: z.array(selector).optional() }).optional().describe("Parts (ids or folder names) drawn orange, faces (selectors) drawn as selected (blue)"),
   frame: z
     .object({ min: vec3, max: vec3 })
     .optional()
