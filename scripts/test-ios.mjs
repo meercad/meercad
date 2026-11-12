@@ -61,10 +61,12 @@ for (const key of which) {
   const dev = DEVICES[key];
   if (!dev) throw new Error(`unknown device ${key} (ipad, iphone)`);
   const udid = simulator(dev);
+  // A fresh device each run: no projects, settings or window sizes left from the last one (iPadOS
+  // keeps a resized app window, which then hangs off the screen).
+  spawnSync("xcrun", ["simctl", "shutdown", udid]);
+  must("xcrun", ["simctl", "erase", udid]);
   spawnSync("xcrun", ["simctl", "boot", udid]);
   must("xcrun", ["simctl", "bootstatus", udid, "-b"]);
-  // A fresh install each run: no projects or settings left from the last one.
-  spawnSync("xcrun", ["simctl", "uninstall", udid, "app.meercad"]);
   must("xcrun", ["simctl", "install", udid, appPath]);
   const bundle = join(out, `${key}.xcresult`);
   rmSync(bundle, { recursive: true, force: true });

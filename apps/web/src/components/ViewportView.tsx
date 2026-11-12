@@ -240,6 +240,9 @@ export function ViewportView() {
 
   useEffect(() => {
     const v = new Viewport(host.current!);
+    // Named for screen readers (and the touch tests, which aim gestures with several fingers at it).
+    v.renderer.domElement.setAttribute("role", "img");
+    v.renderer.domElement.setAttribute("aria-label", t("3D view"));
     setVp(v);
     setViewport(v);
     const applyNav = () => {

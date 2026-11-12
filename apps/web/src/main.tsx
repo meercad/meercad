@@ -15,7 +15,7 @@ installLongPressMenus();
 if (import.meta.env.DEV || uiTesting())
   void Promise.all([import("./store"), import("./sketch/state"), import("./lib/mcpBridge")]).then(([store, sketch, bridge]) => {
     (window as unknown as { meercadTest: unknown }).meercadTest = { app: store.useApp, sketch: sketch.useSketchUi, store, mcp: bridge.testCall };
-    if (uiTesting()) installProbe(store.useApp, store.rebuilding);
+    if (uiTesting()) installProbe(store.useApp, store.rebuilding, (p) => store.getViewport()?.worldToScreen(p) ?? null);
   });
 installKeyboardDetection();
 

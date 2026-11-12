@@ -204,6 +204,7 @@ export default {
   preview: "Vorschau",
   Ready: "Bereit",
   "Fit all": "Alles zeigen",
+  "3D view": "3D-Ansicht",
   "View options": "Ansichtsoptionen",
   "Shaded with edges": "Schattiert mit Kanten",
   Shaded: "Schattiert",

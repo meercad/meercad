@@ -9,11 +9,13 @@
 /* Begin PBXBuildFile section */
 		B0000000000000000000A001 /* MeerCAD.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000F001 /* MeerCAD.swift */; };
 		B0000000000000000000A002 /* TouchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000F002 /* TouchTests.swift */; };
+		B0000000000000000000A003 /* WorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000F003 /* WorkflowTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B0000000000000000000F001 /* MeerCAD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeerCAD.swift; sourceTree = "<group>"; };
 		B0000000000000000000F002 /* TouchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000F003 /* WorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowTests.swift; sourceTree = "<group>"; };
 		B0000000000000000000F0FF /* MeercadUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeercadUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -41,6 +43,7 @@
 			children = (
 				B0000000000000000000F001 /* MeerCAD.swift */,
 				B0000000000000000000F002 /* TouchTests.swift */,
+				B0000000000000000000F003 /* WorkflowTests.swift */,
 			);
 			path = MeercadUITests;
 			sourceTree = "<group>";
@@ -107,6 +110,7 @@
 			files = (
 				B0000000000000000000A001 /* MeerCAD.swift in Sources */,
 				B0000000000000000000A002 /* TouchTests.swift in Sources */,
+				B0000000000000000000A003 /* WorkflowTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

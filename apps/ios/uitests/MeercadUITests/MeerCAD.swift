@@ -18,6 +18,19 @@ struct Probe: Decodable {
     let errors: [String]
     let toasts: [String]
     let rects: [String: [Double]?]
+    let axes: Axes?
+    let sketchInfo: SketchInfo?
+    let measure: [[String]]?
+
+    struct Axes: Decodable {
+        let o: [Double], x: [Double], y: [Double], z: [Double]
+    }
+    struct SketchInfo: Decodable {
+        let lines: Int
+        let circles: Int
+        let dof: Int?
+        let regions: [Double]
+    }
 
     struct BodyInfo: Decodable {
         let id: String
@@ -79,7 +92,12 @@ final class MeerCAD {
         let el = probeElement
         guard el.exists else { return nil }
         let text = String(el.label.dropFirst("UITEST ".count))
-        return try? JSONDecoder().decode(Probe.self, from: Data(text.utf8))
+        do {
+            return try JSONDecoder().decode(Probe.self, from: Data(text.utf8))
+        } catch {
+            print("probe not readable: \(error) in \(text.prefix(400))")
+            return nil
+        }
     }
 
     private func waitQuietly(_ seconds: TimeInterval) -> Bool {
@@ -127,11 +145,21 @@ final class MeerCAD {
     // MARK: touching
 
     /// A button, link or other element whose label contains `label`.
+    /// Prefers a button named exactly so, then one whose name starts with it (a tool and its key),
+    /// then anything containing it, hittable ones first.
     func element(_ label: String) -> XCUIElement {
-        let p = NSPredicate(format: "label CONTAINS %@ AND NOT (label BEGINSWITH %@)", label, "UITEST ")
-        let button = app.buttons.matching(p).firstMatch
-        if button.exists { return button }
-        return app.descendants(matching: .any).matching(p).firstMatch
+        let tries = [
+            NSPredicate(format: "label == %@", label),
+            NSPredicate(format: "label BEGINSWITH %@", label + " "),
+            NSPredicate(format: "label CONTAINS %@ AND NOT (label BEGINSWITH %@)", label, "UITEST "),
+        ]
+        for p in tries {
+            for query in [app.buttons.matching(p), app.descendants(matching: .any).matching(p)] {
+                let all = query.allElementsBoundByIndex
+                if let hit = all.first(where: { $0.isHittable }) ?? all.first { return hit }
+            }
+        }
+        return app.buttons.matching(tries[2]).firstMatch
     }
 
     func tap(_ label: String, timeout: TimeInterval = 15, file: StaticString = #filePath, line: UInt = #line) {
@@ -147,6 +175,64 @@ final class MeerCAD {
     }
 
     func screenSize() -> CGSize { app.webViews.firstMatch.frame.size }
+
+    /// Where a point of the model (mm) is on screen, from the probe's axes (exact on the origin
+    /// planes in a straight view, close enough elsewhere to land on a face).
+    func screen(_ p: (Double, Double, Double), _ axes: Probe.Axes) -> XCUICoordinate {
+        let x = axes.o[0] + (axes.x[0] - axes.o[0]) * p.0 / 10 + (axes.y[0] - axes.o[0]) * p.1 / 10 + (axes.z[0] - axes.o[0]) * p.2 / 10
+        let y = axes.o[1] + (axes.x[1] - axes.o[1]) * p.0 / 10 + (axes.y[1] - axes.o[1]) * p.1 / 10 + (axes.z[1] - axes.o[1]) * p.2 / 10
+        return point(x, y)
+    }
+
+    /// The axes once the camera stands still (a view turns for a moment after a sketch starts).
+    func steadyAxes(file: StaticString = #filePath, line: UInt = #line) -> Probe.Axes {
+        var last: [Double] = []
+        let end = Date().addingTimeInterval(15)
+        while Date() < end {
+            if let a = probe()?.axes {
+                let now = a.o + a.x + a.y + a.z
+                if now == last { return a }
+                last = now
+            }
+            Thread.sleep(forTimeInterval: 0.6)
+        }
+        XCTFail("the view did not come to rest", file: file, line: line)
+        return probe()!.axes!
+    }
+
+    /// A tool in the rail (or the phone's bar), and an item of its group if it opens one.
+    func tool(_ label: String, item: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
+        tap(label, file: file, line: line)
+        if let item {
+            // A group's items are menu items named by their hint; their visible name is a text inside.
+            let inMenu = app.menuItems.containing(NSPredicate(format: "label == %@", item)).firstMatch
+            let el = inMenu.waitForExistence(timeout: 3) ? inMenu : element(item)
+            if !el.exists {
+                let tree = app.debugDescription
+                print(tree.split(separator: "\n").filter { $0.contains("Menu") || $0.contains("Basic") || $0.contains("ectangle") || $0.contains("Create") }.joined(separator: "\n"))
+            }
+            XCTAssertTrue(el.waitForExistence(timeout: 5), "no \(item) under \(label)", file: file, line: line)
+            el.tap()
+        }
+        Thread.sleep(forTimeInterval: 0.4)
+    }
+
+    /// A new empty part from the overview.
+    func newPart(file: StaticString = #filePath, line: UInt = #line) {
+        waitFor("the overview", file: file, line: line) { $0.screen == "home" }
+        // The overview's big New part card; a first tap into a just-started app can get lost, so
+        // a person taps again.
+        for attempt in 0..<3 {
+            let card = app.buttons.matching(NSPredicate(format: "label == %@", "New part")).allElementsBoundByIndex.filter { $0.isHittable }.max { $0.frame.height < $1.frame.height }
+            XCTAssertNotNil(card, "no New part card", file: file, line: line)
+            card?.tap()
+            let end = Date().addingTimeInterval(8)
+            while Date() < end, probe()?.screen != "editor" { Thread.sleep(forTimeInterval: 0.3) }
+            if probe()?.screen == "editor" || attempt == 2 { break }
+        }
+        waitFor("the new part", file: file, line: line) { $0.screen == "editor" }
+        Thread.sleep(forTimeInterval: 1)
+    }
 
     /// Edits a step in the history list the touch way: a long press opens its menu, then Edit.
     func editRow(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
