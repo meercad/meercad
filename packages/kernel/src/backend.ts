@@ -537,6 +537,9 @@ function revolve(f: ResolvedRevolve, ctx: Ctx): Omit<ModelState, "arena"> {
   const ax = axis(f.axis, ctx);
   const angle = Math.max(-360, Math.min(360, f.angle));
   if (Math.abs(angle) < 1e-6) throw new FeatureError("revolve angle must not be zero");
+  // An axis square to the sketch turns the profile within its own plane: no solid (OCCT gives one of no volume).
+  const n = sk.frame.normal;
+  if (Math.abs(ax.dir[0] * n[0] + ax.dir[1] * n[1] + ax.dir[2] * n[2]) > 1 - 1e-6) throw new FeatureError("the axis stands square to the sketch: turning the profile about it makes no solid", "pick an axis that lies in the sketch's plane");
   const full = Math.abs(Math.abs(angle) - 360) < 1e-9;
   const faces = ctx.g.regionFaces(sk.frame, regions);
   const gpAx = ctx.g.ax1(ax.origin, ax.dir);

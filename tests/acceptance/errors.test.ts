@@ -105,6 +105,9 @@ describe("more steps that cannot be built say why", () => {
     ["a shell whose opening's edge is rounded", [{ id: "fi1", op: "fillet", edges: [{ edge: ["ex1.end_cap", "ex1.side[sk1.l1]"] }], radius: 3 }, { id: "sh1", op: "shell", faces: [{ face: "ex1.end_cap" }], thickness: 2 }], /shell failed: the part came back solid.*shell before rounding/],
     ["a shell removing no faces", [{ id: "sh1", op: "shell", faces: [], thickness: 1 }], /select at least one face to remove/],
     ["a shell across two parts", [...part2, { id: "sh1", op: "shell", faces: [{ face: "ex1.end_cap" }, { face: "exb.end_cap" }], thickness: 1 }], /shell faces must belong to one body/],
+    ["a sketch on a curved face", [...shaft, sketch("sk8", { face: round }, circle("c", 0, 0, 1))], /the selected face is not planar/],
+    ["a sketch on several faces at once", [sketch("sk8", { face: { select: "faces", of: "ex1" } }, circle("c", 0, 0, 1))], /pick exactly one/],
+    ["a revolve about several edges", [sketch("sk9", { ref: "origin.XZ" }, rect("r", 50, 0, 5, 5)), { id: "r1", op: "revolve", profile: { sketch: "sk9" }, axis: { edge: { select: "edges", of: "ex1" } }, angle: 90, mode: "new_body" }], /axis edge selector must match exactly one edge/],
     ["bending with a tolerance of 0", [{ id: "bd1", op: "bend", mode: "bend", bodies: ["ex1"], angle: 90, axis: { ref: "origin.Y" }, tolerance: 0 }], /tolerance must be greater than zero/],
   ] as [string, Feature[], RegExp][])("%s", async (_name, extra, msg) => {
     expect(await fails(extra)).toMatch(msg);
