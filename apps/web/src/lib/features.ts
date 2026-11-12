@@ -334,7 +334,11 @@ export function featureName(f: Feature): string {
     return `${WALL_ACCESSORIES[f.accessory ?? "hook"]} ${size}`;
   }
   if (!f.name && f.op === "label" && f.text?.trim()) return `${t("Label")} ${f.text.trim().split("\n")[0]}`;
-  return f.name ?? `${FEATURES[f.op].label} ${f.id.replace(/^\D+/, "")}`;
+  if (f.name) return f.name;
+  // "Extrude 3" from ex3; an id without a number (an assistant's "base", "lid") is shown as it is,
+  // so two such parts are not both just "Extrude".
+  const n = f.id.replace(/^\D+/, "");
+  return `${FEATURES[f.op].label} ${n || f.id}`;
 }
 
 /**

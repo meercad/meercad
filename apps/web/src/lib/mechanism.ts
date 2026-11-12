@@ -636,7 +636,8 @@ export function addPoseToMotion(id: string, at?: number): void {
   );
   const existing = currentDoc().mechanism?.motions?.find((x) => x.id === id);
   const m: Motion = existing ? structuredClone(existing) : { id, name: t("Motion"), duration: 2, loop: true, keys: [] };
-  const when = at ?? (m.keys.length ? Math.min(m.duration, (m.keys[m.keys.length - 1]!.at ?? 0) + 0.5) : 0);
+  // Half a second after the last moment; past the end, the motion grows (it used to replace the last moment there).
+  const when = at ?? (m.keys.length ? +((m.keys[m.keys.length - 1]!.at ?? 0) + 0.5).toFixed(3) : 0);
   m.keys = [...m.keys.filter((k) => Math.abs(k.at - when) > 1e-9), { at: when, values }].sort((a, b) => a.at - b.at);
   if (when > m.duration) m.duration = when;
   apply({ type: "set_motion", motion: m });

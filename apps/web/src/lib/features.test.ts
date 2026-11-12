@@ -83,6 +83,9 @@ describe("names in the lists", () => {
   it("names steps by what they make", () => {
     expect(features.map(featureName)).toEqual(["Extrude 1", "Linear pattern 1", expect.stringMatching(/M3×12/), "Hole 1", "Box 80×60×40", "Bin 2×1×3", "Pegboard 6×4", "Label M3×10", "Jar ⌀60×50"]);
     expect(featureName({ id: "x", op: "extrude", name: "Base" } as Feature)).toBe("Base");
+    // An id without a number (as assistants often choose) names the part, so two do not read alike.
+    expect(featureName({ id: "base", op: "extrude" } as Feature)).toBe("Extrude base");
+    expect(featureName({ id: "lid", op: "extrude" } as Feature)).toBe("Extrude lid");
   });
 
   it("names parts, copies and inserts", () => {
