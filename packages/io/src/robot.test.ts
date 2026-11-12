@@ -282,4 +282,60 @@ describe("writeRobot", () => {
     // world, base, arm; free joint + hinge; one actuator; base 1000 g + arm 72 g
     expect(out).toBe("3 2 1 1.072");
   });
+
+  it("says what it leaves out or makes up: joints on their own link, second movers, loose links, parts without mass", () => {
+    const { parts, joints } = pendulum();
+    const r = writeRobot(
+      [...parts, box("loose", [300, 0, 0], [310, 10, 10]), { ...box("air", [400, 0, 0], [410, 10, 10]), mass: 0 }],
+      [
+        ...joints,
+        // Turning the weight against the arm it is glued to: one link, nothing to turn.
+        { id: "self", type: "revolute", a: "weight", b: "arm", origin: [0, 0, 200], axis: [1, 0, 0] },
+        // A second joint moving the arm (already on the hinge).
+        { id: "again", type: "slider", a: "arm", b: "base", origin: [0, 0, 0], axis: [0, 0, 1] },
+        // A slider with no travel, on a carrier that is no part.
+        { id: "rail", type: "slider", a: "carrier", b: "base", origin: [0, 0, 0], axis: [1, 0, 0] },
+      ],
+      [],
+      { name: "w", actuators: { hinge: { effort: 1, friction: 0.2, damping: 0.1, armature: 0.001, kp: 10, kv: 1 } } },
+    );
+    const w = r.warnings.join("\n");
+    expect(w).toMatch(/joint self moves a part on its own link/);
+    expect(w).toMatch(/joint again: link .* already moves on joint hinge/);
+    expect(w).toMatch(/links hang on nothing/);
+    expect(w).toMatch(/link carrier has no parts \(a joint carrier\)/);
+    expect(w).toMatch(/link air has no mass/);
+    expect(w).toMatch(/slider rail has no travel; the URDF gets ±1 m/);
+    expect(text(r.files, "w.xml")).toContain('frictionloss="0.2"');
+    // Several roots: the URDF hangs the others on the first.
+    expect(text(r.files, "w.urdf")).toMatch(/_floating" type="floating"/);
+  });
+
+  it("names parts that start with a digit or share a name", () => {
+    const a = box("1st", [0, 0, 0], [10, 10, 10]);
+    const b = { ...box("x", [20, 0, 0], [30, 10, 10]), name: "Box 1st" };
+    const r = writeRobot([a, b], [], [], { name: "names", floating: false });
+    const names = r.links.map((l) => l.name);
+    expect(names.every((n) => /^[A-Za-z_]/.test(n))).toBe(true);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("fits a sphere to a ball", () => {
+    const n = 24;
+    const pos: number[] = [];
+    const idx: number[] = [];
+    for (let i = 0; i <= n; i++)
+      for (let j = 0; j < 2 * n; j++) {
+        const t = (Math.PI * i) / n, f = (Math.PI * j) / n;
+        pos.push(10 * Math.sin(t) * Math.cos(f), 10 * Math.sin(t) * Math.sin(f), 10 * Math.cos(t));
+      }
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < 2 * n; j++) {
+        const a = i * 2 * n + j, b = i * 2 * n + ((j + 1) % (2 * n)), c = a + 2 * n, d = b + 2 * n;
+        idx.push(a, c, b, b, c, d);
+      }
+    const s = fitCollisionShape({ positions: new Float32Array(pos), indices: new Uint32Array(idx) });
+    expect(s?.type).toBe("sphere");
+    expect(s!.size[0]).toBeCloseTo(10, 0);
+  });
 });
