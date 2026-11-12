@@ -7,6 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Feature, Joint, SketchEntity } from "@meercad/schema";
+import { readStl } from "@meercad/io";
 import { testCall } from "./mcpBridge";
 import { useMotion } from "./mechanism";
 
@@ -75,6 +76,22 @@ describe("moving parts through the assistant", () => {
     expect(useMotion.getState().playing ?? null).toBeFalsy();
     const run = await call<Record<string, unknown>>("check_motion", { motion: "m1", steps: 4 });
     expect(run).toBeTruthy();
+  });
+
+  it("exports moved parts where they are shown, or where they were drawn", async () => {
+    await call("set_pose", { values: { j1: 0, j2: -18.5 } });
+    const minX = async (posed: boolean) => {
+      const r = await call<{ files: Record<string, string> }>("export", { format: "stl", parts: ["cube"], posed });
+      const bytes = Uint8Array.from(atob(Object.values(r.files)[0]!), (c) => c.charCodeAt(0));
+      const v = readStl(bytes).vertices;
+      let m = Infinity;
+      for (let i = 0; i < v.length; i += 3) m = Math.min(m, v[i]!);
+      return m;
+    };
+    // The cube is drawn from x = 60; slid back 18.5 mm it starts at 41.5.
+    expect(await minX(true)).toBeCloseTo(41.5, 4);
+    expect(await minX(false)).toBeCloseTo(60, 4);
+    await call("set_pose", { values: { j1: 0, j2: 0 } });
   });
 
   it("exports the mechanism as a robot with its links", async () => {

@@ -234,6 +234,17 @@ describe("terrains", () => {
     cancelMarking();
   });
 
+  it("exports the surroundings with an OBJ at their corrected size", async () => {
+    const { meshExportFiles } = await import("../components/io");
+    const { files } = await meshExportFiles("obj");
+    const objName = Object.keys(files).find((n) => n.endsWith(".obj"))!;
+    const text = new TextDecoder().decode(files[objName]!);
+    expect(text).toMatch(/\bGarden\b/);
+    const xs = [...text.matchAll(/^v (\S+) (\S+) (\S+)/gm)].map((m) => Number(m[1]));
+    // Scaled by 1.25 above: the ground reaches 50 m (in mm).
+    expect(Math.max(...xs)).toBeCloseTo(50_000, 0);
+  });
+
   it("builds a model from photos through the Mac app", async () => {
     const desktop = (window as unknown as { meercadDesktop: { photos: { build: (f?: string) => Promise<unknown> } } }).meercadDesktop;
     const was = desktop.photos.build;
