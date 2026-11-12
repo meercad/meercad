@@ -63,6 +63,29 @@ export default defineConfig({
   test: {
     // Kernel tests run about three times slower on the CI runner than on a Mac.
     testTimeout: 120_000,
+    /**
+     * Line coverage of every package and the app, measured over all levels but perf and E2E
+     * (`pnpm test:coverage`, CI job "coverage"). The goal is 100 % everywhere; each threshold is
+     * where the package stands, so coverage can only go up: raise it when tests are added, never
+     * lower it (docs/TESTING.md).
+     */
+    coverage: {
+      provider: "v8",
+      include: ["packages/*/src/**", "apps/web/src/**"],
+      exclude: ["**/*.test.{ts,tsx}", "**/*.d.ts", "apps/web/src/main.tsx", "apps/web/src/kernel.worker.ts"],
+      thresholds: {
+        "packages/ai/src/**": { lines: 100 },
+        "packages/naming/src/**": { lines: 100 },
+        "packages/schema/src/**": { lines: 99 },
+        "packages/io/src/**": { lines: 98.5 },
+        "packages/sketch/src/**": { lines: 98.5 },
+        "packages/model/src/**": { lines: 97.9 },
+        "packages/kernel/src/**": { lines: 97 },
+        "packages/mcp/src/**": { lines: 94 },
+        "packages/viewport/src/**": { lines: 59 },
+        "apps/web/src/**": { lines: 54 },
+      },
+    },
     projects: [
       {
         extends: true,
