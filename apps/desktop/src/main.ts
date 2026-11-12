@@ -445,6 +445,9 @@ ipcMain.handle("files:write-local", async (_e, p: { path: unknown; base64: unkno
  */
 ipcMain.handle("files:share", async (e, p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => {
   const win = windowFor(e.sender);
+  // The UI end-to-end run (tests/e2e/app.ts): the file goes into its folder instead of the share menu.
+  const testDir = process.env["MEERCAD_E2E_SAVE_DIR"];
+  if (testDir) return void (await writeFile(join(testDir, safeName(p.name, "design.meercad")), typeof p.data === "string" ? p.data : Buffer.from(p.data)));
   const dir = await mkdtemp(join(app.getPath("temp"), "meercad-share-"));
   const file = join(dir, safeName(p.name, "design.meercad"));
   await writeFile(file, typeof p.data === "string" ? p.data : Buffer.from(p.data));
