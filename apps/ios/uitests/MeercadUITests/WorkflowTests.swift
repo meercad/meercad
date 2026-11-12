@@ -78,6 +78,34 @@ final class WorkflowTests: XCTestCase {
         XCTAssertNotNil(rows.range(of: #"Area 400(\.0+)? mm²"#, options: .regularExpression), "measured: \(rows)")
     }
 
+    // Typing into fields is not tested here: the Simulator's key events go through the Mac's
+    // keyboard layout and reach the page's fields unreliably (nothing arrives on a German Mac). The
+    // Mac E2E run types every kind of value; on iPhone and iPad values change by dragging
+    // (testDraggingTheTopFaceChangesTheThicknessVariable).
+
+    /// Round the top of a cube with Modify › Fillet and a tap on its top face: the volume by formula.
+    func testFilletAnEdgeByTapping() {
+        m.newPart()
+        m.tool("Create", item: "Basic solid")
+        m.waitFor("the basic solid dialog") { $0.dialog?.hasPrefix("primitive") == true }
+        m.settled()
+        m.tap("Accept")
+        m.waitFor("the cube", timeout: 60) { $0.dialog == nil && $0.bodies.count == 1 && !$0.busy }
+        m.tool("Modify", item: "Fillet")
+        m.waitFor("the fillet dialog") { $0.dialog?.hasPrefix("fillet") == true }
+        // A tap on the top face picks its four edges.
+        m.screen((0, 0, 20), m.steadyAxes()).tap()
+        Thread.sleep(forTimeInterval: 1)
+        m.settled()
+        m.tap("Accept")
+        let done = m.waitFor("the rounded cube", timeout: 60) { $0.dialog == nil && !$0.busy && $0.features.count == 2 }
+        // Four 20 mm edges rounded with the default r = 2: each takes 20 · r² (1 − π/4), and where two
+        // meet at a corner they overlap by r³ (5/3 − π/2).
+        let r = 2.0
+        XCTAssertEqual(done.bodies[0].volume, 8000 - 4 * 20 * r * r * (1 - Double.pi / 4) + 4 * r * r * r * (5.0 / 3 - Double.pi / 2), accuracy: 1e-3)
+        XCTAssertEqual(done.errors, [])
+    }
+
     /// The model view (the page names it "3D view"), for gestures with several fingers.
     private func modelArea() -> XCUIElement {
         let view = m.app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "3D view")).firstMatch
