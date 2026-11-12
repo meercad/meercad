@@ -96,7 +96,7 @@ describe("importing files", () => {
     const a = mesh(prism([[100, 0], [110, 0], [110, 10], [100, 10]], 10));
     const b = mesh(prism([[120, 0], [140, 0], [140, 10], [120, 10]], 5));
     const three = write3mf([{ ...a, name: "a" }, { ...b, name: "b" }] as never);
-    expect(await importFile(new File([three], "pair.3mf"))).toBe(true);
+    expect(await importFile(new File([three as BlobPart], "pair.3mf"))).toBe(true);
     const names = currentDoc().features.filter((f) => f.op === "import").map((f) => (f as { fileName: string }).fileName);
     expect(names.slice(-2)).toEqual(["pair.3mf › a", "pair.3mf › b"]);
     const out = await rebuildNow();
