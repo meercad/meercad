@@ -653,7 +653,7 @@ export function curvesToSketch(curves: Curve2[]): { entities: SketchEntity[]; co
   return { entities, constraints: [] };
 }
 
-/** Basic SVG import: line, rect, circle, polyline, polygon and paths (curves become polylines). */
+/** Basic SVG import: line, rect (rounded too), circle, ellipse, polyline, polygon and paths (curves become polylines). */
 export function readSvg(text: string): Curve2[] {
   const doc = new DOMParser().parseFromString(text, "image/svg+xml");
   const svg = doc.querySelector("svg");
@@ -675,14 +675,40 @@ export function readSvg(text: string): Curve2[] {
     for (let i = 0; i + 1 < pts.length; i++) out.push({ kind: "line", a: P(...pts[i]!), b: P(...pts[i + 1]!) });
     if (closed && pts.length > 2) out.push({ kind: "line", a: P(...pts.at(-1)!), b: P(...pts[0]!) });
   };
-  for (const el of svg.querySelectorAll("line,rect,circle,polyline,polygon,path")) {
+  for (const el of svg.querySelectorAll("line,rect,circle,ellipse,polyline,polygon,path")) {
     switch (el.tagName.toLowerCase()) {
       case "line":
         out.push({ kind: "line", a: P(num(el, "x1"), num(el, "y1")), b: P(num(el, "x2"), num(el, "y2")) });
         break;
       case "rect": {
         const [x, y, w, h] = [num(el, "x"), num(el, "y"), num(el, "width"), num(el, "height")];
-        poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true);
+        // Rounded corners: rx and ry, either standing for both, at most half the side.
+        const has = (a: string) => el.hasAttribute(a) && el.getAttribute(a) !== "auto";
+        let [rx, ry] = [has("rx") ? num(el, "rx") : NaN, has("ry") ? num(el, "ry") : NaN];
+        if (Number.isNaN(rx)) rx = Number.isNaN(ry) ? 0 : ry;
+        if (Number.isNaN(ry)) ry = rx;
+        [rx, ry] = [Math.min(Math.abs(rx), w / 2), Math.min(Math.abs(ry), h / 2)];
+        if (!rx || !ry) {
+          poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true);
+          break;
+        }
+        const pts: [number, number][] = [[x + rx, y]];
+        const corner = (to: [number, number], next: [number, number]) => {
+          pts.push(to, ...arcPoints(to, next, rx, ry, 0, false, true));
+        };
+        corner([x + w - rx, y], [x + w, y + ry]);
+        corner([x + w, y + h - ry], [x + w - rx, y + h]);
+        corner([x + rx, y + h], [x, y + h - ry]);
+        corner([x, y + ry], [x + rx, y]);
+        // The last corner ends where the outline began.
+        pts.pop();
+        poly(pts.filter((p, k) => k === 0 || p[0] !== pts[k - 1]![0] || p[1] !== pts[k - 1]![1]), true);
+        break;
+      }
+      case "ellipse": {
+        const [cx, cy, rx, ry] = [num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry")];
+        if (rx === ry) out.push({ kind: "circle", center: P(cx, cy), radius: rx * unitScale });
+        else poly(Array.from({ length: 96 }, (_, k): [number, number] => [cx + rx * Math.cos((k * Math.PI) / 48), cy + ry * Math.sin((k * Math.PI) / 48)]), true);
         break;
       }
       case "circle": {
@@ -719,6 +745,10 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
     if (pts.length > 1) subs.push({ pts, closed });
     pts = [];
   };
+  // The last control point of a cubic (C, S) or quadratic (Q, T) curve: S and T mirror it.
+  let lastCubic: [number, number] | null = null;
+  let lastQuad: [number, number] | null = null;
+  const mirror = (c: [number, number] | null): [number, number] => (c ? [2 * cur[0] - c[0], 2 * cur[1] - c[1]] : cur);
   const bezier = (ctrl: [number, number][], to: [number, number]) => {
     const all = [cur, ...ctrl, to];
     for (let s = 1; s <= 12; s++) {
@@ -733,7 +763,12 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
     if (/[a-zA-Z]/.test(tokens[i]!)) cmd = tokens[i++]!;
     const rel = cmd === cmd.toLowerCase();
     const at = (x: number, y: number): [number, number] => (rel ? [cur[0] + x, cur[1] + y] : [x, y]);
-    switch (cmd.toUpperCase()) {
+    const up = cmd.toUpperCase();
+    // A drawing command right after Z starts again where that outline began.
+    if (up !== "M" && up !== "Z" && !pts.length) pts = [cur];
+    const [cubic, quad] = [lastCubic, lastQuad];
+    lastCubic = lastQuad = null;
+    switch (up) {
       case "M":
         flush(false);
         cur = at(n(), n());
@@ -753,20 +788,37 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
         cur = [cur[0], rel ? cur[1] + n() : n()];
         pts.push(cur);
         break;
-      case "C":
-        bezier([at(n(), n()), at(n(), n())], at(n(), n()));
+      case "C": {
+        const c1 = at(n(), n());
+        const c2 = at(n(), n());
+        bezier([c1, c2], at(n(), n()));
+        lastCubic = c2;
         break;
-      case "Q":
-        bezier([at(n(), n())], at(n(), n()));
+      }
+      case "S": {
+        const c1 = mirror(cubic);
+        const c2 = at(n(), n());
+        bezier([c1, c2], at(n(), n()));
+        lastCubic = c2;
         break;
-      case "S":
-      case "T":
-        bezier(cmd.toUpperCase() === "S" ? [at(n(), n())] : [], at(n(), n()));
+      }
+      case "Q": {
+        const c = at(n(), n());
+        bezier([c], at(n(), n()));
+        lastQuad = c;
         break;
+      }
+      case "T": {
+        const c = mirror(quad);
+        bezier([c], at(n(), n()));
+        lastQuad = c;
+        break;
+      }
       case "A": {
-        n(); n(); n(); n(); n();
-        cur = at(n(), n());
-        pts.push(cur);
+        const [rx, ry, rot, large, sweep] = [n(), n(), n(), n(), n()];
+        const to = at(n(), n());
+        pts.push(...arcPoints(cur, to, rx, ry, rot, large !== 0, sweep !== 0));
+        cur = to;
         break;
       }
       case "Z":
@@ -780,4 +832,42 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
   }
   flush(false);
   return subs;
+}
+
+/**
+ * Points along an SVG elliptical arc from `a` to `b` (the path's A command, SVG 1.1 F.6.5), the
+ * start left out: radii too small to reach are scaled up, as the spec says; zero radii are a line.
+ */
+export function arcPoints(a: [number, number], b: [number, number], rx: number, ry: number, rotDeg: number, large: boolean, sweep: boolean): [number, number][] {
+  rx = Math.abs(rx);
+  ry = Math.abs(ry);
+  if (!rx || !ry || (a[0] === b[0] && a[1] === b[1])) return [b];
+  const phi = (rotDeg * Math.PI) / 180;
+  const [cos, sin] = [Math.cos(phi), Math.sin(phi)];
+  const [dx, dy] = [(a[0] - b[0]) / 2, (a[1] - b[1]) / 2];
+  const x1 = cos * dx + sin * dy;
+  const y1 = -sin * dx + cos * dy;
+  const lam = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
+  if (lam > 1) [rx, ry] = [rx * Math.sqrt(lam), ry * Math.sqrt(lam)];
+  const num = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1;
+  const den = rx * rx * y1 * y1 + ry * ry * x1 * x1;
+  const k = (large === sweep ? -1 : 1) * Math.sqrt(Math.max(0, num / den));
+  const cx1 = (k * rx * y1) / ry;
+  const cy1 = (-k * ry * x1) / rx;
+  const cx = cos * cx1 - sin * cy1 + (a[0] + b[0]) / 2;
+  const cy = sin * cx1 + cos * cy1 + (a[1] + b[1]) / 2;
+  const angle = (ux: number, uy: number) => Math.atan2(uy, ux);
+  const t0 = angle((x1 - cx1) / rx, (y1 - cy1) / ry);
+  let dt = angle((-x1 - cx1) / rx, (-y1 - cy1) / ry) - t0;
+  if (sweep && dt < 0) dt += 2 * Math.PI;
+  if (!sweep && dt > 0) dt -= 2 * Math.PI;
+  const steps = Math.max(4, Math.ceil(Math.abs(dt) / (Math.PI / 32)));
+  const out: [number, number][] = [];
+  for (let s = 1; s < steps; s++) {
+    const t = t0 + (dt * s) / steps;
+    const [ex, ey] = [rx * Math.cos(t), ry * Math.sin(t)];
+    out.push([cos * ex - sin * ey + cx, sin * ex + cos * ey + cy]);
+  }
+  out.push(b);
+  return out;
 }
