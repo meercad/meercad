@@ -16,7 +16,7 @@ interface Stored {
 export const testFiles = { projects: new Map<string, Stored>(), folders: new Set<string>(), saves: 0 };
 
 let n = 0;
-const meta = (p: Stored) => ({ id: p.id, name: p.name, folder: p.folder, modified: p.modified, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
+const meta = (p: Stored) => ({ id: p.id, name: p.name, folder: p.folder, updatedAt: p.modified, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
 
 const desktop = {
   isDesktop: true,
