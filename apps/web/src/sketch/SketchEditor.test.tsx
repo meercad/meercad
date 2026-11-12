@@ -10,7 +10,8 @@ import { THREE, type Viewport } from "@meercad/viewport";
 import { closeSketch, currentDoc, getViewport, newProject, rebuildNow, startSketch, useApp } from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "../components/ViewportView";
-import { setTool, useSketchUi } from "./state";
+import { setSketchSelection, setTool, useSketchUi } from "./state";
+import { applyConstraint, deleteSelection, selectAll, toggleConstruction } from "./actions";
 
 let vp: Viewport;
 const sketch = () => currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as SketchFeature;
@@ -122,5 +123,68 @@ describe("drawing in a sketch", () => {
     await act(async () => setTool("line"));
     await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
     expect(useSketchUi.getState().tool).toBe("select");
+  });
+
+  /** The solved curves of the open sketch after a rebuild. */
+  async function solved() {
+    const out = await rebuildNow();
+    return out.report.sketches.find((x) => x.id === sketch().id)!;
+  }
+
+  it("draws a centred rectangle, a polygon, an arc through three points and a point", async () => {
+    await act(async () => setTool("rect_center"));
+    await clickAt(20, 10);
+    await clickAt(30, 15);
+    expect((await solved()).regions.map((r) => Math.round(r.area))).toEqual([200]);
+    await act(async () => setTool("polygon"));
+    await clickAt(60, 10);
+    await clickAt(66, 10);
+    expect(sketch().entities.filter((e) => e.type === "line").length).toBeGreaterThan(4 + 4);
+    await act(async () => setTool("arc"));
+    await clickAt(0, 30);
+    await clickAt(20, 30);
+    await clickAt(10, 40);
+    const arc = (await solved()).curves.find((c) => c.kind === "arc") as { radius: number; center: [number, number] };
+    expect(arc.radius).toBeCloseTo(10, 0);
+    await act(async () => setTool("point"));
+    await clickAt(-10, -10);
+    expect(points().some((p) => Math.abs(p.x + 10) < 0.6 && Math.abs(p.y + 10) < 0.6)).toBe(true);
+  });
+
+  it("dimensions, constrains and deletes what is selected", async () => {
+    await act(async () => setTool("rect"));
+    await clickAt(0, 0);
+    await typeSizes("40", "20");
+    await act(async () => setTool("select"));
+    const bottom = sketch().entities.find((e) => e.type === "line")!.id;
+    await act(async () => setSketchSelection([{ kind: "curve", id: bottom }]));
+    await act(async () => applyConstraint("length"));
+    const len = sketch().constraints.find((c) => c.type === "length");
+    expect(len).toBeDefined();
+    // The constraint's value is the line's length: 40 or 20.
+    expect([40, 20]).toContain(Number(String((len as { value: unknown }).value).replace(/ ?mm$/, "")));
+    await act(async () => toggleConstruction());
+    expect((sketch().entities.find((e) => e.id === bottom) as { construction?: boolean }).construction).toBe(true);
+    await act(async () => selectAll());
+    expect(useSketchUi.getState().selection.length).toBeGreaterThan(4);
+    await act(async () => deleteSelection());
+    expect(sketch().entities).toEqual([]);
+  });
+
+  it("rounds a corner and offsets a rectangle", async () => {
+    await act(async () => setTool("rect"));
+    await clickAt(0, 0);
+    await typeSizes("40", "20");
+    await act(async () => useSketchUi.setState({ editSize: 5 }));
+    await act(async () => setTool("fillet"));
+    await clickAt(40, 20);
+    const s1 = await solved();
+    // A rounded corner takes (1 − π/4)·r² off the area.
+    expect(s1.regions[0]!.area).toBeCloseTo(800 - (1 - Math.PI / 4) * 25, 3);
+    await act(async () => useSketchUi.setState({ editSize: 2 }));
+    await act(async () => setTool("offset"));
+    await clickAt(20, 0);
+    const s2 = await solved();
+    expect(s2.regions.length).toBeGreaterThanOrEqual(2);
   });
 });
