@@ -109,4 +109,26 @@ describe("clicks in the 3D view", () => {
     await pickMenu("Measure");
     expect(useApp.getState().measure).toMatchObject({ active: true, picks: [{ kind: "face", bodyId: "ex1" }] });
   });
+
+  it("starts tools from a face and an edge, duplicates a part with its size and deletes one", async () => {
+    await clickAt([20, 10, 10], { button: 2 });
+    await pickMenu("Push/pull face");
+    expect(useApp.getState().dialog?.feature).toMatchObject({ op: "extrude" });
+    await act(async () => useApp.setState({ dialog: null }));
+    // An edge of the block: its long top edge at y = 0.
+    await clickAt([20, 0, 10], { button: 2 });
+    await pickMenu("Fillet");
+    expect(useApp.getState().dialog?.feature).toMatchObject({ op: "fillet" });
+    await act(async () => useApp.setState({ dialog: null }));
+    const volumes = () => useApp.getState().output!.report.bodies.map((b) => Math.round(b.volume ?? 0)).sort((a, b) => a - b);
+    expect(volumes()).toEqual([2500, 8000]);
+    await clickAt([65, 5, 25], { button: 2 });
+    await pickMenu("Duplicate");
+    await rebuilt();
+    expect(volumes()).toEqual([2500, 2500, 8000]);
+    await clickAt([20, 10, 10], { button: 2 });
+    await pickMenu("Delete Extrude 1");
+    await rebuilt();
+    expect(volumes()).toEqual([2500, 2500]);
+  });
 });
