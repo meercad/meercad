@@ -150,3 +150,32 @@ describe("imported meshes", () => {
     expect(made.reduce((v, b) => v + b.volume, 0)).toBeCloseTo(1500, 1);
   });
 });
+
+describe("pictures for the assistant", () => {
+  it("renders views, a motion sheet with a GIF and a drawing sheet", async () => {
+    // The pictures come from the app's own 3D view.
+    const { withScreen, renderUi, rebuilt } = await import("../../test/ui");
+    const { ViewportView } = await import("../components/ViewportView");
+    const { createElement } = await import("react");
+    withScreen();
+    renderUi(createElement(ViewportView));
+    await rebuilt();
+    const view = await call<{ png: string }>("render_view", { view: "iso", width: 320, height: 240 });
+    expect(view.png.length).toBeGreaterThan(0);
+    for (const extra of [{ direction: [1, -1, 1] }, { focus: ["ex1"], isolate: true }, { section: { plane: "XZ", offset: 5 } }, { highlight: { parts: ["ex1"], faces: [{ face: "ex1.end_cap" }] } }, { style: "rendered" }, { frame: { min: [0, 0, 0], max: [30, 30, 20] } }])
+      expect((await call<{ png: string }>("render_view", { view: "top", ...extra })).png.length, JSON.stringify(extra)).toBeGreaterThan(0);
+    await expect(call("render_view", { section: { plane: "AB" } })).rejects.toThrow(/section needs plane/);
+    await call("apply_ops", { ops: [{ type: "set_joint", joint: { id: "jz", type: "revolute", a: "ex1", b: "ground", anchor: { axis: { ref: "origin.Z" } }, limits: [0, 90] } }] });
+    const motion = await call<{ png: string; frames: unknown[]; gif?: string }>("render_motion", { joint: "jz", frames: 3, video: { frames: 4, width: 64, height: 64 } });
+    expect(motion.frames).toHaveLength(3);
+    expect(motion.gif?.length).toBeGreaterThan(0);
+    await expect(call("render_motion", {})).rejects.toThrow(/give a joint/);
+    const sheet = await call<{ file: string; scale: string; views: string[] }>("drawing", { views: ["front", "top"], paper: "A4", format: "svg" });
+    expect(sheet.views).toEqual(["front", "top"]);
+    expect(atob(sheet.file)).toContain("<svg");
+    const dxf = await call<{ file: string }>("drawing", { format: "dxf" });
+    expect(atob(dxf.file)).toContain("SECTION");
+    const pdf = await call<{ file: string }>("drawing", {});
+    expect(atob(pdf.file).slice(0, 5)).toBe("%PDF-");
+  }, 120_000);
+});
