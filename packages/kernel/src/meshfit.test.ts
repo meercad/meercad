@@ -82,3 +82,33 @@ describe("fitMesh", () => {
     expect(fit.segments.every((s) => s.vertices.length === 2)).toBe(true);
   });
 });
+
+describe("turning surfaces back into facets", () => {
+  it("demotes the wall of a cylinder to one facet per triangle, keeping the area and the caps", async () => {
+    const { demoteRegions } = await import("./meshfit.js");
+    const fit = fitMesh(lathe([[0, 0], [0, 5], [10, 5], [10, 0]]));
+    const wall = fit.regions.find((r) => r.primitive?.kind === "cylinder")!;
+    const out = demoteRegions(fit, [wall.index]);
+    expect(out.regions.filter((r) => r.primitive?.kind === "plane")).toHaveLength(2);
+    expect(out.regions.filter((r) => r.primitive === null)).toHaveLength(wall.triangles.length);
+    const area = (f: typeof fit) => f.regions.reduce((s, r) => s + r.area, 0);
+    expect(area(out)).toBeCloseTo(area(fit), 9);
+    // Every triangle still belongs to exactly one region.
+    expect([...out.triangleRegion].every((r) => r >= 0)).toBe(true);
+    // Nothing named: the fit stays as it was.
+    expect(demoteRegions(fit, []).regions.map((r) => r.primitive?.kind)).toEqual(fit.regions.map((r) => r.primitive?.kind));
+  });
+
+  it("keeps a triangle of no area, adding nothing to the surface", () => {
+    const box = lathe([[0, 0], [0, 5], [10, 5], [10, 0]], 8);
+    const plain = fitMesh(box);
+    // A sliver on the top cap through its centre: (5, 0), (0, 0) and (−5, 0), all corners already there.
+    const fit = fitMesh([...box, 5, 0, 10, 0, 0, 10, -5, 0, 10]);
+    expect(fit.regions.reduce((s, r) => s + r.triangles.length, 0)).toBe(box.length / 9 + 1);
+    // It belongs to a region like every other triangle, and adds nothing to the area or the volume.
+    expect([...fit.triangleRegion].every((r) => r >= 0)).toBe(true);
+    const area = (f: typeof fit) => f.regions.reduce((s, r) => s + r.area, 0);
+    expect(area(fit)).toBeCloseTo(area(plain), 9);
+    expect(fit.volume).toBeCloseTo(plain.volume, 9);
+  });
+});
