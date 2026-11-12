@@ -2,6 +2,9 @@
  * The app's tests run in happy-dom with the Mac app's file interface (window.meercadDesktop) kept
  * in memory: projects and folders live in `testFiles` for the duration of a test file.
  */
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { vi } from "vitest";
 import type { MeercadDocument } from "@meercad/schema";
 
 interface Stored {
@@ -94,3 +97,46 @@ const desktop = {
 
 // A page that is not cross-origin isolated: the single-threaded kernel, as on a plain-http address.
 (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated = false;
+
+/**
+ * WebGL does not exist in happy-dom: the 3D view gets a renderer that keeps its canvas and settings
+ * and draws nothing. Scene, camera, picking and everything around them are the real ones.
+ */
+// "three" belongs to the viewport package (the app does not depend on it itself): its module as the
+// viewport resolves it is the one to replace.
+const threeModule = join(dirname(createRequire(join(process.cwd(), "packages/viewport/package.json")).resolve("three")), "three.module.js");
+vi.doMock(threeModule, async () => {
+  const three = (await vi.importActual(threeModule)) as typeof import("three");
+  class TestRenderer {
+    constructor() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 600;
+      const target: Record<string | symbol, unknown> = {
+        domElement: canvas,
+        shadowMap: { enabled: false, type: 0, autoUpdate: true, needsUpdate: false },
+        capabilities: { isWebGL2: true, maxTextures: 16, maxTextureSize: 4096, getMaxAnisotropy: () => 1, precision: "highp" },
+        info: { render: { triangles: 0, calls: 0, points: 0, lines: 0, frame: 0 }, memory: { geometries: 0, textures: 0 }, programs: [], autoReset: true, reset() {} },
+        outputColorSpace: three.SRGBColorSpace,
+        toneMapping: three.NoToneMapping,
+        toneMappingExposure: 1,
+        localClippingEnabled: false,
+        clippingPlanes: [],
+        autoClear: true,
+        getPixelRatio: () => 1,
+        getSize: (v: { set(x: number, y: number): unknown }) => v.set(800, 600),
+        getDrawingBufferSize: (v: { set(x: number, y: number): unknown }) => v.set(800, 600),
+        getRenderTarget: () => null,
+        getClearColor: (c: unknown) => c,
+        getClearAlpha: () => 0,
+        getContext: () => ({ getExtension: () => null, getParameter: () => 0 }),
+        readRenderTargetPixels: () => undefined,
+      };
+      return new Proxy(target, {
+        get: (t, k) => (k in t ? t[k] : () => undefined),
+        set: (t, k, v) => ((t[k] = v), true),
+      });
+    }
+  }
+  return { ...three, WebGLRenderer: TestRenderer };
+});
