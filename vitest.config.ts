@@ -71,7 +71,7 @@ export default defineConfig({
      */
     coverage: {
       provider: "v8",
-      include: ["packages/*/src/**", "apps/web/src/**"],
+      include: ["packages/*/src/**/*.{ts,tsx}", "apps/web/src/**/*.{ts,tsx}"],
       exclude: ["**/*.test.{ts,tsx}", "**/*.d.ts", "apps/web/src/main.tsx", "apps/web/src/kernel.worker.ts"],
       thresholds: {
         "packages/ai/src/**": { lines: 100 },
@@ -82,8 +82,8 @@ export default defineConfig({
         "packages/model/src/**": { lines: 97.9 },
         "packages/kernel/src/**": { lines: 97 },
         "packages/mcp/src/**": { lines: 94 },
-        "packages/viewport/src/**": { lines: 59 },
-        "apps/web/src/**": { lines: 54 },
+        "packages/viewport/src/**": { lines: 73 },
+        "apps/web/src/**": { lines: 63 },
       },
     },
     projects: [
