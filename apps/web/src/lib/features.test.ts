@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from "vitest";
 import { emptyDocument, validateDocument, type Feature, type FeatureOp, type MeercadDocument } from "@meercad/schema";
-import { newProject, rebuildNow, apply, currentDoc } from "../store";
 import { draftFeature, draftProblem, FEATURES, featureName, isFastener, partName, sketchesUsed, TOOLBAR } from "./features";
 
 const ops = Object.keys(FEATURES) as FeatureOp[];
@@ -45,19 +44,6 @@ describe("new steps", () => {
     expect(draftProblem({ ...draftFeature("sweep", emptyDocument()), ...filled.sweep } as Feature)).toBe("Pick the path: lines and arcs of a sketch");
     expect(draftProblem({ ...draftFeature("align", emptyDocument()), ...filled.align } as Feature)).toBe("Pick the face to set it onto");
     expect(draftProblem({ id: "g1", op: "gridfinity", kind: "bin", pocket: { body: "" } } as unknown as Feature)).toBe("Pick the part the bin should hold");
-  });
-
-  it("build with their defaults where they need no pick", async () => {
-    await newProject(undefined, "Defaults");
-    const ready = ops.filter((op) => draftProblem(draftFeature(op, emptyDocument())) === null && !["label", "split", "plane", "sketch"].includes(op));
-    for (const op of ready) {
-      const f = draftFeature(op, currentDoc());
-      expect(apply({ type: "add_features", features: [f] }), op).toBe(true);
-    }
-    const out = await rebuildNow();
-    const failed = out.report.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`);
-    expect(failed).toEqual([]);
-    expect(out.report.bodies.length).toBeGreaterThanOrEqual(ready.length);
   });
 
   it("follow the last sketch and the steps already there", () => {

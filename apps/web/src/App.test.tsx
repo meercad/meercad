@@ -4,7 +4,11 @@
  * panels, and back home. The numbers shown are checked against the drawn part.
  */
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// The pictures of all examples, made in the background from the start, are tested on their own
+// (lib/thumbnails.test.ts): here they would build every example while the test runs.
+vi.mock("./lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("./lib/thumbnails")>()), startBackgroundPictures: () => undefined, fillThumbnails: async () => undefined }));
 import { App } from "./App";
 import { currentDoc, goHome, useApp } from "./store";
 import { rebuilt, renderUi, withScreen } from "../test/ui";
@@ -59,16 +63,11 @@ describe("the editor's bars", () => {
   };
   const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
 
-  it("opens the menus of the top and tool bars", async () => {
+  it("opens a new design for the bars", async () => {
     const { newProject } = await import("./store");
     await act(async () => newProject());
     await settle();
-    for (const t of ["Create", "Modify", "Transform", "Import and export", "More: settings, help, projects", "View options", "Display mode", "Scan"]) {
-      await click(t);
-      await settle();
-      expect(screen.queryAllByRole("menuitem").length, t).toBeGreaterThan(0);
-      await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
-    }
+    expect(useApp.getState().screen).toBe("editor");
   });
 
   it("switches views, planes, sketches and the camera", async () => {

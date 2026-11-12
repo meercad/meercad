@@ -3,7 +3,11 @@
  * sketch, two parts and a joint, each entry is picked once, and what it opens is closed again.
  */
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// The pictures of all examples, made in the background from the start, are tested on their own
+// (lib/thumbnails.test.ts): here they would build every example while the test runs.
+vi.mock("./lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("./lib/thumbnails")>()), startBackgroundPictures: () => undefined, fillThumbnails: async () => undefined }));
 import type { Feature, SketchEntity } from "@meercad/schema";
 import { App } from "./App";
 import { apply, cancelDialog, closeSketch, newProject, useApp } from "./store";

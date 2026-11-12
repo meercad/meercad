@@ -56,6 +56,9 @@ export const SLOW = [
   "packages/model/src/texture/texture.test.ts",
 ];
 
+/** App tests that take long (every menu entry, every tool built). They run in `pnpm test`, not on every commit. */
+export const WEB_SLOW = ["apps/web/src/menus.test.tsx", "apps/web/src/components/FeatureDialog.build.test.tsx"];
+
 export default defineConfig({
   test: {
     // Kernel tests run about three times slower on the CI runner than on a Mac.
@@ -70,7 +73,13 @@ export default defineConfig({
         plugins: [testKernelWorker()],
         // TSX of the app (React 19, automatic runtime).
         oxc: { jsx: { runtime: "automatic" } },
-        test: { name: "web", environment: "happy-dom", include: ["apps/web/src/**/*.test.{ts,tsx}"], setupFiles: ["apps/web/test/setup.ts"] },
+        test: { name: "web", environment: "happy-dom", include: ["apps/web/src/**/*.test.{ts,tsx}"], exclude: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"] },
+      },
+      {
+        extends: true,
+        plugins: [testKernelWorker()],
+        oxc: { jsx: { runtime: "automatic" } },
+        test: { name: "web-slow", environment: "happy-dom", include: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"] },
       },
       {
         extends: true,

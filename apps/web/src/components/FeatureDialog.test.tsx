@@ -71,24 +71,6 @@ describe("the step dialog", () => {
     expect(useApp.getState().output!.report.bodies[0]!.volume).toBeCloseTo(20000, 6);
   });
 
-  it("adds every tool that needs no pick and builds it", async () => {
-    renderUi(<FeatureDialog />);
-    const ready = TOOLBAR.filter((op) => op !== "sketch" && op !== "plane").filter((op) => {
-      startFeature(op);
-      const ok = draftProblem(useApp.getState().dialog!.feature) === null;
-      cancelDialog();
-      return ok;
-    });
-    expect(ready.length).toBeGreaterThan(8);
-    for (const op of ready) {
-      await act(async () => startFeature(op));
-      await act(async () => void expect(commitDialog(), op).toBe(true));
-    }
-    await rebuilt();
-    const failed = useApp.getState().output!.report.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`);
-    expect(failed).toEqual([]);
-  });
-
   it("closes with Escape", async () => {
     renderUi(<FeatureDialog />);
     await act(async () => startFeature("gear"));
