@@ -1,58 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Arena, convertMesh, MAX_FACETS } from "@meercad/kernel";
 import { getOcct } from "./helpers.js";
+import { arc, insideOut, prism, turned, type P } from "./meshes.js";
 
 /**
  * `convertMesh` on meshes of turned parts with known volumes: spheres, a capsule, two spheres
  * grown together, a double cone and a disc with a groove. Each comes back as a solid of the
  * recognised surfaces, its volume within 1 % of the mesh and close to the exact formula.
  */
-
-type P = [number, number];
-
-/** A closed surface of revolution about Z: the profile runs from a point on the axis (r = 0) to another. */
-function turned(profile: P[], around = 64): Float64Array {
-  const out: number[] = [];
-  const at = (p: P, k: number): [number, number, number] => {
-    const a = (2 * Math.PI * k) / around;
-    return [p[0] * Math.cos(a), p[0] * Math.sin(a), p[1]];
-  };
-  for (let i = 0; i + 1 < profile.length; i++) {
-    const [p, q] = [profile[i]!, profile[i + 1]!];
-    for (let k = 0; k < around; k++) {
-      const [a, b, c, d] = [at(p, k), at(p, k + 1), at(q, k + 1), at(q, k)];
-      // The profile runs bottom to top on the outside: (a, b, c) faces outward.
-      if (p[0] > 0) out.push(...a, ...b, ...c);
-      if (q[0] > 0) out.push(...a, ...c, ...d);
-    }
-  }
-  return Float64Array.from(out);
-}
-
-/** Profile points along an arc about (0, cz), angles from -π/2 (bottom) to π/2 (top). */
-function arc(cz: number, r: number, from: number, to: number, n: number): P[] {
-  return Array.from({ length: n + 1 }, (_, i) => {
-    const t = from + ((to - from) * i) / n;
-    return [Math.abs(r * Math.cos(t)) < 1e-12 ? 0 : r * Math.cos(t), cz + r * Math.sin(t)] as P;
-  });
-}
-
-/** A convex outline (counter-clockwise, in XY) extruded from z = 0 to `h`, closed by two fans. */
-function prism(outline: P[], h: number): Float64Array {
-  const out: number[] = [];
-  const n = outline.length;
-  for (let i = 1; i + 1 < n; i++) {
-    const [a, b, c] = [outline[0]!, outline[i]!, outline[i + 1]!];
-    out.push(a[0], a[1], h, b[0], b[1], h, c[0], c[1], h);
-    out.push(a[0], a[1], 0, c[0], c[1], 0, b[0], b[1], 0);
-  }
-  for (let i = 0; i < n; i++) {
-    const [a, b] = [outline[i]!, outline[(i + 1) % n]!];
-    out.push(a[0], a[1], 0, b[0], b[1], 0, b[0], b[1], h);
-    out.push(a[0], a[1], 0, b[0], b[1], h, a[0], a[1], h);
-  }
-  return Float64Array.from(out);
-}
 
 async function convert(mesh: Float64Array, tolerance?: number) {
   const oc = await getOcct();
@@ -135,6 +90,12 @@ describe("mesh_convert of turned shapes", () => {
     expect(r.counts).toEqual({ plane: 4, cylinder: 2, cone: 0, sphere: 0, facet: 0 });
     expect(new Set(r.regions).size).toBe(6);
     expect(r.volume / ((40 * 12 + Math.PI * 36) * 4)).toBeCloseTo(1, 2);
+  });
+
+  it("reads a mesh wound inside out the same", async () => {
+    const r = await convert(insideOut(turned([...arc(0, 5, -Math.PI / 2, 0, 16), ...arc(20, 5, 0, Math.PI / 2, 16)])));
+    expect(r.counts).toEqual({ plane: 0, cylinder: 1, cone: 0, sphere: 2, facet: 0 });
+    expect(r.volume / ((4 / 3) * Math.PI * 125 + Math.PI * 25 * 20)).toBeCloseTo(1, 2);
   });
 
   it("refuses a part that is mostly freeform", async () => {
