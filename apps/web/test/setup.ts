@@ -78,7 +78,11 @@ const desktop = {
       testFiles.folders.add(f);
       return f;
     },
-    delete: async (folder: string) => void testFiles.folders.delete(folder),
+    // Like the Mac app: the folder goes with everything in it.
+    delete: async (folder: string) => {
+      for (const f of [...testFiles.folders]) if (f === folder || f.startsWith(`${folder}/`)) testFiles.folders.delete(f);
+      for (const [id, p] of testFiles.projects) if (p.folder === folder || p.folder?.startsWith(`${folder}/`)) testFiles.projects.delete(id);
+    },
   },
   storage: {
     status: async () => ({ dir: "/test", defaultDir: "/test", chosen: false, iCloudDir: "", iCloudAvailable: false }),
