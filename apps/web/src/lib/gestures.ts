@@ -164,9 +164,10 @@ export function installLongPressMenus(): () => void {
  * after a finger tap, when the page changes right then (in a sketch: the rebuild after a line, the
  * value chips moving), and only a second tap clicks; "Done" then looked dead. A finger or pen
  * lift on the button runs it if no click follows within a moment; a late click is not run twice.
+ * A long press is no tap: it opens the element's menu (installLongPressMenus).
  */
 export function sureTap(run: () => void): { onClick: () => void; onPointerDown: (e: { pointerType: string; clientX: number; clientY: number }) => void; onPointerUp: (e: { pointerType: string; clientX: number; clientY: number }) => void; onPointerCancel: () => void } {
-  let down: { x: number; y: number } | null = null;
+  let down: { x: number; y: number; t: number } | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   // When the lift ran it, the click that may still come late must not run it again.
   let liftRanAt = -Infinity;
@@ -176,12 +177,12 @@ export function sureTap(run: () => void): { onClick: () => void; onPointerDown: 
   };
   return {
     onPointerDown: (e) => {
-      down = e.pointerType === "mouse" ? null : { x: e.clientX, y: e.clientY };
+      down = e.pointerType === "mouse" ? null : { x: e.clientX, y: e.clientY, t: performance.now() };
     },
     onPointerUp: (e) => {
       const d = down;
       down = null;
-      if (!d || e.pointerType === "mouse" || Math.hypot(e.clientX - d.x, e.clientY - d.y) > SLOP) return;
+      if (!d || e.pointerType === "mouse" || Math.hypot(e.clientX - d.x, e.clientY - d.y) > SLOP || performance.now() - d.t >= LONG_PRESS_MS) return;
       clearTimeout(timer);
       timer = setTimeout(() => {
         liftRanAt = performance.now();
