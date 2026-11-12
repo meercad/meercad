@@ -1,6 +1,7 @@
 /** File import/export and share links. */
 import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotCollision, type RobotLink, type RobotPart, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
+import { SupersededError } from "@meercad/kernel/client";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
@@ -364,7 +365,9 @@ export async function variantFiles(format: MeshFormat | "step", progress?: (k: n
   try {
     for (const [k, v] of variants.entries()) {
       progress?.(k, variants.length);
-      const out = await kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
+      // A rebuild the app had already asked for (the edit just before) may overtake this one: build it again.
+      const build = () => kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
+      const out = await build().catch((e: unknown) => (e instanceof SupersededError ? build() : Promise.reject(e)));
       const failed = out.report.features.find((f) => f.status === "error");
       if (failed) throw new Error(t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }));
       const hidden = useApp.getState().hidden;
