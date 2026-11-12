@@ -108,6 +108,9 @@ describe("more steps that cannot be built say why", () => {
     ["a sketch on a curved face", [...shaft, sketch("sk8", { face: round }, circle("c", 0, 0, 1))], /the selected face is not planar/],
     ["a sketch on several faces at once", [sketch("sk8", { face: { select: "faces", of: "ex1" } }, circle("c", 0, 0, 1))], /pick exactly one/],
     ["a revolve about several edges", [sketch("sk9", { ref: "origin.XZ" }, rect("r", 50, 0, 5, 5)), { id: "r1", op: "revolve", profile: { sketch: "sk9" }, axis: { edge: { select: "edges", of: "ex1" } }, angle: 90, mode: "new_body" }], /axis edge selector must match exactly one edge/],
+    ["an extrude of a sketch with no closed shape", [{ ...line, id: "sk8" } as Feature, { id: "e2", op: "extrude", profile: { sketch: "sk8" }, extent: "blind", distance: 5, mode: "new_body" }], /has no closed region/],
+    ["text with nothing to write", [{ id: "tx1", op: "text", plane: { face: { face: "ex1.end_cap" } }, text: "   ", size: 5, depth: 1, mode: "join" }], /the text is empty/],
+    ["a sketch on a face that no selector finds", [sketch("sk8", { face: { select: "faces", of: "ex1", where: { tag: "ex1.nope" } } }, circle("c", 0, 0, 1))], /no face matches the selector/],
     ["bending with a tolerance of 0", [{ id: "bd1", op: "bend", mode: "bend", bodies: ["ex1"], angle: 90, axis: { ref: "origin.Y" }, tolerance: 0 }], /tolerance must be greater than zero/],
   ] as [string, Feature[], RegExp][])("%s", async (_name, extra, msg) => {
     expect(await fails(extra)).toMatch(msg);
