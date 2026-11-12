@@ -44,13 +44,19 @@ export interface App {
   stop(): Promise<void>;
 }
 
-export async function startApp({ keep = false } = {}): Promise<App> {
-  const dir = mkdtempSync(join(tmpdir(), "meercad-e2e-"));
+/**
+ * `dir`: start again on the folder of an earlier run (stopped with `keep`), as after quitting the app.
+ * `shared`: the flags to start with instead of terms accepted and tour seen (tests/e2e/terms.e2e.ts).
+ * `inspect`: a port for the main process's inspector, to send what the menu bar sends.
+ */
+export async function startApp({ keep = false, dir = "", shared, inspect }: { keep?: boolean; dir?: string; shared?: Record<string, unknown>; inspect?: number } = {}): Promise<App> {
+  const again = !!dir;
+  dir ||= mkdtempSync(join(tmpdir(), "meercad-e2e-"));
   const webPort = await freePort();
   const cdpPort = await freePort();
   // A Mac where the terms of use are accepted and the tour was seen (the flags every meerCAD on the Mac shares, here in the temp folder).
   mkdirSync(join(dir, "shared"), { recursive: true });
-  writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true, [TERMS_KEY]: acceptRecord("e2e", "en") }));
+  if (!again || shared) writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify(shared ?? { tourDone: true, [TERMS_KEY]: acceptRecord("e2e", "en") }));
   const r = spawnSync("node", ["build.mjs"], { cwd: join(root, "apps/desktop"), stdio: "inherit" });
   if (r.status !== 0) throw new Error("desktop build failed");
 
@@ -62,7 +68,7 @@ export async function startApp({ keep = false } = {}): Promise<App> {
     join(root, "apps/desktop/node_modules/.bin/electron"),
     [".", "--dev", `--user-data-dir=${join(dir, "userdata")}`, `--remote-debugging-port=${cdpPort}`, "--lang=en-US",
       // The window may sit behind the user's: it must keep animating and timing as if in front.
-      "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows"],
+      "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows", ...(inspect ? [`--inspect=127.0.0.1:${inspect}`] : [])],
     {
       cwd: join(root, "apps/desktop"),
       env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared") },

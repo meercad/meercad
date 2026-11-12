@@ -9,5 +9,8 @@
     "@meercad/schema": "workspace:*",
     "@meercad/sketch": "workspace:*",
     "fflate": "^0.8.3"
+  },
+  "devDependencies": {
+    "happy-dom": "^21.0.4"
   }
 }

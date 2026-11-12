@@ -4,7 +4,7 @@
  * localStorage. Only on the device; nothing is sent anywhere.
  */
 import { desktop } from "./persistence";
-import { needsAcceptance, parseRecord, TERMS_KEY, type TermsRecord } from "./terms";
+import { needsAcceptance, parseRecord, TERMS_KEY, TERMS_MCP_ERROR, type TermsRecord } from "./terms";
 
 const LOCAL_KEY = `meercad.${TERMS_KEY}`;
 
@@ -26,6 +26,11 @@ export function termsRecord(): TermsRecord | null {
 }
 
 export const termsAccepted = (): boolean => termsRecord() !== null;
+
+/** Every assistant request (mcpBridge) first: refused with TERMS_MCP_ERROR until the terms are accepted. */
+export function requireTerms(): void {
+  if (!termsAccepted()) throw new Error(TERMS_MCP_ERROR);
+}
 
 /** Keeps the record and tells the other meerCAD copies on this Mac. */
 export function saveTerms(record: TermsRecord): void {

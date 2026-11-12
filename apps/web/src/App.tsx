@@ -140,6 +140,8 @@ export function App() {
     document.documentElement.classList.add("is-desktop");
     if (assistantWindow) document.documentElement.classList.add("in-assistant-tab");
     const offMenu = desktop.on("menu", (cmd) => {
+      // Before the terms of use are accepted, the menu bar does nothing behind them.
+      if (!termsAccepted()) return;
       // While an assistant works on the model, the menu commands wait too.
       if (useApp.getState().aiLock && cmd !== "shortcuts") return;
       if (cmd === "new") void newProject();
@@ -315,6 +317,8 @@ export function App() {
     const onDrop = (e: DragEvent) => {
       if (!e.dataTransfer?.files.length) return;
       e.preventDefault();
+      // Nothing is imported behind the terms of use.
+      if (!termsAccepted()) return;
       void importFile(e.dataTransfer.files[0]);
     };
     const onOver = (e: DragEvent) => e.dataTransfer?.types.includes("Files") && e.preventDefault();
