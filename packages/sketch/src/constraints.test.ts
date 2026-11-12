@@ -203,3 +203,86 @@ describe("sketch constraints give the exact geometry", () => {
     expect(s.diagnostics.conflicting.length).toBeGreaterThan(0);
   });
 });
+
+describe("constraints between circles and arcs, and with projected model edges", () => {
+  const circle = (id: string, c: string, x: number, y: number, r: number): SketchEntity[] => [pt(c, x, y), { id, type: "circle", center: c, radius: r }];
+  const arc = (id: string, c: string, s: string, e: string, cx: number, cy: number, r: number): SketchEntity[] => [pt(c, cx, cy), pt(s, cx + r, cy), pt(e, cx, cy + r), { id, type: "arc", center: c, start: s, end: e }];
+
+  it("tangent circles touch: centres one sum of radii apart", () => {
+    const s = solve([...circle("k1", "c1", 0, 0, 5), ...circle("k2", "c2", 12, 3, 3)], [
+      { id: "f", type: "fix", point: "c1" },
+      { id: "r1", type: "radius", curve: "k1", value: 5 },
+      { id: "r2", type: "radius", curve: "k2", value: 3 },
+      { id: "t", type: "tangent", a: "k1", b: "k2" },
+    ]);
+    const d = dist(s.p("c1"), s.p("c2"));
+    expect(Math.min(Math.abs(d - 8), Math.abs(d - 2))).toBeLessThan(1e-8);
+  });
+
+  it("tangent arcs, a circle tangent to an arc, and equal radii between circles and arcs", () => {
+    const s = solve([...arc("a1", "c1", "s1", "e1", 0, 0, 5), ...arc("a2", "c2", "s2", "e2", 20, 0, 4), ...circle("k", "c3", 0, 20, 2)], [
+      { id: "f1", type: "fix", point: "c1" },
+      { id: "r1", type: "radius", curve: "a1", value: 5 },
+      { id: "eq1", type: "equal", a: "a1", b: "a2" },
+      { id: "t1", type: "tangent", a: "a1", b: "a2" },
+      { id: "eq2", type: "equal", a: "k", b: "a1" },
+      { id: "t2", type: "tangent", a: "k", b: "a1" },
+    ]);
+    const r = (id: string) => (s.curve(id) as { radius: number }).radius;
+    expect(r("a2")).toBeCloseTo(5, 8);
+    expect(r("k")).toBeCloseTo(5, 8);
+    const d12 = dist(s.p("c1"), s.p("c2"));
+    expect(Math.min(Math.abs(d12 - 10), Math.abs(d12))).toBeLessThan(1e-7);
+    const d13 = dist(s.p("c1"), s.p("c3"));
+    expect(Math.min(Math.abs(d13 - 10), Math.abs(d13))).toBeLessThan(1e-7);
+  });
+
+  it("a point on an arc and on a circle", () => {
+    const s = solve([...arc("a", "c1", "s1", "e1", 0, 0, 5), ...circle("k", "c2", 20, 0, 3), pt("q", 3, 3), pt("r", 19, 4)], [
+      { id: "f1", type: "fix", point: "c1" },
+      { id: "f2", type: "fix", point: "c2" },
+      { id: "ra", type: "radius", curve: "a", value: 5 },
+      { id: "rk", type: "radius", curve: "k", value: 3 },
+      { id: "o1", type: "point_on", point: "q", curve: "a" },
+      { id: "o2", type: "point_on", point: "r", curve: "k" },
+    ]);
+    expect(dist(s.p("q"), s.p("c1"))).toBeCloseTo(5, 8);
+    expect(dist(s.p("r"), s.p("c2"))).toBeCloseTo(3, 8);
+  });
+
+  it("projected model edges stay where they are and can be used: line, circle and arc", () => {
+    const external: SolvedCurve[] = [
+      { id: "x1", kind: "line", a: [0, 0], b: [50, 0], p1: "", p2: "", construction: false, external: true },
+      { id: "x2", kind: "circle", center: [30, 30], radius: 6, c: "", construction: false, external: true },
+      { id: "x3", kind: "arc", center: [-20, 0], radius: 4, a0: 0, a1: Math.PI / 2, c: "", start: "", end: "", construction: false, external: true },
+    ];
+    const s = solver.solve(
+      {
+        entities: [pt("a", 3, 7), pt("b", 20, 20), pt("c", -15, 3)],
+        constraints: [
+          { id: "1", type: "point_on", point: "a", curve: "x1" },
+          { id: "2", type: "coincident", a: "b", b: "x2.center" },
+          { id: "3", type: "point_on", point: "c", curve: "x3" },
+        ],
+        external,
+      },
+    );
+    expect(s.diagnostics.ok).toBe(true);
+    expect((s.points.get("a") as V2)[1]).toBeCloseTo(0, 8);
+    expect(s.points.get("b")).toEqual([30, 30].map((v) => expect.closeTo(v, 8)));
+    expect(dist(s.points.get("c") as V2, [-20, 0])).toBeCloseTo(4, 8);
+  });
+
+  it.each([
+    ["tangent between two lines", { type: "tangent", a: "l1", b: "l2" }, /needs a circle or arc/],
+    ["equal between a line and a circle", { type: "equal", a: "l1", b: "k" }, /cannot mix lines and circles/],
+    ["a radius on a line", { type: "radius", curve: "l1", value: 3 }, /needs a circle or arc/],
+    ["a length on a circle", { type: "length", line: "k", value: 3 }, /needs a line/],
+    ["an angle with a circle", { type: "angle", a: "l1", b: "k", value: 30 }, /needs two lines/],
+    ["an arc angle on a line", { type: "arc_angle", curve: "l1", value: 30 }, /needs an arc/],
+    ["a constraint on a curve that does not exist", { type: "horizontal", line: "zz" }, /unknown curve "zz"/],
+  ])("explains %s", (_n, c, msg) => {
+    const entities = [pt("a", 0, 0), pt("b", 10, 0), pt("c", 10, 10), ln("l1", "a", "b"), ln("l2", "b", "c"), ...circle("k", "kc", 30, 0, 3)];
+    expect(() => solver.solve({ entities, constraints: [{ id: "x", ...c } as ResolvedConstraint] })).toThrow(msg);
+  });
+});
