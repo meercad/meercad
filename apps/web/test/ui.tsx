@@ -50,3 +50,14 @@ export async function answer(text?: string | null): Promise<void> {
 export async function contextMenu(el: Element): Promise<void> {
   await act(async () => void fireEvent.contextMenu(el, { clientX: 10, clientY: 10 }));
 }
+
+/**
+ * Gives every element a layout of `width` × `height` px at the top left (happy-dom lays nothing
+ * out): the 3D view then has a screen to project onto and pick from.
+ */
+export function withScreen(width = 800, height = 600): void {
+  const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+  Object.defineProperty(proto, "clientWidth", { configurable: true, get: () => width });
+  Object.defineProperty(proto, "clientHeight", { configurable: true, get: () => height });
+  proto["getBoundingClientRect"] = () => ({ left: 0, top: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => ({}) });
+}
