@@ -8,6 +8,7 @@ and E2E needs the app. So the tests are split into levels, and each moment runs 
 | Level | What it proves | Command | Time (Mac / CI) |
 | --- | --- | --- | --- |
 | Unit | Packages and app logic without the kernel: schema, ops, expressions, solver, readers and writers | part of `pnpm test:quick` | seconds |
+| App | The app's store and logic (`apps/web/src/**/*.test.ts`, vitest project `web`) in happy-dom, with the real kernel worker in the same process and projects kept in memory: moving parts, an assistant's requests, measuring and exporting by number | part of `pnpm test:quick` | seconds |
 | Integration | The kernel end to end through `KernelSession.rebuild`, the path the app uses: volumes, sizes, topology | `pnpm test:quick` (fast files) and `pnpm test` (all) | ≈ 1 min quick, ≈ 8 min all (4-core runner) |
 | Test models | Real designs from simple to complex rebuild as expected, also after parameter changes | `pnpm test tests/acceptance/models.test.ts` | ≈ 1 min |
 | Performance | Start, open and change times of every test model, mesh sizes, memory, export and import | `pnpm test:perf` | ≈ 4 min (4-core runner) |
@@ -30,10 +31,21 @@ Integration files that take long (over about 10 s on a 4-core runner) are listed
 suite.
 
 **Everything covered.** `tests/coverage.test.ts` fails when a feature op, a document op or an MCP
-tool has no test. MCP tools that run inside the app and are only checked by the E2E run are listed
-there by name (`MCP_E2E_ONLY`), so a new tool is a decision, not an oversight. Line coverage (Nov
-2026): io, kernel, model, schema, sketch over 90 %; the app (`apps/web`) and the viewport under 5 %,
-because they need a browser, which is the E2E run's job.
+tool has no test. MCP tools that are only checked by the E2E run are listed there by name
+(`MCP_E2E_ONLY`, empty since every tool is called in `packages/mcp/src/server.inprocess.test.ts`),
+so a new tool is a decision, not an oversight.
+
+**The app in tests.** The vitest project `web` runs in happy-dom. `vitest.config.ts` swaps the
+app's `./kernel.worker.ts?worker` for `apps/web/test/kernelWorker.ts`, the real kernel worker in the
+same process (messages copied both ways like a Worker's), so `rebuildNow()` builds designs as the
+app does. `apps/web/test/setup.ts` gives the app the Mac app's file interface with projects and
+folders in memory (`testFiles`). `testCall` (lib/mcpBridge) runs an assistant's request without a
+server.
+
+**The MCP server in tests.** `server.ts` starts its stdio transport only when
+`MEERCAD_MCP_INPROCESS` is not set and exports `server` and `bridge`: `server.inprocess.test.ts`
+connects an MCP client over an in-memory transport and a stand-in app over the bridge, so the
+coverage run counts the server. `server.test.ts` still starts the built server over stdio.
 
 ## Coverage
 
