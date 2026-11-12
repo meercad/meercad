@@ -6,11 +6,12 @@
  */
 import { act, cleanup } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { currentDoc, getViewport, newProject, undo, useApp } from "../store";
+import type { Feature } from "@meercad/schema";
+import { apply, closeSketch, currentDoc, getViewport, newProject, undo, useApp } from "../store";
 import { answer, rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "../components/ViewportView";
 import { glb } from "../../../../tests/glbs";
-import { addTerrain, buildTerrain, hasTerrain, sceneryOf } from "./terrain";
+import { addTerrain, buildTerrain, hasTerrain, placeAt, previewPlace, sceneryOf, setOnTerrain, setPlaceOffset, sketchOnTerrain, startPlacing, useTerrainPlace } from "./terrain";
 import { testCall } from "./mcpBridge";
 import {
   addMarkPoint,
@@ -156,6 +157,52 @@ describe("terrains", () => {
     const h = (await testCall("terrain_height", { points: [[10_000, 10_000], [30_000, 10_000], [60_000, 10_000]] })) as { extent: { min: number[]; max: number[] }; points: { z: number | null }[] };
     expect(h.points.map((p) => p.z)).toEqual([0, 2_500, null]);
     expect(h.extent).toEqual({ min: [0, 0, 0], max: [50_000, 25_000, 2_500] });
+  });
+
+  it("sets parts onto the ground: the lowest point on the highest ground under them", async () => {
+    // A 1 × 1 × 0.5 m block floating 100 mm above the flat square, and one across the step to the raised one.
+    const block = (id: string, x: number): Feature[] => [
+      { id: `s${id}`, op: "sketch", plane: { ref: "origin.XY" }, entities: [
+        { id: "a", type: "point", x, y: 1_000 }, { id: "b", type: "point", x: x + 1_000, y: 1_000 }, { id: "c", type: "point", x: x + 1_000, y: 2_000 }, { id: "d", type: "point", x, y: 2_000 },
+        { id: "l1", type: "line", p1: "a", p2: "b" }, { id: "l2", type: "line", p1: "b", p2: "c" }, { id: "l3", type: "line", p1: "c", p2: "d" }, { id: "l4", type: "line", p1: "d", p2: "a" },
+      ], constraints: [] },
+      { id: `pl${id}`, op: "plane", base: { ref: "origin.XY" }, offset: 100 },
+      { id, op: "extrude", profile: { sketch: `s${id}` }, extent: "blind", distance: 500, mode: "new_body" },
+    ];
+    expect(apply({ type: "add_features", features: [...block("b1", 1_000), ...block("b2", 24_500)] })).toBe(true);
+    // Lifted 100 mm by a move first, so it floats.
+    apply({ type: "add_features", features: [{ id: "up", op: "transform", bodies: ["b1", "b2"], translate: [0, 0, 100] } as Feature] });
+    await rebuilt();
+    const bbox = (id: string) => useApp.getState().output!.report.bodies.find((b) => b.id === id)!.bbox;
+    expect(bbox("b1").min[2]).toBeCloseTo(100, 6);
+    await act(async () => setOnTerrain("b1"));
+    await rebuilt();
+    expect(bbox("b1").min[2]).toBeCloseTo(0, 6);
+    await act(async () => setOnTerrain("b1"));
+    expect(useApp.getState().toasts.at(-1)!.text).toMatch(/already stands on the terrain/);
+    // Across the step: it rests on the raised ground (2.5 m after the scale), not sunk into it.
+    await act(async () => setOnTerrain("b2"));
+    await rebuilt();
+    expect(bbox("b2").min[2]).toBeCloseTo(2_500, 6);
+    // Placed by a click at (10, 10) m, 200 mm up (Arrow up twice, ten times 10 mm each).
+    startPlacing("b1");
+    previewPlace([10_000, 10_000, 0]);
+    expect(useTerrainPlace.getState().move).toEqual([8_500, 8_500, 0]);
+    for (let i = 0; i < 2; i++) window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", shiftKey: true }));
+    expect(useTerrainPlace.getState().offset).toBe(200);
+    await act(async () => placeAt([10_000, 10_000, 0]));
+    await rebuilt();
+    const b = bbox("b1");
+    expect([(b.min[0]! + b.max[0]!) / 2, (b.min[1]! + b.max[1]!) / 2, b.min[2]]).toEqual([expect.closeTo(10_000, 6), expect.closeTo(10_000, 6), expect.closeTo(200, 6)]);
+    setPlaceOffset(0);
+    // No ground far away.
+    await act(async () => placeAt([900_000, 0, 0]));
+    expect(useTerrainPlace.getState().body).toBeNull();
+    // A sketch at the ground's height there.
+    await act(async () => sketchOnTerrain([3_000, 3_000, 1_234.56]));
+    expect(currentDoc().features.at(-2)).toMatchObject({ op: "plane", offset: 1_234.6, name: "Ground at 1.23 m" });
+    expect(currentDoc().features.at(-1)).toMatchObject({ op: "sketch", plane: { ref: currentDoc().features.at(-2)!.id } });
+    await act(async () => closeSketch());
   });
 
   it("builds a model from photos through the Mac app", async () => {
