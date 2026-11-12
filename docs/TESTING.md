@@ -53,8 +53,8 @@ coverage run counts the server. `server.test.ts` still starts the built server o
 integration-slow) and fails when a package's line coverage drops below its threshold in
 `vitest.config.ts`; CI runs it as the job "coverage". The goal is 100 % everywhere. Each threshold
 is where its package stands, so coverage can only go up: raise it when tests are added, never lower
-it. Nov 2026: ai and naming 100 %, schema 99.4 %, io 99.0 %, sketch 99.5 %, model 98.4 %, kernel
-97.2 %, MCP 96.7 %, viewport 87.8 %, the app 72.7 % (≈ 1500 tests, 12 min on a Mac mini). `E2E_COVERAGE=1 pnpm test:e2e` records which of the app's
+it. Nov 2026: ai and naming 100 %, schema 100 %, io 99.0 %, sketch 99.6 %, model 98.4 %, kernel
+97.7 %, MCP 96.7 %, viewport 87.8 %, the app 78.4 % (≈ 1580 tests, 12 min on a Mac mini). `E2E_COVERAGE=1 pnpm test:e2e` records which of the app's
 code a Mac E2E run executed; `node scripts/e2e-coverage.mjs [--files]` prints it per folder and file.
 
 Known answers live in `tests/acceptance/reference-values.test.ts` (sizes, booleans, fillets and

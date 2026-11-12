@@ -76,14 +76,14 @@ export default defineConfig({
       thresholds: {
         "packages/ai/src/**": { lines: 100 },
         "packages/naming/src/**": { lines: 100 },
-        "packages/schema/src/**": { lines: 99 },
+        "packages/schema/src/**": { lines: 100 },
         "packages/io/src/**": { lines: 98.9 },
         "packages/sketch/src/**": { lines: 99.4 },
         "packages/model/src/**": { lines: 98.3 },
-        "packages/kernel/src/**": { lines: 97 },
+        "packages/kernel/src/**": { lines: 97.5 },
         "packages/mcp/src/**": { lines: 96.5 },
         "packages/viewport/src/**": { lines: 87.5 },
-        "apps/web/src/**": { lines: 72.5 },
+        "apps/web/src/**": { lines: 78 },
       },
     },
     projects: [
