@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Lock, LockOpen, Pencil, Plus, Trash } from "lucide-react";
-import { useEffect, useState, type DragEvent, type MouseEvent } from "react";
+import { useEffect, useState, type DragEvent, type MouseEvent, type PointerEvent } from "react";
 import { EMPTY_SELECTION, clickSelect, keepShown, toggleAll } from "../lib/multiSelect";
 import { askConfirm, askText } from "./Ask";
 import { showMenu, type MenuEntry } from "./Menu";
@@ -17,8 +17,31 @@ import { TabStrip } from "./Tabs";
 import { exampleThumbnail, fillThumbnails } from "../lib/thumbnails";
 import { t, tn } from "../lib/i18n";
 import { setPrefs, usePrefs } from "../lib/keymap";
+import { sureTap } from "../lib/gestures";
+import { openGuard } from "../lib/opening";
 
 const DRAG_TYPE = "application/x-meercad-project";
+
+/** One per card, so a press and its lift reach the same one across re-renders. */
+const cardTaps = new Map<string, ReturnType<typeof sureTap>>();
+/**
+ * A project card opens its project on the first tap (see sureTap): on the iPhone the overview
+ * changes under the finger (pictures being made) and iOS then sometimes swallows the click. The
+ * buttons on the card do their own thing; opening twice is harmless (openProject waits for the
+ * opening running).
+ */
+function cardTap(id: string) {
+  let tap = cardTaps.get(id);
+  if (!tap) cardTaps.set(id, (tap = sureTap(() => void openProject(id))));
+  const tapper = tap;
+  const onCard = (e: PointerEvent) => !(e.target instanceof Element && e.target.closest(".card button"));
+  return {
+    onClick: tapper.onClick,
+    onPointerDown: (e: PointerEvent) => (onCard(e) ? tapper.onPointerDown(e) : tapper.onPointerCancel()),
+    onPointerUp: (e: PointerEvent) => onCard(e) && tapper.onPointerUp(e),
+    onPointerCancel: tapper.onPointerCancel,
+  };
+}
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
 const parentOf = (f: string) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
 /** `text` is a translated message with a {msg} placeholder for the error. */
@@ -405,7 +428,8 @@ export function Home() {
               }}
               // Shift-click would select the text on the page as well.
               onMouseDown={(e) => e.shiftKey && e.preventDefault()}
-              onClick={(e) => (selecting || e.metaKey || e.ctrlKey || e.shiftKey ? pickCard(e, p.id) : void openProject(p.id))}
+              {...(selecting ? {} : cardTap(p.id))}
+              onClick={(e) => (selecting || e.metaKey || e.ctrlKey || e.shiftKey ? pickCard(e, p.id) : cardTap(p.id).onClick())}
               onKeyDown={(e) => {
                 if (selecting && (e.key === " " || e.key === "Enter")) return (e.preventDefault(), pickCard(null, p.id));
                 if (e.key === "Enter") void openProject(p.id);
@@ -526,10 +550,17 @@ export function Home() {
   );
 }
 
+/** Examples being opened: tapping one again meanwhile makes no second copy. */
+const openingExamples = openGuard();
+
 /** A new project from an example; a large one is fetched first. */
-async function openExample(ex: Example): Promise<void> {
-  if (!ex.url) return void newProject(structuredClone(ex.doc), t(ex.name), true);
-  const task = startTask(t("Opening {name}", { name: t(ex.name) }));
+function openExample(ex: Example): Promise<void> {
+  return openingExamples.run(ex.name, () => openExampleNow(ex));
+}
+
+async function openExampleNow(ex: Example): Promise<void> {
+  if (!ex.url) return newProject(structuredClone(ex.doc), t(ex.name), true);
+  const task = startTask(t("Opening {name}", { name: t(ex.name) }), null, { untilEditor: true });
   try {
     const doc = (await (await fetch(ex.url)).json()) as MeercadDocument;
     await newProject(doc, t(ex.name));

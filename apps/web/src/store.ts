@@ -21,6 +21,7 @@ import { outputKey, readOutput, writeOutput, type MeshOptions } from "./lib/open
 import { isCompact } from "./lib/layout";
 import type { PaceCurve, ProgressPoint } from "./lib/eta";
 import { t } from "./lib/i18n";
+import { openGuard, tasksOnEditor } from "./lib/opening";
 
 export interface DialogState {
   feature: Feature;
@@ -267,6 +268,8 @@ export interface Task {
   cancel?: () => void;
   /** Long work (minutes): shows the time it has run and an estimate of what is left. */
   long?: boolean;
+  /** Only the way into the editor ("Opening …"): ends once the editor shows the design, which then shows its own progress. */
+  untilEditor?: boolean;
   /** How its progress goes with time, when not evenly (see lib/eta). */
   pace?: PaceCurve;
   /** When the first progress came (performance.now()), and every change since: [seconds after it, progress]. */
@@ -280,7 +283,7 @@ let taskId = 0;
  * rebuild, reading an import). Update it as it goes; `done` removes it. The Tasks panel shows it
  * with a progress bar once it has run for a moment.
  */
-export function startTask(label: string, progress: number | null = null, options: { project?: string; cancel?: () => void; long?: boolean; pace?: PaceCurve } = {}): { update(progress: number | null, detail?: string): void; done(): void } {
+export function startTask(label: string, progress: number | null = null, options: { project?: string; cancel?: () => void; long?: boolean; pace?: PaceCurve; untilEditor?: boolean } = {}): { update(progress: number | null, detail?: string): void; done(): void } {
   const id = ++taskId;
   set((s) => ({ tasks: [...s.tasks, { id, label, progress, since: performance.now(), ...options }] }));
   return {
@@ -837,27 +840,37 @@ export function dropCachedTab(id: string): void {
   if (get().project?.id !== id) tabStores.delete(id);
 }
 
+/** Openings running (see lib/opening): another tap on the card while one runs starts no second one. */
+const opening = openGuard();
+
 /**
  * Opens a project in a tab. A project an assistant works on is open in its tab only: that tab
- * comes to the front instead.
+ * comes to the front instead. While it is being opened, opening it again waits for that opening.
  */
-export async function openProject(id: string): Promise<void> {
-  if (get().project?.id === id && get().screen === "editor") return;
+export function openProject(id: string): Promise<void> {
+  if (get().project?.id === id && get().screen === "editor") return Promise.resolve();
+  return opening.run(id, (current) => openProjectNow(id, current));
+}
+
+async function openProjectNow(id: string, current: () => boolean): Promise<void> {
   const held = assistantWindow ? undefined : get().assistantTabs.find((a) => a.project === id);
   if (held) return showAssistantTab(held.session);
   await flushSave(true);
   const cached = tabStores.get(id);
   const tab = get().tabs.find((t) => t.id === id);
   if (cached && tab) {
+    if (!current()) return;
     loadDoc(cached.doc, { id, name: tab.name, folder: tab.folder ?? "", updatedAt: Date.now() }, cached);
     history.replaceState(null, "", `#/p/${encodeURIComponent(id)}`);
     return;
   }
   // Reading can take a while (a big design, or one still coming from iCloud): shown as a task.
-  const reading = startTask(t("Opening {name} …", { name: id.split("/").pop() ?? id }));
+  const reading = startTask(t("Opening {name} …", { name: id.split("/").pop() ?? id }), null, { untilEditor: true });
   const p = await loadProject(id)
     .catch(() => undefined)
     .finally(() => reading.done());
+  // Another project was asked for meanwhile: that one gets the editor.
+  if (!current()) return;
   if (!p) {
     toast(t("Project not found"), "error");
     closeTab(id, false);
@@ -931,8 +944,10 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   docStore = store ?? new DocumentStore(doc);
   tabStores.set(meta.id, docStore);
   if (!get().tabs.some((t) => t.id === meta.id)) setTabs([...get().tabs, { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) }]);
-  set({
+  set((s) => ({
     screen: "editor",
+    // The editor shows its own progress from here on ("Building the model").
+    tasks: tasksOnEditor(s.tasks),
     assistantTab: null,
     project: meta,
     dialog: null,
@@ -946,7 +961,7 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
     proposalDoc: null,
     saveState: "saved",
     selectedFeature: null,
-  });
+  }));
   syncDoc();
   set({ saveState: "saved" });
   showKeptOutput(meta.id);

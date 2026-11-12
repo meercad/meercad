@@ -302,7 +302,8 @@ input.expr { font-family: var(--mono); font-size: 12px; }
 .home .sub { color: var(--text-2); margin: 0 0 22px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s; display: flex; flex-direction: column; text-align: left; padding: 0; }
-.card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); transform: translateY(-1px); }
+/* Only with a pointer that hovers: on touch, iOS may take the first tap for the hover and only the second for the click. */
+@media (hover: hover) { .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); transform: translateY(-1px); } }
 .card .thumb { aspect-ratio: 4 / 3; background: radial-gradient(ellipse at 50% 35%, var(--viewport-a), var(--viewport-b)); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .card .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .card .meta { padding: 10px 12px; display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--border); }
