@@ -57,7 +57,7 @@ export const SLOW = [
 ];
 
 /** App tests that take long (every menu entry, every tool built). They run in `pnpm test`, not on every commit. */
-export const WEB_SLOW = ["apps/web/src/menus.test.tsx", "apps/web/src/components/FeatureDialog.build.test.tsx"];
+export const WEB_SLOW = ["apps/web/src/menus.test.tsx", "apps/web/src/components/FeatureDialog.build.test.tsx", "apps/web/src/components/FeatureDialog.fields.test.tsx"];
 
 export default defineConfig({
   test: {
