@@ -107,6 +107,11 @@ const desktop = {
 const threeModule = join(dirname(createRequire(join(process.cwd(), "packages/viewport/package.json")).resolve("three")), "three.module.js");
 vi.doMock(threeModule, async () => {
   const three = (await vi.importActual(threeModule)) as typeof import("@meercad/viewport").THREE;
+  /** Whatever the renderer's insides are asked for: callable, with any property, all doing nothing. */
+  const anything: unknown = new Proxy(function () {}, {
+    get: (_t, k) => (k === Symbol.toPrimitive ? () => 0 : k === "then" ? undefined : anything),
+    apply: () => anything,
+  });
   class TestRenderer {
     constructor() {
       const canvas = document.createElement("canvas");
@@ -133,7 +138,7 @@ vi.doMock(threeModule, async () => {
         readRenderTargetPixels: () => undefined,
       };
       return new Proxy(target, {
-        get: (t, k) => (k in t ? t[k] : () => undefined),
+        get: (t, k) => (k in t ? t[k] : anything),
         set: (t, k, v) => ((t[k] = v), true),
       });
     }
@@ -170,3 +175,8 @@ HTMLCanvasElement.prototype.toDataURL = () => "data:image/png;base64,iVBORw0KGgo
 HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
   cb(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
 };
+
+// Downloads: the app hands files to an <a download> with an object URL.
+const urls = globalThis.URL as unknown as { createObjectURL?: (b: Blob) => string; revokeObjectURL?: (u: string) => void };
+urls.createObjectURL ??= () => "blob:test";
+urls.revokeObjectURL ??= () => undefined;
