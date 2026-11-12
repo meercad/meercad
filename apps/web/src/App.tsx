@@ -15,6 +15,8 @@ import { FirstRun } from "./components/FirstRun";
 import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Tour, tourDone } from "./components/Tour";
+import { TermsGate } from "./components/TermsGate";
+import { termsAccepted } from "./lib/termsStore";
 import { Toasts } from "./components/Toasts";
 import { openPalette, TopBar } from "./components/TopBar";
 import { Toolbar } from "./components/Toolbar";
@@ -110,10 +112,12 @@ export function App() {
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);
+  // First start: the terms of use come before anything else (an assistant's tab only exists once they are accepted).
+  const [terms, setTerms] = useState(() => !assistantWindow && !termsAccepted());
   // First time in the editor: offer the introduction tour.
   useEffect(() => {
-    if (screen === "editor" && !tourDone() && !isCompact() && !assistantWindow) setTour(true);
-  }, [screen]);
+    if (!terms && screen === "editor" && !tourDone() && !isCompact() && !assistantWindow) setTour(true);
+  }, [screen, terms]);
   useEffect(() => {
     const open = () => setGuide((g) => !g);
     window.addEventListener("meercad:help", open);
@@ -136,6 +140,8 @@ export function App() {
     document.documentElement.classList.add("is-desktop");
     if (assistantWindow) document.documentElement.classList.add("in-assistant-tab");
     const offMenu = desktop.on("menu", (cmd) => {
+      // Before the terms of use are accepted, the menu bar does nothing behind them.
+      if (!termsAccepted()) return;
       // While an assistant works on the model, the menu commands wait too.
       if (useApp.getState().aiLock && cmd !== "shortcuts") return;
       if (cmd === "new") void newProject();
@@ -311,6 +317,8 @@ export function App() {
     const onDrop = (e: DragEvent) => {
       if (!e.dataTransfer?.files.length) return;
       e.preventDefault();
+      // Nothing is imported behind the terms of use.
+      if (!termsAccepted()) return;
       void importFile(e.dataTransfer.files[0]);
     };
     const onOver = (e: DragEvent) => e.dataTransfer?.types.includes("Files") && e.preventDefault();
@@ -354,9 +362,10 @@ export function App() {
       <VersionsDialog />
       <ShareDialog />
       <MaterialPicker />
-      {desktop ? <FirstRun /> : null}
+      {desktop && !terms ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />
+      {terms ? <TermsGate onAccept={() => setTerms(false)} /> : null}
       {debugHud ? <DebugHud /> : null}
     </>
   );

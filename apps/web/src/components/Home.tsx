@@ -508,6 +508,7 @@ export function Home() {
           {(
             [
               ["about", t("About meerCAD")],
+              ["terms", t("Terms of use")],
               ["privacy", t("Privacy")],
               ["licenses", t("Licences")],
             ] as const

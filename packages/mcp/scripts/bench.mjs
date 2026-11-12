@@ -20,7 +20,9 @@ async function waitFor(what, fn, ms = 90000) { const end = Date.now() + ms; for 
 
 const dir = mkdtempSync(join(tmpdir(), "meercad-bench-app-"));
 mkdirSync(join(dir, "shared"), { recursive: true });
-writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true }));
+// Terms of use accepted (apps/web/src/lib/terms.ts: raise the version here with TERMS_VERSION; tests/terms.test.ts checks it).
+const termsAccepted = { version: "2026-11-12", acceptedAt: new Date().toISOString(), appVersion: "bench", lang: "en", points: ["hobby", "accuracy", "check", "safety", "ai", "risk"] };
+writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true, termsAccepted }));
 const [webPort, cdpPort, mcpPort] = [await freePort(), await freePort(), await freePort()];
 if (spawnSync("node", ["build.mjs"], { cwd: join(ROOT, "apps/desktop"), stdio: "inherit" }).status) throw new Error("desktop build");
 if (spawnSync("node", ["build.mjs"], { cwd: join(ROOT, "packages/mcp"), stdio: "inherit" }).status) throw new Error("mcp build");
