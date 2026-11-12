@@ -10,6 +10,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import type { AssistantTab } from "./persistence";
 import { bridgeStatus, onBridgeStatus, setBridgeEnabled } from "./mcpBridge";
 import { newProject, useApp } from "../store";
+import { acceptRecord } from "./terms";
+import { saveTerms } from "./termsStore";
 
 /** The MCP server's end: what the app sent, and a way to send it requests. */
 class FakeSocket {
@@ -81,6 +83,8 @@ const WS = globalThis.WebSocket;
 beforeAll(async () => {
   (globalThis as { WebSocket: unknown }).WebSocket = FakeSocket;
   desktop()["assistant"] = assistant;
+  // The user has accepted the terms of use (before that every request is refused: tests/terms-store.test.ts).
+  saveTerms(acceptRecord("test", "en"));
   await newProject(undefined, "User's own");
 });
 afterAll(() => {

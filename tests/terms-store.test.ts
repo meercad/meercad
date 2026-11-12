@@ -184,8 +184,8 @@ describe("assistant lock (MCP) until the terms are accepted", () => {
     // The connection hands every request to route, the assistant tabs theirs to serve.
     expect(src).toContain("const result = await route(msg);");
     expect(src).toContain("serve(req as BridgeRequest).then(");
-    // The test hook exists only in development builds.
+    // The test hook exists only in development builds (and in an iOS app a UI test started).
     const main = readFileSync(join(root, "apps/web/src/main.tsx"), "utf8");
-    expect(main.slice(0, main.indexOf("mcp: bridge.testCall"))).toMatch(/if \(import\.meta\.env\.DEV\)\s*\n?\s*void Promise\.all/);
+    expect(main.slice(0, main.indexOf("mcp: bridge.testCall"))).toMatch(/if \(import\.meta\.env\.DEV( \|\| uiTesting\(\))?\)\s*\n?\s*void Promise\.all/);
   });
 });

@@ -11,6 +11,8 @@ vi.mock("./lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("./l
 import { App } from "./App";
 import { apply, currentDoc, getViewport, newProject, rebuildNow, useApp } from "./store";
 import { rebuilt, renderUi, withScreen } from "../test/ui";
+import { acceptRecord } from "./lib/terms";
+import { saveTerms } from "./lib/termsStore";
 
 const rect: SketchEntity[] = [
   { id: "p1", type: "point", x: 0, y: 0 },
@@ -43,6 +45,8 @@ const distance = () => (currentDoc().features.find((f) => f.id === "ex1") as { d
 beforeAll(async () => {
   withScreen(1280, 800);
   localStorage.setItem("meercad.tourDone", "1");
+  // A user who has accepted the terms of use (before that, keys, menu and drops do nothing: tests/terms-store.test.ts).
+  saveTerms(acceptRecord("test", "en"));
   const desktop = (window as unknown as { meercadDesktop: { on: (e: string, h: Handler) => () => void } }).meercadDesktop;
   desktop.on = (e, h) => {
     handlers.set(e, [...(handlers.get(e) ?? []), h]);
