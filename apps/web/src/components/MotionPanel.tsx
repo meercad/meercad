@@ -310,7 +310,12 @@ function MotionsSection() {
                     {k.at.toFixed(2)} s
                   </button>
                   {canEdit ? (
-                    <button className="link" title={t("Delete")} onClick={() => update({ ...m, keys: m.keys.filter((x) => x !== k) })}>
+                    <button
+                      className="link"
+                      title={t("Delete")}
+                      // The last moment takes the motion with it: a motion without moments is none.
+                      onClick={() => (m.keys.length > 1 ? update({ ...m, keys: m.keys.filter((x) => x !== k) }) : (stopPlaying(), apply({ type: "delete_motion", id: m.id })))}
+                    >
                       <X />
                     </button>
                   ) : null}
