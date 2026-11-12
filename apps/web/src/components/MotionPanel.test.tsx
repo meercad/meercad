@@ -42,7 +42,7 @@ afterAll(cleanup);
 
 describe("the joints panel", () => {
   it("lists the joint and moves the part with its slider", async () => {
-    expect(screen.getAllByDisplayValue ? document.body.textContent : "").toMatch(/Slide/);
+    expect(document.body.textContent).toMatch(/Slide/);
     const slider = document.querySelector<HTMLInputElement>('input[type="range"]')!;
     expect(slider).not.toBeNull();
     await act(async () => void fireEvent.change(slider, { target: { value: "-5" } }));
