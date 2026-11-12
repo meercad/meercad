@@ -280,7 +280,7 @@ export function Toolbar() {
   }, [compact, entryKey]);
 
   return (
-    <nav className="toolbar rail" ref={rail} aria-label={t("Tools")} onPointerLeave={() => hover(null)} data-more={more}>
+    <nav className="toolbar rail" ref={rail} aria-label={t("Tools")} onPointerLeave={(e) => e.pointerType === "mouse" && hover(null)} data-more={more}>
       <div className="rail-items" ref={scroller}>
       {/* Phone: the panels that have no room on screen open from the bar. */}
       {compact ? (
@@ -317,7 +317,7 @@ export function Toolbar() {
         const active = e.tools.find((t) => t.active);
         const GroupIcon = active?.icon ?? e.icon;
         return (
-          <div className="rail-group" key={e.id} onPointerEnter={() => !compact && hover(e.id)}>
+          <div className="rail-group" key={e.id} onPointerEnter={(ev) => !compact && ev.pointerType === "mouse" && hover(e.id)}>
             <button
               className={`tool group ${active ? "active" : ""} ${open === e.id ? "open" : ""}`}
               aria-haspopup="menu"
@@ -328,6 +328,9 @@ export function Toolbar() {
                   const r = ev.currentTarget.getBoundingClientRect();
                   return showMenu(r.left, r.top - 8, e.tools.map((t) => ({ label: t.label, icon: <t.icon />, onClick: () => run(t) })), { above: true });
                 }
+                // Fingers and pens do not hover: a tap opens the group and keeps it open (a lift of the
+                // finger used to count as leaving the rail and closed it again at once).
+                window.clearTimeout(closeTimer.current);
                 setPinned(open !== e.id || !pinned);
                 setOpen(open === e.id && pinned ? null : e.id);
               }}
