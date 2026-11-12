@@ -26,6 +26,8 @@ Email: [email address]
   Documents/meerCAD).
 - **Web app:** projects are kept in your browser's storage on your computer.
 - Settings such as shortcuts, units and display options are stored on your device in the same way.
+- That you accepted the terms of use (their version, the date, the app version and language) is stored
+  only on your device in the same way, so the app does not ask again.
 
 None of this data is sent to us or to anyone else.
 

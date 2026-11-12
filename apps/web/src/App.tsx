@@ -15,6 +15,8 @@ import { FirstRun } from "./components/FirstRun";
 import { HelpPanel } from "./components/Help";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import { Tour, tourDone } from "./components/Tour";
+import { TermsGate } from "./components/TermsGate";
+import { termsAccepted } from "./lib/termsStore";
 import { Toasts } from "./components/Toasts";
 import { openPalette, TopBar } from "./components/TopBar";
 import { Toolbar } from "./components/Toolbar";
@@ -110,10 +112,12 @@ export function App() {
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);
+  // First start: the terms of use come before anything else (an assistant's tab only exists once they are accepted).
+  const [terms, setTerms] = useState(() => !assistantWindow && !termsAccepted());
   // First time in the editor: offer the introduction tour.
   useEffect(() => {
-    if (screen === "editor" && !tourDone() && !isCompact() && !assistantWindow) setTour(true);
-  }, [screen]);
+    if (!terms && screen === "editor" && !tourDone() && !isCompact() && !assistantWindow) setTour(true);
+  }, [screen, terms]);
   useEffect(() => {
     const open = () => setGuide((g) => !g);
     window.addEventListener("meercad:help", open);
@@ -354,9 +358,10 @@ export function App() {
       <VersionsDialog />
       <ShareDialog />
       <MaterialPicker />
-      {desktop ? <FirstRun /> : null}
+      {desktop && !terms ? <FirstRun /> : null}
       <MenuHost />
       <AskHost />
+      {terms ? <TermsGate onAccept={() => setTerms(false)} /> : null}
       {debugHud ? <DebugHud /> : null}
     </>
   );

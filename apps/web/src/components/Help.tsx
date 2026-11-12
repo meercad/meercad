@@ -206,6 +206,10 @@ const guides = (): { section: string; guides: Guide[] }[] => [
               ·{" "}
               <button className="link" onClick={() => about()}>
                 {t("No warranty")}
+              </button>{" "}
+              ·{" "}
+              <button className="link" onClick={() => about("terms")}>
+                {t("Terms of use")}
               </button>
             </li>
           </ul>

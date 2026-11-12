@@ -12,6 +12,8 @@ import { partName } from "./features";
 import { emptyDocument, type DocOp, type EdgeSelector, type FaceSelector, type MeercadDocument } from "@meercad/schema";
 import { filamentsOf, openInSlicer, robotFiles, sketchCurves, usdzFile } from "../components/io";
 import * as tools from "./mcpTools";
+import { TERMS_MCP_ERROR } from "./terms";
+import { termsAccepted } from "./termsStore";
 import { clientLabel } from "./mcpClient";
 import { asTestProjects, assistantWindow, desktop, isTestProject, type AssistantTab } from "./persistence";
 import { apply, currentDoc, flushSave, getViewport, goHome, handOverAssistantTab, kernel, newProject, openProject, rebuildNow, redo, refreshProjects, releaseProject, scheduleRebuild, setAssistantTabs, showAssistantTab, undo, useApp } from "../store";
@@ -208,6 +210,8 @@ const PROJECTLESS = new Set(["get_status", "list_projects", "list_folders", "lis
  * calls over to it. Older servers keep one tab per session, whose project an open replaces.
  */
 async function route(req: BridgeRequest): Promise<unknown> {
+  // Before the user has accepted the terms of use, no assistant tab opens and nothing is answered.
+  if (!termsAccepted()) throw new Error(TERMS_MCP_ERROR);
   const a = desktop?.assistant;
   const named = req.params[PROJECT_PARAM];
   const project = typeof named === "string" && named ? named : undefined;
@@ -319,6 +323,8 @@ function initUserWindow(): void {
 
 /** In this page: shows who is working, and locks the app while the request changes things. */
 async function serve(req: BridgeRequest): Promise<unknown> {
+  // Nothing for the assistant before the user has accepted the terms of use.
+  if (!termsAccepted()) throw new Error(TERMS_MCP_ERROR);
   const client = clientLabel(req.client);
   const locks = !READS.has(req.method);
   // Lookups an assistant makes before opening its own tab do not flash in the user's.

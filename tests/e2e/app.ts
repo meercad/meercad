@@ -10,6 +10,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Page, sleep } from "./cdp.js";
+import { acceptRecord, TERMS_KEY } from "../../apps/web/src/lib/terms.js";
 
 const root = resolve(import.meta.dirname, "../..");
 
@@ -47,9 +48,9 @@ export async function startApp({ keep = false } = {}): Promise<App> {
   const dir = mkdtempSync(join(tmpdir(), "meercad-e2e-"));
   const webPort = await freePort();
   const cdpPort = await freePort();
-  // A Mac where the tour was seen (the flags every meerCAD on the Mac shares, here in the temp folder).
+  // A Mac where the terms of use are accepted and the tour was seen (the flags every meerCAD on the Mac shares, here in the temp folder).
   mkdirSync(join(dir, "shared"), { recursive: true });
-  writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true }));
+  writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify({ tourDone: true, [TERMS_KEY]: acceptRecord("e2e", "en") }));
   const r = spawnSync("node", ["build.mjs"], { cwd: join(root, "apps/desktop"), stdio: "inherit" });
   if (r.status !== 0) throw new Error("desktop build failed");
 
