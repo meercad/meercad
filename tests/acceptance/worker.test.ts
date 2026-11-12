@@ -53,7 +53,7 @@ describe("kernel worker", () => {
     const ready = w.out.find((m) => m.type === "ready") as Extract<WorkerResponse, { type: "ready" }>;
     expect(ready.threads).toBe(false);
     expect(first.report.bodies.map((b) => Math.round(b.volume))).toEqual([8000, 500]);
-    expect(first.report.timing!.post).toBeGreaterThanOrEqual(first.report.timing!.start);
+    expect(first.report.timing!.post).toBeGreaterThanOrEqual(first.report.timing!.start!);
     expect(first.report.kernelMemory).toBeGreaterThanOrEqual(256 * 2 ** 20);
     expect(w.out.filter((m) => m.type === "progress" && m.seq === 1).length).toBeGreaterThan(0);
 

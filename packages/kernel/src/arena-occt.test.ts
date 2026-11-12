@@ -109,8 +109,9 @@ describe("OCCT helpers", () => {
   });
 
   it("turns OCCT's exceptions into words", () => {
-    const tag = new WebAssembly.Tag({ parameters: [] });
-    const ex = new WebAssembly.Exception(tag, []);
+    // Tag and Exception are newer than the TypeScript DOM types.
+    const W = WebAssembly as unknown as { Tag: new (d: { parameters: string[] }) => object; Exception: new (tag: object, payload: unknown[]) => object };
+    const ex = new W.Exception(new W.Tag({ parameters: [] }), []);
     const says = (r: () => [string, string]) => ({ getExceptionMessage: r }) as unknown as OC;
     expect(occtErrorMessage(says(() => ["Standard_Failure", "BRep_API: command not done"]), ex)).toBe("Standard_Failure: BRep_API: command not done");
     expect(occtErrorMessage(says(() => ["StdFail_NotDone", ""]), ex)).toBe("StdFail_NotDone");

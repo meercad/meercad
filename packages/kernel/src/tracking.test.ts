@@ -9,7 +9,8 @@ import type { ModelState } from "./state.js";
 const arena = { tag: "arena" } as unknown as ModelState["arena"];
 const state = (bodies: [string, unknown][] = [], extra: Partial<Record<string, unknown>> = {}) =>
   ({ arena, bodies: new Map(bodies), sketches: new Map(), planes: new Map(), tools: new Map(), references: new Map(), gears: new Map(), grids: new Map(), walls: new Map(), textures: new Map(), ...extra }) as unknown as ModelState;
-const A = { id: "a" }, B = { id: "b" }, C = { id: "c" };
+/** Stand-ins for parts: compared by identity only. */
+const A = { id: "a" } as never, B = { id: "b" } as never, C = { id: "c" } as never;
 const bodiesOf = (s: ModelState | null) => (s ? [...(s.bodies as Map<string, unknown>).keys()] : null);
 
 /** Runs `step` tracked on `prev` and returns its footprint. */
@@ -184,7 +185,7 @@ describe("a step's footprint", () => {
     delete (old as unknown as Record<string, unknown>)["textures"];
     // The step looks into the missing map and adds it.
     const fp = track(old, (v) => {
-      v.textures.get("t1");
+      v.textures!.get("t1");
       const textures = copyMap(v.textures);
       textures.set("t1", C);
       return { ...v, textures };

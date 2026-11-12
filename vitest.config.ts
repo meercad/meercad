@@ -1,18 +1,17 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-import type { Plugin } from "vite";
 
 /**
  * The app imports its kernel worker the Vite way (`./kernel.worker.ts?worker`, `?worker&url`); in
  * its tests the worker runs in the same process (apps/web/test/kernelWorker.ts).
  */
-function testKernelWorker(): Plugin {
+function testKernelWorker() {
   const stub = fileURLToPath(new URL("./apps/web/test/kernelWorker.ts", import.meta.url));
   return {
     name: "meercad-test-kernel-worker",
-    enforce: "pre",
-    resolveId: (id) => (id.endsWith("?worker") ? stub : id.endsWith("?worker&url") ? "\0worker-url" : null),
-    load: (id) => (id === "\0worker-url" ? "export default \"kernel.worker.js\";" : null),
+    enforce: "pre" as const,
+    resolveId: (id: string) => (id.endsWith("?worker") ? stub : id.endsWith("?worker&url") ? "\0worker-url" : null),
+    load: (id: string) => (id === "\0worker-url" ? "export default \"kernel.worker.js\";" : null),
   };
 }
 

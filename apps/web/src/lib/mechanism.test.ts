@@ -61,7 +61,7 @@ const slide: Joint = { id: "j2", type: "slider", a: "cube", b: "ground", anchor:
 function moved(part: string, p: [number, number, number]): number[] {
   const m = currentPoses().get(part);
   if (!m) return p;
-  return [0, 1, 2].map((r) => m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
+  return [0, 1, 2].map((r) => m[r]! * p[0] + m[4 + r]! * p[1] + m[8 + r]! * p[2] + m[12 + r]!);
 }
 
 beforeAll(async () => {
