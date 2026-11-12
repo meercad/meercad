@@ -99,6 +99,9 @@ describe("several projects at once", () => {
   });
 
   it("deletes a folder with what it holds, after saying how much", async () => {
+    // Two more in the folder, whatever the choosing above left there.
+    for (const n of ["Six", "Seven"]) await createProject(n, emptyDocument(), "Box");
+    await act(async () => void (await refreshProjects()));
     await act(async () => useApp.setState({ folder: "" }));
     await settle();
     await act(async () => void fireEvent.click(screen.getAllByTitle("Folder actions")[0]!));
