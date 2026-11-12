@@ -144,4 +144,47 @@ final class TouchTests: XCTestCase {
             m.waitFor("the overview") { $0.screen == "home" }
         }
     }
+
+    /// The phone turned sideways keeps the phone layout (the window is lower than 580 points) and its
+    /// tool bar stays on the screen, with the model built as before; turned back, the same.
+    func testPhoneTurnedSidewaysKeepsTheToolsOnScreen() throws {
+        let start = m.openExample("Mounting plate")
+        try XCTSkipUnless(start.compact, "turning sideways matters for the phone layout")
+        let volume = start.bodies.map(\.volume).reduce(0, +)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        Thread.sleep(forTimeInterval: 1.5)
+        let side = m.waitFor("the page to turn sideways") { $0.width > 600 }
+        XCTAssertTrue(side.compact, "sideways the phone lost its phone layout")
+        let size = m.screenSize()
+        let bar = side.rect("bar")
+        XCTAssertNotNil(bar, "no tool bar sideways")
+        if let bar { XCTAssertLessThanOrEqual(bar.maxY, size.height + 1, "the tool bar runs off the bottom") }
+        XCTAssertEqual(side.scale, 1, accuracy: 0.01, "turning zoomed the page")
+        XCTAssertEqual(side.bodies.map(\.volume).reduce(0, +), volume, accuracy: volume * 1e-9)
+        XCUIDevice.shared.orientation = .portrait
+        Thread.sleep(forTimeInterval: 1.5)
+        let back = m.waitFor("the page to turn back") { $0.width < 600 }
+        XCTAssertTrue(back.compact)
+        XCTAssertEqual(back.scale, 1, accuracy: 0.01)
+    }
+
+    /// A circle drawn with two taps on the Top plane closes into one round region of π r².
+    func testDrawACircleByTapping() {
+        m.newPart()
+        m.tap("Sketch")
+        m.tap("Top")
+        m.waitFor("the sketch on Top", timeout: 20) { $0.sketch != nil && $0.axes != nil }
+        let axes = m.steadyAxes()
+        m.tool("Circle")
+        m.screen((0, 0, 0), axes).tap()
+        Thread.sleep(forTimeInterval: 0.5)
+        m.screen((20, 0, 0), axes).tap()
+        let drawn = m.waitFor("the circle", timeout: 10) { ($0.sketchInfo?.circles ?? 0) == 1 && ($0.sketchInfo?.regions.count ?? 0) == 1 }
+        let area = drawn.sketchInfo!.regions[0]
+        // About r = 20 (a finger lands within a few points of the grid point it aims at).
+        XCTAssertEqual(area, Double.pi * 400, accuracy: Double.pi * 400 * 0.2, "the circle is not about r 20")
+        // Whatever the radius, it is a circle: no corners, one region, nothing left to solve but its size.
+        XCTAssertEqual(drawn.sketchInfo?.lines, 0)
+    }
 }
