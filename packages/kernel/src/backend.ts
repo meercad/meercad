@@ -787,18 +787,35 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
     const origin: Vec3 = [ax.origin[0] + dir[0] * z, ax.origin[1] + dir[1] * z, ax.origin[2] + dir[2] * z];
     const spine = helixWire(oc, arena, { origin, dir, xdir: [radial[0] / r, radial[1] / r, radial[2] / r] }, r, f.pitch, f.turns, !!f.leftHanded, taper);
     if (taper < 0 && r - f.turns * f.pitch * Math.tan((-taper * Math.PI) / 180) <= rMax - r + 1e-3) throw new FeatureError("the taper narrows the coil onto its axis", "use fewer turns or a smaller taper");
-    let pipe;
+    // The profile keeps its place in the plane through the axis all the way round: its binormal
+    // stays the axis, as for threads. The plain pipe (corrected Frenet) turned it about the helix,
+    // ~14° per turn at r = 21, P = 5. A profile with holes has more than one wire and is swept
+    // whole; there the turn stays.
+    const wires: TopoDS_Shape[] = [];
+    for (const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_WIRE")); ex.More(); ex.Next()) wires.push(arena.track(ex.Current()));
+    let built: { shape: TopoDS_Shape; first: TopoDS_Shape; last: TopoDS_Shape; generated: (s: TopoDS_Shape) => TopoDS_Shape[] };
     try {
-      pipe = arena.track(new oc.BRepOffsetAPI_MakePipe(spine, face));
+      if (wires.length === 1) {
+        const mk = arena.track(new oc.BRepOffsetAPI_MakePipeShell(spine));
+        mk.SetMode(arena.track(new oc.gp_Dir(dir[0], dir[1], dir[2])));
+        mk.Add(wires[0]!, false, false);
+        mk.Build();
+        if (!mk.IsDone()) throw new FeatureError("coil failed");
+        mk.MakeSolid();
+        built = { shape: arena.track(mk.Shape()), first: arena.track(mk.FirstShape()), last: arena.track(mk.LastShape()), generated: (s) => listToArray(arena, mk.Generated(s)) };
+      } else {
+        const pipe = arena.track(new oc.BRepOffsetAPI_MakePipe(spine, face));
+        if (!pipe.IsDone()) throw new FeatureError("coil failed");
+        built = { shape: arena.track(pipe.Shape()), first: arena.track(pipe.FirstShape()), last: arena.track(pipe.LastShape()), generated: (s) => listToArray(arena, pipe.Generated(s)) };
+      }
     } catch (e) {
+      if (e instanceof FeatureError) throw e;
       throw new FeatureError(`coil failed: ${occtErrorMessage(oc, e)}`);
     }
-    if (!pipe.IsDone()) throw new FeatureError("coil failed");
-    let shape = arena.track(pipe.Shape());
     const props = arena.track(new oc.GProp_GProps());
-    oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
-    if (props.Mass() < 0) shape = arena.track(shape.Reversed());
-    return { shape, first: arena.track(pipe.FirstShape()), last: arena.track(pipe.LastShape()), generated: (s: TopoDS_Shape) => listToArray(arena, pipe.Generated(s)) };
+    oc.BRepGProp.VolumeProperties(built.shape, props, false, false, false);
+    if (props.Mass() < 0) built.shape = arena.track(built.shape.Reversed());
+    return built;
   };
   let tool: Body;
   if ("sketch" in f.profile) {
