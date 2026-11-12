@@ -11,6 +11,7 @@ import { answer, rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "../components/ViewportView";
 import { glb } from "../../../../tests/glbs";
 import { addTerrain, buildTerrain, hasTerrain, sceneryOf } from "./terrain";
+import { testCall } from "./mcpBridge";
 import {
   addMarkPoint,
   areaOf,
@@ -148,6 +149,13 @@ describe("terrains", () => {
     expect(ref().data).not.toBe(before);
     await act(async () => undo());
     expect(ref().data).toBe(before);
+  });
+
+  it("tells an assistant the ground's height under points, at the corrected size", async () => {
+    // Scaled by 1.25 above: the flat square reaches to x = 25 m, the raised one is 2.5 m up beyond it.
+    const h = (await testCall("terrain_height", { points: [[10_000, 10_000], [30_000, 10_000], [60_000, 10_000]] })) as { extent: { min: number[]; max: number[] }; points: { z: number | null }[] };
+    expect(h.points.map((p) => p.z)).toEqual([0, 2_500, null]);
+    expect(h.extent).toEqual({ min: [0, 0, 0], max: [50_000, 25_000, 2_500] });
   });
 
   it("builds a model from photos through the Mac app", async () => {

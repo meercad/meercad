@@ -1029,7 +1029,9 @@ export class Viewport {
   sceneryLoading = 0;
   private sceneryWaiting: (() => void)[] = [];
 
+  /** The shown reference models, placed and scaled as they are now (not as the last frame drew them). */
   private shownScenery(): THREE.Object3D[] {
+    this.sceneryGroup.updateMatrixWorld(true);
     return this.sceneryGroup.children.filter((o) => o.visible);
   }
 

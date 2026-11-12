@@ -20,7 +20,8 @@ export function glb(squares: { x: number; y: number; z: number; s: number }[]): 
     nodes: [{ mesh: 0 }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0, COLOR_0: 1 }, indices: 2, mode: 4 }] }],
     accessors: [
-      { bufferView: 0, componentType: 5126, count: pos.length / 3, type: "VEC3", min: [0, 0, 0], max: [1, 1, 1] },
+      // The true bounds: readers take the model's box from them.
+      { bufferView: 0, componentType: 5126, count: pos.length / 3, type: "VEC3", min: [0, 1, 2].map((a) => Math.min(...pos.filter((_, i) => i % 3 === a))), max: [0, 1, 2].map((a) => Math.max(...pos.filter((_, i) => i % 3 === a))) },
       { bufferView: 1, componentType: 5126, count: col.length / 3, type: "VEC3" },
       { bufferView: 2, componentType: 5125, count: idx.length, type: "SCALAR" },
     ],
