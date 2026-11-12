@@ -9,7 +9,7 @@ import type { DocOp, EdgeSelector, Feature } from "@meercad/schema";
 import type { Pick } from "@meercad/viewport";
 import { askConfirm } from "../components/Ask";
 import { deleteFeature } from "../components/FeatureTree";
-import { apply, currentDoc, toast, useApp } from "../store";
+import { apply, applyQuiet, currentDoc, toast, useApp } from "../store";
 import { nextFeatureId } from "@meercad/model";
 import { featureName } from "./features";
 
@@ -138,11 +138,12 @@ export async function deleteModelSelection(): Promise<void> {
     }
     return;
   }
-  // Several faces from one feature (e.g. two holes of one cut): apply one at a time.
+  // Several faces from one feature (e.g. two holes of one cut): one at a time, each worked out
+  // on the design the one before left, all in one undo step.
   let count = 0;
   for (const p of faces) {
     const r = opForFace(p);
-    if (!("problem" in r) && r.op && apply(r.op, ...(r.extra ?? []))) count++;
+    if (!("problem" in r) && r.op && (count ? applyQuiet : apply)(r.op, ...(r.extra ?? []))) count++;
   }
   useApp.setState({ selection: [] });
   toast(t("Deleted {what} — undo with ⌘Z", { what: count === 1 ? whats[0]! : t("{n} items", { n: count }) }));
