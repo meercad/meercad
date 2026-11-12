@@ -535,8 +535,15 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const e = d.entities.find((x) => x.id === target.id);
       if (e?.type !== "line") return;
       if (!before && !after) drop(target.id);
-      else if (!before) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p1: endpoint(after!) } : x));
-      else if (!after) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p2: endpoint(before) } : x));
+      // The new end point first: making it adds a point, which a map over the old list would lose
+      // (the line then ended on a point that did not exist, and nothing was trimmed).
+      else if (!before) {
+        const p1 = endpoint(after!);
+        d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p1 } : x));
+      } else if (!after) {
+        const p2 = endpoint(before);
+        d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p2 } : x));
+      }
       else {
         const [m1, m2] = [endpoint(before), endpoint(after)];
         d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p2: m1 } : x));
@@ -573,8 +580,13 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         }
       } else if (e.type === "arc") {
         if (!before && !after) drop(target.id);
-        else if (!before) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, start: endpoint(after!) } : x));
-        else if (!after) d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, end: endpoint(before) } : x));
+        else if (!before) {
+          const start = endpoint(after!);
+          d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, start } : x));
+        } else if (!after) {
+          const end = endpoint(before);
+          d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, end } : x));
+        }
         else {
           const [m1, m2] = [endpoint(before), endpoint(after)];
           d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, end: m1 } : x));
