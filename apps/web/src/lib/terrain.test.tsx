@@ -4,7 +4,7 @@
  * right, the size is corrected from a known distance, and clean-ups replace the model in one step.
  * The ground: a 20 × 20 m flat square at height 0, with a second one 2 m higher beside it.
  */
-import { act, cleanup } from "@testing-library/react";
+import { act, cleanup, fireEvent } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Feature } from "@meercad/schema";
 import { apply, closeSketch, currentDoc, getViewport, newProject, undo, useApp } from "../store";
@@ -203,6 +203,35 @@ describe("terrains", () => {
     expect(currentDoc().features.at(-2)).toMatchObject({ op: "plane", offset: 1_234.6, name: "Ground at 1.23 m" });
     expect(currentDoc().features.at(-1)).toMatchObject({ op: "sketch", plane: { ref: currentDoc().features.at(-2)!.id } });
     await act(async () => closeSketch());
+  });
+
+  it("paints a highlighter stroke on the ground with the pointer", async () => {
+    const vp = getViewport()!;
+    (vp as unknown as { scene: { updateMatrixWorld(f: boolean): void } }).scene.updateMatrixWorld(true);
+    const before = ref().marks?.length ?? 0;
+    startMarking("stroke");
+    await settle();
+    const ev = { pointerId: 9, pointerType: "mouse", button: 0, isPrimary: true };
+    const at = (x: number, y: number) => {
+      const [cx, cy] = vp.worldToScreen([x, y, 0])!;
+      return { clientX: cx, clientY: cy };
+    };
+    await act(async () => {
+      fireEvent.pointerDown(vp.canvas, { ...ev, ...at(3_000, 3_000), buttons: 1 });
+      fireEvent.pointerMove(vp.canvas, { ...ev, ...at(6_000, 3_000), buttons: 1 });
+      fireEvent.pointerMove(vp.canvas, { ...ev, ...at(9_000, 4_000), buttons: 1 });
+      fireEvent.pointerUp(vp.canvas, { ...ev, ...at(9_000, 4_000), buttons: 0 });
+    });
+    await settle();
+    const marks = ref().marks ?? [];
+    expect(marks.length).toBe(before + 1);
+    const stroke = marks.at(-1)!;
+    expect(stroke.kind).toBe("stroke");
+    // Its points lie where the pointer went over the flat ground (scaled 1.25 above: still z 0).
+    expect(stroke.points[0]![0]).toBeCloseTo(3_000, -2);
+    expect(stroke.points.at(-1)![0]).toBeCloseTo(9_000, -2);
+    expect(stroke.points.every((p) => Math.abs(p[2]) < 1)).toBe(true);
+    cancelMarking();
   });
 
   it("builds a model from photos through the Mac app", async () => {
