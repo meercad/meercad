@@ -15,13 +15,16 @@ describe("tool calls that take longer than a client waits", () => {
   it("answers a slow call in time, and the same call again gets its result without a second run", async () => {
     const p = createPatience({ answerWithinMs: 50, keepMs: 1000 });
     let runs = 0;
+    // The work ends when the test says so, not after a time a busy machine may overrun.
+    let finish!: (v: string) => void;
     const slow = () => {
       runs++;
-      return later(150, "opened");
+      return new Promise<string>((r) => (finish = r));
     };
     expect(await p.run("open Robo", slow, still)).toBe("still true");
     // Asked again while it still runs: waits again, still no second run.
     expect(await p.run("open Robo", slow, still)).toBe("still true");
+    finish("opened");
     expect(await p.run("open Robo", slow, still)).toBe("opened");
     expect(runs).toBe(1);
     // Fetched: the next identical call is a new one.
