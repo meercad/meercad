@@ -43,13 +43,9 @@ const mcpTools = [...read("packages/mcp/src/server.ts").matchAll(/registerTool\(
  * MCP tools that run inside the app (mcpBridge) and are only checked by the end-to-end run against
  * the WIP app (`pnpm test:e2e`). Take a tool off this list once a unit or integration test calls it.
  */
-const MCP_E2E_ONLY = [
-  "check_clearance", "check_interference", "check_motion", "clear_preview", "create_folder", "deviation",
-  "export_drawing", "export_robot", "get_sketch", "get_version", "import_file", "joints_from_gears",
-  "list_examples", "list_folders", "list_materials", "list_projects", "measure_scan", "move_project",
-  "new_project", "open_example", "open_project", "photo_terrain", "place_on_terrain", "play_motion", "preview_ops",
-  "print_check", "rebuild_mesh", "redo", "rename_project", "render_motion", "render_view", "repair_mesh", "set_pose",
-  "set_view", "set_visibility", "status", "terrain_height", "wall_thickness",
+const MCP_E2E_ONLY: string[] = [
+  // Empty since Nov 2026: packages/mcp/src/server.inprocess.test.ts calls every tool against a
+  // stand-in app. What the app does with a call is still checked by the E2E run.
 ];
 
 describe("test coverage of what the app can do", () => {
