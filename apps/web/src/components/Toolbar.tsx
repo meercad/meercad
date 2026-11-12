@@ -39,7 +39,7 @@ import {
   Grid3x3,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
-import { CABLES_ENABLED, type FeatureOp } from "@meercad/schema";
+import type { FeatureOp } from "@meercad/schema";
 import { toggleJoints, useMotion } from "../lib/mechanism";
 import { FEATURES } from "../lib/features";
 import { keyFor, usePrefs, type Action } from "../lib/keymap";
@@ -156,7 +156,7 @@ function useEntries(): RailEntry[] {
   return [
     feature("sketch", activeOp),
     "sep",
-    { id: "create", icon: Box, label: t("Create"), tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("loft", activeOp), feature("sweep", activeOp), feature("coil", activeOp), feature("rib", activeOp), feature("primitive", activeOp), feature("text", activeOp), feature("standard_part", activeOp), feature("screw", activeOp), ...(CABLES_ENABLED ? [feature("cable", activeOp)] : []), feature("gridfinity", activeOp), feature("wall", activeOp), feature("label", activeOp), feature("box", activeOp), feature("snap_hook", activeOp), feature("lithophane", activeOp), ...(mechanics ? [feature("gear", activeOp), feature("spring", activeOp)] : []), feature("plane", activeOp)] },
+    { id: "create", icon: Box, label: t("Create"), tools: [feature("extrude", activeOp), feature("revolve", activeOp), feature("loft", activeOp), feature("sweep", activeOp), feature("coil", activeOp), feature("rib", activeOp), feature("primitive", activeOp), feature("text", activeOp), feature("standard_part", activeOp), feature("screw", activeOp), feature("gridfinity", activeOp), feature("wall", activeOp), feature("label", activeOp), feature("box", activeOp), feature("snap_hook", activeOp), feature("lithophane", activeOp), ...(mechanics ? [feature("gear", activeOp), feature("spring", activeOp)] : []), feature("plane", activeOp)] },
     { id: "modify", icon: SquarePen, label: t("Modify"), tools: [feature("fillet", activeOp), feature("chamfer", activeOp), feature("shell", activeOp), feature("draft", activeOp), feature("offset_face", activeOp), feature("hole", activeOp), feature("thread", activeOp), feature("split", activeOp), feature("boolean", activeOp)] },
     {
       id: "transform",

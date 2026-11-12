@@ -1,4 +1,4 @@
-import { isPausedOp, withoutRemovedFeatures, type Expr, type MeercadDocument } from "@meercad/schema";
+import { withoutRemovedFeatures, type Expr, type MeercadDocument } from "@meercad/schema";
 import { resolveParams } from "./expr.js";
 import { FIT_VAR, fitExpr } from "./fit.js";
 import { hashString } from "./hash.js";
@@ -154,8 +154,7 @@ export class RebuildEngine<S> {
         statuses.push({ id: f.id, status: "rolled_back", ms: 0, cached: false });
         continue;
       }
-      // Steps switched off in this version (cables) are kept in the design but built as if suppressed.
-      const off = f.suppressed || isPausedOp(f.op);
+      const off = f.suppressed;
       let resolved: ResolvedFeature | null = null;
       let resolveError: string | null = null;
       if (!off) {

@@ -38,11 +38,10 @@ import {
   FishingHook,
   Dna,
   Screw,
-  Cable,
   createLucideIcon,
   Image as ImageIcon,
   type LucideIcon, Trash2 } from "lucide-react";
-import { isPausedOp, type EdgeSelector, type Feature, type FeatureOp, type MeercadDocument } from "@meercad/schema";
+import { type EdgeSelector, type Feature, type FeatureOp, type MeercadDocument } from "@meercad/schema";
 import { nextFeatureId, standardShape } from "@meercad/model";
 import { t } from "./i18n";
 
@@ -86,7 +85,6 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   coil: { label: t("Coil"), icon: Dna, hint: t("Sweep a profile along a helix round an axis: custom threads, coils, worms, spiral ramps") },
   spring: { label: t("Spring"), icon: Spring, hint: t("Compression, extension or torsion spring from wire, diameter and coils, with its spring rate") },
   screw: { label: t("Screw and nut"), icon: Screw, hint: t("Screw, threaded rod or nut of any size and thread form: metric, trapezoidal, square, buttress, round, multi-start") },
-  cable: { label: t("Cable"), icon: Cable, hint: t("Cable through 3D points, round or ribbon, with plugs (JST, XT30, IDC); checked for stretch, bends and collisions while joints move") },
   gear: { shortcut: "G", label: t("Gear"), icon: Cog, hint: t("Involute gear, ring gear or rack; adds the mating gear at the right distance") },
   linear_pattern: { shortcut: "L", label: t("Linear pattern"), icon: Grid3x3, hint: t("Repeat features or bodies along a direction") },
   circular_pattern: { shortcut: "O", label: t("Circular pattern"), icon: Orbit, hint: t("Repeat features or bodies around an axis") },
@@ -102,7 +100,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
 export const BODY_ICON = Box;
 export const COPY_ICON = Copy;
 
-export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "coil", "rib", "primitive", "text", "standard_part", "screw", "spring", "cable", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"].filter((op) => !isPausedOp(op)) as FeatureOp[];
+export const TOOLBAR: FeatureOp[] = ["sketch", "extrude", "revolve", "loft", "sweep", "coil", "rib", "primitive", "text", "standard_part", "screw", "spring", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "hole", "split", "gear", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane"];
 
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
@@ -129,8 +127,6 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       return { id, op, face: { face: "" }, clearance: "fit / 2" };
     case "coil":
       return { id, op, profile, axis: { ref: "origin.Z" }, pitch: 5, turns: 5, mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import") ? "join" : "new_body" };
-    case "cable":
-      return { id, op, points: [], diameter: 2 };
     case "spring":
       return { id, op, kind: "compression", wire: 1.5, diameter: 15, coils: 6, length: 40, plane: { ref: "origin.XY" }, mode: "new_body" };
     case "screw":

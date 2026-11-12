@@ -275,9 +275,9 @@ describe("MCP server in process", () => {
 
   it("writes an export's files: one, several next to each other, per variant, and staged in pieces", async () => {
     const one = join(dir, "exp", "part.stl");
-    answers["export"] = (p) => ({ files: { [`${p["name"]}.stl`]: b64("solid") }, filaments: [{ slot: 1, color: "#fff" }, { slot: 2, material: "PETG", color: "#000" }], cablesLeftOut: ["c1"] });
+    answers["export"] = (p) => ({ files: { [`${p["name"]}.stl`]: b64("solid") }, filaments: [{ slot: 1, color: "#fff" }, { slot: 2, material: "PETG", color: "#000" }] });
     const r1 = textOf(await callTool("export", { project: "P1", format: "stl", path: one }));
-    expect(r1).toBe(`wrote ${one}; filaments: 1 = any #fff, 2 = PETG #000; cables left out (not printed; name them in parts to export them): 1`);
+    expect(r1).toBe(`wrote ${one}; filaments: 1 = any #fff, 2 = PETG #000`);
     expect(readFileSync(one).toString()).toBe("solid");
 
     const obj = join(dir, "exp", "scene.obj");
@@ -336,8 +336,8 @@ describe("MCP server in process", () => {
   });
 
   it("opens in a slicer and says what it sent", async () => {
-    answers["send_to_slicer"] = () => ({ slicer: "Bambu Studio", file: "/tmp/x.3mf", moved: true, filaments: [{ slot: 1, color: "#f00" }], cablesLeftOut: ["c1", "c2"] });
-    expect(textOf(await callTool("send_to_slicer", {}))).toBe("opened /tmp/x.3mf in Bambu Studio (moved parts where they are shown); filaments: 1 = any #f00; cables left out (not printed): 2");
+    answers["send_to_slicer"] = () => ({ slicer: "Bambu Studio", file: "/tmp/x.3mf", moved: true, filaments: [{ slot: 1, color: "#f00" }] });
+    expect(textOf(await callTool("send_to_slicer", {}))).toBe("opened /tmp/x.3mf in Bambu Studio (moved parts where they are shown); filaments: 1 = any #f00");
     answers["send_to_slicer"] = () => ({ slicer: "PrusaSlicer", file: "/tmp/y.3mf", moved: false });
     expect(textOf(await callTool("send_to_slicer", {}))).toBe("opened /tmp/y.3mf in PrusaSlicer");
   });

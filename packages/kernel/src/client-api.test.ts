@@ -51,11 +51,11 @@ describe("kernel client calls", () => {
     expect(await c.exportStep(["b"], [{ id: "b", name: "Box" }])).toEqual(new Uint8Array([1, 2]));
     expect(await c.exportMeshes(["b"])).toEqual([{ bodyId: "b" }]);
     expect(await c.overlaps(["x"], { budgetMs: 10 })).toEqual({ pairs: [{ a: "x", b: "y", distance: 1, overlap: 0 }], left: 3 });
-    expect(await c.clearances(["x"], {}, 2, ["cable"], { x: 1, y: 1 })).toHaveLength(1);
+    expect(await c.clearances(["x"], {}, 2, ["wire"], { x: 1, y: 1 })).toHaveLength(1);
     expect(await c.drawing(["front"], ["b"], doc())).toEqual([{ name: "front" }]);
     expect((await c.measure({ bodyId: "b", kind: "face", index: 0 }, { bodyId: "b", kind: "face", index: 1 })).rows[0]).toEqual(["Distance", "5 mm"]);
     expect(w.sent.find((r) => r.type === "export_step")).toMatchObject({ bodies: ["b"], parts: [{ id: "b", name: "Box" }] });
-    expect(w.sent.find((r) => r.type === "clearance" && "skip" in r)).toMatchObject({ within: 2, skip: ["cable"], rigid: { x: 1, y: 1 } });
+    expect(w.sent.find((r) => r.type === "clearance" && "skip" in r)).toMatchObject({ within: 2, skip: ["wire"], rigid: { x: 1, y: 1 } });
   });
 
   it("refuses an answer of the wrong kind for every call", async () => {

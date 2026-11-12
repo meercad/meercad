@@ -686,44 +686,6 @@ export class Viewport {
     this.applyPoses();
   }
 
-  /** Parts drawn bent in the shown pose (cables), in model coordinates, instead of as built. */
-  private bent = new Map<string, { positions: Float32Array; normals: Float32Array; indices: Uint32Array; color?: string }>();
-  private bentGroup = new THREE.Group();
-
-  /** Shows parts bent instead of as built (cables following moving parts); an empty list shows them as built again. */
-  setBentParts(list: readonly { bodyId: string; positions: Float32Array; normals: Float32Array; indices: Uint32Array; color?: string }[]): void {
-    if (!list.length && !this.bent.size) return;
-    this.bent = new Map(list.map(({ bodyId, ...m }) => [bodyId, m]));
-    this.applyBent();
-    this.invalidate();
-  }
-
-  private applyBent(): void {
-    for (const o of [...this.bentGroup.children]) {
-      const m = o as THREE.Mesh;
-      m.geometry.dispose();
-      (m.material as THREE.Material).dispose();
-      this.bentGroup.remove(o);
-    }
-    if (!this.bentGroup.parent) this.scene.add(this.bentGroup);
-    for (const b of this.bodies) {
-      const m = this.bent.get(b.mesh.bodyId);
-      b.group.visible = !m;
-      if (!m) continue;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(m.positions, 3));
-      geo.setAttribute("normal", new THREE.BufferAttribute(m.normals, 3));
-      geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
-      geo.computeBoundingSphere();
-      // The part's own colour (its first vertex as painted) unless one is given.
-      const painted = b.faces.geometry.getAttribute("color");
-      const color = m.color ? new THREE.Color(m.color) : painted && painted.count ? new THREE.Color(painted.getX(0), painted.getY(0), painted.getZ(0)) : new THREE.Color(0x888888);
-      const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color, metalness: PLAIN_LOOK.metalness, roughness: PLAIN_LOOK.roughness, side: THREE.DoubleSide }));
-      mesh.castShadow = true;
-      this.bentGroup.add(mesh);
-    }
-  }
-
   private applyPoses(): void {
     for (const b of this.bodies) {
       const m = this.poses.get(b.mesh.bodyId);
@@ -732,7 +694,6 @@ export class Viewport {
       else b.group.matrix.identity();
       b.group.updateMatrixWorld(true);
     }
-    if (this.bent.size) this.applyBent();
     this.placeJoints();
     if (this.stage.active) this.stage.fit(new THREE.Box3().setFromObject(this.bodiesGroup));
     this.invalidate();

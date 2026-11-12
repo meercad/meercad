@@ -18,8 +18,7 @@ describe("new steps", () => {
       expect(f.op, op).toBe(op);
       expect(f.id, op).toMatch(new RegExp(`^[a-z_]+1$`));
       // A draft that waits for a pick is never saved (draftProblem holds the dialog back).
-      // Cables are switched off (Nov 2026): the tool is not offered, its draft has no points.
-      if (draftProblem(f) || op === "cable") continue;
+      if (draftProblem(f)) continue;
       const v = validateDocument(withFeatures([f]));
       expect(v.ok ? [] : v.errors, op).toEqual([]);
     }
@@ -50,7 +49,7 @@ describe("new steps", () => {
 
   it("build with their defaults where they need no pick", async () => {
     await newProject(undefined, "Defaults");
-    const ready = ops.filter((op) => draftProblem(draftFeature(op, emptyDocument())) === null && !["cable", "label", "split", "plane", "sketch"].includes(op));
+    const ready = ops.filter((op) => draftProblem(draftFeature(op, emptyDocument())) === null && !["label", "split", "plane", "sketch"].includes(op));
     for (const op of ready) {
       const f = draftFeature(op, currentDoc());
       expect(apply({ type: "add_features", features: [f] }), op).toBe(true);

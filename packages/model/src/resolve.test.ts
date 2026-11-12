@@ -28,7 +28,6 @@ const steps = [
   { id: "j", op: "label", text: "x", position: [W, W], width: W },
   { id: "k", op: "standard_part", kind: "screw", plane: { ref: "origin.XY" }, points: [[W, W]], length: W },
   { id: "l", op: "hole", kind: "simple", plane: { ref: "origin.XY" }, points: [[W, W]], diameter: W, depth: W },
-  { id: "m", op: "cable", points: [{ at: [W, W, W] }], diameter: W, start: { kind: "jst", pins: W }, end: { kind: "jst", pins: W } },
   { id: "n", op: "spring", kind: "compression", wire: W, diameter: W, coils: W, length: W, center: [W, W] },
   { id: "o", op: "screw", kind: "screw", diameter: W, length: W, center: [W, W] },
   { id: "p", op: "gear", kind: "spur", module: W, teeth: W, width: W, center: [W, W], meshWith: { gear: "q", direction: W }, bore: { diameter: W, allowance: W, flat: W }, hub: { diameter: W, length: W } },
@@ -79,7 +78,5 @@ describe("resolving refuses what cannot be built", () => {
     expect(resolveFeature({ id: "t", op: "text", plane: { ref: "origin.XY" }, text: "x", size: "w", depth: 1 } as unknown as Feature, s)).toMatchObject({ size: 4, position: [0, 0], angle: 0 });
     const sp = resolveFeature({ id: "sp", op: "standard_part", kind: "screw", plane: { ref: "origin.XY" }, points: [["w", 1]], length: "w * 3" } as unknown as Feature, s);
     expect(sp).toMatchObject({ points: [[4, 1]], length: 12 });
-    const cb = resolveFeature({ id: "cb", op: "cable", points: [{ at: ["w", 0, 1] }], diameter: 2, start: { kind: "jst", pins: "w" } } as unknown as Feature, s);
-    expect(cb).toMatchObject({ points: [{ at: [4, 0, 1] }], diameter: 2, start: { kind: "jst", pins: 4 } });
   });
 });

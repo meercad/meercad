@@ -2,7 +2,7 @@ import { ArrowLeftRight, Check, Cog, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { asArray, type AxisRef, type BooleanMode, type EdgeSelector, type Expr, type FaceSelector, type Feature, type PatternSource, type PlaneSpec, type ProfileRef, type ThreadProfile } from "@meercad/schema";
 import type { Pick, PickKind } from "@meercad/viewport";
-import { cable, gearDims, HOLE_SIZES, INSERT_SIZES, insertDims, insertLengths, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_CUT_TO_LENGTH, STANDARD_DEFAULT_SIZE, STANDARD_LYING, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH, STANDARD_WITH_MOVING } from "@meercad/model";
+import { gearDims, HOLE_SIZES, INSERT_SIZES, insertDims, insertLengths, METRIC_THREADS, parseMetric, SCREW_LENGTHS, STANDARD_CUT_TO_LENGTH, STANDARD_DEFAULT_SIZE, STANDARD_LYING, STANDARD_NAMES, STANDARD_SIZES, STANDARD_WITH_LENGTH, STANDARD_WITH_MOVING } from "@meercad/model";
 
 /** The standard parts in the picker, by what they are for. */
 const STANDARD_GROUPS: [string, (keyof typeof STANDARD_NAMES)[]][] = [
@@ -257,16 +257,6 @@ function handlePick(p: Pick, d: DialogState): void {
         break;
       }
       case "points": {
-        // A cable runs through the tapped point, fixed to the part tapped (it moves with it).
-        if (g.op === "cable") {
-          if (p.kind !== "face" || p.bodyId === g.id) break;
-          const r = (v: number) => Math.round(v * 100) / 100;
-          // The cable lies on the face, not half in it: its centre a radius off along the normal.
-          const off = g.shape === "ribbon" ? cable.RIBBON_THICKNESS / 2 : typeof g.diameter === "number" ? g.diameter / 2 : 0;
-          const n = p.normal ?? [0, 0, 0];
-          g.points = [...g.points, { at: [r(p.point[0] + n[0] * off), r(p.point[1] + n[1] * off), r(p.point[2] + n[2] * off)], on: p.bodyId }];
-          break;
-        }
         // A tapped edge puts a hole beside it, as far in as the wall to the edge needs.
         if (g.op === "hole" && p.kind === "edge") {
           const mesh = meshes.find((m) => m.bodyId === p.bodyId);
@@ -1155,135 +1145,6 @@ function useFeatureInfo(id: string): Record<string, number> | undefined {
   return useApp((s) => s.output?.report.features.find((x) => x.id === id)?.info);
 }
 
-type CablePlug = NonNullable<Of<"cable">["start"]>;
-const PLUG_PINS: Partial<Record<CablePlug["kind"], [number, number]>> = { jst_xh: [1, 16], jst_ph: [1, 16], jst_sh: [1, 16], dupont: [1, 16], idc: [2, 64] };
-
-/** Cable: points it runs through (tapped on parts, or typed), section, material, plugs on the ends. */
-function CableFields({ f, set }: { f: Of<"cable">; set: (patch: Record<string, unknown>) => void }) {
-  const info = useFeatureInfo(f.id);
-  const features = useApp((s) => s.doc.features);
-  const built = useApp((s) => s.output?.report.bodies);
-  const bodies = (built ?? []).map((b) => b.id).filter((b) => b !== f.id);
-  const ribbon = f.shape === "ribbon";
-  const setPoint = (i: number, patch: Partial<Of<"cable">["points"][number]>) =>
-    set({ points: f.points.map((p, j) => (j === i ? Object.fromEntries(Object.entries({ ...p, ...patch }).filter(([, v]) => v !== undefined)) : p)) });
-  const move = (i: number, by: number) => {
-    const pts = [...f.points];
-    const [p] = pts.splice(i, 1);
-    pts.splice(i + by, 0, p!);
-    set({ points: pts });
-  };
-  const addPoint = () => {
-    const last = f.points.at(-1);
-    const at: [Expr, Expr, Expr] = last ? [typeof last.at[0] === "number" ? last.at[0] + 20 : last.at[0], last.at[1], last.at[2]] : [0, 0, 0];
-    set({ points: [...f.points, { at }] });
-  };
-  const plug = (end: "start" | "end") => {
-    const c = f[end];
-    const pins = c ? PLUG_PINS[c.kind] : undefined;
-    return (
-      <div className="row">
-        <Field label={end === "start" ? t("Plug at the start") : t("Plug at the end")}>
-          <select className="field" value={c?.kind ?? ""} onChange={(e) => set({ [end]: e.target.value ? { kind: e.target.value } : undefined })}>
-            <option value="">{t("None")}</option>
-            {cable.CABLE_PLUG_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {cable.plugLabel(k)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {c && pins ? (
-          <Field label={t("Contacts")}>
-            <ExprInput value={c.pins ?? ""} unit="" placeholder={c.kind === "idc" ? String(ribbon ? (f.conductors ?? 10) : 10) : c.kind === "dupont" ? "1" : "2"} onCommit={(v) => set({ [end]: { ...c, pins: v === "" ? undefined : v } })} />
-          </Field>
-        ) : null}
-      </div>
-    );
-  };
-  return (
-    <>
-      <Seg value={ribbon ? "ribbon" : "round"} options={[["round", t("Round cable")], ["ribbon", t("Ribbon cable")]]} onChange={(shape) => set(shape === "ribbon" ? { shape, diameter: undefined, material: undefined, conductors: f.conductors ?? 10 } : { shape: undefined, conductors: undefined, diameter: f.diameter ?? 2 })} />
-      <div className="row">
-        {ribbon ? (
-          <Field label={t("Wires")}>
-            <ExprInput value={f.conductors ?? 10} unit="" onCommit={(conductors) => set({ conductors })} onLive={(conductors) => set({ conductors })} />
-          </Field>
-        ) : (
-          <>
-            <Field label={t("Diameter")}>
-              <ExprInput value={f.diameter ?? 2} autoFocus onCommit={(diameter) => set({ diameter })} onLive={(diameter) => set({ diameter })} />
-            </Field>
-            <Field label={t("Insulation")}>
-              <select className="field" value={f.material ?? "silicone"} onChange={(e) => set({ material: e.target.value === "silicone" ? undefined : e.target.value })}>
-                <option value="silicone">{t("Silicone (flexible)")}</option>
-                <option value="pvc">{t("PVC")}</option>
-                <option value="ptfe">{t("PTFE")}</option>
-              </select>
-            </Field>
-          </>
-        )}
-      </div>
-      <div className="row">
-        <Field label={t("Smallest bend radius")}>
-          <ExprInput value={f.bendRadius ?? ""} placeholder={ribbon ? "3" : `${cable.CABLE_MATERIALS[f.material ?? "silicone"].bend} × Ø`} onCommit={(v) => set({ bendRadius: v === "" ? undefined : v })} />
-        </Field>
-        <Field label={t("Slack")}>
-          <ExprInput value={f.slack ?? ""} placeholder="0" onCommit={(v) => set({ slack: v === "" ? undefined : v })} />
-        </Field>
-      </div>
-      <Field label={t("Points ({n})", { n: f.points.length })}>
-        <SelBox field="points" items={f.points.length ? [tn(f.points.length, "{n} point: tap a part to add", "{n} points: tap a part to add")] : []} placeholder={t("Tap parts where the cable runs")} />
-        {f.points.map((pt, i) => (
-          <div key={i} className="cable-point">
-            <div className="cable-xyz">
-              {([0, 1, 2] as const).map((k) => (
-                <ExprInput key={k} value={pt.at[k]} quiet onCommit={(v) => setPoint(i, { at: pt.at.map((q, j) => (j === k ? v : q)) as [Expr, Expr, Expr] })} />
-              ))}
-            </div>
-            <div className="row" style={{ gap: 4, alignItems: "center" }}>
-              <select className="field small" value={pt.on ?? ""} onChange={(e) => setPoint(i, { on: e.target.value || undefined })}>
-                <option value="">{t("Fixed in place")}</option>
-                {[...new Set([...bodies, ...(pt.on ? [pt.on] : [])])].map((b) => (
-                  <option key={b} value={b}>
-                    {t("Moves with {part}", { part: partName(b, features) })}
-                  </option>
-                ))}
-              </select>
-              <button className="icon-btn sm" title={t("Earlier")} disabled={i === 0} onClick={() => move(i, -1)}>
-                ↑
-              </button>
-              <button className="icon-btn sm" title={t("Remove")} onClick={() => set({ points: f.points.filter((_, j) => j !== i) })}>
-                <X />
-              </button>
-            </div>
-          </div>
-        ))}
-        <button className="btn" onClick={addPoint}>
-          {t("Add point")}
-        </button>
-      </Field>
-      {plug("start")}
-      {plug("end")}
-      <p className="muted small">{t("Points fixed to a part move with it. Open the joints and move them: the cable follows and turns red when it is stretched, bent too tight or runs into a part.")}</p>
-      {info ? (
-        <div className="gear-sizes small">
-          <span>{t("Length")}</span>
-          <b>{mm(info["length"] ?? 0)}</b>
-          <span>{t("Mass")}</span>
-          <b>{`${+(info["mass"] ?? 0).toFixed(1)} g`}</b>
-          {info["minRadius"] !== undefined ? (
-            <>
-              <span>{t("Tightest bend")}</span>
-              <b>{mm(info["minRadius"])}</b>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </>
-  );
-}
-
 /** Coil: profile, axis, pitch and turns, taper, hand. */
 function CoilFields({ f, set, profileChip, sketches }: { f: Of<"coil">; set: (patch: Record<string, unknown>) => void; profileChip: (p: ProfileRef) => string; sketches: Of<"sketch">[] }) {
   const features = useApp((s) => s.doc.features);
@@ -1699,8 +1560,6 @@ function Body({ d }: { d: DialogState }) {
       return <CoilFields f={f} set={set} profileChip={profileChip} sketches={sketches} />;
     case "spring":
       return <SpringFields f={f} set={set} />;
-    case "cable":
-      return <CableFields f={f} set={set} />;
     case "screw":
       return <ScrewFields f={f} set={set} />;
     case "gridfinity":

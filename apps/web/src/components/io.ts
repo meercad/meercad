@@ -68,41 +68,25 @@ function exportIds(parts?: readonly string[]): string[] {
 }
 
 /**
- * The parts a file for printing takes (STL, 3MF, the slicer): cables are left out unless asked for
- * by name, as nobody prints them. A robot's two dozen cables made more triangles than its 560 other
- * parts and two thirds of the export time (2026-11-11). Only cables shown: they go.
- */
-export function printIds(ids: readonly string[], parts?: readonly string[]): { ids: string[]; cables: string[] } {
-  if (parts) return { ids: [...ids], cables: [] };
-  const cable = new Set(currentDoc().features.filter((f) => f.op === "cable").map((f) => f.id));
-  const cables = ids.filter((id) => cable.has(id));
-  if (!cables.length || cables.length === ids.length) return { ids: [...ids], cables: [] };
-  return { ids: ids.filter((id) => !cable.has(id)), cables };
-}
-
-/**
  * The files of an STL/3MF/OBJ export from a print-quality tessellation (the on-screen one is far
  * coarser), named `name`.ext; OBJ also takes the visible terrains and scans with their pictures.
  * `posed` (default) takes moved parts where they are shown. `moved` tells whether any were.
- * STL and 3MF leave cables out unless `parts` names them (see printIds); `cables` lists those.
  */
-export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string; materials?: boolean } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[]; cables: string[] }> {
+export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string; materials?: boolean } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[] }> {
   const name = opts.name ?? baseName();
-  const shown = exportIds(opts.parts);
-  const { ids, cables } = format === "obj" ? { ids: shown, cables: [] } : printIds(shown, opts.parts);
+  const ids = exportIds(opts.parts);
   const surroundings = format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
   if (!ids.length && !surroundings) throw new Error(t("Nothing to export"));
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
   const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
-  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes, cables };
-  return { files: { [`${name}.${format}`]: meshFile(format, meshes, opts.materials) }, moved: poses.size > 0, meshes, cables };
+  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes };
+  return { files: { [`${name}.${format}`]: meshFile(format, meshes, opts.materials) }, moved: poses.size > 0, meshes };
 }
 
 export async function exportMesh(format: MeshFormat): Promise<void> {
   try {
-    const { files, moved, meshes, cables } = await meshExportFiles(format);
+    const { files, moved, meshes } = await meshExportFiles(format);
     if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
-    if (cables.length) toast(t("Cables left out ({n}): they are not printed. To export them, show only them.", { n: cables.length }), "info");
     const names = Object.keys(files);
     if (names.length > 1) toast(t("Exported as a zip: the OBJ with its materials and pictures"), "info");
     download(names.length > 1 ? `${baseName()}.zip` : names[0]!, (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart);
@@ -119,20 +103,19 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
  * materials if the setting is on), written to a temporary file the slicer opens. `slicer`: which
  * one, default the first installed (Bambu Studio before PrusaSlicer).
  */
-export async function openInSlicer(slicer?: SlicerId, opts: { parts?: readonly string[]; posed?: boolean; materials?: boolean } = {}): Promise<{ slicer: string; file: string; moved: boolean; meshes: BodyMesh[]; cables: string[] }> {
+export async function openInSlicer(slicer?: SlicerId, opts: { parts?: readonly string[]; posed?: boolean; materials?: boolean } = {}): Promise<{ slicer: string; file: string; moved: boolean; meshes: BodyMesh[] }> {
   const target = slicerFor(slicer) ?? ((await refreshSlicers()), slicerFor(slicer));
   if (!target || !desktop?.slicers) throw new Error(slicer ? t("{name} is not installed on this Mac", { name: slicer === "bambu" ? "Bambu Studio" : "PrusaSlicer" }) : t("No slicer installed (Bambu Studio or PrusaSlicer)"));
-  const { files, moved, meshes, cables } = await meshExportFiles("3mf", opts);
+  const { files, moved, meshes } = await meshExportFiles("3mf", opts);
   const [name, data] = Object.entries(files)[0]!;
   const r = await desktop.slicers.open({ slicer: target.id, name, data });
-  return { ...r, moved, meshes, cables };
+  return { ...r, moved, meshes };
 }
 
 /** The menu's "Send to …": the model opens in the slicer, with a word on what went. */
 export async function sendToSlicer(slicer: SlicerId): Promise<void> {
   try {
-    const { slicer: name, moved, meshes, cables } = await openInSlicer(slicer);
-    if (cables.length) toast(t("Cables left out ({n}): they are not printed. To export them, show only them.", { n: cables.length }), "info");
+    const { slicer: name, moved, meshes } = await openInSlicer(slicer);
     toast(moved ? t("Sent to {name}, moved parts where they are now", { name }) : t("Sent to {name}", { name }));
     tellFilaments(meshes);
   } catch (e) {
@@ -200,7 +183,7 @@ export interface RobotExportOptions {
   actuators?: Readonly<Record<string, RobotActuator>>;
   /** "shapes" (default): one box, cylinder or sphere per part to collide with; "mesh": the triangles. */
   collision?: RobotCollision;
-  /** Only these parts (cables too when named); default every part shown, cables left out. */
+  /** Only these parts; default every part shown. */
   parts?: readonly string[];
   /** Parts to leave out as well. */
   exclude?: readonly string[];
@@ -222,9 +205,7 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
   const all = bodies.map((b) => b.id);
   const unknown = [...Object.keys(opts.masses ?? {}), ...(opts.exclude ?? [])].filter((id) => !all.includes(id));
   if (unknown.length) throw new Error(t("unknown part {id}", { id: unknown.join(", ") }));
-  // The parts shown (or named), without cables: two dozen cables hanging on nothing would fall out of the robot.
-  const { ids: taken, cables } = printIds(exportIds(opts.parts), opts.parts);
-  const ids = taken.filter((id) => !opts.exclude?.includes(id));
+  const ids = exportIds(opts.parts).filter((id) => !opts.exclude?.includes(id));
   if (!ids.length) throw new Error(t("Nothing to export"));
   const keep = new Set(ids);
   const left = new Set(all.filter((id) => !keep.has(id)));
@@ -251,8 +232,7 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
     parts.push({ id: b.id, name: partName(b.id, doc.features), mesh: { positions: mesh.positions, indices: mesh.indices }, ...(color ? { color } : {}), mass, centroid, inertia });
   }
   if (plain.length) warnings.push(`${plain.length} parts have no material and count as PLA (${plain.slice(0, 6).join(", ")}${plain.length > 6 ? ", …" : ""})`);
-  if (cables.length) warnings.push(`${cables.length} cables left out (name them in parts to take them)`);
-  const hiddenOut = all.filter((id) => left.has(id) && !cables.includes(id)).length;
+  const hiddenOut = all.filter((id) => left.has(id)).length;
   if (hiddenOut && !opts.parts) warnings.push(`${hiddenOut} parts hidden or excluded, left out`);
   const { mech, problems } = currentMechanism();
   for (const [id, msg] of Object.entries(problems)) warnings.push(`joint ${id} left out: ${msg}`);
@@ -389,7 +369,7 @@ export async function variantFiles(format: MeshFormat | "step", progress?: (k: n
       if (failed) throw new Error(t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }));
       const hidden = useApp.getState().hidden;
       const shown = out.report.bodies.map((b) => b.id).filter((id) => (parts ? parts.includes(id) : !hidden.has(id)));
-      const ids = format === "stl" || format === "3mf" ? printIds(shown, parts).ids : shown;
+      const ids = shown;
       const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
       if (format === "obj") {
         const obj = objExport(`${safe(baseName())}-${safe(v.name)}`, await kernel.exportMeshes(ids), false);

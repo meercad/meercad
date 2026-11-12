@@ -120,39 +120,57 @@ function checkSketch(sk: SketchFeature, at: string, errors: string[]): void {
 /** Formats written by earlier versions, read as the current one. */
 export const LEGACY_FORMATS: readonly string[] = ["leocad/1"];
 
-/** Steps earlier versions had and this one no longer offers ("texture": the surface pattern). */
-export const REMOVED_OPS: readonly string[] = ["texture"];
-
 /**
- * Whether cables are offered. While they are switched off, designs that hold cable steps still open
- * and keep them as they are (nothing is removed from the file), but the steps are not built, not
- * shown and cannot be added or changed. Switch back on to bring the feature back as it was.
+ * Steps earlier versions had and this one no longer offers: "texture" (the surface pattern) and
+ * "cable" (cables laid through points, removed Nov 2026).
  */
-export const CABLES_ENABLED = false;
+export const REMOVED_OPS: readonly string[] = ["texture", "cable"];
 
-/** Steps this version keeps in a design but does not build or offer (see CABLES_ENABLED). */
-export const PAUSED_OPS: readonly string[] = CABLES_ENABLED ? [] : ["cable"];
-
-/** Whether a step is kept in the design but switched off in this version. */
-export const isPausedOp = (op: unknown): boolean => PAUSED_OPS.includes(op as string);
+/** Fields of a step that name parts: a removed step's part is taken out of them. */
+const PART_LISTS = ["bodies", "tools", "targets", "catchIn"] as const;
+/** Fields that name one part: a step whose part is gone goes with it. */
+const PART_FIELDS = ["target", "body"] as const;
 
 /**
- * A design without the steps of REMOVED_OPS, and the ids of those it dropped. They only ever changed
- * the look of faces, never the solid, so no later step depends on them; a rollback to one of them
- * moves back to the step before. Anything that is not a design comes back as it was.
+ * A design without the steps of REMOVED_OPS, and the ids of those it dropped. A texture only ever
+ * changed the look of faces; a cable was a part of its own that nothing builds on. What named a
+ * dropped cable lets go of it: later steps' part lists, joints that moved it (and their couplings
+ * and moments in motions), its colour, material and place in the parts list. A step left with no
+ * part to work on goes too. A rollback to a dropped step moves back to the step before. Anything
+ * that is not a design comes back as it was.
  */
 export function withoutRemovedFeatures<T>(input: T): { doc: T; removed: string[] } {
-  const d = input as { features?: unknown; rollback?: unknown } | null;
+  const d = input as { features?: unknown; rollback?: unknown } & Record<string, unknown>;
   if (!d || typeof d !== "object" || !Array.isArray(d.features)) return { doc: input, removed: [] };
-  const gone = (f: unknown) => !!f && typeof f === "object" && REMOVED_OPS.includes((f as { op?: unknown }).op as string);
+  const opOf = (f: unknown) => (f && typeof f === "object" ? (f as { op?: unknown }).op : undefined);
   const features = d.features as unknown[];
-  if (!features.some(gone)) return { doc: input, removed: [] };
+  if (!features.some((f) => REMOVED_OPS.includes(opOf(f) as string))) return { doc: input, removed: [] };
   const removed: string[] = [];
+  /** Parts of dropped steps: the step's id, and its copies' ids ("<id>_…"). */
+  const gonePart = (b: unknown) => typeof b === "string" && removed.some((r) => b === r || b.startsWith(`${r}_`));
   const kept: unknown[] = [];
   let rollback = d.rollback;
   for (const f of features) {
-    if (!gone(f)) {
-      kept.push(f);
+    let step = f as Record<string, unknown>;
+    let drop = REMOVED_OPS.includes(opOf(f) as string);
+    if (!drop && step && typeof step === "object" && removed.length) {
+      for (const k of PART_FIELDS) if (gonePart(step[k])) drop = true;
+      for (const k of PART_LISTS) {
+        const list = step[k];
+        if (!Array.isArray(list) || !list.some(gonePart)) continue;
+        const rest = list.filter((b) => !gonePart(b));
+        if (!rest.length && k !== "targets" && k !== "catchIn") drop = true;
+        step = { ...step, [k]: rest };
+      }
+      const source = step["source"] as { bodies?: unknown[] } | undefined;
+      if (source && Array.isArray(source.bodies) && source.bodies.some(gonePart)) {
+        const rest = source.bodies.filter((b) => !gonePart(b));
+        if (!rest.length) drop = true;
+        step = { ...step, source: { ...source, bodies: rest } };
+      }
+    }
+    if (!drop) {
+      kept.push(step);
       continue;
     }
     const id = (f as { id?: unknown }).id;
@@ -162,7 +180,24 @@ export function withoutRemovedFeatures<T>(input: T): { doc: T; removed: string[]
       rollback = before && typeof before.id === "string" ? before.id : null;
     }
   }
-  return { doc: { ...d, features: kept, ...("rollback" in d ? { rollback } : {}) } as T, removed };
+  const out: Record<string, unknown> = { ...d, features: kept, ...("rollback" in d ? { rollback } : {}) };
+  const without = (r: unknown) => (r && typeof r === "object" ? Object.fromEntries(Object.entries(r).filter(([k]) => !gonePart(k))) : r);
+  const listWithout = (l: unknown) => (Array.isArray(l) ? l.filter((x) => !gonePart(x)) : l);
+  for (const k of ["partColors", "partMaterials"]) if (k in d) out[k] = without(d[k]);
+  for (const k of ["partOrder", "seeThrough"]) if (k in d) out[k] = listWithout(d[k]);
+  if (Array.isArray(d["partGroups"])) out["partGroups"] = (d["partGroups"] as { parts?: unknown }[]).map((g) => ({ ...g, parts: listWithout(g.parts) }));
+  const mech = d["mechanism"] as { joints?: { id: string; a?: unknown; b?: unknown }[]; couplings?: { driver: string; driven: string }[]; motions?: { keys?: { values?: Record<string, unknown> }[] }[] } | undefined;
+  if (mech && Array.isArray(mech.joints) && mech.joints.some((j) => gonePart(j.a) || gonePart(j.b))) {
+    const goneJoints = new Set(mech.joints.filter((j) => gonePart(j.a) || gonePart(j.b)).map((j) => j.id));
+    const jointGone = (k: string) => goneJoints.has(k.replace(/\.(turn|slide)$/, ""));
+    out["mechanism"] = {
+      ...mech,
+      joints: mech.joints.filter((j) => !goneJoints.has(j.id)),
+      ...(mech.couplings ? { couplings: mech.couplings.filter((c) => !goneJoints.has(c.driver) && !goneJoints.has(c.driven)) } : {}),
+      ...(mech.motions ? { motions: mech.motions.map((m) => ({ ...m, keys: (m.keys ?? []).map((k) => ({ ...k, values: Object.fromEntries(Object.entries(k.values ?? {}).filter(([j]) => !jointGone(j))) })) })) } : {}),
+    };
+  }
+  return { doc: out as T, removed };
 }
 
 export function validateDocument(input: unknown): Validation<MeercadDocument> {
@@ -357,11 +392,6 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       case "bend":
         for (const b of f.bodies) body(b, at);
         if (f.mode === "bend" ? f.angle === undefined && f.radius === undefined : f.radius === undefined) errors.push(`${at}: ${f.mode === "bend" ? "a bend needs an angle or a radius" : `${f.mode} needs a radius`}`);
-        break;
-      case "cable":
-        if (f.shape === "ribbon" ? f.diameter !== undefined : f.diameter === undefined) errors.push(`${at}: ${f.shape === "ribbon" ? "a ribbon cable takes conductors, not a diameter" : "a round cable needs a diameter"}`);
-        if (f.shape !== "ribbon" && f.conductors !== undefined) errors.push(`${at}: conductors are for ribbon cables`);
-        for (const end of [f.start, f.end]) if (end && (end.kind === "xt30" || end.kind === "xt60") && end.pins !== undefined) errors.push(`${at}: ${end.kind} plugs have two contacts`);
         break;
       case "hole":
         planeSpec(f.plane, at);

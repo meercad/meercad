@@ -3,7 +3,7 @@
  * history: a change that cannot be made leaves the design exactly as it was.
  */
 import { describe, expect, it } from "vitest";
-import { CABLES_ENABLED, type Feature, type MeercadDocument } from "@meercad/schema";
+import { type Feature, type MeercadDocument } from "@meercad/schema";
 import { applyOp, DocumentStore, nextFeatureId, OpError } from "./store.js";
 
 const sketch = (id: string): Feature =>
@@ -23,11 +23,6 @@ describe("steps", () => {
     const added = applyOp(rolled, { type: "add_features", features: [extrude("ex3", "sk1", 1)] });
     expect(ids(added)).toEqual(["sk1", "ex1", "ex3", "ex2"]);
     expect(added.rollback).toBe("ex3");
-  });
-
-  it("refuses steps paused in this version", () => {
-    if (CABLES_ENABLED) return;
-    refuses(base(), { type: "add_features", features: [{ id: "cab1", op: "cable", points: [{ at: [0, 0, 0] }, { at: [10, 0, 0] }], diameter: 2 }] }, /cable steps are not available/);
   });
 
   it("edits a step, removes fields set to null, and never changes its id", () => {
@@ -190,7 +185,7 @@ describe("undo history", () => {
   });
 
   it("gives every kind of step a free id of its own", () => {
-    const ops = ["sketch", "primitive", "plane", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "gear", "coil", "spring", "screw", "cable", "linear_pattern", "circular_pattern", "mirror", "boolean", "transform", "delete", "import", "mesh_convert", "bend", "hole", "loft", "split", "rib", "draft", "offset_face", "text", "standard_part", "gridfinity", "label", "box", "snap_hook", "wall", "lithophane", "align", "scale", "sweep"] as const;
+    const ops = ["sketch", "primitive", "plane", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "gear", "coil", "spring", "screw", "linear_pattern", "circular_pattern", "mirror", "boolean", "transform", "delete", "import", "mesh_convert", "bend", "hole", "loft", "split", "rib", "draft", "offset_face", "text", "standard_part", "gridfinity", "label", "box", "snap_hook", "wall", "lithophane", "align", "scale", "sweep"] as const;
     for (const op of ops) expect(nextFeatureId(base(), op), op).toMatch(/^[a-z]+\d+$/);
     expect(nextFeatureId(base(), "extrude")).toBe("ex3");
     expect(nextFeatureId(base(), "sketch")).toBe("sk2");

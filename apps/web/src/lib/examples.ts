@@ -1,5 +1,5 @@
 /** Fully parametric starter models for the home screen. Home shows `name` and `description` through t(). */
-import { CABLES_ENABLED, type Expr, type MeercadDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
+import { type Expr, type MeercadDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 import { packsUsed, type PackId } from "./packUse";
 
 /** Rectangle anchored at the origin with width/height dimensions. */
@@ -302,7 +302,6 @@ const MORE: [file: string, name: string, description: string][] = [
   ["43-springs", "Springs", "Compression, extension and torsion springs from wire, diameter and coils"],
   ["44-trapezoid-screw-and-nut", "Clamp screw and nut", "A Tr16 screw with a knurled head and its nut, with play for printing"],
   ["46-coil-thread", "Coil", "A thread of your own profile cut into a rod, and a conical coil"],
-  ...(CABLES_ENABLED ? [["47-cable-on-a-swinging-arm", "Cable on a swinging arm", "A cable with an XT30 and a JST plug that follows the arm; swing it far and it gets stretched"] as [string, string, string]] : []),
   ["45-jar-with-lid", "Jar with screw lid", "A three-start round thread: the lid closes in a third of a turn"],
 ];
 

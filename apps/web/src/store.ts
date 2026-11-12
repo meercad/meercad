@@ -760,7 +760,6 @@ function firstField(op: FeatureOp): string | null {
       gear: "plane",
       coil: "profile",
       spring: "plane",
-      cable: "points",
       screw: "plane",
       hole: "plane",
       standard_part: "plane",
@@ -908,12 +907,14 @@ export async function newProject(doc: MeercadDocument = emptyDocument(), name = 
 }
 
 function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore): void {
-  // Steps an earlier version had and this one no longer offers (the surface texture) are left out;
-  // the next save writes the design without them.
+  // Steps an earlier version had and this one no longer offers (the surface texture, cables) are
+  // left out; the next save writes the design without them.
   const cleaned = store ? { doc, removed: [] } : withoutRemovedFeatures(doc);
   if (cleaned.removed.length) {
+    const gone = new Set(doc.features.filter((f) => cleaned.removed.includes(f.id)).map((f) => (f as { op: string }).op));
     doc = cleaned.doc;
-    toast(t("This design had a surface texture. meerCAD no longer has it, so the part now shows smooth."), "info");
+    if (gone.has("texture")) toast(t("This design had a surface texture. meerCAD no longer has it, so the part now shows smooth."), "info");
+    if (gone.has("cable")) toast(t("This design had cables. meerCAD no longer has them, so they are left out; the rest of the design is as before."), "info");
   }
   // Nothing of this project is on screen until its first rebuild ends.
   shownDoc = null;
