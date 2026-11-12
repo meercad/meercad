@@ -66,3 +66,50 @@ describe("steps that cannot be built say why", () => {
     expect(await fails(extra)).toMatch(msg);
   });
 });
+
+/** A second part beside the box, and a round shaft standing on it. */
+const part2: Feature[] = [
+  sketch("skb", { ref: "origin.XY" }, rect("q", 60, 0, 10, 10)),
+  { id: "exb", op: "extrude", profile: { sketch: "skb" }, extent: "blind", distance: 10, mode: "new_body" },
+];
+const shaft: Feature[] = [
+  sketch("skc", { ref: "origin.XY" }, circle("c", 100, 0, 5)),
+  { id: "exc", op: "extrude", profile: { sketch: "skc" }, extent: "blind", distance: 10, mode: "new_body" },
+];
+const allFaces = { select: "faces", of: "ex1" } as const;
+const round = { face: "exc.side[skc.c]" };
+const pathSketch = (entities: Parameters<typeof sketch>[2]) => [sketch("sk9", { ref: "origin.YZ" }, circle("c", 0, 0, 1)), sketch("sk8", { ref: "origin.XY" }, entities)];
+
+describe("more steps that cannot be built say why", () => {
+  it.each([
+    ["a sketch on a curved face", [...shaft, sketch("sk9", { face: round }, circle("c", 0, 0, 1))], /the selected face is not planar/],
+    ["a sketch on several faces that are not one plane", [sketch("sk9", { face: allFaces }, circle("c", 0, 0, 1))], /face selector matches 6 faces; pick exactly one/],
+    ["a sketch on a face selector that finds nothing", [sketch("sk9", { face: { select: "faces", of: "ex1", where: { tag: "ex1.nope" } } }, circle("c", 0, 0, 1))], /no face matches the selector/],
+    ["a push/pull of several faces", [{ id: "e2", op: "extrude", profile: { face: allFaces }, extent: "blind", distance: 3, mode: "join" }], /push\/pull needs exactly one face/],
+    ["an extrude of a sketch by 0 mm", [sketch("sk9", { ref: "origin.XY" }, circle("c", 100, 100, 3)), { id: "e2", op: "extrude", profile: { sketch: "sk9" }, extent: "blind", distance: 0, mode: "new_body" }], /must not be zero/],
+    ["a loft from several faces at once", [sketch("sk9", { ref: "origin.XY" }, circle("c", 100, 0, 5)), { id: "lo1", op: "loft", profiles: [{ face: allFaces }, { sketch: "sk9" }], mode: "new_body" }], /pick exactly one face/],
+    ["a loft from a curved face", [...shaft, sketch("sk9", { ref: "origin.XY" }, circle("c", 200, 0, 5)), { id: "lo1", op: "loft", profiles: [{ face: round }, { sketch: "sk9" }], mode: "new_body" }], /the face must be flat/],
+    ["a sweep along lines that are gone", [...pathSketch([{ id: "p1", type: "point", x: 0, y: 0 }, { id: "p2", type: "point", x: 10, y: 0 }, { id: "g1", type: "line", p1: "p1", p2: "p2" }]), { id: "sw1", op: "sweep", profile: { sketch: "sk9" }, path: { sketch: "sk8", curves: ["zz"] }, mode: "new_body" }], /path curve\(s\) no longer exist: zz/],
+    ["a sweep along a circle and a line", [...pathSketch([...circle("o", 50, 50, 10), { id: "p1", type: "point", x: 0, y: 0 }, { id: "p2", type: "point", x: 10, y: 0 }, { id: "g1", type: "line", p1: "p1", p2: "p2" }]), { id: "sw1", op: "sweep", profile: { sketch: "sk9" }, path: { sketch: "sk8" }, mode: "new_body" }], /a circle can only be a path on its own/],
+    ["a coil of no turns", [sketch("sk9", { ref: "origin.XZ" }, circle("c", 60, 0, 2)), { id: "co1", op: "coil", profile: { sketch: "sk9" }, axis: { ref: "origin.Z" }, pitch: 5, turns: 0, mode: "new_body" }], /at least a fraction of a turn/],
+    ["a coil of too many turns", [sketch("sk9", { ref: "origin.XZ" }, circle("c", 60, 0, 2)), { id: "co1", op: "coil", profile: { sketch: "sk9" }, axis: { ref: "origin.Z" }, pitch: 5, turns: 501, mode: "new_body" }], /at most 500 turns/],
+    ["aligning by several faces", [...part2, { id: "al1", op: "align", from: { face: { select: "faces", of: "exb" } }, to: { face: { face: "ex1.end_cap" } } }], /the face to move: pick exactly one face/],
+    ["aligning a curved face flat", [...shaft, { id: "al1", op: "align", from: { face: round }, to: { face: { face: "ex1.end_cap" } } }], /the face to move: the face must be flat/],
+    ["aligning on the axis of a flat face", [...part2, { id: "al1", op: "align", from: { axisOf: { face: "exb.end_cap" } }, to: { axisOf: { face: "ex1.end_cap" } } }], /must be round \(a hole, a shaft\)/],
+    ["aligning a part to itself", [{ id: "al1", op: "align", from: { face: { face: "ex1.start_cap" } }, to: { face: { face: "ex1.end_cap" } } }], /the target face belongs to a part being moved/],
+    ["a draft across two parts", [...part2, { id: "dr1", op: "draft", faces: [{ face: "ex1.side[sk1.l1]" }, { face: "exb.side[skb.q1]" }], neutral: { ref: "origin.XY" }, angle: 3 }], /draft faces must belong to one part/],
+    ["moving faces of two parts", [...part2, { id: "of1", op: "offset_face", faces: [{ face: "ex1.end_cap" }, { face: "exb.end_cap" }], distance: 2 }], /the faces must belong to one part/],
+    ["moving a curved face up to a plane", [...shaft, { id: "of1", op: "offset_face", faces: [round], distance: 0, upTo: { ref: "origin.XY" } }], /is not flat/],
+    ["a rib along lines that are gone", [sketch("sk9", { ref: "origin.XZ" }, [{ id: "a", type: "point", x: 0, y: 10 }, { id: "b", type: "point", x: 10, y: 0 }, { id: "ln", type: "line", p1: "a", p2: "b" }]), { id: "rb1", op: "rib", sketch: "sk9", curves: ["zz"], thickness: 2 }], /rib line\(s\) no longer exist: zz/],
+    ["a shell removing no faces", [{ id: "sh1", op: "shell", faces: [], thickness: 1 }], /select at least one face to remove/],
+    ["a shell across two parts", [...part2, { id: "sh1", op: "shell", faces: [{ face: "ex1.end_cap" }, { face: "exb.end_cap" }], thickness: 1 }], /shell faces must belong to one body/],
+    ["bending with a tolerance of 0", [{ id: "bd1", op: "bend", mode: "bend", bodies: ["ex1"], angle: 90, axis: { ref: "origin.Y" }, tolerance: 0 }], /tolerance must be greater than zero/],
+  ] as [string, Feature[], RegExp][])("%s", async (_name, extra, msg) => {
+    expect(await fails(extra)).toMatch(msg);
+  });
+
+  it("a rib with no part to stand on", async () => {
+    const { report } = (await newSession()).rebuild(doc([sketch("sk9", { ref: "origin.XZ" }, [{ id: "a", type: "point", x: 0, y: 10 }, { id: "b", type: "point", x: 10, y: 0 }, { id: "ln", type: "line", p1: "a", p2: "b" }]), { id: "rb1", op: "rib", sketch: "sk9", thickness: 2 }]));
+    expect(report.features.find((f) => f.id === "rb1")!.message).toMatch(/a rib needs a part to stand on/);
+  });
+});
