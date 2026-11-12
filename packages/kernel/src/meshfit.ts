@@ -658,13 +658,16 @@ function fitCone(vs: number[], tris: number[], f: Fitter): Fit | null {
   for (const q of pts) along += dot(sub(q, apex), axis);
   if (along < 0) axis = scale(axis, -1);
   // Half angle: mean angle between the axis and the lines from the apex to the vertices.
+  // The tip itself, when it is a vertex of the mesh, has no direction and is left out.
   let ang = 0;
+  let count = 0;
   for (const q of pts) {
     const d = sub(q, apex);
     const l = len(d);
-    if (l > 0) ang += Math.acos(Math.max(-1, Math.min(1, dot(d, axis) / l)));
+    if (l > f.tolerance) (ang += Math.acos(Math.max(-1, Math.min(1, dot(d, axis) / l)))), count++;
   }
-  ang /= pts.length;
+  if (!count) return null;
+  ang /= count;
   if (ang < (1 * Math.PI) / 180 || ang > (89 * Math.PI) / 180) return null;
   const primitive: Primitive = { kind: "cone", apex, axis, halfAngle: ang };
   return { primitive, residual: residualOf(vs, primitive, f) };

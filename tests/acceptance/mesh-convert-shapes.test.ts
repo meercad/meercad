@@ -107,10 +107,10 @@ describe("mesh_convert of turned shapes", () => {
     expect(r.volume / ((2 * Math.PI * 8 * (100 + 60 + 36)) / 3)).toBeCloseTo(1, 2);
   });
 
-  // Found Nov 2026: a cone that ends in a point, meshed as a fan from the tip to the rim the way
-  // CAD programs write it, has all its vertices on a sphere too, and is taken for one. The volume
-  // check catches it, so the step fails instead of giving a wrong part.
-  it.fails("makes a pointed double cone two cones (taken for spheres today)", async () => {
+  // A cone that ends in a point, meshed as a fan from the tip to the rim the way CAD programs write
+  // it, has all its vertices on a sphere too. Until Nov 2026 the tip vertex pulled the cone's
+  // angle off and the sphere won; the volume check then refused the step.
+  it("makes a pointed double cone two cones, not spheres", async () => {
     const r = await convert(turned([[0, -10], [10, 0], [0, 10]]));
     expect(r.counts).toEqual({ plane: 0, cylinder: 0, cone: 2, sphere: 0, facet: 0 });
     expect(r.volume / ((2 * Math.PI * 100 * 10) / 3)).toBeCloseTo(1, 2);
