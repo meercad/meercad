@@ -106,7 +106,7 @@ const desktop = {
 // viewport resolves it is the one to replace.
 const threeModule = join(dirname(createRequire(join(process.cwd(), "packages/viewport/package.json")).resolve("three")), "three.module.js");
 vi.doMock(threeModule, async () => {
-  const three = (await vi.importActual(threeModule)) as typeof import("three");
+  const three = (await vi.importActual(threeModule)) as typeof import("@meercad/viewport").THREE;
   class TestRenderer {
     constructor() {
       const canvas = document.createElement("canvas");
