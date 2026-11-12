@@ -109,6 +109,9 @@ function checkSketch(sk: SketchFeature, at: string, errors: string[]): void {
       case "diameter":
         if (!curve(c.curve)) bad("circle or arc", c.curve);
         break;
+      case "arc_angle":
+        if (!curve(c.curve)) bad("arc", c.curve);
+        break;
     }
   }
 }
