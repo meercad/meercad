@@ -823,12 +823,17 @@ server.registerTool(
   }),
 );
 
-await server.connect(new StdioServerTransport());
-// When the client goes away (stdin closes), exit so no orphan keeps the bridge port.
-const quit = () => {
-  log("client disconnected, exiting");
-  process.exit(0);
-};
-process.stdin.on("end", quit);
-process.stdin.on("close", quit);
-log("MCP server ready on stdio");
+/** For the tests, which drive this server in the same process over a transport of their own (server.inprocess.test.ts). */
+export { server, bridge };
+
+if (!process.env["MEERCAD_MCP_INPROCESS"]) {
+  await server.connect(new StdioServerTransport());
+  // When the client goes away (stdin closes), exit so no orphan keeps the bridge port.
+  const quit = () => {
+    log("client disconnected, exiting");
+    process.exit(0);
+  };
+  process.stdin.on("end", quit);
+  process.stdin.on("close", quit);
+  log("MCP server ready on stdio");
+}
