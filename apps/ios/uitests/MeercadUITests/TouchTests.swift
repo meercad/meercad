@@ -23,12 +23,14 @@ final class TouchTests: XCTestCase {
     func testDoubleTapsAndPinchesNeverZoomTheInterface() {
         _ = m.openExample("Mounting plate")
         let size = m.screenSize()
+        // In Double, so older Swift (Xcode 16) need not guess between CGFloat and Double.
+        let (w, h) = (Double(size.width), Double(size.height))
         let spots: [(Double, Double)] = [
-            (size.width / 2 + 120, 75), // top bar (below the system area, where a double tap sizes the window)
-            (size.width - 40, size.height / 2), // beside the model
-            (size.width / 2, size.height - 30), // tool bar
-            (40, size.height / 2), // left edge
-            (size.width / 2, size.height / 2), // the model
+            (w / 2 + 120, 75), // top bar (below the system area, where a double tap sizes the window)
+            (w - 40, h / 2), // beside the model
+            (w / 2, h - 30), // tool bar
+            (40, h / 2), // left edge
+            (w / 2, h / 2), // the model
         ]
         let start = m.probe()!
         print("before: scale \(start.scale) inner \(start.width) visible \(start.visible) layout \(start.layout) screen \(size)")
