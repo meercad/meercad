@@ -175,6 +175,7 @@ export function setJointValue(id: string, value: number): boolean {
     }
     return moveLoop(l, r);
   }
+  if (!mech.joint(id)) return false;
   const r = mech.rootValueFor(id, value);
   if (!r) return false;
   const [lo, hi] = mech.range(r.root);
