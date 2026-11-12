@@ -101,6 +101,8 @@ describe("more steps that cannot be built say why", () => {
     ["moving faces of two parts", [...part2, { id: "of1", op: "offset_face", faces: [{ face: "ex1.end_cap" }, { face: "exb.end_cap" }], distance: 2 }], /the faces must belong to one part/],
     ["moving a curved face up to a plane", [...shaft, { id: "of1", op: "offset_face", faces: [round], distance: 0, upTo: { ref: "origin.XY" } }], /is not flat/],
     ["a rib along lines that are gone", [sketch("sk9", { ref: "origin.XZ" }, [{ id: "a", type: "point", x: 0, y: 10 }, { id: "b", type: "point", x: 10, y: 0 }, { id: "ln", type: "line", p1: "a", p2: "b" }]), { id: "rb1", op: "rib", sketch: "sk9", curves: ["zz"], thickness: 2 }], /rib line\(s\) no longer exist: zz/],
+    // OCCT reports success and hands the part back solid: 2 mm walls were never made.
+    ["a shell whose opening's edge is rounded", [{ id: "fi1", op: "fillet", edges: [{ edge: ["ex1.end_cap", "ex1.side[sk1.l1]"] }], radius: 3 }, { id: "sh1", op: "shell", faces: [{ face: "ex1.end_cap" }], thickness: 2 }], /shell failed: the part came back solid.*shell before rounding/],
     ["a shell removing no faces", [{ id: "sh1", op: "shell", faces: [], thickness: 1 }], /select at least one face to remove/],
     ["a shell across two parts", [...part2, { id: "sh1", op: "shell", faces: [{ face: "ex1.end_cap" }, { face: "exb.end_cap" }], thickness: 1 }], /shell faces must belong to one body/],
     ["bending with a tolerance of 0", [{ id: "bd1", op: "bend", mode: "bend", bodies: ["ex1"], angle: 90, axis: { ref: "origin.Y" }, tolerance: 0 }], /tolerance must be greater than zero/],

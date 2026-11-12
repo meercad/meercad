@@ -1500,6 +1500,10 @@ function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
   }
   if (!mk.IsDone()) throw new FeatureError("shell failed", "try a smaller thickness or remove fewer faces");
   const body = new Body(oc, arena, input.bodyId, arena.track(mk.Shape()));
+  // A hollowed part has inner walls besides the outer ones. OCCT sometimes reports success and
+  // hands the part back as it was (a round or bevel along the opening's edge does that; computing
+  // the walls' intersections does not help): that is no shell.
+  if (body.faces.length <= input.faces.length) throw new FeatureError("shell failed: the part came back solid", "shell before rounding or bevelling the opening's edges, or try another thickness");
   const descendants = input.faces.map((face) => {
     const same = body.faceIndex(face);
     if (same >= 0) return [same];
