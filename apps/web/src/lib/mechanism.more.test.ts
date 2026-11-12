@@ -6,7 +6,7 @@
  * rocker's swing is found by driving it to its ends.
  */
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { DocOp, Feature, Joint, SketchEntity } from "@meercad/schema";
+import type { DocOp, Feature, Joint, JointAnchor, SketchEntity } from "@meercad/schema";
 import { apply, newProject, rebuildNow } from "../store";
 import { currentMechanism, currentPoses, jointValues, openForCheck, partDrag, restPose, setJointValue, swingRanges } from "./mechanism";
 
@@ -25,7 +25,7 @@ const part = (id: string, x: number, y: number, w: number, h: number, z = 0): Fe
   { id, op: "extrude", profile: { sketch: `s_${id}` }, extent: "blind", distance: 3, mode: "new_body" },
 ];
 /** The vertical edge of part `id` at its sketch corner between sides `s1` and `s2` (a, b, c, d). */
-const corner = (id: string, s1: string, s2: string) => ({ edge: { edge: [`${id}.side[s_${id}.r${s1}]`, `${id}.side[s_${id}.r${s2}]`] } });
+const corner = (id: string, s1: string, s2: string): JointAnchor => ({ edge: { edge: [`${id}.side[s_${id}.r${s1}]`, `${id}.side[s_${id}.r${s2}]`] } });
 const at = (part: string, p: [number, number, number]) => {
   const m = currentPoses().get(part);
   if (!m) return p;
