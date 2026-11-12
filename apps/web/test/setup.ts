@@ -140,3 +140,33 @@ vi.doMock(threeModule, async () => {
   }
   return { ...three, WebGLRenderer: TestRenderer };
 });
+
+/**
+ * Nor does a 2D canvas: the app draws textures, thumbnails and labels into one. This one keeps its
+ * settings, measures text at 6 px a character and draws nothing; pictures come out blank.
+ */
+const ctx2d = (canvas: HTMLCanvasElement) => {
+  const state: Record<string | symbol, unknown> = {
+    canvas,
+    measureText: (s: string) => ({ width: s.length * 6, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 }),
+    getImageData: (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+    createImageData: (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+    createPattern: () => ({}),
+    getLineDash: () => [],
+    getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
+    isPointInPath: () => false,
+  };
+  return new Proxy(state, { get: (t, k) => (k in t ? t[k] : () => undefined), set: (t, k, v) => ((t[k] = v), true) });
+};
+const contexts = new WeakMap<HTMLCanvasElement, unknown>();
+HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string) {
+  if (kind !== "2d") return null;
+  if (!contexts.has(this)) contexts.set(this, ctx2d(this));
+  return contexts.get(this);
+} as typeof HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.toDataURL = () => "data:image/png;base64,iVBORw0KGgo=";
+HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+  cb(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
+};

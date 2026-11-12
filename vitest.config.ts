@@ -3,15 +3,25 @@ import { defineConfig } from "vitest/config";
 
 /**
  * The app imports its kernel worker the Vite way (`./kernel.worker.ts?worker`, `?worker&url`); in
- * its tests the worker runs in the same process (apps/web/test/kernelWorker.ts).
+ * its tests the worker runs in the same process (apps/web/test/kernelWorker.ts). Files imported as
+ * URLs (`?url`, the sketch solver's .wasm) are their paths on disk.
  */
 function testKernelWorker() {
   const stub = fileURLToPath(new URL("./apps/web/test/kernelWorker.ts", import.meta.url));
   return {
     name: "meercad-test-kernel-worker",
     enforce: "pre" as const,
-    resolveId: (id: string) => (id.endsWith("?worker") ? stub : id.endsWith("?worker&url") ? "\0worker-url" : null),
-    load: (id: string) => (id === "\0worker-url" ? "export default \"kernel.worker.js\";" : null),
+    async resolveId(this: { resolve(id: string, importer?: string): Promise<{ id: string } | null> }, id: string, importer?: string) {
+      if (id.endsWith("?worker")) return stub;
+      if (id.endsWith("?worker&url")) return "\0worker-url";
+      // A file's URL (a .wasm the app loads): in Node its path on disk.
+      if (id.endsWith("?url")) {
+        const file = await this.resolve(id.slice(0, -4), importer);
+        return file ? `/@file-path/${encodeURIComponent(file.id)}` : null;
+      }
+      return null;
+    },
+    load: (id: string) => (id === "\0worker-url" ? "export default \"kernel.worker.js\";" : id.startsWith("/@file-path/") ? `export default ${JSON.stringify(decodeURIComponent(id.slice("/@file-path/".length)))};` : null),
   };
 }
 
