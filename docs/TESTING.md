@@ -11,7 +11,7 @@ and E2E needs the app. So the tests are split into levels, and each moment runs 
 | Integration | The kernel end to end through `KernelSession.rebuild`, the path the app uses: volumes, sizes, topology | `pnpm test:quick` (fast files) and `pnpm test` (all) | ≈ 1 min quick, ≈ 8 min all (4-core runner) |
 | Test models | Real designs from simple to complex rebuild as expected, also after parameter changes | `pnpm test tests/acceptance/models.test.ts` | ≈ 1 min |
 | Performance | Start, open and change times of every test model, mesh sizes, memory, export and import | `pnpm test:perf` | ≈ 4 min (4-core runner) |
-| E2E | The planned models built through the UI of the WIP app, the result compared | `pnpm test:e2e` | long |
+| E2E | Every `tests/e2e/*.e2e.ts` in a private copy of the Mac app: the test models built through the UI, exports, functions one by one (generators, delete, undo, measure, variables, interference, import), versions, units and the overview | `pnpm test:e2e` | long |
 | iPhone/iPad | Touch in the real iOS app in the Simulator: taps, double taps, drags, pinches, sheets | `pnpm test:ios` | ≈ 10 min per device |
 | Hands-on | What only a person sees: looks, touch, Pencil | Checklist below | — |
 
@@ -56,7 +56,7 @@ the iOS app for the Simulator, installs it fresh on its own simulators ("meerCAD
 in a hidden text (`apps/web/src/lib/uitestProbe.ts`): zoom, open sheets, steps, variables, part sizes,
 errors. Failures keep a screenshot in `test-results/ios/<device>.xcresult`.
 
-On the iPad a double tap near the top edge resizes the app's window (iPadOS), so touch tests stay
+Each run erases its simulator first. On the iPad a double tap near the top edge resizes the app's window (iPadOS), so touch tests stay
 below 60 pt.
 
 ## Performance tests
