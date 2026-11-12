@@ -1,4 +1,20 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import type { Plugin } from "vite";
+
+/**
+ * The app imports its kernel worker the Vite way (`./kernel.worker.ts?worker`, `?worker&url`); in
+ * its tests the worker runs in the same process (apps/web/test/kernelWorker.ts).
+ */
+function testKernelWorker(): Plugin {
+  const stub = fileURLToPath(new URL("./apps/web/test/kernelWorker.ts", import.meta.url));
+  return {
+    name: "meercad-test-kernel-worker",
+    enforce: "pre",
+    resolveId: (id) => (id.endsWith("?worker") ? stub : id.endsWith("?worker&url") ? "\0worker-url" : null),
+    load: (id) => (id === "\0worker-url" ? "export default \"kernel.worker.js\";" : null),
+  };
+}
 
 /**
  * Test levels (docs/TESTING.md):
@@ -39,6 +55,13 @@ export default defineConfig({
       {
         extends: true,
         test: { name: "unit", include: ["packages/*/src/**/*.test.ts", "tests/*.test.ts"], exclude: SLOW },
+      },
+      {
+        extends: true,
+        plugins: [testKernelWorker()],
+        // TSX of the app (React 19, automatic runtime).
+        oxc: { jsx: { runtime: "automatic" } },
+        test: { name: "web", environment: "happy-dom", include: ["apps/web/src/**/*.test.{ts,tsx}"], setupFiles: ["apps/web/test/setup.ts"] },
       },
       {
         extends: true,
