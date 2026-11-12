@@ -80,8 +80,8 @@ describe("values on the model", () => {
     const make = [...document.querySelectorAll<HTMLButtonElement>(".value-menu button")].at(-1);
     expect(make).toBeDefined();
     {
-      await act(async () => void fireEvent.mouseDown(make));
-      await act(async () => void fireEvent.click(make));
+      await act(async () => void fireEvent.mouseDown(make!));
+      await act(async () => void fireEvent.click(make!));
       const name = screen.queryByLabelText("Variable name") as HTMLInputElement | null;
       expect(name).not.toBeNull();
       if (name) {
