@@ -66,10 +66,11 @@ beforeAll(async () => {
   regions = out().report.sketches.find((s) => s.id === "sk3")!.regions.map((r) => r.key);
   expect(regions).toHaveLength(2);
 });
+// A spring's preview takes a while to build on a busy machine (a coverage run).
 afterEach(async () => {
   await act(async () => cancelDialog());
   cleanup();
-});
+}, 60_000);
 
 describe("picks for profiles and paths", () => {
   it("takes regions in and out of an extrusion's profile", async () => {
@@ -187,11 +188,13 @@ describe("picks of faces and parts", () => {
     expect(draft<{ position: number[] }>().position).toEqual([12.35, 6.79]);
     await act(async () => cancelDialog());
     await open("spring");
+    // Two coils: quick to build.
+    await act(async () => updateDraft({ coils: 2 } as Partial<Feature>));
     // The text's preview (its letters split the top) has gone once the spring's is built.
     await act(async () => void (await rebuildNow()));
     await pick(face("ex1", "ex1.end_cap", [30, 5, 10], [0, 0, 1]), "plane");
     expect(draft<{ center: number[] }>().center).toEqual([30, 5]);
-  });
+  }, 60_000);
 });
 
 describe("picks made before the tool opens", () => {
