@@ -249,6 +249,10 @@ class Builder {
       if (!mf.IsDone()) throw new FeatureError("could not build a flat face from the mesh");
       return arena.track(mf.Face());
     }
+    if (prim.kind === "sphere") {
+      const cap = this.sphereCap(prim, r);
+      if (cap) return cap;
+    }
     const surface = this.surface(prim, r);
     if (!loops.length) {
       const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, 1e-7));
@@ -270,6 +274,36 @@ class Builder {
     for (const w of loops.slice(1)) mf.Add(w.wire);
     if (!mf.IsDone()) throw new FeatureError(`could not build a ${prim.kind} face from the mesh`);
     return arena.track(mf.Face());
+  }
+
+  /**
+   * A sphere region bounded by one circle (a ball cut by a plane, or grown into another ball): the
+   * sphere placed with its pole square to the circle, and the face cut from it along the circle's
+   * latitude. Built from a loop instead, such a face had no area and the solid came out wrong.
+   */
+  private sphereCap(prim: Extract<Primitive, { kind: "sphere" }>, r: Region): TopoDS_Face | null {
+    const { oc, arena } = this;
+    if (r.loops.length !== 1 || r.loops[0]!.length !== 1) return null;
+    const seg = this.fit.segments[r.loops[0]![0]!.segment]!;
+    if (!seg.closed) return null;
+    // A closed segment ends on its first vertex again.
+    const pts = seg.vertices.slice(0, -1).map((v) => this.p(v));
+    let c: Vec3 = [0, 0, 0];
+    for (const q of pts) c = add(c, scale(q, 1 / pts.length));
+    const d = sub(c, prim.center);
+    const dist = len(d);
+    if (dist <= this.tol) return null;
+    const axis = scale(d, 1 / dist);
+    if (pts.some((q) => Math.abs(dot(sub(q, prim.center), axis) - dist) > this.tol * 2)) return null;
+    const lat = Math.asin(Math.min(1, dist / prim.radius));
+    // The small cap beyond the circle, or the rest of the ball: whichever has the mesh's area.
+    const small = 2 * Math.PI * prim.radius * (prim.radius - dist);
+    const large = 2 * Math.PI * prim.radius * (prim.radius + dist);
+    const [v0, v1] = Math.abs(small - r.area) < Math.abs(large - r.area) ? [lat, Math.PI / 2] : [-Math.PI / 2, lat];
+    const ax3 = arena.track(new oc.gp_Ax3(this.pnt(prim.center), this.dir(axis), this.dir(basis(axis)[0])));
+    const surface = arena.track(new oc.Geom_SphericalSurface(ax3, prim.radius));
+    const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, 0, 2 * Math.PI, v0, v1, 1e-7));
+    return mf.IsDone() ? arena.track(mf.Face()) : null;
   }
 
   /** V range of a cylinder or cone region bounded by exactly two closed circles square to its axis, else null. */
