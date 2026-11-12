@@ -241,9 +241,17 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
     }
     const units = [...new Set(unitOf.values())].sort((x, y) => y.reduce((s, t) => s + areas[t]!, 0) - x.reduce((s, t) => s + areas[t]!, 0));
     const claimed = new Set<number>();
-    const adjacentUnits = (tris: number[]) => {
+    const edgeLength = (t: number, e: number) => len(sub(p(tri(t)[(e + 1) % 3]!), p(tri(t)[e]!)));
+    /** Units next to `tris`; with `minEdge`, only across edges at least that long. */
+    const adjacentUnits = (tris: number[], minEdge = 0) => {
       const out = new Set<number[]>();
-      for (const t of tris) for (const u of neighbours(t)) if (inPiece.has(u) && !claimed.has(u) && dot(normals[t]!, normals[u]!) > sharp) out.add(unitOf.get(u)!);
+      for (const t of tris)
+        for (let e = 0; e < 3; e++) {
+          const h = twin[t * 3 + e]!;
+          if (h < 0 || (minEdge > 0 && edgeLength(t, e) < minEdge)) continue;
+          const u = Math.floor(h / 3);
+          if (inPiece.has(u) && !claimed.has(u) && dot(normals[t]!, normals[u]!) > sharp) out.add(unitOf.get(u)!);
+        }
       for (const t of tris) out.delete(unitOf.get(t)!);
       return [...out];
     };
@@ -256,8 +264,18 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
       for (let ring = 0; ring < 2; ring++) cand = [...new Set([...cand, ...adjacentUnits(cand).flat()])];
       // A small seed fits several surfaces (a corner of a sphere looks like a cylinder up close):
       // each hypothesis grows on its own and the one that covers the most area wins.
+      let starts = fitCurved(cand, verticesOf(cand), fitter);
+      if (!starts.length) {
+        // A strip of a cylinder whose ends meet another surface smoothly (a capsule's half
+        // spheres): the rings above took in triangles of that surface across the strip's short
+        // ends. Its neighbours across the long sides alone show the strip's own surface.
+        let side = [...seed];
+        const long = Math.max(...seed.flatMap((t) => [0, 1, 2].map((e) => edgeLength(t, e)))) / 2;
+        for (let ring = 0; ring < 2; ring++) side = [...new Set([...side, ...adjacentUnits(side, long).flat()])];
+        starts = fitCurved(side, verticesOf(side), fitter);
+      }
       let best: { tris: number[]; fit: Fit; area: number } | null = null;
-      for (const start of fitCurved(cand, verticesOf(cand), fitter)) {
+      for (const start of starts) {
         let fit = start;
         let grown = [...new Set(cand.filter((t) => fitsOn([t], fit.primitive)).flatMap((t) => unitOf.get(t)!))].filter((t) => fitsOn(unitOf.get(t)!, fit.primitive));
         let sinceRefit = 0;
@@ -640,13 +658,16 @@ function fitCone(vs: number[], tris: number[], f: Fitter): Fit | null {
   for (const q of pts) along += dot(sub(q, apex), axis);
   if (along < 0) axis = scale(axis, -1);
   // Half angle: mean angle between the axis and the lines from the apex to the vertices.
+  // The tip itself, when it is a vertex of the mesh, has no direction and is left out.
   let ang = 0;
+  let count = 0;
   for (const q of pts) {
     const d = sub(q, apex);
     const l = len(d);
-    if (l > 0) ang += Math.acos(Math.max(-1, Math.min(1, dot(d, axis) / l)));
+    if (l > f.tolerance) (ang += Math.acos(Math.max(-1, Math.min(1, dot(d, axis) / l)))), count++;
   }
-  ang /= pts.length;
+  if (!count) return null;
+  ang /= count;
   if (ang < (1 * Math.PI) / 180 || ang > (89 * Math.PI) / 180) return null;
   const primitive: Primitive = { kind: "cone", apex, axis, halfAngle: ang };
   return { primitive, residual: residualOf(vs, primitive, f) };

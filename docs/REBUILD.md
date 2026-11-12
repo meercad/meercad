@@ -166,7 +166,7 @@ All in `tests/bench/`, run from `tests/` with `../node_modules/.bin/jiti bench/<
 | `feature-times.ts file` | time by kind of step |
 | `heap.ts`, `leak.ts`, `leak2.ts`, `leak3.ts` | kernel memory over edits, and per kernel call |
 | `mesh-density.ts file` | triangles and meshing time at several tolerances |
-| `export-time.ts file` | export meshes part by part (cables apart), writing the 3MF |
+| `export-time.ts file` | export meshes part by part, writing the 3MF |
 
 Robot design, calls as an assistant makes them (fresh app):
 

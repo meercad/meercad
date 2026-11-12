@@ -329,7 +329,7 @@ export class Viewport {
   handles: Handle[] = [];
   private handleGroup = new THREE.Group();
   private jointGroup = new THREE.Group();
-  private activeHandle: { h: Handle; value: number; pointer: number } | null = null;
+  private activeHandle: { h: Handle; value: number; start: number; pointer: number } | null = null;
   private hoverHandle: string | null = null;
   /** Reports the value being dragged and its screen position (for a value tooltip). */
   onHandleDrag: ((h: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
@@ -686,44 +686,6 @@ export class Viewport {
     this.applyPoses();
   }
 
-  /** Parts drawn bent in the shown pose (cables), in model coordinates, instead of as built. */
-  private bent = new Map<string, { positions: Float32Array; normals: Float32Array; indices: Uint32Array; color?: string }>();
-  private bentGroup = new THREE.Group();
-
-  /** Shows parts bent instead of as built (cables following moving parts); an empty list shows them as built again. */
-  setBentParts(list: readonly { bodyId: string; positions: Float32Array; normals: Float32Array; indices: Uint32Array; color?: string }[]): void {
-    if (!list.length && !this.bent.size) return;
-    this.bent = new Map(list.map(({ bodyId, ...m }) => [bodyId, m]));
-    this.applyBent();
-    this.invalidate();
-  }
-
-  private applyBent(): void {
-    for (const o of [...this.bentGroup.children]) {
-      const m = o as THREE.Mesh;
-      m.geometry.dispose();
-      (m.material as THREE.Material).dispose();
-      this.bentGroup.remove(o);
-    }
-    if (!this.bentGroup.parent) this.scene.add(this.bentGroup);
-    for (const b of this.bodies) {
-      const m = this.bent.get(b.mesh.bodyId);
-      b.group.visible = !m;
-      if (!m) continue;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(m.positions, 3));
-      geo.setAttribute("normal", new THREE.BufferAttribute(m.normals, 3));
-      geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
-      geo.computeBoundingSphere();
-      // The part's own colour (its first vertex as painted) unless one is given.
-      const painted = b.faces.geometry.getAttribute("color");
-      const color = m.color ? new THREE.Color(m.color) : painted && painted.count ? new THREE.Color(painted.getX(0), painted.getY(0), painted.getZ(0)) : new THREE.Color(0x888888);
-      const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color, metalness: PLAIN_LOOK.metalness, roughness: PLAIN_LOOK.roughness, side: THREE.DoubleSide }));
-      mesh.castShadow = true;
-      this.bentGroup.add(mesh);
-    }
-  }
-
   private applyPoses(): void {
     for (const b of this.bodies) {
       const m = this.poses.get(b.mesh.bodyId);
@@ -732,7 +694,6 @@ export class Viewport {
       else b.group.matrix.identity();
       b.group.updateMatrixWorld(true);
     }
-    if (this.bent.size) this.applyBent();
     this.placeJoints();
     if (this.stage.active) this.stage.fit(new THREE.Box3().setFromObject(this.bodiesGroup));
     this.invalidate();
@@ -1068,7 +1029,9 @@ export class Viewport {
   sceneryLoading = 0;
   private sceneryWaiting: (() => void)[] = [];
 
+  /** The shown reference models, placed and scaled as they are now (not as the last frame drew them). */
   private shownScenery(): THREE.Object3D[] {
+    this.sceneryGroup.updateMatrixWorld(true);
     return this.sceneryGroup.children.filter((o) => o.visible);
   }
 
@@ -1715,6 +1678,21 @@ export class Viewport {
       "pointerdown",
       (e) => {
         if (e.button !== 0 || (e.pointerType === "touch" && this.penSeen)) return;
+        // A second finger while one drags an arrow: the two fingers pinch or pan the view, so the
+        // drag is called off and the value goes back to where it was (a pinch over a selected face
+        // changed its thickness).
+        const active = this.activeHandle;
+        if (active && e.pointerId !== active.pointer) {
+          this.activeHandle = null;
+          dragTo.cancel();
+          el.style.cursor = "";
+          if (el.hasPointerCapture(active.pointer)) el.releasePointerCapture(active.pointer);
+          this.onHandleDrag?.(null, active.start, null);
+          if (active.value !== active.start) active.h.onDrag(active.start);
+          active.h.onEnd(active.start);
+          this.drawHandles();
+          return;
+        }
         const h = this.hitHandle(e.clientX, e.clientY, e.pointerType === "touch" ? 30 : 18);
         if (!h) return;
         if (lastClick && performance.now() - lastClick.at < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 6) return;
@@ -1725,7 +1703,7 @@ export class Viewport {
         const t = this.axisParam(h, e.clientX, e.clientY);
         // Offset between where the arrow was grabbed and its value, so it does not jump.
         grab = (t ?? 0) - (h.value + this.handleBase(h));
-        this.activeHandle = { h, value: h.value, pointer: e.pointerId };
+        this.activeHandle = { h, value: h.value, start: h.value, pointer: e.pointerId };
         h.onStart?.();
       },
       { capture: true },

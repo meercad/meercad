@@ -41,6 +41,8 @@ export interface App {
   page: Page;
   /** The temp folder with the app data and the projects. */
   dir: string;
+  /** Where exports land (instead of a save dialog). */
+  saved: string;
   stop(): Promise<void>;
 }
 
@@ -57,6 +59,8 @@ export async function startApp({ keep = false, dir = "", shared, inspect }: { ke
   // A Mac where the terms of use are accepted and the tour was seen (the flags every meerCAD on the Mac shares, here in the temp folder).
   mkdirSync(join(dir, "shared"), { recursive: true });
   if (!again || shared) writeFileSync(join(dir, "shared", "shared.json"), JSON.stringify(shared ?? { tourDone: true, [TERMS_KEY]: acceptRecord("e2e", "en") }));
+  // Exports are saved here without the save dialog (see files:save in apps/desktop).
+  mkdirSync(join(dir, "saved"), { recursive: true });
   const r = spawnSync("node", ["build.mjs"], { cwd: join(root, "apps/desktop"), stdio: "inherit" });
   if (r.status !== 0) throw new Error("desktop build failed");
 
@@ -71,7 +75,7 @@ export async function startApp({ keep = false, dir = "", shared, inspect }: { ke
       "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows", ...(inspect ? [`--inspect=127.0.0.1:${inspect}`] : [])],
     {
       cwd: join(root, "apps/desktop"),
-      env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared") },
+      env: { ...process.env, MEERCAD_DEV_URL: devUrl, MEERCAD_PROJECTS_DIR: join(dir, "projects"), MEERCAD_MCP_BRIDGE: "off", MEERCAD_SHARED_DIR: join(dir, "shared"), MEERCAD_E2E_SAVE_DIR: join(dir, "saved") },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -83,12 +87,41 @@ export async function startApp({ keep = false, dir = "", shared, inspect }: { ke
   await page.call("Runtime.enable");
   await page.call("Page.enable");
   await waitFor("the app to load", () => page.eval<boolean>("!!window.meercadTest && document.readyState === 'complete'"));
+  // E2E_COVERAGE=1: which of the app's code the run executes (`node scripts/e2e-coverage.mjs`).
+  // Counting starts before the page's scripts load, so the page loads once more.
+  const coverage = !!process.env["E2E_COVERAGE"];
+  if (coverage) {
+    await page.call("Profiler.enable");
+    await page.call("Profiler.startPreciseCoverage", { callCount: false, detailed: true });
+    await page.call("Page.reload", { ignoreCache: true });
+    await sleep(500);
+    await waitFor("the app to load again", () => page.eval<boolean>("!!window.meercadTest && document.readyState === 'complete'"));
+  }
 
   const stop = async () => {
+    if (coverage) {
+      try {
+        const { result } = (await page.call("Profiler.takePreciseCoverage")) as { result: { url: string; functions: { ranges: { startOffset: number; endOffset: number; count: number }[] }[] }[] };
+        const own = result.filter((r) => r.url.startsWith(devUrl) && /\/(src|@fs)\//.test(r.url) && !r.url.includes("node_modules"));
+        // Each module's code ends where its inline source map starts; the map must not count as code.
+        const scripts = await Promise.all(
+          own.map(async (r) => {
+            const text = await (await fetch(r.url)).text().catch(() => "");
+            const at = text.lastIndexOf("\n//# sourceMappingURL=");
+            return { ...r, codeLength: at > 0 ? at : text.length || undefined };
+          }),
+        );
+        const out = join(root, "test-results/e2e-coverage");
+        mkdirSync(out, { recursive: true });
+        writeFileSync(join(out, `${Date.now()}-${process.pid}.json`), JSON.stringify({ devUrl, scripts }));
+      } catch (e) {
+        console.warn("E2E coverage not written:", e);
+      }
+    }
     electron.kill();
     vite.kill();
     await sleep(500);
     if (!keep) rmSync(dir, { recursive: true, force: true });
   };
-  return { page, dir, stop };
+  return { page, dir, saved: join(dir, "saved"), stop };
 }

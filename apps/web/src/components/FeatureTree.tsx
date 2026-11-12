@@ -7,7 +7,7 @@ import { hasPack, usePack } from "../lib/premium";
 import { evaluate, formatInertia, formatMass, massOf, massProperties, partMaterial, referencedNames } from "@meercad/model";
 import { materialName } from "../lib/materials";
 import { openMaterialPicker } from "./MaterialPicker";
-import { isPausedOp, type Expr, type Feature, type ReferenceModel } from "@meercad/schema";
+import { type Expr, type Feature, type ReferenceModel } from "@meercad/schema";
 import { FEATURES, featureName, partName } from "../lib/features";
 import { PLANE_LABELS } from "../lib/topology";
 import { apply, editFeature, openSketch, startSketch, toast, toggleSide, useApp } from "../store";
@@ -76,7 +76,31 @@ function SectionHead({ open, onToggle, children, actions, sub }: { open: boolean
 export function SidePanel() {
   return (
     <aside className="side">
-      <button className="sheet-grip" onClick={() => toggleSide(false)} aria-label={t("Close")} title={t("Close")}>
+      {/* Phone: a tap on the grip or a swipe down closes the sheet. */}
+      <button
+        className="sheet-grip"
+        onClick={() => toggleSide(false)}
+        onPointerDown={(e) => {
+          const y0 = e.clientY;
+          const el = e.currentTarget;
+          el.setPointerCapture?.(e.pointerId);
+          const move = (m: PointerEvent) => {
+            if (m.clientY - y0 > 40) done(true);
+          };
+          const done = (close = false) => {
+            el.removeEventListener("pointermove", move);
+            el.removeEventListener("pointerup", up);
+            el.removeEventListener("pointercancel", up);
+            if (close) toggleSide(false);
+          };
+          const up = () => done();
+          el.addEventListener("pointermove", move);
+          el.addEventListener("pointerup", up);
+          el.addEventListener("pointercancel", up);
+        }}
+        aria-label={t("Close")}
+        title={t("Close")}
+      >
         <i />
       </button>
       <div className="side-scroll">
@@ -186,8 +210,6 @@ function FeatureList() {
           </span>
         </li>
         {doc.features.map((f, i) => {
-          // Steps switched off in this version stay in the design but are not listed.
-          if (isPausedOp(f.op)) return null;
           const st = status.get(f.id);
           const Icon = FEATURES[f.op].icon;
           const rolledBack = i > rollbackIndex;

@@ -49,7 +49,11 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
   let plan: ReturnType<typeof reconstruct>;
   let meshVolume: number;
   try {
-    const fit = fitMesh(mesh.positions);
+    // The fit takes the triangles' corners; the display mesh shares its vertices through `indices`
+    // (an imported STL's happen to come one per corner, a converted part's do not).
+    const corners = new Float32Array(mesh.indices.length * 3);
+    for (let i = 0; i < mesh.indices.length; i++) corners.set(mesh.positions.subarray(mesh.indices[i]! * 3, mesh.indices[i]! * 3 + 3), i * 3);
+    const fit = fitMesh(corners);
     meshVolume = fit.volume;
     plan = reconstruct(fit, { prefix });
   } catch (e) {

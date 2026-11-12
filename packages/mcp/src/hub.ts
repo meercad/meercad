@@ -77,6 +77,14 @@ export function createBridge(o: BridgeOptions) {
       pending.delete(id);
     }
   };
+  /** Everything waiting on the app, here and at peers, fails. */
+  const appGone = () => {
+    failAll("the meerCAD app disconnected");
+    for (const [id, r] of relayed) {
+      relayed.delete(id);
+      if (r.peer.readyState === r.peer.OPEN) r.peer.send(JSON.stringify({ id: r.id, error: "the meerCAD app disconnected" }));
+    }
+  };
 
   function start(): void {
     if (stopped) return;
@@ -159,7 +167,11 @@ export function createBridge(o: BridgeOptions) {
         return;
       }
       if (msg["hello"] === "meercad") {
-        if (app && app !== ws) app.close(4000, "replaced by a newer connection");
+        if (app && app !== ws) {
+          app.close(4000, "replaced by a newer connection");
+          // What waited on the old connection is never answered: fail it now, not at its timeout.
+          appGone();
+        }
         app = ws;
         hello = msg as unknown as BridgeHello;
         log(`app connected (project: ${hello.project ?? "none"})`);
@@ -190,11 +202,7 @@ export function createBridge(o: BridgeOptions) {
       if (app === ws) {
         app = null;
         hello = null;
-        failAll("the meerCAD app disconnected");
-        for (const [id, r] of relayed) {
-          relayed.delete(id);
-          if (r.peer.readyState === r.peer.OPEN) r.peer.send(JSON.stringify({ id: r.id, error: "the meerCAD app disconnected" }));
-        }
+        appGone();
       }
     });
   }

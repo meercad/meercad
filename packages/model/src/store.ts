@@ -1,5 +1,5 @@
 import { MATERIALS, materialById } from "./materials.js";
-import { emptyDocument, isPausedOp, validateDocument, validateOp, type DocOp, type Expr, type Feature, type MeercadDocument } from "@meercad/schema";
+import { emptyDocument, validateDocument, validateOp, type DocOp, type Expr, type Feature, type MeercadDocument } from "@meercad/schema";
 import { renameInExpr } from "./expr.js";
 import { FIT_VAR } from "./fit.js";
 import { mapFeatureExprs } from "./resolve.js";
@@ -15,8 +15,6 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
   const next = structuredClone(doc);
   switch (op.type) {
     case "add_features": {
-      const paused = op.features.find((f) => isPausedOp(f.op));
-      if (paused) throw new OpError(`${paused.op} steps are not available in this version`);
       let at = next.features.length;
       if (op.after !== undefined) {
         at = op.after === null ? 0 : indexOf(next, op.after) + 1;
@@ -29,7 +27,6 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     }
     case "edit_feature": {
       const i = indexOf(next, op.id);
-      if (isPausedOp(next.features[i]!.op) || isPausedOp(op.patch["op"])) throw new OpError(`${String(op.patch["op"] ?? next.features[i]!.op)} steps are not available in this version`);
       if ("id" in op.patch && op.patch["id"] !== op.id) throw new OpError("edit_feature cannot change a feature id");
       const merged = { ...next.features[i], ...structuredClone(op.patch) };
       for (const [k, val] of Object.entries(merged)) if (val === null) delete (merged as Record<string, unknown>)[k];
@@ -302,7 +299,6 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     coil: "co",
     spring: "spr",
     screw: "scr",
-    cable: "cab",
     linear_pattern: "lp",
     circular_pattern: "cp",
     mirror: "mi",

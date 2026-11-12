@@ -286,3 +286,38 @@ describe("trimSpline", () => {
     expect(trimSpline(ring, [20, 0], [hits[0]!])).toEqual([]);
   });
 });
+
+describe("sketch edits refuse what cannot be done", () => {
+  const es = rect(0, 0, 40, 30);
+  const sk = { entities: es, constraints: [] as SketchConstraint[] };
+  it("corners: a size of 0, a corner with no position, lines in line", () => {
+    expect(() => cornerEdit(sk, positions(es), "p1", 0, "fillet")).toThrow(/radius must be greater than zero/);
+    expect(() => cornerEdit(sk, positions(es), "p1", -1, "chamfer")).toThrow(/distance must be greater than zero/);
+    expect(() => cornerEdit(sk, new Map(), "p1", 2, "fillet")).toThrow(/has no position/);
+    const straight: SketchEntity[] = [{ id: "a", type: "point", x: 0, y: 0 }, { id: "b", type: "point", x: 10, y: 0 }, { id: "c", type: "point", x: 20, y: 0 }, { id: "m", type: "line", p1: "a", p2: "b" }, { id: "n", type: "line", p1: "b", p2: "c" }];
+    expect(() => cornerEdit({ entities: straight, constraints: [] }, positions(straight), "b", 2, "fillet")).toThrow(/in line/);
+  });
+  it("a corner joined by a coincident constraint instead of a shared point is still found", () => {
+    const split: SketchEntity[] = [{ id: "a", type: "point", x: 0, y: 0 }, { id: "b", type: "point", x: 10, y: 0 }, { id: "b2", type: "point", x: 10, y: 0 }, { id: "c", type: "point", x: 10, y: 10 }, { id: "m", type: "line", p1: "a", p2: "b" }, { id: "n", type: "line", p1: "b2", p2: "c" }];
+    const d = cornerEdit({ entities: split, constraints: [{ id: "k", type: "coincident", a: "b", b: "b2" }] }, positions(split), "b", 2, "chamfer");
+    expect(d.entities.some((e) => e.type === "line" && e.id !== "m" && e.id !== "n")).toBe(true);
+  });
+  it("offsets: zero, nothing picked, a radius that would vanish", () => {
+    expect(() => offsetCurves(sk, positions(es), ["l1"], 0)).toThrow(/must not be zero/);
+    expect(() => offsetCurves(sk, positions(es), [], 2)).toThrow(/pick lines, arcs or circles/);
+    const c: SketchEntity[] = [{ id: "o", type: "point", x: 0, y: 0 }, { id: "k", type: "circle", center: "o", radius: 2 }];
+    expect(() => offsetCurves({ entities: c, constraints: [] }, positions(c), ["k"], -3)).toThrow(/would vanish/);
+    expect(() => offsetCurves(sk, new Map(), ["l1"], 2)).toThrow(/has no position/);
+  });
+  it("patterns: nothing picked, a count out of range; arcs are repeated too", async () => {
+    const { patternCurves } = await import("./index.js");
+    expect(() => patternCurves(sk, positions(es), [], { kind: "linear", count: 3, dx: 5, dy: 0 })).toThrow(/pick the curves to repeat/);
+    expect(() => patternCurves(sk, positions(es), ["l1"], { kind: "linear", count: 1, dx: 5, dy: 0 })).toThrow(/between 2 and 200/);
+    expect(() => patternCurves(sk, new Map(), ["l1"], { kind: "linear", count: 2, dx: 5, dy: 0 })).toThrow(/has no position/);
+    const a: SketchEntity[] = [{ id: "c", type: "point", x: 0, y: 0 }, { id: "s", type: "point", x: 5, y: 0 }, { id: "e", type: "point", x: 0, y: 5 }, { id: "a1", type: "arc", center: "c", start: "s", end: "e" }];
+    const out = patternCurves({ entities: a, constraints: [] }, positions(a), ["a1"], { kind: "linear", count: 3, dx: 20, dy: 0 });
+    expect(out.entities.filter((e) => e.type === "arc")).toHaveLength(3);
+    const centres = out.entities.filter((e) => e.type === "arc").map((e) => at(out, (e as { center: string }).center)[0]);
+    expect(centres).toEqual([0, 20, 40]);
+  });
+});

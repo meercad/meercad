@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -61,6 +61,32 @@ describe("local files", () => {
 
   it("reports a missing file at once", async () => {
     await expect(readLocal(join(dir, "missing.step"), app(), 5000)).rejects.toThrow(/ENOENT/);
+  });
+
+  it("hands a file it is refused at once to the app, reading and writing", async () => {
+    const locked = join(dir, "locked");
+    await mkdir(locked);
+    await writeFile(join(locked, "a.stl"), "x");
+    await chmod(join(locked, "a.stl"), 0o000);
+    await chmod(locked, 0o500);
+    try {
+      const a = app();
+      expect(String(await readLocal(join(locked, "a.stl"), a, 5000))).toBe("from app");
+      expect(await writeLocal(join(locked, "b.stl"), new Uint8Array([1]), a, 5000)).toBe(join(locked, "b.stl"));
+      expect(a.read).toHaveBeenCalledOnce();
+      expect(a.write).toHaveBeenCalledOnce();
+    } finally {
+      await chmod(locked, 0o700);
+    }
+  });
+
+  it("reports a file it cannot write for another reason, and an app that fails with no message", async () => {
+    await writeFile(join(dir, "plain"), "x");
+    // A folder that is a file.
+    await expect(writeLocal(join(dir, "plain", "b.stl"), new Uint8Array([1]), app(), 5000)).rejects.toThrow(/cannot write the file .*\(E(EXIST|NOTDIR)\)/);
+    slow.add(dir);
+    const a = { read: async () => Promise.reject("gone"), write: async () => Promise.reject("gone") };
+    await expect(writeLocal(join(dir, "c.stl"), new Uint8Array([1]), a, 20)).rejects.toThrow(/could not either \(gone\)/);
   });
 });
 

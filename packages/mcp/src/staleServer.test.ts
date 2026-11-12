@@ -49,4 +49,22 @@ describe("stale MCP server", () => {
     f.gone = true;
     expect(staleCheck("/nope", probe)()).toBe(false);
   });
+
+  it("watches a real file on disk", async () => {
+    const { mkdtempSync, rmSync, writeFileSync, utimesSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "meercad-stale-"));
+    try {
+      const file = join(dir, "server.js");
+      writeFileSync(file, "a");
+      const stale = staleCheck(file);
+      expect(stale()).toBe(false);
+      writeFileSync(file, "b");
+      utimesSync(file, new Date(), new Date(Date.now() + 5000));
+      expect(stale()).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

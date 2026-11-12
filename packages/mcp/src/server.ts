@@ -497,7 +497,7 @@ server.registerTool(
   guard(async ({ format, path, sketch, parts, posed, variants, materials, version }) => {
     const out = resolve(path);
     const name = basename(out).replace(/\.[^.]+$/, "");
-    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[]; cablesLeftOut?: string[] }>("export", { format, sketch, parts, posed, variants, name, materials, version, stage: true });
+    const r = await call<ExportedFiles & { filaments?: { slot: number; material?: string; color: string }[] }>("export", { format, sketch, parts, posed, variants, name, materials, version, stage: true });
     const count = namesOf(r).length;
     const written: string[] = [];
     await eachFile(r, async (file, data) => {
@@ -507,8 +507,7 @@ server.registerTool(
       await writeFile(target, data);
       written.push(target);
     });
-    const left = r.cablesLeftOut?.length ? `; cables left out (not printed; name them in parts to export them): ${r.cablesLeftOut.length}` : "";
-    return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}${left}`);
+    return text(`wrote ${written.join(", ")}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
   }),
 );
 
@@ -526,9 +525,8 @@ server.registerTool(
     },
   },
   guard(async ({ slicer, parts, posed, materials }) => {
-    const r = await call<{ slicer: string; file: string; moved: boolean; filaments?: { slot: number; material?: string; color: string }[]; cablesLeftOut?: string[] }>("send_to_slicer", { slicer, parts, posed, materials });
-    const left = r.cablesLeftOut?.length ? `; cables left out (not printed): ${r.cablesLeftOut.length}` : "";
-    return text(`opened ${r.file} in ${r.slicer}${r.moved ? " (moved parts where they are shown)" : ""}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}${left}`);
+    const r = await call<{ slicer: string; file: string; moved: boolean; filaments?: { slot: number; material?: string; color: string }[] }>("send_to_slicer", { slicer, parts, posed, materials });
+    return text(`opened ${r.file} in ${r.slicer}${r.moved ? " (moved parts where they are shown)" : ""}${r.filaments?.length ? `; filaments: ${r.filaments.map((f) => `${f.slot} = ${f.material ?? "any"} ${f.color}`).join(", ")}` : ""}`);
   }),
 );
 
@@ -537,7 +535,7 @@ server.registerTool(
   {
     title: "Export a robot for simulation",
     description:
-      "Writes the design as a robot for physics simulation and robot learning into the folder `path`: <name>.xml (MJCF for MuJoCo and mjlab), <name>.urdf (ROS, Isaac Sim, PyBullet) and meshes/<part>.stl, in metres, kilograms and radians. Parts held together by fixed joints become one link; each revolute or slider joint becomes a joint with its limits; couplings become MJCF equalities and URDF mimic joints; each link gets mass, centre of gravity and inertia from its parts' materials. Each part collides as one simple shape (collision: \"shapes\", default): the box, cylinder or sphere of least volume around it, turned with the part, which Isaac Sim/PhysX and MuJoCo simulate fast and stably (the meshes stay the visuals); collision: \"mesh\" collides with the triangles instead. Links that hang on nothing get a free joint (floating: false fixes them). `masses` sets real grams per part (bought motors, printed parts with their infill). `actuators` gives drive data per joint id: effort (Nm or N), velocity (rad/s), kp and kv (then the MJCF gets a position actuator, else a torque motor), armature (kg·m²), damping, friction; joints without it stay passive. It takes the parts shown (see set_visibility) without cables, `parts` names the parts to take instead (cables too when named), `exclude` leaves more out; joints to a part left out go with it. Returns the links (name, parts, kg, parent, joint) and warnings (loops left out, parts without material, joints without drive data, parts their collision shape fits badly).",
+      "Writes the design as a robot for physics simulation and robot learning into the folder `path`: <name>.xml (MJCF for MuJoCo and mjlab), <name>.urdf (ROS, Isaac Sim, PyBullet) and meshes/<part>.stl, in metres, kilograms and radians. Parts held together by fixed joints become one link; each revolute or slider joint becomes a joint with its limits; couplings become MJCF equalities and URDF mimic joints; each link gets mass, centre of gravity and inertia from its parts' materials. Each part collides as one simple shape (collision: \"shapes\", default): the box, cylinder or sphere of least volume around it, turned with the part, which Isaac Sim/PhysX and MuJoCo simulate fast and stably (the meshes stay the visuals); collision: \"mesh\" collides with the triangles instead. Links that hang on nothing get a free joint (floating: false fixes them). `masses` sets real grams per part (bought motors, printed parts with their infill). `actuators` gives drive data per joint id: effort (Nm or N), velocity (rad/s), kp and kv (then the MJCF gets a position actuator, else a torque motor), armature (kg·m²), damping, friction; joints without it stay passive. It takes the parts shown (see set_visibility), `parts` names the parts to take instead, `exclude` leaves more out; joints to a part left out go with it. Returns the links (name, parts, kg, parent, joint) and warnings (loops left out, parts without material, joints without drive data, parts their collision shape fits badly).",
     inputSchema: {
       path: z.string().describe("Folder to write into (created if missing)"),
       name: z.string().optional().describe("Model and file name; default the project's name"),
@@ -551,7 +549,7 @@ server.registerTool(
         .optional()
         .describe("Drive data per joint id"),
       collision: z.enum(["shapes", "mesh"]).optional().describe('What links collide with: "shapes" (default, one box/cylinder/sphere per part) or "mesh"'),
-      parts: z.array(z.string()).optional().describe("Only these parts; default the parts shown, without cables"),
+      parts: z.array(z.string()).optional().describe("Only these parts; default the parts shown"),
       exclude: z.array(z.string()).optional().describe("Parts to leave out"),
     },
   },
@@ -823,12 +821,17 @@ server.registerTool(
   }),
 );
 
-await server.connect(new StdioServerTransport());
-// When the client goes away (stdin closes), exit so no orphan keeps the bridge port.
-const quit = () => {
-  log("client disconnected, exiting");
-  process.exit(0);
-};
-process.stdin.on("end", quit);
-process.stdin.on("close", quit);
-log("MCP server ready on stdio");
+/** For the tests, which drive this server in the same process over a transport of their own (server.inprocess.test.ts). */
+export { server, bridge };
+
+if (!process.env["MEERCAD_MCP_INPROCESS"]) {
+  await server.connect(new StdioServerTransport());
+  // When the client goes away (stdin closes), exit so no orphan keeps the bridge port.
+  const quit = () => {
+    log("client disconnected, exiting");
+    process.exit(0);
+  };
+  process.stdin.on("end", quit);
+  process.stdin.on("close", quit);
+  log("MCP server ready on stdio");
+}

@@ -1030,52 +1030,6 @@ export interface PrimitiveFeature extends FeatureBase {
   targets?: string[];
 }
 
-/** Plugs on a cable's ends. Sizes are typical housings; the cable leaves the back of the plug. */
-export type CableConnectorKind = "jst_xh" | "jst_ph" | "jst_sh" | "dupont" | "xt30" | "xt60" | "idc";
-
-export interface CableConnector {
-  kind: CableConnectorKind;
-  /** Number of contacts (JST and Dupont: 1–16, default 2; IDC: even, default the ribbon's conductors or 10). XT plugs have 2. */
-  pins?: Expr;
-}
-
-/** A point a cable runs through, fixed to a part (moving with it when a joint moves) or to the ground. */
-export interface CablePoint {
-  /** Where, in model coordinates (mm), with the part as drawn. */
-  at: [Expr, Expr, Expr];
-  /** Body id of the part the point is fixed to (a clip, a socket); absent: fixed in place. */
-  on?: string;
-}
-
-/**
- * A cable laid through 3D points: round (`diameter`) or a flat ribbon of `conductors` wires on a
- * 1.27 mm pitch. It runs smoothly through every point and leaves its ends straight; a plug on an
- * end sits with its mating face on the end point, the cable coming out of its back. Points fixed to
- * parts move with them, so while joints move the app lays the cable again and checks it: longer
- * than the cable (its drawn route plus `slack`) means it is stretched, bends tighter than
- * `bendRadius` or running into a part are reported too. The cable is a part of its own (id = the
- * feature id) with the cable's material.
- */
-export interface CableFeature extends FeatureBase {
-  op: "cable";
-  /** At least two; the first and last are the cable's ends. */
-  points: CablePoint[];
-  shape?: "round" | "ribbon";
-  /** Round cables: outside diameter, mm. */
-  diameter?: Expr;
-  /** Ribbon cables: number of wires (default 10). */
-  conductors?: Expr;
-  /** Insulation; gives the density (copper included) and the default bend radius. Default silicone. */
-  material?: CableMaterialKind;
-  /** Smallest allowed bend radius of the centre line, mm (default from the material: silicone 3 ×, PVC 6 ×, PTFE 8 × the diameter; ribbon 3 mm). */
-  bendRadius?: Expr;
-  /** Extra length beyond the drawn route, mm (default 0): room to move before the cable is stretched. */
-  slack?: Expr;
-  start?: CableConnector;
-  end?: CableConnector;
-}
-
-export type CableMaterialKind = "silicone" | "pvc" | "ptfe";
 
 export type Feature =
   | PrimitiveFeature
@@ -1116,8 +1070,7 @@ export type Feature =
   | DeleteFeature
   | ImportFeature
   | MeshConvertFeature
-  | BendFeature
-  | CableFeature;
+  | BendFeature;
 export type FeatureOp = Feature["op"];
 
 // ---------------------------------------------------------------- selectors

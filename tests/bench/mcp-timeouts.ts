@@ -19,22 +19,11 @@ const time = <T>(label: string, fn: () => T): T => {
 };
 const r = time("first rebuild", () => s.rebuild(doc));
 console.log(`  ${r.report.bodies.length} bodies, ${r.report.features.filter((f) => f.status === "error").length} feature errors`);
-const cable = doc.features.find((f) => f.op === "cable" && !f.suppressed) as { id: string; slack?: number } | undefined;
-if (cable) {
-  const edited = { ...doc, features: doc.features.map((f) => (f.id === cable.id ? { ...f, slack: (cable.slack ?? 10) + 1 } : f)) } as MeercadDocument;
-  time(`incremental rebuild (slack of ${cable.id})`, () => s.rebuild(edited));
-  time("rebuild back", () => s.rebuild(doc));
-}
 const moving = [...new Set((doc.mechanism?.joints ?? []).filter((x) => x.type !== "fixed").map((x) => x.a))];
-const skip = doc.features.filter((f) => f.op === "cable").map((f) => f.id);
+const skip: string[] = [];
 const out = time(`clearances at rest (${moving.length} moving)`, () => clearances(oc, s.state!, moving, {}, 2, skip));
 console.log(`  ${out.length} pairs, ${out.filter((c) => c.distance < 1e-6).length} touching`);
 const rigid = motion.rigidGroups(doc.mechanism?.joints ?? []);
 const kept = time("clearances at rest, rigid pairs left out", () => clearances(oc, s.state!, moving, {}, 2, skip, rigid));
 console.log(`  ${kept.length} pairs, ${kept.filter((c) => c.distance < 1e-6).length} touching`);
-if (cable) {
-  const edited = { ...doc, features: doc.features.map((f) => (f.id === cable.id ? { ...f, slack: (cable.slack ?? 10) + 2 } : f)) } as MeercadDocument;
-  time("preview of a slack change (fork)", () => s.preview(edited));
-  time("rebuild after the preview (all cached)", () => s.rebuild(doc));
-}
 process.exit(0);

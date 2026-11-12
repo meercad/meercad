@@ -148,4 +148,55 @@ describe("MCP bridge hub", () => {
     await expect(a.call("get_model")).rejects.toThrow(/not connected/);
     await expect(b.call("get_model")).rejects.toThrow(/not connected/);
   });
+
+  it("hands a newer app connection the place of the old one, and fails what waited on the old", async () => {
+    const port = nextPort++;
+    const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
+    stops.push(() => a.stop());
+    await until(() => a.role === "hub");
+    // An app that never answers.
+    const first = new WebSocket(`ws://127.0.0.1:${port}`);
+    await new Promise((r) => first.on("open", r));
+    first.send(JSON.stringify({ hello: "meercad", version: "1", project: "P" }));
+    await until(async () => (await a.status()).connected);
+    const waiting = a.call("get_model", {}, 5000);
+    const second = new WebSocket(`ws://127.0.0.1:${port}`);
+    await new Promise((r) => second.on("open", r));
+    second.send(JSON.stringify({ hello: "meercad", version: "2", project: "Q" }));
+    await expect(waiting).rejects.toThrow(/the meerCAD app disconnected/);
+    expect((await a.status()).hello).toMatchObject({ version: "2" });
+    // A request the app does not answer in time.
+    await expect(a.call("get_model", {}, 50)).rejects.toThrow(/get_model timed out/);
+    // An older server asking for the port is told no; the hub stays.
+    const old = new WebSocket(`ws://127.0.0.1:${port}`);
+    await new Promise((r) => old.on("open", r));
+    old.send(JSON.stringify({ takeover: "meercad" }));
+    old.send("not json");
+    await wait(50);
+    expect(a.role).toBe("hub");
+    old.close();
+    second.close();
+    first.close();
+  });
+
+  it("passes a peer's requests on, and tells it when the app goes away mid-request", async () => {
+    const port = nextPort++;
+    const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
+    stops.push(() => a.stop());
+    await until(() => a.role === "hub");
+    const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
+    stops.push(() => b.stop());
+    await until(() => b.role === "peer");
+    // The peer asks the hub's status itself: not connected yet.
+    expect(await b.status()).toMatchObject({ role: "peer", connected: false });
+    await expect(b.call("get_model")).rejects.toThrow(/not connected/);
+    const app = new WebSocket(`ws://127.0.0.1:${port}`);
+    await new Promise((r) => app.on("open", r));
+    app.send(JSON.stringify({ hello: "meercad", version: "1", project: "P" }));
+    await until(async () => (await b.status()).connected);
+    const waiting = b.call("get_model", {}, 5000);
+    await wait(50);
+    app.close();
+    await expect(waiting).rejects.toThrow(/the meerCAD app disconnected/);
+  });
 });

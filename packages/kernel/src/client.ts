@@ -320,8 +320,8 @@ export class KernelClient {
   }
 
   /**
-   * `skip`: parts left out altogether (cables, which bend with the parts and are checked on their
-   * own). `rigid`: parts with the same number are held together; their pairs are left out.
+   * `skip`: parts left out altogether. `rigid`: parts with the same number are held together; their
+   * pairs are left out.
    */
   /**
    * Overlaps of parts where they are modelled, for a big design: only pairs with one of `parts` (all

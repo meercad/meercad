@@ -32,4 +32,17 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run --project integration-slow
+      - run: pnpm vitest run --project integration-slow --project web-slow
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Fails when a package's line coverage drops below its threshold (vitest.config.ts).
+      - run: pnpm test:coverage

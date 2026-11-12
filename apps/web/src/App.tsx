@@ -109,6 +109,12 @@ export function App() {
   const sideOpen = useApp((s) => s.sideOpen);
   const motionOpen = useMotion((s) => s.open);
   const sheet = useApp((s) => !!s.dialog || s.measure.active) || motionOpen;
+  const sketching = useApp((s) => !!s.sketchId);
+  // Phone: the parts sheet makes way for a sketch or another sheet (a feature's dialog, measuring).
+  // In a sketch the bar has no Parts button to close it again, and it covered half the sketch.
+  useEffect(() => {
+    if (sideOpen && (sketching || sheet) && isCompact()) toggleSide(false);
+  }, [sideOpen, sketching, sheet]);
   const [help, setHelp] = useState(false);
   const [guide, setGuide] = useState(false);
   const [tour, setTour] = useState(false);

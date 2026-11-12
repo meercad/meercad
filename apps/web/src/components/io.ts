@@ -1,6 +1,7 @@
 /** File import/export and share links. */
 import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotCollision, type RobotLink, type RobotPart, type TexturedMesh } from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
+import { SupersededError } from "@meercad/kernel/client";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
@@ -68,41 +69,25 @@ function exportIds(parts?: readonly string[]): string[] {
 }
 
 /**
- * The parts a file for printing takes (STL, 3MF, the slicer): cables are left out unless asked for
- * by name, as nobody prints them. A robot's two dozen cables made more triangles than its 560 other
- * parts and two thirds of the export time (2026-11-11). Only cables shown: they go.
- */
-export function printIds(ids: readonly string[], parts?: readonly string[]): { ids: string[]; cables: string[] } {
-  if (parts) return { ids: [...ids], cables: [] };
-  const cable = new Set(currentDoc().features.filter((f) => f.op === "cable").map((f) => f.id));
-  const cables = ids.filter((id) => cable.has(id));
-  if (!cables.length || cables.length === ids.length) return { ids: [...ids], cables: [] };
-  return { ids: ids.filter((id) => !cable.has(id)), cables };
-}
-
-/**
  * The files of an STL/3MF/OBJ export from a print-quality tessellation (the on-screen one is far
  * coarser), named `name`.ext; OBJ also takes the visible terrains and scans with their pictures.
  * `posed` (default) takes moved parts where they are shown. `moved` tells whether any were.
- * STL and 3MF leave cables out unless `parts` names them (see printIds); `cables` lists those.
  */
-export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string; materials?: boolean } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[]; cables: string[] }> {
+export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string; materials?: boolean } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[] }> {
   const name = opts.name ?? baseName();
-  const shown = exportIds(opts.parts);
-  const { ids, cables } = format === "obj" ? { ids: shown, cables: [] } : printIds(shown, opts.parts);
+  const ids = exportIds(opts.parts);
   const surroundings = format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
   if (!ids.length && !surroundings) throw new Error(t("Nothing to export"));
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
   const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
-  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes, cables };
-  return { files: { [`${name}.${format}`]: meshFile(format, meshes, opts.materials) }, moved: poses.size > 0, meshes, cables };
+  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes };
+  return { files: { [`${name}.${format}`]: meshFile(format, meshes, opts.materials) }, moved: poses.size > 0, meshes };
 }
 
 export async function exportMesh(format: MeshFormat): Promise<void> {
   try {
-    const { files, moved, meshes, cables } = await meshExportFiles(format);
+    const { files, moved, meshes } = await meshExportFiles(format);
     if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
-    if (cables.length) toast(t("Cables left out ({n}): they are not printed. To export them, show only them.", { n: cables.length }), "info");
     const names = Object.keys(files);
     if (names.length > 1) toast(t("Exported as a zip: the OBJ with its materials and pictures"), "info");
     download(names.length > 1 ? `${baseName()}.zip` : names[0]!, (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart);
@@ -119,20 +104,19 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
  * materials if the setting is on), written to a temporary file the slicer opens. `slicer`: which
  * one, default the first installed (Bambu Studio before PrusaSlicer).
  */
-export async function openInSlicer(slicer?: SlicerId, opts: { parts?: readonly string[]; posed?: boolean; materials?: boolean } = {}): Promise<{ slicer: string; file: string; moved: boolean; meshes: BodyMesh[]; cables: string[] }> {
+export async function openInSlicer(slicer?: SlicerId, opts: { parts?: readonly string[]; posed?: boolean; materials?: boolean } = {}): Promise<{ slicer: string; file: string; moved: boolean; meshes: BodyMesh[] }> {
   const target = slicerFor(slicer) ?? ((await refreshSlicers()), slicerFor(slicer));
   if (!target || !desktop?.slicers) throw new Error(slicer ? t("{name} is not installed on this Mac", { name: slicer === "bambu" ? "Bambu Studio" : "PrusaSlicer" }) : t("No slicer installed (Bambu Studio or PrusaSlicer)"));
-  const { files, moved, meshes, cables } = await meshExportFiles("3mf", opts);
+  const { files, moved, meshes } = await meshExportFiles("3mf", opts);
   const [name, data] = Object.entries(files)[0]!;
   const r = await desktop.slicers.open({ slicer: target.id, name, data });
-  return { ...r, moved, meshes, cables };
+  return { ...r, moved, meshes };
 }
 
 /** The menu's "Send to …": the model opens in the slicer, with a word on what went. */
 export async function sendToSlicer(slicer: SlicerId): Promise<void> {
   try {
-    const { slicer: name, moved, meshes, cables } = await openInSlicer(slicer);
-    if (cables.length) toast(t("Cables left out ({n}): they are not printed. To export them, show only them.", { n: cables.length }), "info");
+    const { slicer: name, moved, meshes } = await openInSlicer(slicer);
     toast(moved ? t("Sent to {name}, moved parts where they are now", { name }) : t("Sent to {name}", { name }));
     tellFilaments(meshes);
   } catch (e) {
@@ -200,7 +184,7 @@ export interface RobotExportOptions {
   actuators?: Readonly<Record<string, RobotActuator>>;
   /** "shapes" (default): one box, cylinder or sphere per part to collide with; "mesh": the triangles. */
   collision?: RobotCollision;
-  /** Only these parts (cables too when named); default every part shown, cables left out. */
+  /** Only these parts; default every part shown. */
   parts?: readonly string[];
   /** Parts to leave out as well. */
   exclude?: readonly string[];
@@ -222,9 +206,7 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
   const all = bodies.map((b) => b.id);
   const unknown = [...Object.keys(opts.masses ?? {}), ...(opts.exclude ?? [])].filter((id) => !all.includes(id));
   if (unknown.length) throw new Error(t("unknown part {id}", { id: unknown.join(", ") }));
-  // The parts shown (or named), without cables: two dozen cables hanging on nothing would fall out of the robot.
-  const { ids: taken, cables } = printIds(exportIds(opts.parts), opts.parts);
-  const ids = taken.filter((id) => !opts.exclude?.includes(id));
+  const ids = exportIds(opts.parts).filter((id) => !opts.exclude?.includes(id));
   if (!ids.length) throw new Error(t("Nothing to export"));
   const keep = new Set(ids);
   const left = new Set(all.filter((id) => !keep.has(id)));
@@ -251,8 +233,7 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
     parts.push({ id: b.id, name: partName(b.id, doc.features), mesh: { positions: mesh.positions, indices: mesh.indices }, ...(color ? { color } : {}), mass, centroid, inertia });
   }
   if (plain.length) warnings.push(`${plain.length} parts have no material and count as PLA (${plain.slice(0, 6).join(", ")}${plain.length > 6 ? ", …" : ""})`);
-  if (cables.length) warnings.push(`${cables.length} cables left out (name them in parts to take them)`);
-  const hiddenOut = all.filter((id) => left.has(id) && !cables.includes(id)).length;
+  const hiddenOut = all.filter((id) => left.has(id)).length;
   if (hiddenOut && !opts.parts) warnings.push(`${hiddenOut} parts hidden or excluded, left out`);
   const { mech, problems } = currentMechanism();
   for (const [id, msg] of Object.entries(problems)) warnings.push(`joint ${id} left out: ${msg}`);
@@ -384,12 +365,14 @@ export async function variantFiles(format: MeshFormat | "step", progress?: (k: n
   try {
     for (const [k, v] of variants.entries()) {
       progress?.(k, variants.length);
-      const out = await kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
+      // A rebuild the app had already asked for (the edit just before) may overtake this one: build it again.
+      const build = () => kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
+      const out = await build().catch((e: unknown) => (e instanceof SupersededError ? build() : Promise.reject(e)));
       const failed = out.report.features.find((f) => f.status === "error");
       if (failed) throw new Error(t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }));
       const hidden = useApp.getState().hidden;
       const shown = out.report.bodies.map((b) => b.id).filter((id) => (parts ? parts.includes(id) : !hidden.has(id)));
-      const ids = format === "stl" || format === "3mf" ? printIds(shown, parts).ids : shown;
+      const ids = shown;
       const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
       if (format === "obj") {
         const obj = objExport(`${safe(baseName())}-${safe(v.name)}`, await kernel.exportMeshes(ids), false);
@@ -673,7 +656,7 @@ export function curvesToSketch(curves: Curve2[]): { entities: SketchEntity[]; co
   return { entities, constraints: [] };
 }
 
-/** Basic SVG import: line, rect, circle, polyline, polygon and paths (curves become polylines). */
+/** Basic SVG import: line, rect (rounded too), circle, ellipse, polyline, polygon and paths (curves become polylines). */
 export function readSvg(text: string): Curve2[] {
   const doc = new DOMParser().parseFromString(text, "image/svg+xml");
   const svg = doc.querySelector("svg");
@@ -695,14 +678,40 @@ export function readSvg(text: string): Curve2[] {
     for (let i = 0; i + 1 < pts.length; i++) out.push({ kind: "line", a: P(...pts[i]!), b: P(...pts[i + 1]!) });
     if (closed && pts.length > 2) out.push({ kind: "line", a: P(...pts.at(-1)!), b: P(...pts[0]!) });
   };
-  for (const el of svg.querySelectorAll("line,rect,circle,polyline,polygon,path")) {
+  for (const el of svg.querySelectorAll("line,rect,circle,ellipse,polyline,polygon,path")) {
     switch (el.tagName.toLowerCase()) {
       case "line":
         out.push({ kind: "line", a: P(num(el, "x1"), num(el, "y1")), b: P(num(el, "x2"), num(el, "y2")) });
         break;
       case "rect": {
         const [x, y, w, h] = [num(el, "x"), num(el, "y"), num(el, "width"), num(el, "height")];
-        poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true);
+        // Rounded corners: rx and ry, either standing for both, at most half the side.
+        const has = (a: string) => el.hasAttribute(a) && el.getAttribute(a) !== "auto";
+        let [rx, ry] = [has("rx") ? num(el, "rx") : NaN, has("ry") ? num(el, "ry") : NaN];
+        if (Number.isNaN(rx)) rx = Number.isNaN(ry) ? 0 : ry;
+        if (Number.isNaN(ry)) ry = rx;
+        [rx, ry] = [Math.min(Math.abs(rx), w / 2), Math.min(Math.abs(ry), h / 2)];
+        if (!rx || !ry) {
+          poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true);
+          break;
+        }
+        const pts: [number, number][] = [[x + rx, y]];
+        const corner = (to: [number, number], next: [number, number]) => {
+          pts.push(to, ...arcPoints(to, next, rx, ry, 0, false, true));
+        };
+        corner([x + w - rx, y], [x + w, y + ry]);
+        corner([x + w, y + h - ry], [x + w - rx, y + h]);
+        corner([x + rx, y + h], [x, y + h - ry]);
+        corner([x, y + ry], [x + rx, y]);
+        // The last corner ends where the outline began.
+        pts.pop();
+        poly(pts.filter((p, k) => k === 0 || p[0] !== pts[k - 1]![0] || p[1] !== pts[k - 1]![1]), true);
+        break;
+      }
+      case "ellipse": {
+        const [cx, cy, rx, ry] = [num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry")];
+        if (rx === ry) out.push({ kind: "circle", center: P(cx, cy), radius: rx * unitScale });
+        else poly(Array.from({ length: 96 }, (_, k): [number, number] => [cx + rx * Math.cos((k * Math.PI) / 48), cy + ry * Math.sin((k * Math.PI) / 48)]), true);
         break;
       }
       case "circle": {
@@ -739,6 +748,10 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
     if (pts.length > 1) subs.push({ pts, closed });
     pts = [];
   };
+  // The last control point of a cubic (C, S) or quadratic (Q, T) curve: S and T mirror it.
+  let lastCubic: [number, number] | null = null;
+  let lastQuad: [number, number] | null = null;
+  const mirror = (c: [number, number] | null): [number, number] => (c ? [2 * cur[0] - c[0], 2 * cur[1] - c[1]] : cur);
   const bezier = (ctrl: [number, number][], to: [number, number]) => {
     const all = [cur, ...ctrl, to];
     for (let s = 1; s <= 12; s++) {
@@ -753,7 +766,12 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
     if (/[a-zA-Z]/.test(tokens[i]!)) cmd = tokens[i++]!;
     const rel = cmd === cmd.toLowerCase();
     const at = (x: number, y: number): [number, number] => (rel ? [cur[0] + x, cur[1] + y] : [x, y]);
-    switch (cmd.toUpperCase()) {
+    const up = cmd.toUpperCase();
+    // A drawing command right after Z starts again where that outline began.
+    if (up !== "M" && up !== "Z" && !pts.length) pts = [cur];
+    const [cubic, quad] = [lastCubic, lastQuad];
+    lastCubic = lastQuad = null;
+    switch (up) {
       case "M":
         flush(false);
         cur = at(n(), n());
@@ -773,20 +791,37 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
         cur = [cur[0], rel ? cur[1] + n() : n()];
         pts.push(cur);
         break;
-      case "C":
-        bezier([at(n(), n()), at(n(), n())], at(n(), n()));
+      case "C": {
+        const c1 = at(n(), n());
+        const c2 = at(n(), n());
+        bezier([c1, c2], at(n(), n()));
+        lastCubic = c2;
         break;
-      case "Q":
-        bezier([at(n(), n())], at(n(), n()));
+      }
+      case "S": {
+        const c1 = mirror(cubic);
+        const c2 = at(n(), n());
+        bezier([c1, c2], at(n(), n()));
+        lastCubic = c2;
         break;
-      case "S":
-      case "T":
-        bezier(cmd.toUpperCase() === "S" ? [at(n(), n())] : [], at(n(), n()));
+      }
+      case "Q": {
+        const c = at(n(), n());
+        bezier([c], at(n(), n()));
+        lastQuad = c;
         break;
+      }
+      case "T": {
+        const c = mirror(quad);
+        bezier([c], at(n(), n()));
+        lastQuad = c;
+        break;
+      }
       case "A": {
-        n(); n(); n(); n(); n();
-        cur = at(n(), n());
-        pts.push(cur);
+        const [rx, ry, rot, large, sweep] = [n(), n(), n(), n(), n()];
+        const to = at(n(), n());
+        pts.push(...arcPoints(cur, to, rx, ry, rot, large !== 0, sweep !== 0));
+        cur = to;
         break;
       }
       case "Z":
@@ -800,4 +835,42 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
   }
   flush(false);
   return subs;
+}
+
+/**
+ * Points along an SVG elliptical arc from `a` to `b` (the path's A command, SVG 1.1 F.6.5), the
+ * start left out: radii too small to reach are scaled up, as the spec says; zero radii are a line.
+ */
+export function arcPoints(a: [number, number], b: [number, number], rx: number, ry: number, rotDeg: number, large: boolean, sweep: boolean): [number, number][] {
+  rx = Math.abs(rx);
+  ry = Math.abs(ry);
+  if (!rx || !ry || (a[0] === b[0] && a[1] === b[1])) return [b];
+  const phi = (rotDeg * Math.PI) / 180;
+  const [cos, sin] = [Math.cos(phi), Math.sin(phi)];
+  const [dx, dy] = [(a[0] - b[0]) / 2, (a[1] - b[1]) / 2];
+  const x1 = cos * dx + sin * dy;
+  const y1 = -sin * dx + cos * dy;
+  const lam = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
+  if (lam > 1) [rx, ry] = [rx * Math.sqrt(lam), ry * Math.sqrt(lam)];
+  const num = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1;
+  const den = rx * rx * y1 * y1 + ry * ry * x1 * x1;
+  const k = (large === sweep ? -1 : 1) * Math.sqrt(Math.max(0, num / den));
+  const cx1 = (k * rx * y1) / ry;
+  const cy1 = (-k * ry * x1) / rx;
+  const cx = cos * cx1 - sin * cy1 + (a[0] + b[0]) / 2;
+  const cy = sin * cx1 + cos * cy1 + (a[1] + b[1]) / 2;
+  const angle = (ux: number, uy: number) => Math.atan2(uy, ux);
+  const t0 = angle((x1 - cx1) / rx, (y1 - cy1) / ry);
+  let dt = angle((-x1 - cx1) / rx, (-y1 - cy1) / ry) - t0;
+  if (sweep && dt < 0) dt += 2 * Math.PI;
+  if (!sweep && dt > 0) dt -= 2 * Math.PI;
+  const steps = Math.max(4, Math.ceil(Math.abs(dt) / (Math.PI / 32)));
+  const out: [number, number][] = [];
+  for (let s = 1; s < steps; s++) {
+    const t = t0 + (dt * s) / steps;
+    const [ex, ey] = [rx * Math.cos(t), ry * Math.sin(t)];
+    out.push([cos * ex - sin * ey + cx, sin * ex + cos * ey + cy]);
+  }
+  out.push(b);
+  return out;
 }

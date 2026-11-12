@@ -416,7 +416,9 @@ ipcMain.handle("projects:reveal", (_e, p?: string | { folder: string }) =>
 );
 ipcMain.handle("files:save", async (e, p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => {
   const win = windowFor(e.sender);
-  const r = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath("downloads"), p.name), ...(p.filters ? { filters: p.filters } : {}) });
+  // The UI end-to-end run (tests/e2e/app.ts) saves without the dialog, into its own temp folder.
+  const testDir = process.env["MEERCAD_E2E_SAVE_DIR"];
+  const r = testDir ? { canceled: false, filePath: join(testDir, basename(p.name)) } : await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath("downloads"), p.name), ...(p.filters ? { filters: p.filters } : {}) });
   if (r.canceled || !r.filePath) return null;
   await writeFile(r.filePath, typeof p.data === "string" ? p.data : Buffer.from(p.data));
   return r.filePath;
@@ -443,6 +445,9 @@ ipcMain.handle("files:write-local", async (_e, p: { path: unknown; base64: unkno
  */
 ipcMain.handle("files:share", async (e, p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => {
   const win = windowFor(e.sender);
+  // The UI end-to-end run (tests/e2e/app.ts): the file goes into its folder instead of the share menu.
+  const testDir = process.env["MEERCAD_E2E_SAVE_DIR"];
+  if (testDir) return void (await writeFile(join(testDir, safeName(p.name, "design.meercad")), typeof p.data === "string" ? p.data : Buffer.from(p.data)));
   const dir = await mkdtemp(join(app.getPath("temp"), "meercad-share-"));
   const file = join(dir, safeName(p.name, "design.meercad"));
   await writeFile(file, typeof p.data === "string" ? p.data : Buffer.from(p.data));

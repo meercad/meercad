@@ -18,6 +18,7 @@ import { InlineInput } from "./InlineValues";
 import { docUnit, fmtLen, lengthValue } from "../lib/units";
 import { Kbd } from "./Kbd";
 import { bendInfo } from "../lib/bend";
+import { capDrag } from "../lib/capDrag";
 import { t } from "../lib/i18n";
 
 const num = (e: Expr | undefined, fallback = 0): number => {
@@ -217,6 +218,24 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       // arrow points straight out of it at the clicked spot.
       const origin = p.normal ? onPlane(p.point, a.origin, a.normal) : p.point;
       const dir = p.normal ? a.normal : (p.surface ?? a.normal);
+      // The end face of an extrusion: the drag changes its distance (or the variable behind it),
+      // so what was cut through the part later still goes through.
+      const cap = p.normal ? capDrag(currentDoc(), p.tags ?? [], (e) => num(e, NaN), docUnit()) : null;
+      if (cap && Number.isFinite(cap.distance)) {
+        const back = origin.map((x, i) => x - dir[i]! * cap.distance) as V3;
+        return [
+          {
+            id: "cap",
+            origin: back,
+            dir,
+            value: cap.distance,
+            min: 0.05,
+            onStart: () => void apply(cap.write(cap.distance)),
+            onDrag: (v) => void applyQuiet(cap.write(v)),
+            onEnd: (v) => void applyQuiet(cap.write(v)),
+          },
+        ];
+      }
       return [
         {
           id: "extrude",

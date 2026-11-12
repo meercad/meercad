@@ -4,7 +4,7 @@ import { download } from "./io";
 import { jointRange, renderMotionGif } from "../lib/render";
 import type { Joint, Motion } from "@meercad/schema";
 import { partName } from "../lib/features";
-import { cable, motion } from "@meercad/model";
+import { motion } from "@meercad/model";
 import { addPoseToMotion, checkClearance, checkMotionRun, currentMechanism, swingRanges, deleteJoint, editJoint, jointValues, jointsFromGears, playJoint, playMotion, restPose, saveJoint, setJointField, setJointValue, showMotionAt, startJoint, stopPlaying, updateJointDraft, useMotion, wantedClearance, type JointField } from "../lib/mechanism";
 import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { apply, toast, useApp } from "../store";
@@ -193,7 +193,6 @@ export function MotionPanel() {
               ) : null}
             </div>
             {joints.length ? <ClearanceResults /> : null}
-            <CableStates />
             {joints.some((j) => j.type !== "fixed") && (canEdit || doc.mechanism?.motions?.length) ? <MotionsSection /> : null}
             {gearsWithout && canEdit ? (
               <button
@@ -311,7 +310,12 @@ function MotionsSection() {
                     {k.at.toFixed(2)} s
                   </button>
                   {canEdit ? (
-                    <button className="link" title={t("Delete")} onClick={() => update({ ...m, keys: m.keys.filter((x) => x !== k) })}>
+                    <button
+                      className="link"
+                      title={t("Delete")}
+                      // The last moment takes the motion with it: a motion without moments is none.
+                      onClick={() => (m.keys.length > 1 ? update({ ...m, keys: m.keys.filter((x) => x !== k) }) : (stopPlaying(), apply({ type: "delete_motion", id: m.id })))}
+                    >
                       <X />
                     </button>
                   ) : null}
@@ -489,31 +493,3 @@ function JointForm() {
   );
 }
 
-/** The cables in the pose shown: stretched, bent too tight, running into parts, or how much they have to spare. */
-function CableStates() {
-  const cables = useMotion((s) => s.cables);
-  const features = useApp((s) => s.doc.features);
-  if (!cables.length) return null;
-  const name = (id: string) => partName(id, features);
-  const mmText = (v: number) => `${+v.toFixed(1)} mm`;
-  return (
-    <div className="cable-states">
-      <b>{t("Cables")}</b>
-      {cables.map((c) => {
-        const lines: string[] = [];
-        if (c.error) lines.push(c.error);
-        else {
-          if (cable.isStretched(c)) lines.push(t("stretched by {mm}", { mm: mmText(c.stretch) }));
-          if (cable.isTooTight(c)) lines.push(t("bent to {r}, allowed {min}", { r: mmText(c.minRadius), min: mmText(c.bendRadius) }));
-          if (c.hits.length) lines.push(t("runs into {parts}", { parts: c.hits.map(name).join(", ") }));
-        }
-        const bad = lines.length > 0;
-        return (
-          <p key={c.id} className={`small ${bad ? "warn" : "muted"}`}>
-            {name(c.id)}: {bad ? lines.join(" · ") : t("fine, {mm} to spare", { mm: mmText(Math.max(0, -c.stretch)) })}
-          </p>
-        );
-      })}
-    </div>
-  );
-}

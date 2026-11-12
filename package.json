@@ -11,12 +11,14 @@
     "ios": "pnpm --filter meercad-ios sync && pnpm --filter meercad-ios open",
     "build": "pnpm --filter @meercad/web build",
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
-    "test": "vitest run --project unit --project integration --project integration-slow",
-    "test:quick": "vitest run --project unit --project integration",
+    "test": "vitest run --project unit --project web --project web-slow --project integration --project integration-slow",
+    "test:quick": "vitest run --project unit --project web --project integration",
+    "test:coverage": "vitest run --project unit --project web --project web-slow --project integration --project integration-slow --coverage.enabled",
     "test:perf": "vitest run --project perf",
     "test:release": "node scripts/test-release.mjs",
-    "test:watch": "vitest --project unit --project integration",
+    "test:watch": "vitest --project unit --project web --project integration",
     "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
+    "test:ios": "node scripts/test-ios.mjs",
     "wip": "node scripts/install-mac.mjs wip",
     "rc": "node scripts/install-mac.mjs rc",
     "claude-config": "node scripts/claude-config.mjs",
@@ -25,8 +27,11 @@
     "hooks": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "5.0.5",
+    "happy-dom": "^21.0.4",
     "typescript": "~5.9.3",
     "vitest": "^5.0.5"
   }

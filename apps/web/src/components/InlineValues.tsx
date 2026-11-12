@@ -40,9 +40,11 @@ const fmt = (e: Expr, unit = " mm") => {
   return `${+e.toFixed(3)}${unit}`;
 };
 
+/** The centre of the first face with a tag starting with `prefix` (or, for a copy's mark such as "@lp1.1", ending with it). */
 function faceCenterByTag(out: RebuildOutput, prefix: string): V3 | null {
+  const hit = prefix.startsWith("@") ? (x: string) => x.endsWith(prefix) : (x: string) => x.startsWith(prefix);
   for (const m of out.meshes) {
-    const i = m.faceTags.findIndex((t) => t.some((x) => x.startsWith(prefix)));
+    const i = m.faceTags.findIndex((t) => t.some(hit));
     if (i >= 0) return faceAnchor(m, i)?.origin ?? null;
   }
   return null;

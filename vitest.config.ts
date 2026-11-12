@@ -1,4 +1,29 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
+/**
+ * The app imports its kernel worker the Vite way (`./kernel.worker.ts?worker`, `?worker&url`); in
+ * its tests the worker runs in the same process (apps/web/test/kernelWorker.ts). Files imported as
+ * URLs (`?url`, the sketch solver's .wasm) are their paths on disk.
+ */
+function testKernelWorker() {
+  const stub = fileURLToPath(new URL("./apps/web/test/kernelWorker.ts", import.meta.url));
+  return {
+    name: "meercad-test-kernel-worker",
+    enforce: "pre" as const,
+    async resolveId(this: { resolve(id: string, importer?: string): Promise<{ id: string } | null> }, id: string, importer?: string) {
+      if (id.endsWith("?worker")) return stub;
+      if (id.endsWith("?worker&url")) return "\0worker-url";
+      // A file's URL (a .wasm the app loads): in Node its path on disk.
+      if (id.endsWith("?url")) {
+        const file = await this.resolve(id.slice(0, -4), importer);
+        return file ? `/@file-path/${encodeURIComponent(file.id)}` : null;
+      }
+      return null;
+    },
+    load: (id: string) => (id === "\0worker-url" ? "export default \"kernel.worker.js\";" : id.startsWith("/@file-path/") ? `export default ${JSON.stringify(decodeURIComponent(id.slice("/@file-path/".length)))};` : null),
+  };
+}
 
 /**
  * Test levels (docs/TESTING.md):
@@ -31,14 +56,53 @@ export const SLOW = [
   "packages/model/src/texture/texture.test.ts",
 ];
 
+/** App tests that take long (every menu entry, every tool built). They run in `pnpm test`, not on every commit. */
+export const WEB_SLOW = ["apps/web/src/menus.test.tsx", "apps/web/src/components/FeatureDialog.build.test.tsx", "apps/web/src/components/FeatureDialog.fields.test.tsx"];
+
 export default defineConfig({
   test: {
     // Kernel tests run about three times slower on the CI runner than on a Mac.
     testTimeout: 120_000,
+    /**
+     * Line coverage of every package and the app, measured over all levels but perf and E2E
+     * (`pnpm test:coverage`, CI job "coverage"). The goal is 100 % everywhere; each threshold is
+     * where the package stands, so coverage can only go up: raise it when tests are added, never
+     * lower it (docs/TESTING.md).
+     */
+    coverage: {
+      provider: "v8",
+      include: ["packages/*/src/**/*.{ts,tsx}", "apps/web/src/**/*.{ts,tsx}"],
+      exclude: ["**/*.test.{ts,tsx}", "**/*.d.ts", "apps/web/src/main.tsx", "apps/web/src/kernel.worker.ts"],
+      thresholds: {
+        "packages/ai/src/**": { lines: 100 },
+        "packages/naming/src/**": { lines: 100 },
+        "packages/schema/src/**": { lines: 100 },
+        "packages/io/src/**": { lines: 98.9 },
+        "packages/sketch/src/**": { lines: 99.4 },
+        "packages/model/src/**": { lines: 98.3 },
+        "packages/kernel/src/**": { lines: 97.5 },
+        "packages/mcp/src/**": { lines: 96.5 },
+        "packages/viewport/src/**": { lines: 94.5 },
+        "apps/web/src/**": { lines: 86.5 },
+      },
+    },
     projects: [
       {
         extends: true,
         test: { name: "unit", include: ["packages/*/src/**/*.test.ts", "tests/*.test.ts"], exclude: SLOW },
+      },
+      {
+        extends: true,
+        plugins: [testKernelWorker()],
+        // TSX of the app (React 19, automatic runtime).
+        oxc: { jsx: { runtime: "automatic" } },
+        test: { name: "web", environment: "happy-dom", include: ["apps/web/src/**/*.test.{ts,tsx}"], exclude: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"] },
+      },
+      {
+        extends: true,
+        plugins: [testKernelWorker()],
+        oxc: { jsx: { runtime: "automatic" } },
+        test: { name: "web-slow", environment: "happy-dom", include: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"] },
       },
       {
         extends: true,

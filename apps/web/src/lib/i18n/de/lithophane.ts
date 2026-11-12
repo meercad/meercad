@@ -5,6 +5,7 @@ export default {
   "Picture width": "Bildbreite",
   "auto": "auto",
   "This design had a surface texture. meerCAD no longer has it, so the part now shows smooth.": "Dieses Design hatte eine Oberflächenstruktur. meerCAD bietet sie nicht mehr an, deshalb ist das Teil jetzt glatt.",
+  "This design had cables. meerCAD no longer has them, so they are left out; the rest of the design is as before.": "Dieses Design hatte Kabel. meerCAD bietet sie nicht mehr an, deshalb fehlen sie jetzt; der Rest bleibt, wie er war.",
   "STEP keeps the smooth plate: the lithophane's picture comes along in STL, 3MF and OBJ": "STEP enthält die glatte Platte: Das Bild der Lithophanie kommt nur in STL, 3MF und OBJ mit",
   // Lithophanie
   "Lithophane": "Lithophanie",
