@@ -16,7 +16,15 @@ interface Stored {
   thumbnail?: string;
 }
 
-export const testFiles = { projects: new Map<string, Stored>(), folders: new Set<string>(), saves: 0 };
+export const testFiles = {
+  projects: new Map<string, Stored>(),
+  folders: new Set<string>(),
+  saves: 0,
+  /** Pictures kept next to a project's file by another device (sharedPicture.ts), by id. */
+  shared: new Map<string, { thumbnail: string; look: number }>(),
+  /** Projects read for a build ("load:id") and shared pictures looked at ("shared:id"), in order. */
+  calls: [] as string[],
+};
 
 let n = 0;
 const meta = (p: Stored) => ({ id: p.id, name: p.name, folder: p.folder, updatedAt: p.modified, ...(p.thumbnail ? { thumbnail: p.thumbnail } : {}) });
@@ -27,7 +35,12 @@ const desktop = {
   info: async () => ({ version: "test", projectsDir: "/test", mcpCommand: { command: "node", args: [] }, channel: "wip" as const }),
   projects: {
     list: async () => [...testFiles.projects.values()].map(meta),
+    sharedThumbnail: async (id: string) => {
+      testFiles.calls.push(`shared:${id}`);
+      return testFiles.shared.get(id) ?? null;
+    },
     load: async (id: string) => {
+      testFiles.calls.push(`load:${id}`);
       const p = testFiles.projects.get(id);
       return p && { ...meta(p), doc: structuredClone(p.doc) };
     },

@@ -179,7 +179,7 @@ let examplesToPicture: { list: readonly ExampleDoc[]; done: () => void } = { lis
 const runPictures = pictureRunner({
   projects: fillMissingThumbnails,
   // The background kernel's memory is given back once everything is pictured.
-  examples: () => fillExampleThumbnails(examplesToPicture.list, examplesToPicture.done).finally(endSpare),
+  examples: (yieldNow) => fillExampleThumbnails(examplesToPicture.list, examplesToPicture.done, yieldNow).finally(endSpare),
 });
 /** The projects' pictures first, then the examples' (see pictureRunner); `done` after each example. */
 export function fillThumbnails(examples: readonly ExampleDoc[], done: () => void): Promise<void> {
@@ -242,10 +242,37 @@ async function findBlank(projects: readonly ProjectMeta[]): Promise<void> {
 }
 const triedKey = (p: ProjectMeta) => `${p.id}@${p.updatedAt}`;
 
+/** Projects whose shared picture was looked at this session, by id and file time (see takeShared). */
+const sharedTried = new Set<string>();
+
+/**
+ * Takes every picture kept next to a project's file (see sharedPicture.ts) that shows the file as
+ * it is now, before anything is built. Before, each project was looked at only when its turn came
+ * in the build queue: one project without such a picture (changed on the Mac a moment ago, or never
+ * pictured) was built first, minutes on the iPhone, or took the page down, and the pictures of all
+ * the projects after it waited, again on each visit. Nothing is built here, so it goes on while a
+ * project is open in the editor too; only files too big to read next to the editor wait for the
+ * overview (BIG_FILE_BYTES).
+ */
+async function takeSharedPictures(): Promise<void> {
+  const s = useApp.getState();
+  const look = currentLookSince();
+  for (const p of s.projects) {
+    if (p.id === s.project?.id || sharedTried.has(triedKey(p))) continue;
+    if (!needsPicture(p, blank.get(p.thumbnail ?? "") ?? false, look)) continue;
+    if (oneKernel && editorOpen() && (p.size ?? 0) > BIG_FILE_BYTES) continue;
+    sharedTried.add(triedKey(p));
+    const shared = await takeSharedThumbnail(p.id).catch(() => null);
+    if (shared) useApp.setState((st) => ({ projects: st.projects.map((q) => (q.id === p.id ? { ...q, thumbnail: shared, thumbnailAt: Date.now() } : q)) }));
+  }
+}
+
 async function fillMissingThumbnails(): Promise<void> {
   let host: HTMLDivElement | null = null;
   let vp: Viewport | null = null;
   try {
+    await findBlank(useApp.getState().projects);
+    await takeSharedPictures();
     for (;;) {
       await findBlank(useApp.getState().projects);
       const s = useApp.getState();
@@ -259,8 +286,10 @@ async function fillMissingThumbnails(): Promise<void> {
         tried.delete(triedKey(next));
         return;
       }
-      // Pictured on another device (iCloud) and not changed since: taken as it is, nothing built.
-      const shared = await takeSharedThumbnail(next.id).catch(() => null);
+      // Pictured on another device (iCloud) and not changed since: taken as it is, nothing built
+      // (normally already by takeSharedPictures, unless the editor was open with a big file).
+      const shared = sharedTried.has(triedKey(next)) ? null : await takeSharedThumbnail(next.id).catch(() => null);
+      sharedTried.add(triedKey(next));
       if (shared) {
         useApp.setState((st) => ({ projects: st.projects.map((p) => (p.id === next.id ? { ...p, thumbnail: shared, thumbnailAt: Date.now() } : p)) }));
         continue;
@@ -361,11 +390,13 @@ function exampleFailed(key: string): void {
 }
 
 /** Makes the missing example pictures one by one; `done` is called after each. */
-async function fillExampleThumbnails(examples: readonly { name: string; thumbnail?: string; doc: MeercadDocument }[], done: () => void): Promise<void> {
+async function fillExampleThumbnails(examples: readonly { name: string; thumbnail?: string; doc: MeercadDocument }[], done: () => void, yieldNow: () => boolean = () => false): Promise<void> {
   let host: HTMLDivElement | null = null;
   let vp: Viewport | null = null;
   try {
     for (const ex of examples) {
+      // The projects (listed or changed meanwhile) go first; the rest of the examples after them.
+      if (yieldNow()) return;
       if (ex.thumbnail || exampleThumbnail(ex.name, ex.doc)) continue;
       const key = keyOf(ex.name, ex.doc);
       if (examplesFailed().includes(key)) continue;
