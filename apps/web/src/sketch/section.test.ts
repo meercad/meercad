@@ -45,4 +45,20 @@ describe("mesh sections", () => {
     const asGuides = traceSections({ entities: [], constraints: [] }, chains, 0.05, true);
     expect(asGuides.draft.entities.filter((e) => e.type !== "point").every((e) => (e as { construction?: boolean }).construction)).toBe(true);
   });
+
+  it("traces a slot as two lines and two arcs, tangent where they meet", async () => {
+    const outline: [number, number][] = [];
+    for (let i = 0; i <= 48; i++) outline.push([20 + 5 * Math.cos(-Math.PI / 2 + (Math.PI * i) / 48), 5 * Math.sin(-Math.PI / 2 + (Math.PI * i) / 48)]);
+    for (let i = 0; i <= 48; i++) outline.push([5 * Math.cos(Math.PI / 2 + (Math.PI * i) / 48), 5 * Math.sin(Math.PI / 2 + (Math.PI * i) / 48)]);
+    const slot = meshOf("im3", prism(outline, 5));
+    const chains = meshSections(imports(["im3"]), [slot], frame);
+    expect(chains).toHaveLength(1);
+    const { draft } = traceSections({ entities: [], constraints: [] }, chains, 0.05, false);
+    const kinds = draft.entities.filter((e) => e.type !== "point").map((e) => e.type).sort();
+    expect(kinds).toEqual(["arc", "arc", "line", "line"]);
+    expect(draft.constraints.filter((c) => c.type === "tangent")).toHaveLength(4);
+    expect(draft.constraints.filter((c) => c.type === "horizontal")).toHaveLength(2);
+    const solver = await SketchSolver.create();
+    expect(solver.solve({ entities: draft.entities, constraints: draft.constraints as never }).diagnostics.ok).toBe(true);
+  });
 });
