@@ -153,3 +153,10 @@ describe("variables depending on variables", () => {
     expect(renameInExpr(4, "w", "x")).toBe(4);
   });
 });
+
+describe("a formula that starts with an operator", () => {
+  it("is refused with the place named", () => {
+    expect(() => ev("* 2")).toThrow('unexpected "*" in "* 2"');
+    expect(() => ev(")")).toThrow('unexpected ")" in ")"');
+  });
+});
