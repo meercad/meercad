@@ -35,4 +35,13 @@ describe("the Measure card", () => {
     expect(useApp.getState().measure.active).toBe(false);
     expect(document.querySelector(".measure-card")).toBeNull();
   });
+
+  it("shows an assistant's activity and dismisses a preview", async () => {
+    await act(async () => useApp.setState({ aiActivity: { client: "Claude", tool: "apply_ops" } as never, proposalDoc: useApp.getState().doc }));
+    expect(document.querySelector(".ai-activity")!.textContent).toMatch(/Claude/);
+    await act(async () => void fireEvent.click(screen.getByText("Dismiss")));
+    expect(useApp.getState().proposalDoc).toBeNull();
+    await act(async () => useApp.setState({ aiActivity: null }));
+    expect(document.querySelector(".ai-activity")).toBeNull();
+  });
 });
