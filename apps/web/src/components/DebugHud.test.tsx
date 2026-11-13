@@ -48,6 +48,32 @@ describe("the diagnostics overlay", () => {
     expect(document.body.textContent).toMatch(/\d/);
   });
 
+  it("copies without a clipboard (plain http on the local network) by a hidden text field", async () => {
+    const was = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    const commands: string[] = [];
+    const doc = document as unknown as { execCommand: (c: string) => boolean };
+    const before = doc.execCommand;
+    doc.execCommand = (c: string) => (commands.push(c), true);
+    try {
+      await act(async () => void fireEvent.click(screen.getByText("Copy")));
+      expect(commands).toEqual(["copy"]);
+      expect(screen.getByText("Copied")).toBeTruthy();
+      expect(document.querySelector("textarea[readonly]")).toBeNull();
+      // Over https it uses the clipboard.
+      const copied: string[] = [];
+      Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
+      Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
+      await act(async () => void fireEvent.click(screen.getByText(/^Cop/)));
+      expect(copied[0]).toContain(navigator.userAgent);
+    } finally {
+      doc.execCommand = before;
+      delete (window as unknown as Record<string, unknown>)["isSecureContext"];
+      if (was) Object.defineProperty(navigator, "clipboard", was);
+      else delete (navigator as unknown as Record<string, unknown>)["clipboard"];
+    }
+  });
+
   it("runs its buttons", async () => {
     for (const b of screen.queryAllByRole("button")) {
       await act(async () => void fireEvent.click(b));
