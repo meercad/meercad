@@ -3,7 +3,8 @@
  * undo, redo, preview and versions; sketches as DXF and SVG; parts shown and hidden; folders;
  * big exports fetched piece by piece.
  */
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { hideDeviation, showDeviation, useDeviation } from "./deviation";
 import { writeStl } from "@meercad/io";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import { prism, turned } from "../../../../tests/acceptance/meshes";
@@ -134,6 +135,21 @@ describe("imported meshes", () => {
     expect(Math.abs(d.minMm)).toBeLessThan(0.01);
     expect(Math.abs(d.maxMm)).toBeLessThan(0.01);
     expect(d.shareWithinTolerance).toBe(1);
+    // Shown on screen, measured in slices; a second look started meanwhile makes the first one stop.
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => (clock += 30));
+    try {
+      useDeviation.setState({ stats: null });
+      showDeviation("ex1", imported.added[0]!);
+      showDeviation("ex1", imported.added[0]!);
+      await vi.waitFor(() => {
+        if (!useDeviation.getState().stats) throw new Error("still measuring");
+      }, 20_000);
+      expect(useDeviation.getState().stats!.within).toBe(1);
+    } finally {
+      now.mockRestore();
+      hideDeviation();
+    }
   });
 
   it("cleans up a mesh and rebuilds it with features of the right size", async () => {
