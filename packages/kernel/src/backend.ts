@@ -1790,22 +1790,26 @@ function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: st
     return checked(solid);
   };
   /**
-   * A mesh of several closed pieces (a hollow inside the part, or parts side by side in one file)
-   * is no single shell: one shell per piece, hollows (wound inwards) added to the piece around them.
+   * A mesh known closed and wound outwards from its corners alone (each edge run once each way, the
+   * volume positive) needs none of OCCT's checks, which take most of a minute on 70,000 triangles:
+   * one shell per piece, hollows set into the piece around them.
    */
-  const piecesSolid = (): TopoDS_Shape | null => {
+  const closedSolid = (): TopoDS_Shape | null => {
     const mesh = parseStl(bytes);
     if (mesh.indices.length / 3 !== count) return null;
     const pieces = meshPieces(mesh.positions, mesh.indices);
-    if (pieces.length < 2) return null;
+    if (!pieces.every((p) => p.closed) || !pieces.some((p) => p.volume > 0)) return null;
+    return assemble(pieces);
+  };
+  const assemble = (pieces: ReturnType<typeof meshPieces>, check = false): TopoDS_Shape | null => {
     const all = facesOf(faces);
     const inside = (a: number[], b: number[]) => [0, 1, 2].every((k) => a[k]! >= b[k]! - 1e-6 && a[k + 3]! <= b[k + 3]! + 1e-6);
-    const outer = pieces.filter((p) => p.volume > 0);
     const solids: TopoDS_Shape[] = [];
-    for (const o of outer) {
+    for (const o of pieces.filter((p) => p.volume > 0)) {
       const mk = arena.track(new oc.BRepBuilderAPI_MakeSolid(shellOf(o.triangles.map((t) => all[t]!))));
       for (const h of pieces) if (h.volume <= 0 && inside(h.box, o.box)) mk.Add(shellOf(h.triangles.map((t) => all[t]!)));
-      const solid = checked(arena.track(oc.TopoDS.Solid(arena.track(mk.Solid()))));
+      const made = arena.track(oc.TopoDS.Solid(arena.track(mk.Solid())));
+      const solid = check ? checked(made) : made;
       if (!solid) return null;
       solids.push(solid);
     }
@@ -1816,7 +1820,17 @@ function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: st
     for (const x of solids) builder.Add(compound, x);
     return compound;
   };
-  let solid = toSolid(faces) ?? piecesSolid();
+  /**
+   * A mesh of several closed pieces (a hollow inside the part, or parts side by side in one file)
+   * is no single shell: one shell per piece, hollows (wound inwards) added to the piece around them.
+   */
+  const piecesSolid = (): TopoDS_Shape | null => {
+    const mesh = parseStl(bytes);
+    if (mesh.indices.length / 3 !== count) return null;
+    const pieces = meshPieces(mesh.positions, mesh.indices);
+    return pieces.length < 2 ? null : assemble(pieces, true);
+  };
+  let solid = (!trusted && closedSolid()) || (toSolid(faces) ?? piecesSolid());
   if (!solid) {
     // Small gaps between triangles: sew them shut, then try again.
     const sew = arena.track(new oc.BRepBuilderAPI_Sewing(1e-3, true, true, true, false));
@@ -1834,7 +1848,7 @@ function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: st
  * The closed pieces of a triangle mesh (corners joined where their coordinates are equal): each
  * piece's triangles, signed volume (negative when wound inwards, as a hollow is) and box.
  */
-export function meshPieces(positions: ArrayLike<number>, indices: ArrayLike<number>): { triangles: number[]; volume: number; box: number[] }[] {
+export function meshPieces(positions: ArrayLike<number>, indices: ArrayLike<number>): { triangles: number[]; volume: number; box: number[]; closed: boolean }[] {
   const ids = new Map<string, number>();
   const weld = (v: number) => {
     const key = `${positions[v * 3]},${positions[v * 3 + 1]},${positions[v * 3 + 2]}`;
@@ -1857,11 +1871,21 @@ export function meshPieces(positions: ArrayLike<number>, indices: ArrayLike<numb
     const b2 = find(b);
     if (c2 !== b2) up[c2] = b2;
   }
-  const byRoot = new Map<number, { triangles: number[]; volume: number; box: number[] }>();
+  // Closed and wound one way: every edge is run once each way (a → b in one triangle, b → a in its neighbour).
+  const runs = new Map<number, number>();
+  const open = new Set<number>();
+  const nv = ids.size;
+  for (let t = 0; t < n; t++)
+    for (let k = 0; k < 3; k++) {
+      const [a, b] = [corner[t * 3 + k]!, corner[t * 3 + ((k + 1) % 3)]!];
+      runs.set(a * nv + b, (runs.get(a * nv + b) ?? 0) + 1);
+    }
+  for (const [key, count] of runs) if (count !== 1 || runs.get((key % nv) * nv + Math.floor(key / nv)) !== 1) open.add(find(Math.floor(key / nv)));
+  const byRoot = new Map<number, { triangles: number[]; volume: number; box: number[]; closed: boolean }>();
   for (let t = 0; t < n; t++) {
     const r = find(corner[t * 3]!);
     let p = byRoot.get(r);
-    if (!p) byRoot.set(r, (p = { triangles: [], volume: 0, box: [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity] }));
+    if (!p) byRoot.set(r, (p = { triangles: [], volume: 0, box: [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity], closed: !open.has(r) }));
     p.triangles.push(t);
     const [a, b, c] = [indices[t * 3]! * 3, indices[t * 3 + 1]! * 3, indices[t * 3 + 2]! * 3];
     const P = positions;
