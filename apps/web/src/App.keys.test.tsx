@@ -211,4 +211,85 @@ describe("the Mac app's menu", () => {
     const out = await rebuildNow();
     expect(out.report.sketches.find((s) => s.id === sk.id)!.regions[0]!.area).toBeCloseTo(300, 6);
   });
+
+  it("hides and shows parts, turns to the face under the mouse, sketches on it (Plasticity keys)", async () => {
+    await act(async () => newProject(undefined, "Keys 2"));
+    await act(async () => void apply({ type: "add_features", features: design }));
+    await rebuilt();
+    const { usePrefs } = await import("./lib/keymap");
+    usePrefs.setState({ keys: "plasticity" } as never);
+    try {
+      useApp.setState({ selection: [{ kind: "face", bodyId: "ex1", face: 0, tags: [], point: [0, 0, 0], normal: null }] } as never);
+      await key("h", { code: "KeyH" });
+      expect(useApp.getState().hidden.has("ex1")).toBe(true);
+      await key("h", { code: "KeyH", altKey: true });
+      expect(useApp.getState().hidden.size).toBe(0);
+    } finally {
+      usePrefs.setState({ keys: "meercad" } as never);
+    }
+    // Space looks square onto the face under the mouse, S sketches on it.
+    const vp = getViewport()!;
+    const top = { kind: "face", bodyId: "ex1", face: 0, tags: ["ex1.end_cap"], point: [20, 10, 10], normal: [0, 0, 1] } as never;
+    vp.setHover(top);
+    const q = vp.cameraQuaternion.clone();
+    await key(" ", { code: "Space" });
+    await act(async () => new Promise((r) => setTimeout(r, 600)));
+    (vp as unknown as { frame(): void }).frame();
+    expect(vp.cameraQuaternion.equals(q)).toBe(false);
+    vp.setHover(top);
+    await key("s", { code: "KeyS" });
+    const sk = currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<Feature, { op: "sketch" }>;
+    expect(sk.plane).toMatchObject({ face: expect.anything() });
+    const { closeSketch, undo } = await import("./store");
+    await act(async () => closeSketch());
+    await act(async () => undo());
+  });
+
+  it("edits parts from the Mac app's Edit menu, and text when a field has the focus", async () => {
+    await act(async () => newProject(undefined, "Keys 3"));
+    await act(async () => void apply({ type: "add_features", features: design }));
+    await rebuilt();
+    const before = (await rebuildNow()).report.bodies.length;
+    await emit("menu", "selectAll");
+    expect(useApp.getState().selection.length).toBeGreaterThan(0);
+    await emit("menu", "copy");
+    await act(async () => new Promise((r) => setTimeout(r, 300)));
+    await emit("menu", "paste");
+    await act(async () => new Promise((r) => setTimeout(r, 300)));
+    await rebuilt();
+    expect((await rebuildNow()).report.bodies.length).toBe(before + 1);
+    await emit("menu", "duplicate");
+    await rebuilt();
+    await emit("menu", "cut");
+    await rebuilt();
+    // With a text field focused the menu edits its text (through the Mac app).
+    const native: string[] = [];
+    const desktop = (window as unknown as { meercadDesktop: { editNative?: (c: string) => Promise<void> } }).meercadDesktop;
+    const own = desktop.editNative;
+    desktop.editNative = async (c) => void native.push(c);
+    const input = document.createElement("input");
+    document.body.append(input);
+    input.focus();
+    await emit("menu", "copy");
+    await emit("menu", "duplicate");
+    input.remove();
+    desktop.editNative = own;
+    expect(native).toEqual(["copy"]);
+    const { undo } = await import("./store");
+    for (let i = 0; i < 3; i++) await act(async () => undo());
+    await rebuilt();
+  });
+
+  it("takes ⌥⌘H and ⌘\\ for the side panel, and ⌘O to import", async () => {
+    const before = useApp.getState().sideOpen;
+    await key("h", { metaKey: true, altKey: true });
+    expect(useApp.getState().sideOpen).toBe(!before);
+    await key("\\", { metaKey: true });
+    expect(useApp.getState().sideOpen).toBe(before);
+    // ⌘O asks for a file (the stand-in Mac app answers with none): nothing changes.
+    const n = currentDoc().features.length;
+    await key("o", { metaKey: true });
+    expect(currentDoc().features.length).toBe(n);
+  });
 });
+
