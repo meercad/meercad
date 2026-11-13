@@ -114,6 +114,9 @@ describe("dialog fields of the other kinds", () => {
     ["a thread on a shaft", "thread", { faces: [{ face: "ex1.end_cap" }], size: "M8", threadLength: 6 }],
     ["moving a face up to another", "offset_face", { faces: [{ face: "ex1.end_cap" }], distance: 2, upTo: { face: { face: "ex1.start_cap" } } }],
     ["a mesh convert", "mesh_convert", { body: "ex1", tolerance: 0.2, angle: 25 }],
+    ["a round snap-lid box", "box", { lid: "snap", shape: "round", width: 40, height: 20 }],
+    ["a screw-lid jar", "box", { lid: "screw", width: 40, height: 20, lidThickness: 2 }],
+    ["a snap hook clicking into a part", "snap_hook", { plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10]], catchIn: ["ex1"], flip: true, angle: 90 }],
   ];
   for (const [name, op, draft] of cases) it(name, async () => useEveryControl(op, draft), 120_000);
 });
