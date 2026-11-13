@@ -180,6 +180,8 @@ export class Mechanism {
       g *= c.ratio;
       cur = c.driver;
     }
+    // Only called for joints with a root (rootOf not null): the chain ends within the loop.
+    /* v8 ignore next */
     return g;
   }
 

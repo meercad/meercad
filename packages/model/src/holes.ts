@@ -145,6 +145,8 @@ export function holeShape(kind: HoleKind, o: { size?: string | undefined; diamet
         ins = insertDims(row.size, o.length);
       } catch (e) {
         if (e instanceof InsertError) throw new HoleError(e.message);
+        // insertDims throws InsertError only: anything else is a bug and goes on as it is.
+        /* v8 ignore next */
         throw e;
       }
       if (!ins) throw new HoleError(`no insert size for ${row.size}: use one of ${INSERT_SIZES.join(", ")}`);

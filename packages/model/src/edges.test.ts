@@ -7,7 +7,10 @@ import { describe, expect, it } from "vitest";
 import { emptyDocument, type Feature, type MeercadDocument } from "@meercad/schema";
 import { areaPlan, drawerFit, GridfinityError, loopArea } from "./gridfinity.js";
 import { restored, snapshot, versionChanges, pruneBlobs } from "./versions.js";
-import { wallFit } from "./wall.js";
+import { openGridNode, wallFit } from "./wall.js";
+import { applyOp } from "./store.js";
+import { allowedSnapStrain } from "./closures.js";
+import { evaluate, ExprError } from "./expr.js";
 import { leadOf, standardShape } from "./standardParts.js";
 
 const big = "x".repeat(10_000);
@@ -87,5 +90,45 @@ describe("standard parts that cannot be made", () => {
     expect(() => standardShape("insert", { size: "M99" })).toThrow(/unknown size "M99"/);
     expect(() => standardShape("shaft", { size: "Ø999" })).toThrow(/unknown size "Ø999"/);
     expect(() => standardShape("magnet", { diameter: 0, height: 2 })).toThrow(/magnet needs a diameter and a height/);
+  });
+});
+
+describe("more edge cases", () => {
+  it("refuses to restore a version whose files are gone, naming the version", () => {
+    const d: MeercadDocument = { ...emptyDocument(), features: [{ id: "im1", op: "import", format: "stl", fileName: "a.stl", data: big } as Feature] };
+    const blobs: Record<string, string> = {};
+    const v = snapshot(d, "v1", 1, blobs);
+    expect(() => applyOp({ ...d, blobs: {}, versions: [v] }, { type: "restore_version", name: "v1" })).toThrow(/version "v1".*the contents of a\.stl are missing/);
+  });
+
+  it("reads the openGrid node's reach beyond the board's depth as at its back", () => {
+    expect(openGridNode(-1)).toBe(5.9);
+    expect(openGridNode(0.7)).toBeCloseTo((5.9 + 7.88) / 2, 9);
+    expect(openGridNode(50)).toBe(5.9);
+  });
+
+  it("takes PLA's snap strain for an unknown or missing filament", () => {
+    const pla = allowedSnapStrain("PLA");
+    expect(allowedSnapStrain(undefined)).toBe(pla);
+    expect(allowedSnapStrain("Wood")).toBe(pla);
+    expect(allowedSnapStrain("TPU")).toBeGreaterThan(pla);
+  });
+
+  it("refuses an expression that starts with an operator", () => {
+    expect(() => evaluate("* 2", new Map())).toThrow(ExprError);
+    expect(() => evaluate("3 + )", new Map())).toThrow(/unexpected "\)"/);
+  });
+
+  it("fills a round outline of many corners with whole cells, all inside it", () => {
+    // A 32-cornered disc 400 mm across: too many corners to line the grid up with each.
+    const ring: [number, number][] = Array.from({ length: 32 }, (_, i) => [200 * Math.cos((2 * Math.PI * i) / 32), 200 * Math.sin((2 * Math.PI * i) / 32)]);
+    const plan = areaPlan({ loops: [ring], gap: 0.5 });
+    expect(plan.cells.length).toBeGreaterThan(40);
+    // Each cell's corners lie within the disc.
+    for (const [i, j] of plan.cells)
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
+        const x = plan.origin[0] + (i + dx) * 42, y = plan.origin[1] + (j + dy) * 42;
+        expect(Math.hypot(x, y)).toBeLessThanOrEqual(200 + 1e-6);
+      }
   });
 });

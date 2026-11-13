@@ -133,6 +133,13 @@ describe("RebuildEngine", () => {
     bad.release();
     expect(k.disposed).toBe(2);
     expect(e.rebuild(doc(10)).firstRecomputed).toBe(-1);
+    // A preview called off half way (the progress callback throws, as a superseded rebuild does):
+    // what it built is released before the error goes on, and the cache stays.
+    k.runs.length = 0;
+    const off = new Error("superseded");
+    expect(() => e.fork(doc(14), (i) => { if (i === 2) throw off; })).toThrow(off);
+    expect(k.disposed).toBe(3);
+    expect(e.rebuild(doc(10)).firstRecomputed).toBe(-1);
   });
 
   it("reports errors with hints and passes state through", () => {

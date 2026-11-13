@@ -288,6 +288,8 @@ export function standardShape(kind: StandardKind, o: { size?: string | undefined
         ins = o.size ? insertDims(o.size, o.length) : undefined;
       } catch (e) {
         if (e instanceof InsertError) throw new StandardPartError(e.message);
+        // insertDims throws InsertError only: anything else is a bug and goes on as it is.
+        /* v8 ignore next */
         throw e;
       }
       if (!ins) throw new StandardPartError(`unknown size "${o.size ?? ""}": use one of ${INSERT_SIZES.join(", ")}`);

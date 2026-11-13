@@ -200,6 +200,8 @@ export function planScanBin(input: BinPlanInput): BinPlan {
   // One cell more on each side, so the pocket's walls stand clear of the play.
   const gx0 = fx0 - 2 * cell, gy0 = fy0 - 2 * cell;
   const nx = Math.ceil((fx1 + 2 * cell - gx0) / cell) + 1, ny = Math.ceil((fy1 + 2 * cell - gy0) / cell) + 1;
+  // The cells were chosen to hold the footprint with its play (fits above): a guard only.
+  /* v8 ignore next 2 */
   if (gx0 < -W / 2 + POCKET_MARGIN - 2 * cell - 1e-6 || gx0 + (nx - 1) * cell > W / 2 - POCKET_MARGIN + 2 * cell + 1 || gy0 < -D / 2 + POCKET_MARGIN - 2 * cell - 1e-6 || gy0 + (ny - 1) * cell > D / 2 - POCKET_MARGIN + 2 * cell + 1)
     throw new ScanBinError("the part does not fit the bin");
   const field = new Float64Array(nx * ny).fill(Infinity);
