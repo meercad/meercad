@@ -91,7 +91,11 @@ export function ViewportView() {
   const selection = useApp((s) => s.selection);
   const measure = useApp((s) => s.measure);
   const pickingPlane = useApp((s) => s.pickingSketchPlane);
-  const placing = useTerrainPlace((s) => !!s.body) || usePrintCheck((s) => s.picking);
+  // Both hooks every render: with \`||\` the second was skipped while a part was being placed on the
+  // terrain, React saw fewer hooks than before and the view broke.
+  const placingOnTerrain = useTerrainPlace((s) => !!s.body);
+  const pickingFace = usePrintCheck((s) => s.picking);
+  const placing = placingOnTerrain || pickingFace;
   const doc = useApp((s) => s.doc);
   // Deviation from a mesh as a colour map on the part.
   const heat = useDeviation((s) => s.maps);
