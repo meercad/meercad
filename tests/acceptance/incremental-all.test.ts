@@ -9,7 +9,9 @@ import { checkEveryStep, corpus } from "./helpers.js";
 
 // Each file is built from scratch twice per step, so big files take long: the Stapelbox (36 steps)
 // needs about 115 s on a 4-core runner alone and more next to the other slow files.
-const TIMEOUT = 600_000;
+// Stapelbox: about 70 s alone, over 16 min in the coverage run beside three other kernels (the Mac
+// mini's 16 GB swap): room for that.
+const TIMEOUT = 1_500_000;
 
 describe("rebuilding only what a change touches: all files", () => {
   for (const file of readdirSync(new URL("../corpus/", import.meta.url)).filter((f) => f.endsWith(".meercad.json")).sort()) {

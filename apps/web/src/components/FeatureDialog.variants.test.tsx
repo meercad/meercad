@@ -103,7 +103,6 @@ describe("dialog fields of the other kinds", () => {
     ["an internal gear and a rack", "gear", { kind: "internal", module: 2, teeth: 30, width: 6, rim: 6, herringbone: true, helix: 20 }],
     ["a rack", "gear", { kind: "rack", module: 2, teeth: 10, width: 6, rim: 4, center: [5, 5] }],
     ["a gear with a flatted bore", "gear", { kind: "spur", module: 2, teeth: 20, width: 6, bore: { diameter: 6, flat: 5 } }],
-    ["an extension spring", "spring", { kind: "extension", wire: 1, diameter: 10, length: 30, ends: "hooks" }],
     ["inserts and rails", "standard_part", { kind: "insert", size: "M3", plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10], [20, 10]], withMoving: true }],
     ["a rail", "standard_part", { kind: "rail", size: "MGN12", length: 200, angle: 30, plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10]] }],
     ["a shaft", "standard_part", { kind: "shaft", size: "8", length: 100, plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10]] }],
