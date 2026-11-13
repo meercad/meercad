@@ -256,14 +256,16 @@ export async function gearJoints() {
 // ---------------------------------------------------------------- files
 
 /** Imports a file as the app does (also DXF/SVG as a sketch, and .meercad as a new project). */
-export async function importBytes(name: string, base64: string) {
+export async function importBytes(name: string, base64: string, fullDetail = false) {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   const before = new Set(currentDoc().features.map((f) => f.id));
   const project = useApp.getState().project?.id;
-  const r = await said(() => importFile(new File([bytes], name)));
+  let lightened: { name: string; from: number; to: number }[] = [];
+  const r = await said(() => importFile(new File([bytes], name), { fullDetail, lightened: (l) => (lightened = l) }));
   if (useApp.getState().project?.id !== project) return { ...r, openedProject: useApp.getState().project };
   useApp.setState({ sketchId: null });
-  return { ...r, added: currentDoc().features.filter((f) => !before.has(f.id)).map((f) => f.id) };
+  const added = currentDoc().features.filter((f) => !before.has(f.id)).map((f) => f.id);
+  return { ...r, added, ...(lightened.length ? { lightened: lightened.map((l) => ({ mesh: l.name, triangles: `${l.from} → ${l.to}` })), note: "very fine meshes were made lighter so the import stays quick; import_file with fullDetail: true keeps every triangle (slow: about 0.3 ms each)" } : {}) };
 }
 
 export interface ExportOptions {

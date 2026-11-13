@@ -1,5 +1,6 @@
 /** File import/export and share links. */
-import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotCollision, type RobotLink, type RobotPart, type TexturedMesh } from "@meercad/io";
+import { filamentSlots, objFiles, parseStl, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotCollision, type RobotLink, type RobotPart, type TexturedMesh, type TriangleMesh } from "@meercad/io";
+import { withinBudget } from "../lib/importBudget";
 import type { BodyMesh } from "@meercad/kernel";
 import { SupersededError } from "@meercad/kernel/client";
 import { showNotice } from "./Ask";
@@ -546,7 +547,7 @@ export const IMPORT_TYPES = ".step,.stp,.stl,.3mf,.obj,.dxf,.svg,.meercad,.json"
  * a new design named after the file. Meshes become solid bodies; a failed import says why.
  */
 /** Imports a file into the open design (or a new one); true when it came in without errors. */
-export async function importFile(file?: File | null, opts: { seeThrough?: boolean; texture?: MeshTexture } = {}): Promise<boolean> {
+export async function importFile(file?: File | null, opts: { seeThrough?: boolean; texture?: MeshTexture; fullDetail?: boolean; lightened?: (l: { name: string; from: number; to: number }[]) => void } = {}): Promise<boolean> {
   file ??= await pickFile(IMPORT_TYPES);
   if (!file) return false;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -575,7 +576,13 @@ export async function importFile(file?: File | null, opts: { seeThrough?: boolea
   let features: Feature[];
   const reading = startTask(t("Reading {name}", { name: file.name }));
   try {
-    features = await importFeatures(file, ext);
+    const read = await importFeatures(file, ext, !!opts.fullDetail);
+    features = read.features;
+    if (read.lightened.length) {
+      const [from, to] = read.lightened.reduce(([a, b], l) => [a + l.from, b + l.to], [0, 0]);
+      toast(t("{name} is very fine: {from} triangles made {to} so it imports quickly", { name: file.name, from: from.toLocaleString(), to: to.toLocaleString() }));
+      opts.lightened?.(read.lightened);
+    }
   } catch (e) {
     toast(t("Could not import {name}: {error}", { name: file.name, error: e instanceof Error ? e.message : String(e) }), "error");
     return false;
@@ -605,22 +612,34 @@ export async function importFile(file?: File | null, opts: { seeThrough?: boolea
   return !!out && !failed.length;
 }
 
-async function importFeatures(file: File, ext: string): Promise<Feature[]> {
+async function importFeatures(file: File, ext: string, fullDetail: boolean): Promise<{ features: Feature[]; lightened: { name: string; from: number; to: number }[] }> {
   // STEP assemblies come in as one part per solid.
   const imp = (fileName: string, format: "step" | "stl", bytes: Uint8Array): Feature => ({ id: "", op: "import", format, fileName, data: toBase64(bytes), ...(format === "step" ? { split: true } : {}) });
-  if (ext === "step" || ext === "stp") return [imp(file.name, "step", new Uint8Array(await file.arrayBuffer()))];
-  if (ext === "stl") return [imp(file.name, "stl", new Uint8Array(await file.arrayBuffer()))];
-  // 3MF and OBJ meshes go in as STL, one body per object on the build plate.
-  if (ext === "3mf") {
-    const meshes = read3mf(new Uint8Array(await file.arrayBuffer()));
-    return meshes.map((m) => imp(meshes.length > 1 ? `${file.name} › ${m.name}` : file.name, "stl", writeStl([m])));
+  const only = (features: Feature[]) => ({ features, lightened: [] });
+  if (ext === "step" || ext === "stp") return only([imp(file.name, "step", new Uint8Array(await file.arrayBuffer()))]);
+  // Meshes go in as STL, one body per object on the build plate (3MF), very fine ones made lighter.
+  const meshes = (named: { name: string; mesh: TriangleMesh; bytes?: Uint8Array }[]) => {
+    const fit = fullDetail ? { meshes: named.map((n) => n.mesh), lightened: [] } : withinBudget(named.map((n) => n.mesh));
+    const changed = new Set(fit.lightened.map((l) => l.index));
+    return {
+      features: named.map((n, i) => imp(n.name, "stl", !changed.has(i) && n.bytes ? n.bytes : writeStl([fit.meshes[i]!]))),
+      lightened: fit.lightened.map((l) => ({ name: named[l.index]!.name, from: l.from, to: l.to })),
+    };
+  };
+  if (ext === "stl") {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return meshes([{ name: file.name, mesh: parseStl(bytes), bytes }]);
   }
-  if (ext === "obj") return [imp(file.name, "stl", writeStl([readObj(await file.text())]))];
+  if (ext === "3mf") {
+    const read = read3mf(new Uint8Array(await file.arrayBuffer()));
+    return meshes(read.map((m) => ({ name: read.length > 1 ? `${file.name} › ${m.name}` : file.name, mesh: m })));
+  }
+  if (ext === "obj") return meshes([{ name: file.name, mesh: readObj(await file.text()) }]);
   const text = await file.text();
   const curves = ext === "dxf" ? readDxf(text) : readSvg(text);
   if (!curves.length) throw new Error(t("no supported geometry found in the file"));
   const { entities, constraints } = curvesToSketch(curves);
-  return [{ id: "", op: "sketch", name: file.name, plane: { ref: "origin.XY" }, entities, constraints }];
+  return only([{ id: "", op: "sketch", name: file.name, plane: { ref: "origin.XY" }, entities, constraints }]);
 }
 
 /** Converts free curves to sketch entities, sharing points at coincident endpoints. */

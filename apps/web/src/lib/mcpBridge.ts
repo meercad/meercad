@@ -910,7 +910,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
       return tools.gearJoints();
     case "import_file":
-      return created(p, () => tools.importBytes(String(p["name"]), String(p["base64"])));
+      return created(p, () => tools.importBytes(String(p["name"]), String(p["base64"]), p["fullDetail"] === true));
     case "staged_files": {
       const token = String(p["token"]);
       const s = staged.get(token);

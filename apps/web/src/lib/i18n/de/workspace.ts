@@ -283,6 +283,7 @@ export default {
   "{feature} ({n} of {total})": "{feature} ({n} von {total})",
   Rebuilding: "Wird neu berechnet",
   "Reading {name}": "{name} wird gelesen",
+  "{name} is very fine: {from} triangles made {to} so it imports quickly": "{name} ist sehr fein: {from} Dreiecke auf {to} vereinfacht, damit der Import schnell geht",
   "Hide deviation": "Abweichung ausblenden",
   "Deviation from {mesh}": "Abweichung zu {mesh}",
   "The part or the mesh is not in the model any more.": "Das Teil oder das Netz ist nicht mehr im Modell.",

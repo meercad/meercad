@@ -105,7 +105,7 @@ describe("loft", () => {
     // Close to the frustum between the two ellipses; the broken loft lost a third of it.
     expect(b.volume).toBeGreaterThan(0.99 * frustum(PI * 200, PI * 120, 30));
     expect(b.volume).toBeLessThan(1.01 * frustum(PI * 200, PI * 120, 30));
-    expect(Math.abs(b.centroid[0])).toBeLessThan(1e-3);
+    expect(Math.abs(b.centroid![0])).toBeLessThan(1e-3);
   });
 
   it("lofts open splines closed with lines, and the part can be split", async () => {
