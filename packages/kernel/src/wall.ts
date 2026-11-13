@@ -45,10 +45,10 @@ export interface WallRecord {
 const checked = <T>(fn: () => T): T => {
   try {
     return fn();
-  } catch (e) {
-    if (e instanceof WallError) throw new FeatureError(e.message);
+  } catch (error) {
+    if (error instanceof WallError) throw new FeatureError(error.message);
 
-    throw e;
+    throw error;
   }
 };
 

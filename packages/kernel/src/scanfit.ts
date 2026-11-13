@@ -100,15 +100,15 @@ export function scanMesh(corners: ArrayLike<number>): ScanMesh {
 }
 
 /** The triangle whose centre is nearest to `p`. */
-export function nearestTriangle(m: ScanMesh, p: Vec3): number {
+export function nearestTriangle(mesh: ScanMesh, p: Vec3): number {
   let best = -1;
   let bd = Infinity;
 
-  for (let t = 0; t < m.areas.length; t++) {
+  for (let t = 0; t < mesh.areas.length; t++) {
     const d =
-      (m.centroids[t * 3]! - p[0]) ** 2 +
-      (m.centroids[t * 3 + 1]! - p[1]) ** 2 +
-      (m.centroids[t * 3 + 2]! - p[2]) ** 2;
+      (mesh.centroids[t * 3]! - p[0]) ** 2 +
+      (mesh.centroids[t * 3 + 1]! - p[1]) ** 2 +
+      (mesh.centroids[t * 3 + 2]! - p[2]) ** 2;
 
     if (d < bd) {
       bd = d;
@@ -128,15 +128,15 @@ const KINDS: Kind[] = ["plane", "cylinder", "sphere", "cone"];
  * small patch round the seed and refitted until it stops growing; the simplest kind that covers
  * nearly as much as the best one wins (a plane over a huge flat cylinder, say).
  */
-export function shapeAt(m: ScanMesh, seed: number, tol: number, kinds: Kind[] = KINDS): ScanShape | null {
+export function shapeAt(mesh: ScanMesh, seed: number, tol: number, kinds: Kind[] = KINDS): ScanShape | null {
   if (seed < 0) return null;
 
   // Curved kinds need a wider patch: on a few triangles their axis is barely defined.
-  const [small, wide] = [seedPatch(m, seed, 40), seedPatch(m, seed, 160)];
+  const [small, wide] = [seedPatch(mesh, seed, 40), seedPatch(mesh, seed, 160)];
   const found: ScanShape[] = [];
 
   for (const kind of kinds) {
-    const s = grow(m, seed, kind === "plane" ? small : wide, kind, tol);
+    const s = grow(mesh, seed, kind === "plane" ? small : wide, kind, tol);
     if (s) found.push(s);
   }
 
@@ -148,7 +148,7 @@ export function shapeAt(m: ScanMesh, seed: number, tol: number, kinds: Kind[] = 
 }
 
 /** About `size` triangles round the seed, not across sharp edges. */
-function seedPatch(m: ScanMesh, seed: number, size: number): number[] {
+function seedPatch(mesh: ScanMesh, seed: number, size: number): number[] {
   const out = [seed];
   const seen = new Set(out);
 
@@ -156,39 +156,42 @@ function seedPatch(m: ScanMesh, seed: number, size: number): number[] {
     const t = out[i]!;
 
     for (let e = 0; e < 3; e++) {
-      const u = m.neighbours[t * 3 + e]!;
+      const u = mesh.neighbours[t * 3 + e]!;
       if (u < 0 || seen.has(u)) continue;
 
       seen.add(u);
-      if (dot(normal(m, t), normal(m, u)) > Math.cos((50 * Math.PI) / 180)) out.push(u);
+      if (dot(normal(mesh, t), normal(mesh, u)) > Math.cos((50 * Math.PI) / 180)) out.push(u);
     }
   }
 
   return out;
 }
 
-function grow(m: ScanMesh, seed: number, patch: number[], kind: Kind, tol: number): ScanShape | null {
+function grow(mesh: ScanMesh, seed: number, patch: number[], kind: Kind, tol: number): ScanShape | null {
   let region = patch;
-  let surface = fit(m, region, kind);
+  let surface = fit(mesh, region, kind);
 
   for (let iter = 0; iter < 8 && surface; iter++) {
-    const next = flood(m, seed, surface, tol);
+    const next = flood(mesh, seed, surface, tol);
     if (next.length < 3) return null;
 
     const same = next.length === region.length;
     region = next;
-    surface = fit(m, region, kind) ?? surface;
+    surface = fit(mesh, region, kind) ?? surface;
     if (same) break;
   }
 
-  if (!surface || !valid(surface, m.diag)) return null;
+  if (!surface || !valid(surface, mesh.diag)) return null;
 
   // The last fit must still hold the region it was fitted on.
   let deviation = 0;
 
   for (const t of region) {
     for (let k = 0; k < 3; k++) {
-      deviation = Math.max(deviation, Math.abs(surfaceDistance(vertex(m, m.triangles[t * 3 + k]!), surface)));
+      deviation = Math.max(
+        deviation,
+        Math.abs(surfaceDistance(vertex(mesh, mesh.triangles[t * 3 + k]!), surface)),
+      );
     }
   }
 
@@ -198,8 +201,8 @@ function grow(m: ScanMesh, seed: number, patch: number[], kind: Kind, tol: numbe
   let c: Vec3 = [0, 0, 0];
 
   for (const t of region) {
-    area += m.areas[t]!;
-    c = add(c, scale(centroid(m, t), m.areas[t]!));
+    area += mesh.areas[t]!;
+    c = add(c, scale(centroid(mesh, t), mesh.areas[t]!));
   }
 
   const shape: ScanShape = {
@@ -216,7 +219,7 @@ function grow(m: ScanMesh, seed: number, patch: number[], kind: Kind, tol: numbe
 
     for (const t of region) {
       for (let k = 0; k < 3; k++) {
-        const h = dot(sub(vertex(m, m.triangles[t * 3 + k]!), base), surface.axis);
+        const h = dot(sub(vertex(mesh, mesh.triangles[t * 3 + k]!), base), surface.axis);
         lo = Math.min(lo, h);
         hi = Math.max(hi, h);
       }
@@ -229,26 +232,29 @@ function grow(m: ScanMesh, seed: number, patch: number[], kind: Kind, tol: numbe
 }
 
 /** Triangles connected to the seed whose corners lie within tol of the surface and that face like it. */
-function flood(m: ScanMesh, seed: number, s: Primitive, tol: number): number[] {
+function flood(mesh: ScanMesh, seed: number, primitive: Primitive, tol: number): number[] {
   const fits = (t: number) => {
     for (let k = 0; k < 3; k++) {
-      if (Math.abs(surfaceDistance(vertex(m, m.triangles[t * 3 + k]!), s)) > tol) return false;
+      if (Math.abs(surfaceDistance(vertex(mesh, mesh.triangles[t * 3 + k]!), primitive)) > tol) return false;
     }
 
-    return Math.abs(dot(normal(m, t), primitiveNormal(centroid(m, t), s))) > Math.cos((30 * Math.PI) / 180);
+    return (
+      Math.abs(dot(normal(mesh, t), primitiveNormal(centroid(mesh, t), primitive))) >
+      Math.cos((30 * Math.PI) / 180)
+    );
   };
 
   if (!fits(seed)) return [];
 
   const out = [seed];
-  const seen = new Uint8Array(m.areas.length);
+  const seen = new Uint8Array(mesh.areas.length);
   seen[seed] = 1;
 
   for (let i = 0; i < out.length; i++) {
     const t = out[i]!;
 
     for (let e = 0; e < 3; e++) {
-      const u = m.neighbours[t * 3 + e]!;
+      const u = mesh.neighbours[t * 3 + e]!;
       if (u < 0 || seen[u]) continue;
 
       seen[u] = 1;
@@ -259,18 +265,25 @@ function flood(m: ScanMesh, seed: number, s: Primitive, tol: number): number[] {
   return out;
 }
 
-function valid(s: Primitive, diag: number): boolean {
-  if (s.kind === "cylinder" || s.kind === "sphere") return s.radius > 0 && s.radius < diag * 2;
-  if (s.kind === "cone") return s.halfAngle > (3 * Math.PI) / 180 && s.halfAngle < (87 * Math.PI) / 180;
+function valid(primitive: Primitive, diag: number): boolean {
+  if (primitive.kind === "cylinder" || primitive.kind === "sphere") {
+    return primitive.radius > 0 && primitive.radius < diag * 2;
+  }
+
+  if (primitive.kind === "cone") {
+    return primitive.halfAngle > (3 * Math.PI) / 180 && primitive.halfAngle < (87 * Math.PI) / 180;
+  }
 
   return true;
 }
 
 /** Least squares fit of one kind to the triangles' corners (and, for the axis, their normals). */
-function fit(m: ScanMesh, tris: number[], kind: Kind): Primitive | null {
+function fit(mesh: ScanMesh, tris: number[], kind: Kind): Primitive | null {
   const vs = [
-    ...new Set(tris.flatMap((t) => [m.triangles[t * 3]!, m.triangles[t * 3 + 1]!, m.triangles[t * 3 + 2]!])),
-  ].map((v) => vertex(m, v));
+    ...new Set(
+      tris.flatMap((t) => [mesh.triangles[t * 3]!, mesh.triangles[t * 3 + 1]!, mesh.triangles[t * 3 + 2]!]),
+    ),
+  ].map((v) => vertex(mesh, v));
   if (vs.length < 4) return null;
 
   const mean = scale(vs.reduce(add, [0, 0, 0] as Vec3), 1 / vs.length);
@@ -285,7 +298,7 @@ function fit(m: ScanMesh, tris: number[], kind: Kind): Primitive | null {
 
     let up = smallest(eigen3(cov));
     // Keep it facing the way the triangles do.
-    const avg = tris.reduce((s, t) => add(s, scale(normal(m, t), m.areas[t]!)), [0, 0, 0] as Vec3);
+    const avg = tris.reduce((s, t) => add(s, scale(normal(mesh, t), mesh.areas[t]!)), [0, 0, 0] as Vec3);
     if (dot(avg, up) < 0) up = scale(up, -1);
 
     return { kind: "plane", origin: mean, normal: up };
@@ -318,8 +331,8 @@ function fit(m: ScanMesh, tris: number[], kind: Kind): Primitive | null {
   }
 
   // Cylinders and cones: the axis is the direction the normals vary least along.
-  const ns = tris.map((t) => normal(m, t));
-  const w = tris.map((t) => m.areas[t]!);
+  const ns = tris.map((t) => normal(mesh, t));
+  const w = tris.map((t) => mesh.areas[t]!);
   const nMean = scale(
     ns.reduce((s, n, i) => add(s, scale(n, w[i]!)), [0, 0, 0] as Vec3),
     1 / (w.reduce((s, v) => s + v, 0) || 1),
@@ -350,7 +363,7 @@ function fit(m: ScanMesh, tris: number[], kind: Kind): Primitive | null {
   const B = [0, 0, 0];
   tris.forEach((t, i) => {
     const n = ns[i]!;
-    const c = centroid(m, t);
+    const c = centroid(mesh, t);
     const nc = dot(n, c);
 
     for (let r = 0; r < 3; r++) {
@@ -446,20 +459,20 @@ function smallest(e: { values: number[]; vectors: Vec3[] }): Vec3 {
   return unit(e.vectors[k]!);
 }
 
-const vertex = (m: ScanMesh, v: number): Vec3 => [
-  m.positions[v * 3]!,
-  m.positions[v * 3 + 1]!,
-  m.positions[v * 3 + 2]!,
+const vertex = (mesh: ScanMesh, v: number): Vec3 => [
+  mesh.positions[v * 3]!,
+  mesh.positions[v * 3 + 1]!,
+  mesh.positions[v * 3 + 2]!,
 ];
-const centroid = (m: ScanMesh, t: number): Vec3 => [
-  m.centroids[t * 3]!,
-  m.centroids[t * 3 + 1]!,
-  m.centroids[t * 3 + 2]!,
+const centroid = (mesh: ScanMesh, t: number): Vec3 => [
+  mesh.centroids[t * 3]!,
+  mesh.centroids[t * 3 + 1]!,
+  mesh.centroids[t * 3 + 2]!,
 ];
-const normal = (m: ScanMesh, t: number): Vec3 => [
-  m.normals[t * 3]!,
-  m.normals[t * 3 + 1]!,
-  m.normals[t * 3 + 2]!,
+const normal = (mesh: ScanMesh, t: number): Vec3 => [
+  mesh.normals[t * 3]!,
+  mesh.normals[t * 3 + 1]!,
+  mesh.normals[t * 3 + 2]!,
 ];
 
 // ---------------------------------------------------------------- measuring

@@ -122,10 +122,10 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse =
     : { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
 
   const faceByHash = new Map<number, number>();
-  body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));
+  body.faces.forEach((face, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(face, HASH_BOUND), i));
 
   const edgeByHash = new Map<number, number>();
-  body.edges.forEach((e, i) => edgeByHash.set(oc.ReplicadShapeHasher.HashCode(e, HASH_BOUND), i));
+  body.edges.forEach((edge, i) => edgeByHash.set(oc.ReplicadShapeHasher.HashCode(edge, HASH_BOUND), i));
 
   const m = oc.ReplicadMeshExtractor.extract(body.shape, linear, angular, false);
   const em = oc.ReplicadEdgeMeshExtractor.extract(body.shape, linear, angular);

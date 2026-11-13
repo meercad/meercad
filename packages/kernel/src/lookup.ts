@@ -17,7 +17,7 @@ export function facesIn(bodies: Bodies, sel: FaceSelector): FaceRef[] {
   return ask(bodies, (m) => {
     const refs = resolveFaces(sel, [...m.values()]);
 
-    return { refs, parts: refs.map((r) => m.get(r.body)) };
+    return { refs, parts: refs.map((faceRef) => m.get(faceRef.body)) };
   }).refs;
 }
 

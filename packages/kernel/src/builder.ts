@@ -40,7 +40,7 @@ export class Builder {
       x1 = cx + w / 2,
       y0 = cy - h / 2,
       y1 = cy + h / 2;
-    const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.t(new oc.BRepBuilderAPI_MakeWire());
 
     if (r < 1e-4) {
       const vs = [
@@ -49,11 +49,11 @@ export class Builder {
         this.vertex(x1, y1, z),
         this.vertex(x0, y1, z),
       ];
-      vs.forEach((v, i) =>
-        mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % 4]!)).Edge())),
+      vs.forEach((vertex, i) =>
+        wireBuilder.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % 4]!)).Edge())),
       );
 
-      return this.t(mw.Wire());
+      return this.t(wireBuilder.Wire());
     }
 
     // Corners: centre, then the two ends of the arc (counter-clockwise).
@@ -68,12 +68,12 @@ export class Builder {
     const dx = this.t(new oc.gp_Dir(1, 0, 0));
     corners.forEach(([ccx, ccy], k) => {
       const circ = this.t(new oc.gp_Circ(this.t(new oc.gp_Ax2(this.pnt(ccx, ccy, z), dz, dx)), r));
-      mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(circ, vs[k]![0], vs[k]![1])).Edge()));
-      mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vs[k]![1], vs[(k + 1) % 4]![0])).Edge()));
+      wireBuilder.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(circ, vs[k]![0], vs[k]![1])).Edge()));
+      wireBuilder.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vs[k]![1], vs[(k + 1) % 4]![0])).Edge()));
     });
-    if (!mw.IsDone()) throw new FeatureError("could not build an outline");
+    if (!wireBuilder.IsDone()) throw new FeatureError("could not build an outline");
 
-    return this.t(mw.Wire());
+    return this.t(wireBuilder.Wire());
   }
 
   /** Ruled loft through rounded rectangles: `profile` is [z, inset] pairs from the bottom up. */
@@ -110,13 +110,15 @@ export class Builder {
   /** A closed polygon in the plane x = x0 (points as [y, z]) extruded along x to x1. */
   prismX(pts: [number, number][], x0: number, x1: number): TopoDS_Shape {
     const { oc } = this;
-    const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.t(new oc.BRepBuilderAPI_MakeWire());
     const vs = pts.map(([y, z]) => this.vertex(x0, y, z));
-    vs.forEach((v, i) =>
-      mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
-    const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(mw.Wire()), true)).Face());
+    const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(wireBuilder.Wire()), true)).Face());
 
     return this.t(
       this.t(new oc.BRepPrimAPI_MakePrism(face, this.t(new oc.gp_Vec(x1 - x0, 0, 0)), false, true)).Shape(),
@@ -125,13 +127,15 @@ export class Builder {
 
   prismY(pts: [number, number][], y0: number, y1: number): TopoDS_Shape {
     const { oc } = this;
-    const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.t(new oc.BRepBuilderAPI_MakeWire());
     const vs = pts.map(([x, z]) => this.vertex(x, y0, z));
-    vs.forEach((v, i) =>
-      mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
-    const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(mw.Wire()), true)).Face());
+    const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(wireBuilder.Wire()), true)).Face());
 
     return this.t(
       this.t(new oc.BRepPrimAPI_MakePrism(face, this.t(new oc.gp_Vec(0, y1 - y0, 0)), false, true)).Shape(),
@@ -141,13 +145,15 @@ export class Builder {
   /** A closed polygon at height z as a wire. */
   polyWire(loop: [number, number][], z: number): TopoDS_Wire {
     const { oc } = this;
-    const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.t(new oc.BRepBuilderAPI_MakeWire());
     const vs = loop.map(([x, y]) => this.vertex(x, y, z));
-    vs.forEach((v, i) =>
-      mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
-    return this.t(mw.Wire());
+    return this.t(wireBuilder.Wire());
   }
 
   /** Ruled loft through polygons with the same number of corners, from the bottom up. */
@@ -165,15 +171,15 @@ export class Builder {
    * A copy of a shape moved by (dx, dy, dz). With `copy` false the copy shares the original's
    * geometry (and its tessellation) and only carries the move.
    */
-  moved(s: TopoDS_Shape, dx: number, dy: number, dz: number, copy = true): TopoDS_Shape {
+  moved(shape: TopoDS_Shape, dx: number, dy: number, dz: number, copy = true): TopoDS_Shape {
     const tr = this.t(new this.oc.gp_Trsf());
     tr.SetTranslation(this.t(new this.oc.gp_Vec(dx, dy, dz)));
 
-    return this.t(this.t(new this.oc.BRepBuilderAPI_Transform(s, tr, copy, false)).Shape());
+    return this.t(this.t(new this.oc.BRepBuilderAPI_Transform(shape, tr, copy, false)).Shape());
   }
 
   /** A copy of a shape turned about the x axis by `deg` degrees, then moved by (0, dy, dz). */
-  turnedX(s: TopoDS_Shape, deg: number, dy: number, dz: number): TopoDS_Shape {
+  turnedX(shape: TopoDS_Shape, deg: number, dy: number, dz: number): TopoDS_Shape {
     const { oc } = this;
     const r = this.t(new oc.gp_Trsf());
     r.SetRotation(
@@ -181,7 +187,7 @@ export class Builder {
       (deg * Math.PI) / 180,
     );
 
-    const turned = this.t(this.t(new oc.BRepBuilderAPI_Transform(s, r, true, false)).Shape());
+    const turned = this.t(this.t(new oc.BRepBuilderAPI_Transform(shape, r, true, false)).Shape());
 
     return this.moved(turned, 0, dy, dz);
   }
@@ -215,10 +221,12 @@ export class Builder {
       this.vertex(x + r1, y, z1),
       this.vertex(x, y, z1),
     ];
-    const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
-    vs.forEach((v, i) => mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % 4]!)).Edge())));
+    const wireBuilder = this.t(new oc.BRepBuilderAPI_MakeWire());
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % 4]!)).Edge())),
+    );
 
-    const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(mw.Wire()), true)).Face());
+    const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(this.t(wireBuilder.Wire()), true)).Face());
     const axis = this.t(new oc.gp_Ax1(this.pnt(x, y, z0), this.t(new oc.gp_Dir(0, 0, 1))));
     const rev = this.t(new oc.BRepPrimAPI_MakeRevol(face, axis, 2 * Math.PI, false));
     if (!rev.IsDone()) throw new FeatureError("could not build a countersink");
@@ -231,20 +239,22 @@ export class Builder {
     const { oc } = this;
 
     const wire = (loop: [number, number][]) => {
-      const mw = this.t(new oc.BRepBuilderAPI_MakeWire());
+      const wireBuilder = this.t(new oc.BRepBuilderAPI_MakeWire());
       const vs = loop.map(([x, y]) => this.vertex(x, y, z));
-      vs.forEach((v, i) =>
-        mw.Add(this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+      vs.forEach((vertex, i) =>
+        wireBuilder.Add(
+          this.t(this.t(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+        ),
       );
 
-      return this.t(mw.Wire());
+      return this.t(wireBuilder.Wire());
     };
 
-    const mf = this.t(new oc.BRepBuilderAPI_MakeFace(wire(outer), true));
-    for (const h of holes) mf.Add(wire(h));
-    if (!mf.IsDone()) return null;
+    const faceBuilder = this.t(new oc.BRepBuilderAPI_MakeFace(wire(outer), true));
+    for (const h of holes) faceBuilder.Add(wire(h));
+    if (!faceBuilder.IsDone()) return null;
 
-    return this.t(mf.Face());
+    return this.t(faceBuilder.Face());
   }
 
   prismZ(face: TopoDS_Shape, h: number): TopoDS_Shape {
@@ -264,7 +274,7 @@ export class Builder {
 
     const list = (shapes: TopoDS_Shape[]) => {
       const l = this.t(new oc.NCollection_List_TopoDS_Shape());
-      for (const s of shapes) l.Append(s);
+      for (const shape of shapes) l.Append(shape);
 
       return l;
     };
@@ -295,7 +305,7 @@ export class Builder {
 
     const list = (shapes: TopoDS_Shape[]) => {
       const l = this.t(new oc.NCollection_List_TopoDS_Shape());
-      for (const s of shapes) l.Append(s);
+      for (const shape of shapes) l.Append(shape);
 
       return l;
     };
@@ -319,23 +329,25 @@ export class Builder {
   }
 
   /** The solids of a shape, one by one. */
-  solids(s: TopoDS_Shape): TopoDS_Shape[] {
+  solids(shape: TopoDS_Shape): TopoDS_Shape[] {
     const out: TopoDS_Shape[] = [];
 
     for (
-      const e = this.t(new this.oc.TopExp_Explorer(s, "TopAbs_SOLID" as never, "TopAbs_SHAPE" as never));
-      e.More();
-      e.Next()
+      const explorer = this.t(
+        new this.oc.TopExp_Explorer(shape, "TopAbs_SOLID" as never, "TopAbs_SHAPE" as never),
+      );
+      explorer.More();
+      explorer.Next()
     ) {
-      out.push(this.t(e.Current()));
+      out.push(this.t(explorer.Current()));
     }
 
     return out;
   }
 
-  volume(s: TopoDS_Shape): number {
+  volume(shape: TopoDS_Shape): number {
     const props = this.t(new this.oc.GProp_GProps());
-    this.oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    this.oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
     return Math.abs(props.Mass());
   }
@@ -353,23 +365,23 @@ export class Builder {
   ): TopoDS_Shape {
     const { oc } = this;
 
-    const prism = (w: TopoDS_Wire) => {
-      const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(w, true)).Face());
+    const prism = (wire: TopoDS_Wire) => {
+      const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(wire, true)).Face());
 
       return this.t(
         this.t(new oc.BRepPrimAPI_MakePrism(face, this.t(new oc.gp_Vec(0, 0, z1 - z0)), false, true)).Shape(),
       );
     };
 
-    const area = (s: TopoDS_Shape) => this.volume(s) / (z1 - z0);
+    const area = (shape: TopoDS_Shape) => this.volume(shape) / (z1 - z0);
 
     // Each loop on its own (inwards: the outer loop shrinks, holes grow), then holes cut from the outer.
     const loop = (pts: [number, number][], grow: boolean): TopoDS_Shape[] => {
-      const w = this.polyWire(pts, z0);
-      if (inset <= 1e-9) return [prism(w)];
+      const wire = this.polyWire(pts, z0);
+      if (inset <= 1e-9) return [prism(wire)];
 
-      const base = prism(w);
-      const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(w, true)).Face());
+      const base = prism(wire);
+      const face = this.t(this.t(new oc.BRepBuilderAPI_MakeFace(wire, true)).Face());
       const out: TopoDS_Shape[] = [];
 
       for (const sign of [-1, 1]) {
@@ -386,13 +398,13 @@ export class Builder {
         const wires: TopoDS_Shape[] = [];
 
         for (
-          const e = this.t(
+          const explorer = this.t(
             new oc.TopExp_Explorer(this.t(mk.Shape()), "TopAbs_WIRE" as never, "TopAbs_SHAPE" as never),
           );
-          e.More();
-          e.Next()
+          explorer.More();
+          explorer.Next()
         ) {
-          wires.push(this.t(e.Current()));
+          wires.push(this.t(explorer.Current()));
         }
 
         const solids = wires.map((x) => prism(this.t(oc.TopoDS.Wire(x))));
@@ -421,8 +433,8 @@ export class Builder {
     return this.bool("cut", merged, holeSolids);
   }
 
-  unify(s: TopoDS_Shape): TopoDS_Shape {
-    const u = this.t(new this.oc.ShapeUpgrade_UnifySameDomain(s, true, true, false));
+  unify(shape: TopoDS_Shape): TopoDS_Shape {
+    const u = this.t(new this.oc.ShapeUpgrade_UnifySameDomain(shape, true, true, false));
     u.Build();
 
     return this.t(u.Shape());
@@ -432,7 +444,7 @@ export class Builder {
     const b = this.t(new this.oc.TopoDS_Builder());
     const c = this.t(new this.oc.TopoDS_Compound());
     b.MakeCompound(c);
-    for (const s of shapes) b.Add(c, s);
+    for (const shape of shapes) b.Add(c, shape);
 
     return c;
   }

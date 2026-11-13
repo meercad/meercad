@@ -30,10 +30,10 @@ import { occtErrorMessage, type OC } from "./occt.js";
 const checked = <T>(fn: () => T): T => {
   try {
     return fn();
-  } catch (e) {
-    if (e instanceof ClosureError) throw new FeatureError(e.message);
+  } catch (error) {
+    if (error instanceof ClosureError) throw new FeatureError(error.message);
 
-    throw e;
+    throw error;
   }
 };
 
@@ -114,13 +114,15 @@ class ClosureBuilder extends Builder {
   /** A closed polygon in the x–z plane (points as [r, z]) turned once round the z axis. */
   turned(pts: [number, number][]): TopoDS_Shape {
     const { oc } = this;
-    const mw = this.tr(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.tr(new oc.BRepBuilderAPI_MakeWire());
     const vs = pts.map(([r, z]) => this.vertex(r, 0, z));
-    vs.forEach((v, i) =>
-      mw.Add(this.tr(this.tr(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        this.tr(this.tr(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
-    const face = this.tr(this.tr(new oc.BRepBuilderAPI_MakeFace(this.tr(mw.Wire()), true)).Face());
+    const face = this.tr(this.tr(new oc.BRepBuilderAPI_MakeFace(this.tr(wireBuilder.Wire()), true)).Face());
     const axis = this.tr(new oc.gp_Ax1(this.pnt(0, 0, 0), this.tr(new oc.gp_Dir(0, 0, 1))));
     const rev = this.tr(new oc.BRepPrimAPI_MakeRevol(face, axis, 2 * Math.PI, false));
     if (!rev.IsDone()) throw new FeatureError("could not build the round box");
@@ -150,15 +152,17 @@ class ClosureBuilder extends Builder {
     oc.BRepLib.BuildCurves3d(edge);
 
     const spine = this.tr(this.tr(new oc.BRepBuilderAPI_MakeWire(edge)).Wire());
-    const mw = this.tr(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.tr(new oc.BRepBuilderAPI_MakeWire());
     const vs = profile.map(([r, dz]) => this.vertex(x[0] * r, x[1] * r, z0 + dz));
-    vs.forEach((v, i) =>
-      mw.Add(this.tr(this.tr(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        this.tr(this.tr(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
     const mk = this.tr(new oc.BRepOffsetAPI_MakePipeShell(spine));
     mk.SetMode(this.tr(new oc.gp_Dir(0, 0, 1)));
-    mk.Add(this.tr(mw.Wire()), false, false);
+    mk.Add(this.tr(wireBuilder.Wire()), false, false);
     mk.Build(this.tr(new oc.Message_ProgressRange()));
     if (!mk.IsDone()) throw new FeatureError("could not build the thread");
 
@@ -205,12 +209,12 @@ export function boxBodies(oc: OC, arena: Arena, f: ResolvedBox, frame: PlaneFram
     out.push(b.place(lid, lidTrsf, `${f.id}_lid`));
 
     return out;
-  } catch (e) {
-    if (e instanceof FeatureError || e instanceof ClosureError) {
-      throw e instanceof ClosureError ? new FeatureError(e.message) : e;
+  } catch (error) {
+    if (error instanceof FeatureError || error instanceof ClosureError) {
+      throw error instanceof ClosureError ? new FeatureError(error.message) : error;
     }
 
-    throw new FeatureError(`could not build the box: ${occtErrorMessage(oc, e)}`);
+    throw new FeatureError(`could not build the box: ${occtErrorMessage(oc, error)}`);
   }
 }
 

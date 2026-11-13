@@ -38,14 +38,16 @@ export function standardPartBody(
     const at = (rad: number, t: number): Vec3 =>
       [0, 1, 2].map((i) => c[i]! + a[i]! * t + frame.u[i]! * rad) as Vec3;
     const pts = [at(0, from), at(r1, from), at(r2, to), at(0, to)];
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = pts.map((p) => arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(pnt(p))).Vertex()));
-    vs.forEach((v0, i) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v0, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
     const face = arena.track(
-      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face(),
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
     );
     const rev = arena.track(
       new oc.BRepPrimAPI_MakeRevol(
@@ -65,7 +67,7 @@ export function standardPartBody(
     const R = across / Math.sqrt(3);
     const v = frame.v;
     const base = along(from);
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = Array.from({ length: 6 }, (_, k) => {
       const ang = (k * Math.PI) / 3;
       const p: Vec3 = [0, 1, 2].map(
@@ -75,11 +77,11 @@ export function standardPartBody(
       return arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(pnt(p))).Vertex());
     });
     vs.forEach((x, k) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(x, vs[(k + 1) % 6]!)).Edge())),
+      wireBuilder.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(x, vs[(k + 1) % 6]!)).Edge())),
     );
 
     const face = arena.track(
-      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face(),
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
     );
     const h = to - from;
 
@@ -114,13 +116,17 @@ export function standardPartBody(
     [0, 1, 2].map((i) => frame.u[i]! * d[0] + frame.v[i]! * d[1] + a[i]! * d[2]) as Vec3;
 
   const polyFace = (pts: Vec3[]) => {
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = pts.map((p) => arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(pnt(p))).Vertex()));
     vs.forEach((x, k) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(x, vs[(k + 1) % vs.length]!)).Edge())),
+      wireBuilder.Add(
+        arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(x, vs[(k + 1) % vs.length]!)).Edge()),
+      ),
     );
 
-    return arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face());
+    return arena.track(
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
+    );
   };
 
   const prismOf = (
@@ -152,7 +158,7 @@ export function standardPartBody(
   let solid: TopoDS_Shape | null = null;
 
   for (const pr of shape.prisms ?? []) {
-    let s = prismOf(pr.outline, pr.along, pr.from, pr.to);
+    let shape = prismOf(pr.outline, pr.along, pr.from, pr.to);
 
     for (const cutout of pr.cuts ?? []) {
       // Cut-outs run a little past both ends, so they open the part cleanly.
@@ -172,10 +178,10 @@ export function standardPartBody(
                 cutout.circle[2],
                 pr.to - pr.from + 2,
               );
-      s = bool("cut", s, tool);
+      shape = bool("cut", shape, tool);
     }
 
-    solid = solid ? bool("fuse", solid, s) : s;
+    solid = solid ? bool("fuse", solid, shape) : shape;
   }
 
   shape.rings.forEach((ring, k) => {
@@ -217,7 +223,7 @@ export function standardPartBody(
   const top = axial.length ? Math.max(...axial) : NaN,
     bottom = axial.length ? Math.min(...axial) : NaN;
   const lying = (shape.prisms ?? []).filter((p) => p.along === "u");
-  body.faceTags = body.faces.map((f, i) => {
+  body.faceTags = body.faces.map((face, i) => {
     const p = body.facePoints[i]!;
     const t = (p[0] - c[0]) * a[0] + (p[1] - c[1]) * a[1] + (p[2] - c[2]) * a[2];
     const radial = Math.hypot(p[0] - c[0] - a[0] * t, p[1] - c[1] - a[1] * t, p[2] - c[2] - a[2] * t);
@@ -272,7 +278,7 @@ export function standardPartBody(
       .find((r) => r.role && t > r.from + 1e-6 && t < r.to - 1e-6);
     if (on?.role) return name(on.role);
 
-    void f;
+    void face;
 
     return name("side");
   });

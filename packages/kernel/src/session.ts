@@ -139,19 +139,19 @@ export class KernelSession {
       }
     }
 
-    const sketches: SketchView[] = [...r.state.sketches.values()].map((s) => ({
-      id: s.id,
-      frame: s.frame,
-      points: [...s.solved.points].map(([id, [x, y]]) => [id, x, y]),
-      curves: s.solved.curves,
-      regions: s.regions.map((g) => ({
-        key: g.key,
-        depth: g.depth,
-        area: g.area,
-        polygons: g.polygons,
-        sample: g.sample,
+    const sketches: SketchView[] = [...r.state.sketches.values()].map((sketchResult) => ({
+      id: sketchResult.id,
+      frame: sketchResult.frame,
+      points: [...sketchResult.solved.points].map(([id, [x, y]]) => [id, x, y]),
+      curves: sketchResult.solved.curves,
+      regions: sketchResult.regions.map((region) => ({
+        key: region.key,
+        depth: region.depth,
+        area: region.area,
+        polygons: region.polygons,
+        sample: region.sample,
       })),
-      diagnostics: s.solved.diagnostics,
+      diagnostics: sketchResult.solved.diagnostics,
     }));
 
     return {
@@ -169,8 +169,10 @@ export class KernelSession {
         gears: gearViews(
           r.state,
           new Map(
-            doc.features.flatMap((f) =>
-              f.op === "gear" && f.meshWith ? [[f.id, f.meshWith.gear] as [string, string]] : [],
+            doc.features.flatMap((feature) =>
+              feature.op === "gear" && feature.meshWith
+                ? [[feature.id, feature.meshWith.gear] as [string, string]]
+                : [],
             ),
           ),
         ),

@@ -153,7 +153,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
   }
 
   execute(
-    f: ResolvedFeature,
+    feature: ResolvedFeature,
     prev: ModelState,
     note?: (footprint: Footprint<ModelState>) => void,
     earlier?: ModelState,
@@ -171,7 +171,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
     };
 
     try {
-      const state = { ...this.run(f, ctx), arena };
+      const state = { ...this.run(feature, ctx), arena };
       arena.trim();
       if (ctx.earlier?.kept) arena.adopt(earlier!.arena);
 
@@ -186,7 +186,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
         ...(ctx.info ? { info: ctx.info } : {}),
         ...(ctx.earlier?.kept ? { keepsEarlier: true } : {}),
       };
-    } catch (e) {
+    } catch (error) {
       arena.dispose();
 
       if (tracked) {
@@ -194,75 +194,78 @@ export class OcctBackend implements KernelBackend<ModelState> {
         if (fp) note!(fp);
       }
 
-      if (e instanceof FeatureError) throw e;
-      if (e instanceof ResolveError || e instanceof SketchSolveError) throw new FeatureError(e.message);
+      if (error instanceof FeatureError) throw error;
 
-      throw new FeatureError(`kernel error: ${occtErrorMessage(this.oc, e)}`);
+      if (error instanceof ResolveError || error instanceof SketchSolveError) {
+        throw new FeatureError(error.message);
+      }
+
+      throw new FeatureError(`kernel error: ${occtErrorMessage(this.oc, error)}`);
     }
   }
 
-  private run(f: ResolvedFeature, ctx: Ctx): Omit<ModelState, "arena"> {
-    switch (f.op) {
+  private run(feature: ResolvedFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+    switch (feature.op) {
       case "sketch":
-        return this.sketch(f, ctx);
+        return this.sketch(feature, ctx);
       case "plane":
-        return plane(f, ctx);
+        return plane(feature, ctx);
       case "extrude":
-        return extrude(f, ctx);
+        return extrude(feature, ctx);
       case "revolve":
-        return revolve(f, ctx);
+        return revolve(feature, ctx);
       case "loft":
-        return loft(f, ctx);
+        return loft(feature, ctx);
       case "sweep":
-        return sweep(f, ctx);
+        return sweep(feature, ctx);
       case "split":
-        return split(f, ctx);
+        return split(feature, ctx);
       case "rib":
-        return rib(f, ctx);
+        return rib(feature, ctx);
       case "draft":
-        return draft(f, ctx);
+        return draft(feature, ctx);
       case "offset_face":
-        return offsetFace(f, ctx);
+        return offsetFace(feature, ctx);
       case "text":
-        return textFeature(f, ctx);
+        return textFeature(feature, ctx);
       case "primitive":
-        return primitiveFeature(f, ctx);
+        return primitiveFeature(feature, ctx);
       case "standard_part":
-        return standardPartFeature(f, ctx);
+        return standardPartFeature(feature, ctx);
       case "align":
-        return alignFeature(f, ctx);
+        return alignFeature(feature, ctx);
       case "scale":
-        return scaleFeature(f, ctx);
+        return scaleFeature(feature, ctx);
       case "fillet":
       case "chamfer":
-        return edgeTreatment(f, ctx);
+        return edgeTreatment(feature, ctx);
       case "shell":
-        return shell(f, ctx);
+        return shell(feature, ctx);
       case "thread": {
-        const { body } = threadBody(ctx.oc, ctx.arena, ctx.prev.bodies, f);
+        const { body } = threadBody(ctx.oc, ctx.arena, ctx.prev.bodies, feature);
 
         return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(body.bodyId, body) };
       }
       case "gear": {
-        const partner = f.meshWith ? ctx.prev.gears.get(f.meshWith.gear) : undefined;
-        if (f.meshWith && !partner) throw new FeatureError(`gear "${f.meshWith.gear}" not found`);
+        const partner = feature.meshWith ? ctx.prev.gears.get(feature.meshWith.gear) : undefined;
+        if (feature.meshWith && !partner) throw new FeatureError(`gear "${feature.meshWith.gear}" not found`);
 
-        const frame = partner ? partner.frame : planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
-        const { body, record } = gearBody(ctx.oc, ctx.arena, f, frame, partner);
+        const frame = partner ? partner.frame : planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx);
+        const { body, record } = gearBody(ctx.oc, ctx.arena, feature, frame, partner);
 
         return {
-          ...applyTool(ctx, f.id, body, f.mode, f.targets),
-          gears: copyMap(ctx.prev.gears).set(f.id, record),
+          ...applyTool(ctx, feature.id, body, feature.mode, feature.targets),
+          gears: copyMap(ctx.prev.gears).set(feature.id, record),
         };
       }
       case "coil":
-        return coil(f, ctx);
+        return coil(feature, ctx);
       case "spring": {
         const { body, info } = springBody(
           ctx.oc,
           ctx.arena,
-          f,
-          planeFrame(f.plane ?? { ref: "origin.XY" }, ctx),
+          feature,
+          planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx),
           ctx.warnings,
         );
         ctx.info = {
@@ -274,50 +277,50 @@ export class OcctBackend implements KernelBackend<ModelState> {
           meanDiameter: round3(info.meanDiameter),
         };
 
-        return applyTool(ctx, f.id, body, f.mode, f.targets);
+        return applyTool(ctx, feature.id, body, feature.mode, feature.targets);
       }
       case "screw": {
         const { body, info } = screwBody(
           ctx.oc,
           ctx.arena,
-          f,
-          planeFrame(f.plane ?? { ref: "origin.XY" }, ctx),
+          feature,
+          planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx),
           ctx.warnings,
         );
         ctx.info = { pitch: info.pitch, height: round3(info.height) };
 
-        return applyTool(ctx, f.id, body, f.mode, f.targets);
+        return applyTool(ctx, feature.id, body, feature.mode, feature.targets);
       }
       case "gridfinity": {
-        const plate = f.baseplate ? ctx.prev.grids?.get(f.baseplate) : undefined;
-        if (f.baseplate && !plate) throw new FeatureError(`baseplate "${f.baseplate}" not found`);
+        const plate = feature.baseplate ? ctx.prev.grids?.get(feature.baseplate) : undefined;
+        if (feature.baseplate && !plate) throw new FeatureError(`baseplate "${feature.baseplate}" not found`);
 
-        if (f.kind === "baseplate" && (f.outline || f.bed || f.drawer)) {
+        if (feature.kind === "baseplate" && (feature.outline || feature.bed || feature.drawer)) {
           let frame: PlaneFrame;
           let outline: OutlineRegion[] | undefined;
 
-          if (f.outline) {
-            const { sk, regions } = sketchRegions(f.outline, ctx);
-            frame = sk.frame;
-            outline = regions.map((r) => ({
-              outer: r.polygons[0]!.map((p) => [p[0], p[1]] as [number, number]),
-              holes: r.polygons.slice(1).map((h) => h.map((p) => [p[0], p[1]] as [number, number])),
+          if (feature.outline) {
+            const { sk: sketchResult, regions } = sketchRegions(feature.outline, ctx);
+            frame = sketchResult.frame;
+            outline = regions.map((region) => ({
+              outer: region.polygons[0]!.map((p) => [p[0], p[1]] as [number, number]),
+              holes: region.polygons.slice(1).map((h) => h.map((p) => [p[0], p[1]] as [number, number])),
             }));
           } else {
-            frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
+            frame = planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx);
           }
 
-          const out = areaPlateBodies(ctx.oc, ctx.arena, f, frame, outline, ctx.warnings);
+          const out = areaPlateBodies(ctx.oc, ctx.arena, feature, frame, outline, ctx.warnings);
           ctx.info = out.info;
 
           const bodies = copyMap(ctx.prev.bodies);
           for (const b of out.bodies) bodies.set(b.bodyId, b);
 
-          return { ...ctx.prev, bodies, grids: copyMap(ctx.prev.grids).set(f.id, out.record) };
+          return { ...ctx.prev, bodies, grids: copyMap(ctx.prev.grids).set(feature.id, out.record) };
         }
 
-        let frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
-        const pocket = f.kind === "bin" && f.pocket ? pocketFor(f, frame, ctx) : undefined;
+        let frame = planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx);
+        const pocket = feature.kind === "bin" && feature.pocket ? pocketFor(feature, frame, ctx) : undefined;
 
         if (pocket) {
           // Built round the part: the bin's rim at the part's sinking line.
@@ -332,41 +335,49 @@ export class OcctBackend implements KernelBackend<ModelState> {
           };
         }
 
-        const { body, record } = gridfinityBody(ctx.oc, ctx.arena, f, frame, plate, ctx.warnings, pocket);
-        const bodies = copyMap(ctx.prev.bodies).set(f.id, body);
+        const { body, record } = gridfinityBody(
+          ctx.oc,
+          ctx.arena,
+          feature,
+          frame,
+          plate,
+          ctx.warnings,
+          pocket,
+        );
+        const bodies = copyMap(ctx.prev.bodies).set(feature.id, body);
 
         return {
           ...ctx.prev,
           bodies,
-          ...(record ? { grids: copyMap(ctx.prev.grids).set(f.id, record) } : {}),
+          ...(record ? { grids: copyMap(ctx.prev.grids).set(feature.id, record) } : {}),
         };
       }
       case "wall": {
-        const board = f.board ? ctx.prev.walls?.get(f.board) : undefined;
-        if (f.board && !board) throw new FeatureError(`board "${f.board}" not found`);
+        const board = feature.board ? ctx.prev.walls?.get(feature.board) : undefined;
+        if (feature.board && !board) throw new FeatureError(`board "${feature.board}" not found`);
 
-        const frame = planeFrame(f.plane ?? { ref: "origin.XY" }, ctx);
-        const { body, record } = wallBody(ctx.oc, ctx.arena, f, frame, board, ctx.warnings);
-        const bodies = copyMap(ctx.prev.bodies).set(f.id, body);
+        const frame = planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx);
+        const { body, record } = wallBody(ctx.oc, ctx.arena, feature, frame, board, ctx.warnings);
+        const bodies = copyMap(ctx.prev.bodies).set(feature.id, body);
 
         return {
           ...ctx.prev,
           bodies,
-          ...(record ? { walls: copyMap(ctx.prev.walls).set(f.id, record) } : {}),
+          ...(record ? { walls: copyMap(ctx.prev.walls).set(feature.id, record) } : {}),
         };
       }
       case "lithophane": {
         const { body, texture } = lithophaneBody(
           ctx.oc,
           ctx.arena,
-          f,
-          planeFrame(f.plane ?? { ref: "origin.XY" }, ctx),
+          feature,
+          planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx),
         );
 
         return {
           ...ctx.prev,
-          bodies: copyMap(ctx.prev.bodies).set(f.id, body),
-          textures: copyMap(ctx.prev.textures).set(f.id, texture),
+          bodies: copyMap(ctx.prev.bodies).set(feature.id, body),
+          textures: copyMap(ctx.prev.textures).set(feature.id, texture),
         };
       }
       case "label": {
@@ -375,8 +386,8 @@ export class OcctBackend implements KernelBackend<ModelState> {
         for (const b of labelBodies(
           ctx.oc,
           ctx.arena,
-          f,
-          planeFrame(f.plane ?? { ref: "origin.XY" }, ctx),
+          feature,
+          planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx),
           ctx.warnings,
         )) {
           bodies.set(b.bodyId, b);
@@ -387,36 +398,44 @@ export class OcctBackend implements KernelBackend<ModelState> {
       case "box": {
         const bodies = copyMap(ctx.prev.bodies);
 
-        for (const b of boxBodies(ctx.oc, ctx.arena, f, planeFrame(f.plane ?? { ref: "origin.XY" }, ctx))) {
+        for (const b of boxBodies(
+          ctx.oc,
+          ctx.arena,
+          feature,
+          planeFrame(feature.plane ?? { ref: "origin.XY" }, ctx),
+        )) {
           bodies.set(b.bodyId, b);
         }
 
         return { ...ctx.prev, bodies };
       }
       case "snap_hook":
-        return snapHookFeature(f, ctx);
+        return snapHookFeature(feature, ctx);
       case "linear_pattern":
       case "circular_pattern":
       case "mirror":
-        return pattern(f, ctx);
+        return pattern(feature, ctx);
       case "boolean":
-        return booleanFeature(f, ctx);
+        return booleanFeature(feature, ctx);
       case "transform":
-        return transformFeature(f, ctx);
+        return transformFeature(feature, ctx);
       case "delete": {
         const bodies = copyMap(ctx.prev.bodies);
-        for (const id of f.bodies) if (!bodies.delete(id)) throw new FeatureError(`body "${id}" not found`);
+
+        for (const id of feature.bodies) {
+          if (!bodies.delete(id)) throw new FeatureError(`body "${id}" not found`);
+        }
 
         return { ...ctx.prev, bodies };
       }
       case "import":
-        return importFeature(f, ctx);
+        return importFeature(feature, ctx);
       case "mesh_convert":
-        return meshConvertFeature(f, ctx);
+        return meshConvertFeature(feature, ctx);
       case "bend":
-        return bendFeature(f, ctx);
+        return bendFeature(feature, ctx);
       case "hole":
-        return holeFeature(f, ctx);
+        return holeFeature(feature, ctx);
     }
   }
 
@@ -424,8 +443,10 @@ export class OcctBackend implements KernelBackend<ModelState> {
     const frame = planeFrame(f.plane, ctx);
     const external: SolvedCurve[] = [];
 
-    for (const e of f.entities) {
-      if (e.type === "projection") external.push(...project(e.id, e.edges, !!e.construction, frame, ctx));
+    for (const entity of f.entities) {
+      if (entity.type === "projection") {
+        external.push(...project(entity.id, entity.edges, !!entity.construction, frame, ctx));
+      }
     }
 
     const solved = this.solver.solve({ entities: f.entities, constraints: f.constraints, external });
@@ -452,7 +473,9 @@ function planeFrame(spec: PlaneSpec, ctx: Ctx): PlaneFrame {
   }
 
   const refs = facesIn(ctx.prev.bodies, spec.face);
-  const faces = refs.flatMap((r) => r.faces.map((fi) => ({ body: ctx.prev.bodies.get(r.body)!, fi })));
+  const faces = refs.flatMap((faceRef) =>
+    faceRef.faces.map((fi) => ({ body: ctx.prev.bodies.get(faceRef.body)!, fi })),
+  );
   if (!faces.length) throw new FeatureError("face selector matches no face");
 
   const planes = faces.map(({ body, fi }) => ({ info: body.faceInfo[fi]!, point: body.facePoints[fi]! }));
@@ -489,12 +512,15 @@ function axis(ref: AxisRef, ctx: Ctx): { origin: Vec3; dir: Vec3 } {
 
   if ("line" in ref) {
     const [skId, ...rest] = ref.line.split(".");
-    const sk = ctx.prev.sketches.get(skId!);
-    const curve = sk?.solved.curves.find((c) => c.id === rest.join("."));
-    if (!sk || !curve || curve.kind !== "line") throw new FeatureError(`axis line "${ref.line}" not found`);
+    const sketchResult = ctx.prev.sketches.get(skId!);
+    const curve = sketchResult?.solved.curves.find((curve) => curve.id === rest.join("."));
 
-    const a = toWorld(sk.frame, curve.a);
-    const b = toWorld(sk.frame, curve.b);
+    if (!sketchResult || !curve || curve.kind !== "line") {
+      throw new FeatureError(`axis line "${ref.line}" not found`);
+    }
+
+    const a = toWorld(sketchResult.frame, curve.a);
+    const b = toWorld(sketchResult.frame, curve.b);
 
     return { origin: a, dir: unit([b[0] - a[0], b[1] - a[1], b[2] - a[2]]) };
   }
@@ -503,11 +529,11 @@ function axis(ref: AxisRef, ctx: Ctx): { origin: Vec3; dir: Vec3 } {
   if (er.edges.length !== 1) throw new FeatureError("axis edge selector must match exactly one edge");
 
   const edge = ctx.prev.bodies.get(er.body)!.edges[er.edges[0]!]!;
-  const c = ctx.arena.track(new ctx.oc.BRepAdaptor_Curve(edge));
+  const curveAdaptor = ctx.arena.track(new ctx.oc.BRepAdaptor_Curve(edge));
 
-  if (c.GetType() !== "GeomAbs_Line") {
-    if (c.GetType() === "GeomAbs_Circle") {
-      const ax = ctx.arena.track(ctx.arena.track(c.Circle()).Axis());
+  if (curveAdaptor.GetType() !== "GeomAbs_Line") {
+    if (curveAdaptor.GetType() === "GeomAbs_Circle") {
+      const ax = ctx.arena.track(ctx.arena.track(curveAdaptor.Circle()).Axis());
       const p = ctx.arena.track(ax.Location());
       const d = ctx.arena.track(ax.Direction());
 
@@ -517,8 +543,8 @@ function axis(ref: AxisRef, ctx: Ctx): { origin: Vec3; dir: Vec3 } {
     throw new FeatureError("axis edge must be straight or circular");
   }
 
-  const p0 = ctx.arena.track(c.Value(c.FirstParameter()));
-  const p1 = ctx.arena.track(c.Value(c.LastParameter()));
+  const p0 = ctx.arena.track(curveAdaptor.Value(curveAdaptor.FirstParameter()));
+  const p1 = ctx.arena.track(curveAdaptor.Value(curveAdaptor.LastParameter()));
 
   return { origin: [p0.X(), p0.Y(), p0.Z()], dir: unit([p1.X() - p0.X(), p1.Y() - p0.Y(), p1.Z() - p0.Z()]) };
 }
@@ -535,17 +561,17 @@ function project(
 
   return ref.edges.map((ei, k) => {
     const cid = `${id}.${k}`;
-    const c = ctx.arena.track(new ctx.oc.BRepAdaptor_Curve(body.edges[ei]!));
-    const first = c.FirstParameter();
-    const last = c.LastParameter();
+    const curveAdaptor = ctx.arena.track(new ctx.oc.BRepAdaptor_Curve(body.edges[ei]!));
+    const first = curveAdaptor.FirstParameter();
+    const last = curveAdaptor.LastParameter();
 
     const at = (u: number) => {
-      const p = ctx.arena.track(c.Value(u));
+      const p = ctx.arena.track(curveAdaptor.Value(u));
 
       return toSketch(frame, [p.X(), p.Y(), p.Z()]);
     };
 
-    const type = c.GetType();
+    const type = curveAdaptor.GetType();
 
     if (type === "GeomAbs_Line") {
       return {
@@ -561,7 +587,7 @@ function project(
     }
 
     if (type === "GeomAbs_Circle") {
-      const circ = ctx.arena.track(c.Circle());
+      const circ = ctx.arena.track(curveAdaptor.Circle());
       const ax = ctx.arena.track(ctx.arena.track(circ.Axis()).Direction());
       const n: Vec3 = [ax.X(), ax.Y(), ax.Z()];
       const cosN = n[0] * frame.normal[0] + n[1] * frame.normal[1] + n[2] * frame.normal[2];
@@ -603,14 +629,14 @@ function project(
 }
 
 function sketchRegions(profile: Extract<ProfileRef, { sketch: string }>, ctx: Ctx) {
-  const sk = ctx.prev.sketches.get(profile.sketch);
-  if (!sk) throw new FeatureError(`sketch "${profile.sketch}" is missing or failed`);
+  const sketchResult = ctx.prev.sketches.get(profile.sketch);
+  if (!sketchResult) throw new FeatureError(`sketch "${profile.sketch}" is missing or failed`);
 
-  const { regions, missing } = selectRegions(sk.regions, profile.regions);
+  const { regions, missing } = selectRegions(sketchResult.regions, profile.regions);
   if (missing.length) throw new FeatureError(`sketch region(s) no longer exist: ${missing.join(", ")}`);
   if (!regions.length) throw new FeatureError(`sketch "${profile.sketch}" has no closed region`);
 
-  return { sk, regions };
+  return { sk: sketchResult, regions };
 }
 
 const unit = (v: Vec3): Vec3 => {
@@ -641,7 +667,7 @@ function sweepTool(
     shape: TopoDS_Shape;
     first: TopoDS_Shape | null;
     last: TopoDS_Shape | null;
-    generated: (s: TopoDS_Shape) => TopoDS_Shape[];
+    generated: (shape: TopoDS_Shape) => TopoDS_Shape[];
   },
 ): Body {
   const { oc, arena } = ctx;
@@ -651,12 +677,12 @@ function sweepTool(
     const r = make(face);
     const body = new Body(oc, arena, featureId, r.shape);
     const tags: string[][] = body.faces.map(() => []);
-    const tag = (s: TopoDS_Shape | null, t: string) => s && tags[body.faceIndex(s)]?.push(t);
+    const tag = (shape: TopoDS_Shape | null, t: string) => shape && tags[body.faceIndex(shape)]?.push(t);
     tag(r.first, `${featureId}.start_cap`);
     tag(r.last, `${featureId}.end_cap`);
 
     for (const { edge, name } of edges) {
-      for (const s of r.generated(edge)) tag(s, `${featureId}.side[${sketchId}.${name}]`);
+      for (const shape of r.generated(edge)) tag(shape, `${featureId}.side[${sketchId}.${name}]`);
     }
 
     body.faceTags = tags.map((t, i) => (t.length ? t : [`${featureId}.face[${i}]`]));
@@ -676,7 +702,7 @@ function extrudeFace(
 ): Omit<ModelState, "arena"> {
   const refs = facesIn(ctx.prev.bodies, f.profile.face);
 
-  if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) {
+  if (refs.reduce((n, faceRef) => n + faceRef.faces.length, 0) !== 1) {
     throw new FeatureError("push/pull needs exactly one face");
   }
 
@@ -697,19 +723,19 @@ function extrudeFace(
 
   const tool = new Body(ctx.oc, ctx.arena, f.id, ctx.arena.track(prism.Shape()));
   const tags: string[][] = tool.faces.map(() => []);
-  const tag = (s: TopoDS_Shape, t: string) => tags[tool.faceIndex(s)]?.push(t);
+  const tag = (shape: TopoDS_Shape, t: string) => tags[tool.faceIndex(shape)]?.push(t);
   tag(ctx.arena.track(prism.FirstShape()), `${f.id}.start_cap`);
   tag(ctx.arena.track(prism.LastShape()), `${f.id}.end_cap`);
 
   // Side faces are named after the model face on the other side of each boundary edge.
-  const ex = ctx.arena.track(new ctx.oc.TopExp_Explorer(face, "TopAbs_EDGE"));
+  const explorer = ctx.arena.track(new ctx.oc.TopExp_Explorer(face, "TopAbs_EDGE"));
 
-  for (let k = 0; ex.More(); ex.Next(), k++) {
-    const edge = ctx.arena.track(ex.Current());
+  for (let k = 0; explorer.More(); explorer.Next(), k++) {
+    const edge = ctx.arena.track(explorer.Current());
     const ei = body.edgeIndex(edge);
     const other = (body.edgeFaces[ei] ?? []).find((x) => x !== fi);
     const name = other !== undefined ? (body.faceTags[other]?.[0] ?? `e${k}`) : `e${k}`;
-    for (const s of listToArray(ctx.arena, prism.Generated(edge))) tag(s, `${f.id}.side[${name}]`);
+    for (const shape of listToArray(ctx.arena, prism.Generated(edge))) tag(shape, `${f.id}.side[${name}]`);
   }
 
   tool.faceTags = tags.map((t, i) => (t.length ? t : [`${f.id}.face[${i}]`]));
@@ -729,9 +755,9 @@ function thickenFace(
 ): Omit<ModelState, "arena"> {
   const { oc, arena } = ctx;
 
-  const volume = (s: TopoDS_Shape) => {
+  const volume = (shape: TopoDS_Shape) => {
     const props = arena.track(new oc.GProp_GProps());
-    oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
     return Math.abs(props.Mass());
   };
@@ -757,9 +783,9 @@ function thicken({ oc, arena }: Ctx, face: TopoDS_Shape, offset: number): TopoDS
 
   try {
     mk.MakeThickSolidBySimple(face, offset);
-  } catch (e) {
+  } catch (error) {
     throw new FeatureError(
-      `push/pull failed on this curved face: ${occtErrorMessage(oc, e)}`,
+      `push/pull failed on this curved face: ${occtErrorMessage(oc, error)}`,
       "try a smaller distance",
     );
   }
@@ -787,10 +813,10 @@ function extrude(f: ResolvedExtrude, ctx: Ctx): Omit<ModelState, "arena"> {
     return extrudeFace(f as ResolvedExtrude & { profile: { face: FaceSelector } }, ctx);
   }
 
-  const { sk, regions } = sketchRegions(f.profile, ctx);
+  const { sk: sketchResult, regions } = sketchRegions(f.profile, ctx);
   const dir: Vec3 = f.flip
-    ? [-sk.frame.normal[0], -sk.frame.normal[1], -sk.frame.normal[2]]
-    : sk.frame.normal;
+    ? [-sketchResult.frame.normal[0], -sketchResult.frame.normal[1], -sketchResult.frame.normal[2]]
+    : sketchResult.frame.normal;
   let start = 0;
   let length = f.distance;
 
@@ -807,16 +833,16 @@ function extrude(f: ResolvedExtrude, ctx: Ctx): Omit<ModelState, "arena"> {
   if (Math.abs(length) < 1e-6) throw new FeatureError("extrude distance must not be zero");
 
   const frame: PlaneFrame = {
-    ...sk.frame,
+    ...sketchResult.frame,
     origin: [
-      sk.frame.origin[0] + dir[0] * start,
-      sk.frame.origin[1] + dir[1] * start,
-      sk.frame.origin[2] + dir[2] * start,
+      sketchResult.frame.origin[0] + dir[0] * start,
+      sketchResult.frame.origin[1] + dir[1] * start,
+      sketchResult.frame.origin[2] + dir[2] * start,
     ],
   };
   const faces = ctx.g.regionFaces(frame, regions);
   const vec = ctx.g.vec([dir[0] * length, dir[1] * length, dir[2] * length]);
-  const tool = sweepTool(ctx, f.id, faces, sk.id, (face) => {
+  const tool = sweepTool(ctx, f.id, faces, sketchResult.id, (face) => {
     const prism = ctx.arena.track(new ctx.oc.BRepPrimAPI_MakePrism(face, vec, false, true));
     if (!prism.IsDone()) throw new FeatureError("extrude failed");
 
@@ -824,7 +850,7 @@ function extrude(f: ResolvedExtrude, ctx: Ctx): Omit<ModelState, "arena"> {
       shape: ctx.arena.track(prism.Shape()),
       first: ctx.arena.track(prism.FirstShape()),
       last: ctx.arena.track(prism.LastShape()),
-      generated: (s) => listToArray(ctx.arena, prism.Generated(s)),
+      generated: (shape) => listToArray(ctx.arena, prism.Generated(shape)),
     };
   });
 
@@ -834,14 +860,14 @@ function extrude(f: ResolvedExtrude, ctx: Ctx): Omit<ModelState, "arena"> {
 function revolve(f: ResolvedRevolve, ctx: Ctx): Omit<ModelState, "arena"> {
   if ("face" in f.profile) throw new FeatureError("revolve needs a sketch profile");
 
-  const { sk, regions } = sketchRegions(f.profile, ctx);
+  const { sk: sketchResult, regions } = sketchRegions(f.profile, ctx);
   const ax = axis(f.axis, ctx);
   const angle = Math.max(-360, Math.min(360, f.angle));
   if (Math.abs(angle) < 1e-6) throw new FeatureError("revolve angle must not be zero");
 
   // An axis square to the sketch turns the profile within its own plane: no solid (OCCT gives one of no
   // volume).
-  const n = sk.frame.normal;
+  const n = sketchResult.frame.normal;
 
   if (Math.abs(ax.dir[0] * n[0] + ax.dir[1] * n[1] + ax.dir[2] * n[2]) > 1 - 1e-6) {
     throw new FeatureError(
@@ -851,9 +877,9 @@ function revolve(f: ResolvedRevolve, ctx: Ctx): Omit<ModelState, "arena"> {
   }
 
   const full = Math.abs(Math.abs(angle) - 360) < 1e-9;
-  const faces = ctx.g.regionFaces(sk.frame, regions);
+  const faces = ctx.g.regionFaces(sketchResult.frame, regions);
   const gpAx = ctx.g.ax1(ax.origin, ax.dir);
-  let tool = sweepTool(ctx, f.id, faces, sk.id, (face) => {
+  let tool = sweepTool(ctx, f.id, faces, sketchResult.id, (face) => {
     const rev = ctx.arena.track(new ctx.oc.BRepPrimAPI_MakeRevol(face, gpAx, (angle * Math.PI) / 180, false));
     if (!rev.IsDone()) throw new FeatureError("revolve failed (does the profile cross the axis?)");
 
@@ -861,7 +887,7 @@ function revolve(f: ResolvedRevolve, ctx: Ctx): Omit<ModelState, "arena"> {
       shape: ctx.arena.track(rev.Shape()),
       first: full ? null : ctx.arena.track(rev.FirstShape()),
       last: full ? null : ctx.arena.track(rev.LastShape()),
-      generated: (s) => listToArray(ctx.arena, rev.Generated(s)),
+      generated: (shape) => listToArray(ctx.arena, rev.Generated(shape)),
     };
   });
 
@@ -873,20 +899,22 @@ function revolve(f: ResolvedRevolve, ctx: Ctx): Omit<ModelState, "arena"> {
 }
 
 /** One loft or sweep profile as a face: a single sketch region, or a flat model face. */
-function profileFace(p: ProfileRef, ctx: Ctx, what: string): TopoDS_Face {
-  if ("sketch" in p) {
-    const { sk, regions } = sketchRegions(p, ctx);
+function profileFace(profile: ProfileRef, ctx: Ctx, what: string): TopoDS_Face {
+  if ("sketch" in profile) {
+    const { sk: sketchResult, regions } = sketchRegions(profile, ctx);
 
     if (regions.length !== 1) {
-      throw new FeatureError(`${what}: sketch "${sk.id}" has ${regions.length} closed regions, pick one`);
+      throw new FeatureError(
+        `${what}: sketch "${sketchResult.id}" has ${regions.length} closed regions, pick one`,
+      );
     }
 
-    return ctx.g.regionFaces(sk.frame, regions)[0]!.face;
+    return ctx.g.regionFaces(sketchResult.frame, regions)[0]!.face;
   }
 
-  const refs = facesIn(ctx.prev.bodies, p.face);
+  const refs = facesIn(ctx.prev.bodies, profile.face);
 
-  if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) {
+  if (refs.reduce((n, faceRef) => n + faceRef.faces.length, 0) !== 1) {
     throw new FeatureError(`${what}: pick exactly one face`);
   }
 
@@ -902,17 +930,21 @@ function faceWires({ oc, arena }: Ctx, face: TopoDS_Face): { outer: TopoDS_Wire;
   const outer = arena.track(oc.BRepTools.OuterWire(face));
   const holes: TopoDS_Wire[] = [];
 
-  for (const e = arena.track(new oc.TopExp_Explorer(face, "TopAbs_WIRE")); e.More(); e.Next()) {
-    const w = arena.track(oc.TopoDS.Wire(arena.track(e.Current())));
-    if (!w.IsSame(outer)) holes.push(w);
+  for (
+    const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_WIRE"));
+    explorer.More();
+    explorer.Next()
+  ) {
+    const wire = arena.track(oc.TopoDS.Wire(arena.track(explorer.Current())));
+    if (!wire.IsSame(outer)) holes.push(wire);
   }
 
   return { outer, holes };
 }
 
-function centroid({ oc, arena }: Ctx, s: TopoDS_Shape): Vec3 {
+function centroid({ oc, arena }: Ctx, shape: TopoDS_Shape): Vec3 {
   const props = arena.track(new oc.GProp_GProps());
-  oc.BRepGProp.LinearProperties(s, props, false, false);
+  oc.BRepGProp.LinearProperties(shape, props, false, false);
 
   const c = arena.track(props.CentreOfMass());
 
@@ -923,13 +955,13 @@ function centroid({ oc, arena }: Ctx, s: TopoDS_Shape): Vec3 {
 function thruSections(ctx: Ctx, id: string, wires: TopoDS_Wire[], ruled: boolean): Body {
   const { oc, arena } = ctx;
   const loft = arena.track(new oc.BRepOffsetAPI_ThruSections(true, ruled, 1e-6));
-  for (const w of wires) loft.AddWire(w);
+  for (const wire of wires) loft.AddWire(wire);
 
   try {
     loft.Build(arena.track(new oc.Message_ProgressRange()));
-  } catch (e) {
+  } catch (error) {
     throw new FeatureError(
-      `loft failed: ${occtErrorMessage(oc, e)}`,
+      `loft failed: ${occtErrorMessage(oc, error)}`,
       "profiles with very different shapes or crossing each other cannot be joined",
     );
   }
@@ -956,15 +988,17 @@ function thruSections(ctx: Ctx, id: string, wires: TopoDS_Wire[], ruled: boolean
  * Loft through the profiles in order. Profiles with the same number of holes give a hollow loft:
  * the holes are lofted too (each paired with the nearest one, relative to its profile) and cut out.
  */
-function loft(f: LoftFeature, ctx: Ctx): Omit<ModelState, "arena"> {
-  if (f.profiles.length < 2) throw new FeatureError("a loft needs at least two profiles");
+function loft(feature: LoftFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+  if (feature.profiles.length < 2) throw new FeatureError("a loft needs at least two profiles");
 
-  const wires = f.profiles.map((p, i) => faceWires(ctx, profileFace(p, ctx, `profile ${i + 1}`)));
+  const wires = feature.profiles.map((profile, i) =>
+    faceWires(ctx, profileFace(profile, ctx, `profile ${i + 1}`)),
+  );
   let tool = thruSections(
     ctx,
-    f.id,
+    feature.id,
     wires.map((w) => w.outer),
-    !!f.ruled,
+    !!feature.ruled,
   );
   const holes = wires[0]!.holes.length;
 
@@ -975,7 +1009,7 @@ function loft(f: LoftFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   if (holes) {
     const centres = wires.map((w) => ({
       outer: centroid(ctx, w.outer),
-      holes: w.holes.map((h) => centroid(ctx, h)),
+      holes: w.holes.map((wire) => centroid(ctx, wire)),
     }));
 
     const rel = (k: number, h: number): Vec3 => {
@@ -1004,34 +1038,37 @@ function loft(f: LoftFeature, ctx: Ctx): Omit<ModelState, "arena"> {
         prev = rel(k, best);
       }
 
-      cuts.push(thruSections(ctx, f.id, chain, !!f.ruled));
+      cuts.push(thruSections(ctx, feature.id, chain, !!feature.ruled));
     }
 
-    tool = booleanBodies(ctx.oc, ctx.arena, tool, cuts, "cut", f.id);
+    tool = booleanBodies(ctx.oc, ctx.arena, tool, cuts, "cut", feature.id);
   }
 
-  return applyTool(ctx, f.id, tool, f.mode, f.targets);
+  return applyTool(ctx, feature.id, tool, feature.mode, feature.targets);
 }
 
 /**
  * The sweep path as a wire: the sketch's lines and arcs (non-construction, or the listed ones),
  * chained end to end. One chain without branches, open or closed.
  */
-function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
+function pathWire(feature: SweepFeature, ctx: Ctx): TopoDS_Wire {
   const { oc, arena, g } = ctx;
-  const sk = ctx.prev.sketches.get(f.path.sketch);
-  if (!sk) throw new FeatureError(`path sketch "${f.path.sketch}" is missing or failed`);
+  const sketchResult = ctx.prev.sketches.get(feature.path.sketch);
+  if (!sketchResult) throw new FeatureError(`path sketch "${feature.path.sketch}" is missing or failed`);
 
-  const wanted = f.path.curves;
-  const missing = wanted?.filter((id) => !sk.solved.curves.some((c) => c.id === id)) ?? [];
+  const wanted = feature.path.curves;
+  const missing = wanted?.filter((id) => !sketchResult.solved.curves.some((curve) => curve.id === id)) ?? [];
   if (missing.length) throw new FeatureError(`path curve(s) no longer exist: ${missing.join(", ")}`);
 
-  const curves = sk.solved.curves.filter((c) =>
-    wanted ? wanted.includes(c.id) : !c.construction && !c.external,
+  const curves = sketchResult.solved.curves.filter((curve) =>
+    wanted ? wanted.includes(curve.id) : !curve.construction && !curve.external,
   );
-  if (!curves.length) throw new FeatureError(`path sketch "${sk.id}" has no lines, arcs or splines`);
 
-  if (curves.some((c) => c.kind === "circle") && curves.length > 1) {
+  if (!curves.length) {
+    throw new FeatureError(`path sketch "${sketchResult.id}" has no lines, arcs or splines`);
+  }
+
+  if (curves.some((curve) => curve.kind === "circle") && curves.length > 1) {
     throw new FeatureError("a circle can only be a path on its own");
   }
 
@@ -1040,12 +1077,12 @@ function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
     1e-6 *
     Math.max(
       1,
-      ...curves.flatMap((c) =>
-        (c.kind === "line"
-          ? [...c.a, ...c.b]
-          : c.kind === "spline"
-            ? c.pts.flat()
-            : [...c.center, c.radius]
+      ...curves.flatMap((curve) =>
+        (curve.kind === "line"
+          ? [...curve.a, ...curve.b]
+          : curve.kind === "spline"
+            ? curve.pts.flat()
+            : [...curve.center, curve.radius]
         ).map(Math.abs),
       ),
     );
@@ -1053,17 +1090,17 @@ function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
 
   const vertex = (p: [number, number]) => {
     let hit = verts.find((x) => distance2(p, x.p) < tol * 100);
-    if (!hit) verts.push((hit = { p, v: g.vertex(toWorld(sk.frame, p)), n: 0 }));
+    if (!hit) verts.push((hit = { p, v: g.vertex(toWorld(sketchResult.frame, p)), n: 0 }));
 
     hit.n++;
 
     return hit;
   };
 
-  const edges: { edge: TopoDS_Edge; ends: [number, number] }[] = curves.map((c) => {
-    if (c.kind === "line") {
-      const a = vertex(c.a),
-        b = vertex(c.b);
+  const edges: { edge: TopoDS_Edge; ends: [number, number] }[] = curves.map((curve) => {
+    if (curve.kind === "line") {
+      const a = vertex(curve.a),
+        b = vertex(curve.b);
 
       return {
         edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(a.v, b.v)).Edge()),
@@ -1071,32 +1108,39 @@ function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
       };
     }
 
-    if (c.kind === "spline") {
-      const a = vertex(c.pts[0]!),
-        b = vertex(c.pts[c.pts.length - 1]!);
+    if (curve.kind === "spline") {
+      const a = vertex(curve.pts[0]!),
+        b = vertex(curve.pts[curve.pts.length - 1]!);
 
-      return { edge: g.splineEdge(sk.frame, c.pts, a.v, b.v), ends: [verts.indexOf(a), verts.indexOf(b)] };
+      return {
+        edge: g.splineEdge(sketchResult.frame, curve.pts, a.v, b.v),
+        ends: [verts.indexOf(a), verts.indexOf(b)],
+      };
     }
 
     const circ = arena.track(
       new oc.gp_Circ(
         arena.track(
-          new oc.gp_Ax2(g.pnt(toWorld(sk.frame, c.center)), g.dir(sk.frame.normal), g.dir(sk.frame.u)),
+          new oc.gp_Ax2(
+            g.pnt(toWorld(sketchResult.frame, curve.center)),
+            g.dir(sketchResult.frame.normal),
+            g.dir(sketchResult.frame.u),
+          ),
         ),
-        c.radius,
+        curve.radius,
       ),
     );
 
-    if (c.kind === "circle") {
+    if (curve.kind === "circle") {
       return { edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(circ)).Edge()), ends: [-1, -1] };
     }
 
     const at = (t: number): [number, number] => [
-      c.center[0] + c.radius * Math.cos(t),
-      c.center[1] + c.radius * Math.sin(t),
+      curve.center[0] + curve.radius * Math.cos(t),
+      curve.center[1] + curve.radius * Math.sin(t),
     ];
-    const a = vertex(at(c.a0)),
-      b = vertex(at(c.a1));
+    const a = vertex(at(curve.a0)),
+      b = vertex(at(curve.a1));
 
     return {
       edge: arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(circ, a.v, b.v)).Edge()),
@@ -1131,17 +1175,20 @@ function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
     throw new FeatureError("the path has gaps: its lines and arcs must join end to end");
   }
 
-  const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
-  for (const i of order) mw.Add(edges[i]!.edge);
-  if (!mw.IsDone()) throw new FeatureError("the path has gaps: its lines and arcs must join end to end");
+  const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
+  for (const i of order) wireBuilder.Add(edges[i]!.edge);
 
-  return arena.track(mw.Wire());
+  if (!wireBuilder.IsDone()) {
+    throw new FeatureError("the path has gaps: its lines and arcs must join end to end");
+  }
+
+  return arena.track(wireBuilder.Wire());
 }
 
 /** The profile moved along the path, turning with it (corrected Frenet frame). */
-function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+function sweep(feature: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena } = ctx;
-  const spine = pathWire(f, ctx);
+  const spine = pathWire(feature, ctx);
 
   const make = (face: TopoDS_Shape) => {
     let pipe;
@@ -1149,9 +1196,9 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     try {
       // OCCT's default frame for pipes is the corrected Frenet one.
       pipe = arena.track(new oc.BRepOffsetAPI_MakePipe(spine, face));
-    } catch (e) {
+    } catch (error) {
       throw new FeatureError(
-        `sweep failed: ${occtErrorMessage(oc, e)}`,
+        `sweep failed: ${occtErrorMessage(oc, error)}`,
         "a profile too large for a tight bend makes the sweep cross itself",
       );
     }
@@ -1167,22 +1214,22 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
       shape: arena.track(pipe.Shape()),
       first: arena.track(pipe.FirstShape()),
       last: arena.track(pipe.LastShape()),
-      generated: (s: TopoDS_Shape) => listToArray(arena, pipe.Generated(s)),
+      generated: (shape: TopoDS_Shape) => listToArray(arena, pipe.Generated(shape)),
     };
   };
 
   let tool: Body;
 
-  if ("sketch" in f.profile) {
-    const { sk, regions } = sketchRegions(f.profile, ctx);
-    tool = sweepTool(ctx, f.id, ctx.g.regionFaces(sk.frame, regions), sk.id, make);
+  if ("sketch" in feature.profile) {
+    const { sk: sketchResult, regions } = sketchRegions(feature.profile, ctx);
+    tool = sweepTool(ctx, feature.id, ctx.g.regionFaces(sketchResult.frame, regions), sketchResult.id, make);
   } else {
-    const r = make(profileFace(f.profile, ctx, "profile"));
-    tool = new Body(oc, arena, f.id, r.shape);
-    tool.faceTags = tool.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+    const r = make(profileFace(feature.profile, ctx, "profile"));
+    tool = new Body(oc, arena, feature.id, r.shape);
+    tool.faceTags = tool.faces.map((_, i) => [`${feature.id}.face[${i}]`]);
   }
 
-  return applyTool(ctx, f.id, tool, f.mode, f.targets);
+  return applyTool(ctx, feature.id, tool, feature.mode, feature.targets);
 }
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -1211,12 +1258,21 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
     // Samples of the profile's outline: how far it reaches from the axis and along it.
     const zs: number[] = [];
 
-    for (const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE")); ex.More(); ex.Next()) {
-      const c = arena.track(new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(ex.Current()))));
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      const curveAdaptor = arena.track(
+        new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(explorer.Current()))),
+      );
 
       for (let k = 0; k <= 16; k++) {
         const p = arena.track(
-          c.Value(c.FirstParameter() + ((c.LastParameter() - c.FirstParameter()) * k) / 16),
+          curveAdaptor.Value(
+            curveAdaptor.FirstParameter() +
+              ((curveAdaptor.LastParameter() - curveAdaptor.FirstParameter()) * k) / 16,
+          ),
         );
         const v = rel([p.X(), p.Y(), p.Z()]);
         const z = dotv(v, dir);
@@ -1278,15 +1334,19 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
     // whole; there the turn stays.
     const wires: TopoDS_Shape[] = [];
 
-    for (const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_WIRE")); ex.More(); ex.Next()) {
-      wires.push(arena.track(ex.Current()));
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_WIRE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      wires.push(arena.track(explorer.Current()));
     }
 
     let built: {
       shape: TopoDS_Shape;
       first: TopoDS_Shape;
       last: TopoDS_Shape;
-      generated: (s: TopoDS_Shape) => TopoDS_Shape[];
+      generated: (shape: TopoDS_Shape) => TopoDS_Shape[];
     };
 
     try {
@@ -1302,7 +1362,7 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
           shape: arena.track(mk.Shape()),
           first: arena.track(mk.FirstShape()),
           last: arena.track(mk.LastShape()),
-          generated: (s) => listToArray(arena, mk.Generated(s)),
+          generated: (shape) => listToArray(arena, mk.Generated(shape)),
         };
       } else {
         const pipe = arena.track(new oc.BRepOffsetAPI_MakePipe(spine, face));
@@ -1312,13 +1372,13 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
           shape: arena.track(pipe.Shape()),
           first: arena.track(pipe.FirstShape()),
           last: arena.track(pipe.LastShape()),
-          generated: (s) => listToArray(arena, pipe.Generated(s)),
+          generated: (shape) => listToArray(arena, pipe.Generated(shape)),
         };
       }
-    } catch (e) {
-      if (e instanceof FeatureError) throw e;
+    } catch (error) {
+      if (error instanceof FeatureError) throw error;
 
-      throw new FeatureError(`coil failed: ${occtErrorMessage(oc, e)}`);
+      throw new FeatureError(`coil failed: ${occtErrorMessage(oc, error)}`);
     }
 
     const props = arena.track(new oc.GProp_GProps());
@@ -1331,8 +1391,8 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
   let tool: Body;
 
   if ("sketch" in f.profile) {
-    const { sk, regions } = sketchRegions(f.profile, ctx);
-    tool = sweepTool(ctx, f.id, ctx.g.regionFaces(sk.frame, regions), sk.id, make);
+    const { sk: sketchResult, regions } = sketchRegions(f.profile, ctx);
+    tool = sweepTool(ctx, f.id, ctx.g.regionFaces(sketchResult.frame, regions), sketchResult.id, make);
   } else {
     const r = make(profileFace(f.profile, ctx, "profile"));
     tool = new Body(oc, arena, f.id, r.shape);
@@ -1377,7 +1437,7 @@ function faceGeometry(
 ): { body: string; origin: Vec3; dir: Vec3 } {
   const refs = facesIn(ctx.prev.bodies, sel);
 
-  if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) {
+  if (refs.reduce((n, faceRef) => n + faceRef.faces.length, 0) !== 1) {
     throw new FeatureError(`${what}: pick exactly one face`);
   }
 
@@ -1478,10 +1538,10 @@ function standardPartFeature(f: ResolvedStandardPart, ctx: Ctx): Omit<ModelState
       height: f.height,
       moving: f.withMoving,
     });
-  } catch (e) {
-    if (e instanceof StandardPartError) throw new FeatureError(e.message);
+  } catch (error) {
+    if (error instanceof StandardPartError) throw new FeatureError(error.message);
 
-    throw e;
+    throw error;
   }
 
   const plane = planeFrame(f.plane, ctx);
@@ -1551,7 +1611,7 @@ function snapHookFeature(f: ResolvedSnapHook, ctx: Ctx): Omit<ModelState, "arena
 
   if (!targets?.length && mode !== "new_body") {
     if ("face" in f.plane) {
-      targets = [...new Set(facesIn(bodies, f.plane.face).map((r) => r.body))].filter(
+      targets = [...new Set(facesIn(bodies, f.plane.face).map((faceRef) => faceRef.body))].filter(
         (id) => !catchIn.includes(id),
       );
     } else {
@@ -1670,13 +1730,15 @@ function textFeature(f: ResolvedText, ctx: Ctx): Omit<ModelState, "arena"> {
     ) as Vec3;
 
   const wire = (loop: [number, number][]) => {
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = loop.map((p) => g.vertex(world(p)));
-    vs.forEach((v, i) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
-    return arena.track(mw.Wire());
+    return arena.track(wireBuilder.Wire());
   };
 
   const depth = f.depth + lift;
@@ -1687,11 +1749,13 @@ function textFeature(f: ResolvedText, ctx: Ctx): Omit<ModelState, "arena"> {
   const solids: Body[] = [];
 
   for (const shape of nest(loops)) {
-    const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(pln, wire(shape.outer), true));
-    for (const h of shape.holes) mf.Add(wire(h));
-    if (!mf.IsDone()) continue;
+    const faceBuilder = arena.track(new oc.BRepBuilderAPI_MakeFace(pln, wire(shape.outer), true));
+    for (const loop of shape.holes) faceBuilder.Add(wire(loop));
+    if (!faceBuilder.IsDone()) continue;
 
-    const prism = arena.track(new oc.BRepPrimAPI_MakePrism(arena.track(mf.Face()), vec, false, true));
+    const prism = arena.track(
+      new oc.BRepPrimAPI_MakePrism(arena.track(faceBuilder.Face()), vec, false, true),
+    );
     if (!prism.IsDone()) continue;
 
     const body = new Body(oc, arena, f.id, arena.track(prism.Shape()));
@@ -1734,8 +1798,8 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
 
   if (!f.faces.length) throw new FeatureError("select the faces to draft");
 
-  const refs = f.faces.flatMap((s) => facesIn(ctx.prev.bodies, s));
-  const bodyIds = new Set(refs.map((r) => r.body));
+  const refs = f.faces.flatMap((selector) => facesIn(ctx.prev.bodies, selector));
+  const bodyIds = new Set(refs.map((faceRef) => faceRef.body));
   if (bodyIds.size !== 1) throw new FeatureError("draft faces must belong to one part");
 
   const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
@@ -1746,8 +1810,8 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
   );
   const mk = arena.track(new oc.BRepOffsetAPI_DraftAngle(input.shape));
 
-  for (const r of refs) {
-    for (const fi of r.faces) {
+  for (const faceRef of refs) {
+    for (const fi of faceRef.faces) {
       const face = oc.TopoDS.Face(input.faces[fi]!);
       mk.Add(face, g.dir(pull), (f.angle * Math.PI) / 180, pln, true);
 
@@ -1762,8 +1826,11 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
 
   try {
     mk.Build(arena.track(new oc.Message_ProgressRange()));
-  } catch (e) {
-    throw new FeatureError(`draft failed: ${occtErrorMessage(oc, e)}`, "try a smaller angle or fewer faces");
+  } catch (error) {
+    throw new FeatureError(
+      `draft failed: ${occtErrorMessage(oc, error)}`,
+      "try a smaller angle or fewer faces",
+    );
   }
 
   if (!mk.IsDone()) {
@@ -1776,7 +1843,7 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
     if (same >= 0) return [same];
 
     return listToArray(arena, mk.Modified(face))
-      .map((s) => body.faceIndex(s))
+      .map((shape) => body.faceIndex(shape))
       .filter((i) => i >= 0);
   });
   body.faceTags = propagateTags(
@@ -1801,12 +1868,12 @@ function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> 
   const { oc, arena, g } = ctx;
   if (!f.faces.length) throw new FeatureError("select the faces to move");
 
-  const refs = f.faces.flatMap((s) => facesIn(ctx.prev.bodies, s));
-  const bodyIds = new Set(refs.map((r) => r.body));
+  const refs = f.faces.flatMap((selector) => facesIn(ctx.prev.bodies, selector));
+  const bodyIds = new Set(refs.map((faceRef) => faceRef.body));
   if (bodyIds.size !== 1) throw new FeatureError("the faces must belong to one part");
 
   const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
-  const faces = [...new Set(refs.flatMap((r) => r.faces))];
+  const faces = [...new Set(refs.flatMap((faceRef) => faceRef.faces))];
   // Up to a plane: each flat face moves by its own distance onto it.
   const target = f.upTo ? planeFrame(f.upTo, ctx) : null;
 
@@ -1882,9 +1949,9 @@ function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> 
           }
 
           mk.MakeThickSolidBySimple(from, d > 0 ? d + OVERLAP : d);
-        } catch (e) {
+        } catch (error) {
           throw new FeatureError(
-            `face ${name} cannot be moved: ${occtErrorMessage(oc, e)}`,
+            `face ${name} cannot be moved: ${occtErrorMessage(oc, error)}`,
             "try a smaller distance",
           );
         }
@@ -1893,17 +1960,20 @@ function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> 
 
         // The slab can come out inside out (negative volume): rebuild the solid from its shell, which orients
         // it outwards.
-        const ex = arena.track(
+        const explorer = arena.track(
           new oc.TopExp_Explorer(
             arena.track(mk.Shape()),
             oc.TopAbs_ShapeEnum.TopAbs_SHELL,
             oc.TopAbs_ShapeEnum.TopAbs_SHAPE,
           ),
         );
-        if (!ex.More()) throw new FeatureError(`face ${name} cannot be moved`, "try a smaller distance");
+
+        if (!explorer.More()) {
+          throw new FeatureError(`face ${name} cannot be moved`, "try a smaller distance");
+        }
 
         shape = arena.track(
-          arena.track(new oc.ShapeFix_Solid()).SolidFromShell(oc.TopoDS.Shell(ex.Current())),
+          arena.track(new oc.ShapeFix_Solid()).SolidFromShell(oc.TopoDS.Shell(explorer.Current())),
         );
       }
 
@@ -1936,70 +2006,83 @@ function rib(f: ResolvedRib, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena, g } = ctx;
   if (!(f.thickness > 0)) throw new FeatureError("the rib's thickness must be greater than zero");
 
-  const sk = ctx.prev.sketches.get(f.sketch);
-  if (!sk) throw new FeatureError(`sketch "${f.sketch}" is missing or failed`);
+  const sketchResult = ctx.prev.sketches.get(f.sketch);
+  if (!sketchResult) throw new FeatureError(`sketch "${f.sketch}" is missing or failed`);
 
-  const missing = f.curves?.filter((id) => !sk.solved.curves.some((c) => c.id === id)) ?? [];
+  const missing =
+    f.curves?.filter((id) => !sketchResult.solved.curves.some((curve) => curve.id === id)) ?? [];
   if (missing.length) throw new FeatureError(`rib line(s) no longer exist: ${missing.join(", ")}`);
 
-  const lines = sk.solved.curves.filter(
-    (c): c is Extract<SolvedCurve, { kind: "line" }> =>
-      c.kind === "line" && (f.curves ? f.curves.includes(c.id) : !c.construction && !c.external),
+  const lines = sketchResult.solved.curves.filter(
+    (curve): curve is Extract<SolvedCurve, { kind: "line" }> =>
+      curve.kind === "line" &&
+      (f.curves ? f.curves.includes(curve.id) : !curve.construction && !curve.external),
   );
 
   if (!lines.length) {
-    throw new FeatureError(`sketch "${sk.id}" has no lines for a rib`, "draw an open line from wall to wall");
+    throw new FeatureError(
+      `sketch "${sketchResult.id}" has no lines for a rib`,
+      "draw an open line from wall to wall",
+    );
   }
 
   const parts = [...ctx.prev.bodies.values()];
   if (!parts.length) throw new FeatureError("a rib needs a part to stand on");
 
   const big = modelSize(ctx);
-  const n = sk.frame.normal;
+  const n = sketchResult.frame.normal;
   const half = f.thickness / 2;
   const add = (p: Vec3, d: Vec3, s: number): Vec3 => [p[0] + d[0] * s, p[1] + d[1] * s, p[2] + d[2] * s];
 
-  const solidsOf = (s: TopoDS_Shape) => {
+  const solidsOf = (shape: TopoDS_Shape) => {
     const out: TopoDS_Shape[] = [];
 
-    for (const e = arena.track(new oc.TopExp_Explorer(s, "TopAbs_SOLID")); e.More(); e.Next()) {
-      out.push(arena.track(e.Current()));
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      out.push(arena.track(explorer.Current()));
     }
 
     return out;
   };
 
-  const volume = (s: TopoDS_Shape) => {
+  const volume = (shape: TopoDS_Shape) => {
     const props = arena.track(new oc.GProp_GProps());
-    oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
     return Math.abs(props.Mass());
   };
 
   // The line lies on the boundary of the piece that holds it, and away from every other piece.
-  const touches = (s: TopoDS_Shape, p: Vec3) => {
-    const d = arena.track(new oc.BRepExtrema_DistShapeShape(g.vertex(p), s));
+  const touches = (shape: TopoDS_Shape, p: Vec3) => {
+    const d = arena.track(new oc.BRepExtrema_DistShapeShape(g.vertex(p), shape));
 
     return d.IsDone() && d.Value() < 1e-6 * big;
   };
 
   const quad = (pts: Vec3[]) => {
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = pts.map((p) => g.vertex(p));
-    vs.forEach((v, i) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
-    return arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face());
+    return arena.track(
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
+    );
   };
 
   // A piece closed in by walls stays within the parts' bounds; an open one runs out to the slab's end.
-  const pb = parts.map((p) => bodyBounds(oc, p));
+  const pb = parts.map((body) => bodyBounds(oc, body));
   const lo = [0, 1, 2].map((k) => Math.min(...pb.map((b) => b.min[k]!)) - 1e-3);
   const hi = [0, 1, 2].map((k) => Math.max(...pb.map((b) => b.max[k]!)) + 1e-3);
 
-  const within = (s: TopoDS_Shape) => {
-    const b = bounds(oc, arena, s);
+  const within = (shape: TopoDS_Shape) => {
+    const b = bounds(oc, arena, shape);
 
     return [0, 1, 2].every((k) => b.min[k]! >= lo[k]! - f.thickness && b.max[k]! <= hi[k]! + f.thickness);
   };
@@ -2007,8 +2090,8 @@ function rib(f: ResolvedRib, ctx: Ctx): Omit<ModelState, "arena"> {
   const pieces: Body[] = [];
 
   for (const line of lines) {
-    const a = toWorld(sk.frame, line.a),
-      b = toWorld(sk.frame, line.b);
+    const a = toWorld(sketchResult.frame, line.a),
+      b = toWorld(sketchResult.frame, line.b);
     const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
     if (len < 1e-6) continue;
 
@@ -2040,7 +2123,7 @@ function rib(f: ResolvedRib, ctx: Ctx): Omit<ModelState, "arena"> {
         if (cut.IsDone() && !cut.HasErrors()) rest = arena.track(cut.Shape());
       }
 
-      const piece = solidsOf(rest).find((s) => touches(s, mid));
+      const piece = solidsOf(rest).find((shape) => touches(shape, mid));
       if (!piece) return null;
 
       const v = volume(piece);
@@ -2114,10 +2197,10 @@ function split(f: ResolvedSplit, ctx: Ctx): Omit<ModelState, "arena"> {
     const piece = (side: Body, resultId: string) => {
       try {
         return booleanBodies(oc, arena, body, side, "common", resultId);
-      } catch (e) {
-        if (e instanceof FeatureError) return null;
+      } catch (error) {
+        if (error instanceof FeatureError) return null;
 
-        throw e;
+        throw error;
       }
     };
 
@@ -2150,7 +2233,7 @@ function split(f: ResolvedSplit, ctx: Ctx): Omit<ModelState, "arena"> {
       );
       bodies.set(id, joined.front);
       bodies.set(joined.back.bodyId, joined.back);
-      for (const d of joined.dowels) bodies.set(d.bodyId, d);
+      for (const body of joined.dowels) bodies.set(body.bodyId, body);
       continue;
     }
 
@@ -2202,7 +2285,7 @@ function moved(ctx: Ctx, body: Body, trsf: gp_Trsf, id: string, suffix: string):
   out.faceTags = tags.map((tg, i) => (tg.length ? tg : [`${id}.face[${i}]`]));
 
   // A moved or copied mesh keeps its triangles, moved the same way (as long as faces keep their order).
-  if (body.sourceMesh && body.faces.every((f, i) => out.faceIndex(t.map(f)) === i)) {
+  if (body.sourceMesh && body.faces.every((face, i) => out.faceIndex(t.map(face)) === i)) {
     const src = body.sourceMesh;
     const m = new Float32Array(src.length);
 
@@ -2288,9 +2371,9 @@ function applyTool(
           booleanBodies(ctx.oc, ctx.arena, target, tool, mode === "cut" ? "cut" : "common"),
         );
         changed++;
-      } catch (e) {
+      } catch (error) {
         if (mode === "intersect") bodies.delete(target.bodyId);
-        else if (!(e instanceof FeatureError)) throw e;
+        else if (!(error instanceof FeatureError)) throw error;
       }
     }
 
@@ -2367,7 +2450,7 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
   const descendants = input.faces.map((face) => {
     if (mk.IsDeleted(face)) return [];
 
-    const modified = listToArray(arena, mk.Modified(face)).map((s) => body.faceIndex(s));
+    const modified = listToArray(arena, mk.Modified(face)).map((shape) => body.faceIndex(shape));
     if (modified.length) return modified.filter((i) => i >= 0);
 
     const same = body.faceIndex(face);
@@ -2381,8 +2464,8 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
     const sel = selectorForEdge(input, ei);
     const name = sel && "edge" in sel ? sel.edge.join("|") : `edge${ei}`;
 
-    for (const s of listToArray(arena, mk.Generated(input.edges[ei]!))) {
-      const i = body.faceIndex(s);
+    for (const shape of listToArray(arena, mk.Generated(input.edges[ei]!))) {
+      const i = body.faceIndex(shape);
       if (i >= 0) generated.push({ face: i, tag: `${f.id}.${kind}[${name}]` });
     }
   }
@@ -2402,20 +2485,20 @@ function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
   if (!(f.thickness > 0)) throw new FeatureError("shell thickness must be greater than zero");
   if (!f.faces.length) throw new FeatureError("select at least one face to remove");
 
-  const refs = f.faces.flatMap((s) => facesIn(ctx.prev.bodies, s));
-  const bodyIds = new Set(refs.map((r) => r.body));
+  const refs = f.faces.flatMap((selector) => facesIn(ctx.prev.bodies, selector));
+  const bodyIds = new Set(refs.map((faceRef) => faceRef.body));
   if (bodyIds.size !== 1) throw new FeatureError("shell faces must belong to one body");
 
   const input = ctx.prev.bodies.get([...bodyIds][0]!)!;
   const list = arena.track(new oc.NCollection_List_TopoDS_Shape());
-  for (const r of refs) for (const fi of r.faces) list.Append(input.faces[fi]!);
+  for (const faceRef of refs) for (const fi of faceRef.faces) list.Append(input.faces[fi]!);
 
   const mk = arena.track(new oc.BRepOffsetAPI_MakeThickSolid());
 
   try {
     mk.MakeThickSolidByJoin(input.shape, list, f.outward ? f.thickness : -f.thickness, 1e-3);
-  } catch (e) {
-    throw new FeatureError(`shell failed: ${occtErrorMessage(oc, e)}`, "try a smaller thickness");
+  } catch (error) {
+    throw new FeatureError(`shell failed: ${occtErrorMessage(oc, error)}`, "try a smaller thickness");
   }
 
   if (!mk.IsDone()) throw new FeatureError("shell failed", "try a smaller thickness or remove fewer faces");
@@ -2437,7 +2520,7 @@ function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
     if (same >= 0) return [same];
 
     return listToArray(arena, mk.Modified(face))
-      .map((s) => body.faceIndex(s))
+      .map((shape) => body.faceIndex(shape))
       .filter((i) => i >= 0)
       .slice(0, 1);
   });
@@ -2447,8 +2530,11 @@ function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
     const tag = input.faceTags[i]?.[0];
     if (!tag) return;
 
-    for (const s of [...listToArray(arena, mk.Modified(face)), ...listToArray(arena, mk.Generated(face))]) {
-      const j = body.faceIndex(s);
+    for (const shape of [
+      ...listToArray(arena, mk.Modified(face)),
+      ...listToArray(arena, mk.Generated(face)),
+    ]) {
+      const j = body.faceIndex(shape);
       if (j >= 0 && !claimed.has(j)) generated.push({ face: j, tag: `${f.id}.inner[${tag}]` });
     }
   });
@@ -2578,16 +2664,16 @@ function applyCopies(ctx: Ctx, copies: Body[], mode: BooleanMode): Omit<ModelSta
         booleanBodies(ctx.oc, ctx.arena, target, tools, mode === "cut" ? "cut" : "fuse"),
       );
     }
-  } catch (e) {
-    if (e instanceof FeatureError) return null;
+  } catch (error) {
+    if (error instanceof FeatureError) return null;
 
-    throw e;
+    throw error;
   }
 
   return { ...ctx.prev, bodies: next };
 }
 
-function booleanFeature(f: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+function booleanFeature(feature: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   const bodies = copyMap(ctx.prev.bodies);
 
   const get = (id: string) => {
@@ -2597,25 +2683,30 @@ function booleanFeature(f: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> 
     return b;
   };
 
-  let target = get(f.target);
-  const op = f.operation === "union" ? "fuse" : f.operation === "subtract" ? "cut" : "common";
+  let target = get(feature.target);
+  const op = feature.operation === "union" ? "fuse" : feature.operation === "subtract" ? "cut" : "common";
   // Union and subtract with several tools in one OCCT call: much faster than one boolean per tool
   // against an ever more complex result (intersect means something else with several tools).
   let done = false;
 
-  if (op !== "common" && f.tools.length > 1) {
+  if (op !== "common" && feature.tools.length > 1) {
     try {
-      target = booleanBodies(ctx.oc, ctx.arena, target, f.tools.map(get), op, f.target);
+      target = booleanBodies(ctx.oc, ctx.arena, target, feature.tools.map(get), op, feature.target);
       done = true;
-    } catch (e) {
-      if (!(e instanceof FeatureError)) throw e;
+    } catch (error) {
+      if (!(error instanceof FeatureError)) throw error;
     }
   }
 
-  if (!done) for (const t of f.tools) target = booleanBodies(ctx.oc, ctx.arena, target, get(t), op, f.target);
-  if (!f.keepTools) for (const t of f.tools) bodies.delete(t);
+  if (!done) {
+    for (const t of feature.tools) {
+      target = booleanBodies(ctx.oc, ctx.arena, target, get(t), op, feature.target);
+    }
+  }
 
-  bodies.set(f.target, target);
+  if (!feature.keepTools) for (const t of feature.tools) bodies.delete(t);
+
+  bodies.set(feature.target, target);
 
   return { ...ctx.prev, bodies };
 }
@@ -2649,43 +2740,43 @@ function moveBodies(
   return { ...ctx.prev, bodies };
 }
 
-function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
+function importFeature(feature: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   let bytes: Uint8Array;
 
   try {
-    bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
+    bytes = Uint8Array.from(atob(feature.data), (c) => c.charCodeAt(0));
   } catch {
     throw new FeatureError(
-      `import "${f.fileName}": data must be the file's contents encoded as base64`,
+      `import "${feature.fileName}": data must be the file's contents encoded as base64`,
       "through MCP, pass the file's path in `path` instead of `data`",
     );
   }
 
   const { oc, arena } = ctx;
 
-  if (f.format === "stl") {
-    const body = new Body(oc, arena, f.id, stlSolid(ctx, f, bytes));
-    body.faceTags = body.faces.map((_, i) => [`${f.id}.face[${i}]`]);
+  if (feature.format === "stl") {
+    const body = new Body(oc, arena, feature.id, stlSolid(ctx, feature, bytes));
+    body.faceTags = body.faces.map((_, i) => [`${feature.id}.face[${i}]`]);
 
     // One face per triangle, in file order: show and export the file's own triangles.
     const corners = parseStl(bytes).positions;
 
     if (corners.length === body.faces.length * 9) {
       body.sourceMesh = corners;
-      body.sourceFeature = f.id;
+      body.sourceFeature = feature.id;
     }
 
-    return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(f.id, body) };
+    return { ...ctx.prev, bodies: copyMap(ctx.prev.bodies).set(feature.id, body) };
   }
 
-  const path = `/import-${f.id}.step`;
+  const path = `/import-${feature.id}.step`;
   oc.FS.writeFile(path, bytes);
 
   try {
     const reader = arena.track(new oc.STEPControl_Reader());
 
     if (String(reader.ReadFile(path)) !== "IFSelect_RetDone") {
-      throw new FeatureError(`could not read STEP file "${f.fileName}"`);
+      throw new FeatureError(`could not read STEP file "${feature.fileName}"`);
     }
 
     reader.TransferRoots();
@@ -2693,19 +2784,23 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
     const shape = arena.track(reader.OneShape());
     const solids: TopoDS_Shape[] = [];
 
-    if (f.split) {
-      for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID")); e.More(); e.Next()) {
-        solids.push(arena.track(e.Current()));
+    if (feature.split) {
+      for (
+        const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID"));
+        explorer.More();
+        explorer.Next()
+      ) {
+        solids.push(arena.track(explorer.Current()));
       }
     }
 
     // One part, or (split) one per solid: an assembly from another CAD tool keeps its parts apart.
     const pieces = solids.length > 1 ? solids : [shape];
     const bodies = copyMap(ctx.prev.bodies);
-    pieces.forEach((s, k) => {
-      const id = k === 0 ? f.id : `${f.id}_${k + 1}`;
-      const body = new Body(oc, arena, id, s);
-      if (!body.faces.length) throw new FeatureError(`STEP file "${f.fileName}" contains no faces`);
+    pieces.forEach((shape, k) => {
+      const id = k === 0 ? feature.id : `${feature.id}_${k + 1}`;
+      const body = new Body(oc, arena, id, shape);
+      if (!body.faces.length) throw new FeatureError(`STEP file "${feature.fileName}" contains no faces`);
 
       body.faceTags = body.faces.map((_, i) => [`${id}.face[${i}]`]);
       bodies.set(id, unifyIfNeeded(ctx, body));
@@ -2722,8 +2817,8 @@ function importFeature(f: ImportFeature, ctx: Ctx): Omit<ModelState, "arena"> {
  * shell and then a solid (sewn first if the mesh has tiny gaps), which booleans can work with. An
  * open mesh is reported, not dropped silently.
  */
-function stlSolid(ctx: Ctx, f: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
-  return meshSolid(ctx, `import-${f.id}`, bytes, `STL file "${f.fileName}"`);
+function stlSolid(ctx: Ctx, feature: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
+  return meshSolid(ctx, `import-${feature.id}`, bytes, `STL file "${feature.fileName}"`);
 }
 
 /**
@@ -2753,9 +2848,16 @@ function meshSolid(
     oc.FS.unlink(path);
   }
 
-  const triangles = (s: TopoDS_Shape) => {
+  const triangles = (shape: TopoDS_Shape) => {
     let n = 0;
-    for (const e = arena.track(new oc.TopExp_Explorer(s, "TopAbs_FACE")); e.More(); e.Next()) n++;
+
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      n++;
+    }
 
     return n;
   };
@@ -2768,8 +2870,12 @@ function meshSolid(
     const shell = arena.track(new oc.TopoDS_Shell());
     builder.MakeShell(shell);
 
-    for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE")); e.More(); e.Next()) {
-      builder.Add(shell, arena.track(e.Current()));
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      builder.Add(shell, arena.track(explorer.Current()));
     }
 
     const solid = arena.track(
@@ -2824,10 +2930,10 @@ function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
       allowance: f.allowance,
       length: f.length,
     });
-  } catch (e) {
-    if (e instanceof HoleError) throw new FeatureError(e.message);
+  } catch (error) {
+    if (error instanceof HoleError) throw new FeatureError(error.message);
 
-    throw e;
+    throw error;
   }
 
   const frame = planeFrame(f.plane, ctx);
@@ -2907,9 +3013,9 @@ function insertWalls(
   const { oc, arena } = ctx;
   const a: Vec3 = f.flip ? frame.normal : [-frame.normal[0], -frame.normal[1], -frame.normal[2]];
 
-  const volume = (s: TopoDS_Shape) => {
+  const volume = (shape: TopoDS_Shape) => {
     const props = arena.track(new oc.GProp_GProps());
-    oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
     return Math.abs(props.Mass());
   };
@@ -3067,10 +3173,10 @@ function bendFeature(f: ResolvedBend, ctx: Ctx): Omit<ModelState, "arena"> {
         tolerance,
       },
     );
-  } catch (e) {
-    if (e instanceof BendError) throw new FeatureError(e.message, e.hint);
+  } catch (error) {
+    if (error instanceof BendError) throw new FeatureError(error.message, error.hint);
 
-    throw e;
+    throw error;
   }
 
   const bodies = copyMap(ctx.prev.bodies);
@@ -3132,10 +3238,10 @@ function pocketFor(f: ResolvedGridfinity, frame: PlaneFrame, ctx: Ctx): BinPocke
       ...(f.autoUnits ? {} : { units: f.units }),
       ...(f.autoHeight ? {} : { height: f.height }),
     });
-  } catch (e) {
-    if (e instanceof ScanBinError) throw new FeatureError(e.message);
+  } catch (error) {
+    if (error instanceof ScanBinError) throw new FeatureError(error.message);
 
-    throw e;
+    throw error;
   }
 
   const tool = meshSolid(
@@ -3183,11 +3289,11 @@ function trianglesOf({ oc, arena }: Ctx, body: Body): Float32Array | null {
     const pts: Vec3[] = [];
 
     for (
-      const ex = arena.track(new oc.TopExp_Explorer(body.faces[i]!, "TopAbs_VERTEX"));
-      ex.More();
-      ex.Next()
+      const explorer = arena.track(new oc.TopExp_Explorer(body.faces[i]!, "TopAbs_VERTEX"));
+      explorer.More();
+      explorer.Next()
     ) {
-      const v = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(ex.Current())))));
+      const v = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(explorer.Current())))));
       const q: Vec3 = [v.X(), v.Y(), v.Z()];
       if (!pts.some((o) => Math.hypot(o[0] - q[0], o[1] - q[1], o[2] - q[2]) < 1e-9)) pts.push(q);
     }

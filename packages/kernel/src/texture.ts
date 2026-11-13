@@ -32,7 +32,11 @@ export function texturesOf(state: ModelState, body: Body): { layers: TextureLaye
     if (rec.body !== body) {
       try {
         faces = [
-          ...new Set(rec.feature.faces.flatMap((s) => resolveFaces(s, [body]).flatMap((r) => r.faces))),
+          ...new Set(
+            rec.feature.faces.flatMap((selector) =>
+              resolveFaces(selector, [body]).flatMap((faceRef) => faceRef.faces),
+            ),
+          ),
         ];
       } catch {
         continue;
@@ -103,7 +107,7 @@ function surfacesOf(oc: OC, body: Body, faces: Iterable<number>): FaceSurface[] 
 export function needsFineBase(oc: OC, body: Body, layers: TextureLayer[]): boolean {
   if (body.sourceMesh) return false;
 
-  const s = surfacesOf(oc, body, new Set(layers.flatMap((l) => l.faces)));
+  const s = surfacesOf(oc, body, new Set(layers.flatMap((layer) => layer.faces)));
 
   return s.some((x) => x?.kind === "other");
 }
@@ -120,7 +124,9 @@ export function texturedMesh(
   quality: "export" | "display" | "draft",
   coarse = 1,
 ): BodyMesh {
-  const surfaces = body.sourceMesh ? [] : surfacesOf(oc, body, new Set(layers.flatMap((l) => l.faces)));
+  const surfaces = body.sourceMesh
+    ? []
+    : surfacesOf(oc, body, new Set(layers.flatMap((layer) => layer.faces)));
   const preset =
     quality === "export" ? EXPORT_TEXTURE : quality === "draft" ? DRAFT_TEXTURE : DISPLAY_TEXTURE;
   const opts =

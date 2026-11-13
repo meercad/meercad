@@ -58,10 +58,10 @@ export function toOutline(x: number, y: number, w: number, h: number, r: number)
 const checked = <T>(fn: () => T): T => {
   try {
     return fn();
-  } catch (e) {
-    if (e instanceof GridfinityError) throw new FeatureError(e.message);
+  } catch (error) {
+    if (error instanceof GridfinityError) throw new FeatureError(error.message);
 
-    throw e;
+    throw error;
   }
 };
 
@@ -256,7 +256,7 @@ function binBody(
         // A block in the front corner with a quarter cylinder taken out: the floor curves up into the wall.
         const x0 = ix0 - 0.05,
           x1 = ix0 + iw + 0.05;
-        const s = b.bool(
+        const shape = b.bool(
           "cut",
           b.prismX(
             [
@@ -270,7 +270,7 @@ function binBody(
           ),
           [b.cylinderX(y0 + scoop, floor + scoop, scoop, x0 - 1, x1 + 1)],
         );
-        adds.push(s);
+        adds.push(shape);
         regions.push({
           tag: "scoop",
           box: { min: [x0, y0, floor + 1e-3], max: [x1, y0 + scoop, floor + scoop] },
@@ -927,7 +927,7 @@ export function labelBodies(
     const cx = symbol ? x + room[0] / 2 : 0;
     const ox = cx - (m.min[0]! + m.max[0]!) / 2,
       oy = -(m.min[1]! + m.max[1]!) / 2;
-    for (const l of m.loops) loops.push(l.map(([u, v]) => [u + ox, v + oy] as [number, number]));
+    for (const loop of m.loops) loops.push(loop.map(([u, v]) => [u + ox, v + oy] as [number, number]));
   }
 
   if (!loops.length) throw new FeatureError("a label needs a text or a symbol");
@@ -956,11 +956,11 @@ export function labelBodies(
 
   if (engraved) {
     // Engraving opens a hair above the top so the cut is clean; the inlay fills it exactly.
-    const deeper = marks.map((m) => {
+    const deeper = marks.map((shape) => {
       const t = arena.track(new oc.gp_Trsf());
       t.SetTranslation(arena.track(new oc.gp_Vec(0, 0, 0.01)));
 
-      return arena.track(arena.track(new oc.BRepBuilderAPI_Transform(m, t, true, false)).Shape());
+      return arena.track(arena.track(new oc.BRepBuilderAPI_Transform(shape, t, true, false)).Shape());
     });
     base = b.bool("cut", plate, [b.compound(marks), b.compound(deeper)]);
   } else {

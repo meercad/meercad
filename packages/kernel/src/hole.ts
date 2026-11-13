@@ -66,18 +66,20 @@ export function holeTools(
       c[1] + a[1] * t + frame.u[1] * rad,
       c[2] + a[2] * t + frame.u[2] * rad,
     ];
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = prof.map((p) =>
       arena.track(
         arena.track(new oc.BRepBuilderAPI_MakeVertex(arena.track(new oc.gp_Pnt(...at(p))))).Vertex(),
       ),
     );
-    vs.forEach((v0, i) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v0, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
     const face = arena.track(
-      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face(),
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
     );
     const axis = arena.track(
       new oc.gp_Ax1(arena.track(new oc.gp_Pnt(...c)), arena.track(new oc.gp_Dir(...a))),
@@ -90,13 +92,15 @@ export function holeTools(
 
   const body = new Body(oc, arena, id, compound);
   // Tags by geometry: radius for round faces, depth for flat ones.
-  body.faceTags = body.faces.map((f, i) => {
-    const s = arena.track(new oc.BRepAdaptor_Surface(f, true));
-    const type = s.GetType();
+  body.faceTags = body.faces.map((face, i) => {
+    const surfaceAdaptor = arena.track(new oc.BRepAdaptor_Surface(face, true));
+    const type = surfaceAdaptor.GetType();
     const name = (part: string) => [`${id}.${part}`];
 
     if (type === "GeomAbs_Cylinder") {
-      return name(Math.abs(arena.track(s.Cylinder()).Radius() - r) < 1e-6 ? "wall" : "counterbore");
+      return name(
+        Math.abs(arena.track(surfaceAdaptor.Cylinder()).Radius() - r) < 1e-6 ? "wall" : "counterbore",
+      );
     }
 
     if (type === "GeomAbs_Cone") return name("countersink");

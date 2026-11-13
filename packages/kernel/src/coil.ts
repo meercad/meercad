@@ -116,19 +116,19 @@ function variableHelix(
 }
 
 /** The point and unit tangent at the start or end of a wire made of one edge. */
-function wireEnd(oc: OC, arena: Arena, w: TopoDS_Wire, end: boolean): { p: V; t: V } {
-  const ex = arena.track(new oc.TopExp_Explorer(w, "TopAbs_EDGE"));
-  const c = arena.track(new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(ex.Current()))));
-  const u = end ? c.LastParameter() : c.FirstParameter();
-  const p = arena.track(c.Value(u));
-  const d = arena.track(c.EvalDN(u, 1));
+function wireEnd(oc: OC, arena: Arena, wire: TopoDS_Wire, end: boolean): { p: V; t: V } {
+  const explorer = arena.track(new oc.TopExp_Explorer(wire, "TopAbs_EDGE"));
+  const curveAdaptor = arena.track(new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(explorer.Current()))));
+  const u = end ? curveAdaptor.LastParameter() : curveAdaptor.FirstParameter();
+  const p = arena.track(curveAdaptor.Value(u));
+  const d = arena.track(curveAdaptor.EvalDN(u, 1));
 
   return { p: [p.X(), p.Y(), p.Z()], t: unit([d.X(), d.Y(), d.Z()]) };
 }
 
-function volume(oc: OC, arena: Arena, s: TopoDS_Shape): number {
+function volume(oc: OC, arena: Arena, shape: TopoDS_Shape): number {
   const props = arena.track(new oc.GProp_GProps());
-  oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+  oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
   return props.Mass();
 }
@@ -170,14 +170,14 @@ function pipe(oc: OC, arena: Arena, spine: TopoDS_Wire, d: number, what: string)
 
     mk.MakeSolid();
 
-    let s = arena.track(mk.Shape());
-    if (volume(oc, arena, s) < 0) s = arena.track(s.Reversed());
+    let shape = arena.track(mk.Shape());
+    if (volume(oc, arena, shape) < 0) shape = arena.track(shape.Reversed());
 
-    return s;
-  } catch (e) {
-    if (e instanceof FeatureError) throw e;
+    return shape;
+  } catch (error) {
+    if (error instanceof FeatureError) throw error;
 
-    throw new FeatureError(`could not sweep the ${what}: ${occtErrorMessage(oc, e)}`);
+    throw new FeatureError(`could not sweep the ${what}: ${occtErrorMessage(oc, error)}`);
   }
 }
 
@@ -287,8 +287,8 @@ export function springBody(
     return along(add(center, e, R), z);
   };
 
-  const solid = (s: TopoDS_Shape) => {
-    const b = new Body(oc, arena, f.id, s);
+  const solid = (shape: TopoDS_Shape) => {
+    const b = new Body(oc, arena, f.id, shape);
     b.faceTags = b.faces.map(() => [`${f.id}.coil`]);
 
     return b;
@@ -435,10 +435,10 @@ export function springBody(
           )
           .Shape(),
       );
-      let s = boolOp(oc, arena, "fuse", cylinderBetween(end, knee, d / 2), torus, what);
-      s = boolOp(oc, arena, "fuse", s, sphere(end, d / 2), what);
+      let shape = boolOp(oc, arena, "fuse", cylinderBetween(end, knee, d / 2), torus, what);
+      shape = boolOp(oc, arena, "fuse", shape, sphere(end, d / 2), what);
 
-      return boolOp(oc, arena, "fuse", s, sphere(knee, d / 2), what);
+      return boolOp(oc, arena, "fuse", shape, sphere(knee, d / 2), what);
     };
 
     shape = boolOp(oc, arena, "fuse", shape, loop(at(0, zb), -1), what);

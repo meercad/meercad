@@ -45,10 +45,10 @@ export function region(segs: Seg[]): Region {
   return { segs, min: [Math.min(...xs), Math.min(...ys)], max: [Math.max(...xs), Math.max(...ys)] };
 }
 
-export function inside(r: Region, [x, y]: P2): boolean {
+export function inside(region: Region, [x, y]: P2): boolean {
   let n = 0;
 
-  for (const [a, b] of r.segs) {
+  for (const [a, b] of region.segs) {
     if (a[1] > y !== b[1] > y && x < a[0] + ((y - a[1]) * (b[0] - a[0])) / (b[1] - a[1])) n++;
   }
 
@@ -56,10 +56,10 @@ export function inside(r: Region, [x, y]: P2): boolean {
 }
 
 /** Distance to the outline (holes included). */
-export function edgeDistance(r: Region, p: P2): number {
+export function edgeDistance(region: Region, p: P2): number {
   let d = Infinity;
 
-  for (const [a, b] of r.segs) {
+  for (const [a, b] of region.segs) {
     const dx = b[0] - a[0],
       dy = b[1] - a[1];
     const l2 = dx * dx + dy * dy;
@@ -74,16 +74,16 @@ export function edgeDistance(r: Region, p: P2): number {
  * Points inside on a grid (two dozen across the narrow side, 20 000 at most), with their distance to the
  * outline.
  */
-export function samples(r: Region): { p: P2; d: number }[] {
-  const w = r.max[0] - r.min[0],
-    h = r.max[1] - r.min[1];
+export function samples(region: Region): { p: P2; d: number }[] {
+  const w = region.max[0] - region.min[0],
+    h = region.max[1] - region.min[1];
   const step = Math.max(Math.min(w, h) / 24, Math.sqrt((w * h) / 20000)) || 1;
   const out: { p: P2; d: number }[] = [];
 
-  for (let x = r.min[0] + step / 2; x < r.max[0]; x += step) {
-    for (let y = r.min[1] + step / 2; y < r.max[1]; y += step) {
+  for (let x = region.min[0] + step / 2; x < region.max[0]; x += step) {
+    for (let y = region.min[1] + step / 2; y < region.max[1]; y += step) {
       const p: P2 = [x, y];
-      if (inside(r, p)) out.push({ p, d: edgeDistance(r, p) });
+      if (inside(region, p)) out.push({ p, d: edgeDistance(region, p) });
     }
   }
 
@@ -149,9 +149,9 @@ interface Ctx {
 
 const along = (p: Vec3, d: Vec3, t: number): Vec3 => [p[0] + d[0] * t, p[1] + d[1] * t, p[2] + d[2] * t];
 
-function volume({ oc, arena }: Ctx, s: TopoDS_Shape): number {
+function volume({ oc, arena }: Ctx, shape: TopoDS_Shape): number {
   const props = arena.track(new oc.GProp_GProps());
-  oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+  oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
   return Math.abs(props.Mass());
 }
@@ -182,7 +182,7 @@ function compound(ctx: Ctx, shapes: TopoDS_Shape[]): TopoDS_Shape {
   const builder = ctx.arena.track(new ctx.oc.TopoDS_Builder());
   const c = ctx.arena.track(new ctx.oc.TopoDS_Compound());
   builder.MakeCompound(c);
-  for (const s of shapes) builder.Add(c, s);
+  for (const shape of shapes) builder.Add(c, shape);
 
   return c;
 }
@@ -197,15 +197,19 @@ function tool(ctx: Ctx, shape: TopoDS_Shape, tag: string): Body {
 /** A straight prism over a closed polygon of world points, moved along `dir` by `length`. */
 function prism(ctx: Ctx, pts: Vec3[], dir: Vec3, length: number): TopoDS_Shape {
   const { oc, arena } = ctx;
-  const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+  const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
   const vs = pts.map((p) =>
     arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(arena.track(new oc.gp_Pnt(...p)))).Vertex()),
   );
-  vs.forEach((v0, i) =>
-    mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v0, vs[(i + 1) % vs.length]!)).Edge())),
+  vs.forEach((vertex, i) =>
+    wireBuilder.Add(
+      arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+    ),
   );
 
-  const face = arena.track(arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face());
+  const face = arena.track(
+    arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
+  );
 
   return arena.track(
     arena
@@ -246,17 +250,23 @@ function cutRegions(ctx: Ctx, front: Body): Region[] {
       return [dot(d, frame.u), dot(d, frame.v)];
     };
 
-    for (const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE")); ex.More(); ex.Next()) {
-      const c = arena.track(new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(ex.Current()))));
-      const [t0, t1] = [c.FirstParameter(), c.LastParameter()];
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      const curveAdaptor = arena.track(
+        new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(explorer.Current()))),
+      );
+      const [t0, t1] = [curveAdaptor.FirstParameter(), curveAdaptor.LastParameter()];
 
       const at = (t: number) => {
-        const q = arena.track(c.Value(t));
+        const q = arena.track(curveAdaptor.Value(t));
 
         return to2([q.X(), q.Y(), q.Z()]);
       };
 
-      const k = c.GetType() === "GeomAbs_Line" ? 1 : 48;
+      const k = curveAdaptor.GetType() === "GeomAbs_Line" ? 1 : 48;
       let prev = at(t0);
 
       for (let j = 1; j <= k; j++) {
@@ -330,18 +340,20 @@ function pins(
   const spots: { at: P2; size: number }[] = [];
 
   if (c.points?.length) {
-    const deep = Math.max(...regions.map((r) => Math.max(0, ...samples(r).map((s) => s.d))));
+    const deep = Math.max(...regions.map((region) => Math.max(0, ...samples(region).map((s) => s.d))));
     for (const at of c.points) spots.push({ at, size: c.size ?? pinSize(deep) });
   } else {
     let tooThin = 0;
 
-    for (const r of regions) {
-      const pts = samples(r);
+    for (const region of regions) {
+      const pts = samples(region);
       const deep = Math.max(0, ...pts.map((s) => s.d));
       const size = c.size ?? pinSize(deep);
       const reach = size / 2 + clearance + WALL;
       // Two pins hold a piece from turning; a small cut only has room for one.
-      const count = c.count ?? (r.max[0] - r.min[0] > 6 * reach || r.max[1] - r.min[1] > 6 * reach ? 2 : 1);
+      const count =
+        c.count ??
+        (region.max[0] - region.min[0] > 6 * reach || region.max[1] - region.min[1] > 6 * reach ? 2 : 1);
       const at = placePins(pts, reach, count);
       if (!at.length) tooThin++;
 
@@ -379,14 +391,14 @@ function pins(
 
       holeTools.push(hole);
 
-      const d = new Body(
+      const body = new Body(
         ctx.oc,
         ctx.arena,
         dowelId(loose.length + 1),
         cylinder(ctx, at, r, -length / 2, length / 2),
       );
-      d.faceTags = d.faces.map(() => [`${ctx.id}.dowel`]);
-      loose.push(d);
+      body.faceTags = body.faces.map(() => [`${ctx.id}.dowel`]);
+      loose.push(body);
     } else {
       const pin = cylinder(ctx, at, r, -length, INSIDE);
       const hole = cylinder(ctx, at, r + clearance, -(length + clearance), INSIDE);
@@ -439,12 +451,12 @@ function dovetail(
   const tongues: TopoDS_Shape[] = [];
   const slots: TopoDS_Shape[] = [];
 
-  for (const r of regions) {
-    const pts = samples(r);
+  for (const region of regions) {
+    const pts = samples(region);
     if (!pts.length) continue;
 
     // Slides along the longer side of the cut unless told otherwise; sits across the roomiest point.
-    const alongU = r.max[0] - r.min[0] >= r.max[1] - r.min[1];
+    const alongU = region.max[0] - region.min[0] >= region.max[1] - region.min[1];
     const a =
       c.angle !== undefined ? (c.angle * Math.PI) / 180 : alongU !== (c.slide === "short") ? 0 : Math.PI / 2;
     const s2: P2 = [Math.cos(a), Math.sin(a)];
@@ -460,7 +472,7 @@ function dovetail(
     }
 
     // Along the slide direction: the whole cut face and a little more, so the slot is open at both ends.
-    const proj = r.segs.flatMap((sg) => sg.map((p) => p[0] * s2[0] + p[1] * s2[1]));
+    const proj = region.segs.flatMap((sg) => sg.map((p) => p[0] * s2[0] + p[1] * s2[1]));
     const s0 = Math.min(...proj) - 1,
       s1 = Math.max(...proj) + 1;
     const across = deepest.p[0] * w2[0] + deepest.p[1] * w2[1];
@@ -490,14 +502,14 @@ function dovetail(
       );
     };
 
-    const t = tongue(0, -depth, INSIDE);
+    const shape = tongue(0, -depth, INSIDE);
 
-    if (within(ctx, whole, t) < 0.3) {
+    if (within(ctx, whole, shape) < 0.3) {
       ctx.warnings.push("a dovetail would mostly lie outside the part");
       continue;
     }
 
-    const common = ctx.arena.track(new ctx.oc.BRepAlgoAPI_Common(whole.shape, t));
+    const common = ctx.arena.track(new ctx.oc.BRepAlgoAPI_Common(whole.shape, shape));
     if (!common.IsDone() || common.HasErrors()) continue;
 
     tongues.push(ctx.arena.track(common.Shape()));

@@ -67,10 +67,12 @@ export function convertMesh(
     // Every face costs OCCT's mesher dearly: more than this and the result is as slow as the mesh was.
     if (fit.regions.length <= MAX_FACETS) return;
 
-    const facets = fit.regions.filter((r) => !r.primitive).length;
+    const facets = fit.regions.filter((region) => !region.primitive).length;
     const pct = Math.round(
-      (fit.regions.filter((r) => !r.primitive || r.triangles.length <= 2).reduce((s, r) => s + r.area, 0) /
-        fit.regions.reduce((s, r) => s + r.area, 0)) *
+      (fit.regions
+        .filter((region) => !region.primitive || region.triangles.length <= 2)
+        .reduce((s, region) => s + region.area, 0) /
+        fit.regions.reduce((s, region) => s + region.area, 0)) *
         100,
     );
 
@@ -89,8 +91,8 @@ export function convertMesh(
     const faces: TopoDS_Face[] = [];
 
     // Full bands first: the faces next to them reuse their circle edges.
-    for (const r of [...fit.regions].sort((x, y) => Number(b.isBand(y)) - Number(b.isBand(x)))) {
-      const face = b.face(r);
+    for (const region of [...fit.regions].sort((x, y) => Number(b.isBand(y)) - Number(b.isBand(x)))) {
+      const face = b.face(region);
       if (face) faces.push(face);
     }
 
@@ -98,7 +100,7 @@ export function convertMesh(
 
     if (built.ok) {
       const counts: ConvertResult["counts"] = { plane: 0, cylinder: 0, cone: 0, sphere: 0, facet: 0 };
-      for (const r of fit.regions) counts[r.primitive?.kind ?? "facet"]++;
+      for (const region of fit.regions) counts[region.primitive?.kind ?? "facet"]++;
 
       const f = fit;
 
@@ -149,16 +151,16 @@ class Builder {
   }
 
   private vertex(i: number): TopoDS_Vertex {
-    let v = this.vertices.get(i);
+    let vertex = this.vertices.get(i);
 
-    if (!v) {
-      v = this.arena.track(
+    if (!vertex) {
+      vertex = this.arena.track(
         this.arena.track(new this.oc.BRepBuilderAPI_MakeVertex(this.pnt(this.p(i)))).Vertex(),
       );
-      this.vertices.set(i, v);
+      this.vertices.set(i, vertex);
     }
 
-    return v;
+    return vertex;
   }
 
   private line(a: number, b: number): TopoDS_Edge {
@@ -292,33 +294,39 @@ class Builder {
 
   // ------------------------------------------------------------ faces
 
-  isBand(r: Region): boolean {
-    return !!r.primitive && r.primitive.kind !== "plane" && !!this.bandRange(r.primitive, r);
+  isBand(region: Region): boolean {
+    return (
+      !!region.primitive && region.primitive.kind !== "plane" && !!this.bandRange(region.primitive, region)
+    );
   }
 
   /** The band's own circle edges stand in for the region's two closed segments (oriented along them). */
   private adoptBandCircles(
     face: TopoDS_Face,
     prim: Extract<Primitive, { kind: "cylinder" | "cone" }>,
-    r: Region,
+    region: Region,
   ): void {
     const { oc, arena } = this;
     const base = prim.kind === "cylinder" ? prim.origin : prim.apex;
     const circles: { edge: TopoDS_Edge; level: number }[] = [];
 
-    for (const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE")); ex.More(); ex.Next()) {
-      const edge = arena.track(oc.TopoDS.Edge(arena.track(ex.Current())));
-      const c = arena.track(new oc.BRepAdaptor_Curve(edge));
-      if (c.GetType() !== "GeomAbs_Circle") continue;
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      const edge = arena.track(oc.TopoDS.Edge(arena.track(explorer.Current())));
+      const curveAdaptor = arena.track(new oc.BRepAdaptor_Curve(edge));
+      if (curveAdaptor.GetType() !== "GeomAbs_Circle") continue;
 
-      const q = arena.track(c.Value(c.FirstParameter()));
+      const q = arena.track(curveAdaptor.Value(curveAdaptor.FirstParameter()));
       circles.push({
         edge: arena.track(oc.TopoDS.Edge(arena.track(edge.Oriented("TopAbs_FORWARD")))),
         level: dot(sub([q.X(), q.Y(), q.Z()], base), prim.axis),
       });
     }
 
-    for (const loop of r.loops) {
+    for (const loop of region.loops) {
       const si = loop[0]!.segment;
       const vs = this.fit.segments[si]!.vertices;
       const level = dot(sub(this.p(vs[0]!), base), prim.axis);
@@ -342,26 +350,28 @@ class Builder {
   }
 
   private wire(loop: Region["loops"][number]): TopoDS_Wire | null {
-    const mw = this.arena.track(new this.oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.arena.track(new this.oc.BRepBuilderAPI_MakeWire());
 
     for (const ref of loop) {
       let edges = this.segmentEdges(ref.segment);
       if (!ref.forward) edges = [...edges].reverse();
 
-      for (const e of edges) {
-        mw.Add(ref.forward ? e : this.arena.track(this.oc.TopoDS.Edge(this.arena.track(e.Reversed()))));
+      for (const edge of edges) {
+        wireBuilder.Add(
+          ref.forward ? edge : this.arena.track(this.oc.TopoDS.Edge(this.arena.track(edge.Reversed()))),
+        );
       }
     }
 
-    if (!mw.IsDone()) return null;
+    if (!wireBuilder.IsDone()) return null;
 
-    return this.arena.track(mw.Wire());
+    return this.arena.track(wireBuilder.Wire());
   }
 
-  face(r: Region): TopoDS_Face | null {
+  face(region: Region): TopoDS_Face | null {
     const { oc, arena } = this;
-    const prim = r.primitive;
-    const wires = r.loops.map((loop) => ({ loop, wire: this.wire(loop) }));
+    const prim = region.primitive;
+    const wires = region.loops.map((loop) => ({ loop, wire: this.wire(loop) }));
 
     if (wires.some((w) => !w.wire)) {
       throw new FeatureError(
@@ -373,55 +383,57 @@ class Builder {
     const loops = wires as { loop: Region["loops"][number]; wire: TopoDS_Wire }[];
 
     if (!prim || prim.kind === "plane") {
-      const normal = prim ? prim.normal : this.triangleNormal(r);
-      const origin = prim ? prim.origin : this.p(this.fit.triangles[r.triangles[0]! * 3]!);
+      const normal = prim ? prim.normal : this.triangleNormal(region);
+      const origin = prim ? prim.origin : this.p(this.fit.triangles[region.triangles[0]! * 3]!);
       if (!normal) return null;
 
       const pln = arena.track(new oc.gp_Pln(arena.track(new oc.gp_Ax3(this.pnt(origin), this.dir(normal)))));
       // The outer loop encloses the largest area; the others are holes.
       const areas = loops.map((w) => Math.abs(this.loopArea(w.loop, normal)));
       const outer = areas.indexOf(Math.max(...areas));
-      const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(pln, loops[outer]!.wire, true));
-      loops.forEach((w, i) => i !== outer && mf.Add(w.wire));
-      if (!mf.IsDone()) throw new FeatureError("could not build a flat face from the mesh");
+      const faceBuilder = arena.track(new oc.BRepBuilderAPI_MakeFace(pln, loops[outer]!.wire, true));
+      loops.forEach((w, i) => i !== outer && faceBuilder.Add(w.wire));
+      if (!faceBuilder.IsDone()) throw new FeatureError("could not build a flat face from the mesh");
 
-      return arena.track(mf.Face());
+      return arena.track(faceBuilder.Face());
     }
 
     if (prim.kind === "sphere") {
-      const cap = this.sphereCap(prim, r);
+      const cap = this.sphereCap(prim, region);
       if (cap) return cap;
     }
 
-    const surface = this.surface(prim, r);
+    const surface = this.surface(prim, region);
 
     if (!loops.length) {
-      const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, 1e-7));
+      const faceBuilder = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, 1e-7));
 
-      return mf.IsDone() ? arena.track(mf.Face()) : null;
+      return faceBuilder.IsDone() ? arena.track(faceBuilder.Face()) : null;
     }
 
     // A hole wall or shaft, bounded by two circles square to the axis: OCCT's own full band has a
     // clean seam and whole circle edges (which fillets and threads need); sewing merges its circles
     // with the neighbouring faces' hole edges.
-    const band = this.bandRange(prim, r);
+    const band = this.bandRange(prim, region);
 
     if (band) {
-      const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, 0, 2 * Math.PI, band[0], band[1], 1e-7));
+      const faceBuilder = arena.track(
+        new oc.BRepBuilderAPI_MakeFace(surface, 0, 2 * Math.PI, band[0], band[1], 1e-7),
+      );
 
-      if (mf.IsDone() && prim.kind !== "sphere") {
-        const face = arena.track(mf.Face());
-        this.adoptBandCircles(face, prim, r);
+      if (faceBuilder.IsDone() && prim.kind !== "sphere") {
+        const face = arena.track(faceBuilder.Face());
+        this.adoptBandCircles(face, prim, region);
 
         return face;
       }
     }
 
-    const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, loops[0]!.wire, false));
-    for (const w of loops.slice(1)) mf.Add(w.wire);
-    if (!mf.IsDone()) throw new FeatureError(`could not build a ${prim.kind} face from the mesh`);
+    const faceBuilder = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, loops[0]!.wire, false));
+    for (const w of loops.slice(1)) faceBuilder.Add(w.wire);
+    if (!faceBuilder.IsDone()) throw new FeatureError(`could not build a ${prim.kind} face from the mesh`);
 
-    return arena.track(mf.Face());
+    return arena.track(faceBuilder.Face());
   }
 
   /**
@@ -429,11 +441,11 @@ class Builder {
    * sphere placed with its pole square to the circle, and the face cut from it along the circle's
    * latitude. Built from a loop instead, such a face had no area and the solid came out wrong.
    */
-  private sphereCap(prim: Extract<Primitive, { kind: "sphere" }>, r: Region): TopoDS_Face | null {
+  private sphereCap(prim: Extract<Primitive, { kind: "sphere" }>, region: Region): TopoDS_Face | null {
     const { oc, arena } = this;
-    if (r.loops.length !== 1 || r.loops[0]!.length !== 1) return null;
+    if (region.loops.length !== 1 || region.loops[0]!.length !== 1) return null;
 
-    const seg = this.fit.segments[r.loops[0]![0]!.segment]!;
+    const seg = this.fit.segments[region.loops[0]![0]!.segment]!;
     if (!seg.closed) return null;
 
     // A closed segment ends on its first vertex again.
@@ -453,24 +465,26 @@ class Builder {
     const small = 2 * Math.PI * prim.radius * (prim.radius - dist);
     const large = 2 * Math.PI * prim.radius * (prim.radius + dist);
     const [v0, v1] =
-      Math.abs(small - r.area) < Math.abs(large - r.area) ? [lat, Math.PI / 2] : [-Math.PI / 2, lat];
+      Math.abs(small - region.area) < Math.abs(large - region.area)
+        ? [lat, Math.PI / 2]
+        : [-Math.PI / 2, lat];
     const ax3 = arena.track(new oc.gp_Ax3(this.pnt(prim.center), this.dir(axis), this.dir(basis(axis)[0])));
     const surface = arena.track(new oc.Geom_SphericalSurface(ax3, prim.radius));
-    const mf = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, 0, 2 * Math.PI, v0, v1, 1e-7));
+    const faceBuilder = arena.track(new oc.BRepBuilderAPI_MakeFace(surface, 0, 2 * Math.PI, v0, v1, 1e-7));
 
-    return mf.IsDone() ? arena.track(mf.Face()) : null;
+    return faceBuilder.IsDone() ? arena.track(faceBuilder.Face()) : null;
   }
 
   /**
    * V range of a cylinder or cone region bounded by exactly two closed circles square to its axis, else null.
    */
-  private bandRange(prim: Exclude<Primitive, { kind: "plane" }>, r: Region): [number, number] | null {
-    if (prim.kind === "sphere" || r.loops.length !== 2) return null;
+  private bandRange(prim: Exclude<Primitive, { kind: "plane" }>, region: Region): [number, number] | null {
+    if (prim.kind === "sphere" || region.loops.length !== 2) return null;
 
     const base = prim.kind === "cylinder" ? prim.origin : prim.apex;
     const levels: number[] = [];
 
-    for (const loop of r.loops) {
+    for (const loop of region.loops) {
       if (loop.length !== 1) return null;
 
       const seg = this.fit.segments[loop[0]!.segment]!;
@@ -496,10 +510,10 @@ class Builder {
    * The surface, placed so that its seam (u = 0) and, for a sphere, its poles lie away from the
    * patch: a face whose boundary crosses the seam or holds a pole is hard to make valid.
    */
-  private surface(prim: Exclude<Primitive, { kind: "plane" }>, r: Region): Geom_Surface {
+  private surface(prim: Exclude<Primitive, { kind: "plane" }>, region: Region): Geom_Surface {
     const { oc, arena } = this;
     let mean: Vec3 = [0, 0, 0];
-    for (const t of r.triangles) mean = add(mean, primitiveNormal(this.centroid(t), prim));
+    for (const t of region.triangles) mean = add(mean, primitiveNormal(this.centroid(t), prim));
 
     const ax3 = (origin: Vec3, axis: Vec3) => {
       // X opposite to the patch's mean direction: the patch is centred at u = π.
@@ -530,10 +544,10 @@ class Builder {
     return scale(add(add(this.p(tri[t * 3]!), this.p(tri[t * 3 + 1]!)), this.p(tri[t * 3 + 2]!)), 1 / 3);
   }
 
-  private triangleNormal(r: Region): Vec3 | null {
+  private triangleNormal(region: Region): Vec3 | null {
     let n: Vec3 = [0, 0, 0];
 
-    for (const t of r.triangles) {
+    for (const t of region.triangles) {
       const tri = this.fit.triangles;
       const [a, b, c] = [this.p(tri[t * 3]!), this.p(tri[t * 3 + 1]!), this.p(tri[t * 3 + 2]!)];
       n = add(n, cross(sub(b, a), sub(c, a)));
@@ -571,7 +585,7 @@ class Builder {
   ): { ok: true; shape: TopoDS_Shape } | { ok: false; invalidFaces: TopoDS_Face[] } {
     const { oc, arena } = this;
     const sew = arena.track(new oc.BRepBuilderAPI_Sewing(this.tol * 2, true, true, true, false));
-    for (const f of faces) sew.Add(f);
+    for (const face of faces) sew.Add(face);
     sew.Perform(arena.track(new oc.Message_ProgressRange()));
 
     const sewed = arena.track(sew.SewedShape());
@@ -581,8 +595,12 @@ class Builder {
 
     let count = 0;
 
-    for (const e = arena.track(new oc.TopExp_Explorer(sewed, "TopAbs_FACE")); e.More(); e.Next()) {
-      builder.Add(shell, arena.track(e.Current()));
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(sewed, "TopAbs_FACE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      builder.Add(shell, arena.track(explorer.Current()));
       count++;
     }
 
@@ -597,8 +615,8 @@ class Builder {
       fix.SetMaxTolerance(Math.max(this.tol * 20, 0.05));
       fix.Perform(arena.track(new oc.Message_ProgressRange()));
       shape = arena.track(fix.Solid());
-    } catch (e) {
-      throw new FeatureError(`could not close the faces into a solid: ${occtErrorMessage(oc, e)}`);
+    } catch (error) {
+      throw new FeatureError(`could not close the faces into a solid: ${occtErrorMessage(oc, error)}`);
     }
 
     if (shape.ShapeType() !== "TopAbs_SOLID") {
@@ -614,8 +632,12 @@ class Builder {
     if (!arena.track(new oc.BRepCheck_Analyzer(solid, true, false)).IsValid()) {
       const invalidFaces: TopoDS_Face[] = [];
 
-      for (const e = arena.track(new oc.TopExp_Explorer(solid, "TopAbs_FACE")); e.More(); e.Next()) {
-        const face = arena.track(oc.TopoDS.Face(arena.track(e.Current())));
+      for (
+        const explorer = arena.track(new oc.TopExp_Explorer(solid, "TopAbs_FACE"));
+        explorer.More();
+        explorer.Next()
+      ) {
+        const face = arena.track(oc.TopoDS.Face(arena.track(explorer.Current())));
         if (!arena.track(new oc.BRepCheck_Analyzer(face, true, false)).IsValid()) invalidFaces.push(face);
       }
 
@@ -668,15 +690,15 @@ class Builder {
     const parallel = (a: Vec3, b: Vec3) => Math.abs(dot(a, b)) > COS_1DEG;
     const onLine = (q: Vec3, origin: Vec3, axis: Vec3) =>
       len(sub(sub(q, origin), scale(axis, dot(sub(q, origin), axis)))) < near;
-    let matches: (r: Region) => boolean;
+    let matches: (region: Region) => boolean;
 
     if (type === "GeomAbs_Plane") {
       const pln = arena.track(surf.Plane());
       const n = vec(arena.track(arena.track(pln.Axis()).Direction()));
       const loc = vec(arena.track(pln.Location()));
 
-      matches = (r) => {
-        const prim = r.primitive ?? this.facetPlane(r);
+      matches = (region) => {
+        const prim = region.primitive ?? this.facetPlane(region);
 
         return (
           prim?.kind === "plane" &&
@@ -690,21 +712,21 @@ class Builder {
       const d = vec(arena.track(ax.Direction()));
       const loc = vec(arena.track(ax.Location()));
       const radius = cyl.Radius();
-      matches = (r) =>
-        r.primitive?.kind === "cylinder" &&
-        parallel(d, r.primitive.axis) &&
-        Math.abs(radius - r.primitive.radius) < near &&
-        onLine(loc, r.primitive.origin, r.primitive.axis);
+      matches = (region) =>
+        region.primitive?.kind === "cylinder" &&
+        parallel(d, region.primitive.axis) &&
+        Math.abs(radius - region.primitive.radius) < near &&
+        onLine(loc, region.primitive.origin, region.primitive.axis);
     } else if (type === "GeomAbs_Sphere") {
       const sph = arena.track(surf.Sphere());
       const loc = vec(arena.track(sph.Location()));
       const radius = sph.Radius();
-      matches = (r) =>
-        r.primitive?.kind === "sphere" &&
-        Math.abs(radius - r.primitive.radius) < near &&
-        len(sub(loc, r.primitive.center)) < near;
+      matches = (region) =>
+        region.primitive?.kind === "sphere" &&
+        Math.abs(radius - region.primitive.radius) < near &&
+        len(sub(loc, region.primitive.center)) < near;
     } else if (type === "GeomAbs_Cone") {
-      matches = (r) => r.primitive?.kind === "cone";
+      matches = (region) => region.primitive?.kind === "cone";
     } else {
       matches = () => true;
     }
@@ -715,8 +737,14 @@ class Builder {
 
     const hits = new Map<number, number>();
 
-    for (const e = arena.track(new oc.TopExp_Explorer(face, "TopAbs_VERTEX")); e.More(); e.Next()) {
-      const pt = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(e.Current())))));
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_VERTEX"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      const pt = arena.track(
+        oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(explorer.Current())))),
+      );
       const v = this.nearestVertex([pt.X(), pt.Y(), pt.Z()]);
       if (v < 0) continue;
 
@@ -725,23 +753,23 @@ class Builder {
 
     let best = candidates[0]!;
 
-    for (const r of candidates) {
-      const h = hits.get(r.index) ?? 0;
+    for (const region of candidates) {
+      const h = hits.get(region.index) ?? 0;
       const hb = hits.get(best.index) ?? 0;
-      if (h > hb || (h === hb && r.area < best.area)) best = r;
+      if (h > hb || (h === hb && region.area < best.area)) best = region;
     }
 
     return best.index;
   }
 
   private facetPlanes = new Map<number, Primitive | null>();
-  private facetPlane(r: Region): Primitive | null {
-    let prim = this.facetPlanes.get(r.index);
+  private facetPlane(region: Region): Primitive | null {
+    let prim = this.facetPlanes.get(region.index);
 
     if (prim === undefined) {
-      const normal = this.triangleNormal(r);
-      prim = normal ? { kind: "plane", origin: this.centroid(r.triangles[0]!), normal } : null;
-      this.facetPlanes.set(r.index, prim);
+      const normal = this.triangleNormal(region);
+      prim = normal ? { kind: "plane", origin: this.centroid(region.triangles[0]!), normal } : null;
+      this.facetPlanes.set(region.index, prim);
     }
 
     return prim;
@@ -752,12 +780,12 @@ class Builder {
     if (!this.vertexRegions) {
       this.vertexRegions = new Map();
 
-      for (const r of this.fit.regions) {
-        for (const loop of r.loops) {
+      for (const region of this.fit.regions) {
+        for (const loop of region.loops) {
           for (const ref of loop) {
             for (const x of this.fit.segments[ref.segment]!.vertices) {
               const list = this.vertexRegions.get(x) ?? [];
-              if (!list.includes(r.index)) list.push(r.index);
+              if (!list.includes(region.index)) list.push(region.index);
 
               this.vertexRegions.set(x, list);
             }
@@ -808,9 +836,16 @@ class Builder {
 function circleAxis(a: Primitive | null, b: Primitive | null, tol: number): Vec3 | null {
   if (!a || !b) return null;
 
-  const axisOf = (s: Primitive): Vec3 | null => (s.kind === "cylinder" || s.kind === "cone" ? s.axis : null);
-  const pointOf = (s: Primitive): Vec3 =>
-    s.kind === "cylinder" ? s.origin : s.kind === "cone" ? s.apex : s.kind === "sphere" ? s.center : s.origin;
+  const axisOf = (primitive: Primitive): Vec3 | null =>
+    primitive.kind === "cylinder" || primitive.kind === "cone" ? primitive.axis : null;
+  const pointOf = (primitive: Primitive): Vec3 =>
+    primitive.kind === "cylinder"
+      ? primitive.origin
+      : primitive.kind === "cone"
+        ? primitive.apex
+        : primitive.kind === "sphere"
+          ? primitive.center
+          : primitive.origin;
   if (a.kind === "plane" && b.kind === "plane") return null;
 
   if (a.kind === "plane" || b.kind === "plane") {

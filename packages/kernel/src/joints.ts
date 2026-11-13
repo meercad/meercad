@@ -74,12 +74,12 @@ export function jointFrames(oc: OC, state: ModelState, mechanism: Mechanism | un
     return mechanism.joints.map((j) => {
       try {
         return { id: j.id, ...anchorFrame(oc, arena, state, j.anchor) };
-      } catch (e) {
+      } catch (error) {
         return {
           id: j.id,
           origin: [0, 0, 0],
           axis: [0, 0, 1],
-          error: e instanceof Error ? e.message : occtErrorMessage(oc, e),
+          error: error instanceof Error ? error.message : occtErrorMessage(oc, error),
         };
       }
     });
@@ -99,16 +99,16 @@ function anchorFrame(oc: OC, arena: Arena, state: ModelState, anchor: JointAncho
   }
 
   if ("gear" in anchor) {
-    const g = gearViews(state, new Map()).find((x) => x.id === anchor.gear);
-    if (!g) throw new Error(`gear "${anchor.gear}" not found`);
+    const gear = gearViews(state, new Map()).find((x) => x.id === anchor.gear);
+    if (!gear) throw new Error(`gear "${anchor.gear}" not found`);
 
-    return { origin: g.origin, axis: g.axis };
+    return { origin: gear.origin, axis: gear.axis };
   }
 
   if ("axisOf" in anchor) {
     const refs = resolveFaces(anchor.axisOf, bodies);
 
-    if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) {
+    if (refs.reduce((n, faceRef) => n + faceRef.faces.length, 0) !== 1) {
       throw new Error("the axis needs exactly one round face");
     }
 
@@ -128,10 +128,10 @@ function anchorFrame(oc: OC, arena: Arena, state: ModelState, anchor: JointAncho
     const axis = norm([d.X(), d.Y(), d.Z()]);
     // Centre the origin on the face along the axis.
     const ts: number[] = [];
-    const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_VERTEX"));
+    const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_VERTEX"));
 
-    for (; ex.More(); ex.Next()) {
-      const p = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(ex.Current())))));
+    for (; explorer.More(); explorer.Next()) {
+      const p = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(explorer.Current())))));
       ts.push(dot([p.X() - o[0], p.Y() - o[1], p.Z() - o[2]], axis));
     }
 

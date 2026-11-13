@@ -34,7 +34,7 @@ export function booleanBodies(
 
     const list = (shapes: TopoDS_Shape[]) => {
       const l = arena.track(new oc.NCollection_List_TopoDS_Shape());
-      for (const s of shapes) l.Append(s);
+      for (const shape of shapes) l.Append(shape);
 
       return l;
     };
@@ -73,7 +73,7 @@ export function booleanBodies(
       if (algo.IsDeleted(face)) return [];
 
       const mod = listToArray(arena, algo.Modified(face))
-        .map((s) => pre.faceIndex(s))
+        .map((shape) => pre.faceIndex(shape))
         .filter((i) => i >= 0);
       if (mod.length) return mod;
 
@@ -101,14 +101,14 @@ export function unify(oc: OC, arena: Arena, body: Body): Body {
   const shape = arena.track(u.Shape());
   const out = new Body(oc, arena, body.bodyId, shape);
 
-  if (out.faces.length === body.faces.length && out.faces.every((f) => body.faceIndex(f) >= 0)) {
-    out.faceTags = out.faces.map((f) => [...(body.faceTags[body.faceIndex(f)] ?? [])]);
+  if (out.faces.length === body.faces.length && out.faces.every((face) => body.faceIndex(face) >= 0)) {
+    out.faceTags = out.faces.map((face) => [...(body.faceTags[body.faceIndex(face)] ?? [])]);
 
     return out;
   }
 
   const samples = body.facePoints;
-  const sameIdx = out.faces.map((f) => body.faceIndex(f));
+  const sameIdx = out.faces.map((face) => body.faceIndex(face));
   const matched = new Set(sameIdx.filter((i) => i >= 0));
   const open = body.faces.map((_, i) => i).filter((i) => !matched.has(i));
   // Only points inside a merged face's box can lie on it: the exact test (slow, and its objects
@@ -147,28 +147,28 @@ export function pointOnFace(
   face: TopoDS_Face,
   tol = 1e-4,
 ): boolean {
-  const v = arena.track(
+  const vertex = arena.track(
     arena.track(new oc.BRepBuilderAPI_MakeVertex(arena.track(new oc.gp_Pnt(p[0], p[1], p[2])))).Vertex(),
   );
-  const d = arena.track(new oc.BRepExtrema_DistShapeShape(v, face));
+  const d = arena.track(new oc.BRepExtrema_DistShapeShape(vertex, face));
 
   return d.IsDone() && d.Value() < tol;
 }
 
-function isEmpty(oc: OC, arena: Arena, s: TopoDS_Shape): boolean {
-  const ex = arena.track(new oc.TopExp_Explorer(s, "TopAbs_SOLID"));
+function isEmpty(oc: OC, arena: Arena, shape: TopoDS_Shape): boolean {
+  const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID"));
 
-  return !ex.More();
+  return !explorer.More();
 }
 
 /** Axis-aligned bounds of a shape. */
 export function bounds(
   oc: OC,
   arena: Arena,
-  s: TopoDS_Shape,
+  shape: TopoDS_Shape,
 ): { min: [number, number, number]; max: [number, number, number] } {
   const box = arena.track(new oc.Bnd_Box());
-  oc.BRepBndLib.Add(s, box, false);
+  oc.BRepBndLib.Add(shape, box, false);
   if (box.IsVoid()) return { min: [0, 0, 0], max: [0, 0, 0] };
 
   const lo = arena.track(box.CornerMin());

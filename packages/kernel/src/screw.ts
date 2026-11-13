@@ -132,8 +132,8 @@ export function screwBody(
 
   try {
     spec = threadSpec(d, nut, { profile: f.profile, diameter: d, pitch: f.pitch, starts: f.starts });
-  } catch (e) {
-    throw new FeatureError(e instanceof Error ? e.message : String(e));
+  } catch (error) {
+    throw new FeatureError(error instanceof Error ? error.message : String(error));
   }
 
   const dims = screwDims(f.kind, head, d, nut ? f.length : undefined);
@@ -163,14 +163,16 @@ export function screwBody(
   const cone = (r1: number, r2: number, from: number, to: number): TopoDS_Shape => {
     const pt = (r: number, t: number): V => [0, 1, 2].map((i) => c[i]! + a[i]! * t + frame.u[i]! * r) as V;
     const pts = [pt(0, from), pt(r1, from), pt(r2, to), pt(0, to)];
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = pts.map((p) => arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(pnt(p))).Vertex()));
-    vs.forEach((v0, i) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v0, vs[(i + 1) % vs.length]!)).Edge())),
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
     );
 
     const face = arena.track(
-      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face(),
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
     );
     const rev = arena.track(
       new oc.BRepPrimAPI_MakeRevol(
@@ -199,7 +201,7 @@ export function screwBody(
 
   const hexPrism = (across: number, from: number, to: number): TopoDS_Shape => {
     const Rh = across / Math.sqrt(3);
-    const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
     const vs = Array.from({ length: 6 }, (_, k) => {
       const ang = (k * Math.PI) / 3;
       const p = [0, 1, 2].map(
@@ -209,11 +211,11 @@ export function screwBody(
       return arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(pnt(p))).Vertex());
     });
     vs.forEach((x, k) =>
-      mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(x, vs[(k + 1) % 6]!)).Edge())),
+      wireBuilder.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(x, vs[(k + 1) % 6]!)).Edge())),
     );
 
     const face = arena.track(
-      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(mw.Wire()), true)).Face(),
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
     );
     const h = to - from;
 
@@ -233,7 +235,7 @@ export function screwBody(
 
   // A ribbed grip: a cylinder with round grooves round its edge.
   const knob = (dia: number, from: number, to: number): TopoDS_Shape => {
-    let s = cylinder(dia / 2, from, to);
+    let shape = cylinder(dia / 2, from, to);
     const n = Math.max(8, Math.round((Math.PI * dia) / Math.max(3, dia / 4)));
     const rg = (Math.PI * dia) / n / 4;
 
@@ -258,14 +260,14 @@ export function screwBody(
           )
           .Shape(),
       );
-      s = bool("cut", s, groove);
+      shape = bool("cut", shape, groove);
     }
 
     // Soft top and bottom edges.
     const e = Math.min(0.6, (to - from) / 6);
     const softened = bool(
       "cut",
-      s,
+      shape,
       bool("cut", cylinder(dia, to - e, to + 1), cone(dia / 2 - e, dia / 2 + 1 - e, to - e, to + 1)),
     );
 
@@ -288,15 +290,15 @@ export function screwBody(
           ? knob(dims.across, 0, L)
           : cylinder(dims.across / 2, 0, L);
     // Hex nuts: the usual 30° chamfer of the corners on both sides (a double cone through the flats' circle).
-    let o = outer;
+    let shape = outer;
 
     if (head === "hex") {
       const r0 = dims.across / 2;
       const grow = Math.sqrt(3) * L;
-      o = bool("common", bool("common", o, cone(r0, r0 + grow, 0, L)), cone(r0 + grow, r0, 0, L));
+      shape = bool("common", bool("common", shape, cone(r0, r0 + grow, 0, L)), cone(r0 + grow, r0, 0, L));
     }
 
-    blank = bool("cut", o, cylinder(R, -1, L + 1));
+    blank = bool("cut", shape, cylinder(R, -1, L + 1));
     top = L;
   } else {
     const k = dims.height;
@@ -305,32 +307,32 @@ export function screwBody(
     if (head === "none") {
       blank = cylinder(R, 0, L);
     } else {
-      let h: TopoDS_Shape;
+      let shape: TopoDS_Shape;
 
       if (head === "hex") {
         // Chamfered corners on the head's top (here its bottom, at the plane).
         const r0 = dims.across / 2;
-        h = bool("common", hexPrism(dims.across, 0, k), cone(r0, r0 + Math.sqrt(3) * k, 0, k));
+        shape = bool("common", hexPrism(dims.across, 0, k), cone(r0, r0 + Math.sqrt(3) * k, 0, k));
       } else if (head === "knob") {
-        h = knob(dims.across, 0, k);
+        shape = knob(dims.across, 0, k);
       } else if (head === "round") {
-        h = bool(
+        shape = bool(
           "fuse",
           cylinder(dims.across / 2, 0, k * 0.45),
           cone(dims.across / 2, dims.across * 0.32, k * 0.45, k),
         );
       } else {
-        h = cylinder(dims.across / 2, 0, k);
+        shape = cylinder(dims.across / 2, 0, k);
       }
 
       if (dims.socket) {
         // The socket opens at the head's bottom, which is where a driver reaches it on a screw standing on
         // its head.
         const depth = head === "round" ? 0.6 * k : 0.6 * k;
-        h = bool("cut", h, hexPrism(dims.socket, -1, depth));
+        shape = bool("cut", shape, hexPrism(dims.socket, -1, depth));
       }
 
-      blank = bool("fuse", h, shank);
+      blank = bool("fuse", shape, shank);
     }
 
     top = (head === "none" ? 0 : k) + L;
@@ -346,9 +348,12 @@ export function screwBody(
     const z = axial(body0.facePoints[i]!);
 
     if (!info.planar) {
-      const s = arena.track(new oc.BRepAdaptor_Surface(face, true));
+      const surfaceAdaptor = arena.track(new oc.BRepAdaptor_Surface(face, true));
 
-      if (s.GetType() === "GeomAbs_Cylinder" && Math.abs(arena.track(s.Cylinder()).Radius() - R) < 1e-6) {
+      if (
+        surfaceAdaptor.GetType() === "GeomAbs_Cylinder" &&
+        Math.abs(arena.track(surfaceAdaptor.Cylinder()).Radius() - R) < 1e-6
+      ) {
         fi = i;
 
         return [nut ? `${f.id}.bore` : `${f.id}.shank`];
@@ -406,9 +411,9 @@ export function screwBody(
       const knife = bool("cut", cylinder(R + 1, top - span, top + 1), cone(R + 1, rRoot, top - span, top));
       body = cutBody(oc, arena, body, knife, `${f.id}.tip`);
     }
-  } catch (e) {
+  } catch (error) {
     warnings.push(
-      `left the ${nut ? "nut's ends" : "tip"} without a chamfer (${e instanceof FeatureError ? e.message : occtErrorMessage(oc, e)})`,
+      `left the ${nut ? "nut's ends" : "tip"} without a chamfer (${error instanceof FeatureError ? error.message : occtErrorMessage(oc, error)})`,
     );
     body = threaded;
   }
@@ -423,9 +428,9 @@ function cutBody(oc: OC, arena: Arena, body: Body, tool: TopoDS_Shape, tag: stri
 
   const out = booleanBodies(oc, arena, body, t, "cut");
 
-  const vol = (s: TopoDS_Shape) => {
+  const vol = (shape: TopoDS_Shape) => {
     const props = arena.track(new oc.GProp_GProps());
-    oc.BRepGProp.VolumeProperties(s, props, false, false, false);
+    oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
     return Math.abs(props.Mass());
   };

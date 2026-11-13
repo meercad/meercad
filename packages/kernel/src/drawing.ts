@@ -116,8 +116,12 @@ function section(oc: OC, arena: Arena, shape: TopoDS_Shape): DrawingView {
 
   const pieces: TopoDS_Shape[] = [];
 
-  for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID")); e.More(); e.Next()) {
-    const common = arena.track(new oc.BRepAlgoAPI_Common(arena.track(e.Current()), keep));
+  for (
+    const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_SOLID"));
+    explorer.More();
+    explorer.Next()
+  ) {
+    const common = arena.track(new oc.BRepAlgoAPI_Common(arena.track(explorer.Current()), keep));
     if (!common.IsDone() || common.HasErrors()) continue;
 
     const piece = arena.track(common.Shape());
@@ -130,12 +134,16 @@ function section(oc: OC, arena: Arena, shape: TopoDS_Shape): DrawingView {
   const sections: Polyline[][] = [];
   const sectionParts: number[] = [];
   pieces.forEach((piece, part) => {
-    for (const e = arena.track(new oc.TopExp_Explorer(piece, "TopAbs_FACE")); e.More(); e.Next()) {
-      const face = oc.TopoDS.Face(arena.track(e.Current()));
-      const s = arena.track(new oc.BRepAdaptor_Surface(face, true));
-      if (s.GetType() !== "GeomAbs_Plane") continue;
+    for (
+      const explorer = arena.track(new oc.TopExp_Explorer(piece, "TopAbs_FACE"));
+      explorer.More();
+      explorer.Next()
+    ) {
+      const face = oc.TopoDS.Face(arena.track(explorer.Current()));
+      const surfaceAdaptor = arena.track(new oc.BRepAdaptor_Surface(face, true));
+      if (surfaceAdaptor.GetType() !== "GeomAbs_Plane") continue;
 
-      const pl = arena.track(s.Plane());
+      const pl = arena.track(surfaceAdaptor.Plane());
       const n = arena.track(arena.track(pl.Axis()).Direction());
       const at = arena.track(pl.Location());
       if (Math.abs(Math.abs(n.Y()) - 1) > 1e-6 || Math.abs(at.Y() - y) > 1e-6) continue;
@@ -143,13 +151,19 @@ function section(oc: OC, arena: Arena, shape: TopoDS_Shape): DrawingView {
       // The face's edges in any order: hatching fills between them by parity, which needs no loops.
       const loops: Polyline[] = [];
 
-      for (const ed = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE")); ed.More(); ed.Next()) {
-        const c = arena.track(new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(ed.Current()))));
-        const [t0, t1] = [c.FirstParameter(), c.LastParameter()];
-        const n = c.GetType() === "GeomAbs_Line" ? 1 : 32;
+      for (
+        const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_EDGE"));
+        explorer.More();
+        explorer.Next()
+      ) {
+        const curveAdaptor = arena.track(
+          new oc.BRepAdaptor_Curve(oc.TopoDS.Edge(arena.track(explorer.Current()))),
+        );
+        const [t0, t1] = [curveAdaptor.FirstParameter(), curveAdaptor.LastParameter()];
+        const n = curveAdaptor.GetType() === "GeomAbs_Line" ? 1 : 32;
         loops.push(
           Array.from({ length: n + 1 }, (_, i) => {
-            const p = arena.track(c.Value(t0 + ((t1 - t0) * i) / n));
+            const p = arena.track(curveAdaptor.Value(t0 + ((t1 - t0) * i) / n));
 
             return [p.X(), p.Z()] as [number, number];
           }),
@@ -182,7 +196,7 @@ function view(oc: OC, arena: Arena, shape: TopoDS_Shape, name: ViewName): Drawin
   algo.Hide();
 
   const hlr = arena.track(new oc.HLRBRep_HLRToShape(algo));
-  const lines = (s: TopoDS_Shape | null) => (s && !s.IsNull() ? polylines(oc, arena, s) : []);
+  const lines = (shape: TopoDS_Shape | null) => (shape && !shape.IsNull() ? polylines(oc, arena, shape) : []);
   const visible = [...lines(arena.track(hlr.VCompound())), ...lines(arena.track(hlr.OutLineVCompound()))];
   // Edges at the back that lie exactly behind visible ones would only draw dashes over solid lines.
   const hidden =
@@ -210,21 +224,25 @@ function view(oc: OC, arena: Arena, shape: TopoDS_Shape, name: ViewName): Drawin
 }
 
 /** The edges of a projected shape as polylines: straight edges by their ends, curves sampled finely. */
-function polylines(oc: OC, arena: Arena, s: TopoDS_Shape): Polyline[] {
+function polylines(oc: OC, arena: Arena, shape: TopoDS_Shape): Polyline[] {
   const out: Polyline[] = [];
 
-  for (const e = arena.track(new oc.TopExp_Explorer(s, "TopAbs_EDGE")); e.More(); e.Next()) {
-    const edge = oc.TopoDS.Edge(arena.track(e.Current()));
-    const c = arena.track(new oc.BRepAdaptor_Curve(edge));
-    const [t0, t1] = [c.FirstParameter(), c.LastParameter()];
+  for (
+    const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_EDGE"));
+    explorer.More();
+    explorer.Next()
+  ) {
+    const edge = oc.TopoDS.Edge(arena.track(explorer.Current()));
+    const curveAdaptor = arena.track(new oc.BRepAdaptor_Curve(edge));
+    const [t0, t1] = [curveAdaptor.FirstParameter(), curveAdaptor.LastParameter()];
 
     const at = (t: number): [number, number] => {
-      const p = arena.track(c.Value(t));
+      const p = arena.track(curveAdaptor.Value(t));
 
       return [p.X(), p.Y()];
     };
 
-    if (c.GetType() === "GeomAbs_Line") {
+    if (curveAdaptor.GetType() === "GeomAbs_Line") {
       out.push([at(t0), at(t1)]);
       continue;
     }
@@ -284,12 +302,16 @@ function endOnCircles(
   ];
   const out: { c: [number, number]; r: number; hole: boolean }[] = [];
 
-  for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE")); e.More(); e.Next()) {
-    const face = oc.TopoDS.Face(arena.track(e.Current()));
-    const s = arena.track(new oc.BRepAdaptor_Surface(face, true));
-    if (s.GetType() !== "GeomAbs_Cylinder") continue;
+  for (
+    const explorer = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE"));
+    explorer.More();
+    explorer.Next()
+  ) {
+    const face = oc.TopoDS.Face(arena.track(explorer.Current()));
+    const surfaceAdaptor = arena.track(new oc.BRepAdaptor_Surface(face, true));
+    if (surfaceAdaptor.GetType() !== "GeomAbs_Cylinder") continue;
 
-    const cyl = arena.track(s.Cylinder());
+    const cyl = arena.track(surfaceAdaptor.Cylinder());
     const ax = arena.track(cyl.Axis());
     const d = arena.track(ax.Direction());
     if (Math.abs(Math.abs(d.X() * eye[0] + d.Y() * eye[1] + d.Z() * eye[2]) - 1) > 1e-6) continue;

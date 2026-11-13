@@ -8,7 +8,7 @@ import { drawingViews } from "./drawing.js";
 
 interface WorkerScope {
   postMessage(msg: WorkerResponse, transfer?: Transferable[]): void;
-  addEventListener(type: "message", fn: (e: MessageEvent<WorkerRequest>) => void): void;
+  addEventListener(type: "message", fn: (event: MessageEvent<WorkerRequest>) => void): void;
 }
 
 /**
@@ -37,8 +37,8 @@ export function startKernelWorker(
   /** Meshes sent with the last main-session rebuild: an unchanged part is not copied again (KeptMesh). */
   let lastSent = new Set<BodyMesh>();
 
-  scope.addEventListener("message", (e) => {
-    const req = e.data;
+  scope.addEventListener("message", (event) => {
+    const req = event.data;
     if ("seq" in req) received.set(req.seq, now());
 
     if (req.type === "rebuild" || req.type === "sandbox") {
@@ -119,7 +119,9 @@ export function startKernelWorker(
           type: "rebuilt",
           seq: req.seq,
           ...r,
-          meshes: r.meshes.map((m) => (before.has(m) ? { bodyId: m.bodyId, kept: true as const } : m)),
+          meshes: r.meshes.map((mesh) =>
+            before.has(mesh) ? { bodyId: mesh.bodyId, kept: true as const } : mesh,
+          ),
         });
         break;
       }

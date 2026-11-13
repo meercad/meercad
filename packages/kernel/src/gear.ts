@@ -81,10 +81,10 @@ export function gearBody(
     place = partner
       ? meshPlacement(partner, params, rad(f.meshWith?.direction ?? 0))
       : { center: f.center ?? [0, 0], rotation: rad(f.rotation ?? 0) };
-  } catch (e) {
-    if (e instanceof GearError) throw new FeatureError(e.message);
+  } catch (error) {
+    if (error instanceof GearError) throw new FeatureError(error.message);
 
-    throw e;
+    throw error;
   }
 
   const dims = gearDims(params);
@@ -152,8 +152,8 @@ export function gearBody(
   try {
     solid = sweep(shape.outer);
     if (shape.inner) solid = boolOp(oc, arena, "cut", solid, sweep(shape.inner));
-  } catch (e) {
-    if (e instanceof FeatureError) throw e;
+  } catch (error) {
+    if (error instanceof FeatureError) throw error;
 
     throw new FeatureError("could not build the gear", "try fewer teeth or a smaller helix angle");
   }
@@ -426,33 +426,33 @@ function wire(oc: OC, arena: Arena, loop: OutlineSegment[], map: (p: Pt) => Vec3
       arena.track(new oc.BRepBuilderAPI_MakeVertex(arena.track(new oc.gp_Pnt(p[0], p[1], p[2])))).Vertex(),
     );
   // Consecutive segments share their end points, so they share vertices too.
-  const starts = loop.map((s) => vertex(map(s.pts[0]!)));
-  const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
-  loop.forEach((s, i) => {
-    const v0 = starts[i]!;
+  const starts = loop.map((segment) => vertex(map(segment.pts[0]!)));
+  const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
+  loop.forEach((segment, i) => {
+    const vertex = starts[i]!;
     const v1 = starts[(i + 1) % loop.length]!;
     let edge: TopoDS_Edge;
 
-    if (s.pts.length === 2) {
-      edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v0, v1)).Edge());
+    if (segment.pts.length === 2) {
+      edge = arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, v1)).Edge());
     } else {
-      const pts = arena.track(new oc.NCollection_Array1_gp_Pnt(1, s.pts.length));
-      s.pts.forEach((p, k) => {
+      const pts = arena.track(new oc.NCollection_Array1_gp_Pnt(1, segment.pts.length));
+      segment.pts.forEach((p, k) => {
         const w = map(p);
         pts.SetValue(k + 1, arena.track(new oc.gp_Pnt(w[0], w[1], w[2])));
       });
 
       const fit = arena.track(new oc.GeomAPI_PointsToBSpline(pts, 3, 8, "GeomAbs_C2" as never, 1e-6));
       edge = arena.track(
-        arena.track(new oc.BRepBuilderAPI_MakeEdge(arena.track(fit.Curve()), v0, v1)).Edge(),
+        arena.track(new oc.BRepBuilderAPI_MakeEdge(arena.track(fit.Curve()), vertex, v1)).Edge(),
       );
     }
 
-    mw.Add(edge);
+    wireBuilder.Add(edge);
   });
-  if (!mw.IsDone()) throw new FeatureError("the gear's outline is not closed");
+  if (!wireBuilder.IsDone()) throw new FeatureError("the gear's outline is not closed");
 
-  return arena.track(mw.Wire());
+  return arena.track(wireBuilder.Wire());
 }
 
 function prismOf(

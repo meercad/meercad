@@ -40,9 +40,9 @@ export function exportStep(
     if (parts?.length) {
       try {
         return exportStepParts(oc, arena, bodies, parts);
-      } catch (e) {
+      } catch (error) {
         // Names and colours are a nicety: without them the shapes still go out.
-        console.warn("STEP with names and colours failed, writing plain STEP:", e);
+        console.warn("STEP with names and colours failed, writing plain STEP:", error);
       }
     }
 
@@ -136,8 +136,8 @@ function exportStepParts(
 const exported = new WeakMap<Body, { sig: string; mesh: BodyMesh }>();
 /** Above this many bytes per export nothing is kept: the meshes would fill the kernel's memory. */
 const KEEP_EXPORT_BYTES = 1.5 * 2 ** 30;
-const meshBytes = (m: BodyMesh) =>
-  m.positions.byteLength + m.normals.byteLength + m.indices.byteLength + m.edgeLines.byteLength;
+const meshBytes = (mesh: BodyMesh) =>
+  mesh.positions.byteLength + mesh.normals.byteLength + mesh.indices.byteLength + mesh.edgeLines.byteLength;
 
 /**
  * Print/CNC-quality triangles of the last rebuild's bodies, for STL and 3MF export. The meshes are
@@ -170,7 +170,7 @@ export function exportMeshes(oc: OC, state: ModelState, bodyIds?: string[]): Bod
     // triangulated once.)
     for (const b of meshed) oc.BRepTools.Clean(b.shape, true);
 
-    if (out.reduce((n, m) => n + meshBytes(m), 0) > KEEP_EXPORT_BYTES) {
+    if (out.reduce((n, mesh) => n + meshBytes(mesh), 0) > KEEP_EXPORT_BYTES) {
       for (const b of bodies) exported.delete(b);
     }
 
@@ -225,10 +225,10 @@ export function measure(oc: OC, state: ModelState, a: PickRef, b?: PickRef): Mea
         oc.BRepGProp.LinearProperties(s, props, false, false);
         rows.push(["Length", f(props.Mass())]);
 
-        const c = arena.track(new oc.BRepAdaptor_Curve(body.edges[p.index]!));
+        const curveAdaptor = arena.track(new oc.BRepAdaptor_Curve(body.edges[p.index]!));
 
-        if (c.GetType() === "GeomAbs_Circle") {
-          const r = arena.track(c.Circle()).Radius();
+        if (curveAdaptor.GetType() === "GeomAbs_Circle") {
+          const r = arena.track(curveAdaptor.Circle()).Radius();
           rows.push(["Radius", f(r)], ["Diameter", f(2 * r)]);
         }
       }
@@ -283,11 +283,11 @@ function direction(oc: OC, arena: Arena, p: PickRef, body: Body): [number, numbe
     return info?.planar && info.normal ? info.normal : null;
   }
 
-  const c = arena.track(new oc.BRepAdaptor_Curve(body.edges[p.index]!));
-  if (c.GetType() !== "GeomAbs_Line") return null;
+  const curveAdaptor = arena.track(new oc.BRepAdaptor_Curve(body.edges[p.index]!));
+  if (curveAdaptor.GetType() !== "GeomAbs_Line") return null;
 
-  const a = arena.track(c.Value(c.FirstParameter()));
-  const b = arena.track(c.Value(c.LastParameter()));
+  const a = arena.track(curveAdaptor.Value(curveAdaptor.FirstParameter()));
+  const b = arena.track(curveAdaptor.Value(curveAdaptor.LastParameter()));
   const v: [number, number, number] = [b.X() - a.X(), b.Y() - a.Y(), b.Z() - a.Z()];
   const l = Math.hypot(...v) || 1;
 
@@ -342,7 +342,7 @@ export function clearances(
       if (!skip.includes(id)) shapes.set(id, placed(oc, arena, body.shape, poses[id]));
     }
 
-    const box = new Map([...shapes].map(([id, s]) => [id, bounds(oc, arena, s)]));
+    const box = new Map([...shapes].map(([id, shape]) => [id, bounds(oc, arena, shape)]));
     const grow = (b: ReturnType<typeof bounds>) => ({
       min: b.min.map((v) => v - within) as typeof b.min,
       max: b.max.map((v) => v + within) as typeof b.max,
@@ -366,9 +366,9 @@ export function clearances(
           continue;
         }
 
-        const A = shapes.get(a)!;
+        const shape = shapes.get(a)!;
         const B = shapes.get(b)!;
-        const d = arena.track(new oc.BRepExtrema_DistShapeShape(A, B));
+        const d = arena.track(new oc.BRepExtrema_DistShapeShape(shape, B));
         if (!d.IsDone()) continue;
 
         const distance = d.Value();
@@ -377,7 +377,7 @@ export function clearances(
         let overlap = 0;
 
         if (distance < 1e-6) {
-          const common = arena.track(new oc.BRepAlgoAPI_Common(A, B));
+          const common = arena.track(new oc.BRepAlgoAPI_Common(shape, B));
 
           if (common.IsDone() && !common.HasErrors()) {
             const props = arena.track(new oc.GProp_GProps());

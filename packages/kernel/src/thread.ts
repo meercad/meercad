@@ -39,7 +39,7 @@ export function threadBody(
   f: ResolvedThread,
 ): { body: Body; info: ThreadInfo } {
   const refs = facesIn(bodies, f.face);
-  const count = refs.reduce((n, r) => n + r.faces.length, 0);
+  const count = refs.reduce((n, faceRef) => n + faceRef.faces.length, 0);
 
   if (count !== 1) {
     throw new FeatureError(`the face selector matches ${count} faces; pick exactly one cylindrical face`);
@@ -93,10 +93,10 @@ export function threadFace(
 
   // Axial extent of the face and which of its ends are open (the thread runs out there).
   const ts: number[] = [];
-  const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_VERTEX"));
+  const explorer = arena.track(new oc.TopExp_Explorer(face, "TopAbs_VERTEX"));
 
-  for (; ex.More(); ex.Next()) {
-    const p = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(ex.Current())))));
+  for (; explorer.More(); explorer.Next()) {
+    const p = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(explorer.Current())))));
     ts.push(dot([p.X() - o[0], p.Y() - o[1], p.Z() - o[2]], a));
   }
 
@@ -150,8 +150,8 @@ export function threadFace(
     }
 
     shape = grooveShape(spec.profile, spec.d, spec.pitch, internal, c);
-  } catch (e) {
-    throw new FeatureError(e instanceof Error ? e.message : String(e));
+  } catch (error) {
+    throw new FeatureError(error instanceof Error ? error.message : String(error));
   }
 
   const P = spec.pitch;
@@ -209,8 +209,8 @@ export function threadFace(
     return add([xdir[0] * c, xdir[1] * c, xdir[2] * c], ahead, sn);
   };
 
-  const tagged = (s: TopoDS_Shape) => {
-    const b = new Body(oc, arena, input.bodyId, s);
+  const tagged = (shape: TopoDS_Shape) => {
+    const b = new Body(oc, arena, input.bodyId, shape);
     b.faceTags = b.faces.map(() => [f.tag]);
 
     return b;
@@ -230,9 +230,9 @@ export function threadFace(
   // The spine runs between the outline's wide side (just past the crest) and the root, as it always has.
   const rMid = (shape.outline[0]![0] + rRoot) / 2;
 
-  const volume = (sh: TopoDS_Shape) => {
+  const volume = (shape: TopoDS_Shape) => {
     const props = arena.track(new oc.GProp_GProps());
-    oc.BRepGProp.VolumeProperties(sh, props, false, false, false);
+    oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
 
     return props.Mass();
   };
@@ -331,14 +331,14 @@ export function threadFace(
       const before = volume(from.shape);
       const out = booleanBodies(oc, arena, from, grooves.map(tagged), "cut", from.bodyId, fuzzy);
       // Measured after the cut: measuring the grooves first changes what OCCT's boolean makes of them.
-      const gv = grooves.reduce((sum, g) => sum + volume(g), 0);
+      const gv = grooves.reduce((sum, shape) => sum + volume(shape), 0);
       // Most of the grooves lie in material; a cut that removed (almost) nothing missed them, one that
       // removed more than them went wrong (it can happen, and leaves bits of the groove outside).
       const removed = before - volume(out.shape);
 
       return removed > 0.2 * gv && removed < 1.02 * gv ? out : null;
-    } catch (e) {
-      lastError = e;
+    } catch (error) {
+      lastError = error;
 
       return null;
     }
@@ -430,29 +430,31 @@ function helix(
   }
 
   const n = Math.max(1, Math.ceil((height / pitch) * pieces));
-  const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+  const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
 
   for (let k = 0; k < n; k++) {
     const edge = arena.track(
       arena.track(new oc.BRepBuilderAPI_MakeEdge(line, surface, (span * k) / n, (span * (k + 1)) / n)).Edge(),
     );
     oc.BRepLib.BuildCurves3d(edge);
-    mw.Add(edge);
+    wireBuilder.Add(edge);
   }
 
-  return arena.track(mw.Wire());
+  return arena.track(wireBuilder.Wire());
 }
 
 function polygon(oc: OC, arena: Arena, pts: V[]): TopoDS_Wire {
-  const mw = arena.track(new oc.BRepBuilderAPI_MakeWire());
+  const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
   const vs = pts.map((p) =>
     arena.track(arena.track(new oc.BRepBuilderAPI_MakeVertex(arena.track(new oc.gp_Pnt(...p)))).Vertex()),
   );
-  vs.forEach((v, i) =>
-    mw.Add(arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(v, vs[(i + 1) % vs.length]!)).Edge())),
+  vs.forEach((vertex, i) =>
+    wireBuilder.Add(
+      arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+    ),
   );
 
-  return arena.track(mw.Wire());
+  return arena.track(wireBuilder.Wire());
 }
 
 function boolOp(

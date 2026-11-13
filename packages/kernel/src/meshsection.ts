@@ -173,8 +173,8 @@ export function fitSection(chain: SectionChain, tol: number): SectionPiece[] {
 
   const last = pts.length - 1;
   // Break points, moved onto the arcs and to where neighbouring lines meet.
-  const lines = raw.map((r) => (r.arc ? null : lineFit(pts.slice(r.i, r.j + 1))));
-  const verts: Vec2[] = raw.map((r) => pts[r.i]!);
+  const lines = raw.map((run) => (run.arc ? null : lineFit(pts.slice(run.i, run.j + 1))));
+  const verts: Vec2[] = raw.map((run) => pts[run.i]!);
   verts.push(pts[last]!);
 
   const m = raw.length;
@@ -200,7 +200,7 @@ export function fitSection(chain: SectionChain, tol: number): SectionPiece[] {
       q = Math.abs(Math.hypot(foot[0] - c.cx, foot[1] - c.cy) - c.r) < tol * 2 ? foot : toCircle(q, c);
     } else {
       const on: Vec2[] = [];
-      for (const r of [before, after]) if (r.arc) on.push(toCircle(q, r.arc));
+      for (const run of [before, after]) if (run.arc) on.push(toCircle(q, run.arc));
       q = [on.reduce((s, p) => s + p[0], 0) / on.length, on.reduce((s, p) => s + p[1], 0) / on.length];
     }
 
@@ -212,11 +212,18 @@ export function fitSection(chain: SectionChain, tol: number): SectionPiece[] {
   const pieces: SectionPiece[] = [];
 
   for (let k = 0; k < m; k++) {
-    const r = raw[k]!;
+    const run = raw[k]!;
     const [a, b] = [verts[k]!, verts[k + 1]!];
 
-    if (r.arc) {
-      pieces.push({ kind: "arc", center: [r.arc.cx, r.arc.cy], radius: r.arc.r, a, b, ccw: r.arc.sweep > 0 });
+    if (run.arc) {
+      pieces.push({
+        kind: "arc",
+        center: [run.arc.cx, run.arc.cy],
+        radius: run.arc.r,
+        a,
+        b,
+        ccw: run.arc.sweep > 0,
+      });
     } else if (distance2(a, b) > tol * 0.1) {
       pieces.push({ kind: "line", a, b });
     }

@@ -87,25 +87,25 @@ export function basis(n: Vec3): [Vec3, Vec3] {
 }
 
 /** Distance of a point from a primitive's surface (signed for planes: along the normal). */
-export function surfaceDistance(p: Vec3, s: Primitive): number {
-  switch (s.kind) {
+export function surfaceDistance(p: Vec3, primitive: Primitive): number {
+  switch (primitive.kind) {
     case "plane":
-      return dot(sub(p, s.origin), s.normal);
+      return dot(sub(p, primitive.origin), primitive.normal);
     case "cylinder": {
-      const d = sub(p, s.origin);
-      const t = dot(d, s.axis);
+      const d = sub(p, primitive.origin);
+      const t = dot(d, primitive.axis);
 
-      return len(sub(d, scale(s.axis, t))) - s.radius;
+      return len(sub(d, scale(primitive.axis, t))) - primitive.radius;
     }
     case "cone": {
-      const d = sub(p, s.apex);
-      const t = dot(d, s.axis);
-      const r = len(sub(d, scale(s.axis, t)));
+      const d = sub(p, primitive.apex);
+      const t = dot(d, primitive.axis);
+      const r = len(sub(d, scale(primitive.axis, t)));
 
-      return r * Math.cos(s.halfAngle) - t * Math.sin(s.halfAngle);
+      return r * Math.cos(primitive.halfAngle) - t * Math.sin(primitive.halfAngle);
     }
     case "sphere":
-      return len(sub(p, s.center)) - s.radius;
+      return len(sub(p, primitive.center)) - primitive.radius;
   }
 }
 
@@ -194,7 +194,7 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
   const regions: Region[] = [];
 
   const newRegion = (tris: number[], primitive: Primitive | null, residual: number) => {
-    const r: Region = {
+    const region: Region = {
       index: regions.length,
       triangles: tris,
       primitive,
@@ -202,10 +202,10 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
       residual,
       loops: [],
     };
-    for (const t of tris) triangleRegion[t] = r.index;
-    regions.push(r);
+    for (const t of tris) triangleRegion[t] = region.index;
+    regions.push(region);
 
-    return r;
+    return region;
   };
 
   const verticesOf = (tris: number[]) => {
@@ -278,11 +278,11 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
 
   const leftovers = new Set<number>();
 
-  for (const r of regions) {
-    if (r.primitive && r.primitive.kind !== "plane") continue;
+  for (const region of regions) {
+    if (region.primitive && region.primitive.kind !== "plane") continue;
 
-    const thin = r.triangles.length <= 2 || r.area * 40 < perimeter(r.triangles) ** 2;
-    if (!r.primitive || thin) for (const t of r.triangles) leftovers.add(t);
+    const thin = region.triangles.length <= 2 || region.area * 40 < perimeter(region.triangles) ** 2;
+    if (!region.primitive || thin) for (const t of region.triangles) leftovers.add(t);
   }
 
   const curvedPieces = components(
@@ -314,8 +314,8 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
     const unitOf = new Map<number, number[]>();
 
     for (const t of piece) {
-      const r = regions[triangleRegion[t]!];
-      unitOf.set(t, r && r.triangles.every((x) => inPiece.has(x)) ? r.triangles : [t]);
+      const region = regions[triangleRegion[t]!];
+      unitOf.set(t, region && region.triangles.every((x) => inPiece.has(x)) ? region.triangles : [t]);
     }
 
     const units = [...new Set(unitOf.values())].sort(
@@ -433,14 +433,14 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
   while (changed) {
     changed = false;
 
-    for (const r of regions) {
-      if (!r.primitive || r.primitive.kind === "plane" || !r.triangles.length) continue;
+    for (const region of regions) {
+      if (!region.primitive || region.primitive.kind === "plane" || !region.triangles.length) continue;
 
       const border = new Set<number>();
 
-      for (const t of r.triangles) {
+      for (const t of region.triangles) {
         for (const u of neighbours(t)) {
-          if (triangleRegion[u]! >= 0 && triangleRegion[u] !== r.index) border.add(triangleRegion[u]!);
+          if (triangleRegion[u]! >= 0 && triangleRegion[u] !== region.index) border.add(triangleRegion[u]!);
         }
       }
 
@@ -449,18 +449,18 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
         if (!other.triangles.length || other.primitive?.kind !== "plane") continue;
 
         const vs = verticesOf(other.triangles);
-        if (!vs.every((v) => Math.abs(surfaceDistance(p(v), r.primitive!)) <= tolerance)) continue;
+        if (!vs.every((v) => Math.abs(surfaceDistance(p(v), region.primitive!)) <= tolerance)) continue;
 
         if (
           !other.triangles.every(
-            (t) => Math.abs(dot(normals[t]!, primitiveNormal(centroids[t]!, r.primitive!))) > 0.9,
+            (t) => Math.abs(dot(normals[t]!, primitiveNormal(centroids[t]!, region.primitive!))) > 0.9,
           )
         ) {
           continue;
         }
 
-        for (const t of other.triangles) triangleRegion[t] = r.index;
-        for (const t of other.triangles) r.triangles.push(t);
+        for (const t of other.triangles) triangleRegion[t] = region.index;
+        for (const t of other.triangles) region.triangles.push(t);
         other.triangles = [];
         changed = true;
       }
@@ -471,10 +471,10 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
   for (let t = 0; t < n; t++) {
     if (degenerate(t)) continue;
 
-    const r = triangleRegion[t]! >= 0 ? regions[triangleRegion[t]!] : undefined;
+    const region = triangleRegion[t]! >= 0 ? regions[triangleRegion[t]!] : undefined;
 
-    if (!r || r.primitive === null) {
-      if (r) r.triangles = r.triangles.filter((x) => x !== t);
+    if (!region || region.primitive === null) {
+      if (region) region.triangles = region.triangles.filter((x) => x !== t);
 
       newRegion([t], null, 0);
     }
@@ -495,21 +495,21 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
   }
 
   // Drop emptied regions and renumber.
-  const kept = regions.filter((r) => r.triangles.length);
-  kept.forEach((r, i) => {
-    r.index = i;
-    r.area = r.triangles.reduce((s, t) => s + areas[t]!, 0);
-    for (const t of r.triangles) triangleRegion[t] = i;
+  const kept = regions.filter((region) => region.triangles.length);
+  kept.forEach((region, i) => {
+    region.index = i;
+    region.area = region.triangles.reduce((s, t) => s + areas[t]!, 0);
+    for (const t of region.triangles) triangleRegion[t] = i;
   });
   regions.length = 0;
   // One by one: a scan can leave far more regions than a spread call takes arguments.
-  for (const r of kept) regions.push(r);
+  for (const region of kept) regions.push(region);
 
-  for (const r of regions) {
-    if (!r.primitive) continue;
+  for (const region of regions) {
+    if (!region.primitive) continue;
 
-    const vs = verticesOf(r.triangles);
-    r.residual = Math.max(0, ...vs.map((v) => Math.abs(surfaceDistance(p(v), r.primitive!))));
+    const vs = verticesOf(region.triangles);
+    region.residual = Math.max(0, ...vs.map((v) => Math.abs(surfaceDistance(p(v), region.primitive!))));
   }
 
   const segments = traceBoundaries(regions, triangleRegion, triangles, twin);
@@ -538,7 +538,7 @@ export function demoteRegions(fit: MeshFit, which: Iterable<number>): MeshFit {
   };
 
   const add = (tris: number[], primitive: Primitive | null, residual: number) => {
-    const r: Region = {
+    const region: Region = {
       index: regions.length,
       triangles: tris,
       primitive,
@@ -546,13 +546,16 @@ export function demoteRegions(fit: MeshFit, which: Iterable<number>): MeshFit {
       residual,
       loops: [],
     };
-    for (const t of tris) triangleRegion[t] = r.index;
-    regions.push(r);
+    for (const t of tris) triangleRegion[t] = region.index;
+    regions.push(region);
   };
 
-  for (const r of fit.regions) {
-    if (!drop.has(r.index) || !r.primitive) add([...r.triangles], r.primitive, r.residual);
-    else for (const t of r.triangles) add([t], null, 0);
+  for (const region of fit.regions) {
+    if (!drop.has(region.index) || !region.primitive) {
+      add([...region.triangles], region.primitive, region.residual);
+    } else {
+      for (const t of region.triangles) add([t], null, 0);
+    }
   }
 
   const segments = traceBoundaries(regions, triangleRegion, fit.triangles, fit.twin);
@@ -561,23 +564,28 @@ export function demoteRegions(fit: MeshFit, which: Iterable<number>): MeshFit {
 }
 
 /** Outward unit normal of a primitive at a point near its surface. */
-export function primitiveNormal(q: Vec3, s: Primitive): Vec3 {
-  switch (s.kind) {
+export function primitiveNormal(q: Vec3, primitive: Primitive): Vec3 {
+  switch (primitive.kind) {
     case "plane":
-      return s.normal;
+      return primitive.normal;
     case "cylinder": {
-      const d = sub(q, s.origin);
+      const d = sub(q, primitive.origin);
 
-      return unit(sub(d, scale(s.axis, dot(d, s.axis))));
+      return unit(sub(d, scale(primitive.axis, dot(d, primitive.axis))));
     }
     case "cone": {
-      const d = sub(q, s.apex);
-      const radial = unit(sub(d, scale(s.axis, dot(d, s.axis))));
+      const d = sub(q, primitive.apex);
+      const radial = unit(sub(d, scale(primitive.axis, dot(d, primitive.axis))));
 
-      return unit(sub(scale(radial, Math.cos(s.halfAngle)), scale(s.axis, Math.sin(s.halfAngle))));
+      return unit(
+        sub(
+          scale(radial, Math.cos(primitive.halfAngle)),
+          scale(primitive.axis, Math.sin(primitive.halfAngle)),
+        ),
+      );
     }
     case "sphere":
-      return unit(sub(q, s.center));
+      return unit(sub(q, primitive.center));
   }
 }
 
@@ -691,69 +699,72 @@ interface Fit {
   residual: number;
 }
 
-const residualOf = (vs: number[], s: Primitive, f: Fitter) =>
-  Math.max(0, ...vs.map((v) => Math.abs(surfaceDistance(f.p(v), s))));
+const residualOf = (vs: number[], primitive: Primitive, fitter: Fitter) =>
+  Math.max(0, ...vs.map((v) => Math.abs(surfaceDistance(fitter.p(v), primitive))));
 
 /** Best primitive for a set of triangles, or null when none fits within tolerance. */
-function fitPatch(tris: number[], vs: number[], f: Fitter, curvedOnly = false): Fit | null {
+function fitPatch(tris: number[], vs: number[], fitter: Fitter, curvedOnly = false): Fit | null {
   if (!curvedOnly) {
-    const plane = fitPlane(vs, tris, f);
+    const plane = fitPlane(vs, tris, fitter);
     const nrm = (plane.primitive as Extract<Primitive, { kind: "plane" }>).normal;
-    if (plane.residual <= f.tolerance && tris.every((t) => dot(f.normals[t]!, nrm) > f.flat)) return plane;
+
+    if (plane.residual <= fitter.tolerance && tris.every((t) => dot(fitter.normals[t]!, nrm) > fitter.flat)) {
+      return plane;
+    }
   }
 
-  return fitCurved(tris, vs, f)[0] ?? null;
+  return fitCurved(tris, vs, fitter)[0] ?? null;
 }
 
 /** Every curved primitive that fits a set of triangles within tolerance, simplest first. */
-function fitCurved(tris: number[], vs: number[], f: Fitter): Fit[] {
+function fitCurved(tris: number[], vs: number[], fitter: Fitter): Fit[] {
   if (vs.length < 6 || tris.length < 4) return [];
 
   const out: Fit[] = [];
-  const cyl = fitCylinder(vs, tris, f);
-  if (cyl && cyl.residual <= f.tolerance) out.push(cyl);
+  const cyl = fitCylinder(vs, tris, fitter);
+  if (cyl && cyl.residual <= fitter.tolerance) out.push(cyl);
 
   if (vs.length >= 8) {
-    const cone = fitCone(vs, tris, f);
-    if (cone && cone.residual <= f.tolerance) out.push(cone);
+    const cone = fitCone(vs, tris, fitter);
+    if (cone && cone.residual <= fitter.tolerance) out.push(cone);
 
-    const sphere = fitSphere(vs, f);
-    if (sphere && sphere.residual <= f.tolerance) out.push(sphere);
+    const sphere = fitSphere(vs, fitter);
+    if (sphere && sphere.residual <= fitter.tolerance) out.push(sphere);
   }
 
   return out;
 }
 
-function fitPlane(vs: number[], tris: number[], f: Fitter): Fit {
+function fitPlane(vs: number[], tris: number[], fitter: Fitter): Fit {
   let nrm: Vec3 = [0, 0, 0];
   let c: Vec3 = [0, 0, 0];
   let total = 0;
 
   for (const t of tris) {
-    nrm = add(nrm, scale(f.normals[t]!, f.areas[t]!));
-    c = add(c, scale(f.centroids[t]!, f.areas[t]!));
-    total += f.areas[t]!;
+    nrm = add(nrm, scale(fitter.normals[t]!, fitter.areas[t]!));
+    c = add(c, scale(fitter.centroids[t]!, fitter.areas[t]!));
+    total += fitter.areas[t]!;
   }
 
   nrm = unit(nrm);
-  c = total > 0 ? scale(c, 1 / total) : f.p(vs[0]!);
+  c = total > 0 ? scale(c, 1 / total) : fitter.p(vs[0]!);
 
   const primitive: Primitive = { kind: "plane", origin: c, normal: nrm };
 
-  return { primitive, residual: residualOf(vs, primitive, f) };
+  return { primitive, residual: residualOf(vs, primitive, fitter) };
 }
 
 /**
  * Area-weighted covariance of the triangle normals about their mean; its smallest axis is the axis of a
  * cylinder or cone.
  */
-function normalAxis(tris: number[], f: Fitter): { axis: Vec3; spread: number } | null {
+function normalAxis(tris: number[], fitter: Fitter): { axis: Vec3; spread: number } | null {
   let mean: Vec3 = [0, 0, 0];
   let total = 0;
 
   for (const t of tris) {
-    mean = add(mean, scale(f.normals[t]!, f.areas[t]!));
-    total += f.areas[t]!;
+    mean = add(mean, scale(fitter.normals[t]!, fitter.areas[t]!));
+    total += fitter.areas[t]!;
   }
 
   if (!(total > 0)) return null;
@@ -763,8 +774,8 @@ function normalAxis(tris: number[], f: Fitter): { axis: Vec3; spread: number } |
   const m = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 
   for (const t of tris) {
-    const d = sub(f.normals[t]!, mean);
-    const w = f.areas[t]! / total;
+    const d = sub(fitter.normals[t]!, mean);
+    const w = fitter.areas[t]! / total;
     for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) m[i * 3 + j]! += w * d[i]! * d[j]!;
   }
 
@@ -776,20 +787,20 @@ function normalAxis(tris: number[], f: Fitter): { axis: Vec3; spread: number } |
   return { axis: unit(vectors[k]!), spread: Math.max(...values) };
 }
 
-function fitCylinder(vs: number[], tris: number[], f: Fitter): Fit | null {
-  const ax = normalAxis(tris, f);
+function fitCylinder(vs: number[], tris: number[], fitter: Fitter): Fit | null {
+  const ax = normalAxis(tris, fitter);
   if (!ax || ax.spread < 1e-6) return null;
 
   const [e1, e2] = basis(ax.axis);
-  const pts = vs.map((v) => f.p(v));
+  const pts = vs.map((v) => fitter.p(v));
   const uv = pts.map((q): [number, number] => [dot(q, e1), dot(q, e2)]);
   const circle = fitCircle(uv);
-  if (!circle || !(circle.r > 0) || circle.r > f.diag * 100) return null;
+  if (!circle || !(circle.r > 0) || circle.r > fitter.diag * 100) return null;
 
   const origin = add(scale(e1, circle.cx), scale(e2, circle.cy));
   const primitive: Primitive = { kind: "cylinder", origin, axis: ax.axis, radius: circle.r };
 
-  return { primitive, residual: residualOf(vs, primitive, f) };
+  return { primitive, residual: residualOf(vs, primitive, fitter) };
 }
 
 /** Least squares circle (Kåsa) refined by a few Gauss-Newton steps on the geometric distance. */
@@ -863,20 +874,20 @@ export function fitCircle(pts: [number, number][]): { cx: number; cy: number; r:
   return { cx: cx + mx, cy: cy + my, r };
 }
 
-function fitCone(vs: number[], tris: number[], f: Fitter): Fit | null {
-  const ax = normalAxis(tris, f);
+function fitCone(vs: number[], tris: number[], fitter: Fitter): Fit | null {
+  const ax = normalAxis(tris, fitter);
   if (!ax || ax.spread < 1e-6) return null;
 
   // Every tangent plane of a cone passes through its apex: least squares point of all triangle planes.
   const a = [0, 0, 0, 0, 0, 0, 0, 0, 0];
   const b = [0, 0, 0];
   let total = 0;
-  for (const t of tris) total += f.areas[t]!;
+  for (const t of tris) total += fitter.areas[t]!;
 
   for (const t of tris) {
-    const nrm = f.normals[t]!;
-    const w = f.areas[t]! / total;
-    const d = dot(nrm, f.centroids[t]!);
+    const nrm = fitter.normals[t]!;
+    const w = fitter.areas[t]! / total;
+    const d = dot(nrm, fitter.centroids[t]!);
 
     for (let i = 0; i < 3; i++) {
       b[i]! += w * nrm[i]! * d;
@@ -888,7 +899,7 @@ function fitCone(vs: number[], tris: number[], f: Fitter): Fit | null {
   if (!apexSolution) return null;
 
   const apex = apexSolution as Vec3;
-  const pts = vs.map((v) => f.p(v));
+  const pts = vs.map((v) => fitter.p(v));
   let axis = ax.axis;
   let along = 0;
   for (const q of pts) along += dot(sub(q, apex), axis);
@@ -902,7 +913,7 @@ function fitCone(vs: number[], tris: number[], f: Fitter): Fit | null {
   for (const q of pts) {
     const d = sub(q, apex);
     const l = len(d);
-    if (l > f.tolerance) ((ang += Math.acos(Math.max(-1, Math.min(1, dot(d, axis) / l)))), count++);
+    if (l > fitter.tolerance) ((ang += Math.acos(Math.max(-1, Math.min(1, dot(d, axis) / l)))), count++);
   }
 
   if (!count) return null;
@@ -912,16 +923,16 @@ function fitCone(vs: number[], tris: number[], f: Fitter): Fit | null {
 
   const primitive: Primitive = { kind: "cone", apex, axis, halfAngle: ang };
 
-  return { primitive, residual: residualOf(vs, primitive, f) };
+  return { primitive, residual: residualOf(vs, primitive, fitter) };
 }
 
-function fitSphere(vs: number[], f: Fitter): Fit | null {
+function fitSphere(vs: number[], fitter: Fitter): Fit | null {
   // Algebraic fit: x² + y² + z² + D x + E y + F z + G = 0.
   const a = new Array<number>(16).fill(0);
   const b = [0, 0, 0, 0];
 
   for (const v of vs) {
-    const q = f.p(v);
+    const q = fitter.p(v);
     const row = [q[0], q[1], q[2], 1];
     const rhs = -(q[0] * q[0] + q[1] * q[1] + q[2] * q[2]);
 
@@ -939,11 +950,11 @@ function fitSphere(vs: number[], f: Fitter): Fit | null {
   if (!(r2 > 0)) return null;
 
   const radius = Math.sqrt(r2);
-  if (radius > f.diag * 100) return null;
+  if (radius > fitter.diag * 100) return null;
 
   const primitive: Primitive = { kind: "sphere", center, radius };
 
-  return { primitive, residual: residualOf(vs, primitive, f) };
+  return { primitive, residual: residualOf(vs, primitive, fitter) };
 }
 
 // ---------------------------------------------------------------- linear algebra
@@ -1061,12 +1072,12 @@ function traceBoundaries(
   const to = (h: number) => triangles[Math.floor(h / 3) * 3 + (((h % 3) + 1) % 3)]!;
   const nextInTriangle = (h: number) => Math.floor(h / 3) * 3 + (((h % 3) + 1) % 3);
 
-  for (const r of regions) {
+  for (const region of regions) {
     const visited = new Set<number>();
     const boundary: number[] = [];
 
-    for (const t of r.triangles) {
-      for (let e = 0; e < 3; e++) if (regionOf(twin[t * 3 + e]!) !== r.index) boundary.push(t * 3 + e);
+    for (const t of region.triangles) {
+      for (let e = 0; e < 3; e++) if (regionOf(twin[t * 3 + e]!) !== region.index) boundary.push(t * 3 + e);
     }
 
     for (const start of boundary) {
@@ -1083,7 +1094,7 @@ function traceBoundaries(
         // Rotate around the end vertex through this region's triangles until the outgoing edge leaves it.
         let k = nextInTriangle(h);
         let guard = 0;
-        while (regionOf(twin[k]!) === r.index && guard++ < 10000) k = nextInTriangle(twin[k]!);
+        while (regionOf(twin[k]!) === region.index && guard++ < 10000) k = nextInTriangle(twin[k]!);
         h = k;
       } while (h !== start && !visited.has(h));
 
@@ -1146,13 +1157,13 @@ function traceBoundaries(
         if (si === undefined) {
           si = segments.length;
           bySequence.set(forwardKey, si);
-          segments.push({ a: r.index, b: other, vertices: vs, closed });
+          segments.push({ a: region.index, b: other, vertices: vs, closed });
         }
 
         loopRefs.push({ segment: si, forward });
       }
 
-      r.loops.push(loopRefs);
+      region.loops.push(loopRefs);
     }
   }
 

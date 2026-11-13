@@ -100,9 +100,9 @@ export function reconstruct(fit: MeshFit, opts: ReconstructOptions = {}, upright
     if (!levels.some((l) => Math.abs(l - z) <= tol * 2)) levels.push(z);
   };
 
-  for (const r of fit.regions) {
-    if (r.primitive?.kind === "plane" && Math.abs(dot(r.primitive.normal, n)) > COS_2DEG) {
-      addLevel(dot(r.primitive.origin, n));
+  for (const region of fit.regions) {
+    if (region.primitive?.kind === "plane" && Math.abs(dot(region.primitive.normal, n)) > COS_2DEG) {
+      addLevel(dot(region.primitive.origin, n));
     }
   }
 
@@ -165,7 +165,7 @@ export function reconstruct(fit: MeshFit, opts: ReconstructOptions = {}, upright
 
     if (typeof process !== "undefined" && process.env?.["MESH_DEBUG"]) {
       process.stderr.write(
-        `layer ${layer} z ${fmt(zA)}..${fmt(zB)} loops ${loops.length} runs ${loops.reduce((n, l) => n + l.length, 0)} entities ${sk.entities.length} constraints ${sk.constraints.length}\n`,
+        `layer ${layer} z ${fmt(zA)}..${fmt(zB)} loops ${loops.length} runs ${loops.reduce((n, loop) => n + loop.length, 0)} entities ${sk.entities.length} constraints ${sk.constraints.length}\n`,
       );
     }
 
@@ -223,31 +223,38 @@ function reconstructTilted(fit: MeshFit, dir: Vec3, opts: ReconstructOptions): R
   let base: Vec3 = dir;
   let baseArea = 0;
 
-  for (const r of fit.regions) {
-    const s = r.primitive;
-    if (s?.kind !== "plane" || Math.abs(dot(s.normal, dir)) < COS_2DEG || r.area <= baseArea) continue;
+  for (const region of fit.regions) {
+    const primitive = region.primitive;
 
-    base = s.normal;
-    baseArea = r.area;
+    if (
+      primitive?.kind !== "plane" ||
+      Math.abs(dot(primitive.normal, dir)) < COS_2DEG ||
+      region.area <= baseArea
+    ) {
+      continue;
+    }
+
+    base = primitive.normal;
+    baseArea = region.area;
   }
 
   const e3 = norm(scale(base, -1));
   let side: Vec3 | null = null;
   let sideArea = 0;
 
-  for (const r of fit.regions) {
-    const s = r.primitive;
+  for (const region of fit.regions) {
+    const primitive = region.primitive;
 
     if (
-      s?.kind !== "plane" ||
-      Math.abs(dot(s.normal, e3)) > Math.sin((2 * Math.PI) / 180) ||
-      r.area <= sideArea
+      primitive?.kind !== "plane" ||
+      Math.abs(dot(primitive.normal, e3)) > Math.sin((2 * Math.PI) / 180) ||
+      region.area <= sideArea
     ) {
       continue;
     }
 
-    side = s.normal;
-    sideArea = r.area;
+    side = primitive.normal;
+    sideArea = region.area;
   }
 
   // Without a flat side wall (a round part), any direction square to the main one.
@@ -463,33 +470,37 @@ function mainDirection(fit: MeshFit): Vec3 | null {
 
     let score = 0;
 
-    for (const r of fit.regions) {
-      const s = r.primitive;
-      if (!s) continue;
+    for (const region of fit.regions) {
+      const primitive = region.primitive;
+      if (!primitive) continue;
 
-      if (s.kind === "plane") {
-        const c = Math.abs(dot(s.normal, d));
-        if (c > COS_2DEG) score += r.area;
-        else if (c < Math.sin((2 * Math.PI) / 180)) score += r.area * 0.5;
-      } else if ((s.kind === "cylinder" || s.kind === "cone") && Math.abs(dot(s.axis, d)) > COS_2DEG) {
-        score += r.area;
+      if (primitive.kind === "plane") {
+        const c = Math.abs(dot(primitive.normal, d));
+        if (c > COS_2DEG) score += region.area;
+        else if (c < Math.sin((2 * Math.PI) / 180)) score += region.area * 0.5;
+      } else if (
+        (primitive.kind === "cylinder" || primitive.kind === "cone") &&
+        Math.abs(dot(primitive.axis, d)) > COS_2DEG
+      ) {
+        score += region.area;
       }
     }
 
     candidates.push({ dir: d, score });
   };
 
-  for (const r of fit.regions) {
-    const s = r.primitive;
-    if (s?.kind === "plane") consider(s.normal);
-    else if (s?.kind === "cylinder" || s?.kind === "cone") consider(s.axis);
+  for (const region of fit.regions) {
+    const primitive = region.primitive;
+    if (primitive?.kind === "plane") consider(primitive.normal);
+    else if (primitive?.kind === "cylinder" || primitive?.kind === "cone") consider(primitive.axis);
   }
 
   const best = candidates.sort((a, b) => b.score - a.score)[0];
   if (!best) return null;
 
   return fit.regions.some(
-    (r) => r.primitive?.kind === "plane" && Math.abs(dot(r.primitive.normal, best.dir)) > COS_2DEG,
+    (region) =>
+      region.primitive?.kind === "plane" && Math.abs(dot(region.primitive.normal, best.dir)) > COS_2DEG,
   )
     ? best.dir
     : null;
@@ -701,7 +712,8 @@ function sketchOf(
     });
 
     const points = pieced.reduce(
-      (s, l) => s + (l.circle ? 1 : l.pieces.length + l.pieces.filter((pc) => pc.kind === "arc").length),
+      (s, l) =>
+        s + (l.circle ? 1 : l.pieces.length + l.pieces.filter((piece) => piece.kind === "arc").length),
       0,
     );
     if (points <= MAX_SKETCH_POINTS || simplifyTol > fit.diag / 20) break;
@@ -727,7 +739,7 @@ function sketchOf(
       continue;
     }
 
-    if (pieces.length < 3 && !pieces.some((pc) => pc.kind === "arc")) continue;
+    if (pieces.length < 3 && !pieces.some((piece) => piece.kind === "arc")) continue;
 
     // A sliver with no area (a wall thinner than the simplification) cannot be extruded, nor can
     // a loop that crosses itself after simplification.
@@ -739,39 +751,39 @@ function sketchOf(
     }
 
     // Shared point entities at the joints.
-    const ids = pieces.map((pc) => point(pc.a));
+    const ids = pieces.map((piece) => point(piece.a));
     const endOf = (i: number) => ids[(i + 1) % ids.length]!;
     const lines: string[] = [];
-    pieces.forEach((pc, i) => {
-      if (pc.kind === "line") {
+    pieces.forEach((piece, i) => {
+      if (piece.kind === "line") {
         const id = `l${++nl}`;
         entities.push({ id, type: "line", p1: ids[i]!, p2: endOf(i) });
         lines.push(id);
       } else {
         // Ends fixed (shared with the neighbours) and the radius given: the centre follows.
-        const c = point(pc.center);
+        const c = point(piece.center);
         const id = `a${++na}`;
         entities.push({
           id,
           type: "arc",
           center: c,
-          start: pc.ccw ? ids[i]! : endOf(i),
-          end: pc.ccw ? endOf(i) : ids[i]!,
+          start: piece.ccw ? ids[i]! : endOf(i),
+          end: piece.ccw ? endOf(i) : ids[i]!,
         });
 
         // The ends are rounded to µm: the radius must still reach across them.
-        const chord = len(sub(pc.b, pc.a));
+        const chord = len(sub(piece.b, piece.a));
         constraints.push({
           id: `k${++ncs}`,
           type: "radius",
           curve: id,
-          value: round(Math.max(pc.radius, chord / 2 + 0.002)),
+          value: round(Math.max(piece.radius, chord / 2 + 0.002)),
         });
       }
     });
 
     const rect =
-      pieces.length === 4 && pieces.every((pc) => pc.kind === "line")
+      pieces.length === 4 && pieces.every((piece) => piece.kind === "line")
         ? rectangle(pieces as { a: Vec3; b: Vec3 }[], frame, tol)
         : null;
 
@@ -833,9 +845,9 @@ function sketchOf(
 function loopArea(pieces: Piece[], frame: PlaneFrame): number {
   let area = 0;
 
-  for (const pc of pieces) {
-    const [ax, ay] = toSketch(frame, pc.a);
-    const [bx, by] = toSketch(frame, pc.b);
+  for (const piece of pieces) {
+    const [ax, ay] = toSketch(frame, piece.a);
+    const [bx, by] = toSketch(frame, piece.b);
     area += ax * by - bx * ay;
   }
 
@@ -844,7 +856,7 @@ function loopArea(pieces: Piece[], frame: PlaneFrame): number {
 
 /** Whether any two non-adjacent pieces of a loop cross (arcs taken as their chords). */
 function selfIntersects(pieces: Piece[], frame: PlaneFrame): boolean {
-  const segs = pieces.map((pc) => [toSketch(frame, pc.a), toSketch(frame, pc.b)] as [Vec2, Vec2]);
+  const segs = pieces.map((piece) => [toSketch(frame, piece.a), toSketch(frame, piece.b)] as [Vec2, Vec2]);
   const cross2 = (o: Vec2, a: Vec2, b: Vec2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const n = segs.length;
 
@@ -947,19 +959,26 @@ function piecesOf(loop: Loop, fit: MeshFit, n: Vec3, tol: number, simplifyTol: n
 
 /** Centre and radius of a run that lies on a cylinder or cone square to the plane, in the plane. */
 function roundRun(run: Run, fit: MeshFit, n: Vec3, tol: number): { center: Vec3; radius: number } | null {
-  const s = fit.regions[run.region]?.primitive;
-  if (!s || (s.kind !== "cylinder" && s.kind !== "cone") || Math.abs(dot(s.axis, n)) < COS_2DEG) return null;
+  const primitive = fit.regions[run.region]?.primitive;
 
-  const base = s.kind === "cylinder" ? s.origin : s.apex;
+  if (
+    !primitive ||
+    (primitive.kind !== "cylinder" && primitive.kind !== "cone") ||
+    Math.abs(dot(primitive.axis, n)) < COS_2DEG
+  ) {
+    return null;
+  }
+
+  const base = primitive.kind === "cylinder" ? primitive.origin : primitive.apex;
   const z = dot(run.points[0]!, n);
   const center: Vec3 = [0, 1, 2].map(
-    (k) => base[k]! + s.axis[k]! * ((z - dot(base, n)) / dot(s.axis, n)),
+    (k) => base[k]! + primitive.axis[k]! * ((z - dot(base, n)) / dot(primitive.axis, n)),
   ) as Vec3;
   // The recognised cylinder's radius is exact; the slice points of a tessellated wall lie on it.
   let radius = 0;
 
-  if (s.kind === "cylinder") {
-    radius = s.radius;
+  if (primitive.kind === "cylinder") {
+    radius = primitive.radius;
   } else {
     for (const q of run.points) radius += len(sub(q, center));
     radius /= run.points.length;

@@ -91,9 +91,10 @@ export function textLoops(
 
   // Drop repeated points (a closing point equal to the first, zero-length pieces).
   const clean = loops
-    .map((l) =>
-      l.filter(
-        (p, i) => Math.hypot(p[0] - l[(i + 1) % l.length]![0], p[1] - l[(i + 1) % l.length]![1]) > 1e-6,
+    .map((loop) =>
+      loop.filter(
+        (p, i) =>
+          Math.hypot(p[0] - loop[(i + 1) % loop.length]![0], p[1] - loop[(i + 1) % loop.length]![1]) > 1e-6,
       ),
     )
     .filter((l) => l.length >= 3 && Math.abs(area(l)) > 1e-6);
@@ -102,24 +103,24 @@ export function textLoops(
 }
 
 /** Signed area (counter-clockwise positive). */
-export function area(l: Loop): number {
+export function area(loop: Loop): number {
   let a = 0;
 
-  for (let i = 0; i < l.length; i++) {
-    const [x0, y0] = l[i]!;
-    const [x1, y1] = l[(i + 1) % l.length]!;
+  for (let i = 0; i < loop.length; i++) {
+    const [x0, y0] = loop[i]!;
+    const [x1, y1] = loop[(i + 1) % loop.length]!;
     a += x0 * y1 - x1 * y0;
   }
 
   return a / 2;
 }
 
-export function inside(p: [number, number], l: Loop): boolean {
+export function inside(p: [number, number], loop: Loop): boolean {
   let c = false;
 
-  for (let i = 0, j = l.length - 1; i < l.length; j = i++) {
-    const [xi, yi] = l[i]!;
-    const [xj, yj] = l[j]!;
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const [xi, yi] = loop[i]!;
+    const [xj, yj] = loop[j]!;
     if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c;
   }
 
@@ -128,16 +129,18 @@ export function inside(p: [number, number], l: Loop): boolean {
 
 /** Outlines grouped into shapes: each outer loop with the holes directly inside it (even-odd). */
 export function nest(loops: Loop[]): { outer: Loop; holes: Loop[] }[] {
-  const depth = loops.map((l, i) => loops.filter((o, j) => j !== i && inside(l[0]!, o)).length);
-  const shapes = loops.flatMap((l, i) =>
-    depth[i]! % 2 === 0 ? [{ i, outer: area(l) > 0 ? l : [...l].reverse(), holes: [] as Loop[] }] : [],
+  const depth = loops.map((loop, i) => loops.filter((o, j) => j !== i && inside(loop[0]!, o)).length);
+  const shapes = loops.flatMap((loop, i) =>
+    depth[i]! % 2 === 0
+      ? [{ i, outer: area(loop) > 0 ? loop : [...loop].reverse(), holes: [] as Loop[] }]
+      : [],
   );
-  loops.forEach((l, i) => {
+  loops.forEach((loop, i) => {
     if (depth[i]! % 2 === 0) return;
 
     // The hole belongs to the innermost outer loop around it.
-    const owner = shapes.filter((s) => inside(l[0]!, loops[s.i]!) && depth[s.i] === depth[i]! - 1)[0];
-    owner?.holes.push(area(l) < 0 ? l : [...l].reverse());
+    const owner = shapes.filter((s) => inside(loop[0]!, loops[s.i]!) && depth[s.i] === depth[i]! - 1)[0];
+    owner?.holes.push(area(loop) < 0 ? loop : [...loop].reverse());
   });
 
   return shapes.map(({ outer, holes }) => ({ outer, holes }));

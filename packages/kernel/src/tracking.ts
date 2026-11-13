@@ -77,8 +77,8 @@ type Answer = { value: unknown } | { error: string };
 function answerOf(fn: () => unknown): Answer {
   try {
     return { value: fn() };
-  } catch (e) {
-    return { error: e instanceof Error ? `${e.constructor.name}: ${e.message}` : String(e) };
+  } catch (error) {
+    return { error: error instanceof Error ? `${error.constructor.name}: ${error.message}` : String(error) };
   }
 }
 

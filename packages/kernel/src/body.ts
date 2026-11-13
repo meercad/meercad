@@ -61,26 +61,30 @@ export class Body implements Topology {
     // Only the faces and edges themselves are kept. What an explorer hands out on the way is freed
     // at once: a state keeps its shapes for as long as the design is open (Arena.trim), and a big
     // design (1100 steps) held 1.5 million of these for nothing, 350 MB of the kernel worker.
-    [this.faceMap, this.faces] = indexShapes(oc, arena, shape, "TopAbs_FACE", (s) => oc.TopoDS.Face(s));
+    [this.faceMap, this.faces] = indexShapes(oc, arena, shape, "TopAbs_FACE", (shape) =>
+      oc.TopoDS.Face(shape),
+    );
   }
 
   private get edgeIndexed(): { edges: TopoDS_Edge[]; map: ShapeIndex; faces: number[][] } {
     if (this.edgeData) return this.edgeData;
 
     const { oc } = this;
-    const [map, edges] = indexShapes(oc, this.arena, this.shape, "TopAbs_EDGE", (s) => oc.TopoDS.Edge(s));
+    const [map, edges] = indexShapes(oc, this.arena, this.shape, "TopAbs_EDGE", (shape) =>
+      oc.TopoDS.Edge(shape),
+    );
     const faces: number[][] = edges.map(() => []);
     this.faces.forEach((face, fi) => {
-      const ex = new oc.TopExp_Explorer(face, "TopAbs_EDGE");
+      const explorer = new oc.TopExp_Explorer(face, "TopAbs_EDGE");
 
-      for (; ex.More(); ex.Next()) {
-        const edge = ex.Current();
+      for (; explorer.More(); explorer.Next()) {
+        const edge = explorer.Current();
         const adj = faces[map.find(edge)];
         edge.delete();
         if (adj && !adj.includes(fi)) adj.push(fi);
       }
 
-      ex.delete();
+      explorer.delete();
     });
 
     return (this.edgeData = { edges, map, faces });
@@ -96,12 +100,12 @@ export class Body implements Topology {
   }
 
   /** 0-based face index of a sub-shape of this body, or -1. */
-  faceIndex(s: TopoDS_Shape): number {
-    return this.faceMap.find(s);
+  faceIndex(shape: TopoDS_Shape): number {
+    return this.faceMap.find(shape);
   }
 
-  edgeIndex(s: TopoDS_Shape): number {
-    return this.edgeIndexed.map.find(s);
+  edgeIndex(shape: TopoDS_Shape): number {
+    return this.edgeIndexed.map.find(shape);
   }
 
   /** A point inside each face (triangle centroid) and on each edge (polyline midpoint). */
@@ -114,7 +118,7 @@ export class Body implements Topology {
   }
 
   get faceInfo(): FaceInfo[] {
-    if (!this.info) this.info = this.faces.map((f) => faceInfo(this.oc, this.arena, f));
+    if (!this.info) this.info = this.faces.map((face) => faceInfo(this.oc, this.arena, face));
 
     return this.info;
   }
@@ -125,10 +129,10 @@ type Vec3 = [number, number, number];
 
 function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
   const faceByHash = new Map<number, number>();
-  body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));
+  body.faces.forEach((face, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(face, HASH_BOUND), i));
 
   const edgeByHash = new Map<number, number>();
-  body.edges.forEach((e, i) => edgeByHash.set(oc.ReplicadShapeHasher.HashCode(e, HASH_BOUND), i));
+  body.edges.forEach((edge, i) => edgeByHash.set(oc.ReplicadShapeHasher.HashCode(edge, HASH_BOUND), i));
 
   const m = oc.ReplicadMeshExtractor.extract(body.shape, 0.1, 0.5, true);
   const em = oc.ReplicadEdgeMeshExtractor.extract(body.shape, 0.1, 0.5);
@@ -206,35 +210,35 @@ class ShapeIndex {
   constructor(private readonly oc: OC) {}
 
   /** Adds the shape if new; returns its 0-based index. */
-  add(s: TopoDS_Shape): number {
-    const h = this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND);
+  add(shape: TopoDS_Shape): number {
+    const h = this.oc.ReplicadShapeHasher.HashCode(shape, HASH_BOUND);
     const at = this.byHash.get(h);
 
     if (at === undefined) {
       this.byHash.set(h, this.shapes.length);
 
-      return this.shapes.push(s) - 1;
+      return this.shapes.push(shape) - 1;
     }
 
     const hit =
       typeof at === "number"
-        ? this.shapes[at]!.IsSame(s)
+        ? this.shapes[at]!.IsSame(shape)
           ? at
           : -1
-        : (at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1);
+        : (at.find((i) => this.shapes[i]!.IsSame(shape)) ?? -1);
     if (hit !== -1) return hit;
     if (typeof at === "number") this.byHash.set(h, [at, this.shapes.length]);
     else at.push(this.shapes.length);
 
-    return this.shapes.push(s) - 1;
+    return this.shapes.push(shape) - 1;
   }
 
-  find(s: TopoDS_Shape): number {
-    const at = this.byHash.get(this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND));
+  find(shape: TopoDS_Shape): number {
+    const at = this.byHash.get(this.oc.ReplicadShapeHasher.HashCode(shape, HASH_BOUND));
     if (at === undefined) return -1;
-    if (typeof at === "number") return this.shapes[at]!.IsSame(s) ? at : -1;
+    if (typeof at === "number") return this.shapes[at]!.IsSame(shape) ? at : -1;
 
-    return at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1;
+    return at.find((i) => this.shapes[i]!.IsSame(shape)) ?? -1;
   }
 }
 
@@ -248,25 +252,25 @@ function indexShapes<T extends TopoDS_Shape>(
   arena: Arena,
   shape: TopoDS_Shape,
   type: "TopAbs_FACE" | "TopAbs_EDGE",
-  cast: (s: TopoDS_Shape) => T,
+  cast: (shape: TopoDS_Shape) => T,
 ): [ShapeIndex, T[]] {
   const index = new ShapeIndex(oc);
   const unique: T[] = [];
-  const ex = new oc.TopExp_Explorer(shape, type);
+  const explorer = new oc.TopExp_Explorer(shape, type);
 
-  for (; ex.More(); ex.Next()) {
-    const s = ex.Current();
+  for (; explorer.More(); explorer.Next()) {
+    const shape = explorer.Current();
 
-    if (index.find(s) === -1) {
-      const typed = arena.track(cast(s));
+    if (index.find(shape) === -1) {
+      const typed = arena.track(cast(shape));
       index.add(typed);
       unique.push(typed);
     }
 
-    s.delete();
+    shape.delete();
   }
 
-  ex.delete();
+  explorer.delete();
 
   return [index, unique];
 }

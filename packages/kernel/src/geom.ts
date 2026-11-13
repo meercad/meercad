@@ -46,15 +46,15 @@ export class Geom {
     frame: PlaneFrame,
     regions: readonly Region[],
   ): { face: TopoDS_Face; edges: { edge: TopoDS_Edge; name: string }[] }[] {
-    return regions.map((r) => {
+    return regions.map((region) => {
       const named: { edge: TopoDS_Edge; name: string }[] = [];
-      const outer = this.wire(frame, r.outer, named);
+      const outer = this.wire(frame, region.outer, named);
       const pln = this.arena.track(new this.oc.gp_Pln(this.ax3(frame)));
-      const mf = this.arena.track(new this.oc.BRepBuilderAPI_MakeFace(pln, outer, true));
-      for (const h of r.holes) mf.Add(this.wire(frame, h, named));
-      if (!mf.IsDone()) throw new Error(`could not build a face for region ${r.key}`);
+      const faceBuilder = this.arena.track(new this.oc.BRepBuilderAPI_MakeFace(pln, outer, true));
+      for (const h of region.holes) faceBuilder.Add(this.wire(frame, h, named));
+      if (!faceBuilder.IsDone()) throw new Error(`could not build a face for region ${region.key}`);
 
-      return { face: this.arena.track(mf.Face()), edges: named };
+      return { face: this.arena.track(faceBuilder.Face()), edges: named };
     });
   }
 
@@ -68,7 +68,7 @@ export class Geom {
   splineEdge(
     frame: PlaneFrame,
     pts: readonly [number, number][],
-    v0: TopoDS_Vertex,
+    vertex: TopoDS_Vertex,
     v1: TopoDS_Vertex,
   ): TopoDS_Edge {
     const oc = this.oc;
@@ -78,22 +78,22 @@ export class Geom {
     const fit = this.arena.track(new oc.GeomAPI_PointsToBSpline(arr, 3, 8, "GeomAbs_C2" as never, 1e-6));
 
     return this.arena.track(
-      this.arena.track(new oc.BRepBuilderAPI_MakeEdge(this.arena.track(fit.Curve()), v0, v1)).Edge(),
+      this.arena.track(new oc.BRepBuilderAPI_MakeEdge(this.arena.track(fit.Curve()), vertex, v1)).Edge(),
     );
   }
 
   private wire(frame: PlaneFrame, loop0: readonly LoopEdge[], named: { edge: TopoDS_Edge; name: string }[]) {
     const oc = this.oc;
-    const mw = this.arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const wireBuilder = this.arena.track(new oc.BRepBuilderAPI_MakeWire());
     // Splines arrive as runs of short lines ("s1~0", "s1~1", …): each run becomes one smooth edge.
     // The loop is turned so that it does not start in the middle of a run.
-    const base = (e: LoopEdge) => (e.curve.includes("~") ? e.curve.split("~")[0]! : null);
+    const base = (edge: LoopEdge) => (edge.curve.includes("~") ? edge.curve.split("~")[0]! : null);
     const cut = loop0.findIndex(
-      (e, i) => base(e) === null || base(e) !== base(loop0[(i - 1 + loop0.length) % loop0.length]!),
+      (edge, i) => base(edge) === null || base(edge) !== base(loop0[(i - 1 + loop0.length) % loop0.length]!),
     );
     const loop = cut > 0 ? [...loop0.slice(cut), ...loop0.slice(0, cut)] : [...loop0];
     // Shared vertices so consecutive edges connect without MakeWire rebuilding them.
-    const starts = loop.map((e) => this.vertex(toWorld(frame, segStart(e))));
+    const starts = loop.map((edge) => this.vertex(toWorld(frame, segStart(edge))));
 
     for (let i = 0; i < loop.length;) {
       const e = loop[i]!;
@@ -120,10 +120,10 @@ export class Geom {
         const mid = halves.length > 1 ? this.vertex(toWorld(frame, pts[halves[0]![1]]!)) : null;
 
         for (const [from, to] of halves) {
-          const v0 = from === 0 ? starts[i]! : mid!;
+          const vertex = from === 0 ? starts[i]! : mid!;
           const v1 = to === pts.length - 1 ? starts[(j + 1) % loop.length]! : mid!;
-          const edge = this.splineEdge(frame, pts.slice(from, to + 1), v0, v1);
-          mw.Add(edge);
+          const edge = this.splineEdge(frame, pts.slice(from, to + 1), vertex, v1);
+          wireBuilder.Add(edge);
           named.push({ edge, name: b });
         }
 
@@ -131,42 +131,44 @@ export class Geom {
         continue;
       }
 
-      const v0 = starts[i]!;
+      const vertex = starts[i]!;
       const v1 = starts[(i + 1) % loop.length]!;
       let edge: TopoDS_Edge;
-      const s = e.seg;
+      const segment = e.seg;
 
-      if (s.kind === "line") {
-        edge = this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(v0, v1)).Edge());
+      if (segment.kind === "line") {
+        edge = this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, v1)).Edge());
       } else {
-        const center = toWorld(frame, s.center);
+        const center = toWorld(frame, segment.center);
         const circ = this.arena.track(
           new oc.gp_Circ(
             this.arena.track(new oc.gp_Ax2(this.pnt(center), this.dir(frame.normal), this.dir(frame.u))),
-            s.radius,
+            segment.radius,
           ),
         );
 
-        if (s.kind === "circle") {
+        if (segment.kind === "circle") {
           edge = this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(circ)).Edge());
-          if (!s.ccw) edge = this.arena.track(oc.TopoDS.Edge(this.arena.track(edge.Reversed())));
-        } else if (s.ccw) {
-          edge = this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(circ, v0, v1)).Edge());
+          if (!segment.ccw) edge = this.arena.track(oc.TopoDS.Edge(this.arena.track(edge.Reversed())));
+        } else if (segment.ccw) {
+          edge = this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(circ, vertex, v1)).Edge());
         } else {
           // Build the CCW arc v1 → v0 and traverse it backwards.
-          const fwd = this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(circ, v1, v0)).Edge());
+          const fwd = this.arena.track(
+            this.arena.track(new oc.BRepBuilderAPI_MakeEdge(circ, v1, vertex)).Edge(),
+          );
           edge = this.arena.track(oc.TopoDS.Edge(this.arena.track(fwd.Reversed())));
         }
       }
 
-      mw.Add(edge);
+      wireBuilder.Add(edge);
       named.push({ edge, name: e.name });
       i++;
     }
 
-    if (!mw.IsDone()) throw new Error("profile loop is not closed");
+    if (!wireBuilder.IsDone()) throw new Error("profile loop is not closed");
 
-    return this.arena.track(mw.Wire());
+    return this.arena.track(wireBuilder.Wire());
   }
 
   translation(v: Vec3): gp_Trsf {
@@ -196,15 +198,18 @@ export class Geom {
 
     return {
       shape: this.arena.track(tr.Shape()),
-      map: (s: TopoDS_Shape) => this.arena.track(tr.ModifiedShape(s)),
+      map: (shape: TopoDS_Shape) => this.arena.track(tr.ModifiedShape(shape)),
     };
   }
 }
 
-function segStart(e: LoopEdge): [number, number] {
-  const s = e.seg;
-  if (s.kind === "line") return s.a;
-  if (s.kind === "circle") return [s.center[0] + s.radius, s.center[1]];
+function segStart(edge: LoopEdge): [number, number] {
+  const segment = edge.seg;
+  if (segment.kind === "line") return segment.a;
+  if (segment.kind === "circle") return [segment.center[0] + segment.radius, segment.center[1]];
 
-  return [s.center[0] + s.radius * Math.cos(s.from), s.center[1] + s.radius * Math.sin(s.from)];
+  return [
+    segment.center[0] + segment.radius * Math.cos(segment.from),
+    segment.center[1] + segment.radius * Math.sin(segment.from),
+  ];
 }
