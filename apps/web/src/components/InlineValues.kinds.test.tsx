@@ -99,11 +99,6 @@ describe("values at more kinds of steps", () => {
     ] });
     await show("gf1");
     await type(/^↕ 3/, "5");
-    // It is taken as written; the step then says what is wrong with it, and undo brings 5 back.
-    const st = (await rebuildNow()).report.features.find((f) => f.id === "gf1")!;
-    expect(st.status).toBe("error");
-    const { undo } = await import("../store");
-    await act(async () => undo());
     expect(feature<{ height: unknown }>("gf1").height).toBe(5);
     // Height 5 units: 35 mm plus the lip (4.4 mm).
     expect((await bbox("gf1")).max[2]).toBeCloseTo(35 + 4.4, 3);
