@@ -13,6 +13,7 @@ import { basename, extname, join, relative, sep } from "node:path";
 export function trashDirFor(path: string, home = homedir()): string {
   const mobile = join(home, "Library", "Mobile Documents");
   const rel = relative(mobile, path);
+
   return rel && !rel.startsWith("..") && !rel.startsWith(sep) ? join(mobile, ".Trash") : join(home, ".Trash");
 }
 
@@ -22,6 +23,7 @@ export function freeName(dir: string, name: string): string {
   const stem = name.slice(0, name.length - ext.length);
   let candidate = name;
   for (let n = 2; existsSync(join(dir, candidate)); n++) candidate = `${stem} ${n}${ext}`;
+
   return join(dir, candidate);
 }
 
@@ -30,11 +32,16 @@ export function freeName(dir: string, name: string): string {
  * folder itself. Throws the system's error when that fails too (the App Store build cannot reach the
  * Trash folder), so the caller still reports it.
  */
-export async function moveToTrash(path: string, trashItem: (path: string) => Promise<void>, home?: string): Promise<void> {
+export async function moveToTrash(
+  path: string,
+  trashItem: (path: string) => Promise<void>,
+  home?: string,
+): Promise<void> {
   try {
     await trashItem(path);
   } catch (e) {
     if (!existsSync(path)) return; // gone after all
+
     try {
       const dir = trashDirFor(path, home);
       await mkdir(dir, { recursive: true });

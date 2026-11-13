@@ -25,7 +25,9 @@ const api = {
   installClaudeDesktop: () => ipcRenderer.invoke("mcp:install-claude-desktop"),
   /** The port this build's MCP server listens on (RC, WIP and the store release each have their own). */
   mcpPort: ipcRenderer.sendSync("mcp:port") as number,
-  /** The MCP bridge, held by the window's page: its state, and turning it on or off from an assistant's tab. */
+  /**
+   * The MCP bridge, held by the window's page: its state, and turning it on or off from an assistant's tab.
+   */
   mcp: {
     /** The window's page reports its state. */
     status: (s: string) => ipcRenderer.send("mcp:status", s),
@@ -39,32 +41,44 @@ const api = {
   },
   /** Assistant sessions' own tabs (MCP): the window's page passes their requests on to them. */
   assistant: {
-    open: (p: { session: string; client: string }): Promise<number> => ipcRenderer.invoke("assistant:open", p),
-    windowOf: (session: string): Promise<number | "closed" | "released" | "idle" | null> => ipcRenderer.invoke("assistant:window", session),
-    call: (window: number, req: unknown): Promise<unknown> => ipcRenderer.invoke("assistant:call", { window, req }),
+    open: (p: { session: string; client: string }): Promise<number> =>
+      ipcRenderer.invoke("assistant:open", p),
+    windowOf: (session: string): Promise<number | "closed" | "released" | "idle" | null> =>
+      ipcRenderer.invoke("assistant:window", session),
+    call: (window: number, req: unknown): Promise<unknown> =>
+      ipcRenderer.invoke("assistant:call", { window, req }),
     /** The assistants' tabs (also sent as "assistant-tabs" whenever they change). */
     tabs: (): Promise<AssistantTabInfo[]> => ipcRenderer.invoke("assistant:tabs"),
     /** Opens an assistant's tab in the room `rect` leaves (CSS pixels), or none. */
-    show: (p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null) => ipcRenderer.send("assistant:show", p),
+    show: (p: { session: string; rect: { x: number; y: number; width: number; height: number } } | null) =>
+      ipcRenderer.send("assistant:show", p),
     /** A picture of the open assistant's tab (PNG data URL), shown in its room while a dialog covers it. */
     snapshot: (session: string): Promise<string | null> => ipcRenderer.invoke("assistant:snapshot", session),
     /** Takes an assistant's tab over: it saves and closes; returns its project for a tab of the user's. */
-    handOver: (session: string, why?: "closed" | "released" | "idle"): Promise<{ id: string; name: string } | null> => ipcRenderer.invoke("assistant:hand-over", session, why),
+    handOver: (
+      session: string,
+      why?: "closed" | "released" | "idle",
+    ): Promise<{ id: string; name: string } | null> =>
+      ipcRenderer.invoke("assistant:hand-over", session, why),
     // In an assistant's tab:
     ready: () => ipcRenderer.send("assistant:ready"),
     project: (p: { id: string; name: string } | null) => ipcRenderer.send("assistant:project", p),
     busy: (p: { busy: boolean; tool: string | null }) => ipcRenderer.send("assistant:busy", p),
     stop: () => ipcRenderer.send("assistant:stop"),
     released: (callId: number) => ipcRenderer.send("window:released", callId),
-    respond: (p: { callId: number; result?: unknown; error?: string }) => ipcRenderer.send("assistant:respond", p),
+    respond: (p: { callId: number; result?: unknown; error?: string }) =>
+      ipcRenderer.send("assistant:respond", p),
   },
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),
     load: (id: string) => ipcRenderer.invoke("projects:load", id),
-    save: (p: { id: string; doc: unknown; thumbnail?: string; look?: number }) => ipcRenderer.invoke("projects:save", p),
-    thumbnail: (p: { id: string; thumbnail: string; look?: number; local?: boolean }) => ipcRenderer.invoke("projects:thumbnail", p),
+    save: (p: { id: string; doc: unknown; thumbnail?: string; look?: number }) =>
+      ipcRenderer.invoke("projects:save", p),
+    thumbnail: (p: { id: string; thumbnail: string; look?: number; local?: boolean }) =>
+      ipcRenderer.invoke("projects:thumbnail", p),
     sharedThumbnail: (id: string) => ipcRenderer.invoke("projects:shared-thumbnail", id),
-    create: (p: { name: string; doc: unknown; folder?: string; test?: boolean }) => ipcRenderer.invoke("projects:create", p),
+    create: (p: { name: string; doc: unknown; folder?: string; test?: boolean }) =>
+      ipcRenderer.invoke("projects:create", p),
     move: (p: { id: string; folder: string }) => ipcRenderer.invoke("projects:move", p),
     folders: () => ipcRenderer.invoke("projects:folders"),
     rename: (p: { id: string; name: string }) => ipcRenderer.invoke("projects:rename", p),
@@ -88,20 +102,50 @@ const api = {
   },
   /** The system's text editing in the focused field: cut, copy, paste, selectAll. */
   editNative: (cmd: string) => ipcRenderer.invoke("edit:native", cmd),
-  saveFile: (p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke("files:save", p),
-  /** A file the MCP server may not reach (macOS guards Documents, Desktop …; this app has the user's OK): absolute paths, base64. */
+  saveFile: (p: {
+    name: string;
+    data: Uint8Array | string;
+    filters?: { name: string; extensions: string[] }[];
+  }) => ipcRenderer.invoke("files:save", p),
+  /**
+   * A file the MCP server may not reach (macOS guards Documents, Desktop …; this app has the user's OK):
+   * absolute paths, base64.
+   */
   readLocalFile: (path: string) => ipcRenderer.invoke("files:read-local", path),
   writeLocalFile: (p: { path: string; base64: string }) => ipcRenderer.invoke("files:write-local", p),
   /** Slicers installed on this Mac (Bambu Studio, PrusaSlicer), and opening a 3MF in one. */
   slicers: {
     list: (): Promise<{ id: "bambu" | "prusa"; name: string }[]> => ipcRenderer.invoke("slicers:list"),
-    open: (p: { slicer: "bambu" | "prusa"; name: string; data: Uint8Array }): Promise<{ slicer: string; file: string }> => ipcRenderer.invoke("slicers:open", p),
+    open: (p: {
+      slicer: "bambu" | "prusa";
+      name: string;
+      data: Uint8Array;
+    }): Promise<{ slicer: string; file: string }> => ipcRenderer.invoke("slicers:open", p),
   },
   /** The system's share menu (AirDrop, Messages, Mail …) for a file, at the pointer or at x/y. */
-  shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => ipcRenderer.invoke("files:share", p),
-  on: (channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "photos-progress" | "ui-scale" | "bridge-request" | "release-project" | "assistant-tabs" | "assistant-stop" | "assistant-idle" | "mcp-status" | "mcp-set-enabled", fn: (arg: any) => void) => {
+  shareFile: (p: { name: string; data: Uint8Array | string; x?: number; y?: number }) =>
+    ipcRenderer.invoke("files:share", p),
+  on: (
+    channel:
+      | "menu"
+      | "open-project"
+      | "projects-changed"
+      | "project-saved"
+      | "error"
+      | "photos-progress"
+      | "ui-scale"
+      | "bridge-request"
+      | "release-project"
+      | "assistant-tabs"
+      | "assistant-stop"
+      | "assistant-idle"
+      | "mcp-status"
+      | "mcp-set-enabled",
+    fn: (arg: any) => void,
+  ) => {
     const listener = (_e: unknown, arg: unknown) => fn(arg);
     ipcRenderer.on(channel, listener);
+
     return () => ipcRenderer.removeListener(channel, listener);
   },
 };
