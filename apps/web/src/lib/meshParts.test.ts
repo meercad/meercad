@@ -5,7 +5,8 @@
  * editable body keeps its 1800 mm³ and says so once; rebuilding it with features gives a part of
  * the same volume next to the hidden mesh.
  */
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import * as fit from "@meercad/kernel/fit";
 import { writeStl } from "@meercad/io";
 import { prism, turnedAboutX } from "../../../../tests/acceptance/meshes";
 import { testCall } from "./mcpBridge";
@@ -62,6 +63,12 @@ describe("making a mesh part editable", () => {
     expect(out.report.bodies.find((b) => b.id === plate)!.volume).toBeCloseTo(1800, 3);
     convertMeshPart(plate);
     expect(lastToast()).toMatch(/is already converted by step mc1/);
+    // When that step failed, it says why (and opens the step to change it).
+    const output = useApp.getState().output!;
+    useApp.setState({ output: { ...output, report: { ...output.report, features: output.report.features.map((f) => (f.id === "mc1" ? { ...f, status: "error", message: "tolerance too small", hint: "raise it" } : f)) } } });
+    convertMeshPart(plate);
+    expect(lastToast()).toMatch(/Converting .* failed: tolerance too small \(raise it\)/);
+    useApp.setState({ dialog: null, output });
   });
 
   it("rebuilds it with features of the same volume, the mesh hidden", async () => {
@@ -70,5 +77,10 @@ describe("making a mesh part editable", () => {
     expect(useApp.getState().hidden.has(plate)).toBe(true);
     await rebuildMeshPart("nope");
     expect(lastToast()).toMatch(/is not in the model/);
+    vi.spyOn(fit, "fitMesh").mockImplementationOnce(() => {
+      throw new Error("no faces found");
+    });
+    await rebuildMeshPart(plate);
+    expect(lastToast()).toMatch(/Could not rebuild .*: no faces found/);
   });
 });
