@@ -46,6 +46,7 @@ const checked = <T>(fn: () => T): T => {
     return fn();
   } catch (e) {
     if (e instanceof GridfinityError) throw new FeatureError(e.message);
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
 };

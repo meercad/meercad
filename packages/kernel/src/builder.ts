@@ -241,6 +241,7 @@ export class Builder {
         const mk = this.t(new oc.BRepOffsetAPI_MakeOffset(face, "GeomAbs_Arc" as never, false));
         try {
           mk.Perform(sign * inset, 0);
+          /* v8 ignore next 2 -- OCCT throws here only on failures no test can provoke on purpose */
         } catch {
           continue;
         }

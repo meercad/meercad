@@ -71,6 +71,7 @@ describe("steps that cannot be built say why", () => {
     ["an import that is not base64", [{ id: "im1", op: "import", format: "stl", fileName: "x.stl", data: "not base64!!" }], /must be the file's contents encoded as base64/],
     ["an STL with no triangles", [{ id: "im1", op: "import", format: "stl", fileName: "x.stl", data: Buffer.from(new Uint8Array(84)).toString("base64") }], /contains no triangles|could not read/],
     ["a STEP file that is no STEP", [{ id: "im1", op: "import", format: "step", fileName: "x.step", data: Buffer.from("hello").toString("base64") }], /could not read STEP file "x.step"/],
+    ["a screw thread of nine starts", [{ id: "scr1", op: "screw", kind: "screw", diameter: 8, length: 20, starts: 9, mode: "new_body" }], /a thread has 1 to 8 starts/],
     ["holes without points", [{ id: "ho1", op: "hole", kind: "simple", plane: { face: { face: "ex1.end_cap" } }, points: [], diameter: 3, depth: 10 }], /place at least one hole/],
     ["standard parts without points", [{ id: "np1", op: "standard_part", kind: "screw", size: "M3", plane: { face: { face: "ex1.end_cap" } }, points: [], length: 10 }], /place at least one part/],
     ["bending nothing", [{ id: "bd1", op: "bend", mode: "bend", bodies: [], angle: 90, axis: { ref: "origin.Y" } }], /pick the parts to bend/],

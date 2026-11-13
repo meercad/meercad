@@ -33,6 +33,7 @@ export function exportStep(oc: OC, state: ModelState, bodyIds?: string[], parts?
         return exportStepParts(oc, arena, bodies, parts);
       } catch (e) {
         // Names and colours are a nicety: without them the shapes still go out.
+        /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
         console.warn("STEP with names and colours failed, writing plain STEP:", e);
       }
     }

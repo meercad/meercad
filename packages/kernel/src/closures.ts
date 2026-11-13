@@ -21,6 +21,7 @@ const checked = <T>(fn: () => T): T => {
     return fn();
   } catch (e) {
     if (e instanceof ClosureError) throw new FeatureError(e.message);
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
 };
@@ -153,6 +154,7 @@ export function boxBodies(oc: OC, arena: Arena, f: ResolvedBox, frame: PlaneFram
     return out;
   } catch (e) {
     if (e instanceof FeatureError || e instanceof ClosureError) throw e instanceof ClosureError ? new FeatureError(e.message) : e;
+    /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
     throw new FeatureError(`could not build the box: ${occtErrorMessage(oc, e)}`);
   }
 }

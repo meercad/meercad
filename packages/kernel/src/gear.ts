@@ -63,6 +63,7 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
     place = partner ? meshPlacement(partner, params, rad(f.meshWith?.direction ?? 0)) : { center: f.center ?? [0, 0], rotation: rad(f.rotation ?? 0) };
   } catch (e) {
     if (e instanceof GearError) throw new FeatureError(e.message);
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
   const dims = gearDims(params);
@@ -112,6 +113,7 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
     if (shape.inner) solid = boolOp(oc, arena, "cut", solid, sweep(shape.inner));
   } catch (e) {
     if (e instanceof FeatureError) throw e;
+    /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
     throw new FeatureError("could not build the gear", "try fewer teeth or a smaller helix angle");
   }
 

@@ -219,6 +219,7 @@ export function screwBody(oc: OC, arena: Arena, f: ResolvedScrew, frame: PlaneFr
       body = cutBody(oc, arena, body, knife, `${f.id}.tip`);
     }
   } catch (e) {
+    /* v8 ignore next 2 -- OCCT throws here only on failures no test can provoke on purpose */
     warnings.push(`left the ${nut ? "nut's ends" : "tip"} without a chamfer (${e instanceof FeatureError ? e.message : occtErrorMessage(oc, e)})`);
     body = threaded;
   }

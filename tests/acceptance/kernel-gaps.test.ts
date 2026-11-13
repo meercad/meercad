@@ -4,7 +4,7 @@
  * snap hook whose barbs reach no part to click into.
  */
 import { describe, expect, it } from "vitest";
-import { exportMeshes } from "@meercad/kernel";
+import { clearances, exportMeshes } from "@meercad/kernel";
 import { writeStl } from "@meercad/io";
 import type { Feature } from "@meercad/schema";
 import { circle, doc, getOcct, newSession, rect, sketch } from "./helpers.js";
@@ -82,4 +82,47 @@ describe("kernel corners", () => {
     expect(st.message).toMatch(/do not reach "ex2": no window cut/);
     expect(report.bodies.find((b) => b.id === "ex2")!.volume).toBeCloseTo(2 * 30 * 17, 6);
   });
+
+  it("extrudes an outline with an arc bulging inwards (an arc run backwards)", async () => {
+    // A 40 × 20 plate with a half-round notch of radius 6 in its top edge.
+    const { report } = await build([
+      sketch("sk1", { ref: "origin.XY" }, [
+        { id: "a", type: "point", x: 0, y: 0 },
+        { id: "b", type: "point", x: 40, y: 0 },
+        { id: "c", type: "point", x: 40, y: 20 },
+        { id: "d", type: "point", x: 26, y: 20 },
+        { id: "m", type: "point", x: 20, y: 20 },
+        { id: "e", type: "point", x: 14, y: 20 },
+        { id: "f", type: "point", x: 0, y: 20 },
+        { id: "l1", type: "line", p1: "a", p2: "b" },
+        { id: "l2", type: "line", p1: "b", p2: "c" },
+        { id: "l3", type: "line", p1: "c", p2: "d" },
+        { id: "n", type: "arc", center: "m", start: "e", end: "d" },
+        { id: "l4", type: "line", p1: "e", p2: "f" },
+        { id: "l5", type: "line", p1: "f", p2: "a" },
+      ]),
+      { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 5, mode: "new_body" },
+    ]);
+    okAll(report);
+    const b = report.bodies.find((x) => x.id === "ex1")!;
+    expect(b.volume).toBeCloseTo((40 * 20 - (Math.PI * 36) / 2) * 5, 6);
+  });
+
+  it("stops measuring gaps when its time is up, and says how many pairs are left", async () => {
+    const s = await newSession();
+    s.rebuild(doc([
+      sketch("sk1", { ref: "origin.XY" }, rect("a", 0, 0, 10, 10)),
+      { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 5, mode: "new_body" },
+      sketch("sk2", { ref: "origin.XY" }, rect("b", 11, 0, 10, 10)),
+      { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 5, mode: "new_body" },
+    ]));
+    const oc = await getOcct();
+    const limits: { budgetMs?: number; left?: number } = { budgetMs: -1 };
+    expect(clearances(oc, s.state!, ["ex1"], {}, 2, [], {}, limits)).toEqual([]);
+    expect(limits.left).toBe(1);
+    // With time, the pair is measured: 1 mm apart.
+    const pairs = clearances(oc, s.state!, ["ex1"], {}, 2);
+    expect(pairs.find((p) => p.a !== p.b)!.distance).toBeCloseTo(1, 6);
+  });
 });
+

@@ -181,6 +181,7 @@ export function threadFace(oc: OC, arena: Arena, input: Body, fi: number, f: Thr
       if (volume(swept) < 0) swept = arena.track(swept.Reversed());
       return boolOp(oc, arena, "common", swept, cylinder(Math.max(rCrest, rRoot) + P, zLo, zHi));
     } catch (err) {
+      /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
       throw new FeatureError(`could not build the thread: ${err instanceof FeatureError ? err.message : occtErrorMessage(oc, err)}`);
     }
   };

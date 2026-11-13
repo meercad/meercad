@@ -72,6 +72,8 @@ export function lithophaneBody(oc: OC, arena: Arena, f: ResolvedLithophane, fram
       if (near(R)) return "picture";
       if (near(Rin)) return "back";
       if (near(R + d)) return "frame";
+      // Round faces lie only at those three radii: a guard only.
+      /* v8 ignore next */
       return "side";
     };
   }
