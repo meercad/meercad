@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { SketchEntity } from "@meercad/schema";
-import { findRegions, selectRegions, SketchSolver, type ResolvedConstraint, type SolvedCurve } from "./index.js";
+import {
+  findRegions,
+  selectRegions,
+  SketchSolver,
+  type ResolvedConstraint,
+  type SolvedCurve,
+} from "./index.js";
 
 let solver: SketchSolver;
 beforeAll(async () => {
@@ -17,8 +23,25 @@ const rect = (x0: number, y0: number, x1: number, y1: number, p = "p", l = "l"):
   { id: `${l}3`, type: "line", p1: `${p}3`, p2: `${p}4` },
   { id: `${l}4`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
-const line = (id: string, a: [number, number], b: [number, number]): SolvedCurve => ({ id, kind: "line", a, b, p1: "", p2: "", construction: false, external: false });
-const circle = (id: string, center: [number, number], radius: number): SolvedCurve => ({ id, kind: "circle", center, radius, c: "", construction: false, external: false });
+const line = (id: string, a: [number, number], b: [number, number]): SolvedCurve => ({
+  id,
+  kind: "line",
+  a,
+  b,
+  p1: "",
+  p2: "",
+  construction: false,
+  external: false,
+});
+const circle = (id: string, center: [number, number], radius: number): SolvedCurve => ({
+  id,
+  kind: "circle",
+  center,
+  radius,
+  c: "",
+  construction: false,
+  external: false,
+});
 const box = (x0: number, y0: number, x1: number, y1: number, p = "l"): SolvedCurve[] => [
   line(`${p}1`, [x0, y0], [x1, y0]),
   line(`${p}2`, [x1, y0], [x1, y1]),
@@ -46,8 +69,14 @@ describe("SketchSolver", () => {
   });
 
   it("reports remaining DOF and conflicts", () => {
-    expect(solver.solve({ entities: rect(0, 0, 4, 2), constraints: cons.slice(0, 5) }).diagnostics.dof).toBe(2);
-    const bad = solver.solve({ entities: rect(0, 0, 4, 2), constraints: [...cons, { id: "c8", type: "distance", a: "p1", b: "p3", value: 1 }] });
+    expect(solver.solve({ entities: rect(0, 0, 4, 2), constraints: cons.slice(0, 5) }).diagnostics.dof).toBe(
+      2,
+    );
+
+    const bad = solver.solve({
+      entities: rect(0, 0, 4, 2),
+      constraints: [...cons, { id: "c8", type: "distance", a: "p1", b: "p3", value: 1 }],
+    });
     expect(bad.diagnostics.ok).toBe(false);
     expect(bad.diagnostics.conflicting.length).toBeGreaterThan(0);
   });
@@ -73,15 +102,21 @@ describe("SketchSolver", () => {
       ],
     });
     expect(s.diagnostics.ok).toBe(true);
+
     const arc = s.curves.find((c) => c.id === "a1")!;
     expect(arc.kind === "arc" && arc.radius).toBeCloseTo(12);
+
     const k = s.curves.find((c) => c.id === "k")!;
     expect(k.kind === "circle" && k.radius).toBeCloseTo(5);
+
     const [q, m] = [s.points.get("q")!, s.points.get("m")!];
     const deg = (Math.atan2(Math.abs(m[1] - q[1]), Math.abs(m[0] - q[0])) * 180) / Math.PI;
     expect(deg).toBeCloseTo(30, 4);
 
-    const dragged = solver.solve({ entities: rect(0, 0, 4, 2), constraints: cons.slice(1, 5) }, { drag: { p3: [10, 7] } });
+    const dragged = solver.solve(
+      { entities: rect(0, 0, 4, 2), constraints: cons.slice(1, 5) },
+      { drag: { p3: [10, 7] } },
+    );
     expect(dragged.points.get("p3")![0]).toBeCloseTo(10);
     expect(dragged.points.get("p2")![0]).toBeCloseTo(10); // vertical l2 follows
   });
@@ -103,6 +138,7 @@ describe("arc angle", () => {
       ],
     });
     expect(s.diagnostics.ok).toBe(true);
+
     const e = s.points.get("e")!;
     expect((Math.atan2(e[1], e[0]) * 180) / Math.PI).toBeCloseTo(135, 3);
     expect(Math.hypot(e[0], e[1])).toBeCloseTo(10, 3);
@@ -112,8 +148,10 @@ describe("arc angle", () => {
 describe("tangent to a spline end", () => {
   const dir = (a: [number, number] | undefined, b: [number, number] | undefined) => {
     const d = Math.hypot(b![0] - a![0], b![1] - a![1]);
+
     return [(b![0] - a![0]) / d, (b![1] - a![1]) / d];
   };
+
   const wave: SketchEntity[] = [
     { id: "s1p", type: "point", x: 10, y: 0 },
     { id: "s2p", type: "point", x: 20, y: 8 },
@@ -123,7 +161,11 @@ describe("tangent to a spline end", () => {
 
   it("turns the spline's first span in line with a line ending there", () => {
     const s = solver.solve({
-      entities: [{ id: "a", type: "point", x: 0, y: 0 }, ...wave, { id: "l1", type: "line", p1: "a", p2: "s1p" }],
+      entities: [
+        { id: "a", type: "point", x: 0, y: 0 },
+        ...wave,
+        { id: "l1", type: "line", p1: "a", p2: "s1p" },
+      ],
       constraints: [
         { id: "f1", type: "fix", point: "a" },
         { id: "f2", type: "fix", point: "s1p" },
@@ -134,6 +176,7 @@ describe("tangent to a spline end", () => {
     expect(s.diagnostics.ok).toBe(true);
     // The line runs along x, so the spline leaves its start along x too: the next point moved onto y = 0.
     expect(s.points.get("s2p")![1]).toBeCloseTo(0, 6);
+
     const sp = s.curves.find((c) => c.id === "s1")!;
     const d = sp.kind === "spline" ? dir(sp.pts[0], sp.pts[1]) : [];
     expect(d[0]).toBeCloseTo(1, 3);
@@ -158,11 +201,13 @@ describe("tangent to a spline end", () => {
       ],
     });
     expect(s.diagnostics.ok).toBe(true);
+
     const at = (id: string) => s.points.get(id)!;
     // At the arc's end the radius is perpendicular to the spline's last span.
     const r = dir(at("c"), at("s3p"));
     const span = dir(at("s2p"), at("s3p"));
     expect(r[0]! * span[0]! + r[1]! * span[1]!).toBeCloseTo(0, 6);
+
     // The two splines run on in one direction through their shared point.
     const into = dir(at("q1"), at("s1p"));
     const out = dir(at("s1p"), at("s2p"));
@@ -172,7 +217,12 @@ describe("tangent to a spline end", () => {
   it("asks for a shared end", () => {
     const s = () =>
       solver.solve({
-        entities: [...wave, { id: "a", type: "point", x: 0, y: 5 }, { id: "b", type: "point", x: 5, y: 5 }, { id: "l1", type: "line", p1: "a", p2: "b" }],
+        entities: [
+          ...wave,
+          { id: "a", type: "point", x: 0, y: 5 },
+          { id: "b", type: "point", x: 5, y: 5 },
+          { id: "l1", type: "line", p1: "a", p2: "b" },
+        ],
         constraints: [{ id: "t", type: "tangent", a: "l1", b: "s1" }],
       });
     expect(s).toThrow(/must end where the other curve ends/);
@@ -183,8 +233,10 @@ describe("findRegions", () => {
   it("keeps an arc whole when it is a hair off its line's end", () => {
     // A slanted slot with round ends exactly as the solver returned it: the arcs' radii are off by
     // rounding, and splitting an arc at the near-miss left a sliver region without area.
-    const line = (id: string, a: [number, number], b: [number, number]): SolvedCurve => ({ id, kind: "line", a, b, construction: false }) as SolvedCurve;
-    const arc = (id: string, center: [number, number], radius: number, a0: number, a1: number): SolvedCurve => ({ id, kind: "arc", center, radius, a0, a1, construction: false }) as SolvedCurve;
+    const line = (id: string, a: [number, number], b: [number, number]): SolvedCurve =>
+      ({ id, kind: "line", a, b, construction: false }) as SolvedCurve;
+    const arc = (id: string, center: [number, number], radius: number, a0: number, a1: number): SolvedCurve =>
+      ({ id, kind: "arc", center, radius, a0, a1, construction: false }) as SolvedCurve;
     const regions = findRegions([
       line("l1", [-1.670493, 33.634481], [80.105334, 71.220571]),
       arc("a1", [81.775827, 67.58609], 3.9999998753012465, -1.1399683488775014, 2.001624304712294),
@@ -205,8 +257,10 @@ describe("findRegions", () => {
   it("turns a circle inside a rectangle into a hole (even-odd)", () => {
     const r = findRegions([...box(0, 0, 40, 20), circle("c1", [20, 10], 5)]);
     expect(r.map((x) => x.key).sort()).toEqual(["c1", "l1+l2+l3+l4|c1"]);
+
     const ring = r.find((x) => x.key.includes("|"))!;
     expect(ring.area).toBeCloseTo(800 - Math.PI * 25);
+
     const picked = selectRegions(r, "all").regions;
     expect(picked.map((x) => x.key)).toEqual(["l1+l2+l3+l4|c1"]);
   });
@@ -217,6 +271,7 @@ describe("findRegions", () => {
     expect(r).toHaveLength(3);
     expect(r.map((x) => x.depth).sort()).toEqual([1, 1, 2]);
     expect(r.reduce((s, x) => s + x.area, 0)).toBeCloseTo(700);
+
     // A line across a circle splits it into two halves with distinct keys; the overhang is ignored.
     const h = findRegions([circle("c1", [0, 0], 10), line("l9", [-15, 0], [15, 0])]);
     expect(h).toHaveLength(2);
@@ -225,7 +280,19 @@ describe("findRegions", () => {
   });
 
   it("supports slots made of lines and arcs", () => {
-    const arc = (id: string, center: [number, number], a0: number, a1: number): SolvedCurve => ({ id, kind: "arc", center, radius: 5, a0, a1, c: "", start: "", end: "", construction: false, external: false });
+    const arc = (id: string, center: [number, number], a0: number, a1: number): SolvedCurve => ({
+      id,
+      kind: "arc",
+      center,
+      radius: 5,
+      a0,
+      a1,
+      c: "",
+      start: "",
+      end: "",
+      construction: false,
+      external: false,
+    });
     const r = findRegions([
       line("t", [0, 5], [20, 5]),
       line("b", [20, -5], [0, -5]),
