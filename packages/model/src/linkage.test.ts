@@ -144,4 +144,15 @@ describe("closed-loop linkages", () => {
 
     expect(below.values["crank"]).toBeCloseTo(-20, 4);
   });
+
+  it("turns a coupled wheel with the crank, at the coupling's ratio", () => {
+    const { joints } = fourBar(100, 30, 90, 70);
+    const wheel = rev("wheel", "wheel", "ground", [200, 0, 0]);
+    const L = new Linkage([...joints, wheel], [{ driver: "crank", driven: "wheel", ratio: 2 }]);
+    const r = L.solve(new Map(), { crank: 20 });
+
+    expect(r.ok).toBe(true);
+    expect(r.values["crank"]).toBeCloseTo(20, 3);
+    expect(r.values["wheel"]).toBeCloseTo(40, 3);
+  });
 });
