@@ -61,10 +61,11 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
   try {
     shape = gearShape(params, { ...(f.rim !== undefined ? { rim: f.rim } : {}) });
     place = partner ? meshPlacement(partner, params, rad(f.meshWith?.direction ?? 0)) : { center: f.center ?? [0, 0], rotation: rad(f.rotation ?? 0) };
+    /* v8 ignore start -- the gear's sizes are checked before (GearError only for a partner that cannot mesh) */
   } catch (e) {
     if (e instanceof GearError) throw new FeatureError(e.message);
-    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
+    /* v8 ignore stop */
   }
   const dims = gearDims(params);
   const [cx, cy] = place.center;
@@ -111,11 +112,12 @@ export function gearBody(oc: OC, arena: Arena, f: ResolvedGear, frame: PlaneFram
   try {
     solid = sweep(shape.outer);
     if (shape.inner) solid = boolOp(oc, arena, "cut", solid, sweep(shape.inner));
+    /* v8 ignore start -- OCCT throws here only on failures no test can provoke on purpose */
   } catch (e) {
     if (e instanceof FeatureError) throw e;
-    /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
     throw new FeatureError("could not build the gear", "try fewer teeth or a smaller helix angle");
   }
+  /* v8 ignore stop */
 
   const axisAt = (z: number): Vec3 => lift(toWorld(frame, [cx, cy]), z);
   // Tooth chamfer: keep what lies inside a cylinder at the tip circle with 45° chamfers at both

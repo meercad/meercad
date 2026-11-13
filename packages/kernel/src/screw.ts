@@ -218,11 +218,12 @@ export function screwBody(oc: OC, arena: Arena, f: ResolvedScrew, frame: PlaneFr
       const knife = bool("cut", cylinder(R + 1, top - span, top + 1), cone(R + 1, rRoot, top - span, top));
       body = cutBody(oc, arena, body, knife, `${f.id}.tip`);
     }
+    /* v8 ignore start -- OCCT throws here only on failures no test can provoke on purpose */
   } catch (e) {
-    /* v8 ignore next 2 -- OCCT throws here only on failures no test can provoke on purpose */
     warnings.push(`left the ${nut ? "nut's ends" : "tip"} without a chamfer (${e instanceof FeatureError ? e.message : occtErrorMessage(oc, e)})`);
     body = threaded;
   }
+  /* v8 ignore stop */
   return { body, info: { size: spec.size, pitch: spec.pitch, height: top } };
 }
 

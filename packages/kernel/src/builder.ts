@@ -241,10 +241,11 @@ export class Builder {
         const mk = this.t(new oc.BRepOffsetAPI_MakeOffset(face, "GeomAbs_Arc" as never, false));
         try {
           mk.Perform(sign * inset, 0);
-          /* v8 ignore next 2 -- OCCT throws here only on failures no test can provoke on purpose */
+          /* v8 ignore start -- OCCT throws here only on failures no test can provoke on purpose */
         } catch {
           continue;
         }
+        /* v8 ignore stop */
         if (!mk.IsDone()) continue;
         const wires: TopoDS_Shape[] = [];
         for (const e = this.t(new oc.TopExp_Explorer(this.t(mk.Shape()), "TopAbs_WIRE" as never, "TopAbs_SHAPE" as never)); e.More(); e.Next()) wires.push(this.t(e.Current()));

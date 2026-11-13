@@ -102,7 +102,9 @@ export default defineConfig({
         extends: true,
         plugins: [testKernelWorker()],
         oxc: { jsx: { runtime: "automatic" } },
-        test: { name: "web-slow", environment: "happy-dom", include: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"] },
+        // The slow projects run after the rest, each in a group of its own: side by side with the
+        // others (each worker holds an OCCT kernel) the Mac mini's 16 GB swapped and they timed out.
+        test: { name: "web-slow", environment: "happy-dom", include: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"], sequence: { groupOrder: 1 } },
       },
       {
         extends: true,
@@ -110,7 +112,7 @@ export default defineConfig({
       },
       {
         extends: true,
-        test: { name: "integration-slow", include: SLOW },
+        test: { name: "integration-slow", include: SLOW, sequence: { groupOrder: 2 } },
       },
       {
         extends: true,

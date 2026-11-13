@@ -162,10 +162,11 @@ class Builder {
         : this.arena.track(new this.oc.BRepBuilderAPI_MakeEdge(circ, this.vertex(vs[0]!), this.vertex(vs[vs.length - 1]!)));
       if (!mk.IsDone()) return null;
       return [this.arena.track(mk.Edge())];
-      /* v8 ignore next 3 -- OCCT refuses an edge here only for degenerate input no test reproduces: the caller falls back to straight edges */
+      /* v8 ignore start -- OCCT refuses an edge here only for degenerate input no test reproduces: the caller falls back to straight edges */
     } catch {
       return null;
     }
+    /* v8 ignore stop */
   }
 
   private spline(vs: number[], closed: boolean): TopoDS_Edge[] | null {
@@ -184,10 +185,11 @@ class Builder {
         : this.arena.track(new this.oc.BRepBuilderAPI_MakeEdge(curve, this.vertex(vs[0]!), this.vertex(vs[vs.length - 1]!)));
       if (!me.IsDone()) return null;
       return [this.arena.track(me.Edge())];
-      /* v8 ignore next 3 -- OCCT refuses an edge here only for degenerate input no test reproduces: the caller falls back to straight edges */
+      /* v8 ignore start -- OCCT refuses an edge here only for degenerate input no test reproduces: the caller falls back to straight edges */
     } catch {
       return null;
     }
+    /* v8 ignore stop */
   }
 
   // ------------------------------------------------------------ faces
@@ -497,10 +499,11 @@ class Builder {
       matches = (r) => r.primitive?.kind === "sphere" && Math.abs(radius - r.primitive.radius) < near && len(sub(loc, r.primitive.center)) < near;
     } else if (type === "GeomAbs_Cone") {
       matches = (r) => r.primitive?.kind === "cone";
-      /* v8 ignore next 3 -- the converter builds planes, cylinders, cones and spheres only */
+      /* v8 ignore start -- the converter builds planes, cylinders, cones and spheres only */
     } else {
       matches = () => true;
     }
+    /* v8 ignore stop */
     const candidates = this.fit.regions.filter(matches);
     if (!candidates.length) return -1;
     if (candidates.length === 1) return candidates[0]!.index;

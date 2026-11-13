@@ -158,11 +158,12 @@ function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
         const a = (eg[g]! + count / 2 - 1) * 3;
         const b = (eg[g]! + count / 2) * 3;
         edges[ei] = [0, 1, 2].map((k) => (lines[a + k]! + lines[b + k]!) / 2) as Vec3;
-      /* v8 ignore next 4 -- the lines come as segment pairs, so a group's count is even: a guard only */
+      /* v8 ignore start -- the lines come as segment pairs, so a group's count is even: a guard only */
       } else {
         const a = (eg[g]! + (count - 1) / 2) * 3;
         edges[ei] = [lines[a]!, lines[a + 1]!, lines[a + 2]!];
       }
+      /* v8 ignore stop */
     }
     return { faces, edges };
   } finally {

@@ -50,6 +50,20 @@ describe("gridfinity baseplate for an area, cut for the print bed", () => {
     for (const t of ["bp1.pocket", "bp1.joint", "bp1.side", "bp1.top"]) expect(tags).toContain(t);
   });
 
+  it("makes equal middle pieces once and places each copy exactly", async () => {
+    // 12 × 1 cells on a 130 mm bed: four pieces of three cells; the two in the middle are alike.
+    const { report } = await build([plate({ units: [12, 1], bed: { size: [130, 130] } })]);
+    ok(report);
+    const pieces = report.bodies.filter((b) => b.id.startsWith("bp1_")).sort((a, b) => a.bbox.min[0] - b.bbox.min[0]);
+    expect(pieces).toHaveLength(4);
+    // The middle two: the same volume, three cells (126 mm) apart, side by side with no gap.
+    expect(pieces[1]!.volume).toBeCloseTo(pieces[2]!.volume, 6);
+    expect(pieces[2]!.bbox.min[0] - pieces[1]!.bbox.min[0]).toBeCloseTo(126, 6);
+    for (let i = 1; i < 4; i++) expect(pieces[i]!.bbox.min[0]).toBeCloseTo(pieces[i - 1]!.bbox.max[0], 6);
+    const whole = await build([plate({ units: [12, 1] })]);
+    expect(pieces.reduce((s, b) => s + b.volume, 0)).toBeCloseTo(whole.report.bodies[0]!.volume, 1);
+  });
+
   it("takes an unusable margin off the bed (2 cm at the back)", async () => {
     // 329 × 309 fits a 340 × 320 bed in one piece; 300 mm usable depth does not.
     const h2s = await build([plate({ drawer: [330, 310], bed: { size: [340, 320] } })]);

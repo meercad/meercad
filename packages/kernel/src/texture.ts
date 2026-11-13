@@ -21,10 +21,11 @@ export function texturesOf(state: ModelState, body: Body): { layers: TextureLaye
     if (rec.body !== body) {
       try {
         faces = [...new Set(rec.feature.faces.flatMap((s) => resolveFaces(s, [body]).flatMap((r) => r.faces)))];
-        /* v8 ignore next 3 -- a picture's face selector that no longer resolves: left off that body */
+        /* v8 ignore start -- a picture's face selector that no longer resolves: left off that body */
       } catch {
         continue;
       }
+      /* v8 ignore stop */
     }
     if (!faces.length) continue;
     const f = rec.feature;
@@ -58,8 +59,9 @@ function surfacesOf(oc: OC, body: Body, faces: Iterable<number>): FaceSurface[] 
         const p = arena.track(ax.Location());
         const d = arena.track(ax.Direction());
         out[fi] = { kind: "cylinder", origin: [p.X(), p.Y(), p.Z()], axis: [d.X(), d.Y(), d.Z()], radius: cyl.Radius() };
-        /* v8 ignore next -- a lithophane's picture lies on planes and cylinders only */
+        /* v8 ignore start -- a lithophane's picture lies on planes and cylinders only */
       } else out[fi] = { kind: "other" };
+      /* v8 ignore stop */
     }
     return out;
   } finally {

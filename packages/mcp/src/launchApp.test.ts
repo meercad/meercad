@@ -62,7 +62,7 @@ describe("app launcher", () => {
   it("logs it when the app cannot be opened, and still waits for it", async () => {
     const said: string[] = [];
     let polls = 0;
-    const l = createLauncher({ target: { path: "/Gone.app" }, open: () => { throw new Error("no such app"); }, connected: async () => ++polls > 2, pollMs: 1, graceMs: 0, log: (m) => void said.push(m) });
+    const l = createLauncher({ target: { path: "/Gone.app" }, open: () => { throw new Error("no such app"); }, connected: async () => ++polls > 2, pollMs: 1, graceMs: 0, log: (m) => void said.push(String(m)) });
     expect(await l.ensure()).toMatchObject({ connected: true });
     expect(said.some((m) => /could not open the meerCAD app: no such app/.test(m))).toBe(true);
   });

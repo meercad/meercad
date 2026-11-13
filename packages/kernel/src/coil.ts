@@ -108,11 +108,12 @@ function pipe(oc: OC, arena: Arena, spine: TopoDS_Wire, d: number, what: string)
     let s = arena.track(mk.Shape());
     if (volume(oc, arena, s) < 0) s = arena.track(s.Reversed());
     return s;
+    /* v8 ignore start -- OCCT throws here only on failures no test can provoke on purpose */
   } catch (e) {
-    /* v8 ignore next 2 -- OCCT throws here only on failures no test can provoke on purpose */
     if (e instanceof FeatureError) throw e;
     throw new FeatureError(`could not sweep the ${what}: ${occtErrorMessage(oc, e)}`);
   }
+  /* v8 ignore stop */
 }
 
 // ---------------------------------------------------------------- springs

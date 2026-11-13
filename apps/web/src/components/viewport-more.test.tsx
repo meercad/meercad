@@ -186,11 +186,12 @@ describe("the 3D view, more", () => {
   it("pans with a two-finger swipe when swipes do not orbit", async () => {
     const nav = (vp as unknown as { navigation: Parameters<Viewport["setNavigation"]>[0] }).navigation;
     vp.setNavigation(nav, false, false);
-    const before = vp.camera.position.clone();
+    const cam = () => (vp as unknown as { camera: THREE.Camera }).camera;
+    const before = cam().position.clone();
     await act(async () => void fireEvent.wheel(vp.canvas, { clientX: 400, clientY: 300, deltaX: 30, deltaY: 10, deltaMode: 0 }));
     await act(async () => void fireEvent.wheel(vp.canvas, { clientX: 400, clientY: 300, deltaX: 30, deltaY: 10, deltaMode: 0 }));
     vp.scene.updateMatrixWorld(true);
-    expect(vp.camera.position.equals(before)).toBe(false);
+    expect(cam().position.equals(before)).toBe(false);
     vp.setNavigation(nav);
   });
 

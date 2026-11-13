@@ -299,8 +299,9 @@ export function regionAt(regions: readonly Region[], p: Vec2): Region | undefine
   return regions
     .filter((r) => pointInPolygon(p, r.polygons[0]!) && !r.polygons.slice(1).some((h) => pointInPolygon(p, h)))
     // The faces of one sketch do not overlap, so at most one is left: the smallest wins if ever two are.
-    /* v8 ignore next */
+    /* v8 ignore start */
     .sort((a, b) => a.area - b.area)[0];
+  /* v8 ignore stop */
 }
 
 // ---------------------------------------------------------------- geometry

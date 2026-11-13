@@ -166,10 +166,11 @@ function triangulate(pos: number[], loop: number[]): number[] {
   if (ears) return ears.flatMap(([a, b, d]) => (signed < 0 ? [loop[idx[a]!]!, loop[idx[d]!]!, loop[idx[b]!]!] : [loop[a]!, loop[b]!, loop[d]!]));
   // Folded rim: a fan round a new vertex in the middle (a rim that crosses itself seen from its
   // best-fit plane; seen on torn scans, not reproduced by a test mesh).
-  /* v8 ignore next 3 */
+  /* v8 ignore start */
   const mid = pos.length / 3;
   pos.push(...c);
   return loop.flatMap((v, i) => [v, loop[(i + 1) % n]!, mid]);
+  /* v8 ignore stop */
 }
 
 /** Triangles of a simple counter-clockwise polygon, or null when it crosses itself. */

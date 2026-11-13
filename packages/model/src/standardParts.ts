@@ -286,12 +286,13 @@ export function standardShape(kind: StandardKind, o: { size?: string | undefined
       let ins;
       try {
         ins = o.size ? insertDims(o.size, o.length) : undefined;
+        // insertDims throws InsertError only: anything else is a bug and goes on as it is.
+        /* v8 ignore start */
       } catch (e) {
         if (e instanceof InsertError) throw new StandardPartError(e.message);
-        // insertDims throws InsertError only: anything else is a bug and goes on as it is.
-        /* v8 ignore next */
         throw e;
       }
+      /* v8 ignore stop */
       if (!ins) throw new StandardPartError(`unknown size "${o.size ?? ""}": use one of ${INSERT_SIZES.join(", ")}`);
       // Melted into its hole, flush with the face: as wide as the hole, so it does not collide with the part.
       return { rings: [{ r: ins.hole / 2, hole: insertBore(ins.size), from: -ins.length, to: 0 }], label: insertLabel(ins), labelText: { text: "{size}×{length} heat-set insert", values: { size: ins.size, length: ins.length } } };

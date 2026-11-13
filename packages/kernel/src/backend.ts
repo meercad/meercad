@@ -809,11 +809,12 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
         if (!pipe.IsDone()) throw new FeatureError("coil failed");
         built = { shape: arena.track(pipe.Shape()), first: arena.track(pipe.FirstShape()), last: arena.track(pipe.LastShape()), generated: (s) => listToArray(arena, pipe.Generated(s)) };
       }
+      /* v8 ignore start -- OCCT throws here only on failures no test can provoke on purpose */
     } catch (e) {
-      /* v8 ignore next 2 -- OCCT throws here only on failures no test can provoke on purpose */
       if (e instanceof FeatureError) throw e;
       throw new FeatureError(`coil failed: ${occtErrorMessage(oc, e)}`);
     }
+    /* v8 ignore stop */
     const props = arena.track(new oc.GProp_GProps());
     oc.BRepGProp.VolumeProperties(built.shape, props, false, false, false);
     if (props.Mass() < 0) built.shape = arena.track(built.shape.Reversed());
@@ -1425,11 +1426,12 @@ function applyTool(ctx: Ctx, featureId: string, tool: Body, mode: BooleanMode, t
       try {
         bodies.set(target.bodyId, booleanBodies(ctx.oc, ctx.arena, target, tool, mode === "cut" ? "cut" : "common"));
         changed++;
+        /* v8 ignore start -- a boolean OCCT cannot do: the part drops out of an intersect, stays as it was otherwise */
       } catch (e) {
         if (mode === "intersect") bodies.delete(target.bodyId);
-        /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
         else if (!(e instanceof FeatureError)) throw e;
       }
+      /* v8 ignore stop */
     }
     if (mode === "cut" && changed === 0) throw new FeatureError("nothing to cut: the tool does not intersect any body");
   }
@@ -1620,10 +1622,11 @@ function applyCopies(ctx: Ctx, copies: Body[], mode: BooleanMode): Omit<ModelSta
   const next = copyMap(ctx.prev.bodies);
   try {
     for (const [target, tools] of groups) next.set(target.bodyId, booleanBodies(ctx.oc, ctx.arena, target, tools, mode === "cut" ? "cut" : "fuse"));
+    /* v8 ignore start -- a boolean OCCT cannot do: the copies go one by one */
   } catch (e) {
     if (e instanceof FeatureError) return null;
-    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
+    /* v8 ignore stop */
   }
   return { ...ctx.prev, bodies: next };
 }
@@ -2014,6 +2017,7 @@ function trianglesOf({ oc, arena }: Ctx, body: Body): Float32Array | null {
     }
     const n = body.faceInfo[i]?.normal;
     if (pts.length !== 3 || !n) return null;
+    /* v8 ignore start -- mesh parts keep their triangles (sourceMesh); this reads those of one kept without them */
     const [a, b, c] = pts as [Vec3, Vec3, Vec3];
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -2021,6 +2025,7 @@ function trianglesOf({ oc, arena }: Ctx, body: Body): Float32Array | null {
     out.set(cx * n[0] + cy * n[1] + cz * n[2] < 0 ? [...a, ...c, ...b] : [...a, ...b, ...c], i * 9);
   }
   return out;
+  /* v8 ignore stop */
 }
 
 function unifyIfNeeded(ctx: Ctx, body: Body): Body {
