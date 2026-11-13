@@ -59,10 +59,13 @@ export const SLOW = [
 /** App tests that take long (every menu entry, every tool built). They run in `pnpm test`, not on every commit. */
 export const WEB_SLOW = ["apps/web/src/menus.test.tsx", "apps/web/src/components/FeatureDialog.build.test.tsx", "apps/web/src/components/FeatureDialog.fields.test.tsx"];
 
+/** `pnpm test:coverage`: coverage instrumentation slows the kernel tests down by about half again. */
+const COVERAGE = process.argv.some((a) => a.startsWith("--coverage"));
+
 export default defineConfig({
   test: {
-    // Kernel tests run about three times slower on the CI runner than on a Mac.
-    testTimeout: 120_000,
+    // Kernel tests run about three times slower on the CI runner than on a Mac, with coverage slower still.
+    testTimeout: COVERAGE ? 300_000 : 120_000,
     /**
      * Line coverage of every package and the app, measured over all levels but perf and E2E
      * (`pnpm test:coverage`, CI job "coverage"). The goal is 100 % everywhere; each threshold is

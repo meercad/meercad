@@ -305,7 +305,10 @@ describe("MCP server in process", () => {
       return { data: (p["pieces"] as { name: string; offset: number; length: number }[]).map((x) => staged[x.name]!.subarray(x.offset, x.offset + x.length).toString("base64")) };
     };
     const out3mf = join(dir, "exp", "big.3mf");
-    expect(textOf(await callTool("export", { format: "3mf", path: out3mf }))).toContain(out3mf);
+    // Fetching 17 MB may outlast the answer window on a slow runner: the same call again picks up the result.
+    let wrote = textOf(await callTool("export", { format: "3mf", path: out3mf }));
+    while (wrote.includes('"stillWorking":true')) wrote = textOf(await callTool("export", { format: "3mf", path: out3mf }));
+    expect(wrote).toContain(out3mf);
     expect(readFileSync(out3mf).equals(big)).toBe(true);
     expect(readFileSync(join(dir, "exp", "small.txt")).toString()).toBe("small");
     expect(asked).toEqual([["big.3mf"], ["big.3mf", "small.txt"], "done"]);

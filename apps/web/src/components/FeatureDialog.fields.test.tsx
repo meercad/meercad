@@ -74,6 +74,6 @@ describe("every dialog field", () => {
       expect(useApp.getState().dialog?.feature.op).toBe(op);
       await act(async () => cancelDialog());
       cleanup();
-    }, 60_000);
+    });
   }
 });
