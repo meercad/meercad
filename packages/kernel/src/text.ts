@@ -60,6 +60,7 @@ export function textLoops(text: string, o: { font?: TextFont; size: number; alig
         const n = Math.max(2, Math.ceil(Math.hypot(c.x - x0, c.y - y0) / step));
         curve(n, (t) => [(1 - t) ** 2 * x0 + 2 * (1 - t) * t * c.x1 + t * t * c.x, (1 - t) ** 2 * y0 + 2 * (1 - t) * t * c.y1 + t * t * c.y]);
         at = [c.x, c.y];
+      /* v8 ignore next 6 -- cubic curves come from CFF fonts; the fonts meerCAD ships are TrueType (quadratic) */
       } else if (c.type === "C") {
         const [x0, y0] = at;
         const n = Math.max(3, Math.ceil(Math.hypot(c.x - x0, c.y - y0) / step));

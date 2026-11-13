@@ -120,6 +120,31 @@ describe("kernel client", () => {
       expect(third.meshes[0]).toBe(a);
     });
 
+    it("goes on in the running kernel when the fresh one fails to start, and tries again later", async () => {
+      const memory = [1 * GB, 3 * GB, 3.1 * GB, 3.8 * GB];
+      const old = new FakeWorker((req) => built(req.seq, memory.shift() ?? 3.8 * GB));
+      const broken = new FakeWorker((req) => ({ type: "failed", seq: req.seq, message: "out of memory" }) as WorkerResponse);
+      let started = 0;
+      const client = new KernelClient(old as unknown as Worker, undefined, { worker: () => (started++, broken as unknown as Worker) });
+      expect(client.memoryUsed).toBe(0);
+      await client.rebuild(doc(1));
+      await client.rebuild(doc(2));
+      await settle();
+      expect(client.memoryUsed).toBe(3 * GB);
+      // The fresh kernel failed: it is ended, the running one goes on.
+      expect(started).toBe(1);
+      expect(broken.terminated).toBe(true);
+      expect(old.terminated).toBe(false);
+      await client.rebuild(doc(3));
+      await settle();
+      // 0.1 GB more since: not grown enough to try again.
+      expect(started).toBe(1);
+      await client.rebuild(doc(4));
+      await settle();
+      // 0.8 GB more: another try.
+      expect(started).toBe(2);
+    });
+
     it("starts over in a fresh kernel when asked and the running one holds too much (iPad)", async () => {
       const old = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, 1.5 * GB) : { type: "configured", seq: req.seq }));
       const fresh = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, 0.2 * GB) : { type: "configured", seq: req.seq }));

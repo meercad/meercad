@@ -158,6 +158,7 @@ function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
         const a = (eg[g]! + count / 2 - 1) * 3;
         const b = (eg[g]! + count / 2) * 3;
         edges[ei] = [0, 1, 2].map((k) => (lines[a + k]! + lines[b + k]!) / 2) as Vec3;
+      /* v8 ignore next 4 -- the lines come as segment pairs, so a group's count is even: a guard only */
       } else {
         const a = (eg[g]! + (count - 1) / 2) * 3;
         edges[ei] = [lines[a]!, lines[a + 1]!, lines[a + 2]!];
@@ -188,17 +189,21 @@ class ShapeIndex {
       this.byHash.set(h, this.shapes.length);
       return this.shapes.push(s) - 1;
     }
+    // Two different shapes with one hash: kept side by side (seen on big models, not in tests).
+    /* v8 ignore start */
     const hit = typeof at === "number" ? (this.shapes[at]!.IsSame(s) ? at : -1) : (at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1);
     if (hit !== -1) return hit;
     if (typeof at === "number") this.byHash.set(h, [at, this.shapes.length]);
     else at.push(this.shapes.length);
     return this.shapes.push(s) - 1;
+    /* v8 ignore stop */
   }
 
   find(s: TopoDS_Shape): number {
     const at = this.byHash.get(this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND));
     if (at === undefined) return -1;
     if (typeof at === "number") return this.shapes[at]!.IsSame(s) ? at : -1;
+    /* v8 ignore next -- a shared hash, see add */
     return at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1;
   }
 }

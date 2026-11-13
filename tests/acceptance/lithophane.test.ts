@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { exportMeshes, type RebuildReport } from "@meercad/kernel";
-import type { LithophaneFeature, TextureImage } from "@meercad/schema";
+import type { Feature, LithophaneFeature, TextureImage } from "@meercad/schema";
 import { doc, getOcct, newSession } from "./helpers.js";
 
 const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
@@ -118,6 +118,19 @@ describe("lithophane", () => {
       if (p[0]! < -R * 0.75 && p[2]! > 56) topLeft = Math.max(topLeft, radius(p));
     }
     expect(topLeft).toBeLessThan(R + 0.3);
+  });
+
+  it("keeps its picture when a later step moves it", async () => {
+    const s = await newSession();
+    const r = s.rebuild(doc([litho({}), { id: "mv1", op: "transform", bodies: ["li1"], translate: [10, 0, 5] } as Feature]));
+    ok(r.report);
+    const m = r.meshes[0]!;
+    expect(m.textured).toBe(true);
+    expect(closedManifold(m.positions, m.indices)).toEqual({ open: 0, bad: 0 });
+    const plain = s.rebuild(doc([litho({})]));
+    const [a, b] = [r.report.bodies[0]!.bbox, plain.report.bodies[0]!.bbox];
+    expect(a.min[0] - b.min[0]).toBeCloseTo(10, 6);
+    expect(a.min[2] - b.min[2]).toBeCloseTo(5, 6);
   });
 
   it("closes round as a lamp shade with a frame at top and bottom", async () => {

@@ -104,6 +104,16 @@ describe("openGrid holders", () => {
     }
   });
 
+  it("makes the shortest hook without the slope under its arm, reaching exactly as far as asked", async () => {
+    // A hook 6 mm high reaching 8 mm: no room for the 45° support below it.
+    const { report, meshes } = await build([board({ units: [2, 2] }), holder({ units: [1, 1], accessory: "hook", depth: 8 })]);
+    ok(report);
+    expect(new Set(meshes.find((m) => m.bodyId === "wl2")!.faceTags.flat())).toContain("wl2.hook");
+    const plain = await build([board({ units: [2, 2] }), holder({ units: [1, 1], accessory: "hook", depth: 30 })]);
+    // The tip stands the asked reach in front of the plate (both from the same plate).
+    expect(body(plain.report, "wl2").bbox.max[2] - body(report, "wl2").bbox.max[2]).toBeCloseTo(22, 6);
+  });
+
   it("holds Gridfinity bins on a bin shelf, and says how wide the holder must be", async () => {
     const tight = await build([board({ units: [4, 2] }), holder({ units: [3, 2], accessory: "bin", size: 2 })]);
     expect(failed(tight.report, "wl2")).toMatch(/4 cells wide/);
