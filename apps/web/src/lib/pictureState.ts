@@ -74,15 +74,20 @@ export function lookSince(stored: LookMark | null, version: number, now: number)
  * springs), and while they went first a project's picture could wait minutes, or never come when
  * the overview was left before. A call during a run asks for one more run after it, so a project
  * added or changed meanwhile still gets its picture.
+ *
+ * The examples give way to such a call (`yieldNow`, asked between two examples): the first run
+ * starts before the projects are listed, and on a fresh iPhone the projects (and the pictures that
+ * came with them through iCloud) otherwise waited until all examples were built, minutes.
  */
-export function pictureRunner(steps: { projects: () => Promise<void>; examples: () => Promise<void> }): () => Promise<void> {
+export function pictureRunner(steps: { projects: () => Promise<void>; examples: (yieldNow: () => boolean) => Promise<void> }): () => Promise<void> {
   let running: Promise<void> | null = null;
   let again = false;
   const run = async (): Promise<void> => {
     do {
       again = false;
       await steps.projects();
-      await steps.examples();
+      if (again) continue;
+      await steps.examples(() => again);
     } while (again);
   };
   return () => {
