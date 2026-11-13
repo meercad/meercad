@@ -86,3 +86,35 @@ describe("compareShapes", () => {
     expect(get(at(20, 0, 2), at(6, 0, 10), "Distance between axes")).toBeLessThan(0.05);
   });
 });
+
+describe("compareShapes, worked by hand", () => {
+  const base = { triangles: [], area: 1, deviation: 0, centroid: [0, 0, 0] as [number, number, number] };
+  const plane = (z: number): ScanShape => ({ ...base, kind: "plane", origin: [0, 0, z], normal: [0, 0, 1], centroid: [3, 4, z] });
+  const rod = (origin: [number, number, number], axis: [number, number, number], centroid: [number, number, number] = origin): ScanShape => ({ ...base, kind: "cylinder", origin, axis, radius: 2, centroid });
+  const ball = (center: [number, number, number]): ScanShape => ({ ...base, kind: "sphere", center, radius: 3, centroid: center });
+  const cone = (apex: [number, number, number]): ScanShape => ({ ...base, kind: "cone", apex, axis: [0, 0, 1], halfAngle: Math.PI / 4, centroid: apex });
+  const get = (a: ScanShape, b: ScanShape, label: string) => value(compareShapes(a, b), label);
+
+  it("an axis lying along a face: how high above it it runs", () => {
+    // A rod along X, 7 mm above the face z = 2, its triangles' centre off to one side.
+    const r = rod([0, 0, 9], [1, 0, 0], [40, 0, 11]);
+    expect(get(plane(2), r, "Angle to axis")).toBeCloseTo(0, 9);
+    expect(get(r, plane(2), "Distance to axis")).toBeCloseTo(7, 9);
+  });
+
+  it("two skew axes: their closest distance, and the angle between them", () => {
+    // One along X through the origin, one along Y through (0, 0, 5): 5 mm apart where they cross.
+    const out = compareShapes(rod([0, 0, 0], [1, 0, 0]), rod([3, -8, 5], [0, 1, 0]));
+    expect(value(out, "Angle between axes")).toBeCloseTo(90, 9);
+    expect(value(out, "Closest distance between axes")).toBeCloseTo(5, 9);
+    // At 30° to each other, still 5 mm apart.
+    const tilted = compareShapes(cone([0, 0, 0]), rod([1, 1, 5], [Math.sin(Math.PI / 6), 0, Math.cos(Math.PI / 6)]));
+    expect(value(tilted, "Angle between axes")).toBeCloseTo(30, 9);
+  });
+
+  it("a ball: from a face, from an axis, from another ball", () => {
+    expect(get(ball([1, 2, 10]), plane(4), "Distance to centre")).toBeCloseTo(6, 9);
+    expect(get(ball([3, 4, 7]), rod([0, 0, 0], [0, 0, 1]), "Distance centre to axis")).toBeCloseTo(5, 9);
+    expect(get(ball([0, 0, 0]), ball([2, 3, 6]), "Distance between centres")).toBeCloseTo(7, 9);
+  });
+});
