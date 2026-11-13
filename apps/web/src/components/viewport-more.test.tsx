@@ -7,6 +7,7 @@
 import { act, cleanup, fireEvent } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
+import * as vpModule from "@meercad/viewport";
 import { samePick, THREE, type Pick, type Viewport } from "@meercad/viewport";
 import { apply, getViewport, newProject } from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
@@ -192,4 +193,28 @@ describe("the 3D view, more", () => {
     expect(vp.camera.position.equals(before)).toBe(false);
     vp.setNavigation(nav);
   });
+
+  it("fades the studio ground's shadow out towards its rim", () => {
+    const stage = (vp as unknown as { stage: { ground: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial> } }).stage;
+    const shader = {
+      vertexShader: "void main() {\n#include <begin_vertex>\n}",
+      fragmentShader: "void main() {\ngl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );\n}",
+    };
+    stage.ground.material.onBeforeCompile(shader as never, undefined as never);
+    expect(shader.vertexShader).toContain("vGround = position.xy;");
+    expect(shader.fragmentShader).toContain("smoothstep( 0.3, 0.5, length( vGround ) )");
+  });
+
+  it("gives back the studio stage's memory when the view goes", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const { Viewport } = vpModule;
+    const other = new Viewport(host);
+    const stage = (other as unknown as { stage: { dispose(): void } }).stage;
+    const spy = vi.spyOn(stage, "dispose");
+    other.dispose();
+    expect(spy).toHaveBeenCalledOnce();
+    host.remove();
+  });
 });
+

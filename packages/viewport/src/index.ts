@@ -2426,6 +2426,9 @@ export class Viewport {
     this.resizeObserver.disconnect();
     this.renderer.setAnimationLoop(null);
     this.controls.dispose();
+    // The studio stage's ground, backdrops and shadow map are GPU memory too (the overview makes
+    // a view per picture).
+    this.stage.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
