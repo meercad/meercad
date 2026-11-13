@@ -82,7 +82,7 @@ export function AboutDialog() {
               </h3>
               <p className="muted">
                 {t(
-                  "meerCAD is provided as is, without warranty of any kind. Check dimensions, fits and strength before you print, mill or use a part, especially where it carries loads or matters for safety. The authors are not liable for damage arising from designs made with meerCAD or from parts made from them, as far as the law allows.",
+                  "meerCAD is a design tool, provided free of charge and as is, without warranty. All results (dimensions, masses, fits, overhangs, checks and any analysis) are estimates and can be wrong. Check every part yourself before you make or use it. Do not use meerCAD as the basis for anything whose failure could hurt people or cause serious damage, such as aircraft, vehicles, lifting gear, load-bearing structures, pressure vessels or medical devices, unless qualified professionals verify the design independently. As far as the law allows, we are not liable for parts or products designed or made with meerCAD; see the licence agreement at meercad.app/eula.",
                 )}
               </p>
             </section>

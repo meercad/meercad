@@ -1,64 +1,42 @@
 # Privacy policy
 
-_Last updated: 28 October 2026_
-
-meerCAD is a CAD app for designing parts. This policy covers the meerCAD apps for iPad and macOS and
-the meerCAD web app.
+_Last updated: 11 November 2026. The current version is at https://meercad.app/privacy (German: https://meercad.app/datenschutz, legally binding)._
 
 ## Short version
 
-meerCAD does not collect, store or send any personal data. There is no account, no advertising, no
-analytics and no tracking. Your designs stay on your device.
+The meerCAD apps collect no personal data: no account, no advertising, no analytics, no tracking. Your designs stay on your devices. This website sets no cookies and uses no analytics.
 
 ## Who is responsible
 
-[Name]  
-[Street and number]  
-[Postcode and city, country]  
-Email: [email address]
+Torben Berger UG (haftungsbeschränkt)  
+Oberer Rainweg 55  
+69118 Heidelberg  
+Germany  
+Email: support@meercad.app
 
-## Your designs and settings
+## This website
 
-- **iPad:** projects are saved as `.meercad` files in the app's own folder on your iPad. The Files app
-  shows it under "On My iPad › meerCAD". If you move files to iCloud Drive or another service, that
-  service's terms apply.
-- **macOS:** projects are saved as `.meercad` files in a folder you choose (by default
-  Documents/meerCAD).
-- **Web app:** projects are kept in your browser's storage on your computer.
-- Settings such as shortcuts, units and display options are stored on your device in the same way.
-- That you accepted the terms of use (their version, the date, the app version and language) is stored
-  only on your device in the same way, so the app does not ask again.
+The website is hosted by Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, USA. When you visit it, Vercel processes technically necessary data in server logs: IP address, date and time, page requested, browser and operating system, and the referring page. This keeps the site secure and available (Art. 6(1)(f) GDPR). A data processing agreement with Vercel is in place; transfers to the USA rely on the EU Standard Contractual Clauses. Fonts and images are served by this site itself, not by third parties.
 
-None of this data is sent to us or to anyone else.
+## Email
 
-## Network connections
+If you write to us, we use your address and message to reply (Art. 6(1)(b) or (f) GDPR) and delete them once they are no longer needed for that and no retention duty applies.
 
-- **iPhone, iPad and Mac:** the app makes no network connections of its own. Updates come from the
-  App Store.
-- **Share links:** "Copy share link" puts the design into the link itself (after the `#`). It is not
-  uploaded anywhere; whoever you send the link to can open the design.
+## The apps
 
-## AI assistants
-
-If you connect an AI assistant (for example Claude Desktop) to meerCAD through the Model Context
-Protocol, the assistant can read and change the open design. The assistant sends what it reads to
-its provider under that provider's terms. meerCAD itself does not send anything; you decide whether to
-connect an assistant.
-
-## Crash reports
-
-meerCAD contains no crash reporting. If you allow your device to share analytics with app developers,
-Apple may send us anonymous crash reports; you can turn this off in your device's settings.
-
-## Children
-
-meerCAD collects no data from anyone, including children.
+- **Designs** are saved as files in meerCAD's folder in your iCloud Drive (on the Mac, alternatively in a folder you choose), so they appear on all your devices. Apple stores and syncs them under your iCloud account and Apple's terms; without iCloud they stay on the device. They never reach us.
+- **Settings** such as shortcuts, units and display options are stored on your device.
+- **Terms of use:** that you accepted them (their version, the date, the app version and language) is stored only on your device, so the app does not ask again.
+- **Camera:** if you use a 3D scan, the camera and LiDAR images are processed on your device only and saved as part of your design. Nothing is uploaded.
+- **Sending to a slicer** hands the print file to the slicer app on the same device; meerCAD sends nothing over the network.
+- **Network:** the apps make no network connections of their own. Updates come from the App Store.
+- **AI assistants:** if you connect an assistant (for example Claude Desktop) through MCP, it can read and change the open design and sends what it reads to its provider under that provider's terms. meerCAD itself sends nothing.
+- **Crash reports:** meerCAD contains no crash reporting of its own. If you allow your device to share analytics with app developers, Apple gives us anonymous crash reports; you can turn this off in your device's settings.
+- **Purchases** are handled by Apple through the App Store; we receive no payment details.
 
 ## Your rights
 
-As we process no personal data, there is nothing for us to show, correct or delete. If you have
-questions, write to the address above. You also have the right to complain to a data protection
-authority.
+You have the right to access, rectification, erasure, restriction of processing, data portability and to object to processing based on legitimate interests. Write to the address above. You can also complain to a data protection authority.
 
 ## Changes
 

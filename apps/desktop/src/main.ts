@@ -1214,6 +1214,16 @@ else {
         }
       }
     }
+    // The apps moved to another Apple team and with it to another iCloud container; a projects
+    // folder in the old one would no longer be shared with the iPhone and iPad (projects copied over once).
+    if (!MAS) {
+      const docs = (id: string) => join(homedir(), "Library", "Mobile Documents", id, "Documents");
+      const [oldDocs, newDocs] = [docs("iCloud~dev~meercad~app"), docs("iCloud~app~meercad")];
+      if (settings.projectsDir === oldDocs && existsSync(newDocs)) {
+        settings = { ...settings, projectsDir: newDocs };
+        await writeFile(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`).catch(() => undefined);
+      }
+    }
     if (!SIDE_BY_SIDE && !process.env["MEERCAD_PROJECTS_DIR"]) {
       const moved = await moveLegacyDefaultFolder(settings.projectsDir, defaultProjectsDir(), thumbsDir()).catch(() => null);
       if (moved) {
