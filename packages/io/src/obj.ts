@@ -51,7 +51,7 @@ export interface ObjMesh extends TriangleMesh {
 
 const hexRgb = (c?: string) =>
   c && /^#[0-9a-f]{6}$/i.test(c) ? [1, 3, 5].map((k) => parseInt(c.slice(k, k + 2), 16) / 255) : undefined;
-const materialName = (m: ObjMesh, i: number) => `${objName(m.name ?? `part_${i + 1}`)}_${i + 1}`;
+const materialName = (mesh: ObjMesh, i: number) => `${objName(mesh.name ?? `part_${i + 1}`)}_${i + 1}`;
 
 /**
  * Wavefront OBJ of one or more meshes, one `o` object per part (units: mm, Z up, as in STL).
@@ -68,23 +68,25 @@ export function writeObj(meshes: readonly ObjMesh[], opts: { mtllib?: string } =
   let base = 1;
   let uvBase = 1;
 
-  for (const [i, m] of meshes.entries()) {
-    const flat = hexRgb(m.color);
-    const textured = !!(m.uvs && m.texture);
-    out.push(`o ${objName(m.name ?? `part_${i + 1}`)}`);
-    if (opts.mtllib) out.push(`usemtl ${materialName(m, i)}`);
+  for (const [i, mesh] of meshes.entries()) {
+    const flat = hexRgb(mesh.color);
+    const textured = !!(mesh.uvs && mesh.texture);
+    out.push(`o ${objName(mesh.name ?? `part_${i + 1}`)}`);
+    if (opts.mtllib) out.push(`usemtl ${materialName(mesh, i)}`);
 
     const map = new Map<string, number>();
-    const remap = new Uint32Array(m.positions.length / 3);
+    const remap = new Uint32Array(mesh.positions.length / 3);
     const uvLines: string[] = [];
 
     for (let v = 0; v < remap.length; v++) {
-      const x = m.positions[v * 3]!,
-        y = m.positions[v * 3 + 1]!,
-        z = m.positions[v * 3 + 2]!;
-      const rgb = m.colors ? [m.colors[v * 3]!, m.colors[v * 3 + 1]!, m.colors[v * 3 + 2]!] : flat;
-      const uv = textured ? [m.uvs![v * 2]!, 1 - m.uvs![v * 2 + 1]!] : undefined;
-      const key = `${x.toFixed(5)} ${y.toFixed(5)} ${z.toFixed(5)}${uv ? ` ${uv[0]!.toFixed(6)} ${uv[1]!.toFixed(6)}` : ""}${m.colors ? ` ${rgb!.map((c) => c.toFixed(3)).join(" ")}` : ""}`;
+      const x = mesh.positions[v * 3]!,
+        y = mesh.positions[v * 3 + 1]!,
+        z = mesh.positions[v * 3 + 2]!;
+      const rgb = mesh.colors
+        ? [mesh.colors[v * 3]!, mesh.colors[v * 3 + 1]!, mesh.colors[v * 3 + 2]!]
+        : flat;
+      const uv = textured ? [mesh.uvs![v * 2]!, 1 - mesh.uvs![v * 2 + 1]!] : undefined;
+      const key = `${x.toFixed(5)} ${y.toFixed(5)} ${z.toFixed(5)}${uv ? ` ${uv[0]!.toFixed(6)} ${uv[1]!.toFixed(6)}` : ""}${mesh.colors ? ` ${rgb!.map((c) => c.toFixed(3)).join(" ")}` : ""}`;
       let k = map.get(key);
 
       if (k === undefined) {
@@ -99,10 +101,10 @@ export function writeObj(meshes: readonly ObjMesh[], opts: { mtllib?: string } =
 
     out.push(...uvLines);
 
-    for (let t = 0; t < m.indices.length; t += 3) {
-      const a = remap[m.indices[t]!]!,
-        b = remap[m.indices[t + 1]!]!,
-        c = remap[m.indices[t + 2]!]!;
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const a = remap[mesh.indices[t]!]!,
+        b = remap[mesh.indices[t + 1]!]!,
+        c = remap[mesh.indices[t + 2]!]!;
       if (a === b || b === c || a === c) continue;
 
       out.push(
@@ -126,16 +128,16 @@ export function writeObj(meshes: readonly ObjMesh[], opts: { mtllib?: string } =
 export function writeMtl(meshes: readonly ObjMesh[]): string {
   const out: string[] = ["# meerCAD"];
 
-  for (const [i, m] of meshes.entries()) {
-    const rgb = (m.texture && m.uvs ? undefined : hexRgb(m.color)) ?? [1, 1, 1];
+  for (const [i, mesh] of meshes.entries()) {
+    const rgb = (mesh.texture && mesh.uvs ? undefined : hexRgb(mesh.color)) ?? [1, 1, 1];
     out.push(
       "",
-      `newmtl ${materialName(m, i)}`,
+      `newmtl ${materialName(mesh, i)}`,
       `Kd ${rgb.map((c) => c.toFixed(4)).join(" ")}`,
       "Ks 0 0 0",
       "illum 1",
     );
-    if (m.texture && m.uvs) out.push(`map_Kd ${m.texture}`);
+    if (mesh.texture && mesh.uvs) out.push(`map_Kd ${mesh.texture}`);
   }
 
   return out.join("\n") + "\n";

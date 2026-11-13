@@ -90,8 +90,11 @@ export function parseStl(data: Uint8Array): TriangleMesh {
   } else {
     const text = new TextDecoder().decode(data);
     const nums: number[] = [];
-    const re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
-    for (let m = re.exec(text); m; m = re.exec(text)) nums.push(Number(m[1]), Number(m[2]), Number(m[3]));
+    const pattern = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
+
+    for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+      nums.push(Number(match[1]), Number(match[2]), Number(match[3]));
+    }
 
     if (nums.length % 9 !== 0 || nums.some((n) => !Number.isFinite(n))) {
       throw new Error("malformed ASCII STL");

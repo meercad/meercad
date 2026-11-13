@@ -139,29 +139,35 @@ function namer(): (raw: string) => string {
 }
 
 function rgba(color: string | undefined): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(color ?? "");
-  if (!m) return "0.8 0.8 0.8 1";
+  const match = /^#?([0-9a-f]{6})$/i.exec(color ?? "");
+  if (!match) return "0.8 0.8 0.8 1";
 
-  const n = parseInt(m[1]!, 16);
+  const n = parseInt(match[1]!, 16);
 
   return vec([((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, 1]);
 }
 
 /** Mass, centre and inertia (about the centre, g·mm², products ∫xy dm) of several parts together. */
 function combine(parts: readonly RobotPart[]): { mass: number; center: V3; inertia: number[] } {
-  const mass = parts.reduce((s, p) => s + p.mass, 0);
+  const mass = parts.reduce((s, part) => s + part.mass, 0);
   const center: V3 = [0, 0, 0];
 
   if (mass > 0) {
-    for (const p of parts) for (let k = 0; k < 3; k++) center[k]! += (p.centroid[k]! * p.mass) / mass;
+    for (const part of parts) {
+      for (let k = 0; k < 3; k++) center[k]! += (part.centroid[k]! * part.mass) / mass;
+    }
   }
 
   const inertia = [0, 0, 0, 0, 0, 0];
 
-  for (const p of parts) {
-    const [dx, dy, dz] = [p.centroid[0] - center[0], p.centroid[1] - center[1], p.centroid[2] - center[2]];
+  for (const part of parts) {
+    const [dx, dy, dz] = [
+      part.centroid[0] - center[0],
+      part.centroid[1] - center[1],
+      part.centroid[2] - center[2],
+    ];
     const shift = [dy * dy + dz * dz, dx * dx + dz * dz, dx * dx + dy * dy, dx * dy, dx * dz, dy * dz];
-    for (let k = 0; k < 6; k++) inertia[k]! += p.inertia[k]! + p.mass * shift[k]!;
+    for (let k = 0; k < 6; k++) inertia[k]! += part.inertia[k]! + part.mass * shift[k]!;
   }
 
   return { mass, center, inertia };
@@ -191,10 +197,10 @@ function boxOf(parts: readonly RobotPart[]): { min: V3; max: V3 } | null {
   const min: V3 = [Infinity, Infinity, Infinity];
   const max: V3 = [-Infinity, -Infinity, -Infinity];
 
-  for (const p of parts) {
-    for (let i = 0; i < p.mesh.positions.length; i += 3) {
+  for (const part of parts) {
+    for (let i = 0; i < part.mesh.positions.length; i += 3) {
       for (let d = 0; d < 3; d++) {
-        const v = p.mesh.positions[i + d]!;
+        const v = part.mesh.positions[i + d]!;
         if (v < min[d]!) min[d] = v;
         if (v > max[d]!) max[d] = v;
       }
@@ -435,22 +441,26 @@ export function fitCollisionShape(mesh: TriangleMesh): CollisionShape | null {
 }
 
 /** The box around a shape, model mm. */
-function shapeBox(s: CollisionShape): { min: V3; max: V3 } {
-  const r = s.rotation;
+function shapeBox(shape: CollisionShape): { min: V3; max: V3 } {
+  const r = shape.rotation;
   const ext = [0, 1, 2].map((d) => {
     const row = [r[d * 3]!, r[d * 3 + 1]!, r[d * 3 + 2]!];
-    if (s.type === "sphere") return s.size[0]!;
+    if (shape.type === "sphere") return shape.size[0]!;
 
-    if (s.type === "box") {
-      return Math.abs(row[0]!) * s.size[0]! + Math.abs(row[1]!) * s.size[1]! + Math.abs(row[2]!) * s.size[2]!;
+    if (shape.type === "box") {
+      return (
+        Math.abs(row[0]!) * shape.size[0]! +
+        Math.abs(row[1]!) * shape.size[1]! +
+        Math.abs(row[2]!) * shape.size[2]!
+      );
     }
 
-    return Math.abs(row[2]!) * s.size[1]! + Math.sqrt(Math.max(0, 1 - row[2]! ** 2)) * s.size[0]!;
+    return Math.abs(row[2]!) * shape.size[1]! + Math.sqrt(Math.max(0, 1 - row[2]! ** 2)) * shape.size[0]!;
   });
 
   return {
-    min: [0, 1, 2].map((d) => s.center[d]! - ext[d]!) as V3,
-    max: [0, 1, 2].map((d) => s.center[d]! + ext[d]!) as V3,
+    min: [0, 1, 2].map((d) => shape.center[d]! - ext[d]!) as V3,
+    max: [0, 1, 2].map((d) => shape.center[d]! + ext[d]!) as V3,
   };
 }
 
@@ -519,7 +529,7 @@ export function writeRobot(
 ): RobotExport {
   const warnings: string[] = [];
   const floating = options.floating !== false;
-  const byId = new Map(parts.map((p) => [p.id, p]));
+  const byId = new Map(parts.map((part) => [part.id, part]));
 
   // Parts a joint names that are no part (the carrier of a cylindrical joint) become empty links.
   const virtual = new Set<string>();
@@ -622,27 +632,27 @@ export function writeRobot(
     if (parent !== WORLD) parent.children.push(child);
   }
 
-  const roots = links.filter((l) => !l.parent);
-  const onGround = links.filter((l) => l.parent === WORLD);
-  const free = roots.filter((l) => !l.grounded);
+  const roots = links.filter((link) => !link.parent);
+  const onGround = links.filter((link) => link.parent === WORLD);
+  const free = roots.filter((link) => !link.grounded);
 
   if (free.length > 1) {
     warnings.push(
-      `${free.length} links hang on nothing (${free.map((l) => l.name).join(", ")}); each becomes its own body. Join them with joints for one robot`,
+      `${free.length} links hang on nothing (${free.map((link) => link.name).join(", ")}); each becomes its own body. Join them with joints for one robot`,
     );
   }
 
-  for (const l of links) {
-    if (!l.parts.length) {
+  for (const link of links) {
+    if (!link.parts.length) {
       warnings.push(
-        `link ${l.name} has no parts (a joint carrier); it gets a tiny mass of ${TINY_MASS * 1000} g`,
+        `link ${link.name} has no parts (a joint carrier); it gets a tiny mass of ${TINY_MASS * 1000} g`,
       );
     }
   }
 
-  for (const l of links) {
-    if (l.parts.length && l.parts.every((p) => !(p.mass > 0))) {
-      warnings.push(`link ${l.name} has no mass: give its parts a material`);
+  for (const link of links) {
+    if (link.parts.length && link.parts.every((part) => !(part.mass > 0))) {
+      warnings.push(`link ${link.name} has no mass: give its parts a material`);
     }
   }
 
@@ -660,8 +670,8 @@ export function writeRobot(
   }
 
   // Mass properties per link, in the link frame, SI units.
-  const inertial = (l: Link) => {
-    const c = combine(l.parts);
+  const inertial = (link: Link) => {
+    const c = combine(link.parts);
 
     if (!(c.mass > 0)) {
       return {
@@ -672,9 +682,9 @@ export function writeRobot(
     }
 
     const pos: V3 = [
-      (c.center[0] - l.frame[0]) / 1000,
-      (c.center[1] - l.frame[1]) / 1000,
-      (c.center[2] - l.frame[2]) / 1000,
+      (c.center[0] - link.frame[0]) / 1000,
+      (c.center[1] - link.frame[1]) / 1000,
+      (c.center[2] - link.frame[2]) / 1000,
     ];
     // g·mm² → kg·m² is 1e-9; the inertia tensor's off-diagonal entries are −∫xy dm.
     const s = 1e-9;
@@ -694,11 +704,11 @@ export function writeRobot(
   const meshName = new Map<string, string>();
   const meshNamer = namer();
 
-  for (const l of links) {
-    for (const p of l.parts) {
-      const n = meshNamer(p.id);
-      meshName.set(p.id, n);
-      files[`meshes/${n}.stl`] = writeStl([inFrame(p.mesh, l.frame)], `meerCAD ${n} (metres)`);
+  for (const link of links) {
+    for (const part of link.parts) {
+      const n = meshNamer(part.id);
+      meshName.set(part.id, n);
+      files[`meshes/${n}.stl`] = writeStl([inFrame(part.mesh, link.frame)], `meerCAD ${n} (metres)`);
     }
   }
 
@@ -708,16 +718,16 @@ export function writeRobot(
   if (shapes) {
     const loose: string[] = [];
 
-    for (const l of links) {
-      for (const p of l.parts) {
-        const s = fitCollisionShape(p.mesh);
-        if (!s) continue;
+    for (const link of links) {
+      for (const part of link.parts) {
+        const shape = fitCollisionShape(part.mesh);
+        if (!shape) continue;
 
-        shapes.set(p.id, s);
+        shapes.set(part.id, shape);
 
-        if (s.fill > LOOSE_FIT) {
+        if (shape.fill > LOOSE_FIT) {
           loose.push(
-            `${p.name ?? p.id} (${s.type}, ${Number.isFinite(s.fill) ? `${s.fill.toFixed(1)}×` : "open mesh"})`,
+            `${part.name ?? part.id} (${shape.type}, ${Number.isFinite(shape.fill) ? `${shape.fill.toFixed(1)}×` : "open mesh"})`,
           );
         }
       }
@@ -731,37 +741,37 @@ export function writeRobot(
   }
 
   /** A shape's centre in a link frame, metres. */
-  const shapePos = (s: CollisionShape, l: Link): V3 =>
-    [0, 1, 2].map((d) => (s.center[d]! - l.frame[d]!) / 1000) as V3;
+  const shapePos = (shape: CollisionShape, link: Link): V3 =>
+    [0, 1, 2].map((d) => (shape.center[d]! - link.frame[d]!) / 1000) as V3;
 
   const rad = (j: RobotJoint, v: number) => (j.type === "revolute" ? (v * Math.PI) / 180 : v / 1000);
 
-  const rel = (l: Link): V3 => {
-    const pf = l.parent && l.parent !== WORLD ? l.parent.frame : ([0, 0, 0] as V3);
+  const rel = (link: Link): V3 => {
+    const pf = link.parent && link.parent !== WORLD ? link.parent.frame : ([0, 0, 0] as V3);
 
-    return [(l.frame[0] - pf[0]) / 1000, (l.frame[1] - pf[1]) / 1000, (l.frame[2] - pf[2]) / 1000];
+    return [(link.frame[0] - pf[0]) / 1000, (link.frame[1] - pf[1]) / 1000, (link.frame[2] - pf[2]) / 1000];
   };
 
   const jointName = new Map<string, string>();
   const jn = namer();
-  for (const l of links) if (l.joint) jointName.set(l.joint.id, jn(l.joint.id));
+  for (const link of links) if (link.joint) jointName.set(link.joint.id, jn(link.joint.id));
 
   // ---------- MJCF ----------
   const mj: string[] = [];
   const indent = (d: number) => "  ".repeat(d);
 
-  const writeBody = (l: Link, depth: number, withFreeJoint: boolean) => {
-    const pos = l.parent ? rel(l) : ([0, 0, 0] as V3);
-    mj.push(`${indent(depth)}<body name="${l.name}" pos="${vec(pos)}">`);
+  const writeBody = (link: Link, depth: number, withFreeJoint: boolean) => {
+    const pos = link.parent ? rel(link) : ([0, 0, 0] as V3);
+    mj.push(`${indent(depth)}<body name="${link.name}" pos="${vec(pos)}">`);
 
-    if (l.parts.length) {
-      mj.push(`${indent(depth + 1)}${comment(l.parts.map((p) => p.name ?? p.id).join(", "))}`);
+    if (link.parts.length) {
+      mj.push(`${indent(depth + 1)}${comment(link.parts.map((part) => part.name ?? part.id).join(", "))}`);
     }
 
-    if (withFreeJoint) mj.push(`${indent(depth + 1)}<freejoint name="${l.name}_free"/>`);
+    if (withFreeJoint) mj.push(`${indent(depth + 1)}<freejoint name="${link.name}_free"/>`);
 
-    if (l.joint) {
-      const j = l.joint;
+    if (link.joint) {
+      const j = link.joint;
       const a = options.actuators?.[j.id];
       const attrs = [
         `name="${jointName.get(j.id)}"`,
@@ -778,30 +788,34 @@ export function writeRobot(
       mj.push(`${indent(depth + 1)}<joint ${attrs.join(" ")}/>`);
     }
 
-    const m = inertial(l);
+    const m = inertial(link);
     mj.push(
       `${indent(depth + 1)}<inertial pos="${vec(m.pos)}" mass="${num(m.mass)}" fullinertia="${vec(m.full)}"/>`,
     );
 
-    for (const p of l.parts) {
+    for (const part of link.parts) {
       mj.push(
-        `${indent(depth + 1)}<geom name="${meshName.get(p.id)}"${shapes ? ` class="visual"` : ""} type="mesh" mesh="${meshName.get(p.id)}" rgba="${rgba(p.color)}"/>`,
+        `${indent(depth + 1)}<geom name="${meshName.get(part.id)}"${shapes ? ` class="visual"` : ""} type="mesh" mesh="${meshName.get(part.id)}" rgba="${rgba(part.color)}"/>`,
       );
     }
 
-    for (const p of l.parts) {
-      const s = shapes?.get(p.id);
-      if (!s) continue;
+    for (const part of link.parts) {
+      const shape = shapes?.get(part.id);
+      if (!shape) continue;
 
       const size =
-        s.type === "sphere" ? [s.size[0]!] : s.type === "cylinder" ? [s.size[0]!, s.size[1]!] : s.size;
-      const q = s.type === "sphere" ? "" : ` quat="${vec(quat(s.rotation))}"`;
+        shape.type === "sphere"
+          ? [shape.size[0]!]
+          : shape.type === "cylinder"
+            ? [shape.size[0]!, shape.size[1]!]
+            : shape.size;
+      const q = shape.type === "sphere" ? "" : ` quat="${vec(quat(shape.rotation))}"`;
       mj.push(
-        `${indent(depth + 1)}<geom name="${meshName.get(p.id)}_collision" class="collision" type="${s.type}" size="${vec(size.map((v) => v / 1000))}" pos="${vec(shapePos(s, l))}"${q}/>`,
+        `${indent(depth + 1)}<geom name="${meshName.get(part.id)}_collision" class="collision" type="${shape.type}" size="${vec(size.map((v) => v / 1000))}" pos="${vec(shapePos(shape, link))}"${q}/>`,
       );
     }
 
-    for (const c of l.children) writeBody(c, depth + 1, false);
+    for (const c of link.children) writeBody(c, depth + 1, false);
     mj.push(`${indent(depth)}</body>`);
   };
 
@@ -827,22 +841,22 @@ export function writeRobot(
   mj.push(`  <worldbody>`);
   mj.push(`    <light name="sun" pos="0 0 3" dir="0 0 -1" directional="true"/>`);
   mj.push(`    <geom name="floor" type="plane" size="0 0 0.05" rgba="0.85 0.86 0.88 1"/>`);
-  for (const r of roots) writeBody(r, 2, floating && !r.grounded);
-  for (const l of onGround) writeBody(l, 2, false);
+  for (const link of roots) writeBody(link, 2, floating && !link.grounded);
+  for (const link of onGround) writeBody(link, 2, false);
   mj.push(`  </worldbody>`);
 
   // Simulators collide meshes by their convex hulls: a foot's hull swallows the ankle above it. Links
   // whose boxes already overlap at rest would push each other apart at the first step, so they do not
   // collide with each other (parent and child never do in MuJoCo).
   const boxes = new Map(
-    links.map((l) => {
-      const b = boxOf(l.parts);
+    links.map((link) => {
+      const b = boxOf(link.parts);
 
-      for (const p of l.parts) {
-        const s = shapes?.get(p.id);
-        if (!s || !b) continue;
+      for (const part of link.parts) {
+        const shape = shapes?.get(part.id);
+        if (!shape || !b) continue;
 
-        const sb = shapeBox(s);
+        const sb = shapeBox(shape);
 
         for (let d = 0; d < 3; d++) {
           b.min[d] = Math.min(b.min[d]!, sb.min[d]!);
@@ -850,7 +864,7 @@ export function writeRobot(
         }
       }
 
-      return [l, b];
+      return [link, b];
     }),
   );
   const excluded: [Link, Link][] = [];
@@ -878,27 +892,29 @@ export function writeRobot(
     mj.push(`  </contact>`);
   }
 
-  const coupled = couplings.filter((c) => jointName.has(c.driver) && jointName.has(c.driven));
+  const coupled = couplings.filter(
+    (coupling) => jointName.has(coupling.driver) && jointName.has(coupling.driven),
+  );
 
   if (coupled.length) {
     mj.push(`  <equality>`);
 
-    for (const c of coupled) {
+    for (const coupling of coupled) {
       mj.push(
-        `    <joint joint1="${jointName.get(c.driven)}" joint2="${jointName.get(c.driver)}" polycoef="0 ${num(c.ratio)} 0 0 0"/>`,
+        `    <joint joint1="${jointName.get(coupling.driven)}" joint2="${jointName.get(coupling.driver)}" polycoef="0 ${num(coupling.ratio)} 0 0 0"/>`,
       );
     }
 
     mj.push(`  </equality>`);
   }
 
-  const driven = links.filter((l) => l.joint && options.actuators?.[l.joint.id]);
+  const driven = links.filter((link) => link.joint && options.actuators?.[link.joint.id]);
 
   if (driven.length) {
     mj.push(`  <actuator>`);
 
-    for (const l of driven) {
-      const j = l.joint!;
+    for (const link of driven) {
+      const j = link.joint!;
       const a = options.actuators![j.id]!;
       const n = jointName.get(j.id)!;
       const force = a.effort !== undefined ? ` forcerange="${num(-a.effort)} ${num(a.effort)}"` : "";
@@ -928,25 +944,28 @@ export function writeRobot(
     `  ${comment(`Written by meerCAD. Units: metres, kilograms, radians. Meshes in meshes/, one per part. Collision: ${shapes ? "one box, cylinder or sphere per part" : "the meshes"}.`)}`,
   );
 
-  const urdfRoots = roots.filter((r) => !r.grounded);
-  const needsWorld = onGround.length > 0 || roots.some((r) => r.grounded);
+  const urdfRoots = roots.filter((link) => !link.grounded);
+  const needsWorld = onGround.length > 0 || roots.some((link) => link.grounded);
   if (needsWorld) ur.push(`  <link name="${WORLD}"/>`);
 
   if (!needsWorld && urdfRoots.length > 1) {
     warnings.push(
       `URDF has one root: ${urdfRoots
         .slice(1)
-        .map((l) => l.name)
+        .map((link) => link.name)
         .join(
           ", ",
         )} hang on ${urdfRoots[0]!.name} with floating joints, which many URDF tools do not support`,
     );
   }
 
-  for (const l of links) {
-    const m = inertial(l);
-    ur.push(`  <link name="${l.name}">`);
-    if (l.parts.length) ur.push(`    ${comment(l.parts.map((p) => p.name ?? p.id).join(", "))}`);
+  for (const link of links) {
+    const m = inertial(link);
+    ur.push(`  <link name="${link.name}">`);
+
+    if (link.parts.length) {
+      ur.push(`    ${comment(link.parts.map((part) => part.name ?? part.id).join(", "))}`);
+    }
 
     ur.push(`    <inertial>`);
     ur.push(`      <origin xyz="${vec(m.pos)}" rpy="0 0 0"/>`);
@@ -958,31 +977,33 @@ export function writeRobot(
     );
     ur.push(`    </inertial>`);
 
-    for (const p of l.parts) {
-      const file = `meshes/${meshName.get(p.id)}.stl`;
+    for (const part of link.parts) {
+      const file = `meshes/${meshName.get(part.id)}.stl`;
       ur.push(`    <visual>`);
       ur.push(`      <origin xyz="0 0 0" rpy="0 0 0"/>`);
       ur.push(`      <geometry><mesh filename="${file}"/></geometry>`);
-      ur.push(`      <material name="${meshName.get(p.id)}"><color rgba="${rgba(p.color)}"/></material>`);
+      ur.push(
+        `      <material name="${meshName.get(part.id)}"><color rgba="${rgba(part.color)}"/></material>`,
+      );
       ur.push(`    </visual>`);
 
-      const s = shapes?.get(p.id);
-      if (shapes && !s) continue;
+      const shape = shapes?.get(part.id);
+      if (shapes && !shape) continue;
 
-      ur.push(`    <collision name="${meshName.get(p.id)}_collision">`);
+      ur.push(`    <collision name="${meshName.get(part.id)}_collision">`);
 
-      if (s) {
+      if (shape) {
         const mm = (v: number) => num(v / 1000);
         ur.push(
-          `      <origin xyz="${vec(shapePos(s, l))}" rpy="${vec(s.type === "sphere" ? [0, 0, 0] : rpy(s.rotation))}"/>`,
+          `      <origin xyz="${vec(shapePos(shape, link))}" rpy="${vec(shape.type === "sphere" ? [0, 0, 0] : rpy(shape.rotation))}"/>`,
         );
 
         const g =
-          s.type === "box"
-            ? `<box size="${vec(s.size.map((v) => (2 * v) / 1000))}"/>`
-            : s.type === "cylinder"
-              ? `<cylinder radius="${mm(s.size[0]!)}" length="${mm(2 * s.size[1]!)}"/>`
-              : `<sphere radius="${mm(s.size[0]!)}"/>`;
+          shape.type === "box"
+            ? `<box size="${vec(shape.size.map((v) => (2 * v) / 1000))}"/>`
+            : shape.type === "cylinder"
+              ? `<cylinder radius="${mm(shape.size[0]!)}" length="${mm(2 * shape.size[1]!)}"/>`
+              : `<sphere radius="${mm(shape.size[0]!)}"/>`;
         ur.push(`      <geometry>${g}</geometry>`);
       } else {
         ur.push(`      <origin xyz="0 0 0" rpy="0 0 0"/>`);
@@ -995,17 +1016,17 @@ export function writeRobot(
     ur.push(`  </link>`);
   }
 
-  const urdfJoint = (l: Link) => {
-    if (!l.parent) return;
+  const urdfJoint = (link: Link) => {
+    if (!link.parent) return;
 
-    const j = l.joint!;
+    const j = link.joint!;
     const a = options.actuators?.[j.id];
-    const parent = l.parent === WORLD ? WORLD : l.parent.name;
+    const parent = link.parent === WORLD ? WORLD : link.parent.name;
     const type = j.type === "slider" ? "prismatic" : j.limits ? "revolute" : "continuous";
     ur.push(`  <joint name="${jointName.get(j.id)}" type="${type}">`);
-    ur.push(`    <origin xyz="${vec(rel(l))}" rpy="0 0 0"/>`);
+    ur.push(`    <origin xyz="${vec(rel(link))}" rpy="0 0 0"/>`);
     ur.push(`    <parent link="${parent}"/>`);
-    ur.push(`    <child link="${l.name}"/>`);
+    ur.push(`    <child link="${link.name}"/>`);
     ur.push(`    <axis xyz="${vec(j.axis)}"/>`);
 
     const effort = a?.effort ?? 100;
@@ -1026,7 +1047,7 @@ export function writeRobot(
       ur.push(`    <dynamics damping="${num(a?.damping ?? 0)}" friction="${num(a?.friction ?? 0)}"/>`);
     }
 
-    const mimic = couplings.find((c) => c.driven === j.id && jointName.has(c.driver));
+    const mimic = couplings.find((coupling) => coupling.driven === j.id && jointName.has(coupling.driver));
 
     if (mimic) {
       ur.push(
@@ -1037,27 +1058,27 @@ export function writeRobot(
     ur.push(`  </joint>`);
   };
 
-  for (const l of links) urdfJoint(l);
+  for (const link of links) urdfJoint(link);
 
   // Links fixed to the ground hang on the world; extra free roots hang on the first with floating joints.
-  for (const r of roots) {
-    if (r.grounded) {
+  for (const link of roots) {
+    if (link.grounded) {
       ur.push(
-        `  <joint name="${r.name}_fixed" type="fixed"><parent link="${WORLD}"/><child link="${r.name}"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>`,
+        `  <joint name="${link.name}_fixed" type="fixed"><parent link="${WORLD}"/><child link="${link.name}"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>`,
       );
     }
   }
 
   if (!needsWorld) {
-    for (const r of urdfRoots.slice(1)) {
+    for (const link of urdfRoots.slice(1)) {
       ur.push(
-        `  <joint name="${r.name}_floating" type="floating"><parent link="${urdfRoots[0]!.name}"/><child link="${r.name}"/><origin xyz="${vec([-urdfRoots[0]!.frame[0] / 1000, -urdfRoots[0]!.frame[1] / 1000, -urdfRoots[0]!.frame[2] / 1000])}" rpy="0 0 0"/></joint>`,
+        `  <joint name="${link.name}_floating" type="floating"><parent link="${urdfRoots[0]!.name}"/><child link="${link.name}"/><origin xyz="${vec([-urdfRoots[0]!.frame[0] / 1000, -urdfRoots[0]!.frame[1] / 1000, -urdfRoots[0]!.frame[2] / 1000])}" rpy="0 0 0"/></joint>`,
       );
     }
   } else {
-    for (const r of urdfRoots) {
+    for (const link of urdfRoots) {
       ur.push(
-        `  <joint name="${r.name}_floating" type="floating"><parent link="${WORLD}"/><child link="${r.name}"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>`,
+        `  <joint name="${link.name}_floating" type="floating"><parent link="${WORLD}"/><child link="${link.name}"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>`,
       );
     }
   }
@@ -1067,12 +1088,12 @@ export function writeRobot(
 
   return {
     files,
-    links: links.map((l) => ({
-      name: l.name,
-      parts: l.parts.map((p) => p.id),
-      mass: +inertial(l).mass.toFixed(4),
-      parent: l.parent === WORLD ? WORLD : (l.parent?.name ?? null),
-      joint: l.joint ? jointName.get(l.joint.id)! : null,
+    links: links.map((link) => ({
+      name: link.name,
+      parts: link.parts.map((part) => part.id),
+      mass: +inertial(link).mass.toFixed(4),
+      parent: link.parent === WORLD ? WORLD : (link.parent?.name ?? null),
+      joint: link.joint ? jointName.get(link.joint.id)! : null,
     })),
     warnings,
   };

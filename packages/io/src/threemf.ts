@@ -26,7 +26,8 @@ export interface Mesh3mf extends TriangleMesh {
 
 const filamentOf = (f: string | Filament | undefined): Filament | undefined =>
   f === undefined ? undefined : typeof f === "string" ? { color: f } : f;
-const filamentKey = (f: Filament) => `${f.type ?? ""}|${f.material ?? ""}|${f.color.toUpperCase()}`;
+const filamentKey = (filament: Filament) =>
+  `${filament.type ?? ""}|${filament.material ?? ""}|${filament.color.toUpperCase()}`;
 
 /**
  * The filament slots (extruders) a 3MF export assigns: one per material and colour, numbered from
@@ -40,15 +41,15 @@ export function filamentSlots(meshes: readonly Pick<Mesh3mf, "filament">[]): {
   const filaments: Filament[] = [];
   const keys: string[] = [];
   const slot = meshes.map((m) => {
-    const f = filamentOf(m.filament);
-    if (!f) return 1;
+    const filament = filamentOf(m.filament);
+    if (!filament) return 1;
 
-    const k = filamentKey(f);
+    const k = filamentKey(filament);
     let i = keys.indexOf(k);
 
     if (i < 0) {
       i = keys.push(k) - 1;
-      filaments.push({ ...f, color: f.color.toUpperCase() });
+      filaments.push({ ...filament, color: filament.color.toUpperCase() });
     }
 
     return i + 1;
@@ -74,13 +75,13 @@ const XMLNS_MATERIAL = "http://schemas.microsoft.com/3dmanufacturing/material/20
 export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
   // Base materials: one per material name and colour.
   const bases: { name: string; color: string; look?: Mesh3mf["look"] }[] = [];
-  const baseOf = meshes.map((m, i) => {
-    if (!m.color) return -1;
+  const baseOf = meshes.map((mesh, i) => {
+    if (!mesh.color) return -1;
 
-    const name = m.material ?? m.name ?? `Color ${i + 1}`;
-    const color = m.color.toUpperCase();
+    const name = mesh.material ?? mesh.name ?? `Color ${i + 1}`;
+    const color = mesh.color.toUpperCase();
     let k = bases.findIndex((b) => b.name === name && b.color === color);
-    if (k < 0) k = bases.push({ name, color, ...(m.look ? { look: m.look } : {}) }) - 1;
+    if (k < 0) k = bases.push({ name, color, ...(mesh.look ? { look: mesh.look } : {}) }) - 1;
 
     return k;
   });
@@ -103,15 +104,15 @@ export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
 
   const triangleCounts: number[] = [];
 
-  const objectChunks = (m: Mesh3mf, i: number) => {
+  const objectChunks = (mesh: Mesh3mf, i: number) => {
     const map = new Map<string, number>();
     const verts: string[] = [];
-    const remap = new Uint32Array(m.positions.length / 3);
+    const remap = new Uint32Array(mesh.positions.length / 3);
 
     for (let v = 0; v < remap.length; v++) {
-      const x = m.positions[v * 3]!,
-        y = m.positions[v * 3 + 1]!,
-        z = m.positions[v * 3 + 2]!;
+      const x = mesh.positions[v * 3]!,
+        y = mesh.positions[v * 3 + 1]!,
+        z = mesh.positions[v * 3 + 2]!;
       const key = `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
       let idx = map.get(key);
 
@@ -126,8 +127,12 @@ export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
 
     const tris: string[] = [];
 
-    for (let t = 0; t < m.indices.length; t += 3) {
-      const [a, b, c] = [remap[m.indices[t]!]!, remap[m.indices[t + 1]!]!, remap[m.indices[t + 2]!]!];
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const [a, b, c] = [
+        remap[mesh.indices[t]!]!,
+        remap[mesh.indices[t + 1]!]!,
+        remap[mesh.indices[t + 2]!]!,
+      ];
       if (a !== b && b !== c && a !== c) tris.push(`<triangle v1="${a}" v2="${b}" v3="${c}"/>`);
     }
 
@@ -136,7 +141,7 @@ export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
     const k = baseOf[i]!;
     const material = k >= 0 ? ` pid="${matId}" pindex="${k}"` : "";
     out([
-      `<object id="${i + 1}" type="model" name="${escapeXml(m.name ?? `Body ${i + 1}`)}"${material}><mesh><vertices>`,
+      `<object id="${i + 1}" type="model" name="${escapeXml(mesh.name ?? `Body ${i + 1}`)}"${material}><mesh><vertices>`,
     ]);
     out(verts);
     out(["</vertices><triangles>"]);
@@ -155,18 +160,18 @@ export function write3mf(meshes: readonly Mesh3mf[]): Uint8Array {
   const slicers: Record<string, Uint8Array> = {};
 
   if (filaments.length > 1) {
-    const name = (m: Mesh3mf, i: number) => escapeXml(m.name ?? `Body ${i + 1}`);
+    const name = (mesh: Mesh3mf, i: number) => escapeXml(mesh.name ?? `Body ${i + 1}`);
     // Without a volume (its triangle range) the slicer would load the object empty.
     const prusa = meshes
       .map(
-        (m, i) =>
-          `<object id="${i + 1}" instances_count="1"><metadata type="object" key="name" value="${name(m, i)}"/><metadata type="object" key="extruder" value="${slot[i]}"/><volume firstid="0" lastid="${Math.max(0, triangleCounts[i]! - 1)}"><metadata type="volume" key="name" value="${name(m, i)}"/><metadata type="volume" key="volume_type" value="ModelPart"/></volume></object>`,
+        (mesh, i) =>
+          `<object id="${i + 1}" instances_count="1"><metadata type="object" key="name" value="${name(mesh, i)}"/><metadata type="object" key="extruder" value="${slot[i]}"/><volume firstid="0" lastid="${Math.max(0, triangleCounts[i]! - 1)}"><metadata type="volume" key="name" value="${name(mesh, i)}"/><metadata type="volume" key="volume_type" value="ModelPart"/></volume></object>`,
       )
       .join("");
     const bambu = meshes
       .map(
-        (m, i) =>
-          `<object id="${i + 1}"><metadata key="name" value="${name(m, i)}"/><metadata key="extruder" value="${slot[i]}"/></object>`,
+        (mesh, i) =>
+          `<object id="${i + 1}"><metadata key="name" value="${name(mesh, i)}"/><metadata key="extruder" value="${slot[i]}"/></object>`,
       )
       .join("");
     slicers["Metadata/Slic3r_PE_model.config"] = strToU8(
@@ -276,8 +281,8 @@ export function read3mf(data: Uint8Array): (TriangleMesh & { name: string })[] {
     const scale = UNIT_MM[attr(/<model\b[^>]*>/.exec(xml)?.[0] ?? "", "unit") ?? "millimeter"] ?? 1;
     const objects = new Map<string, ModelObject>();
 
-    for (const m of xml.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g)) {
-      const [head, body] = [m[1]!, m[2]!];
+    for (const match of xml.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g)) {
+      const [head, body] = [match[1]!, match[2]!];
       const obj: ModelObject = { components: [] };
       const name = attr(head, "name");
       if (name) obj.name = name;
@@ -285,24 +290,32 @@ export function read3mf(data: Uint8Array): (TriangleMesh & { name: string })[] {
       if (/<mesh\b/.test(body)) {
         const vertices: number[] = [];
 
-        for (const v of body.matchAll(/<vertex\b([^>]*)\/?>/g)) {
-          vertices.push(Number(attr(v[1]!, "x")), Number(attr(v[1]!, "y")), Number(attr(v[1]!, "z")));
+        for (const match of body.matchAll(/<vertex\b([^>]*)\/?>/g)) {
+          vertices.push(
+            Number(attr(match[1]!, "x")),
+            Number(attr(match[1]!, "y")),
+            Number(attr(match[1]!, "z")),
+          );
         }
 
         const triangles: number[] = [];
 
-        for (const t of body.matchAll(/<triangle\b([^>]*)\/?>/g)) {
-          triangles.push(Number(attr(t[1]!, "v1")), Number(attr(t[1]!, "v2")), Number(attr(t[1]!, "v3")));
+        for (const match of body.matchAll(/<triangle\b([^>]*)\/?>/g)) {
+          triangles.push(
+            Number(attr(match[1]!, "v1")),
+            Number(attr(match[1]!, "v2")),
+            Number(attr(match[1]!, "v3")),
+          );
         }
 
         obj.mesh = { vertices, triangles };
       }
 
-      for (const c of body.matchAll(/<component\b([^>]*)\/?>/g)) {
+      for (const match of body.matchAll(/<component\b([^>]*)\/?>/g)) {
         obj.components.push({
-          file: norm(attr(c[1]!, "p:path") ?? path),
-          id: attr(c[1]!, "objectid") ?? "",
-          transform: parseMat(attr(c[1]!, "transform")),
+          file: norm(attr(match[1]!, "p:path") ?? path),
+          id: attr(match[1]!, "objectid") ?? "",
+          transform: parseMat(attr(match[1]!, "transform")),
         });
       }
 
@@ -311,8 +324,11 @@ export function read3mf(data: Uint8Array): (TriangleMesh & { name: string })[] {
 
     const build: { id: string; transform: Mat }[] = [];
 
-    for (const it of xml.matchAll(/<item\b([^>]*)\/?>/g)) {
-      build.push({ id: attr(it[1]!, "objectid") ?? "", transform: parseMat(attr(it[1]!, "transform")) });
+    for (const match of xml.matchAll(/<item\b([^>]*)\/?>/g)) {
+      build.push({
+        id: attr(match[1]!, "objectid") ?? "",
+        transform: parseMat(attr(match[1]!, "transform")),
+      });
     }
 
     models.set(norm(path), { scale, objects, build });

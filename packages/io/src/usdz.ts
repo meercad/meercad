@@ -71,10 +71,10 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
   const lo = [Infinity, Infinity, Infinity];
   const hi = [-Infinity, -Infinity, -Infinity];
 
-  for (const m of meshes) {
-    for (let i = 0; i < m.positions.length; i += 3) {
+  for (const mesh of meshes) {
+    for (let i = 0; i < mesh.positions.length; i += 3) {
       for (let k = 0; k < 3; k++) {
-        const v = m.positions[i + k]!;
+        const v = mesh.positions[i + k]!;
         if (v < lo[k]!) lo[k] = v;
         if (v > hi[k]!) hi[k] = v;
       }
@@ -93,7 +93,7 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
   const normal = (n: ArrayLike<number>, i: number) =>
     `(${num(n[i]!)}, ${num(n[i + 2]!)}, ${num(-n[i + 1]!)})`;
 
-  const names = primNames(meshes.map((m, i) => m.name ?? `Part ${i + 1}`));
+  const names = primNames(meshes.map((mesh, i) => mesh.name ?? `Part ${i + 1}`));
   const out: string[] = [
     "#usda 1.0",
     "(",
@@ -112,8 +112,8 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
     "    {",
   ];
 
-  for (const [i, m] of meshes.entries()) {
-    const [r, g, b] = linearRgb(m.color);
+  for (const [i, mesh] of meshes.entries()) {
+    const [r, g, b] = linearRgb(mesh.color);
     out.push(
       `        def Material "M_${names[i]}"`,
       "        {",
@@ -122,8 +122,8 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
       "            {",
       '                uniform token info:id = "UsdPreviewSurface"',
       `                color3f inputs:diffuseColor = (${num(r)}, ${num(g)}, ${num(b)})`,
-      `                float inputs:metallic = ${num(clamp01(m.metalness, 0))}`,
-      `                float inputs:roughness = ${num(clamp01(m.roughness, 0.5))}`,
+      `                float inputs:metallic = ${num(clamp01(mesh.metalness, 0))}`,
+      `                float inputs:roughness = ${num(clamp01(mesh.roughness, 0.5))}`,
       "                token outputs:surface",
       "            }",
       "        }",
@@ -132,19 +132,19 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
 
   out.push("    }");
 
-  for (const [i, m] of meshes.entries()) {
-    const n = m.positions.length / 3;
+  for (const [i, mesh] of meshes.entries()) {
+    const n = mesh.positions.length / 3;
     const pts: string[] = [];
     const elo = [Infinity, Infinity, Infinity];
     const ehi = [-Infinity, -Infinity, -Infinity];
 
     for (let v = 0; v < n; v++) {
-      pts.push(point(m.positions, v * 3));
+      pts.push(point(mesh.positions, v * 3));
 
       const u = [
-        (m.positions[v * 3]! - cx) / 1000,
-        (m.positions[v * 3 + 2]! - floor) / 1000,
-        -(m.positions[v * 3 + 1]! - cy) / 1000,
+        (mesh.positions[v * 3]! - cx) / 1000,
+        (mesh.positions[v * 3 + 2]! - floor) / 1000,
+        -(mesh.positions[v * 3 + 1]! - cy) / 1000,
       ];
 
       for (let k = 0; k < 3; k++) {
@@ -153,7 +153,7 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
       }
     }
 
-    const tris = m.indices.length / 3;
+    const tris = mesh.indices.length / 3;
     out.push(
       "",
       `    def Mesh "${names[i]}" (`,
@@ -163,13 +163,13 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
       "        uniform bool doubleSided = 0",
       `        float3[] extent = [(${elo.map(num).join(", ")}), (${ehi.map(num).join(", ")})]`,
       `        int[] faceVertexCounts = [${new Array<number>(tris).fill(3).join(", ")}]`,
-      `        int[] faceVertexIndices = [${Array.from(m.indices).join(", ")}]`,
+      `        int[] faceVertexIndices = [${Array.from(mesh.indices).join(", ")}]`,
       `        rel material:binding = </Model/Materials/M_${names[i]}>`,
     );
 
-    if (m.normals && m.normals.length === m.positions.length) {
+    if (mesh.normals && mesh.normals.length === mesh.positions.length) {
       const ns: string[] = [];
-      for (let v = 0; v < n; v++) ns.push(normal(m.normals, v * 3));
+      for (let v = 0; v < n; v++) ns.push(normal(mesh.normals, v * 3));
       out.push(
         `        normal3f[] normals = [${ns.join(", ")}] (`,
         '            interpolation = "vertex"',
