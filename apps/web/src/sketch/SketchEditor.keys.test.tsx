@@ -105,9 +105,14 @@ describe("the sketch editor's panel and keys", () => {
     await act(async () => setTool("rect"));
     await clickAt(0, 40);
     await act(async () => void fireEvent.keyDown(window, { key: "5" }));
+    // Keys typed before the fields have focus go on into them: the active one, then the next by Tab.
+    await act(async () => void fireEvent.keyDown(window, { key: "2" }));
     await act(async () => void fireEvent.keyDown(window, { key: "Tab" }));
+    await act(async () => void fireEvent.keyDown(window, { key: "7" }));
+    await act(async () => void fireEvent.keyDown(window, { key: "Tab", shiftKey: true }));
     const inputs = () => [...document.querySelectorAll<HTMLInputElement>(".draw-entry input")];
     expect(inputs()).toHaveLength(2);
+    expect(inputs().map((i) => i.value)).toEqual(["52", "7"]);
     await act(async () => void fireEvent.keyDown(inputs()[0]!, { key: "Tab" }));
     await act(async () => void fireEvent.keyDown(inputs()[1]!, { key: "Tab", shiftKey: true }));
     await act(async () => void fireEvent.keyDown(inputs()[0]!, { key: "Escape" }));
