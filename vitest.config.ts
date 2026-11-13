@@ -104,17 +104,18 @@ export default defineConfig({
         oxc: { jsx: { runtime: "automatic" } },
         // The slow projects run after the rest, each in a group of its own: side by side with the
         // others (each worker holds an OCCT kernel) the Mac mini's 16 GB swapped and they timed out.
-        test: { name: "web-slow", environment: "happy-dom", include: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"], sequence: { groupOrder: 1 },
+        test: { name: "web-slow", environment: "happy-dom", include: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"], sequence: { groupOrder: 2 },
           // One file at a time: two dialog walk-throughs side by side made a spring build time out.
           fileParallelism: false },
       },
       {
         extends: true,
-        test: { name: "integration", include: ["tests/acceptance/**/*.test.ts"], exclude: SLOW },
+        // After the app's tests: kernels beside the app's own kernels made the app's tests time out.
+        test: { name: "integration", include: ["tests/acceptance/**/*.test.ts"], exclude: SLOW, sequence: { groupOrder: 1 } },
       },
       {
         extends: true,
-        test: { name: "integration-slow", include: SLOW, sequence: { groupOrder: 2 } },
+        test: { name: "integration-slow", include: SLOW, sequence: { groupOrder: 3 } },
       },
       {
         extends: true,
