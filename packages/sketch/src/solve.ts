@@ -84,58 +84,59 @@ export class SketchSolver {
 
     const curves: SolvedCurve[] = [];
 
-    for (const e of input.entities) {
-      const construction = !!e.construction;
+    for (const entity of input.entities) {
+      const construction = !!entity.construction;
 
-      if (e.type === "line") {
+      if (entity.type === "line") {
         curves.push({
-          id: e.id,
+          id: entity.id,
           kind: "line",
-          a: pt(e.p1),
-          b: pt(e.p2),
-          p1: e.p1,
-          p2: e.p2,
+          a: pt(entity.p1),
+          b: pt(entity.p2),
+          p1: entity.p1,
+          p2: entity.p2,
           construction,
           external: false,
         });
-      } else if (e.type === "circle") {
-        const c = values.get(e.id) as { radius: number } | undefined;
+      } else if (entity.type === "circle") {
+        const c = values.get(entity.id) as { radius: number } | undefined;
         curves.push({
-          id: e.id,
+          id: entity.id,
           kind: "circle",
-          center: pt(e.center),
-          radius: c?.radius ?? e.radius,
-          c: e.center,
+          center: pt(entity.center),
+          radius: c?.radius ?? entity.radius,
+          c: entity.center,
           construction,
           external: false,
         });
-      } else if (e.type === "arc") {
-        const a = values.get(e.id) as { radius: number; start_angle: number; end_angle: number } | undefined;
+      } else if (entity.type === "arc") {
+        const a = values.get(entity.id) as
+          { radius: number; start_angle: number; end_angle: number } | undefined;
 
         if (a) {
           curves.push({
-            id: e.id,
+            id: entity.id,
             kind: "arc",
-            center: pt(e.center),
+            center: pt(entity.center),
             radius: a.radius,
             a0: a.start_angle,
             a1: a.end_angle,
-            c: e.center,
-            start: e.start,
-            end: e.end,
+            c: entity.center,
+            start: entity.start,
+            end: entity.end,
             construction,
             external: false,
           });
         }
-      } else if (e.type === "spline") {
-        const through = e.points.map(pt);
+      } else if (entity.type === "spline") {
+        const through = entity.points.map(pt);
         curves.push({
-          id: e.id,
+          id: entity.id,
           kind: "spline",
-          pts: splinePoints(through, !!e.closed),
+          pts: splinePoints(through, !!entity.closed),
           through,
-          points: e.points,
-          closed: !!e.closed,
+          points: entity.points,
+          closed: !!entity.closed,
           construction,
           external: false,
         });
@@ -145,23 +146,23 @@ export class SketchSolver {
     for (const x of input.external ?? []) curves.push(x);
 
     // Expose curve characteristic points under their reference names too ("l1.p1", "c1.center").
-    for (const c of curves) {
-      if (c.kind === "spline") continue;
+    for (const curve of curves) {
+      if (curve.kind === "spline") continue;
 
-      if (c.kind === "line") {
-        points.set(`${c.id}.p1`, c.a);
-        points.set(`${c.id}.p2`, c.b);
+      if (curve.kind === "line") {
+        points.set(`${curve.id}.p1`, curve.a);
+        points.set(`${curve.id}.p2`, curve.b);
       } else {
-        points.set(`${c.id}.center`, c.center);
+        points.set(`${curve.id}.center`, curve.center);
 
-        if (c.kind === "arc") {
-          points.set(`${c.id}.start`, [
-            c.center[0] + c.radius * Math.cos(c.a0),
-            c.center[1] + c.radius * Math.sin(c.a0),
+        if (curve.kind === "arc") {
+          points.set(`${curve.id}.start`, [
+            curve.center[0] + curve.radius * Math.cos(curve.a0),
+            curve.center[1] + curve.radius * Math.sin(curve.a0),
           ]);
-          points.set(`${c.id}.end`, [
-            c.center[0] + c.radius * Math.cos(c.a1),
-            c.center[1] + c.radius * Math.sin(c.a1),
+          points.set(`${curve.id}.end`, [
+            curve.center[0] + curve.radius * Math.cos(curve.a1),
+            curve.center[1] + curve.radius * Math.sin(curve.a1),
           ]);
         }
       }
@@ -214,46 +215,46 @@ function buildPrimitives(
   const splines = new Map<string, readonly string[]>();
   const coords = new Map<string, Vec2>([["origin", [0, 0]]]);
 
-  for (const e of input.entities) {
-    if (e.type === "point") {
-      points.push({ id: e.id, type: "point", x: e.x, y: e.y, fixed: false });
-      coords.set(e.id, [e.x, e.y]);
+  for (const entity of input.entities) {
+    if (entity.type === "point") {
+      points.push({ id: entity.id, type: "point", x: entity.x, y: entity.y, fixed: false });
+      coords.set(entity.id, [entity.x, entity.y]);
     }
   }
 
   const at = (id: string): Vec2 => coords.get(id) ?? [0, 0];
 
-  for (const e of input.entities) {
-    if (e.type === "line") {
-      curves.push({ id: e.id, type: "line", p1_id: e.p1, p2_id: e.p2 });
-      kinds.set(e.id, "line");
-      curvePoints.set(e.id, { p1: e.p1, p2: e.p2 });
-    } else if (e.type === "circle") {
-      curves.push({ id: e.id, type: "circle", c_id: e.center, radius: e.radius });
-      kinds.set(e.id, "circle");
-      curvePoints.set(e.id, { center: e.center });
-    } else if (e.type === "arc") {
-      const c = at(e.center);
-      const s = at(e.start);
-      const t = at(e.end);
+  for (const entity of input.entities) {
+    if (entity.type === "line") {
+      curves.push({ id: entity.id, type: "line", p1_id: entity.p1, p2_id: entity.p2 });
+      kinds.set(entity.id, "line");
+      curvePoints.set(entity.id, { p1: entity.p1, p2: entity.p2 });
+    } else if (entity.type === "circle") {
+      curves.push({ id: entity.id, type: "circle", c_id: entity.center, radius: entity.radius });
+      kinds.set(entity.id, "circle");
+      curvePoints.set(entity.id, { center: entity.center });
+    } else if (entity.type === "arc") {
+      const c = at(entity.center);
+      const s = at(entity.start);
+      const t = at(entity.end);
       const radius = distance2(c, s) || 1;
       const a0 = Math.atan2(s[1] - c[1], s[0] - c[0]);
       const a1 = a0 + sweep(a0, Math.atan2(t[1] - c[1], t[0] - c[0]));
       curves.push({
-        id: e.id,
+        id: entity.id,
         type: "arc",
-        c_id: e.center,
-        start_id: e.start,
-        end_id: e.end,
+        c_id: entity.center,
+        start_id: entity.start,
+        end_id: entity.end,
         radius,
         start_angle: a0,
         end_angle: a1,
       });
-      cons.push({ id: `${e.id}#rules`, type: "arc_rules", a_id: e.id });
-      kinds.set(e.id, "arc");
-      curvePoints.set(e.id, { center: e.center, start: e.start, end: e.end });
-    } else if (e.type === "spline" && !e.closed && e.points.length >= 2) {
-      splines.set(e.id, e.points);
+      cons.push({ id: `${entity.id}#rules`, type: "arc_rules", a_id: entity.id });
+      kinds.set(entity.id, "arc");
+      curvePoints.set(entity.id, { center: entity.center, start: entity.start, end: entity.end });
+    } else if (entity.type === "spline" && !entity.closed && entity.points.length >= 2) {
+      splines.set(entity.id, entity.points);
     }
   }
 

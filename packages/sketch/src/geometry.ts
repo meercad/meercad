@@ -65,13 +65,13 @@ export function frameFromPlane(point: Vec3, normal: Vec3): PlaneFrame {
   const v = cross3(n, u);
 
   // Keep origin planes identical to the named frames (e.g. a face at z=10 behaves like XY).
-  for (const f of Object.values(ORIGIN_FRAMES)) {
-    if (dot3(f.normal, n) > 1 - 1e-9) {
+  for (const frame of Object.values(ORIGIN_FRAMES)) {
+    if (dot3(frame.normal, n) > 1 - 1e-9) {
       return {
-        origin: add3(f.origin, scale3(n, dot3(sub3(point, f.origin), n))),
-        u: f.u,
-        v: f.v,
-        normal: f.normal,
+        origin: add3(frame.origin, scale3(n, dot3(sub3(point, frame.origin), n))),
+        u: frame.u,
+        v: frame.v,
+        normal: frame.normal,
       };
     }
   }
@@ -79,16 +79,16 @@ export function frameFromPlane(point: Vec3, normal: Vec3): PlaneFrame {
   return { origin, u, v, normal: n };
 }
 
-export function offsetFrame(f: PlaneFrame, offset: number, angleDeg = 0): PlaneFrame {
-  const origin = add3(f.origin, scale3(f.normal, offset));
-  if (!angleDeg) return { ...f, origin };
+export function offsetFrame(frame: PlaneFrame, offset: number, angleDeg = 0): PlaneFrame {
+  const origin = add3(frame.origin, scale3(frame.normal, offset));
+  if (!angleDeg) return { ...frame, origin };
 
   // Rotate v and normal about u.
   const a = (angleDeg * Math.PI) / 180;
-  const v = add3(scale3(f.v, Math.cos(a)), scale3(f.normal, Math.sin(a)));
-  const normal = cross3(f.u, v);
+  const v = add3(scale3(frame.v, Math.cos(a)), scale3(frame.normal, Math.sin(a)));
+  const normal = cross3(frame.u, v);
 
-  return { origin, u: f.u, v, normal };
+  return { origin, u: frame.u, v, normal };
 }
 
 // ---------------------------------------------------------------- solved sketch

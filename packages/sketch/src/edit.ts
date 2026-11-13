@@ -26,7 +26,10 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
 
 /** A fresh id with this prefix, not used by any entity or constraint. */
 function fresh(d: SketchData, prefix: string): string {
-  const taken = new Set([...d.entities.map((e) => e.id), ...d.constraints.map((c) => c.id)]);
+  const taken = new Set([
+    ...d.entities.map((entity) => entity.id),
+    ...d.constraints.map((constraint) => constraint.id),
+  ]);
   let n = 1;
   while (taken.has(`${prefix}${n}`)) n++;
 
@@ -34,8 +37,8 @@ function fresh(d: SketchData, prefix: string): string {
 }
 
 /** Entity ids a constraint refers to ("l1.p2" refers to l1). */
-function refs(c: SketchConstraint): string[] {
-  return Object.entries(c)
+function refs(constraint: SketchConstraint): string[] {
+  return Object.entries(constraint)
     .filter(([k, v]) => k !== "id" && k !== "type" && typeof v === "string")
     .map(([, v]) => (v as string).split(".")[0]!);
 }
@@ -58,21 +61,21 @@ export function cornerEdit(
   // Points joined to the corner by a coincident constraint count as the corner too.
   const same = new Set([corner]);
 
-  for (const c of sk.constraints) {
-    if (c.type === "coincident") {
-      if (same.has(c.a)) same.add(c.b);
-      if (same.has(c.b)) same.add(c.a);
+  for (const constraint of sk.constraints) {
+    if (constraint.type === "coincident") {
+      if (same.has(constraint.a)) same.add(constraint.b);
+      if (same.has(constraint.b)) same.add(constraint.a);
     }
   }
 
   const lines = sk.entities.filter(
-    (e): e is Extract<SketchEntity, { type: "line" }> =>
-      e.type === "line" && !e.construction && (same.has(e.p1) || same.has(e.p2)),
+    (entity): entity is Extract<SketchEntity, { type: "line" }> =>
+      entity.type === "line" && !entity.construction && (same.has(entity.p1) || same.has(entity.p2)),
   );
   const others = sk.entities.filter(
-    (e) =>
-      (e.type === "arc" && (same.has(e.start) || same.has(e.end))) ||
-      (e.type === "circle" && same.has(e.center)),
+    (entity) =>
+      (entity.type === "arc" && (same.has(entity.start) || same.has(entity.end))) ||
+      (entity.type === "circle" && same.has(entity.center)),
   );
 
   if (lines.length !== 2 || others.length) {
@@ -118,34 +121,38 @@ export function cornerEdit(
   const t1 = point(T1),
     t2 = point(T2);
   // Each line now ends where the new geometry starts.
-  out.entities = out.entities.map((e) => {
-    if (e.id === lines[0]!.id) {
+  out.entities = out.entities.map((entity) => {
+    if (entity.id === lines[0]!.id) {
       return same.has(lines[0]!.p1) ? { ...lines[0]!, p1: t1 } : { ...lines[0]!, p2: t1 };
     }
 
-    if (e.id === lines[1]!.id) {
+    if (entity.id === lines[1]!.id) {
       return same.has(lines[1]!.p1) ? { ...lines[1]!, p1: t2 } : { ...lines[1]!, p2: t2 };
     }
 
-    return e;
+    return entity;
   });
   // Constraints on the old corner point no longer describe anything; neither do the lines' lengths.
   out.constraints = out.constraints.filter(
-    (c) => !refs(c).some((r) => same.has(r)) && !(c.type === "length" && lines.some((l) => l.id === c.line)),
+    (constraint) =>
+      !refs(constraint).some((r) => same.has(r)) &&
+      !(constraint.type === "length" && lines.some((l) => l.id === constraint.line)),
   );
 
   const used = new Set(
-    out.entities.flatMap((e) =>
-      e.type === "line"
-        ? [e.p1, e.p2]
-        : e.type === "arc"
-          ? [e.center, e.start, e.end]
-          : e.type === "circle"
-            ? [e.center]
+    out.entities.flatMap((entity) =>
+      entity.type === "line"
+        ? [entity.p1, entity.p2]
+        : entity.type === "arc"
+          ? [entity.center, entity.start, entity.end]
+          : entity.type === "circle"
+            ? [entity.center]
             : [],
     ),
   );
-  out.entities = out.entities.filter((e) => !(e.type === "point" && same.has(e.id) && !used.has(e.id)));
+  out.entities = out.entities.filter(
+    (entity) => !(entity.type === "point" && same.has(entity.id) && !used.has(entity.id)),
+  );
 
   if (kind === "fillet") {
     const bis = unit(add(u1, u2));
@@ -182,7 +189,9 @@ export function offsetCurves(
   if (!distance) throw new SketchEditError("the offset distance must not be zero");
 
   const picked = sk.entities.filter(
-    (e) => curves.includes(e.id) && (e.type === "line" || e.type === "arc" || e.type === "circle"),
+    (entity) =>
+      curves.includes(entity.id) &&
+      (entity.type === "line" || entity.type === "arc" || entity.type === "circle"),
   );
   if (!picked.length) throw new SketchEditError("pick lines, arcs or circles to offset");
 
@@ -205,7 +214,7 @@ export function offsetCurves(
   type Seg = Extract<SketchEntity, { type: "line" | "arc" }>;
 
   const ends = (e: Seg): [string, string] => (e.type === "line" ? [e.p1, e.p2] : [e.start, e.end]);
-  const segs = picked.filter((e): e is Seg => e.type !== "circle");
+  const segs = picked.filter((entity): entity is Seg => entity.type !== "circle");
   const left = new Set(segs);
 
   while (left.size) {
@@ -307,7 +316,10 @@ export function offsetCurves(
 
     const tangentTo = (arc: string, line: string) =>
       sk.constraints.some(
-        (c) => c.type === "tangent" && ((c.a === arc && c.b === line) || (c.a === line && c.b === arc)),
+        (constraint) =>
+          constraint.type === "tangent" &&
+          ((constraint.a === arc && constraint.b === line) ||
+            (constraint.a === line && constraint.b === arc)),
       );
 
     for (const { e, from } of walk) {
@@ -354,14 +366,14 @@ export function offsetCurves(
     }
   }
 
-  for (const e of picked) {
-    if (e.type !== "circle") continue;
+  for (const entity of picked) {
+    if (entity.type !== "circle") continue;
 
-    const nr = e.radius + distance;
+    const nr = entity.radius + distance;
     if (!(nr > 0)) throw new SketchEditError("the offset is larger than a radius: the curve would vanish");
 
     const id = fresh(out, "c");
-    out.entities.push({ id, type: "circle", center: e.center, radius: round(nr) });
+    out.entities.push({ id, type: "circle", center: entity.center, radius: round(nr) });
     out.constraints.push({ id: fresh(out, "c"), type: "radius", curve: id, value: round(nr) });
   }
 
@@ -382,9 +394,12 @@ export function patternCurves(
     | { kind: "circular"; count: number; angle: number; center: Vec2 },
 ): SketchData {
   const picked = sk.entities.filter(
-    (e) =>
-      curves.includes(e.id) &&
-      (e.type === "line" || e.type === "arc" || e.type === "circle" || e.type === "spline"),
+    (entity) =>
+      curves.includes(entity.id) &&
+      (entity.type === "line" ||
+        entity.type === "arc" ||
+        entity.type === "circle" ||
+        entity.type === "spline"),
   );
   if (!picked.length) throw new SketchEditError("pick the curves to repeat");
   if (!(o.count >= 2) || o.count > 200) throw new SketchEditError("the count must be between 2 and 200");
@@ -400,15 +415,15 @@ export function patternCurves(
     return [o.center[0] + x * Math.cos(a) - y * Math.sin(a), o.center[1] + x * Math.sin(a) + y * Math.cos(a)];
   };
 
-  const pointsOf = (e: SketchEntity) =>
-    e.type === "line"
-      ? [e.p1, e.p2]
-      : e.type === "circle"
-        ? [e.center]
-        : e.type === "arc"
-          ? [e.center, e.start, e.end]
-          : e.type === "spline"
-            ? e.points
+  const pointsOf = (entity: SketchEntity) =>
+    entity.type === "line"
+      ? [entity.p1, entity.p2]
+      : entity.type === "circle"
+        ? [entity.center]
+        : entity.type === "arc"
+          ? [entity.center, entity.start, entity.end]
+          : entity.type === "spline"
+            ? entity.points
             : [];
 
   for (let k = 1; k < o.count; k++) {
@@ -430,19 +445,19 @@ export function patternCurves(
       return nid;
     };
 
-    for (const e of picked) {
-      const pts = pointsOf(e).map(copyPoint);
+    for (const entity of picked) {
+      const pts = pointsOf(entity).map(copyPoint);
       const id = fresh(
         out,
-        e.type === "line" ? "l" : e.type === "circle" ? "c" : e.type === "arc" ? "a" : "s",
+        entity.type === "line" ? "l" : entity.type === "circle" ? "c" : entity.type === "arc" ? "a" : "s",
       );
-      const construction = e.construction ? { construction: true } : {};
+      const construction = entity.construction ? { construction: true } : {};
 
-      if (e.type === "line") {
+      if (entity.type === "line") {
         out.entities.push({ id, type: "line", p1: pts[0]!, p2: pts[1]!, ...construction });
-      } else if (e.type === "circle") {
-        out.entities.push({ id, type: "circle", center: pts[0]!, radius: e.radius, ...construction });
-      } else if (e.type === "arc") {
+      } else if (entity.type === "circle") {
+        out.entities.push({ id, type: "circle", center: pts[0]!, radius: entity.radius, ...construction });
+      } else if (entity.type === "arc") {
         out.entities.push({
           id,
           type: "arc",
@@ -451,17 +466,19 @@ export function patternCurves(
           end: pts[2]!,
           ...construction,
         });
-      } else if (e.type === "spline") {
+      } else if (entity.type === "spline") {
         out.entities.push({
           id,
           type: "spline",
           points: pts,
-          ...(e.closed ? { closed: true } : {}),
+          ...(entity.closed ? { closed: true } : {}),
           ...construction,
         });
       }
 
-      if (e.type !== "spline") out.constraints.push({ id: fresh(out, "k"), type: "equal", a: id, b: e.id });
+      if (entity.type !== "spline") {
+        out.constraints.push({ id: fresh(out, "k"), type: "equal", a: id, b: entity.id });
+      }
     }
   }
 

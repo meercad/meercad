@@ -16,18 +16,18 @@ type Basic = Exclude<SolvedCurve, { kind: "spline" }>;
  * pieces of one spline back into a smooth curve); other curves pass through.
  */
 export function expandSplines(curves: readonly SolvedCurve[]): Basic[] {
-  return curves.flatMap((c): Basic[] =>
-    c.kind !== "spline"
-      ? [c]
-      : c.pts.slice(1).map((b, k) => ({
-          id: `${c.id}~${k}`,
+  return curves.flatMap((curve): Basic[] =>
+    curve.kind !== "spline"
+      ? [curve]
+      : curve.pts.slice(1).map((b, k) => ({
+          id: `${curve.id}~${k}`,
           kind: "line",
-          a: c.pts[k]!,
+          a: curve.pts[k]!,
           b,
           p1: "",
           p2: "",
-          construction: c.construction,
-          external: c.external,
+          construction: curve.construction,
+          external: curve.external,
         })),
   );
 }
@@ -210,22 +210,22 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
 
     const deg = new Array<number>(verts.length).fill(0);
 
-    for (const e of edges) {
-      if (e.alive) {
-        deg[e.v0]!++;
-        deg[e.v1]!++;
+    for (const edge of edges) {
+      if (edge.alive) {
+        deg[edge.v0]!++;
+        deg[edge.v1]!++;
       }
     }
 
-    for (const e of edges) {
-      if (e.alive && (deg[e.v0] === 1 || deg[e.v1] === 1)) {
-        e.alive = false;
+    for (const edge of edges) {
+      if (edge.alive && (deg[edge.v0] === 1 || deg[edge.v1] === 1)) {
+        edge.alive = false;
         changed = true;
       }
     }
   }
 
-  const live = edges.filter((e) => e.alive);
+  const live = edges.filter((edge) => edge.alive);
 
   // 4. half-edges sorted by direction around each vertex
   interface Half {
@@ -238,9 +238,9 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
 
   const halves: Half[] = [];
 
-  for (const e of live) {
-    halves.push({ edge: e, fwd: true, from: e.v0, to: e.v1, angle: leaveAngle(e.piece, true) });
-    halves.push({ edge: e, fwd: false, from: e.v1, to: e.v0, angle: leaveAngle(e.piece, false) });
+  for (const edge of live) {
+    halves.push({ edge: edge, fwd: true, from: edge.v0, to: edge.v1, angle: leaveAngle(edge.piece, true) });
+    halves.push({ edge: edge, fwd: false, from: edge.v1, to: edge.v0, angle: leaveAngle(edge.piece, false) });
   }
 
   const twin = (i: number) => i ^ 1;
@@ -295,7 +295,7 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
   // components via union-find on vertices
   const parent = verts.map((_, i) => i);
   const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x]!)));
-  for (const e of live) parent[find(e.v0)] = find(e.v1);
+  for (const edge of live) parent[find(edge.v0)] = find(edge.v1);
 
   const all: Cycle[] = cycles.map((cyc) => {
     const loop = loopOf(cyc);
@@ -317,8 +317,8 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
     all.push({ loop: cw, area: loopArea(cw), polygon: polygonOf(cw), component: comp });
   });
 
-  const bounded = all.map((c, i) => i).filter((i) => all[i]!.area > tol * tol);
-  const outerCycles = all.map((c, i) => i).filter((i) => all[i]!.area < -tol * tol);
+  const bounded = all.map((cycle, i) => i).filter((i) => all[i]!.area > tol * tol);
+  const outerCycles = all.map((cycle, i) => i).filter((i) => all[i]!.area < -tol * tol);
 
   // 6. assign each component's outer boundary as a hole of the smallest enclosing bounded face
   const holeOf = new Map<number, number>(); // negative cycle -> bounded cycle (or -1 = unbounded)
@@ -369,15 +369,15 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
   return bounded.map((b) => {
     const holes = outerCycles.filter((n) => holeOf.get(n) === b).map((n) => all[n]!);
     const outer = all[b]!;
-    const keyOf = (loop: LoopEdge[]) => [...new Set(loop.map((e) => e.name))].sort().join("+");
-    const key = [keyOf(outer.loop), ...holes.map((h) => keyOf(h.loop)).sort()].join("|");
-    const polygons = [outer.polygon, ...holes.map((h) => h.polygon)];
+    const keyOf = (loop: LoopEdge[]) => [...new Set(loop.map((edge) => edge.name))].sort().join("+");
+    const key = [keyOf(outer.loop), ...holes.map((cycle) => keyOf(cycle.loop)).sort()].join("|");
+    const polygons = [outer.polygon, ...holes.map((cycle) => cycle.polygon)];
 
     return {
       key,
       outer: outer.loop,
-      holes: holes.map((h) => h.loop),
-      area: outer.area + holes.reduce((s, h) => s + h.area, 0),
+      holes: holes.map((cycle) => cycle.loop),
+      area: outer.area + holes.reduce((s, cycle) => s + cycle.area, 0),
       depth: depth.get(b) ?? 1,
       sample: interiorPoint(polygons),
       polygons,
@@ -391,10 +391,10 @@ export function selectRegions(
   which: "all" | readonly string[] | undefined,
 ): { regions: Region[]; missing: string[] } {
   if (which === undefined || which === "all") {
-    return { regions: regions.filter((r) => r.depth % 2 === 1), missing: [] };
+    return { regions: regions.filter((region) => region.depth % 2 === 1), missing: [] };
   }
 
-  const byKey = new Map(regions.map((r) => [r.key, r]));
+  const byKey = new Map(regions.map((region) => [region.key, region]));
 
   return { regions: which.flatMap((k) => byKey.get(k) ?? []), missing: which.filter((k) => !byKey.has(k)) };
 }
@@ -402,7 +402,8 @@ export function selectRegions(
 export function regionAt(regions: readonly Region[], p: Vec2): Region | undefined {
   return regions
     .filter(
-      (r) => pointInPolygon(p, r.polygons[0]!) && !r.polygons.slice(1).some((h) => pointInPolygon(p, h)),
+      (region) =>
+        pointInPolygon(p, region.polygons[0]!) && !region.polygons.slice(1).some((h) => pointInPolygon(p, h)),
     )
     .sort((a, b) => a.area - b.area)[0];
 }
@@ -425,54 +426,56 @@ function uniq(xs: number[], eps: number): number[] {
   return out;
 }
 
-function ends(p: Piece): [Vec2, Vec2] {
-  return p.kind === "line"
-    ? [p.a, p.b]
-    : [arcPoint(p.center, p.radius, p.a0), arcPoint(p.center, p.radius, p.a1)];
+function ends(piece: Piece): [Vec2, Vec2] {
+  return piece.kind === "line"
+    ? [piece.a, piece.b]
+    : [arcPoint(piece.center, piece.radius, piece.a0), arcPoint(piece.center, piece.radius, piece.a1)];
 }
 
 /**
  * Direction leaving the start (fwd) or end (!fwd) of a piece, probed slightly inside to separate tangent
  * curves.
  */
-function leaveAngle(p: Piece, fwd: boolean): number {
-  if (p.kind === "line") {
-    const [a, b] = fwd ? [p.a, p.b] : [p.b, p.a];
+function leaveAngle(piece: Piece, fwd: boolean): number {
+  if (piece.kind === "line") {
+    const [a, b] = fwd ? [piece.a, piece.b] : [piece.b, piece.a];
 
     return Math.atan2(b[1] - a[1], b[0] - a[0]);
   }
 
-  const span = p.a1 - p.a0;
+  const span = piece.a1 - piece.a0;
   const t = Math.min(span * 1e-3, 1e-3);
-  const [from, probe] = fwd ? [p.a0, p.a0 + t] : [p.a1, p.a1 - t];
-  const s = arcPoint(p.center, p.radius, from);
-  const q = arcPoint(p.center, p.radius, probe);
+  const [from, probe] = fwd ? [piece.a0, piece.a0 + t] : [piece.a1, piece.a1 - t];
+  const s = arcPoint(piece.center, piece.radius, from);
+  const q = arcPoint(piece.center, piece.radius, probe);
 
   return Math.atan2(q[1] - s[1], q[0] - s[0]);
 }
 
-function toSegment(p: Piece, fwd: boolean): LoopSegment {
-  if (p.kind === "line") return fwd ? { kind: "line", a: p.a, b: p.b } : { kind: "line", a: p.b, b: p.a };
+function toSegment(piece: Piece, fwd: boolean): LoopSegment {
+  if (piece.kind === "line") {
+    return fwd ? { kind: "line", a: piece.a, b: piece.b } : { kind: "line", a: piece.b, b: piece.a };
+  }
 
   return fwd
-    ? { kind: "arc", center: p.center, radius: p.radius, from: p.a0, to: p.a1, ccw: true }
-    : { kind: "arc", center: p.center, radius: p.radius, from: p.a1, to: p.a0, ccw: false };
+    ? { kind: "arc", center: piece.center, radius: piece.radius, from: piece.a0, to: piece.a1, ccw: true }
+    : { kind: "arc", center: piece.center, radius: piece.radius, from: piece.a1, to: piece.a0, ccw: false };
 }
 
-function segArea(s: LoopSegment): number {
-  if (s.kind === "line") return (s.a[0] * s.b[1] - s.b[0] * s.a[1]) / 2;
+function segArea(segment: LoopSegment): number {
+  if (segment.kind === "line") return (segment.a[0] * segment.b[1] - segment.b[0] * segment.a[1]) / 2;
 
-  const [cx, cy] = s.center;
-  const r = s.radius;
+  const [cx, cy] = segment.center;
+  const r = segment.radius;
   let d: number;
   let t0: number;
 
-  if (s.kind === "circle") {
+  if (segment.kind === "circle") {
     t0 = 0;
-    d = s.ccw ? TAU : -TAU;
+    d = segment.ccw ? TAU : -TAU;
   } else {
-    t0 = s.from;
-    d = s.ccw ? sweep(s.from, s.to) : -sweep(s.to, s.from);
+    t0 = segment.from;
+    d = segment.ccw ? sweep(segment.from, segment.to) : -sweep(segment.to, segment.from);
   }
 
   const t1 = t0 + d;
@@ -481,7 +484,7 @@ function segArea(s: LoopSegment): number {
 }
 
 export function loopArea(loop: readonly LoopEdge[]): number {
-  return loop.reduce((s, e) => s + segArea(e.seg), 0);
+  return loop.reduce((s, edge) => s + segArea(edge.seg), 0);
 }
 
 export function polygonOf(loop: readonly LoopEdge[]): Vec2[] {
