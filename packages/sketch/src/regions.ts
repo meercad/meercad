@@ -121,6 +121,8 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
         at,
       );
       rel.sort((a, b) => a - b);
+      // The arc's own ends are always among its split parameters (step 1): kept as a guard only.
+      /* v8 ignore next 2 */
       if (rel[0]! > at) rel.unshift(0);
       if (rel.at(-1)! < span - at) rel.push(span);
       const pieces: Piece[] = [];
@@ -197,6 +199,8 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
     for (let h = i; cycleOf[h] === -1; h = next(h)) {
       cycleOf[h] = cycles.length;
       cyc.push(h);
+      // Every half-edge has one successor, so a cycle closes within all of them: a guard only.
+      /* v8 ignore next */
       if (cyc.length > halves.length) break;
     }
     cycles.push(cyc);
@@ -218,6 +222,8 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
   });
   // standalone circles: a positive and a negative cycle each, in their own component
   standalone.forEach((c, k) => {
+    // Only circles are left standalone (step 2); this narrows the type.
+    /* v8 ignore next */
     if (c.kind !== "circle") return;
     const ccw: LoopEdge[] = [{ name: c.id, curve: c.id, seg: { kind: "circle", center: c.center, radius: c.radius, ccw: true } }];
     const cw: LoopEdge[] = [{ name: c.id, curve: c.id, seg: { kind: "circle", center: c.center, radius: c.radius, ccw: false } }];
@@ -292,6 +298,8 @@ export function selectRegions(regions: readonly Region[], which: "all" | readonl
 export function regionAt(regions: readonly Region[], p: Vec2): Region | undefined {
   return regions
     .filter((r) => pointInPolygon(p, r.polygons[0]!) && !r.polygons.slice(1).some((h) => pointInPolygon(p, h)))
+    // The faces of one sketch do not overlap, so at most one is left: the smallest wins if ever two are.
+    /* v8 ignore next */
     .sort((a, b) => a.area - b.area)[0];
 }
 
@@ -402,6 +410,8 @@ function interiorPoint(polys: Vec2[][]): Vec2 {
       if (inside(m)) return m;
     }
   }
+  // A polygon with area always has a point left of some edge's midpoint: a guard only.
+  /* v8 ignore next */
   return c;
 }
 
