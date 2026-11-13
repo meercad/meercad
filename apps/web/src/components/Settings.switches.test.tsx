@@ -10,6 +10,7 @@ import { newProject } from "../store";
 import { renderUi } from "../../test/ui";
 import * as storage from "../lib/storage";
 import { Settings } from "./Settings";
+import { DEFAULT_FIT } from "@meercad/model";
 
 const desktop = () => (window as unknown as { meercadDesktop: Record<string, Record<string, (...a: never[]) => Promise<unknown>>> }).meercadDesktop;
 const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
@@ -17,6 +18,7 @@ const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)
 beforeAll(async () => {
   await newProject(undefined, "Settings switches");
   vi.spyOn(desktop()["storage"]!, "status").mockResolvedValue({ dir: "/test", defaultDir: "/test", chosen: true, iCloudDir: "/icloud/meerCAD", iCloudAvailable: true });
+  vi.spyOn(desktop()["uiScale"]!, "get").mockResolvedValue({ choice: "auto", auto: 1.25, current: 1.25, steps: [1, 1.25, 1.5] });
   renderUi(<Settings onShortcuts={() => undefined} />);
   await act(async () => void window.dispatchEvent(new Event("meercad:settings")));
   await settle();
@@ -55,8 +57,9 @@ describe("the settings' switches", () => {
   it("sends the interface size to the Mac app, and shows, changes and moves the projects folder", async () => {
     const sizes: unknown[] = [];
     vi.spyOn(desktop()["uiScale"]!, "set").mockImplementation(async (v: never) => void sizes.push(v));
-    const sizeButtons = [...document.querySelectorAll<HTMLButtonElement>(".settings .segmented button")].filter((b) => /%|Small|Large|Default|Klein|Groß/.test(b.textContent ?? ""));
-    if (sizeButtons[0]) await act(async () => void fireEvent.click(sizeButtons[0]!));
+    const sizeButtons = [...document.querySelectorAll<HTMLButtonElement>(".settings .seg button")].filter((b) => /%/.test(b.textContent ?? ""));
+    await act(async () => void fireEvent.click(sizeButtons.at(-1)!));
+    expect(sizes).toHaveLength(1);
     const reveal = vi.spyOn(desktop()["projects"]!, "reveal").mockResolvedValue(undefined);
     await act(async () => void fireEvent.click([...document.querySelectorAll(".folder-row button")][0]!));
     expect(reveal).toHaveBeenCalled();
@@ -70,8 +73,25 @@ describe("the settings' switches", () => {
     void sizes;
   });
 
+  it("picks a control scheme, refuses a fit out of range, and opens the shortcuts", async () => {
+    await act(async () => void fireEvent.click(screen.getAllByText("Fusion 360")[0]!));
+    expect(usePrefs.getState()).toMatchObject({ keys: "fusion", mouse: "fusion" });
+    setPrefs({ keys: "meercad", mouse: "meercad" });
+    const fit = document.querySelector<HTMLInputElement>(`.settings input[placeholder="${DEFAULT_FIT}"]`)!;
+    await act(async () => void fireEvent.blur(fit, { target: { value: "0,3" } }));
+    expect(usePrefs.getState().printerFit).toBe(0.3);
+    const again = document.querySelector<HTMLInputElement>(`.settings input[placeholder="${DEFAULT_FIT}"]`)!;
+    await act(async () => void fireEvent.blur(again, { target: { value: "7" } }));
+    expect(usePrefs.getState().printerFit).toBe(0.3);
+    await act(async () => void fireEvent.blur(again, { target: { value: "" } }));
+    expect(usePrefs.getState().printerFit).toBeNull();
+  });
+
   it("closes by its button", async () => {
     await act(async () => void fireEvent.click(screen.getByTitle("Close (Esc)")));
+    expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull();
+    await act(async () => void window.dispatchEvent(new Event("meercad:settings")));
+    await act(async () => void fireEvent.click(screen.getByText("Show all shortcuts")));
     expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull();
   });
 });
