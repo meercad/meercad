@@ -5,7 +5,8 @@
  * arrows at the moved part; a drag back to nothing cancels.
  */
 import { act, cleanup, fireEvent } from "@testing-library/react";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import * as store from "../store";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
 import { apply, cancelDialog, currentDoc, editFeature, getViewport, newProject, rebuildNow, undo, useApp } from "../store";
@@ -111,6 +112,28 @@ describe("more drag arrows", () => {
     await drag("extrude", 0);
     expect(currentDoc().features.length).toBe(before);
     expect(useApp.getState().dialog).toBeNull();
+  });
+
+  it("drags with a ghost of the profile while rebuilds are slow", async () => {
+    const slow = vi.spyOn(store, "rebuildIsSlow").mockReturnValue(true);
+    try {
+      const out = useApp.getState().output!;
+      const key = out.report.sketches.find((s) => s.id === "sk3")!.regions[0]!.key;
+      await select({ kind: "region", sketchId: "sk3", key, point: [65, 5, 0] } as Pick);
+      const h = handle("extrude");
+      await act(async () => h.onStart?.());
+      await act(async () => h.onDrag(4));
+      await act(async () => h.onDrag(6));
+      // A pause in the drag lets one rebuild through.
+      await settle(450);
+      await act(async () => h.onEnd(6));
+      await settle();
+      expect(currentDoc().features.at(-1)).toMatchObject({ op: "extrude", distance: 6 });
+      await act(async () => undo());
+      await rebuilt();
+    } finally {
+      slow.mockRestore();
+    }
   });
 
   it("shows the three arrows of a move at the moved part, and drags along y", async () => {
