@@ -1826,6 +1826,8 @@ export class Viewport {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
     const px = this.pixelSize();
     this.raycaster.params.Line = { threshold: px * 6 };
+    // Sketch lines are fat lines (Line2), measured in pixels on screen.
+    (this.raycaster.params as { Line2?: { threshold: number } }).Line2 = { threshold: 6 };
     const ray = this.raycaster;
     const v3 = (p: THREE.Vector3): Vec3 => [p.x, p.y, p.z];
 
@@ -1833,7 +1835,8 @@ export class Viewport {
     const occlusion = faceHit ? faceHit.distance + px * 4 : Infinity;
 
     if (kinds.has("sketch_curve") && this.sketchGroup.visible) {
-      const hit = ray.intersectObject(this.sketchGroup, true).find((h) => h.object instanceof THREE.Line && (h.object.userData as { curve?: string }).curve !== undefined);
+      // Each curve is a fat line (Line2, a mesh, not a THREE.Line): found by what it carries.
+      const hit = ray.intersectObject(this.sketchGroup, true).find((h) => h.object instanceof Line2 && (h.object.userData as { curve?: string }).curve !== undefined);
       if (hit) {
         const { sketch, curve } = hit.object.userData as { sketch: string; curve: string };
         return { kind: "sketch_curve", sketchId: sketch, curveId: curve, point: v3(hit.point) };
