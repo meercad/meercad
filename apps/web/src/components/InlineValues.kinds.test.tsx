@@ -75,6 +75,17 @@ describe("values at more kinds of steps", () => {
     apply({ type: "delete_feature", id: "bd1" } as never);
   });
 
+  it("a revolve's angle", async () => {
+    apply({ type: "add_features", features: [
+      { id: "skr", op: "sketch", plane: { ref: "origin.XZ" }, entities: rect(5, 5).map((e) => (e.type === "point" ? { ...e, x: e.x + 80 } : e)), constraints: [] },
+      { id: "rv1", op: "revolve", profile: { sketch: "skr" }, axis: { ref: "origin.Z" }, angle: 180, mode: "new_body" },
+    ] as Feature[] });
+    await show("rv1");
+    await type(/^∠/, "90");
+    expect(feature<{ angle: unknown }>("rv1").angle).toBe(90);
+    apply({ type: "delete_feature", id: "rv1" } as never, { type: "delete_feature", id: "skr" } as never);
+  });
+
   it("a wall holder's cells and a label's width", async () => {
     apply({ type: "add_features", features: [
       { id: "wl1", op: "wall", system: "opengrid", kind: "board", units: [2, 2] },
