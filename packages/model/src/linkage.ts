@@ -204,6 +204,8 @@ export class Linkage {
         const M = Float64Array.from(A);
         for (let a = 0; a < n; a++) M[a * n + a] = M[a * n + a]! * (1 + lambda) + 1e-12;
         const delta = solveLinear(M, Float64Array.from(g), n);
+        // The damping (and 1e-12) on the diagonal keeps M regular: a guard only.
+        /* v8 ignore next 4 */
         if (!delta) {
           lambda *= 10;
           continue;
@@ -254,7 +256,10 @@ export class Linkage {
       const over = this.joints.filter((j) => j.limits && (next.values[j.id]! < j.limits[0] - 1e-6 || next.values[j.id]! > j.limits[1] + 1e-6));
       if (over.length) {
         goal = { ...goal, ...Object.fromEntries(over.map((j) => [j.id, Math.min(j.limits![1], Math.max(j.limits![0], next.values[j.id]!))])) };
-        next = this.solveOnce(from.poses, { ...step, ...Object.fromEntries(over.map((j) => [j.id, goal[j.id]!])) }, drag, from.values);
+        const held = { ...step, ...Object.fromEntries(over.map((j) => [j.id, goal[j.id]!])) };
+        next = this.solveOnce(from.poses, held, drag, from.values);
+        // As above: without the drag's pull the joints close exactly, the held one at its limit.
+        if (drag) next = this.solveOnce(next.poses, held, undefined, next.values);
       }
       // Refuse a step that does not close, or that jumps (the linkage flipping over a dead point).
       const jump = this.joints.some((j) => Math.abs((next.values[j.id] ?? 0) - (from.values[j.id] ?? 0)) > (j.type === "revolute" ? 25 : 15));

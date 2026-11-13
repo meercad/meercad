@@ -98,4 +98,38 @@ describe("closed-loop linkages", () => {
     expect(p[0]).toBeLessThan(B[0] - 2);
     expect(r.residual).toBeLessThan(1e-4);
   });
+
+  it("carries a part fixed to the coupler along, exactly", () => {
+    const { joints } = fourBar(100, 30, 90, 70);
+    // A flag glued to the coupler at (40, 60): it moves with the coupler as one piece.
+    const L = new Linkage([...joints, { id: "glue", type: "fixed", a: "flag", b: "coupler", origin: [40, 60, 0], axis: Z }]);
+    const r = L.solve(new Map(), { crank: 40 });
+    expect(r.ok).toBe(true);
+    const p = transformPoint(r.poses.get("flag")!, [55, 61, 3]);
+    const q = transformPoint(r.poses.get("coupler")!, [55, 61, 3]);
+    for (let k = 0; k < 3; k++) expect(p[k]).toBeCloseTo(q[k]!, 5);
+    expect(r.values["glue"]).toBe(0);
+  });
+
+  it("turns a geared wheel by the ratio, also in a loop", () => {
+    const { joints } = fourBar(100, 30, 90, 70);
+    // A wheel on the ground at (−40, 0), geared to the crank 2 : 1 the other way.
+    const L = new Linkage([...joints, rev("wheel", "wheel", "ground", [-40, 0, 0])], [{ driver: "crank", driven: "wheel", ratio: -0.5 }]);
+    const r = L.solve(new Map(), { crank: 60 });
+    expect(r.ok).toBe(true);
+    expect(r.values["crank"]).toBeCloseTo(60, 3);
+    expect(r.values["wheel"]).toBeCloseTo(-30, 3);
+  });
+
+  it("holds a dragged joint at its limit", () => {
+    // A pendulum swinging at most 10° either way, its tip dragged to 20°.
+    const L = new Linkage([{ ...rev("swing", "arm", "ground", [0, 0, 0]), limits: [-10, 10] }]);
+    const r = L.solve(new Map(), {}, { part: "arm", local: [0, 50, 0], ray: { origin: [-50 * Math.sin(rad(20)), 50 * Math.cos(rad(20)), 100], dir: [0, 0, -1] } });
+    expect(r.ok).toBe(true);
+    expect(r.values["swing"]).toBeCloseTo(10, 3);
+    // The arm's tip stands at 10° from where it was, 50 mm out.
+    const tip = transformPoint(r.poses.get("arm")!, [0, 50, 0]);
+    expect(tip[0]).toBeCloseTo(-50 * Math.sin(rad(10)), 3);
+    expect(tip[1]).toBeCloseTo(50 * Math.cos(rad(10)), 3);
+  });
 });
