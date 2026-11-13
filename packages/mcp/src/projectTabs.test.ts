@@ -78,6 +78,13 @@ describe("one open project per session", () => {
     expect(openBlock([], "a", ["a~2"], "p1")).toEqual({ opening: true });
     expect(openBlock([], "a", ["b"], "p1")).toBeNull();
   });
+
+  it("says that another chat is opening a project, and how the connection is freed", () => {
+    const message = openBlockMessage({ opening: true }, undefined, 10 * 60_000);
+
+    expect(message).toContain("Another chat on this meerCAD connection is opening a project right now.");
+    expect(message).toContain("after 10 minutes without a call");
+  });
 });
 
 describe("taking a project over (open_project takeover)", () => {

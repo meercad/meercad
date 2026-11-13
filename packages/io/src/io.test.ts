@@ -333,3 +333,27 @@ describe("3MF with materials", () => {
     ).toBeUndefined();
   });
 });
+
+describe("files that are not what they claim to be", () => {
+  const triangle = {
+    positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+    indices: new Uint32Array([0, 1, 2]),
+  };
+
+  it("refuses an OBJ file without faces", () => {
+    expect(() => readObj("v 0 0 0\nv 1 0 0\nv 0 1 0\n")).toThrow("no usable faces in the OBJ file");
+  });
+
+  it("refuses a 3MF file that is no zip package", () => {
+    expect(() => read3mf(new Uint8Array([1, 2, 3, 4]))).toThrow("not a 3MF file (it is not a zip package)");
+  });
+
+  it("escapes XML characters in a part name when writing a 3MF file", () => {
+    const files = unzipSync(write3mf([{ ...triangle, name: `Lid <"A" & 'B'>` }]));
+    const xml = Object.values(files)
+      .map((bytes) => strFromU8(bytes))
+      .join("\n");
+
+    expect(xml).toContain("Lid &lt;&quot;A&quot; &amp; &apos;B&apos;&gt;");
+  });
+});
