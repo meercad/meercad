@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { BodyMesh } from "@meercad/kernel";
 import { measureWalls, thinSpots, WALL_SAMPLES } from "../apps/web/src/lib/wallMeasure";
 
@@ -54,5 +54,19 @@ describe("wall thickness on a fine mesh", () => {
     expect(measured(quick)).toBeLessThan(measured(fine));
     expect(quick!.stats.thin).toBeCloseTo(fine!.stats.thin, 1);
     expect(quick!.stats.min).toBeCloseTo(0.6, 1);
+  });
+
+  it("hands the app its time back now and then, says how far it is, and stops when asked", async () => {
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => (clock += 30));
+    try {
+      const seen: number[] = [];
+      const done = await measureWalls(box([0, 0, 0], [20, 20, 2]), 1, { samples: WALL_SAMPLES.fast, progress: (f) => seen.push(f) });
+      expect(done).not.toBeNull();
+      expect(seen.length).toBeGreaterThan(0);
+      expect(await measureWalls(box([0, 0, 0], [20, 20, 3]), 1, { samples: WALL_SAMPLES.fast, aborted: () => true })).toBeNull();
+    } finally {
+      now.mockRestore();
+    }
   });
 });
