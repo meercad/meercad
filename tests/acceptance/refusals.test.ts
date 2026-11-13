@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Feature } from "@meercad/schema";
-import { doc, newSession } from "./helpers.js";
+import { circle, doc, newSession, sketch } from "./helpers.js";
 
 /** A 2 × 2 pixel grey picture (4 bytes, base64). */
 const pixels = "AAAAAA==";
@@ -113,6 +113,22 @@ describe("values out of range are refused with the limit named", () => {
       "a lithophane curved tighter than its thickness allows",
       [lithophane({ width: 5, curve: 350, thickness: 3 })],
       /the curve is too tight for a 5 mm wide picture: at most 71°/,
+    ],
+    [
+      "a sweep along a path with a gap",
+      [
+        sketch("sk3", { ref: "origin.XZ" }, circle("c", 0, 0, 1)),
+        sketch("sk4", { ref: "origin.XY" }, [
+          { id: "ma", type: "point", x: 0, y: 0 },
+          { id: "mb", type: "point", x: 0, y: 10 },
+          { id: "m", type: "line", p1: "ma", p2: "mb" },
+          { id: "na", type: "point", x: 5, y: 20 },
+          { id: "nb", type: "point", x: 5, y: 30 },
+          { id: "n", type: "line", p1: "na", p2: "nb" },
+        ]),
+        { id: "f", op: "sweep", profile: { sketch: "sk3" }, path: { sketch: "sk4" }, mode: "new_body" },
+      ],
+      /the path has gaps: its lines and arcs must join end to end/,
     ],
     [
       "a screw of no length",
