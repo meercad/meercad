@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { validateDocument, validateOp } from "./index.js";
 
 const corpus = (name: string) =>
-  JSON.parse(readFileSync(new URL(`../../../tests/corpus/${name}`, import.meta.url), "utf8")) as Record<string, unknown>;
+  JSON.parse(readFileSync(new URL(`../../../tests/corpus/${name}`, import.meta.url), "utf8")) as Record<
+    string,
+    unknown
+  >;
 
 describe("validateDocument", () => {
   it("accepts the reference box", () => {
@@ -26,10 +29,22 @@ describe("validateDocument", () => {
     const r = validateDocument({
       format: "meercad/1",
       params: {},
-      features: [{ id: "x", op: "knurl" }, { id: "e", op: "extrude", profile: { sketch: "x" }, extent: "blind", distance: 1, mode: "new_body", color: "red" }],
+      features: [
+        { id: "x", op: "knurl" },
+        {
+          id: "e",
+          op: "extrude",
+          profile: { sketch: "x" },
+          extent: "blind",
+          distance: 1,
+          mode: "new_body",
+          color: "red",
+        },
+      ],
       rollback: null,
     });
     expect(r.ok).toBe(false);
+
     if (!r.ok) {
       expect(r.errors.join("\n")).toContain("allowed values");
       expect(r.errors.join("\n")).toContain("(color)");
@@ -37,12 +52,16 @@ describe("validateDocument", () => {
   });
 
   it("rejects dangling references inside sketches and between features", () => {
-    const doc = corpus("box-fillet.meercad.json") as { features: Record<string, unknown>[]; rollback: unknown };
+    const doc = corpus("box-fillet.meercad.json") as {
+      features: Record<string, unknown>[];
+      rollback: unknown;
+    };
     const sk = doc.features[0] as { constraints: unknown[]; entities: unknown[] };
     sk.constraints.push({ id: "c9", type: "length", line: "l9", value: 1 });
     sk.entities.push({ id: "l5", type: "line", p1: "p1", p2: "nope" });
     doc.features[1] = { ...doc.features[1], profile: { sketch: "sk9" } };
     doc.rollback = "nope";
+
     const r = validateDocument(doc);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors).toHaveLength(4);
@@ -61,7 +80,11 @@ describe("body ids of copies", () => {
     ];
     const r = validateDocument({ ...base, features });
     expect(r.ok ? [] : r.errors).toEqual([]);
-    const bad = validateDocument({ ...base, features: [...features, { id: "mv2", op: "transform", bodies: ["nope_1"], translate: [1, 0, 0] }] });
+
+    const bad = validateDocument({
+      ...base,
+      features: [...features, { id: "mv2", op: "transform", bodies: ["nope_1"], translate: [1, 0, 0] }],
+    });
     expect(bad.ok ? [] : bad.errors).toEqual(['feature mv2: body refers to unknown or later feature "nope"']);
   });
 });
@@ -81,8 +104,13 @@ describe("materials in documents", () => {
     const own = [{ id: "own1", name: "Galaxy black", base: "petg", color: "#1a1a1f", density: 1.3 }];
     const r = validateDocument({ ...base, materials: own, partMaterials: { ex1: "own1" } });
     expect(r.ok ? r.value.materials : r.errors).toEqual(own);
-    expect(validateDocument({ ...base, materials: [{ id: "Own 1", name: "x", base: "pla" }] }).ok).toBe(false);
-    expect(validateDocument({ ...base, materials: [{ id: "own1", name: "x", base: "pla", color: "black" }] }).ok).toBe(false);
+    expect(validateDocument({ ...base, materials: [{ id: "Own 1", name: "x", base: "pla" }] }).ok).toBe(
+      false,
+    );
+    expect(
+      validateDocument({ ...base, materials: [{ id: "own1", name: "x", base: "pla", color: "black" }] }).ok,
+    ).toBe(false);
+
     const plain = validateDocument(base);
     expect(plain.ok && "materials" in plain.value).toBe(false);
     expect(validateOp({ type: "define_material", material: own[0] }).ok).toBe(true);

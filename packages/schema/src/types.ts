@@ -72,9 +72,12 @@ export interface ProjectionEntity {
   edges: EdgeSelector[];
   construction?: boolean;
 }
-export type SketchEntity = PointEntity | LineEntity | CircleEntity | ArcEntity | SplineEntity | ProjectionEntity;
+export type SketchEntity =
+  PointEntity | LineEntity | CircleEntity | ArcEntity | SplineEntity | ProjectionEntity;
 
-/** Point reference: a point entity id, "origin", or a curve's characteristic point like "l1.p1", "c1.center". */
+/**
+ * Point reference: a point entity id, "origin", or a curve's characteristic point like "l1.p1", "c1.center".
+ */
 export type PointRef = string;
 
 export type SketchConstraint =
@@ -88,7 +91,15 @@ export type SketchConstraint =
   | { id: string; type: "midpoint"; point: PointRef; line: string }
   | { id: string; type: "symmetric"; a: PointRef; b: PointRef; axis: string }
   | { id: string; type: "fix"; point: PointRef }
-  | { id: string; type: "distance"; a: PointRef; b: PointRef | string; value: Expr; axis?: "x" | "y"; label?: [number, number] }
+  | {
+      id: string;
+      type: "distance";
+      a: PointRef;
+      b: PointRef | string;
+      value: Expr;
+      axis?: "x" | "y";
+      label?: [number, number];
+    }
   | { id: string; type: "length"; line: string; value: Expr; label?: [number, number] }
   | { id: string; type: "radius" | "diameter"; curve: string; value: Expr; label?: [number, number] }
   | { id: string; type: "angle"; a: string; b: string; value: Expr; label?: [number, number] }
@@ -241,7 +252,10 @@ export interface SpringFeature extends FeatureBase {
   coils: Expr;
   /** Compression: free length, mm (default 3 × diameter). */
   length?: Expr;
-  /** Compression spring ends: open, closed (the last turn touches the next) or closed and ground flat (default). */
+  /**
+   * Compression spring ends: open, closed (the last turn touches the next) or closed and ground flat
+   * (default).
+   */
   ends?: "open" | "closed" | "ground";
   /** Extension and torsion: gap between neighbouring coils, mm (default 0.3, so printed coils stay apart). */
   gap?: Expr;
@@ -265,7 +279,10 @@ export interface SpringFeature extends FeatureBase {
 export interface ScrewFeature extends FeatureBase {
   op: "screw";
   kind: "screw" | "nut";
-  /** Screws: hex, socket (cylinder with hex socket), round (button), knob (ribbed thumb head) or none (threaded rod). Nuts: hex, round or knob. Default hex. */
+  /**
+   * Screws: hex, socket (cylinder with hex socket), round (button), knob (ribbed thumb head) or none
+   * (threaded rod). Nuts: hex, round or knob. Default hex.
+   */
   head?: "hex" | "socket" | "round" | "knob" | "none";
   profile?: ThreadProfile;
   /** Nominal (major) diameter, mm. */
@@ -469,21 +486,44 @@ export interface SweepFeature extends FeatureBase {
  * Standard parts placed on a flat face (or a plane) at points in its coordinates: socket head cap
  * and hex head screws (ISO 4762, ISO 4017; the head stands on the face, the shank goes in),
  * countersunk screws (ISO 10642), set screws (ISO 4026) and heat-set inserts (flush in the face),
- * hex nuts (ISO 4032), washers (ISO 7089), ball bearings and round magnets (standing on the face). Each point gives its own
+ * hex nuts (ISO 4032), washers (ISO 7089), ball bearings and round magnets (standing on the face). Each point
+ * gives its own
  * part (ids sp1, sp1_2, …). `flip` turns them the other way.
  */
 export interface StandardPartFeature extends FeatureBase {
   op: "standard_part";
-  kind: "socket_screw" | "countersunk_screw" | "hex_screw" | "set_screw" | "hex_nut" | "washer" | "insert" | "bearing" | "magnet" | "profile" | "corner_bracket" | "t_nut" | "linear_bearing" | "shaft" | "lead_screw" | "rail";
+  kind:
+    | "socket_screw"
+    | "countersunk_screw"
+    | "hex_screw"
+    | "set_screw"
+    | "hex_nut"
+    | "washer"
+    | "insert"
+    | "bearing"
+    | "magnet"
+    | "profile"
+    | "corner_bracket"
+    | "t_nut"
+    | "linear_bearing"
+    | "shaft"
+    | "lead_screw"
+    | "rail";
   /**
    * "M3" for screws, nuts and washers, "608" for bearings; "2020" for aluminium profiles and their
    * corner brackets, "M5-8" for T-nuts (thread, slot), "LM8UU", "8" for shafts, "Tr8x8" lead
    * screws, "MGN12" linear rails.
    */
   size?: string;
-  /** Screw length (under the head; countersunk and set screws overall); profiles, shafts, lead screws and rails: their length. */
+  /**
+   * Screw length (under the head; countersunk and set screws overall); profiles, shafts, lead screws and
+   * rails: their length.
+   */
   length?: Expr;
-  /** Lead screws: with their flanged nut; rails: with a carriage. The app joins them so they move (slider, and the nut coupled to the screw's turning). */
+  /**
+   * Lead screws: with their flanged nut; rails: with a carriage. The app joins them so they move (slider, and
+   * the nut coupled to the screw's turning).
+   */
   withMoving?: boolean;
   /** Rails and brackets lie on the face along its u axis; this turns them in the plane, degrees. */
   angle?: Expr;
@@ -581,7 +621,10 @@ export interface GridfinityFeature extends FeatureBase {
   outline?: { sketch: string; regions?: "all" | string[] };
   /** Baseplate in a drawer or outline: gap to its edge all round, default 0.5 mm. */
   gap?: Expr;
-  /** Baseplate in a drawer or outline: fill the rest round the cells with a solid border (default true); false leaves it empty. */
+  /**
+   * Baseplate in a drawer or outline: fill the rest round the cells with a solid border (default true); false
+   * leaves it empty.
+   */
   fill?: boolean;
   /** Baseplate: cut it into pieces for this print bed (see GridfinityBed). */
   bed?: GridfinityBed;
@@ -593,7 +636,9 @@ export interface GridfinityFeature extends FeatureBase {
   baseplate?: string;
   /** Bin in a baseplate: the baseplate cell under the bin's lower-left cell, from [0, 0]. */
   cell?: [Expr, Expr];
-  /** Bin: a nest for a part in the bin's solid top (the bin is solid; dividers, scoop and tab are left out). */
+  /**
+   * Bin: a nest for a part in the bin's solid top (the bin is solid; dividers, scoop and tab are left out).
+   */
   pocket?: GridfinityPocket;
 }
 
@@ -771,8 +816,11 @@ export interface WallFeature extends FeatureBase {
   cell?: [Expr, Expr];
 }
 
-/** Symbols for printable labels, drawn as clean outlines: screws by head (side view), nuts, washers, inserts. */
-export type LabelSymbol = "none" | "screw_pan" | "screw_countersunk" | "screw_socket" | "screw_hex" | "nut" | "washer" | "insert";
+/**
+ * Symbols for printable labels, drawn as clean outlines: screws by head (side view), nuts, washers, inserts.
+ */
+export type LabelSymbol =
+  "none" | "screw_pan" | "screw_countersunk" | "screw_socket" | "screw_hex" | "nut" | "washer" | "insert";
 
 /**
  * A printable label: a rounded plate with a symbol on the left and text beside it, raised or
@@ -863,9 +911,14 @@ export interface LithophaneFeature extends FeatureBase {
   width: Expr;
   /** Thinnest place (lithophane) or base plate (relief), mm; default 0.8 or 1.6. */
   thickness?: Expr;
-  /** Thickness the picture adds at its darkest (lithophane) or brightest (relief) place, mm; default 2.2 or 1.6. */
+  /**
+   * Thickness the picture adds at its darkest (lithophane) or brightest (relief) place, mm; default 2.2 or
+   * 1.6.
+   */
   depth?: Expr;
-  /** Frame width round the picture at the full thickness, mm; default 0 (a curve of 360: only top and bottom). */
+  /**
+   * Frame width round the picture at the full thickness, mm; default 0 (a curve of 360: only top and bottom).
+   */
   frame?: Expr;
   /** Bend round the plane's normal, degrees: 0 flat (default), up to 360 (closed round). */
   curve?: Expr;
@@ -917,7 +970,9 @@ export interface SplitConnectors {
   kind: "pins" | "dowels" | "dovetail";
   /** Pin or dowel diameter; for a dovetail its width at the cut. Default: from the size of the cut. */
   size?: Expr;
-  /** How far a pin or tongue reaches into the other piece (dowels: their whole length). Default: from size. */
+  /**
+   * How far a pin or tongue reaches into the other piece (dowels: their whole length). Default: from size.
+   */
   depth?: Expr;
   /** Gap on every side between a connector and its hole (default 0.2 mm). */
   clearance?: Expr;
@@ -941,7 +996,10 @@ export interface HoleFeature extends FeatureBase {
   plane: PlaneSpec;
   /** Hole centres in the plane's coordinates. */
   points: [Expr, Expr][];
-  /** simple: a plain bore of `diameter`; clearance/counterbore/countersink: for a screw of `size`; tapped: threaded; insert: for a heat-set insert. */
+  /**
+   * simple: a plain bore of `diameter`; clearance/counterbore/countersink: for a screw of `size`; tapped:
+   * threaded; insert: for a heat-set insert.
+   */
   kind: "simple" | "clearance" | "counterbore" | "countersink" | "tapped" | "insert";
   /** Screw size such as "M3" (all kinds but simple). */
   size?: string;
@@ -971,9 +1029,14 @@ export interface MeshConvertFeature extends FeatureBase {
   op: "mesh_convert";
   /** The mesh part (the id of its import feature). */
   body: string;
-  /** Largest distance (mm) between the mesh's vertices and a recognised surface; default from the part's size. */
+  /**
+   * Largest distance (mm) between the mesh's vertices and a recognised surface; default from the part's size.
+   */
   tolerance?: Expr;
-  /** Angle (degrees) between neighbouring triangles above which they belong to different curved surfaces; default 30. */
+  /**
+   * Angle (degrees) between neighbouring triangles above which they belong to different curved surfaces;
+   * default 30.
+   */
   angle?: Expr;
 }
 
@@ -995,7 +1058,9 @@ export interface BendFeature extends FeatureBase {
   axis: AxisRef;
   /** bend: total angle in degrees, at most 360 (instead of `radius`). */
   angle?: Expr;
-  /** wrap: the cylinder's radius; spiral: the inner radius; bend: the radius of the middle of the thickness. */
+  /**
+   * wrap: the cylinder's radius; spiral: the inner radius; bend: the radius of the middle of the thickness.
+   */
   radius?: Expr;
   /** spiral: gap between neighbouring turns (default 1 mm). */
   gap?: Expr;
@@ -1029,7 +1094,6 @@ export interface PrimitiveFeature extends FeatureBase {
   mode: BooleanMode;
   targets?: string[];
 }
-
 
 export type Feature =
   | PrimitiveFeature
@@ -1143,7 +1207,10 @@ export interface Coupling {
   ratio: Expr;
 }
 
-/** One moment of a motion: the joint values the parts take then. Joints left out keep moving between the moments that name them. */
+/**
+ * One moment of a motion: the joint values the parts take then. Joints left out keep moving between the
+ * moments that name them.
+ */
 export interface MotionKey {
   /** Seconds from the start of the motion. */
   at: number;
@@ -1330,7 +1397,9 @@ export type DocOp =
   /** Adds a reference model or replaces the one with the same id. */
   | { type: "set_reference"; reference: ReferenceModel }
   | { type: "delete_reference"; id: string }
-  /** A part's material (an id from model/materials such as "petg", or an own material's id), or null for none. */
+  /**
+   * A part's material (an id from model/materials such as "petg", or an own material's id), or null for none.
+   */
   | { type: "set_material"; part: string; material: string | null }
   /** Adds an own material or replaces the one with the same id. */
   | { type: "define_material"; material: CustomMaterial }
@@ -1351,7 +1420,9 @@ export type DocOp =
   | { type: "restore_version"; name: string }
   | { type: "rename_version"; name: string; to: string }
   | { type: "delete_version"; name: string }
-  /** A part's colour ("#rrggbb"), or null to colour it automatically again; colours also pick 3MF filaments. */
+  /**
+   * A part's colour ("#rrggbb"), or null to colour it automatically again; colours also pick 3MF filaments.
+   */
   | { type: "set_part_color"; part: string; color: string | null }
   /** Draws parts see-through (a reference to model against, e.g. a scan), or solid again. */
   | { type: "set_see_through"; parts: string[]; on: boolean }

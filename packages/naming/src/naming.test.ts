@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { edgeSelectorFor, propagateTags, resolveEdges, resolveFaces, ResolveError, selectorForEdge, type Topology } from "./index.js";
+import {
+  edgeSelectorFor,
+  propagateTags,
+  resolveEdges,
+  resolveFaces,
+  ResolveError,
+  selectorForEdge,
+  type Topology,
+} from "./index.js";
 
 // Box: 0 bottom, 1 top, 2..5 sides (bottom,right,top,left). 12 edges.
 const sides = ["bottom", "right", "top", "left"];
@@ -23,26 +31,38 @@ const box: Topology = {
 
 describe("resolveEdges", () => {
   it("finds the edge between two faces", () => {
-    expect(resolveEdges([{ edge: ["ex1.end_cap", "ex1.side[sk1.r1.top]"] }], [box])).toEqual({ body: "ex1", edges: [6] });
+    expect(resolveEdges([{ edge: ["ex1.end_cap", "ex1.side[sk1.r1.top]"] }], [box])).toEqual({
+      body: "ex1",
+      edges: [6],
+    });
   });
   it("finds all edges of a face relative to a feature", () => {
-    expect(resolveEdges([{ select: "edges", of: "ex1", where: { face: "end_cap" } }], [box]).edges).toEqual([4, 5, 6, 7]);
+    expect(resolveEdges([{ select: "edges", of: "ex1", where: { face: "end_cap" } }], [box]).edges).toEqual([
+      4, 5, 6, 7,
+    ]);
     expect(resolveEdges([{ select: "edges", of: "ex1" }], [box]).edges).toHaveLength(12);
     expect(resolveEdges([{ edge: ["ex1.end_cap", "ex1.side[*]"] }], [box]).edges).toEqual([4, 5, 6, 7]);
   });
   it("errors instead of guessing", () => {
     expect(() => resolveEdges([{ edge: ["ex1.end_cap", "ex1.start_cap"] }], [box])).toThrow(ResolveError);
     expect(() => resolveEdges([{ edge: ["ex1.end_cap", "ex9.x"] }], [box])).toThrow(/no edge/);
+
     const twin = { ...box, bodyId: "ex2" };
-    expect(() => resolveEdges([{ edge: ["ex1.end_cap", "ex1.side[sk1.r1.top]"] }], [box, twin])).toThrow(/ambiguous|several/);
+    expect(() => resolveEdges([{ edge: ["ex1.end_cap", "ex1.side[sk1.r1.top]"] }], [box, twin])).toThrow(
+      /ambiguous|several/,
+    );
   });
 });
 
 describe("resolveFaces", () => {
   it("filters by normal and picks largest", () => {
-    expect(resolveFaces({ select: "faces", where: { planar: true, normal: "+Z" } }, [box])).toEqual([{ body: "ex1", faces: [1] }]);
+    expect(resolveFaces({ select: "faces", where: { planar: true, normal: "+Z" } }, [box])).toEqual([
+      { body: "ex1", faces: [1] },
+    ]);
     expect(() => resolveFaces({ select: "faces", pick: "largest" }, [box])).toThrow(/ambiguous/);
-    expect(resolveFaces({ select: "faces", where: { normal: "+X" }, pick: "largest" }, [box])).toEqual([{ body: "ex1", faces: [3] }]);
+    expect(resolveFaces({ select: "faces", where: { normal: "+X" }, pick: "largest" }, [box])).toEqual([
+      { body: "ex1", faces: [3] },
+    ]);
   });
 });
 
@@ -52,7 +72,12 @@ describe("tags", () => {
     expect(edgeSelectorFor(["a"], ["a"])).toBeNull();
   });
   it("propagates through modify/delete/generate and flags untagged faces", () => {
-    const r = propagateTags([["a"], ["b"], ["c"]], 4, { descendants: [[0], [], [1]], generated: [{ face: 2, tag: "fi1.round[x]" }] }, "fi1");
+    const r = propagateTags(
+      [["a"], ["b"], ["c"]],
+      4,
+      { descendants: [[0], [], [1]], generated: [{ face: 2, tag: "fi1.round[x]" }] },
+      "fi1",
+    );
     expect(r.tags).toEqual([["a"], ["c"], ["fi1.round[x]"], ["fi1.face[3]"]]);
     expect(r.untagged).toEqual([3]);
   });
@@ -63,9 +88,18 @@ describe("near disambiguation", () => {
   const topo: Topology = {
     bodyId: "b",
     faceTags: [["a"], ["s"]],
-    edgeFaces: [[0, 1], [0, 1]],
-    edgePoints: [[0, 0, 0], [10, 0, 0]],
-    facePoints: [[0, 0, 0], [5, 5, 0]],
+    edgeFaces: [
+      [0, 1],
+      [0, 1],
+    ],
+    edgePoints: [
+      [0, 0, 0],
+      [10, 0, 0],
+    ],
+    facePoints: [
+      [0, 0, 0],
+      [5, 5, 0],
+    ],
   };
   it("picks the nearest edge and only adds near when needed", () => {
     expect(() => resolveEdges([{ edge: ["a", "s"] }], [topo])).toThrow(/ambiguous/);

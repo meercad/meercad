@@ -8,7 +8,12 @@ type Json = Record<string, unknown>;
 const ID = "^[A-Za-z_][A-Za-z0-9_]*$";
 const id = { type: "string", pattern: ID, maxLength: 64 };
 const ref = (name: string) => ({ $ref: `#/definitions/${name}` });
-const str = (description?: string) => ({ type: "string", minLength: 1, maxLength: 512, ...(description ? { description } : {}) });
+const str = (description?: string) => ({
+  type: "string",
+  minLength: 1,
+  maxLength: 512,
+  ...(description ? { description } : {}),
+});
 const bool = { type: "boolean" };
 const num = { type: "number" };
 const vec3 = { type: "array", items: num, minItems: 3, maxItems: 3 };
@@ -40,11 +45,13 @@ const expr = {
 };
 
 const constraintVariants: Record<string, Json> = {};
+
 const c = (type: string | string[], props: Json, required: string[]) => {
   for (const t of [type].flat()) {
     constraintVariants[t] = obj({ id, type: { const: t }, ...props }, ["id", "type", ...required]);
   }
 };
+
 const label = vec2;
 c("coincident", { a: str(), b: str() }, ["a", "b"]);
 c(["horizontal", "vertical"], { line: str() }, ["line"]);
@@ -54,7 +61,11 @@ c("point_on", { point: str(), curve: str() }, ["point", "curve"]);
 c("midpoint", { point: str(), line: str() }, ["point", "line"]);
 c("symmetric", { a: str(), b: str(), axis: str() }, ["a", "b", "axis"]);
 c("fix", { point: str() }, ["point"]);
-c("distance", { a: str(), b: str(), value: ref("expr"), axis: { enum: ["x", "y"] }, label }, ["a", "b", "value"]);
+c("distance", { a: str(), b: str(), value: ref("expr"), axis: { enum: ["x", "y"] }, label }, [
+  "a",
+  "b",
+  "value",
+]);
 c("length", { line: str(), value: ref("expr"), label }, ["line", "value"]);
 c(["radius", "diameter"], { curve: str(), value: ref("expr"), label }, ["curve", "value"]);
 c("angle", { a: str(), b: str(), value: ref("expr"), label }, ["a", "b", "value"]);
@@ -66,20 +77,35 @@ export const definitions: Record<string, Json> = {
   expr,
   faceTag: str('Face tag, e.g. "ex1.end_cap", "ex1.side[sk1.l1]". Suffix [*] matches by prefix.'),
   faceSelector: oneOf(
-    obj({ face: ref("faceTag"), near: vec3 }, ["face"], "Faces with this tag; `near` picks the closest when several share it."),
+    obj(
+      { face: ref("faceTag"), near: vec3 },
+      ["face"],
+      "Faces with this tag; `near` picks the closest when several share it.",
+    ),
     obj(
       {
         select: { const: "faces" },
         of: id,
-        where: obj({ planar: bool, normal: { enum: ["+X", "-X", "+Y", "-Y", "+Z", "-Z"] }, tag: ref("faceTag") }, []),
+        where: obj(
+          { planar: bool, normal: { enum: ["+X", "-X", "+Y", "-Y", "+Z", "-Z"] }, tag: ref("faceTag") },
+          [],
+        ),
         pick: { enum: ["largest", "smallest"] },
       },
       ["select"],
     ),
   ),
   edgeSelector: oneOf(
-    obj({ edge: arr(ref("faceTag"), { minItems: 2, maxItems: 2 }), near: vec3 }, ["edge"], "The edge shared by two tagged faces."),
-    obj({ select: { const: "edges" }, of: id, where: obj({ face: ref("faceTag") }, []) }, ["select"], "All edges around faces matching where.face (relative to `of`)."),
+    obj(
+      { edge: arr(ref("faceTag"), { minItems: 2, maxItems: 2 }), near: vec3 },
+      ["edge"],
+      "The edge shared by two tagged faces.",
+    ),
+    obj(
+      { select: { const: "edges" }, of: id, where: obj({ face: ref("faceTag") }, []) },
+      ["select"],
+      "All edges around faces matching where.face (relative to `of`).",
+    ),
   ),
   edges: oneOf(ref("edgeSelector"), arr(ref("edgeSelector"), { minItems: 1 })),
   planeSpec: oneOf(
@@ -93,21 +119,64 @@ export const definitions: Record<string, Json> = {
   ),
   profile: oneOf(
     obj(
-      { sketch: id, regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })) },
+      {
+        sketch: id,
+        regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })),
+      },
       ["sketch"],
       'Sketch regions; "all" (default) takes regions at odd nesting depth, so circles inside a rectangle become holes.',
     ),
-    obj({ face: ref("faceSelector") }, ["face"], "A model face pushed/pulled: a flat face along its normal, a curved one offset along its surface."),
+    obj(
+      { face: ref("faceSelector") },
+      ["face"],
+      "A model face pushed/pulled: a flat face along its normal, a curved one offset along its surface.",
+    ),
   ),
-  patternSource: oneOf(obj({ features: arr(id, { minItems: 1 }) }, ["features"]), obj({ bodies: arr(id, { minItems: 1 }) }, ["bodies"])),
+  patternSource: oneOf(
+    obj({ features: arr(id, { minItems: 1 }) }, ["features"]),
+    obj({ bodies: arr(id, { minItems: 1 }) }, ["bodies"]),
+  ),
   mode: { enum: ["new_body", "join", "cut", "intersect"] },
   entity: tagged("type", {
     point: obj({ id, type: { const: "point" }, x: num, y: num, ...construction }, ["id", "type", "x", "y"]),
     line: obj({ id, type: { const: "line" }, p1: id, p2: id, ...construction }, ["id", "type", "p1", "p2"]),
-    circle: obj({ id, type: { const: "circle" }, center: id, radius: { type: "number", exclusiveMinimum: 0 }, ...construction }, ["id", "type", "center", "radius"]),
-    arc: obj({ id, type: { const: "arc" }, center: id, start: id, end: id, ...construction }, ["id", "type", "center", "start", "end"]),
-    spline: obj({ id, type: { const: "spline" }, points: arr(id, { minItems: 2, maxItems: 500 }), closed: bool, ...construction }, ["id", "type", "points"], "Smooth curve through the points, in order."),
-    projection: obj({ id, type: { const: "projection" }, edges: arr(ref("edgeSelector"), { minItems: 1 }), ...construction }, ["id", "type", "edges"]),
+    circle: obj(
+      {
+        id,
+        type: { const: "circle" },
+        center: id,
+        radius: { type: "number", exclusiveMinimum: 0 },
+        ...construction,
+      },
+      ["id", "type", "center", "radius"],
+    ),
+    arc: obj({ id, type: { const: "arc" }, center: id, start: id, end: id, ...construction }, [
+      "id",
+      "type",
+      "center",
+      "start",
+      "end",
+    ]),
+    spline: obj(
+      {
+        id,
+        type: { const: "spline" },
+        points: arr(id, { minItems: 2, maxItems: 500 }),
+        closed: bool,
+        ...construction,
+      },
+      ["id", "type", "points"],
+      "Smooth curve through the points, in order.",
+    ),
+    projection: obj(
+      {
+        id,
+        type: { const: "projection" },
+        edges: arr(ref("edgeSelector"), { minItems: 1 }),
+        ...construction,
+      },
+      ["id", "type", "edges"],
+    ),
   }),
   constraint: tagged("type", constraintVariants),
   jointAnchor: oneOf(
@@ -130,7 +199,10 @@ export const definitions: Record<string, Json> = {
     },
     ["id", "type", "a", "b", "anchor"],
   ),
-  coupling: obj({ id, name: { type: "string", maxLength: 128 }, driver: id, driven: id, ratio: ref("expr") }, ["id", "driver", "driven", "ratio"]),
+  coupling: obj(
+    { id, name: { type: "string", maxLength: 128 }, driver: id, driven: id, ratio: ref("expr") },
+    ["id", "driver", "driven", "ratio"],
+  ),
   motion: obj(
     {
       id,
@@ -142,7 +214,11 @@ export const definitions: Record<string, Json> = {
         obj(
           {
             at: { type: "number", minimum: 0, maximum: 3600 },
-            values: { type: "object", propertyNames: { minLength: 1, maxLength: 140 }, additionalProperties: { type: "number" } },
+            values: {
+              type: "object",
+              propertyNames: { minLength: 1, maxLength: 140 },
+              additionalProperties: { type: "number" },
+            },
           },
           ["at", "values"],
         ),
@@ -159,13 +235,20 @@ export const definitions: Record<string, Json> = {
       data: { type: "string", maxLength: 256 * 1024 * 1024 },
       hidden: bool,
       scale: { type: "number", exclusiveMinimum: 0 },
-      geo: obj({ lat: { type: "number" }, lon: { type: "number" }, alt: { type: "number" } }, ["lat", "lon", "alt"]),
+      geo: obj({ lat: { type: "number" }, lon: { type: "number" }, alt: { type: "number" } }, [
+        "lat",
+        "lon",
+        "alt",
+      ]),
       marks: arr(
         obj(
           {
             id,
             kind: { enum: ["line", "area", "note", "point", "stroke"] },
-            points: arr(arr({ type: "number" }, { minItems: 3, maxItems: 3 }), { minItems: 1, maxItems: 10_000 }),
+            points: arr(arr({ type: "number" }, { minItems: 3, maxItems: 3 }), {
+              minItems: 1,
+              maxItems: 10_000,
+            }),
             color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
             text: { type: "string", maxLength: 2000 },
             width: { type: "number", exclusiveMinimum: 0 },
@@ -177,8 +260,15 @@ export const definitions: Record<string, Json> = {
     ["id", "name", "format", "data"],
   ),
   feature: tagged("op", {
-    sketch: feature("sketch", { plane: ref("planeSpec"), entities: arr(ref("entity")), constraints: arr(ref("constraint")) }, ["plane", "entities", "constraints"]),
-    plane: feature("plane", { base: ref("planeSpec"), offset: ref("expr"), angle: ref("expr") }, ["base", "offset"]),
+    sketch: feature(
+      "sketch",
+      { plane: ref("planeSpec"), entities: arr(ref("entity")), constraints: arr(ref("constraint")) },
+      ["plane", "entities", "constraints"],
+    ),
+    plane: feature("plane", { base: ref("planeSpec"), offset: ref("expr"), angle: ref("expr") }, [
+      "base",
+      "offset",
+    ]),
     extrude: feature(
       "extrude",
       {
@@ -194,16 +284,33 @@ export const definitions: Record<string, Json> = {
     ),
     revolve: feature(
       "revolve",
-      { profile: ref("profile"), axis: ref("axisRef"), angle: ref("expr"), symmetric: bool, mode: ref("mode"), targets: arr(id) },
+      {
+        profile: ref("profile"),
+        axis: ref("axisRef"),
+        angle: ref("expr"),
+        symmetric: bool,
+        mode: ref("mode"),
+        targets: arr(id),
+      },
       ["profile", "axis", "angle", "mode"],
     ),
-    scale: feature("scale", { bodies: arr(id, { minItems: 1 }), factor: ref("expr"), center: { enum: ["part", "origin"] } }, ["bodies", "factor"]),
+    scale: feature(
+      "scale",
+      { bodies: arr(id, { minItems: 1 }), factor: ref("expr"), center: { enum: ["part", "origin"] } },
+      ["bodies", "factor"],
+    ),
     align: feature(
       "align",
       {
         bodies: arr(id),
-        from: oneOf(obj({ face: ref("faceSelector") }, ["face"]), obj({ axisOf: ref("faceSelector") }, ["axisOf"])),
-        to: oneOf(obj({ face: ref("faceSelector") }, ["face"]), obj({ axisOf: ref("faceSelector") }, ["axisOf"])),
+        from: oneOf(
+          obj({ face: ref("faceSelector") }, ["face"]),
+          obj({ axisOf: ref("faceSelector") }, ["axisOf"]),
+        ),
+        to: oneOf(
+          obj({ face: ref("faceSelector") }, ["face"]),
+          obj({ axisOf: ref("faceSelector") }, ["axisOf"]),
+        ),
         offset: ref("expr"),
         angle: ref("expr"),
         flip: bool,
@@ -213,7 +320,26 @@ export const definitions: Record<string, Json> = {
     standard_part: feature(
       "standard_part",
       {
-        kind: { enum: ["socket_screw", "countersunk_screw", "hex_screw", "set_screw", "hex_nut", "washer", "insert", "bearing", "magnet", "profile", "corner_bracket", "t_nut", "linear_bearing", "shaft", "lead_screw", "rail"] },
+        kind: {
+          enum: [
+            "socket_screw",
+            "countersunk_screw",
+            "hex_screw",
+            "set_screw",
+            "hex_nut",
+            "washer",
+            "insert",
+            "bearing",
+            "magnet",
+            "profile",
+            "corner_bracket",
+            "t_nut",
+            "linear_bearing",
+            "shaft",
+            "lead_screw",
+            "rail",
+          ],
+        },
         size: { type: "string", maxLength: 16 },
         length: ref("expr"),
         withMoving: bool,
@@ -268,7 +394,10 @@ export const definitions: Record<string, Json> = {
         dividers: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
         dividerThickness: ref("expr"),
         scoop: ref("expr"),
-        tab: obj({ width: ref("expr"), angle: ref("expr"), style: { enum: ["full", "left", "center", "right"] } }, []),
+        tab: obj(
+          { width: ref("expr"), angle: ref("expr"), style: { enum: ["full", "left", "center", "right"] } },
+          [],
+        ),
         lip: bool,
         solid: bool,
         magnets: bool,
@@ -276,10 +405,22 @@ export const definitions: Record<string, Json> = {
         magnetDiameter: ref("expr"),
         magnetDepth: ref("expr"),
         drawer: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
-        outline: obj({ sketch: id, regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })) }, ["sketch"]),
+        outline: obj(
+          {
+            sketch: id,
+            regions: oneOf({ const: "all" }, arr({ type: "string", maxLength: 1024 }, { minItems: 1 })),
+          },
+          ["sketch"],
+        ),
         gap: ref("expr"),
         fill: bool,
-        bed: obj({ size: arr(ref("expr"), { minItems: 2, maxItems: 2 }), margin: arr(ref("expr"), { minItems: 2, maxItems: 2 }) }, ["size"]),
+        bed: obj(
+          {
+            size: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
+            margin: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
+          },
+          ["size"],
+        ),
         plane: ref("planeSpec"),
         position: arr(ref("expr"), { minItems: 2, maxItems: 2 }),
         baseplate: id,
@@ -364,7 +505,18 @@ export const definitions: Record<string, Json> = {
         thickness: ref("expr"),
         corner: ref("expr"),
         text: { type: "string", maxLength: 200 },
-        symbol: { enum: ["none", "screw_pan", "screw_countersunk", "screw_socket", "screw_hex", "nut", "washer", "insert"] },
+        symbol: {
+          enum: [
+            "none",
+            "screw_pan",
+            "screw_countersunk",
+            "screw_socket",
+            "screw_hex",
+            "nut",
+            "washer",
+            "insert",
+          ],
+        },
         size: ref("expr"),
         font: { enum: ["sans", "sans-bold", "mono"] },
         style: { enum: ["raised", "engraved"] },
@@ -376,14 +528,31 @@ export const definitions: Record<string, Json> = {
       },
       [],
     ),
-    draft: feature("draft", { faces: arr(ref("faceSelector"), { minItems: 1 }), angle: ref("expr"), neutral: ref("planeSpec"), flip: bool }, ["faces", "angle", "neutral"]),
-    offset_face: feature("offset_face", { faces: arr(ref("faceSelector"), { minItems: 1 }), distance: ref("expr"), upTo: ref("planeSpec") }, ["faces", "distance"]),
+    draft: feature(
+      "draft",
+      {
+        faces: arr(ref("faceSelector"), { minItems: 1 }),
+        angle: ref("expr"),
+        neutral: ref("planeSpec"),
+        flip: bool,
+      },
+      ["faces", "angle", "neutral"],
+    ),
+    offset_face: feature(
+      "offset_face",
+      { faces: arr(ref("faceSelector"), { minItems: 1 }), distance: ref("expr"), upTo: ref("planeSpec") },
+      ["faces", "distance"],
+    ),
     lithophane: feature(
       "lithophane",
       {
         kind: { enum: ["lithophane", "relief"] },
         image: obj(
-          { width: { type: "integer", minimum: 1, maximum: 1024 }, height: { type: "integer", minimum: 1, maximum: 1024 }, pixels: { type: "string", maxLength: 2 * 1024 * 1024 } },
+          {
+            width: { type: "integer", minimum: 1, maximum: 1024 },
+            height: { type: "integer", minimum: 1, maximum: 1024 },
+            pixels: { type: "string", maxLength: 2 * 1024 * 1024 },
+          },
           ["width", "height", "pixels"],
           "Greyscale picture: width × height bytes row by row from the top (0 dark, 255 bright), base64.",
         ),
@@ -398,7 +567,16 @@ export const definitions: Record<string, Json> = {
       },
       ["image", "width"],
     ),
-    rib: feature("rib", { sketch: id, curves: arr({ type: "string", maxLength: 256 }, { minItems: 1 }), thickness: ref("expr"), flip: bool }, ["sketch", "thickness"]),
+    rib: feature(
+      "rib",
+      {
+        sketch: id,
+        curves: arr({ type: "string", maxLength: 256 }, { minItems: 1 }),
+        thickness: ref("expr"),
+        flip: bool,
+      },
+      ["sketch", "thickness"],
+    ),
     split: feature(
       "split",
       {
@@ -423,22 +601,37 @@ export const definitions: Record<string, Json> = {
     ),
     loft: feature(
       "loft",
-      { profiles: arr(ref("profile"), { minItems: 2, maxItems: 50 }), ruled: bool, mode: ref("mode"), targets: arr(id) },
+      {
+        profiles: arr(ref("profile"), { minItems: 2, maxItems: 50 }),
+        ruled: bool,
+        mode: ref("mode"),
+        targets: arr(id),
+      },
       ["profiles", "mode"],
     ),
     sweep: feature(
       "sweep",
       {
         profile: ref("profile"),
-        path: obj({ sketch: id, curves: arr({ type: "string", maxLength: 256 }, { minItems: 1 }) }, ["sketch"], "Lines and arcs of a sketch, chained end to end; all non-construction curves unless listed."),
+        path: obj(
+          { sketch: id, curves: arr({ type: "string", maxLength: 256 }, { minItems: 1 }) },
+          ["sketch"],
+          "Lines and arcs of a sketch, chained end to end; all non-construction curves unless listed.",
+        ),
         mode: ref("mode"),
         targets: arr(id),
       },
       ["profile", "path", "mode"],
     ),
-    fillet: feature("fillet", { edges: ref("edges"), radius: ref("expr"), radius2: ref("expr") }, ["edges", "radius"]),
+    fillet: feature("fillet", { edges: ref("edges"), radius: ref("expr"), radius2: ref("expr") }, [
+      "edges",
+      "radius",
+    ]),
     chamfer: feature("chamfer", { edges: ref("edges"), distance: ref("expr") }, ["edges", "distance"]),
-    shell: feature("shell", { faces: arr(ref("faceSelector")), thickness: ref("expr"), outward: bool }, ["faces", "thickness"]),
+    shell: feature("shell", { faces: arr(ref("faceSelector")), thickness: ref("expr"), outward: bool }, [
+      "faces",
+      "thickness",
+    ]),
     thread: feature(
       "thread",
       {
@@ -456,7 +649,17 @@ export const definitions: Record<string, Json> = {
     ),
     coil: feature(
       "coil",
-      { profile: ref("profile"), axis: ref("axisRef"), pitch: ref("expr"), turns: ref("expr"), taper: ref("expr"), leftHanded: bool, flip: bool, mode: ref("mode"), targets: arr(id) },
+      {
+        profile: ref("profile"),
+        axis: ref("axisRef"),
+        pitch: ref("expr"),
+        turns: ref("expr"),
+        taper: ref("expr"),
+        leftHanded: bool,
+        flip: bool,
+        mode: ref("mode"),
+        targets: arr(id),
+      },
       ["profile", "axis", "pitch", "turns", "mode"],
     ),
     spring: feature(
@@ -517,8 +720,19 @@ export const definitions: Record<string, Json> = {
         meshWith: obj({ gear: id, direction: ref("expr") }, ["gear"]),
         chamfer: ref("expr"),
         rim: ref("expr"),
-        bore: obj({ diameter: ref("expr"), allowance: ref("expr"), shape: { enum: ["round", "d_flat", "hex"] }, flat: ref("expr") }, ["diameter"]),
-        hub: obj({ diameter: ref("expr"), length: ref("expr"), side: { enum: ["front", "back", "both"] } }, ["diameter", "length"]),
+        bore: obj(
+          {
+            diameter: ref("expr"),
+            allowance: ref("expr"),
+            shape: { enum: ["round", "d_flat", "hex"] },
+            flat: ref("expr"),
+          },
+          ["diameter"],
+        ),
+        hub: obj({ diameter: ref("expr"), length: ref("expr"), side: { enum: ["front", "back", "both"] } }, [
+          "diameter",
+          "length",
+        ]),
         mode: ref("mode"),
         targets: arr(id),
       },
@@ -537,11 +751,20 @@ export const definitions: Record<string, Json> = {
       },
       ["source", "direction", "count", "spacing"],
     ),
-    circular_pattern: feature("circular_pattern", { source: ref("patternSource"), axis: ref("axisRef"), count: ref("expr"), angle: ref("expr") }, ["source", "axis", "count"]),
+    circular_pattern: feature(
+      "circular_pattern",
+      { source: ref("patternSource"), axis: ref("axisRef"), count: ref("expr"), angle: ref("expr") },
+      ["source", "axis", "count"],
+    ),
     mirror: feature("mirror", { source: ref("patternSource"), plane: ref("planeSpec") }, ["source", "plane"]),
     boolean: feature(
       "boolean",
-      { operation: { enum: ["union", "subtract", "intersect"] }, target: id, tools: arr(id, { minItems: 1 }), keepTools: bool },
+      {
+        operation: { enum: ["union", "subtract", "intersect"] },
+        target: id,
+        tools: arr(id, { minItems: 1 }),
+        keepTools: bool,
+      },
       ["operation", "target", "tools"],
     ),
     transform: feature(
@@ -599,7 +822,12 @@ export const definitions: Record<string, Json> = {
           type: "object",
           additionalProperties: false,
           required: ["image", "mime", "uvs"],
-          properties: { image: { type: "string", maxLength: 32 * 1024 * 1024 }, mime: { enum: ["image/jpeg", "image/png"] }, uvs: { type: "string", maxLength: 64 * 1024 * 1024 }, hidden: bool },
+          properties: {
+            image: { type: "string", maxLength: 32 * 1024 * 1024 },
+            mime: { enum: ["image/jpeg", "image/png"] },
+            uvs: { type: "string", maxLength: 64 * 1024 * 1024 },
+            hidden: bool,
+          },
         },
       },
       ["format", "fileName", "data"],
@@ -635,21 +863,63 @@ export const documentSchema = {
       params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") },
       autoParams: arr(id),
       partOrder: arr({ type: "string", maxLength: 128 }),
-      partColors: { type: "object", propertyNames: { maxLength: 128 }, additionalProperties: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" } },
+      partColors: {
+        type: "object",
+        propertyNames: { maxLength: 128 },
+        additionalProperties: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+      },
       seeThrough: arr({ type: "string", maxLength: 128 }),
-      partMaterials: { type: "object", propertyNames: { maxLength: 128 }, additionalProperties: { type: "string", pattern: "^[a-z0-9]{1,32}$" } },
+      partMaterials: {
+        type: "object",
+        propertyNames: { maxLength: 128 },
+        additionalProperties: { type: "string", pattern: "^[a-z0-9]{1,32}$" },
+      },
       materials: arr(CUSTOM_MATERIAL),
-      partGroups: arr(obj({ name: { type: "string", minLength: 1, maxLength: 128 }, parts: arr({ type: "string", maxLength: 128 }) }, ["name", "parts"])),
+      partGroups: arr(
+        obj(
+          {
+            name: { type: "string", minLength: 1, maxLength: 128 },
+            parts: arr({ type: "string", maxLength: 128 }),
+          },
+          ["name", "parts"],
+        ),
+      ),
       units: { enum: ["mm", "in"] },
       fit: ref("expr"),
       features: arr(ref("feature")),
-      mechanism: obj({ joints: arr(ref("joint")), couplings: arr(ref("coupling")), motions: arr(ref("motion")), clearance: ref("expr") }, ["joints"]),
+      mechanism: obj(
+        {
+          joints: arr(ref("joint")),
+          couplings: arr(ref("coupling")),
+          motions: arr(ref("motion")),
+          clearance: ref("expr"),
+        },
+        ["joints"],
+      ),
       references: arr(ref("reference")),
-      variants: arr(obj({ name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") } }, ["name", "params"])),
+      variants: arr(
+        obj(
+          {
+            name: VARIANT_NAME,
+            params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") },
+          },
+          ["name", "params"],
+        ),
+      ),
       variant: VARIANT_NAME,
       // A version's state is checked when it is restored, as the whole document it then becomes.
-      versions: arr(obj({ name: VERSION_NAME, at: { type: "number" }, state: { type: "object" } }, ["name", "at", "state"])),
-      blobs: { type: "object", propertyNames: { pattern: "^blob:[0-9a-z:]{1,64}$" }, additionalProperties: { type: "string", maxLength: 64 * 1024 * 1024 } },
+      versions: arr(
+        obj({ name: VERSION_NAME, at: { type: "number" }, state: { type: "object" } }, [
+          "name",
+          "at",
+          "state",
+        ]),
+      ),
+      blobs: {
+        type: "object",
+        propertyNames: { pattern: "^blob:[0-9a-z:]{1,64}$" },
+        additionalProperties: { type: "string", maxLength: 64 * 1024 * 1024 },
+      },
       rollback: oneOf({ type: "null" }, id),
     },
     ["format", "params", "features", "rollback"],
@@ -661,17 +931,42 @@ export const docOpSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
   $id: "https://meercad.dev/schema/op.json",
   ...tagged("type", {
-    add_features: obj({ type: true, features: arr(ref("feature"), { minItems: 1 }), after: oneOf({ type: "null" }, id) }, ["features"]),
+    add_features: obj(
+      { type: true, features: arr(ref("feature"), { minItems: 1 }), after: oneOf({ type: "null" }, id) },
+      ["features"],
+    ),
     edit_feature: obj({ type: true, id, patch: { type: "object" } }, ["id", "patch"]),
     delete_feature: obj({ type: true, id }, ["id"]),
     move_feature: obj({ type: true, id, after: oneOf({ type: "null" }, id) }, ["id", "after"]),
-    set_param: obj({ type: true, name: id, expr: oneOf({ type: "null" }, ref("expr")), auto: bool }, ["name", "expr"]),
+    set_param: obj({ type: true, name: id, expr: oneOf({ type: "null" }, ref("expr")), auto: bool }, [
+      "name",
+      "expr",
+    ]),
     rename_param: obj({ type: true, name: id, to: id }, ["name", "to"]),
     set_rollback: obj({ type: true, id: oneOf({ type: "null" }, id) }, ["id"]),
     replace: obj({ type: true, doc: { type: "object" } }, ["doc"]),
-    set_part_color: obj({ type: true, part: id, color: oneOf({ type: "null" }, { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }) }, ["part", "color"]),
+    set_part_color: obj(
+      {
+        type: true,
+        part: id,
+        color: oneOf({ type: "null" }, { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }),
+      },
+      ["part", "color"],
+    ),
     set_see_through: obj({ type: true, parts: arr(id), on: bool }, ["parts", "on"]),
-    set_part_list: obj({ type: true, groups: oneOf({ type: "null" }, arr(obj({ name: { type: "string", minLength: 1, maxLength: 80 }, parts: arr(id) }, ["name", "parts"]))), order: oneOf({ type: "null" }, arr(id)) }, []),
+    set_part_list: obj(
+      {
+        type: true,
+        groups: oneOf(
+          { type: "null" },
+          arr(
+            obj({ name: { type: "string", minLength: 1, maxLength: 80 }, parts: arr(id) }, ["name", "parts"]),
+          ),
+        ),
+        order: oneOf({ type: "null" }, arr(id)),
+      },
+      [],
+    ),
     set_units: obj({ type: true, units: { enum: ["mm", "in"] } }, ["units"]),
     set_fit: obj({ type: true, fit: oneOf({ type: "null" }, ref("expr")) }, ["fit"]),
     set_joint: obj({ type: true, joint: ref("joint") }, ["joint"]),
@@ -682,13 +977,26 @@ export const docOpSchema = {
     delete_motion: obj({ type: true, id }, ["id"]),
     set_reference: obj({ type: true, reference: ref("reference") }, ["reference"]),
     delete_reference: obj({ type: true, id }, ["id"]),
-    set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, MATERIAL_ID) }, ["part", "material"]),
+    set_material: obj({ type: true, part: id, material: oneOf({ type: "null" }, MATERIAL_ID) }, [
+      "part",
+      "material",
+    ]),
     define_material: obj({ type: true, material: CUSTOM_MATERIAL }, ["material"]),
     delete_material: obj({ type: true, id: MATERIAL_ID }, ["id"]),
-    set_variant: obj({ type: true, name: VARIANT_NAME, params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") }, rename: VARIANT_NAME }, ["name", "params"]),
+    set_variant: obj(
+      {
+        type: true,
+        name: VARIANT_NAME,
+        params: { type: "object", propertyNames: { pattern: ID }, additionalProperties: ref("expr") },
+        rename: VARIANT_NAME,
+      },
+      ["name", "params"],
+    ),
     delete_variant: obj({ type: true, name: VARIANT_NAME }, ["name"]),
     use_variant: obj({ type: true, name: oneOf({ type: "null" }, VARIANT_NAME) }, ["name"]),
-    save_version: obj({ type: true, name: VERSION_NAME, doc: { type: "object" }, at: { type: "number" } }, ["name"]),
+    save_version: obj({ type: true, name: VERSION_NAME, doc: { type: "object" }, at: { type: "number" } }, [
+      "name",
+    ]),
     restore_version: obj({ type: true, name: VERSION_NAME }, ["name"]),
     rename_version: obj({ type: true, name: VERSION_NAME, to: VERSION_NAME }, ["name", "to"]),
     delete_version: obj({ type: true, name: VERSION_NAME }, ["name"]),

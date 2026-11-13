@@ -35,8 +35,20 @@ const example = {
         { id: "c10", type: "distance", a: "q1", b: "origin", axis: "x", value: "width / 2 - 10 mm" },
       ],
     },
-    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "thickness", mode: "new_body" },
-    { id: "fi1", op: "fillet", edges: { select: "edges", of: "ex1", where: { face: "end_cap" } }, radius: "1 mm" },
+    {
+      id: "ex1",
+      op: "extrude",
+      profile: { sketch: "sk1" },
+      extent: "blind",
+      distance: "thickness",
+      mode: "new_body",
+    },
+    {
+      id: "fi1",
+      op: "fillet",
+      edges: { select: "edges", of: "ex1", where: { face: "end_cap" } },
+      radius: "1 mm",
+    },
   ],
 };
 
@@ -115,9 +127,15 @@ export const SYSTEM_PROMPT = FULL_PROMPT;
 export const GUIDE_TEXT = SYSTEM_PROMPT.slice(0, SYSTEM_PROMPT.indexOf("JSON Schema of one op:")).trimEnd();
 
 type Json = Record<string, unknown>;
-const schema = docOpSchema as unknown as { allOf: { if: { properties: { type: { const: string } } }; then: Json }[]; definitions: Record<string, Json> };
+
+const schema = docOpSchema as unknown as {
+  allOf: { if: { properties: { type: { const: string } } }; then: Json }[];
+  definitions: Record<string, Json>;
+};
 /** Op types and feature ops with their own JSON Schema. */
-const featureDef = schema.definitions["feature"] as { allOf?: { if: { properties: { op: { const: string } } }; then: Json }[] };
+const featureDef = schema.definitions["feature"] as {
+  allOf?: { if: { properties: { op: { const: string } } }; then: Json }[];
+};
 export const OP_NAMES: string[] = schema.allOf.map((x) => x.if.properties.type.const);
 export const FEATURE_NAMES: string[] = (featureDef.allOf ?? []).map((x) => x.if.properties.op.const);
 
@@ -125,14 +143,18 @@ export const FEATURE_NAMES: string[] = (featureDef.allOf ?? []).map((x) => x.if.
 function refsOf(node: unknown, out: Set<string>): void {
   if (!node || typeof node !== "object") return;
   if (Array.isArray(node)) return node.forEach((n) => refsOf(n, out));
+
   for (const [k, v] of Object.entries(node)) {
     if (k === "$ref" && typeof v === "string" && v.startsWith("#/definitions/")) {
       const name = v.slice("#/definitions/".length);
+
       if (name !== "feature" && !out.has(name)) {
         out.add(name);
         refsOf(schema.definitions[name], out);
       }
-    } else refsOf(v, out);
+    } else {
+      refsOf(v, out);
+    }
   }
 }
 
@@ -142,8 +164,10 @@ function refsOf(node: unknown, out: Set<string>): void {
  */
 export function schemaFor(names: readonly string[]): string {
   if (names.includes("all")) return `JSON Schema of one op:\n${opSchemaText}`;
+
   const parts: Record<string, Json> = {};
   const unknown: string[] = [];
+
   for (const n of names) {
     const op = schema.allOf.find((x) => x.if.properties.type.const === n);
     const feature = featureDef.allOf?.find((x) => x.if.properties.op.const === n);
@@ -151,11 +175,18 @@ export function schemaFor(names: readonly string[]): string {
     if (feature) parts[`feature ${n}`] = feature.then;
     if (!op && !feature) unknown.push(n);
   }
+
   const defs = new Set<string>();
   refsOf(parts, defs);
+
   const definitions = Object.fromEntries([...defs].sort().map((d) => [d, schema.definitions[d]]));
+
   return [
-    ...(unknown.length ? [`Unknown: ${unknown.join(", ")}. Ops: ${OP_NAMES.join(", ")}. Features: ${FEATURE_NAMES.join(", ")}.`] : []),
+    ...(unknown.length
+      ? [
+          `Unknown: ${unknown.join(", ")}. Ops: ${OP_NAMES.join(", ")}. Features: ${FEATURE_NAMES.join(", ")}.`,
+        ]
+      : []),
     `JSON Schema (refs point to "definitions" below; "#/definitions/feature" is any feature):`,
     JSON.stringify({ ...parts, definitions }),
   ].join("\n");
