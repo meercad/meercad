@@ -7,7 +7,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import {
+  add2,
   cornerEdit,
+  distance2,
+  dot2,
+  midpoint2,
+  scale2,
+  sub2,
   findRegions,
   patternCurves,
   splinePoints,
@@ -2551,36 +2557,48 @@ function arcThrough(
   };
 }
 
+/** Lengths below this count as zero (mm). */
+const ZERO_LENGTH = 1e-9;
+
 /**
- * The point on the arc's middle for a chord a→b, a radius and/or sweep angle (degrees), bulging to `side`'s
- * side.
+ * The middle point of the arc over the chord `start`→`end`, bulging to the side `side` lies on.
+ * The arc is given by its radius, its sweep angle (degrees) or both; null when no such arc exists.
  */
 function arcMidFor(
-  a: Vec2,
-  b: Vec2,
+  start: Vec2,
+  end: Vec2,
   side: Vec2,
   radius: number | null,
   angleDeg: number | null,
 ): Vec2 | null {
-  const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  if (L < 1e-9) return null;
+  const chordLength = distance2(start, end);
 
-  let theta = angleDeg !== null ? (angleDeg * Math.PI) / 180 : null;
-  let r = radius;
-  if (theta !== null && (theta <= 0 || theta >= 2 * Math.PI)) return null;
-  if (r === null && theta !== null) r = L / (2 * Math.sin(theta / 2));
-  if (r === null || r < L / 2 - 1e-9) return null;
+  if (chordLength < ZERO_LENGTH) return null;
 
-  theta ??= 2 * Math.asin(Math.min(1, L / (2 * r)));
+  const givenSweep = angleDeg !== null ? (angleDeg * Math.PI) / 180 : null;
 
-  const mid: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  let n: Vec2 = [-(b[1] - a[1]) / L, (b[0] - a[0]) / L];
-  if ((side[0] - mid[0]) * n[0] + (side[1] - mid[1]) * n[1] < 0) n = [-n[0], -n[1]];
+  if (givenSweep !== null && (givenSweep <= 0 || givenSweep >= 2 * Math.PI)) return null;
 
-  // Sagitta: how far the arc's middle stands off the chord (more than r for a major arc).
-  const h = r - r * Math.cos(theta / 2);
+  // A sweep angle without a radius fixes the radius.
+  const arcRadius =
+    radius === null && givenSweep !== null ? chordLength / (2 * Math.sin(givenSweep / 2)) : radius;
 
-  return [mid[0] + n[0] * h, mid[1] + n[1] * h];
+  // The chord cannot be longer than the diameter.
+  if (arcRadius === null || arcRadius < chordLength / 2 - ZERO_LENGTH) return null;
+
+  // A radius without a sweep angle means the shorter arc over the chord.
+  const sweepAngle = givenSweep ?? 2 * Math.asin(Math.min(1, chordLength / (2 * arcRadius)));
+
+  const chordMid = midpoint2(start, end);
+  const chord = sub2(end, start);
+  const leftOfChord: Vec2 = [-chord[1] / chordLength, chord[0] / chordLength];
+  const sideIsRight = dot2(sub2(side, chordMid), leftOfChord) < 0;
+  const bulgeDirection: Vec2 = sideIsRight ? [-leftOfChord[0], -leftOfChord[1]] : leftOfChord;
+
+  // How far the arc's middle stands off the chord (more than the radius for an arc over half a circle).
+  const bulgeHeight = arcRadius - arcRadius * Math.cos(sweepAngle / 2);
+
+  return add2(chordMid, scale2(bulgeDirection, bulgeHeight));
 }
 
 const SNAP_LABEL: Record<NonNullable<Snap["kind"]>, string> = {

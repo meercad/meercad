@@ -29,6 +29,18 @@ export const cross3 = (a: Vec3, b: Vec3): Vec3 => [
 export const len3 = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
 export const norm3 = (a: Vec3): Vec3 => scale3(a, 1 / (len3(a) || 1));
 
+export const add2 = (a: Vec2, b: Vec2): Vec2 => [a[0] + b[0], a[1] + b[1]];
+export const sub2 = (a: Vec2, b: Vec2): Vec2 => [a[0] - b[0], a[1] - b[1]];
+export const scale2 = (a: Vec2, s: number): Vec2 => [a[0] * s, a[1] * s];
+export const dot2 = (a: Vec2, b: Vec2) => a[0] * b[0] + a[1] * b[1];
+/** The z part of a × b: positive when b lies counter-clockwise of a. */
+export const cross2 = (a: Vec2, b: Vec2) => a[0] * b[1] - a[1] * b[0];
+export const len2 = (a: Vec2) => Math.hypot(a[0], a[1]);
+export const distance2 = (a: Vec2, b: Vec2) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+export const midpoint2 = (a: Vec2, b: Vec2): Vec2 => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+/** `a` turned a quarter turn counter-clockwise. */
+export const perpendicular2 = (a: Vec2): Vec2 => [-a[1], a[0]];
+
 export function toWorld(frame: PlaneFrame, [a, b]: Vec2): Vec3 {
   const { origin: o, u, v } = frame;
 
