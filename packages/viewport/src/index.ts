@@ -423,7 +423,7 @@ export class Viewport {
   private activeHandle: { h: Handle; value: number; start: number; pointer: number } | null = null;
   private hoverHandle: string | null = null;
   /** Reports the value being dragged and its screen position (for a value tooltip). */
-  onHandleDrag: ((h: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
+  onHandleDrag: ((handle: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -490,10 +490,12 @@ export class Viewport {
     this.scene.add(this.axes);
 
     // Mouse buttons are assigned per press from the navigation preset (see setNavigation).
-    this.renderer.domElement.addEventListener("pointerdown", (e) => this.assignButtons(e), { capture: true });
-    this.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
+    this.renderer.domElement.addEventListener("pointerdown", (event) => this.assignButtons(event), {
+      capture: true,
+    });
+    this.renderer.domElement.addEventListener("contextmenu", (event) => event.preventDefault());
     // Trackpad swipes orbit and pan before OrbitControls would zoom with them (see ./wheel).
-    this.renderer.domElement.addEventListener("wheel", (e) => this.trackpadWheel(e), {
+    this.renderer.domElement.addEventListener("wheel", (event) => this.trackpadWheel(event), {
       capture: true,
       passive: false,
     });
@@ -531,22 +533,22 @@ export class Viewport {
   }
 
   /** Orbits or pans for a trackpad swipe; zooming (wheel, pinch, Ctrl + swipe) stays with OrbitControls. */
-  private trackpadWheel(e: WheelEvent): void {
+  private trackpadWheel(event: WheelEvent): void {
     const c = this.controls;
     if (!c.enabled) return;
 
-    const gesture = this.wheel.classify(e, this.swipeOrbits);
+    const gesture = this.wheel.classify(event, this.swipeOrbits);
     if (gesture === "zoom") return;
 
-    e.preventDefault();
-    e.stopImmediatePropagation();
+    event.preventDefault();
+    event.stopImmediatePropagation();
     // Mid-drag the buttons own the camera.
     if ((c as unknown as { state: number }).state !== -1) return;
 
-    const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
+    const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1;
     // Deltas are scroll offsets (the content moves the other way), so the model follows the fingers
     // as it follows a drag.
-    const [dx, dy] = [-e.deltaX * scale, -e.deltaY * scale];
+    const [dx, dy] = [-event.deltaX * scale, -event.deltaY * scale];
     const h = this.renderer.domElement.clientHeight || 1;
 
     if (gesture === "orbit") {
@@ -557,20 +559,20 @@ export class Viewport {
     }
   }
 
-  private assignButtons(e: PointerEvent): void {
-    const button = e.button === 1 ? "middle" : e.button === 2 ? "right" : null;
+  private assignButtons(event: PointerEvent): void {
+    const button = event.button === 1 ? "middle" : event.button === 2 ? "right" : null;
     if (!button) return;
 
-    const mod: NavBinding["mod"] = e.shiftKey
+    const mod: NavBinding["mod"] = event.shiftKey
       ? "shift"
-      : e.ctrlKey || e.metaKey
+      : event.ctrlKey || event.metaKey
         ? "ctrl"
-        : e.altKey
+        : event.altKey
           ? "alt"
           : undefined;
     const hit = (list: NavBinding[]) => list.some((b) => b.button === button && b.mod === mod);
     // OrbitControls swaps rotate and pan itself while ctrl/meta/shift is held; pre-swap to cancel that.
-    const flipped = e.ctrlKey || e.metaKey || e.shiftKey;
+    const flipped = event.ctrlKey || event.metaKey || event.shiftKey;
     const action = hit(this.navigation.orbit)
       ? flipped
         ? THREE.MOUSE.PAN
@@ -702,19 +704,19 @@ export class Viewport {
    * and touches already navigating are cancelled when the pen comes down.
    */
   private bindPointerRoles(): void {
-    const el = this.renderer.domElement;
+    const element = this.renderer.domElement;
 
-    const filter = (e: PointerEvent) => {
-      if (e.target !== el) return;
+    const filter = (event: PointerEvent) => {
+      if (event.target !== element) return;
 
-      if (e.pointerType === "pen") {
+      if (event.pointerType === "pen") {
         if (!this.penSeen) {
           this.penSeen = true;
           this.applyTouches();
         }
 
-        if (e.type === "pointerdown") {
-          this.penDown.add(e.pointerId);
+        if (event.type === "pointerdown") {
+          this.penDown.add(event.pointerId);
 
           // Cancel touches already navigating: they were the palm landing first.
           for (const id of [...this.touches]) {
@@ -727,30 +729,30 @@ export class Viewport {
               bubbles: true,
             });
             this.palmCancels.add(cancel);
-            el.dispatchEvent(cancel);
+            element.dispatchEvent(cancel);
           }
-        } else if (e.type === "pointerup" || e.type === "pointercancel") {
-          if (this.penDown.delete(e.pointerId)) this.penUpAt = performance.now();
+        } else if (event.type === "pointerup" || event.type === "pointercancel") {
+          if (this.penDown.delete(event.pointerId)) this.penUpAt = performance.now();
         }
 
         return;
       }
 
-      if (e.pointerType !== "touch" || this.palmCancels.has(e)) return;
+      if (event.pointerType !== "touch" || this.palmCancels.has(event)) return;
 
-      if (e.type === "pointerdown") {
-        if (this.penActive) this.rejected.add(e.pointerId);
-        else this.touches.add(e.pointerId);
+      if (event.type === "pointerdown") {
+        if (this.penActive) this.rejected.add(event.pointerId);
+        else this.touches.add(event.pointerId);
       }
 
-      const rejected = this.rejected.has(e.pointerId);
+      const rejected = this.rejected.has(event.pointerId);
 
-      if (e.type === "pointerup" || e.type === "pointercancel") {
-        this.touches.delete(e.pointerId);
-        this.rejected.delete(e.pointerId);
+      if (event.type === "pointerup" || event.type === "pointercancel") {
+        this.touches.delete(event.pointerId);
+        this.rejected.delete(event.pointerId);
       }
 
-      if (rejected) e.stopPropagation();
+      if (rejected) event.stopPropagation();
     };
 
     // Capturing on the container runs before every listener on the canvas, OrbitControls included.
@@ -773,7 +775,7 @@ export class Viewport {
     this.rebuildSketches(data);
     this.rebuildPlanes(data.planes);
     this.rebuildReferences(data.references);
-    this.selected = this.selected.filter((s) => this.pickStillValid(s));
+    this.selected = this.selected.filter((pick) => this.pickStillValid(pick));
     if (this.hover && !this.pickStillValid(this.hover)) this.hover = null;
 
     this.paint();
@@ -798,10 +800,10 @@ export class Viewport {
     return this.hover;
   }
 
-  setHover(p: Pick | null): void {
-    if (samePick(p, this.hover)) return;
+  setHover(pick: Pick | null): void {
+    if (samePick(pick, this.hover)) return;
 
-    this.hover = p;
+    this.hover = pick;
     this.paint();
   }
 
@@ -820,8 +822,10 @@ export class Viewport {
     this.paint();
   }
 
-  private pickStillValid(p: Pick): boolean {
-    if (p.kind === "face" || p.kind === "edge") return this.bodies.some((b) => b.mesh.bodyId === p.bodyId);
+  private pickStillValid(pick: Pick): boolean {
+    if (pick.kind === "face" || pick.kind === "edge") {
+      return this.bodies.some((b) => b.mesh.bodyId === pick.bodyId);
+    }
 
     return true;
   }
@@ -1045,71 +1049,73 @@ export class Viewport {
   }
 
   private bindPartDrag(): void {
-    const el = this.renderer.domElement;
-    el.addEventListener(
+    const element = this.renderer.domElement;
+    element.addEventListener(
       "pointerdown",
-      (e) => {
+      (event) => {
         const drag = this.partDrag;
 
         if (
           !drag ||
-          e.button !== 0 ||
+          event.button !== 0 ||
           this.activePart !== null ||
-          (e.pointerType === "touch" && !e.isPrimary)
+          (event.pointerType === "touch" && !event.isPrimary)
         ) {
           return;
         }
 
-        const ray = this.ray(e.clientX, e.clientY);
+        const ray = this.ray(event.clientX, event.clientY);
         // A joint symbol is a handle: it turns or slides its joint, before any part under it.
-        const grabbed = this.jointAt(e.clientX, e.clientY, e.pointerType === "touch" ? 22 : 10);
+        const grabbed = this.jointAt(event.clientX, event.clientY, event.pointerType === "touch" ? 22 : 10);
 
         if (!(grabbed && drag.startJoint?.(grabbed, ray))) {
-          const pick = this.pick(e.clientX, e.clientY, new Set(["face"]));
+          const pick = this.pick(event.clientX, event.clientY, new Set(["face"]));
           if (pick?.kind !== "face" || !drag.start(pick, ray)) return;
         }
 
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        el.setPointerCapture(e.pointerId);
-        this.activePart = e.pointerId;
-        el.style.cursor = "grabbing";
+        event.stopImmediatePropagation();
+        event.preventDefault();
+        element.setPointerCapture(event.pointerId);
+        this.activePart = event.pointerId;
+        element.style.cursor = "grabbing";
       },
       { capture: true },
     );
 
-    const moveTo = perFrame((e: PointerEvent) => this.partDrag?.move(this.ray(e.clientX, e.clientY)));
-    el.addEventListener(
+    const moveTo = perFrame((event: PointerEvent) =>
+      this.partDrag?.move(this.ray(event.clientX, event.clientY)),
+    );
+    element.addEventListener(
       "pointermove",
-      (e) => {
-        if (this.activePart === null && this.partDrag && e.pointerType === "mouse" && !e.buttons) {
-          const over = this.jointAt(e.clientX, e.clientY, 10) !== null;
-          if (over) el.style.cursor = "grab";
-          else if (el.style.cursor === "grab" && this.jointHover) el.style.cursor = "";
+      (event) => {
+        if (this.activePart === null && this.partDrag && event.pointerType === "mouse" && !event.buttons) {
+          const over = this.jointAt(event.clientX, event.clientY, 10) !== null;
+          if (over) element.style.cursor = "grab";
+          else if (element.style.cursor === "grab" && this.jointHover) element.style.cursor = "";
 
           this.jointHover = over;
         }
 
-        if (e.pointerId !== this.activePart) return;
+        if (event.pointerId !== this.activePart) return;
 
-        e.stopImmediatePropagation();
-        moveTo(e);
+        event.stopImmediatePropagation();
+        moveTo(event);
       },
       { capture: true },
     );
 
-    const end = (e: PointerEvent) => {
-      if (e.pointerId !== this.activePart) return;
+    const end = (event: PointerEvent) => {
+      if (event.pointerId !== this.activePart) return;
 
-      e.stopImmediatePropagation();
+      event.stopImmediatePropagation();
       moveTo.flush();
       this.activePart = null;
-      el.style.cursor = "";
+      element.style.cursor = "";
       this.partDrag?.end();
     };
 
-    el.addEventListener("pointerup", end, { capture: true });
-    el.addEventListener("pointercancel", end, { capture: true });
+    element.addEventListener("pointerup", end, { capture: true });
+    element.addEventListener("pointercancel", end, { capture: true });
   }
 
   private buildBody(mesh: ViewMesh, ghost: boolean): BodyObj {
@@ -1189,15 +1195,15 @@ export class Viewport {
   private rebuildSketches(data: SceneData): void {
     disposeTree(this.sketchGroup);
 
-    for (const s of data.sketches) {
-      if (s.id === data.editingSketch) continue;
+    for (const sketchView of data.sketches) {
+      if (sketchView.id === data.editingSketch) continue;
 
       const g = new THREE.Group();
-      g.userData = { sketch: s.id };
+      g.userData = { sketch: sketchView.id };
       g.matrixAutoUpdate = false;
-      g.matrix.copy(frameMatrix(s.frame));
+      g.matrix.copy(frameMatrix(sketchView.frame));
 
-      for (const c of s.curves) {
+      for (const c of sketchView.curves) {
         const color = c.external ? C.sketchExternal : c.construction ? C.sketchConstruction : C.sketch;
         const line = fatLine(curvePoints(c), {
           color,
@@ -1205,11 +1211,11 @@ export class Viewport {
           ...(c.construction ? { dashed: { dash: 1.5, gap: 1 } } : {}),
         });
         line.renderOrder = 5;
-        line.userData = { sketch: s.id, curve: c.id };
+        line.userData = { sketch: sketchView.id, curve: c.id };
         g.add(line);
       }
 
-      for (const r of s.regions) {
+      for (const r of sketchView.regions) {
         const shape = new THREE.Shape(r.polygons[0]!.map(([x, y]) => new THREE.Vector2(x, y)));
 
         for (const h of r.polygons.slice(1)) {
@@ -1227,7 +1233,7 @@ export class Viewport {
           }),
         );
         mesh.renderOrder = 4;
-        mesh.userData = { sketch: s.id, region: r.key };
+        mesh.userData = { sketch: sketchView.id, region: r.key };
         g.add(mesh);
       }
 
@@ -1238,13 +1244,13 @@ export class Viewport {
   private rebuildPlanes(planes: PlaneView[]): void {
     disposeTree(this.planeGroup);
 
-    for (const p of planes) {
+    for (const plane of planes) {
       const g = new THREE.Group();
       g.matrixAutoUpdate = false;
-      g.matrix.copy(frameMatrix(p.frame));
+      g.matrix.copy(frameMatrix(plane.frame));
 
-      const s = p.size;
-      const color = p.color ?? C.plane;
+      const s = plane.size;
+      const color = plane.color ?? C.plane;
       const fill = new THREE.Mesh(
         new THREE.PlaneGeometry(s, s),
         new THREE.MeshBasicMaterial({
@@ -1256,7 +1262,7 @@ export class Viewport {
         }),
       );
       fill.position.set(s / 2, s / 2, 0);
-      fill.userData = { plane: p.id };
+      fill.userData = { plane: plane.id };
 
       const border = new THREE.LineLoop(
         new THREE.BufferGeometry().setFromPoints([
@@ -1267,9 +1273,9 @@ export class Viewport {
         ]),
         new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }),
       );
-      border.userData = { plane: p.id, border: true };
+      border.userData = { plane: plane.id, border: true };
       g.add(fill, border);
-      g.userData = { plane: p.id };
+      g.userData = { plane: plane.id };
       this.planeGroup.add(g);
     }
   }
@@ -1646,7 +1652,7 @@ export class Viewport {
 
   /** Moves and sizes the grid plane with the view, and picks its spacings for the zoom. */
   private updateGrid(): void {
-    const f = this.gridFrame ?? {
+    const frame = this.gridFrame ?? {
       origin: [0, 0, 0] as Vec3,
       u: [1, 0, 0] as Vec3,
       v: [0, 1, 0] as Vec3,
@@ -1654,12 +1660,12 @@ export class Viewport {
     };
     const target = this.controls.target;
     // The view centre, dropped onto the grid plane, in plane coordinates.
-    const d = target.clone().sub(new THREE.Vector3(...f.origin));
-    const cx = d.dot(new THREE.Vector3(...f.u));
-    const cy = d.dot(new THREE.Vector3(...f.v));
-    const onPlane = new THREE.Vector3(...f.origin)
-      .addScaledVector(new THREE.Vector3(...f.u), cx)
-      .addScaledVector(new THREE.Vector3(...f.v), cy);
+    const d = target.clone().sub(new THREE.Vector3(...frame.origin));
+    const cx = d.dot(new THREE.Vector3(...frame.u));
+    const cy = d.dot(new THREE.Vector3(...frame.v));
+    const onPlane = new THREE.Vector3(...frame.origin)
+      .addScaledVector(new THREE.Vector3(...frame.u), cx)
+      .addScaledVector(new THREE.Vector3(...frame.v), cy);
     const pixel = this.pixelSize([onPlane.x, onPlane.y, onPlane.z]);
     const steps = this.gridSteps(pixel);
     this.gridSpacing = steps.snap;
@@ -1677,7 +1683,7 @@ export class Viewport {
     u["uColor"]!.value = new THREE.Color(this.dark ? 0x6b7590 : 0x8a95a8);
     u["uOpacity"]!.value = this.dark ? 0.6 : 0.55;
 
-    const m = frameMatrix(f)
+    const m = frameMatrix(frame)
       .multiply(new THREE.Matrix4().makeTranslation(cx, cy, 0))
       .multiply(new THREE.Matrix4().makeScale(reach * 2, reach * 2, 1));
     this.gridMesh.matrixAutoUpdate = false;
@@ -1933,7 +1939,8 @@ export class Viewport {
   setBodyColors(colors: ReadonlyMap<string, string>): void {
     const next = new Map([...colors].map(([id, hex]) => [id, new THREE.Color(hex)]));
     const same =
-      next.size === this.bodyColors.size && [...next].every(([id, c]) => this.bodyColors.get(id)?.equals(c));
+      next.size === this.bodyColors.size &&
+      [...next].every(([id, color]) => this.bodyColors.get(id)?.equals(color));
     if (same) return;
 
     this.bodyColors = next;
@@ -1948,11 +1955,11 @@ export class Viewport {
     const selFaces = new Map<string, Set<number>>();
     const selEdges = new Map<string, Set<number>>();
 
-    for (const p of this.selected) {
-      if (p.kind === "face") {
-        (selFaces.get(p.bodyId) ?? selFaces.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.face);
-      } else if (p.kind === "edge") {
-        (selEdges.get(p.bodyId) ?? selEdges.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.edge);
+    for (const pick of this.selected) {
+      if (pick.kind === "face") {
+        (selFaces.get(pick.bodyId) ?? selFaces.set(pick.bodyId, new Set()).get(pick.bodyId)!).add(pick.face);
+      } else if (pick.kind === "edge") {
+        (selEdges.get(pick.bodyId) ?? selEdges.set(pick.bodyId, new Set()).get(pick.bodyId)!).add(pick.edge);
       }
     }
 
@@ -1985,8 +1992,8 @@ export class Viewport {
               : base;
 
       for (let t = 0; t < b.triFace.length; t++) {
-        const c = faceColor(b.triFace[t]!);
-        for (let k = 0; k < 3; k++) fc.setXYZ(idx[t * 3 + k]!, c.r, c.g, c.b);
+        const color = faceColor(b.triFace[t]!);
+        for (let k = 0; k < 3; k++) fc.setXYZ(idx[t * 3 + k]!, color.r, color.g, color.b);
       }
 
       fc.needsUpdate = true;
@@ -1996,13 +2003,13 @@ export class Viewport {
 
       for (let sg = 0; sg < b.segEdge.length; sg++) {
         const e = b.segEdge[sg]!;
-        const c = se.has(e)
+        const color = se.has(e)
           ? C.edgeSel
           : hovered?.kind === "edge" && hovered.edge === e
             ? C.edgeHover
             : C.edge;
-        ec.setXYZ(segIdx.getX(sg * 2), c.r, c.g, c.b);
-        ec.setXYZ(segIdx.getX(sg * 2 + 1), c.r, c.g, c.b);
+        ec.setXYZ(segIdx.getX(sg * 2), color.r, color.g, color.b);
+        ec.setXYZ(segIdx.getX(sg * 2 + 1), color.r, color.g, color.b);
       }
 
       ec.needsUpdate = true;
@@ -2013,7 +2020,7 @@ export class Viewport {
 
       if (region !== undefined && o instanceof THREE.Mesh) {
         const sel = this.selected.some(
-          (s) => s.kind === "region" && s.sketchId === sketch && s.key === region,
+          (pick) => pick.kind === "region" && pick.sketchId === sketch && pick.key === region,
         );
         const hov =
           this.hover?.kind === "region" && this.hover.sketchId === sketch && this.hover.key === region;
@@ -2022,7 +2029,7 @@ export class Viewport {
 
       if (curve !== undefined && o instanceof THREE.Line) {
         const sel = this.selected.some(
-          (s) => s.kind === "sketch_curve" && s.sketchId === sketch && s.curveId === curve,
+          (pick) => pick.kind === "sketch_curve" && pick.sketchId === sketch && pick.curveId === curve,
         );
         const hov =
           this.hover?.kind === "sketch_curve" &&
@@ -2042,7 +2049,7 @@ export class Viewport {
       const { plane, border } = o.userData as { plane?: string; border?: boolean };
       if (plane === undefined || !(o instanceof THREE.Mesh || o instanceof THREE.Line)) return;
 
-      const sel = this.selected.some((s) => s.kind === "plane" && s.planeId === plane);
+      const sel = this.selected.some((pick) => pick.kind === "plane" && pick.planeId === plane);
       const hov = this.hover?.kind === "plane" && this.hover.planeId === plane;
       const mat = o.material as THREE.Material;
       if (border) mat.opacity = sel || hov ? 1 : strong ? 0.9 : 0.55;
@@ -2055,21 +2062,21 @@ export class Viewport {
   setHandles(handles: Handle[]): void {
     // While dragging, the grabbed handle keeps its own callbacks and position until release.
     if (this.activeHandle) {
-      handles = [this.activeHandle.h, ...handles.filter((h) => h.id !== this.activeHandle!.h.id)];
+      handles = [this.activeHandle.h, ...handles.filter((handle) => handle.id !== this.activeHandle!.h.id)];
     }
 
     this.handles = handles;
     this.drawHandles();
   }
 
-  private handleBase(h: Handle): number {
-    return this.pixelSize(h.origin) * 46;
+  private handleBase(handle: Handle): number {
+    return this.pixelSize(handle.origin) * 46;
   }
 
-  private handleTip(h: Handle, value = h.value): THREE.Vector3 {
-    const d = new THREE.Vector3(...h.dir).normalize();
+  private handleTip(handle: Handle, value = handle.value): THREE.Vector3 {
+    const d = new THREE.Vector3(...handle.dir).normalize();
 
-    return new THREE.Vector3(...h.origin).addScaledVector(d, value + this.handleBase(h));
+    return new THREE.Vector3(...handle.origin).addScaledVector(d, value + this.handleBase(handle));
   }
 
   private drawHandles(): void {
@@ -2084,8 +2091,9 @@ export class Viewport {
       return m;
     };
 
-    for (const h0 of this.handles) {
-      const h = this.activeHandle?.h.id === h0.id ? { ...h0, value: this.activeHandle.value } : h0;
+    for (const handle of this.handles) {
+      const h =
+        this.activeHandle?.h.id === handle.id ? { ...handle, value: this.activeHandle.value } : handle;
       const px = this.pixelSize(h.origin);
       const d = new THREE.Vector3(...h.dir).normalize();
       const o = new THREE.Vector3(...h.origin);
@@ -2146,15 +2154,15 @@ export class Viewport {
   }
 
   private hitHandle(clientX: number, clientY: number, radius = 18): Handle | null {
-    const r = this.renderer.domElement.getBoundingClientRect();
-    const px = clientX - r.left;
-    const py = clientY - r.top;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
     let best: Handle | null = null;
     let bd = radius;
 
-    for (const h of this.handles) {
-      const tip = this.handleTip(h);
-      const a = this.worldToScreen(h.origin);
+    for (const handle of this.handles) {
+      const tip = this.handleTip(handle);
+      const a = this.worldToScreen(handle.origin);
       const b = this.worldToScreen([tip.x, tip.y, tip.z]);
       if (!a || !b) continue;
 
@@ -2167,7 +2175,7 @@ export class Viewport {
 
       if (dist < bd) {
         bd = dist;
-        best = h;
+        best = handle;
       }
     }
 
@@ -2175,12 +2183,12 @@ export class Viewport {
   }
 
   /** Axis parameter closest to the pointer ray. */
-  private axisParam(h: Handle, clientX: number, clientY: number): number | null {
+  private axisParam(handle: Handle, clientX: number, clientY: number): number | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
 
     const ray = this.raycaster.ray;
-    const d = new THREE.Vector3(...h.dir).normalize();
-    const w0 = ray.origin.clone().sub(new THREE.Vector3(...h.origin));
+    const d = new THREE.Vector3(...handle.dir).normalize();
+    const w0 = ray.origin.clone().sub(new THREE.Vector3(...handle.origin));
     const b = d.dot(ray.direction);
     const denom = 1 - b * b;
     if (denom < 1e-6) return null;
@@ -2201,35 +2209,38 @@ export class Viewport {
   }
 
   private bindHandles(): void {
-    const el = this.renderer.domElement;
+    const element = this.renderer.domElement;
     let grab = 0;
     // A plain click (not on an arrow): the arrow that appears where it selected a face must not
     // catch the second click of a double-click there, which selects the whole part.
     let lastClick: { at: number; x: number; y: number } | null = null;
     let grabbed = false;
-    el.addEventListener(
+    element.addEventListener(
       "pointerup",
-      (e) => {
-        lastClick = !grabbed && e.button === 0 ? { at: performance.now(), x: e.clientX, y: e.clientY } : null;
+      (event) => {
+        lastClick =
+          !grabbed && event.button === 0
+            ? { at: performance.now(), x: event.clientX, y: event.clientY }
+            : null;
         grabbed = false;
       },
       { capture: true },
     );
-    el.addEventListener(
+    element.addEventListener(
       "pointerdown",
-      (e) => {
-        if (e.button !== 0 || (e.pointerType === "touch" && this.penSeen)) return;
+      (event) => {
+        if (event.button !== 0 || (event.pointerType === "touch" && this.penSeen)) return;
 
         // A second finger while one drags an arrow: the two fingers pinch or pan the view, so the
         // drag is called off and the value goes back to where it was (a pinch over a selected face
         // changed its thickness).
         const active = this.activeHandle;
 
-        if (active && e.pointerId !== active.pointer) {
+        if (active && event.pointerId !== active.pointer) {
           this.activeHandle = null;
           dragTo.cancel();
-          el.style.cursor = "";
-          if (el.hasPointerCapture(active.pointer)) el.releasePointerCapture(active.pointer);
+          element.style.cursor = "";
+          if (element.hasPointerCapture(active.pointer)) element.releasePointerCapture(active.pointer);
 
           this.onHandleDrag?.(null, active.start, null);
           if (active.value !== active.start) active.h.onDrag(active.start);
@@ -2240,65 +2251,65 @@ export class Viewport {
           return;
         }
 
-        const h = this.hitHandle(e.clientX, e.clientY, e.pointerType === "touch" ? 30 : 18);
-        if (!h) return;
+        const handle = this.hitHandle(event.clientX, event.clientY, event.pointerType === "touch" ? 30 : 18);
+        if (!handle) return;
 
         if (
           lastClick &&
           performance.now() - lastClick.at < 400 &&
-          Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 6
+          Math.hypot(event.clientX - lastClick.x, event.clientY - lastClick.y) < 6
         ) {
           return;
         }
 
         grabbed = true;
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        el.setPointerCapture(e.pointerId);
+        event.stopImmediatePropagation();
+        event.preventDefault();
+        element.setPointerCapture(event.pointerId);
 
-        const t = this.axisParam(h, e.clientX, e.clientY);
+        const t = this.axisParam(handle, event.clientX, event.clientY);
         // Offset between where the arrow was grabbed and its value, so it does not jump.
-        grab = (t ?? 0) - (h.value + this.handleBase(h));
-        this.activeHandle = { h, value: h.value, start: h.value, pointer: e.pointerId };
-        h.onStart?.();
+        grab = (t ?? 0) - (handle.value + this.handleBase(handle));
+        this.activeHandle = { h: handle, value: handle.value, start: handle.value, pointer: event.pointerId };
+        handle.onStart?.();
       },
       { capture: true },
     );
-    el.addEventListener(
+    element.addEventListener(
       "pointermove",
-      (e) => {
+      (event) => {
         const a = this.activeHandle;
 
         if (!a) {
           // Fingers do not hover; a finger orbiting across an arrow must not be swallowed.
-          if (e.pointerType === "touch") return;
+          if (event.pointerType === "touch") return;
 
-          const hit = this.hitHandle(e.clientX, e.clientY)?.id ?? null;
+          const hit = this.hitHandle(event.clientX, event.clientY)?.id ?? null;
 
           if (hit !== this.hoverHandle) {
             this.hoverHandle = hit;
-            el.style.cursor = hit ? "grab" : "";
+            element.style.cursor = hit ? "grab" : "";
             this.drawHandles();
           }
 
-          if (hit) e.stopImmediatePropagation();
+          if (hit) event.stopImmediatePropagation();
 
           return;
         }
 
-        if (e.pointerId !== a.pointer) return;
+        if (event.pointerId !== a.pointer) return;
 
-        e.stopImmediatePropagation();
-        dragTo(e);
+        event.stopImmediatePropagation();
+        dragTo(event);
       },
       { capture: true },
     );
 
-    const dragTo = perFrame((e: PointerEvent) => {
+    const dragTo = perFrame((event: PointerEvent) => {
       const a = this.activeHandle;
       if (!a) return;
 
-      const t = this.axisParam(a.h, e.clientX, e.clientY);
+      const t = this.axisParam(a.h, event.clientX, event.clientY);
       if (t === null) return;
 
       const raw = t - grab - this.handleBase(a.h);
@@ -2318,14 +2329,14 @@ export class Viewport {
       this.onHandleDrag?.(a.h, v, this.worldToScreen([tip.x, tip.y, tip.z]));
     });
 
-    const end = (e: PointerEvent) => {
+    const end = (event: PointerEvent) => {
       const a = this.activeHandle;
-      if (!a || e.pointerId !== a.pointer) return;
+      if (!a || event.pointerId !== a.pointer) return;
 
-      e.stopImmediatePropagation();
+      event.stopImmediatePropagation();
       dragTo.flush();
       this.activeHandle = null;
-      el.style.cursor = "";
+      element.style.cursor = "";
       this.onHandleDrag?.(null, a.value, null);
       a.h.onEnd(a.value);
       this.drawHandles();
@@ -2337,19 +2348,19 @@ export class Viewport {
       }
     };
 
-    el.addEventListener("pointerup", end, { capture: true });
-    el.addEventListener("pointercancel", end, { capture: true });
+    element.addEventListener("pointerup", end, { capture: true });
+    element.addEventListener("pointercancel", end, { capture: true });
   }
 
   /** Screen position (canvas CSS px) of a handle's arrow tip, for value labels. */
   handleTipScreen(id: string): Vec2 | null {
-    const h =
+    const handle =
       this.activeHandle?.h.id === id
         ? { ...this.activeHandle.h, value: this.activeHandle.value }
         : this.handles.find((x) => x.id === id);
-    if (!h) return null;
+    if (!handle) return null;
 
-    const tip = this.handleTip(h);
+    const tip = this.handleTip(handle);
 
     return this.worldToScreen([tip.x, tip.y, tip.z]);
   }
@@ -2361,9 +2372,12 @@ export class Viewport {
   // ---------------------------------------------------------------- picking
 
   private ndc(clientX: number, clientY: number): THREE.Vector2 {
-    const r = this.renderer.domElement.getBoundingClientRect();
+    const rect = this.renderer.domElement.getBoundingClientRect();
 
-    return new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    return new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
   }
 
   /** World units per screen pixel at a point (or at the orbit target). */
@@ -2526,17 +2540,17 @@ export class Viewport {
     enclosed: boolean,
     kinds: ReadonlySet<"face" | "edge">,
   ): Pick[] {
-    const r = this.renderer.domElement.getBoundingClientRect();
-    const [ax, bx] = [Math.min(x0, x1) - r.left, Math.max(x0, x1) - r.left];
-    const [ay, by] = [Math.min(y0, y1) - r.top, Math.max(y0, y1) - r.top];
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const [ax, bx] = [Math.min(x0, x1) - rect.left, Math.max(x0, x1) - rect.left];
+    const [ay, by] = [Math.min(y0, y1) - rect.top, Math.max(y0, y1) - rect.top];
     const v = new THREE.Vector3();
 
     const inside = (x: number, y: number, z: number) => {
       v.set(x, y, z).project(this.camera);
       if (v.z > 1) return false;
 
-      const sx = ((v.x + 1) / 2) * r.width;
-      const sy = ((1 - v.y) / 2) * r.height;
+      const sx = ((v.x + 1) / 2) * rect.width;
+      const sy = ((1 - v.y) / 2) * rect.height;
 
       return sx >= ax && sx <= bx && sy >= ay && sy <= by;
     };
@@ -2604,17 +2618,17 @@ export class Viewport {
   }
 
   /** Intersects the pointer ray with a sketch plane; returns sketch coordinates. */
-  rayToPlane(clientX: number, clientY: number, f: Frame): Vec2 | null {
+  rayToPlane(clientX: number, clientY: number, frame: Frame): Vec2 | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
 
-    const n = new THREE.Vector3(...f.normal);
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, new THREE.Vector3(...f.origin));
+    const n = new THREE.Vector3(...frame.normal);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, new THREE.Vector3(...frame.origin));
     const hit = this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
     if (!hit) return null;
 
-    const d = hit.sub(new THREE.Vector3(...f.origin));
+    const d = hit.sub(new THREE.Vector3(...frame.origin));
 
-    return [d.dot(new THREE.Vector3(...f.u)), d.dot(new THREE.Vector3(...f.v))];
+    return [d.dot(new THREE.Vector3(...frame.u)), d.dot(new THREE.Vector3(...frame.v))];
   }
 
   /** Screen position (CSS px relative to the canvas) of a world point; null when behind the camera. */
@@ -2622,9 +2636,9 @@ export class Viewport {
     const v = new THREE.Vector3(...p).project(this.camera);
     if (v.z > 1) return null;
 
-    const el = this.renderer.domElement;
+    const element = this.renderer.domElement;
 
-    return [((v.x + 1) / 2) * el.clientWidth, ((1 - v.y) / 2) * el.clientHeight];
+    return [((v.x + 1) / 2) * element.clientWidth, ((1 - v.y) / 2) * element.clientHeight];
   }
 
   // ---------------------------------------------------------------- camera
@@ -2660,8 +2674,8 @@ export class Viewport {
   }
 
   private setOrthoSize(h: number): void {
-    const el = this.renderer.domElement;
-    const aspect = (el.clientWidth || 1) / (el.clientHeight || 1);
+    const element = this.renderer.domElement;
+    const aspect = (element.clientWidth || 1) / (element.clientHeight || 1);
     this.ortho.top = h / 2;
     this.ortho.bottom = -h / 2;
     this.ortho.left = (-h / 2) * aspect;
@@ -2680,12 +2694,12 @@ export class Viewport {
   }
 
   /** Looks at a plane head-on (sketch mode). */
-  alignToFrame(f: Frame, animate = true): void {
+  alignToFrame(frame: Frame, animate = true): void {
     this.lookFrom(
-      new THREE.Vector3(...f.normal),
-      new THREE.Vector3(...f.v),
+      new THREE.Vector3(...frame.normal),
+      new THREE.Vector3(...frame.v),
       animate,
-      new THREE.Vector3(...f.origin),
+      new THREE.Vector3(...frame.origin),
     );
   }
 
@@ -2864,7 +2878,7 @@ export class Viewport {
     if (o.bodyColors) {
       this.setBodyColors(
         new Map([
-          ...[...savedColors].map(([id, c]): [string, string] => [id, `#${c.getHexString()}`]),
+          ...[...savedColors].map(([id, color]): [string, string] => [id, `#${color.getHexString()}`]),
           ...o.bodyColors,
         ]),
       );
@@ -2972,7 +2986,7 @@ export class Viewport {
       this.paint();
     }
 
-    for (const h of hidden) h.group.visible = true;
+    for (const body of hidden) body.group.visible = true;
     helpers.forEach((h, i) => (h.visible = shown[i]!));
     this.invalidate();
 
@@ -3289,13 +3303,13 @@ export function perFrame<E>(fn: (e: E) => void): ((e: E) => void) & { flush(): v
   });
 }
 
-export function frameMatrix(f: Frame): THREE.Matrix4 {
+export function frameMatrix(frame: Frame): THREE.Matrix4 {
   const m = new THREE.Matrix4().makeBasis(
-    new THREE.Vector3(...f.u),
-    new THREE.Vector3(...f.v),
-    new THREE.Vector3(...f.normal),
+    new THREE.Vector3(...frame.u),
+    new THREE.Vector3(...frame.v),
+    new THREE.Vector3(...frame.normal),
   );
-  m.setPosition(...f.origin);
+  m.setPosition(...frame.origin);
 
   return m;
 }

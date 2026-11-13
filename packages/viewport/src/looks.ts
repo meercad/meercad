@@ -100,12 +100,12 @@ export function paintBackdrop(
 
 /** The backdrop as a texture for the view on screen. */
 function backdrop(dark: boolean): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 4;
-  c.height = 256;
-  paintBackdrop(c.getContext("2d")!, 4, 256, dark);
+  const element = document.createElement("canvas");
+  element.width = 4;
+  element.height = 256;
+  paintBackdrop(element.getContext("2d")!, 4, 256, dark);
 
-  const tex = new THREE.CanvasTexture(c);
+  const tex = new THREE.CanvasTexture(element);
   tex.colorSpace = THREE.SRGBColorSpace;
 
   return tex;
@@ -173,7 +173,7 @@ export class RenderedStage {
       background: this.scene.background,
       environment: this.scene.environment,
       toneMapping: this.renderer.toneMapping,
-      lights: this.lamps.map((l) => l.intensity),
+      lights: this.lamps.map((light) => light.intensity),
     };
     this.scene.environment = studioEnvironment(this.renderer);
     this.scene.environmentRotation.copy(ENV_ROTATION);
@@ -186,7 +186,7 @@ export class RenderedStage {
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = true;
     // The studio and the sun light the model now; the lamps that follow the camera only fill in.
-    this.lamps.forEach((l) => (l.intensity *= l instanceof THREE.HemisphereLight ? 0 : 0.25));
+    this.lamps.forEach((light) => (light.intensity *= light instanceof THREE.HemisphereLight ? 0 : 0.25));
     this.scene.add(this.sun, this.sun.target, this.ground);
   }
 
@@ -198,7 +198,7 @@ export class RenderedStage {
     this.scene.environment = this.saved.environment;
     this.renderer.toneMapping = this.saved.toneMapping;
     this.renderer.shadowMap.enabled = false;
-    this.lamps.forEach((l, i) => (l.intensity = this.saved!.lights[i]!));
+    this.lamps.forEach((light, i) => (light.intensity = this.saved!.lights[i]!));
     this.scene.remove(this.sun, this.sun.target, this.ground);
     this.saved = null;
   }
