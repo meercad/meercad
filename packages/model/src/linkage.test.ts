@@ -33,6 +33,19 @@ function fourBar(g: number, c: number, k: number, r: number) {
 }
 
 describe("closed-loop linkages", () => {
+  it("parts fixed twice over close no loop; a fixed joint across a moving one does", () => {
+    const fix = (id: string, a: string, b: string): MotionJoint => ({ id, type: "fixed", a, b, origin: [0, 0, 0], axis: Z });
+    // A gripper: the jaw turns on its housing, the housing is bolted to the flange and to the arm, the flange to the arm.
+    const arm = [rev("shoulder", "arm", "ground", [0, 0, 0]), fix("f1", "flange", "arm"), fix("f2", "housing", "flange"), fix("f3", "housing", "arm"), rev("grip", "jaw", "housing", [100, 0, 0])];
+    expect(hasLoops(arm)).toBe(false);
+    // Bolting the jaw to the housing as well locks the grip: that is a loop.
+    expect(hasLoops([...arm, fix("f4", "jaw", "housing")])).toBe(true);
+    // Fixed joints made either way round: the mount holds the housing (which hangs in no joint itself) and is held by the flange.
+    expect(hasLoops([rev("wrist", "flange", "arm", [0, 0, 0]), fix("f_so", "mount", "housing"), fix("f_fl", "mount", "flange"), rev("grip", "jaw", "housing", [10, 0, 0])])).toBe(false);
+    // A part fixed to the ground and turning on it too.
+    expect(hasLoops([rev("j1", "p", "ground", [0, 0, 0]), fix("f1", "p", "ground")])).toBe(true);
+  });
+
   it("drives a crank-rocker round and round, matching the closed form", () => {
     const { joints, rockerAngle } = fourBar(100, 30, 90, 70);
     expect(hasLoops(joints)).toBe(true);

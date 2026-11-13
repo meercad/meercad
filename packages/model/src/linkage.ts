@@ -315,12 +315,39 @@ function solveLinear(A: Float64Array, b: Float64Array, n: number): Float64Array 
   return x;
 }
 
-/** Whether joints need the loop solver: some part hangs in more than one joint. */
+/**
+ * Whether joints need the loop solver: the joints close a circle. Fixed joints hold parts together
+ * whichever way round they were made, so parts fixed to each other count as one; such a group that
+ * turns or slides in no joint stands still, like the ground. A gripper's housing bolted to its
+ * mount, the mount bolted to a turning flange, closes no circle. (The loop solver takes every part
+ * at once: on a robot of hundreds of parts each step took minutes.)
+ */
 export function hasLoops(joints: readonly MotionJoint[]): boolean {
-  const seen = new Set<string>();
+  const up = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while (up.has(r)) r = up.get(r)!;
+    return r;
+  };
+  const join = (a: string, b: string) => {
+    const [ra, rb] = [find(a), find(b)];
+    if (ra !== rb) up.set(ra, rb);
+  };
+  for (const j of joints) if (j.type === "fixed") join(j.a, j.b);
+  // Groups that move in some joint; every other one stands with the ground.
+  const moves = new Set(joints.filter((j) => j.type !== "fixed").map((j) => find(j.a)));
+  const node = (x: string) => (moves.has(find(x)) ? find(x) : "\u0000ground");
+  const up2 = new Map<string, string>();
+  const find2 = (x: string): string => {
+    let r = x;
+    while (up2.has(r)) r = up2.get(r)!;
+    return r;
+  };
   for (const j of joints) {
-    if (seen.has(j.a)) return true;
-    seen.add(j.a);
+    if (j.type === "fixed") continue;
+    const [a, b] = [find2(node(j.a)), find2(node(j.b))];
+    if (a === b) return true;
+    up2.set(a, b);
   }
   return false;
 }

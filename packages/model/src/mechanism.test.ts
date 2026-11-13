@@ -27,6 +27,29 @@ describe("couplings", () => {
     expect(m.joint("j2")?.type).toBe("revolute");
   });
 
+  it("a part fixed twice over moves with the part it hangs on, through the joint that does not lead back to it", () => {
+    const fix = (id: string, a: string, b: string): MotionJoint => ({ id, type: "fixed", a, b, origin: [0, 0, 0], axis: [0, 0, 1] });
+    // The housing's first joint points to the flange, which hangs on the housing: it hangs on the arm instead.
+    const m = new Mechanism([turn("shoulder", "arm", "ground"), fix("f1", "housing", "flange"), fix("f2", "flange", "housing"), fix("f3", "housing", "arm")]);
+    expect(m.jointOf("housing")?.id).toBe("f3");
+    const poses = m.poses(m.values({ shoulder: 90 }));
+    expect(transformPoint(poses.get("housing")!, [10, 0, 0]).map((v) => Math.round(v * 1e9) / 1e9)).toEqual([0, 10, 0]);
+    expect(transformPoint(poses.get("flange")!, [10, 0, 0]).map((v) => Math.round(v * 1e9) / 1e9)).toEqual([0, 10, 0]);
+  });
+
+  it("a gripper housing held only as the other side of a fixed joint turns with its mount (Emil's right hand)", () => {
+    const fix = (id: string, a: string, b: string): MotionJoint => ({ id, type: "fixed", a, b, origin: [0, 0, 0], axis: [0, 0, 1] });
+    // The mount is fixed to the housing and to the flange; the flange turns on the arm, the jaw on the housing.
+    const joints = [turn("wrist", "flange", "arm"), fix("f_so", "mount", "housing"), fix("f_fl", "mount", "flange"), { ...turn("grip", "jaw", "housing"), origin: [10, 0, 0] as [number, number, number] }];
+    const m = new Mechanism(joints);
+    expect(m.jointOf("mount")?.id).toBe("f_fl");
+    expect(m.jointOf("housing")).toMatchObject({ id: "f_so", a: "housing", b: "mount" });
+    const poses = m.poses(m.values({ wrist: 90, grip: 0 }));
+    const round = (p: number[]) => p.map((v) => Math.round(v * 1e9) / 1e9 + 0);
+    expect(round(transformPoint(poses.get("housing")!, [10, 0, 0]))).toEqual([0, 10, 0]);
+    expect(round(transformPoint(poses.get("jaw")!, [10, 0, 0]))).toEqual([0, 10, 0]);
+  });
+
   it("reports a part in two joints, a joint driven twice and couplings that go round in a circle", () => {
     expect(new Mechanism([turn("j1", "p", "ground"), turn("j2", "p", "ground")]).errors).toEqual(['part "p" moves in two joints']);
     const twice = new Mechanism([turn("j1", "a", "ground"), turn("j2", "b", "ground"), turn("j3", "c", "ground")], [
