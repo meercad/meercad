@@ -28,9 +28,11 @@ export const TEXTURED_LOOK: BodyLook = { roughness: 1, metalness: 0 };
 const ENV_ROTATION = new THREE.Euler(Math.PI / 2, 0, 0);
 
 const envCache = new WeakMap<THREE.WebGLRenderer, THREE.Texture>();
+
 /** The studio light as a prefiltered environment map, made once per renderer. */
 export function studioEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
   let tex = envCache.get(renderer);
+
   if (!tex) {
     const pmrem = new THREE.PMREMGenerator(renderer);
     const room = new RoomEnvironment();
@@ -39,6 +41,7 @@ export function studioEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture 
     pmrem.dispose();
     envCache.set(renderer, tex);
   }
+
   return tex;
 }
 
@@ -46,7 +49,12 @@ export function studioEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture 
  * Puts a look on a part's material. `env`: reflections of the studio (metals need them to look
  * like metal); `rendered`: the full look, with light passing through see-through materials.
  */
-export function applyLook(mat: THREE.MeshPhysicalMaterial, look: BodyLook, env: THREE.Texture | null, rendered: boolean): void {
+export function applyLook(
+  mat: THREE.MeshPhysicalMaterial,
+  look: BodyLook,
+  env: THREE.Texture | null,
+  rendered: boolean,
+): void {
   const before = programKey(mat);
   mat.roughness = look.roughness;
   mat.metalness = look.metalness;
@@ -66,11 +74,18 @@ export function applyLook(mat: THREE.MeshPhysicalMaterial, look: BodyLook, env: 
 }
 
 /** What makes three.js compile another shader for a material. */
-const programKey = (m: THREE.MeshPhysicalMaterial) => `${!!m.envMap}|${m.clearcoat > 0}|${m.sheen > 0}|${m.transmission > 0}`;
+const programKey = (m: THREE.MeshPhysicalMaterial) =>
+  `${!!m.envMap}|${m.clearcoat > 0}|${m.sheen > 0}|${m.transmission > 0}`;
 
 /** Paints the rendered view's backdrop, a vertical gradient, over a whole canvas. */
-export function paintBackdrop(g: CanvasRenderingContext2D, width: number, height: number, dark: boolean): void {
+export function paintBackdrop(
+  g: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  dark: boolean,
+): void {
   const grad = g.createLinearGradient(0, 0, 0, height);
+
   if (dark) {
     grad.addColorStop(0, "#3a404b");
     grad.addColorStop(1, "#16191e");
@@ -78,6 +93,7 @@ export function paintBackdrop(g: CanvasRenderingContext2D, width: number, height
     grad.addColorStop(0, "#fbfcfd");
     grad.addColorStop(1, "#d5dbe3");
   }
+
   g.fillStyle = grad;
   g.fillRect(0, 0, width, height);
 }
@@ -88,8 +104,10 @@ function backdrop(dark: boolean): THREE.CanvasTexture {
   c.width = 4;
   c.height = 256;
   paintBackdrop(c.getContext("2d")!, 4, 256, dark);
+
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+
   return tex;
 }
 
@@ -102,7 +120,13 @@ export class RenderedStage {
   readonly sun = new THREE.DirectionalLight(0xffffff, 1.6);
   private ground: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial>;
   private backdrops = new Map<boolean, THREE.CanvasTexture>();
-  private saved: { background: THREE.Scene["background"]; environment: THREE.Texture | null; toneMapping: THREE.ToneMapping; lights: number[] } | null = null;
+  private saved: {
+    background: THREE.Scene["background"];
+    environment: THREE.Texture | null;
+    toneMapping: THREE.ToneMapping;
+    lights: number[];
+  } | null = null;
+
   active = false;
   dark = false;
 
@@ -117,15 +141,23 @@ export class RenderedStage {
     this.sun.shadow.radius = 5;
     this.sun.shadow.bias = -0.0005;
     this.sun.shadow.normalBias = 0.02;
+
     // The ground only shows the shadow, fading out towards its rim: it ends inside the area the
     // sun's shadow covers, so there is no edge to see.
     const shadowOnly = new THREE.ShadowMaterial({ color: 0x0d1424, opacity: 0.32, depthWrite: false });
+
     shadowOnly.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader.replace("void main() {", "varying vec2 vGround;\nvoid main() {").replace("#include <begin_vertex>", "#include <begin_vertex>\n\tvGround = position.xy;");
+      shader.vertexShader = shader.vertexShader
+        .replace("void main() {", "varying vec2 vGround;\nvoid main() {")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\n\tvGround = position.xy;");
       shader.fragmentShader = shader.fragmentShader
         .replace("void main() {", "varying vec2 vGround;\nvoid main() {")
-        .replace("gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );", "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) * ( 1.0 - smoothstep( 0.3, 0.5, length( vGround ) ) ) );");
+        .replace(
+          "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );",
+          "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) * ( 1.0 - smoothstep( 0.3, 0.5, length( vGround ) ) ) );",
+        );
     };
+
     this.ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), shadowOnly);
     this.ground.receiveShadow = true;
     this.ground.renderOrder = -2;
@@ -135,8 +167,14 @@ export class RenderedStage {
 
   enable(): void {
     if (this.active) return;
+
     this.active = true;
-    this.saved = { background: this.scene.background, environment: this.scene.environment, toneMapping: this.renderer.toneMapping, lights: this.lamps.map((l) => l.intensity) };
+    this.saved = {
+      background: this.scene.background,
+      environment: this.scene.environment,
+      toneMapping: this.renderer.toneMapping,
+      lights: this.lamps.map((l) => l.intensity),
+    };
     this.scene.environment = studioEnvironment(this.renderer);
     this.scene.environmentRotation.copy(ENV_ROTATION);
     this.scene.background = this.backdropFor(this.dark);
@@ -154,6 +192,7 @@ export class RenderedStage {
 
   disable(): void {
     if (!this.active || !this.saved) return;
+
     this.active = false;
     this.scene.background = this.saved.background;
     this.scene.environment = this.saved.environment;
@@ -177,12 +216,14 @@ export class RenderedStage {
   private backdropFor(dark: boolean): THREE.CanvasTexture {
     let t = this.backdrops.get(dark);
     if (!t) this.backdrops.set(dark, (t = backdrop(dark)));
+
     return t;
   }
 
   /** Sun and ground for a model in `box` (world space); redraws the shadow. */
   fit(box: THREE.Box3): void {
     if (box.isEmpty()) box = new THREE.Box3(new THREE.Vector3(-50, -50, 0), new THREE.Vector3(50, 50, 50));
+
     const sphere = box.getBoundingSphere(new THREE.Sphere());
     const r = Math.max(sphere.radius, 1);
     // From above, a little from the front left: the shadow falls behind, as in a photo studio.
@@ -190,6 +231,7 @@ export class RenderedStage {
     this.sun.position.copy(sphere.center).addScaledVector(dir, r * 4);
     this.sun.target.position.copy(sphere.center);
     this.sun.target.updateMatrixWorld();
+
     const cam = this.sun.shadow.camera;
     cam.left = cam.bottom = -r * 2.2;
     cam.right = cam.top = r * 2.2;
@@ -206,14 +248,18 @@ export class RenderedStage {
   /** A sharper shadow for pictures: a bigger map for one render, then back. */
   withShadowSize<T>(size: number, fn: () => T): T {
     const before = this.sun.shadow.mapSize.x;
+
     const resize = (s: number) => {
       this.sun.shadow.mapSize.set(s, s);
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
       this.renderer.shadowMap.needsUpdate = true;
     };
+
     if (size === before) return fn();
+
     resize(size);
+
     try {
       return fn();
     } finally {
@@ -241,39 +287,62 @@ export interface SwatchSpec {
  * Sphere swatches (PNG data URLs, `size` px square, transparent around) drawn with the given
  * renderer in a small studio of their own. The renderer's size is put back afterwards.
  */
-export function drawSwatches(renderer: THREE.WebGLRenderer, specs: readonly SwatchSpec[], size: number): string[] {
+export function drawSwatches(
+  renderer: THREE.WebGLRenderer,
+  specs: readonly SwatchSpec[],
+  size: number,
+): string[] {
   if (!specs.length) return [];
+
   const scene = new THREE.Scene();
   scene.environment = studioEnvironment(renderer);
   scene.environmentRotation.copy(ENV_ROTATION);
+
   const key = new THREE.DirectionalLight(0xffffff, 1.2);
   key.position.set(-1, -1.2, 2);
   scene.add(key);
+
   const geo = new THREE.SphereGeometry(1, 64, 40);
   const mat = new THREE.MeshPhysicalMaterial();
   const ball = new THREE.Mesh(geo, mat);
   scene.add(ball);
+
   // A darker ground colour behind see-through materials, so they read as clear, not white.
-  const backing = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ color: 0x5b6573 }));
+  const backing = new THREE.Mesh(
+    new THREE.PlaneGeometry(6, 6),
+    new THREE.MeshBasicMaterial({ color: 0x5b6573 }),
+  );
   backing.position.set(0, 3, 0);
   backing.rotation.x = Math.PI / 2;
+
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
   cam.up.set(0, 0, 1);
   cam.position.set(0, -4.2, 1.4);
   cam.lookAt(0, 0, 0);
-  const prev = { size: renderer.getSize(new THREE.Vector2()), ratio: renderer.getPixelRatio(), tone: renderer.toneMapping, shadows: renderer.shadowMap.enabled, clear: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
+
+  const prev = {
+    size: renderer.getSize(new THREE.Vector2()),
+    ratio: renderer.getPixelRatio(),
+    tone: renderer.toneMapping,
+    shadows: renderer.shadowMap.enabled,
+    clear: renderer.getClearColor(new THREE.Color()),
+    alpha: renderer.getClearAlpha(),
+  };
   renderer.setPixelRatio(1);
   renderer.setSize(size, size, false);
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.shadowMap.enabled = false;
   renderer.setClearColor(0x000000, 0);
+
   const out: string[] = [];
+
   try {
     for (const s of specs) {
       applyLook(mat, s.look, scene.environment, true);
       mat.color.set(s.color);
       if ((s.look.transmission ?? 0) > 0) scene.add(backing);
       else scene.remove(backing);
+
       renderer.render(scene, cam);
       out.push(renderer.domElement.toDataURL("image/png"));
     }
@@ -288,5 +357,6 @@ export function drawSwatches(renderer: THREE.WebGLRenderer, specs: readonly Swat
     (backing.material as THREE.Material).dispose();
     backing.geometry.dispose();
   }
+
   return out;
 }

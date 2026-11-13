@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { isMouseWheel, WheelClassifier, type WheelLike } from "./wheel";
 
-const ev = (o: Partial<WheelLike>): WheelLike => ({ deltaX: 0, deltaY: 0, deltaMode: 0, ctrlKey: false, metaKey: false, shiftKey: false, timeStamp: 0, ...o });
+const ev = (o: Partial<WheelLike>): WheelLike => ({
+  deltaX: 0,
+  deltaY: 0,
+  deltaMode: 0,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false,
+  timeStamp: 0,
+  ...o,
+});
 
 describe("isMouseWheel", () => {
   it("knows notched wheels", () => {
@@ -37,7 +46,8 @@ describe("WheelClassifier", () => {
   it("keeps the device for the whole gesture", () => {
     const c = new WheelClassifier();
     expect(c.classify(ev({ deltaY: 3, timeStamp: 0 }))).toBe("orbit");
-    expect(c.classify(ev({ deltaY: 100, timeStamp: 16 }))).toBe("orbit"); // looks like a notch, still the swipe
+    // looks like a notch, still the swipe
+    expect(c.classify(ev({ deltaY: 100, timeStamp: 16 }))).toBe("orbit");
     expect(c.classify(ev({ deltaY: 100, timeStamp: 600 }))).toBe("zoom"); // a new gesture
   });
   it("zooms everything when swiping should not orbit", () => {

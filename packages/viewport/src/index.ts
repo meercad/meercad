@@ -10,7 +10,17 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { WheelClassifier } from "./wheel.js";
-import { applyLook, drawSwatches, paintBackdrop, PLAIN_LOOK, RenderedStage, studioEnvironment, TEXTURED_LOOK, type BodyLook, type SwatchSpec } from "./looks.js";
+import {
+  applyLook,
+  drawSwatches,
+  paintBackdrop,
+  PLAIN_LOOK,
+  RenderedStage,
+  studioEnvironment,
+  TEXTURED_LOOK,
+  type BodyLook,
+  type SwatchSpec,
+} from "./looks.js";
 
 export type { BodyLook, SwatchSpec } from "./looks.js";
 
@@ -52,7 +62,16 @@ export interface BodyTexture {
 export type SketchCurveView =
   | { id: string; kind: "line"; a: Vec2; b: Vec2; construction: boolean; external: boolean }
   | { id: string; kind: "circle"; center: Vec2; radius: number; construction: boolean; external: boolean }
-  | { id: string; kind: "arc"; center: Vec2; radius: number; a0: number; a1: number; construction: boolean; external: boolean }
+  | {
+      id: string;
+      kind: "arc";
+      center: Vec2;
+      radius: number;
+      a0: number;
+      a1: number;
+      construction: boolean;
+      external: boolean;
+    }
   | { id: string; kind: "spline"; pts: Vec2[]; construction: boolean; external: boolean };
 
 export interface SketchView {
@@ -95,71 +114,124 @@ export interface HeightGrid {
  * goes in (floor, table, ceiling; lawn and treetop), surfaces closer than three cells merge.
  */
 export function layeredHeights(corners: Float32Array, n = 1024): HeightGrid | null {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
+
   for (let k = 0; k < corners.length; k += 3) {
-    x0 = Math.min(x0, corners[k]!), x1 = Math.max(x1, corners[k]!);
-    y0 = Math.min(y0, corners[k + 1]!), y1 = Math.max(y1, corners[k + 1]!);
+    ((x0 = Math.min(x0, corners[k]!)), (x1 = Math.max(x1, corners[k]!)));
+    ((y0 = Math.min(y0, corners[k + 1]!)), (y1 = Math.max(y1, corners[k + 1]!)));
   }
+
   if (!(x1 > x0 || y1 > y0)) return null;
+
   const cell = Math.max(x1 - x0, y1 - y0) / n || 1;
   const z = new Float32Array(n * n * LAYERS).fill(NaN);
   const merge = cell * 3;
   const c = corners;
+
   for (let t = 0; t + 8 < c.length; t += 9) {
-    const ax = c[t]!, ay = c[t + 1]!, az = c[t + 2]!, bx = c[t + 3]!, by = c[t + 4]!, bz = c[t + 5]!, cx = c[t + 6]!, cy = c[t + 7]!, cz = c[t + 8]!;
+    const ax = c[t]!,
+      ay = c[t + 1]!,
+      az = c[t + 2]!,
+      bx = c[t + 3]!,
+      by = c[t + 4]!,
+      bz = c[t + 5]!,
+      cx = c[t + 6]!,
+      cy = c[t + 7]!,
+      cz = c[t + 8]!;
     const det = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
     if (Math.abs(det) < 1e-12) continue;
-    const i0 = Math.max(0, Math.floor((Math.min(ax, bx, cx) - x0) / cell)), i1 = Math.min(n - 1, Math.floor((Math.max(ax, bx, cx) - x0) / cell));
-    const j0 = Math.max(0, Math.floor((Math.min(ay, by, cy) - y0) / cell)), j1 = Math.min(n - 1, Math.floor((Math.max(ay, by, cy) - y0) / cell));
-    for (let j = j0; j <= j1; j++)
+
+    const i0 = Math.max(0, Math.floor((Math.min(ax, bx, cx) - x0) / cell)),
+      i1 = Math.min(n - 1, Math.floor((Math.max(ax, bx, cx) - x0) / cell));
+    const j0 = Math.max(0, Math.floor((Math.min(ay, by, cy) - y0) / cell)),
+      j1 = Math.min(n - 1, Math.floor((Math.max(ay, by, cy) - y0) / cell));
+
+    for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
-        const px = x0 + (i + 0.5) * cell, py = y0 + (j + 0.5) * cell;
+        const px = x0 + (i + 0.5) * cell,
+          py = y0 + (j + 0.5) * cell;
         const l1 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / det;
         const l2 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / det;
         const l3 = 1 - l1 - l2;
         if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+
         const h = l1 * az + l2 * bz + l3 * cz;
-        // Into the cell's layers, highest first: the same surface again, a new one, or (full) dropped unless higher.
+        // Into the cell's layers, highest first: the same surface again, a new one, or (full) dropped unless
+        // higher.
         const k = (j * n + i) * LAYERS;
         let l = 0;
         while (l < LAYERS && !Number.isNaN(z[k + l]!) && z[k + l]! > h + merge) l++;
         if (l === LAYERS) continue;
+
         const there = z[k + l]!;
+
         if (!Number.isNaN(there) && Math.abs(there - h) <= merge) {
           if (h > there) z[k + l] = h;
+
           continue;
         }
+
         for (let m = LAYERS - 1; m > l; m--) z[k + m] = z[k + m - 1]!;
         z[k + l] = h;
       }
+    }
   }
+
   return { x0, y0, cell, n, z };
 }
 
-/** The grid's height at (x, y): of the surface nearest to `near`, else the highest; null where there is none. */
+/**
+ * The grid's height at (x, y): of the surface nearest to `near`, else the highest; null where there is none.
+ */
 export function heightAt(g: HeightGrid, x: number, y: number, near?: number): number | null {
-  const fx = (x - g.x0) / g.cell - 0.5, fy = (y - g.y0) / g.cell - 0.5;
-  const i = Math.floor(fx), j = Math.floor(fy);
+  const fx = (x - g.x0) / g.cell - 0.5,
+    fy = (y - g.y0) / g.cell - 0.5;
+  const i = Math.floor(fx),
+    j = Math.floor(fy);
+
   const pick = (k: number): number => {
     let best = NaN;
+
     for (let l = 0; l < LAYERS; l++) {
       const z = g.z[k * LAYERS + l]!;
       if (Number.isNaN(z)) break;
-      if (Number.isNaN(best) || (near === undefined ? z > best : Math.abs(z - near) < Math.abs(best - near))) best = z;
+
+      if (
+        Number.isNaN(best) ||
+        (near === undefined ? z > best : Math.abs(z - near) < Math.abs(best - near))
+      ) {
+        best = z;
+      }
     }
+
     return best;
   };
+
   // Bilinear between the four cells around, leaving out cells with no surface.
-  let sum = 0, weight = 0;
-  for (const [di, dj] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
-    const ci = i + di, cj = j + dj;
+  let sum = 0,
+    weight = 0;
+
+  for (const [di, dj] of [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+  ] as const) {
+    const ci = i + di,
+      cj = j + dj;
     if (ci < 0 || cj < 0 || ci >= g.n || cj >= g.n) continue;
+
     const z = pick(cj * g.n + ci);
     if (Number.isNaN(z)) continue;
+
     const w = (di ? fx - i : 1 - (fx - i)) * (dj ? fy - j : 1 - (fy - j)) + 1e-9;
     sum += z * w;
     weight += w;
   }
+
   return weight ? sum / weight : null;
 }
 
@@ -173,7 +245,15 @@ export interface SceneryView {
 
 export type Pick =
   /** `normal` only for flat faces; `surface` is the direction out of the material at `point`, on any face. */
-  | { kind: "face"; bodyId: string; face: number; tags: string[]; point: Vec3; normal: Vec3 | null; surface?: Vec3 }
+  | {
+      kind: "face";
+      bodyId: string;
+      face: number;
+      tags: string[];
+      point: Vec3;
+      normal: Vec3 | null;
+      surface?: Vec3;
+    }
   | { kind: "edge"; bodyId: string; edge: number; point: Vec3 }
   | { kind: "region"; sketchId: string; key: string; point: Vec3 }
   | { kind: "sketch_curve"; sketchId: string; curveId: string; point: Vec3 }
@@ -318,7 +398,18 @@ export class Viewport {
   private hover: Pick | null = null;
   private selected: Pick[] = [];
   private framed = false;
-  private anim: { from: THREE.Vector3; to: THREE.Vector3; upFrom: THREE.Vector3; upTo: THREE.Vector3; target: THREE.Vector3; targetFrom: THREE.Vector3; t0: number; zoomTo?: number; zoomFrom?: number } | null = null;
+  private anim: {
+    from: THREE.Vector3;
+    to: THREE.Vector3;
+    upFrom: THREE.Vector3;
+    upTo: THREE.Vector3;
+    target: THREE.Vector3;
+    targetFrom: THREE.Vector3;
+    t0: number;
+    zoomTo?: number;
+    zoomFrom?: number;
+  } | null = null;
+
   private resizeObserver: ResizeObserver;
   private disposed = false;
   private listeners = new Set<() => void>();
@@ -352,17 +443,25 @@ export class Viewport {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.2;
     this.controls.zoomToCursor = true;
-    this.controls.mouseButtons = { LEFT: null as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+    this.controls.mouseButtons = {
+      LEFT: null as unknown as THREE.MOUSE,
+      MIDDLE: THREE.MOUSE.PAN,
+      RIGHT: THREE.MOUSE.ROTATE,
+    };
     this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
     this.controls.addEventListener("change", () => this.emit());
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x7d8a99, 2.0);
     this.scene.add(hemi);
+
     const key = new THREE.DirectionalLight(0xffffff, 1.5);
     key.position.set(0.5, -1, 2);
+
     const fill = new THREE.DirectionalLight(0xffffff, 0.5);
     fill.position.set(-1, 0.5, -0.5);
+
     const lamps: THREE.Light[] = [hemi];
+
     for (const cam of [this.persp, this.ortho]) {
       const k = key.clone();
       const f = fill.clone();
@@ -370,11 +469,23 @@ export class Viewport {
       lamps.push(k, f);
       this.scene.add(cam);
     }
+
     this.stage = new RenderedStage(this.scene, this.renderer, lamps);
 
     this.grid = new THREE.Group();
     this.grid.add(this.gridMesh);
-    this.scene.add(this.grid, this.planeGroup, this.bodiesGroup, this.refGroup, this.sceneryGroup, this.marksGroup, this.sketchGroup, this.overlay, this.handleGroup, this.jointGroup);
+    this.scene.add(
+      this.grid,
+      this.planeGroup,
+      this.bodiesGroup,
+      this.refGroup,
+      this.sceneryGroup,
+      this.marksGroup,
+      this.sketchGroup,
+      this.overlay,
+      this.handleGroup,
+      this.jointGroup,
+    );
     this.axes = axesHelper();
     this.scene.add(this.axes);
 
@@ -382,7 +493,10 @@ export class Viewport {
     this.renderer.domElement.addEventListener("pointerdown", (e) => this.assignButtons(e), { capture: true });
     this.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
     // Trackpad swipes orbit and pan before OrbitControls would zoom with them (see ./wheel).
-    this.renderer.domElement.addEventListener("wheel", (e) => this.trackpadWheel(e), { capture: true, passive: false });
+    this.renderer.domElement.addEventListener("wheel", (e) => this.trackpadWheel(e), {
+      capture: true,
+      passive: false,
+    });
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -397,7 +511,11 @@ export class Viewport {
   private stage!: RenderedStage;
   /** Finishes of parts with a material, by body id. */
   private looks = new Map<string, BodyLook>();
-  private navigation: Navigation = { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "shift" }], zoom: [] };
+  private navigation: Navigation = {
+    orbit: [{ button: "right" }],
+    pan: [{ button: "middle" }, { button: "right", mod: "shift" }],
+    zoom: [],
+  };
 
   private wheel = new WheelClassifier();
   private swipeOrbits = true;
@@ -416,17 +534,21 @@ export class Viewport {
   private trackpadWheel(e: WheelEvent): void {
     const c = this.controls;
     if (!c.enabled) return;
+
     const gesture = this.wheel.classify(e, this.swipeOrbits);
     if (gesture === "zoom") return;
+
     e.preventDefault();
     e.stopImmediatePropagation();
     // Mid-drag the buttons own the camera.
     if ((c as unknown as { state: number }).state !== -1) return;
+
     const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
     // Deltas are scroll offsets (the content moves the other way), so the model follows the fingers
     // as it follows a drag.
     const [dx, dy] = [-e.deltaX * scale, -e.deltaY * scale];
     const h = this.renderer.domElement.clientHeight || 1;
+
     if (gesture === "orbit") {
       c.rotateLeft((2 * Math.PI * dx * c.rotateSpeed) / h);
       c.rotateUp((2 * Math.PI * dy * c.rotateSpeed) / h);
@@ -438,14 +560,25 @@ export class Viewport {
   private assignButtons(e: PointerEvent): void {
     const button = e.button === 1 ? "middle" : e.button === 2 ? "right" : null;
     if (!button) return;
-    const mod: NavBinding["mod"] = e.shiftKey ? "shift" : e.ctrlKey || e.metaKey ? "ctrl" : e.altKey ? "alt" : undefined;
+
+    const mod: NavBinding["mod"] = e.shiftKey
+      ? "shift"
+      : e.ctrlKey || e.metaKey
+        ? "ctrl"
+        : e.altKey
+          ? "alt"
+          : undefined;
     const hit = (list: NavBinding[]) => list.some((b) => b.button === button && b.mod === mod);
     // OrbitControls swaps rotate and pan itself while ctrl/meta/shift is held; pre-swap to cancel that.
     const flipped = e.ctrlKey || e.metaKey || e.shiftKey;
     const action = hit(this.navigation.orbit)
-      ? flipped ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
+      ? flipped
+        ? THREE.MOUSE.PAN
+        : THREE.MOUSE.ROTATE
       : hit(this.navigation.pan)
-        ? flipped ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN
+        ? flipped
+          ? THREE.MOUSE.ROTATE
+          : THREE.MOUSE.PAN
         : hit(this.navigation.zoom)
           ? THREE.MOUSE.DOLLY
           : (-1 as THREE.MOUSE);
@@ -463,46 +596,70 @@ export class Viewport {
    * own entry in `normals` (a curved face). Instant, so a drag shows its result even while a slow
    * rebuild is still running. `null` removes it.
    */
-  setGhost(g: { triangles: Float32Array; normal: Vec3; normals?: Float32Array | undefined; distance: number } | null): void {
+  setGhost(
+    g: { triangles: Float32Array; normal: Vec3; normals?: Float32Array | undefined; distance: number } | null,
+  ): void {
     if (!g) {
       if (this.ghost) disposeTree(this.ghost);
+
       this.ghost?.removeFromParent();
       this.ghost = null;
+
       return;
     }
+
     const t = g.triangles;
     const off = new THREE.Vector3(...g.normal).normalize().multiplyScalar(g.distance);
     // Boundary edges belong to one triangle only; they become the side walls.
     const key = (i: number) => `${t[i]!.toFixed(4)},${t[i + 1]!.toFixed(4)},${t[i + 2]!.toFixed(4)}`;
     const edges = new Map<string, [number, number, number]>();
+
     for (let tri = 0; tri < t.length; tri += 9) {
       for (let k = 0; k < 3; k++) {
         const a = tri + k * 3;
         const b = tri + ((k + 1) % 3) * 3;
         const [ka, kb] = [key(a), key(b)];
         const [fwd, back] = [`${ka}|${kb}`, `${kb}|${ka}`];
-        if (edges.has(back) || edges.has(fwd)) edges.delete(back), edges.delete(fwd);
+        if (edges.has(back) || edges.has(fwd)) (edges.delete(back), edges.delete(fwd));
         else edges.set(fwd, [a, b, 0]);
       }
     }
+
     const pos: number[] = [];
     const n = g.normals;
     const v = (i: number, o: boolean) =>
-      n ? pos.push(t[i]! + (o ? n[i]! * g.distance : 0), t[i + 1]! + (o ? n[i + 1]! * g.distance : 0), t[i + 2]! + (o ? n[i + 2]! * g.distance : 0)) : pos.push(t[i]! + (o ? off.x : 0), t[i + 1]! + (o ? off.y : 0), t[i + 2]! + (o ? off.z : 0));
+      n
+        ? pos.push(
+            t[i]! + (o ? n[i]! * g.distance : 0),
+            t[i + 1]! + (o ? n[i + 1]! * g.distance : 0),
+            t[i + 2]! + (o ? n[i + 2]! * g.distance : 0),
+          )
+        : pos.push(t[i]! + (o ? off.x : 0), t[i + 1]! + (o ? off.y : 0), t[i + 2]! + (o ? off.z : 0));
+
     for (let i = 0; i < t.length; i += 9) {
-      v(i, false), v(i + 3, false), v(i + 6, false);
-      v(i, true), v(i + 3, true), v(i + 6, true);
+      (v(i, false), v(i + 3, false), v(i + 6, false));
+      (v(i, true), v(i + 3, true), v(i + 6, true));
     }
+
     for (const [a, b] of edges.values()) {
-      v(a, false), v(b, false), v(b, true);
-      v(a, false), v(b, true), v(a, true);
+      (v(a, false), v(b, false), v(b, true));
+      (v(a, false), v(b, true), v(a, true));
     }
+
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();
+
     const cut = g.distance < 0;
-    const mat = new THREE.MeshBasicMaterial({ color: cut ? 0xe5484d : 0x6366f1, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+    const mat = new THREE.MeshBasicMaterial({
+      color: cut ? 0xe5484d : 0x6366f1,
+      transparent: true,
+      opacity: 0.32,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
     if (this.ghost) disposeTree(this.ghost);
+
     this.ghost?.removeFromParent();
     this.ghost = new THREE.Mesh(geo, mat);
     this.ghost.renderOrder = 5;
@@ -519,10 +676,15 @@ export class Viewport {
     this.fingerDraws = on;
     this.applyTouches();
   }
+
   private applyTouches(): void {
     // An unknown action leaves OrbitControls idle for one finger; two fingers still pan and zoom.
-    this.controls.touches = { ONE: this.fingerDraws && !this.penSeen ? (-1 as THREE.TOUCH) : THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+    this.controls.touches = {
+      ONE: this.fingerDraws && !this.penSeen ? (-1 as THREE.TOUCH) : THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
   }
+
   private penDown = new Set<number>();
   private penUpAt = 0;
   private touches = new Set<number>();
@@ -541,42 +703,60 @@ export class Viewport {
    */
   private bindPointerRoles(): void {
     const el = this.renderer.domElement;
+
     const filter = (e: PointerEvent) => {
       if (e.target !== el) return;
+
       if (e.pointerType === "pen") {
         if (!this.penSeen) {
           this.penSeen = true;
           this.applyTouches();
         }
+
         if (e.type === "pointerdown") {
           this.penDown.add(e.pointerId);
+
           // Cancel touches already navigating: they were the palm landing first.
           for (const id of [...this.touches]) {
             this.touches.delete(id);
             this.rejected.add(id);
-            const cancel = new PointerEvent("pointercancel", { pointerId: id, pointerType: "touch", bubbles: true });
+
+            const cancel = new PointerEvent("pointercancel", {
+              pointerId: id,
+              pointerType: "touch",
+              bubbles: true,
+            });
             this.palmCancels.add(cancel);
             el.dispatchEvent(cancel);
           }
         } else if (e.type === "pointerup" || e.type === "pointercancel") {
           if (this.penDown.delete(e.pointerId)) this.penUpAt = performance.now();
         }
+
         return;
       }
+
       if (e.pointerType !== "touch" || this.palmCancels.has(e)) return;
+
       if (e.type === "pointerdown") {
         if (this.penActive) this.rejected.add(e.pointerId);
         else this.touches.add(e.pointerId);
       }
+
       const rejected = this.rejected.has(e.pointerId);
+
       if (e.type === "pointerup" || e.type === "pointercancel") {
         this.touches.delete(e.pointerId);
         this.rejected.delete(e.pointerId);
       }
+
       if (rejected) e.stopPropagation();
     };
+
     // Capturing on the container runs before every listener on the canvas, OrbitControls included.
-    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const) this.container.addEventListener(type, filter, { capture: true });
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const) {
+      this.container.addEventListener(type, filter, { capture: true });
+    }
   }
 
   // ---------------------------------------------------------------- scene
@@ -595,12 +775,15 @@ export class Viewport {
     this.rebuildReferences(data.references);
     this.selected = this.selected.filter((s) => this.pickStillValid(s));
     if (this.hover && !this.pickStillValid(this.hover)) this.hover = null;
+
     this.paint();
     this.applyDisplayMode();
+
     if (!this.framed && (data.bodies.length || data.sketches.length)) {
       this.framed = true;
       this.fit(false);
     }
+
     this.lastSceneMs = performance.now() - t0;
   }
 
@@ -617,6 +800,7 @@ export class Viewport {
 
   setHover(p: Pick | null): void {
     if (samePick(p, this.hover)) return;
+
     this.hover = p;
     this.paint();
   }
@@ -625,6 +809,7 @@ export class Viewport {
   private wholeBodies = new Set<string>();
   setWholeBodies(ids: Set<string>): void {
     if (ids.size === this.wholeBodies.size && [...ids].every((id) => this.wholeBodies.has(id))) return;
+
     this.wholeBodies = ids;
     for (const b of this.bodies) b.painted = undefined;
     this.paint();
@@ -637,6 +822,7 @@ export class Viewport {
 
   private pickStillValid(p: Pick): boolean {
     if (p.kind === "face" || p.kind === "edge") return this.bodies.some((b) => b.mesh.bodyId === p.bodyId);
+
     return true;
   }
 
@@ -645,16 +831,23 @@ export class Viewport {
     // of a big design (or a scene change without a new build) does not upload every part again.
     const old = new Map<ViewMesh, BodyObj>();
     for (const b of this.bodies) old.set(b.mesh, b);
+
     const next: BodyObj[] = [];
+
     for (const m of data.bodies) {
       if (data.hiddenBodies?.has(m.bodyId)) continue;
+
       const ghost = !!data.ghostBodies?.has(m.bodyId);
       const kept = old.get(m);
+
       if (kept && kept.ghost === ghost) {
         old.delete(m);
         next.push(kept);
-      } else next.push(this.buildBody(m, ghost));
+      } else {
+        next.push(this.buildBody(m, ghost));
+      }
     }
+
     for (const b of old.values()) {
       b.faces.geometry.dispose();
       b.edges.geometry.dispose();
@@ -662,9 +855,11 @@ export class Viewport {
       (b.edges.material as THREE.Material).dispose();
       for (const o of b.group.children) if (o.userData["heat"]) disposeTree(o);
     }
+
     this.bodiesGroup.clear();
     this.bodies = next;
     if (this.heat.size) this.attachHeat();
+
     for (const b of this.bodies) this.bodiesGroup.add(b.group);
     this.applyPoses();
   }
@@ -676,12 +871,19 @@ export class Viewport {
    * Set while parts can be dragged (moving a mechanism): `start` decides on a press on a part whether
    * it grabs that part; then `move` gets the pointer ray until `end`.
    */
-  partDrag: { start(pick: Extract<Pick, { kind: "face" }>, ray: Ray): boolean; startJoint?(id: string, ray: Ray): boolean; move(ray: Ray): void; end(): void } | null = null;
+  partDrag: {
+    start(pick: Extract<Pick, { kind: "face" }>, ray: Ray): boolean;
+    startJoint?(id: string, ray: Ray): boolean;
+    move(ray: Ray): void;
+    end(): void;
+  } | null = null;
+
   private activePart: number | null = null;
 
   /** Shows parts moved from where they were modelled (column-major 4×4 matrices by body id). */
   setPoses(poses: ReadonlyMap<string, readonly number[]>): void {
     if (poses.size === 0 && this.poses.size === 0) return;
+
     this.poses = poses;
     this.applyPoses();
   }
@@ -692,40 +894,72 @@ export class Viewport {
       b.group.matrixAutoUpdate = false;
       if (m) b.group.matrix.fromArray(m as number[]);
       else b.group.matrix.identity();
+
       b.group.updateMatrixWorld(true);
     }
+
     this.placeJoints();
     if (this.stage.active) this.stage.fit(new THREE.Box3().setFromObject(this.bodiesGroup));
+
     this.invalidate();
   }
 
   /** Shows joints as symbols (empty list hides them). */
   setJointGlyphs(glyphs: JointGlyph[]): void {
     disposeTree(this.jointGroup);
+
     const box = this.modelBox();
-    const size = box ? Math.max(5, Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) * 0.08) : 8;
+    const size = box
+      ? Math.max(
+          5,
+          Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) * 0.08,
+        )
+      : 8;
+
     for (const j of glyphs) {
       const g = new THREE.Group();
       // `grip`: points of the symbol to grab it by (fixed joints have none).
       const grip: THREE.Vector3[] = [];
       g.userData = { parent: j.parent, joint: j.id, grip };
+
       const color = j.active ? 0xff7a1a : 0x4f46e5;
       const o = new THREE.Vector3(...j.origin);
       const a = new THREE.Vector3(...j.axis).normalize();
-      const u = new THREE.Vector3().crossVectors(a, Math.abs(a.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize();
+      const u = new THREE.Vector3()
+        .crossVectors(a, Math.abs(a.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0))
+        .normalize();
       const v = new THREE.Vector3().crossVectors(a, u);
-      const at = (cu: number, cv: number, ca = 0) => o.clone().addScaledVector(u, cu).addScaledVector(v, cv).addScaledVector(a, ca);
-      const line = (pts: THREE.Vector3[], width = 2.5) => g.add(Object.assign(fatLine(pts, { color, width }), { renderOrder: 60 }));
+      const at = (cu: number, cv: number, ca = 0) =>
+        o.clone().addScaledVector(u, cu).addScaledVector(v, cv).addScaledVector(a, ca);
+      const line = (pts: THREE.Vector3[], width = 2.5) =>
+        g.add(Object.assign(fatLine(pts, { color, width }), { renderOrder: 60 }));
       // The axis itself, dashed through the joint.
-      g.add(Object.assign(fatLine([at(0, 0, -1.6 * size), at(0, 0, 1.6 * size)], { color, width: 1.5, dashed: { dash: size * 0.2, gap: size * 0.12 } }), { renderOrder: 60 }));
+      g.add(
+        Object.assign(
+          fatLine([at(0, 0, -1.6 * size), at(0, 0, 1.6 * size)], {
+            color,
+            width: 1.5,
+            dashed: { dash: size * 0.2, gap: size * 0.12 },
+          }),
+          { renderOrder: 60 },
+        ),
+      );
+
       if (j.type === "revolute") {
         // Three quarters of a ring about the axis, ending in an arrow: it turns.
         const r = size * 0.8;
-        const ring = Array.from({ length: 49 }, (_, k) => at(r * Math.cos((k / 48) * 1.5 * Math.PI), r * Math.sin((k / 48) * 1.5 * Math.PI)));
+        const ring = Array.from({ length: 49 }, (_, k) =>
+          at(r * Math.cos((k / 48) * 1.5 * Math.PI), r * Math.sin((k / 48) * 1.5 * Math.PI)),
+        );
         line(ring);
+
         const end = 1.5 * Math.PI;
         const tip = at(r * Math.cos(end), r * Math.sin(end));
-        const back = (s: number) => at(r * Math.cos(end - 0.35) + s * Math.cos(end - 0.35) * size * 0.18, r * Math.sin(end - 0.35) + s * Math.sin(end - 0.35) * size * 0.18);
+        const back = (s: number) =>
+          at(
+            r * Math.cos(end - 0.35) + s * Math.cos(end - 0.35) * size * 0.18,
+            r * Math.sin(end - 0.35) + s * Math.sin(end - 0.35) * size * 0.18,
+          );
         line([back(1), tip, back(-1)]);
         // A knob on the ring to turn it by.
         g.add(knob(at(r * Math.cos(Math.PI * 0.75), r * Math.sin(Math.PI * 0.75)), size * 0.13, color));
@@ -734,7 +968,15 @@ export class Viewport {
         // A double arrow along the axis: it slides.
         const L = size * 1.2;
         line([at(0, 0, -L), at(0, 0, L)]);
-        for (const s of [1, -1]) line([at(size * 0.25, 0, s * (L - size * 0.35)), at(0, 0, s * L), at(-size * 0.25, 0, s * (L - size * 0.35))]);
+
+        for (const s of [1, -1]) {
+          line([
+            at(size * 0.25, 0, s * (L - size * 0.35)),
+            at(0, 0, s * L),
+            at(-size * 0.25, 0, s * (L - size * 0.35)),
+          ]);
+        }
+
         g.add(knob(at(0, 0, 0), size * 0.13, color));
         grip.push(...Array.from({ length: 13 }, (_, k) => at(0, 0, -L + (2 * L * k) / 12)));
       } else {
@@ -742,8 +984,10 @@ export class Viewport {
         const q = size * 0.35;
         line([at(-q, -q), at(q, -q), at(q, q), at(-q, q), at(-q, -q)]);
       }
+
       this.jointGroup.add(g);
     }
+
     this.placeJoints();
     this.invalidate();
   }
@@ -755,6 +999,7 @@ export class Viewport {
       g.matrixAutoUpdate = false;
       if (m) g.matrix.fromArray(m as number[]);
       else g.matrix.identity();
+
       g.updateMatrixWorld(true);
     }
   }
@@ -766,23 +1011,32 @@ export class Viewport {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const p = new THREE.Vector3();
     let best: { id: string; d: number } | null = null;
+
     for (const g of this.jointGroup.children) {
       const { joint, grip } = g.userData as { joint?: string; grip?: THREE.Vector3[] };
       if (!joint || !grip?.length) continue;
+
       for (const q of grip) {
         p.copy(q).applyMatrix4(g.matrixWorld).project(this.camera);
         if (p.z > 1) continue;
-        const d = Math.hypot(rect.left + ((p.x + 1) / 2) * rect.width - clientX, rect.top + ((1 - p.y) / 2) * rect.height - clientY);
+
+        const d = Math.hypot(
+          rect.left + ((p.x + 1) / 2) * rect.width - clientX,
+          rect.top + ((1 - p.y) / 2) * rect.height - clientY,
+        );
         if (d <= px && (!best || d < best.d)) best = { id: joint, d };
       }
     }
+
     return best?.id ?? null;
   }
 
   /** The pointer's ray into the scene. */
   ray(clientX: number, clientY: number): Ray {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+
     const { origin: o, direction: d } = this.raycaster.ray;
+
     return { origin: [o.x, o.y, o.z], dir: [d.x, d.y, d.z] };
   }
 
@@ -796,14 +1050,25 @@ export class Viewport {
       "pointerdown",
       (e) => {
         const drag = this.partDrag;
-        if (!drag || e.button !== 0 || this.activePart !== null || (e.pointerType === "touch" && !e.isPrimary)) return;
+
+        if (
+          !drag ||
+          e.button !== 0 ||
+          this.activePart !== null ||
+          (e.pointerType === "touch" && !e.isPrimary)
+        ) {
+          return;
+        }
+
         const ray = this.ray(e.clientX, e.clientY);
         // A joint symbol is a handle: it turns or slides its joint, before any part under it.
         const grabbed = this.jointAt(e.clientX, e.clientY, e.pointerType === "touch" ? 22 : 10);
+
         if (!(grabbed && drag.startJoint?.(grabbed, ray))) {
           const pick = this.pick(e.clientX, e.clientY, new Set(["face"]));
           if (pick?.kind !== "face" || !drag.start(pick, ray)) return;
         }
+
         e.stopImmediatePropagation();
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
@@ -812,6 +1077,7 @@ export class Viewport {
       },
       { capture: true },
     );
+
     const moveTo = perFrame((e: PointerEvent) => this.partDrag?.move(this.ray(e.clientX, e.clientY)));
     el.addEventListener(
       "pointermove",
@@ -820,22 +1086,28 @@ export class Viewport {
           const over = this.jointAt(e.clientX, e.clientY, 10) !== null;
           if (over) el.style.cursor = "grab";
           else if (el.style.cursor === "grab" && this.jointHover) el.style.cursor = "";
+
           this.jointHover = over;
         }
+
         if (e.pointerId !== this.activePart) return;
+
         e.stopImmediatePropagation();
         moveTo(e);
       },
       { capture: true },
     );
+
     const end = (e: PointerEvent) => {
       if (e.pointerId !== this.activePart) return;
+
       e.stopImmediatePropagation();
       moveTo.flush();
       this.activePart = null;
       el.style.cursor = "";
       this.partDrag?.end();
     };
+
     el.addEventListener("pointerup", end, { capture: true });
     el.addEventListener("pointercancel", end, { capture: true });
   }
@@ -847,10 +1119,17 @@ export class Viewport {
     geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(mesh.positions.length), 3));
     geo.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     geo.computeBoundingSphere();
+
     const triFace = new Int32Array(mesh.indices.length / 3).fill(-1);
+
     for (let i = 0; i < mesh.faceRanges.length; i += 3) {
-      triFace.fill(mesh.faceRanges[i + 2]!, mesh.faceRanges[i]! / 3, (mesh.faceRanges[i]! + mesh.faceRanges[i + 1]!) / 3);
+      triFace.fill(
+        mesh.faceRanges[i + 2]!,
+        mesh.faceRanges[i]! / 3,
+        (mesh.faceRanges[i]! + mesh.faceRanges[i + 1]!) / 3,
+      );
     }
+
     const faces = new THREE.Mesh(
       geo,
       new THREE.MeshPhysicalMaterial({
@@ -871,77 +1150,121 @@ export class Viewport {
 
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute("position", new THREE.BufferAttribute(mesh.edgeLines, 3));
+
     // Typed arrays sized up front: thread and fillet edges run to many thousand segments.
     let segs = 0;
     for (let i = 0; i < mesh.edgeRanges.length; i += 3) segs += Math.max(0, mesh.edgeRanges[i + 1]! - 1);
+
     const segIndex = new Uint32Array(segs * 2);
     const segEdge = new Int32Array(segs);
     let n = 0;
+
     for (let i = 0; i < mesh.edgeRanges.length; i += 3) {
       const start = mesh.edgeRanges[i]!;
       const count = mesh.edgeRanges[i + 1]!;
+
       for (let k = start; k < start + count - 1; k++) {
         segIndex[n * 2] = k;
         segIndex[n * 2 + 1] = k + 1;
         segEdge[n++] = mesh.edgeRanges[i + 2]!;
       }
     }
+
     lineGeo.setIndex(new THREE.BufferAttribute(segIndex, 1));
     lineGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(mesh.edgeLines.length), 3));
     lineGeo.computeBoundingSphere();
-    const edges = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: ghost, opacity: ghost ? 0.35 : 1 }));
+
+    const edges = new THREE.LineSegments(
+      lineGeo,
+      new THREE.LineBasicMaterial({ vertexColors: true, transparent: ghost, opacity: ghost ? 0.35 : 1 }),
+    );
     edges.userData = { body: mesh.bodyId };
+
     const group = new THREE.Group();
     group.add(faces, edges);
+
     return { mesh, group, faces, edges, triFace, segEdge, ghost };
   }
 
   private rebuildSketches(data: SceneData): void {
     disposeTree(this.sketchGroup);
+
     for (const s of data.sketches) {
       if (s.id === data.editingSketch) continue;
+
       const g = new THREE.Group();
       g.userData = { sketch: s.id };
       g.matrixAutoUpdate = false;
       g.matrix.copy(frameMatrix(s.frame));
+
       for (const c of s.curves) {
         const color = c.external ? C.sketchExternal : c.construction ? C.sketchConstruction : C.sketch;
-        const line = fatLine(curvePoints(c), { color, width: c.construction ? 1.5 : 2, ...(c.construction ? { dashed: { dash: 1.5, gap: 1 } } : {}) });
+        const line = fatLine(curvePoints(c), {
+          color,
+          width: c.construction ? 1.5 : 2,
+          ...(c.construction ? { dashed: { dash: 1.5, gap: 1 } } : {}),
+        });
         line.renderOrder = 5;
         line.userData = { sketch: s.id, curve: c.id };
         g.add(line);
       }
+
       for (const r of s.regions) {
         const shape = new THREE.Shape(r.polygons[0]!.map(([x, y]) => new THREE.Vector2(x, y)));
-        for (const h of r.polygons.slice(1)) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
+
+        for (const h of r.polygons.slice(1)) {
+          shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
+        }
+
         const mesh = new THREE.Mesh(
           new THREE.ShapeGeometry(shape),
-          new THREE.MeshBasicMaterial({ color: C.region, transparent: true, opacity: REGION_OPACITY, side: THREE.DoubleSide, depthWrite: false }),
+          new THREE.MeshBasicMaterial({
+            color: C.region,
+            transparent: true,
+            opacity: REGION_OPACITY,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          }),
         );
         mesh.renderOrder = 4;
         mesh.userData = { sketch: s.id, region: r.key };
         g.add(mesh);
       }
+
       this.sketchGroup.add(g);
     }
   }
 
   private rebuildPlanes(planes: PlaneView[]): void {
     disposeTree(this.planeGroup);
+
     for (const p of planes) {
       const g = new THREE.Group();
       g.matrixAutoUpdate = false;
       g.matrix.copy(frameMatrix(p.frame));
+
       const s = p.size;
       const color = p.color ?? C.plane;
       const fill = new THREE.Mesh(
         new THREE.PlaneGeometry(s, s),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.06,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
       );
       fill.position.set(s / 2, s / 2, 0);
       fill.userData = { plane: p.id };
+
       const border = new THREE.LineLoop(
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(s, 0, 0), new THREE.Vector3(s, s, 0), new THREE.Vector3(0, s, 0)]),
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(s, 0, 0),
+          new THREE.Vector3(s, s, 0),
+          new THREE.Vector3(0, s, 0),
+        ]),
         new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }),
       );
       border.userData = { plane: p.id, border: true };
@@ -953,12 +1276,23 @@ export class Viewport {
 
   private rebuildReferences(refs: ReferenceMeshView[]): void {
     disposeTree(this.refGroup);
+
     for (const r of refs) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(r.positions, 3));
       geo.setIndex(new THREE.BufferAttribute(r.indices, 1));
       geo.computeVertexNormals();
-      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xc9b38a, transparent: true, opacity: 0.6, roughness: 0.8, side: THREE.DoubleSide }));
+
+      const m = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({
+          color: 0xc9b38a,
+          transparent: true,
+          opacity: 0.6,
+          roughness: 0.8,
+          side: THREE.DoubleSide,
+        }),
+      );
       m.userData = { reference: r.id };
       this.refGroup.add(m);
     }
@@ -970,41 +1304,51 @@ export class Viewport {
    */
   setScenery(list: readonly SceneryView[]): Promise<void> {
     this.heights = undefined;
+
     for (const [id, s] of this.scenery) {
       if (list.some((l) => l.id === id && l.data === s.data)) continue;
+
       if (s.object) {
         this.sceneryGroup.remove(s.object);
         disposeTree(s.object, true);
       }
+
       this.scenery.delete(id);
     }
+
     for (const s of list) {
       let entry = this.scenery.get(s.id);
+
       if (!entry) {
         const e = (entry = { data: s.data, object: null as THREE.Object3D | null });
         this.scenery.set(s.id, e);
         this.sceneryLoading++;
+
         const settle = () => {
           this.sceneryLoading--;
           if (!this.sceneryLoading) for (const r of this.sceneryWaiting.splice(0)) r();
         };
+
         new GLTFLoader().parse(
           s.data,
           "",
           (gltf) => {
             settle();
             if (this.scenery.get(s.id) !== e) return disposeTree(gltf.scene, true);
+
             e.object = gltf.scene;
             e.object.scale.setScalar(list.find((l) => l.id === s.id)?.scale ?? 1);
             this.heights = undefined;
             e.object.visible = !list.find((l) => l.id === s.id)?.hidden;
             this.sceneryGroup.add(gltf.scene);
+
             // The first view of a project takes in its surroundings once they are there.
             if (!this.sceneryFramed) {
               this.sceneryFramed = true;
               this.framed = true;
               this.fit(false);
             }
+
             this.invalidate();
           },
           (err) => {
@@ -1013,13 +1357,16 @@ export class Viewport {
           },
         );
       }
+
       if (entry.object) {
         entry.object.visible = !s.hidden;
         entry.object.scale.setScalar(s.scale ?? 1);
         entry.object.updateMatrixWorld(true);
       }
     }
+
     this.invalidate();
+
     return this.sceneryLoading ? new Promise((r) => this.sceneryWaiting.push(r)) : Promise.resolve();
   }
 
@@ -1032,6 +1379,7 @@ export class Viewport {
   /** The shown reference models, placed and scaled as they are now (not as the last frame drew them). */
   private shownScenery(): THREE.Object3D[] {
     this.sceneryGroup.updateMatrixWorld(true);
+
     return this.sceneryGroup.children.filter((o) => o.visible);
   }
 
@@ -1039,20 +1387,36 @@ export class Viewport {
   sceneryBox(): { min: Vec3; max: Vec3 } | null {
     const objects = this.shownScenery();
     if (!objects.length) return null;
+
     const box = new THREE.Box3();
     for (const o of objects) box.expandByObject(o);
-    return box.isEmpty() ? null : { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] };
+
+    return box.isEmpty()
+      ? null
+      : { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] };
   }
 
-  /** Where the ray through a screen point first meets a shown reference model, with the surface's upward normal there. */
+  /**
+   * Where the ray through a screen point first meets a shown reference model, with the surface's upward
+   * normal there.
+   */
   sceneryHit(clientX: number, clientY: number): { id: string; point: Vec3; normal: Vec3 } | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+
     const hit = this.raycaster.intersectObjects(this.shownScenery(), true)[0];
     if (!hit) return null;
-    const n = (hit.face?.normal.clone() ?? new THREE.Vector3(0, 0, 1)).transformDirection(hit.object.matrixWorld);
+
+    const n = (hit.face?.normal.clone() ?? new THREE.Vector3(0, 0, 1)).transformDirection(
+      hit.object.matrixWorld,
+    );
     if (n.z < 0) n.negate();
+
     let id = "";
-    for (const [key, e] of this.scenery) if (e.object && hit.object !== e.object && e.object.getObjectById(hit.object.id)) id = key;
+
+    for (const [key, e] of this.scenery) {
+      if (e.object && hit.object !== e.object && e.object.getObjectById(hit.object.id)) id = key;
+    }
+
     return { id, point: [hit.point.x, hit.point.y, hit.point.z], normal: [n.x, n.y, n.z] };
   }
 
@@ -1063,6 +1427,7 @@ export class Viewport {
    */
   sceneryHeight(x: number, y: number, near?: number): number | null {
     const g = (this.heights ??= this.heightGrid());
+
     return g ? heightAt(g, x, y, near) : null;
   }
 
@@ -1081,20 +1446,26 @@ export class Viewport {
   private heightGrid(): HeightGrid | null {
     const objects = this.shownScenery();
     if (!objects.length) return null;
+
     const corners: number[] = [];
     const v = new THREE.Vector3();
-    for (const root of objects)
+
+    for (const root of objects) {
       root.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
+
         const pos = mesh.geometry.getAttribute("position");
         const index = mesh.geometry.getIndex();
         const count = index ? index.count : pos.count;
+
         for (let k = 0; k < count; k++) {
           v.fromBufferAttribute(pos, index ? index.getX(k) : k).applyMatrix4(mesh.matrixWorld);
           corners.push(v.x, v.y, v.z);
         }
       });
+    }
+
     return corners.length ? layeredHeights(Float32Array.from(corners)) : null;
   }
 
@@ -1102,39 +1473,79 @@ export class Viewport {
    * Lines and areas drawn on the reference models (already following the ground: points in mm).
    * Areas are filled see-through; everything stays visible through the ground a little.
    */
-  setSceneryMarks(marks: readonly { id: string; points: readonly Vec3[]; closed?: boolean; color: string; fill?: Float32Array; fillOpacity?: number; width?: number; dashed?: boolean }[]): void {
+  setSceneryMarks(
+    marks: readonly {
+      id: string;
+      points: readonly Vec3[];
+      closed?: boolean;
+      color: string;
+      fill?: Float32Array;
+      fillOpacity?: number;
+      width?: number;
+      dashed?: boolean;
+    }[],
+  ): void {
     disposeTree(this.marksGroup);
+
     for (const m of marks) {
       if (m.points.length >= 2) {
         const pts = m.points.map((p) => new THREE.Vector3(...p));
-        const line = fatLine(pts, { color: new THREE.Color(m.color).getHex(), width: m.width ?? 3, loop: !!m.closed, depthTest: true, ...(m.dashed ? { dashed: { dash: 800, gap: 500 } } : {}) });
+        const line = fatLine(pts, {
+          color: new THREE.Color(m.color).getHex(),
+          width: m.width ?? 3,
+          loop: !!m.closed,
+          depthTest: true,
+          ...(m.dashed ? { dashed: { dash: 800, gap: 500 } } : {}),
+        });
         line.userData = { mark: m.id };
         line.renderOrder = 5;
         this.marksGroup.add(line);
       }
+
       if (m.fill?.length) {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", new THREE.BufferAttribute(m.fill, 3));
-        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: m.fillOpacity ?? 0.35, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+
+        const mesh = new THREE.Mesh(
+          geo,
+          new THREE.MeshBasicMaterial({
+            color: m.color,
+            transparent: true,
+            opacity: m.fillOpacity ?? 0.35,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -4,
+            polygonOffsetUnits: -4,
+          }),
+        );
         mesh.userData = { mark: m.id };
         mesh.renderOrder = 4;
         this.marksGroup.add(mesh);
       }
     }
+
     this.invalidate();
   }
+
   private marksGroup = new THREE.Group();
 
-  /** Near and far follow the view distance, so an area hundreds of metres across shows whole without losing depth precision up close. */
+  /**
+   * Near and far follow the view distance, so an area hundreds of metres across shows whole without losing
+   * depth precision up close.
+   */
   private updateClipping(): void {
     const d = this.camera.position.distanceTo(this.controls.target);
     let far = Math.max(100_000, d * 20);
+
     if (this.sceneryGroup.children.length) {
       const box = new THREE.Box3().setFromObject(this.sceneryGroup);
       if (!box.isEmpty()) far = Math.max(far, d * 2 + box.getSize(new THREE.Vector3()).length() * 2);
     }
+
     const near = Math.max(0.1, d / 2000);
     if (this.persp.near === near && this.persp.far === far) return;
+
     this.persp.near = near;
     this.persp.far = far;
     this.persp.updateProjectionMatrix();
@@ -1150,8 +1561,10 @@ export class Viewport {
   gridSteps: (pixel: number) => { minor: number; major: number; snap: number } = (pixel) => {
     const levels = [0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000];
     const minor = levels.find((n) => n / pixel >= 12) ?? 50000;
+
     return { minor, major: minor * 10, snap: minor };
   };
+
   /** Step the grid currently offers for snapping, in mm. */
   gridSpacing = 1;
 
@@ -1159,6 +1572,7 @@ export class Viewport {
   private gridFrame: Frame | null = null;
   setGridFrame(frame: Frame | null): void {
     this.gridFrame = frame;
+
     // While sketching the grid is drawn over the model, like the sketch itself.
     const mat = this.gridMesh.material as THREE.ShaderMaterial;
     mat.depthTest = !frame;
@@ -1226,22 +1640,34 @@ export class Viewport {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
     mesh.frustumCulled = false;
     mesh.renderOrder = -1;
+
     return mesh;
   })();
 
   /** Moves and sizes the grid plane with the view, and picks its spacings for the zoom. */
   private updateGrid(): void {
-    const f = this.gridFrame ?? { origin: [0, 0, 0] as Vec3, u: [1, 0, 0] as Vec3, v: [0, 1, 0] as Vec3, normal: [0, 0, 1] as Vec3 };
+    const f = this.gridFrame ?? {
+      origin: [0, 0, 0] as Vec3,
+      u: [1, 0, 0] as Vec3,
+      v: [0, 1, 0] as Vec3,
+      normal: [0, 0, 1] as Vec3,
+    };
     const target = this.controls.target;
     // The view centre, dropped onto the grid plane, in plane coordinates.
     const d = target.clone().sub(new THREE.Vector3(...f.origin));
     const cx = d.dot(new THREE.Vector3(...f.u));
     const cy = d.dot(new THREE.Vector3(...f.v));
-    const onPlane = new THREE.Vector3(...f.origin).addScaledVector(new THREE.Vector3(...f.u), cx).addScaledVector(new THREE.Vector3(...f.v), cy);
+    const onPlane = new THREE.Vector3(...f.origin)
+      .addScaledVector(new THREE.Vector3(...f.u), cx)
+      .addScaledVector(new THREE.Vector3(...f.v), cy);
     const pixel = this.pixelSize([onPlane.x, onPlane.y, onPlane.z]);
     const steps = this.gridSteps(pixel);
     this.gridSpacing = steps.snap;
-    const reach = this.camera instanceof THREE.OrthographicCamera ? pixel * Math.max(this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight) * 2 : this.camera.position.distanceTo(onPlane) * 6;
+
+    const reach =
+      this.camera instanceof THREE.OrthographicCamera
+        ? pixel * Math.max(this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight) * 2
+        : this.camera.position.distanceTo(onPlane) * 6;
     const u = (this.gridMesh.material as THREE.ShaderMaterial).uniforms;
     u["uMinor"]!.value = steps.minor;
     u["uMajor"]!.value = steps.major;
@@ -1250,7 +1676,10 @@ export class Viewport {
     (u["uCenter"]!.value as THREE.Vector2).set(cx, cy);
     u["uColor"]!.value = new THREE.Color(this.dark ? 0x6b7590 : 0x8a95a8);
     u["uOpacity"]!.value = this.dark ? 0.6 : 0.55;
-    const m = frameMatrix(f).multiply(new THREE.Matrix4().makeTranslation(cx, cy, 0)).multiply(new THREE.Matrix4().makeScale(reach * 2, reach * 2, 1));
+
+    const m = frameMatrix(f)
+      .multiply(new THREE.Matrix4().makeTranslation(cx, cy, 0))
+      .multiply(new THREE.Matrix4().makeScale(reach * 2, reach * 2, 1));
     this.gridMesh.matrixAutoUpdate = false;
     this.gridMesh.matrix.copy(m);
     this.gridMesh.matrixWorldNeedsUpdate = true;
@@ -1259,6 +1688,7 @@ export class Viewport {
   /** Light/dark scene colours (grid contrast). */
   setDark(dark: boolean): void {
     if (dark === this.dark) return;
+
     this.dark = dark;
     this.stage.setDark(dark);
     // Parts without a colour of their own are drawn lighter on the dark background.
@@ -1280,16 +1710,21 @@ export class Viewport {
   private applyDisplayMode(): void {
     const m = this.displayMode;
     const rendered = m === "rendered";
+
     if (rendered !== this.stage.active) {
-      if (rendered) this.stage.enable();
-      else {
+      if (rendered) {
+        this.stage.enable();
+      } else {
         this.stage.disable();
         this.setTurntable(false);
       }
+
       this.grid.visible = !rendered && this.gridWanted;
       this.applyLooks();
     }
+
     if (rendered) this.stage.fit(new THREE.Box3().setFromObject(this.bodiesGroup));
+
     for (const b of this.bodies) {
       const fm = b.faces.material as THREE.MeshStandardMaterial;
       const em = b.edges.material as THREE.LineBasicMaterial;
@@ -1310,21 +1745,26 @@ export class Viewport {
   setPlanesVisible(v: boolean): void {
     this.planeGroup.visible = v;
   }
+
   private planeEmphasis = false;
   /** Stronger plane fills and borders, for when the user has to pick one. */
   setPlaneEmphasis(on: boolean): void {
     if (on === this.planeEmphasis) return;
+
     this.planeEmphasis = on;
     this.paint();
   }
+
   setSketchesVisible(v: boolean): void {
     this.sketchGroup.visible = v;
   }
+
   setGridVisible(v: boolean): void {
     this.gridWanted = v;
     // The rendered view stands the model on its ground instead.
     this.grid.visible = v && !this.stage.active;
   }
+
   private gridWanted = true;
 
   // ---------------------------------------------------------------- highlight
@@ -1339,6 +1779,7 @@ export class Viewport {
   private heat: ReadonlyMap<string, { positions: Float32Array; colors: Float32Array }> = new Map();
   setBodyHeat(heat: ReadonlyMap<string, { positions: Float32Array; colors: Float32Array }>): void {
     if (heat.size === 0 && this.heat.size === 0) return;
+
     this.heat = heat;
     this.attachHeat();
     this.invalidate();
@@ -1350,30 +1791,45 @@ export class Viewport {
         b.group.remove(o);
         disposeTree(o);
       }
+
       const h = this.heat.get(b.mesh.bodyId);
       if (!h) continue;
+
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(h.positions, 3));
       geo.setAttribute("color", new THREE.BufferAttribute(h.colors, 3));
       geo.computeVertexNormals();
-      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.05, roughness: 0.6, side: THREE.DoubleSide }));
+
+      const m = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          metalness: 0.05,
+          roughness: 0.6,
+          side: THREE.DoubleSide,
+        }),
+      );
       m.userData = { heat: true };
       // Not pickable: picks keep landing on the part's own faces.
       m.raycast = () => undefined;
       b.group.add(m);
     }
   }
+
   private textures = new Map<string, BodyTexture>();
   private textureCache = new Map<string, { tex: THREE.Texture | null }>();
 
   /** Pictures on parts (scans); a part left out shows plain again. */
   setBodyTextures(list: readonly BodyTexture[]): void {
     this.textures = new Map(list.map((t) => [t.bodyId, t]));
+
     for (const [key, c] of this.textureCache) {
       if (list.some((t) => t.key === key)) continue;
+
       c.tex?.dispose();
       this.textureCache.delete(key);
     }
+
     this.applyTextures(true);
   }
 
@@ -1385,12 +1841,14 @@ export class Viewport {
       if (mat.map === tex) continue;
       if (tex) b.faces.geometry.setAttribute("uv", new THREE.BufferAttribute(t!.uvs, 2));
       else b.faces.geometry.deleteAttribute("uv");
+
       mat.map = tex;
       mat.needsUpdate = true;
       b.textured = !!tex;
       this.applyLook(b);
       b.painted = undefined;
     }
+
     if (repaint) {
       this.paint();
       this.invalidate();
@@ -1401,11 +1859,13 @@ export class Viewport {
   private textureFor(t: BodyTexture): THREE.Texture | null {
     const cached = this.textureCache.get(t.key);
     if (cached) return cached.tex;
+
     const entry: { tex: THREE.Texture | null } = { tex: null };
     this.textureCache.set(t.key, entry);
     createImageBitmap(t.image)
       .then((bitmap) => {
         if (this.disposed || this.textureCache.get(t.key) !== entry) return bitmap.close();
+
         const tex = new THREE.Texture(bitmap);
         // glTF convention: the coordinates already count rows from the top.
         tex.flipY = false;
@@ -1416,13 +1876,17 @@ export class Viewport {
         this.applyTextures(true);
       })
       .catch((e: unknown) => console.warn("texture", t.key, e));
+
     return null;
   }
 
   /** Finishes of parts by body id (from their materials); parts not listed look plain. */
   setBodyLooks(looks: ReadonlyMap<string, BodyLook>): void {
-    const same = looks.size === this.looks.size && [...looks].every(([id, l]) => JSON.stringify(this.looks.get(id)) === JSON.stringify(l));
+    const same =
+      looks.size === this.looks.size &&
+      [...looks].every(([id, l]) => JSON.stringify(this.looks.get(id)) === JSON.stringify(l));
     if (same) return;
+
     this.looks = new Map(looks);
     this.applyLooks();
     this.invalidate();
@@ -1439,7 +1903,8 @@ export class Viewport {
     const look = b.textured ? TEXTURED_LOOK : (this.looks.get(b.mesh.bodyId) ?? PLAIN_LOOK);
     const rendered = this.stage.active;
     // Plain parts in the working view keep the lamps' light alone, as they always looked.
-    const env = rendered || (this.looks.has(b.mesh.bodyId) && !b.textured) ? studioEnvironment(this.renderer) : null;
+    const env =
+      rendered || (this.looks.has(b.mesh.bodyId) && !b.textured) ? studioEnvironment(this.renderer) : null;
     applyLook(mat, look, env, rendered);
   }
 
@@ -1450,6 +1915,7 @@ export class Viewport {
   swatches(specs: readonly SwatchSpec[], size = 96): string[] {
     const out = drawSwatches(this.renderer, specs, size);
     this.renderer.render(this.scene, this.camera);
+
     return out;
   }
 
@@ -1466,8 +1932,10 @@ export class Viewport {
 
   setBodyColors(colors: ReadonlyMap<string, string>): void {
     const next = new Map([...colors].map(([id, hex]) => [id, new THREE.Color(hex)]));
-    const same = next.size === this.bodyColors.size && [...next].every(([id, c]) => this.bodyColors.get(id)?.equals(c));
+    const same =
+      next.size === this.bodyColors.size && [...next].every(([id, c]) => this.bodyColors.get(id)?.equals(c));
     if (same) return;
+
     this.bodyColors = next;
     for (const b of this.bodies) b.painted = undefined;
     this.paint();
@@ -1479,11 +1947,17 @@ export class Viewport {
     // would be quadratic), then only bodies whose highlight changed are recoloured.
     const selFaces = new Map<string, Set<number>>();
     const selEdges = new Map<string, Set<number>>();
+
     for (const p of this.selected) {
-      if (p.kind === "face") (selFaces.get(p.bodyId) ?? selFaces.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.face);
-      else if (p.kind === "edge") (selEdges.get(p.bodyId) ?? selEdges.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.edge);
+      if (p.kind === "face") {
+        (selFaces.get(p.bodyId) ?? selFaces.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.face);
+      } else if (p.kind === "edge") {
+        (selEdges.get(p.bodyId) ?? selEdges.set(p.bodyId, new Set()).get(p.bodyId)!).add(p.edge);
+      }
     }
+
     const h = this.hover && (this.hover.kind === "face" || this.hover.kind === "edge") ? this.hover : null;
+
     for (const b of this.bodies) {
       const id = b.mesh.bodyId;
       const whole = this.wholeBodies.has(id);
@@ -1494,46 +1968,80 @@ export class Viewport {
         ? `whole|${sf.size || se.size ? 1 : 0}|${hovered ? 1 : 0}`
         : `${[...sf].join(",")}|${[...se].join(",")}|${hovered ? `${hovered.kind}${hovered.kind === "face" ? hovered.face : hovered.edge}` : ""}`;
       if (b.painted === key) continue;
+
       b.painted = key;
+
       const fc = b.faces.geometry.getAttribute("color") as THREE.BufferAttribute;
       const idx = b.mesh.indices;
       const base = b.textured ? WHITE : (this.bodyColors.get(id) ?? (this.dark ? C.faceDark : C.face));
       const wholeColor = sf.size || se.size ? C.faceSel : hovered ? C.faceHover : base;
-      const faceColor = (f: number) => (whole ? wholeColor : sf.has(f) ? C.faceSel : hovered?.kind === "face" && hovered.face === f ? C.faceHover : base);
+      const faceColor = (f: number) =>
+        whole
+          ? wholeColor
+          : sf.has(f)
+            ? C.faceSel
+            : hovered?.kind === "face" && hovered.face === f
+              ? C.faceHover
+              : base;
+
       for (let t = 0; t < b.triFace.length; t++) {
         const c = faceColor(b.triFace[t]!);
         for (let k = 0; k < 3; k++) fc.setXYZ(idx[t * 3 + k]!, c.r, c.g, c.b);
       }
+
       fc.needsUpdate = true;
+
       const ec = b.edges.geometry.getAttribute("color") as THREE.BufferAttribute;
       const segIdx = b.edges.geometry.getIndex()!;
+
       for (let sg = 0; sg < b.segEdge.length; sg++) {
         const e = b.segEdge[sg]!;
-        const c = se.has(e) ? C.edgeSel : hovered?.kind === "edge" && hovered.edge === e ? C.edgeHover : C.edge;
+        const c = se.has(e)
+          ? C.edgeSel
+          : hovered?.kind === "edge" && hovered.edge === e
+            ? C.edgeHover
+            : C.edge;
         ec.setXYZ(segIdx.getX(sg * 2), c.r, c.g, c.b);
         ec.setXYZ(segIdx.getX(sg * 2 + 1), c.r, c.g, c.b);
       }
+
       ec.needsUpdate = true;
     }
+
     this.sketchGroup.traverse((o) => {
       const { region, curve, sketch } = o.userData as { region?: string; curve?: string; sketch?: string };
+
       if (region !== undefined && o instanceof THREE.Mesh) {
-        const sel = this.selected.some((s) => s.kind === "region" && s.sketchId === sketch && s.key === region);
-        const hov = this.hover?.kind === "region" && this.hover.sketchId === sketch && this.hover.key === region;
+        const sel = this.selected.some(
+          (s) => s.kind === "region" && s.sketchId === sketch && s.key === region,
+        );
+        const hov =
+          this.hover?.kind === "region" && this.hover.sketchId === sketch && this.hover.key === region;
         (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.5 : hov ? 0.32 : REGION_OPACITY;
       }
+
       if (curve !== undefined && o instanceof THREE.Line) {
-        const sel = this.selected.some((s) => s.kind === "sketch_curve" && s.sketchId === sketch && s.curveId === curve);
-        const hov = this.hover?.kind === "sketch_curve" && this.hover.sketchId === sketch && this.hover.curveId === curve;
+        const sel = this.selected.some(
+          (s) => s.kind === "sketch_curve" && s.sketchId === sketch && s.curveId === curve,
+        );
+        const hov =
+          this.hover?.kind === "sketch_curve" &&
+          this.hover.sketchId === sketch &&
+          this.hover.curveId === curve;
         const mat = o.material as THREE.LineBasicMaterial;
         if (mat.userData["base"] === undefined) mat.userData["base"] = mat.color.getHex();
-        mat.color.setHex(sel ? C.edgeSel.getHex() : hov ? C.edgeHover.getHex() : (mat.userData["base"] as number));
+
+        mat.color.setHex(
+          sel ? C.edgeSel.getHex() : hov ? C.edgeHover.getHex() : (mat.userData["base"] as number),
+        );
       }
     });
+
     const strong = this.planeEmphasis;
     this.planeGroup.traverse((o) => {
       const { plane, border } = o.userData as { plane?: string; border?: boolean };
       if (plane === undefined || !(o instanceof THREE.Mesh || o instanceof THREE.Line)) return;
+
       const sel = this.selected.some((s) => s.kind === "plane" && s.planeId === plane);
       const hov = this.hover?.kind === "plane" && this.hover.planeId === plane;
       const mat = o.material as THREE.Material;
@@ -1546,7 +2054,10 @@ export class Viewport {
 
   setHandles(handles: Handle[]): void {
     // While dragging, the grabbed handle keeps its own callbacks and position until release.
-    if (this.activeHandle) handles = [this.activeHandle.h, ...handles.filter((h) => h.id !== this.activeHandle!.h.id)];
+    if (this.activeHandle) {
+      handles = [this.activeHandle.h, ...handles.filter((h) => h.id !== this.activeHandle!.h.id)];
+    }
+
     this.handles = handles;
     this.drawHandles();
   }
@@ -1557,18 +2068,22 @@ export class Viewport {
 
   private handleTip(h: Handle, value = h.value): THREE.Vector3 {
     const d = new THREE.Vector3(...h.dir).normalize();
+
     return new THREE.Vector3(...h.origin).addScaledVector(d, value + this.handleBase(h));
   }
 
   private drawHandles(): void {
     disposeTree(this.handleGroup);
+
     const onTop = <M extends THREE.Material>(m: M, opacity = 1) => {
       m.depthTest = false;
       m.depthWrite = false;
       m.transparent = true;
       m.opacity = opacity;
+
       return m;
     };
+
     for (const h0 of this.handles) {
       const h = this.activeHandle?.h.id === h0.id ? { ...h0, value: this.activeHandle.value } : h0;
       const px = this.pixelSize(h.origin);
@@ -1578,36 +2093,54 @@ export class Viewport {
       const hot = this.activeHandle?.h.id === h.id || this.hoverHandle === h.id;
       const color = hot ? 0xff7a1a : (h.color ?? 0x4f46e5);
       const along = tip.clone().sub(o);
-      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), along.lengthSq() ? along.clone().normalize() : d);
+      const q = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        along.lengthSq() ? along.clone().normalize() : d,
+      );
       const parts: THREE.Object3D[] = [];
+
       // A slim track from the grabbed spot to the knob, with a soft white edge so it reads on any surface.
       for (const [r, col, opacity, order] of [
         [2.4, 0xffffff, 0.7, 50],
         [1, color, 0.9, 51],
       ] as const) {
-        const track = new THREE.Mesh(new THREE.CylinderGeometry(px * r, px * r, Math.max(along.length(), px), 12), onTop(new THREE.MeshBasicMaterial({ color: col }), opacity));
+        const track = new THREE.Mesh(
+          new THREE.CylinderGeometry(px * r, px * r, Math.max(along.length(), px), 12),
+          onTop(new THREE.MeshBasicMaterial({ color: col }), opacity),
+        );
         track.position.copy(o).addScaledVector(along, 0.5);
         track.quaternion.copy(q);
         track.renderOrder = order;
-        const dot = new THREE.Mesh(new THREE.SphereGeometry(px * (r === 1 ? 3 : 4.6), 16, 12), onTop(new THREE.MeshBasicMaterial({ color: col }), r === 1 ? 1 : 0.9));
+
+        const dot = new THREE.Mesh(
+          new THREE.SphereGeometry(px * (r === 1 ? 3 : 4.6), 16, 12),
+          onTop(new THREE.MeshBasicMaterial({ color: col }), r === 1 ? 1 : 0.9),
+        );
         dot.position.copy(o);
         dot.renderOrder = order;
         parts.push(track, dot);
       }
+
       // The knob: a round, screen-facing button with chevrons along the drag direction.
       const pointing = h.value < 0 ? d.clone().negate() : d;
       const tex = handleKnob(color, h.twoWay ?? h.min === undefined);
+
       if (tex) {
         const knob = new THREE.Sprite(onTop(new THREE.SpriteMaterial({ map: tex })));
         const a = this.worldToScreen([tip.x, tip.y, tip.z]);
         const ahead = tip.clone().addScaledVector(pointing, px * 20);
         const b = this.worldToScreen([ahead.x, ahead.y, ahead.z]);
-        if (a && b && Math.hypot(b[0] - a[0], b[1] - a[1]) > 2) knob.material.rotation = Math.atan2(a[1] - b[1], b[0] - a[0]);
+
+        if (a && b && Math.hypot(b[0] - a[0], b[1] - a[1]) > 2) {
+          knob.material.rotation = Math.atan2(a[1] - b[1], b[0] - a[0]);
+        }
+
         knob.position.copy(tip);
         knob.scale.setScalar(px * (hot ? 36 : 32));
         knob.renderOrder = 53;
         parts.push(knob);
       }
+
       this.handleGroup.add(...parts);
     }
   }
@@ -1618,34 +2151,40 @@ export class Viewport {
     const py = clientY - r.top;
     let best: Handle | null = null;
     let bd = radius;
+
     for (const h of this.handles) {
       const tip = this.handleTip(h);
       const a = this.worldToScreen(h.origin);
       const b = this.worldToScreen([tip.x, tip.y, tip.z]);
       if (!a || !b) continue;
+
       // Distance to the arrow segment, favouring the tip.
       const dx = b[0] - a[0];
       const dy = b[1] - a[1];
       const l2 = dx * dx + dy * dy || 1;
       const t = Math.max(0.35, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / l2));
       const dist = Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py) - (t > 0.9 ? 6 : 0);
+
       if (dist < bd) {
         bd = dist;
         best = h;
       }
     }
+
     return best;
   }
 
   /** Axis parameter closest to the pointer ray. */
   private axisParam(h: Handle, clientX: number, clientY: number): number | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+
     const ray = this.raycaster.ray;
     const d = new THREE.Vector3(...h.dir).normalize();
     const w0 = ray.origin.clone().sub(new THREE.Vector3(...h.origin));
     const b = d.dot(ray.direction);
     const denom = 1 - b * b;
     if (denom < 1e-6) return null;
+
     return (w0.dot(d) - b * w0.dot(ray.direction)) / denom;
   }
 
@@ -1654,8 +2193,10 @@ export class Viewport {
 
   private snapStep(at: Vec3): number {
     if (this.handleStep) return this.handleStep(this.pixelSize(at));
+
     const px = this.pixelSize(at) * 6;
     for (const s of [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100]) if (s >= px) return s;
+
     return 100;
   }
 
@@ -1678,28 +2219,43 @@ export class Viewport {
       "pointerdown",
       (e) => {
         if (e.button !== 0 || (e.pointerType === "touch" && this.penSeen)) return;
+
         // A second finger while one drags an arrow: the two fingers pinch or pan the view, so the
         // drag is called off and the value goes back to where it was (a pinch over a selected face
         // changed its thickness).
         const active = this.activeHandle;
+
         if (active && e.pointerId !== active.pointer) {
           this.activeHandle = null;
           dragTo.cancel();
           el.style.cursor = "";
           if (el.hasPointerCapture(active.pointer)) el.releasePointerCapture(active.pointer);
+
           this.onHandleDrag?.(null, active.start, null);
           if (active.value !== active.start) active.h.onDrag(active.start);
+
           active.h.onEnd(active.start);
           this.drawHandles();
+
           return;
         }
+
         const h = this.hitHandle(e.clientX, e.clientY, e.pointerType === "touch" ? 30 : 18);
         if (!h) return;
-        if (lastClick && performance.now() - lastClick.at < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 6) return;
+
+        if (
+          lastClick &&
+          performance.now() - lastClick.at < 400 &&
+          Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 6
+        ) {
+          return;
+        }
+
         grabbed = true;
         e.stopImmediatePropagation();
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
+
         const t = this.axisParam(h, e.clientX, e.clientY);
         // Offset between where the arrow was grabbed and its value, so it does not jump.
         grab = (t ?? 0) - (h.value + this.handleBase(h));
@@ -1712,45 +2268,60 @@ export class Viewport {
       "pointermove",
       (e) => {
         const a = this.activeHandle;
+
         if (!a) {
           // Fingers do not hover; a finger orbiting across an arrow must not be swallowed.
           if (e.pointerType === "touch") return;
+
           const hit = this.hitHandle(e.clientX, e.clientY)?.id ?? null;
+
           if (hit !== this.hoverHandle) {
             this.hoverHandle = hit;
             el.style.cursor = hit ? "grab" : "";
             this.drawHandles();
           }
+
           if (hit) e.stopImmediatePropagation();
+
           return;
         }
+
         if (e.pointerId !== a.pointer) return;
+
         e.stopImmediatePropagation();
         dragTo(e);
       },
       { capture: true },
     );
+
     const dragTo = perFrame((e: PointerEvent) => {
-        const a = this.activeHandle;
-        if (!a) return;
-        const t = this.axisParam(a.h, e.clientX, e.clientY);
-        if (t === null) return;
-        const raw = t - grab - this.handleBase(a.h);
-        const step = this.snapStep(a.h.origin);
-        let v = Math.round(raw / step) * step;
-        if (a.h.min !== undefined) v = Math.max(a.h.min, v);
-        v = Math.round(v * 1000) / 1000;
-        if (v !== a.value) {
-          a.value = v;
-          a.h.onDrag(v);
-          this.drawHandles();
-        }
-        const tip = this.handleTip(a.h, v);
-        this.onHandleDrag?.(a.h, v, this.worldToScreen([tip.x, tip.y, tip.z]));
+      const a = this.activeHandle;
+      if (!a) return;
+
+      const t = this.axisParam(a.h, e.clientX, e.clientY);
+      if (t === null) return;
+
+      const raw = t - grab - this.handleBase(a.h);
+      const step = this.snapStep(a.h.origin);
+      let v = Math.round(raw / step) * step;
+      if (a.h.min !== undefined) v = Math.max(a.h.min, v);
+
+      v = Math.round(v * 1000) / 1000;
+
+      if (v !== a.value) {
+        a.value = v;
+        a.h.onDrag(v);
+        this.drawHandles();
+      }
+
+      const tip = this.handleTip(a.h, v);
+      this.onHandleDrag?.(a.h, v, this.worldToScreen([tip.x, tip.y, tip.z]));
     });
+
     const end = (e: PointerEvent) => {
       const a = this.activeHandle;
       if (!a || e.pointerId !== a.pointer) return;
+
       e.stopImmediatePropagation();
       dragTo.flush();
       this.activeHandle = null;
@@ -1758,21 +2329,28 @@ export class Viewport {
       this.onHandleDrag?.(null, a.value, null);
       a.h.onEnd(a.value);
       this.drawHandles();
+
       if (this.pendingInset !== null) {
         const px = this.pendingInset;
         this.pendingInset = null;
         this.setBottomInset(px);
       }
     };
+
     el.addEventListener("pointerup", end, { capture: true });
     el.addEventListener("pointercancel", end, { capture: true });
   }
 
   /** Screen position (canvas CSS px) of a handle's arrow tip, for value labels. */
   handleTipScreen(id: string): Vec2 | null {
-    const h = this.activeHandle?.h.id === id ? { ...this.activeHandle.h, value: this.activeHandle.value } : this.handles.find((x) => x.id === id);
+    const h =
+      this.activeHandle?.h.id === id
+        ? { ...this.activeHandle.h, value: this.activeHandle.value }
+        : this.handles.find((x) => x.id === id);
     if (!h) return null;
+
     const tip = this.handleTip(h);
+
     return this.worldToScreen([tip.x, tip.y, tip.z]);
   }
 
@@ -1784,15 +2362,21 @@ export class Viewport {
 
   private ndc(clientX: number, clientY: number): THREE.Vector2 {
     const r = this.renderer.domElement.getBoundingClientRect();
+
     return new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
   }
 
   /** World units per screen pixel at a point (or at the orbit target). */
   pixelSize(at?: Vec3): number {
     const h = this.renderer.domElement.clientHeight || 1;
-    if (this.camera instanceof THREE.OrthographicCamera) return (this.camera.top - this.camera.bottom) / this.camera.zoom / h;
+
+    if (this.camera instanceof THREE.OrthographicCamera) {
+      return (this.camera.top - this.camera.bottom) / this.camera.zoom / h;
+    }
+
     const p = at ? new THREE.Vector3(...at) : this.controls.target;
     const d = this.camera.position.distanceTo(p);
+
     return (2 * d * Math.tan((this.persp.fov * Math.PI) / 360)) / h;
   }
 
@@ -1801,75 +2385,132 @@ export class Viewport {
   private isPlanar(b: BodyObj, face: number): boolean {
     let cache = this.planar.get(b);
     if (!cache) this.planar.set(b, (cache = new Map()));
+
     const known = cache.get(face);
     if (known !== undefined) return known;
+
     const { faceRanges: fr, indices, normals } = b.mesh;
     let ref: [number, number, number] | null = null;
     let flat = true;
+
     for (let g = 0; g < fr.length && flat; g += 3) {
       if (fr[g + 2] !== face) continue;
+
       for (let t = fr[g]!; t < fr[g]! + fr[g + 1]!; t++) {
         const i = indices[t]! * 3;
         const n: [number, number, number] = [normals[i]!, normals[i + 1]!, normals[i + 2]!];
-        if (!ref) ref = n;
-        else if (n[0] * ref[0] + n[1] * ref[1] + n[2] * ref[2] < 0.9995) {
+
+        if (!ref) {
+          ref = n;
+        } else if (n[0] * ref[0] + n[1] * ref[1] + n[2] * ref[2] < 0.9995) {
           flat = false;
           break;
         }
       }
     }
+
     cache.set(face, flat);
+
     return flat;
   }
 
   pick(clientX: number, clientY: number, kinds: ReadonlySet<PickKind>): Pick | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+
     const px = this.pixelSize();
     this.raycaster.params.Line = { threshold: px * 6 };
+
     const ray = this.raycaster;
     const v3 = (p: THREE.Vector3): Vec3 => [p.x, p.y, p.z];
 
-    const faceHit = ray.intersectObjects(this.bodies.map((b) => b.faces), false)[0];
+    const faceHit = ray.intersectObjects(
+      this.bodies.map((b) => b.faces),
+      false,
+    )[0];
     const occlusion = faceHit ? faceHit.distance + px * 4 : Infinity;
 
     if (kinds.has("sketch_curve") && this.sketchGroup.visible) {
-      const hit = ray.intersectObject(this.sketchGroup, true).find((h) => h.object instanceof THREE.Line && (h.object.userData as { curve?: string }).curve !== undefined);
+      const hit = ray
+        .intersectObject(this.sketchGroup, true)
+        .find(
+          (h) =>
+            h.object instanceof THREE.Line && (h.object.userData as { curve?: string }).curve !== undefined,
+        );
+
       if (hit) {
         const { sketch, curve } = hit.object.userData as { sketch: string; curve: string };
+
         return { kind: "sketch_curve", sketchId: sketch, curveId: curve, point: v3(hit.point) };
       }
     }
+
     if (kinds.has("edge")) {
-      const hit = ray.intersectObjects(this.bodies.map((b) => b.edges), false).find((h) => h.distance <= occlusion);
+      const hit = ray
+        .intersectObjects(
+          this.bodies.map((b) => b.edges),
+          false,
+        )
+        .find((h) => h.distance <= occlusion);
+
       if (hit && hit.index !== undefined) {
         const b = this.bodies.find((x) => x.edges === hit.object)!;
         const edge = b.segEdge[Math.floor(hit.index / 2)] ?? -1;
         if (edge >= 0) return { kind: "edge", bodyId: b.mesh.bodyId, edge, point: v3(hit.point) };
       }
     }
+
     if (kinds.has("region") && this.sketchGroup.visible) {
-      const hit = ray.intersectObject(this.sketchGroup, true).find((h) => (h.object.userData as { region?: string }).region !== undefined && h.distance <= occlusion);
+      const hit = ray
+        .intersectObject(this.sketchGroup, true)
+        .find(
+          (h) => (h.object.userData as { region?: string }).region !== undefined && h.distance <= occlusion,
+        );
+
       if (hit) {
         const { sketch, region } = hit.object.userData as { sketch: string; region: string };
+
         return { kind: "region", sketchId: sketch, key: region, point: v3(hit.point) };
       }
     }
+
     if (kinds.has("face") && faceHit && faceHit.faceIndex !== undefined && faceHit.faceIndex !== null) {
       const b = this.bodies.find((x) => x.faces === faceHit.object)!;
       const face = b.triFace[faceHit.faceIndex] ?? -1;
+
       if (face >= 0) {
         // Only flat faces have one normal (push/pull and sketching need it); curved ones get none.
-        // The interpolated vertex normal follows a curved face; the triangle's own normal is exact on a flat one.
+        // The interpolated vertex normal follows a curved face; the triangle's own normal is exact on a flat
+        // one.
         const fn = faceHit.face?.normal;
         const hn = faceHit.normal ?? fn;
         const n: Vec3 | null = this.isPlanar(b, face) && fn ? [fn.x, fn.y, fn.z] : null;
-        return { kind: "face", bodyId: b.mesh.bodyId, face, tags: b.mesh.faceTags[face] ?? [], point: v3(faceHit.point), normal: n, surface: n ?? (hn ? [hn.x, hn.y, hn.z] : undefined) };
+
+        return {
+          kind: "face",
+          bodyId: b.mesh.bodyId,
+          face,
+          tags: b.mesh.faceTags[face] ?? [],
+          point: v3(faceHit.point),
+          normal: n,
+          surface: n ?? (hn ? [hn.x, hn.y, hn.z] : undefined),
+        };
       }
     }
+
     if (kinds.has("plane") && this.planeGroup.visible) {
-      const hit = ray.intersectObject(this.planeGroup, true).find((h) => h.object instanceof THREE.Mesh && h.distance <= occlusion);
-      if (hit) return { kind: "plane", planeId: (hit.object.userData as { plane: string }).plane, point: v3(hit.point) };
+      const hit = ray
+        .intersectObject(this.planeGroup, true)
+        .find((h) => h.object instanceof THREE.Mesh && h.distance <= occlusion);
+
+      if (hit) {
+        return {
+          kind: "plane",
+          planeId: (hit.object.userData as { plane: string }).plane,
+          point: v3(hit.point),
+        };
+      }
     }
+
     return null;
   }
 
@@ -1877,21 +2518,33 @@ export class Viewport {
    * Box selection in screen space (client px). `enclosed` keeps only entities fully inside,
    * otherwise anything touching the box is taken.
    */
-  boxSelect(x0: number, y0: number, x1: number, y1: number, enclosed: boolean, kinds: ReadonlySet<"face" | "edge">): Pick[] {
+  boxSelect(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    enclosed: boolean,
+    kinds: ReadonlySet<"face" | "edge">,
+  ): Pick[] {
     const r = this.renderer.domElement.getBoundingClientRect();
     const [ax, bx] = [Math.min(x0, x1) - r.left, Math.max(x0, x1) - r.left];
     const [ay, by] = [Math.min(y0, y1) - r.top, Math.max(y0, y1) - r.top];
     const v = new THREE.Vector3();
+
     const inside = (x: number, y: number, z: number) => {
       v.set(x, y, z).project(this.camera);
       if (v.z > 1) return false;
+
       const sx = ((v.x + 1) / 2) * r.width;
       const sy = ((1 - v.y) / 2) * r.height;
+
       return sx >= ax && sx <= bx && sy >= ay && sy <= by;
     };
+
     const test = (pts: number[]) => {
       let any = false;
       let all = true;
+
       for (let i = 0; i < pts.length; i += 3) {
         const ok = inside(pts[i]!, pts[i + 1]!, pts[i + 2]!);
         any ||= ok;
@@ -1899,43 +2552,68 @@ export class Viewport {
         if (!enclosed && any) return true;
         if (enclosed && !all) return false;
       }
+
       return enclosed ? all && pts.length > 0 : any;
     };
+
     const out: Pick[] = [];
+
     for (const b of this.bodies) {
       const m = b.mesh;
+
       if (kinds.has("face")) {
         for (let g = 0; g < m.faceRanges.length; g += 3) {
           const [start, count, face] = [m.faceRanges[g]!, m.faceRanges[g + 1]!, m.faceRanges[g + 2]!];
           if (face < 0) continue;
+
           const pts: number[] = [];
+
           for (let k = start; k < start + count; k++) {
             const i = m.indices[k]! * 3;
             pts.push(m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!);
           }
-          if (test(pts)) out.push({ kind: "face", bodyId: m.bodyId, face, tags: m.faceTags[face] ?? [], point: [pts[0]!, pts[1]!, pts[2]!], normal: null });
+
+          if (test(pts)) {
+            out.push({
+              kind: "face",
+              bodyId: m.bodyId,
+              face,
+              tags: m.faceTags[face] ?? [],
+              point: [pts[0]!, pts[1]!, pts[2]!],
+              normal: null,
+            });
+          }
         }
       }
+
       if (kinds.has("edge")) {
         for (let g = 0; g < m.edgeRanges.length; g += 3) {
           const [start, count, edge] = [m.edgeRanges[g]!, m.edgeRanges[g + 1]!, m.edgeRanges[g + 2]!];
           if (edge < 0) continue;
+
           const pts = Array.from(m.edgeLines.subarray(start * 3, (start + count) * 3));
-          if (test(pts)) out.push({ kind: "edge", bodyId: m.bodyId, edge, point: [pts[0]!, pts[1]!, pts[2]!] });
+
+          if (test(pts)) {
+            out.push({ kind: "edge", bodyId: m.bodyId, edge, point: [pts[0]!, pts[1]!, pts[2]!] });
+          }
         }
       }
     }
+
     return out;
   }
 
   /** Intersects the pointer ray with a sketch plane; returns sketch coordinates. */
   rayToPlane(clientX: number, clientY: number, f: Frame): Vec2 | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+
     const n = new THREE.Vector3(...f.normal);
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, new THREE.Vector3(...f.origin));
     const hit = this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
     if (!hit) return null;
+
     const d = hit.sub(new THREE.Vector3(...f.origin));
+
     return [d.dot(new THREE.Vector3(...f.u)), d.dot(new THREE.Vector3(...f.v))];
   }
 
@@ -1943,7 +2621,9 @@ export class Viewport {
   worldToScreen(p: Vec3): Vec2 | null {
     const v = new THREE.Vector3(...p).project(this.camera);
     if (v.z > 1) return null;
+
     const el = this.renderer.domElement;
+
     return [((v.x + 1) / 2) * el.clientWidth, ((1 - v.y) / 2) * el.clientHeight];
   }
 
@@ -1956,10 +2636,12 @@ export class Viewport {
   setProjection(p: "perspective" | "orthographic"): void {
     const next = p === "orthographic" ? this.ortho : this.persp;
     if (next === this.camera) return;
+
     const target = this.controls.target.clone();
     const dist = this.camera.position.distanceTo(target);
     next.position.copy(this.camera.position);
     next.up.copy(this.camera.up);
+
     if (next === this.ortho) {
       const h = 2 * dist * Math.tan((this.persp.fov * Math.PI) / 360);
       this.ortho.zoom = 1;
@@ -1969,6 +2651,7 @@ export class Viewport {
       const d = h / (2 * Math.tan((this.persp.fov * Math.PI) / 360));
       next.position.copy(target).add(this.camera.position.clone().sub(target).normalize().multiplyScalar(d));
     }
+
     this.camera = next;
     this.controls.object = next;
     this.controls.update();
@@ -1998,33 +2681,50 @@ export class Viewport {
 
   /** Looks at a plane head-on (sketch mode). */
   alignToFrame(f: Frame, animate = true): void {
-    this.lookFrom(new THREE.Vector3(...f.normal), new THREE.Vector3(...f.v), animate, new THREE.Vector3(...f.origin));
+    this.lookFrom(
+      new THREE.Vector3(...f.normal),
+      new THREE.Vector3(...f.v),
+      animate,
+      new THREE.Vector3(...f.origin),
+    );
   }
 
   lookFrom(dir: THREE.Vector3, up: THREE.Vector3, animate: boolean, center?: THREE.Vector3): void {
     const box = new THREE.Box3().setFromObject(this.bodiesGroup);
     const sk = new THREE.Box3().setFromObject(this.sketchGroup);
     if (!sk.isEmpty()) box.union(sk);
+
     for (const o of this.shownScenery()) box.expandByObject(o);
-    const target = center && box.isEmpty() ? center : box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
+
+    const target =
+      center && box.isEmpty()
+        ? center
+        : box.isEmpty()
+          ? new THREE.Vector3()
+          : box.getCenter(new THREE.Vector3());
     const size = box.isEmpty() ? 100 : Math.max(box.getSize(new THREE.Vector3()).length(), 10);
     // Fit the narrower of the two view angles, so tall (phone) windows frame the model too.
     const half = Math.tan((this.persp.fov * Math.PI) / 360) * Math.min(1, this.persp.aspect);
     const dist = this.camera === this.ortho ? size * 4 : (size * 1.4) / half / 2;
     const to = target.clone().add(dir.clone().normalize().multiplyScalar(dist));
     const zoomTo = this.camera === this.ortho ? this.orthoZoomFor(size * 1.3) : undefined;
+
     if (!animate) {
       this.camera.position.copy(to);
       this.camera.up.copy(up);
       this.controls.target.copy(target);
+
       if (zoomTo) {
         this.ortho.zoom = zoomTo;
         this.ortho.updateProjectionMatrix();
       }
+
       this.controls.update();
       this.emit();
+
       return;
     }
+
     this.anim = {
       from: this.camera.position.clone(),
       to,
@@ -2044,12 +2744,14 @@ export class Viewport {
   /** Orbits the camera around the target (radians), e.g. when dragging the view cube. */
   orbit(dAzimuth: number, dPolar: number): void {
     this.anim = null;
+
     const target = this.controls.target;
     const offset = this.camera.position.clone().sub(target);
     const up = this.camera.up.clone().normalize();
     // Azimuth around the world Z axis, polar around the camera's right vector.
     offset.applyAxisAngle(new THREE.Vector3(0, 0, 1), dAzimuth);
     up.applyAxisAngle(new THREE.Vector3(0, 0, 1), dAzimuth);
+
     const right = new THREE.Vector3().crossVectors(up, offset).normalize();
     offset.applyAxisAngle(right, dPolar);
     up.applyAxisAngle(right, dPolar);
@@ -2086,11 +2788,16 @@ export class Viewport {
 
   fit(animate = true): void {
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
-    this.lookFrom(dir.lengthSq() ? dir : new THREE.Vector3(...VIEWS.iso.dir), this.camera.up.clone(), animate);
+    this.lookFrom(
+      dir.lengthSq() ? dir : new THREE.Vector3(...VIEWS.iso.dir),
+      this.camera.up.clone(),
+      animate,
+    );
   }
 
   onChange(fn: () => void): () => void {
     this.listeners.add(fn);
+
     return () => this.listeners.delete(fn);
   }
 
@@ -2099,12 +2806,14 @@ export class Viewport {
   private emit(): void {
     this.changed = true;
   }
+
   private changed = true;
 
   /** Bounding box of the shown parts in their current poses (or of `bodies` only). */
   modelBox(bodies?: readonly string[]): { min: Vec3; max: Vec3 } | null {
     const box = new THREE.Box3();
     for (const b of this.bodies) if (!bodies || bodies.includes(b.mesh.bodyId)) box.expandByObject(b.group);
+
     return box.isEmpty() ? null : { min: box.min.toArray() as Vec3, max: box.max.toArray() as Vec3 };
   }
 
@@ -2128,31 +2837,65 @@ export class Viewport {
     /** In the rendered look (materials in studio light, soft shadow), whatever the view shows. */
     rendered?: boolean;
   }): string {
-    if (o.rendered && this.displayMode !== "rendered") return this.inMode("rendered", () => this.render({ ...o, rendered: false }));
+    if (o.rendered && this.displayMode !== "rendered") {
+      return this.inMode("rendered", () => this.render({ ...o, rendered: false }));
+    }
+
     // Joint symbols are editing aids like the grid: pictures and motion frames show the parts only.
-    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.sketchGroup, this.refGroup, this.jointGroup];
+    const helpers = [
+      this.grid,
+      this.planeGroup,
+      this.handleGroup,
+      this.overlay,
+      this.axes,
+      this.sketchGroup,
+      this.refGroup,
+      this.jointGroup,
+    ];
     const shown = helpers.map((h) => h.visible);
     helpers.forEach((h) => (h.visible = false));
+
     const hidden = o.isolate && o.focus ? this.bodies.filter((b) => !o.focus!.includes(b.mesh.bodyId)) : [];
     for (const b of hidden) b.group.visible = false;
+
     const savedColors = this.bodyColors;
     const savedSel = this.selected;
-    if (o.bodyColors) this.setBodyColors(new Map([...[...savedColors].map(([id, c]): [string, string] => [id, `#${c.getHexString()}`]), ...o.bodyColors]));
+
+    if (o.bodyColors) {
+      this.setBodyColors(
+        new Map([
+          ...[...savedColors].map(([id, c]): [string, string] => [id, `#${c.getHexString()}`]),
+          ...o.bodyColors,
+        ]),
+      );
+    }
+
     if (o.faces) this.setSelection(o.faces);
+
     // The cut: clip everything, and show the inside (back faces) in red where the plane opens it.
     const caps: THREE.Mesh[] = [];
-    // three.js keeps the side a plane's normal points to; the section removes that side, so the plane faces away.
-    const plane = o.section ? new THREE.Plane(new THREE.Vector3(...o.section.normal).normalize().negate(), o.section.offset) : null;
+    // three.js keeps the side a plane's normal points to; the section removes that side, so the plane faces
+    // away.
+    const plane = o.section
+      ? new THREE.Plane(new THREE.Vector3(...o.section.normal).normalize().negate(), o.section.offset)
+      : null;
+
     if (plane) {
       this.renderer.localClippingEnabled = true;
+
       for (const b of this.bodies) {
         (b.faces.material as THREE.Material).clippingPlanes = [plane];
         (b.edges.material as THREE.Material).clippingPlanes = [plane];
-        const cap = new THREE.Mesh(b.faces.geometry, new THREE.MeshBasicMaterial({ color: 0xd94a4a, side: THREE.BackSide, clippingPlanes: [plane] }));
+
+        const cap = new THREE.Mesh(
+          b.faces.geometry,
+          new THREE.MeshBasicMaterial({ color: 0xd94a4a, side: THREE.BackSide, clippingPlanes: [plane] }),
+        );
         b.group.add(cap);
         caps.push(cap);
       }
     }
+
     const prev = this.renderer.getSize(new THREE.Vector2());
     const prevRatio = this.renderer.getPixelRatio();
     this.persp.clearViewOffset();
@@ -2160,24 +2903,40 @@ export class Viewport {
     // (four times the pixels, and the tokens an assistant pays to look at it).
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(o.width, o.height, false);
+
     const aspect = o.width / o.height;
-    const saved = { aspect: this.persp.aspect, fov: this.persp.fov, pos: this.persp.position.clone(), quat: this.persp.quaternion.clone(), up: this.persp.up.clone() };
+    const saved = {
+      aspect: this.persp.aspect,
+      fov: this.persp.fov,
+      pos: this.persp.position.clone(),
+      quat: this.persp.quaternion.clone(),
+      up: this.persp.up.clone(),
+    };
     this.persp.aspect = aspect;
     this.persp.fov = fovFor(aspect);
     this.persp.updateProjectionMatrix();
+
     const b = o.box ?? this.modelBox(o.focus) ?? { min: [-50, -50, -50] as Vec3, max: [50, 50, 50] as Vec3 };
-    const sphere = new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)).getBoundingSphere(new THREE.Sphere());
+    const sphere = new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)).getBoundingSphere(
+      new THREE.Sphere(),
+    );
     const std = VIEWS[o.view ?? "iso"];
     const dir = new THREE.Vector3(...(o.direction ?? std.dir)).normalize();
     // Up: Z, unless looking along it.
-    const up = o.direction ? (Math.abs(dir.z) > 0.95 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(...std.up);
+    const up = o.direction
+      ? Math.abs(dir.z) > 0.95
+        ? new THREE.Vector3(0, 1, 0)
+        : new THREE.Vector3(0, 0, 1)
+      : new THREE.Vector3(...std.up);
     const fov = THREE.MathUtils.degToRad(this.persp.fov) / 2;
-    const dist = (Math.max(sphere.radius, 1e-3) / Math.sin(Math.min(fov, Math.atan(Math.tan(fov) * aspect)))) * 1.04;
+    const dist =
+      (Math.max(sphere.radius, 1e-3) / Math.sin(Math.min(fov, Math.atan(Math.tan(fov) * aspect)))) * 1.04;
     this.persp.position.copy(sphere.center).addScaledVector(dir, dist);
     this.persp.up.copy(up);
     this.persp.lookAt(sphere.center);
     this.persp.updateMatrixWorld();
     this.renderer.render(this.scene, this.persp);
+
     const url = this.renderer.domElement.toDataURL("image/png");
     // Put everything back.
     this.persp.position.copy(saved.pos);
@@ -2190,26 +2949,33 @@ export class Viewport {
     this.renderer.setPixelRatio(prevRatio);
     this.renderer.setSize(prev.x, prev.y, false);
     this.applyInset();
+
     for (const cap of caps) {
       cap.removeFromParent();
       (cap.material as THREE.Material).dispose();
     }
+
     if (plane) {
       for (const body of this.bodies) {
         (body.faces.material as THREE.Material).clippingPlanes = null;
         (body.edges.material as THREE.Material).clippingPlanes = null;
       }
+
       this.renderer.localClippingEnabled = false;
     }
+
     if (o.faces) this.setSelection(savedSel);
+
     if (o.bodyColors) {
       this.bodyColors = savedColors;
       for (const body of this.bodies) body.painted = undefined;
       this.paint();
     }
+
     for (const h of hidden) h.group.visible = true;
     helpers.forEach((h, i) => (h.visible = shown[i]!));
     this.invalidate();
+
     return url;
   }
 
@@ -2218,6 +2984,7 @@ export class Viewport {
     const before = this.displayMode;
     const spin = this.controls.autoRotate;
     this.setDisplayMode(mode);
+
     try {
       return fn();
     } finally {
@@ -2238,30 +3005,53 @@ export class Viewport {
     const W = Math.max(1, Math.min(Viewport.MAX_IMAGE, Math.round(width)));
     const H = Math.max(1, Math.min(Viewport.MAX_IMAGE, Math.round(height)));
     if (this.displayMode !== "rendered") return this.inMode("rendered", () => this.renderImage(W, H, opts));
+
     const out = document.createElement("canvas");
     out.width = W;
     out.height = H;
+
     const g = out.getContext("2d")!;
-    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.sketchGroup, this.jointGroup, this.marksGroup];
+    const helpers = [
+      this.grid,
+      this.planeGroup,
+      this.handleGroup,
+      this.overlay,
+      this.axes,
+      this.sketchGroup,
+      this.jointGroup,
+      this.marksGroup,
+    ];
     const shown = helpers.map((h) => h.visible);
     helpers.forEach((h) => (h.visible = false));
-    const prev = { size: this.renderer.getSize(new THREE.Vector2()), ratio: this.renderer.getPixelRatio(), aspect: this.persp.aspect, l: this.ortho.left, r: this.ortho.right };
+
+    const prev = {
+      size: this.renderer.getSize(new THREE.Vector2()),
+      ratio: this.renderer.getPixelRatio(),
+      aspect: this.persp.aspect,
+      l: this.ortho.left,
+      r: this.ortho.right,
+    };
     const cam = this.camera;
     const aspect = W / H;
+
     // Same height of view as on screen; the width follows the picture's proportions.
-    if (cam instanceof THREE.PerspectiveCamera) cam.aspect = aspect;
-    else {
+    if (cam instanceof THREE.PerspectiveCamera) {
+      cam.aspect = aspect;
+    } else {
       cam.left = cam.bottom * aspect;
       cam.right = cam.top * aspect;
     }
+
     // The backdrop is painted once under the whole picture: drawn per tile it would start over in each.
     this.stage.setBackdrop(false);
     if (!opts.transparent) paintBackdrop(g, W, H, this.stage.dark);
+
     const tile = Math.min(1024, this.renderer.capabilities.maxTextureSize);
+
     try {
       this.renderer.setPixelRatio(1);
       this.stage.withShadowSize(4096, () => {
-        for (let y = 0; y < H; y += tile)
+        for (let y = 0; y < H; y += tile) {
           for (let x = 0; x < W; x += tile) {
             const w = Math.min(tile, W - x);
             const h = Math.min(tile, H - y);
@@ -2271,6 +3061,7 @@ export class Viewport {
             this.renderer.render(this.scene, cam);
             g.drawImage(this.renderer.domElement, 0, 0, w, h, x, y, w, h);
           }
+        }
       });
     } finally {
       cam.clearViewOffset();
@@ -2287,6 +3078,7 @@ export class Viewport {
       this.renderer.shadowMap.needsUpdate = true;
       this.invalidate();
     }
+
     return out;
   }
 
@@ -2295,11 +3087,13 @@ export class Viewport {
     const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.jointGroup];
     const shown = helpers.map((h) => h.visible);
     if (clean) helpers.forEach((h) => (h.visible = false));
+
     const prev = this.renderer.getSize(new THREE.Vector2());
     // Pictures are of the whole model, without the room kept free for a sheet.
     this.persp.clearViewOffset();
     this.ortho.clearViewOffset();
     this.renderer.setSize(width, height, false);
+
     const aspect = width / height;
     const saved = { aspect: this.persp.aspect, fov: this.persp.fov, l: this.ortho.left, r: this.ortho.right };
     this.persp.aspect = aspect;
@@ -2308,17 +3102,20 @@ export class Viewport {
     this.ortho.left = this.ortho.bottom * aspect;
     this.ortho.right = this.ortho.top * aspect;
     this.ortho.updateProjectionMatrix();
+
     // Clean shots frame the model tightly with the perspective camera, with its surroundings.
     const box = new THREE.Box3().setFromObject(this.bodiesGroup);
     for (const o of this.shownScenery()) box.expandByObject(o);
+
     const cam = clean && !box.isEmpty() ? this.persp : this.camera;
     const pose = { pos: this.persp.position.clone(), quat: this.persp.quaternion.clone() };
+
     if (cam === this.persp && clean) {
       const sphere = box.getBoundingSphere(new THREE.Sphere());
       // Always from the standard iso corner, whatever view the user was in (a top view pictures a square).
       const dir = new THREE.Vector3(...VIEWS.iso.dir).normalize();
       const fov = THREE.MathUtils.degToRad(this.persp.fov) / 2;
-      const dist = sphere.radius / Math.sin(Math.min(fov, Math.atan(Math.tan(fov) * aspect))) * 1.02;
+      const dist = (sphere.radius / Math.sin(Math.min(fov, Math.atan(Math.tan(fov) * aspect)))) * 1.02;
       this.persp.position.copy(sphere.center).addScaledVector(dir, dist);
       this.persp.up.set(...VIEWS.iso.up);
       this.persp.lookAt(sphere.center);
@@ -2327,7 +3124,9 @@ export class Viewport {
       this.persp.updateProjectionMatrix();
       this.persp.updateMatrixWorld();
     }
+
     this.renderer.render(this.scene, cam);
+
     const url = this.renderer.domElement.toDataURL("image/png");
     this.persp.position.copy(pose.pos);
     this.persp.quaternion.copy(pose.quat);
@@ -2342,6 +3141,7 @@ export class Viewport {
     this.updateClipping();
     this.applyInset();
     if (clean) helpers.forEach((h, i) => (h.visible = shown[i]!));
+
     return url;
   }
 
@@ -2352,42 +3152,57 @@ export class Viewport {
       this.camera.position.lerpVectors(this.anim.from, this.anim.to, e);
       this.camera.up.lerpVectors(this.anim.upFrom, this.anim.upTo, e).normalize();
       this.controls.target.lerpVectors(this.anim.targetFrom, this.anim.target, e);
+
       if (this.anim.zoomTo && this.anim.zoomFrom) {
         this.ortho.zoom = this.anim.zoomFrom + (this.anim.zoomTo - this.anim.zoomFrom) * e;
         this.ortho.updateProjectionMatrix();
       }
+
       if (t >= 1) this.anim = null;
+
       this.emit();
     }
+
     this.controls.update();
+
     if (this.changed) {
       this.changed = false;
       this.updateClipping();
       this.updateGrid();
       if (this.handles.length) this.drawHandles();
+
       for (const fn of this.listeners) fn();
     }
+
     this.renderer.render(this.scene, this.camera);
   }
 
-  /** Height in px of a panel covering the bottom of the view (phone sheets): the picture centres in the space above it. */
+  /**
+   * Height in px of a panel covering the bottom of the view (phone sheets): the picture centres in the space
+   * above it.
+   */
   private bottomInset = 0;
   /** Inset asked for while an arrow is being dragged: the picture must not move under the finger. */
   private pendingInset: number | null = null;
   setBottomInset(px: number): void {
     if (this.activeHandle) {
       this.pendingInset = px;
+
       return;
     }
+
     if (Math.abs(px - this.bottomInset) < 1) return;
+
     this.bottomInset = px;
     this.applyInset();
     this.emit();
   }
+
   private applyInset(): void {
     const w = this.container.clientWidth || 1;
     const h = this.container.clientHeight || 1;
     const shift = Math.round(this.bottomInset / 2);
+
     for (const cam of [this.persp, this.ortho]) {
       if (shift) cam.setViewOffset(w, h, 0, shift, w, h);
       else cam.clearViewOffset();
@@ -2405,6 +3220,7 @@ export class Viewport {
     this.persp.aspect = w / h;
     this.persp.fov = fovFor(w / h);
     this.persp.updateProjectionMatrix();
+
     const oh = this.ortho.top - this.ortho.bottom || 200;
     this.setOrthoSize(oh);
     this.applyInset();
@@ -2417,6 +3233,7 @@ export class Viewport {
 
   dispose(): void {
     if (this.disposed) return;
+
     this.disposed = true;
     for (const c of this.textureCache.values()) c.tex?.dispose();
     this.textureCache.clear();
@@ -2443,23 +3260,29 @@ export class Viewport {
 export function perFrame<E>(fn: (e: E) => void): ((e: E) => void) & { flush(): void; cancel(): void } {
   let pending: E | null = null;
   let raf = 0;
+
   const run = () => {
     raf = 0;
+
     const e = pending;
     pending = null;
     if (e) fn(e);
   };
+
   const wrapped = (e: E) => {
     pending = e;
     if (!raf) raf = requestAnimationFrame(run);
   };
+
   return Object.assign(wrapped, {
     flush: () => {
       if (raf) cancelAnimationFrame(raf);
+
       run();
     },
     cancel: () => {
       if (raf) cancelAnimationFrame(raf);
+
       raf = 0;
       pending = null;
     },
@@ -2467,27 +3290,39 @@ export function perFrame<E>(fn: (e: E) => void): ((e: E) => void) & { flush(): v
 }
 
 export function frameMatrix(f: Frame): THREE.Matrix4 {
-  const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.v), new THREE.Vector3(...f.normal));
+  const m = new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(...f.u),
+    new THREE.Vector3(...f.v),
+    new THREE.Vector3(...f.normal),
+  );
   m.setPosition(...f.origin);
+
   return m;
 }
 
 export function curvePoints(c: SketchCurveView): Vec2[] {
   if (c.kind === "line") return [c.a, c.b];
   if (c.kind === "spline") return c.pts;
-  const [a0, sweep] = c.kind === "circle" ? [0, 2 * Math.PI] : [c.a0, (((c.a1 - c.a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
+
+  const [a0, sweep] =
+    c.kind === "circle"
+      ? [0, 2 * Math.PI]
+      : [c.a0, (((c.a1 - c.a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
   const n = Math.max(8, Math.ceil(sweep / (Math.PI / 48)));
   const pts: Vec2[] = [];
+
   for (let i = 0; i <= n; i++) {
     const a = a0 + (sweep * i) / n;
     pts.push([c.center[0] + c.radius * Math.cos(a), c.center[1] + c.radius * Math.sin(a)]);
   }
+
   return pts;
 }
 
 const WHITE = new THREE.Color(0xffffff);
 
 const knobs = new Map<string, THREE.Texture>();
+
 /**
  * Texture of a handle knob: a filled disc with a white rim and soft shadow, and white chevrons
  * pointing right (rotated to the drag direction when drawn); both ways when `twoWay`. Cached.
@@ -2496,11 +3331,14 @@ function handleKnob(color: number, twoWay: boolean): THREE.Texture | null {
   const key = `${color}:${twoWay}`;
   const hit = knobs.get(key);
   if (hit) return hit;
+
   const S = 128;
   const canvas = typeof document === "undefined" ? null : document.createElement("canvas");
   const g = canvas?.getContext("2d");
   if (!canvas || !g) return null;
+
   canvas.width = canvas.height = S;
+
   const c = S / 2;
   g.shadowColor = "rgba(15, 23, 42, 0.35)";
   g.shadowBlur = 10;
@@ -2518,6 +3356,7 @@ function handleKnob(color: number, twoWay: boolean): THREE.Texture | null {
   g.lineWidth = 8;
   g.lineCap = "round";
   g.lineJoin = "round";
+
   const chevron = (x: number, dir: 1 | -1, h: number) => {
     g.beginPath();
     g.moveTo(x - (h / 2) * dir, c - h);
@@ -2525,14 +3364,19 @@ function handleKnob(color: number, twoWay: boolean): THREE.Texture | null {
     g.lineTo(x - (h / 2) * dir, c + h);
     g.stroke();
   };
+
   if (twoWay) {
     chevron(c + 19, 1, 12);
     chevron(c - 19, -1, 12);
-  } else chevron(c + 4, 1, 15);
+  } else {
+    chevron(c + 4, 1, 15);
+  }
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   knobs.set(key, tex);
+
   return tex;
 }
 
@@ -2540,9 +3384,12 @@ function disposeTree(g: THREE.Object3D, textures = false): void {
   g.traverse((o) => {
     const m = o as THREE.Mesh;
     m.geometry?.dispose();
+
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+
     for (const x of Array.isArray(mat) ? mat : mat ? [mat] : []) {
       if (textures) (x as THREE.MeshBasicMaterial).map?.dispose();
+
       x.dispose();
     }
   });
@@ -2551,26 +3398,34 @@ function disposeTree(g: THREE.Object3D, textures = false): void {
 
 function axesHelper(): THREE.Group {
   const g = new THREE.Group();
+
   const mk = (to: Vec3, color: number) => {
     // Hidden by parts in front of them, so they do not show through the model like scratches.
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(...to)]), new THREE.LineBasicMaterial({ color }));
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(...to)]),
+      new THREE.LineBasicMaterial({ color }),
+    );
     line.renderOrder = 10;
     g.add(line);
   };
+
   mk([12, 0, 0], 0xe5484d);
   mk([0, 12, 0], 0x30a46c);
   mk([0, 0, 12], 0x3e63dd);
+
   return g;
 }
 
 /** Vertical field of view in landscape; portrait windows keep it as the horizontal one instead. */
 const BASE_FOV = 40;
 /** The vertical field of view for an aspect ratio: turning a phone keeps the model the same width. */
-const fovFor = (aspect: number) => (aspect >= 1 ? BASE_FOV : (2 * Math.atan(Math.tan((BASE_FOV * Math.PI) / 360) / aspect) * 180) / Math.PI);
+const fovFor = (aspect: number) =>
+  aspect >= 1 ? BASE_FOV : (2 * Math.atan(Math.tan((BASE_FOV * Math.PI) / 360) / aspect) * 180) / Math.PI;
 
 export function samePick(a: Pick | null, b: Pick | null): boolean {
   if (!a || !b) return a === b;
   if (a.kind !== b.kind) return false;
+
   switch (a.kind) {
     case "face":
       return a.bodyId === (b as typeof a).bodyId && a.face === (b as typeof a).face;
@@ -2596,21 +3451,46 @@ export const SKETCH_LINE_WIDTH = 2.5;
  */
 /** A round knob drawn over the model: the part of a symbol to take hold of. */
 function knob(at: THREE.Vector3, radius: number, color: number): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true }));
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 16, 12),
+    new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true }),
+  );
   m.position.copy(at);
   m.renderOrder = 61;
+
   return m;
 }
 
-export function fatLine(points: readonly (readonly [number, number] | THREE.Vector3)[], o: { color: number; width?: number; loop?: boolean; dashed?: { dash: number; gap: number }; depthTest?: boolean }): Line2 {
+export function fatLine(
+  points: readonly (readonly [number, number] | THREE.Vector3)[],
+  o: {
+    color: number;
+    width?: number;
+    loop?: boolean;
+    dashed?: { dash: number; gap: number };
+    depthTest?: boolean;
+  },
+): Line2 {
   const flat: number[] = [];
-  const push = (p: readonly [number, number] | THREE.Vector3) => (p instanceof THREE.Vector3 ? flat.push(p.x, p.y, p.z) : flat.push(p[0], p[1], 0));
+  const push = (p: readonly [number, number] | THREE.Vector3) =>
+    p instanceof THREE.Vector3 ? flat.push(p.x, p.y, p.z) : flat.push(p[0], p[1], 0);
   points.forEach(push);
   if (o.loop && points.length) push(points[0]!);
+
   const geo = new LineGeometry();
   geo.setPositions(flat);
-  const mat = new LineMaterial({ color: o.color, linewidth: o.width ?? SKETCH_LINE_WIDTH, depthTest: o.depthTest ?? false, dashed: !!o.dashed, dashSize: o.dashed?.dash ?? 1, gapSize: o.dashed?.gap ?? 1, transparent: true });
+
+  const mat = new LineMaterial({
+    color: o.color,
+    linewidth: o.width ?? SKETCH_LINE_WIDTH,
+    depthTest: o.depthTest ?? false,
+    dashed: !!o.dashed,
+    dashSize: o.dashed?.dash ?? 1,
+    gapSize: o.dashed?.gap ?? 1,
+    transparent: true,
+  });
   const line = new Line2(geo, mat);
   if (o.dashed) line.computeLineDistances();
+
   return line;
 }

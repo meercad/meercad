@@ -7,7 +7,9 @@ const square = (s: number, z: number) => [0, 0, z, s, 0, z, s, s, z, 0, 0, z, s,
 describe("terrain height grid", () => {
   it("keeps floor and ceiling apart and answers with the one nearest to the asked height", () => {
     // A 4 m room: floor at 0, ceiling at 2.5 m, a table top at 0.75 m over part of it.
-    const table = [1000, 1000, 750, 2000, 1000, 750, 2000, 2000, 750, 1000, 1000, 750, 2000, 2000, 750, 1000, 2000, 750];
+    const table = [
+      1000, 1000, 750, 2000, 1000, 750, 2000, 2000, 750, 1000, 1000, 750, 2000, 2000, 750, 1000, 2000, 750,
+    ];
     const g = layeredHeights(Float32Array.from([...square(4000, 0), ...square(4000, 2500), ...table]), 256)!;
     expect(heightAt(g, 3000, 3000)).toBeCloseTo(2500, 0);
     expect(heightAt(g, 3000, 3000, 100)).toBeCloseTo(0, 0);
@@ -18,7 +20,10 @@ describe("terrain height grid", () => {
   });
 
   it("follows a slope", () => {
-    const g = layeredHeights(Float32Array.from([0, 0, 0, 1000, 0, 100, 1000, 1000, 100, 0, 0, 0, 1000, 1000, 100, 0, 1000, 0]), 128)!;
+    const g = layeredHeights(
+      Float32Array.from([0, 0, 0, 1000, 0, 100, 1000, 1000, 100, 0, 0, 0, 1000, 1000, 100, 0, 1000, 0]),
+      128,
+    )!;
     expect(heightAt(g, 500, 500)).toBeCloseTo(50, 0);
   });
 });

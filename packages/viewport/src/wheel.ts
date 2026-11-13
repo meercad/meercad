@@ -8,13 +8,17 @@
  */
 export type WheelGesture = "orbit" | "pan" | "zoom";
 
-export type WheelLike = Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode" | "ctrlKey" | "metaKey" | "shiftKey" | "timeStamp">;
+export type WheelLike = Pick<
+  WheelEvent,
+  "deltaX" | "deltaY" | "deltaMode" | "ctrlKey" | "metaKey" | "shiftKey" | "timeStamp"
+>;
 
 /** One notch of a mouse wheel on macOS: Cocoa's 0.1 line step (16.16 fixed point) times 40 px. */
 const MAC_NOTCH = 4.000244140625;
 
 const multipleOf = (v: number, step: number) => {
   const r = Math.abs(v) / step;
+
   return r >= 1 - 1e-9 && Math.abs(r - Math.round(r)) < 1e-6;
 };
 
@@ -26,9 +30,11 @@ const multipleOf = (v: number, step: number) => {
 export function isMouseWheel(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode">): boolean {
   if (e.deltaMode !== 0) return true;
   if (e.deltaX !== 0 && e.deltaY !== 0) return false;
+
   const v = e.deltaY !== 0 ? e.deltaY : e.deltaX;
   if (v === 0) return false;
   if (!Number.isInteger(v) && multipleOf(v, MAC_NOTCH)) return true;
+
   return Number.isInteger(v) && (multipleOf(v, 100) || multipleOf(v, 120));
 }
 
@@ -52,6 +58,7 @@ export class WheelClassifier {
     if (e.ctrlKey || e.metaKey) return "zoom";
     if (fresh) this.mouse = isMouseWheel(e);
     if (this.mouse || !swipeOrbits) return "zoom";
+
     return e.shiftKey ? "pan" : "orbit";
   }
 }
