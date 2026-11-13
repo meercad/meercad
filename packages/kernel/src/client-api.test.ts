@@ -50,7 +50,7 @@ describe("kernel client calls", () => {
     expect(await c.bodyProps()).toEqual([{ id: "b", volume: 8 }]);
     expect(await c.exportStep(["b"], [{ id: "b", name: "Box" }])).toEqual(new Uint8Array([1, 2]));
     expect(await c.exportMeshes(["b"])).toEqual([{ bodyId: "b" }]);
-    expect(await c.overlaps(["x"], { budgetMs: 10 })).toEqual({ pairs: [{ a: "x", b: "y", distance: 1, overlap: 0 }], left: 3 });
+    expect(await c.overlaps(["x"], { budgetMs: 10 })).toEqual({ pairs: [{ a: "x", b: "y", distance: 1, overlap: 0 }], left: 3, fine: [] });
     expect(await c.clearances(["x"], {}, 2, ["wire"], { x: 1, y: 1 })).toHaveLength(1);
     expect(await c.drawing(["front"], ["b"], doc())).toEqual([{ name: "front" }]);
     expect((await c.measure({ bodyId: "b", kind: "face", index: 0 }, { bodyId: "b", kind: "face", index: 1 })).rows[0]).toEqual(["Distance", "5 mm"]);

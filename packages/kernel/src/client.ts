@@ -342,12 +342,12 @@ export class KernelClient {
   /**
    * Overlaps of parts where they are modelled, for a big design: only pairs with one of `parts` (all
    * when left out), only parts reaching into `box`, and at most `budgetMs` of work; `left` counts
-   * the pairs there was no time for.
+   * the pairs there was no time for, `fine` the imported meshes too fine to check (see FINE_MESH_FACES).
    */
-  async overlaps(parts: string[], limits: { box?: { min: [number, number, number]; max: [number, number, number] }; budgetMs?: number } = {}): Promise<{ pairs: Clearance[]; left: number }> {
+  async overlaps(parts: string[], limits: { box?: { min: [number, number, number]; max: [number, number, number] }; budgetMs?: number } = {}): Promise<{ pairs: Clearance[]; left: number; fine: string[] }> {
     const r = await this.send({ type: "clearance", moving: parts, poses: {}, within: 0, ...limits });
     if (r.type !== "clearances") throw new Error("unexpected response");
-    return { pairs: r.result, left: r.left ?? 0 };
+    return { pairs: r.result, left: r.left ?? 0, fine: r.fine ?? [] };
   }
 
   async clearances(moving: string[], poses: Record<string, number[]>, within?: number, skip?: string[], rigid?: Record<string, number>): Promise<Clearance[]> {

@@ -80,12 +80,13 @@ export async function interference(opts: { parts?: string[]; box?: { min: Vec3; 
   if (ids.length < 2) return { overlaps: [], touching: [], note: "only one part" };
   const unknown = opts.parts?.filter((id) => !ids.includes(id)) ?? [];
   if (unknown.length) throw new Error(`no part ${unknown.map((id) => `"${id}"`).join(", ")}`);
-  const { pairs, left } = await kernel.overlaps(opts.parts?.length ? opts.parts : ids, { ...(opts.box ? { box: opts.box } : {}), budgetMs: (opts.seconds ?? 120) * 1000 });
+  const { pairs, left, fine } = await kernel.overlaps(opts.parts?.length ? opts.parts : ids, { ...(opts.box ? { box: opts.box } : {}), budgetMs: (opts.seconds ?? 120) * 1000 });
   const name = (id: string) => partName(id, currentDoc().features);
   return {
     overlaps: pairs.filter((p) => p.overlap > 1e-3).sort((a, b) => b.overlap - a.overlap).map((p) => ({ a: p.a, b: p.b, names: [name(p.a), name(p.b)], overlapMm3: round(p.overlap) })),
     touching: pairs.filter((p) => p.overlap <= 1e-3 && p.distance < 1e-4).map((p) => [p.a, p.b]),
     ...(left ? { unchecked: left, note: `Out of time: ${left} pairs of parts close to each other were not checked. Narrow the check with parts (ids) or box ({min, max}), or give it more seconds.` } : {}),
+    ...(fine.length ? { meshesNotChecked: fine, meshNote: "imported meshes with many triangles are not checked against the parts they come close to (the geometry kernel cannot do it); check them in the app by eye, or simplify the mesh (repair_mesh with reduce) or rebuild it as a part (rebuild_mesh)" } : {}),
   };
 }
 
