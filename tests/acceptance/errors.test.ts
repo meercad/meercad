@@ -11,6 +11,19 @@ const box: Feature[] = [
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 const two = sketch("sk2", { ref: "origin.XY" }, [...rect("m", 60, 0, 10, 10), ...rect("n", 80, 0, 10, 10)]);
+/** A blob outlined by a spline and a line, 5 mm thick, beside the box: its outline edges are free-form. */
+const blob: Feature[] = [
+  sketch("sk7", { ref: "origin.XY" }, [
+    { id: "q1", type: "point", x: 100, y: 0 },
+    { id: "q2", type: "point", x: 120, y: 10 },
+    { id: "q3", type: "point", x: 110, y: 30 },
+    { id: "q4", type: "point", x: 95, y: 15 },
+    { id: "sp", type: "spline", points: ["q1", "q2", "q3", "q4"] },
+    { id: "ln", type: "line", p1: "q4", p2: "q1" },
+  ]),
+  { id: "bl", op: "extrude", profile: { sketch: "sk7" }, extent: "blind", distance: 5, mode: "new_body" },
+];
+const curvy = { select: "edges", of: "bl", where: { face: "end_cap" } };
 const line = sketch("sk3", { ref: "origin.XZ" }, [{ id: "a", type: "point", x: 0, y: 0 }, { id: "b", type: "point", x: 0, y: 30 }, { id: "ln", type: "line", p1: "a", p2: "b" }]);
 
 /** Builds `extra` after the box and returns the message of the step `id` (which must fail). */
@@ -30,6 +43,8 @@ describe("steps that cannot be built say why", () => {
     ["a push/pull on a face that is not there", [{ id: "e2", op: "extrude", profile: { face: { face: "ex1.nope" } }, extent: "blind", distance: 3, mode: "join" }], /face|no/],
     ["a revolve of 0°", [sketch("sk9", { ref: "origin.XZ" }, rect("r", 50, 0, 5, 5)), { ...line, id: "sk8" } as Feature, { id: "r1", op: "revolve", profile: { sketch: "sk9" }, axis: { line: "sk8.ln" }, angle: 0, mode: "new_body" }], /must not be zero/],
     ["a revolve about a line that is not there", [sketch("sk9", { ref: "origin.XZ" }, rect("r", 50, 0, 5, 5)), { id: "r1", op: "revolve", profile: { sketch: "sk9" }, axis: { line: "sk9.zz" }, angle: 90, mode: "new_body" }], /axis line "sk9.zz" not found/],
+    ["a revolve about a free-form edge", [...blob, sketch("sk9", { ref: "origin.XZ" }, rect("r", 50, 0, 5, 5)), { id: "r1", op: "revolve", profile: { sketch: "sk9" }, axis: { edge: { edge: ["bl.side[sk7.sp]", "bl.end_cap"] } }, angle: 90, mode: "new_body" } as Feature], /axis edge must be straight or circular/],
+    ["a sketch projecting a free-form edge", [...blob, sketch("sk9", { face: { face: "bl.end_cap" } }, [{ id: "pr", type: "projection", edges: [curvy] as never }])], /only straight and circular edges can be projected/],
     ["a revolve of a face", [{ id: "r1", op: "revolve", profile: { face: { face: "ex1.end_cap" } }, axis: { ref: "origin.Z" }, angle: 90, mode: "join" }], /needs a sketch profile/],
     ["a loft of one profile", [sketch("sk9", { ref: "origin.XY" }, circle("c", 100, 0, 5)), { id: "lo1", op: "loft", profiles: [{ sketch: "sk9" }], mode: "new_body" }], /at least two profiles/],
     ["a loft from a sketch with two regions", [two, sketch("sk9", { ref: "origin.XY" }, circle("c", 100, 0, 5)), { id: "lo1", op: "loft", profiles: [{ sketch: "sk2" }, { sketch: "sk9" }], mode: "new_body" }], /2 closed regions, pick one/],

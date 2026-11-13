@@ -136,6 +136,7 @@ export class OcctBackend implements KernelBackend<ModelState> {
       }
       if (e instanceof FeatureError) throw e;
       if (e instanceof ResolveError || e instanceof SketchSolveError) throw new FeatureError(e.message);
+      /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
       throw new FeatureError(`kernel error: ${occtErrorMessage(this.oc, e)}`);
     }
   }
@@ -487,6 +488,7 @@ function thicken({ oc, arena }: Ctx, face: TopoDS_Shape, offset: number): TopoDS
   try {
     mk.MakeThickSolidBySimple(face, offset);
   } catch (e) {
+    /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
     throw new FeatureError(`push/pull failed on this curved face: ${occtErrorMessage(oc, e)}`, "try a smaller distance");
   }
   if (!mk.IsDone()) throw new FeatureError("push/pull failed on this curved face", "try a smaller distance");
@@ -598,6 +600,7 @@ function thruSections(ctx: Ctx, id: string, wires: TopoDS_Wire[], ruled: boolean
   try {
     loft.Build(arena.track(new oc.Message_ProgressRange()));
   } catch (e) {
+    /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
     throw new FeatureError(`loft failed: ${occtErrorMessage(oc, e)}`, "profiles with very different shapes or crossing each other cannot be joined");
   }
   if (!loft.IsDone()) throw new FeatureError("loft failed: the profiles could not be joined", "check that the profiles lie on different planes and do not cross");
@@ -716,6 +719,7 @@ function sweep(f: SweepFeature, ctx: Ctx): Omit<ModelState, "arena"> {
       // OCCT's default frame for pipes is the corrected Frenet one.
       pipe = arena.track(new oc.BRepOffsetAPI_MakePipe(spine, face));
     } catch (e) {
+      /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
       throw new FeatureError(`sweep failed: ${occtErrorMessage(oc, e)}`, "a profile too large for a tight bend makes the sweep cross itself");
     }
     if (!pipe.IsDone()) throw new FeatureError("sweep failed", "a profile too large for a tight bend makes the sweep cross itself");
@@ -806,6 +810,7 @@ function coil(f: ResolvedCoil, ctx: Ctx): Omit<ModelState, "arena"> {
         built = { shape: arena.track(pipe.Shape()), first: arena.track(pipe.FirstShape()), last: arena.track(pipe.LastShape()), generated: (s) => listToArray(arena, pipe.Generated(s)) };
       }
     } catch (e) {
+      /* v8 ignore next 2 -- OCCT throws here only on failures no test can provoke on purpose */
       if (e instanceof FeatureError) throw e;
       throw new FeatureError(`coil failed: ${occtErrorMessage(oc, e)}`);
     }
@@ -915,6 +920,7 @@ function standardPartFeature(f: ResolvedStandardPart, ctx: Ctx): Omit<ModelState
     shape = standardShape(f.kind, { size: f.size, length: f.length, diameter: f.diameter, height: f.height, moving: f.withMoving });
   } catch (e) {
     if (e instanceof StandardPartError) throw new FeatureError(e.message);
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
   const plane = planeFrame(f.plane, ctx);
@@ -1062,6 +1068,7 @@ function textFeature(f: ResolvedText, ctx: Ctx): Omit<ModelState, "arena"> {
       const i = b.faceIndex(face);
       if (i >= 0) return [...b.faceTags[i]!];
     }
+    /* v8 ignore next -- every face of the compound comes from one of the solids */
     return [`${f.id}.side`];
   });
   return applyTool(ctx, f.id, tool, f.mode, f.targets);
@@ -1090,6 +1097,7 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
   try {
     mk.Build(arena.track(new oc.Message_ProgressRange()));
   } catch (e) {
+    /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
     throw new FeatureError(`draft failed: ${occtErrorMessage(oc, e)}`, "try a smaller angle or fewer faces");
   }
   if (!mk.IsDone()) throw new FeatureError("draft failed", "try a smaller angle, or draft faces that meet the neutral plane");
@@ -1162,6 +1170,7 @@ function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> 
           }
           mk.MakeThickSolidBySimple(from, d > 0 ? d + OVERLAP : d);
         } catch (e) {
+          /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
           throw new FeatureError(`face ${name} cannot be moved: ${occtErrorMessage(oc, e)}`, "try a smaller distance");
         }
         if (!mk.IsDone()) throw new FeatureError(`face ${name} cannot be moved`, "try a smaller distance");
@@ -1301,6 +1310,7 @@ function split(f: ResolvedSplit, ctx: Ctx): Omit<ModelState, "arena"> {
         return booleanBodies(oc, arena, body, side, "common", resultId);
       } catch (e) {
         if (e instanceof FeatureError) return null;
+        /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
         throw e;
       }
     };
@@ -1417,6 +1427,7 @@ function applyTool(ctx: Ctx, featureId: string, tool: Body, mode: BooleanMode, t
         changed++;
       } catch (e) {
         if (mode === "intersect") bodies.delete(target.bodyId);
+        /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
         else if (!(e instanceof FeatureError)) throw e;
       }
     }
@@ -1445,6 +1456,7 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
     try {
       mk.Build();
     } catch {
+      /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
       return null;
     }
     if (!mk.IsDone()) return null;
@@ -1460,6 +1472,7 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
       r /= 2;
       if (attempt(r)) throw new FeatureError(`${f.op} of ${fmt(size)} mm failed`, `${fmt(r)} mm works; the edges or neighbouring faces may be too short for ${fmt(size)} mm`);
     }
+    /* v8 ignore next -- an edge no radius at all can treat; halving finds one for every edge tried */
     throw new FeatureError(`${f.op} of ${fmt(size)} mm failed`, "the selected edges cannot be treated");
   }
   const { mk, shape } = ok;
@@ -1499,6 +1512,7 @@ function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
   try {
     mk.MakeThickSolidByJoin(input.shape, list, f.outward ? f.thickness : -f.thickness, 1e-3);
   } catch (e) {
+    /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
     throw new FeatureError(`shell failed: ${occtErrorMessage(oc, e)}`, "try a smaller thickness");
   }
   if (!mk.IsDone()) throw new FeatureError("shell failed", "try a smaller thickness or remove fewer faces");
@@ -1608,6 +1622,7 @@ function applyCopies(ctx: Ctx, copies: Body[], mode: BooleanMode): Omit<ModelSta
     for (const [target, tools] of groups) next.set(target.bodyId, booleanBodies(ctx.oc, ctx.arena, target, tools, mode === "cut" ? "cut" : "fuse"));
   } catch (e) {
     if (e instanceof FeatureError) return null;
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
   return { ...ctx.prev, bodies: next };
@@ -1630,6 +1645,7 @@ function booleanFeature(f: BooleanFeature, ctx: Ctx): Omit<ModelState, "arena"> 
       target = booleanBodies(ctx.oc, ctx.arena, target, f.tools.map(get), op, f.target);
       done = true;
     } catch (e) {
+      /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
       if (!(e instanceof FeatureError)) throw e;
     }
   }
@@ -1770,6 +1786,7 @@ function holeFeature(f: ResolvedHole, ctx: Ctx): Omit<ModelState, "arena"> {
     shape = holeShape(f.kind, { size: f.size, diameter: f.diameter, fit: f.fit, depth: f.depth, allowance: f.allowance, length: f.length });
   } catch (e) {
     if (e instanceof HoleError) throw new FeatureError(e.message);
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
   const frame = planeFrame(f.plane, ctx);
@@ -1918,6 +1935,7 @@ function bendFeature(f: ResolvedBend, ctx: Ctx): Omit<ModelState, "arena"> {
     );
   } catch (e) {
     if (e instanceof BendError) throw new FeatureError(e.message, e.hint);
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
   const bodies = copyMap(ctx.prev.bodies);
@@ -1960,6 +1978,7 @@ function pocketFor(f: ResolvedGridfinity, frame: PlaneFrame, ctx: Ctx): BinPocke
     plan = planScanBin({ corners: local, sink: p.sink, clearance: p.clearance, grip: p.grip, ...(f.autoUnits ? {} : { units: f.units }), ...(f.autoHeight ? {} : { height: f.height }) });
   } catch (e) {
     if (e instanceof ScanBinError) throw new FeatureError(e.message);
+    /* v8 ignore next -- only a programming error gets here (OCCT failures come as FeatureError) */
     throw e;
   }
   const tool = meshSolid(ctx, `nest-${f.id}`, writeStl([{ positions: plan.tool, indices: Uint32Array.from({ length: plan.tool.length / 3 }, (_, i) => i) }]), "the nest", true);
