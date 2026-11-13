@@ -41,7 +41,11 @@ beforeAll(async () => {
 });
 afterAll(cleanup);
 
-/** Every control in the dialog once (a number typed into each value, each choice, each switch). */
+/**
+ * Every control in the dialog once (a number typed into each value, each choice, each switch), from
+ * the bottom up: the examples and the kind at the top would otherwise turn the draft into another
+ * kind before its own fields were used.
+ */
 async function useEveryControl(op: FeatureOp, draft: Record<string, unknown>) {
   renderUi(<FeatureDialog />);
   const open = async () => {
@@ -53,7 +57,7 @@ async function useEveryControl(op: FeatureOp, draft: Record<string, unknown>) {
   expect(dialog(), op).not.toBeNull();
   const used = new Set<Element>();
   for (let round = 0; round < 3; round++) {
-    const controls = [...dialog()!.querySelectorAll<HTMLElement>(".dialog-body input, .dialog-body select, .dialog-body textarea, .dialog-body button, .dialog-body [role=button]")].filter((c) => !used.has(c));
+    const controls = [...dialog()!.querySelectorAll<HTMLElement>(".dialog-body input, .dialog-body select, .dialog-body textarea, .dialog-body button, .dialog-body [role=button]")].filter((c) => !used.has(c)).reverse();
     if (!controls.length) break;
     for (const c of controls) {
       used.add(c);

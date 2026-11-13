@@ -93,3 +93,18 @@ describe("a bin in a baseplate", () => {
     expect((bb.min[1]! + bb.max[1]!) / 2).toBeCloseTo(pb.min[1]! + 1.5 * 42, 3);
   });
 });
+
+describe("switching the kind", () => {
+  it("shows a bin for a part right after a drawer baseplate was previewed (its info has a width, but no nest depth)", async () => {
+    await act(async () => startFeature("gridfinity"));
+    await act(async () => updateDraft({ kind: "baseplate", units: [2, 2], drawer: [300, 200] } as Partial<Feature>));
+    await act(async () => void (await rebuildNow()));
+    await settle();
+    // Once the dialog crashed here: the baseplate's width was read as the bin's and its nest depth was missing.
+    await act(async () => void fireEvent.click(screen.getByText("For a part")));
+    expect(document.querySelector(".dialog")).not.toBeNull();
+    expect(draft<{ pocket?: unknown }>().pocket).toBeDefined();
+    await act(async () => cancelDialog());
+  });
+});
+

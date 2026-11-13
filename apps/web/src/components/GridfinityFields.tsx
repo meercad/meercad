@@ -394,7 +394,9 @@ function PartBinFields({ f, set, info }: { f: Of<"gridfinity">; set: SetFn; info
   const p = f.pocket!;
   const auto = !f.units;
   const setPocket = (patch: Partial<NonNullable<Of<"gridfinity">["pocket"]>>) => set({ pocket: { ...p, ...patch } });
-  const sizeText = info?.["width"] !== undefined
+  // The step's last info may still be a baseplate's or a bin's (the kind was just switched): only a
+  // bin for a part reports how deep its nest is.
+  const sizeText = info?.["pocketDepth"] !== undefined
     ? t("{x} × {y} cells, {h} units high · nest {d} deep", { x: info["width"]!, y: info["depth"]!, h: info["height"]!, d: mm(info["pocketDepth"]!) }) + (info["angle"] ? ` · ${t("turned {a}°", { a: +info["angle"].toFixed(1) })}` : "")
     : "";
   return (
