@@ -28,7 +28,15 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </div>
 );
 
-function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, ReactNode][]; onChange: (v: T) => void }) {
+function Seg<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: [T, ReactNode][];
+  onChange: (v: T) => void;
+}) {
   return (
     <div className="segmented">
       {options.map(([v, label]) => (
@@ -57,11 +65,18 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
 
   const choose = async (blob: File | undefined) => {
     if (!blob) return;
+
     try {
       const image = await heightImageFromFile(blob, { max: PHOTO_PIXELS, stretch: true });
-      set({ image, ...(f.name ? {} : { name: blob.name.replace(/\.[^.]+$/, "").slice(0, 60) || undefined }) });
+      set({
+        image,
+        ...(f.name ? {} : { name: blob.name.replace(/\.[^.]+$/, "").slice(0, 60) || undefined }),
+      });
     } catch (e) {
-      toast(t("Could not read the picture: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error");
+      toast(
+        t("Could not read the picture: {msg}", { msg: e instanceof Error ? e.message : String(e) }),
+        "error",
+      );
     }
   };
 
@@ -77,10 +92,18 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
           <button className={`btn ${has ? "" : "primary"}`} onClick={() => file.current?.click()}>
             <ImagePlus /> {has ? t("Other photo…") : t("Choose a photo…")}
           </button>
-          {has ? <span className="muted small">{`${f.image.width} × ${f.image.height} px · ${width.toFixed(0)} × ${height.toFixed(0)} mm`}</span> : null}
+          {has ? (
+            <span className="muted small">{`${f.image.width} × ${f.image.height} px · ${width.toFixed(0)} × ${height.toFixed(0)} mm`}</span>
+          ) : null}
         </div>
       </Field>
-      <input ref={file} type="file" accept="image/*" hidden onChange={(e) => void choose(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
+      <input
+        ref={file}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => void choose(e.target.files?.[0]).finally(() => (e.target.value = ""))}
+      />
       <Field label={t("Kind")}>
         <Seg
           value={kind}
@@ -89,10 +112,20 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
             ["relief", t("Relief")],
           ]}
           // The thicknesses go back to the kind's own start values.
-          onChange={(k) => set({ kind: k === "lithophane" ? undefined : k, thickness: undefined, depth: undefined })}
+          onChange={(k) =>
+            set({ kind: k === "lithophane" ? undefined : k, thickness: undefined, depth: undefined })
+          }
         />
       </Field>
-      <p className="muted small">{relief ? t("Bright parts stand out, dark parts stay low: the picture shows in the shadows when light falls from the side.") : t("Dark parts get thick, bright parts thin: held against the light or a lamp, the plate shows the photo.")}</p>
+      <p className="muted small">
+        {relief
+          ? t(
+              "Bright parts stand out, dark parts stay low: the picture shows in the shadows when light falls from the side.",
+            )
+          : t(
+              "Dark parts get thick, bright parts thin: held against the light or a lamp, the plate shows the photo.",
+            )}
+      </p>
       <Field label={t("Shape")}>
         <Seg
           value={shape}
@@ -106,39 +139,98 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
       </Field>
       {shape === "curved" ? (
         <Field label={t("Bend")}>
-          <SliderValue value={f.curve} fallback={120} min={10} max={350} step={5} unit="deg" onChange={(c) => set({ curve: c ?? 120 })} />
+          <SliderValue
+            value={f.curve}
+            fallback={120}
+            min={10}
+            max={350}
+            step={5}
+            unit="deg"
+            onChange={(c) => set({ curve: c ?? 120 })}
+          />
         </Field>
       ) : null}
       <Field label={shape === "round" ? t("Circumference") : t("Picture width")}>
-        <SliderValue value={f.width} fallback={100} min={20} max={shape === "round" ? 600 : 250} step={1} unit="mm" onChange={(w) => set({ width: w ?? 100 })} />
+        <SliderValue
+          value={f.width}
+          fallback={100}
+          min={20}
+          max={shape === "round" ? 600 : 250}
+          step={1}
+          unit="mm"
+          onChange={(w) => set({ width: w ?? 100 })}
+        />
       </Field>
       <Field label={relief ? t("Base plate") : t("Thinnest (bright)")}>
-        <SliderValue value={f.thickness} fallback={relief ? 1.6 : 0.8} min={0.4} max={5} step={0.1} unit="mm" placeholder={relief ? "1.6" : "0.8"} onChange={(thickness) => set({ thickness })} />
+        <SliderValue
+          value={f.thickness}
+          fallback={relief ? 1.6 : 0.8}
+          min={0.4}
+          max={5}
+          step={0.1}
+          unit="mm"
+          placeholder={relief ? "1.6" : "0.8"}
+          onChange={(thickness) => set({ thickness })}
+        />
       </Field>
       <Field label={relief ? t("Relief height") : t("Added at dark parts")}>
-        <SliderValue value={f.depth} fallback={relief ? 1.6 : 2.2} min={0.2} max={8} step={0.1} unit="mm" placeholder={relief ? "1.6" : "2.2"} onChange={(depth) => set({ depth })} />
+        <SliderValue
+          value={f.depth}
+          fallback={relief ? 1.6 : 2.2}
+          min={0.2}
+          max={8}
+          step={0.1}
+          unit="mm"
+          placeholder={relief ? "1.6" : "2.2"}
+          onChange={(depth) => set({ depth })}
+        />
       </Field>
       <Field label={t("Frame")}>
-        <SliderValue value={f.frame} fallback={0} min={0} max={15} step={0.5} unit="mm" placeholder="0" onChange={(frame) => set({ frame: frame === 0 ? undefined : frame })} />
+        <SliderValue
+          value={f.frame}
+          fallback={0}
+          min={0}
+          max={15}
+          step={0.5}
+          unit="mm"
+          placeholder="0"
+          onChange={(frame) => set({ frame: frame === 0 ? undefined : frame })}
+        />
       </Field>
       <label className="checkbox">
-        <input type="checkbox" checked={!!f.invert} onChange={(e) => set({ invert: e.target.checked || undefined })} /> {t("Swap dark and bright")}
+        <input
+          type="checkbox"
+          checked={!!f.invert}
+          onChange={(e) => set({ invert: e.target.checked || undefined })}
+        />{" "}
+        {t("Swap dark and bright")}
       </label>
       <Field label={t("On")}>
-        <PlaneBox value={describePlane(f.plane ?? { ref: "origin.XY" })} placeholder={t("Tap a flat face where the plate goes")} />
+        <PlaneBox
+          value={describePlane(f.plane ?? { ref: "origin.XY" })}
+          placeholder={t("Tap a flat face where the plate goes")}
+        />
       </Field>
       <div className="row">
         <Field label={t("Position x")}>
-          <ExprInput value={f.position?.[0] ?? 0} onCommit={(x) => set({ position: [x, f.position?.[1] ?? 0] })} />
+          <ExprInput
+            value={f.position?.[0] ?? 0}
+            onCommit={(x) => set({ position: [x, f.position?.[1] ?? 0] })}
+          />
         </Field>
         <Field label={t("Position y")}>
-          <ExprInput value={f.position?.[1] ?? 0} onCommit={(y) => set({ position: [f.position?.[0] ?? 0, y] })} />
+          <ExprInput
+            value={f.position?.[1] ?? 0}
+            onCommit={(y) => set({ position: [f.position?.[0] ?? 0, y] })}
+          />
         </Field>
       </div>
       <p className="muted small">
         {relief
           ? t("Export as STL or 3MF: only they carry the picture.")
-          : t("Print in white at 100 % infill, 0.1–0.12 mm layers; curved plates stand, so print them upright. Export as STL or 3MF: only they carry the picture.")}
+          : t(
+              "Print in white at 100 % infill, 0.1–0.12 mm layers; curved plates stand, so print them upright. Export as STL or 3MF: only they carry the picture.",
+            )}
       </p>
     </>
   );

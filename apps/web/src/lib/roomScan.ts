@@ -17,6 +17,7 @@ interface RoomPlugin {
   scanRoom(o: { lang: string }): Promise<RoomScan>;
   scanArea(o: { lang: string }): Promise<TerrainResult & { path: string }>;
 }
+
 const Room = registerPlugin<RoomPlugin>("Room");
 
 /** Whether this is the iPhone or iPad app, where rooms and areas can be scanned. */
@@ -25,20 +26,35 @@ export const canScanSpaces = nativeApp && Capacitor.getPlatform() === "ios";
 let caps: Promise<{ room: boolean; area: boolean }> | null = null;
 const capabilities = () => (caps ??= Room.capabilities({ lang }).catch(() => ({ room: false, area: false })));
 
-const stamp = () => new Date().toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const stamp = () =>
+  new Date().toLocaleString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 /** Scans a room and opens it as a new project of parts. */
 export async function scanRoom(): Promise<void> {
-  if (!(await capabilities()).room) return toast(t("Scanning rooms needs an iPhone or iPad with LiDAR and iOS 17 or later."), "error");
+  if (!(await capabilities()).room) {
+    return toast(t("Scanning rooms needs an iPhone or iPad with LiDAR and iOS 17 or later."), "error");
+  }
+
   let scan: RoomScan;
+
   try {
     scan = await Room.scanRoom({ lang });
   } catch (e) {
     const err = e as { code?: string; message?: string };
     if (err.code !== "cancelled") toast(err.message ?? t("Scanning failed"), "error");
+
     return;
   }
-  if (!scan.walls.length) return toast(t("No walls were found. Scan again and show every wall for a moment."), "error");
+
+  if (!scan.walls.length) {
+    return toast(t("No walls were found. Scan again and show every wall for a moment."), "error");
+  }
+
   const doc = roomDocument(scan, {
     wall: (n) => t("Wall {n}", { n }),
     floor: t("Floor"),
@@ -49,12 +65,24 @@ export async function scanRoom(): Promise<void> {
     opening: t("Opening"),
   });
   await newProject(doc, t("Room {when}", { when: stamp() }));
-  toast(t("{walls} walls, {openings} doors and windows, {objects} pieces of furniture. Every wall is a part you can push, move or cut.", { walls: scan.walls.length, openings: scan.doors.length + scan.windows.length + scan.openings.length, objects: scan.objects.length }));
+  toast(
+    t(
+      "{walls} walls, {openings} doors and windows, {objects} pieces of furniture. Every wall is a part you can push, move or cut.",
+      {
+        walls: scan.walls.length,
+        openings: scan.doors.length + scan.windows.length + scan.openings.length,
+        objects: scan.objects.length,
+      },
+    ),
+  );
 }
 
 /** Scans an area (garden bed, terrace, a corner) into a textured model around the open design. */
 export async function scanArea(): Promise<void> {
-  if (!(await capabilities()).area) return toast(t("Scanning areas needs an iPhone or iPad with LiDAR."), "error");
+  if (!(await capabilities()).area) {
+    return toast(t("Scanning areas needs an iPhone or iPad with LiDAR."), "error");
+  }
+
   try {
     const r = await Room.scanArea({ lang });
     const file = await Filesystem.readFile({ path: `file://${r.path}` });

@@ -29,7 +29,10 @@ const WHAT: Record<string, string> = {
   "terrain models": t("terrain models"),
 };
 
-const fileSize = (bytes: number) => (bytes < 1024 * 1024 ? t("{n} kB", { n: Math.max(1, Math.round(bytes / 1024)) }) : t("{n} MB", { n: (bytes / 1024 / 1024).toFixed(1) }));
+const fileSize = (bytes: number) =>
+  bytes < 1024 * 1024
+    ? t("{n} kB", { n: Math.max(1, Math.round(bytes / 1024)) })
+    : t("{n} MB", { n: (bytes / 1024 / 1024).toFixed(1) });
 
 /** The file shared for a design: its JSON, pretty printed like a saved project. */
 export function shareText(doc: MeercadDocument, versions: boolean): string {
@@ -40,7 +43,12 @@ export function shareText(doc: MeercadDocument, versions: boolean): string {
 async function share(name: string, text: string): Promise<void> {
   if (nativeApp) return shareFile(name, text);
   if (desktop?.shareFile) return desktop.shareFile({ name, data: text });
-  const path = await desktop?.saveFile({ name, data: text, filters: [{ name: t("meerCAD part"), extensions: ["meercad"] }] });
+
+  const path = await desktop?.saveFile({
+    name,
+    data: text,
+    filters: [{ name: t("meerCAD part"), extensions: ["meercad"] }],
+  });
   if (path) toast(t("Saved {path}", { path }));
 }
 
@@ -54,12 +62,15 @@ export function ShareDialog() {
   useEffect(() => {
     const show = () => {
       if (!useApp.getState().project) return;
+
       setWithVersions(false);
       setOpen(true);
     };
+
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("meercad:share", show);
     window.addEventListener("keydown", onKey);
+
     return () => {
       window.removeEventListener("meercad:share", show);
       window.removeEventListener("keydown", onKey);
@@ -71,8 +82,10 @@ export function ShareDialog() {
   const text = shareText(doc, withVersions);
   const name = `${baseName()}.meercad`;
   const packs = packsUsed(sharedDoc(doc, { versions: withVersions }));
+
   const go = async () => {
     setBusy(true);
+
     try {
       // The design as it is now, edits of the last moment included.
       await share(name, shareText(currentDoc(), withVersions));
@@ -86,7 +99,12 @@ export function ShareDialog() {
 
   return (
     <div className="modal-backdrop" onPointerDown={() => setOpen(false)}>
-      <div className="modal settings share-dialog" role="dialog" aria-label={t("Share design")} onPointerDown={(e) => e.stopPropagation()}>
+      <div
+        className="modal settings share-dialog"
+        role="dialog"
+        aria-label={t("Share design")}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <header className="settings-head">
           <h2>{t("Share design")}</h2>
           <button className="icon-btn" onClick={() => setOpen(false)} title={t("Close (Esc)")}>
@@ -94,12 +112,21 @@ export function ShareDialog() {
           </button>
         </header>
         <p>
-          <b>{name}</b> <span className="muted small">· {fileSize(new TextEncoder().encode(text).length)}</span>
+          <b>{name}</b>{" "}
+          <span className="muted small">· {fileSize(new TextEncoder().encode(text).length)}</span>
         </p>
-        <p className="muted">{t("The design goes along with every step of its history: whoever opens it in meerCAD can change all of it, just like you. It does not change your own copy.")}</p>
+        <p className="muted">
+          {t(
+            "The design goes along with every step of its history: whoever opens it in meerCAD can change all of it, just like you. It does not change your own copy.",
+          )}
+        </p>
         {versions ? (
           <label className="check">
-            <input type="checkbox" checked={withVersions} onChange={(e) => setWithVersions(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={withVersions}
+              onChange={(e) => setWithVersions(e.target.checked)}
+            />
             <span>{tn(versions, "Include the saved version", "Include the {n} saved versions")}</span>
           </label>
         ) : null}
@@ -107,10 +134,19 @@ export function ShareDialog() {
           <div className="callout info">
             {packs.map((u) => (
               <p key={u.pack}>
-                {t("Uses {pack}: {what}.", { pack: t(PACKS.find((p) => p.id === u.pack)!.name), what: u.what.map((w) => WHAT[w] ?? w).join(", ") })}
+                {t("Uses {pack}: {what}.", {
+                  pack: t(PACKS.find((p) => p.id === u.pack)!.name),
+                  what: u.what.map((w) => WHAT[w] ?? w).join(", "),
+                })}
               </p>
             ))}
-            <p>{tn(packs.length, "Without this pack the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.", "Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.")}</p>
+            <p>
+              {tn(
+                packs.length,
+                "Without this pack the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.",
+                "Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.",
+              )}
+            </p>
           </div>
         ) : null}
         <div className="row share-actions">

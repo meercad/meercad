@@ -3,7 +3,13 @@ import { type Expr, type MeercadDocument, type SketchConstraint, type SketchEnti
 import { packsUsed, type PackId } from "./packUse";
 
 /** Rectangle anchored at the origin with width/height dimensions. */
-function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: SketchEntity[]; constraints: SketchConstraint[] } {
+function rect(
+  w: Expr,
+  h: Expr,
+  centered: boolean,
+  x = 40,
+  y = 20,
+): { entities: SketchEntity[]; constraints: SketchConstraint[] } {
   const entities: SketchEntity[] = [
     { id: "p1", type: "point", x: centered ? -x / 2 : 0, y: centered ? -y / 2 : 0 },
     { id: "p2", type: "point", x: centered ? x / 2 : x, y: centered ? -y / 2 : 0 },
@@ -19,13 +25,29 @@ function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: 
     { id: "c2", type: "horizontal", line: "l3" },
     { id: "c3", type: "vertical", line: "l2" },
     { id: "c4", type: "vertical", line: "l4" },
-    { id: "c5", type: "length", line: "l1", value: w, label: [centered ? 0 : x / 2, centered ? -y / 2 - 6 : -6] },
-    { id: "c6", type: "length", line: "l2", value: h, label: [centered ? x / 2 + 8 : x + 8, centered ? 0 : y / 2] },
+    {
+      id: "c5",
+      type: "length",
+      line: "l1",
+      value: w,
+      label: [centered ? 0 : x / 2, centered ? -y / 2 - 6 : -6],
+    },
+    {
+      id: "c6",
+      type: "length",
+      line: "l2",
+      value: h,
+      label: [centered ? x / 2 + 8 : x + 8, centered ? 0 : y / 2],
+    },
   ];
+
   if (centered) {
     entities.push({ id: "d1", type: "line", p1: "p1", p2: "p3", construction: true });
     constraints.push({ id: "c7", type: "midpoint", point: "origin", line: "d1" });
-  } else constraints.push({ id: "c7", type: "coincident", a: "p1", b: "origin" });
+  } else {
+    constraints.push({ id: "c7", type: "coincident", a: "p1", b: "origin" });
+  }
+
   return { entities, constraints };
 }
 
@@ -38,15 +60,31 @@ function rect(w: Expr, h: Expr, centered: boolean, x = 40, y = 20): { entities: 
 export const EXAMPLE_GREYS = ["#bcc0c5", "#5a5f66", "#9da2a8"] as const;
 
 /** Part colours for the given parts, the grey tones in turn. */
-export const exampleGreys = (...ids: string[]): Record<string, string> => Object.fromEntries(ids.map((id, i) => [id, EXAMPLE_GREYS[i % EXAMPLE_GREYS.length]!]));
+export const exampleGreys = (...ids: string[]): Record<string, string> =>
+  Object.fromEntries(ids.map((id, i) => [id, EXAMPLE_GREYS[i % EXAMPLE_GREYS.length]!]));
 
 const plate = rect("width", "depth", true, 60, 40);
 const bracket: MeercadDocument = {
   format: "meercad/1",
-  params: { width: "60 mm", depth: "40 mm", thickness: "4 mm", hole: "4.5 mm", inset: "10 mm", corner: "5 mm" },
+  params: {
+    width: "60 mm",
+    depth: "40 mm",
+    thickness: "4 mm",
+    hole: "4.5 mm",
+    inset: "10 mm",
+    corner: "5 mm",
+  },
   features: [
     { id: "sk1", op: "sketch", name: "Plate outline", plane: { ref: "origin.XY" }, ...plate },
-    { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: "thickness", mode: "new_body" },
+    {
+      id: "ex1",
+      op: "extrude",
+      name: "Plate",
+      profile: { sketch: "sk1" },
+      extent: "blind",
+      distance: "thickness",
+      mode: "new_body",
+    },
     {
       id: "fi1",
       op: "fillet",
@@ -75,19 +113,41 @@ const bracket: MeercadDocument = {
         { id: "c2", type: "equal", a: "h1", b: "h2" },
         { id: "c3", type: "horizontal_points", a: "q1", b: "origin" },
         { id: "c4", type: "horizontal_points", a: "q2", b: "origin" },
-        { id: "c5", type: "distance", a: "q1", b: "origin", axis: "x", value: "width / 2 - inset", label: [-10, -8] },
-        { id: "c6", type: "distance", a: "origin", b: "q2", axis: "x", value: "width / 2 - inset", label: [10, -8] },
+        {
+          id: "c5",
+          type: "distance",
+          a: "q1",
+          b: "origin",
+          axis: "x",
+          value: "width / 2 - inset",
+          label: [-10, -8],
+        },
+        {
+          id: "c6",
+          type: "distance",
+          a: "origin",
+          b: "q2",
+          axis: "x",
+          value: "width / 2 - inset",
+          label: [10, -8],
+        },
       ],
     },
-    { id: "ex2", op: "extrude", name: "Holes", profile: { sketch: "sk2" }, extent: "through_all", distance: 1, flip: true, mode: "cut" },
+    {
+      id: "ex2",
+      op: "extrude",
+      name: "Holes",
+      profile: { sketch: "sk2" },
+      extent: "through_all",
+      distance: 1,
+      flip: true,
+      mode: "cut",
+    },
     {
       id: "ch1",
       op: "chamfer",
       name: "Countersinks",
-      edges: [
-        { edge: ["ex1.end_cap", "ex2.side[sk2.h1]"] },
-        { edge: ["ex1.end_cap", "ex2.side[sk2.h2]"] },
-      ],
+      edges: [{ edge: ["ex1.end_cap", "ex2.side[sk2.h1]"] }, { edge: ["ex1.end_cap", "ex2.side[sk2.h2]"] }],
       distance: "1 mm",
     },
   ],
@@ -100,9 +160,33 @@ const box: MeercadDocument = {
   params: { width: "80 mm", length: "50 mm", height: "30 mm", wall: "2 mm", round: "4 mm" },
   features: [
     { id: "sk1", op: "sketch", name: "Footprint", plane: { ref: "origin.XY" }, ...boxRect },
-    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "height", mode: "new_body" },
-    { id: "fi1", op: "fillet", name: "Round corners", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }, { edge: ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"] }, { edge: ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"] }, { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l4]"] }], radius: "round" },
-    { id: "fi2", op: "fillet", name: "Bottom edge", edges: { select: "edges", of: "ex1", where: { face: "start_cap" } }, radius: "wall + 1 mm" },
+    {
+      id: "ex1",
+      op: "extrude",
+      profile: { sketch: "sk1" },
+      extent: "blind",
+      distance: "height",
+      mode: "new_body",
+    },
+    {
+      id: "fi1",
+      op: "fillet",
+      name: "Round corners",
+      edges: [
+        { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] },
+        { edge: ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"] },
+        { edge: ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"] },
+        { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l4]"] },
+      ],
+      radius: "round",
+    },
+    {
+      id: "fi2",
+      op: "fillet",
+      name: "Bottom edge",
+      edges: { select: "edges", of: "ex1", where: { face: "start_cap" } },
+      radius: "wall + 1 mm",
+    },
     { id: "sh1", op: "shell", name: "Hollow", faces: [{ face: "ex1.end_cap" }], thickness: "wall" },
   ],
   rollback: null,
@@ -128,7 +212,14 @@ const flange: MeercadDocument = {
         { id: "k3", type: "diameter", curve: "c2", value: "bore", label: [8, 12] },
       ],
     },
-    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "thickness", mode: "new_body" },
+    {
+      id: "ex1",
+      op: "extrude",
+      profile: { sketch: "sk1" },
+      extent: "blind",
+      distance: "thickness",
+      mode: "new_body",
+    },
     {
       id: "sk2",
       op: "sketch",
@@ -144,8 +235,22 @@ const flange: MeercadDocument = {
         { id: "k3", type: "distance", a: "origin", b: "q", axis: "x", value: "pcd / 2", label: [11, -6] },
       ],
     },
-    { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "through_all", distance: 1, flip: true, mode: "cut" },
-    { id: "cp1", op: "circular_pattern", source: { features: ["ex2"] }, axis: { ref: "origin.Z" }, count: "holes" },
+    {
+      id: "ex2",
+      op: "extrude",
+      profile: { sketch: "sk2" },
+      extent: "through_all",
+      distance: 1,
+      flip: true,
+      mode: "cut",
+    },
+    {
+      id: "cp1",
+      op: "circular_pattern",
+      source: { features: ["ex2"] },
+      axis: { ref: "origin.Z" },
+      count: "holes",
+    },
     { id: "ch1", op: "chamfer", edges: { edge: ["ex1.end_cap", "ex1.side[sk1.c1]"] }, distance: "1 mm" },
   ],
   rollback: null,
@@ -156,8 +261,28 @@ const gearPair: MeercadDocument = {
   format: "meercad/1",
   params: { module: "1.5 mm", pinion: "15", wheel: "30", width: "8 mm", shaft: "5 mm" },
   features: [
-    { id: "gr1", op: "gear", name: "Pinion", kind: "spur", module: "module", teeth: "pinion", width: "width", bore: { diameter: "shaft", shape: "d_flat", flat: "shaft - 0.5 mm", allowance: "0.15 mm" }, mode: "new_body" },
-    { id: "gr2", op: "gear", name: "Wheel", kind: "spur", teeth: "wheel", width: "width", meshWith: { gear: "gr1", direction: 30 }, bore: { diameter: "8 mm", allowance: "0.15 mm" }, mode: "new_body" },
+    {
+      id: "gr1",
+      op: "gear",
+      name: "Pinion",
+      kind: "spur",
+      module: "module",
+      teeth: "pinion",
+      width: "width",
+      bore: { diameter: "shaft", shape: "d_flat", flat: "shaft - 0.5 mm", allowance: "0.15 mm" },
+      mode: "new_body",
+    },
+    {
+      id: "gr2",
+      op: "gear",
+      name: "Wheel",
+      kind: "spur",
+      teeth: "wheel",
+      width: "width",
+      meshWith: { gear: "gr1", direction: 30 },
+      bore: { diameter: "8 mm", allowance: "0.15 mm" },
+      mode: "new_body",
+    },
   ],
   mechanism: {
     joints: [
@@ -177,10 +302,26 @@ const hingedBox: MeercadDocument = {
   params: { width: "60 mm", depth: "40 mm", height: "20 mm", lid: "3 mm", pin: "5 mm" },
   features: [
     { id: "sk1", op: "sketch", name: "Footprint", plane: { ref: "origin.XY" }, ...hingeRect },
-    { id: "ex1", op: "extrude", name: "Box", profile: { sketch: "sk1" }, extent: "blind", distance: "height", mode: "new_body" },
+    {
+      id: "ex1",
+      op: "extrude",
+      name: "Box",
+      profile: { sketch: "sk1" },
+      extent: "blind",
+      distance: "height",
+      mode: "new_body",
+    },
     { id: "pl1", op: "plane", name: "Lid plane", base: { ref: "origin.XY" }, offset: "height" },
     { id: "sk2", op: "sketch", name: "Lid outline", plane: { ref: "pl1" }, ...hingeRect },
-    { id: "ex2", op: "extrude", name: "Lid", profile: { sketch: "sk2" }, extent: "blind", distance: "lid", mode: "new_body" },
+    {
+      id: "ex2",
+      op: "extrude",
+      name: "Lid",
+      profile: { sketch: "sk2" },
+      extent: "blind",
+      distance: "lid",
+      mode: "new_body",
+    },
     { id: "pl2", op: "plane", name: "Pin plane", base: { ref: "origin.YZ" }, offset: "-width / 2" },
     {
       id: "sk3",
@@ -197,12 +338,35 @@ const hingedBox: MeercadDocument = {
         { id: "k3", type: "distance", a: "origin", b: "q", axis: "y", value: "height", label: [-6, 10] },
       ],
     },
-    { id: "ex3", op: "extrude", name: "Pin", profile: { sketch: "sk3" }, extent: "blind", distance: "width", mode: "new_body" },
+    {
+      id: "ex3",
+      op: "extrude",
+      name: "Pin",
+      profile: { sketch: "sk3" },
+      extent: "blind",
+      distance: "width",
+      mode: "new_body",
+    },
   ],
   mechanism: {
     joints: [
-      { id: "j1", name: "Pin", type: "fixed", a: "ex3", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.c1]" } } },
-      { id: "j2", name: "Lid", type: "revolute", a: "ex2", b: "ex1", anchor: { axisOf: { face: "ex3.side[sk3.c1]" } }, limits: [0, 110] },
+      {
+        id: "j1",
+        name: "Pin",
+        type: "fixed",
+        a: "ex3",
+        b: "ex1",
+        anchor: { axisOf: { face: "ex3.side[sk3.c1]" } },
+      },
+      {
+        id: "j2",
+        name: "Lid",
+        type: "revolute",
+        a: "ex2",
+        b: "ex1",
+        anchor: { axisOf: { face: "ex3.side[sk3.c1]" } },
+        limits: [0, 110],
+      },
     ],
   },
   partColors: exampleGreys("ex2", "ex3"),
@@ -216,10 +380,52 @@ const namePlate: MeercadDocument = {
   params: { width: "80 mm", height: "30 mm", thickness: "4 mm", letters: "8 mm" },
   features: [
     { id: "sk1", op: "sketch", name: "Outline", plane: { ref: "origin.XY" }, ...plateRect },
-    { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: "thickness", mode: "new_body" },
-    { id: "fi1", op: "fillet", name: "Corners", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }, { edge: ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"] }, { edge: ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"] }, { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l4]"] }], radius: "4 mm" },
-    { id: "tx1", op: "text", name: "Name", plane: { face: { face: "ex1.end_cap" } }, text: "meerCAD", font: "sans-bold", align: "center", position: [0, -2], size: "letters", depth: "1 mm", mode: "join" },
-    { id: "tx2", op: "text", name: "Label", plane: { face: { face: "ex1.end_cap" } }, text: "made with meerCAD", align: "center", position: [0, -10], size: "3.5 mm", depth: "0.6 mm", mode: "cut" },
+    {
+      id: "ex1",
+      op: "extrude",
+      name: "Plate",
+      profile: { sketch: "sk1" },
+      extent: "blind",
+      distance: "thickness",
+      mode: "new_body",
+    },
+    {
+      id: "fi1",
+      op: "fillet",
+      name: "Corners",
+      edges: [
+        { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] },
+        { edge: ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"] },
+        { edge: ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"] },
+        { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l4]"] },
+      ],
+      radius: "4 mm",
+    },
+    {
+      id: "tx1",
+      op: "text",
+      name: "Name",
+      plane: { face: { face: "ex1.end_cap" } },
+      text: "meerCAD",
+      font: "sans-bold",
+      align: "center",
+      position: [0, -2],
+      size: "letters",
+      depth: "1 mm",
+      mode: "join",
+    },
+    {
+      id: "tx2",
+      op: "text",
+      name: "Label",
+      plane: { face: { face: "ex1.end_cap" } },
+      text: "made with meerCAD",
+      align: "center",
+      position: [0, -10],
+      size: "3.5 mm",
+      depth: "0.6 mm",
+      mode: "cut",
+    },
   ],
   rollback: null,
 };
@@ -233,12 +439,73 @@ const storage: MeercadDocument = {
   params: { height: "3", scoop: "8 mm" },
   features: [
     { id: "gf1", op: "gridfinity", name: "Baseplate", kind: "baseplate", units: [3, 2], magnets: true },
-    { id: "gf2", op: "gridfinity", name: "Screws", kind: "bin", units: [2, 1], height: "height", dividers: [1, 0], scoop: "scoop", tab: {}, baseplate: "gf1", cell: [0, 0] },
-    { id: "gf3", op: "gridfinity", name: "Inserts", kind: "bin", units: [1, 1], height: "height", scoop: "scoop", tab: {}, baseplate: "gf1", cell: [2, 0] },
-    { id: "gf4", op: "gridfinity", name: "Sorter", kind: "bin", units: [3, 1], height: "height", dividers: [5, 0], scoop: "scoop", baseplate: "gf1", cell: [0, 1] },
-    { id: "lb1", op: "label", name: "Screw label", plane: { face: { face: "gf2.tab" } }, position: [-41.6, -8.6], text: "M3×10", symbol: "screw_socket" },
-    { id: "lb2", op: "label", name: "Nut label", plane: { face: { face: "gf2.tab" } }, position: [-0.4, -8.6], text: "M3", symbol: "nut", style: "engraved", separate: true },
-    { id: "lb3", op: "label", name: "Insert label", plane: { face: { face: "gf3.tab" } }, position: [42, -8.6], width: 34, text: "M3", symbol: "insert" },
+    {
+      id: "gf2",
+      op: "gridfinity",
+      name: "Screws",
+      kind: "bin",
+      units: [2, 1],
+      height: "height",
+      dividers: [1, 0],
+      scoop: "scoop",
+      tab: {},
+      baseplate: "gf1",
+      cell: [0, 0],
+    },
+    {
+      id: "gf3",
+      op: "gridfinity",
+      name: "Inserts",
+      kind: "bin",
+      units: [1, 1],
+      height: "height",
+      scoop: "scoop",
+      tab: {},
+      baseplate: "gf1",
+      cell: [2, 0],
+    },
+    {
+      id: "gf4",
+      op: "gridfinity",
+      name: "Sorter",
+      kind: "bin",
+      units: [3, 1],
+      height: "height",
+      dividers: [5, 0],
+      scoop: "scoop",
+      baseplate: "gf1",
+      cell: [0, 1],
+    },
+    {
+      id: "lb1",
+      op: "label",
+      name: "Screw label",
+      plane: { face: { face: "gf2.tab" } },
+      position: [-41.6, -8.6],
+      text: "M3×10",
+      symbol: "screw_socket",
+    },
+    {
+      id: "lb2",
+      op: "label",
+      name: "Nut label",
+      plane: { face: { face: "gf2.tab" } },
+      position: [-0.4, -8.6],
+      text: "M3",
+      symbol: "nut",
+      style: "engraved",
+      separate: true,
+    },
+    {
+      id: "lb3",
+      op: "label",
+      name: "Insert label",
+      plane: { face: { face: "gf3.tab" } },
+      position: [42, -8.6],
+      width: 34,
+      text: "M3",
+      symbol: "insert",
+    },
   ],
   partColors: { ...exampleGreys("gf2", "gf3", "gf4", "lb1", "lb2", "lb3"), lb2_mark: "#2b2b2b" },
   rollback: null,
@@ -252,15 +519,83 @@ const toolWall: MeercadDocument = {
   format: "meercad/1",
   params: {},
   features: [
-    { id: "wl1", op: "wall", system: "opengrid", kind: "board", units: [7, 5], variant: "lite", screws: true },
-    { id: "wl2", op: "wall", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", board: "wl1", cell: [0, 4] },
-    { id: "wl3", op: "wall", system: "opengrid", kind: "holder", units: [1, 1], accessory: "ring", size: 12, board: "wl1", cell: [1, 4] },
-    { id: "wl4", op: "wall", system: "opengrid", kind: "holder", units: [1, 1], accessory: "hook", depth: 60, board: "wl1", cell: [2, 4] },
-    { id: "wl5", op: "wall", system: "opengrid", kind: "holder", units: [3, 2], accessory: "shelf", depth: 50, board: "wl1", cell: [4, 3] },
-    { id: "wl6", op: "wall", system: "opengrid", kind: "holder", units: [4, 2], accessory: "bin", size: 2, board: "wl1", cell: [0, 0] },
+    {
+      id: "wl1",
+      op: "wall",
+      system: "opengrid",
+      kind: "board",
+      units: [7, 5],
+      variant: "lite",
+      screws: true,
+    },
+    {
+      id: "wl2",
+      op: "wall",
+      system: "opengrid",
+      kind: "holder",
+      units: [1, 1],
+      accessory: "hook",
+      board: "wl1",
+      cell: [0, 4],
+    },
+    {
+      id: "wl3",
+      op: "wall",
+      system: "opengrid",
+      kind: "holder",
+      units: [1, 1],
+      accessory: "ring",
+      size: 12,
+      board: "wl1",
+      cell: [1, 4],
+    },
+    {
+      id: "wl4",
+      op: "wall",
+      system: "opengrid",
+      kind: "holder",
+      units: [1, 1],
+      accessory: "hook",
+      depth: 60,
+      board: "wl1",
+      cell: [2, 4],
+    },
+    {
+      id: "wl5",
+      op: "wall",
+      system: "opengrid",
+      kind: "holder",
+      units: [3, 2],
+      accessory: "shelf",
+      depth: 50,
+      board: "wl1",
+      cell: [4, 3],
+    },
+    {
+      id: "wl6",
+      op: "wall",
+      system: "opengrid",
+      kind: "holder",
+      units: [4, 2],
+      accessory: "bin",
+      size: 2,
+      board: "wl1",
+      cell: [0, 0],
+    },
     // A bin standing in the bin shelf's left cell: on a plane facing up the wall at the cells' floor.
     { id: "pl1", op: "plane", name: "Shelf floor", base: { ref: "origin.XZ" }, angle: 180, offset: 68 },
-    { id: "gf1", op: "gridfinity", name: "Bin", kind: "bin", units: [1, 1], height: 3, scoop: 8, tab: {}, plane: { ref: "pl1" }, position: [-63, -29.5] },
+    {
+      id: "gf1",
+      op: "gridfinity",
+      name: "Bin",
+      kind: "bin",
+      units: [1, 1],
+      height: 3,
+      scoop: 8,
+      tab: {},
+      plane: { ref: "pl1" },
+      position: [-63, -29.5],
+    },
   ],
   partColors: exampleGreys("wl2", "wl3", "wl4", "wl5", "wl6", "gf1"),
   rollback: null,
@@ -284,25 +619,55 @@ export interface Example {
  * The premium packs an example needs to be shown and changed. Variants do not count: without the
  * pack its variables still change it (a DIN box's `din`).
  */
-export const examplePacks = (ex: Example): PackId[] => ex.packs ?? packsUsed(ex.doc).map((u) => u.pack).filter((p) => p !== "versions");
+export const examplePacks = (ex: Example): PackId[] =>
+  ex.packs ??
+  packsUsed(ex.doc)
+    .map((u) => u.pack)
+    .filter((p) => p !== "versions");
 
 /**
  * Larger examples as files in src/examples, with the name and line shown for them. Only real designs
  * ship here; the small per-feature demos are test models in tests/corpus (feature-*.meercad.json).
  */
 // Vite bundles them; the cast keeps the file free of Vite's types (the tests include it too).
-const files = (import.meta as ImportMeta & { glob(pattern: string, opts: object): Record<string, string> }).glob("../examples/*.meercad", { query: "?raw", import: "default", eager: true });
+const files = (
+  import.meta as ImportMeta & { glob(pattern: string, opts: object): Record<string, string> }
+).glob("../examples/*.meercad", { query: "?raw", import: "default", eager: true });
 const MORE: [file: string, name: string, description: string][] = [
-  ["40-stackable-ribbed-box", "Stackable DIN box", "Parametric for DIN A paper (variable din: 6, 5 or 4 for A6, A5, A4); two of a size stand exactly on the next larger one; prints without supports"],
-  ["39-two-material-grip", "Two-material grip", "A PLA handle with a grooved TPU sleeve: two filaments in one 3MF"],
+  [
+    "40-stackable-ribbed-box",
+    "Stackable DIN box",
+    "Parametric for DIN A paper (variable din: 6, 5 or 4 for A6, A5, A4); two of a size stand exactly on the next larger one; prints without supports",
+  ],
+  [
+    "39-two-material-grip",
+    "Two-material grip",
+    "A PLA handle with a grooved TPU sleeve: two filaments in one 3MF",
+  ],
   ["37-rolled-up-rule", "Rolled-up rule", "A 1 m rule rolled into a flat spiral that fits the print bed"],
   ["38-text-bracelet", "Text bracelet", "A band with raised text wrapped into a closed ring"],
-  ["41-linear-axis", "Linear axis", "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts"],
-  ["42-boxes-and-snap-hooks", "Boxes and snap hooks", "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks"],
+  [
+    "41-linear-axis",
+    "Linear axis",
+    "A carriage on an MGN12 rail and a nut on a turning lead screw, with aluminium posts",
+  ],
+  [
+    "42-boxes-and-snap-hooks",
+    "Boxes and snap hooks",
+    "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks",
+  ],
   ["43-springs", "Springs", "Compression, extension and torsion springs from wire, diameter and coils"],
-  ["44-trapezoid-screw-and-nut", "Clamp screw and nut", "A Tr16 screw with a knurled head and its nut, with play for printing"],
+  [
+    "44-trapezoid-screw-and-nut",
+    "Clamp screw and nut",
+    "A Tr16 screw with a knurled head and its nut, with play for printing",
+  ],
   ["46-coil-thread", "Coil", "A thread of your own profile cut into a rod, and a conical coil"],
-  ["45-jar-with-lid", "Jar with screw lid", "A three-start round thread: the lid closes in a third of a turn"],
+  [
+    "45-jar-with-lid",
+    "Jar with screw lid",
+    "A three-start round thread: the lid closes in a third of a turn",
+  ],
 ];
 
 export const EXAMPLES: Example[] = [
@@ -312,11 +677,22 @@ export const EXAMPLES: Example[] = [
   { name: "Gear pair", description: "Meshing gears that turn together", doc: gearPair },
   { name: "Hinged box", description: "Lid on a pin that swings open", doc: hingedBox },
   { name: "Name plate", description: "Raised and engraved text", doc: namePlate },
-  { name: "Storage grid with labels", description: "Bins in a baseplate, with label tabs and two-colour labels", doc: storage, feature: true },
-  { name: "Tool wall on openGrid", description: "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins", doc: toolWall, feature: true },
+  {
+    name: "Storage grid with labels",
+    description: "Bins in a baseplate, with label tabs and two-colour labels",
+    doc: storage,
+    feature: true,
+  },
+  {
+    name: "Tool wall on openGrid",
+    description: "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins",
+    doc: toolWall,
+    feature: true,
+  },
   ...MORE.map(([file, name, description]) => {
     const raw = files[`../examples/${file}.meercad`];
     if (!raw) throw new Error(`example ${file} is missing`);
+
     return { name, description, doc: JSON.parse(raw) as MeercadDocument, feature: true as const };
   }),
 ];

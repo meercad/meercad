@@ -1,4 +1,6 @@
-/** German texts: materials, the material picker, the rendered view. See ../GLOSSARY.md (material = Material). */
+/**
+ * German texts: materials, the material picker, the rendered view. See ../GLOSSARY.md (material = Material).
+ */
 export default {
   // Material names new in the library (packages/model MATERIALS; the older ones are in workspace.ts)
   "PLA matte": "PLA matt",
@@ -8,22 +10,38 @@ export default {
   "Resin (clear)": "Harz (klar)",
 
   // Notes on the materials
-  "Easy to print and stiff; softens from about 55 °C.": "Leicht zu drucken und steif; wird ab etwa 55 °C weich.",
-  "PLA without shine: hides layer lines, looks moulded.": "PLA ohne Glanz: verbirgt Schichtlinien, wirkt wie gegossen.",
-  "Glossy, pearly sheen for decorative prints; a little weaker between layers.": "Glänzend mit Perlschimmer für Deko-Drucke; zwischen den Schichten etwas schwächer.",
-  "Tough, glossy and food-safe grades exist; stands up to about 70 °C.": "Zäh und glänzend, lebensmittelechte Sorten gibt es; hält bis etwa 70 °C.",
-  "Heat resistant to about 95 °C; warps, print enclosed.": "Hitzebeständig bis etwa 95 °C; verzieht sich, geschlossen drucken.",
-  "Like ABS, but stays colourfast outdoors in sun and rain.": "Wie ABS, bleibt aber draußen in Sonne und Regen farbecht.",
-  "Flexible and grippy: grips, bumpers, seals. Print slowly.": "Flexibel und griffig: Griffe, Puffer, Dichtungen. Langsam drucken.",
-  "Very soft, rubber-like; needs a direct drive extruder.": "Sehr weich, gummiartig; braucht einen Direktextruder.",
-  "Tough and slippery: gears, hinges, wear parts. Keep it dry.": "Zäh und gleitfähig: Zahnräder, Scharniere, Verschleißteile. Trocken lagern.",
-  "Very strong and heat resistant to about 115 °C; print enclosed.": "Sehr fest und hitzebeständig bis etwa 115 °C; geschlossen drucken.",
-  "Carbon fibre filled: stiff, matte, light. Needs a hardened nozzle.": "Mit Kohlefasern: steif, matt, leicht. Braucht eine gehärtete Düse.",
-  "Carbon fibre filled PETG: stiff and tough. Needs a hardened nozzle.": "PETG mit Kohlefasern: steif und zäh. Braucht eine gehärtete Düse.",
-  "PLA with wood fibres: looks and sands like wood. Use a 0.6 mm nozzle.": "PLA mit Holzfasern: sieht aus wie Holz und lässt sich so schleifen. Mit 0,6-mm-Düse drucken.",
-  "PLA with metal powder (bronze, copper): heavy, can be polished. Needs a hardened nozzle.": "PLA mit Metallpulver (Bronze, Kupfer): schwer, lässt sich polieren. Braucht eine gehärtete Düse.",
-  "Photopolymer for fine detail on resin printers; brittle.": "Fotopolymer für feine Details auf Harzdruckern; spröde.",
-  "See-through photopolymer; clear after sanding and coating.": "Durchsichtiges Fotopolymer; klar nach Schleifen und Lackieren.",
+  "Easy to print and stiff; softens from about 55 °C.":
+    "Leicht zu drucken und steif; wird ab etwa 55 °C weich.",
+  "PLA without shine: hides layer lines, looks moulded.":
+    "PLA ohne Glanz: verbirgt Schichtlinien, wirkt wie gegossen.",
+  "Glossy, pearly sheen for decorative prints; a little weaker between layers.":
+    "Glänzend mit Perlschimmer für Deko-Drucke; zwischen den Schichten etwas schwächer.",
+  "Tough, glossy and food-safe grades exist; stands up to about 70 °C.":
+    "Zäh und glänzend, lebensmittelechte Sorten gibt es; hält bis etwa 70 °C.",
+  "Heat resistant to about 95 °C; warps, print enclosed.":
+    "Hitzebeständig bis etwa 95 °C; verzieht sich, geschlossen drucken.",
+  "Like ABS, but stays colourfast outdoors in sun and rain.":
+    "Wie ABS, bleibt aber draußen in Sonne und Regen farbecht.",
+  "Flexible and grippy: grips, bumpers, seals. Print slowly.":
+    "Flexibel und griffig: Griffe, Puffer, Dichtungen. Langsam drucken.",
+  "Very soft, rubber-like; needs a direct drive extruder.":
+    "Sehr weich, gummiartig; braucht einen Direktextruder.",
+  "Tough and slippery: gears, hinges, wear parts. Keep it dry.":
+    "Zäh und gleitfähig: Zahnräder, Scharniere, Verschleißteile. Trocken lagern.",
+  "Very strong and heat resistant to about 115 °C; print enclosed.":
+    "Sehr fest und hitzebeständig bis etwa 115 °C; geschlossen drucken.",
+  "Carbon fibre filled: stiff, matte, light. Needs a hardened nozzle.":
+    "Mit Kohlefasern: steif, matt, leicht. Braucht eine gehärtete Düse.",
+  "Carbon fibre filled PETG: stiff and tough. Needs a hardened nozzle.":
+    "PETG mit Kohlefasern: steif und zäh. Braucht eine gehärtete Düse.",
+  "PLA with wood fibres: looks and sands like wood. Use a 0.6 mm nozzle.":
+    "PLA mit Holzfasern: sieht aus wie Holz und lässt sich so schleifen. Mit 0,6-mm-Düse drucken.",
+  "PLA with metal powder (bronze, copper): heavy, can be polished. Needs a hardened nozzle.":
+    "PLA mit Metallpulver (Bronze, Kupfer): schwer, lässt sich polieren. Braucht eine gehärtete Düse.",
+  "Photopolymer for fine detail on resin printers; brittle.":
+    "Fotopolymer für feine Details auf Harzdruckern; spröde.",
+  "See-through photopolymer; clear after sanding and coating.":
+    "Durchsichtiges Fotopolymer; klar nach Schleifen und Lackieren.",
   "Light and easy to machine.": "Leicht und gut zu bearbeiten.",
   "Strong and stiff; rusts unless coated.": "Fest und steif; rostet ohne Beschichtung.",
   "Corrosion resistant steel (A2/A4).": "Rostfreier Stahl (A2/A4).",
@@ -57,8 +75,10 @@ export default {
   "Based on {material}": "Basiert auf {material}",
   "{mass} for {parts} (solid)": "{mass} für {parts} (massiv)",
   "Own material from this": "Eigenes Material daraus",
-  "The parts have different materials. Pick one to give them all the same.": "Die Teile haben verschiedene Materialien. Wähl eines, um allen dasselbe zu geben.",
-  "Pick a material: the parts get its look, their mass, and the right filament in 3MF exports.": "Wähl ein Material: Die Teile bekommen sein Aussehen, ihre Masse und im 3MF-Export das passende Filament.",
+  "The parts have different materials. Pick one to give them all the same.":
+    "Die Teile haben verschiedene Materialien. Wähl eines, um allen dasselbe zu geben.",
+  "Pick a material: the parts get its look, their mass, and the right filament in 3MF exports.":
+    "Wähl ein Material: Die Teile bekommen sein Aussehen, ihre Masse und im 3MF-Export das passende Filament.",
 
   // RenderBar.tsx, ViewportView.tsx
   Rendered: "Gerendert",
@@ -87,7 +107,8 @@ export default {
   "Filament {n}: {material} {color}": "Filament {n}: {material} {color}",
   "any material": "beliebiges Material",
   "{n} filaments assigned": "{n} Filamente zugeordnet",
-  "Load these filaments in the slicer in this order; each part is already assigned to its filament.": "Leg diese Filamente im Slicer in dieser Reihenfolge ein; jedes Teil ist seinem Filament schon zugeordnet.",
+  "Load these filaments in the slicer in this order; each part is already assigned to its filament.":
+    "Leg diese Filamente im Slicer in dieser Reihenfolge ein; jedes Teil ist seinem Filament schon zugeordnet.",
 
   // Help.tsx
   "Materials and rendered pictures": "Materialien und gerenderte Bilder",
@@ -102,5 +123,6 @@ export default {
   "Pictures: Display mode → **Rendered** shows the materials in studio light with a soft shadow. **Turntable** turns the model slowly; **Save image** saves a sharp picture up to 4K, also with a transparent background.":
     "Bilder: Darstellung → **Gerendert** zeigt die Materialien im Studiolicht mit weichem Schatten. **Drehteller** dreht das Modell langsam; **Bild speichern** speichert ein scharfes Bild bis 4K, auch mit transparentem Hintergrund.",
   "Two-material grip": "Griff aus zwei Materialien",
-  "A PLA handle with a grooved TPU sleeve: two filaments in one 3MF": "Ein PLA-Griff mit gerillter TPU-Hülle: zwei Filamente in einem 3MF",
+  "A PLA handle with a grooved TPU sleeve: two filaments in one 3MF":
+    "Ein PLA-Griff mit gerillter TPU-Hülle: zwei Filamente in einem 3MF",
 } as Record<string, string>;

@@ -8,7 +8,17 @@ import { act, cleanup } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
-import { apply, cancelDialog, currentDoc, editFeature, getViewport, newProject, rebuildNow, undo, useApp } from "../store";
+import {
+  apply,
+  cancelDialog,
+  currentDoc,
+  editFeature,
+  getViewport,
+  newProject,
+  rebuildNow,
+  undo,
+  useApp,
+} from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "./ViewportView";
 
@@ -23,20 +33,45 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: [{ id: "c", type: "point", x: 20, y: 10 }, { id: "k", type: "circle", center: "c", radius: 4 }], constraints: [{ id: "d", type: "diameter", curve: "k", value: "hole" }] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: [
+      { id: "c", type: "point", x: 20, y: 10 },
+      { id: "k", type: "circle", center: "c", radius: 4 },
+    ],
+    constraints: [{ id: "d", type: "diameter", curve: "k", value: "hole" }],
+  },
   { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "symmetric", distance: 30, mode: "cut" },
-  { id: "sk3", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("q", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk3",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("q", 60, 0, 10, 10),
+    constraints: [],
+  },
 ];
 let vp: Viewport;
 const settle = (ms = 40) => act(async () => new Promise((r) => setTimeout(r, ms)));
-const volumeOf = async (id: string) => (await rebuildNow()).report.bodies.find((b) => b.id === id)?.volume ?? NaN;
+const volumeOf = async (id: string) =>
+  (await rebuildNow()).report.bodies.find((b) => b.id === id)?.volume ?? NaN;
+
 async function select(...picks: Pick[]) {
   await act(async () => useApp.setState({ selection: picks, selectedFeature: null }));
   await settle();
 }
+
 const handle = (id: string) => vp.handles.find((h) => h.id === id)!;
+
 async function drag(id: string, to: number) {
   const h = handle(id);
   expect(h, `${id}: ${vp.handles.map((x) => x.id).join()}`).toBeDefined();
@@ -65,7 +100,16 @@ describe("more drag arrows", () => {
   const wall = (): Pick => {
     const m = useApp.getState().output!.meshes.find((x) => x.bodyId === "ex1")!;
     const face = m.faceTags.findIndex((tags) => tags.some((t) => t.startsWith("ex2.side[sk2.k]")));
-    return { kind: "face", bodyId: "ex1", face, tags: m.faceTags[face]!, point: [20, 6, 5], normal: null, surface: [0, 1, 0] } as unknown as Pick;
+
+    return {
+      kind: "face",
+      bodyId: "ex1",
+      face,
+      tags: m.faceTags[face]!,
+      point: [20, 6, 5],
+      normal: null,
+      surface: [0, 1, 0],
+    } as unknown as Pick;
   };
 
   it("widens a hole sized by a variable by changing the variable, and says so", async () => {
@@ -76,7 +120,9 @@ describe("more drag arrows", () => {
     expect(await volumeOf("ex1")).toBeCloseTo(8000 - Math.PI * 25 * 10, 3);
     // Its value label offers to unlink, naming what it changes with.
     await select(wall());
-    expect(document.querySelector<HTMLButtonElement>("button.unlink")!.title).toMatch(/Changes together with the variable "hole"/);
+    expect(document.querySelector<HTMLButtonElement>("button.unlink")!.title).toMatch(
+      /Changes together with the variable "hole"/,
+    );
     await act(async () => undo());
     await rebuilt();
   });
@@ -85,9 +131,11 @@ describe("more drag arrows", () => {
     await select(wall());
     // The label lays itself out again with the next frame of the view; here a second pick stands in.
     await select(wall());
+
     const unlink = document.querySelector<HTMLButtonElement>("button.unlink");
     expect(unlink).not.toBeNull();
     await act(async () => void unlink!.click());
+
     const sk = currentDoc().features.find((f) => f.id === "sk2") as Extract<Feature, { op: "sketch" }>;
     expect(sk.constraints.find((c) => c.id === "d")).toMatchObject({ value: 8 });
     expect(currentDoc().params["hole"]).toBe("8 mm");
@@ -100,6 +148,7 @@ describe("more drag arrows", () => {
     const key = out.report.sketches.find((s) => s.id === "sk3")!.regions[0]!.key;
     await select({ kind: "region", sketchId: "sk3", key, point: [65, 5, 0] } as Pick);
     await drag("extrude", 7);
+
     const step = currentDoc().features.at(-1)!;
     expect(step).toMatchObject({ op: "extrude", distance: 7, profile: { sketch: "sk3", regions: [key] } });
     expect(await volumeOf(step.id)).toBeCloseTo(700, 3);
@@ -107,6 +156,7 @@ describe("more drag arrows", () => {
     await rebuilt();
     // Dragged back to nothing: no step.
     await select({ kind: "region", sketchId: "sk3", key, point: [65, 5, 0] } as Pick);
+
     const before = currentDoc().features.length;
     await drag("extrude", 0);
     expect(currentDoc().features.length).toBe(before);
@@ -114,7 +164,10 @@ describe("more drag arrows", () => {
   });
 
   it("shows the three arrows of a move at the moved part, and drags along y", async () => {
-    apply({ type: "add_features", features: [{ id: "mv1", op: "transform", bodies: ["ex1"], translate: [5, 0, 0] } as Feature] });
+    apply({
+      type: "add_features",
+      features: [{ id: "mv1", op: "transform", bodies: ["ex1"], translate: [5, 0, 0] } as Feature],
+    });
     await rebuilt();
     await act(async () => editFeature("mv1"));
     await settle();

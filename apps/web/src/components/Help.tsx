@@ -11,7 +11,8 @@ interface Guide {
 }
 
 const li = (text: string) => <li>{rich(text)}</li>;
-const about = (detail?: string) => window.dispatchEvent(new CustomEvent("meercad:about", detail ? { detail } : {}));
+const about = (detail?: string) =>
+  window.dispatchEvent(new CustomEvent("meercad:about", detail ? { detail } : {}));
 
 /** Built when the panel opens, so it only describes the premium packs that are shown. */
 const guides = (): { section: string; guides: Guide[] }[] => [
@@ -22,10 +23,22 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Your first part in 2 minutes"),
         body: (
           <ol>
-            {li(t("Hover the grid's **Top** plane (or a flat face) and press [S] — or hover **Origin** in the feature list and pick a plane."))}
+            {li(
+              t(
+                "Hover the grid's **Top** plane (or a flat face) and press [S] — or hover **Origin** in the feature list and pick a plane.",
+              ),
+            )}
             {li(t("Press [R], click a corner on the origin, click the opposite corner."))}
-            {li(t("Press [D], click the bottom line, click below it and type `40` [↵]. Dimension the side the same way."))}
-            {li(t("Press [↵] to finish the sketch, click inside the rectangle and **drag the arrow** up — or press [E] and type a distance."))}
+            {li(
+              t(
+                "Press [D], click the bottom line, click below it and type `40` [↵]. Dimension the side the same way.",
+              ),
+            )}
+            {li(
+              t(
+                "Press [↵] to finish the sketch, click inside the rectangle and **drag the arrow** up — or press [E] and type a distance.",
+              ),
+            )}
             {li(t("Click a top edge and drag its arrow away from the part to round it."))}
             {li(t("Export → **STL** or **3MF** for your slicer."))}
           </ol>
@@ -35,9 +48,21 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Navigating the 3D view"),
         body: (
           <ul>
-            {li(t("**Rotate**: right-drag (or drag the view cube) · **Pan**: middle-drag or Shift + right-drag · **Zoom**: wheel, towards the cursor."))}
-            {li(t("**Trackpad**: swipe with two fingers to rotate, Shift + swipe to pan, pinch or Ctrl + swipe to zoom."))}
-            {li(t("View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. [Mod+1]–[Mod+7] pick standard views, [Space] over a face looks straight at it, [Z] fits all."))}
+            {li(
+              t(
+                "**Rotate**: right-drag (or drag the view cube) · **Pan**: middle-drag or Shift + right-drag · **Zoom**: wheel, towards the cursor.",
+              ),
+            )}
+            {li(
+              t(
+                "**Trackpad**: swipe with two fingers to rotate, Shift + swipe to pan, pinch or Ctrl + swipe to zoom.",
+              ),
+            )}
+            {li(
+              t(
+                "View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. [Mod+1]–[Mod+7] pick standard views, [Space] over a face looks straight at it, [Z] fits all.",
+              ),
+            )}
             {li(t("The box icon at the bottom right switches perspective / orthographic."))}
           </ul>
         ),
@@ -46,9 +71,21 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("On iPhone and iPad"),
         body: (
           <ul>
-            {li(t("**Fingers navigate**: one finger rotates, two fingers pan and pinch to zoom. **The Apple Pencil works**: it selects, draws in sketches and drags the arrows."))}
-            {li(t("**Undo**: tap with two fingers or swipe three fingers left · **Redo**: tap with three fingers or swipe right — or use the arrows at the top right. A short note says what was undone."))}
-            {li(t("Long-press for the menus a right-click opens on the Mac. Double-tap or squeeze the Pencil to switch a sketch between selecting and drawing."))}
+            {li(
+              t(
+                "**Fingers navigate**: one finger rotates, two fingers pan and pinch to zoom. **The Apple Pencil works**: it selects, draws in sketches and drags the arrows.",
+              ),
+            )}
+            {li(
+              t(
+                "**Undo**: tap with two fingers or swipe three fingers left · **Redo**: tap with three fingers or swipe right — or use the arrows at the top right. A short note says what was undone.",
+              ),
+            )}
+            {li(
+              t(
+                "Long-press for the menus a right-click opens on the Mac. Double-tap or squeeze the Pencil to switch a sketch between selecting and drawing.",
+              ),
+            )}
           </ul>
         ),
       },
@@ -61,9 +98,21 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Drawing and snapping"),
         body: (
           <ul>
-            {li(t("Tools: [L] line (keeps chaining; double-click or Esc ends, clicking the start closes), [R] rectangle, [Shift+R] center rectangle, [C] circle, [A] arc (center, start, end), [G] polygon, [P] point, [T] trim."))}
-            {li(t("The cursor snaps to existing points, onto curves and onto the axes — the tip next to the cursor tells you which. Nearly horizontal/vertical lines become exactly so."))}
-            {li(t("[X] toggles construction geometry (dashed, ignored for profiles). [U] uses model edges as fixed references."))}
+            {li(
+              t(
+                "Tools: [L] line (keeps chaining; double-click or Esc ends, clicking the start closes), [R] rectangle, [Shift+R] center rectangle, [C] circle, [A] arc (center, start, end), [G] polygon, [P] point, [T] trim.",
+              ),
+            )}
+            {li(
+              t(
+                "The cursor snaps to existing points, onto curves and onto the axes — the tip next to the cursor tells you which. Nearly horizontal/vertical lines become exactly so.",
+              ),
+            )}
+            {li(
+              t(
+                "[X] toggles construction geometry (dashed, ignored for profiles). [U] uses model edges as fixed references.",
+              ),
+            )}
             {li(t("Closed loops fill light blue — those are the profiles you can extrude."))}
           </ul>
         ),
@@ -72,9 +121,21 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Dimensions and constraints"),
         body: (
           <ul>
-            {li(t("[D], then click a line (length), circle (diameter), arc (radius), two points (distance — place the label to the side for horizontal/vertical) or two lines (angle). Type a value or an expression like `width / 2`."))}
-            {li(t("Double-click any dimension to change it. Select geometry and add constraints with [Shift] + letter: [Shift+V] horizontal/vertical, [Shift+N] coincident, [Shift+T] tangent, [Shift+E] equal, [Shift+A] parallel, [Shift+P] perpendicular, [Shift+C] concentric, [Shift+M] midpoint, [Shift+S] symmetric, [Shift+L] lock."))}
-            {li(t("The badge top-left shows the remaining degrees of freedom; “Fully defined” means nothing can move by accident."))}
+            {li(
+              t(
+                "[D], then click a line (length), circle (diameter), arc (radius), two points (distance — place the label to the side for horizontal/vertical) or two lines (angle). Type a value or an expression like `width / 2`.",
+              ),
+            )}
+            {li(
+              t(
+                "Double-click any dimension to change it. Select geometry and add constraints with [Shift] + letter: [Shift+V] horizontal/vertical, [Shift+N] coincident, [Shift+T] tangent, [Shift+E] equal, [Shift+A] parallel, [Shift+P] perpendicular, [Shift+C] concentric, [Shift+M] midpoint, [Shift+S] symmetric, [Shift+L] lock.",
+              ),
+            )}
+            {li(
+              t(
+                "The badge top-left shows the remaining degrees of freedom; “Fully defined” means nothing can move by accident.",
+              ),
+            )}
             {li(t("Drag points or lines to try shapes — the solver keeps all constraints."))}
           </ul>
         ),
@@ -90,9 +151,25 @@ const guides = (): { section: string; guides: Guide[] }[] => [
           <ul>
             {li(t("Select any face, flat or round → drag the knob: out adds material, in cuts."))}
             {li(t("Select a sketch region → drag to extrude it."))}
-            {li(touchOnly() ? t("Select edges (each tap adds one) → drag away from the part for a fillet, towards it for a chamfer.") : t("Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer."))}
-            {li(t("The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts."))}
-            {li(t("Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it."))}
+            {li(
+              touchOnly()
+                ? t(
+                    "Select edges (each tap adds one) → drag away from the part for a fillet, towards it for a chamfer.",
+                  )
+                : t(
+                    "Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer.",
+                  ),
+            )}
+            {li(
+              t(
+                "The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts.",
+              ),
+            )}
+            {li(
+              t(
+                "Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it.",
+              ),
+            )}
           </ul>
         ),
       },
@@ -100,11 +177,27 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Features with exact values"),
         body: (
           <ul>
-            {li(t("Extrude [E]: New / Add / Remove / Intersect, blind, symmetric, two directions or through all."))}
+            {li(
+              t(
+                "Extrude [E]: New / Add / Remove / Intersect, blind, symmetric, two directions or through all.",
+              ),
+            )}
             {li(t("Revolve [V] around an axis, line or edge. Fillet [F], Chamfer [C], Shell [H]."))}
-            {li(t("Patterns [L] / [O] and Mirror [I] copy extrudes/revolves or whole parts. Boolean [B] combines parts. Plane [N] adds offset construction planes."))}
-            {li(t("**Modify → Hole** with **Insert** makes holes for heat-set threaded inserts (M2–M10): pick the length, tap the face, or tap an edge to put the hole far enough in. **Also place the inserts** adds them as parts to the parts list; a warning shows where the wall around an insert is too thin."))}
-            {li(t("Dialogs preview live; [↵] accepts, [Esc] cancels. Drag the arrows in the viewport to set distances."))}
+            {li(
+              t(
+                "Patterns [L] / [O] and Mirror [I] copy extrudes/revolves or whole parts. Boolean [B] combines parts. Plane [N] adds offset construction planes.",
+              ),
+            )}
+            {li(
+              t(
+                "**Modify → Hole** with **Insert** makes holes for heat-set threaded inserts (M2–M10): pick the length, tap the face, or tap an edge to put the hole far enough in. **Also place the inserts** adds them as parts to the parts list; a warning shows where the wall around an insert is too thin.",
+              ),
+            )}
+            {li(
+              t(
+                "Dialogs preview live; [↵] accepts, [Esc] cancels. Drag the arrows in the viewport to set distances.",
+              ),
+            )}
           </ul>
         ),
       },
@@ -112,10 +205,26 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Bend, ring and spiral"),
         body: (
           <ul>
-            {li(t("**Bend** (Transform menu): pick the parts, then choose **Bend** (round the axis by an angle), **Ring** (onto a cylinder: a flat pattern becomes a bracelet) or **Spiral** (a long strip rolls up into a flat coil that fits the print bed)."))}
-            {li(t("The axis buttons X / Y / Z or a picked edge set the axis it bends round. A spiral's axis goes through the strip's thin side, so it stays flat on the bed."))}
-            {li(t("Drag the arrow or type the radius, angle or gap. The step shows how many turns a spiral makes and how wide it gets; turns that would touch are refused, ones closer than 0.3 mm get a warning."))}
-            {li(t("Lengths along the part stay the same, so a ruler's marks keep their spacing. The result is a mesh part, ready for STL or 3MF."))}
+            {li(
+              t(
+                "**Bend** (Transform menu): pick the parts, then choose **Bend** (round the axis by an angle), **Ring** (onto a cylinder: a flat pattern becomes a bracelet) or **Spiral** (a long strip rolls up into a flat coil that fits the print bed).",
+              ),
+            )}
+            {li(
+              t(
+                "The axis buttons X / Y / Z or a picked edge set the axis it bends round. A spiral's axis goes through the strip's thin side, so it stays flat on the bed.",
+              ),
+            )}
+            {li(
+              t(
+                "Drag the arrow or type the radius, angle or gap. The step shows how many turns a spiral makes and how wide it gets; turns that would touch are refused, ones closer than 0.3 mm get a warning.",
+              ),
+            )}
+            {li(
+              t(
+                "Lengths along the part stay the same, so a ruler's marks keep their spacing. The result is a mesh part, ready for STL or 3MF.",
+              ),
+            )}
           </ul>
         ),
       },
@@ -123,9 +232,15 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("History, rollback and variables"),
         body: (
           <ul>
-            {li(t("Double-click a feature to edit it; everything after it updates. Drag features to reorder."))}
+            {li(
+              t("Double-click a feature to edit it; everything after it updates. Drag features to reorder."),
+            )}
             {li(t("Drag the blue bar under the features to roll back and insert steps earlier."))}
-            {li(t("Add variables (e.g. `wall = 2 mm`) and use them in any value; renaming a variable updates every use."))}
+            {li(
+              t(
+                "Add variables (e.g. `wall = 2 mm`) and use them in any value; renaming a variable updates every use.",
+              ),
+            )}
             {li(t("Right-click a feature to suppress, rename or delete it."))}
           </ul>
         ),
@@ -134,11 +249,31 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Storage bins and labels"),
         body: (
           <ul>
-            {li(t("**Create → Storage bin** makes bins and baseplates for the open Gridfinity grid (42 mm cells, 7 mm height units). Start from a preset, then change cells, height, dividers, scoop, label tab, stacking lip and magnet or screw holes; − and + step the counts."))}
-            {li(t("A baseplate fills a drawer or any area when you give its size, or a shape you drew in a sketch; the rest becomes a solid border or stays empty. **Cut into pieces for the print bed** splits it between cells into parts that fit your print bed (256 × 256 mm unless you change it, less what of the bed you cannot use). Bins pick a baseplate and a cell to stand in, and **Check fit** confirms that nothing overlaps."))}
-            {li(t("**A bin for a part**: right-click or long-press a part (a scan, a tool) and choose **Gridfinity bin for this part**, or pick **For a part** in the bin dialog. The part sinks into the bin's top by half its height with 0.5 mm play; the bin takes as few cells as hold it, turned if that saves cells. Set how deep it sinks, the play and a finger grip across the part."))}
-            {li(t("**Create → Label** makes a printable label with a screw, nut, washer or insert symbol and text like `M3×10`. Tap a bin's label tab to put it there; **Two colours** makes the marking its own part for a second colour."))}
-            {li(t("**Create → Wall storage** makes openGrid boards (28 mm cells, full or lite) and pegboards, and holders that clip into them: hooks, rings for tools, shelves and shelves that hold Gridfinity bins. Pick the board a holder hangs on and its cell; **Check fit** confirms the snaps or pegs sit free."))}
+            {li(
+              t(
+                "**Create → Storage bin** makes bins and baseplates for the open Gridfinity grid (42 mm cells, 7 mm height units). Start from a preset, then change cells, height, dividers, scoop, label tab, stacking lip and magnet or screw holes; − and + step the counts.",
+              ),
+            )}
+            {li(
+              t(
+                "A baseplate fills a drawer or any area when you give its size, or a shape you drew in a sketch; the rest becomes a solid border or stays empty. **Cut into pieces for the print bed** splits it between cells into parts that fit your print bed (256 × 256 mm unless you change it, less what of the bed you cannot use). Bins pick a baseplate and a cell to stand in, and **Check fit** confirms that nothing overlaps.",
+              ),
+            )}
+            {li(
+              t(
+                "**A bin for a part**: right-click or long-press a part (a scan, a tool) and choose **Gridfinity bin for this part**, or pick **For a part** in the bin dialog. The part sinks into the bin's top by half its height with 0.5 mm play; the bin takes as few cells as hold it, turned if that saves cells. Set how deep it sinks, the play and a finger grip across the part.",
+              ),
+            )}
+            {li(
+              t(
+                "**Create → Label** makes a printable label with a screw, nut, washer or insert symbol and text like `M3×10`. Tap a bin's label tab to put it there; **Two colours** makes the marking its own part for a second colour.",
+              ),
+            )}
+            {li(
+              t(
+                "**Create → Wall storage** makes openGrid boards (28 mm cells, full or lite) and pegboards, and holders that clip into them: hooks, rings for tools, shelves and shelves that hold Gridfinity bins. Pick the board a holder hangs on and its cell; **Check fit** confirms the snaps or pegs sit free.",
+              ),
+            )}
             {li(t("Both are ordinary parts: round their edges, cut into them or write on them."))}
           </ul>
         ),
@@ -147,9 +282,21 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Boxes, lids and snap hooks"),
         body: (
           <ul>
-            {li(t("**Create → Box with lid** makes a box and its lid as two parts: rectangular or round with a **snap lid** that clicks into a groove, or a round jar with a **screw lid**. Start from a preset, then change sizes, wall, play, snap or thread."))}
-            {li(t("The lid lies upside down next to the box, ready to print. **Lid on the box** shows it closed; **Check fit** confirms that nothing overlaps."))}
-            {li(t("**Create → Snap hook** puts hooks on a flat face. Tap the face where they stand, turn the barb with the turn button, and tap the part they click into: its window is cut with play. The dialog shows how far the hook bends and which plastics take it."))}
+            {li(
+              t(
+                "**Create → Box with lid** makes a box and its lid as two parts: rectangular or round with a **snap lid** that clicks into a groove, or a round jar with a **screw lid**. Start from a preset, then change sizes, wall, play, snap or thread.",
+              ),
+            )}
+            {li(
+              t(
+                "The lid lies upside down next to the box, ready to print. **Lid on the box** shows it closed; **Check fit** confirms that nothing overlaps.",
+              ),
+            )}
+            {li(
+              t(
+                "**Create → Snap hook** puts hooks on a flat face. Tap the face where they stand, turn the barb with the turn button, and tap the part they click into: its window is cut with play. The dialog shows how far the hook bends and which plastics take it.",
+              ),
+            )}
           </ul>
         ),
       },
@@ -162,11 +309,33 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Saving, export and import"),
         body: (
           <ul>
-            {li(t("Projects save automatically as open `.meercad` files (readable JSON) — in the desktop app in Documents/meerCAD."))}
-            {li(t("Export: STL and 3MF for 3D printing, STEP for other CAD tools, OBJ for rendering and other 3D tools (terrains and scans keep their textures), DXF/SVG of a sketch for laser cutting."))}
-            {li(t("Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already."))}
-            {hasPack("drawings") ? li(t("Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.")) : null}
-            {li(t("Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces."))}
+            {li(
+              t(
+                "Projects save automatically as open `.meercad` files (readable JSON) — in the desktop app in Documents/meerCAD.",
+              ),
+            )}
+            {li(
+              t(
+                "Export: STL and 3MF for 3D printing, STEP for other CAD tools, OBJ for rendering and other 3D tools (terrains and scans keep their textures), DXF/SVG of a sketch for laser cutting.",
+              ),
+            )}
+            {li(
+              t(
+                "Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already.",
+              ),
+            )}
+            {hasPack("drawings")
+              ? li(
+                  t(
+                    "Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.",
+                  ),
+                )
+              : null}
+            {li(
+              t(
+                "Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces.",
+              ),
+            )}
           </ul>
         ),
       },
@@ -174,11 +343,31 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Materials and rendered pictures"),
         body: (
           <ul>
-            {li(t("Give parts a material: right-click (or long-press) a part in the view or the parts list → **Material…**. Select several parts first to give them all the same one. Search by name, or browse filaments, resins, metals and wood."))}
-            {li(t("A material sets the part's finish (matte, glossy, silk, rubbery, metal), its mass (shown in the parts list, solid at 100 % infill) and its print data: nozzle and bed temperature, hardness of flexible ones. Carbon, wood and metal bring their own colour; plastics keep the part's colour."))}
-            {li(t("Your own materials: in the picker, **Own material from this** makes one with your name and colour (say, your black PETG), based on a library material. Edit or delete it there; its parts then go back to the base material."))}
-            {li(t("Multi-material printing: export **3MF**. Parts with different materials or colours go to different filaments (a PETG body and a TPU grip, for instance), and meerCAD tells you which filament number gets which material, so you load them in that order in the slicer."))}
-            {li(t("Pictures: Display mode → **Rendered** shows the materials in studio light with a soft shadow. **Turntable** turns the model slowly; **Save image** saves a sharp picture up to 4K, also with a transparent background."))}
+            {li(
+              t(
+                "Give parts a material: right-click (or long-press) a part in the view or the parts list → **Material…**. Select several parts first to give them all the same one. Search by name, or browse filaments, resins, metals and wood.",
+              ),
+            )}
+            {li(
+              t(
+                "A material sets the part's finish (matte, glossy, silk, rubbery, metal), its mass (shown in the parts list, solid at 100 % infill) and its print data: nozzle and bed temperature, hardness of flexible ones. Carbon, wood and metal bring their own colour; plastics keep the part's colour.",
+              ),
+            )}
+            {li(
+              t(
+                "Your own materials: in the picker, **Own material from this** makes one with your name and colour (say, your black PETG), based on a library material. Edit or delete it there; its parts then go back to the base material.",
+              ),
+            )}
+            {li(
+              t(
+                "Multi-material printing: export **3MF**. Parts with different materials or colours go to different filaments (a PETG body and a TPU grip, for instance), and meerCAD tells you which filament number gets which material, so you load them in that order in the slicer.",
+              ),
+            )}
+            {li(
+              t(
+                "Pictures: Display mode → **Rendered** shows the materials in studio light with a soft shadow. **Turntable** turns the model slowly; **Save image** saves a sharp picture up to 4K, also with a transparent background.",
+              ),
+            )}
           </ul>
         ),
       },
@@ -191,10 +380,20 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         title: t("Licenses"),
         body: (
           <ul>
-            {li(t("meerCAD © 2026 Torben Berger UG (haftungsbeschränkt), all rights reserved. The file-format, I/O and naming libraries are MIT licensed, so other tools can read and write .meercad files."))}
-            {li(t("Geometry by **Open CASCADE Technology** and sketch solving by **PlaneGCS** (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules."))}
+            {li(
+              t(
+                "meerCAD © 2026 Torben Berger UG (haftungsbeschränkt), all rights reserved. The file-format, I/O and naming libraries are MIT licensed, so other tools can read and write .meercad files.",
+              ),
+            )}
+            {li(
+              t(
+                "Geometry by **Open CASCADE Technology** and sketch solving by **PlaneGCS** (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules.",
+              ),
+            )}
             {li(t("Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages."))}
-            {li(t("Your models belong to you: projects are plain files on your device; nothing is uploaded."))}
+            {li(
+              t("Your models belong to you: projects are plain files on your device; nothing is uploaded."),
+            )}
             <li>
               <button className="link" onClick={() => about("licenses")}>
                 {t("All licences")}
@@ -225,8 +424,16 @@ const guides = (): { section: string; guides: Guide[] }[] => [
         body: (
           <ol>
             {li(t("Click the plug icon in the top bar and enable **Allow assistants to control meerCAD**."))}
-            {li(t("Copy the shown configuration into Claude Desktop (Settings → Developer → Edit Config) or run the `claude mcp add …` command for Claude Code."))}
-            {li(t("Ask for parts or changes, e.g. “make the plate 10 mm wider and add a third hole”. The assistant can pick and open projects, preview ideas and apply them — you see every step live and can undo."))}
+            {li(
+              t(
+                "Copy the shown configuration into Claude Desktop (Settings → Developer → Edit Config) or run the `claude mcp add …` command for Claude Code.",
+              ),
+            )}
+            {li(
+              t(
+                "Ask for parts or changes, e.g. “make the plate 10 mm wider and add a third hole”. The assistant can pick and open projects, preview ideas and apply them — you see every step live and can undo.",
+              ),
+            )}
           </ol>
         ),
       },
@@ -234,9 +441,18 @@ const guides = (): { section: string; guides: Guide[] }[] => [
   },
 ];
 
-export function HelpPanel({ onClose, onTour, onShortcuts }: { onClose: () => void; onTour: () => void; onShortcuts: () => void }) {
+export function HelpPanel({
+  onClose,
+  onTour,
+  onShortcuts,
+}: {
+  onClose: () => void;
+  onTour: () => void;
+  onShortcuts: () => void;
+}) {
   const [all] = useState(guides);
   const [open, setOpen] = useState<string | null>(all[0]!.guides[0]!.title);
+
   return (
     <aside className="panel-right help-panel">
       <div className="head">

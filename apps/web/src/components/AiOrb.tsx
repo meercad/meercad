@@ -4,6 +4,7 @@ import { t } from "../lib/i18n";
 /** What an assistant's tool call does, in words for the user. */
 export function toolLabel(tool: string | null | undefined): string | null {
   if (!tool) return null;
+
   const words: Record<string, string> = {
     apply_ops: t("Changing the model"),
     preview_ops: t("Trying a variant"),
@@ -39,10 +40,14 @@ export function toolLabel(tool: string | null | undefined): string | null {
     repair_mesh: t("Repairing the mesh"),
     gear_calc: t("Calculating gears"),
   };
+
   return words[tool] ?? tool.replace(/_/g, " ");
 }
 
-/** A round mark for an assistant: soft colours drift and swirl inside it while it works, held still while it waits. */
+/**
+ * A round mark for an assistant: soft colours drift and swirl inside it while it works, held still while it
+ * waits.
+ */
 export function AiOrb({ busy, small = false }: { busy: boolean; small?: boolean }) {
   return (
     <span className={`ai-orb ${busy ? "busy" : ""} ${small ? "sm" : ""}`} aria-hidden="true">

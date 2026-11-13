@@ -13,10 +13,14 @@ import { showMenu } from "./Menu";
 import "../materials.css";
 
 /** Picture sizes offered by "Save image". */
-export function imageSizes(view: { width: number; height: number }): { label: string; width: number; height: number }[] {
+export function imageSizes(view: {
+  width: number;
+  height: number;
+}): { label: string; width: number; height: number }[] {
   const s = (w: number, h: number) => `${w} × ${h}`;
   const sw = Math.round(view.width * 2);
   const sh = Math.round(view.height * 2);
+
   return [
     { label: t("As on screen, sharp ({size})", { size: s(sw, sh) }), width: sw, height: sh },
     { label: t("Full HD ({size})", { size: s(1920, 1080) }), width: 1920, height: 1080 },
@@ -26,14 +30,23 @@ export function imageSizes(view: { width: number; height: number }): { label: st
 }
 
 /** Renders the view at a size and saves it as a PNG. */
-export async function saveRender(vp: Viewport, width: number, height: number, transparent: boolean): Promise<void> {
+export async function saveRender(
+  vp: Viewport,
+  width: number,
+  height: number,
+  transparent: boolean,
+): Promise<void> {
   try {
     const canvas = vp.renderImage(width, height, { transparent });
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!blob) throw new Error(t("the picture could not be encoded"));
+
     download(`${baseName()} ${canvas.width}x${canvas.height}.png`, new Uint8Array(await blob.arrayBuffer()));
   } catch (e) {
-    toast(t("Could not save the picture: {error}", { error: e instanceof Error ? e.message : String(e) }), "error");
+    toast(
+      t("Could not save the picture: {error}", { error: e instanceof Error ? e.message : String(e) }),
+      "error",
+    );
   }
 }
 
@@ -41,6 +54,7 @@ export function RenderBar({ vp, onExit }: { vp: Viewport; onExit: () => void }) 
   const [spin, setSpin] = useState(vp.turntable);
   const [transparent, setTransparent] = useState(false);
   useEffect(() => () => vp.setTurntable(false), [vp]);
+
   return (
     <div className="render-bar" role="toolbar" aria-label={t("Rendered view")}>
       <button
@@ -55,7 +69,12 @@ export function RenderBar({ vp, onExit }: { vp: Viewport; onExit: () => void }) 
         <RotateCw />
         <span>{t("Turntable")}</span>
       </button>
-      <button className={`icon-btn ${transparent ? "active" : ""}`} title={t("Save pictures without a background (transparent)")} aria-pressed={transparent} onClick={() => setTransparent(!transparent)}>
+      <button
+        className={`icon-btn ${transparent ? "active" : ""}`}
+        title={t("Save pictures without a background (transparent)")}
+        aria-pressed={transparent}
+        onClick={() => setTransparent(!transparent)}
+      >
         <SquareDashed />
         <span>{t("Transparent")}</span>
       </button>
@@ -68,7 +87,11 @@ export function RenderBar({ vp, onExit }: { vp: Viewport; onExit: () => void }) 
           showMenu(
             r.left,
             r.bottom + 6,
-            imageSizes({ width: el.clientWidth, height: el.clientHeight }).map((s) => ({ label: s.label, icon: <ImageDown />, onClick: () => void saveRender(vp, s.width, s.height, transparent) })),
+            imageSizes({ width: el.clientWidth, height: el.clientHeight }).map((s) => ({
+              label: s.label,
+              icon: <ImageDown />,
+              onClick: () => void saveRender(vp, s.width, s.height, transparent),
+            })),
           );
         }}
       >

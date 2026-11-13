@@ -26,17 +26,22 @@ export interface PackUse {
 /** The packs a design uses, each with what uses it; empty for a design without any. */
 export function packsUsed(doc: MeercadDocument): PackUse[] {
   const use = new Map<PackId, Set<string>>();
-  const add = (pack: PackId, what: string) => (use.get(pack) ?? use.set(pack, new Set()).get(pack)!).add(what);
+  const add = (pack: PackId, what: string) =>
+    (use.get(pack) ?? use.set(pack, new Set()).get(pack)!).add(what);
+
   for (const f of doc.features) {
     if (f.op === "gear") add("mechanics", "gears");
     else if (f.op === "spring") add("mechanics", "springs");
   }
+
   if (doc.mechanism?.joints.length) add("mechanics", "joints");
   if (doc.mechanism?.motions?.length) add("mechanics", "motions");
   if (doc.variants?.length) add("versions", "variants");
   if (doc.versions?.length) add("versions", "saved versions");
   if (doc.references?.length) add("scan", "terrain models");
+
   const order: PackId[] = ["mechanics", "scan", "drawings", "versions"];
+
   return order.filter((p) => use.has(p)).map((pack) => ({ pack, what: [...use.get(pack)!] }));
 }
 
@@ -47,6 +52,8 @@ export function packsUsed(doc: MeercadDocument): PackUse[] {
  */
 export function sharedDoc(doc: MeercadDocument, opts: { versions?: boolean } = {}): MeercadDocument {
   if (opts.versions || (!doc.versions && !doc.blobs)) return doc;
+
   const { versions: _v, blobs: _b, ...rest } = doc;
+
   return rest;
 }

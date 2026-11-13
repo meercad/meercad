@@ -8,5 +8,10 @@ import { currentDoc, openDraft } from "../store";
 
 export function binForPart(bodyId: string): void {
   const doc = currentDoc();
-  openDraft({ id: nextFeatureId(doc, "gridfinity"), op: "gridfinity", kind: "bin", pocket: { body: bodyId } });
+  openDraft({
+    id: nextFeatureId(doc, "gridfinity"),
+    op: "gridfinity",
+    kind: "bin",
+    pocket: { body: bodyId },
+  });
 }

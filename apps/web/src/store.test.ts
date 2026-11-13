@@ -6,7 +6,19 @@
 import { describe, expect, it } from "vitest";
 import type { DocOp, Feature, SketchEntity } from "@meercad/schema";
 import { testFiles } from "../test/setup";
-import { apply, currentDoc, flushSave, goHome, newProject, openProject, rebuildNow, redo, renameProject, undo, useApp } from "./store";
+import {
+  apply,
+  currentDoc,
+  flushSave,
+  goHome,
+  newProject,
+  openProject,
+  rebuildNow,
+  redo,
+  renameProject,
+  undo,
+  useApp,
+} from "./store";
 
 const rect = (w: number, h: number): SketchEntity[] => [
   { id: "p1", type: "point", x: 0, y: 0 },
@@ -22,14 +34,19 @@ const box: Feature[] = [
   { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect(40, 20), constraints: [] },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "h", mode: "new_body" },
 ];
-const add: DocOp[] = [{ type: "set_param", name: "h", expr: "10 mm" }, { type: "add_features", features: box }];
+const add: DocOp[] = [
+  { type: "set_param", name: "h", expr: "10 mm" },
+  { type: "add_features", features: box },
+];
 
 describe("the app's store", () => {
   it("makes a design, builds it and saves it", async () => {
     await newProject(undefined, "Box");
+
     const id = useApp.getState().project!.id;
     expect(useApp.getState().screen).toBe("editor");
     expect(apply(...add)).toBe(true);
+
     const out = await rebuildNow();
     expect(out.report.bodies.map((b) => b.volume)).toEqual([expect.closeTo(8000, 6)]);
     expect(useApp.getState().output).toBe(out);
@@ -57,6 +74,7 @@ describe("the app's store", () => {
 
   it("renames, leaves and opens the project again", async () => {
     await renameProject("Boxy");
+
     const id = useApp.getState().project!.id;
     expect(useApp.getState().project!.name).toBe("Boxy");
     goHome();

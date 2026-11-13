@@ -9,7 +9,18 @@ import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import type { Viewport } from "@meercad/viewport";
-import { apply, cancelDialog, commitDialog, getViewport, newProject, setDialogField, startFeature, undo, updateDraft, useApp } from "../store";
+import {
+  apply,
+  cancelDialog,
+  commitDialog,
+  getViewport,
+  newProject,
+  setDialogField,
+  startFeature,
+  undo,
+  updateDraft,
+  useApp,
+} from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "./ViewportView";
 import { FeatureDialog, pickKindsFor } from "./FeatureDialog";
@@ -25,9 +36,21 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 25, mode: "new_body" },
 ];
 let vp: Viewport;
@@ -36,7 +59,15 @@ const draft = <T,>() => useApp.getState().dialog!.feature as T;
 
 async function clickAt(world: [number, number, number], opts: { shiftKey?: boolean } = {}) {
   const [x, y] = vp.worldToScreen(world)!;
-  const ev = { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true, ...opts };
+  const ev = {
+    clientX: x,
+    clientY: y,
+    pointerId: 1,
+    pointerType: "mouse",
+    button: 0,
+    isPrimary: true,
+    ...opts,
+  };
   await act(async () => {
     fireEvent.pointerMove(vp.canvas, { ...ev, buttons: 0 });
     fireEvent.pointerDown(vp.canvas, { ...ev, buttons: 1 });
@@ -45,10 +76,21 @@ async function clickAt(world: [number, number, number], opts: { shiftKey?: boole
   // Far enough apart that two clicks on one spot are not a double-click.
   await settle(350);
 }
+
 /** The parts' volumes, smallest first, once the app has filled them in after the rebuild. */
 const volumes = async () => {
-  await waitFor(() => expect(useApp.getState().output!.report.bodies.every((b) => typeof b.volume === "number" && Number.isFinite(b.volume))).toBe(true));
-  return useApp.getState().output!.report.bodies.map((b) => b.volume!).sort((a, b) => a - b);
+  await waitFor(() =>
+    expect(
+      useApp
+        .getState()
+        .output!.report.bodies.every((b) => typeof b.volume === "number" && Number.isFinite(b.volume)),
+    ).toBe(true),
+  );
+
+  return useApp
+    .getState()
+    .output!.report.bodies.map((b) => b.volume!)
+    .sort((a, b) => a - b);
 };
 
 beforeAll(async () => {
@@ -79,6 +121,7 @@ describe("picking for a step", () => {
     await act(async () => startFeature("hole"));
     expect(useApp.getState().dialog!.field).toBe("plane");
     await clickAt([10, 5, 10]);
+
     const h = draft<{ points: [number, number][]; plane: unknown }>();
     expect(h.plane).toBeTruthy();
     expect(h.points).toHaveLength(1);
@@ -86,12 +129,16 @@ describe("picking for a step", () => {
     expect(h.points[0]![1]).toBeCloseTo(5, 2);
     expect(useApp.getState().dialog!.field).toBe("points");
     await clickAt([30, 15, 10]);
+
     const pts = draft<{ points: [number, number][] }>().points;
     expect(pts).toHaveLength(2);
     expect(pts[1]![0]).toBeCloseTo(30, 2);
     expect(pts[1]![1]).toBeCloseTo(15, 2);
     // Two 5 mm holes through the 10 mm block.
-    await act(async () => updateDraft({ kind: "simple", diameter: 5, depth: undefined, allowance: 0 } as Partial<Feature>));
+    await act(async () =>
+      updateDraft({ kind: "simple", diameter: 5, depth: undefined, allowance: 0 } as Partial<Feature>),
+    );
+
     let ok = false;
     await act(async () => void (ok = commitDialog()));
     expect(ok).toBe(true);
@@ -108,10 +155,15 @@ describe("picking for a step", () => {
     expect(draft<{ edges: unknown[] }>().edges).toHaveLength(1);
     await clickAt([20, 20, 10]);
     expect(draft<{ edges: unknown[] }>().edges).toHaveLength(2);
+
     // The preview already rounds the picked edges, so one comes out by its chip's ✕.
-    const chip = [...document.querySelectorAll<HTMLElement>(".selbox .chip")].find((c) => c.title.endsWith("side bc"))!;
+    const chip = [...document.querySelectorAll<HTMLElement>(".selbox .chip")].find((c) =>
+      c.title.endsWith("side bc"),
+    )!;
     await act(async () => void fireEvent.click(chip.querySelector("button")!));
-    expect(draft<{ edges: { edge: string[] }[] }>().edges.map((e) => e.edge.join())).toEqual(["ex1.end_cap,ex1.side[sk1.ba]"]);
+    expect(draft<{ edges: { edge: string[] }[] }>().edges.map((e) => e.edge.join())).toEqual([
+      "ex1.end_cap,ex1.side[sk1.ba]",
+    ]);
     await act(async () => cancelDialog());
 
     await act(async () => startFeature("boolean"));

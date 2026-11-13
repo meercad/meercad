@@ -21,10 +21,37 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
-  { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "h", mode: "new_body", name: "Base" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
-  { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: "h * 2", mode: "new_body" },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
+  {
+    id: "ex1",
+    op: "extrude",
+    profile: { sketch: "sk1" },
+    extent: "blind",
+    distance: "h",
+    mode: "new_body",
+    name: "Base",
+  },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
+  {
+    id: "ex2",
+    op: "extrude",
+    profile: { sketch: "sk2" },
+    extent: "blind",
+    distance: "h * 2",
+    mode: "new_body",
+  },
 ];
 
 async function rebuilt() {
@@ -42,7 +69,11 @@ describe("the side panel", () => {
   it("lists the steps, the parts with their sizes and the variables", async () => {
     render(<SidePanel />);
     await rebuilt();
-    for (const name of ["Base", "Extrude 2", "Sketch 1", "Sketch 2"]) expect(screen.getAllByText(name).length).toBeGreaterThan(0);
+
+    for (const name of ["Base", "Extrude 2", "Sketch 1", "Sketch 2"]) {
+      expect(screen.getAllByText(name).length).toBeGreaterThan(0);
+    }
+
     // Each part's box in its tooltip: 40 × 20 × 10 and 10 × 10 × 20.
     expect(document.querySelector('[title^="6 faces · 40 × 20 × 10 mm"]')).not.toBeNull();
     expect(document.querySelector('[title^="6 faces · 10 × 10 × 20 mm"]')).not.toBeNull();
@@ -52,8 +83,16 @@ describe("the side panel", () => {
   it("selects a step by click, several with ⌘ and a range with Shift", async () => {
     render(<SidePanel />);
     await rebuilt();
+
     /** The step's row in the list (draggable), not the part of the same name. */
-    const row = (name: string) => screen.getAllByText(name).map((el) => el.closest('[draggable="true"]')).find((el) => el && el.closest("li")?.getAttribute("draggable") !== "true" && el.getAttribute("title") !== null)!;
+    const row = (name: string) =>
+      screen
+        .getAllByText(name)
+        .map((el) => el.closest('[draggable="true"]'))
+        .find(
+          (el) =>
+            el && el.closest("li")?.getAttribute("draggable") !== "true" && el.getAttribute("title") !== null,
+        )!;
     fireEvent.click(row("Base"));
     expect(useApp.getState().selectedFeature).toBe("ex1");
     fireEvent.click(row("Extrude 2"), { metaKey: true });
@@ -76,12 +115,14 @@ describe("the side panel", () => {
   it("changes a variable and the parts follow", async () => {
     render(<SidePanel />);
     await rebuilt();
+
     const input = screen.getByDisplayValue("10 mm");
     fireEvent.change(input, { target: { value: "15 mm" } });
     fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.blur(input);
     expect(currentDoc().params["h"]).toBe("15 mm");
     await rebuilt();
+
     const vols = useApp.getState().output!.report.bodies.map((b) => Math.round(b.volume));
     expect(vols).toEqual([12000, 3000]);
     expect(document.querySelector('[title^="6 faces · 40 × 20 × 15 mm"]')).not.toBeNull();
@@ -91,19 +132,30 @@ describe("the side panel", () => {
     apply({ type: "set_param", name: "width", expr: "40 mm" });
     render(<SidePanel />);
     await rebuilt();
+
     const search = screen.queryByLabelText("Search variables");
+
     if (search) {
       fireEvent.change(search, { target: { value: "wid" } });
       expect(screen.queryByDisplayValue("15 mm")).toBeNull();
       expect(screen.getByDisplayValue("40 mm")).toBeTruthy();
     }
+
     expect(within(document.body).getAllByText(/width|h/).length).toBeGreaterThan(0);
   });
 });
 
 describe("the side panel's menus and dialogs", () => {
-  const stepRow = (name: string) => screen.getAllByText(name).map((el) => el.closest('[draggable="true"]')).find((el) => el && el.closest("li")?.getAttribute("draggable") !== "true" && el.getAttribute("title") !== null)!;
-  const partRow = (title: RegExp) => [...document.querySelectorAll("li.tree-item")].find((el) => title.test(el.getAttribute("title") ?? ""))!;
+  const stepRow = (name: string) =>
+    screen
+      .getAllByText(name)
+      .map((el) => el.closest('[draggable="true"]'))
+      .find(
+        (el) =>
+          el && el.closest("li")?.getAttribute("draggable") !== "true" && el.getAttribute("title") !== null,
+      )!;
+  const partRow = (title: RegExp) =>
+    [...document.querySelectorAll("li.tree-item")].find((el) => title.test(el.getAttribute("title") ?? ""))!;
 
   it("renames, suppresses and rolls back a step from its menu", async () => {
     renderUi(<SidePanel />);
@@ -134,8 +186,11 @@ describe("the side panel's menus and dialogs", () => {
   it("moves a step by dragging it", async () => {
     renderUi(<SidePanel />);
     await rebuilt();
+
     const from = stepRow("Sketch 2");
-    const targets = [...document.querySelectorAll("li")].filter((li) => li.querySelector('[draggable="true"][title]'));
+    const targets = [...document.querySelectorAll("li")].filter((li) =>
+      li.querySelector('[draggable="true"][title]'),
+    );
     fireEvent.dragStart(from);
     // Before the first step.
     fireEvent.dragOver(targets[0]!);
@@ -152,6 +207,7 @@ describe("the side panel's menus and dialogs", () => {
     await contextMenu(partRow(/40 × 20/));
     await pickMenu("Move to Bits");
     expect(currentDoc().partGroups).toEqual([{ name: "Bits", parts: ["ex1"] }]);
+
     const head = screen.getByTitle("Click to fold · double-click to rename · drop parts here");
     await act(async () => void fireEvent.doubleClick(head));
     await answer("Pieces");
@@ -191,8 +247,10 @@ describe("the side panel's menus and dialogs", () => {
     await rebuilt();
     await act(async () => void fireEvent.click(screen.getByTitle("Add variable")));
     await act(async () => void fireEvent.click(screen.getByTitle("Add")));
+
     const added = Object.keys(currentDoc().params).find((n) => !["h", "width"].includes(n))!;
     expect(currentDoc().params[added]).toBe("10 mm");
+
     const name = screen.getByDisplayValue(added);
     fireEvent.change(name, { target: { value: "depth" } });
     fireEvent.blur(name);
@@ -200,6 +258,7 @@ describe("the side panel's menus and dialogs", () => {
     await contextMenu(screen.getByDisplayValue("depth").closest(".param-row")!);
     await pickMenu("Move to automatic");
     expect(currentDoc().autoParams).toContain("depth");
+
     if (screen.queryByTitle("Add variant")) {
       await act(async () => void fireEvent.click(screen.getByTitle("Add variant")));
       await answer("Tall");

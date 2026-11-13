@@ -1,7 +1,21 @@
 /* A slider with its typed value next to it (see SliderValue). */
-.slider-value { display: flex; align-items: center; gap: 8px; }
-.slider-value input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
-.slider-value-text { width: 118px; flex: none; }
+.slider-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slider-value input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  height: 28px;
+}
+.slider-value-text {
+  width: 118px;
+  flex: none;
+}
 @media (pointer: coarse) {
-  .slider-value input[type="range"] { height: 36px; }
+  .slider-value input[type="range"] {
+    height: 36px;
+  }
 }

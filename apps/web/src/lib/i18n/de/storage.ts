@@ -2,12 +2,14 @@
 export default {
   // lib/features.ts: tools
   "Storage bin": "Sortierbox",
-  "Bins and baseplates for the Gridfinity storage grid: compartments, scoops, label tabs, magnets; editable like any part": "Boxen und Grundplatten für das Gridfinity-Raster: Fächer, Griffmulden, Beschriftungsleisten, Magnete; bearbeitbar wie jedes Teil",
-  "Label": "Etikett",
-  "Printable label with a screw, nut or insert symbol and text, raised or engraved, in one or two colours": "Druckbares Etikett mit Schrauben-, Mutter- oder Einsatz-Symbol und Text, erhaben oder graviert, ein- oder zweifarbig",
+  "Bins and baseplates for the Gridfinity storage grid: compartments, scoops, label tabs, magnets; editable like any part":
+    "Boxen und Grundplatten für das Gridfinity-Raster: Fächer, Griffmulden, Beschriftungsleisten, Magnete; bearbeitbar wie jedes Teil",
+  Label: "Etikett",
+  "Printable label with a screw, nut or insert symbol and text, raised or engraved, in one or two colours":
+    "Druckbares Etikett mit Schrauben-, Mutter- oder Einsatz-Symbol und Text, erhaben oder graviert, ein- oder zweifarbig",
   // components/GridfinityFields.tsx
-  "Fewer": "Weniger",
-  "More": "Mehr",
+  Fewer: "Weniger",
+  More: "Mehr",
   "1×1 bin": "Box 1×1",
   "2×1 bin, 3 dividers": "Box 2×1, 3 Trennwände",
   "3×2 bin, 6 compartments": "Box 3×2, 6 Fächer",
@@ -27,23 +29,25 @@ export default {
   "left empty {bx} and {by}": "frei gelassen {bx} und {by}",
   "Fill the rest with a solid border": "Rest mit massivem Rand füllen",
   "{n} pieces, the largest {w} × {d}": "{n} Teile, das größte {w} × {d}",
-  "Cells": "Felder",
+  Cells: "Felder",
   "Floor area": "Fläche",
   "Drawn outline": "Gezeichnete Kontur",
   "Area width": "Breite der Fläche",
   "Area depth": "Tiefe der Fläche",
   "Outline (sketch)": "Kontur (Skizze)",
   "Pick a sketch": "Skizze wählen",
-  "Draw the area's outline in a sketch first (any closed shape, holes too), then pick it here.": "Zeichne die Kontur der Fläche zuerst in einer Skizze (jede geschlossene Form, auch mit Aussparungen) und wähle sie dann hier.",
+  "Draw the area's outline in a sketch first (any closed shape, holes too), then pick it here.":
+    "Zeichne die Kontur der Fläche zuerst in einer Skizze (jede geschlossene Form, auch mit Aussparungen) und wähle sie dann hier.",
   "Gap to the edge": "Abstand zum Rand",
   "Cut into pieces for the print bed": "In Teile fürs Druckbett zerlegen",
   "Bed width": "Druckbett-Breite",
   "Bed depth": "Druckbett-Tiefe",
   "Unusable width": "Randabzug Breite",
   "Unusable depth": "Randabzug Tiefe",
-  "What of the bed cannot be printed on, e.g. 20 mm depth when the back 2 cm are taken. The plate comes apart between cells; the pieces are parts A1, A2, … (rows from the front): export them together as one 3MF.": "Was vom Druckbett nicht nutzbar ist, z. B. 20 mm Tiefe, wenn hinten 2 cm wegfallen. Die Platte wird zwischen den Feldern geteilt; die Teile heißen A1, A2, … (Reihen von vorn): exportiere sie zusammen als eine 3MF-Datei.",
-  "Bin": "Box",
-  "Baseplate": "Grundplatte",
+  "What of the bed cannot be printed on, e.g. 20 mm depth when the back 2 cm are taken. The plate comes apart between cells; the pieces are parts A1, A2, … (rows from the front): export them together as one 3MF.":
+    "Was vom Druckbett nicht nutzbar ist, z. B. 20 mm Tiefe, wenn hinten 2 cm wegfallen. Die Platte wird zwischen den Feldern geteilt; die Teile heißen A1, A2, … (Reihen von vorn): exportiere sie zusammen als eine 3MF-Datei.",
+  Bin: "Box",
+  Baseplate: "Grundplatte",
   "Fill a drawer": "Schublade füllen",
   "Drawer width": "Schubladenbreite",
   "Drawer depth": "Schubladentiefe",
@@ -52,7 +56,7 @@ export default {
   "Height (units)": "Höhe (Einheiten)",
   "Dividers across": "Trennwände quer",
   "Dividers along": "Trennwände längs",
-  "Wall": "Wand",
+  Wall: "Wand",
   "Floor height": "Bodenhöhe",
   "Scoop: a finger slide at the front": "Griffmulde vorn",
   "Scoop radius": "Radius der Griffmulde",
@@ -70,42 +74,51 @@ export default {
   "Cell (column)": "Feld (Spalte)",
   "Cell (row)": "Feld (Reihe)",
   "Tap a plane or flat face where it stands": "Tippe auf eine Ebene oder ebene Fläche, auf der sie steht",
-  "Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.": "Boxen messen 42 mm pro Feld und 7 mm pro Höheneinheit, mit 0.25 mm Spiel rundum in der Grundplatte. Das Ergebnis ist ein normales Teil: du kannst Kanten abrunden oder hineinschneiden.",
-  "Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and, if you like, a solid border round them.": "Grundplatten halten Boxen in 42-mm-Feldern. Ohne Boden drucken sie am schnellsten; Magnete und Schrauben brauchen einen. Eine Fläche oder gezeichnete Kontur bekommt so viele ganze Felder, wie hineinpassen, und auf Wunsch ringsum einen massiven Rand als Füllstück.",
+  "Bins are 42 mm per cell and 7 mm per height unit, with 0.25 mm play all round in a baseplate. The result is an ordinary part: round its edges or cut into it.":
+    "Boxen messen 42 mm pro Feld und 7 mm pro Höheneinheit, mit 0.25 mm Spiel rundum in der Grundplatte. Das Ergebnis ist ein normales Teil: du kannst Kanten abrunden oder hineinschneiden.",
+  "Baseplates hold bins in 42 mm cells. Without a floor they print fastest; magnets and screws need one. An area or a drawn outline gets as many whole cells as fit and, if you like, a solid border round them.":
+    "Grundplatten halten Boxen in 42-mm-Feldern. Ohne Boden drucken sie am schnellsten; Magnete und Schrauben brauchen einen. Eine Fläche oder gezeichnete Kontur bekommt so viele ganze Felder, wie hineinpassen, und auf Wunsch ringsum einen massiven Rand als Füllstück.",
   "Tab of a 1-cell bin": "Leiste einer 1er-Box",
   "Wide tab": "Breite Leiste",
   "Drawer front": "Schubladenfront",
-  "Symbol": "Symbol",
-  "None": "Keins",
+  Symbol: "Symbol",
+  None: "Keins",
   "Two colours: the marking as its own part": "Zweifarbig: Beschriftung als eigenes Teil",
-  "fit": "passend",
+  fit: "passend",
   "Tap a flat face where the label goes": "Tippe auf die ebene Fläche, auf die das Etikett kommt",
-  "Tap a bin's label tab to put the label on it. With two colours, give the marking its own colour or material and print both in one go.": "Tippe auf die Beschriftungsleiste einer Box, um das Etikett daraufzusetzen. Zweifarbig gibst du der Beschriftung eine eigene Farbe oder ein eigenes Material und druckst beides in einem Durchgang.",
+  "Tap a bin's label tab to put the label on it. With two colours, give the marking its own colour or material and print both in one go.":
+    "Tippe auf die Beschriftungsleiste einer Box, um das Etikett daraufzusetzen. Zweifarbig gibst du der Beschriftung eine eigene Farbe oder ein eigenes Material und druckst beides in einem Durchgang.",
   // components/Help.tsx
   "Storage bins and labels": "Sortierboxen und Etiketten",
-  "**Create → Storage bin** makes bins and baseplates for the open Gridfinity grid (42 mm cells, 7 mm height units). Start from a preset, then change cells, height, dividers, scoop, label tab, stacking lip and magnet or screw holes; − and + step the counts.": "**Erstellen → Sortierbox** macht Boxen und Grundplatten für das offene Gridfinity-Raster (42-mm-Felder, 7-mm-Höheneinheiten). Fang mit einer Vorlage an und ändere dann Felder, Höhe, Trennwände, Griffmulde, Beschriftungsleiste, Stapelrand und Magnet- oder Schraubenlöcher; − und + zählen hoch und runter.",
-  "A baseplate fills a drawer or any area when you give its size, or a shape you drew in a sketch; the rest becomes a solid border or stays empty. **Cut into pieces for the print bed** splits it between cells into parts that fit your print bed (256 × 256 mm unless you change it, less what of the bed you cannot use). Bins pick a baseplate and a cell to stand in, and **Check fit** confirms that nothing overlaps.": "Eine Grundplatte füllt eine Schublade oder jede Fläche, wenn du ihre Maße angibst, oder eine Form, die du in einer Skizze gezeichnet hast; der Rest wird ein massiver Rand oder bleibt frei. **In Teile fürs Druckbett zerlegen** teilt sie zwischen den Feldern in Teile, die auf dein Druckbett passen (256 × 256 mm, solange du nichts änderst, abzüglich des Bereichs, den du nicht nutzen kannst). Boxen wählen eine Grundplatte und ein Feld, in dem sie stehen, und **Passung prüfen** bestätigt, dass sich nichts überschneidet.",
-  "**Create → Label** makes a printable label with a screw, nut, washer or insert symbol and text like `M3×10`. Tap a bin's label tab to put it there; **Two colours** makes the marking its own part for a second colour.": "**Erstellen → Etikett** macht ein druckbares Etikett mit Schrauben-, Mutter-, Scheiben- oder Einsatz-Symbol und Text wie `M3×10`. Tippe auf die Beschriftungsleiste einer Box, um es dorthin zu setzen; **Zweifarbig** macht die Beschriftung zu einem eigenen Teil für eine zweite Farbe.",
-  "Both are ordinary parts: round their edges, cut into them or write on them.": "Beides sind normale Teile: du kannst Kanten abrunden, hineinschneiden oder darauf schreiben.",
+  "**Create → Storage bin** makes bins and baseplates for the open Gridfinity grid (42 mm cells, 7 mm height units). Start from a preset, then change cells, height, dividers, scoop, label tab, stacking lip and magnet or screw holes; − and + step the counts.":
+    "**Erstellen → Sortierbox** macht Boxen und Grundplatten für das offene Gridfinity-Raster (42-mm-Felder, 7-mm-Höheneinheiten). Fang mit einer Vorlage an und ändere dann Felder, Höhe, Trennwände, Griffmulde, Beschriftungsleiste, Stapelrand und Magnet- oder Schraubenlöcher; − und + zählen hoch und runter.",
+  "A baseplate fills a drawer or any area when you give its size, or a shape you drew in a sketch; the rest becomes a solid border or stays empty. **Cut into pieces for the print bed** splits it between cells into parts that fit your print bed (256 × 256 mm unless you change it, less what of the bed you cannot use). Bins pick a baseplate and a cell to stand in, and **Check fit** confirms that nothing overlaps.":
+    "Eine Grundplatte füllt eine Schublade oder jede Fläche, wenn du ihre Maße angibst, oder eine Form, die du in einer Skizze gezeichnet hast; der Rest wird ein massiver Rand oder bleibt frei. **In Teile fürs Druckbett zerlegen** teilt sie zwischen den Feldern in Teile, die auf dein Druckbett passen (256 × 256 mm, solange du nichts änderst, abzüglich des Bereichs, den du nicht nutzen kannst). Boxen wählen eine Grundplatte und ein Feld, in dem sie stehen, und **Passung prüfen** bestätigt, dass sich nichts überschneidet.",
+  "**Create → Label** makes a printable label with a screw, nut, washer or insert symbol and text like `M3×10`. Tap a bin's label tab to put it there; **Two colours** makes the marking its own part for a second colour.":
+    "**Erstellen → Etikett** macht ein druckbares Etikett mit Schrauben-, Mutter-, Scheiben- oder Einsatz-Symbol und Text wie `M3×10`. Tippe auf die Beschriftungsleiste einer Box, um es dorthin zu setzen; **Zweifarbig** macht die Beschriftung zu einem eigenen Teil für eine zweite Farbe.",
+  "Both are ordinary parts: round their edges, cut into them or write on them.":
+    "Beides sind normale Teile: du kannst Kanten abrunden, hineinschneiden oder darauf schreiben.",
   // lib/examples.ts
   "Storage grid with labels": "Sortierraster mit Etiketten",
-  "Bins in a baseplate, with label tabs and two-colour labels": "Boxen in einer Grundplatte, mit Beschriftungsleisten und zweifarbigen Etiketten",
+  "Bins in a baseplate, with label tabs and two-colour labels":
+    "Boxen in einer Grundplatte, mit Beschriftungsleisten und zweifarbigen Etiketten",
   // label symbols (model/gridfinity.ts LABEL_SYMBOL_NAMES)
   "Pan head screw": "Linsenkopfschraube",
   "Countersunk screw": "Senkkopfschraube",
   "Socket head screw": "Zylinderkopfschraube",
   "Hex head screw": "Sechskantschraube",
-  "Nut": "Mutter",
-  "Washer": "Unterlegscheibe",
+  Nut: "Mutter",
+  Washer: "Unterlegscheibe",
   "Heat-set insert": "Gewindeeinsatz zum Einschmelzen",
   // lib/features.ts, components/WallFields.tsx: wall storage
   "Wall storage": "Wandsystem",
-  "Boards for the wall (openGrid, pegboards) and holders that clip into them: hooks, rings, shelves, shelves for Gridfinity bins": "Platten für die Wand (openGrid, Lochplatten) und Halter, die darin einrasten: Haken, Ringe, Ablagen, Ablagen für Gridfinity-Boxen",
-  "Pegboard": "Lochplatte",
-  "Plate": "Platte",
-  "Hook": "Haken",
+  "Boards for the wall (openGrid, pegboards) and holders that clip into them: hooks, rings, shelves, shelves for Gridfinity bins":
+    "Platten für die Wand (openGrid, Lochplatten) und Halter, die darin einrasten: Haken, Ringe, Ablagen, Ablagen für Gridfinity-Boxen",
+  Pegboard: "Lochplatte",
+  Plate: "Platte",
+  Hook: "Haken",
   "Ring holder": "Ringhalter",
-  "Shelf": "Ablage",
+  Shelf: "Ablage",
   "Bin shelf": "Boxenablage",
   "Screw snap": "Schraub-Snap",
   "openGrid board 4×4": "openGrid-Platte 4×4",
@@ -116,8 +129,8 @@ export default {
   "{w} × {h} outside, {t} thick": "außen {w} × {h}, {t} dick",
   "Plate {w} × {h}": "Platte {w} × {h}",
   "{n} bins need {c} cells across": "{n} Boxen brauchen {c} Felder Breite",
-  "Board": "Platte",
-  "Holder": "Halter",
+  Board: "Platte",
+  Holder: "Halter",
   "Full (6.8 mm)": "Voll (6,8 mm)",
   "Lite (4 mm)": "Lite (4 mm)",
   "Hole pattern": "Lochbild",
@@ -125,14 +138,16 @@ export default {
   "Hole side": "Lochkante",
   "Hole diameter": "Lochdurchmesser",
   "Board thickness": "Plattendicke",
-  "Holds": "Hält",
+  Holds: "Hält",
   "Cells across": "Felder breit",
   "Cells up": "Felder hoch",
   "Screw holes next to the corners": "Schraublöcher an den Ecken",
   "Tap a plane or flat face where it lies": "Tippe auf eine Ebene oder ebene Fläche, auf der es liegt",
-  "openGrid is an open wall system on a 28 mm grid (by David D, CC BY 4.0). Holders click in on snaps; the lite board takes lite snaps, screws straight to the wall and is quicker to print.": "openGrid ist ein offenes Wandsystem im 28-mm-Raster (von David D, CC BY 4.0). Halter rasten mit Snaps ein; die Lite-Platte nimmt Lite-Snaps, wird direkt an die Wand geschraubt und druckt schneller.",
-  "Pegboard holders hang on pegs through the holes: the top pegs hook up behind the board, so tilt the holder in from above.": "Halter für Lochplatten hängen mit Stiften in den Löchern: Die oberen haken hinter der Platte nach oben, also den Halter von oben schräg einsetzen.",
-  "Reach": "Ausladung",
+  "openGrid is an open wall system on a 28 mm grid (by David D, CC BY 4.0). Holders click in on snaps; the lite board takes lite snaps, screws straight to the wall and is quicker to print.":
+    "openGrid ist ein offenes Wandsystem im 28-mm-Raster (von David D, CC BY 4.0). Halter rasten mit Snaps ein; die Lite-Platte nimmt Lite-Snaps, wird direkt an die Wand geschraubt und druckt schneller.",
+  "Pegboard holders hang on pegs through the holes: the top pegs hook up behind the board, so tilt the holder in from above.":
+    "Halter für Lochplatten hängen mit Stiften in den Löchern: Die oberen haken hinter der Platte nach oben, also den Halter von oben schräg einsetzen.",
+  Reach: "Ausladung",
   "Tip height": "Spitze hoch",
   "Inner diameter": "Innendurchmesser",
   "Gap to the plate": "Abstand zur Platte",
@@ -143,10 +158,13 @@ export default {
   '1" pitch, 5 mm holes': '1"-Raster, 5-mm-Löcher',
   "25 mm pitch, 5 mm holes": "25-mm-Raster, 5-mm-Löcher",
   "38 mm pitch, square holes": "38-mm-Raster, Vierkantlöcher",
-  "**Create → Wall storage** makes openGrid boards (28 mm cells, full or lite) and pegboards, and holders that clip into them: hooks, rings for tools, shelves and shelves that hold Gridfinity bins. Pick the board a holder hangs on and its cell; **Check fit** confirms the snaps or pegs sit free.": "**Erstellen → Wandsystem** macht openGrid-Platten (28-mm-Felder, voll oder Lite) und Lochplatten sowie Halter, die darin einrasten: Haken, Ringe für Werkzeug, Ablagen und Ablagen für Gridfinity-Boxen. Wähle die Platte, an der ein Halter hängt, und sein Feld; **Passung prüfen** zeigt, dass Snaps oder Stifte frei sitzen.",
+  "**Create → Wall storage** makes openGrid boards (28 mm cells, full or lite) and pegboards, and holders that clip into them: hooks, rings for tools, shelves and shelves that hold Gridfinity bins. Pick the board a holder hangs on and its cell; **Check fit** confirms the snaps or pegs sit free.":
+    "**Erstellen → Wandsystem** macht openGrid-Platten (28-mm-Felder, voll oder Lite) und Lochplatten sowie Halter, die darin einrasten: Haken, Ringe für Werkzeug, Ablagen und Ablagen für Gridfinity-Boxen. Wähle die Platte, an der ein Halter hängt, und sein Feld; **Passung prüfen** zeigt, dass Snaps oder Stifte frei sitzen.",
   "Tool wall on openGrid": "Werkzeugwand mit openGrid",
-  "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins": "Eine Platte mit Haken, Ring, Ablage und einer Ablage für Gridfinity-Boxen",
-  "A snap {w} square, {t} deep, screwed to the wall through its middle": "Ein Snap, {w} im Quadrat und {t} tief, mittig an die Wand geschraubt",
+  "A board with a hook, a ring, a shelf and a shelf for Gridfinity bins":
+    "Eine Platte mit Haken, Ring, Ablage und einer Ablage für Gridfinity-Boxen",
+  "A snap {w} square, {t} deep, screwed to the wall through its middle":
+    "Ein Snap, {w} im Quadrat und {t} tief, mittig an die Wand geschraubt",
   // components/GridfinityFields.tsx: bins for a part
   "For a part": "Für ein Teil",
   "Part to hold": "Teil, das hineinkommt",
@@ -154,15 +172,18 @@ export default {
   "Sinks in (% of its height)": "Versinkt (% seiner Höhe)",
   "Finger grip across the part": "Fingermulde quer über das Teil",
   "Size to fit the part": "Größe passend zum Teil",
-  "{x} × {y} cells, {h} units high · nest {d} deep": "{x} × {y} Felder, {h} Einheiten hoch · Aussparung {d} tief",
+  "{x} × {y} cells, {h} units high · nest {d} deep":
+    "{x} × {y} Felder, {h} Einheiten hoch · Aussparung {d} tief",
   "turned {a}°": "um {a}° gedreht",
   "Nothing (built round the part)": "Nichts (um das Teil herum gebaut)",
   "Stands on": "Steht auf",
-  "The part sinks into the bin's solid top; the nest follows its underside and opens upwards, so it lifts straight out. The bin is built where the part lies, turned to need the fewest cells. Turn or lay the part down first to choose which side goes in. Making the nest takes a few seconds.": "Das Teil versinkt in der vollen Oberseite der Box; die Aussparung folgt seiner Unterseite und ist nach oben offen, so lässt es sich gerade herausheben. Die Box entsteht dort, wo das Teil liegt, so gedreht, dass sie möglichst wenige Felder braucht. Dreh oder leg das Teil vorher hin, um zu wählen, welche Seite nach unten kommt. Die Aussparung zu berechnen dauert ein paar Sekunden.",
+  "The part sinks into the bin's solid top; the nest follows its underside and opens upwards, so it lifts straight out. The bin is built where the part lies, turned to need the fewest cells. Turn or lay the part down first to choose which side goes in. Making the nest takes a few seconds.":
+    "Das Teil versinkt in der vollen Oberseite der Box; die Aussparung folgt seiner Unterseite und ist nach oben offen, so lässt es sich gerade herausheben. Die Box entsteht dort, wo das Teil liegt, so gedreht, dass sie möglichst wenige Felder braucht. Dreh oder leg das Teil vorher hin, um zu wählen, welche Seite nach unten kommt. Die Aussparung zu berechnen dauert ein paar Sekunden.",
   // lib/features.ts, context menus
   "Pick the part the bin should hold": "Wähle das Teil, das in die Box kommt",
   "Bin for a part": "Box für ein Teil",
   "Gridfinity bin for this part": "Gridfinity-Box für dieses Teil",
   // components/Help.tsx
-  "**A bin for a part**: right-click or long-press a part (a scan, a tool) and choose **Gridfinity bin for this part**, or pick **For a part** in the bin dialog. The part sinks into the bin's top by half its height with 0.5 mm play; the bin takes as few cells as hold it, turned if that saves cells. Set how deep it sinks, the play and a finger grip across the part.": "**Eine Box für ein Teil**: Rechtsklick oder langes Drücken auf ein Teil (einen Scan, ein Werkzeug) und **Gridfinity-Box für dieses Teil** wählen, oder im Box-Dialog **Für ein Teil**. Das Teil versinkt zur Hälfte seiner Höhe mit 0,5 mm Spiel in der Oberseite der Box; die Box nimmt so wenige Felder wie nötig, gedreht, wenn das Felder spart. Einstellbar sind, wie tief es versinkt, das Spiel und eine Fingermulde quer über das Teil.",
+  "**A bin for a part**: right-click or long-press a part (a scan, a tool) and choose **Gridfinity bin for this part**, or pick **For a part** in the bin dialog. The part sinks into the bin's top by half its height with 0.5 mm play; the bin takes as few cells as hold it, turned if that saves cells. Set how deep it sinks, the play and a finger grip across the part.":
+    "**Eine Box für ein Teil**: Rechtsklick oder langes Drücken auf ein Teil (einen Scan, ein Werkzeug) und **Gridfinity-Box für dieses Teil** wählen, oder im Box-Dialog **Für ein Teil**. Das Teil versinkt zur Hälfte seiner Höhe mit 0,5 mm Spiel in der Oberseite der Box; die Box nimmt so wenige Felder wie nötig, gedreht, wenn das Felder spart. Einstellbar sind, wie tief es versinkt, das Spiel und eine Fingermulde quer über das Teil.",
 };

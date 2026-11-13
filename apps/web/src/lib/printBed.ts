@@ -23,17 +23,35 @@ export function partSize(bbox: { min: readonly number[]; max: readonly number[] 
 export function fitsBed(size: readonly number[], bed: readonly number[]): boolean {
   const s = [...size].sort((a, b) => a - b);
   const b = [...bed].sort((a, b) => a - b);
+
   return s.every((v, i) => v <= b[i]! + 1e-6);
 }
 
 /** Parts too big for the bed (finite bodies only; an empty bed setting turns the check off). */
-export function tooBig<T extends { id: string; bbox: { min: readonly number[]; max: readonly number[] } }>(bodies: readonly T[], bed: Bed | null): T[] {
+export function tooBig<T extends { id: string; bbox: { min: readonly number[]; max: readonly number[] } }>(
+  bodies: readonly T[],
+  bed: Bed | null,
+): T[] {
   if (!bed) return [];
-  return bodies.filter((b) => b.bbox.min.every(Number.isFinite) && b.bbox.max.every(Number.isFinite) && !fitsBed(partSize(b.bbox), bed));
+
+  return bodies.filter(
+    (b) =>
+      b.bbox.min.every(Number.isFinite) &&
+      b.bbox.max.every(Number.isFinite) &&
+      !fitsBed(partSize(b.bbox), bed),
+  );
 }
 
 export function validBed(raw: unknown): Bed | null | undefined {
   if (raw === null) return null;
-  if (Array.isArray(raw) && raw.length === 3 && raw.every((v) => typeof v === "number" && v >= 10 && v <= 5000)) return raw as Bed;
+
+  if (
+    Array.isArray(raw) &&
+    raw.length === 3 &&
+    raw.every((v) => typeof v === "number" && v >= 10 && v <= 5000)
+  ) {
+    return raw as Bed;
+  }
+
   return undefined;
 }

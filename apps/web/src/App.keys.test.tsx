@@ -7,7 +7,12 @@
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
-vi.mock("./lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("./lib/thumbnails")>()), startBackgroundPictures: () => undefined, fillThumbnails: async () => undefined }));
+
+vi.mock("./lib/thumbnails", async (orig) => ({
+  ...(await orig<typeof import("./lib/thumbnails")>()),
+  startBackgroundPictures: () => undefined,
+  fillThumbnails: async () => undefined,
+}));
 import { App } from "./App";
 import { apply, currentDoc, getViewport, newProject, rebuildNow, useApp } from "./store";
 import { rebuilt, renderUi, withScreen } from "../test/ui";
@@ -29,29 +34,44 @@ const design: Feature[] = [
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 type Handler = (arg: unknown) => void;
+
 const handlers = new Map<string, Handler[]>();
+
 const emit = async (event: string, arg?: unknown) => {
   await act(async () => {
     for (const h of handlers.get(event) ?? []) h(arg);
   });
   await act(async () => new Promise((r) => setTimeout(r, 30)));
 };
+
 const key = async (k: string, opts: Partial<KeyboardEventInit> = {}, target: Window | Element = window) => {
   await act(async () => void fireEvent.keyDown(target, { key: k, ...opts }));
   await act(async () => new Promise((r) => setTimeout(r, 20)));
 };
-const distance = () => (currentDoc().features.find((f) => f.id === "ex1") as { distance: unknown } | undefined)?.distance;
+
+const distance = () =>
+  (currentDoc().features.find((f) => f.id === "ex1") as { distance: unknown } | undefined)?.distance;
 
 beforeAll(async () => {
   withScreen(1280, 800);
   localStorage.setItem("meercad.tourDone", "1");
-  // A user who has accepted the terms of use (before that, keys, menu and drops do nothing: tests/terms-store.test.ts).
+  // A user who has accepted the terms of use (before that, keys, menu and drops do nothing:
+  // tests/terms-store.test.ts).
   saveTerms(acceptRecord("test", "en"));
-  const desktop = (window as unknown as { meercadDesktop: { on: (e: string, h: Handler) => () => void } }).meercadDesktop;
+
+  const desktop = (window as unknown as { meercadDesktop: { on: (e: string, h: Handler) => () => void } })
+    .meercadDesktop;
+
   desktop.on = (e, h) => {
     handlers.set(e, [...(handlers.get(e) ?? []), h]);
-    return () => handlers.set(e, (handlers.get(e) ?? []).filter((x) => x !== h));
+
+    return () =>
+      handlers.set(
+        e,
+        (handlers.get(e) ?? []).filter((x) => x !== h),
+      );
   };
+
   renderUi(<App />);
   await act(async () => new Promise((r) => setTimeout(r, 50)));
   await act(async () => newProject(undefined, "Keys"));
@@ -70,9 +90,14 @@ describe("the keyboard", () => {
     await key("z", { metaKey: true });
     await key("y", { ctrlKey: true });
     expect(distance()).toBe(15);
+
     // In a text field ⌘Z undoes the typing.
     const typed: string[] = [];
-    (document as unknown as { execCommand: (c: string) => boolean }).execCommand = (c) => (typed.push(c), true);
+    (document as unknown as { execCommand: (c: string) => boolean }).execCommand = (c) => (
+      typed.push(c),
+      true
+    );
+
     const input = document.createElement("input");
     document.body.append(input);
     await key("z", { metaKey: true }, input);
@@ -129,6 +154,7 @@ describe("the keyboard", () => {
     expect(fitted).toBe(1);
     vp.setView = setView;
     vp.fit = fit;
+
     const side = useApp.getState().sideOpen;
     await key("\\", { metaKey: true });
     expect(useApp.getState().sideOpen).toBe(!side);
@@ -144,6 +170,7 @@ describe("the keyboard", () => {
     const first = useApp.getState().project!.id;
     await key("t", { metaKey: true });
     await waitFor(() => expect(useApp.getState().project?.id).not.toBe(first));
+
     const second = useApp.getState().project!.id;
     await key("Tab", { ctrlKey: true });
     await waitFor(() => expect(useApp.getState().project?.id).toBe(first));
@@ -168,6 +195,7 @@ describe("the Mac app's menu", () => {
     expect(distance()).not.toBe(12);
     await emit("menu", "redo");
     expect(distance()).toBe(12);
+
     let settings = 0;
     window.addEventListener("meercad:settings", () => settings++, { once: true });
     await emit("menu", "settings");
@@ -187,6 +215,7 @@ describe("the Mac app's menu", () => {
     await emit("open-project", id);
     expect(useApp.getState().project?.id).toBe(id);
     await emit("project-saved", "someone-else");
+
     let changed = 0;
     window.addEventListener("meercad:projects-changed", () => changed++, { once: true });
     await emit("projects-changed");
@@ -195,6 +224,7 @@ describe("the Mac app's menu", () => {
 
   it("waits with menu commands while an assistant works", async () => {
     useApp.setState({ aiLock: { client: "Claude" } as never });
+
     const id = useApp.getState().project!.id;
     await emit("menu", "home");
     expect(useApp.getState().project?.id).toBe(id);
@@ -206,7 +236,10 @@ describe("the Mac app's menu", () => {
     const svg = `<svg width="100mm" viewBox="0 0 100 100"><rect x="0" y="0" width="30" height="10"/></svg>`;
     const file = new File([svg], "plate.svg", { type: "image/svg+xml" });
     await act(async () => void fireEvent.drop(window, { dataTransfer: { files: [file] } }));
-    await waitFor(() => expect(currentDoc().features.some((f) => f.op === "sketch" && f.name === "plate.svg")).toBe(true));
+    await waitFor(() =>
+      expect(currentDoc().features.some((f) => f.op === "sketch" && f.name === "plate.svg")).toBe(true),
+    );
+
     const sk = currentDoc().features.find((f) => f.op === "sketch" && f.name === "plate.svg")!;
     const out = await rebuildNow();
     expect(out.report.sketches.find((s) => s.id === sk.id)!.regions[0]!.area).toBeCloseTo(300, 6);

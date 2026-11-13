@@ -7,7 +7,8 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 
-const query = typeof matchMedia === "undefined" ? null : matchMedia("(max-width: 600px), (max-height: 580px)");
+const query =
+  typeof matchMedia === "undefined" ? null : matchMedia("(max-width: 600px), (max-height: 580px)");
 
 export const isCompact = (): boolean => !!query?.matches;
 
@@ -15,6 +16,7 @@ function mark(): void {
   if (isCompact()) document.documentElement.dataset["compact"] = "";
   else delete document.documentElement.dataset["compact"];
 }
+
 mark();
 query?.addEventListener("change", mark);
 
@@ -23,6 +25,7 @@ export function useCompact(): boolean {
   return useSyncExternalStore(
     (fn) => {
       query?.addEventListener("change", fn);
+
       return () => query?.removeEventListener("change", fn);
     },
     isCompact,

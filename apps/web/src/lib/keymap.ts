@@ -5,7 +5,17 @@
  */
 import { create } from "zustand";
 import type { Navigation } from "@meercad/viewport";
-import { actionIn, KEY_SCHEMES, keymapFor, MOUSE_SCHEMES, mouseFor, type Action, type KeyScheme, type MouseScheme, type RightClick } from "./controls";
+import {
+  actionIn,
+  KEY_SCHEMES,
+  keymapFor,
+  MOUSE_SCHEMES,
+  mouseFor,
+  type Action,
+  type KeyScheme,
+  type MouseScheme,
+  type RightClick,
+} from "./controls";
 import { DEFAULT_BED, validBed, type Bed } from "./printBed";
 
 export * from "./controls";
@@ -37,7 +47,10 @@ interface Prefs {
   printBed: Bed | null;
   /** The fit measured on this device's printer (mm per side), given to new designs; null: not measured. */
   printerFit: number | null;
-  /** Joint symbols (axes, turn rings, slide arrows) in the scene while the joints panel is open; off shows the motion alone. */
+  /**
+   * Joint symbols (axes, turn rings, slide arrows) in the scene while the joints panel is open; off shows the
+   * motion alone.
+   */
   showJoints: boolean;
   /**
    * 3MF exports carry the parts' materials, colours and filament slots. Off (default): plain
@@ -46,13 +59,32 @@ interface Prefs {
   threeMfMaterials: boolean;
 }
 
-
 const STORAGE_KEY = "meercad.prefs";
 
 function load(): Prefs {
-  const fallback: Prefs = { keys: "meercad", mouse: "meercad", invertZoom: false, swipeOrbits: true, showKeys: true, showValues: true, colorParts: true, snapGrid: true, snapGeometry: true, units: "metric", showExamples: true, examplesOpen: true, showTextures: true, printBed: DEFAULT_BED, printerFit: null, showJoints: true, threeMfMaterials: false };
+  const fallback: Prefs = {
+    keys: "meercad",
+    mouse: "meercad",
+    invertZoom: false,
+    swipeOrbits: true,
+    showKeys: true,
+    showValues: true,
+    colorParts: true,
+    snapGrid: true,
+    snapGeometry: true,
+    units: "metric",
+    showExamples: true,
+    examplesOpen: true,
+    showTextures: true,
+    printBed: DEFAULT_BED,
+    printerFit: null,
+    showJoints: true,
+    threeMfMaterials: false,
+  };
+
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Prefs>;
+
     return {
       keys: KEY_SCHEMES.some((s) => s.id === raw.keys) ? raw.keys! : fallback.keys,
       mouse: MOUSE_SCHEMES.some((s) => s.id === raw.mouse) ? raw.mouse! : fallback.mouse,
@@ -68,7 +100,10 @@ function load(): Prefs {
       examplesOpen: raw.examplesOpen !== false,
       showTextures: raw.showTextures !== false,
       printBed: validBed(raw.printBed) === undefined ? fallback.printBed : validBed(raw.printBed)!,
-      printerFit: typeof raw.printerFit === "number" && raw.printerFit >= 0 && raw.printerFit <= 1 ? raw.printerFit : null,
+      printerFit:
+        typeof raw.printerFit === "number" && raw.printerFit >= 0 && raw.printerFit <= 1
+          ? raw.printerFit
+          : null,
       showJoints: raw.showJoints !== false,
       threeMfMaterials: raw.threeMfMaterials === true,
     };
@@ -86,6 +121,7 @@ usePrefs.subscribe(applyRootClasses);
 
 export function setPrefs(p: Partial<Prefs>): void {
   usePrefs.setState(p);
+
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(usePrefs.getState()));
   } catch {
@@ -106,6 +142,7 @@ export function keyFor(action: Action): string | undefined {
 /** Re-renders when the preset changes. */
 export function useKey(action: Action): string | undefined {
   const scheme = usePrefs((s) => s.keys);
+
   return keymapFor(scheme)[action][0];
 }
 

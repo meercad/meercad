@@ -1,3 +1,18 @@
 /* Lithophane dialog: the photo preview. */
-.litho-preview { display: block; width: 100%; padding: 0; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #000; cursor: pointer; }
-.litho-preview img { display: block; width: 100%; max-height: 220px; object-fit: contain; }
+.litho-preview {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+}
+.litho-preview img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}

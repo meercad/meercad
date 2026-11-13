@@ -9,7 +9,17 @@ import { act, cleanup } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import type { Pick } from "@meercad/viewport";
-import { apply, cancelDialog, dialogPick, newProject, rebuildNow, setDialogField, startFeature, updateDraft, useApp } from "../store";
+import {
+  apply,
+  cancelDialog,
+  dialogPick,
+  newProject,
+  rebuildNow,
+  setDialogField,
+  startFeature,
+  updateDraft,
+  useApp,
+} from "../store";
 import { renderUi } from "../../test/ui";
 import { FeatureDialog } from "./FeatureDialog";
 
@@ -24,24 +34,50 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 25, mode: "new_body" },
   // Two squares side by side above the parts: two regions, and lines to pick.
   { id: "pl1", op: "plane", base: { ref: "origin.XY" }, offset: 40 },
-  { id: "sk3", op: "sketch", plane: { ref: "pl1" }, entities: [...rect("q", 0, 0, 10, 10), ...rect("r", 20, 0, 10, 10)], constraints: [] },
+  {
+    id: "sk3",
+    op: "sketch",
+    plane: { ref: "pl1" },
+    entities: [...rect("q", 0, 0, 10, 10), ...rect("r", 20, 0, 10, 10)],
+    constraints: [],
+  },
 ];
 const draft = <T,>() => useApp.getState().dialog!.feature as T;
 let regions: string[] = [];
 const out = () => useApp.getState().output!;
+
 /** A pick of the face of `body` whose first tag starts with `tag`. */
-function face(body: string, tag: string, point: [number, number, number], normal: [number, number, number] | null): Pick {
+function face(
+  body: string,
+  tag: string,
+  point: [number, number, number],
+  normal: [number, number, number] | null,
+): Pick {
   const m = out().meshes.find((x) => x.bodyId === body)!;
   const i = m.faceTags.findIndex((t) => t[0]!.startsWith(tag));
   expect(i, `${body} ${tag}`).toBeGreaterThanOrEqual(0);
+
   return { kind: "face", bodyId: body, face: i, tags: m.faceTags[i]!, point, normal } as Pick;
 }
+
 /** A pick of the edge of `body` between the faces tagged `a` and `b`. */
 function edge(body: string, a: string, b: string, point: [number, number, number]): Pick {
   const m = out().meshes.find((x) => x.bodyId === body)!;
@@ -49,21 +85,29 @@ function edge(body: string, a: string, b: string, point: [number, number, number
   const fb = m.faceTags.findIndex((t) => t[0] === b);
   const e = m.edgeFaces.findIndex((f) => f.includes(fa) && f.includes(fb));
   expect(e).toBeGreaterThanOrEqual(0);
+
   return { kind: "edge", bodyId: body, edge: e, point } as Pick;
 }
-const curve = (sketchId: string, curveId: string): Pick => ({ kind: "sketch_curve", sketchId, curveId, point: [0, 0, 40] }) as Pick;
+
+const curve = (sketchId: string, curveId: string): Pick =>
+  ({ kind: "sketch_curve", sketchId, curveId, point: [0, 0, 40] }) as Pick;
 const region = (key: string): Pick => ({ kind: "region", sketchId: "sk3", key, point: [5, 5, 40] }) as Pick;
+
 const pick = async (p: Pick, field?: string) => {
   if (field) await act(async () => setDialogField(field));
+
   await act(async () => dialogPick!(p, false));
 };
+
 const open = async (op: Parameters<typeof startFeature>[0]) => act(async () => startFeature(op));
 
 beforeAll(async () => {
   await newProject(undefined, "More picks");
   apply({ type: "add_features", features: design });
   await rebuildNow();
-  regions = out().report.sketches.find((s) => s.id === "sk3")!.regions.map((r) => r.key);
+  regions = out()
+    .report.sketches.find((s) => s.id === "sk3")!
+    .regions.map((r) => r.key);
   expect(regions).toHaveLength(2);
 });
 // A spring's preview takes a while to build on a busy machine (a coverage run).
@@ -97,6 +141,7 @@ describe("picks for profiles and paths", () => {
     await pick(region(regions[1]!), "profiles");
     await pick(curve("sk1", "ba"));
     await pick(face("ex2", "ex2.end_cap", [65, 5, 25], [0, 0, 1]));
+
     const ps = draft<{ profiles: unknown[] }>().profiles;
     expect(ps.slice(0, 2)).toEqual([{ sketch: "sk3", regions: [regions[1]] }, { sketch: "sk1" }]);
     expect(ps[2]).toMatchObject({ face: expect.anything() });
@@ -109,7 +154,10 @@ describe("picks for profiles and paths", () => {
     await open("rib");
     await pick(curve("sk3", "qa"), "curves");
     await pick(curve("sk3", "qb"));
-    expect(draft<{ sketch: string; curves: string[] }>()).toMatchObject({ sketch: "sk3", curves: ["qa", "qb"] });
+    expect(draft<{ sketch: string; curves: string[] }>()).toMatchObject({
+      sketch: "sk3",
+      curves: ["qa", "qb"],
+    });
     await pick(curve("sk1", "ba"));
     expect(draft<{ sketch: string; curves: string[] }>()).toMatchObject({ sketch: "sk1", curves: ["ba"] });
     await pick(curve("sk1", "ba"));
@@ -176,7 +224,9 @@ describe("picks of faces and parts", () => {
   it("turns parts about an edge picked as the axis", async () => {
     renderUi(<FeatureDialog />);
     await open("transform");
-    await act(async () => updateDraft({ bodies: ["ex2"], rotate: { axis: { ref: "origin.Z" }, angle: 90 } } as Partial<Feature>));
+    await act(async () =>
+      updateDraft({ bodies: ["ex2"], rotate: { axis: { ref: "origin.Z" }, angle: 90 } } as Partial<Feature>),
+    );
     await pick(edge("ex1", "ex1.end_cap", "ex1.side[sk1.ba]", [20, 0, 10]), "axis");
     expect(draft<{ rotate: { axis: unknown } }>().rotate.axis).toMatchObject({ edge: expect.anything() });
   });
@@ -200,7 +250,13 @@ describe("picks of faces and parts", () => {
 describe("picks made before the tool opens", () => {
   it("make a whole selected part the parts to move, or the mirror's source", async () => {
     renderUi(<FeatureDialog />);
-    const all = out().meshes.find((m) => m.bodyId === "ex2")!.faceTags.map((tags, i) => ({ kind: "face", bodyId: "ex2", face: i, tags, point: [65, 5, 25], normal: null }) as Pick);
+
+    const all = out()
+      .meshes.find((m) => m.bodyId === "ex2")!
+      .faceTags.map(
+        (tags, i) =>
+          ({ kind: "face", bodyId: "ex2", face: i, tags, point: [65, 5, 25], normal: null }) as Pick,
+      );
     useApp.setState({ selection: all });
     await open("transform");
     expect(draft<{ bodies: string[] }>().bodies).toEqual(["ex2"]);

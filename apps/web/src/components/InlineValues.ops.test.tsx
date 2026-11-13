@@ -23,28 +23,48 @@ const rect: SketchEntity[] = [
   { id: "l4", type: "line", p1: "p4", p2: "p1" },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect, constraints: [{ id: "w", type: "length", line: "l1", value: "w" }, { id: "h", type: "length", line: "l2", value: 20 }, { id: "f", type: "fix", point: "p1" }, { id: "hz", type: "horizontal", line: "l1" }, { id: "vt", type: "vertical", line: "l2" }, { id: "hz2", type: "horizontal", line: "l3" }, { id: "vt2", type: "vertical", line: "l4" }] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect,
+    constraints: [
+      { id: "w", type: "length", line: "l1", value: "w" },
+      { id: "h", type: "length", line: "l2", value: 20 },
+      { id: "f", type: "fix", point: "p1" },
+      { id: "hz", type: "horizontal", line: "l1" },
+      { id: "vt", type: "vertical", line: "l2" },
+      { id: "hz2", type: "horizontal", line: "l3" },
+      { id: "vt2", type: "vertical", line: "l4" },
+    ],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
   { id: "fi1", op: "fillet", edges: [{ edge: ["ex1.end_cap", "ex1.side[sk1.l1]"] }], radius: 2 },
   { id: "ch1", op: "chamfer", edges: [{ edge: ["ex1.end_cap", "ex1.side[sk1.l3]"] }], distance: 1 },
   { id: "pl1", op: "plane", base: { ref: "origin.XY" }, offset: 30 },
 ];
-const chips = () => [...document.querySelectorAll<HTMLButtonElement>(".value-chip button[title='Click to edit']")];
+const chips = () => [
+  ...document.querySelectorAll<HTMLButtonElement>(".value-chip button[title='Click to edit']"),
+];
 const texts = () => chips().map((c) => c.textContent ?? "");
 const volume = async () => (await rebuildNow()).report.bodies[0]!.volume!;
+
 async function show(id: string) {
   await rebuilt();
   await act(async () => useApp.setState({ selectedFeature: id, selection: [] }));
   await act(async () => new Promise((r) => setTimeout(r, 30)));
 }
+
 async function type(chipText: RegExp, value: string) {
   const chip = chips().find((c) => chipText.test(c.textContent ?? ""));
   expect(chip, `${chipText} in ${texts().join(" | ")}`).toBeDefined();
   await act(async () => void fireEvent.click(chip!));
+
   const input = document.querySelector<HTMLInputElement>(".value-chip input")!;
   await act(async () => void fireEvent.change(input, { target: { value } }));
   await act(async () => void fireEvent.keyDown(input, { key: "Enter" }));
 }
+
 /** The block 40 × 20 × 10 with an R r round along one 40 mm edge and a c bevel along the other. */
 const block = (r: number, c: number) => 8000 - (1 - Math.PI / 4) * r * r * 40 - (c * c * 40) / 2;
 
@@ -91,6 +111,7 @@ describe("values on the model for each step", () => {
     expect(texts()).toEqual(expect.arrayContaining(["↕ 10 mm", "20"]));
     expect(texts().some((t) => /^w|40/.test(t))).toBe(true);
     await type(/^20$/, "25");
+
     const sk = currentDoc().features.find((f) => f.id === "sk1") as Extract<Feature, { op: "sketch" }>;
     expect(sk.constraints.find((c) => c.id === "h")).toMatchObject({ value: 25 });
     expect(sk.constraints.find((c) => c.id === "w")).toMatchObject({ value: "w" });
@@ -100,11 +121,15 @@ describe("values on the model for each step", () => {
 
   it("unlinks a size from its variable to a plain number", async () => {
     await show("sk1");
+
     const unlink = document.querySelector<HTMLButtonElement>(".value-chip .unlink");
     expect(unlink).not.toBeNull();
     await act(async () => void fireEvent.click(unlink!));
+
     const sk = currentDoc().features.find((f) => f.id === "sk1") as Extract<Feature, { op: "sketch" }>;
-    expect(String((sk.constraints.find((c) => c.id === "w") as { value: unknown }).value)).toMatch(/^40( mm)?$/);
+    expect(String((sk.constraints.find((c) => c.id === "w") as { value: unknown }).value)).toMatch(
+      /^40( mm)?$/,
+    );
   });
 
   it("shows a shell's wall and a pattern's count and spacing", async () => {
@@ -113,7 +138,14 @@ describe("values on the model for each step", () => {
       features: [
         // Open at the bottom: the top's rounded and bevelled edges would stop a shell open there.
         { id: "sh1", op: "shell", faces: [{ face: "ex1.start_cap" }], thickness: 2 } as Feature,
-        { id: "lp1", op: "linear_pattern", source: { bodies: ["ex1"] }, direction: { ref: "origin.X" }, count: 2, spacing: 60 } as Feature,
+        {
+          id: "lp1",
+          op: "linear_pattern",
+          source: { bodies: ["ex1"] },
+          direction: { ref: "origin.X" },
+          count: 2,
+          spacing: 60,
+        } as Feature,
       ],
     });
     await show("sh1");

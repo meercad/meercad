@@ -21,14 +21,29 @@ interface ScanPlugin {
   capabilities(o: { lang: string }): Promise<Caps>;
   imported(o: { folder: string }): Promise<void>;
   /** `uvs` and `texture`: the object scan's picture (coordinates per STL corner, and a JPEG). */
-  scan(o: { mode: ScanMode; lang: string }): Promise<{ path: string; paths?: string[]; folder: string; triangles: number; size: [number, number, number]; photos: number; seconds: number; uvs?: string; texture?: string }>;
+  scan(o: { mode: ScanMode; lang: string }): Promise<{
+    path: string;
+    paths?: string[];
+    folder: string;
+    triangles: number;
+    size: [number, number, number];
+    photos: number;
+    seconds: number;
+    uvs?: string;
+    texture?: string;
+  }>;
 }
+
 const Scan = registerPlugin<ScanPlugin>("Scan");
 
 let available: Promise<Caps> | null = null;
+
 /** Whether this device can scan, and why not (asked once). */
 function capabilities(): Promise<Caps> {
-  return (available ??= Scan.capabilities({ lang }).catch((e: { message?: string }) => ({ scan: false, reason: t("The scanner did not answer: {error}", { error: e.message ?? String(e) }) })));
+  return (available ??= Scan.capabilities({ lang }).catch((e: { message?: string }) => ({
+    scan: false,
+    reason: t("The scanner did not answer: {error}", { error: e.message ?? String(e) }),
+  })));
 }
 
 /** Whether to offer scanning: in the iPhone/iPad app (a device that cannot scan says why on use). */
@@ -42,34 +57,68 @@ const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n.toFixed(1));
 export async function scanObject(mode: ScanMode = "object"): Promise<void> {
   const caps = await capabilities();
   console.info("scan capabilities", JSON.stringify(caps));
-  if (mode === "object" && !caps.scan) return toast(caps.reason || t("This device cannot scan objects."), "error");
-  if (mode !== "object" && !caps.surface) return toast(t("Scanning with LiDAR needs an iPhone or iPad with LiDAR."), "error");
+
+  if (mode === "object" && !caps.scan) {
+    return toast(caps.reason || t("This device cannot scan objects."), "error");
+  }
+
+  if (mode !== "object" && !caps.surface) {
+    return toast(t("Scanning with LiDAR needs an iPhone or iPad with LiDAR."), "error");
+  }
+
   let r: Awaited<ReturnType<ScanPlugin["scan"]>>;
+
   try {
     r = await Scan.scan({ mode, lang });
   } catch (e) {
     const err = e as { code?: string; message?: string };
     console.info("scan failed", err.code, err.message);
     if (err.code !== "cancelled") toast(err.message ?? t("Scanning failed"), "error");
+
     return;
   }
-  const stamp = new Date().toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  const stamp = new Date().toLocaleString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const label = { object: t("Scan"), lidar: t("LiDAR scan"), surface: t("Surface scan") }[mode];
   const paths = r.paths ?? [r.path];
   // The object scan's colours: shown on the part (switchable in its menu) and exported with OBJ.
   let texture: MeshTexture | undefined;
+
   if (r.uvs && r.texture && paths.length === 1) {
-    const [uvs, image] = await Promise.all([Filesystem.readFile({ path: `file://${r.uvs}` }), Filesystem.readFile({ path: `file://${r.texture}` })]).catch(() => [null, null]);
+    const [uvs, image] = await Promise.all([
+      Filesystem.readFile({ path: `file://${r.uvs}` }),
+      Filesystem.readFile({ path: `file://${r.texture}` }),
+    ]).catch(() => [null, null]);
     if (uvs && image) texture = { image: image.data as string, mime: "image/jpeg", uvs: uvs.data as string };
   }
+
   for (const [k, path] of paths.entries()) {
     const data = await Filesystem.readFile({ path: `file://${path}` });
     const bytes = Uint8Array.from(atob(data.data as string), (c) => c.charCodeAt(0));
     const name = `${label} ${stamp}${paths.length > 1 ? ` (${k + 1})` : ""}.stl`;
+
     // A scan that did not come in stays on the device and is offered again on the next Scan.
     // With its colours it comes in solid, so they are seen; a plain one see-through, to model against.
-    if (!(await importFile(new File([bytes], name, { type: "model/stl" }), texture ? { texture } : { seeThrough: true }))) return;
+    if (
+      !(await importFile(
+        new File([bytes], name, { type: "model/stl" }),
+        texture ? { texture } : { seeThrough: true },
+      ))
+    ) {
+      return;
+    }
   }
+
   void Scan.imported({ folder: r.folder }).catch(() => undefined);
-  toast(t("Scan: {size} mm · {triangles} triangles", { size: r.size.map(fmt).join(" × "), triangles: r.triangles.toLocaleString() }) + (r.photos ? ` · ${tn(r.photos, "{n} photo", "{n} photos")}` : ""));
+  toast(
+    t("Scan: {size} mm · {triangles} triangles", {
+      size: r.size.map(fmt).join(" × "),
+      triangles: r.triangles.toLocaleString(),
+    }) + (r.photos ? ` · ${tn(r.photos, "{n} photo", "{n} photos")}` : ""),
+  );
 }

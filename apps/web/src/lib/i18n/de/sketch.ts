@@ -11,8 +11,10 @@ export default {
   "two lines": "zwei Linien",
   Perpendicular: "Senkrecht",
   Tangent: "Tangential",
-  "a line and an arc/circle, two arcs, or a spline and a curve at its end": "eine Linie und einen Bogen/Kreis, zwei Bögen oder eine Spline und eine Kurve an ihrem Ende",
-  "a spline and a curve that ends where it ends": "eine Spline und eine Kurve, die dort endet, wo die Spline endet",
+  "a line and an arc/circle, two arcs, or a spline and a curve at its end":
+    "eine Linie und einen Bogen/Kreis, zwei Bögen oder eine Spline und eine Kurve an ihrem Ende",
+  "a spline and a curve that ends where it ends":
+    "eine Spline und eine Kurve, die dort endet, wo die Spline endet",
   Equal: "Gleich",
   "lines or circles/arcs": "Linien oder Kreise/Bögen",
   Concentric: "Konzentrisch",
@@ -26,7 +28,8 @@ export default {
   "points or curves": "Punkte oder Kurven",
   "{tool}: select {what}": "{tool}: wähle {what}",
   "two circles or arcs": "zwei Kreise oder Bögen",
-  "two points, a point and a curve, or two circles (concentric)": "zwei Punkte, einen Punkt und eine Kurve, oder zwei Kreise (konzentrisch)",
+  "two points, a point and a curve, or two circles (concentric)":
+    "zwei Punkte, einen Punkt und eine Kurve, oder zwei Kreise (konzentrisch)",
   "a line and an arc/circle, or two arcs/circles": "eine Linie und einen Bogen/Kreis, oder zwei Bögen/Kreise",
   "two lines or two circles/arcs": "zwei Linien oder zwei Kreise/Bögen",
 
@@ -37,9 +40,11 @@ export default {
   "Cannot round this corner: {reason}": "Diese Ecke lässt sich nicht abrunden: {reason}",
   "Cannot bevel this corner: {reason}": "Diese Ecke lässt sich nicht fasen: {reason}",
   "Cannot offset: {reason}": "Versetzen nicht möglich: {reason}",
-  "Dimension: pick a line, circle, arc, two points, a point and a line, or two lines": "Maß: wähle eine Linie, einen Kreis, einen Bogen, zwei Punkte, einen Punkt und eine Linie, oder zwei Linien",
+  "Dimension: pick a line, circle, arc, two points, a point and a line, or two lines":
+    "Maß: wähle eine Linie, einen Kreis, einen Bogen, zwei Punkte, einen Punkt und eine Linie, oder zwei Linien",
   "hexagon R {r}": "Sechseck R {r}",
-  "Click a model edge to project it into the sketch": "Klicke auf eine Modellkante, um sie in die Skizze zu projizieren",
+  "Click a model edge to project it into the sketch":
+    "Klicke auf eine Modellkante, um sie in die Skizze zu projizieren",
   "Tap to set this value exactly": "Tippe, um diesen Wert genau festzulegen",
   auto: "auto",
   "Enter to place · Tab next · Esc back to the mouse": "Eingabe setzt · Tab weiter · Esc zurück zur Maus",
@@ -71,35 +76,56 @@ export default {
   Aligned: "Ausgerichtet",
   Center: "Zentrum",
   "On edge": "Auf Kante",
-  "Click to continue · type a number for an exact length · double-click or Esc ends · click the start point to close": "Klicke, um weiterzuzeichnen · tippe eine Zahl für eine genaue Länge · Doppelklick oder Esc beendet · klicke auf den Startpunkt, um zu schließen",
-  "Click to start a line, or drag one out. Hold Alt (⌥) to place freely.": "Klicke, um eine Linie zu beginnen, oder zieh eine auf. Halte Alt (⌥), um frei zu setzen.",
-  "Click the opposite corner, or type the width (Tab for the height)": "Klicke auf die gegenüberliegende Ecke, oder tippe die Breite (Tab für die Höhe)",
-  "Click the first corner, or drag the rectangle out": "Klicke auf die erste Ecke, oder zieh das Rechteck auf",
-  "Click a corner, or type the width (Tab for the height)": "Klicke auf eine Ecke, oder tippe die Breite (Tab für die Höhe)",
-  "Click the center, or drag from the center out": "Klicke auf den Mittelpunkt, oder zieh vom Mittelpunkt aus auf",
-  "Click to set the size, or type the diameter": "Klicke, um die Größe festzulegen, oder tippe den Durchmesser",
+  "Click to continue · type a number for an exact length · double-click or Esc ends · click the start point to close":
+    "Klicke, um weiterzuzeichnen · tippe eine Zahl für eine genaue Länge · Doppelklick oder Esc beendet · klicke auf den Startpunkt, um zu schließen",
+  "Click to start a line, or drag one out. Hold Alt (⌥) to place freely.":
+    "Klicke, um eine Linie zu beginnen, oder zieh eine auf. Halte Alt (⌥), um frei zu setzen.",
+  "Click the opposite corner, or type the width (Tab for the height)":
+    "Klicke auf die gegenüberliegende Ecke, oder tippe die Breite (Tab für die Höhe)",
+  "Click the first corner, or drag the rectangle out":
+    "Klicke auf die erste Ecke, oder zieh das Rechteck auf",
+  "Click a corner, or type the width (Tab for the height)":
+    "Klicke auf eine Ecke, oder tippe die Breite (Tab für die Höhe)",
+  "Click the center, or drag from the center out":
+    "Klicke auf den Mittelpunkt, oder zieh vom Mittelpunkt aus auf",
+  "Click to set the size, or type the diameter":
+    "Klicke, um die Größe festzulegen, oder tippe den Durchmesser",
   "Click the center, or drag the circle out": "Klicke auf den Mittelpunkt, oder zieh den Kreis auf",
-  "Click where the arc starts, or drag to its end": "Klicke, wo der Bogen beginnt, oder zieh bis zu seinem Ende",
+  "Click where the arc starts, or drag to its end":
+    "Klicke, wo der Bogen beginnt, oder zieh bis zu seinem Ende",
   "Click where the arc ends": "Klicke, wo der Bogen endet",
-  "Move to bend the arc and click · type the radius (Tab for the angle)": "Bewege die Maus, um den Bogen zu biegen, und klicke · tippe den Radius (Tab für den Winkel)",
+  "Move to bend the arc and click · type the radius (Tab for the angle)":
+    "Bewege die Maus, um den Bogen zu biegen, und klicke · tippe den Radius (Tab für den Winkel)",
   "Click the arc center": "Klicke auf den Mittelpunkt des Bogens",
   "Click the start point": "Klicke auf den Startpunkt",
-  "Click the end point (move clockwise to flip) · type the angle": "Klicke auf den Endpunkt (im Uhrzeigersinn bewegen dreht die Richtung) · tippe den Winkel",
+  "Click the end point (move clockwise to flip) · type the angle":
+    "Klicke auf den Endpunkt (im Uhrzeigersinn bewegen dreht die Richtung) · tippe den Winkel",
   "Click to place a point": "Klicke, um einen Punkt zu setzen",
-  "Click a corner (hexagon; constraints keep it regular)": "Klicke auf eine Ecke (Sechseck; Bedingungen halten es regelmäßig)",
+  "Click a corner (hexagon; constraints keep it regular)":
+    "Klicke auf eine Ecke (Sechseck; Bedingungen halten es regelmäßig)",
   "Click the center": "Klicke auf den Mittelpunkt",
-  "Click the next point · double-click, Enter or Esc finishes · click the first point to close": "Klicke auf den nächsten Punkt · Doppelklick, Eingabe oder Esc beendet · klicke auf den ersten Punkt, um zu schließen",
+  "Click the next point · double-click, Enter or Esc finishes · click the first point to close":
+    "Klicke auf den nächsten Punkt · Doppelklick, Eingabe oder Esc beendet · klicke auf den ersten Punkt, um zu schließen",
   "Click where the smooth curve starts": "Klicke, wo die glatte Kurve beginnt",
-  "Click the piece of a curve to cut away up to its nearest intersections": "Klicke auf das Stück einer Kurve, das bis zu den nächsten Schnittpunkten wegfallen soll",
-  "Click a corner where two lines meet to round it with this radius": "Klicke auf eine Ecke, an der sich zwei Linien treffen, um sie mit diesem Radius abzurunden",
-  "Click a corner where two lines meet to bevel it by this distance along each line": "Klicke auf eine Ecke, an der sich zwei Linien treffen, um sie mit diesem Abstand entlang jeder Linie zu fasen",
-  "Select the curves to repeat (Shift adds), set the pattern, then Repeat selection": "Wähle die Kurven zum Wiederholen (Shift fügt hinzu), stell das Muster ein, dann Auswahl wiederholen",
-  "Click a line, arc or circle: its whole chain is copied at this distance (outwards for closed shapes, negative goes inwards)": "Klicke auf eine Linie, einen Bogen oder Kreis: die ganze Kette wird mit diesem Abstand kopiert (bei geschlossenen Formen nach außen, negativ nach innen)",
-  "Click a second entity, or click empty space to place the dimension (an arc: near its centre for the angle)": "Klicke auf ein zweites Element, oder klicke ins Leere, um das Maß zu setzen (bei einem Bogen: nahe der Mitte für den Winkel)",
+  "Click the piece of a curve to cut away up to its nearest intersections":
+    "Klicke auf das Stück einer Kurve, das bis zu den nächsten Schnittpunkten wegfallen soll",
+  "Click a corner where two lines meet to round it with this radius":
+    "Klicke auf eine Ecke, an der sich zwei Linien treffen, um sie mit diesem Radius abzurunden",
+  "Click a corner where two lines meet to bevel it by this distance along each line":
+    "Klicke auf eine Ecke, an der sich zwei Linien treffen, um sie mit diesem Abstand entlang jeder Linie zu fasen",
+  "Select the curves to repeat (Shift adds), set the pattern, then Repeat selection":
+    "Wähle die Kurven zum Wiederholen (Shift fügt hinzu), stell das Muster ein, dann Auswahl wiederholen",
+  "Click a line, arc or circle: its whole chain is copied at this distance (outwards for closed shapes, negative goes inwards)":
+    "Klicke auf eine Linie, einen Bogen oder Kreis: die ganze Kette wird mit diesem Abstand kopiert (bei geschlossenen Formen nach außen, negativ nach innen)",
+  "Click a second entity, or click empty space to place the dimension (an arc: near its centre for the angle)":
+    "Klicke auf ein zweites Element, oder klicke ins Leere, um das Maß zu setzen (bei einem Bogen: nahe der Mitte für den Winkel)",
   "Click a line, circle, arc or point": "Klicke auf eine Linie, einen Kreis, einen Bogen oder einen Punkt",
-  "Click model edges to use them as fixed reference geometry": "Klicke auf Modellkanten, um sie als feste Bezugsgeometrie zu nutzen",
-  "Drag to move · Shift-click to multi-select · drag empty space to box-select · Del removes": "Ziehen verschiebt · Shift-Klick wählt mehrere · im Leeren ziehen wählt per Rahmen · Del löscht",
-  "{type} {id} — double-click to edit, Del to remove": "{type} {id} — Doppelklick zum Bearbeiten, Del zum Löschen",
+  "Click model edges to use them as fixed reference geometry":
+    "Klicke auf Modellkanten, um sie als feste Bezugsgeometrie zu nutzen",
+  "Drag to move · Shift-click to multi-select · drag empty space to box-select · Del removes":
+    "Ziehen verschiebt · Shift-Klick wählt mehrere · im Leeren ziehen wählt per Rahmen · Del löscht",
+  "{type} {id} — double-click to edit, Del to remove":
+    "{type} {id} — Doppelklick zum Bearbeiten, Del zum Löschen",
   "{type} ({id}) — click to select, Del to remove": "{type} ({id}) — Klick zum Auswählen, Del zum Löschen",
   "constraint::length": "Länge",
   "constraint::distance": "Abstand",
@@ -123,10 +149,14 @@ export default {
   "constraint::coincident": "Deckungsgleich",
 
   // components/SnapControls.tsx
-  "Magnet on: snap to points, lines, circle centres and model edges": "Magnet an: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
-  "Magnet off: snap to points, lines, circle centres and model edges": "Magnet aus: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
-  "Grid on: shown and snapped to; its spacing follows the zoom (Alt places freely)": "Raster an: sichtbar und zum Einrasten; der Abstand folgt dem Zoom (Alt setzt frei)",
-  "Grid off: shown and snapped to; its spacing follows the zoom (Alt places freely)": "Raster aus: sichtbar und zum Einrasten; der Abstand folgt dem Zoom (Alt setzt frei)",
+  "Magnet on: snap to points, lines, circle centres and model edges":
+    "Magnet an: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
+  "Magnet off: snap to points, lines, circle centres and model edges":
+    "Magnet aus: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
+  "Grid on: shown and snapped to; its spacing follows the zoom (Alt places freely)":
+    "Raster an: sichtbar und zum Einrasten; der Abstand folgt dem Zoom (Alt setzt frei)",
+  "Grid off: shown and snapped to; its spacing follows the zoom (Alt places freely)":
+    "Raster aus: sichtbar und zum Einrasten; der Abstand folgt dem Zoom (Alt setzt frei)",
 
   // components/PlaneChooser.tsx
   "Sketch plane": "Skizzenebene",
@@ -136,10 +166,14 @@ export default {
   Cancel: "Abbrechen",
   "Trace mesh section": "Netzschnitt nachzeichnen",
   "Click the orange section line of the mesh": "Klicke auf die orange Schnittlinie des Netzes",
-  "The sketch plane does not cut a mesh part. Sketch on a plane through the part.": "Die Skizzenebene schneidet kein Netz-Teil. Skizziere auf einer Ebene durch das Teil.",
+  "The sketch plane does not cut a mesh part. Sketch on a plane through the part.":
+    "Die Skizzenebene schneidet kein Netz-Teil. Skizziere auf einer Ebene durch das Teil.",
   "Nothing to trace here": "Hier gibt es nichts nachzuzeichnen",
-  "one::Traced {n} curve. Dimension it to set the size.": "{n} Kurve nachgezeichnet. Bemaße sie, um die Größe festzulegen.",
-  "Traced {n} curves. Dimension them to set the sizes.": "{n} Kurven nachgezeichnet. Bemaße sie, um die Größen festzulegen.",
+  "one::Traced {n} curve. Dimension it to set the size.":
+    "{n} Kurve nachgezeichnet. Bemaße sie, um die Größe festzulegen.",
+  "Traced {n} curves. Dimension them to set the sizes.":
+    "{n} Kurven nachgezeichnet. Bemaße sie, um die Größen festzulegen.",
   "Trace all ({n})": "Alle nachzeichnen ({n})",
-  "Click the orange line where the plane cuts a mesh: it becomes lines, arcs and circles within the tolerance. Raise it for rough scans.": "Klicke auf die orange Linie, wo die Ebene ein Netz schneidet: Sie wird zu Linien, Bögen und Kreisen innerhalb der Toleranz. Erhöhe sie bei groben Scans.",
+  "Click the orange line where the plane cuts a mesh: it becomes lines, arcs and circles within the tolerance. Raise it for rough scans.":
+    "Klicke auf die orange Linie, wo die Ebene ein Netz schneidet: Sie wird zu Linien, Bögen und Kreisen innerhalb der Toleranz. Erhöhe sie bei groben Scans.",
 } as Record<string, string>;

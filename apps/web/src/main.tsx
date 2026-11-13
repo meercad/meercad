@@ -10,21 +10,41 @@ import { installKeyboardDetection } from "./lib/keyboard";
 import { installProbe, uiTesting } from "./lib/uitestProbe";
 
 installLongPressMenus();
+
 // Development builds expose the stores so test runs can read the document and the result (docs/TESTING.md).
 // So does an iOS app started by a UI test, which also reads the state from an accessibility label.
-if (import.meta.env.DEV || uiTesting())
-  void Promise.all([import("./store"), import("./sketch/state"), import("./lib/mcpBridge")]).then(([store, sketch, bridge]) => {
-    (window as unknown as { meercadTest: unknown }).meercadTest = { app: store.useApp, sketch: sketch.useSketchUi, store, mcp: bridge.testCall };
-    if (uiTesting()) installProbe(store.useApp, store.rebuilding, (p) => store.getViewport()?.worldToScreen(p) ?? null);
-  });
+if (import.meta.env.DEV || uiTesting()) {
+  void Promise.all([import("./store"), import("./sketch/state"), import("./lib/mcpBridge")]).then(
+    ([store, sketch, bridge]) => {
+      (window as unknown as { meercadTest: unknown }).meercadTest = {
+        app: store.useApp,
+        sketch: sketch.useSketchUi,
+        store,
+        mcp: bridge.testCall,
+      };
+
+      if (uiTesting()) {
+        installProbe(store.useApp, store.rebuilding, (p) => store.getViewport()?.worldToScreen(p) ?? null);
+      }
+    },
+  );
+}
+
 installKeyboardDetection();
 
 // meerCAD is the Mac and iPad app; opened anywhere else (a browser on the dev server) it says so.
 const root = createRoot(document.getElementById("root")!);
-if (desktop || nativeApp)
+
+if (desktop || nativeApp) {
   root.render(
     <StrictMode>
       <App />
     </StrictMode>,
   );
-else root.render(<p style={{ margin: "40vh auto", textAlign: "center", font: "15px system-ui" }}>meerCAD runs as the Mac and iPad app.</p>);
+} else {
+  root.render(
+    <p style={{ margin: "40vh auto", textAlign: "center", font: "15px system-ui" }}>
+      meerCAD runs as the Mac and iPad app.
+    </p>,
+  );
+}

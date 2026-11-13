@@ -13,7 +13,8 @@
  */
 
 /** The file next to a project's file, by the project file's name ("Bracket.meercad"). */
-export const sidecarName = (projectFileName: string) => `.${projectFileName.replace(/\.meercad$/, "")}.meercad-preview`;
+export const sidecarName = (projectFileName: string) =>
+  `.${projectFileName.replace(/\.meercad$/, "")}.meercad-preview`;
 
 export interface SharedPicture {
   /** The project file's size in bytes when it was pictured. */
@@ -29,14 +30,37 @@ export interface SharedPicture {
 const PNG = "data:image/png;base64,";
 
 export function formatSidecar(p: SharedPicture): string {
-  return JSON.stringify({ v: 1, size: p.size, sha256: p.sha256, look: p.look, png: p.thumbnail.slice(PNG.length) });
+  return JSON.stringify({
+    v: 1,
+    size: p.size,
+    sha256: p.sha256,
+    look: p.look,
+    png: p.thumbnail.slice(PNG.length),
+  });
 }
 
 /** The picture in a sidecar's text, or null if it is not one this version reads. */
 export function parseSidecar(text: string): SharedPicture | null {
   try {
-    const o = JSON.parse(text) as { v?: unknown; size?: unknown; sha256?: unknown; look?: unknown; png?: unknown };
-    if (o.v !== 1 || typeof o.size !== "number" || typeof o.sha256 !== "string" || typeof o.look !== "number" || typeof o.png !== "string" || !o.png) return null;
+    const o = JSON.parse(text) as {
+      v?: unknown;
+      size?: unknown;
+      sha256?: unknown;
+      look?: unknown;
+      png?: unknown;
+    };
+
+    if (
+      o.v !== 1 ||
+      typeof o.size !== "number" ||
+      typeof o.sha256 !== "string" ||
+      typeof o.look !== "number" ||
+      typeof o.png !== "string" ||
+      !o.png
+    ) {
+      return null;
+    }
+
     return { size: o.size, sha256: o.sha256, look: o.look, thumbnail: PNG + o.png };
   } catch {
     return null;
@@ -47,9 +71,11 @@ export function parseSidecar(text: string): SharedPicture | null {
 export async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) return null;
+
   const d = new Uint8Array(await subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>));
   let s = "";
   for (const b of d) s += b.toString(16).padStart(2, "0");
+
   return s;
 }
 

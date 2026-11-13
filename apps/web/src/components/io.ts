@@ -1,17 +1,73 @@
 /** File import/export and share links. */
-import { filamentSlots, objFiles, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotCollision, type RobotLink, type RobotPart, type TexturedMesh } from "@meercad/io";
+import {
+  filamentSlots,
+  objFiles,
+  read3mf,
+  readDxf,
+  readGlb,
+  readObj,
+  write3mf,
+  writeDxf,
+  writeObj,
+  writeRobot,
+  writeStl,
+  writeSvg,
+  writeUsdz,
+  writeZip,
+  type Curve2,
+  type ObjMesh,
+  type RobotActuator,
+  type RobotCollision,
+  type RobotLink,
+  type RobotPart,
+  type TexturedMesh,
+} from "@meercad/io";
 import type { BodyMesh } from "@meercad/kernel";
 import { SupersededError } from "@meercad/kernel/client";
 import { showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
-import { applyOp, designOf, freeVersionName, massOf, materialById, motion, nextFeatureId, partMaterial, restored, versionChanges, versionFile } from "@meercad/model";
+import {
+  applyOp,
+  designOf,
+  freeVersionName,
+  massOf,
+  materialById,
+  motion,
+  nextFeatureId,
+  partMaterial,
+  restored,
+  versionChanges,
+  versionFile,
+} from "@meercad/model";
 import { threeMfParts } from "../lib/printParts";
-import { emptyDocument, validateDocument, type DocOp, type Feature, type MeercadDocument, type MeshTexture, type SketchConstraint, type SketchEntity } from "@meercad/schema";
+import {
+  emptyDocument,
+  validateDocument,
+  type DocOp,
+  type Feature,
+  type MeercadDocument,
+  type MeshTexture,
+  type SketchConstraint,
+  type SketchEntity,
+} from "@meercad/schema";
 import { nativeApp, shareFile, showInAr } from "../lib/native";
 import { desktop } from "../lib/persistence";
-import { apply, currentDoc, flushSave, holdRebuilds, kernel, newProject, openSketch, rebuildNow, scheduleRebuild, startTask, toast, useApp } from "../store";
+import {
+  apply,
+  currentDoc,
+  flushSave,
+  holdRebuilds,
+  kernel,
+  newProject,
+  openSketch,
+  rebuildNow,
+  scheduleRebuild,
+  startTask,
+  toast,
+  useApp,
+} from "../store";
 import { t } from "../lib/i18n";
 import { currentMechanism, currentPoses } from "../lib/mechanism";
 import { sceneryOf } from "../lib/terrain";
@@ -33,23 +89,38 @@ const FILTERS: Record<string, { name: string; extensions: string[] }> = {
 /** Saves a file: a save dialog on the Mac, the share sheet on the iPad. */
 export function download(name: string, data: BlobPart): void {
   if (nativeApp) {
-    const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
-    void shareFile(name, payload).catch((e: Error) => toast(t("Could not share {name}: {error}", { name, error: e.message }), "error"));
+    const payload =
+      typeof data === "string"
+        ? data
+        : data instanceof Uint8Array
+          ? data
+          : new Uint8Array(data as ArrayBuffer);
+    void shareFile(name, payload).catch((e: Error) =>
+      toast(t("Could not share {name}: {error}", { name, error: e.message }), "error"),
+    );
+
     return;
   }
+
   const ext = name.split(".").pop() ?? "";
-  const payload = typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
-  void desktop?.saveFile({ name, data: payload, ...(FILTERS[ext] ? { filters: [FILTERS[ext]!] } : {}) }).then((path) => path && toast(t("Saved {path}", { path })));
+  const payload =
+    typeof data === "string" ? data : data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+  void desktop
+    ?.saveFile({ name, data: payload, ...(FILTERS[ext] ? { filters: [FILTERS[ext]!] } : {}) })
+    .then((path) => path && toast(t("Saved {path}", { path })));
 }
 
-export const baseName = () => (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
+export const baseName = () =>
+  (useApp.getState().project?.name ?? "model").replace(/[^\w\- ]+/g, "").trim() || "model";
 
 /** The document with parts drawn see-through (or not). */
 export function seeThroughDoc(doc: MeercadDocument, parts: readonly string[], on: boolean): MeercadDocument {
   const set = new Set(doc.seeThrough ?? []);
   for (const p of parts) on ? set.add(p) : set.delete(p);
+
   const next: MeercadDocument = { ...doc, seeThrough: [...set] };
   if (!set.size) delete next.seeThrough;
+
   return next;
 }
 
@@ -63,8 +134,10 @@ function exportIds(parts?: readonly string[]): string[] {
   const hidden = useApp.getState().hidden;
   const all = useApp.getState().output?.report.bodies.map((b) => b.id) ?? [];
   if (!parts) return all.filter((id) => !hidden.has(id));
+
   const unknown = parts.filter((p) => !all.includes(p));
   if (unknown.length) throw new Error(t("unknown part {id}", { id: unknown.join(", ") }));
+
   return [...parts];
 }
 
@@ -73,28 +146,51 @@ function exportIds(parts?: readonly string[]): string[] {
  * coarser), named `name`.ext; OBJ also takes the visible terrains and scans with their pictures.
  * `posed` (default) takes moved parts where they are shown. `moved` tells whether any were.
  */
-export async function meshExportFiles(format: MeshFormat, opts: { parts?: readonly string[]; posed?: boolean; name?: string; materials?: boolean } = {}): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[] }> {
+export async function meshExportFiles(
+  format: MeshFormat,
+  opts: { parts?: readonly string[]; posed?: boolean; name?: string; materials?: boolean } = {},
+): Promise<{ files: Record<string, Uint8Array>; moved: boolean; meshes: BodyMesh[] }> {
   const name = opts.name ?? baseName();
   const ids = exportIds(opts.parts);
-  const surroundings = format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
+  const surroundings =
+    format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
   if (!ids.length && !surroundings) throw new Error(t("Nothing to export"));
+
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
-  const meshes = ids.length ? (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m)) : [];
-  if (format === "obj") return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes };
-  return { files: { [`${name}.${format}`]: meshFile(format, meshes, opts.materials) }, moved: poses.size > 0, meshes };
+  const meshes = ids.length
+    ? (await kernel.exportMeshes(ids)).map((m) =>
+        poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m,
+      )
+    : [];
+
+  if (format === "obj") {
+    return { files: objExport(name, meshes, surroundings), moved: poses.size > 0, meshes };
+  }
+
+  return {
+    files: { [`${name}.${format}`]: meshFile(format, meshes, opts.materials) },
+    moved: poses.size > 0,
+    meshes,
+  };
 }
 
 export async function exportMesh(format: MeshFormat): Promise<void> {
   try {
     const { files, moved, meshes } = await meshExportFiles(format);
     if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
+
     const names = Object.keys(files);
     if (names.length > 1) toast(t("Exported as a zip: the OBJ with its materials and pictures"), "info");
-    download(names.length > 1 ? `${baseName()}.zip` : names[0]!, (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart);
+
+    download(
+      names.length > 1 ? `${baseName()}.zip` : names[0]!,
+      (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart,
+    );
     if (format === "3mf") tellFilaments(meshes);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg === t("Nothing to export")) return toast(msg, "error");
+
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: msg }), "error");
   }
 }
@@ -104,12 +200,26 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
  * materials if the setting is on), written to a temporary file the slicer opens. `slicer`: which
  * one, default the first installed (Bambu Studio before PrusaSlicer).
  */
-export async function openInSlicer(slicer?: SlicerId, opts: { parts?: readonly string[]; posed?: boolean; materials?: boolean } = {}): Promise<{ slicer: string; file: string; moved: boolean; meshes: BodyMesh[] }> {
-  const target = slicerFor(slicer) ?? ((await refreshSlicers()), slicerFor(slicer));
-  if (!target || !desktop?.slicers) throw new Error(slicer ? t("{name} is not installed on this Mac", { name: slicer === "bambu" ? "Bambu Studio" : "PrusaSlicer" }) : t("No slicer installed (Bambu Studio or PrusaSlicer)"));
+export async function openInSlicer(
+  slicer?: SlicerId,
+  opts: { parts?: readonly string[]; posed?: boolean; materials?: boolean } = {},
+): Promise<{ slicer: string; file: string; moved: boolean; meshes: BodyMesh[] }> {
+  const target = slicerFor(slicer) ?? (await refreshSlicers(), slicerFor(slicer));
+
+  if (!target || !desktop?.slicers) {
+    throw new Error(
+      slicer
+        ? t("{name} is not installed on this Mac", {
+            name: slicer === "bambu" ? "Bambu Studio" : "PrusaSlicer",
+          })
+        : t("No slicer installed (Bambu Studio or PrusaSlicer)"),
+    );
+  }
+
   const { files, moved, meshes } = await meshExportFiles("3mf", opts);
   const [name, data] = Object.entries(files)[0]!;
   const r = await desktop.slicers.open({ slicer: target.id, name, data });
+
   return { ...r, moved, meshes };
 }
 
@@ -117,11 +227,16 @@ export async function openInSlicer(slicer?: SlicerId, opts: { parts?: readonly s
 export async function sendToSlicer(slicer: SlicerId): Promise<void> {
   try {
     const { slicer: name, moved, meshes } = await openInSlicer(slicer);
-    toast(moved ? t("Sent to {name}, moved parts where they are now", { name }) : t("Sent to {name}", { name }));
+    toast(
+      moved ? t("Sent to {name}, moved parts where they are now", { name }) : t("Sent to {name}", { name }),
+    );
     tellFilaments(meshes);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    toast(msg === t("Nothing to export") ? msg : t("Could not send to the slicer: {error}", { error: msg }), "error");
+    toast(
+      msg === t("Nothing to export") ? msg : t("Could not send to the slicer: {error}", { error: msg }),
+      "error",
+    );
   }
 }
 
@@ -129,16 +244,27 @@ export async function sendToSlicer(slicer: SlicerId): Promise<void> {
  * The parts as USDZ for AR: each with its colour and its material's sheen, moved parts where
  * they are shown, standing on the table in real size (see writeUsdz).
  */
-export async function usdzFile(opts: { parts?: readonly string[]; posed?: boolean } = {}): Promise<Uint8Array> {
+export async function usdzFile(
+  opts: { parts?: readonly string[]; posed?: boolean } = {},
+): Promise<Uint8Array> {
   const ids = exportIds(opts.parts);
   if (!ids.length) throw new Error(t("Nothing to export"));
+
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
-  const meshes = (await kernel.exportMeshes(ids)).map((m) => (poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m));
+  const meshes = (await kernel.exportMeshes(ids)).map((m) =>
+    poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m,
+  );
   const doc = currentDoc();
-  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  const colors = partColors(
+    doc,
+    meshes.map((m) => m.bodyId),
+    usePrefs.getState().colorParts,
+  );
+
   return writeUsdz(
     meshes.map((m) => {
       const look = partMaterial(doc, m.bodyId)?.look;
+
       return {
         positions: m.positions,
         indices: m.indices,
@@ -158,15 +284,22 @@ export async function usdzFile(opts: { parts?: readonly string[]; posed?: boolea
  */
 export async function viewInAr(): Promise<void> {
   const task = startTask(t("Preparing the AR view"));
+
   try {
     const data = await usdzFile();
     const name = `${baseName()}.usdz`;
     task.done();
     if (nativeApp) return await showInAr(name, data);
+
     download(name, data as BlobPart);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    toast(msg === t("Nothing to export") ? msg : t("{format} export failed: {error}", { format: "USDZ", error: msg }), "error");
+    toast(
+      msg === t("Nothing to export")
+        ? msg
+        : t("{format} export failed: {error}", { format: "USDZ", error: msg }),
+      "error",
+    );
   } finally {
     task.done();
   }
@@ -197,17 +330,25 @@ export interface RobotExportOptions {
  * part a simple collision shape (box, cylinder or sphere) unless the meshes are asked for. Parts
  * without a material count as PLA. The parts at rest, the screen's tessellation (light meshes).
  */
-export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files: Record<string, Uint8Array>; links: RobotLink[]; warnings: string[] }> {
+export async function robotFiles(
+  opts: RobotExportOptions = {},
+): Promise<{ files: Record<string, Uint8Array>; links: RobotLink[]; warnings: string[] }> {
   await rebuildNow();
+
   const out = useApp.getState().output;
   const doc = currentDoc();
   const bodies = out?.report.bodies ?? [];
   if (!out || !bodies.length) throw new Error(t("Nothing to export"));
+
   const all = bodies.map((b) => b.id);
-  const unknown = [...Object.keys(opts.masses ?? {}), ...(opts.exclude ?? [])].filter((id) => !all.includes(id));
+  const unknown = [...Object.keys(opts.masses ?? {}), ...(opts.exclude ?? [])].filter(
+    (id) => !all.includes(id),
+  );
   if (unknown.length) throw new Error(t("unknown part {id}", { id: unknown.join(", ") }));
+
   const ids = exportIds(opts.parts).filter((id) => !opts.exclude?.includes(id));
   if (!ids.length) throw new Error(t("Nothing to export"));
+
   const keep = new Set(ids);
   const left = new Set(all.filter((id) => !keep.has(id)));
   const meshes = new Map(out.meshes.map((m) => [m.bodyId, m]));
@@ -216,11 +357,14 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
   const warnings: string[] = [];
   const plain: string[] = [];
   const parts: RobotPart[] = [];
+
   for (const b of bodies) {
     const mesh = meshes.get(b.id);
     if (!keep.has(b.id) || !mesh || !Number.isFinite(b.volume) || b.volume <= 0) continue;
+
     const material = partMaterial(doc, b.id);
     if (!material && opts.masses?.[b.id] === undefined) plain.push(b.id);
+
     const mass = opts.masses?.[b.id] ?? massOf(b.volume, material ?? pla);
     const [lo, hi] = [b.bbox.min, b.bbox.max];
     const centroid = b.centroid ?? ([0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as [number, number, number]);
@@ -228,34 +372,77 @@ export async function robotFiles(opts: RobotExportOptions = {}): Promise<{ files
     const [x, y, z] = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
     const k = mass / b.volume;
     const m = b.inertia;
-    const inertia: RobotPart["inertia"] = m ? [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] : [(mass * (y * y + z * z)) / 12, (mass * (x * x + z * z)) / 12, (mass * (x * x + y * y)) / 12, 0, 0, 0];
+    const inertia: RobotPart["inertia"] = m
+      ? [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k]
+      : [
+          (mass * (y * y + z * z)) / 12,
+          (mass * (x * x + z * z)) / 12,
+          (mass * (x * x + y * y)) / 12,
+          0,
+          0,
+          0,
+        ];
     const color = colors.get(b.id);
-    parts.push({ id: b.id, name: partName(b.id, doc.features), mesh: { positions: mesh.positions, indices: mesh.indices }, ...(color ? { color } : {}), mass, centroid, inertia });
+    parts.push({
+      id: b.id,
+      name: partName(b.id, doc.features),
+      mesh: { positions: mesh.positions, indices: mesh.indices },
+      ...(color ? { color } : {}),
+      mass,
+      centroid,
+      inertia,
+    });
   }
-  if (plain.length) warnings.push(`${plain.length} parts have no material and count as PLA (${plain.slice(0, 6).join(", ")}${plain.length > 6 ? ", …" : ""})`);
+
+  if (plain.length) {
+    warnings.push(
+      `${plain.length} parts have no material and count as PLA (${plain.slice(0, 6).join(", ")}${plain.length > 6 ? ", …" : ""})`,
+    );
+  }
+
   const hiddenOut = all.filter((id) => left.has(id)).length;
   if (hiddenOut && !opts.parts) warnings.push(`${hiddenOut} parts hidden or excluded, left out`);
+
   const { mech, problems } = currentMechanism();
   for (const [id, msg] of Object.entries(problems)) warnings.push(`joint ${id} left out: ${msg}`);
+
   const name = (opts.name ?? baseName()).replace(/[^\w\-]+/g, "_") || "robot";
   // Joints to a part left out go with it (carriers of cylindrical joints are no parts and stay).
   const joints = mech.joints.filter((j) => !left.has(j.a) && !left.has(j.b));
   const r = writeRobot(
     parts,
-    joints.map((j) => ({ id: j.id, type: j.type, a: j.a, b: j.b, origin: j.origin, axis: j.axis, ...(j.limits ? { limits: j.limits } : {}) })),
-    mech.couplings.filter((c) => joints.some((j) => j.id === c.driver) && joints.some((j) => j.id === c.driven)).map((c) => ({ driver: c.driver, driven: c.driven, ratio: c.ratio })),
-    { name, ...(opts.floating !== undefined ? { floating: opts.floating } : {}), ...(opts.actuators ? { actuators: opts.actuators } : {}), ...(opts.collision ? { collision: opts.collision } : {}) },
+    joints.map((j) => ({
+      id: j.id,
+      type: j.type,
+      a: j.a,
+      b: j.b,
+      origin: j.origin,
+      axis: j.axis,
+      ...(j.limits ? { limits: j.limits } : {}),
+    })),
+    mech.couplings
+      .filter((c) => joints.some((j) => j.id === c.driver) && joints.some((j) => j.id === c.driven))
+      .map((c) => ({ driver: c.driver, driven: c.driven, ratio: c.ratio })),
+    {
+      name,
+      ...(opts.floating !== undefined ? { floating: opts.floating } : {}),
+      ...(opts.actuators ? { actuators: opts.actuators } : {}),
+      ...(opts.collision ? { collision: opts.collision } : {}),
+    },
   );
+
   return { files: r.files, links: r.links, warnings: [...warnings, ...r.warnings] };
 }
 
 /** The robot export from the menu: a zip with the MJCF, the URDF and the meshes. */
 export async function exportRobot(): Promise<void> {
   const task = startTask(t("Preparing the robot for simulation"));
+
   try {
     const { files, links, warnings } = await robotFiles();
     task.done();
     download(`${baseName()} robot.zip`, writeZip(files) as BlobPart);
+
     const joints = links.filter((l) => l.joint).length;
     void showNotice({
       title: t("Robot exported: {links} links, {joints} joints", { links: links.length, joints }),
@@ -263,7 +450,12 @@ export async function exportRobot(): Promise<void> {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    toast(msg === t("Nothing to export") ? msg : t("{format} export failed: {error}", { format: "MJCF/URDF", error: msg }), "error");
+    toast(
+      msg === t("Nothing to export")
+        ? msg
+        : t("{format} export failed: {error}", { format: "MJCF/URDF", error: msg }),
+      "error",
+    );
   } finally {
     task.done();
   }
@@ -274,10 +466,25 @@ export type MeshFormat = "stl" | "3mf" | "obj";
 /** Parts for OBJ, with their names and colours, and scans with their pictures (unless switched off). */
 function objParts(meshes: readonly BodyMesh[]): (ObjMesh & { image?: { data: Uint8Array; mime: string } })[] {
   const { doc } = useApp.getState();
-  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  const colors = partColors(
+    doc,
+    meshes.map((m) => m.bodyId),
+    usePrefs.getState().colorParts,
+  );
+
   return meshes.map((m) => {
     const tex = exportTexture(doc.features, m);
-    return { positions: m.positions, indices: m.indices, name: partName(m.bodyId, doc.features), ...(tex ? { uvs: tex.uvs, image: tex.image } : colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}) };
+
+    return {
+      positions: m.positions,
+      indices: m.indices,
+      name: partName(m.bodyId, doc.features),
+      ...(tex
+        ? { uvs: tex.uvs, image: tex.image }
+        : colors.get(m.bodyId)
+          ? { color: colors.get(m.bodyId)! }
+          : {}),
+    };
   });
 }
 
@@ -288,33 +495,51 @@ function objParts(meshes: readonly BodyMesh[]): (ObjMesh & { image?: { data: Uin
 function surroundingMeshes(): (TexturedMesh & { name: string })[] {
   const doc = currentDoc();
   const views = sceneryOf(doc);
+
   return (doc.references ?? []).flatMap((r) => {
     const view = views.find((v) => v.id === r.id);
     if (r.hidden || !view) return [];
+
     const pieces = readGlb(new Uint8Array(view.data));
+
     return pieces.map((m, k) => {
       if (r.scale && r.scale !== 1) {
         const p = new Float32Array(m.positions);
         for (let i = 0; i < p.length; i++) p[i] = p[i]! * r.scale;
         m = { ...m, positions: p };
       }
+
       return { ...m, name: pieces.length > 1 ? `${r.name} ${k + 1}` : r.name };
     });
   });
 }
 
 /** The files of an OBJ export: the parts, and with `surroundings` the visible terrains and scans. */
-export function objExport(name: string, meshes: readonly BodyMesh[], surroundings: boolean): Record<string, Uint8Array> {
+export function objExport(
+  name: string,
+  meshes: readonly BodyMesh[],
+  surroundings: boolean,
+): Record<string, Uint8Array> {
   return objFiles(name, [...objParts(meshes), ...(surroundings ? surroundingMeshes() : [])]);
 }
 
-/** Whether a 3MF carries materials, colours and filaments: `materials` if given, else the setting (default off). */
+/**
+ * Whether a 3MF carries materials, colours and filaments: `materials` if given, else the setting (default
+ * off).
+ */
 export const threeMfMaterials = (materials?: boolean) => materials ?? usePrefs.getState().threeMfMaterials;
 
-/** The filaments a 3MF of these parts asks for, in slot order (material and colour); none without materials. */
+/**
+ * The filaments a 3MF of these parts asks for, in slot order (material and colour); none without materials.
+ */
 export function filamentsOf(meshes: readonly BodyMesh[], materials?: boolean) {
   const doc = currentDoc();
-  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  const colors = partColors(
+    doc,
+    meshes.map((m) => m.bodyId),
+    usePrefs.getState().colorParts,
+  );
+
   return filamentSlots(threeMfParts(doc, meshes, colors, threeMfMaterials(materials))).filaments;
 }
 
@@ -322,16 +547,32 @@ export function filamentsOf(meshes: readonly BodyMesh[], materials?: boolean) {
 function tellFilaments(meshes: readonly BodyMesh[]): void {
   const filaments = filamentsOf(meshes);
   if (filaments.length < 2) return;
-  const lines = filaments.map((f, i) => t("Filament {n}: {material} {color}", { n: i + 1, material: f.material ?? t("any material"), color: f.color }));
-  void showNotice({ title: t("{n} filaments assigned", { n: filaments.length }), message: `${lines.join("\n")}\n\n${t("Load these filaments in the slicer in this order; each part is already assigned to its filament.")}` });
+
+  const lines = filaments.map((f, i) =>
+    t("Filament {n}: {material} {color}", {
+      n: i + 1,
+      material: f.material ?? t("any material"),
+      color: f.color,
+    }),
+  );
+  void showNotice({
+    title: t("{n} filaments assigned", { n: filaments.length }),
+    message: `${lines.join("\n")}\n\n${t("Load these filaments in the slicer in this order; each part is already assigned to its filament.")}`,
+  });
 }
 
 /** Parts as an STL, or a 3MF or OBJ with their names and colours (3MF: see threeMfMaterials). */
 function meshFile(format: MeshFormat, meshes: BodyMesh[], materials?: boolean): Uint8Array {
   if (format === "stl") return writeStl(meshes);
+
   const { doc } = useApp.getState();
-  const colors = partColors(doc, meshes.map((m) => m.bodyId), usePrefs.getState().colorParts);
+  const colors = partColors(
+    doc,
+    meshes.map((m) => m.bodyId),
+    usePrefs.getState().colorParts,
+  );
   if (format === "obj") return new TextEncoder().encode(writeObj(objParts(meshes)));
+
   return write3mf(threeMfParts(doc, meshes, colors, threeMfMaterials(materials)));
 }
 
@@ -341,11 +582,22 @@ function meshFile(format: MeshFormat, meshes: BodyMesh[], materials?: boolean): 
  */
 export async function exportVariants(format: MeshFormat | "step"): Promise<void> {
   if (!(currentDoc().variants ?? []).length) return toast(t("This design has no variants"), "error");
+
   const task = startTask(t("Exporting {n} variants", { n: currentDoc().variants!.length }));
+
   try {
-    download(`${baseName()}-${t("variants")}.zip`, writeZip(await variantFiles(format, (k, n) => task.update(k / n))) as BlobPart);
+    download(
+      `${baseName()}-${t("variants")}.zip`,
+      writeZip(await variantFiles(format, (k, n) => task.update(k / n))) as BlobPart,
+    );
   } catch (e) {
-    toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: e instanceof Error ? e.message : String(e) }), "error");
+    toast(
+      t("{format} export failed: {error}", {
+        format: format.toUpperCase(),
+        error: e instanceof Error ? e.message : String(e),
+      }),
+      "error",
+    );
   } finally {
     task.done();
   }
@@ -355,30 +607,58 @@ export async function exportVariants(format: MeshFormat | "step"): Promise<void>
  * Every variant as a file of its own ("holder-Pipe 25.stl", …). The kernel builds each variant in
  * turn; afterwards the design is built as it is again.
  */
-export async function variantFiles(format: MeshFormat | "step", progress?: (k: number, n: number) => void, parts?: readonly string[], materials?: boolean): Promise<Record<string, Uint8Array>> {
+export async function variantFiles(
+  format: MeshFormat | "step",
+  progress?: (k: number, n: number) => void,
+  parts?: readonly string[],
+  materials?: boolean,
+): Promise<Record<string, Uint8Array>> {
   const doc = currentDoc();
   const variants = doc.variants ?? [];
   if (!variants.length) throw new Error(t("This design has no variants"));
+
   const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, "-").trim();
   const files: Record<string, Uint8Array> = {};
   holdRebuilds(true);
+
   try {
     for (const [k, v] of variants.entries()) {
       progress?.(k, variants.length);
+
       // A rebuild the app had already asked for (the edit just before) may overtake this one: build it again.
       const build = () => kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
-      const out = await build().catch((e: unknown) => (e instanceof SupersededError ? build() : Promise.reject(e)));
+      const out = await build().catch((e: unknown) =>
+        e instanceof SupersededError ? build() : Promise.reject(e),
+      );
       const failed = out.report.features.find((f) => f.status === "error");
-      if (failed) throw new Error(t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }));
+
+      if (failed) {
+        throw new Error(
+          t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }),
+        );
+      }
+
       const hidden = useApp.getState().hidden;
-      const shown = out.report.bodies.map((b) => b.id).filter((id) => (parts ? parts.includes(id) : !hidden.has(id)));
+      const shown = out.report.bodies
+        .map((b) => b.id)
+        .filter((id) => (parts ? parts.includes(id) : !hidden.has(id)));
       const ids = shown;
       const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
+
       if (format === "obj") {
         const obj = objExport(`${safe(baseName())}-${safe(v.name)}`, await kernel.exportMeshes(ids), false);
         Object.assign(files, obj);
-      } else files[file] = format === "step" ? await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id))) : meshFile(format, await kernel.exportMeshes(ids), materials);
+      } else {
+        files[file] =
+          format === "step"
+            ? await kernel.exportStep(
+                ids,
+                stepParts().filter((p) => ids.includes(p.id)),
+              )
+            : meshFile(format, await kernel.exportMeshes(ids), materials);
+      }
     }
+
     return files;
   } finally {
     holdRebuilds(false);
@@ -391,14 +671,30 @@ export function stepParts(): { id: string; name: string; color?: string }[] {
   const { doc, output } = useApp.getState();
   const ids = output?.report.bodies.map((b) => b.id) ?? [];
   const colors = partColors(doc, ids, true);
-  return ids.map((id) => ({ id, name: partName(id, doc.features), ...(colors.get(id) ? { color: colors.get(id)! } : {}) }));
+
+  return ids.map((id) => ({
+    id,
+    name: partName(id, doc.features),
+    ...(colors.get(id) ? { color: colors.get(id)! } : {}),
+  }));
 }
 
-/** A STEP file of the parts (default: the ones not hidden), moved parts where they are shown unless `posed` is false. */
-export async function stepFile(opts: { parts?: readonly string[]; posed?: boolean } = {}): Promise<{ data: Uint8Array; moved: boolean }> {
+/**
+ * A STEP file of the parts (default: the ones not hidden), moved parts where they are shown unless `posed` is
+ * false.
+ */
+export async function stepFile(
+  opts: { parts?: readonly string[]; posed?: boolean } = {},
+): Promise<{ data: Uint8Array; moved: boolean }> {
   const ids = exportIds(opts.parts);
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
-  const data = await kernel.exportStep(ids, stepParts().filter((p) => ids.includes(p.id)).map((p) => (poses.has(p.id) ? { ...p, pose: poses.get(p.id)! } : p)));
+  const data = await kernel.exportStep(
+    ids,
+    stepParts()
+      .filter((p) => ids.includes(p.id))
+      .map((p) => (poses.has(p.id) ? { ...p, pose: poses.get(p.id)! } : p)),
+  );
+
   return { data, moved: poses.size > 0 };
 }
 
@@ -406,24 +702,46 @@ export async function exportStep(): Promise<void> {
   try {
     const { data, moved } = await stepFile();
     if (moved) toast(t("Exported as shown: moved parts are where they are now"), "info");
+
     download(`${baseName()}.step`, data as BlobPart);
-    if (currentDoc().features.some((f) => f.op === "lithophane" && !f.suppressed)) toast(t("STEP keeps the smooth plate: the lithophane's picture comes along in STL, 3MF and OBJ"), "info");
+
+    if (currentDoc().features.some((f) => f.op === "lithophane" && !f.suppressed)) {
+      toast(
+        t("STEP keeps the smooth plate: the lithophane's picture comes along in STL, 3MF and OBJ"),
+        "info",
+      );
+    }
   } catch (e) {
-    toast(t("{format} export failed: {error}", { format: "STEP", error: e instanceof Error ? e.message : String(e) }), "error");
+    toast(
+      t("{format} export failed: {error}", {
+        format: "STEP",
+        error: e instanceof Error ? e.message : String(e),
+      }),
+      "error",
+    );
   }
 }
 
 /** Curves of a sketch (excluding construction geometry) for laser/plotter formats. */
 export function sketchCurves(sketchId: string): Curve2[] {
   const sk = useApp.getState().output?.report.sketches.find((s) => s.id === sketchId);
-  return (sk?.curves ?? [])
-    .filter((c) => !c.construction)
-    // Splines go out as the fine polyline of their samples.
-    .flatMap((c): Curve2[] =>
-      c.kind === "spline"
-        ? c.pts.slice(1).map((b, k) => ({ kind: "line", a: c.pts[k]!, b }))
-        : [c.kind === "line" ? { kind: "line", a: c.a, b: c.b } : c.kind === "circle" ? { kind: "circle", center: c.center, radius: c.radius } : { kind: "arc", center: c.center, radius: c.radius, a0: c.a0, a1: c.a1 }],
-    );
+
+  return (
+    (sk?.curves ?? [])
+      .filter((c) => !c.construction)
+      // Splines go out as the fine polyline of their samples.
+      .flatMap((c): Curve2[] =>
+        c.kind === "spline"
+          ? c.pts.slice(1).map((b, k) => ({ kind: "line", a: c.pts[k]!, b }))
+          : [
+              c.kind === "line"
+                ? { kind: "line", a: c.a, b: c.b }
+                : c.kind === "circle"
+                  ? { kind: "circle", center: c.center, radius: c.radius }
+                  : { kind: "arc", center: c.center, radius: c.radius, a0: c.a0, a1: c.a1 },
+            ],
+      )
+  );
 }
 
 export function exportSketch(sketchId: string, format: "dxf" | "svg"): void {
@@ -443,16 +761,25 @@ export function saveFile(): void {
  */
 export function readDesignFile(text: string): { doc: MeercadDocument; name?: string } {
   let json: unknown;
+
   try {
     json = JSON.parse(text);
   } catch (e) {
     throw new Error(t("Not a valid meerCAD file: {error}", { error: (e as Error).message }));
   }
-  const inner = json && typeof json === "object" && !("format" in json) && "document" in json ? (json as { name?: unknown; document: unknown }) : null;
+
+  const inner =
+    json && typeof json === "object" && !("format" in json) && "document" in json
+      ? (json as { name?: unknown; document: unknown })
+      : null;
   const raw = inner ? inner.document : json;
   const v = validateDocument(raw && typeof raw === "object" ? { params: {}, rollback: null, ...raw } : raw);
   if (!v.ok) throw new Error(t("Not a valid meerCAD file: {error}", { error: String(v.errors[0]) }));
-  return { doc: v.value, ...(inner && typeof inner.name === "string" && inner.name ? { name: inner.name } : {}) };
+
+  return {
+    doc: v.value,
+    ...(inner && typeof inner.name === "string" && inner.name ? { name: inner.name } : {}),
+  };
 }
 
 /** A version's name as part of a file name. */
@@ -465,7 +792,10 @@ const fileSafe = (name: string) => name.replace(/[/\\:*?"<>|]+/g, "-").trim() ||
  */
 export function saveVersionFile(name: string): void {
   try {
-    download(`${baseName()} - ${fileSafe(name)}.meercad`, JSON.stringify(versionFile(currentDoc(), name), null, 2));
+    download(
+      `${baseName()} - ${fileSafe(name)}.meercad`,
+      JSON.stringify(versionFile(currentDoc(), name), null, 2),
+    );
   } catch (e) {
     toast((e as Error).message, "error");
   }
@@ -480,46 +810,66 @@ export function saveVersionFile(name: string): void {
 export async function importVersionFile(file?: File | null): Promise<string[]> {
   file ??= await pickFile(".meercad,.json");
   if (!file) return [];
+
   let read: { doc: MeercadDocument; name?: string };
+
   try {
     read = readDesignFile(await file.text());
   } catch (e) {
     toast((e as Error).message, "error");
+
     return [];
   }
+
   const from = read.doc;
   const ops: DocOp[] = [];
   let doc = currentDoc();
+
   const add = (name: string, at: number, design: MeercadDocument) => {
     // A backup brought in twice adds nothing: a version of that name holding that design is there.
     const held = doc.versions?.find((v) => v.name === name);
     if (held && unchanged(versionChanges(held.state, design))) return;
+
     const op: DocOp = { type: "save_version", name: freeVersionName(doc, name), at, doc: designOf(design) };
     doc = applyOp(doc, op);
     ops.push(op);
   };
+
   try {
     for (const v of from.versions ?? []) add(v.name, v.at, restored(from, v));
+
     const same = (from.versions ?? []).some((v) => unchanged(versionChanges(v.state, from)));
+
     if (!same) {
       // A file saved from Versions is named "<project> - <version>": the version's name is the rest.
       const base = file.name.replace(/\.\w+$/, "");
       const prefix = `${baseName()} - `;
-      add(read.name ?? (base.startsWith(prefix) && base.length > prefix.length ? base.slice(prefix.length) : base), file.lastModified || Date.now(), from);
+      add(
+        read.name ??
+          (base.startsWith(prefix) && base.length > prefix.length ? base.slice(prefix.length) : base),
+        file.lastModified || Date.now(),
+        from,
+      );
     }
   } catch (e) {
     toast(t("Could not bring in {name}: {error}", { name: file.name, error: (e as Error).message }), "error");
+
     return [];
   }
+
   if (!ops.length) {
     toast(t("Every version in {name} is here already", { name: file.name }), "info");
+
     return [];
   }
+
   if (!apply(...ops)) return [];
+
   return ops.map((o) => (o as { name: string }).name);
 }
 
-const unchanged = (c: { added: string[]; changed: string[]; removed: string[]; other: boolean }) => !c.added.length && !c.changed.length && !c.removed.length && !c.other;
+const unchanged = (c: { added: string[]; changed: string[]; removed: string[]; other: boolean }) =>
+  !c.added.length && !c.changed.length && !c.removed.length && !c.other;
 
 function pickFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
@@ -534,6 +884,7 @@ function pickFile(accept: string): Promise<File | null> {
 function toBase64(bytes: Uint8Array): string {
   let s = "";
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+
   return btoa(s);
 }
 
@@ -546,104 +897,192 @@ export const IMPORT_TYPES = ".step,.stp,.stl,.3mf,.obj,.dxf,.svg,.meercad,.json"
  * a new design named after the file. Meshes become solid bodies; a failed import says why.
  */
 /** Imports a file into the open design (or a new one); true when it came in without errors. */
-export async function importFile(file?: File | null, opts: { seeThrough?: boolean; texture?: MeshTexture } = {}): Promise<boolean> {
+export async function importFile(
+  file?: File | null,
+  opts: { seeThrough?: boolean; texture?: MeshTexture } = {},
+): Promise<boolean> {
   file ??= await pickFile(IMPORT_TYPES);
   if (!file) return false;
+
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const base = file.name.replace(/\.\w+$/, "");
+
   if (ext === "meercad" || ext === "json") {
     let read: { doc: MeercadDocument; name?: string };
+
     try {
       read = readDesignFile(await file.text());
     } catch (e) {
       toast((e as Error).message, "error");
+
       return false;
     }
+
     await flushSave();
     await newProject(read.doc, read.name ?? base);
+
     return true;
   }
+
   if (!["step", "stp", "stl", "3mf", "obj", "dxf", "svg"].includes(ext)) {
     toast(t("Unsupported file type .{ext}", { ext }), "error");
+
     return false;
   }
+
   if (file.size > 40 * 1024 * 1024) {
     toast(t("File is larger than 40 MB"), "error");
+
     return false;
   }
+
   // Build the features first, so a file that cannot be read starts no empty design.
   let features: Feature[];
   const reading = startTask(t("Reading {name}", { name: file.name }));
+
   try {
     features = await importFeatures(file, ext);
   } catch (e) {
-    toast(t("Could not import {name}: {error}", { name: file.name, error: e instanceof Error ? e.message : String(e) }), "error");
+    toast(
+      t("Could not import {name}: {error}", {
+        name: file.name,
+        error: e instanceof Error ? e.message : String(e),
+      }),
+      "error",
+    );
+
     return false;
   } finally {
     reading.done();
   }
-  if (useApp.getState().screen !== "editor" || !useApp.getState().project) await newProject(emptyDocument(), base);
+
+  if (useApp.getState().screen !== "editor" || !useApp.getState().project) {
+    await newProject(emptyDocument(), base);
+  }
+
   // A scan's picture goes onto its mesh (one mesh per file, so it is the first import).
   const mesh = features.find((f) => f.op === "import" && f.format === "stl");
   if (opts.texture && mesh?.op === "import") mesh.texture = opts.texture;
+
   const doc = currentDoc();
   let n = 0;
-  for (const f of features) f.id = nextFeatureId({ ...doc, features: [...doc.features, ...features.slice(0, n++)] }, f.op === "sketch" ? "sketch" : "import");
+
+  for (const f of features) {
+    f.id = nextFeatureId(
+      { ...doc, features: [...doc.features, ...features.slice(0, n++)] },
+      f.op === "sketch" ? "sketch" : "import",
+    );
+  }
+
   const add = { type: "add_features" as const, features };
   // A part to model against (a scan) comes in see-through, in the same step.
   const meshes = opts.seeThrough ? features.filter((f) => f.op === "import").map((f) => f.id) : [];
-  if (!(meshes.length ? apply({ type: "replace", doc: seeThroughDoc(applyOp(doc, add), meshes, true) }) : apply(add))) return false;
+
+  if (
+    !(meshes.length
+      ? apply({ type: "replace", doc: seeThroughDoc(applyOp(doc, add), meshes, true) })
+      : apply(add))
+  ) {
+    return false;
+  }
+
   const sketch = features.find((f) => f.op === "sketch");
+
   if (sketch) {
     openSketch(sketch.id);
+
     return true;
   }
+
   toast(t("Importing {name}…", { name: file.name }));
+
   const out = await rebuildNow().catch(() => null);
-  const failed = out?.report.features.filter((r) => features.some((f) => f.id === r.id) && r.status === "error") ?? [];
-  if (failed.length) toast(t("Import of {name} failed: {error}", { name: file.name, error: failed[0]!.message ?? t("unknown error") }), "error");
+  const failed =
+    out?.report.features.filter((r) => features.some((f) => f.id === r.id) && r.status === "error") ?? [];
+
+  if (failed.length) {
+    toast(
+      t("Import of {name} failed: {error}", {
+        name: file.name,
+        error: failed[0]!.message ?? t("unknown error"),
+      }),
+      "error",
+    );
+  }
+
   return !!out && !failed.length;
 }
 
 async function importFeatures(file: File, ext: string): Promise<Feature[]> {
   // STEP assemblies come in as one part per solid.
-  const imp = (fileName: string, format: "step" | "stl", bytes: Uint8Array): Feature => ({ id: "", op: "import", format, fileName, data: toBase64(bytes), ...(format === "step" ? { split: true } : {}) });
-  if (ext === "step" || ext === "stp") return [imp(file.name, "step", new Uint8Array(await file.arrayBuffer()))];
+  const imp = (fileName: string, format: "step" | "stl", bytes: Uint8Array): Feature => ({
+    id: "",
+    op: "import",
+    format,
+    fileName,
+    data: toBase64(bytes),
+    ...(format === "step" ? { split: true } : {}),
+  });
+
+  if (ext === "step" || ext === "stp") {
+    return [imp(file.name, "step", new Uint8Array(await file.arrayBuffer()))];
+  }
+
   if (ext === "stl") return [imp(file.name, "stl", new Uint8Array(await file.arrayBuffer()))];
+
   // 3MF and OBJ meshes go in as STL, one body per object on the build plate.
   if (ext === "3mf") {
     const meshes = read3mf(new Uint8Array(await file.arrayBuffer()));
-    return meshes.map((m) => imp(meshes.length > 1 ? `${file.name} › ${m.name}` : file.name, "stl", writeStl([m])));
+
+    return meshes.map((m) =>
+      imp(meshes.length > 1 ? `${file.name} › ${m.name}` : file.name, "stl", writeStl([m])),
+    );
   }
+
   if (ext === "obj") return [imp(file.name, "stl", writeStl([readObj(await file.text())]))];
+
   const text = await file.text();
   const curves = ext === "dxf" ? readDxf(text) : readSvg(text);
   if (!curves.length) throw new Error(t("no supported geometry found in the file"));
+
   const { entities, constraints } = curvesToSketch(curves);
+
   return [{ id: "", op: "sketch", name: file.name, plane: { ref: "origin.XY" }, entities, constraints }];
 }
 
 /** Converts free curves to sketch entities, sharing points at coincident endpoints. */
-export function curvesToSketch(curves: Curve2[]): { entities: SketchEntity[]; constraints: SketchConstraint[] } {
+export function curvesToSketch(curves: Curve2[]): {
+  entities: SketchEntity[];
+  constraints: SketchConstraint[];
+} {
   const entities: SketchEntity[] = [];
   const pts: { id: string; x: number; y: number }[] = [];
   let n = 0;
-  const scale = Math.max(1, ...curves.flatMap((c) => (c.kind === "line" ? [...c.a, ...c.b] : [...c.center])).map(Math.abs));
+  const scale = Math.max(
+    1,
+    ...curves.flatMap((c) => (c.kind === "line" ? [...c.a, ...c.b] : [...c.center])).map(Math.abs),
+  );
   const tol = scale * 1e-6;
+
   const point = (x: number, y: number, shared = true) => {
     if (shared) {
       const hit = pts.find((p) => Math.hypot(p.x - x, p.y - y) < tol);
       if (hit) return hit.id;
     }
+
     const id = `p${++n}`;
     pts.push({ id, x, y });
     entities.push({ id, type: "point", x, y });
+
     return id;
   };
+
   let k = 0;
+
   for (const c of curves) {
     if (c.kind === "line") {
       if (Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1]) < tol) continue;
+
       entities.push({ id: `l${++k}`, type: "line", p1: point(...c.a), p2: point(...c.b) });
     } else if (c.kind === "circle") {
       entities.push({ id: `c${++k}`, type: "circle", center: point(...c.center, false), radius: c.radius });
@@ -653,31 +1092,44 @@ export function curvesToSketch(curves: Curve2[]): { entities: SketchEntity[]; co
       entities.push({ id: `a${++k}`, type: "arc", center: point(...c.center, false), start: s, end: e });
     }
   }
+
   return { entities, constraints: [] };
 }
 
-/** Basic SVG import: line, rect (rounded too), circle, ellipse, polyline, polygon and paths (curves become polylines). */
+/**
+ * Basic SVG import: line, rect (rounded too), circle, ellipse, polyline, polygon and paths (curves become
+ * polylines).
+ */
 export function readSvg(text: string): Curve2[] {
   const doc = new DOMParser().parseFromString(text, "image/svg+xml");
   const svg = doc.querySelector("svg");
   if (!svg) return [];
+
   const vb = (svg.getAttribute("viewBox") ?? "").split(/[\s,]+/).map(Number);
   const width = svg.getAttribute("width") ?? "";
   const unitScale = (() => {
     const m = /^([\d.]+)\s*(mm|cm|in|px)?$/.exec(width);
+
     if (m && vb.length === 4 && vb[2]) {
       const mm = Number(m[1]) * ({ mm: 1, cm: 10, in: 25.4, px: 25.4 / 96 }[m[2] ?? "px"] ?? 25.4 / 96);
+
       return mm / vb[2];
     }
+
     return 25.4 / 96;
   })();
   const out: Curve2[] = [];
   const P = (x: number, y: number): [number, number] => [x * unitScale, -y * unitScale];
   const num = (el: Element, a: string) => Number(el.getAttribute(a) ?? 0);
+
   const poly = (pts: [number, number][], closed: boolean) => {
-    for (let i = 0; i + 1 < pts.length; i++) out.push({ kind: "line", a: P(...pts[i]!), b: P(...pts[i + 1]!) });
+    for (let i = 0; i + 1 < pts.length; i++) {
+      out.push({ kind: "line", a: P(...pts[i]!), b: P(...pts[i + 1]!) });
+    }
+
     if (closed && pts.length > 2) out.push({ kind: "line", a: P(...pts.at(-1)!), b: P(...pts[0]!) });
   };
+
   for (const el of svg.querySelectorAll("line,rect,circle,ellipse,polyline,polygon,path")) {
     switch (el.tagName.toLowerCase()) {
       case "line":
@@ -690,28 +1142,55 @@ export function readSvg(text: string): Curve2[] {
         let [rx, ry] = [has("rx") ? num(el, "rx") : NaN, has("ry") ? num(el, "ry") : NaN];
         if (Number.isNaN(rx)) rx = Number.isNaN(ry) ? 0 : ry;
         if (Number.isNaN(ry)) ry = rx;
+
         [rx, ry] = [Math.min(Math.abs(rx), w / 2), Math.min(Math.abs(ry), h / 2)];
+
         if (!rx || !ry) {
-          poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true);
+          poly(
+            [
+              [x, y],
+              [x + w, y],
+              [x + w, y + h],
+              [x, y + h],
+            ],
+            true,
+          );
           break;
         }
+
         const pts: [number, number][] = [[x + rx, y]];
+
         const corner = (to: [number, number], next: [number, number]) => {
           pts.push(to, ...arcPoints(to, next, rx, ry, 0, false, true));
         };
+
         corner([x + w - rx, y], [x + w, y + ry]);
         corner([x + w, y + h - ry], [x + w - rx, y + h]);
         corner([x + rx, y + h], [x, y + h - ry]);
         corner([x, y + ry], [x + rx, y]);
         // The last corner ends where the outline began.
         pts.pop();
-        poly(pts.filter((p, k) => k === 0 || p[0] !== pts[k - 1]![0] || p[1] !== pts[k - 1]![1]), true);
+        poly(
+          pts.filter((p, k) => k === 0 || p[0] !== pts[k - 1]![0] || p[1] !== pts[k - 1]![1]),
+          true,
+        );
         break;
       }
       case "ellipse": {
         const [cx, cy, rx, ry] = [num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry")];
-        if (rx === ry) out.push({ kind: "circle", center: P(cx, cy), radius: rx * unitScale });
-        else poly(Array.from({ length: 96 }, (_, k): [number, number] => [cx + rx * Math.cos((k * Math.PI) / 48), cy + ry * Math.sin((k * Math.PI) / 48)]), true);
+
+        if (rx === ry) {
+          out.push({ kind: "circle", center: P(cx, cy), radius: rx * unitScale });
+        } else {
+          poly(
+            Array.from({ length: 96 }, (_, k): [number, number] => [
+              cx + rx * Math.cos((k * Math.PI) / 48),
+              cy + ry * Math.sin((k * Math.PI) / 48),
+            ]),
+            true,
+          );
+        }
+
         break;
       }
       case "circle": {
@@ -721,7 +1200,10 @@ export function readSvg(text: string): Curve2[] {
       }
       case "polyline":
       case "polygon": {
-        const ns = (el.getAttribute("points") ?? "").trim().split(/[\s,]+/).map(Number);
+        const ns = (el.getAttribute("points") ?? "")
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number);
         const pts: [number, number][] = [];
         for (let i = 0; i + 1 < ns.length; i += 2) pts.push([ns[i]!, ns[i + 1]!]);
         poly(pts, el.tagName.toLowerCase() === "polygon");
@@ -732,6 +1214,7 @@ export function readSvg(text: string): Curve2[] {
         break;
     }
   }
+
   return out;
 }
 
@@ -744,33 +1227,56 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
   let cmd = "";
   let i = 0;
   const n = () => Number(tokens[i++]);
+
   const flush = (closed: boolean) => {
     if (pts.length > 1) subs.push({ pts, closed });
+
     pts = [];
   };
+
   // The last control point of a cubic (C, S) or quadratic (Q, T) curve: S and T mirror it.
   let lastCubic: [number, number] | null = null;
   let lastQuad: [number, number] | null = null;
-  const mirror = (c: [number, number] | null): [number, number] => (c ? [2 * cur[0] - c[0], 2 * cur[1] - c[1]] : cur);
+  const mirror = (c: [number, number] | null): [number, number] =>
+    c ? [2 * cur[0] - c[0], 2 * cur[1] - c[1]] : cur;
+
   const bezier = (ctrl: [number, number][], to: [number, number]) => {
     const all = [cur, ...ctrl, to];
+
     for (let s = 1; s <= 12; s++) {
       const t = s / 12;
       let layer = all;
-      while (layer.length > 1) layer = layer.slice(1).map((p, k) => [layer[k]![0] + (p[0] - layer[k]![0]) * t, layer[k]![1] + (p[1] - layer[k]![1]) * t] as [number, number]);
+
+      while (layer.length > 1) {
+        layer = layer
+          .slice(1)
+          .map(
+            (p, k) =>
+              [layer[k]![0] + (p[0] - layer[k]![0]) * t, layer[k]![1] + (p[1] - layer[k]![1]) * t] as [
+                number,
+                number,
+              ],
+          );
+      }
+
       pts.push(layer[0]!);
     }
+
     cur = to;
   };
+
   while (i < tokens.length) {
     if (/[a-zA-Z]/.test(tokens[i]!)) cmd = tokens[i++]!;
+
     const rel = cmd === cmd.toLowerCase();
     const at = (x: number, y: number): [number, number] => (rel ? [cur[0] + x, cur[1] + y] : [x, y]);
     const up = cmd.toUpperCase();
     // A drawing command right after Z starts again where that outline began.
     if (up !== "M" && up !== "Z" && !pts.length) pts = [cur];
+
     const [cubic, quad] = [lastCubic, lastQuad];
     lastCubic = lastQuad = null;
+
     switch (up) {
       case "M":
         flush(false);
@@ -826,6 +1332,7 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
       }
       case "Z":
         if (pts.length) pts.push(start);
+
         cur = start;
         flush(false);
         break;
@@ -833,7 +1340,9 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
         i++;
     }
   }
+
   flush(false);
+
   return subs;
 }
 
@@ -841,10 +1350,19 @@ function pathPolylines(d: string): { pts: [number, number][]; closed: boolean }[
  * Points along an SVG elliptical arc from `a` to `b` (the path's A command, SVG 1.1 F.6.5), the
  * start left out: radii too small to reach are scaled up, as the spec says; zero radii are a line.
  */
-export function arcPoints(a: [number, number], b: [number, number], rx: number, ry: number, rotDeg: number, large: boolean, sweep: boolean): [number, number][] {
+export function arcPoints(
+  a: [number, number],
+  b: [number, number],
+  rx: number,
+  ry: number,
+  rotDeg: number,
+  large: boolean,
+  sweep: boolean,
+): [number, number][] {
   rx = Math.abs(rx);
   ry = Math.abs(ry);
   if (!rx || !ry || (a[0] === b[0] && a[1] === b[1])) return [b];
+
   const phi = (rotDeg * Math.PI) / 180;
   const [cos, sin] = [Math.cos(phi), Math.sin(phi)];
   const [dx, dy] = [(a[0] - b[0]) / 2, (a[1] - b[1]) / 2];
@@ -852,6 +1370,7 @@ export function arcPoints(a: [number, number], b: [number, number], rx: number, 
   const y1 = -sin * dx + cos * dy;
   const lam = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
   if (lam > 1) [rx, ry] = [rx * Math.sqrt(lam), ry * Math.sqrt(lam)];
+
   const num = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1;
   const den = rx * rx * y1 * y1 + ry * ry * x1 * x1;
   const k = (large === sweep ? -1 : 1) * Math.sqrt(Math.max(0, num / den));
@@ -864,13 +1383,17 @@ export function arcPoints(a: [number, number], b: [number, number], rx: number, 
   let dt = angle((-x1 - cx1) / rx, (-y1 - cy1) / ry) - t0;
   if (sweep && dt < 0) dt += 2 * Math.PI;
   if (!sweep && dt > 0) dt -= 2 * Math.PI;
+
   const steps = Math.max(4, Math.ceil(Math.abs(dt) / (Math.PI / 32)));
   const out: [number, number][] = [];
+
   for (let s = 1; s < steps; s++) {
     const t = t0 + (dt * s) / steps;
     const [ex, ey] = [rx * Math.cos(t), ry * Math.sin(t)];
     out.push([cos * ex - sin * ey + cx, sin * ex + cos * ey + cy]);
   }
+
   out.push(b);
+
   return out;
 }

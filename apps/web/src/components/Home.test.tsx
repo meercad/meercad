@@ -12,10 +12,17 @@ import { answer, pickMenu, renderUi, withScreen } from "../../test/ui";
 import { testFiles } from "../../test/setup";
 import { Home } from "./Home";
 
-vi.mock("../lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("../lib/thumbnails")>()), fillThumbnails: async () => undefined }));
+vi.mock("../lib/thumbnails", async (orig) => ({
+  ...(await orig<typeof import("../lib/thumbnails")>()),
+  fillThumbnails: async () => undefined,
+}));
 
 const settle = () => act(async () => new Promise((r) => setTimeout(r, 20)));
-const card = (name: string) => screen.getAllByText(name).map((e) => e.closest(".card")).find(Boolean) as HTMLElement;
+const card = (name: string) =>
+  screen
+    .getAllByText(name)
+    .map((e) => e.closest(".card"))
+    .find(Boolean) as HTMLElement;
 
 beforeAll(async () => {
   withScreen();
@@ -33,7 +40,12 @@ describe("the projects overview", () => {
   });
 
   it("makes a folder and moves a project into it", async () => {
-    await act(async () => void fireEvent.click(screen.getAllByRole("button").find((b) => /New folder/.test(b.textContent ?? ""))!));
+    await act(
+      async () =>
+        void fireEvent.click(
+          screen.getAllByRole("button").find((b) => /New folder/.test(b.textContent ?? ""))!,
+        ),
+    );
     await answer("Work");
     await settle();
     expect(testFiles.folders.has("Work")).toBe(true);
@@ -44,7 +56,10 @@ describe("the projects overview", () => {
   });
 
   it("renames and deletes a folder", async () => {
-    const folder = screen.getAllByText("Work").map((e) => e.closest('[role="button"], .card, .folder, button, div')).find(Boolean) as HTMLElement;
+    const folder = screen
+      .getAllByText("Work")
+      .map((e) => e.closest('[role="button"], .card, .folder, button, div'))
+      .find(Boolean) as HTMLElement;
     await act(async () => void fireEvent.contextMenu(folder, { clientX: 5, clientY: 5 }));
     await pickMenu("Rename");
     await answer("Jobs");
@@ -62,9 +77,13 @@ describe("the projects overview", () => {
 
   it("sorts the projects and turns the order round", async () => {
     await act(async () => void fireEvent.click(screen.getByTitle("Sort parts")));
+
     const items = screen.getAllByRole("menuitem");
     await act(async () => void fireEvent.click(items.at(-1)!));
-    const order = screen.getAllByRole("button").find((b) => /click to reverse/.test(b.getAttribute("title") ?? ""))!;
+
+    const order = screen
+      .getAllByRole("button")
+      .find((b) => /click to reverse/.test(b.getAttribute("title") ?? ""))!;
     await act(async () => void fireEvent.click(order));
     await settle();
   });

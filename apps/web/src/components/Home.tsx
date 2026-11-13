@@ -1,10 +1,47 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Box, Check, ChevronRight, Circle, CircleCheck, Ellipsis, FileUp, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Lock, LockOpen, Pencil, Plus, Trash } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Box,
+  Check,
+  ChevronRight,
+  Circle,
+  CircleCheck,
+  Ellipsis,
+  FileUp,
+  Folder,
+  FolderInput,
+  FolderOpen,
+  FolderPlus,
+  ListChecks,
+  Lock,
+  LockOpen,
+  Pencil,
+  Plus,
+  Trash,
+} from "lucide-react";
 import { useEffect, useState, type DragEvent, type MouseEvent, type PointerEvent } from "react";
 import { EMPTY_SELECTION, clickSelect, keepShown, toggleAll } from "../lib/multiSelect";
 import { askConfirm, askText } from "./Ask";
 import { showMenu, type MenuEntry } from "./Menu";
-import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
-import { handOverAssistantTab, newProject, openProject, refreshProjects, startTask, toast, useApp } from "../store";
+import {
+  createFolder,
+  deleteFolder,
+  deleteProject,
+  desktop,
+  moveProject,
+  renameFolder,
+  type ProjectMeta,
+} from "../lib/persistence";
+import {
+  handOverAssistantTab,
+  newProject,
+  openProject,
+  refreshProjects,
+  startTask,
+  toast,
+  useApp,
+} from "../store";
 import type { MeercadDocument } from "@meercad/schema";
 import { EXAMPLES, examplePacks, type Example } from "../lib/examples";
 import { hasPack, usePremium } from "../lib/premium";
@@ -24,6 +61,7 @@ const DRAG_TYPE = "application/x-meercad-project";
 
 /** One per card, so a press and its lift reach the same one across re-renders. */
 const cardTaps = new Map<string, ReturnType<typeof sureTap>>();
+
 /**
  * A project card opens its project on the first tap (see sureTap): on the iPhone the overview
  * changes under the finger (pictures being made) and iOS then sometimes swallows the click. The
@@ -33,8 +71,10 @@ const cardTaps = new Map<string, ReturnType<typeof sureTap>>();
 function cardTap(id: string) {
   let tap = cardTaps.get(id);
   if (!tap) cardTaps.set(id, (tap = sureTap(() => void openProject(id))));
+
   const tapper = tap;
   const onCard = (e: PointerEvent) => !(e.target instanceof Element && e.target.closest(".card button"));
+
   return {
     onClick: tapper.onClick,
     onPointerDown: (e: PointerEvent) => (onCard(e) ? tapper.onPointerDown(e) : tapper.onPointerCancel()),
@@ -42,13 +82,17 @@ function cardTap(id: string) {
     onPointerCancel: tapper.onPointerCancel,
   };
 }
+
 const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
 const parentOf = (f: string) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
 /** `text` is a translated message with a {msg} placeholder for the error. */
-const fail = (text: string) => (e: unknown) => toast(text.replace("{msg}", e instanceof Error ? e.message : String(e)), "error");
+const fail = (text: string) => (e: unknown) =>
+  toast(text.replace("{msg}", e instanceof Error ? e.message : String(e)), "error");
+
 /** A translated text with {ext} shown as the file extension. */
 const withExt = (s: string) => {
   const [a, b] = s.split("{ext}");
+
   return (
     <>
       {a}
@@ -64,8 +108,14 @@ interface Sort {
   /** Newest or A first. */
   asc: boolean;
 }
+
 const SORT_KEY = "meercad.sort";
-const SORT_LABELS: Record<SortKey, string> = { edited: t("Last edited"), created: t("Created"), name: t("Name") };
+const SORT_LABELS: Record<SortKey, string> = {
+  edited: t("Last edited"),
+  created: t("Created"),
+  name: t("Name"),
+};
+
 function loadSort(): Sort {
   try {
     const s = JSON.parse(localStorage.getItem(SORT_KEY) ?? "null") as Sort | null;
@@ -73,13 +123,19 @@ function loadSort(): Sort {
   } catch {
     // default below
   }
+
   return { key: "edited", asc: false };
 }
-const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+
+const byName = (a: string, b: string) =>
+  a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+
 /** Projects in the chosen order; names break ties so the order never jumps. */
 function sortProjects(list: ProjectMeta[], s: Sort): ProjectMeta[] {
   const value = (p: ProjectMeta) => (s.key === "created" ? (p.createdAt ?? p.updatedAt) : p.updatedAt);
-  const cmp = (a: ProjectMeta, b: ProjectMeta) => (s.key === "name" ? byName(a.name, b.name) : value(a) - value(b)) || byName(a.name, b.name);
+  const cmp = (a: ProjectMeta, b: ProjectMeta) =>
+    (s.key === "name" ? byName(a.name, b.name) : value(a) - value(b)) || byName(a.name, b.name);
+
   return [...list].sort((a, b) => (s.asc ? cmp(a, b) : -cmp(a, b)));
 }
 
@@ -91,28 +147,59 @@ async function moveTo(id: string, folder: string): Promise<void> {
 async function moveMany(ids: readonly string[], folder: string): Promise<void> {
   let failed = 0;
   let last = "";
-  for (const id of ids) await moveProject(id, folder).catch((e: unknown) => ((failed += 1), (last = e instanceof Error ? e.message : String(e))));
+
+  for (const id of ids) {
+    await moveProject(id, folder).catch(
+      (e: unknown) => ((failed += 1), (last = e instanceof Error ? e.message : String(e))),
+    );
+  }
+
   await refreshProjects();
+
   const where = folder ? folder.split("/").join(" › ") : t("Your projects");
-  if (failed) toast(tn(failed, "Could not move {n} part: {msg}", "Could not move {n} parts: {msg}", { msg: last }), "error");
-  else toast(tn(ids.length, "Moved {n} part to {folder}", "Moved {n} parts to {folder}", { folder: where }));
+
+  if (failed) {
+    toast(
+      tn(failed, "Could not move {n} part: {msg}", "Could not move {n} parts: {msg}", { msg: last }),
+      "error",
+    );
+  } else {
+    toast(tn(ids.length, "Moved {n} part to {folder}", "Moved {n} parts to {folder}", { folder: where }));
+  }
 }
 
 /** Asks once for all of them, then deletes them; true when the user agreed. */
 async function deleteMany(ids: readonly string[]): Promise<boolean> {
   if (!ids.length) return false;
+
   const ok = await askConfirm({
     title: tn(ids.length, "Delete {n} part?", "Delete {n} parts?"),
-    message: desktop ? t("The project files go to the Trash.") : t("The project files are deleted. This cannot be undone."),
+    message: desktop
+      ? t("The project files go to the Trash.")
+      : t("The project files are deleted. This cannot be undone."),
     confirmLabel: tn(ids.length, "Delete {n} part", "Delete {n} parts"),
     danger: true,
   });
   if (!ok) return false;
+
   let failed = 0;
   let last = "";
-  for (const id of ids) await deleteProject(id).catch((e: unknown) => ((failed += 1), (last = e instanceof Error ? e.message : String(e))));
+
+  for (const id of ids) {
+    await deleteProject(id).catch(
+      (e: unknown) => ((failed += 1), (last = e instanceof Error ? e.message : String(e))),
+    );
+  }
+
   await refreshProjects();
-  if (failed) toast(tn(failed, "Could not delete {n} part: {msg}", "Could not delete {n} parts: {msg}", { msg: last }), "error");
+
+  if (failed) {
+    toast(
+      tn(failed, "Could not delete {n} part: {msg}", "Could not delete {n} parts: {msg}", { msg: last }),
+      "error",
+    );
+  }
+
   return true;
 }
 
@@ -120,30 +207,69 @@ async function deleteMany(ids: readonly string[]): Promise<boolean> {
 function moveTargets(current: string, pick: (folder: string) => void): MenuEntry[] {
   return ["", ...useApp.getState().folders]
     .filter((f) => f !== current)
-    .map((f) => ({ label: f ? f.split("/").join(" › ") : t("Your projects"), icon: f ? <Folder /> : <FolderInput />, onClick: () => pick(f) }));
+    .map((f) => ({
+      label: f ? f.split("/").join(" › ") : t("Your projects"),
+      icon: f ? <Folder /> : <FolderInput />,
+      onClick: () => pick(f),
+    }));
 }
 
 /** The menu for several selected parts (right-click on one of them, or the Move button). */
-function selectionMenu(ids: readonly string[], current: string, x: number, y: number, done: () => void, opts: { above?: boolean; moveOnly?: boolean } = {}): void {
+function selectionMenu(
+  ids: readonly string[],
+  current: string,
+  x: number,
+  y: number,
+  done: () => void,
+  opts: { above?: boolean; moveOnly?: boolean } = {},
+): void {
   const targets = moveTargets(current, (f) => void moveMany(ids, f).then(done));
-  if (opts.moveOnly) return showMenu(x, y, targets.length ? targets : [{ label: t("No other folder yet"), disabled: true }], opts);
+
+  if (opts.moveOnly) {
+    return showMenu(
+      x,
+      y,
+      targets.length ? targets : [{ label: t("No other folder yet"), disabled: true }],
+      opts,
+    );
+  }
+
   showMenu(
     x,
     y,
     [
-      { label: tn(ids.length, "Move {n} part to", "Move {n} parts to"), icon: <FolderInput />, disabled: !targets.length, submenu: targets },
+      {
+        label: tn(ids.length, "Move {n} part to", "Move {n} parts to"),
+        icon: <FolderInput />,
+        disabled: !targets.length,
+        submenu: targets,
+      },
       "sep",
-      { label: tn(ids.length, "Delete {n} part…", "Delete {n} parts…"), icon: <Trash />, danger: true, onClick: () => void deleteMany(ids).then((ok) => ok && done()) },
+      {
+        label: tn(ids.length, "Delete {n} part…", "Delete {n} parts…"),
+        icon: <Trash />,
+        danger: true,
+        onClick: () => void deleteMany(ids).then((ok) => ok && done()),
+      },
     ],
     opts,
   );
 }
 
 async function addFolder(): Promise<void> {
-  const name = await askText({ title: t("New folder"), label: t("Name"), value: t("New folder"), confirmLabel: t("Create") });
+  const name = await askText({
+    title: t("New folder"),
+    label: t("Name"),
+    value: t("New folder"),
+    confirmLabel: t("Create"),
+  });
   if (!name?.trim()) return;
+
   const parent = useApp.getState().folder;
-  await createFolder(parent, name.trim()).then(refreshProjects, fail(t("Could not create the folder: {msg}")));
+  await createFolder(parent, name.trim()).then(
+    refreshProjects,
+    fail(t("Could not create the folder: {msg}")),
+  );
 }
 
 function folderMenu(f: string, x: number, y: number): void {
@@ -154,18 +280,39 @@ function folderMenu(f: string, x: number, y: number): void {
       label: t("Rename…"),
       icon: <Pencil />,
       onClick: async () => {
-        const next = await askText({ title: t("Rename folder"), label: t("Name"), value: name, confirmLabel: t("Rename") });
-        if (next?.trim() && next.trim() !== name) await renameFolder(f, next.trim()).then(refreshProjects, fail(t("Could not rename the folder: {msg}")));
+        const next = await askText({
+          title: t("Rename folder"),
+          label: t("Name"),
+          value: name,
+          confirmLabel: t("Rename"),
+        });
+
+        if (next?.trim() && next.trim() !== name) {
+          await renameFolder(f, next.trim()).then(
+            refreshProjects,
+            fail(t("Could not rename the folder: {msg}")),
+          );
+        }
       },
     },
-    ...(desktop ? [{ label: t("Show in Finder"), icon: <FolderOpen />, onClick: () => void desktop!.projects.reveal({ folder: f }) }] : []),
+    ...(desktop
+      ? [
+          {
+            label: t("Show in Finder"),
+            icon: <FolderOpen />,
+            onClick: () => void desktop!.projects.reveal({ folder: f }),
+          },
+        ]
+      : []),
     "sep",
     {
       label: t("Delete folder…"),
       icon: <Trash />,
       danger: true,
       onClick: async () => {
-        const count = useApp.getState().projects.filter((p) => p.folder === f || p.folder?.startsWith(`${f}/`)).length;
+        const count = useApp
+          .getState()
+          .projects.filter((p) => p.folder === f || p.folder?.startsWith(`${f}/`)).length;
         const ok = await askConfirm({
           title: t("Delete “{name}”?", { name }),
           message: count
@@ -186,8 +333,20 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
   const targets = ["", ...folders].filter((f) => f !== current);
   showMenu(x, y, [
     { label: t("Open"), icon: <Box />, onClick: () => void openProject(p.id) },
-    ...targets.map((f) => ({ label: t("Move to {folder}", { folder: f ? f.split("/").join(" › ") : t("Your projects") }), icon: <FolderInput />, onClick: () => void moveTo(p.id, f) })),
-    ...(desktop ? [{ label: t("Show in Finder"), icon: <FolderOpen />, onClick: () => void desktop!.projects.reveal(p.id) }] : []),
+    ...targets.map((f) => ({
+      label: t("Move to {folder}", { folder: f ? f.split("/").join(" › ") : t("Your projects") }),
+      icon: <FolderInput />,
+      onClick: () => void moveTo(p.id, f),
+    })),
+    ...(desktop
+      ? [
+          {
+            label: t("Show in Finder"),
+            icon: <FolderOpen />,
+            onClick: () => void desktop!.projects.reveal(p.id),
+          },
+        ]
+      : []),
     "sep",
     {
       label: t("Delete…"),
@@ -196,7 +355,9 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
       onClick: async () => {
         const ok = await askConfirm({
           title: t("Delete “{name}”?", { name: p.name }),
-          message: desktop ? t("The project file goes to the Trash.") : t("The project file is deleted. This cannot be undone."),
+          message: desktop
+            ? t("The project file goes to the Trash.")
+            : t("The project file is deleted. This cannot be undone."),
           confirmLabel: t("Delete part"),
           danger: true,
         });
@@ -211,24 +372,31 @@ export function Home() {
   const folders = useApp((s) => s.folders);
   // Only the examples this app can show and change with the packs it has.
   usePremium();
+
   const examples = EXAMPLES.filter((ex) => examplePacks(ex).every(hasPack));
   const folder = useApp((s) => s.folder);
   const prefs = usePrefs();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [sort, setSort] = useState(loadSort);
   useEffect(() => void refreshProjects(), []);
+
   // Files added from outside (or never opened here) get their picture while the overview is open.
   const [, setShots] = useState(0);
   useEffect(() => void fillThumbnails(EXAMPLES, () => setShots((n) => n + 1)), [projects]);
+
   const changeSort = (s: Sort) => {
     setSort(s);
+
     try {
       localStorage.setItem(SORT_KEY, JSON.stringify(s));
     } catch {
       // the order just isn't remembered
     }
   };
-  const subfolders = folders.filter((f) => parentOf(f) === folder).sort((a, b) => (sort.key === "name" && !sort.asc ? -byName(a, b) : byName(a, b)));
+
+  const subfolders = folders
+    .filter((f) => parentOf(f) === folder)
+    .sort((a, b) => (sort.key === "name" && !sort.asc ? -byName(a, b) : byName(a, b)));
   const here = sortProjects(
     projects.filter((p) => (p.folder ?? "") === folder),
     sort,
@@ -245,38 +413,73 @@ export function Home() {
   useEffect(() => setSel((s) => keepShown(s, orderKey ? orderKey.split("\n") : [])), [orderKey]);
   useEffect(() => {
     if (!selecting) return;
+
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || document.querySelector(".ask-backdrop, .modal-backdrop, .menu")) return;
-      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+
+      const typing =
+        e.target instanceof HTMLElement &&
+        (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
       if (typing) return;
       if (e.key === "Escape") return (e.preventDefault(), stopSelecting());
-      if (e.key === "a" && (e.metaKey || e.ctrlKey)) return (e.preventDefault(), setSel((s) => ({ ids: orderKey ? orderKey.split("\n") : [], anchor: s.anchor })));
-      if ((e.key === "Delete" || e.key === "Backspace") && sel.ids.length) return (e.preventDefault(), void deleteMany(sel.ids).then((ok) => ok && stopSelecting()));
+
+      if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+        return (
+          e.preventDefault(),
+          setSel((s) => ({ ids: orderKey ? orderKey.split("\n") : [], anchor: s.anchor }))
+        );
+      }
+
+      if ((e.key === "Delete" || e.key === "Backspace") && sel.ids.length) {
+        return (e.preventDefault(), void deleteMany(sel.ids).then((ok) => ok && stopSelecting()));
+      }
     };
+
     window.addEventListener("keydown", onKey);
+
     return () => window.removeEventListener("keydown", onKey);
   }, [selecting, orderKey, sel.ids]);
+
   const pickCard = (e: MouseEvent | null, id: string) => {
     setSelecting(true);
     setSel((s) => clickSelect(s, order, id, !!e?.shiftKey));
   };
+
   const allSelected = order.length > 0 && order.every((id) => sel.ids.includes(id));
-  const dirLabel = sort.key === "name" ? (sort.asc ? t("A to Z") : t("Z to A")) : sort.asc ? t("Oldest first") : t("Newest first");
-  const crumbs = [{ path: "", label: t("Your projects") }, ...folder.split("/").filter(Boolean).map((label, i, all) => ({ path: all.slice(0, i + 1).join("/"), label }))];
+  const dirLabel =
+    sort.key === "name"
+      ? sort.asc
+        ? t("A to Z")
+        : t("Z to A")
+      : sort.asc
+        ? t("Oldest first")
+        : t("Newest first");
+  const crumbs = [
+    { path: "", label: t("Your projects") },
+    ...folder
+      .split("/")
+      .filter(Boolean)
+      .map((label, i, all) => ({ path: all.slice(0, i + 1).join("/"), label })),
+  ];
+
   const dropOn = async (e: DragEvent, target: string) => {
     e.preventDefault();
     setDropTarget(null);
+
     const ids = e.dataTransfer.getData(DRAG_TYPE).split("\n").filter(Boolean);
     if (ids.length > 1) await moveMany(ids, target).then(stopSelecting);
     else if (ids[0]) await moveTo(ids[0], target);
   };
+
   const ago = (time: number) => {
     const s = (Date.now() - time) / 1000;
     if (s < 60) return t("just now");
     if (s < 3600) return t("{n} min ago", { n: Math.round(s / 60) });
     if (s < 86400) return t("{n} h ago", { n: Math.round(s / 3600) });
+
     return new Date(time).toLocaleDateString();
   };
+
   return (
     <div className="home">
       <div className={`home-top ${desktop ? "desktop" : ""}`}>
@@ -320,7 +523,11 @@ export function Home() {
           <span className="spacer" />
           {selecting ? (
             <>
-              <button className="btn" onClick={() => setSel((s) => toggleAll(s, order))} disabled={!order.length}>
+              <button
+                className="btn"
+                onClick={() => setSel((s) => toggleAll(s, order))}
+                disabled={!order.length}
+              >
                 {allSelected ? t("Select none") : t("Select all")}
               </button>
               <button className="btn primary" onClick={stopSelecting} title={t("Done (Esc)")}>
@@ -329,43 +536,68 @@ export function Home() {
             </>
           ) : (
             <>
-          <button className="btn" onClick={() => setSelecting(true)} disabled={!order.length} title={t("Select several parts to move or delete them together")}>
-            <ListChecks /> {t("Select")}
-          </button>
-          <button
-            className="btn"
-            title={t("Sort parts")}
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              showMenu(
-                r.left,
-                r.bottom + 4,
-                (Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({ label: SORT_LABELS[k], icon: k === sort.key ? <Check /> : <span />, onClick: () => changeSort({ key: k, asc: k === "name" }) })),
-              );
-            }}
-          >
-            <ArrowUpDown /> {SORT_LABELS[sort.key]}
-          </button>
-          <button className="btn" onClick={() => changeSort({ ...sort, asc: !sort.asc })} title={t("{order} — click to reverse", { order: dirLabel })} aria-label={t("Order: {order}", { order: dirLabel })}>
-            {sort.asc ? <ArrowUp /> : <ArrowDown />} {dirLabel}
-          </button>
-          <button className="btn" onClick={() => void addFolder()}>
-            <FolderPlus /> {t("New folder")}
-          </button>
-          {desktop ? (
-            <button className="btn" onClick={() => void desktop!.projects.reveal({ folder })} title={t("Show this folder in Finder")}>
-              <FolderOpen /> {t("Show in Finder")}
-            </button>
-          ) : null}
+              <button
+                className="btn"
+                onClick={() => setSelecting(true)}
+                disabled={!order.length}
+                title={t("Select several parts to move or delete them together")}
+              >
+                <ListChecks /> {t("Select")}
+              </button>
+              <button
+                className="btn"
+                title={t("Sort parts")}
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  showMenu(
+                    r.left,
+                    r.bottom + 4,
+                    (Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({
+                      label: SORT_LABELS[k],
+                      icon: k === sort.key ? <Check /> : <span />,
+                      onClick: () => changeSort({ key: k, asc: k === "name" }),
+                    })),
+                  );
+                }}
+              >
+                <ArrowUpDown /> {SORT_LABELS[sort.key]}
+              </button>
+              <button
+                className="btn"
+                onClick={() => changeSort({ ...sort, asc: !sort.asc })}
+                title={t("{order} — click to reverse", { order: dirLabel })}
+                aria-label={t("Order: {order}", { order: dirLabel })}
+              >
+                {sort.asc ? <ArrowUp /> : <ArrowDown />} {dirLabel}
+              </button>
+              <button className="btn" onClick={() => void addFolder()}>
+                <FolderPlus /> {t("New folder")}
+              </button>
+              {desktop ? (
+                <button
+                  className="btn"
+                  onClick={() => void desktop!.projects.reveal({ folder })}
+                  title={t("Show this folder in Finder")}
+                >
+                  <FolderOpen /> {t("Show in Finder")}
+                </button>
+              ) : null}
             </>
           )}
         </div>
         <p className="sub">
-          {desktop ? (
-            withExt(t("Saved as open {ext} files; folders here are real folders on disk. Drag a part onto a folder to move it."))
-          ) : (
-            withExt(t("Saved as open {ext} files, in the Files app under On My {device} › meerCAD. Drag a part onto a folder to move it.", { device: /iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad" }))
-          )}
+          {desktop
+            ? withExt(
+                t(
+                  "Saved as open {ext} files; folders here are real folders on disk. Drag a part onto a folder to move it.",
+                ),
+              )
+            : withExt(
+                t(
+                  "Saved as open {ext} files, in the Files app under On My {device} › meerCAD. Drag a part onto a folder to move it.",
+                  { device: /iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad" },
+                ),
+              )}
         </p>
         <div className="grid">
           <button className="card new" onClick={() => void newProject()}>
@@ -379,6 +611,7 @@ export function Home() {
           {subfolders.map((f) => {
             const count = projects.filter((p) => p.folder === f || p.folder?.startsWith(`${f}/`)).length;
             const name = f.slice(f.lastIndexOf("/") + 1);
+
             return (
               <div
                 key={f}
@@ -390,6 +623,7 @@ export function Home() {
                 onContextMenu={(e) => (e.preventDefault(), folderMenu(f, e.clientX, e.clientY))}
                 onDragOver={(e) => {
                   if (!dragging(e)) return;
+
                   e.preventDefault();
                   setDropTarget(f);
                 }}
@@ -404,7 +638,11 @@ export function Home() {
                     <b>{name}</b>
                     <small>{tn(count, "{n} part", "{n} parts")}</small>
                   </div>
-                  <button className="icon-btn sm" title={t("Folder actions")} onClick={(e) => (e.stopPropagation(), folderMenu(f, e.clientX, e.clientY))}>
+                  <button
+                    className="icon-btn sm"
+                    title={t("Folder actions")}
+                    onClick={(e) => (e.stopPropagation(), folderMenu(f, e.clientX, e.clientY))}
+                  >
                     <Ellipsis />
                   </button>
                 </div>
@@ -414,84 +652,122 @@ export function Home() {
           {here.map((p) => {
             const picked = sel.ids.includes(p.id);
             const held = assistantTabs.find((a) => a.project === p.id);
+
             return (
-            <div
-              className={`card ${selecting ? "selecting" : ""} ${picked ? "selected" : ""}`}
-              key={p.id}
-              role={selecting ? "checkbox" : "button"}
-              aria-checked={selecting ? picked : undefined}
-              tabIndex={0}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData(DRAG_TYPE, picked && sel.ids.length > 1 ? sel.ids.join("\n") : p.id);
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              // Shift-click would select the text on the page as well.
-              onMouseDown={(e) => e.shiftKey && e.preventDefault()}
-              {...(selecting ? {} : cardTap(p.id))}
-              onClick={(e) => (selecting || e.metaKey || e.ctrlKey || e.shiftKey ? pickCard(e, p.id) : cardTap(p.id).onClick())}
-              onKeyDown={(e) => {
-                if (selecting && (e.key === " " || e.key === "Enter")) return (e.preventDefault(), pickCard(null, p.id));
-                if (e.key === "Enter") void openProject(p.id);
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                if (picked && sel.ids.length > 1) selectionMenu(sel.ids, folder, e.clientX, e.clientY, stopSelecting);
-                else projectMenu(p, e.clientX, e.clientY);
-              }}
-            >
-              <div className="thumb">
-                {p.thumbnail ? <img src={p.thumbnail} alt="" draggable={false} /> : <Box size={32} />}
-                {selecting ? <span className="pick-mark">{picked ? <CircleCheck /> : <Circle />}</span> : null}
-                {held ? (
-                  <span className={`ai-badge ${held.busy ? "busy" : ""}`} title={t("Locked while an assistant works on it: click to open its tab")}>
-                    {held.busy ? <AiOrb busy small /> : <Lock />}
-                    {held.busy ? t("Being worked on") : t("Locked")}
-                  </span>
-                ) : null}
-                {held && !selecting ? (
-                  <button
-                    className="btn sm ai-release"
-                    title={t("{client} stops working on it; the project opens in a tab of yours", { client: held.client })}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handOverAssistantTab(held.session).then(() => openProject(p.id));
-                    }}
-                  >
-                    <LockOpen />
-                    {t("Take over")}
-                  </button>
-                ) : null}
-              </div>
-              <div className="meta">
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <b>{p.name}</b>
-                  <small>{sort.key === "created" && p.createdAt ? t("Created {when}", { when: ago(p.createdAt) }) : ago(p.updatedAt)}</small>
+              <div
+                className={`card ${selecting ? "selecting" : ""} ${picked ? "selected" : ""}`}
+                key={p.id}
+                role={selecting ? "checkbox" : "button"}
+                aria-checked={selecting ? picked : undefined}
+                tabIndex={0}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(DRAG_TYPE, picked && sel.ids.length > 1 ? sel.ids.join("\n") : p.id);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                // Shift-click would select the text on the page as well.
+                onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+                {...(selecting ? {} : cardTap(p.id))}
+                onClick={(e) =>
+                  selecting || e.metaKey || e.ctrlKey || e.shiftKey
+                    ? pickCard(e, p.id)
+                    : cardTap(p.id).onClick()
+                }
+                onKeyDown={(e) => {
+                  if (selecting && (e.key === " " || e.key === "Enter")) {
+                    return (e.preventDefault(), pickCard(null, p.id));
+                  }
+
+                  if (e.key === "Enter") void openProject(p.id);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+
+                  if (picked && sel.ids.length > 1) {
+                    selectionMenu(sel.ids, folder, e.clientX, e.clientY, stopSelecting);
+                  } else {
+                    projectMenu(p, e.clientX, e.clientY);
+                  }
+                }}
+              >
+                <div className="thumb">
+                  {p.thumbnail ? <img src={p.thumbnail} alt="" draggable={false} /> : <Box size={32} />}
+                  {selecting ? (
+                    <span className="pick-mark">{picked ? <CircleCheck /> : <Circle />}</span>
+                  ) : null}
+                  {held ? (
+                    <span
+                      className={`ai-badge ${held.busy ? "busy" : ""}`}
+                      title={t("Locked while an assistant works on it: click to open its tab")}
+                    >
+                      {held.busy ? <AiOrb busy small /> : <Lock />}
+                      {held.busy ? t("Being worked on") : t("Locked")}
+                    </span>
+                  ) : null}
+                  {held && !selecting ? (
+                    <button
+                      className="btn sm ai-release"
+                      title={t("{client} stops working on it; the project opens in a tab of yours", {
+                        client: held.client,
+                      })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handOverAssistantTab(held.session).then(() => openProject(p.id));
+                      }}
+                    >
+                      <LockOpen />
+                      {t("Take over")}
+                    </button>
+                  ) : null}
                 </div>
-                {selecting ? null : (
-                  <button className="icon-btn sm" title={t("Part actions")} onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}>
-                    <Ellipsis />
-                  </button>
-                )}
+                <div className="meta">
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <b>{p.name}</b>
+                    <small>
+                      {sort.key === "created" && p.createdAt
+                        ? t("Created {when}", { when: ago(p.createdAt) })
+                        : ago(p.updatedAt)}
+                    </small>
+                  </div>
+                  {selecting ? null : (
+                    <button
+                      className="icon-btn sm"
+                      title={t("Part actions")}
+                      onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}
+                    >
+                      <Ellipsis />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
             );
           })}
         </div>
         {selecting ? (
           <div className="select-bar" role="toolbar" aria-label={t("Selected parts")}>
-            <span className="select-count">{sel.ids.length ? tn(sel.ids.length, "{n} part selected", "{n} parts selected") : t("Choose the parts to move or delete")}</span>
+            <span className="select-count">
+              {sel.ids.length
+                ? tn(sel.ids.length, "{n} part selected", "{n} parts selected")
+                : t("Choose the parts to move or delete")}
+            </span>
             <button
               className="btn"
               disabled={!sel.ids.length}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
-                selectionMenu(sel.ids, folder, r.left, r.top - 4, stopSelecting, { above: true, moveOnly: true });
+                selectionMenu(sel.ids, folder, r.left, r.top - 4, stopSelecting, {
+                  above: true,
+                  moveOnly: true,
+                });
               }}
             >
               <FolderInput /> {t("Move to…")}
             </button>
-            <button className="btn danger" disabled={!sel.ids.length} onClick={() => void deleteMany(sel.ids).then((ok) => ok && stopSelecting())}>
+            <button
+              className="btn danger"
+              disabled={!sel.ids.length}
+              onClick={() => void deleteMany(sel.ids).then((ok) => ok && stopSelecting())}
+            >
               <Trash /> {t("Delete…")}
             </button>
             <button className="btn" onClick={stopSelecting}>
@@ -501,31 +777,41 @@ export function Home() {
         ) : null}
         {prefs.showExamples && examples.length ? (
           <>
-        <button className="home-section-toggle" onClick={() => setPrefs({ examplesOpen: !prefs.examplesOpen })} aria-expanded={prefs.examplesOpen}>
-          <ChevronRight className={prefs.examplesOpen ? "open" : ""} />
-          <h1>{t("Examples")}</h1>
-          {prefs.examplesOpen ? null : <span className="muted">{examples.length}</span>}
-        </button>
-        {prefs.examplesOpen ? (
-          <>
-        <p className="sub">{t("Fully parametric — open one and change its variables. Hide this section in Settings.")}</p>
-        <div className="grid">
-          {examples.map((ex) => (
-            <button className="card" key={ex.name} onClick={() => void openExample(ex)}>
-              <div className="thumb">
-                {ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc) ? <img src={ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)!} alt="" /> : <Box size={32} />}
-              </div>
-              <div className="meta">
-                <div style={{ minWidth: 0 }}>
-                  <b>{t(ex.name)}</b>
-                  <small>{t(ex.description)}</small>
-                </div>
-              </div>
+            <button
+              className="home-section-toggle"
+              onClick={() => setPrefs({ examplesOpen: !prefs.examplesOpen })}
+              aria-expanded={prefs.examplesOpen}
+            >
+              <ChevronRight className={prefs.examplesOpen ? "open" : ""} />
+              <h1>{t("Examples")}</h1>
+              {prefs.examplesOpen ? null : <span className="muted">{examples.length}</span>}
             </button>
-          ))}
-        </div>
-          </>
-        ) : null}
+            {prefs.examplesOpen ? (
+              <>
+                <p className="sub">
+                  {t("Fully parametric — open one and change its variables. Hide this section in Settings.")}
+                </p>
+                <div className="grid">
+                  {examples.map((ex) => (
+                    <button className="card" key={ex.name} onClick={() => void openExample(ex)}>
+                      <div className="thumb">
+                        {(ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)) ? (
+                          <img src={ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)!} alt="" />
+                        ) : (
+                          <Box size={32} />
+                        )}
+                      </div>
+                      <div className="meta">
+                        <div style={{ minWidth: 0 }}>
+                          <b>{t(ex.name)}</b>
+                          <small>{t(ex.description)}</small>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
         <footer className="home-footer">
@@ -539,7 +825,10 @@ export function Home() {
           ).map(([tab, label], i) => (
             <span key={tab}>
               {i ? " · " : null}
-              <button className="link" onClick={() => window.dispatchEvent(new CustomEvent("meercad:about", { detail: tab }))}>
+              <button
+                className="link"
+                onClick={() => window.dispatchEvent(new CustomEvent("meercad:about", { detail: tab }))}
+              >
                 {label}
               </button>
             </span>
@@ -560,7 +849,9 @@ function openExample(ex: Example): Promise<void> {
 
 async function openExampleNow(ex: Example): Promise<void> {
   if (!ex.url) return newProject(structuredClone(ex.doc), t(ex.name), true);
+
   const task = startTask(t("Opening {name}", { name: t(ex.name) }), null, { untilEditor: true });
+
   try {
     const doc = (await (await fetch(ex.url)).json()) as MeercadDocument;
     await newProject(doc, t(ex.name));

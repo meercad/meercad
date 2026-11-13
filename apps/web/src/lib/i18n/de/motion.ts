@@ -13,7 +13,8 @@ export default {
   Close: "Schließen",
   "Hide joint symbols": "Gelenk-Symbole ausblenden",
   "Show joint symbols": "Gelenk-Symbole einblenden",
-  "Drag a part to move it. The model itself stays as drawn.": "Zieh ein Teil, um es zu bewegen. Das Modell selbst bleibt, wie es gezeichnet ist.",
+  "Drag a part to move it. The model itself stays as drawn.":
+    "Zieh ein Teil, um es zu bewegen. Das Modell selbst bleibt, wie es gezeichnet ist.",
   "Joints let parts turn or slide against each other, from where they were drawn. Add one, then drag the part.":
     "Mit Gelenken drehen oder verschieben sich Teile gegeneinander, ausgehend von ihrer gezeichneten Lage. Füg ein Gelenk hinzu und zieh dann das Teil.",
   "{part} on {base}": "{part} an {base}",
@@ -24,15 +25,18 @@ export default {
   Stop: "Stopp",
   "Play: move it back and forth": "Abspielen: hin und her bewegen",
   "joint::Both": "Beides",
-  "Turn and slide on one axis, like a pin in a guide": "Drehen und Schieben auf einer Achse, wie ein Stift in einer Führung",
+  "Turn and slide on one axis, like a pin in a guide":
+    "Drehen und Schieben auf einer Achse, wie ein Stift in einer Führung",
   "Limits of the turn": "Grenzen beim Drehen",
   "Limits of the slide": "Grenzen beim Schieben",
   "Follows {driver} × {ratio}": "Folgt {driver} × {ratio}",
   "Add joint": "Gelenk hinzufügen",
   "Back to where the parts were drawn": "Zurück in die gezeichnete Lage der Teile",
   "Rest position": "Ruhelage",
-  "{n} gear joint added: drag a gear to turn it": "{n} Zahnradgelenk hinzugefügt: Zieh ein Zahnrad, um es zu drehen",
-  "{n} gear joints added: drag a gear to turn it": "{n} Zahnradgelenke hinzugefügt: Zieh ein Zahnrad, um es zu drehen",
+  "{n} gear joint added: drag a gear to turn it":
+    "{n} Zahnradgelenk hinzugefügt: Zieh ein Zahnrad, um es zu drehen",
+  "{n} gear joints added: drag a gear to turn it":
+    "{n} Zahnradgelenke hinzugefügt: Zieh ein Zahnrad, um es zu drehen",
   "Joints for {n} gear": "Gelenke für {n} Zahnrad",
   "Joints for {n} gears": "Gelenke für {n} Zahnräder",
   "Checking…": "Prüfe…",
@@ -57,11 +61,13 @@ export default {
   Name: "Name",
   Cancel: "Abbrechen",
   "Save joint": "Gelenk speichern",
-  "The part keeps where it was drawn as its rest position.": "Die gezeichnete Lage des Teils wird seine Ruhelage.",
+  "The part keeps where it was drawn as its rest position.":
+    "Die gezeichnete Lage des Teils wird seine Ruhelage.",
 
   "Finish the open tool first": "Schließ zuerst das offene Werkzeug ab",
   "Pick another part, or Ground": "Wähl ein anderes Teil oder den Boden",
-  "Pick a round face (hole or shaft) or an edge for the axis": "Wähl für die Achse eine runde Fläche (Bohrung oder Welle) oder eine Kante",
+  "Pick a round face (hole or shaft) or an edge for the axis":
+    "Wähl für die Achse eine runde Fläche (Bohrung oder Welle) oder eine Kante",
   "Pick the part that moves": "Wähl das Teil, das sich bewegt",
   "No part moves yet: add a joint first": "Noch bewegt sich kein Teil: Füg zuerst ein Gelenk hinzu",
 
@@ -75,47 +81,61 @@ export default {
   "Drawing saved as {format} (scale {scale})": "Zeichnung als {format} gespeichert (Maßstab {scale})",
 
   // Storage, iCloud
-  "In iCloud Drive › meerCAD: the same projects on your iPhone and iPad.": "In iCloud Drive › meerCAD: dieselben Projekte auf iPhone und iPad.",
+  "In iCloud Drive › meerCAD: the same projects on your iPhone and iPad.":
+    "In iCloud Drive › meerCAD: dieselben Projekte auf iPhone und iPad.",
   "Use my own folder…": "Eigenen Ordner verwenden …",
-  "No sync: projects in this folder do not appear on your iPhone and iPad.": "Kein Sync: Projekte in diesem Ordner erscheinen nicht auf iPhone und iPad.",
+  "No sync: projects in this folder do not appear on your iPhone and iPad.":
+    "Kein Sync: Projekte in diesem Ordner erscheinen nicht auf iPhone und iPad.",
   "Switch to iCloud": "Zu iCloud wechseln",
-  "To have your projects on iPhone and iPad too: open meerCAD there with iCloud Drive on. Then you can switch to iCloud here.": "Damit deine Projekte auch auf iPhone und iPad sind: öffne meerCAD dort mit eingeschaltetem iCloud Drive. Danach kannst du hier zu iCloud wechseln.",
+  "To have your projects on iPhone and iPad too: open meerCAD there with iCloud Drive on. Then you can switch to iCloud here.":
+    "Damit deine Projekte auch auf iPhone und iPad sind: öffne meerCAD dort mit eingeschaltetem iCloud Drive. Danach kannst du hier zu iCloud wechseln.",
   "Where projects are saved": "Speicherort der Projekte",
-  "In iCloud Drive › meerCAD: on all your devices with this Apple ID, also on the Mac.": "In iCloud Drive › meerCAD: auf allen deinen Geräten mit dieser Apple-ID, auch auf dem Mac.",
+  "In iCloud Drive › meerCAD: on all your devices with this Apple ID, also on the Mac.":
+    "In iCloud Drive › meerCAD: auf allen deinen Geräten mit dieser Apple-ID, auch auf dem Mac.",
   "Keep on this device only…": "Nur auf diesem Gerät speichern …",
-  "On this device (Files › On My iPad › meerCAD). Your other devices do not see them.": "Auf diesem Gerät (Dateien › Auf meinem iPad › meerCAD). Deine anderen Geräte sehen sie nicht.",
-  "For the same projects on all your devices, sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app.": "Für dieselben Projekte auf allen Geräten: in der Einstellungen-App bei iCloud anmelden und iCloud Drive für meerCAD einschalten.",
+  "On this device (Files › On My iPad › meerCAD). Your other devices do not see them.":
+    "Auf diesem Gerät (Dateien › Auf meinem iPad › meerCAD). Deine anderen Geräte sehen sie nicht.",
+  "For the same projects on all your devices, sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app.":
+    "Für dieselben Projekte auf allen Geräten: in der Einstellungen-App bei iCloud anmelden und iCloud Drive für meerCAD einschalten.",
   "Switch to iCloud?": "Zu iCloud wechseln?",
-  "Your {n} project moves to iCloud Drive › meerCAD and is then on all your devices with this Apple ID, also on the Mac.": "Dein {n} Projekt kommt nach iCloud Drive › meerCAD und ist dann auf allen deinen Geräten mit dieser Apple-ID, auch auf dem Mac.",
-  "Your {n} projects move to iCloud Drive › meerCAD and are then on all your devices with this Apple ID, also on the Mac.": "Deine {n} Projekte kommen nach iCloud Drive › meerCAD und sind dann auf allen deinen Geräten mit dieser Apple-ID, auch auf dem Mac.",
+  "Your {n} project moves to iCloud Drive › meerCAD and is then on all your devices with this Apple ID, also on the Mac.":
+    "Dein {n} Projekt kommt nach iCloud Drive › meerCAD und ist dann auf allen deinen Geräten mit dieser Apple-ID, auch auf dem Mac.",
+  "Your {n} projects move to iCloud Drive › meerCAD and are then on all your devices with this Apple ID, also on the Mac.":
+    "Deine {n} Projekte kommen nach iCloud Drive › meerCAD und sind dann auf allen deinen Geräten mit dieser Apple-ID, auch auf dem Mac.",
   "Keep projects on this device only?": "Projekte nur auf diesem Gerät speichern?",
-  "Your projects move out of iCloud onto this device. They are then no longer on your other devices.": "Deine Projekte kommen aus iCloud auf dieses Gerät. Auf deinen anderen Geräten sind sie dann nicht mehr.",
+  "Your projects move out of iCloud onto this device. They are then no longer on your other devices.":
+    "Deine Projekte kommen aus iCloud auf dieses Gerät. Auf deinen anderen Geräten sind sie dann nicht mehr.",
   "Move to this device": "Auf dieses Gerät holen",
   "Moved {n} project to iCloud": "{n} Projekt nach iCloud verschoben",
   "Moved {n} projects to iCloud": "{n} Projekte nach iCloud verschoben",
   "Moved {n} project to this device": "{n} Projekt auf dieses Gerät geholt",
   "Moved {n} projects to this device": "{n} Projekte auf dieses Gerät geholt",
-  "iCloud Drive is not available: sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app.": "iCloud Drive ist nicht verfügbar: in der Einstellungen-App bei iCloud anmelden und iCloud Drive für meerCAD einschalten.",
-  "Use iCloud Drive (same projects on iPhone and iPad)": "iCloud Drive nutzen (dieselben Projekte auf iPhone und iPad)",
+  "iCloud Drive is not available: sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app.":
+    "iCloud Drive ist nicht verfügbar: in der Einstellungen-App bei iCloud anmelden und iCloud Drive für meerCAD einschalten.",
+  "Use iCloud Drive (same projects on iPhone and iPad)":
+    "iCloud Drive nutzen (dieselben Projekte auf iPhone und iPad)",
 
   // All variants at once
   "Export all {n} variants as {format} (zip)": "Alle {n} Varianten als {format} exportieren (Zip)",
   "This design has no variants": "Dieser Entwurf hat keine Varianten",
   "Exporting {n} variants": "{n} Varianten werden exportiert",
   "variant “{name}” does not build: {error}": "Variante „{name}“ lässt sich nicht aufbauen: {error}",
-  "variants": "Varianten",
+  variants: "Varianten",
   "Zip archive": "Zip-Archiv",
 
   // Versions
-  "Versions": "Versionen",
+  Versions: "Versionen",
   "Versions…": "Versionen …",
-  "Versions: save or restore a state of the design": "Versionen: Stand des Entwurfs speichern oder zurückholen",
-  "Save the design as it is now under a name, to come back to it later. Versions are kept in the project file.": "Speichere den Entwurf, wie er gerade ist, unter einem Namen, um später dorthin zurückzukehren. Versionen liegen in der Projektdatei.",
+  "Versions: save or restore a state of the design":
+    "Versionen: Stand des Entwurfs speichern oder zurückholen",
+  "Save the design as it is now under a name, to come back to it later. Versions are kept in the project file.":
+    "Speichere den Entwurf, wie er gerade ist, unter einem Namen, um später dorthin zurückzukehren. Versionen liegen in der Projektdatei.",
   "Version {n}": "Version {n}",
   "Save version": "Version speichern",
   "Saved as “{name}”": "Als „{name}“ gespeichert",
   "No versions yet.": "Noch keine Versionen.",
-  "To keep one somewhere else as well, save it as a file of its own; From file… brings such a file back in as a version.": "Um eine Version zusätzlich woanders aufzuheben, sichere sie als eigene Datei; „Aus Datei …“ holt so eine Datei wieder als Version herein.",
+  "To keep one somewhere else as well, save it as a file of its own; From file… brings such a file back in as a version.":
+    "Um eine Version zusätzlich woanders aufzuheben, sichere sie als eigene Datei; „Aus Datei …“ holt so eine Datei wieder als Version herein.",
   "From file…": "Aus Datei …",
   "Bring a saved .meercad file in as a version": "Eine gesicherte .meercad-Datei als Version hereinholen",
   "Save as a file…": "Als Datei sichern …",
@@ -125,10 +145,11 @@ export default {
   "Every version in {name} is here already": "Alle Versionen aus {name} sind schon da",
   "Could not bring in {name}: {error}": "{name} ließ sich nicht hereinholen: {error}",
   "Look at it (the design stays as it is)": "Ansehen (der Entwurf bleibt, wie er ist)",
-  "Restore": "Zurückholen",
-  "Rename": "Umbenennen",
+  Restore: "Zurückholen",
+  Rename: "Umbenennen",
   "Restored “{name}”": "„{name}“ zurückgeholt",
-  "Restored “{name}”; the design before is kept as a version": "„{name}“ zurückgeholt; der Stand davor ist als Version gesichert",
+  "Restored “{name}”; the design before is kept as a version":
+    "„{name}“ zurückgeholt; der Stand davor ist als Version gesichert",
   "Before “{name}”": "Vor „{name}“",
   "Same as now": "Wie jetzt",
   "variables or parts changed": "Variablen oder Teile geändert",
@@ -149,7 +170,8 @@ export default {
   Sheet: "Blatt",
   Views: "Ansichten",
   "Parts list on the sheet ({n} lines)": "Teileliste auf dem Blatt ({n} Zeilen)",
-  "Scale {scale} · first-angle projection (ISO E) · dashed lines are hidden edges.": "Maßstab {scale} · Projektionsmethode 1 (ISO E) · gestrichelte Linien sind verdeckte Kanten.",
+  "Scale {scale} · first-angle projection (ISO E) · dashed lines are hidden edges.":
+    "Maßstab {scale} · Projektionsmethode 1 (ISO E) · gestrichelte Linien sind verdeckte Kanten.",
   "Parts list for a spreadsheet": "Teileliste für eine Tabellenkalkulation",
   "Parts list CSV": "Teileliste als CSV",
 
@@ -164,7 +186,8 @@ export default {
   "Saved {path}": "{path} gespeichert",
   "Show see-through": "Durchsichtig zeigen",
   "Show solid": "Undurchsichtig zeigen",
-  "Exported as shown: moved parts are where they are now": "Exportiert wie angezeigt: Bewegte Teile stehen in ihrer aktuellen Stellung",
+  "Exported as shown: moved parts are where they are now":
+    "Exportiert wie angezeigt: Bewegte Teile stehen in ihrer aktuellen Stellung",
   "Nothing to export": "Nichts zu exportieren",
   "unknown part {id}": "unbekanntes Teil {id}",
   "{format} export failed: {error}": "{format}-Export fehlgeschlagen: {error}",
@@ -180,7 +203,8 @@ export default {
 
   "The scanner did not answer: {error}": "Der Scanner antwortet nicht: {error}",
   "This device cannot scan objects.": "Dieses Gerät kann keine Objekte scannen.",
-  "Scanning with LiDAR needs an iPhone or iPad with LiDAR.": "Scannen mit LiDAR braucht ein iPhone oder iPad mit LiDAR.",
+  "Scanning with LiDAR needs an iPhone or iPad with LiDAR.":
+    "Scannen mit LiDAR braucht ein iPhone oder iPad mit LiDAR.",
   "Scanning failed": "Scannen fehlgeschlagen",
   Scan: "Scan",
   "LiDAR scan": "LiDAR-Scan",
@@ -189,14 +213,15 @@ export default {
   "{n} photo": "{n} Foto",
   "{n} photos": "{n} Fotos",
 
-  'a folder named "{name}" already exists': 'es gibt schon einen Ordner „{name}“',
+  'a folder named "{name}" already exists': "es gibt schon einen Ordner „{name}“",
 
   "Converting {name} failed: {error}": "Umwandeln von {name} fehlgeschlagen: {error}",
   "{name} is already converted by step {step}": "{name} ist schon durch Schritt {step} umgewandelt",
   "Converting {name}…": "{name} wird umgewandelt…",
   "Converting {name} failed: {error}. The mesh stays as it was; raise the tolerance in step {step} or undo.":
     "Umwandeln von {name} fehlgeschlagen: {error}. Das Netz bleibt, wie es war. Erhöhe die Toleranz in Schritt {step} oder mach es rückgängig.",
-  "{name} has editable faces now{details}. Undo brings the mesh back.": "{name} hat jetzt bearbeitbare Flächen{details}. Rückgängig holt das Netz zurück.",
+  "{name} has editable faces now{details}. Undo brings the mesh back.":
+    "{name} hat jetzt bearbeitbare Flächen{details}. Rückgängig holt das Netz zurück.",
   "{name} is not in the model": "{name} ist nicht im Modell",
   "Could not rebuild {name}: {error}": "{name} ließ sich nicht nachbauen: {error}",
   "Rebuilt {name} with {n} steps.": "{name} mit {n} Schritten nachgebaut.",
@@ -223,7 +248,8 @@ export default {
   "sheet::Name": "Benennung",
   // Motions (several joints over time)
   Motions: "Bewegungsabläufe",
-  "Link joints into a motion: set a pose, add it as a moment, set the next one, add it, then play.": "Gelenke zu einem Ablauf verknüpfen: Pose einstellen, als Zeitpunkt hinzufügen, nächste Pose einstellen, hinzufügen, dann abspielen.",
+  "Link joints into a motion: set a pose, add it as a moment, set the next one, add it, then play.":
+    "Gelenke zu einem Ablauf verknüpfen: Pose einstellen, als Zeitpunkt hinzufügen, nächste Pose einstellen, hinzufügen, dann abspielen.",
   "Play the motion": "Ablauf abspielen",
   Duration: "Dauer (s)",
   Loop: "Wiederholen",

@@ -63,7 +63,19 @@ export type ModelAction =
   | "view.left";
 export type SketchAction = `sketch.${Exclude<SketchTool, "select">}` | "sketch.construction";
 /** Sketch constraints made from the selection. */
-export type ConstraintKind = "coincident" | "hv" | "vertical" | "parallel" | "perpendicular" | "tangent" | "equal" | "concentric" | "midpoint" | "collinear" | "symmetric" | "fix";
+export type ConstraintKind =
+  | "coincident"
+  | "hv"
+  | "vertical"
+  | "parallel"
+  | "perpendicular"
+  | "tangent"
+  | "equal"
+  | "concentric"
+  | "midpoint"
+  | "collinear"
+  | "symmetric"
+  | "fix";
 export type ConstraintAction = `constraint.${ConstraintKind}`;
 /** Keys that mean the same in the model and in a sketch. */
 export type CommonAction = "confirm" | "cancel" | "delete" | "select_all";
@@ -162,7 +174,8 @@ const BASE: Keymap = {
 };
 
 export type KeyScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blender" | "plasticity";
-export type MouseScheme = "meercad" | "fusion" | "onshape" | "solidworks" | "blender" | "plasticity" | "trackpad";
+export type MouseScheme =
+  "meercad" | "fusion" | "onshape" | "solidworks" | "blender" | "plasticity" | "trackpad";
 /**
  * What a right click (pressed and released without dragging) does. "menu": the actions for what is
  * under the pointer. "confirm": finishes what is running (the open tool, the line or spline being
@@ -176,7 +189,14 @@ export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Key
     id: "fusion",
     label: "Fusion 360",
     note: t("S opens command search, P projects edges, F6 fits the view."),
-    map: { ...BASE, sketch: [], palette: ["S", "Mod+F"], fit: ["F6"], "sketch.project": ["P"], "sketch.point": [] },
+    map: {
+      ...BASE,
+      sketch: [],
+      palette: ["S", "Mod+F"],
+      fit: ["F6"],
+      "sketch.project": ["P"],
+      "sketch.point": [],
+    },
   },
   {
     id: "onshape",
@@ -243,7 +263,9 @@ export const KEY_SCHEMES: { id: KeyScheme; label: string; note: string; map: Key
   {
     id: "plasticity",
     label: "Plasticity",
-    note: t("F searches every command, G/R move and turn, S scales, X deletes, H hides, Shift+R repeats, numpad views."),
+    note: t(
+      "F searches every command, G/R move and turn, S scales, X deletes, H hides, Shift+R repeats, numpad views.",
+    ),
     map: {
       ...BASE,
       delete: ["X", "Delete", "Backspace", "Shift+Backspace"],
@@ -312,7 +334,11 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
     orbit: t("Right drag"),
     pan: t("Middle drag or Shift + right drag"),
     zoom: t("Wheel"),
-    nav: { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "shift" }], zoom: [] },
+    nav: {
+      orbit: [{ button: "right" }],
+      pan: [{ button: "middle" }, { button: "right", mod: "shift" }],
+      zoom: [],
+    },
     rightClick: "menu",
   },
   {
@@ -330,7 +356,11 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
     orbit: t("Right drag"),
     pan: t("Middle drag or Ctrl + right drag"),
     zoom: t("Wheel"),
-    nav: { orbit: [{ button: "right" }], pan: [{ button: "middle" }, { button: "right", mod: "ctrl" }], zoom: [] },
+    nav: {
+      orbit: [{ button: "right" }],
+      pan: [{ button: "middle" }, { button: "right", mod: "ctrl" }],
+      zoom: [],
+    },
     rightClick: "menu",
   },
   {
@@ -339,7 +369,11 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
     orbit: t("Middle drag"),
     pan: t("Ctrl + middle drag"),
     zoom: t("Wheel or Shift + middle drag"),
-    nav: { orbit: [{ button: "middle" }], pan: [{ button: "middle", mod: "ctrl" }], zoom: [{ button: "middle", mod: "shift" }] },
+    nav: {
+      orbit: [{ button: "middle" }],
+      pan: [{ button: "middle", mod: "ctrl" }],
+      zoom: [{ button: "middle", mod: "shift" }],
+    },
     rightClick: "menu",
   },
   {
@@ -348,7 +382,11 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
     orbit: t("Middle drag"),
     pan: t("Shift + middle drag"),
     zoom: t("Wheel or Ctrl + middle drag"),
-    nav: { orbit: [{ button: "middle" }], pan: [{ button: "middle", mod: "shift" }], zoom: [{ button: "middle", mod: "ctrl" }] },
+    nav: {
+      orbit: [{ button: "middle" }],
+      pan: [{ button: "middle", mod: "shift" }],
+      zoom: [{ button: "middle", mod: "ctrl" }],
+    },
     rightClick: "menu",
   },
   {
@@ -357,7 +395,11 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
     orbit: t("Middle drag"),
     pan: t("Right drag or Shift + middle drag"),
     zoom: t("Wheel or Ctrl + middle drag"),
-    nav: { orbit: [{ button: "middle" }], pan: [{ button: "right" }, { button: "middle", mod: "shift" }], zoom: [{ button: "middle", mod: "ctrl" }] },
+    nav: {
+      orbit: [{ button: "middle" }],
+      pan: [{ button: "right" }, { button: "middle", mod: "shift" }],
+      zoom: [{ button: "middle", mod: "ctrl" }],
+    },
     rightClick: "confirm",
   },
   {
@@ -366,21 +408,28 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
     orbit: t("Two-finger swipe or right drag"),
     pan: t("Shift + two-finger swipe or Shift + right drag"),
     zoom: t("Pinch, Ctrl + two-finger swipe or Alt + right drag"),
-    nav: { orbit: [{ button: "right" }], pan: [{ button: "right", mod: "shift" }], zoom: [{ button: "right", mod: "alt" }] },
+    nav: {
+      orbit: [{ button: "right" }],
+      pan: [{ button: "right", mod: "shift" }],
+      zoom: [{ button: "right", mod: "alt" }],
+    },
     rightClick: "menu",
   },
 ];
 
 /** Whole schemes: keys and mouse together, picked with one click in Settings. */
-export const CONTROL_SCHEMES: { id: KeyScheme; label: string; keys: KeyScheme; mouse: MouseScheme }[] = KEY_SCHEMES.map((k) => ({
-  id: k.id,
-  label: k.label,
-  keys: k.id,
-  mouse: k.id,
-}));
+export const CONTROL_SCHEMES: { id: KeyScheme; label: string; keys: KeyScheme; mouse: MouseScheme }[] =
+  KEY_SCHEMES.map((k) => ({
+    id: k.id,
+    label: k.label,
+    keys: k.id,
+    mouse: k.id,
+  }));
 
-export const keymapFor = (scheme: KeyScheme): Keymap => (KEY_SCHEMES.find((s) => s.id === scheme) ?? KEY_SCHEMES[0]!).map;
-export const mouseFor = (scheme: MouseScheme): MouseSchemeInfo => MOUSE_SCHEMES.find((s) => s.id === scheme) ?? MOUSE_SCHEMES[0]!;
+export const keymapFor = (scheme: KeyScheme): Keymap =>
+  (KEY_SCHEMES.find((s) => s.id === scheme) ?? KEY_SCHEMES[0]!).map;
+export const mouseFor = (scheme: MouseScheme): MouseSchemeInfo =>
+  MOUSE_SCHEMES.find((s) => s.id === scheme) ?? MOUSE_SCHEMES[0]!;
 
 /** The key of an event in binding notation: letters, digits and numpad by position, the rest by name. */
 export function eventKey(e: Pick<KeyboardEvent, "code" | "key">): string {
@@ -388,6 +437,7 @@ export function eventKey(e: Pick<KeyboardEvent, "code" | "key">): string {
   if (e.code.startsWith("Digit")) return e.code.slice(5);
   if (e.code.startsWith("Numpad") && /\d$/.test(e.code)) return `Num${e.code.slice(6)}`;
   if (e.code === "Space") return "Space";
+
   return e.key.length === 1 ? e.key.toUpperCase() : e.key;
 }
 
@@ -399,6 +449,7 @@ export function matches(e: KeyEventLike, binding: string): boolean {
   const parts = binding.split("+");
   const key = parts.pop() || "+";
   const mods = new Set(parts);
+
   return (
     eventKey(e) === key &&
     (e.metaKey || e.ctrlKey) === mods.has("Mod") &&
@@ -408,23 +459,107 @@ export function matches(e: KeyEventLike, binding: string): boolean {
 }
 
 /** The first action among `actions` that this event triggers in `map`. */
-export function actionIn<A extends Action>(map: Keymap, e: KeyEventLike, actions: readonly A[]): A | undefined {
+export function actionIn<A extends Action>(
+  map: Keymap,
+  e: KeyEventLike,
+  actions: readonly A[],
+): A | undefined {
   return actions.find((a) => map[a].some((b) => matches(e, b)));
 }
 
 export const COMMON_ACTIONS: readonly CommonAction[] = ["confirm", "cancel", "delete", "select_all"];
 export const MODEL_ACTIONS: readonly ModelAction[] = [
-  "sketch", "extrude", "revolve", "loft", "sweep", "rib", "primitive", "text", "standard_part", "gridfinity", "wall", "label", "box", "snap_hook", "lithophane", "fillet", "chamfer", "shell", "draft", "offset_face", "thread", "gear", "coil", "spring", "screw", "hole", "split", "transform", "align", "scale", "bend", "linear_pattern", "circular_pattern", "mirror", "boolean", "plane",
-  "measure", "joints", "palette", "repeat", "hide", "unhide_all", "fit", "normal", "view.iso", "view.front", "view.back", "view.top", "view.bottom", "view.right", "view.left",
+  "sketch",
+  "extrude",
+  "revolve",
+  "loft",
+  "sweep",
+  "rib",
+  "primitive",
+  "text",
+  "standard_part",
+  "gridfinity",
+  "wall",
+  "label",
+  "box",
+  "snap_hook",
+  "lithophane",
+  "fillet",
+  "chamfer",
+  "shell",
+  "draft",
+  "offset_face",
+  "thread",
+  "gear",
+  "coil",
+  "spring",
+  "screw",
+  "hole",
+  "split",
+  "transform",
+  "align",
+  "scale",
+  "bend",
+  "linear_pattern",
+  "circular_pattern",
+  "mirror",
+  "boolean",
+  "plane",
+  "measure",
+  "joints",
+  "palette",
+  "repeat",
+  "hide",
+  "unhide_all",
+  "fit",
+  "normal",
+  "view.iso",
+  "view.front",
+  "view.back",
+  "view.top",
+  "view.bottom",
+  "view.right",
+  "view.left",
 ];
 export const SKETCH_ACTIONS: readonly SketchAction[] = [
-  "sketch.line", "sketch.rect", "sketch.rect_center", "sketch.circle", "sketch.arc", "sketch.arc_center", "sketch.polygon", "sketch.spline", "sketch.point", "sketch.trim", "sketch.fillet", "sketch.chamfer", "sketch.offset", "sketch.pattern",
-  "sketch.dimension", "sketch.project", "sketch.section", "sketch.construction",
+  "sketch.line",
+  "sketch.rect",
+  "sketch.rect_center",
+  "sketch.circle",
+  "sketch.arc",
+  "sketch.arc_center",
+  "sketch.polygon",
+  "sketch.spline",
+  "sketch.point",
+  "sketch.trim",
+  "sketch.fillet",
+  "sketch.chamfer",
+  "sketch.offset",
+  "sketch.pattern",
+  "sketch.dimension",
+  "sketch.project",
+  "sketch.section",
+  "sketch.construction",
 ];
 export const CONSTRAINT_ACTIONS: readonly ConstraintAction[] = [
-  "constraint.coincident", "constraint.hv", "constraint.vertical", "constraint.parallel", "constraint.perpendicular", "constraint.tangent", "constraint.equal", "constraint.concentric", "constraint.midpoint", "constraint.collinear", "constraint.symmetric", "constraint.fix",
+  "constraint.coincident",
+  "constraint.hv",
+  "constraint.vertical",
+  "constraint.parallel",
+  "constraint.perpendicular",
+  "constraint.tangent",
+  "constraint.equal",
+  "constraint.concentric",
+  "constraint.midpoint",
+  "constraint.collinear",
+  "constraint.symmetric",
+  "constraint.fix",
 ];
 
 /** Everything a key can do outside a sketch, and inside one. Within each, a binding means one thing. */
 export const MODEL_CONTEXT: readonly (CommonAction | ModelAction)[] = [...COMMON_ACTIONS, ...MODEL_ACTIONS];
-export const SKETCH_CONTEXT: readonly (CommonAction | SketchAction | ConstraintAction)[] = [...COMMON_ACTIONS, ...SKETCH_ACTIONS, ...CONSTRAINT_ACTIONS];
+export const SKETCH_CONTEXT: readonly (CommonAction | SketchAction | ConstraintAction)[] = [
+  ...COMMON_ACTIONS,
+  ...SKETCH_ACTIONS,
+  ...CONSTRAINT_ACTIONS,
+];

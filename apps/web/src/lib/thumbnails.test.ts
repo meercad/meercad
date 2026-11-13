@@ -24,7 +24,19 @@ describe("pictures", () => {
   });
 
   it("notes an example that does not build and leaves it", async () => {
-    const broken: MeercadDocument = { ...emptyDocument(), features: [{ id: "ex1", op: "extrude", profile: { sketch: "nope" }, extent: "blind", distance: 1, mode: "new_body" }] };
+    const broken: MeercadDocument = {
+      ...emptyDocument(),
+      features: [
+        {
+          id: "ex1",
+          op: "extrude",
+          profile: { sketch: "nope" },
+          extent: "blind",
+          distance: 1,
+          mode: "new_body",
+        },
+      ],
+    };
     let done = 0;
     await fillThumbnails([{ name: "Broken", doc: broken }], () => done++);
     expect(done).toBe(0);
@@ -36,6 +48,9 @@ describe("pictures", () => {
     const meta = await createProject("Pictured", doc);
     await refreshProjects();
     startBackgroundPictures([]);
-    await vi.waitFor(() => expect(testFiles.projects.get(meta.id)!.thumbnail ?? null).not.toBeNull(), { timeout: 30_000, interval: 100 });
+    await vi.waitFor(() => expect(testFiles.projects.get(meta.id)!.thumbnail ?? null).not.toBeNull(), {
+      timeout: 30_000,
+      interval: 100,
+    });
   }, 60_000);
 });

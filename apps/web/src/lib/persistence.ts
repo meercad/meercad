@@ -19,7 +19,9 @@ export interface ProjectMeta {
   thumbnail?: string;
   /** When the picture was written; a picture older than the file shows an earlier state. */
   thumbnailAt?: number;
-  /** The file's size in bytes, where the store says (the iPad: big designs are not built in the background). */
+  /**
+   * The file's size in bytes, where the store says (the iPad: big designs are not built in the background).
+   */
   size?: number;
 }
 export interface Project extends ProjectMeta {
@@ -51,17 +53,30 @@ export interface AssistantTab {
 
 interface DesktopApi {
   isDesktop: true;
-  /** The Claude Desktop config file written, or null when Claude Desktop was handed the extension to install. */
+  /**
+   * The Claude Desktop config file written, or null when Claude Desktop was handed the extension to install.
+   */
   installClaudeDesktop(): Promise<string | null>;
   /** This build's MCP bridge port (older desktop builds: absent, the default). */
   mcpPort?: number;
   /** Flags shared by every meerCAD on this Mac, as read at start, and how to set one. */
   shared?: { initial: Record<string, unknown>; set(key: string, value: unknown): Promise<void> };
-  info(): Promise<{ version: string; projectsDir: string; mcpCommand: { command: string; args: string[]; env?: Record<string, string> }; mcpName?: string; channel?: "release" | "rc" | "wip"; mas?: boolean; store?: "production" | "sandbox" | null }>;
+  info(): Promise<{
+    version: string;
+    projectsDir: string;
+    mcpCommand: { command: string; args: string[]; env?: Record<string, string> };
+    mcpName?: string;
+    channel?: "release" | "rc" | "wip";
+    mas?: boolean;
+    store?: "production" | "sandbox" | null;
+  }>;
   projects: {
     list(): Promise<ProjectMeta[]>;
     load(id: string): Promise<Project>;
-    /** `look`: the look the picture shows (LOOK_VERSION), kept with it next to the file (see sharedPicture.ts). */
+    /**
+     * `look`: the look the picture shows (LOOK_VERSION), kept with it next to the file (see
+     * sharedPicture.ts).
+     */
     save(p: { id: string; doc: MeercadDocument; thumbnail?: string; look?: number }): Promise<void>;
     /**
      * Stores a project's picture without touching its file; also next to the file (see
@@ -86,7 +101,13 @@ interface DesktopApi {
     delete(folder: string): Promise<void>;
   };
   storage: {
-    status(): Promise<{ dir: string; defaultDir: string; chosen: boolean; iCloudDir: string; iCloudAvailable: boolean }>;
+    status(): Promise<{
+      dir: string;
+      defaultDir: string;
+      chosen: boolean;
+      iCloudDir: string;
+      iCloudAvailable: boolean;
+    }>;
     choose(): Promise<string | null>;
     count(): Promise<number>;
     set(p: { dir: string; move: boolean }): Promise<{ dir: string; moved: number; skipped: number }>;
@@ -102,14 +123,24 @@ interface DesktopApi {
     set(choice: number | "auto"): Promise<void>;
   };
   editNative(cmd: "cut" | "copy" | "paste" | "selectAll"): Promise<void>;
-  saveFile(p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>;
+  saveFile(p: {
+    name: string;
+    data: Uint8Array | string;
+    filters?: { name: string; extensions: string[] }[];
+  }): Promise<string | null>;
   /** Files the MCP server cannot reach itself (macOS privacy), as base64; missing in older desktop apps. */
   readLocalFile?(path: string): Promise<string>;
   writeLocalFile?(p: { path: string; base64: string }): Promise<void>;
-  /** Slicers installed on this Mac and opening a 3MF in one (see lib/slicers); missing in older desktop apps. */
+  /**
+   * Slicers installed on this Mac and opening a 3MF in one (see lib/slicers); missing in older desktop apps.
+   */
   slicers?: {
     list(): Promise<{ id: "bambu" | "prusa"; name: string }[]>;
-    open(p: { slicer: "bambu" | "prusa"; name: string; data: Uint8Array }): Promise<{ slicer: string; file: string }>;
+    open(p: {
+      slicer: "bambu" | "prusa";
+      name: string;
+      data: Uint8Array;
+    }): Promise<{ slicer: string; file: string }>;
   };
   /** Missing in desktop apps from before sharing. */
   shareFile?(p: { name: string; data: Uint8Array | string; x?: number; y?: number }): Promise<void>;
@@ -134,7 +165,10 @@ interface DesktopApi {
      * Takes an assistant's tab over: its page saves and goes; its project, for a tab of the user's.
      * `why`: the user did (closed), the assistant itself (released, close_project) or it sat idle.
      */
-    handOver(session: string, why?: "closed" | "released" | "idle"): Promise<{ id: string; name: string } | null>;
+    handOver(
+      session: string,
+      why?: "closed" | "released" | "idle",
+    ): Promise<{ id: string; name: string } | null>;
     // In an assistant's tab:
     ready(): void;
     project(p: { id: string; name: string } | null): void;
@@ -143,7 +177,17 @@ interface DesktopApi {
     released(callId: number): void;
     respond(p: { callId: number; result?: unknown; error?: string }): void;
   };
-  on(channel: "menu" | "open-project" | "projects-changed" | "project-saved" | "error" | "assistant-stop" | "assistant-idle", fn: (arg: string) => void): () => void;
+  on(
+    channel:
+      | "menu"
+      | "open-project"
+      | "projects-changed"
+      | "project-saved"
+      | "error"
+      | "assistant-stop"
+      | "assistant-idle",
+    fn: (arg: string) => void,
+  ): () => void;
   on(channel: "assistant-tabs", fn: (arg: AssistantTab[]) => void): () => void;
   on(channel: "mcp-status", fn: (arg: "off" | "connecting" | "connected") => void): () => void;
   on(channel: "mcp-set-enabled", fn: (arg: boolean) => void): () => void;
@@ -161,12 +205,17 @@ export interface UiScale {
   steps: number[];
 }
 
-export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi }).meercadDesktop;
+export const desktop: DesktopApi | undefined = (window as unknown as { meercadDesktop?: DesktopApi })
+  .meercadDesktop;
 
-/** This page is an assistant session's tab (MCP, a view inside the app's window): the session and the assistant's name, else null. */
+/**
+ * This page is an assistant session's tab (MCP, a view inside the app's window): the session and the
+ * assistant's name, else null.
+ */
 export const assistantWindow: { session: string; client: string } | null = (() => {
   const q = new URLSearchParams(location.search);
   const session = q.get("assistant");
+
   return session ? { session, client: q.get("client") || "Assistant" } : null;
 })();
 
@@ -175,6 +224,7 @@ export interface FileStore {
   projects: Omit<DesktopApi["projects"], "reveal">;
   folders: DesktopApi["folders"];
 }
+
 /** The app's files: the Mac app's folder or the iPad app's Documents (main.tsx starts nothing elsewhere). */
 const files: FileStore = (desktop ?? nativeFiles)!;
 
@@ -194,15 +244,19 @@ export async function loadProject(id: string): Promise<Project | undefined> {
  * than the user's projects folder. Other builds ignore it.
  */
 let creatingTest = 0;
+
 export async function asTestProjects<T>(on: boolean, fn: () => Promise<T>): Promise<T> {
   if (!on) return fn();
+
   creatingTest++;
+
   try {
     return await fn();
   } finally {
     creatingTest--;
   }
 }
+
 /** A test project's id (see asTestProjects): in the WIP's own folder, not in the user's list. */
 export const isTestProject = (id: string) => id.startsWith(".tests/");
 
@@ -211,7 +265,11 @@ export async function createProject(name: string, doc: MeercadDocument, folder =
 }
 
 export async function saveProject(p: Project): Promise<void> {
-  return files.projects.save({ id: p.id, doc: p.doc, ...(p.thumbnail ? { thumbnail: p.thumbnail, look: LOOK_VERSION } : {}) });
+  return files.projects.save({
+    id: p.id,
+    doc: p.doc,
+    ...(p.thumbnail ? { thumbnail: p.thumbnail, look: LOOK_VERSION } : {}),
+  });
 }
 
 /** Stores a picture for a project that has none, leaving the project itself (and its date) alone. */
@@ -226,18 +284,22 @@ export async function saveThumbnail(id: string, thumbnail: string): Promise<void
 export async function takeSharedThumbnail(id: string): Promise<string | null> {
   const shared = await files.projects.sharedThumbnail?.(id).catch(() => null);
   if (!shared || shared.look !== LOOK_VERSION) return null;
+
   await files.projects.thumbnail({ id, thumbnail: shared.thumbnail, local: true });
+
   return shared.thumbnail;
 }
 
 /** Renames a project; in the desktop app this renames the file, so the id changes. */
 export async function renameProjectFile(id: string, name: string): Promise<ProjectMeta> {
   const r = await files.projects.rename({ id, name });
+
   return { ...r, updatedAt: Date.now() };
 }
 
 export async function deleteProject(id: string): Promise<void> {
   void dropOutput(id);
+
   return files.projects.delete(id);
 }
 

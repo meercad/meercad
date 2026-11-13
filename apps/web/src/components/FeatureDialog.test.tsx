@@ -7,7 +7,17 @@
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Feature, FeatureOp, SketchEntity } from "@meercad/schema";
-import { apply, cancelDialog, commitDialog, currentDoc, editFeature, newProject, startFeature, updateDraft, useApp } from "../store";
+import {
+  apply,
+  cancelDialog,
+  commitDialog,
+  currentDoc,
+  editFeature,
+  newProject,
+  startFeature,
+  updateDraft,
+  useApp,
+} from "../store";
 import { FEATURES, TOOLBAR, draftProblem } from "../lib/features";
 import { rebuilt, renderUi } from "../../test/ui";
 import { FeatureDialog } from "./FeatureDialog";
@@ -25,7 +35,18 @@ const rect = (w: number, h: number): SketchEntity[] => [
 
 beforeAll(async () => {
   await newProject(undefined, "Dialogs");
-  apply({ type: "add_features", features: [{ id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect(40, 20), constraints: [] } as Feature] });
+  apply({
+    type: "add_features",
+    features: [
+      {
+        id: "sk1",
+        op: "sketch",
+        plane: { ref: "origin.XY" },
+        entities: rect(40, 20),
+        constraints: [],
+      } as Feature,
+    ],
+  });
 });
 afterEach(() => {
   cancelDialog();
@@ -35,9 +56,12 @@ afterEach(() => {
 describe("the step dialog", () => {
   it("opens for every tool with its name and its fields", async () => {
     renderUi(<FeatureDialog />);
+
     const tools = TOOLBAR.filter((op) => op !== "sketch") as FeatureOp[];
+
     for (const op of tools) {
       await act(async () => startFeature(op));
+
       const dialog = document.querySelector(".dialog");
       expect(dialog, op).not.toBeNull();
       expect(dialog!.querySelector("h3")!.textContent, op).toBe(FEATURES[op].label);
@@ -58,7 +82,11 @@ describe("the step dialog", () => {
   it("adds an extrude of the sketch and builds it; editing its distance changes the volume", async () => {
     renderUi(<FeatureDialog />);
     await act(async () => startFeature("extrude"));
-    expect(useApp.getState().dialog!.feature).toMatchObject({ op: "extrude", profile: { sketch: "sk1" }, distance: 10 });
+    expect(useApp.getState().dialog!.feature).toMatchObject({
+      op: "extrude",
+      profile: { sketch: "sk1" },
+      distance: 10,
+    });
     await act(async () => void fireEvent.click(screen.getByTitle(/Accept|OK/)));
     expect(currentDoc().features.at(-1)).toMatchObject({ id: "ex1", op: "extrude" });
     await rebuilt();

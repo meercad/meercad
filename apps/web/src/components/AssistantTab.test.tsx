@@ -23,7 +23,11 @@ beforeAll(() => {
     tabs: async () => [],
     stop: () => undefined,
   };
-  useApp.setState({ assistantTabs: [{ session: "S1", client: "Claude", project: "p1", name: "Bracket", busy: false, tool: null }] });
+  useApp.setState({
+    assistantTabs: [
+      { session: "S1", client: "Claude", project: "p1", name: "Bracket", busy: false, tool: null },
+    ],
+  });
 });
 afterAll(() => {
   cleanup();
@@ -34,8 +38,12 @@ describe("an assistant's tab in the window", () => {
   it("lays the assistant's page over its room, and a picture while a menu covers it", async () => {
     renderUi(<AssistantPane session="S1" />);
     await settle();
-    expect(shown.at(-1)).toMatchObject({ session: "S1", rect: { width: expect.any(Number), height: expect.any(Number) } });
+    expect(shown.at(-1)).toMatchObject({
+      session: "S1",
+      rect: { width: expect.any(Number), height: expect.any(Number) },
+    });
     expect(screen.getByText("Claude is opening the project…")).toBeTruthy();
+
     // A menu of this page opens: the assistant's page makes way, its picture stands in.
     const menu = document.createElement("div");
     menu.className = "menu";
@@ -57,7 +65,12 @@ describe("an assistant's tab in the window", () => {
     renderUi(<AssistantBar />);
     expect(screen.getByText("Claude has this model open")).toBeTruthy();
     expect(screen.getByText(/yours again after 30 minutes without one/)).toBeTruthy();
-    await act(async () => useApp.setState({ aiLock: { client: "Claude" } as never, aiActivity: { client: "Claude", tool: "apply_ops" } as never }));
+    await act(async () =>
+      useApp.setState({
+        aiLock: { client: "Claude" } as never,
+        aiActivity: { client: "Claude", tool: "apply_ops" } as never,
+      }),
+    );
     expect(screen.getByText("Claude is working on this model")).toBeTruthy();
     expect(document.querySelector(".assistant-tool")!.textContent).toBeTruthy();
     await act(async () => void fireEvent.click(screen.getByText("Take over")));

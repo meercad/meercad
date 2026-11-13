@@ -18,7 +18,13 @@ import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "./ViewportView";
 
 const b64 = (u: Uint8Array) => btoa(Array.from(u, (c) => String.fromCharCode(c)).join(""));
-const stlOf = (corners: Float64Array) => writeStl([{ positions: Float32Array.from(corners), indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i) }]);
+const stlOf = (corners: Float64Array) =>
+  writeStl([
+    {
+      positions: Float32Array.from(corners),
+      indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i),
+    },
+  ]);
 const card = () => document.querySelector(".deviation-card")?.textContent ?? "";
 let tee = "";
 let plate = "";
@@ -36,10 +42,44 @@ const rect = (x: number, y: number, w: number, h: number): SketchEntity[] => [
 beforeAll(async () => {
   withScreen();
   await testCall("new_project", { name: "Cards" });
+
   // A T in XZ, 10 deep: stem 10 wide and 20 high, bar 30 wide and 5 thick on top.
-  const t = turnedAboutX(prism([[10, 0], [20, 0], [20, 20], [30, 20], [30, 25], [0, 25], [0, 20], [10, 20]], 10), 90);
-  tee = ((await testCall("import_file", { name: "tee.stl", base64: b64(stlOf(t)) })) as { added: string[] }).added[0]!;
-  plate = ((await testCall("import_file", { name: "plate.stl", base64: b64(stlOf(prism([[100, 0], [130, 0], [130, 30], [100, 30]], 2))) })) as { added: string[] }).added[0]!;
+  const t = turnedAboutX(
+    prism(
+      [
+        [10, 0],
+        [20, 0],
+        [20, 20],
+        [30, 20],
+        [30, 25],
+        [0, 25],
+        [0, 20],
+        [10, 20],
+      ],
+      10,
+    ),
+    90,
+  );
+  tee = ((await testCall("import_file", { name: "tee.stl", base64: b64(stlOf(t)) })) as { added: string[] })
+    .added[0]!;
+  plate = (
+    (await testCall("import_file", {
+      name: "plate.stl",
+      base64: b64(
+        stlOf(
+          prism(
+            [
+              [100, 0],
+              [130, 0],
+              [130, 30],
+              [100, 30],
+            ],
+            2,
+          ),
+        ),
+      ),
+    })) as { added: string[] }
+  ).added[0]!;
   renderUi(<ViewportView />);
   await rebuilt();
 });
@@ -52,6 +92,7 @@ describe("cards over a part", () => {
     expect(card()).toMatch(/Printability of/);
     expect(card()).toMatch(/Overhang: 2\.0 cm² \(\d+ % of the surface\) · support about 4\.0 cm³/);
     expect(card()).toMatch(/Turned another way up it prints without support/);
+
     // A limit of 0°: every face that leans out at all needs support; the numbers stay the T's here.
     const limit = document.querySelector<HTMLInputElement>(".deviation-card input[type=number]")!;
     await act(async () => void fireEvent.change(limit, { target: { value: "0" } }));
@@ -73,10 +114,26 @@ describe("cards over a part", () => {
   });
 
   it("shows how far a drawn plate is from the mesh of it", async () => {
-    apply({ type: "add_features", features: [
-      { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect(100, 0, 30, 30), constraints: [] },
-      { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 2.1, mode: "new_body" },
-    ] as Feature[] });
+    apply({
+      type: "add_features",
+      features: [
+        {
+          id: "sk1",
+          op: "sketch",
+          plane: { ref: "origin.XY" },
+          entities: rect(100, 0, 30, 30),
+          constraints: [],
+        },
+        {
+          id: "ex1",
+          op: "extrude",
+          profile: { sketch: "sk1" },
+          extent: "blind",
+          distance: 2.1,
+          mode: "new_body",
+        },
+      ] as Feature[],
+    });
     await rebuildNow();
     await act(async () => showDeviation("ex1", plate));
     await waitFor(() => expect(card()).toMatch(/within/), { timeout: 30_000 });

@@ -7,13 +7,20 @@ import { Logo } from "./TopBar";
 import { t } from "../lib/i18n";
 
 export function FirstRun() {
-  const [status, setStatus] = useState<{ dir: string; defaultDir: string; chosen: boolean; iCloudDir: string; iCloudAvailable: boolean } | null>(null);
+  const [status, setStatus] = useState<{
+    dir: string;
+    defaultDir: string;
+    chosen: boolean;
+    iCloudDir: string;
+    iCloudAvailable: boolean;
+  } | null>(null);
   useEffect(() => {
     if (desktop) void desktop.storage.status().then(setStatus);
   }, []);
   if (!status || status.chosen) return null;
 
   const done = (dir: string | null) => dir && setStatus({ ...status, dir, chosen: true });
+
   return (
     <div className="modal-backdrop first-run">
       <div className="ask first-run-card" role="dialog" aria-label={t("Choose a projects folder")}>
@@ -26,7 +33,10 @@ export function FirstRun() {
         </p>
         <code title={status.defaultDir}>{folderLabel(status.defaultDir)}</code>
         {status.iCloudAvailable ? (
-          <button className="btn primary first-run-cloud" onClick={async () => done(await changeProjectsFolder(status.iCloudDir, { askToMove: false }))}>
+          <button
+            className="btn primary first-run-cloud"
+            onClick={async () => done(await changeProjectsFolder(status.iCloudDir, { askToMove: false }))}
+          >
             <Cloud /> {t("Use iCloud Drive (same projects on iPhone and iPad)")}
           </button>
         ) : null}
@@ -34,7 +44,10 @@ export function FirstRun() {
           <button className="btn" onClick={async () => done(await changeProjectsFolder())}>
             <FolderOpen /> {t("Choose another folder…")}
           </button>
-          <button className={`btn ${status.iCloudAvailable ? "" : "primary"}`} onClick={async () => done(await changeProjectsFolder(status.defaultDir, { askToMove: false }))}>
+          <button
+            className={`btn ${status.iCloudAvailable ? "" : "primary"}`}
+            onClick={async () => done(await changeProjectsFolder(status.defaultDir, { askToMove: false }))}
+          >
             {t("Use this folder")}
           </button>
         </div>

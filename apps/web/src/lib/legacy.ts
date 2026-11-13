@@ -6,6 +6,7 @@ try {
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key?.startsWith("leocad.")) continue;
+
     const next = `meercad.${key.slice(7)}`;
     if (localStorage.getItem(next) === null) localStorage.setItem(next, localStorage.getItem(key)!);
   }

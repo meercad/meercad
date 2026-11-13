@@ -4,7 +4,16 @@
  */
 import { Lock, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { closeTab, handOverAssistantTab, moveTab, newProject, openProject, renameProject, showAssistantTab, useApp } from "../store";
+import {
+  closeTab,
+  handOverAssistantTab,
+  moveTab,
+  newProject,
+  openProject,
+  renameProject,
+  showAssistantTab,
+  useApp,
+} from "../store";
 import { AiOrb, toolLabel } from "./AiOrb";
 import { t } from "../lib/i18n";
 
@@ -29,6 +38,7 @@ export function TabStrip() {
     <div className="tabs" role="tablist" aria-label={t("Open projects")} ref={strip}>
       {tabs.map((tab) => {
         const active = tab.id === activeId;
+
         return (
           <div
             key={tab.id}
@@ -36,7 +46,9 @@ export function TabStrip() {
             aria-selected={active}
             tabIndex={0}
             className={`tab ${active ? "active" : ""} ${dropBefore === tab.id ? "drop-before" : ""}`}
-            title={((name) => (active ? t("{name} — double-click to rename", { name }) : name))(`${tab.folder ? `${tab.folder.split("/").join(" › ")} › ` : ""}${tab.name}`)}
+            title={((name) => (active ? t("{name} — double-click to rename", { name }) : name))(
+              `${tab.folder ? `${tab.folder.split("/").join(" › ")} › ` : ""}${tab.name}`,
+            )}
             draggable={!editing}
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_TYPE, tab.id);
@@ -44,6 +56,7 @@ export function TabStrip() {
             }}
             onDragOver={(e) => {
               if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+
               e.preventDefault();
               setDropBefore(tab.id);
             }}
@@ -51,6 +64,7 @@ export function TabStrip() {
             onDrop={(e) => {
               e.preventDefault();
               setDropBefore(null);
+
               const id = e.dataTransfer.getData(DRAG_TYPE);
               if (id && id !== tab.id) moveTab(id, tab.id);
             }}
@@ -74,6 +88,7 @@ export function TabStrip() {
                 onKeyDown={(e) => {
                   e.stopPropagation();
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+
                   if (e.key === "Escape") {
                     (e.target as HTMLInputElement).value = tab.name;
                     (e.target as HTMLInputElement).blur();
@@ -91,7 +106,9 @@ export function TabStrip() {
                   style={{ "--p": `${Math.round((work.progress ?? 0.25) * 360)}deg` } as CSSProperties}
                 />
               ) : null)(tasks.find((x) => x.project === tab.id))}
-            {active && saveState !== "saved" ? <i className="tab-dirty" title={saveState === "saving" ? t("Saving…") : t("Unsaved changes")} /> : null}
+            {active && saveState !== "saved" ? (
+              <i className="tab-dirty" title={saveState === "saving" ? t("Saving…") : t("Unsaved changes")} />
+            ) : null}
             <button
               className="tab-close"
               title={t("Close tab (⌘W)")}
@@ -108,6 +125,7 @@ export function TabStrip() {
       {assistantTabs.map((a) => {
         const active = a.session === openAssistant;
         const doing = a.busy ? toolLabel(a.tool) : null;
+
         return (
           <div
             key={a.session}
@@ -115,7 +133,13 @@ export function TabStrip() {
             aria-selected={active}
             tabIndex={0}
             className={`tab ai-tab ${active ? "active" : ""} ${a.busy ? "busy" : ""}`}
-            title={[a.name, a.busy ? (doing ?? t("Being worked on")) : null, t("Locked while an assistant works on it")].filter(Boolean).join("\n")}
+            title={[
+              a.name,
+              a.busy ? (doing ?? t("Being worked on")) : null,
+              t("Locked while an assistant works on it"),
+            ]
+              .filter(Boolean)
+              .join("\n")}
             onClick={() => showAssistantTab(a.session)}
             onKeyDown={(e) => e.key === "Enter" && showAssistantTab(a.session)}
           >

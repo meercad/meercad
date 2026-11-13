@@ -25,6 +25,7 @@ const META = "meta";
 /** Touch devices (iPad, iPhone) get a smaller share of storage. */
 const coarsePointer = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 let BUDGET = (coarsePointer ? 256 : 768) * 1024 * 1024;
+
 /** For tests: another budget in bytes. */
 export function setBudget(bytes: number): void {
   BUDGET = bytes;
@@ -53,39 +54,57 @@ interface Meta {
 export function hashText(s: string): string {
   let h1 = 0xdeadbeef ^ s.length;
   let h2 = 0x41c6ce57 ^ s.length;
+
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
     h1 = Math.imul(h1 ^ c, 2654435761);
     h2 = Math.imul(h2 ^ c, 1597334677);
   }
+
   h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
 /** Identifies a build result: the document as a whole, the mesh settings and the kernel build. */
 export function outputKey(doc: MeercadDocument, opts: MeshOptions): string {
   const text = JSON.stringify(doc);
+
   return `${FORMAT}|${opts.build}|${opts.coarse}|${opts.textures ? 1 : 0}|${text.length}|${hashText(text)}`;
 }
 
 /** Bytes an output takes (its typed arrays; the report is small next to them). */
 export function outputBytes(o: RebuildOutput): number {
   let n = 0;
-  for (const m of o.meshes) n += m.positions.byteLength + m.normals.byteLength + m.indices.byteLength + m.faceRanges.byteLength + m.edgeLines.byteLength + m.edgeRanges.byteLength;
+
+  for (const m of o.meshes) {
+    n +=
+      m.positions.byteLength +
+      m.normals.byteLength +
+      m.indices.byteLength +
+      m.faceRanges.byteLength +
+      m.edgeLines.byteLength +
+      m.edgeRanges.byteLength;
+  }
+
   for (const r of o.references) n += r.positions.byteLength + r.indices.byteLength;
+
   return n + 4096;
 }
 
 let opened: Promise<IDBDatabase | null> | null = null;
+
 function db(): Promise<IDBDatabase | null> {
   opened ??= new Promise((resolve) => {
     try {
       const req = indexedDB.open(DB_NAME, 1);
+
       req.onupgradeneeded = () => {
         req.result.createObjectStore(OUTPUTS);
         req.result.createObjectStore(META);
       };
+
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
       req.onblocked = () => resolve(null);
@@ -94,6 +113,7 @@ function db(): Promise<IDBDatabase | null> {
       resolve(null);
     }
   });
+
   return opened;
 }
 
@@ -116,30 +136,40 @@ const written = new Map<string, string>();
 export async function readOutput(project: string, key: string): Promise<RebuildOutput | null> {
   const d = await db();
   if (!d) return null;
+
   try {
     const tx = d.transaction([OUTPUTS, META], "readwrite");
     const stored = (await result(tx.objectStore(OUTPUTS).get(project))) as Stored | undefined;
+
     if (!stored || stored.key !== key) {
       // Whatever this window wrote is gone or outdated (storage cleared, another window): write again.
       written.delete(project);
+
       return null;
     }
+
     const meta = (await result(tx.objectStore(META).get(project))) as Meta | undefined;
-    tx.objectStore(META).put({ bytes: meta?.bytes ?? outputBytes(stored.output), at: Date.now() } satisfies Meta, project);
+    tx.objectStore(META).put(
+      { bytes: meta?.bytes ?? outputBytes(stored.output), at: Date.now() } satisfies Meta,
+      project,
+    );
+
     return stored.output;
   } catch {
     return null;
   }
 }
 
-
 /** Keeps `output` (built from `key`) as the project's result, making room by dropping the oldest. */
 export async function writeOutput(project: string, key: string, output: RebuildOutput): Promise<void> {
   if (written.get(project) === key) return;
+
   const bytes = outputBytes(output);
   if (bytes > BUDGET / 2) return;
+
   const d = await db();
   if (!d) return;
+
   try {
     const metaTx = d.transaction(META, "readonly");
     const all = new Map<string, Meta>();
@@ -147,18 +177,24 @@ export async function writeOutput(project: string, key: string, output: RebuildO
     const metas = (await result(metaTx.objectStore(META).getAll())) as Meta[];
     keys.forEach((k, i) => all.set(k, metas[i]!));
     all.delete(project);
+
     let total = bytes + [...all.values()].reduce((n, m) => n + m.bytes, 0);
     const drop: string[] = [];
+
     for (const [k, m] of [...all].sort((a, b) => a[1].at - b[1].at)) {
       if (total <= BUDGET) break;
+
       drop.push(k);
       total -= m.bytes;
     }
+
     const tx = d.transaction([OUTPUTS, META], "readwrite");
+
     for (const k of drop) {
       tx.objectStore(OUTPUTS).delete(k);
       tx.objectStore(META).delete(k);
     }
+
     tx.objectStore(OUTPUTS).put({ key, output } satisfies Stored, project);
     tx.objectStore(META).put({ bytes, at: Date.now() } satisfies Meta, project);
     await done(tx);
@@ -171,8 +207,10 @@ export async function writeOutput(project: string, key: string, output: RebuildO
 /** Forgets a project's result (it was deleted). */
 export async function dropOutput(project: string): Promise<void> {
   written.delete(project);
+
   const d = await db();
   if (!d) return;
+
   try {
     const tx = d.transaction([OUTPUTS, META], "readwrite");
     tx.objectStore(OUTPUTS).delete(project);

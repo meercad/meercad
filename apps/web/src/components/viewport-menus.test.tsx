@@ -27,12 +27,20 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const b64 = (u: Uint8Array) => btoa(Array.from(u, (c) => String.fromCharCode(c)).join(""));
-const stlOf = (corners: Float64Array) => writeStl([{ positions: Float32Array.from(corners), indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i) }]);
+const stlOf = (corners: Float64Array) =>
+  writeStl([
+    {
+      positions: Float32Array.from(corners),
+      indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i),
+    },
+  ]);
 let vp: Viewport;
 let mesh = "";
 const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+
 async function clickAt(w: [number, number, number], button = 0) {
   (vp as unknown as { scene: { updateMatrixWorld(f: boolean): void } }).scene.updateMatrixWorld(true);
+
   const [x, y] = vp.worldToScreen(w)!;
   const ev = { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button, isPrimary: true };
   await act(async () => {
@@ -46,13 +54,52 @@ async function clickAt(w: [number, number, number], button = 0) {
 beforeAll(async () => {
   withScreen();
   await testCall("new_project", { name: "Menus" });
-  apply({ type: "add_features", features: [
-    { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
-    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-    { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("q", 60, 0, 10, 10), constraints: [] },
-    { id: "pl1", op: "plane", base: { ref: "origin.XY" }, offset: -20 },
-  ] as Feature[] });
-  mesh = ((await testCall("import_file", { name: "plate.stl", base64: b64(stlOf(prism([[0, 40], [30, 40], [30, 60], [0, 60]], 2))) })) as { added: string[] }).added[0]!;
+  apply({
+    type: "add_features",
+    features: [
+      {
+        id: "sk1",
+        op: "sketch",
+        plane: { ref: "origin.XY" },
+        entities: rect("b", 0, 0, 40, 20),
+        constraints: [],
+      },
+      {
+        id: "ex1",
+        op: "extrude",
+        profile: { sketch: "sk1" },
+        extent: "blind",
+        distance: 10,
+        mode: "new_body",
+      },
+      {
+        id: "sk2",
+        op: "sketch",
+        plane: { ref: "origin.XY" },
+        entities: rect("q", 60, 0, 10, 10),
+        constraints: [],
+      },
+      { id: "pl1", op: "plane", base: { ref: "origin.XY" }, offset: -20 },
+    ] as Feature[],
+  });
+  mesh = (
+    (await testCall("import_file", {
+      name: "plate.stl",
+      base64: b64(
+        stlOf(
+          prism(
+            [
+              [0, 40],
+              [30, 40],
+              [30, 60],
+              [0, 60],
+            ],
+            2,
+          ),
+        ),
+      ),
+    })) as { added: string[] }
+  ).added[0]!;
   renderUi(<ViewportView />);
   await rebuilt();
   vp = getViewport()!;
@@ -84,7 +131,9 @@ describe("more right-click menus", () => {
   it("offers a mesh part's actions: hide it and lay it down", async () => {
     await clickAt([15, 50, 2], 2);
     // A mesh part is selected whole.
-    expect(new Set(useApp.getState().selection.map((p) => (p as { bodyId: string }).bodyId))).toEqual(new Set([mesh]));
+    expect(new Set(useApp.getState().selection.map((p) => (p as { bodyId: string }).bodyId))).toEqual(
+      new Set([mesh]),
+    );
     await pickMenu(/^Hide/);
     expect(useApp.getState().hidden.has(mesh)).toBe(true);
     useApp.setState({ hidden: new Set() });
@@ -98,18 +147,24 @@ describe("more right-click menus", () => {
   it("sketches on a flat face clicked while a new sketch waits for its plane", async () => {
     await act(async () => useApp.setState({ pickingSketchPlane: true }));
     await clickAt([20, 10, 10]);
-    const sk = currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<Feature, { op: "sketch" }>;
+
+    const sk = currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<
+      Feature,
+      { op: "sketch" }
+    >;
     expect(sk.plane).toMatchObject({ face: expect.anything() });
     await act(async () => closeSketch());
   });
 
   it("lays a part on the face clicked while waiting for one", async () => {
     await act(async () => usePrintCheck.setState({ picking: true }));
-    // Seen from above, the block's top is what is clicked: it goes down, the block stays 10 high on the plate.
+    // Seen from above, the block's top is what is clicked: it goes down, the block stays 10 high on the
+    // plate.
     // (Away from the last click, so it is no double-click.)
     await settle(500);
     await clickAt([28, 13, 10]);
     expect(usePrintCheck.getState().picking).toBe(false);
+
     const box = (await rebuildNow()).report.bodies.find((b) => b.id === "ex1")!.bbox;
     expect(box.min[2]).toBeCloseTo(0, 6);
     expect(box.max[2]! - box.min[2]!).toBeCloseTo(10, 6);

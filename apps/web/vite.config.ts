@@ -16,6 +16,7 @@ function isolationHeaders(): Plugin {
     for (const [k, v] of Object.entries(isolation)) res.setHeader(k, v);
     next();
   };
+
   return {
     name: "meercad-isolation-headers",
     configureServer: (server) => void server.middlewares.use(set),

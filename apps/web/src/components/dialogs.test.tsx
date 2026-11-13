@@ -33,25 +33,44 @@ const design: Feature[] = [
 const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
 /** Uses every control inside `root` once, skipping those that close it or leave the app. */
-async function useEvery(root: () => Element | null, skip = /Close|Cancel|Quit|Website|Licen|Privacy|Buy|Restore/) {
+async function useEvery(
+  root: () => Element | null,
+  skip = /Close|Cancel|Quit|Website|Licen|Privacy|Buy|Restore/,
+) {
   const seen = new Set<Element>();
+
   for (let round = 0; round < 3; round++) {
     const el = root();
     if (!el) return;
-    const controls = [...el.querySelectorAll<HTMLElement>("input, select, button")].filter((c) => !seen.has(c));
+
+    const controls = [...el.querySelectorAll<HTMLElement>("input, select, button")].filter(
+      (c) => !seen.has(c),
+    );
     if (!controls.length) return;
+
     for (const c of controls) {
       seen.add(c);
       if (!root()?.contains(c)) continue;
+
       const label = `${c.getAttribute("title") ?? ""} ${c.getAttribute("aria-label") ?? ""} ${c.textContent ?? ""}`;
       if (skip.test(label)) continue;
+
       if (c instanceof HTMLSelectElement) {
         const o = [...c.options].at(-1);
         if (o) await act(async () => void fireEvent.change(c, { target: { value: o.value } }));
       } else if (c instanceof HTMLInputElement) {
-        if (c.type === "checkbox" || c.type === "radio") await act(async () => void fireEvent.click(c));
-        else if (c.type !== "file" && c.type !== "color") await act(async () => void fireEvent.change(c, { target: { value: c.type === "range" ? c.max || "1" : "2" } }));
-      } else await act(async () => void fireEvent.click(c));
+        if (c.type === "checkbox" || c.type === "radio") {
+          await act(async () => void fireEvent.click(c));
+        } else if (c.type !== "file" && c.type !== "color") {
+          await act(
+            async () =>
+              void fireEvent.change(c, { target: { value: c.type === "range" ? c.max || "1" : "2" } }),
+          );
+        }
+      } else {
+        await act(async () => void fireEvent.click(c));
+      }
+
       await settle(5);
     }
   }
@@ -70,20 +89,30 @@ describe("the app's dialogs", () => {
     renderUi(<VersionsDialog />);
     await act(async () => void window.dispatchEvent(new CustomEvent("meercad:versions")));
     await settle();
+
     const save = screen.getAllByRole("button").find((b) => /Save/.test(b.textContent ?? ""))!;
     await act(async () => void fireEvent.click(save));
     await settle();
     expect(currentDoc().versions?.length).toBe(1);
     await act(async () => void apply({ type: "set_param", name: "h", expr: "30 mm" }));
-    const restore = screen.getAllByRole("button").find((b) => /Restore/.test(b.textContent ?? b.getAttribute("title") ?? ""));
+
+    const restore = screen
+      .getAllByRole("button")
+      .find((b) => /Restore/.test(b.textContent ?? b.getAttribute("title") ?? ""));
+
     if (restore) {
       await act(async () => void fireEvent.click(restore));
       await settle();
-      const ok = document.querySelector('[role="alertdialog"] .btn.primary, [role="alertdialog"] .btn.danger');
+
+      const ok = document.querySelector(
+        '[role="alertdialog"] .btn.primary, [role="alertdialog"] .btn.danger',
+      );
       if (ok) await act(async () => void fireEvent.click(ok));
+
       await settle();
       expect(currentDoc().params["h"]).toBe("10 mm");
     }
+
     await useEvery(() => document.querySelector(".modal, .dialog, .versions"));
     cleanup();
   });
@@ -92,6 +121,7 @@ describe("the app's dialogs", () => {
     renderUi(<MaterialPicker />);
     await act(async () => openMaterialPicker(["ex1"]));
     await settle();
+
     const petg = screen.getAllByRole("button").find((b) => /PETG/.test(b.textContent ?? ""))!;
     await act(async () => void fireEvent.click(petg));
     await settle();
@@ -114,6 +144,12 @@ describe("the app's dialogs", () => {
       await useEvery(() => document.querySelector(".modal, .settings, .dialog, .sheet, [role=dialog]"));
       cleanup();
     }
-    expect(useApp.getState().toasts.filter((t) => t.kind === "error").map((t) => t.text)).toEqual([]);
+
+    expect(
+      useApp
+        .getState()
+        .toasts.filter((t) => t.kind === "error")
+        .map((t) => t.text),
+    ).toEqual([]);
   });
 });

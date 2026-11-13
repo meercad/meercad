@@ -24,10 +24,24 @@ export interface Pack {
 
 /** Names are English; Settings translates them with t(). */
 export const PACKS: Pack[] = [
-  { id: "mechanics", name: "Mechanics and robotics", contents: "Joints and moving parts, motions with collision check, gears, springs, interference check, robot export (MJCF/URDF)" },
-  { id: "scan", name: "Scan and mesh", contents: "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up, areas from drone photos" },
+  {
+    id: "mechanics",
+    name: "Mechanics and robotics",
+    contents:
+      "Joints and moving parts, motions with collision check, gears, springs, interference check, robot export (MJCF/URDF)",
+  },
+  {
+    id: "scan",
+    name: "Scan and mesh",
+    contents:
+      "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up, areas from drone photos",
+  },
   { id: "drawings", name: "Technical drawings", contents: "Drawings as PDF, SVG and DXF" },
-  { id: "versions", name: "Versions and variants", contents: "Named versions in the file, versions as backup files, variants, exporting all variants" },
+  {
+    id: "versions",
+    name: "Versions and variants",
+    contents: "Named versions in the file, versions as backup files, variants, exporting all variants",
+  },
 ];
 
 const STORAGE_KEY = "meercad.packs";
@@ -42,6 +56,7 @@ interface PremiumState {
 function loadOff(): PremiumState["off"] {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, unknown>;
+
     return Object.fromEntries(PACKS.filter((p) => raw[p.id] === false).map((p) => [p.id, true]));
   } catch {
     return {};
@@ -55,6 +70,7 @@ export const usePremium = create<PremiumState>(() => ({ tester: false, off: load
 /** Whether a pack's functions are shown. */
 export function hasPack(id: PackId): boolean {
   const s = usePremium.getState();
+
   return s.tester && !s.off[id];
 }
 
@@ -71,6 +87,7 @@ export function missingPacks(doc: MeercadDocument): PackUse[] {
 /** The pack needed to change this feature, when it is not on here; null when it can be changed. */
 export function lockedBy(f: Parameters<typeof featurePack>[0]): Pack | null {
   const id = featurePack(f);
+
   return id && !hasPack(id) ? PACKS.find((p) => p.id === id)! : null;
 }
 
@@ -78,9 +95,14 @@ export function setPack(id: PackId, on: boolean): void {
   const off = { ...usePremium.getState().off };
   if (on) delete off[id];
   else off[id] = true;
+
   usePremium.setState({ off });
+
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(PACKS.map((p) => [p.id, !off[p.id]]))));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(Object.fromEntries(PACKS.map((p) => [p.id, !off[p.id]]))),
+    );
   } catch {
     // the switches just won't persist
   }
@@ -96,6 +118,7 @@ async function checkTester(): Promise<boolean> {
   } catch {
     // An old shell without the check is a test build.
   }
+
   return true;
 }
 

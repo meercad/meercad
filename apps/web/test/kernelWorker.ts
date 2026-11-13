@@ -21,9 +21,12 @@ export default class TestKernelWorker {
     startKernelWorker({
       postMessage: (msg) => {
         if (this.terminated) return;
+
         const copy = structuredClone(msg);
         setTimeout(() => {
-          if (!this.terminated) for (const l of this.listeners) l({ data: copy } as MessageEvent<WorkerResponse>);
+          if (!this.terminated) {
+            for (const l of this.listeners) l({ data: copy } as MessageEvent<WorkerResponse>);
+          }
         });
       },
       addEventListener: (_type, fn) => (this.inbox = fn),
@@ -40,6 +43,7 @@ export default class TestKernelWorker {
 
   postMessage(msg: WorkerRequest): void {
     if (this.terminated) return;
+
     const copy = structuredClone(msg);
     setTimeout(() => this.inbox?.({ data: copy } as MessageEvent<WorkerRequest>));
   }

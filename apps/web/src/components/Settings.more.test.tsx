@@ -12,6 +12,7 @@ import { renderUi } from "../../test/ui";
 import { Settings } from "./Settings";
 
 const fitInput = () => document.querySelector<HTMLInputElement>("input.fit-input")!;
+
 async function typeFit(v: string) {
   await act(async () => void fireEvent.change(fitInput(), { target: { value: v } }));
   await act(async () => void fireEvent.blur(fitInput()));
@@ -36,8 +37,11 @@ describe("printer settings", () => {
   });
 
   it("takes a custom build volume between 10 mm and 5 m, and switches the warning off", async () => {
-    const select = [...document.querySelectorAll<HTMLSelectElement>("select")].find((s) => [...s.options].some((o) => o.value === "custom"))!;
+    const select = [...document.querySelectorAll<HTMLSelectElement>("select")].find((s) =>
+      [...s.options].some((o) => o.value === "custom"),
+    )!;
     await act(async () => void fireEvent.change(select, { target: { value: "custom" } }));
+
     const [x, , z] = [...document.querySelectorAll<HTMLInputElement>(".bed-size input")];
     await act(async () => void fireEvent.change(x!, { target: { value: "300" } }));
     await act(async () => void fireEvent.blur(x!));
@@ -45,7 +49,11 @@ describe("printer settings", () => {
     await act(async () => void fireEvent.change(z!, { target: { value: "5" } }));
     await act(async () => void fireEvent.blur(z!));
     expect(usePrefs.getState().printBed![2]).not.toBe(5);
-    const warn = screen.getByText(/Warn when a part does not fit the print bed/).closest("label")!.querySelector("input")!;
+
+    const warn = screen
+      .getByText(/Warn when a part does not fit the print bed/)
+      .closest("label")!
+      .querySelector("input")!;
     await act(async () => void fireEvent.click(warn));
     expect(usePrefs.getState().printBed).toBeNull();
     await act(async () => void fireEvent.click(warn));

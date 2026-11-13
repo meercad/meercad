@@ -13,10 +13,26 @@ import { testCall } from "./mcpBridge";
 import { useThickness } from "./thickness";
 import { usePrintCheck } from "./printability";
 
-const call = <T = Record<string, unknown>>(method: string, params: Record<string, unknown> = {}) => testCall(method, params) as Promise<T>;
+const call = <T = Record<string, unknown>>(method: string, params: Record<string, unknown> = {}) =>
+  testCall(method, params) as Promise<T>;
 const b64 = (u: Uint8Array) => btoa(Array.from(u, (c) => String.fromCharCode(c)).join(""));
-const stlOf = (corners: Float64Array) => writeStl([{ positions: Float32Array.from(corners), indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i) }]);
-type Print = { overhangMm2: number; supportMm3: number; onBedMm2: number; heightMm: number; best: { supportMm3: number } | string; down?: number[]; turned?: unknown[] };
+const stlOf = (corners: Float64Array) =>
+  writeStl([
+    {
+      positions: Float32Array.from(corners),
+      indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i),
+    },
+  ]);
+type Print = {
+  overhangMm2: number;
+  supportMm3: number;
+  onBedMm2: number;
+  heightMm: number;
+  best: { supportMm3: number } | string;
+  down?: number[];
+  turned?: unknown[];
+};
+
 let tee = "";
 let plate = "";
 const rect = (p: string, x: number, y: number, w: number, h: number): SketchEntity[] => [
@@ -32,9 +48,43 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
 
 beforeAll(async () => {
   await call("new_project", { name: "Printing" });
-  const t = turnedAboutX(prism([[10, 0], [20, 0], [20, 20], [30, 20], [30, 25], [0, 25], [0, 20], [10, 20]], 10), 90);
-  tee = (await call<{ added: string[] }>("import_file", { name: "tee.stl", base64: b64(stlOf(t)) })).added[0]!;
-  plate = (await call<{ added: string[] }>("import_file", { name: "plate.stl", base64: b64(stlOf(prism([[100, 0], [130, 0], [130, 30], [100, 30]], 2))) })).added[0]!;
+
+  const t = turnedAboutX(
+    prism(
+      [
+        [10, 0],
+        [20, 0],
+        [20, 20],
+        [30, 20],
+        [30, 25],
+        [0, 25],
+        [0, 20],
+        [10, 20],
+      ],
+      10,
+    ),
+    90,
+  );
+  tee = (await call<{ added: string[] }>("import_file", { name: "tee.stl", base64: b64(stlOf(t)) }))
+    .added[0]!;
+  plate = (
+    await call<{ added: string[] }>("import_file", {
+      name: "plate.stl",
+      base64: b64(
+        stlOf(
+          prism(
+            [
+              [100, 0],
+              [130, 0],
+              [130, 30],
+              [100, 30],
+            ],
+            2,
+          ),
+        ),
+      ),
+    })
+  ).added[0]!;
 });
 
 describe("checking a part for printing", () => {
@@ -53,8 +103,12 @@ describe("checking a part for printing", () => {
     expect(byDir.overhangMm2).toBeCloseTo(0, 0);
     expect(byDir.onBedMm2).toBeCloseTo(300, 0);
     expect(byDir.best).toBe("this way up");
-    await expect(call("print_check", { part: tee, down: [0, 0, 0] })).rejects.toThrow(/down must not be \[0, 0, 0\]/);
-    await expect(call("print_check", { part: tee, down: [0, 0, 1], turn: "best" })).rejects.toThrow(/not both/);
+    await expect(call("print_check", { part: tee, down: [0, 0, 0] })).rejects.toThrow(
+      /down must not be \[0, 0, 0\]/,
+    );
+    await expect(call("print_check", { part: tee, down: [0, 0, 1], turn: "best" })).rejects.toThrow(
+      /not both/,
+    );
     expect(usePrintCheck.getState().body).toBeNull();
   });
 
@@ -62,12 +116,18 @@ describe("checking a part for printing", () => {
     const r = await call<Print>("print_check", { part: tee, turn: "best" });
     expect(r.overhangMm2).toBeCloseTo(0, 0);
     expect(r.heightMm).toBeCloseTo(25, 2);
+
     const again = await call<Print>("print_check", { part: tee, turn: "best" });
     expect(JSON.stringify(again.turned)).toMatch(/already/);
   });
 
   it("measures the plate's walls quickly, without leaving the map shown", async () => {
-    const r = await call<{ thinnestMm: number; shareThinnerThanMinWall: number; shown: boolean; quality?: string }>("wall_thickness", { part: plate, minWall: 1, quality: "fast", show: false });
+    const r = await call<{
+      thinnestMm: number;
+      shareThinnerThanMinWall: number;
+      shown: boolean;
+      quality?: string;
+    }>("wall_thickness", { part: plate, minWall: 1, quality: "fast", show: false });
     expect(r.thinnestMm).toBeCloseTo(2, 2);
     expect(r.shareThinnerThanMinWall).toBe(0);
     expect(r).toMatchObject({ shown: false, quality: "fast" });
@@ -78,15 +138,66 @@ describe("checking a part for printing", () => {
 
 describe("parts that overlap", () => {
   it("finds two blocks overlapping by 1000 mm³ and two that just touch", async () => {
-    await call("apply_ops", { ops: [{ type: "add_features", features: [
-      { id: "sa", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("a", 200, 0, 20, 10), constraints: [] },
-      { id: "ea", op: "extrude", profile: { sketch: "sa" }, extent: "blind", distance: 10, mode: "new_body" },
-      { id: "sb", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 210, 0, 20, 10), constraints: [] },
-      { id: "eb", op: "extrude", profile: { sketch: "sb" }, extent: "blind", distance: 10, mode: "new_body", targets: [] },
-      { id: "sc", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 230, 0, 10, 10), constraints: [] },
-      { id: "ec", op: "extrude", profile: { sketch: "sc" }, extent: "blind", distance: 10, mode: "new_body" },
-    ] as Feature[] }] });
-    const r = await call<{ overlaps: { a: string; b: string; overlapMm3: number }[]; touching: string[][] }>("check_interference", { parts: ["ea", "eb", "ec"] });
+    await call("apply_ops", {
+      ops: [
+        {
+          type: "add_features",
+          features: [
+            {
+              id: "sa",
+              op: "sketch",
+              plane: { ref: "origin.XY" },
+              entities: rect("a", 200, 0, 20, 10),
+              constraints: [],
+            },
+            {
+              id: "ea",
+              op: "extrude",
+              profile: { sketch: "sa" },
+              extent: "blind",
+              distance: 10,
+              mode: "new_body",
+            },
+            {
+              id: "sb",
+              op: "sketch",
+              plane: { ref: "origin.XY" },
+              entities: rect("b", 210, 0, 20, 10),
+              constraints: [],
+            },
+            {
+              id: "eb",
+              op: "extrude",
+              profile: { sketch: "sb" },
+              extent: "blind",
+              distance: 10,
+              mode: "new_body",
+              targets: [],
+            },
+            {
+              id: "sc",
+              op: "sketch",
+              plane: { ref: "origin.XY" },
+              entities: rect("c", 230, 0, 10, 10),
+              constraints: [],
+            },
+            {
+              id: "ec",
+              op: "extrude",
+              profile: { sketch: "sc" },
+              extent: "blind",
+              distance: 10,
+              mode: "new_body",
+            },
+          ] as Feature[],
+        },
+      ],
+    });
+
+    const r = await call<{ overlaps: { a: string; b: string; overlapMm3: number }[]; touching: string[][] }>(
+      "check_interference",
+      { parts: ["ea", "eb", "ec"] },
+    );
     const ab = r.overlaps.find((o) => [o.a, o.b].sort().join() === "ea,eb")!;
     expect(ab.overlapMm3).toBeCloseTo(1000, 3);
     expect(r.touching.map((p) => [...p].sort().join())).toContain("eb,ec");

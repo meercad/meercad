@@ -1,5 +1,21 @@
 /** Settings (⌘,): control scheme (mouse and keys), and where projects are stored. */
-import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Gamepad2, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
+import {
+  Cloud,
+  FolderOpen,
+  Grid3x3,
+  HardDrive,
+  Keyboard,
+  Gem,
+  Gamepad2,
+  Languages,
+  LayoutGrid,
+  Mouse,
+  Printer,
+  Ruler,
+  TriangleAlert,
+  Type,
+  X,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { CONTROL_SCHEMES, KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
@@ -23,15 +39,19 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
 
   useEffect(() => {
     const toggle = () => setOpen((o) => !o);
+
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
         toggle();
       }
+
       if (e.key === "Escape") setOpen(false);
     };
+
     window.addEventListener("meercad:settings", toggle);
     window.addEventListener("keydown", onKey);
+
     return () => {
       window.removeEventListener("meercad:settings", toggle);
       window.removeEventListener("keydown", onKey);
@@ -39,15 +59,19 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   }, []);
   useEffect(() => {
     if (!open || !desktop) return;
+
     void desktop.uiScale.get().then(setUiScale);
+
     return desktop.on("ui-scale", setUiScale);
   }, [open]);
   useEffect(() => {
-    if (open && desktop)
+    if (open && desktop) {
       void desktop.storage.status().then((s) => {
         setDir(s.dir);
         setCloud({ dir: s.iCloudDir, available: s.iCloudAvailable });
       });
+    }
+
     if (open && nativeApp) {
       void storageKind().then(setNativeKind);
       void iCloudFolder().then((d) => setCloud({ dir: d, available: !!d }));
@@ -55,10 +79,17 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   }, [open]);
 
   if (!open) return null;
+
   const keyScheme = KEY_SCHEMES.find((s) => s.id === prefs.keys)!;
+
   return (
     <div className="modal-backdrop" onPointerDown={() => setOpen(false)}>
-      <div className="modal settings" role="dialog" aria-label={t("Settings")} onPointerDown={(e) => e.stopPropagation()}>
+      <div
+        className="modal settings"
+        role="dialog"
+        aria-label={t("Settings")}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <header className="settings-head">
           <h2>{t("Settings")}</h2>
           <button className="icon-btn" onClick={() => setOpen(false)} title={t("Close (Esc)")}>
@@ -78,12 +109,19 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
                 ["de", "Deutsch"],
               ] as [LangChoice, string][]
             ).map(([id, label]) => (
-              <button key={id} className={langChoice() === id ? "on" : ""} onClick={() => langChoice() !== id && setLang(id)} aria-pressed={langChoice() === id}>
+              <button
+                key={id}
+                className={langChoice() === id ? "on" : ""}
+                onClick={() => langChoice() !== id && setLang(id)}
+                aria-pressed={langChoice() === id}
+              >
                 {label}
               </button>
             ))}
           </div>
-          <p className="muted">{t("The app restarts in the chosen language; open projects stay as they are.")}</p>
+          <p className="muted">
+            {t("The app restarts in the chosen language; open projects stay as they are.")}
+          </p>
         </section>
 
         {uiScale && (
@@ -93,13 +131,19 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             </h3>
             <div className="seg">
               {(["auto", ...uiScale.steps] as const).map((c) => (
-                <button key={c} className={uiScale.choice === c ? "on" : ""} aria-pressed={uiScale.choice === c} onClick={() => void desktop?.uiScale.set(c)}>
+                <button
+                  key={c}
+                  className={uiScale.choice === c ? "on" : ""}
+                  aria-pressed={uiScale.choice === c}
+                  onClick={() => void desktop?.uiScale.set(c)}
+                >
                   {c === "auto" ? `${t("Automatic")} (${pct(uiScale.auto)})` : pct(c)}
                 </button>
               ))}
             </div>
             <p className="muted">
-              {t("Automatic makes everything bigger on large monitors without Retina scaling.")} <Kbd k="Mod++" /> <Kbd k="Mod+-" /> <Kbd k="Mod+0" />
+              {t("Automatic makes everything bigger on large monitors without Retina scaling.")}{" "}
+              <Kbd k="Mod++" /> <Kbd k="Mod+-" /> <Kbd k="Mod+0" />
             </p>
           </section>
         )}
@@ -108,12 +152,20 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           <h3>
             <Gamepad2 /> {t("Control scheme")}
           </h3>
-          <p className="muted">{t("Keys, mouse buttons and the right click in one go. Below you can still mix them.")}</p>
+          <p className="muted">
+            {t("Keys, mouse buttons and the right click in one go. Below you can still mix them.")}
+          </p>
           <div className="seg">
             {CONTROL_SCHEMES.map((c) => {
               const on = prefs.keys === c.keys && prefs.mouse === c.mouse;
+
               return (
-                <button key={c.id} className={on ? "on" : ""} onClick={() => setPrefs({ keys: c.keys, mouse: c.mouse })} aria-pressed={on}>
+                <button
+                  key={c.id}
+                  className={on ? "on" : ""}
+                  onClick={() => setPrefs({ keys: c.keys, mouse: c.mouse })}
+                  aria-pressed={on}
+                >
                   {c.label}
                 </button>
               );
@@ -128,7 +180,12 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           <p className="muted">{t("Left click always selects. Pick the scheme your hands already know.")}</p>
           <div className="scheme-grid">
             {MOUSE_SCHEMES.map((m) => (
-              <button key={m.id} className={`scheme ${prefs.mouse === m.id ? "on" : ""}`} onClick={() => setPrefs({ mouse: m.id })} aria-pressed={prefs.mouse === m.id}>
+              <button
+                key={m.id}
+                className={`scheme ${prefs.mouse === m.id ? "on" : ""}`}
+                onClick={() => setPrefs({ mouse: m.id })}
+                aria-pressed={prefs.mouse === m.id}
+              >
                 <b>{m.label}</b>
                 <span>
                   <em>{t("Rotate")}</em> {m.orbit}
@@ -140,17 +197,26 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
                   <em>{t("Zoom")}</em> {m.zoom}
                 </span>
                 <span>
-                  <em>{t("Right click")}</em> {m.rightClick === "confirm" ? t("finishes the tool") : t("menu")}
+                  <em>{t("Right click")}</em>{" "}
+                  {m.rightClick === "confirm" ? t("finishes the tool") : t("menu")}
                 </span>
               </button>
             ))}
           </div>
           <label className="check">
-            <input type="checkbox" checked={prefs.invertZoom} onChange={(e) => setPrefs({ invertZoom: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={prefs.invertZoom}
+              onChange={(e) => setPrefs({ invertZoom: e.target.checked })}
+            />
             {t("Reverse zoom direction (scroll up zooms out)")}
           </label>
           <label className="check">
-            <input type="checkbox" checked={prefs.swipeOrbits} onChange={(e) => setPrefs({ swipeOrbits: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={prefs.swipeOrbits}
+              onChange={(e) => setPrefs({ swipeOrbits: e.target.checked })}
+            />
             {t("Trackpad: two-finger swipe rotates, Shift + swipe pans, pinch or Ctrl + swipe zooms")}
           </label>
         </section>
@@ -161,13 +227,22 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           </h3>
           <div className="seg">
             {KEY_SCHEMES.map((k) => (
-              <button key={k.id} className={prefs.keys === k.id ? "on" : ""} onClick={() => setPrefs({ keys: k.id })} aria-pressed={prefs.keys === k.id}>
+              <button
+                key={k.id}
+                className={prefs.keys === k.id ? "on" : ""}
+                onClick={() => setPrefs({ keys: k.id })}
+                aria-pressed={prefs.keys === k.id}
+              >
                 {k.label}
               </button>
             ))}
           </div>
           <label className="check">
-            <input type="checkbox" checked={prefs.showKeys} onChange={(e) => setPrefs({ showKeys: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={prefs.showKeys}
+              onChange={(e) => setPrefs({ showKeys: e.target.checked })}
+            />
             {t("Show shortcut badges on tools and menus")}
           </label>
           <p className="muted">
@@ -183,18 +258,25 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <Ruler /> {t("On the model")}
           </h3>
           <label className="check">
-            <input type="checkbox" checked={prefs.showValues} onChange={(e) => setPrefs({ showValues: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={prefs.showValues}
+              onChange={(e) => setPrefs({ showValues: e.target.checked })}
+            />
             {t("Show dimensions and sizes (diameters, distances, drag values)")}
           </label>
         </section>
-
 
         <section>
           <h3>
             <LayoutGrid /> {t("Start page")}
           </h3>
           <label className="check">
-            <input type="checkbox" checked={prefs.showExamples} onChange={(e) => setPrefs({ showExamples: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={prefs.showExamples}
+              onChange={(e) => setPrefs({ showExamples: e.target.checked })}
+            />
             {t("Show the example models")}
           </label>
         </section>
@@ -206,14 +288,22 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             </h3>
             {PACKS.map((p) => (
               <label className="check" key={p.id}>
-                <input type="checkbox" checked={!premium.off[p.id]} onChange={(e) => setPack(p.id, e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={!premium.off[p.id]}
+                  onChange={(e) => setPack(p.id, e.target.checked)}
+                />
                 <span>
                   {t(p.name)}
                   <small className="muted pack-contents">{t(p.contents)}</small>
                 </span>
               </label>
             ))}
-            <p className="muted">{t("Only in test builds. The App Store version hides these packs until they are on sale; switch one off to see the app without it.")}</p>
+            <p className="muted">
+              {t(
+                "Only in test builds. The App Store version hides these packs until they are on sale; switch one off to see the app without it.",
+              )}
+            </p>
           </section>
         ) : null}
 
@@ -223,12 +313,19 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           </h3>
           <label className="check">
             {t("New designs in")}
-            <select value={prefs.units} onChange={(e) => setPrefs({ units: e.target.value as "metric" | "imperial" })}>
+            <select
+              value={prefs.units}
+              onChange={(e) => setPrefs({ units: e.target.value as "metric" | "imperial" })}
+            >
               <option value="metric">{t("Metric (mm)")}</option>
               <option value="imperial">{t("Imperial (inches)")}</option>
             </select>
           </label>
-          <p className="muted">{t("An open design switches in File → Millimetres / Inches. Switching never changes sizes, only how lengths are shown and typed.")}</p>
+          <p className="muted">
+            {t(
+              "An open design switches in File → Millimetres / Inches. Switching never changes sizes, only how lengths are shown and typed.",
+            )}
+          </p>
         </section>
 
         <PrintBedSection>
@@ -256,13 +353,19 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             mm
           </label>
           <p className="muted">
-            {t("The gap per side your printer needs between parts that fit into each other. Print the test part, push the pin into its holes and enter the smallest number where it slides in without wobbling. New designs start with it; holes, bores, threads and moving parts use it as “fit”.")}{" "}
+            {t(
+              "The gap per side your printer needs between parts that fit into each other. Print the test part, push the pin into its holes and enter the smallest number where it slides in without wobbling. New designs start with it; holes, bores, threads and moving parts use it as “fit”.",
+            )}{" "}
             <button className="link" onClick={() => (setOpen(false), void openFitTest())}>
               {t("Print the fit test part…")}
             </button>
           </p>
           <label className="check">
-            <input type="checkbox" checked={prefs.threeMfMaterials} onChange={(e) => setPrefs({ threeMfMaterials: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={prefs.threeMfMaterials}
+              onChange={(e) => setPrefs({ threeMfMaterials: e.target.checked })}
+            />
             {t("3MF with materials and colours (slicers then ask which filament each one is)")}
           </label>
         </PrintBedSection>
@@ -272,14 +375,26 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <Grid3x3 /> {t("Sketching")}
           </h3>
           <label className="check">
-            <input type="checkbox" checked={prefs.snapGrid} onChange={(e) => setPrefs({ snapGrid: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={prefs.snapGrid}
+              onChange={(e) => setPrefs({ snapGrid: e.target.checked })}
+            />
             {t("Grid: show it and snap to it (its spacing follows the zoom; also for drag arrows)")}
           </label>
           <label className="check">
-            <input type="checkbox" checked={prefs.snapGeometry} onChange={(e) => setPrefs({ snapGeometry: e.target.checked })} />
-            {t("Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings and alignments")}
+            <input
+              type="checkbox"
+              checked={prefs.snapGeometry}
+              onChange={(e) => setPrefs({ snapGeometry: e.target.checked })}
+            />
+            {t(
+              "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings and alignments",
+            )}
           </label>
-          <p className="muted">{t("Endpoints always snap so lines connect. Hold Alt (⌥) while drawing to place a point freely.")}</p>
+          <p className="muted">
+            {t("Endpoints always snap so lines connect. Hold Alt (⌥) while drawing to place a point freely.")}
+          </p>
         </section>
 
         {desktop ? (
@@ -287,7 +402,9 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <h3>
               <HardDrive /> {t("Projects folder")}
             </h3>
-            <p className="muted">{t("Projects are plain .meercad files. Folders you create in meerCAD are real folders here.")}</p>
+            <p className="muted">
+              {t("Projects are plain .meercad files. Folders you create in meerCAD are real folders here.")}
+            </p>
             {dir && cloud?.dir === dir ? (
               <p className="callout info">
                 <Cloud /> {t("In iCloud Drive › meerCAD: the same projects on your iPhone and iPad.")}
@@ -312,7 +429,8 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
               cloud.available ? (
                 <>
                   <p className="callout warn">
-                    <TriangleAlert /> {t("No sync: projects in this folder do not appear on your iPhone and iPad.")}
+                    <TriangleAlert />{" "}
+                    {t("No sync: projects in this folder do not appear on your iPhone and iPad.")}
                   </p>
                   <button
                     className="btn primary"
@@ -325,7 +443,11 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
                   </button>
                 </>
               ) : (
-                <p className="muted">{t("To have your projects on iPhone and iPad too: open meerCAD there with iCloud Drive on. Then you can switch to iCloud here.")}</p>
+                <p className="muted">
+                  {t(
+                    "To have your projects on iPhone and iPad too: open meerCAD there with iCloud Drive on. Then you can switch to iCloud here.",
+                  )}
+                </p>
               )
             ) : null}
           </section>
@@ -336,20 +458,34 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             </h3>
             {nativeKind === "icloud" ? (
               <>
-                <p className="muted">{t("In iCloud Drive › meerCAD: on all your devices with this Apple ID, also on the Mac.")}</p>
-                <button className="btn" onClick={async () => (await switchNativeStorage("local")) && setNativeKind("local")}>
+                <p className="muted">
+                  {t("In iCloud Drive › meerCAD: on all your devices with this Apple ID, also on the Mac.")}
+                </p>
+                <button
+                  className="btn"
+                  onClick={async () => (await switchNativeStorage("local")) && setNativeKind("local")}
+                >
                   {t("Keep on this device only…")}
                 </button>
               </>
             ) : (
               <>
-                <p className="muted">{t("On this device (Files › On My iPad › meerCAD). Your other devices do not see them.")}</p>
+                <p className="muted">
+                  {t("On this device (Files › On My iPad › meerCAD). Your other devices do not see them.")}
+                </p>
                 {cloud?.available ? (
-                  <button className="btn primary" onClick={async () => (await switchNativeStorage("icloud")) && setNativeKind("icloud")}>
+                  <button
+                    className="btn primary"
+                    onClick={async () => (await switchNativeStorage("icloud")) && setNativeKind("icloud")}
+                  >
                     <Cloud /> {t("Switch to iCloud")}
                   </button>
                 ) : (
-                  <p className="muted">{t("For the same projects on all your devices, sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app.")}</p>
+                  <p className="muted">
+                    {t(
+                      "For the same projects on all your devices, sign in to iCloud and turn on iCloud Drive for meerCAD in the Settings app.",
+                    )}
+                  </p>
                 )}
               </>
             )}
@@ -368,17 +504,24 @@ function PrintBedSection({ children }: { children?: ReactNode }) {
   const [custom, setCustom] = useState(false);
   const preset = bed && !custom ? BED_PRESETS.find((p) => p.size.every((v, i) => v === bed[i])) : undefined;
   const shown = bed ?? DEFAULT_BED;
+
   const setAxis = (i: number, v: number) => {
     if (!(v >= 10 && v <= 5000)) return;
+
     setPrefs({ printBed: shown.map((x, j) => (j === i ? v : x)) as Bed });
   };
+
   return (
     <section>
       <h3>
         <Printer /> {t("3D printer")}
       </h3>
       <label className="check">
-        <input type="checkbox" checked={!!bed} onChange={(e) => setPrefs({ printBed: e.target.checked ? DEFAULT_BED : null })} />
+        <input
+          type="checkbox"
+          checked={!!bed}
+          onChange={(e) => setPrefs({ printBed: e.target.checked ? DEFAULT_BED : null })}
+        />
         {t("Warn when a part does not fit the print bed")}
       </label>
       {bed ? (
@@ -406,13 +549,25 @@ function PrintBedSection({ children }: { children?: ReactNode }) {
               {(["X", "Y", "Z"] as const).map((axis, i) => (
                 <label key={axis}>
                   {axis}
-                  <input className="field" type="number" min={10} max={5000} defaultValue={shown[i]} onBlur={(e) => setAxis(i, Number(e.target.value))} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
+                  <input
+                    className="field"
+                    type="number"
+                    min={10}
+                    max={5000}
+                    defaultValue={shown[i]}
+                    onBlur={(e) => setAxis(i, Number(e.target.value))}
+                    onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                  />
                   mm
                 </label>
               ))}
             </div>
           ) : null}
-          <p className="muted">{t("A part that is larger in any direction gets a warning sign in the parts list. Split it into pieces that fit (Split, with pins or a dovetail so they go back together).")}</p>
+          <p className="muted">
+            {t(
+              "A part that is larger in any direction gets a warning sign in the parts list. Split it into pieces that fit (Split, with pins or a dovetail so they go back together).",
+            )}
+          </p>
         </>
       ) : null}
       {children}

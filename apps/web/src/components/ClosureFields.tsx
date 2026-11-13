@@ -7,7 +7,16 @@
 import { ArrowLeftRight, Minus, Plus, RotateCw, ShieldCheck, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Expr, Feature } from "@meercad/schema";
-import { BOX, boxDefaults, DEFAULT_CLEARANCE, screwBoxSizes, SNAP_HOOK, SNAP_STRAIN, snapBoxSizes, snapHookStrain } from "@meercad/model";
+import {
+  BOX,
+  boxDefaults,
+  DEFAULT_CLEARANCE,
+  screwBoxSizes,
+  SNAP_HOOK,
+  SNAP_STRAIN,
+  snapBoxSizes,
+  snapHookStrain,
+} from "@meercad/model";
 import { checkInterference } from "../lib/interference";
 import { describePlane } from "../lib/topology";
 import { partName } from "../lib/features";
@@ -26,7 +35,15 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </div>
 );
 
-function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, ReactNode][]; onChange: (v: T) => void }) {
+function Seg<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: [T, ReactNode][];
+  onChange: (v: T) => void;
+}) {
   return (
     <div className="segmented">
       {options.map(([v, label]) => (
@@ -40,10 +57,26 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
 
 /** A box that takes picks in the viewport for `field` while active. */
 /** A selection field filled by tapping in the viewport (parts, faces), shared by the storage dialogs. */
-export function PickBox({ field, items, placeholder, onRemove }: { field: string; items: string[]; placeholder: string; onRemove?: (i: number) => void }) {
+export function PickBox({
+  field,
+  items,
+  placeholder,
+  onRemove,
+}: {
+  field: string;
+  items: string[];
+  placeholder: string;
+  onRemove?: (i: number) => void;
+}) {
   const active = useApp((s) => s.dialog?.field === field);
+
   return (
-    <div className={`selbox ${active ? "active" : ""}`} onClick={() => setDialogField(active ? null : field)} role="button" tabIndex={0}>
+    <div
+      className={`selbox ${active ? "active" : ""}`}
+      onClick={() => setDialogField(active ? null : field)}
+      role="button"
+      tabIndex={0}
+    >
       {items.length ? (
         items.map((item, i) => (
           <span className="chip" key={i} title={item}>
@@ -56,7 +89,9 @@ export function PickBox({ field, items, placeholder, onRemove }: { field: string
           </span>
         ))
       ) : (
-        <span className="placeholder">{active ? t("{what} in the viewport…", { what: placeholder }) : placeholder}</span>
+        <span className="placeholder">
+          {active ? t("{what} in the viewport…", { what: placeholder }) : placeholder}
+        </span>
       )}
     </div>
   );
@@ -65,17 +100,46 @@ export function PickBox({ field, items, placeholder, onRemove }: { field: string
 const num = (e: Expr | undefined, fallback: number) => (typeof e === "number" ? e : fallback);
 const mm = (v: number) => `${+v.toFixed(1)} mm`;
 
-function Count({ value, min, max, onChange }: { value: Expr | undefined; min: number; max: number; onChange: (v: Expr) => void }) {
+function Count({
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  value: Expr | undefined;
+  min: number;
+  max: number;
+  onChange: (v: Expr) => void;
+}) {
   const n = num(value, min);
+
   return (
     <div className="row" style={{ gap: 4, alignItems: "center" }}>
-      <button className="icon-btn sm" aria-label={t("Fewer")} disabled={typeof value === "number" && n <= min} onClick={() => onChange(Math.max(min, n - 1))}>
+      <button
+        className="icon-btn sm"
+        aria-label={t("Fewer")}
+        disabled={typeof value === "number" && n <= min}
+        onClick={() => onChange(Math.max(min, n - 1))}
+      >
         <Minus />
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <ExprInput value={value ?? min} unit="" integer quiet className="count" onCommit={onChange} onLive={onChange} />
+        <ExprInput
+          value={value ?? min}
+          unit=""
+          integer
+          quiet
+          className="count"
+          onCommit={onChange}
+          onLive={onChange}
+        />
       </div>
-      <button className="icon-btn sm" aria-label={t("More")} disabled={typeof value === "number" && n >= max} onClick={() => onChange(Math.min(max, n + 1))}>
+      <button
+        className="icon-btn sm"
+        aria-label={t("More")}
+        disabled={typeof value === "number" && n >= max}
+        onClick={() => onChange(Math.min(max, n + 1))}
+      >
         <Plus />
       </button>
     </div>
@@ -84,7 +148,19 @@ function Count({ value, min, max, onChange }: { value: Expr | undefined; min: nu
 
 // ---------------------------------------------------------------- boxes
 
-const BOX_CLEAR: Partial<Of<"box">> = { shape: undefined, depth: undefined, wall: undefined, floor: undefined, corner: undefined, lidThickness: undefined, snap: undefined, lipHeight: undefined, pitch: undefined, neck: undefined, starts: undefined };
+const BOX_CLEAR: Partial<Of<"box">> = {
+  shape: undefined,
+  depth: undefined,
+  wall: undefined,
+  floor: undefined,
+  corner: undefined,
+  lidThickness: undefined,
+  snap: undefined,
+  lipHeight: undefined,
+  pitch: undefined,
+  neck: undefined,
+  starts: undefined,
+};
 
 const BOX_PRESETS: { label: string; patch: Partial<Of<"box">> }[] = [
   { label: t("Small parts box"), patch: { lid: "snap", width: 80, depth: 60, height: 40 } },
@@ -97,19 +173,29 @@ const BOX_PRESETS: { label: string; patch: Partial<Of<"box">> }[] = [
 export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
   const screw = f.lid === "screw";
   const round = screw || f.shape === "round";
-  const pair = (i: number, v: Expr) => set({ position: (f.position ?? [0, 0]).map((x, j) => (j === i ? v : x)) });
+  const pair = (i: number, v: Expr) =>
+    set({ position: (f.position ?? [0, 0]).map((x, j) => (j === i ? v : x)) });
 
   // What the numbers come to (only when they are plain numbers).
   let info = "";
+
   try {
     const r = boxDefaults(f, (_k, e) => (e === undefined ? undefined : typeof e === "number" ? e : NaN));
-    if ([r.width, r.depth, r.height, r.wall, r.clearance].some((v) => !Number.isFinite(v))) info = "";
-    else if (screw) {
+
+    if ([r.width, r.depth, r.height, r.wall, r.clearance].some((v) => !Number.isFinite(v))) {
+      info = "";
+    } else if (screw) {
       const s = screwBoxSizes(r);
-      info = t("Opening ⌀{d}, inside {h} deep · closes in {n} turns", { d: mm(2 * s.neckInner), h: mm(s.depthInside), n: +s.turns.toFixed(1) });
+      info = t("Opening ⌀{d}, inside {h} deep · closes in {n} turns", {
+        d: mm(2 * s.neckInner),
+        h: mm(s.depthInside),
+        n: +s.turns.toFixed(1),
+      });
     } else {
       const s = snapBoxSizes(r);
-      info = round ? t("Inside ⌀{d}, {h} deep", { d: mm(s.inner[0]), h: mm(s.depthInside) }) : t("Inside {w} × {d}, {h} deep", { w: mm(s.inner[0]), d: mm(s.inner[1]), h: mm(s.depthInside) });
+      info = round
+        ? t("Inside ⌀{d}, {h} deep", { d: mm(s.inner[0]), h: mm(s.depthInside) })
+        : t("Inside {w} × {d}, {h} deep", { w: mm(s.inner[0]), d: mm(s.inner[1]), h: mm(s.depthInside) });
     }
   } catch (e) {
     info = e instanceof Error ? e.message : "";
@@ -120,21 +206,61 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       <Examples items={BOX_PRESETS} onPick={(patch) => set({ ...BOX_CLEAR, ...patch })} />
       <Seg
         value={f.lid}
-        options={[["snap", t("Snap lid")], ["screw", t("Screw lid")]]}
-        onChange={(lid) => set(lid === "screw" ? { lid, shape: undefined, depth: undefined, corner: undefined, snap: undefined, lipHeight: undefined, notch: undefined } : { lid, pitch: undefined, neck: undefined, starts: undefined })}
+        options={[
+          ["snap", t("Snap lid")],
+          ["screw", t("Screw lid")],
+        ]}
+        onChange={(lid) =>
+          set(
+            lid === "screw"
+              ? {
+                  lid,
+                  shape: undefined,
+                  depth: undefined,
+                  corner: undefined,
+                  snap: undefined,
+                  lipHeight: undefined,
+                  notch: undefined,
+                }
+              : { lid, pitch: undefined, neck: undefined, starts: undefined },
+          )
+        }
       />
-      {!screw ? <Seg value={f.shape ?? "rect"} options={[["rect", t("Rectangular")], ["round", t("Round")]]} onChange={(shape) => set({ shape: shape === "rect" ? undefined : shape, depth: undefined, corner: undefined })} /> : null}
+      {!screw ? (
+        <Seg
+          value={f.shape ?? "rect"}
+          options={[
+            ["rect", t("Rectangular")],
+            ["round", t("Round")],
+          ]}
+          onChange={(shape) =>
+            set({ shape: shape === "rect" ? undefined : shape, depth: undefined, corner: undefined })
+          }
+        />
+      ) : null}
       <div className="row">
         <Field label={round ? t("Diameter") : t("Width")}>
-          <ExprInput value={f.width} onCommit={(width) => set({ width })} onLive={(width) => set({ width })} />
+          <ExprInput
+            value={f.width}
+            onCommit={(width) => set({ width })}
+            onLive={(width) => set({ width })}
+          />
         </Field>
         {!round ? (
           <Field label={t("Depth")}>
-            <ExprInput value={f.depth ?? f.width} onCommit={(depth) => set({ depth })} onLive={(depth) => set({ depth })} />
+            <ExprInput
+              value={f.depth ?? f.width}
+              onCommit={(depth) => set({ depth })}
+              onLive={(depth) => set({ depth })}
+            />
           </Field>
         ) : null}
         <Field label={t("Height")}>
-          <ExprInput value={f.height} onCommit={(height) => set({ height })} onLive={(height) => set({ height })} />
+          <ExprInput
+            value={f.height}
+            onCommit={(height) => set({ height })}
+            onLive={(height) => set({ height })}
+          />
         </Field>
       </div>
       <p className="muted small">{info}</p>
@@ -143,11 +269,19 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
           <ExprInput value={f.wall} placeholder={String(BOX.wall)} onCommit={(wall) => set({ wall })} />
         </Field>
         <Field label={t("Play")}>
-          <ExprInput value={f.clearance} placeholder={String(DEFAULT_CLEARANCE)} onCommit={(clearance) => set({ clearance })} />
+          <ExprInput
+            value={f.clearance}
+            placeholder={String(DEFAULT_CLEARANCE)}
+            onCommit={(clearance) => set({ clearance })}
+          />
         </Field>
         {!round ? (
           <Field label={t("Corner radius")}>
-            <ExprInput value={f.corner} placeholder={String(BOX.corner)} onCommit={(corner) => set({ corner })} />
+            <ExprInput
+              value={f.corner}
+              placeholder={String(BOX.corner)}
+              onCommit={(corner) => set({ corner })}
+            />
           </Field>
         ) : null}
       </div>
@@ -160,7 +294,12 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
             <ExprInput value={f.neck} placeholder={String(BOX.neck)} onCommit={(neck) => set({ neck })} />
           </Field>
           <Field label={t("Starts")}>
-            <Count value={f.starts ?? 1} min={1} max={4} onChange={(starts) => set({ starts: starts === 1 ? undefined : starts })} />
+            <Count
+              value={f.starts ?? 1}
+              min={1}
+              max={4}
+              onChange={(starts) => set({ starts: starts === 1 ? undefined : starts })}
+            />
           </Field>
         </div>
       ) : (
@@ -170,16 +309,30 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
               <ExprInput value={f.snap} placeholder={String(BOX.snap)} onCommit={(snap) => set({ snap })} />
             </Field>
             <Field label={t("Lip height")}>
-              <ExprInput value={f.lipHeight} placeholder={String(BOX.lipHeight)} onCommit={(lipHeight) => set({ lipHeight })} />
+              <ExprInput
+                value={f.lipHeight}
+                placeholder={String(BOX.lipHeight)}
+                onCommit={(lipHeight) => set({ lipHeight })}
+              />
             </Field>
           </div>
           <label className="checkbox">
-            <input type="checkbox" checked={f.notch !== false} onChange={(e) => set({ notch: e.target.checked ? undefined : false })} /> {t("Notch to open it with a finger nail")}
+            <input
+              type="checkbox"
+              checked={f.notch !== false}
+              onChange={(e) => set({ notch: e.target.checked ? undefined : false })}
+            />{" "}
+            {t("Notch to open it with a finger nail")}
           </label>
         </>
       )}
       <label className="checkbox">
-        <input type="checkbox" checked={f.layout === "closed"} onChange={(e) => set({ layout: e.target.checked ? "closed" : undefined })} /> {t("Lid on the box (to look at it closed)")}
+        <input
+          type="checkbox"
+          checked={f.layout === "closed"}
+          onChange={(e) => set({ layout: e.target.checked ? "closed" : undefined })}
+        />{" "}
+        {t("Lid on the box (to look at it closed)")}
       </label>
       {f.layout === "closed" ? (
         <button className="btn" onClick={() => void checkInterference()}>
@@ -187,7 +340,11 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
         </button>
       ) : null}
       <Field label={t("On")}>
-        <PickBox field="plane" items={[describePlane(f.plane ?? { ref: "origin.XY" })]} placeholder={t("Tap a plane or flat face where it stands")} />
+        <PickBox
+          field="plane"
+          items={[describePlane(f.plane ?? { ref: "origin.XY" })]}
+          placeholder={t("Tap a plane or flat face where it stands")}
+        />
       </Field>
       <div className="row">
         <Field label={t("Position x")}>
@@ -199,8 +356,12 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       </div>
       <p className="muted small">
         {screw
-          ? t("Box and cap are two parts. The thread has 45° flanks, so both print without supports: the jar upright, the cap upside down as it lies.")
-          : t("Box and lid are two parts. The lid's lip clicks into a groove inside the rim; a larger snap holds tighter. Print the lid as it lies, top down.")}{" "}
+          ? t(
+              "Box and cap are two parts. The thread has 45° flanks, so both print without supports: the jar upright, the cap upside down as it lies.",
+            )
+          : t(
+              "Box and lid are two parts. The lid's lip clicks into a groove inside the rim; a larger snap holds tighter. Print the lid as it lies, top down.",
+            )}{" "}
         {t("Play is the gap per side; raise it if the lid is too tight on your printer.")}
       </p>
     </>
@@ -218,66 +379,146 @@ const HOOK_PRESETS: { label: string; patch: Partial<Of<"snap_hook">> }[] = [
 
 /** How much a hook bends, and for which plastics that is fine. */
 function strainText(f: Of<"snap_hook">): { text: string; ok: boolean } | null {
-  const h = { length: num(f.length, SNAP_HOOK.length), thickness: num(f.thickness, SNAP_HOOK.thickness), overhang: num(f.overhang, SNAP_HOOK.overhang) };
+  const h = {
+    length: num(f.length, SNAP_HOOK.length),
+    thickness: num(f.thickness, SNAP_HOOK.thickness),
+    overhang: num(f.overhang, SNAP_HOOK.overhang),
+  };
   if ([f.length, f.thickness, f.overhang].some((e) => e !== undefined && typeof e !== "number")) return null;
+
   const e = snapHookStrain(h);
   const pct = `${(e * 100).toFixed(1)} %`;
   const fits = (["PLA", "PETG", "PA"] as const).filter((m) => e <= SNAP_STRAIN[m]!);
-  if (fits.length === 3) return { text: t("Bends {e} when it snaps: fine in PLA, PETG and nylon.", { e: pct }), ok: true };
-  if (fits.length) return { text: t("Bends {e} when it snaps: too much for PLA; fine in {list}.", { e: pct, list: fits.map((m) => (m === "PA" ? t("nylon") : m)).join(", ") }), ok: false };
-  return { text: t("Bends {e} when it snaps: it may break. Make it longer or thinner, or the overhang smaller.", { e: pct }), ok: false };
+
+  if (fits.length === 3) {
+    return { text: t("Bends {e} when it snaps: fine in PLA, PETG and nylon.", { e: pct }), ok: true };
+  }
+
+  if (fits.length) {
+    return {
+      text: t("Bends {e} when it snaps: too much for PLA; fine in {list}.", {
+        e: pct,
+        list: fits.map((m) => (m === "PA" ? t("nylon") : m)).join(", "),
+      }),
+      ok: false,
+    };
+  }
+
+  return {
+    text: t("Bends {e} when it snaps: it may break. Make it longer or thinner, or the overhang smaller.", {
+      e: pct,
+    }),
+    ok: false,
+  };
 }
 
 export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
   const features = useApp((s) => s.doc.features);
   const strain = strainText(f);
   const angle = num(f.angle, 0);
+
   return (
     <>
       <Examples items={HOOK_PRESETS} onPick={(patch) => set(patch)} />
       <div className="row">
         <Field label={t("Length")}>
-          <ExprInput value={f.length} placeholder={String(SNAP_HOOK.length)} onCommit={(length) => set({ length })} onLive={(length) => set({ length })} />
+          <ExprInput
+            value={f.length}
+            placeholder={String(SNAP_HOOK.length)}
+            onCommit={(length) => set({ length })}
+            onLive={(length) => set({ length })}
+          />
         </Field>
         <Field label={t("Thickness")}>
-          <ExprInput value={f.thickness} placeholder={String(SNAP_HOOK.thickness)} onCommit={(thickness) => set({ thickness })} onLive={(thickness) => set({ thickness })} />
+          <ExprInput
+            value={f.thickness}
+            placeholder={String(SNAP_HOOK.thickness)}
+            onCommit={(thickness) => set({ thickness })}
+            onLive={(thickness) => set({ thickness })}
+          />
         </Field>
         <Field label={t("Width")}>
-          <ExprInput value={f.width} placeholder={String(SNAP_HOOK.width)} onCommit={(width) => set({ width })} />
+          <ExprInput
+            value={f.width}
+            placeholder={String(SNAP_HOOK.width)}
+            onCommit={(width) => set({ width })}
+          />
         </Field>
       </div>
       <div className="row">
         <Field label={t("Overhang")}>
-          <ExprInput value={f.overhang} placeholder={String(SNAP_HOOK.overhang)} onCommit={(overhang) => set({ overhang })} onLive={(overhang) => set({ overhang })} />
+          <ExprInput
+            value={f.overhang}
+            placeholder={String(SNAP_HOOK.overhang)}
+            onCommit={(overhang) => set({ overhang })}
+            onLive={(overhang) => set({ overhang })}
+          />
         </Field>
         <Field label={t("Lead-in")}>
-          <ExprInput value={f.insertAngle} unit="deg" placeholder={String(SNAP_HOOK.insertAngle)} onCommit={(insertAngle) => set({ insertAngle })} />
+          <ExprInput
+            value={f.insertAngle}
+            unit="deg"
+            placeholder={String(SNAP_HOOK.insertAngle)}
+            onCommit={(insertAngle) => set({ insertAngle })}
+          />
         </Field>
         <Field label={t("Holding angle")}>
-          <ExprInput value={f.retainAngle} unit="deg" placeholder={String(SNAP_HOOK.retainAngle)} onCommit={(retainAngle) => set({ retainAngle })} />
+          <ExprInput
+            value={f.retainAngle}
+            unit="deg"
+            placeholder={String(SNAP_HOOK.retainAngle)}
+            onCommit={(retainAngle) => set({ retainAngle })}
+          />
         </Field>
       </div>
       {strain ? <div className={`callout ${strain.ok ? "info" : "warn"}`}>{strain.text}</div> : null}
       <Field label={t("Face")}>
         <div className="row">
           <div style={{ flex: 1 }}>
-            <PickBox field="plane" items={[describePlane(f.plane)]} placeholder={t("Tap a flat face where the hook stands")} />
+            <PickBox
+              field="plane"
+              items={[describePlane(f.plane)]}
+              placeholder={t("Tap a flat face where the hook stands")}
+            />
           </div>
-          <button className={`icon-btn ${f.flip ? "active" : ""}`} title={t("Turn the other way")} aria-label={t("Turn the other way")} onClick={() => set({ flip: f.flip ? undefined : true })}>
+          <button
+            className={`icon-btn ${f.flip ? "active" : ""}`}
+            title={t("Turn the other way")}
+            aria-label={t("Turn the other way")}
+            onClick={() => set({ flip: f.flip ? undefined : true })}
+          >
             <ArrowLeftRight />
           </button>
         </div>
       </Field>
       <Field label={t("Places ({n})", { n: f.points.length })}>
-        <PickBox field="points" items={f.points.length ? [tn(f.points.length, "{n} hook: tap the face to add", "{n} hooks: tap the face to add")] : []} placeholder={t("Tap the face to place hooks")} />
+        <PickBox
+          field="points"
+          items={
+            f.points.length
+              ? [tn(f.points.length, "{n} hook: tap the face to add", "{n} hooks: tap the face to add")]
+              : []
+          }
+          placeholder={t("Tap the face to place hooks")}
+        />
         {f.points.map((pt, i) => (
           <div className="row" key={i}>
             {[0, 1].map((k) => (
               <div key={k} style={{ flex: 1 }}>
-                <ExprInput value={pt[k]} onCommit={(v) => set({ points: f.points.map((q, j) => (j === i ? (k === 0 ? [v, q[1]] : [q[0], v]) : q)) })} />
+                <ExprInput
+                  value={pt[k]}
+                  onCommit={(v) =>
+                    set({ points: f.points.map((q, j) => (j === i ? (k === 0 ? [v, q[1]] : [q[0], v]) : q)) })
+                  }
+                />
               </div>
             ))}
-            <button className="icon-btn sm" title={t("Remove")} aria-label={t("Remove")} onClick={() => set({ points: f.points.filter((_, j) => j !== i) })}>
+            <button
+              className="icon-btn sm"
+              title={t("Remove")}
+              aria-label={t("Remove")}
+              onClick={() => set({ points: f.points.filter((_, j) => j !== i) })}
+            >
               <X />
             </button>
           </div>
@@ -286,9 +527,18 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
       <Field label={t("Barb points")}>
         <div className="row" style={{ alignItems: "center" }}>
           <div style={{ flex: 1 }}>
-            <ExprInput value={f.angle ?? 0} unit="deg" onCommit={(a) => set({ angle: a === 0 ? undefined : a })} />
+            <ExprInput
+              value={f.angle ?? 0}
+              unit="deg"
+              onCommit={(a) => set({ angle: a === 0 ? undefined : a })}
+            />
           </div>
-          <button className="icon-btn" title={t("Turn by 90°")} aria-label={t("Turn by 90°")} onClick={() => set({ angle: (angle + 90) % 360 || undefined })}>
+          <button
+            className="icon-btn"
+            title={t("Turn by 90°")}
+            aria-label={t("Turn by 90°")}
+            onClick={() => set({ angle: (angle + 90) % 360 || undefined })}
+          >
             <RotateCw />
           </button>
         </div>
@@ -306,13 +556,26 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
       </Field>
       {f.catchIn?.length ? (
         <Field label={t("Play round the window")}>
-          <ExprInput value={f.clearance} placeholder={String(DEFAULT_CLEARANCE)} onCommit={(clearance) => set({ clearance })} />
+          <ExprInput
+            value={f.clearance}
+            placeholder={String(DEFAULT_CLEARANCE)}
+            onCommit={(clearance) => set({ clearance })}
+          />
         </Field>
       ) : null}
       <label className="checkbox">
-        <input type="checkbox" checked={f.mode === "new_body"} onChange={(e) => set({ mode: e.target.checked ? "new_body" : undefined })} /> {t("Hooks as a part of their own")}
+        <input
+          type="checkbox"
+          checked={f.mode === "new_body"}
+          onChange={(e) => set({ mode: e.target.checked ? "new_body" : undefined })}
+        />{" "}
+        {t("Hooks as a part of their own")}
       </label>
-      <p className="muted small">{t("Hooks stand on the face and join its part. Model the parts closed, place the hook where its barb reaches into the other part's wall, and pick that part: its window is cut there, with play.")}</p>
+      <p className="muted small">
+        {t(
+          "Hooks stand on the face and join its part. Model the parts closed, place the hook where its barb reaches into the other part's wall, and pick that part: its window is cut there, with play.",
+        )}
+      </p>
     </>
   );
 }

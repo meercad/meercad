@@ -38,13 +38,17 @@ export const PHOTOGRAMMETRY: PaceCurve = [
 /** The share of the time gone by at `p`, read off the curve (straight between its points). */
 export function timeShare(curve: PaceCurve, p: number): number {
   if (p <= curve[0]![0]) return curve[0]![1];
+
   for (let i = 1; i < curve.length; i++) {
     const [p1, t1] = curve[i]!;
+
     if (p <= p1) {
       const [p0, t0] = curve[i - 1]!;
+
       return t0 + ((t1 - t0) * (p - p0)) / (p1 - p0 || 1);
     }
   }
+
   return 1;
 }
 
@@ -64,8 +68,11 @@ export function secondsLeft(points: readonly ProgressPoint[], ran: number, curve
   const p = points.at(-1)?.[1];
   if (p === undefined || p < 0.03 || ran < 20) return null;
   if (!curve) return (ran * (1 - p)) / p;
+
   const totals = points.filter(([, q]) => q >= 0.05).map(([at, q]) => at / timeShare(curve, q));
   if (!totals.length) return null;
+
   const total = totals.reduce((a, b) => a + b) / totals.length;
+
   return Math.max(total - ran, total * (1 - timeShare(curve, Math.min(1, p + 0.05))));
 }

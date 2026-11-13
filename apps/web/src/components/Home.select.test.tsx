@@ -13,13 +13,27 @@ import { answer, pickMenu, renderUi, withScreen } from "../../test/ui";
 import { testFiles } from "../../test/setup";
 import { Home } from "./Home";
 
-vi.mock("../lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("../lib/thumbnails")>()), fillThumbnails: async () => undefined }));
+vi.mock("../lib/thumbnails", async (orig) => ({
+  ...(await orig<typeof import("../lib/thumbnails")>()),
+  fillThumbnails: async () => undefined,
+}));
 
 const settle = () => act(async () => new Promise((r) => setTimeout(r, 20)));
-const card = (name: string) => screen.getAllByText(name).map((e) => e.closest(".card")).find(Boolean) as HTMLElement;
-const button = (text: string | RegExp) => screen.getAllByRole("button").find((b) => (typeof text === "string" ? b.textContent?.trim() === text : text.test(b.textContent ?? "")))!;
-const folderOf = (name: string) => [...testFiles.projects.values()].find((p) => p.name === name)?.folder ?? "";
+const card = (name: string) =>
+  screen
+    .getAllByText(name)
+    .map((e) => e.closest(".card"))
+    .find(Boolean) as HTMLElement;
+const button = (text: string | RegExp) =>
+  screen
+    .getAllByRole("button")
+    .find((b) =>
+      typeof text === "string" ? b.textContent?.trim() === text : text.test(b.textContent ?? ""),
+    )!;
+const folderOf = (name: string) =>
+  [...testFiles.projects.values()].find((p) => p.name === name)?.folder ?? "";
 const exists = (name: string) => [...testFiles.projects.values()].some((p) => p.name === name);
+
 const click = async (el: Element, opts: MouseEventInit = {}) => {
   await act(async () => void fireEvent.click(el, opts));
   await settle();
@@ -71,11 +85,20 @@ describe("several projects at once", () => {
     await pickMenu("Box");
     await settle();
     expect([folderOf("Three"), folderOf("Four")]).toEqual(["Box", "Box"]);
+
     // Drag "Five" onto the folder.
     const data = new Map<string, string>();
-    const dataTransfer = { setData: (k: string, v: string) => void data.set(k, v), getData: (k: string) => data.get(k) ?? "", effectAllowed: "" };
+    const dataTransfer = {
+      setData: (k: string, v: string) => void data.set(k, v),
+      getData: (k: string) => data.get(k) ?? "",
+      effectAllowed: "",
+    };
     await act(async () => void fireEvent.dragStart(card("Five"), { dataTransfer }));
-    const box = screen.getAllByText("Box").map((e) => e.closest(".card, .folder")).find(Boolean) as HTMLElement;
+
+    const box = screen
+      .getAllByText("Box")
+      .map((e) => e.closest(".card, .folder"))
+      .find(Boolean) as HTMLElement;
     await act(async () => void fireEvent.drop(box, { dataTransfer }));
     await settle();
     expect(folderOf("Five")).toBe("Box");
@@ -111,9 +134,12 @@ describe("several projects at once", () => {
     await settle();
     await act(async () => void fireEvent.click(screen.getAllByTitle("Folder actions")[0]!));
     await pickMenu("Delete folder…");
+
     const inside = [...testFiles.projects.values()].filter((p) => p.folder === "Box").length;
     expect(inside).toBeGreaterThan(1);
-    expect(screen.getByRole("alertdialog").textContent).toMatch(new RegExp(`It contains ${inside} parts, which will be deleted too`));
+    expect(screen.getByRole("alertdialog").textContent).toMatch(
+      new RegExp(`It contains ${inside} parts, which will be deleted too`),
+    );
     await answer();
     await settle();
     expect(testFiles.folders.has("Box")).toBe(false);

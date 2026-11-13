@@ -27,6 +27,7 @@ export function AboutDialog() {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setTab(null);
     window.addEventListener("meercad:about", open);
     window.addEventListener("keydown", onKey);
+
     return () => {
       window.removeEventListener("meercad:about", open);
       window.removeEventListener("keydown", onKey);
@@ -34,23 +35,33 @@ export function AboutDialog() {
   }, []);
   useEffect(() => {
     if (!tab || version) return;
-    if (desktop) void desktop.info().then((i) => setVersion(i.version));
-    else
+
+    if (desktop) {
+      void desktop.info().then((i) => setVersion(i.version));
+    } else {
       void import("../lib/native").then(async ({ nativeApp, appVersion }) => {
         if (nativeApp) setVersion(await appVersion());
       });
+    }
   }, [tab, version]);
 
   if (!tab) return null;
+
   const tabs: [Tab, string, ReactNode][] = [
     ["about", t("about::About"), <Info key="i" />],
     ["terms", t("tab::Terms"), <FileCheck key="t" />],
     ["privacy", t("Privacy"), <ShieldCheck key="p" />],
     ["licenses", t("Licences"), <Scale key="l" />],
   ];
+
   return (
     <div className="modal-backdrop" onPointerDown={() => setTab(null)}>
-      <div className="modal settings about" role="dialog" aria-label={t("About meerCAD")} onPointerDown={(e) => e.stopPropagation()}>
+      <div
+        className="modal settings about"
+        role="dialog"
+        aria-label={t("About meerCAD")}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <header className="settings-head">
           <h2>meerCAD{version ? <span className="muted"> {version}</span> : null}</h2>
           <button className="icon-btn" onClick={() => setTab(null)} title={t("Close (Esc)")}>
@@ -68,9 +79,15 @@ export function AboutDialog() {
         {tab === "about" ? (
           <>
             <section>
-              <p>{t("Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.")}</p>
+              <p>
+                {t(
+                  "Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.",
+                )}
+              </p>
               <p className="muted">
-                {t("© 2026 Torben Berger UG (haftungsbeschränkt). The source code is public under the FSL-1.1-ALv2:")}{" "}
+                {t(
+                  "© 2026 Torben Berger UG (haftungsbeschränkt). The source code is public under the FSL-1.1-ALv2:",
+                )}{" "}
                 <a href={SOURCE} target="_blank" rel="noreferrer">
                   {SOURCE.replace("https://", "")}
                 </a>
@@ -91,7 +108,9 @@ export function AboutDialog() {
                 <ShieldCheck /> {t("Privacy")}
               </h3>
               <p className="muted">
-                {t("meerCAD collects no personal data: no account, no analytics, no tracking. Your designs stay on your device.")}{" "}
+                {t(
+                  "meerCAD collects no personal data: no account, no analytics, no tracking. Your designs stay on your device.",
+                )}{" "}
                 <button className="link" onClick={() => setTab("privacy")}>
                   {t("Read the privacy policy")}
                 </button>
@@ -134,6 +153,19 @@ export function AboutDialog() {
 function TermsAccepted() {
   const r = termsRecord();
   if (!r) return null;
-  const at = new Date(r.acceptedAt).toLocaleString(lang === "de" ? "de-DE" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
-  return <p className="terms-accepted">{t("Accepted on {date} (version {version}, app {app})", { date: at, version: r.version, app: r.appVersion || "–" })}</p>;
+
+  const at = new Date(r.acceptedAt).toLocaleString(lang === "de" ? "de-DE" : "en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  return (
+    <p className="terms-accepted">
+      {t("Accepted on {date} (version {version}, app {app})", {
+        date: at,
+        version: r.version,
+        app: r.appVersion || "–",
+      })}
+    </p>
+  );
 }

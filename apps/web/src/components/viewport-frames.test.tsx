@@ -47,6 +47,7 @@ afterAll(cleanup);
 describe("the 3D view between pictures", () => {
   it("finishes an animated camera move over the frames that follow", () => {
     const now = vi.spyOn(performance, "now");
+
     try {
       const t0 = performance.now();
       now.mockReturnValue(t0);
@@ -54,10 +55,12 @@ describe("the 3D view between pictures", () => {
       frame();
       now.mockReturnValue(t0 + 175);
       frame();
+
       const mid = vp.cameraQuaternion.clone();
       now.mockReturnValue(t0 + 1000);
       frame();
       frame();
+
       // Done: looking along +Y at the part from the front.
       const look = new THREE.Vector3(0, 0, -1).applyQuaternion(vp.cameraQuaternion);
       expect(look.y).toBeCloseTo(1, 6);
@@ -65,6 +68,7 @@ describe("the 3D view between pictures", () => {
     } finally {
       now.mockRestore();
     }
+
     vp.setView("top", false);
     vp.fit(false);
     frame();
@@ -75,6 +79,7 @@ describe("the 3D view between pictures", () => {
     const r = vp.ray(at[0], at[1]);
     const d = Math.hypot(...r.dir);
     expect(r.dir[2] / d).toBeLessThan(-0.99);
+
     // The ray passes the point it was cast through.
     const t = (10 - r.origin[2]) / r.dir[2];
     expect(r.origin[0] + r.dir[0] * t).toBeCloseTo(20, 3);
@@ -84,16 +89,20 @@ describe("the 3D view between pictures", () => {
   it("picks the offset plane where it is clicked, at its height", async () => {
     await act(async () => useApp.setState({ showPlanes: true }));
     await rebuilt();
+
     // Over the part: the plane 30 mm up lies in front of it.
     const at = vp.worldToScreen([20, 10, 30])!;
     // The renderer places the plane when it draws (the test's draws nothing): place it as a frame would.
     (vp as unknown as { scene: THREE.Scene }).scene.updateMatrixWorld(true);
+
     const p = vp.pick(at[0], at[1], new Set(["plane"]));
     expect(p?.kind).toBe("plane");
+
     if (p?.kind === "plane") {
       expect(p.point[2]).toBeCloseTo(30, 3);
       expect(p.planeId).toBe("pl1");
     }
+
     await act(async () => useApp.setState({ showPlanes: false }));
   });
 
@@ -105,7 +114,10 @@ describe("the 3D view between pictures", () => {
       move: () => void calls.push("move"),
       end: () => void calls.push("end"),
     };
-    vp.setJointGlyphs([{ id: "j1", origin: [20, 10, 10], axis: [0, 0, 1], type: "slider", active: false } as never]);
+    vp.setJointGlyphs([
+      { id: "j1", origin: [20, 10, 10], axis: [0, 0, 1], type: "slider", active: false } as never,
+    ]);
+
     const ev = { pointerId: 7, pointerType: "mouse", button: 0, isPrimary: true };
     // On the slider's knob, in the middle of its axis.
     const knob = vp.worldToScreen([20, 10, 10])!;
@@ -125,6 +137,7 @@ describe("the 3D view between pictures", () => {
     // Away from the symbol, the part under the pointer.
     vp.setJointGlyphs([]);
     calls.length = 0;
+
     const part = vp.worldToScreen([5, 5, 10])!;
     await act(async () => {
       fireEvent.pointerDown(vp.canvas, { ...ev, clientX: part[0], clientY: part[1], buttons: 1 });
@@ -136,7 +149,12 @@ describe("the 3D view between pictures", () => {
 
   it("shows a picture on a part once it has loaded, and plain again without it", async () => {
     const was = (globalThis as { createImageBitmap?: unknown }).createImageBitmap;
-    (globalThis as { createImageBitmap?: unknown }).createImageBitmap = async () => ({ width: 2, height: 2, close() {} });
+    (globalThis as { createImageBitmap?: unknown }).createImageBitmap = async () => ({
+      width: 2,
+      height: 2,
+      close() {},
+    });
+
     try {
       const mesh = useApp.getState().output!.meshes.find((m) => m.bodyId === "ex1")!;
       const uvs = new Float32Array((mesh.positions.length / 3) * 2);
@@ -146,6 +164,7 @@ describe("the 3D view between pictures", () => {
       vp.setBodyTextures([{ bodyId: "ex1", uvs, image: new Blob(), key: "pic" }]);
       vp.setBodyTextures([{ bodyId: "ex1", uvs: new Float32Array(2), image: new Blob(), key: "small" }]);
       vp.setBodyTextures([]);
+
       const at = vp.worldToScreen([20, 10, 10])!;
       expect(vp.pick(at[0], at[1], new Set(["face"]))?.kind).toBe("face");
     } finally {

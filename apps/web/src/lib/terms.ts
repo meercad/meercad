@@ -15,7 +15,10 @@ export const TERMS_POINTS = [
   { id: "hobby", text: "meerCAD is a tool for hobby projects, not certified professional CAD." },
   { id: "accuracy", text: "There is no guarantee that dimensions, calculations or exports are correct." },
   { id: "check", text: "I check dimensions, fits and strength myself before I print or use a part." },
-  { id: "safety", text: "I do not use it for safety-critical, load-bearing or medical parts without my own expert check." },
+  {
+    id: "safety",
+    text: "I do not use it for safety-critical, load-bearing or medical parts without my own expert check.",
+  },
   { id: "ai", text: "The AI assistant can make mistakes; I check what it builds." },
   { id: "risk", text: "I use meerCAD at my own risk and have read the terms of use and the EULA." },
 ] as const;
@@ -38,6 +41,7 @@ export interface TermsRecord {
 /** The record as stored, or null if it is missing or not a valid record. */
 export function parseRecord(raw: unknown): TermsRecord | null {
   let v = raw;
+
   if (typeof v === "string") {
     try {
       v = JSON.parse(v);
@@ -45,24 +49,40 @@ export function parseRecord(raw: unknown): TermsRecord | null {
       return null;
     }
   }
+
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+
   const r = v as Record<string, unknown>;
   if (typeof r["version"] !== "string" || !r["version"]) return null;
   if (typeof r["acceptedAt"] !== "string" || Number.isNaN(Date.parse(r["acceptedAt"]))) return null;
   if (typeof r["appVersion"] !== "string" || typeof r["lang"] !== "string") return null;
   if (!Array.isArray(r["points"]) || !r["points"].every((p) => typeof p === "string")) return null;
-  return { version: r["version"], acceptedAt: r["acceptedAt"], appVersion: r["appVersion"], lang: r["lang"], points: [...(r["points"] as string[])] };
+
+  return {
+    version: r["version"],
+    acceptedAt: r["acceptedAt"],
+    appVersion: r["appVersion"],
+    lang: r["lang"],
+    points: [...(r["points"] as string[])],
+  };
 }
 
 /** True unless `record` accepts this `version` with every point ticked. */
 export function needsAcceptance(record: TermsRecord | null, version: string = TERMS_VERSION): boolean {
   if (!record || record.version !== version) return true;
+
   return !TERMS_POINTS.every((p) => record.points.includes(p.id));
 }
 
 /** The record for accepting the current text now. */
 export function acceptRecord(appVersion: string, lang: string, now: Date = new Date()): TermsRecord {
-  return { version: TERMS_VERSION, acceptedAt: now.toISOString(), appVersion, lang, points: TERMS_POINTS.map((p) => p.id) };
+  return {
+    version: TERMS_VERSION,
+    acceptedAt: now.toISOString(),
+    appVersion,
+    lang,
+    points: TERMS_POINTS.map((p) => p.id),
+  };
 }
 
 /** What an MCP call gets while the terms are not accepted. */
@@ -70,6 +90,9 @@ export const TERMS_MCP_ERROR =
   "The user must first accept the terms of use in meerCAD (Der Nutzer muss zuerst in meerCAD die Nutzungsvereinbarung akzeptieren). Ask them to open meerCAD and accept; then try again.";
 
 /** True once the scroll box is read to the end (a text shorter than the box counts as read). */
-export function scrolledToEnd(box: { scrollTop: number; scrollHeight: number; clientHeight: number }, tolerance = 24): boolean {
+export function scrolledToEnd(
+  box: { scrollTop: number; scrollHeight: number; clientHeight: number },
+  tolerance = 24,
+): boolean {
   return box.scrollTop + box.clientHeight >= box.scrollHeight - tolerance;
 }

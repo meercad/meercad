@@ -23,9 +23,21 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 25, mode: "new_body" },
 ];
 let vp: Viewport;
@@ -34,7 +46,15 @@ const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)
 async function clickAt(world: [number, number, number], opts: { shiftKey?: boolean; button?: number } = {}) {
   const [x, y] = vp.worldToScreen(world)!;
   const button = opts.button ?? 0;
-  const ev = { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button, isPrimary: true, shiftKey: !!opts.shiftKey };
+  const ev = {
+    clientX: x,
+    clientY: y,
+    pointerId: 1,
+    pointerType: "mouse",
+    button,
+    isPrimary: true,
+    shiftKey: !!opts.shiftKey,
+  };
   await act(async () => {
     fireEvent.pointerMove(vp.canvas, { ...ev, buttons: 0 });
     fireEvent.pointerDown(vp.canvas, { ...ev, buttons: 1 << button });
@@ -42,6 +62,7 @@ async function clickAt(world: [number, number, number], opts: { shiftKey?: boole
   });
   await settle();
 }
+
 const EMPTY: [number, number, number] = [30, 60, 0];
 
 beforeAll(async () => {
@@ -56,7 +77,14 @@ beforeAll(async () => {
     vp.fit(false);
   });
 });
-beforeEach(() => useApp.setState({ selection: [], selectedFeature: null, measure: { active: false, picks: [], result: null }, hidden: new Set() }));
+beforeEach(() =>
+  useApp.setState({
+    selection: [],
+    selectedFeature: null,
+    measure: { active: false, picks: [], result: null },
+    hidden: new Set(),
+  }),
+);
 afterAll(cleanup);
 
 describe("clicks in the 3D view", () => {
@@ -79,6 +107,7 @@ describe("clicks in the 3D view", () => {
     await clickAt([65, 5, 25], { shiftKey: true });
     expect(useApp.getState().measure.picks).toHaveLength(2);
     await settle(200);
+
     const rows = useApp.getState().measure.result?.rows ?? [];
     // The nearest points: the block's top edge at x = 40, z = 10 and the post's at x = 60, z = 25.
     const text = rows.map((r) => r.join(" ")).join("\n");
@@ -107,7 +136,10 @@ describe("clicks in the 3D view", () => {
     expect(useApp.getState().hidden.size).toBe(0);
     await clickAt([20, 10, 10], { button: 2 });
     await pickMenu("Measure");
-    expect(useApp.getState().measure).toMatchObject({ active: true, picks: [{ kind: "face", bodyId: "ex1" }] });
+    expect(useApp.getState().measure).toMatchObject({
+      active: true,
+      picks: [{ kind: "face", bodyId: "ex1" }],
+    });
   });
 
   it("starts tools from a face and an edge, duplicates a part with its size and deletes one", async () => {
@@ -120,7 +152,12 @@ describe("clicks in the 3D view", () => {
     await pickMenu("Fillet");
     expect(useApp.getState().dialog?.feature).toMatchObject({ op: "fillet" });
     await act(async () => useApp.setState({ dialog: null }));
-    const volumes = () => useApp.getState().output!.report.bodies.map((b) => Math.round(b.volume ?? 0)).sort((a, b) => a - b);
+
+    const volumes = () =>
+      useApp
+        .getState()
+        .output!.report.bodies.map((b) => Math.round(b.volume ?? 0))
+        .sort((a, b) => a - b);
     expect(volumes()).toEqual([2500, 8000]);
     await clickAt([65, 5, 25], { button: 2 });
     await pickMenu("Duplicate");

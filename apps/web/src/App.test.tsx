@@ -8,7 +8,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // The pictures of all examples, made in the background from the start, are tested on their own
 // (lib/thumbnails.test.ts): here they would build every example while the test runs.
-vi.mock("./lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("./lib/thumbnails")>()), startBackgroundPictures: () => undefined, fillThumbnails: async () => undefined }));
+vi.mock("./lib/thumbnails", async (orig) => ({
+  ...(await orig<typeof import("./lib/thumbnails")>()),
+  startBackgroundPictures: () => undefined,
+  fillThumbnails: async () => undefined,
+}));
 import { App } from "./App";
 import { currentDoc, goHome, useApp } from "./store";
 import { rebuilt, renderUi, withScreen } from "../test/ui";
@@ -26,7 +30,10 @@ describe("the app", () => {
     renderUi(<App />);
     await act(async () => new Promise((r) => setTimeout(r, 50)));
     expect(useApp.getState().screen).toBe("home");
-    const make = screen.getAllByRole("button").find((b) => /new/i.test(b.textContent ?? "") || /new/i.test(b.getAttribute("title") ?? ""));
+
+    const make = screen
+      .getAllByRole("button")
+      .find((b) => /new/i.test(b.textContent ?? "") || /new/i.test(b.getAttribute("title") ?? ""));
     expect(make).toBeDefined();
     await act(async () => void fireEvent.click(make!));
     await waitFor(() => expect(useApp.getState().screen).toBe("editor"));
@@ -37,10 +44,12 @@ describe("the app", () => {
     const tool = screen.getAllByRole("button").find((b) => (b.getAttribute("title") ?? "").startsWith("Box"));
     if (tool) await act(async () => void fireEvent.click(tool));
     else await act(async () => (await import("./store")).startFeature("box"));
+
     await waitFor(() => expect(useApp.getState().dialog?.feature.op).toBe("box"));
     await act(async () => void fireEvent.click(screen.getByTitle("Accept (Enter)")));
     await rebuilt();
     expect(currentDoc().features.at(-1)!.op).toBe("box");
+
     const bodies = useApp.getState().output!.report.bodies;
     expect(bodies.length).toBeGreaterThanOrEqual(1);
   });
@@ -56,11 +65,14 @@ describe("the editor's bars", () => {
   const click = async (title: string | RegExp) => {
     const b = screen.getAllByRole("button").find((x) => {
       const s = x.getAttribute("title") || x.getAttribute("aria-label") || x.textContent?.trim() || "";
+
       return typeof title === "string" ? s.startsWith(title) : title.test(s);
     });
     if (!b) throw new Error(`no button ${String(title)}`);
+
     await act(async () => void fireEvent.click(b));
   };
+
   const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
 
   it("opens a new design for the bars", async () => {
@@ -71,10 +83,22 @@ describe("the editor's bars", () => {
   });
 
   it("switches views, planes, sketches and the camera", async () => {
-    for (const t of ["Isometric view", "Rotate view 90° left", "Rotate view 90° right", "Fit all", "Planes", "Sketches", "Parts in one colour", "Hide dimensions on the model", /^Grid/, /^Perspective/]) {
+    for (const t of [
+      "Isometric view",
+      "Rotate view 90° left",
+      "Rotate view 90° right",
+      "Fit all",
+      "Planes",
+      "Sketches",
+      "Parts in one colour",
+      "Hide dimensions on the model",
+      /^Grid/,
+      /^Perspective/,
+    ]) {
       await click(t);
       await settle();
     }
+
     expect(useApp.getState().showPlanes).toBeDefined();
   });
 
@@ -95,9 +119,11 @@ describe("the editor's bars", () => {
   it("searches commands and runs one", async () => {
     await click("Search commands");
     await settle();
+
     const input = document.querySelector<HTMLInputElement>(".palette input");
     expect(input).not.toBeNull();
     await act(async () => void fireEvent.change(input!, { target: { value: "gear" } }));
+
     const hit = [...document.querySelectorAll<HTMLButtonElement>(".palette-list button")];
     const gear = hit.find((b) => /^ModelingGear/.test(b.textContent ?? ""));
     expect(gear, hit.map((b) => b.textContent).join(" | ")).toBeDefined();
@@ -114,6 +140,7 @@ describe("the editor's bars", () => {
     expect(currentDoc().params["w"]).toBeUndefined();
     await click("Redo");
     expect(currentDoc().params["w"]).toBe("5 mm");
+
     const tabs = useApp.getState().tabs.length;
     await click("New part");
     await waitFor(() => expect(useApp.getState().tabs.length).toBe(tabs + 1));

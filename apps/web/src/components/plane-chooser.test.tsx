@@ -42,13 +42,24 @@ describe("choosing a sketch plane", () => {
   it("tags every plane and starts the sketch on the one clicked", async () => {
     await act(async () => useApp.setState({ pickingSketchPlane: true }));
     await settle();
+
     const tags = [...document.querySelectorAll<HTMLButtonElement>(".plane-tag")];
-    expect(tags.map((t) => t.dataset["plane"]).sort()).toEqual(["origin.XY", "origin.XZ", "origin.YZ", "pl1"]);
+    expect(tags.map((t) => t.dataset["plane"]).sort()).toEqual([
+      "origin.XY",
+      "origin.XZ",
+      "origin.YZ",
+      "pl1",
+    ]);
+
     const tag = tags.find((t) => t.dataset["plane"] === "pl1")!;
     await act(async () => void fireEvent.pointerEnter(tag));
     await act(async () => void fireEvent.pointerLeave(tag));
     await act(async () => void fireEvent.click(tag));
-    const sk = currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<Feature, { op: "sketch" }>;
+
+    const sk = currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<
+      Feature,
+      { op: "sketch" }
+    >;
     expect(sk.plane).toEqual({ ref: "pl1" });
     await act(async () => closeSketch());
   });
@@ -56,10 +67,15 @@ describe("choosing a sketch plane", () => {
   it("offers the origin planes in a bar, and Cancel stops choosing", async () => {
     await act(async () => useApp.setState({ pickingSketchPlane: true }));
     await settle();
+
     const bar = screen.getByRole("toolbar", { name: "Sketch plane" });
     const xz = [...bar.querySelectorAll("button")].find((b) => /Front/.test(b.textContent ?? ""))!;
     await act(async () => void fireEvent.click(xz));
-    const sk = currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<Feature, { op: "sketch" }>;
+
+    const sk = currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<
+      Feature,
+      { op: "sketch" }
+    >;
     expect(sk.plane).toEqual({ ref: "origin.XZ" });
     await act(async () => closeSketch());
     await act(async () => useApp.setState({ pickingSketchPlane: true }));
@@ -79,18 +95,28 @@ describe("the UI tests' probe", () => {
 
   it("reports the parts' sizes, the sketch's region and the origin on screen", async () => {
     await rebuildNow();
+
     const vp = getViewport()!;
-    const st = probeState(useApp, () => false, (p) => vp.worldToScreen(p));
+    const st = probeState(
+      useApp,
+      () => false,
+      (p) => vp.worldToScreen(p),
+    );
     expect(st.screen).toBe(useApp.getState().screen);
     expect(st.features).toEqual(expect.arrayContaining(["sk1", "ex1", "pl1"]));
     expect(st.bodies.find((b) => b.id === "ex1")!.size).toEqual([40, 20, 10]);
     expect(st.axes).not.toBeNull();
     await act(async () => (await import("../store")).openSketch("sk1"));
     await rebuildNow();
+
     const inSketch = probeState(useApp);
     expect(inSketch.sketchInfo).toMatchObject({ lines: 4, circles: 0, regions: [800] });
     await act(async () => closeSketch());
-    installProbe(useApp, () => false, () => null);
+    installProbe(
+      useApp,
+      () => false,
+      () => null,
+    );
     expect(document.getElementById("uitest-probe")!.textContent).toMatch(/^UITEST \{/);
   });
 });

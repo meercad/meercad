@@ -28,28 +28,35 @@ export function AssistantPane({ session }: { session: string }) {
     const el = slot.current;
     const a = desktop?.assistant;
     if (!el || !a) return;
+
     let gone = false;
+
     const place = () => {
       if (covered) return;
+
       const r = el.getBoundingClientRect();
       a.show({ session, rect: { x: r.left, y: r.top, width: r.width, height: r.height } });
     };
-    if (covered)
+
+    if (covered) {
       void a
         .snapshot(session)
         .catch(() => null)
         .then((img) => {
           if (gone) return;
+
           setStill(img);
           a.show(null);
         });
-    else {
+    } else {
       setStill(null);
       place();
     }
+
     const ro = new ResizeObserver(place);
     ro.observe(el);
     window.addEventListener("resize", place);
+
     return () => {
       gone = true;
       ro.disconnect();
@@ -58,6 +65,7 @@ export function AssistantPane({ session }: { session: string }) {
   }, [session, covered]);
   // Hidden when this pane goes or shows another tab (not when a dialog opens: it is pictured first).
   useEffect(() => () => desktop?.assistant?.show(null), [session]);
+
   return (
     <div className="assistant-pane">
       <header className={`topbar ${desktop ? "desktop" : ""}`}>
@@ -95,8 +103,10 @@ function useCovered(): boolean {
     const mo = new MutationObserver(check);
     mo.observe(document.body, { childList: true, subtree: true });
     check();
+
     return () => mo.disconnect();
   }, []);
+
   return covered;
 }
 
@@ -108,23 +118,38 @@ export function AssistantBar() {
   const client = assistantWindow?.client ?? lock?.client ?? "Claude";
   const busy = !!lock;
   const doing = busy ? toolLabel(tool) : null;
+
   return (
     <div className={`assistant-bar ${busy ? "busy" : ""}`} role="status">
       <AiOrb busy={busy} />
       <div className="assistant-bar-text">
-        <b>{busy ? t("{client} is working on this model", { client }) : t("{client} has this model open", { client })}</b>
+        <b>
+          {busy
+            ? t("{client} is working on this model", { client })
+            : t("{client} has this model open", { client })}
+        </b>
         <small>
           {doing ? (
             <span className="assistant-tool" key={doing}>
               {doing}
             </span>
           ) : (
-            <span>{busy ? t("Working…") : t("Waiting for the next step · yours again after {min} minutes without one", { min: ASSISTANT_IDLE_MS / 60_000 })}</span>
+            <span>
+              {busy
+                ? t("Working…")
+                : t("Waiting for the next step · yours again after {min} minutes without one", {
+                    min: ASSISTANT_IDLE_MS / 60_000,
+                  })}
+            </span>
           )}
           {project ? <span className="muted"> · {project.name}</span> : null}
         </small>
       </div>
-      <button className="btn" onClick={stopAssistant} title={t("{client} stops working on it; the project opens in a tab of yours", { client })}>
+      <button
+        className="btn"
+        onClick={stopAssistant}
+        title={t("{client} stops working on it; the project opens in a tab of yours", { client })}
+      >
         {t("Take over")}
       </button>
     </div>

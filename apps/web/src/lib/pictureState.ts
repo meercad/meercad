@@ -39,6 +39,7 @@ export interface PictureMeta {
  */
 export function blankPixels(rgba: ArrayLike<number>): boolean {
   for (let i = 3; i < rgba.length; i += 4) if (rgba[i] !== 0) return false;
+
   return true;
 }
 
@@ -50,6 +51,7 @@ export function blankPixels(rgba: ArrayLike<number>): boolean {
  */
 export function needsPicture(p: PictureMeta, blank = false, lookSince = 0): boolean {
   if (!p.thumbnail || blank) return true;
+
   return p.thumbnailAt !== undefined && (p.thumbnailAt < p.updatedAt || p.thumbnailAt < lookSince);
 }
 
@@ -75,9 +77,13 @@ export function lookSince(stored: LookMark | null, version: number, now: number)
  * the overview was left before. A call during a run asks for one more run after it, so a project
  * added or changed meanwhile still gets its picture.
  */
-export function pictureRunner(steps: { projects: () => Promise<void>; examples: () => Promise<void> }): () => Promise<void> {
+export function pictureRunner(steps: {
+  projects: () => Promise<void>;
+  examples: () => Promise<void>;
+}): () => Promise<void> {
   let running: Promise<void> | null = null;
   let again = false;
+
   const run = async (): Promise<void> => {
     do {
       again = false;
@@ -85,12 +91,16 @@ export function pictureRunner(steps: { projects: () => Promise<void>; examples: 
       await steps.examples();
     } while (again);
   };
+
   return () => {
     if (running) {
       again = true;
+
       return running;
     }
+
     running = run().finally(() => (running = null));
+
     return running;
   };
 }
@@ -112,8 +122,12 @@ export const BIG_FILE_BYTES = 8 * 2 ** 20;
  * kernel only (`oneKernel`: iPad and iPhone), not while a project is open in the editor, and not a
  * big design (BIG_STEPS), which gets its picture when it is opened.
  */
-export function backgroundBuildAllowed(doc: Pick<MeercadDocument, "features">, at: { oneKernel: boolean; editorOpen: boolean }): boolean {
+export function backgroundBuildAllowed(
+  doc: Pick<MeercadDocument, "features">,
+  at: { oneKernel: boolean; editorOpen: boolean },
+): boolean {
   if (!at.oneKernel) return true;
+
   return !at.editorOpen && doc.features.length <= BIG_STEPS;
 }
 
@@ -132,5 +146,6 @@ export type KernelKind = "kernel" | "kernel-threads" | "kernel-reserve";
  */
 export function kernelKindFor(steps: number, at: { mobile: boolean; threads: boolean }): KernelKind {
   if (at.mobile && steps > BIG_STEPS) return "kernel-reserve";
+
   return at.threads ? "kernel-threads" : at.mobile ? "kernel-reserve" : "kernel";
 }

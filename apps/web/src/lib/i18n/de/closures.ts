@@ -2,49 +2,59 @@
 export default {
   // lib/features.ts: tools and names
   "Box with lid": "Box mit Deckel",
-  "Printable box with a snap lid, or a round jar with a screw lid; box and lid as two parts with the right play": "Druckbare Box mit Schnappdeckel oder runde Dose mit Schraubdeckel; Box und Deckel als zwei Teile mit passendem Spiel",
+  "Printable box with a snap lid, or a round jar with a screw lid; box and lid as two parts with the right play":
+    "Druckbare Box mit Schnappdeckel oder runde Dose mit Schraubdeckel; Box und Deckel als zwei Teile mit passendem Spiel",
   "Snap hook": "Schnapphaken",
-  "Snap hooks on a face that click into a window in the other part, with the bending strain checked": "Schnapphaken auf einer Fläche, die in ein Fenster im anderen Teil einrasten, mit geprüfter Biegedehnung",
-  "Box": "Box",
+  "Snap hooks on a face that click into a window in the other part, with the bending strain checked":
+    "Schnapphaken auf einer Fläche, die in ein Fenster im anderen Teil einrasten, mit geprüfter Biegedehnung",
+  Box: "Box",
   "Round box": "Runde Box",
   "Lid of {name}": "Deckel von {name}",
   "Tap a flat face where the hook stands": "Tippe auf eine ebene Fläche, auf der der Haken steht",
   // lib/examples.ts
   "Boxes and snap hooks": "Boxen und Schnapphaken",
-  "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks": "Eine Box mit Schnappdeckel, eine Schraubdose und ein Gehäuse, dessen Deckel mit zwei Schnapphaken einrastet",
+  "A box with a snap lid, a jar with a screw lid, and a case whose lid clicks in with two snap hooks":
+    "Eine Box mit Schnappdeckel, eine Schraubdose und ein Gehäuse, dessen Deckel mit zwei Schnapphaken einrastet",
   // components/ClosureFields.tsx: boxes
   "Small parts box": "Kleinteilebox",
   "Flat tin": "Flache Dose",
   "Round snap box": "Runde Schnappdose",
-  "Jar": "Schraubdose",
+  Jar: "Schraubdose",
   "Quick-turn jar": "Schnell-Schraubdose",
-  "Opening ⌀{d}, inside {h} deep · closes in {n} turns": "Öffnung ⌀{d}, innen {h} tief · schließt in {n} Umdrehungen",
+  "Opening ⌀{d}, inside {h} deep · closes in {n} turns":
+    "Öffnung ⌀{d}, innen {h} tief · schließt in {n} Umdrehungen",
   "Inside ⌀{d}, {h} deep": "Innen ⌀{d}, {h} tief",
   "Inside {w} × {d}, {h} deep": "Innen {w} × {d}, {h} tief",
   "Snap lid": "Schnappdeckel",
   "Screw lid": "Schraubdeckel",
-  "Rectangular": "Eckig",
-  "Play": "Spiel",
+  Rectangular: "Eckig",
+  Play: "Spiel",
   "Corner radius": "Eckenradius",
   "Neck height": "Halshöhe",
-  "Starts": "Gänge",
-  "Snap": "Rastung",
+  Starts: "Gänge",
+  Snap: "Rastung",
   "Lip height": "Randhöhe",
   "Notch to open it with a finger nail": "Kerbe zum Öffnen mit dem Fingernagel",
   "Lid on the box (to look at it closed)": "Deckel auf der Box (zum Ansehen geschlossen)",
-  "Box and cap are two parts. The thread has 45° flanks, so both print without supports: the jar upright, the cap upside down as it lies.": "Dose und Deckel sind zwei Teile. Das Gewinde hat 45°-Flanken, so drucken beide ohne Stützen: die Dose aufrecht, der Deckel kopfüber, wie er liegt.",
-  "Box and lid are two parts. The lid's lip clicks into a groove inside the rim; a larger snap holds tighter. Print the lid as it lies, top down.": "Box und Deckel sind zwei Teile. Der Rand des Deckels rastet in eine Nut innen in der Box ein; eine größere Rastung hält fester. Drucke den Deckel, wie er liegt, mit der Oberseite nach unten.",
-  "Play is the gap per side; raise it if the lid is too tight on your printer.": "Spiel ist der Spalt je Seite; erhöhe es, wenn der Deckel auf deinem Drucker zu stramm sitzt.",
+  "Box and cap are two parts. The thread has 45° flanks, so both print without supports: the jar upright, the cap upside down as it lies.":
+    "Dose und Deckel sind zwei Teile. Das Gewinde hat 45°-Flanken, so drucken beide ohne Stützen: die Dose aufrecht, der Deckel kopfüber, wie er liegt.",
+  "Box and lid are two parts. The lid's lip clicks into a groove inside the rim; a larger snap holds tighter. Print the lid as it lies, top down.":
+    "Box und Deckel sind zwei Teile. Der Rand des Deckels rastet in eine Nut innen in der Box ein; eine größere Rastung hält fester. Drucke den Deckel, wie er liegt, mit der Oberseite nach unten.",
+  "Play is the gap per side; raise it if the lid is too tight on your printer.":
+    "Spiel ist der Spalt je Seite; erhöhe es, wenn der Deckel auf deinem Drucker zu stramm sitzt.",
   // components/ClosureFields.tsx: snap hooks
   "Holds for good": "Hält dauerhaft",
   "Can be opened": "Lösbar",
-  "Small": "Klein",
-  "Sturdy": "Kräftig",
-  "Bends {e} when it snaps: fine in PLA, PETG and nylon.": "Dehnt sich beim Einrasten um {e}: passt in PLA, PETG und Nylon.",
-  "Bends {e} when it snaps: too much for PLA; fine in {list}.": "Dehnt sich beim Einrasten um {e}: zu viel für PLA; passt in {list}.",
-  "nylon": "Nylon",
-  "Bends {e} when it snaps: it may break. Make it longer or thinner, or the overhang smaller.": "Dehnt sich beim Einrasten um {e}: er kann brechen. Mach ihn länger oder dünner oder den Überstand kleiner.",
-  "Overhang": "Überstand",
+  Small: "Klein",
+  Sturdy: "Kräftig",
+  "Bends {e} when it snaps: fine in PLA, PETG and nylon.":
+    "Dehnt sich beim Einrasten um {e}: passt in PLA, PETG und Nylon.",
+  "Bends {e} when it snaps: too much for PLA; fine in {list}.":
+    "Dehnt sich beim Einrasten um {e}: zu viel für PLA; passt in {list}.",
+  nylon: "Nylon",
+  "Bends {e} when it snaps: it may break. Make it longer or thinner, or the overhang smaller.":
+    "Dehnt sich beim Einrasten um {e}: er kann brechen. Mach ihn länger oder dünner oder den Überstand kleiner.",
+  Overhang: "Überstand",
   "Lead-in": "Einführwinkel",
   "Holding angle": "Haltewinkel",
   "Tap the face to place hooks": "Tippe auf die Fläche, um Haken zu setzen",
@@ -56,12 +66,16 @@ export default {
   "Tap the part the hook clicks into (optional)": "Tippe auf das Teil, in das der Haken einrastet (optional)",
   "Play round the window": "Spiel um das Fenster",
   "Hooks as a part of their own": "Haken als eigenes Teil",
-  "Hooks stand on the face and join its part. Model the parts closed, place the hook where its barb reaches into the other part's wall, and pick that part: its window is cut there, with play.": "Haken stehen auf der Fläche und werden Teil davon. Modelliere die Teile geschlossen, setze den Haken so, dass seine Rastnase in die Wand des anderen Teils reicht, und wähle dieses Teil: Dort wird sein Fenster mit Spiel ausgeschnitten.",
+  "Hooks stand on the face and join its part. Model the parts closed, place the hook where its barb reaches into the other part's wall, and pick that part: its window is cut there, with play.":
+    "Haken stehen auf der Fläche und werden Teil davon. Modelliere die Teile geschlossen, setze den Haken so, dass seine Rastnase in die Wand des anderen Teils reicht, und wähle dieses Teil: Dort wird sein Fenster mit Spiel ausgeschnitten.",
   // components/Help.tsx
   "Boxes, lids and snap hooks": "Boxen, Deckel und Schnapphaken",
-  "**Create → Box with lid** makes a box and its lid as two parts: rectangular or round with a **snap lid** that clicks into a groove, or a round jar with a **screw lid**. Start from a preset, then change sizes, wall, play, snap or thread.": "**Erstellen → Box mit Deckel** macht eine Box und ihren Deckel als zwei Teile: eckig oder rund mit **Schnappdeckel**, der in eine Nut einrastet, oder eine runde Dose mit **Schraubdeckel**. Beginne mit einer Vorlage und ändere dann Maße, Wand, Spiel, Rastung oder Gewinde.",
-  "The lid lies upside down next to the box, ready to print. **Lid on the box** shows it closed; **Check fit** confirms that nothing overlaps.": "Der Deckel liegt kopfüber neben der Box, bereit zum Drucken. **Deckel auf der Box** zeigt sie geschlossen; **Passung prüfen** bestätigt, dass sich nichts überschneidet.",
-  "**Create → Snap hook** puts hooks on a flat face. Tap the face where they stand, turn the barb with the turn button, and tap the part they click into: its window is cut with play. The dialog shows how far the hook bends and which plastics take it.": "**Erstellen → Schnapphaken** setzt Haken auf eine ebene Fläche. Tippe auf die Fläche, auf der sie stehen, dreh die Rastnase mit der Dreh-Taste und tippe auf das Teil, in das sie einrasten: Dort wird ihr Fenster mit Spiel ausgeschnitten. Der Dialog zeigt, wie stark sich der Haken biegt und welche Kunststoffe das aushalten.",
+  "**Create → Box with lid** makes a box and its lid as two parts: rectangular or round with a **snap lid** that clicks into a groove, or a round jar with a **screw lid**. Start from a preset, then change sizes, wall, play, snap or thread.":
+    "**Erstellen → Box mit Deckel** macht eine Box und ihren Deckel als zwei Teile: eckig oder rund mit **Schnappdeckel**, der in eine Nut einrastet, oder eine runde Dose mit **Schraubdeckel**. Beginne mit einer Vorlage und ändere dann Maße, Wand, Spiel, Rastung oder Gewinde.",
+  "The lid lies upside down next to the box, ready to print. **Lid on the box** shows it closed; **Check fit** confirms that nothing overlaps.":
+    "Der Deckel liegt kopfüber neben der Box, bereit zum Drucken. **Deckel auf der Box** zeigt sie geschlossen; **Passung prüfen** bestätigt, dass sich nichts überschneidet.",
+  "**Create → Snap hook** puts hooks on a flat face. Tap the face where they stand, turn the barb with the turn button, and tap the part they click into: its window is cut with play. The dialog shows how far the hook bends and which plastics take it.":
+    "**Erstellen → Schnapphaken** setzt Haken auf eine ebene Fläche. Tippe auf die Fläche, auf der sie stehen, dreh die Rastnase mit der Dreh-Taste und tippe auf das Teil, in das sie einrasten: Dort wird ihr Fenster mit Spiel ausgeschnitten. Der Dialog zeigt, wie stark sich der Haken biegt und welche Kunststoffe das aushalten.",
   // lib/topology.ts: face names in chips
   "face::wall": "Wand",
   "face::inside": "Innenseite",

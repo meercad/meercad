@@ -25,12 +25,35 @@ const circle = (id: string, x: number, y: number, r: number): SketchEntity[] => 
 ];
 /** A 40 × 20 × 10 block with two Ø6 holes cut through it, one edge rounded R2, and a cube beside it. */
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: [...circle("h1", 10, 10, 3), ...circle("h2", 30, 10, 3)], constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: [...circle("h1", 10, 10, 3), ...circle("h2", 30, 10, 3)],
+    constraints: [],
+  },
   { id: "cut", op: "extrude", profile: { sketch: "sk2" }, extent: "through_all", distance: 1, mode: "cut" },
-  { id: "fi1", op: "fillet", edges: [{ edge: ["ex1.end_cap", "ex1.side[sk1.ba]"] }, { edge: ["ex1.end_cap", "ex1.side[sk1.bc]"] }], radius: 2 },
-  { id: "sk3", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "fi1",
+    op: "fillet",
+    edges: [{ edge: ["ex1.end_cap", "ex1.side[sk1.ba]"] }, { edge: ["ex1.end_cap", "ex1.side[sk1.bc]"] }],
+    radius: 2,
+  },
+  {
+    id: "sk3",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "cube", op: "extrude", profile: { sketch: "sk3" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 const hole = Math.PI * 9 * 10;
@@ -39,8 +62,23 @@ const round = (4 - Math.PI) * 40; // one R2 fillet along a 40 mm edge: (r² − 
 async function picks(match: (tag: string) => boolean, body = "ex1"): Promise<Pick[]> {
   const out = await rebuildNow();
   const m = out.meshes.find((x) => x.bodyId === body)!;
-  return m.faceTags.flatMap((tags, face) => (tags.some(match) ? [{ kind: "face" as const, bodyId: body, face, tags, point: [0, 0, 0] as [number, number, number], normal: null }] : []));
+
+  return m.faceTags.flatMap((tags, face) =>
+    tags.some(match)
+      ? [
+          {
+            kind: "face" as const,
+            bodyId: body,
+            face,
+            tags,
+            point: [0, 0, 0] as [number, number, number],
+            normal: null,
+          },
+        ]
+      : [],
+  );
 }
+
 const volume = async (id = "ex1") => (await rebuildNow()).report.bodies.find((b) => b.id === id)?.volume;
 
 beforeAll(async () => {
@@ -53,7 +91,9 @@ describe("the Delete key on the model", () => {
   it("takes one hole out of the cut and keeps the other", async () => {
     useApp.setState({ selection: await picks((t) => t === "cut.side[sk2.h1]") });
     await deleteModelSelection();
-    expect(currentDoc().features.find((f) => f.id === "cut")).toMatchObject({ profile: { sketch: "sk2", regions: [expect.stringContaining("h2")] } });
+    expect(currentDoc().features.find((f) => f.id === "cut")).toMatchObject({
+      profile: { sketch: "sk2", regions: [expect.stringContaining("h2")] },
+    });
     expect(await volume()).toBeCloseTo(8000 - hole - 2 * round, 1);
     expect(useApp.getState().selection).toEqual([]);
     undo();
@@ -69,7 +109,9 @@ describe("the Delete key on the model", () => {
   });
 
   it("drops one rounded edge from the fillet", async () => {
-    useApp.setState({ selection: (await picks((t) => t.startsWith("fi1.round[") && t.includes("sk1.ba"))).slice(0, 1) });
+    useApp.setState({
+      selection: (await picks((t) => t.startsWith("fi1.round[") && t.includes("sk1.ba"))).slice(0, 1),
+    });
     await deleteModelSelection();
     expect((currentDoc().features.find((f) => f.id === "fi1") as { edges: unknown[] }).edges).toHaveLength(1);
     expect(await volume()).toBeCloseTo(8000 - 2 * hole - round, 1);
@@ -93,7 +135,9 @@ describe("the Delete key on the model", () => {
     useApp.setState({ selection: [{ kind: "plane", planeId: "origin.XY", point: [0, 0, 0] }] });
     await deleteModelSelection();
     expect(useApp.getState().toasts.at(-1)!.text).toMatch(/Nothing here can be deleted/);
-    useApp.setState({ selection: [{ kind: "face", bodyId: "ex1", face: 0, tags: [], point: [0, 0, 0], normal: null }] });
+    useApp.setState({
+      selection: [{ kind: "face", bodyId: "ex1", face: 0, tags: [], point: [0, 0, 0], normal: null }],
+    });
     await deleteModelSelection();
     expect(useApp.getState().toasts.at(-1)!.text).toMatch(/no name/);
     useApp.setState({ selection: [] });

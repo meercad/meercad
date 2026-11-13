@@ -20,6 +20,7 @@ const KEY = "meercad.lang";
 export function langChoice(): LangChoice {
   try {
     const v = localStorage.getItem(KEY);
+
     return v === "en" || v === "de" ? v : "auto";
   } catch {
     return "auto";
@@ -29,15 +30,21 @@ export function langChoice(): LangChoice {
 function resolve(): Lang {
   const c = langChoice();
   if (c !== "auto") return c;
-  const sys = typeof navigator !== "undefined" ? (navigator.languages?.[0] ?? navigator.language ?? "en") : "en";
+
+  const sys =
+    typeof navigator !== "undefined" ? (navigator.languages?.[0] ?? navigator.language ?? "en") : "en";
+
   return sys.toLowerCase().startsWith("de") ? "de" : "en";
 }
 
 /** The interface language for this run. */
 export const lang: Lang = resolve();
 if (typeof document !== "undefined") document.documentElement.lang = lang;
+
 // The Mac app names its menu bar in the same language (older desktop builds lack the call).
-if (typeof window !== "undefined") (window as { meercadDesktop?: { setLanguage?: (l: Lang) => void } }).meercadDesktop?.setLanguage?.(lang);
+if (typeof window !== "undefined") {
+  (window as { meercadDesktop?: { setLanguage?: (l: Lang) => void } }).meercadDesktop?.setLanguage?.(lang);
+}
 
 /** Saves the choice and restarts the interface in it. */
 export function setLang(choice: LangChoice): void {
@@ -47,19 +54,27 @@ export function setLang(choice: LangChoice): void {
   } catch {
     // Without storage the choice only lasts until the reload.
   }
+
   location.reload();
 }
 
-const fill = (s: string, vars?: Readonly<Record<string, string | number>>) => (vars ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : s);
+const fill = (s: string, vars?: Readonly<Record<string, string | number>>) =>
+  vars ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : s;
 
 /** The text in the interface language. */
 export function t(s: string, vars?: Readonly<Record<string, string | number>>): string {
   const de = lang === "de" ? DE[s] : undefined;
   const ctx = s.indexOf("::");
+
   return fill(de ?? (ctx >= 0 ? s.slice(ctx + 2) : s), vars);
 }
 
 /** One or many: tn(n, "{n} part", "{n} parts"); `n` is filled in. */
-export function tn(n: number, one: string, other: string, vars?: Readonly<Record<string, string | number>>): string {
+export function tn(
+  n: number,
+  one: string,
+  other: string,
+  vars?: Readonly<Record<string, string | number>>,
+): string {
   return t(n === 1 ? one : other, { n, ...vars });
 }

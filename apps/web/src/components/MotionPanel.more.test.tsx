@@ -23,9 +23,21 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "base", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 50, 0, 10, 10), constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 50, 0, 10, 10),
+    constraints: [],
+  },
   { id: "cube", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 const settle = (ms = 20) => act(async () => new Promise((r) => setTimeout(r, ms)));
@@ -36,8 +48,29 @@ beforeAll(async () => {
   await newProject(undefined, "Motions");
   apply(
     { type: "add_features", features: design },
-    { type: "set_joint", joint: { id: "j1", name: "Slide", type: "slider", a: "cube", b: "ground", anchor: { axis: { ref: "origin.X" } }, limits: [-20, 20] } },
-    { type: "set_motion", motion: { id: "m1", duration: 2, keys: [{ at: 0, values: { j1: 0 } }, { at: 2, values: { j1: -15 } }] } },
+    {
+      type: "set_joint",
+      joint: {
+        id: "j1",
+        name: "Slide",
+        type: "slider",
+        a: "cube",
+        b: "ground",
+        anchor: { axis: { ref: "origin.X" } },
+        limits: [-20, 20],
+      },
+    },
+    {
+      type: "set_motion",
+      motion: {
+        id: "m1",
+        duration: 2,
+        keys: [
+          { at: 0, values: { j1: 0 } },
+          { at: 2, values: { j1: -15 } },
+        ],
+      },
+    },
   );
   await rebuilt();
   await act(async () => openForCheck());
@@ -56,17 +89,24 @@ describe("a motion in the joints panel", () => {
 
   it("finds where the sliding cube meets the base", async () => {
     await act(async () => void fireEvent.click(screen.getByTitle("Check for collisions")));
-    await waitFor(() => expect(screen.getByText(/^Collides at|^No collision/)).toBeTruthy(), { timeout: 60_000 });
+    await waitFor(() => expect(screen.getByText(/^Collides at|^No collision/)).toBeTruthy(), {
+      timeout: 60_000,
+    });
     // The cube's face at x = 50 reaches the base's end at x = 40 after 10 of the 15 mm; the motion
     // eases in and out, so that is at 65 % of the time: the first of 24 frames past it is 1.304 s.
-    expect(screen.getByText(/^Collides at/).textContent).toMatch(/^Collides at 1\.304 s, .*: Extrude base · Extrude cube$/);
+    expect(screen.getByText(/^Collides at/).textContent).toMatch(
+      /^Collides at 1\.304 s, .*: Extrude base · Extrude cube$/,
+    );
   });
 
   it("is renamed and made longer, never shorter than its last moment", async () => {
     const name = screen.getByPlaceholderText("m1");
     await act(async () => void fireEvent.change(name, { target: { value: "Push" } }));
     expect(motion().name).toBe("Push");
-    const duration = [...document.querySelectorAll<HTMLInputElement>('input[type="number"]')].find((i) => i.value === "2")!;
+
+    const duration = [...document.querySelectorAll<HTMLInputElement>('input[type="number"]')].find(
+      (i) => i.value === "2",
+    )!;
     await act(async () => void fireEvent.change(duration, { target: { value: "4" } }));
     expect(motion().duration).toBe(4);
     await act(async () => void fireEvent.change(duration, { target: { value: "1" } }));
@@ -75,17 +115,26 @@ describe("a motion in the joints panel", () => {
 
   it("adds the pose shown as a moment past the end, deletes one, and says a GIF needs the 3D view", async () => {
     await act(async () => void fireEvent.click(screen.getByText("2.00 s")));
-    await act(async () => void fireEvent.click(screen.getByTitle("Adds the pose shown now as the next moment")));
+    await act(
+      async () => void fireEvent.click(screen.getByTitle("Adds the pose shown now as the next moment")),
+    );
     // Past the last moment at 2 s: a new one at 2.5 s, and the motion grows to 2.5 s.
     expect(motion().keys.map((k) => k.at)).toEqual([0, 2, 2.5]);
     expect(motion().duration).toBe(2.5);
     await act(async () => void fireEvent.click(screen.getAllByTitle("Delete").at(-1)!));
     expect(motion().keys.length).toBe(2);
-    const gif = () => document.querySelector<HTMLButtonElement>('.motions button[title="Save a video (GIF) of this motion"]')!;
+
+    const gif = () =>
+      document.querySelector<HTMLButtonElement>(
+        '.motions button[title="Save a video (GIF) of this motion"]',
+      )!;
     await act(async () => void fireEvent.click(gif()));
     await waitFor(() => expect(gif().hasAttribute("disabled")).toBe(false), { timeout: 60_000 });
     // Without a 3D view on the screen there is nothing to film: it says so.
-    expect(useApp.getState().toasts.at(-1)).toMatchObject({ kind: "error", text: "Could not make the video: viewport not ready" });
+    expect(useApp.getState().toasts.at(-1)).toMatchObject({
+      kind: "error",
+      text: "Could not make the video: viewport not ready",
+    });
   });
 
   it("deletes the motion, and a joint from its row", async () => {

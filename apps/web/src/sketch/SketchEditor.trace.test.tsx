@@ -27,13 +27,21 @@ const rect: SketchEntity[] = [
   { id: "l4", type: "line", p1: "p4", p2: "p1" },
 ];
 const b64 = (u: Uint8Array) => btoa(Array.from(u, (c) => String.fromCharCode(c)).join(""));
-const stlOf = (corners: Float64Array) => writeStl([{ positions: Float32Array.from(corners), indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i) }]);
+const stlOf = (corners: Float64Array) =>
+  writeStl([
+    {
+      positions: Float32Array.from(corners),
+      indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i),
+    },
+  ]);
 let vp: Viewport;
 const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
 const sketch = () => currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as SketchFeature;
 const lastToast = () => useApp.getState().toasts.at(-1)?.text ?? "";
+
 async function clickAt(w: [number, number, number]) {
   (vp as unknown as { scene: THREE.Scene }).scene.updateMatrixWorld(true);
+
   const [x, y] = vp.worldToScreen(w)!;
   const ev = { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true };
   await act(async () => {
@@ -43,21 +51,49 @@ async function clickAt(w: [number, number, number]) {
   });
   await settle(400);
 }
+
 async function sketchAtHalfHeight() {
   await act(async () => startSketch({ ref: "pl5" }));
-  await act(async () => vp.lookFrom(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), false, new THREE.Vector3(60, 10, 5)));
+  await act(async () =>
+    vp.lookFrom(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), false, new THREE.Vector3(60, 10, 5)),
+  );
   await settle(60);
 }
 
 beforeAll(async () => {
   withScreen();
   await testCall("new_project", { name: "Tracing" });
-  await testCall("import_file", { name: "box.stl", base64: b64(stlOf(prism([[0, 0], [30, 0], [30, 20], [0, 20]], 10))) });
-  apply({ type: "add_features", features: [
-    { id: "pl5", op: "plane", base: { ref: "origin.XY" }, offset: 5 },
-    { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect, constraints: [] },
-    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  ] as Feature[] });
+  await testCall("import_file", {
+    name: "box.stl",
+    base64: b64(
+      stlOf(
+        prism(
+          [
+            [0, 0],
+            [30, 0],
+            [30, 20],
+            [0, 20],
+          ],
+          10,
+        ),
+      ),
+    ),
+  });
+  apply({
+    type: "add_features",
+    features: [
+      { id: "pl5", op: "plane", base: { ref: "origin.XY" }, offset: 5 },
+      { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect, constraints: [] },
+      {
+        id: "ex1",
+        op: "extrude",
+        profile: { sketch: "sk1" },
+        extent: "blind",
+        distance: 10,
+        mode: "new_body",
+      },
+    ] as Feature[],
+  });
   renderUi(<ViewportView />);
   await rebuilt();
   vp = getViewport()!;
@@ -76,6 +112,7 @@ describe("geometry from the model", () => {
     expect(lastToast()).toMatch(/Click the orange section line of the mesh/);
     await clickAt([15, 0, 5]);
     expect(lastToast()).toMatch(/Traced \d+ curves?/);
+
     const out = await rebuildNow();
     const regions = out.report.sketches.find((s) => s.id === sketch().id)!.regions;
     expect(regions[0]!.area).toBeCloseTo(600, 3);
@@ -86,6 +123,7 @@ describe("geometry from the model", () => {
     await act(async () => setTool("section"));
     await settle();
     await act(async () => void fireEvent.click(screen.getByText(/^Trace all \(1\)$/)));
+
     const out = await rebuildNow();
     expect(out.report.sketches.find((s) => s.id === sketch().id)!.regions[0]!.area).toBeCloseTo(600, 3);
   });
@@ -97,10 +135,14 @@ describe("geometry from the model", () => {
     expect(lastToast()).toBe("Click a model edge to project it into the sketch");
     // The block's top edge along y = 0, from x 100 to 140.
     await clickAt([120, 0, 10]);
+
     const pr = sketch().entities.find((e) => e.type === "projection");
     expect(pr).toBeDefined();
+
     const out = await rebuildNow();
-    const curve = out.report.sketches.find((s) => s.id === sketch().id)!.curves.find((c) => c.kind === "line") as { a: [number, number]; b: [number, number] } | undefined;
+    const curve = out.report.sketches
+      .find((s) => s.id === sketch().id)!
+      .curves.find((c) => c.kind === "line") as { a: [number, number]; b: [number, number] } | undefined;
     expect(curve).toBeDefined();
     expect(Math.hypot(curve!.b[0] - curve!.a[0], curve!.b[1] - curve!.a[1])).toBeCloseTo(40, 6);
   });

@@ -27,8 +27,21 @@ export async function rebuilt(): Promise<void> {
 /** Clicks the entry of the open menu whose text starts with `label`. */
 export async function pickMenu(label: string | RegExp): Promise<void> {
   const item = await waitFor(() => {
-    const found = screen.getAllByRole("menuitem").find((el) => (typeof label === "string" ? el.textContent?.startsWith(label) : label.test(el.textContent ?? "")));
-    if (!found) throw new Error(`no menu entry ${String(label)}: ${screen.getAllByRole("menuitem").map((e) => e.textContent).join(" | ")}`);
+    const found = screen
+      .getAllByRole("menuitem")
+      .find((el) =>
+        typeof label === "string" ? el.textContent?.startsWith(label) : label.test(el.textContent ?? ""),
+      );
+
+    if (!found) {
+      throw new Error(
+        `no menu entry ${String(label)}: ${screen
+          .getAllByRole("menuitem")
+          .map((e) => e.textContent)
+          .join(" | ")}`,
+      );
+    }
+
     return found;
   });
   await act(async () => void fireEvent.click(item));
@@ -37,12 +50,16 @@ export async function pickMenu(label: string | RegExp): Promise<void> {
 /** Answers the open in-app dialog: with text typed into its field, or just confirms (`null` cancels). */
 export async function answer(text?: string | null): Promise<void> {
   const dialog = await waitFor(() => screen.getByRole("alertdialog"));
+
   if (text === null) {
     await act(async () => void fireEvent.keyDown(dialog, { key: "Escape" }));
+
     return;
   }
+
   const input = dialog.querySelector("input");
   if (text !== undefined && input) fireEvent.change(input, { target: { value: text } });
+
   await act(async () => void fireEvent.keyDown(dialog, { key: "Enter" }));
 }
 
@@ -59,5 +76,15 @@ export function withScreen(width = 800, height = 600): void {
   const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
   Object.defineProperty(proto, "clientWidth", { configurable: true, get: () => width });
   Object.defineProperty(proto, "clientHeight", { configurable: true, get: () => height });
-  proto["getBoundingClientRect"] = () => ({ left: 0, top: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => ({}) });
+  proto["getBoundingClientRect"] = () => ({
+    left: 0,
+    top: 0,
+    right: width,
+    bottom: height,
+    width,
+    height,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
 }

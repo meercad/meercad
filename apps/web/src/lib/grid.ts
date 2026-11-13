@@ -24,6 +24,7 @@ export function gridLevels(pixel: number, unit: GridUnit): { minor: number; majo
   const list = MINOR[unit];
   const minor = list.find((n) => n / pixel >= MIN_SPACING_PX) ?? list[list.length - 1]!;
   const major = unit === "in" ? (INCH_MAJOR.find((n) => n >= minor * 8 - 1e-9) ?? minor * 10) : minor * 10;
+
   return { minor, major, snap: minor };
 }
 
@@ -36,16 +37,20 @@ const DRAG: Record<GridUnit, number[]> = {
 /** The step a drag arrow moves in at a zoom level (mm per screen pixel). */
 export function dragStep(pixel: number, unit: GridUnit): number {
   const list = DRAG[unit];
+
   return list.find((n) => n >= pixel * 6) ?? list[list.length - 1]!;
 }
 
 /** A spacing in mm written in the unit: "2.5 mm", "1/16 in". */
 export function formatStep(stepMm: number, unit: GridUnit): string {
   const v = stepMm / UNIT_MM[unit];
+
   if (unit === "in" && v < 1) {
     const den = Math.round(1 / v);
     if (Math.abs(1 / den - v) < 1e-9) return `1/${den} in`;
   }
+
   if (unit === "mm" && v >= 10) return `${+(v / 10).toPrecision(6)} cm`;
+
   return `${+v.toPrecision(6)} ${unit}`;
 }

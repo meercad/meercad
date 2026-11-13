@@ -1,7 +1,8 @@
 /**
  * Measuring on an imported mesh in the app's Measure tool (scanMeasure.ts): a click on the side of
  * a Ø20 × 30 cylinder made of 96 facets finds the cylinder and its diameter, a click on each end
- * finds the planes and their distance; a third click starts over; a tighter tolerance fits again. The wall-thickness map (thickness.ts) of a 30 × 30 × 2 plate finds its 2 mm.
+ * finds the planes and their distance; a third click starts over; a tighter tolerance fits again. The
+ * wall-thickness map (thickness.ts) of a 30 × 30 × 2 plate finds its 2 mm.
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { writeStl } from "@meercad/io";
@@ -12,15 +13,55 @@ import { clearScanMeasure, measureOnScan, scanOf, setScanTolerance, useScanMeasu
 import { hideThickness, setMinWall, showThickness, useThickness } from "./thickness";
 
 const b64 = (u: Uint8Array) => btoa(Array.from(u, (c) => String.fromCharCode(c)).join(""));
-const stlOf = (corners: Float64Array) => writeStl([{ positions: Float32Array.from(corners), indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i) }]);
+const stlOf = (corners: Float64Array) =>
+  writeStl([
+    {
+      positions: Float32Array.from(corners),
+      indices: Uint32Array.from(corners.subarray(0, corners.length / 3), (_, i) => i),
+    },
+  ]);
 const rows = () => Object.fromEntries(useApp.getState().measure.result?.rows ?? []);
 let cyl = "";
 let plate = "";
 
 beforeAll(async () => {
   await testCall("new_project", { name: "Scan measure" });
-  cyl = ((await testCall("import_file", { name: "cyl.stl", base64: b64(stlOf(turned([[0, 0], [10, 0], [10, 30], [0, 30]], 96))) })) as { added: string[] }).added[0]!;
-  plate = ((await testCall("import_file", { name: "plate.stl", base64: b64(stlOf(prism([[100, 0], [130, 0], [130, 30], [100, 30]], 2))) })) as { added: string[] }).added[0]!;
+  cyl = (
+    (await testCall("import_file", {
+      name: "cyl.stl",
+      base64: b64(
+        stlOf(
+          turned(
+            [
+              [0, 0],
+              [10, 0],
+              [10, 30],
+              [0, 30],
+            ],
+            96,
+          ),
+        ),
+      ),
+    })) as { added: string[] }
+  ).added[0]!;
+  plate = (
+    (await testCall("import_file", {
+      name: "plate.stl",
+      base64: b64(
+        stlOf(
+          prism(
+            [
+              [100, 0],
+              [130, 0],
+              [130, 30],
+              [100, 30],
+            ],
+            2,
+          ),
+        ),
+      ),
+    })) as { added: string[] }
+  ).added[0]!;
   useApp.setState({ measure: { active: true, picks: [], result: null } });
 });
 
@@ -66,12 +107,14 @@ describe("the wall thickness map", () => {
   it("finds the plate's 2 mm walls, red below a 3 mm minimum, and goes when hidden", async () => {
     showThickness(plate);
     await expect.poll(() => useThickness.getState().stats, { timeout: 30_000 }).not.toBeNull();
+
     const st = useThickness.getState().stats!;
     expect(st.min).toBeCloseTo(2, 3);
     expect(st.thin).toBe(0);
     setMinWall(3);
     await expect.poll(() => useThickness.getState().stats?.minWall, { timeout: 30_000 }).toBe(3);
     expect(useThickness.getState().stats!.thin).toBeGreaterThan(0.5);
+
     const map = useThickness.getState().maps.get(plate)!;
     expect(map.colors.length).toBe(map.positions.length);
     hideThickness();

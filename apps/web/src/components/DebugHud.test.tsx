@@ -24,7 +24,20 @@ const rect: SketchEntity[] = [
 beforeAll(async () => {
   withScreen();
   await newProject(undefined, "Debug");
-  apply({ type: "add_features", features: [{ id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect, constraints: [] }, { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 5, mode: "new_body" }] as Feature[] });
+  apply({
+    type: "add_features",
+    features: [
+      { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect, constraints: [] },
+      {
+        id: "ex1",
+        op: "extrude",
+        profile: { sketch: "sk1" },
+        extent: "blind",
+        distance: 5,
+        mode: "new_body",
+      },
+    ] as Feature[],
+  });
   renderUi(
     <>
       <ViewportView />
@@ -38,7 +51,10 @@ afterAll(cleanup);
 describe("the diagnostics overlay", () => {
   it("counts pointer moves, a press and the rebuilds", async () => {
     await act(async () => {
-      for (const pointerType of ["mouse", "pen", "touch"]) window.dispatchEvent(new PointerEvent("pointermove", { pointerType }));
+      for (const pointerType of ["mouse", "pen", "touch"]) {
+        window.dispatchEvent(new PointerEvent("pointermove", { pointerType }));
+      }
+
       window.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "pen" }));
       window.dispatchEvent(new PointerEvent("pointermove", { pointerType: "pen" }));
       window.dispatchEvent(new PointerEvent("pointerup", { pointerType: "pen" }));
@@ -53,6 +69,7 @@ describe("the diagnostics overlay", () => {
       await act(async () => void fireEvent.click(b));
       await act(async () => new Promise((r) => setTimeout(r, 50)));
     }
+
     expect(document.body.textContent!.length).toBeGreaterThan(10);
   }, 120_000);
 });

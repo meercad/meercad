@@ -22,15 +22,40 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 
 beforeAll(async () => {
   await newProject(undefined, "View");
-  apply({ type: "add_features", features: design }, { type: "set_joint", joint: { id: "j1", type: "slider", a: "ex2", b: "ground", anchor: { axis: { ref: "origin.X" } }, limits: [-30, 30] } });
+  apply(
+    { type: "add_features", features: design },
+    {
+      type: "set_joint",
+      joint: {
+        id: "j1",
+        type: "slider",
+        a: "ex2",
+        b: "ground",
+        anchor: { axis: { ref: "origin.X" } },
+        limits: [-30, 30],
+      },
+    },
+  );
 });
 afterEach(cleanup);
 
@@ -38,6 +63,7 @@ describe("the 3D view", () => {
   it("shows the design's parts and registers itself", async () => {
     renderUi(<ViewportView />);
     await rebuilt();
+
     const vp = getViewport()!;
     expect(vp).toBeTruthy();
     expect(vp.canvas.tagName).toBe("CANVAS");
@@ -47,7 +73,9 @@ describe("the 3D view", () => {
   it("hides parts, shows sketches and planes", async () => {
     renderUi(<ViewportView />);
     await rebuilt();
-    await act(async () => useApp.setState({ hidden: new Set(["ex2"]), showPlanes: true, showSketches: true }));
+    await act(async () =>
+      useApp.setState({ hidden: new Set(["ex2"]), showPlanes: true, showSketches: true }),
+    );
     await act(async () => useApp.setState({ hidden: new Set(), showPlanes: false }));
     expect(getViewport()).toBeTruthy();
   });

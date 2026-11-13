@@ -4,12 +4,40 @@ import { currentDoc, getViewport, kernel, useApp } from "../store";
 /** Open the app with `?debug` to show it. */
 export const debugHud = new URLSearchParams(location.search).has("debug");
 
-type Counts = { moves: number; pen: number; touch: number; frames: number; requests: number; results: number; superseded: number; rebuildMs: number[] };
-const zero = (): Counts => ({ moves: 0, pen: 0, touch: 0, frames: 0, requests: 0, results: 0, superseded: 0, rebuildMs: [] });
+type Counts = {
+  moves: number;
+  pen: number;
+  touch: number;
+  frames: number;
+  requests: number;
+  results: number;
+  superseded: number;
+  rebuildMs: number[];
+};
+
+const zero = (): Counts => ({
+  moves: 0,
+  pen: 0,
+  touch: 0,
+  frames: 0,
+  requests: 0,
+  results: 0,
+  superseded: 0,
+  rebuildMs: [],
+});
 
 // Where the time of the latest results went: to the worker, waiting there, kernel, meshing, back,
 // and until the viewport had the new scene.
-type Timing = { trip: number; toWorker: number; queued: number; rebuild: number; mesh: number; back: number; scene: number };
+type Timing = {
+  trip: number;
+  toWorker: number;
+  queued: number;
+  rebuild: number;
+  mesh: number;
+  back: number;
+  scene: number;
+};
+
 const recent: Timing[] = [];
 
 /**
@@ -21,35 +49,48 @@ const recent: Timing[] = [];
 export function DebugHud() {
   const [bench, setBench] = useState<string>("");
   const [copied, setCopied] = useState(false);
-  const [view, setView] = useState<{ sec: Counts; press: Counts; afterUpMs: number | null; down: boolean }>({ sec: zero(), press: zero(), afterUpMs: null, down: false });
+  const [view, setView] = useState<{ sec: Counts; press: Counts; afterUpMs: number | null; down: boolean }>({
+    sec: zero(),
+    press: zero(),
+    afterUpMs: null,
+    down: false,
+  });
   useEffect(() => {
     let sec = zero();
     let press = zero();
     let down = false;
     let upAt = 0;
     let afterUpMs: number | null = null;
+
     const both = (f: (c: Counts) => void) => {
       f(sec);
       if (down) f(press);
     };
-    const onMove = (e: PointerEvent) => both((c) => {
-      c.moves++;
-      if (e.pointerType === "pen") c.pen++;
-      if (e.pointerType === "touch") c.touch++;
-    });
+
+    const onMove = (e: PointerEvent) =>
+      both((c) => {
+        c.moves++;
+        if (e.pointerType === "pen") c.pen++;
+        if (e.pointerType === "touch") c.touch++;
+      });
+
     const onDown = () => {
       down = true;
       press = zero();
       afterUpMs = null;
     };
+
     const onUp = () => {
       down = false;
       upAt = performance.now();
     };
+
     const original = kernel.rebuild.bind(kernel);
+
     kernel.rebuild = (doc, opts) => {
       const t0 = performance.now();
       both((c) => c.requests++);
+
       return original(doc, opts).then(
         (r) => {
           const trip = performance.now() - t0;
@@ -57,6 +98,7 @@ export function DebugHud() {
             c.results++;
             c.rebuildMs.push(trip);
           });
+
           const t = r.report.timing;
           const entry: Timing = {
             trip,
@@ -69,6 +111,7 @@ export function DebugHud() {
           };
           recent.unshift(entry);
           recent.length = Math.min(recent.length, 4);
+
           // The viewport gets the scene once React has rendered the new output.
           const tr = performance.now();
           window.setTimeout(() => {
@@ -76,20 +119,26 @@ export function DebugHud() {
             entry.trip = performance.now() - t0;
           }, 0);
           if (!down && upAt) afterUpMs = Math.round(performance.now() - upAt);
+
           return r;
         },
         (e: unknown) => {
           both((c) => c.superseded++);
+
           throw e;
         },
       );
     };
+
     let raf = 0;
+
     const frame = () => {
       both((c) => c.frames++);
       raf = requestAnimationFrame(frame);
     };
+
     raf = requestAnimationFrame(frame);
+
     const tick = window.setInterval(() => {
       setView({ sec, press: { ...press, rebuildMs: [...press.rebuildMs] }, afterUpMs, down });
       sec = zero();
@@ -98,6 +147,7 @@ export function DebugHud() {
     window.addEventListener("pointerdown", onDown, true);
     window.addEventListener("pointerup", onUp, true);
     window.addEventListener("pointercancel", onUp, true);
+
     return () => {
       kernel.rebuild = original;
       cancelAnimationFrame(raf);
@@ -108,6 +158,7 @@ export function DebugHud() {
       window.removeEventListener("pointercancel", onUp, true);
     };
   }, []);
+
   const previewing = useApp((s) => s.previewing);
   const kernelInfo = useApp((s) => s.kernel.info);
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
@@ -119,6 +170,7 @@ export function DebugHud() {
     `viewport setScene: ${Math.round(getViewport()?.lastSceneMs ?? NaN)} ms · ${kernelInfo}`,
     `bench: ${bench || "not run"}`,
   ];
+
   return (
     <div className="debug-hud">
       {lines.slice(0, 4).map((l) => (
@@ -126,7 +178,16 @@ export function DebugHud() {
       ))}
       <div className="debug-bench">
         <button onClick={() => void runBench(setBench)}>Bench</button>
-        <button onClick={() => (copyText([navigator.userAgent, ...lines].join("\n")), setCopied(true), window.setTimeout(() => setCopied(false), 1500))}>{copied ? "Copied" : "Copy"}</button> {bench}
+        <button
+          onClick={() => (
+            copyText([navigator.userAgent, ...lines].join("\n")),
+            setCopied(true),
+            window.setTimeout(() => setCopied(false), 1500)
+          )}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>{" "}
+        {bench}
       </div>
     </div>
   );
@@ -136,8 +197,10 @@ export function DebugHud() {
 function copyText(text: string): void {
   if (navigator.clipboard && isSecureContext) {
     void navigator.clipboard.writeText(text);
+
     return;
   }
+
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.setAttribute("readonly", "");
@@ -155,19 +218,27 @@ function copyText(text: string): void {
  */
 async function runBench(show: (s: string) => void): Promise<void> {
   const doc = currentDoc();
-  const f = [...doc.features].reverse().find((x) => x.op === "extrude" || x.op === "fillet" || x.op === "chamfer" || x.op === "shell");
+  const f = [...doc.features]
+    .reverse()
+    .find((x) => x.op === "extrude" || x.op === "fillet" || x.op === "chamfer" || x.op === "shell");
   const key = f ? (["distance", "radius", "thickness"] as const).find((k) => k in f) : undefined;
   if (!f || !key) return show("needs an extrude, fillet, chamfer or shell");
+
   const base = parseFloat(String((f as unknown as Record<string, unknown>)[key])) || 2;
   const out: string[] = [];
+
   for (let i = 1; i <= 5; i++) {
     const d = structuredClone(doc);
     const g = d.features.find((x) => x.id === f.id) as unknown as Record<string, unknown>;
     g[key] = +(base * (1 + i * 0.03)).toFixed(3);
+
     const t = performance.now();
     const r = await kernel.rebuild(d);
-    out.push(`${Math.round(performance.now() - t)}/${Math.round(r.report.rebuildMs)}/${Math.round(r.report.meshMs)}`);
+    out.push(
+      `${Math.round(performance.now() - t)}/${Math.round(r.report.rebuildMs)}/${Math.round(r.report.meshMs)}`,
+    );
     show(`${f.id}.${key}: ${out.join("  ")} ms (round trip/kernel/mesh)`);
   }
+
   await kernel.rebuild(doc);
 }

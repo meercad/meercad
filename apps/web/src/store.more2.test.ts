@@ -7,7 +7,23 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { emptyDocument, type Feature, type SketchEntity } from "@meercad/schema";
-import { apply, applyQuiet, cancelDialog, currentDoc, editFeature, flushSave, newProject, openProject, rebuildNow, redo, releaseProject, setDesignUnits, undo, useApp, withPrinterFit } from "./store";
+import {
+  apply,
+  applyQuiet,
+  cancelDialog,
+  currentDoc,
+  editFeature,
+  flushSave,
+  newProject,
+  openProject,
+  rebuildNow,
+  redo,
+  releaseProject,
+  setDesignUnits,
+  undo,
+  useApp,
+  withPrinterFit,
+} from "./store";
 import { usePrefs } from "./lib/keymap";
 import { testFiles } from "../test/setup";
 
@@ -71,6 +87,7 @@ describe("units and the printer's fit", () => {
   it("gives a new blank design the printer's fit and the chosen measuring system", async () => {
     const prefs = usePrefs.getState();
     usePrefs.setState({ printerFit: 0.15, units: "imperial" });
+
     try {
       expect(withPrinterFit(emptyDocument()).fit).toBe("0.15 mm");
       // A design with its own fit keeps it.
@@ -110,8 +127,10 @@ describe("projects that cannot be saved or found", () => {
 
   it("saves a project an assistant takes over and moves on to the next tab", async () => {
     await newProject(undefined, "Mine");
+
     const mine = useApp.getState().project!.id;
     await newProject(undefined, "Theirs");
+
     const theirs = useApp.getState().project!.id;
     apply({ type: "set_param", name: "k", expr: "3 mm" });
     await releaseProject(theirs);

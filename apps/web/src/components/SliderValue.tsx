@@ -13,6 +13,7 @@ function useNumber(e: Expr | undefined, fallback: number): number {
   const params = useApp((s) => s.output?.report.params);
   if (e === undefined) return fallback;
   if (typeof e === "number") return e;
+
   try {
     return evaluate(e, new Map(Object.entries(params ?? {})));
   } catch {
@@ -20,10 +21,32 @@ function useNumber(e: Expr | undefined, fallback: number): number {
   }
 }
 
-/** A slider for touch and mouse plus the typed value; while the slider moves, pictures on parts preview coarse. */
-export function SliderValue({ value, fallback, min, max, step, unit, onChange, placeholder }: { value: Expr | undefined; fallback: number; min: number; max: number; step: number; unit: "mm" | "deg" | ""; onChange: (v: Expr | undefined) => void; placeholder?: string }) {
+/**
+ * A slider for touch and mouse plus the typed value; while the slider moves, pictures on parts preview
+ * coarse.
+ */
+export function SliderValue({
+  value,
+  fallback,
+  min,
+  max,
+  step,
+  unit,
+  onChange,
+  placeholder,
+}: {
+  value: Expr | undefined;
+  fallback: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: "mm" | "deg" | "";
+  onChange: (v: Expr | undefined) => void;
+  placeholder?: string;
+}) {
   const n = useNumber(value, fallback);
   const end = () => setDraftTextures(false);
+
   return (
     <div className="slider-value">
       <input
@@ -39,7 +62,13 @@ export function SliderValue({ value, fallback, min, max, step, unit, onChange, p
         onChange={(e) => onChange(Number(Number(e.target.value).toFixed(3)))}
       />
       <div className="slider-value-text">
-        <ExprInput value={value} unit={unit} placeholder={placeholder} onCommit={onChange} onLive={onChange} />
+        <ExprInput
+          value={value}
+          unit={unit}
+          placeholder={placeholder}
+          onCommit={onChange}
+          onLive={onChange}
+        />
       </div>
     </div>
   );

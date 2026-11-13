@@ -1,4 +1,7 @@
-/** Part colours: the ones the user picked, their materials' colours, and a palette for the rest so parts tell apart. */
+/**
+ * Part colours: the ones the user picked, their materials' colours, and a palette for the rest so parts tell
+ * apart.
+ */
 import { partMaterial } from "@meercad/model";
 import type { MeercadDocument } from "@meercad/schema";
 
@@ -14,15 +17,24 @@ export const PART_PALETTE = ["#7a7f86", "#2a9d8f"] as const;
  * colour (carbon, wood, metal, an own material's), else in parts-list order the grey for the first
  * part and the petrol for all others.
  */
-export function partColors(doc: MeercadDocument, bodyIds: readonly string[], auto: boolean): Map<string, string> {
+export function partColors(
+  doc: MeercadDocument,
+  bodyIds: readonly string[],
+  auto: boolean,
+): Map<string, string> {
   const out = new Map<string, string>();
   const picked = doc.partColors ?? {};
-  const order = [...(doc.partOrder ?? []).filter((id) => bodyIds.includes(id)), ...bodyIds.filter((id) => !(doc.partOrder ?? []).includes(id))];
+  const order = [
+    ...(doc.partOrder ?? []).filter((id) => bodyIds.includes(id)),
+    ...bodyIds.filter((id) => !(doc.partOrder ?? []).includes(id)),
+  ];
   let k = 0;
+
   for (const id of order) {
     const own = picked[id] ?? partMaterial(doc, id)?.look.color;
     if (own) out.set(id, own);
     else if (auto && bodyIds.length > 1) out.set(id, PART_PALETTE[k++ === 0 ? 0 : 1]);
   }
+
   return out;
 }

@@ -8,7 +8,18 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DocOp, Feature, Joint, SketchEntity } from "@meercad/schema";
 import type { Pick } from "@meercad/viewport";
 import { apply, newProject, rebuildNow, useApp } from "../store";
-import { jointPick, jointValues, openForCheck, playJoint, restPose, saveJoint, setJointField, startJoint, stopPlaying, useMotion } from "./mechanism";
+import {
+  jointPick,
+  jointValues,
+  openForCheck,
+  playJoint,
+  restPose,
+  saveJoint,
+  setJointField,
+  startJoint,
+  stopPlaying,
+  useMotion,
+} from "./mechanism";
 
 const rect = (p: string, x: number, y: number, w: number, h: number): SketchEntity[] => [
   { id: `${p}1`, type: "point", x, y },
@@ -21,18 +32,53 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const parts: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "base", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 4, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "cube", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk3", op: "sketch", plane: { ref: "origin.XY" }, entities: [{ id: "o", type: "point", x: 20, y: 40 }, { id: "k", type: "circle", center: "o", radius: 5 }], constraints: [] },
+  {
+    id: "sk3",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: [
+      { id: "o", type: "point", x: 20, y: 40 },
+      { id: "k", type: "circle", center: "o", radius: 5 },
+    ],
+    constraints: [],
+  },
   { id: "pin", op: "extrude", profile: { sketch: "sk3" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
-const slide: Joint = { id: "j2", type: "slider", a: "cube", b: "ground", anchor: { axis: { ref: "origin.X" } }, limits: ["-30 mm", "20 mm"] };
-const hinge: Joint = { id: "j1", type: "revolute", a: "base", b: "ground", anchor: { axis: { ref: "origin.Z" } } };
+const slide: Joint = {
+  id: "j2",
+  type: "slider",
+  a: "cube",
+  b: "ground",
+  anchor: { axis: { ref: "origin.X" } },
+  limits: ["-30 mm", "20 mm"],
+};
+const hinge: Joint = {
+  id: "j1",
+  type: "revolute",
+  a: "base",
+  b: "ground",
+  anchor: { axis: { ref: "origin.Z" } },
+};
 
 /** Animation frames run by hand: each call runs the waiting frame at `t` ms. */
 let frames: FrameRequestCallback[] = [];
+
 const runFrame = (t: number) => {
   const now = frames;
   frames = [];
@@ -41,7 +87,10 @@ const runFrame = (t: number) => {
 
 beforeAll(async () => {
   await newProject(undefined, "Play");
-  apply({ type: "add_features", features: parts }, { type: "set_joint", joint: slide }, { type: "set_joint", joint: hinge } as DocOp);
+  apply({ type: "add_features", features: parts }, { type: "set_joint", joint: slide }, {
+    type: "set_joint",
+    joint: hinge,
+  } as DocOp);
   await rebuildNow();
   openForCheck();
   vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => (frames.push(cb), frames.length));
@@ -85,6 +134,7 @@ describe("picking for a new joint", () => {
   const face = (body: string, tag: string, normal: [number, number, number] | null): Pick => {
     const m = useApp.getState().output!.meshes.find((x) => x.bodyId === body)!;
     const i = m.faceTags.findIndex((t) => t[0]!.startsWith(tag));
+
     return { kind: "face", bodyId: body, face: i, tags: m.faceTags[i]!, point: [0, 0, 0], normal } as Pick;
   };
 
@@ -105,7 +155,9 @@ describe("picking for a new joint", () => {
     expect(useMotion.getState().draft!.field).toBe("anchor");
     // A flat face is no axis.
     jointPick(face("base", "base.end_cap", [0, 0, 1]));
-    expect(useApp.getState().toasts.at(-1)!.text).toBe("Pick a round face (hole or shaft) or an edge for the axis");
+    expect(useApp.getState().toasts.at(-1)!.text).toBe(
+      "Pick a round face (hole or shaft) or an edge for the axis",
+    );
     jointPick(face("pin", "pin.side", null));
     expect(useMotion.getState().draft!.joint.anchor).toMatchObject({ axisOf: expect.anything() });
     expect(saveJoint()).toBe(true);

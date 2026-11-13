@@ -15,13 +15,16 @@ import { setSketchSelection, setTool, useSketchUi } from "./state";
 
 let vp: Viewport;
 const sketch = () => currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as SketchFeature;
-const ofType = <T extends SketchEntity["type"]>(type: T) => sketch().entities.filter((e): e is Extract<SketchEntity, { type: T }> => e.type === type);
+const ofType = <T extends SketchEntity["type"]>(type: T) =>
+  sketch().entities.filter((e): e is Extract<SketchEntity, { type: T }> => e.type === type);
 const settle = (ms = 20) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
 const screenAt = (u: number, v: number) => {
   const [x, y] = vp.worldToScreen([u, v, 0])!;
+
   return { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true };
 };
+
 async function clickAt(u: number, v: number, opts: { shiftKey?: boolean } = {}) {
   const ev = { ...screenAt(u, v), ...opts };
   await act(async () => {
@@ -31,27 +34,40 @@ async function clickAt(u: number, v: number, opts: { shiftKey?: boolean } = {}) 
   });
   await settle();
 }
+
 async function dragFrom(from: [number, number], to: [number, number]) {
   const a = screenAt(...from);
   const b = screenAt(...to);
   await act(async () => {
     fireEvent.pointerMove(vp.canvas, { ...a, buttons: 0 });
     fireEvent.pointerDown(vp.canvas, { ...a, buttons: 1 });
-    for (let i = 1; i <= 4; i++) fireEvent.pointerMove(vp.canvas, { ...a, clientX: a.clientX + ((b.clientX - a.clientX) * i) / 4, clientY: a.clientY + ((b.clientY - a.clientY) * i) / 4, buttons: 1 });
+
+    for (let i = 1; i <= 4; i++) {
+      fireEvent.pointerMove(vp.canvas, {
+        ...a,
+        clientX: a.clientX + ((b.clientX - a.clientX) * i) / 4,
+        clientY: a.clientY + ((b.clientY - a.clientY) * i) / 4,
+        buttons: 1,
+      });
+    }
   });
   await settle(40);
   await act(async () => void fireEvent.pointerUp(vp.canvas, { ...b, buttons: 0 }));
   await settle(40);
 }
+
 async function solved() {
   const out = await rebuildNow();
+
   return out.report.sketches.find((x) => x.id === sketch().id)!;
 }
+
 /** A 40 × 20 rectangle from the origin, typed in. */
 async function rectangle() {
   await act(async () => setTool("rect"));
   await clickAt(0, 0);
   await act(async () => void fireEvent.keyDown(window, { key: "4" }));
+
   const inputs = () => [...document.querySelectorAll<HTMLInputElement>(".draw-entry input")];
   await act(async () => void fireEvent.change(inputs()[0]!, { target: { value: "40" } }));
   await act(async () => void fireEvent.change(inputs()[1]!, { target: { value: "20" } }));
@@ -59,9 +75,11 @@ async function rectangle() {
   await act(async () => setTool("select"));
   await settle();
 }
+
 const lineAt = (y: number) => {
   const s = sketch();
   const pos = (id: string) => s.entities.find((e) => e.id === id) as { x: number; y: number };
+
   return ofType("line").find((l) => Math.abs(pos(l.p1).y - y) < 0.01 && Math.abs(pos(l.p2).y - y) < 0.01)!;
 };
 
@@ -72,7 +90,9 @@ beforeEach(async () => {
   await rebuilt();
   vp = getViewport()!;
   await act(async () => startSketch({ ref: "origin.XY" }));
-  await act(async () => vp.lookFrom(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), false, new THREE.Vector3(20, 10, 0)));
+  await act(async () =>
+    vp.lookFrom(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), false, new THREE.Vector3(20, 10, 0)),
+  );
   await settle(50);
 });
 afterEach(async () => {
@@ -87,11 +107,23 @@ describe("more sketch tools", () => {
     await clickAt(20, 10);
     await act(async () => void fireEvent.pointerMove(vp.canvas, { ...screenAt(15, 19), buttons: 0 }));
     await clickAt(10, 20);
-    const arc = (await solved()).curves.find((c) => c.kind === "arc") as { radius: number; center: [number, number] };
+
+    const arc = (await solved()).curves.find((c) => c.kind === "arc") as {
+      radius: number;
+      center: [number, number];
+    };
     expect(arc.radius).toBeCloseTo(10, 1);
     expect(arc.center[0]).toBeCloseTo(10, 1);
     await act(async () => setTool("spline"));
-    for (const [u, v] of [[30, 0], [40, 10], [50, 0]] as const) await clickAt(u, v);
+
+    for (const [u, v] of [
+      [30, 0],
+      [40, 10],
+      [50, 0],
+    ] as const) {
+      await clickAt(u, v);
+    }
+
     await act(async () => void fireEvent.dblClick(vp.canvas, screenAt(50, 0)));
     expect(ofType("spline")).toHaveLength(1);
     expect(ofType("spline")[0]!.points).toHaveLength(3);
@@ -111,10 +143,12 @@ describe("more sketch tools", () => {
     await clickAt(20, -10);
     await clickAt(20, 30);
     await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
+
     const before = ofType("line").length;
     await act(async () => setTool("trim"));
     // The piece below the rectangle goes.
     await clickAt(20, -5);
+
     const pts = ofType("point");
     expect(pts.some((p) => Math.abs(p.y + 10) < 0.01)).toBe(false);
     expect(ofType("line").length).toBeGreaterThanOrEqual(before);
@@ -126,6 +160,7 @@ describe("more sketch tools", () => {
     // The bottom line, then where its label goes.
     await clickAt(20, 0);
     await clickAt(20, -8);
+
     const len = sketch().constraints.find((c) => c.type === "length") as { value: unknown } | undefined;
     expect(Number(String(len?.value).replace(/ ?mm$/, ""))).toBeCloseTo(40, 6);
     await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
@@ -135,6 +170,7 @@ describe("more sketch tools", () => {
     await act(async () => setTool("dimension"));
     await clickAt(25, 10);
     await clickAt(30, 15);
+
     const dia = sketch().constraints.find((c) => c.type === "diameter") as { value: unknown } | undefined;
     expect(Number(String(dia?.value).replace(/ ?mm$/, ""))).toBeCloseTo(10, 0);
   });
@@ -146,20 +182,31 @@ describe("more sketch tools", () => {
     await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
     await act(async () => setTool("pattern"));
     await act(async () => setSketchSelection([{ kind: "curve", id: ofType("line")[0]!.id }]));
-    await act(async () => useSketchUi.setState({ pattern: { kind: "linear", count: 3, dx: 10, dy: 0, angle: 60 } }));
+    await act(async () =>
+      useSketchUi.setState({ pattern: { kind: "linear", count: 3, dx: 10, dy: 0, angle: 60 } }),
+    );
     await act(async () => void fireEvent.click(screen.getByText("Repeat selection")));
-    const xs = ofType("point").map((p) => Math.round(p.x)).sort((a, b) => a - b);
+
+    const xs = ofType("point")
+      .map((p) => Math.round(p.x))
+      .sort((a, b) => a - b);
     expect([...new Set(xs)]).toEqual([0, 10, 20]);
   });
 
   it("selects by click, Shift-click, double-click and box, and drags a point", async () => {
     await rectangle();
+
     const bottom = lineAt(0);
     const top = lineAt(20);
     await clickAt(20, 0);
     expect(useSketchUi.getState().selection).toEqual([{ kind: "curve", id: bottom.id }]);
     await clickAt(20, 20, { shiftKey: true });
-    expect(useSketchUi.getState().selection.map((s) => s.id).sort()).toEqual([bottom.id, top.id].sort());
+    expect(
+      useSketchUi
+        .getState()
+        .selection.map((s) => s.id)
+        .sort(),
+    ).toEqual([bottom.id, top.id].sort());
     await clickAt(20, 20, { shiftKey: true });
     expect(useSketchUi.getState().selection).toHaveLength(1);
     // A double-click takes the whole closed chain.
@@ -171,7 +218,8 @@ describe("more sketch tools", () => {
     // A box round the left half takes what lies wholly inside it.
     await dragFrom([-5, -5], [10, 25]);
     expect(useSketchUi.getState().selection.length).toBeGreaterThan(0);
-    // The rectangle is fixed by its sizes and the origin and stays put; a free line's end follows the pointer.
+    // The rectangle is fixed by its sizes and the origin and stays put; a free line's end follows the
+    // pointer.
     await clickAt(70, 50);
     await dragFrom([40, 20], [50, 30]);
     expect((await solved()).regions[0]!.area).toBeCloseTo(800, 6);

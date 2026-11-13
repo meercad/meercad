@@ -44,29 +44,59 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
 ];
 /** A 40 × 20 × 4 base, a lid of the same size 1 mm above it, and a 10 mm cube beside them. */
 const parts: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "base", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 4, mode: "new_body" },
   { id: "pl", op: "plane", base: { ref: "origin.XY" }, offset: 5 },
   { id: "sk2", op: "sketch", plane: { ref: "pl" }, entities: rect("l", 0, 0, 40, 20), constraints: [] },
   { id: "lid", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 4, mode: "new_body" },
-  { id: "sk3", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk3",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "cube", op: "extrude", profile: { sketch: "sk3" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 /** The lid turns about the X axis (its front edge's line through the origin, 5 mm below it). */
-const hinge: Joint = { id: "j1", type: "revolute", a: "lid", b: "base", anchor: { axis: { ref: "origin.X" } }, limits: [-90, 90] };
+const hinge: Joint = {
+  id: "j1",
+  type: "revolute",
+  a: "lid",
+  b: "base",
+  anchor: { axis: { ref: "origin.X" } },
+  limits: [-90, 90],
+};
 /** The cube slides along X, −30…20 mm. */
-const slide: Joint = { id: "j2", type: "slider", a: "cube", b: "ground", anchor: { axis: { ref: "origin.X" } }, limits: ["-30 mm", "20 mm"] };
+const slide: Joint = {
+  id: "j2",
+  type: "slider",
+  a: "cube",
+  b: "ground",
+  anchor: { axis: { ref: "origin.X" } },
+  limits: ["-30 mm", "20 mm"],
+};
 
 /** Where a point of a part goes with the shown pose. */
 function moved(part: string, p: [number, number, number]): number[] {
   const m = currentPoses().get(part);
   if (!m) return p;
+
   return [0, 1, 2].map((r) => m[r]! * p[0] + m[4 + r]! * p[1] + m[8 + r]! * p[2] + m[12 + r]!);
 }
 
 beforeAll(async () => {
   await newProject(undefined, "Hinge");
-  apply({ type: "add_features", features: parts }, { type: "set_joint", joint: hinge }, { type: "set_joint", joint: slide } as DocOp);
+  apply({ type: "add_features", features: parts }, { type: "set_joint", joint: hinge }, {
+    type: "set_joint",
+    joint: slide,
+  } as DocOp);
   await rebuildNow();
 });
 
@@ -105,6 +135,7 @@ describe("moving parts", () => {
 
   it("measures the gaps between parts in the pose shown", async () => {
     restPose();
+
     const rest = await clearanceNow();
     const lidBase = rest.pairs.find((p) => [p.a, p.b].sort().join() === "base,lid")!;
     expect(lidBase.distance).toBeCloseTo(1, 6);
@@ -113,6 +144,7 @@ describe("moving parts", () => {
     expect(rest.pairs.some((p) => p.a === "cube" || p.b === "cube")).toBe(false);
     // Slid 18.5 mm back, it stands 1.5 mm from the base's end at x = 40.
     setJointValue("j2", -18.5);
+
     const slid = await clearanceNow();
     expect(slid.pairs.find((p) => [p.a, p.b].sort().join() === "base,cube")!.distance).toBeCloseTo(1.5, 6);
     restPose();
@@ -125,6 +157,7 @@ describe("moving parts", () => {
     expect(r.firstContact).toMatchObject({ value: -5, kind: "overlap" });
     expect([r.firstContact!.a, r.firstContact!.b].sort()).toEqual(["base", "lid"]);
     expect(jointValues()["j1"]).toBe(0);
+
     const sweep = await sweepCheck({ joints: [{ joint: "j1", from: 0, to: -30, steps: 6 }] });
     expect(sweep.collisions.length).toBeGreaterThan(0);
   });
@@ -132,7 +165,11 @@ describe("moving parts", () => {
   it("names the parts that move together", () => {
     expect(joinedParts("lid")).toEqual(["lid", "base"]);
     expect(joinedParts("cube")).toEqual(["cube"]);
-    expect(joinedParts("lid", [{ id: "f", type: "fixed", a: "lid", b: "cube", anchor: { axis: { ref: "origin.Z" } } }])).toEqual(["lid", "cube"]);
+    expect(
+      joinedParts("lid", [
+        { id: "f", type: "fixed", a: "lid", b: "cube", anchor: { axis: { ref: "origin.Z" } } },
+      ]),
+    ).toEqual(["lid", "cube"]);
     expect([...designedContacts()]).toEqual(["base|lid"]);
   });
 
@@ -141,6 +178,7 @@ describe("moving parts", () => {
     addPoseToMotion("m1", 0);
     setJointValue("j1", 60);
     addPoseToMotion("m1", 2);
+
     const m = motionById("m1");
     expect(m.keys.map((k) => [k.at, k.values["j1"]])).toEqual([
       [0, 0],
@@ -149,6 +187,7 @@ describe("moving parts", () => {
     expect(showMotionAt(m, 1)).toEqual([]);
     expect(jointValues()["j1"]).toBeGreaterThan(0);
     expect(jointValues()["j1"]).toBeLessThan(60);
+
     const run = await checkMotionRun("m1", 4);
     expect(run.frames).toBe(4);
     expect(run.collisions).toEqual([]);
@@ -159,7 +198,13 @@ describe("moving parts", () => {
   it("adds a joint drawn up in the panel and deletes it", () => {
     startJoint();
     expect(saveJoint()).toBe(false);
-    updateJointDraft({ id: "j9", type: "revolute", a: "cube", b: "ground", anchor: { axis: { ref: "origin.Z" } } });
+    updateJointDraft({
+      id: "j9",
+      type: "revolute",
+      a: "cube",
+      b: "ground",
+      anchor: { axis: { ref: "origin.Z" } },
+    });
     expect(saveJoint()).toBe(true);
     expect(currentDoc().mechanism!.joints.map((j) => j.id)).toContain("j9");
     deleteJoint("j9");
@@ -174,12 +219,22 @@ describe("gears", () => {
       type: "add_features",
       features: [
         { id: "g1", op: "gear", kind: "spur", module: 1, teeth: 20, width: 5, mode: "new_body" },
-        { id: "g2", op: "gear", kind: "spur", teeth: 40, width: 5, meshWith: { gear: "g1" }, mode: "new_body" },
+        {
+          id: "g2",
+          op: "gear",
+          kind: "spur",
+          teeth: 40,
+          width: 5,
+          meshWith: { gear: "g1" },
+          mode: "new_body",
+        },
       ],
     });
     await rebuildNow();
     expect(jointsFromGears()).toBe(2);
-    expect(currentDoc().mechanism!.couplings).toEqual([{ id: "c1", driver: "j1", driven: "j2", ratio: -0.5 }]);
+    expect(currentDoc().mechanism!.couplings).toEqual([
+      { id: "c1", driver: "j1", driven: "j2", ratio: -0.5 },
+    ]);
     expect(jointsFromGears()).toBe(0);
     await rebuildNow();
     openForCheck();

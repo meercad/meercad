@@ -30,9 +30,28 @@ beforeAll(async () => {
   apply({
     type: "add_features",
     features: [
-      { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect(40, 20), constraints: [] } as Feature,
-      { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" } as Feature,
-      { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect(10, 10).map((e) => (e.type === "point" ? { ...e, x: e.x + 60 } : e)), constraints: [] } as Feature,
+      {
+        id: "sk1",
+        op: "sketch",
+        plane: { ref: "origin.XY" },
+        entities: rect(40, 20),
+        constraints: [],
+      } as Feature,
+      {
+        id: "ex1",
+        op: "extrude",
+        profile: { sketch: "sk1" },
+        extent: "blind",
+        distance: 10,
+        mode: "new_body",
+      } as Feature,
+      {
+        id: "sk2",
+        op: "sketch",
+        plane: { ref: "origin.XY" },
+        entities: rect(10, 10).map((e) => (e.type === "point" ? { ...e, x: e.x + 60 } : e)),
+        constraints: [],
+      } as Feature,
     ],
   });
   await rebuilt();
@@ -44,33 +63,51 @@ describe("every dialog field", () => {
     it(`takes a change in ${op}`, async () => {
       renderUi(<FeatureDialog />);
       await act(async () => startFeature(op));
+
       const dialog = () => document.querySelector(".dialog");
       expect(dialog(), op).not.toBeNull();
+
       const used = new Set<Element>();
+
       for (let round = 0; round < 3; round++) {
-        const controls = [...dialog()!.querySelectorAll<HTMLElement>(".dialog-body input, .dialog-body select, .dialog-body button, .dialog-body [role=button]")].filter((c) => !used.has(c));
+        const controls = [
+          ...dialog()!.querySelectorAll<HTMLElement>(
+            ".dialog-body input, .dialog-body select, .dialog-body button, .dialog-body [role=button]",
+          ),
+        ].filter((c) => !used.has(c));
         if (!controls.length) break;
+
         for (const c of controls) {
           used.add(c);
           if (!dialog()?.contains(c)) continue;
+
           if (c instanceof HTMLSelectElement) {
             const options = [...c.options].filter((o) => !o.disabled);
             const pick = options.at(-1) ?? options[0];
             if (pick) await act(async () => void fireEvent.change(c, { target: { value: pick.value } }));
           } else if (c instanceof HTMLInputElement) {
-            if (c.type === "checkbox" || c.type === "radio") await act(async () => void fireEvent.click(c));
-            else if (c.type === "file" || c.type === "color") continue;
-            else {
-              await act(async () => void fireEvent.change(c, { target: { value: c.type === "range" ? c.max || "1" : "3" } }));
+            if (c.type === "checkbox" || c.type === "radio") {
+              await act(async () => void fireEvent.click(c));
+            } else if (c.type === "file" || c.type === "color") {
+              continue;
+            } else {
+              await act(
+                async () =>
+                  void fireEvent.change(c, { target: { value: c.type === "range" ? c.max || "1" : "3" } }),
+              );
               await act(async () => void fireEvent.keyDown(c, { key: "Enter" }));
               await act(async () => void fireEvent.blur(c));
             }
-          } else await act(async () => void fireEvent.click(c));
+          } else {
+            await act(async () => void fireEvent.click(c));
+          }
+
           await settle();
           // A field may have closed the dialog (it is reopened) or opened a picker (it is left).
           if (!useApp.getState().dialog) await act(async () => startFeature(op));
         }
       }
+
       expect(useApp.getState().dialog?.feature.op).toBe(op);
       await act(async () => cancelDialog());
       cleanup();

@@ -19,14 +19,18 @@ export interface OpenGuard {
 export function openGuard(): OpenGuard {
   const running = new Map<string, { ticket: number; done: Promise<void> }>();
   let latest = 0;
+
   return {
     run(key, open) {
       const now = running.get(key);
+
       if (now) {
         // Tapped again: this one is again the one asked for last.
         latest = now.ticket;
+
         return now.done;
       }
+
       const ticket = ++latest;
       const entry = { ticket, done: Promise.resolve() };
       entry.done = (async () => {
@@ -37,6 +41,7 @@ export function openGuard(): OpenGuard {
         }
       })();
       running.set(key, entry);
+
       return entry.done;
     },
     busy: (key) => running.has(key),

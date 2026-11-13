@@ -7,7 +7,15 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { RebuildOutput } from "@meercad/kernel";
 import type { Feature, GearFeature, SketchEntity } from "@meercad/schema";
 import { apply, newProject, rebuildNow } from "../store";
-import { cylinderAnchor, edgeSelectorAnchor, faceAnchor, faceSelectorAnchor, isCylinderFace, profileAnchor, profileTriangles } from "./anchors";
+import {
+  cylinderAnchor,
+  edgeSelectorAnchor,
+  faceAnchor,
+  faceSelectorAnchor,
+  isCylinderFace,
+  profileAnchor,
+  profileTriangles,
+} from "./anchors";
 import { bendDefaults, describeBend, gapProblem, partsBox, unbentBox } from "./bend";
 import { gearParams, pairInfo } from "./gears";
 import { meshTopology } from "./topology";
@@ -24,7 +32,17 @@ const rect = (w: number, h: number): SketchEntity[] => [
 ];
 /** A 40 × 20 × 10 block with a Ø8 hole through it at (30, 10). */
 const block: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: [...rect(40, 20), { id: "hc", type: "point", x: 30, y: 10 }, { id: "h", type: "circle", center: "hc", radius: 4 }], constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: [
+      ...rect(40, 20),
+      { id: "hc", type: "point", x: 30, y: 10 },
+      { id: "h", type: "circle", center: "hc", radius: 4 },
+    ],
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 
@@ -46,6 +64,7 @@ describe("handles on a block with a hole", () => {
     close(top.origin, [x, 10, 10], 1);
     close(top.normal, [0, 0, 1]);
     expect(faceSelectorAnchor(out, { face: "ex1.nope" })).toBeNull();
+
     const m = out.meshes[0]!;
     expect(faceAnchor(m, 999)).toBeNull();
   });
@@ -62,7 +81,13 @@ describe("handles on a block with a hole", () => {
     const topo = meshTopology(m);
     const wall = topo.faceTags.findIndex((t) => t.includes("ex1.side[sk1.h]"));
     expect(isCylinderFace(m, wall)).toBe(true);
-    expect(isCylinderFace(m, topo.faceTags.findIndex((t) => t.includes("ex1.end_cap")))).toBe(false);
+    expect(
+      isCylinderFace(
+        m,
+        topo.faceTags.findIndex((t) => t.includes("ex1.end_cap")),
+      ),
+    ).toBe(false);
+
     const c = cylinderAnchor(m, wall, [0, 0, 1], [1, 0, 0])!;
     close(c.dir, [1, 0, 0]);
     expect(c.radius).toBeCloseTo(4, 2);
@@ -80,15 +105,18 @@ describe("handles on a block with a hole", () => {
     expect(profileAnchor(out, { sketch: "zz" })).toBeNull();
     expect(profileAnchor(out, { sketch: "sk1", regions: ["none"] })).toBeNull();
     close(profileAnchor(out, { face: { face: "ex1.end_cap" } })!.normal, [0, 0, 1]);
+
     // The stand-in base: triangles that cover the region's area.
     const t = profileTriangles(out, { sketch: "sk1" })!;
     let area = 0;
+
     for (let i = 0; i < t.triangles.length; i += 9) {
       const p = t.triangles;
       const u = [p[i + 3]! - p[i]!, p[i + 4]! - p[i + 1]!];
       const v = [p[i + 6]! - p[i]!, p[i + 7]! - p[i + 1]!];
       area += Math.abs(u[0]! * v[1]! - u[1]! * v[0]!) / 2;
     }
+
     expect(area).toBeCloseTo(800 - Math.PI * 16, 0);
     expect(profileTriangles(out, { face: { face: "ex1.end_cap" } })!.triangles.length).toBeGreaterThan(0);
     expect(profileTriangles(out, { face: { face: "ex1.nope" } })).toBeNull();
@@ -96,10 +124,42 @@ describe("handles on a block with a hole", () => {
 });
 
 describe("gear sizes in the dialog", () => {
-  const g1: GearFeature = { id: "g1", op: "gear", kind: "spur", module: "m", teeth: 20, width: 5, mode: "new_body" };
-  const g2: GearFeature = { id: "g2", op: "gear", kind: "spur", teeth: 40, width: 5, meshWith: { gear: "g1" }, mode: "new_body" };
-  const ring: GearFeature = { id: "r", op: "gear", kind: "internal", teeth: 60, width: 5, meshWith: { gear: "g1" }, mode: "new_body" };
-  const rack: GearFeature = { id: "k", op: "gear", kind: "rack", teeth: 30, width: 5, meshWith: { gear: "g1" }, mode: "new_body" };
+  const g1: GearFeature = {
+    id: "g1",
+    op: "gear",
+    kind: "spur",
+    module: "m",
+    teeth: 20,
+    width: 5,
+    mode: "new_body",
+  };
+  const g2: GearFeature = {
+    id: "g2",
+    op: "gear",
+    kind: "spur",
+    teeth: 40,
+    width: 5,
+    meshWith: { gear: "g1" },
+    mode: "new_body",
+  };
+  const ring: GearFeature = {
+    id: "r",
+    op: "gear",
+    kind: "internal",
+    teeth: 60,
+    width: 5,
+    meshWith: { gear: "g1" },
+    mode: "new_body",
+  };
+  const rack: GearFeature = {
+    id: "k",
+    op: "gear",
+    kind: "rack",
+    teeth: 30,
+    width: 5,
+    meshWith: { gear: "g1" },
+    mode: "new_body",
+  };
   const all = [g1, g2, ring, rack];
 
   it("follows the partner's module and gives centre distance and ratio", () => {
@@ -124,19 +184,40 @@ describe("bend numbers", () => {
   const strip = { min: [0, 0, 0], max: [100, 20, 2] };
 
   it("bends a strip round its width and rolls a spiral flat", () => {
-    expect(bendDefaults("bend", strip)).toEqual({ mode: "bend", axis: { ref: "origin.Y" }, angle: 90, radius: undefined, gap: undefined });
+    expect(bendDefaults("bend", strip)).toEqual({
+      mode: "bend",
+      axis: { ref: "origin.Y" },
+      angle: 90,
+      radius: undefined,
+      gap: undefined,
+    });
     // A ring of 100 mm: r = 100 / 2π = 15.92 mm.
-    expect(bendDefaults("wrap", strip)).toMatchObject({ mode: "wrap", axis: { ref: "origin.Y" }, radius: 15.92 });
-    expect(bendDefaults("spiral", strip)).toMatchObject({ mode: "spiral", axis: { ref: "origin.Z" }, radius: 20, gap: 1 });
+    expect(bendDefaults("wrap", strip)).toMatchObject({
+      mode: "wrap",
+      axis: { ref: "origin.Y" },
+      radius: 15.92,
+    });
+    expect(bendDefaults("spiral", strip)).toMatchObject({
+      mode: "spiral",
+      axis: { ref: "origin.Z" },
+      radius: 20,
+      gap: 1,
+    });
   });
 
   it("describes a bend's result and warns about turns that touch", () => {
-    expect(describeBend("spiral", { turns: 2.345, outerRadius: 30, length: 100, thickness: 2 })).toMatch(/2\.3 .*60 mm.*100 mm.*2 mm/);
+    expect(describeBend("spiral", { turns: 2.345, outerRadius: 30, length: 100, thickness: 2 })).toMatch(
+      /2\.3 .*60 mm.*100 mm.*2 mm/,
+    );
     expect(describeBend("wrap", { closed: 1, radius: 15.92 })).toMatch(/31\.8 mm/);
     expect(describeBend("wrap", { closed: 0, angle: 180, radius: 10 })).toMatch(/180°.*20 mm/);
     expect(describeBend("bend", { closed: 1, radius: 5 })).toMatch(/5 mm/);
     expect(describeBend("bend", { closed: 0, radius: 7.25 })).toMatch(/7\.3 mm/);
-    const spiral = { id: "b", op: "bend", mode: "spiral", bodies: [], axis: { ref: "origin.Z" } } as Extract<Feature, { op: "bend" }>;
+
+    const spiral = { id: "b", op: "bend", mode: "spiral", bodies: [], axis: { ref: "origin.Z" } } as Extract<
+      Feature,
+      { op: "bend" }
+    >;
     expect(gapProblem(spiral, 0)!.error).toBe(true);
     expect(gapProblem(spiral, 0.2)!.error).toBe(false);
     expect(gapProblem(spiral, 1)).toBeNull();
@@ -145,7 +226,9 @@ describe("bend numbers", () => {
 
   it("works out the size before bending and the box of the picked parts", () => {
     // Length along X, thickness along Z, width along Y.
-    expect(unbentBox({ ox: 0, oy: 0, oz: 1, ax: 0, ay: 1, az: 0, length: 100, thickness: 2, width: 20 })).toEqual({ min: [0, 0, 0], max: [100, 20, 2] });
+    expect(
+      unbentBox({ ox: 0, oy: 0, oz: 1, ax: 0, ay: 1, az: 0, length: 100, thickness: 2, width: 20 }),
+    ).toEqual({ min: [0, 0, 0], max: [100, 20, 2] });
     expect(partsBox(out, ["ex1"])).toEqual({ min: [0, 0, 0], max: [40, 20, 10] });
     expect(partsBox(out, ["zz"])).toBeNull();
     expect(partsBox(null, ["ex1"])).toBeNull();

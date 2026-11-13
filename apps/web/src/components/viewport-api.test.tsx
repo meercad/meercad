@@ -28,9 +28,11 @@ const design: Feature[] = [
 ];
 let vp: Viewport;
 const FACE = new Set(["face"] as const);
+
 /** The part under the model's top centre still picks. */
 const picksTop = () => {
   const at = vp.worldToScreen([20, 10, 10])!;
+
   return vp.pick(at[0], at[1], FACE)?.kind === "face";
 };
 
@@ -54,6 +56,7 @@ describe("the 3D view's settings", () => {
       vp.setDisplayMode(mode);
       expect(vp.mode).toBe(mode);
     }
+
     vp.setDark(true);
     vp.setDark(false);
     vp.setGridVisible(false);
@@ -66,10 +69,26 @@ describe("the 3D view's settings", () => {
   it("paints colours, looks, heat maps and textures on the parts", () => {
     vp.setBodyColors(new Map([["ex1", "#ff0000"]]));
     vp.setBodyLooks(new Map([["ex1", { color: "#00ff00", roughness: 0.2, metalness: 1 }]]));
-    vp.setBodyHeat(new Map([["ex1", { positions: new Float32Array([0, 0, 10, 40, 0, 10, 40, 20, 10]), colors: new Float32Array(9).fill(1) }]]));
+    vp.setBodyHeat(
+      new Map([
+        [
+          "ex1",
+          {
+            positions: new Float32Array([0, 0, 10, 40, 0, 10, 40, 20, 10]),
+            colors: new Float32Array(9).fill(1),
+          },
+        ],
+      ]),
+    );
     vp.setBodyHeat(new Map());
+
     const look = { roughness: 0.4, metalness: 0 };
-    expect(vp.swatches([{ color: "#ff0000", look }, { color: "#0000ff", look: { roughness: 0.2, metalness: 1 } }] as never).length).toBe(2);
+    expect(
+      vp.swatches([
+        { color: "#ff0000", look },
+        { color: "#0000ff", look: { roughness: 0.2, metalness: 1 } },
+      ] as never).length,
+    ).toBe(2);
     vp.setTurntable(true);
     expect(vp.turntable).toBe(true);
     vp.setTurntable(false);
@@ -77,14 +96,33 @@ describe("the 3D view's settings", () => {
   });
 
   it("shows a ghost of an extrusion, handles and joint symbols", () => {
-    vp.setGhost({ triangles: new Float32Array([0, 0, 10, 10, 0, 10, 0, 10, 10]), normal: [0, 0, 1], distance: 5 });
-    vp.setGhost({ triangles: new Float32Array([0, 0, 10, 10, 0, 10, 0, 10, 10]), normal: [0, 0, 1], distance: -5 });
+    vp.setGhost({
+      triangles: new Float32Array([0, 0, 10, 10, 0, 10, 0, 10, 10]),
+      normal: [0, 0, 1],
+      distance: 5,
+    });
+    vp.setGhost({
+      triangles: new Float32Array([0, 0, 10, 10, 0, 10, 0, 10, 10]),
+      normal: [0, 0, 1],
+      distance: -5,
+    });
     vp.setGhost(null);
-    vp.setHandles([{ id: "h", origin: [20, 10, 10], dir: [0, 0, 1], value: 5, onDrag: () => undefined, onEnd: () => undefined }]);
+    vp.setHandles([
+      {
+        id: "h",
+        origin: [20, 10, 10],
+        dir: [0, 0, 1],
+        value: 5,
+        onDrag: () => undefined,
+        onEnd: () => undefined,
+      },
+    ]);
     expect(vp.handleTipScreen("h")).not.toBeNull();
     expect(vp.handleTipScreen("zz")).toBeNull();
     vp.setHandles([]);
-    vp.setJointGlyphs([{ id: "j1", origin: [0, 0, 0], axis: [0, 0, 1], kind: "revolute", active: true } as never]);
+    vp.setJointGlyphs([
+      { id: "j1", origin: [0, 0, 0], axis: [0, 0, 1], kind: "revolute", active: true } as never,
+    ]);
     vp.setJointGlyphs([]);
     expect(picksTop()).toBe(true);
   });
@@ -103,6 +141,7 @@ describe("the 3D view's settings", () => {
     vp.setProjection("perspective");
     vp.setView("top", false);
     vp.fit(false);
+
     const box = vp.modelBox(["ex1"])!;
     expect(box.max[0] - box.min[0]).toBeCloseTo(40, 3);
     expect(vp.cameraQuaternion).toBeInstanceOf(THREE.Quaternion);
@@ -116,15 +155,45 @@ describe("the 3D view's settings", () => {
   });
 
   it("takes the mouse: wheel, buttons and modifier keys by the chosen navigation", async () => {
-    vp.setNavigation({ orbit: [{ button: "right" }], pan: [{ button: "middle" }], zoom: [{ button: "right", mod: "shift" }] } as never, true, false);
+    vp.setNavigation(
+      {
+        orbit: [{ button: "right" }],
+        pan: [{ button: "middle" }],
+        zoom: [{ button: "right", mod: "shift" }],
+      } as never,
+      true,
+      false,
+    );
+
     const at = { clientX: 400, clientY: 300 };
     await act(async () => {
       fireEvent.wheel(vp.canvas, { ...at, deltaY: 40 });
       fireEvent.wheel(vp.canvas, { ...at, deltaX: 30, deltaY: 2, deltaMode: 0 });
       fireEvent.wheel(vp.canvas, { ...at, deltaY: 3, ctrlKey: true });
-      for (const [button, extra] of [[1, {}], [2, {}], [2, { shiftKey: true }], [1, { altKey: true }], [2, { metaKey: true }]] as const) {
-        fireEvent.pointerDown(vp.canvas, { ...at, ...extra, button, buttons: 1 << button, pointerId: 3, pointerType: "mouse" });
-        fireEvent.pointerMove(vp.canvas, { ...at, clientX: 420, button, buttons: 1 << button, pointerId: 3, pointerType: "mouse" });
+
+      for (const [button, extra] of [
+        [1, {}],
+        [2, {}],
+        [2, { shiftKey: true }],
+        [1, { altKey: true }],
+        [2, { metaKey: true }],
+      ] as const) {
+        fireEvent.pointerDown(vp.canvas, {
+          ...at,
+          ...extra,
+          button,
+          buttons: 1 << button,
+          pointerId: 3,
+          pointerType: "mouse",
+        });
+        fireEvent.pointerMove(vp.canvas, {
+          ...at,
+          clientX: 420,
+          button,
+          buttons: 1 << button,
+          pointerId: 3,
+          pointerType: "mouse",
+        });
         fireEvent.pointerUp(vp.canvas, { ...at, button, buttons: 0, pointerId: 3, pointerType: "mouse" });
       }
     });

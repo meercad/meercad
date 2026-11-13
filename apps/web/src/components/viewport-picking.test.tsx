@@ -23,9 +23,21 @@ const rect = (p: string, x: number, y: number, w: number, h: number): SketchEnti
   { id: `${p}d`, type: "line", p1: `${p}4`, p2: `${p}1` },
 ];
 const design: Feature[] = [
-  { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("b", 0, 0, 40, 20), constraints: [] },
+  {
+    id: "sk1",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("b", 0, 0, 40, 20),
+    constraints: [],
+  },
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: rect("c", 60, 0, 10, 10), constraints: [] },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: rect("c", 60, 0, 10, 10),
+    constraints: [],
+  },
   { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 const FACES = new Set(["face"] as const);
@@ -56,11 +68,14 @@ describe("picking in the 3D view", () => {
     const at = vp.worldToScreen([20, 10, 10])!;
     expect(at[0]).toBeGreaterThan(0);
     expect(at[0]).toBeLessThan(800);
+
     const p = vp.pick(at[0], at[1], FACES)!;
     expect(p).toMatchObject({ kind: "face", bodyId: "ex1" });
     if (p.kind === "face") p.normal!.forEach((v, i) => expect(v).toBeCloseTo([0, 0, 1][i]!, 9));
+
     expect(p.kind === "face" && p.tags).toContain("ex1.end_cap");
     if (p.kind === "face") p.point.forEach((v, i) => expect(v).toBeCloseTo([20, 10, 10][i]!, 3));
+
     // Beside the parts there is nothing.
     const off = vp.worldToScreen([50, 10, 10])!;
     expect(vp.pick(off[0], off[1], FACES)).toBeNull();
@@ -91,6 +106,7 @@ describe("picking in the 3D view", () => {
   it("switches to an orthographic camera and keeps picking right", async () => {
     await act(async () => vp.setProjection("orthographic"));
     expect(vp.projection).toBe("orthographic");
+
     const at = vp.worldToScreen([65, 5, 10])!;
     expect(vp.pick(at[0], at[1], FACES)).toMatchObject({ kind: "face", bodyId: "ex2" });
     expect(vp.pixelSize()).toBeGreaterThan(0);

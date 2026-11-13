@@ -14,19 +14,27 @@ export interface MenuItem {
   disabled?: boolean;
   danger?: boolean;
   onClick?: () => void;
-  /** Opens these entries in place of the menu, with a back row on top (works the same with touch and mouse). */
+  /**
+   * Opens these entries in place of the menu, with a back row on top (works the same with touch and mouse).
+   */
   submenu?: MenuEntry[];
 }
 export type MenuEntry = MenuItem | "sep";
 
 type OpenMenu = { x: number; y: number; items: MenuEntry[]; above?: boolean; alignRight?: boolean };
+
 let openMenu: ((m: OpenMenu | null) => void) | null = null;
 
 /**
  * Opens a context menu at screen coordinates; `above` puts its bottom edge at `y` (bars at the bottom),
  * `alignRight` its right edge at `x` (buttons at the right end of a bar), whatever width the entries need.
  */
-export function showMenu(x: number, y: number, items: MenuEntry[], opts: { above?: boolean; alignRight?: boolean } = {}): void {
+export function showMenu(
+  x: number,
+  y: number,
+  items: MenuEntry[],
+  opts: { above?: boolean; alignRight?: boolean } = {},
+): void {
   openMenu?.({ x, y, items, ...opts });
 }
 
@@ -39,6 +47,7 @@ function tidy(items: MenuEntry[]): MenuEntry[] {
   const out: MenuEntry[] = [];
   for (const it of items) if (it !== "sep" || (out.length && out[out.length - 1] !== "sep")) out.push(it);
   while (out[out.length - 1] === "sep") out.pop();
+
   return out;
 }
 
@@ -54,37 +63,51 @@ export function MenuHost() {
       setStack([]);
       setMenu(m);
     };
+
     return () => {
       openMenu = null;
     };
   }, []);
   useLayoutEffect(() => {
     if (!menu || !ref.current) return;
+
     const r = ref.current.getBoundingClientRect();
     if (!stack.length) rootWidth.current = r.width;
+
     const top = menu.above ? menu.y - r.height : menu.y;
-    // A submenu keeps the top edge of its parent (bottom edge for menus that open upwards), so it doesn't jump.
+    // A submenu keeps the top edge of its parent (bottom edge for menus that open upwards), so it doesn't
+    // jump.
     const left = menu.alignRight ? menu.x - r.width : menu.x;
-    setPos({ left: Math.max(8, Math.min(left, innerWidth - r.width - 8)), top: Math.max(8, Math.min(top, innerHeight - r.height - 8)) });
+    setPos({
+      left: Math.max(8, Math.min(left, innerWidth - r.width - 8)),
+      top: Math.max(8, Math.min(top, innerHeight - r.height - 8)),
+    });
   }, [menu, stack]);
   useEffect(() => {
     if (!menu) return;
+
     const close = (e: Event) => {
       if (e instanceof KeyboardEvent) {
         if ((e.key === "Escape" || e.key === "ArrowLeft") && stack.length) {
           e.preventDefault();
           e.stopPropagation();
           setStack((s) => s.slice(0, -1));
+
           return;
         }
+
         if (e.key !== "Escape") return;
       }
+
       if (e instanceof PointerEvent && ref.current?.contains(e.target as Node)) return;
+
       setMenu(null);
     };
+
     window.addEventListener("pointerdown", close, true);
     window.addEventListener("keydown", close, true);
     window.addEventListener("blur", close);
+
     return () => {
       window.removeEventListener("pointerdown", close, true);
       window.removeEventListener("keydown", close, true);
@@ -92,10 +115,17 @@ export function MenuHost() {
     };
   }, [menu, stack.length]);
   if (!menu) return null;
+
   const parent = stack[stack.length - 1];
   const items = tidy(parent ? parent.submenu! : menu.items);
+
   return createPortal(
-    <div className="menu" ref={ref} style={{ ...pos, minWidth: parent ? rootWidth.current : undefined }} role="menu">
+    <div
+      className="menu"
+      ref={ref}
+      style={{ ...pos, minWidth: parent ? rootWidth.current : undefined }}
+      role="menu"
+    >
       {parent ? (
         <>
           <button className="menu-back" role="menuitem" onClick={() => setStack((s) => s.slice(0, -1))}>
@@ -118,6 +148,7 @@ export function MenuHost() {
             style={it.danger ? { color: "var(--err)" } : undefined}
             onClick={() => {
               if (it.submenu) return setStack((s) => [...s, it]);
+
               setMenu(null);
               it.onClick?.();
             }}

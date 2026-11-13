@@ -15,13 +15,16 @@ import { setTool } from "./state";
 
 let vp: Viewport;
 const sketch = () => currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as SketchFeature;
-const ofType = <T extends SketchEntity["type"]>(type: T) => sketch().entities.filter((e): e is Extract<SketchEntity, { type: T }> => e.type === type);
+const ofType = <T extends SketchEntity["type"]>(type: T) =>
+  sketch().entities.filter((e): e is Extract<SketchEntity, { type: T }> => e.type === type);
 const settle = (ms = 20) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
 const screenAt = (u: number, v: number) => {
   const [x, y] = vp.worldToScreen([u, v, 0])!;
+
   return { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true };
 };
+
 async function clickAt(u: number, v: number, opts: { shiftKey?: boolean } = {}) {
   const ev = { ...screenAt(u, v), ...opts };
   await act(async () => {
@@ -31,27 +34,40 @@ async function clickAt(u: number, v: number, opts: { shiftKey?: boolean } = {}) 
   });
   await settle();
 }
+
 async function dragFrom(from: [number, number], to: [number, number]) {
   const a = screenAt(...from);
   const b = screenAt(...to);
   await act(async () => {
     fireEvent.pointerMove(vp.canvas, { ...a, buttons: 0 });
     fireEvent.pointerDown(vp.canvas, { ...a, buttons: 1 });
-    for (let i = 1; i <= 4; i++) fireEvent.pointerMove(vp.canvas, { ...a, clientX: a.clientX + ((b.clientX - a.clientX) * i) / 4, clientY: a.clientY + ((b.clientY - a.clientY) * i) / 4, buttons: 1 });
+
+    for (let i = 1; i <= 4; i++) {
+      fireEvent.pointerMove(vp.canvas, {
+        ...a,
+        clientX: a.clientX + ((b.clientX - a.clientX) * i) / 4,
+        clientY: a.clientY + ((b.clientY - a.clientY) * i) / 4,
+        buttons: 1,
+      });
+    }
   });
   await settle(40);
   await act(async () => void fireEvent.pointerUp(vp.canvas, { ...b, buttons: 0 }));
   await settle(40);
 }
+
 async function solved() {
   const out = await rebuildNow();
+
   return out.report.sketches.find((x) => x.id === sketch().id)!;
 }
+
 /** A 40 × 20 rectangle from the origin, typed in. */
 async function rectangle() {
   await act(async () => setTool("rect"));
   await clickAt(0, 0);
   await act(async () => void fireEvent.keyDown(window, { key: "4" }));
+
   const inputs = () => [...document.querySelectorAll<HTMLInputElement>(".draw-entry input")];
   await act(async () => void fireEvent.change(inputs()[0]!, { target: { value: "40" } }));
   await act(async () => void fireEvent.change(inputs()[1]!, { target: { value: "20" } }));
@@ -59,9 +75,11 @@ async function rectangle() {
   await act(async () => setTool("select"));
   await settle();
 }
+
 const lineAt = (y: number) => {
   const s = sketch();
   const pos = (id: string) => s.entities.find((e) => e.id === id) as { x: number; y: number };
+
   return ofType("line").find((l) => Math.abs(pos(l.p1).y - y) < 0.01 && Math.abs(pos(l.p2).y - y) < 0.01)!;
 };
 
@@ -72,7 +90,9 @@ beforeEach(async () => {
   await rebuilt();
   vp = getViewport()!;
   await act(async () => startSketch({ ref: "origin.XY" }));
-  await act(async () => vp.lookFrom(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), false, new THREE.Vector3(20, 10, 0)));
+  await act(async () =>
+    vp.lookFrom(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), false, new THREE.Vector3(20, 10, 0)),
+  );
   await settle(50);
 });
 afterEach(async () => {
@@ -80,20 +100,26 @@ afterEach(async () => {
   cleanup();
 });
 
-
 /** Types into the open size fields: the first value (its first key opens them), then the others. */
 async function typeSizes(...values: string[]) {
   for (const [i, v] of values.entries()) {
     if (i === 0) await act(async () => void fireEvent.keyDown(window, { key: v[0]! }));
+
     const inputs = [...document.querySelectorAll<HTMLInputElement>(".draw-entry input")];
     await act(async () => void fireEvent.change(inputs[i]!, { target: { value: v } }));
   }
+
   const inputs = [...document.querySelectorAll<HTMLInputElement>(".draw-entry input")];
   await act(async () => void fireEvent.keyDown(inputs[0]!, { key: "Enter" }));
   await settle();
 }
-const constraint = (type: string) => sketch().constraints.filter((c) => c.type === type).at(-1) as { value: unknown; axis?: string } | undefined;
+
+const constraint = (type: string) =>
+  sketch()
+    .constraints.filter((c) => c.type === type)
+    .at(-1) as { value: unknown; axis?: string } | undefined;
 const num = (v: unknown) => Number(String(v).replace(/ ?(mm|deg|°)$/, ""));
+
 async function line(a: [number, number], b: [number, number]) {
   await act(async () => setTool("line"));
   await clickAt(...a);
@@ -101,6 +127,7 @@ async function line(a: [number, number], b: [number, number]) {
   await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
   await act(async () => setTool("select"));
 }
+
 async function dimension(...clicks: [number, number][]) {
   await act(async () => setTool("dimension"));
   for (const c of clicks) await clickAt(...c);
@@ -115,7 +142,13 @@ describe("arcs of typed sizes", () => {
     await clickAt(20, 0);
     await act(async () => void fireEvent.pointerMove(vp.canvas, { ...screenAt(10, 8), buttons: 0 }));
     await typeSizes("10");
-    const arc = (await solved()).curves.find((c) => c.kind === "arc") as { radius: number; center: [number, number]; a0: number; a1: number };
+
+    const arc = (await solved()).curves.find((c) => c.kind === "arc") as {
+      radius: number;
+      center: [number, number];
+      a0: number;
+      a1: number;
+    };
     expect(arc.radius).toBeCloseTo(10, 6);
     expect(arc.center[0]).toBeCloseTo(10, 6);
     expect(num(constraint("radius")!.value)).toBe(10);
@@ -127,8 +160,14 @@ describe("arcs of typed sizes", () => {
     await clickAt(10, 0);
     await act(async () => void fireEvent.pointerMove(vp.canvas, { ...screenAt(7, 7), buttons: 0 }));
     await typeSizes("90");
-    const arc = (await solved()).curves.find((c) => c.kind === "arc") as { radius: number; a0: number; a1: number };
+
+    const arc = (await solved()).curves.find((c) => c.kind === "arc") as {
+      radius: number;
+      a0: number;
+      a1: number;
+    };
     expect(arc.radius).toBeCloseTo(10, 6);
+
     const sweep = (((arc.a1 - arc.a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     expect((sweep * 180) / Math.PI).toBeCloseTo(90, 6);
   });
@@ -171,6 +210,7 @@ describe("dimensions by clicks", () => {
     await clickAt(20, 0);
     await clickAt(0, 20);
     await act(async () => setTool("select"));
+
     const r = Math.SQRT1_2 * 20;
     await dimension([r, r], [30, 30]);
     expect(num(constraint("radius")!.value)).toBeCloseTo(20, 3);
@@ -188,8 +228,15 @@ describe("trimming round curves", () => {
     await act(async () => setTool("trim"));
     await clickAt(0, 10);
     expect(ofType("circle")).toHaveLength(0);
-    const arc = (await solved()).curves.find((c) => c.kind === "arc") as { radius: number; a0: number; a1: number; center: [number, number] };
+
+    const arc = (await solved()).curves.find((c) => c.kind === "arc") as {
+      radius: number;
+      a0: number;
+      a1: number;
+      center: [number, number];
+    };
     expect(arc.radius).toBeCloseTo(10, 3);
+
     const sweep = (((arc.a1 - arc.a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     expect((sweep * 180) / Math.PI).toBeCloseTo(180, 1);
     // What is left is the lower half.
@@ -202,14 +249,22 @@ describe("trimming round curves", () => {
     await clickAt(20, 0);
     await clickAt(-20, 0.01);
     await line([0, -30], [0, 30]);
+
     const half = (await solved()).curves.find((c) => c.kind === "arc") as { a0: number; a1: number };
     await act(async () => setTool("trim"));
+
     // A quarter of the way along the arc from its start: the piece up to the line goes.
     const sweep0 = (((half.a1 - half.a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     const at = half.a0 + sweep0 / 4;
     await clickAt(20 * Math.cos(at), 20 * Math.sin(at));
-    const arc = (await solved()).curves.find((c) => c.kind === "arc") as { radius: number; a0: number; a1: number };
+
+    const arc = (await solved()).curves.find((c) => c.kind === "arc") as {
+      radius: number;
+      a0: number;
+      a1: number;
+    };
     expect(arc.radius).toBeCloseTo(20, 3);
+
     const sweep = (((arc.a1 - arc.a0) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     expect((sweep0 * 180) / Math.PI).toBeCloseTo(180, 0);
     expect((sweep * 180) / Math.PI).toBeCloseTo(90, 0);

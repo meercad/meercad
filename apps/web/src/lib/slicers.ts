@@ -17,12 +17,15 @@ export const useSlicers = create<{ slicers: Slicer[] }>(() => ({ slicers: [] }))
 export async function refreshSlicers(): Promise<Slicer[]> {
   const slicers = (await desktop?.slicers?.list().catch(() => [] as Slicer[])) ?? [];
   useSlicers.setState({ slicers });
+
   return slicers;
 }
+
 void refreshSlicers();
 
 /** The slicer `id`, or the first one installed (Bambu Studio before PrusaSlicer); null if none. */
 export function slicerFor(id?: SlicerId): Slicer | null {
   const { slicers } = useSlicers.getState();
+
   return (id ? slicers.find((s) => s.id === id) : slicers[0]) ?? null;
 }

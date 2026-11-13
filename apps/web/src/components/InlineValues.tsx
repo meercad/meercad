@@ -37,29 +37,58 @@ const fmt = (e: Expr, unit = " mm") => {
   if (typeof e !== "number") return String(e);
   if (unit === " mm") return fmtLen(e);
   if (unit === "" && docUnit() === "in") return fmtLen(e);
+
   return `${+e.toFixed(3)}${unit}`;
 };
 
-/** The centre of the first face with a tag starting with `prefix` (or, for a copy's mark such as "@lp1.1", ending with it). */
+/**
+ * The centre of the first face with a tag starting with `prefix` (or, for a copy's mark such as "@lp1.1",
+ * ending with it).
+ */
 function faceCenterByTag(out: RebuildOutput, prefix: string): V3 | null {
-  const hit = prefix.startsWith("@") ? (x: string) => x.endsWith(prefix) : (x: string) => x.startsWith(prefix);
+  const hit = prefix.startsWith("@")
+    ? (x: string) => x.endsWith(prefix)
+    : (x: string) => x.startsWith(prefix);
+
   for (const m of out.meshes) {
     const i = m.faceTags.findIndex((t) => t.some(hit));
     if (i >= 0) return faceAnchor(m, i)?.origin ?? null;
   }
+
   return null;
 }
 
 function featureItems(f: Feature, out: RebuildOutput): Item[] {
   const edit = (patch: Record<string, unknown>) => apply({ type: "edit_feature", id: f.id, patch });
-  const item = (key: string, at: V3 | null, label: string, value: Expr, field: string, unit = " mm"): Item[] =>
+  const item = (
+    key: string,
+    at: V3 | null,
+    label: string,
+    value: Expr,
+    field: string,
+    unit = " mm",
+  ): Item[] =>
     at
-      ? [{ key: `${f.id}.${key}`, at, text: `${label}${fmt(value, unit)}`, value, unit: unit === " mm" ? "mm" : unit === "°" ? "deg" : "", suggest: `${f.op}_${field}`, unlinkable: unit === " mm", commit: (v) => edit({ [field]: v }) }]
+      ? [
+          {
+            key: `${f.id}.${key}`,
+            at,
+            text: `${label}${fmt(value, unit)}`,
+            value,
+            unit: unit === " mm" ? "mm" : unit === "°" ? "deg" : "",
+            suggest: `${f.op}_${field}`,
+            unlinkable: unit === " mm",
+            commit: (v) => edit({ [field]: v }),
+          },
+        ]
       : [];
+
   switch (f.op) {
     case "extrude": {
       if (f.extent === "through_all") return [];
+
       const at = faceCenterByTag(out, `${f.id}.end_cap`) ?? profileAnchor(out, f.profile)?.origin ?? null;
+
       return item("distance", at, "↕ ", f.distance, "distance");
     }
     case "revolve":
@@ -72,49 +101,105 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
       return item("thickness", faceCenterByTag(out, `${f.id}.inner[`), "▭ ", f.thickness, "thickness");
     case "plane": {
       const p = out.report.planes.find((x) => x.id === f.id);
+
       return item("offset", p ? p.frame.origin : null, "⇥ ", f.offset, "offset");
     }
     case "bend": {
       const info = out.report.features.find((x) => x.id === f.id)?.info;
       if (!info) return [];
+
       const c: V3 = [info["cx"]!, info["cy"]!, info["cz"]!];
       const o: V3 = [info["ox"]!, info["oy"]!, info["oz"]!];
-      if (f.mode === "bend") return f.angle !== undefined || f.radius === undefined ? item("angle", c, "∠ ", f.angle ?? 90, "angle", "°") : item("radius", c, "R ", f.radius, "radius");
+
+      if (f.mode === "bend") {
+        return f.angle !== undefined || f.radius === undefined
+          ? item("angle", c, "∠ ", f.angle ?? 90, "angle", "°")
+          : item("radius", c, "R ", f.radius, "radius");
+      }
+
       const items = item("radius", c, "R ", f.radius ?? 0, "radius");
+
       // A spiral's gap sits on its outside.
-      if (f.mode === "spiral") items.push(...item("gap", c.map((x, i) => x + o[i]! * info["outerRadius"]!) as V3, "↔ ", f.gap ?? 1, "gap"));
+      if (f.mode === "spiral") {
+        items.push(
+          ...item("gap", c.map((x, i) => x + o[i]! * info["outerRadius"]!) as V3, "↔ ", f.gap ?? 1, "gap"),
+        );
+      }
+
       return items;
     }
     case "linear_pattern":
     case "circular_pattern": {
       const at = faceCenterByTag(out, `@${f.id}.1`) ?? null;
       const items = item("count", at, "× ", f.count, "count", "");
-      if (f.op === "linear_pattern" && at) items.push(...item("spacing", [at[0], at[1], at[2] + 6], "↔ ", f.spacing, "spacing"));
+
+      if (f.op === "linear_pattern" && at) {
+        items.push(...item("spacing", [at[0], at[1], at[2] + 6], "↔ ", f.spacing, "spacing"));
+      }
+
       return items;
     }
     case "box": {
       // The box's outside sizes at its edges: width in front, depth at the side, height on top.
       const b = out.report.bodies.find((x) => x.id === f.id)?.bbox;
       if (!b) return [];
+
       const mid = (i: number) => (b.min[i]! + b.max[i]!) / 2;
       const size = (key: string, p: V3, label: string, value: Expr, commit: (v: Expr) => void): Item => ({
-        key: `${f.id}.${key}`, at: p, text: `${label}${fmt(value, " mm")}`, value, unit: "mm", suggest: `box_${key}`, unlinkable: true, commit,
+        key: `${f.id}.${key}`,
+        at: p,
+        text: `${label}${fmt(value, " mm")}`,
+        value,
+        unit: "mm",
+        suggest: `box_${key}`,
+        unlinkable: true,
+        commit,
       });
       const round = f.lid === "screw" || f.shape === "round";
-      const items = [size("width", [mid(0), b.min[1]! - 4, b.min[2]!], round ? "⌀ " : "↔ ", f.width, (width) => edit({ width }))];
-      if (!round) items.push(size("depth", [b.max[0]! + 4, mid(1), b.min[2]!], "↕ ", f.depth ?? f.width, (depth) => edit({ depth })));
-      items.push(size("height", [b.max[0]!, b.min[1]!, b.max[2]!], "↥ ", f.height, (height) => edit({ height })));
+      const items = [
+        size("width", [mid(0), b.min[1]! - 4, b.min[2]!], round ? "⌀ " : "↔ ", f.width, (width) =>
+          edit({ width }),
+        ),
+      ];
+
+      if (!round) {
+        items.push(
+          size("depth", [b.max[0]! + 4, mid(1), b.min[2]!], "↕ ", f.depth ?? f.width, (depth) =>
+            edit({ depth }),
+          ),
+        );
+      }
+
+      items.push(
+        size("height", [b.max[0]!, b.min[1]!, b.max[2]!], "↥ ", f.height, (height) => edit({ height })),
+      );
+
       return items;
     }
     case "wall": {
       // Cells along x and y at the part's box.
       const b = out.report.bodies.find((x) => x.id === f.id)?.bbox;
       if (!b || f.accessory === "screw") return [];
+
       const mid = (i: number) => (b.min[i]! + b.max[i]!) / 2;
-      const pairItem = (key: string, p: V3, value: Expr, commit: (v: Expr) => void): Item => ({ key: `${f.id}.${key}`, at: p, text: `▦ ${fmt(value, "")}`, value, unit: "", suggest: `wall_${key}`, unlinkable: false, commit });
+      const pairItem = (key: string, p: V3, value: Expr, commit: (v: Expr) => void): Item => ({
+        key: `${f.id}.${key}`,
+        at: p,
+        text: `▦ ${fmt(value, "")}`,
+        value,
+        unit: "",
+        suggest: `wall_${key}`,
+        unlinkable: false,
+        commit,
+      });
+
       return [
-        pairItem("units_x", [mid(0), b.min[1]! - 4, b.max[2]!], f.units[0], (v) => edit({ units: [v, f.units[1]] })),
-        pairItem("units_y", [b.max[0]! + 4, mid(1), b.max[2]!], f.units[1], (v) => edit({ units: [f.units[0], v] })),
+        pairItem("units_x", [mid(0), b.min[1]! - 4, b.max[2]!], f.units[0], (v) =>
+          edit({ units: [v, f.units[1]] }),
+        ),
+        pairItem("units_y", [b.max[0]! + 4, mid(1), b.max[2]!], f.units[1], (v) =>
+          edit({ units: [f.units[0], v] }),
+        ),
       ];
     }
     case "gridfinity":
@@ -122,26 +207,60 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
       // Sizes at the part's box: count of cells (or the label's size) along x and y, a bin's height on top.
       const b = out.report.bodies.find((x) => x.id === f.id)?.bbox;
       if (!b) return [];
+
       const mid = (i: number) => (b.min[i]! + b.max[i]!) / 2;
       const at = (x: number, y: number, z: number): V3 => [x, y, z];
-      const pairItem = (key: string, p: V3, label: string, value: Expr, unit: string, commit: (v: Expr) => void): Item => ({
-        key: `${f.id}.${key}`, at: p, text: `${label}${fmt(value, unit)}`, value, unit: unit === " mm" ? "mm" : "", suggest: `${f.op}_${key}`, unlinkable: unit === " mm", commit,
+      const pairItem = (
+        key: string,
+        p: V3,
+        label: string,
+        value: Expr,
+        unit: string,
+        commit: (v: Expr) => void,
+      ): Item => ({
+        key: `${f.id}.${key}`,
+        at: p,
+        text: `${label}${fmt(value, unit)}`,
+        value,
+        unit: unit === " mm" ? "mm" : "",
+        suggest: `${f.op}_${key}`,
+        unlinkable: unit === " mm",
+        commit,
       });
+
       if (f.op === "label") {
-        const w = f.width ?? 36, h = f.height ?? 11;
+        const w = f.width ?? 36,
+          h = f.height ?? 11;
+
         return [
           pairItem("width", at(mid(0), b.min[1]! - 3, b.max[2]!), "↔ ", w, " mm", (width) => edit({ width })),
-          pairItem("height", at(b.max[0]! + 3, mid(1), b.max[2]!), "↕ ", h, " mm", (height) => edit({ height })),
+          pairItem("height", at(b.max[0]! + 3, mid(1), b.max[2]!), "↕ ", h, " mm", (height) =>
+            edit({ height }),
+          ),
         ];
       }
+
       // A bin sized round its part has no numbers to drag (they follow the part).
       if (f.drawer || !f.units) return [];
+
       const units = f.units;
       const items = [
-        pairItem("units_x", at(mid(0), b.min[1]! - 4, b.min[2]!), "▦ ", units[0], "", (v) => edit({ units: [v, units[1]] })),
-        pairItem("units_y", at(b.max[0]! + 4, mid(1), b.min[2]!), "▦ ", units[1], "", (v) => edit({ units: [units[0], v] })),
+        pairItem("units_x", at(mid(0), b.min[1]! - 4, b.min[2]!), "▦ ", units[0], "", (v) =>
+          edit({ units: [v, units[1]] }),
+        ),
+        pairItem("units_y", at(b.max[0]! + 4, mid(1), b.min[2]!), "▦ ", units[1], "", (v) =>
+          edit({ units: [units[0], v] }),
+        ),
       ];
-      if (f.kind === "bin") items.push(pairItem("height", at(b.max[0]!, b.min[1]!, b.max[2]!), "↕ ", f.height ?? 3, "", (height) => edit({ height })));
+
+      if (f.kind === "bin") {
+        items.push(
+          pairItem("height", at(b.max[0]!, b.min[1]!, b.max[2]!), "↕ ", f.height ?? 3, "", (height) =>
+            edit({ height }),
+          ),
+        );
+      }
+
       return items;
     }
     default:
@@ -149,59 +268,102 @@ function featureItems(f: Feature, out: RebuildOutput): Item[] {
   }
 }
 
-/** Editable dimension labels of a sketch, placed on its plane (or only those of `only`, moved onto `onto`). */
+/**
+ * Editable dimension labels of a sketch, placed on its plane (or only those of `only`, moved onto `onto`).
+ */
 function sketchItems(sk: SketchFeature, out: RebuildOutput, only?: Set<string>, onto?: V3): Item[] {
   const view = out.report.sketches.find((s) => s.id === sk.id);
   if (!view) return [];
+
   const pts = new Map(view.points.map(([id, x, y]) => [id, [x, y] as Vec2]));
+
   const mid = (id: string): Vec2 | null => {
     const c = view.curves.find((x) => x.id === id);
     if (!c) return null;
     if (c.kind === "line") return [(c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2];
     if (c.kind === "spline") return c.pts[Math.floor(c.pts.length / 2)] ?? null;
+
     return [c.center[0] + c.radius * 0.7, c.center[1] + c.radius * 0.7];
   };
+
   const items: Item[] = [];
   const equalPartners = new Set(
-    only ? sk.constraints.flatMap((c) => (c.type === "equal" && (only.has(c.a) || only.has(c.b)) ? [c.a, c.b] : [])) : [],
+    only
+      ? sk.constraints.flatMap((c) =>
+          c.type === "equal" && (only.has(c.a) || only.has(c.b)) ? [c.a, c.b] : [],
+        )
+      : [],
   );
+
   for (const c of sk.constraints) {
     if (!("value" in c)) continue;
+
     // Sizes set on an equal partner (e.g. one diameter driving several holes) belong to the shape too.
-    const sizedViaEqual = (c.type === "length" || c.type === "radius" || c.type === "diameter") && equalPartners.has(constraintRefs(c)[0]!);
+    const sizedViaEqual =
+      (c.type === "length" || c.type === "radius" || c.type === "diameter") &&
+      equalPartners.has(constraintRefs(c)[0]!);
     if (only && !constraintRefs(c).some((r) => only.has(r)) && !sizedViaEqual) continue;
+
     let at: Vec2 | null = c.label ?? null;
+
     if (!at) {
-      if (c.type === "length") at = mid(c.line);
-      else if (c.type === "radius" || c.type === "diameter") at = mid(c.curve);
-      else if (c.type === "angle") at = mid(c.a);
-      else if (c.type === "arc_angle") at = mid(c.curve);
-      else if (c.type === "distance") {
+      if (c.type === "length") {
+        at = mid(c.line);
+      } else if (c.type === "radius" || c.type === "diameter") {
+        at = mid(c.curve);
+      } else if (c.type === "angle") {
+        at = mid(c.a);
+      } else if (c.type === "arc_angle") {
+        at = mid(c.curve);
+      } else if (c.type === "distance") {
         const a = pts.get(c.a);
         const b = pts.get(c.b) ?? mid(c.b);
         at = a && b ? [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] : null;
       }
     }
+
     if (!at) continue;
+
     const prefix = c.type === "diameter" ? "⌀ " : c.type === "radius" ? "R " : "";
     let world = toWorld(view.frame, at);
+
     // Slide the label along the sketch normal to the selected face, so it sits on the model.
     if (onto) {
       const n = view.frame.normal;
       const d = (onto[0] - world[0]) * n[0] + (onto[1] - world[1]) * n[1] + (onto[2] - world[2]) * n[2];
       world = [world[0] + n[0] * d, world[1] + n[1] * d, world[2] + n[2] * d];
     }
+
     items.push({
       key: `${sk.id}.${c.id}`,
       at: world,
       unit: c.type === "angle" || c.type === "arc_angle" ? "deg" : "mm",
-      suggest: c.type === "diameter" ? "diameter" : c.type === "radius" ? "radius" : c.type === "angle" || c.type === "arc_angle" ? "angle" : c.type === "length" ? "length" : "distance",
+      suggest:
+        c.type === "diameter"
+          ? "diameter"
+          : c.type === "radius"
+            ? "radius"
+            : c.type === "angle" || c.type === "arc_angle"
+              ? "angle"
+              : c.type === "length"
+                ? "length"
+                : "distance",
       text: `${c.type === "arc_angle" ? "∠ " : prefix}${fmt(c.value, c.type === "angle" || c.type === "arc_angle" ? "°" : "")}`,
       value: c.value,
       unlinkable: c.type !== "angle" && c.type !== "arc_angle",
-      commit: (v) => apply({ type: "edit_feature", id: sk.id, patch: { constraints: sk.constraints.map((x) => (x.id === c.id ? ({ ...x, value: v } as SketchConstraint) : x)) } }),
+      commit: (v) =>
+        apply({
+          type: "edit_feature",
+          id: sk.id,
+          patch: {
+            constraints: sk.constraints.map((x) =>
+              x.id === c.id ? ({ ...x, value: v } as SketchConstraint) : x,
+            ),
+          },
+        }),
     });
   }
+
   return items;
 }
 
@@ -216,45 +378,82 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const showValues = usePrefs((s) => s.showValues);
   const selection = useApp((s) => s.selection);
   useEffect(() => viewport.onChange(tick), [viewport]);
+
   // Drag arrows are set up after this renders (by the manipulators); lay out again once they change.
   const handleSig = useRef("");
   useEffect(() => {
     const sig = viewport.handles.map((h) => h.id).join();
+
     if (sig !== handleSig.current) {
       handleSig.current = sig;
       tick();
     }
   });
   if (!out || sketchId || dialog || !selected || !showValues) return null;
+
   const f = doc.features.find((x) => x.id === selected);
   if (!f) return null;
+
   const items = [...featureItems(f, out)];
   // Show the driving sketch's dimensions too, so the whole feature can be resized in place.
-  const skId = f.op === "sketch" ? f.id : (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile ? f.profile.sketch : null;
-  const sk = skId ? doc.features.find((x): x is SketchFeature => x.id === skId && x.op === "sketch") : undefined;
+  const skId =
+    f.op === "sketch"
+      ? f.id
+      : (f.op === "extrude" || f.op === "revolve") && "sketch" in f.profile
+        ? f.profile.sketch
+        : null;
+  const sk = skId
+    ? doc.features.find((x): x is SketchFeature => x.id === skId && x.op === "sketch")
+    : undefined;
+
   if (sk) {
     // A picked face of the feature narrows this to the dimensions of the shape it came from.
     const face = selection.length === 1 && selection[0]!.kind === "face" ? selection[0]! : null;
-    const curve = face?.kind === "face" ? face.tags.map((t) => new RegExp(`^${f.id}\\.side\\[${sk.id}\\.([\\w-]+?)(?::\\d+)?\\]$`).exec(t)?.[1]).find(Boolean) : undefined;
+    const curve =
+      face?.kind === "face"
+        ? face.tags
+            .map((t) => new RegExp(`^${f.id}\\.side\\[${sk.id}\\.([\\w-]+?)(?::\\d+)?\\]$`).exec(t)?.[1])
+            .find(Boolean)
+        : undefined;
+
     if (curve && face?.kind === "face") {
       const m = out.meshes.find((x) => x.bodyId === face.bodyId);
-      items.push(...sketchItems(sk, out, shapeOf(sk, curve), (m && faceAnchor(m, face.face)?.origin) ?? face.point));
-    } else if (!face) items.push(...sketchItems(sk, out));
+      items.push(
+        ...sketchItems(sk, out, shapeOf(sk, curve), (m && faceAnchor(m, face.face)?.origin) ?? face.point),
+      );
+    } else if (!face) {
+      items.push(...sketchItems(sk, out));
+    }
   }
+
   return (
     <div className="overlay-layer">
       {layoutChips(items, viewport).map(({ it, s }) => {
         return (
-          <div key={it.key} className="value-chip" style={{ left: s[0], top: s[1] }} onPointerDown={(e) => e.stopPropagation()}>
+          <div
+            key={it.key}
+            className="value-chip"
+            style={{ left: s[0], top: s[1] }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             {editing === it.key ? (
-              <ValueInput value={it.value} unit={it.unit} suggest={it.suggest} onDone={(v) => (setEditing(null), v !== null && v !== it.value && commitKeepingParams(it, v))} />
+              <ValueInput
+                value={it.value}
+                unit={it.unit}
+                suggest={it.suggest}
+                onDone={(v) => (setEditing(null), v !== null && v !== it.value && commitKeepingParams(it, v))}
+              />
             ) : (
               <>
                 <button onClick={() => setEditing(it.key)} title={t("Click to edit")}>
                   {it.text}
                 </button>
                 {it.unlinkable && typeof it.value === "string" && isLinked(it.value) ? (
-                  <button className="unlink" onClick={() => unlink(it)} title={t("Linked to a variable — click to use a plain number here instead")}>
+                  <button
+                    className="unlink"
+                    onClick={() => unlink(it)}
+                    title={t("Linked to a variable — click to use a plain number here instead")}
+                  >
                     <Link2Off />
                   </button>
                 ) : null}
@@ -273,47 +472,83 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
  */
 function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number, number] }[] {
   type Box = { x: number; y: number; w: number; h: number };
+
   const H = 26;
-  const overlaps = (a: Box, b: Box) => Math.abs(a.x - b.x) * 2 < a.w + b.w + 6 && Math.abs(a.y - b.y) * 2 < a.h + b.h + 4;
+  const overlaps = (a: Box, b: Box) =>
+    Math.abs(a.x - b.x) * 2 < a.w + b.w + 6 && Math.abs(a.y - b.y) * 2 < a.h + b.h + 4;
   const placed: Box[] = [];
+
   // Drag arrows keep their labels where they are; chips make room around them.
   for (const h of viewport.handles) {
     const t = viewport.handleTipScreen(h.id);
     if (t) placed.push({ x: t[0] + 16, y: t[1] - 16, w: 90, h: H });
   }
+
   const out: { it: Item; s: [number, number] }[] = [];
+
   for (const it of items) {
     const s = viewport.worldToScreen(it.at);
     if (!s) continue;
+
     const w = it.text.length * 7.4 + 22 + (it.unlinkable && typeof it.value === "string" ? 26 : 0);
     const steps = [0, 1, -1, 2, -2, 3, -3, 4, -4];
-    const box = steps.map((k) => ({ x: s[0], y: s[1] + k * (H + 4), w, h: H })).find((b) => !placed.some((p) => overlaps(b, p))) ?? { x: s[0], y: s[1], w, h: H };
+    const box = steps
+      .map((k) => ({ x: s[0], y: s[1] + k * (H + 4), w, h: H }))
+      .find((b) => !placed.some((p) => overlaps(b, p))) ?? { x: s[0], y: s[1], w, h: H };
     placed.push(box);
     out.push({ it, s: [box.x, box.y] });
   }
+
   return out;
 }
 
 /** Entity ids of the shape a curve belongs to: everything connected to it through shared points. */
 function shapeOf(sk: SketchFeature, curve: string): Set<string> {
   const pointsOf = (e: SketchFeature["entities"][number]): string[] =>
-    e.type === "line" ? [e.p1, e.p2] : e.type === "circle" ? [e.center] : e.type === "arc" ? [e.center, e.start, e.end] : [];
+    e.type === "line"
+      ? [e.p1, e.p2]
+      : e.type === "circle"
+        ? [e.center]
+        : e.type === "arc"
+          ? [e.center, e.start, e.end]
+          : [];
   const ids = new Set([curve]);
-  for (let grew = true; grew; ) {
+
+  for (let grew = true; grew;) {
     grew = false;
+
     for (const e of sk.entities) {
       const pts = pointsOf(e);
       const touches = ids.has(e.id) || pts.some((p) => ids.has(p));
       if (!touches) continue;
+
       for (const id of [e.id, ...pts]) if (!ids.has(id)) (ids.add(id), (grew = true));
     }
+
     // Constraints like midpoint/point_on tie extra points (a rectangle's centre) to the shape.
     for (const c of sk.constraints) {
-      if (c.type !== "midpoint" && c.type !== "point_on" && c.type !== "coincident" && c.type !== "symmetric") continue;
+      if (
+        c.type !== "midpoint" &&
+        c.type !== "point_on" &&
+        c.type !== "coincident" &&
+        c.type !== "symmetric"
+      ) {
+        continue;
+      }
+
       const refs = constraintRefs(c);
-      if (refs.some((r) => ids.has(r)) && refs.some((r) => !ids.has(r) && r !== "origin" && !r.startsWith("origin."))) for (const r of refs) if (r !== "origin" && !r.startsWith("origin.") && !ids.has(r)) (ids.add(r), (grew = true));
+
+      if (
+        refs.some((r) => ids.has(r)) &&
+        refs.some((r) => !ids.has(r) && r !== "origin" && !r.startsWith("origin."))
+      ) {
+        for (const r of refs) {
+          if (r !== "origin" && !r.startsWith("origin.") && !ids.has(r)) (ids.add(r), (grew = true));
+        }
+      }
     }
   }
+
   return ids;
 }
 
@@ -341,7 +576,6 @@ function unlink(it: Item): void {
     toast(t("Unlinked — this value no longer follows the variable"));
   } catch {
     toast(t("Could not evaluate this value"), "error");
-
   }
 }
 
@@ -349,26 +583,48 @@ function commitKeepingParams(it: Item, v: Expr): void {
   const params = useApp.getState().doc.params;
   // A plain value typed over a variable changes the variable, not the dimension's link to it.
   const plain = typeof v === "number" || /^\s*-?\d+(\.\d+)?\s*(mm|in|deg)\s*$/.test(v);
+
   if (typeof it.value === "string" && it.value in params && plain) {
     const old = params[it.value]!;
-    const unit = typeof v === "number" ? (typeof old === "string" && /deg\b/.test(old) ? " deg" : typeof old === "string" && /mm\b/.test(old) ? " mm" : "") : "";
+    const unit =
+      typeof v === "number"
+        ? typeof old === "string" && /deg\b/.test(old)
+          ? " deg"
+          : typeof old === "string" && /mm\b/.test(old)
+            ? " mm"
+            : ""
+        : "";
     apply({ type: "set_param", name: it.value, expr: unit ? `${v}${unit}` : v });
+
     return;
   }
+
   it.commit(v);
 }
 
 /** Quick value field; a `length` is shown and typed in the design's unit. */
-export function InlineInput({ value, length, onDone }: { value: Expr; length?: boolean; onDone: (v: Expr | null) => void }) {
+export function InlineInput({
+  value,
+  length,
+  onDone,
+}: {
+  value: Expr;
+  length?: boolean;
+  onDone: (v: Expr | null) => void;
+}) {
   const initial = length ? lengthText(value) : String(value);
   const [text, setText] = useState(initial);
-  const parse = (t: string): Expr | null => (!t.trim() || t.trim() === initial ? null : length ? lengthExpr(t) : parseExpr(t));
+  const parse = (t: string): Expr | null =>
+    !t.trim() || t.trim() === initial ? null : length ? lengthExpr(t) : parseExpr(t);
   const done = useRef(false);
+
   const finish = (v: Expr | null) => {
     if (done.current) return;
+
     done.current = true;
     onDone(v);
   };
+
   return (
     <input
       autoFocus

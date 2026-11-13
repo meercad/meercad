@@ -7,8 +7,10 @@ export default {
   "Prints without": "Druckt ohne",
   "On the plate": "Auf dem Druckbett",
   "Steepest overhang without support": "Steilster Überhang ohne Stützen",
-  "Overhang: {area} ({share} % of the surface) · support about {volume}": "Überhang: {area} ({share} % der Oberfläche) · Stützmaterial etwa {volume}",
-  "No overhangs: prints without support as it stands.": "Keine Überhänge: Druckt so, wie es steht, ohne Stützen.",
+  "Overhang: {area} ({share} % of the surface) · support about {volume}":
+    "Überhang: {area} ({share} % der Oberfläche) · Stützmaterial etwa {volume}",
+  "No overhangs: prints without support as it stands.":
+    "Keine Überhänge: Druckt so, wie es steht, ohne Stützen.",
   "Turned another way up it prints without support.": "Anders herum gedreht druckt es ohne Stützen.",
   "Turned another way up: support about {volume}.": "Anders herum gedreht: Stützmaterial etwa {volume}.",
   "Lay on a face…": "Auf Fläche legen…",

@@ -6,7 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installLongPressMenus, LONG_PRESS_MS, MultiTouch, Press } from "./gestures";
 
-const ev = (type: string, id: number, x: number, y: number, pointerType = "touch") => ({ type, pointerId: id, clientX: x, clientY: y, pointerType }) as unknown as PointerEvent;
+const ev = (type: string, id: number, x: number, y: number, pointerType = "touch") =>
+  ({ type, pointerId: id, clientX: x, clientY: y, pointerType }) as unknown as PointerEvent;
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -52,6 +53,7 @@ describe("several fingers", () => {
   it("reports two- and three-finger taps and three-finger swipes", () => {
     const seen: string[] = [];
     const m = new MultiTouch((g) => seen.push(g));
+
     for (const [n, dx] of [
       [2, 0],
       [3, 0],
@@ -62,6 +64,7 @@ describe("several fingers", () => {
       for (let i = 0; i < n; i++) m.move(ev("pointermove", i + 1, 100 + i * 30 + dx, 100));
       for (let i = 0; i < n; i++) m.up(ev("pointerup", i + 1, 100 + i * 30 + dx, 100));
     }
+
     expect(seen).toEqual(["tap2", "tap3", "swipe-left", "swipe-right"]);
     // A mouse, one finger, or a cancelled touch says nothing.
     m.down(ev("pointerdown", 1, 0, 0, "mouse"));
@@ -81,22 +84,44 @@ describe("long press on the page", () => {
     const off = installLongPressMenus();
     const el = document.createElement("div");
     document.body.append(el);
+
     const menu = vi.fn();
     const clicked = vi.fn();
     el.addEventListener("contextmenu", menu);
     el.addEventListener("click", clicked);
-    el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, pointerType: "touch", clientX: 5, clientY: 5 }));
+    el.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 5,
+        clientY: 5,
+      }),
+    );
     vi.advanceTimersByTime(LONG_PRESS_MS + 10);
     expect(menu).toHaveBeenCalledOnce();
-    el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, pointerType: "touch", clientX: 5, clientY: 5 }));
+    el.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 5,
+        clientY: 5,
+      }),
+    );
     el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(clicked).not.toHaveBeenCalled();
     // A mouse is left to the browser; an input field is left alone.
     el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 2, pointerType: "mouse" }));
+
     const input = document.createElement("input");
     document.body.append(input);
-    input.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 3, pointerType: "touch" }));
-    input.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId: 3, pointerType: "touch" }));
+    input.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 3, pointerType: "touch" }),
+    );
+    input.dispatchEvent(
+      new PointerEvent("pointermove", { bubbles: true, pointerId: 3, pointerType: "touch" }),
+    );
     vi.advanceTimersByTime(LONG_PRESS_MS + 10);
     expect(menu).toHaveBeenCalledOnce();
     el.dispatchEvent(new MouseEvent("click", { bubbles: true }));

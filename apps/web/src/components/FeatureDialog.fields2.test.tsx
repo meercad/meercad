@@ -7,7 +7,16 @@
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
-import { apply, cancelDialog, currentDoc, newProject, rebuildNow, startFeature, updateDraft, useApp } from "../store";
+import {
+  apply,
+  cancelDialog,
+  currentDoc,
+  newProject,
+  rebuildNow,
+  startFeature,
+  updateDraft,
+  useApp,
+} from "../store";
 import { renderUi } from "../../test/ui";
 import { FeatureDialog } from "./FeatureDialog";
 
@@ -26,10 +35,20 @@ const text = () => document.body.textContent ?? "";
 
 beforeAll(async () => {
   await newProject(undefined, "Fields");
-  apply({ type: "add_features", features: [
-    { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect, constraints: [] },
-    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
-  ] as Feature[] });
+  apply({
+    type: "add_features",
+    features: [
+      { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: rect, constraints: [] },
+      {
+        id: "ex1",
+        op: "extrude",
+        profile: { sketch: "sk1" },
+        extent: "blind",
+        distance: 10,
+        mode: "new_body",
+      },
+    ] as Feature[],
+  });
   await rebuildNow();
   renderUi(<FeatureDialog />);
 });
@@ -41,10 +60,26 @@ afterAll(async () => {
 describe("a hole for a heat-set insert", () => {
   it("says the hole, the insert's outside and the wall it needs, and offers its lengths", async () => {
     await act(async () => startFeature("hole"));
-    await act(async () => updateDraft({ kind: "insert", size: "M3", plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10]] } as Partial<Feature>));
-    expect(text()).toMatch(/M3×5\.7 insert: hole Ø4, insert Ø4\.6 outside, keep at least 1\.6 mm of wall around it/);
-    const select = [...document.querySelectorAll<HTMLSelectElement>("select")].find((s) => [...s.options].some((o) => /\(standard\)/.test(o.textContent ?? "")))!;
-    expect([...select.options].map((o) => o.textContent)).toEqual(["5.7 mm (standard)", "4 mm (short)", "3 mm (short)"]);
+    await act(async () =>
+      updateDraft({
+        kind: "insert",
+        size: "M3",
+        plane: { face: { face: "ex1.end_cap" } },
+        points: [[10, 10]],
+      } as Partial<Feature>),
+    );
+    expect(text()).toMatch(
+      /M3×5\.7 insert: hole Ø4, insert Ø4\.6 outside, keep at least 1\.6 mm of wall around it/,
+    );
+
+    const select = [...document.querySelectorAll<HTMLSelectElement>("select")].find((s) =>
+      [...s.options].some((o) => /\(standard\)/.test(o.textContent ?? "")),
+    )!;
+    expect([...select.options].map((o) => o.textContent)).toEqual([
+      "5.7 mm (standard)",
+      "4 mm (short)",
+      "3 mm (short)",
+    ]);
     await act(async () => void fireEvent.change(select, { target: { value: "4" } }));
     expect(draft<{ length?: number }>().length).toBe(4);
     expect(text()).toMatch(/M3×4 insert: hole Ø4/);
@@ -53,7 +88,14 @@ describe("a hole for a heat-set insert", () => {
   });
 
   it("places and removes holes by their coordinates", async () => {
-    await act(async () => updateDraft({ points: [[10, 10], [30, 10]] } as Partial<Feature>));
+    await act(async () =>
+      updateDraft({
+        points: [
+          [10, 10],
+          [30, 10],
+        ],
+      } as Partial<Feature>),
+    );
     expect(screen.getByText("Holes (2)")).toBeTruthy();
     await act(async () => void fireEvent.click(screen.getAllByTitle("Remove").at(-1)!));
     expect(draft<{ points: unknown[] }>().points).toEqual([[10, 10]]);
@@ -66,10 +108,19 @@ describe("a screw and its nut", () => {
     await act(async () => startFeature("screw"));
     await act(async () => updateDraft({ diameter: 8, pitch: 1.25, center: [5, 7] } as Partial<Feature>));
     await act(async () => void fireEvent.click(screen.getByText("Add matching nut")));
+
     const screw = currentDoc().features.at(-1) as Extract<Feature, { op: "screw" }>;
     expect(screw).toMatchObject({ op: "screw", diameter: 8, pitch: 1.25 });
+
     const nut = draft<Extract<Feature, { op: "screw" }>>();
-    expect(nut).toMatchObject({ op: "screw", kind: "nut", head: "hex", diameter: 8, pitch: 1.25, center: [5 + 3 * 8, 7] });
+    expect(nut).toMatchObject({
+      op: "screw",
+      kind: "nut",
+      head: "hex",
+      diameter: 8,
+      pitch: 1.25,
+      center: [5 + 3 * 8, 7],
+    });
     await act(async () => cancelDialog());
   });
 });

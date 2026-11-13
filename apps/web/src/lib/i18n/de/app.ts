@@ -3,9 +3,11 @@ export default {
   Language: "Sprache",
   "Like the system": "Wie das System",
   "Interface size": "Größe der Oberfläche",
-  "Automatic": "Automatisch",
-  "Automatic makes everything bigger on large monitors without Retina scaling.": "Automatisch vergrößert alles auf großen Monitoren ohne Retina-Skalierung.",
-  "The app restarts in the chosen language; open projects stay as they are.": "Die App startet in der gewählten Sprache neu; offene Projekte bleiben erhalten.",
+  Automatic: "Automatisch",
+  "Automatic makes everything bigger on large monitors without Retina scaling.":
+    "Automatisch vergrößert alles auf großen Monitoren ohne Retina-Skalierung.",
+  "The app restarts in the chosen language; open projects stay as they are.":
+    "Die App startet in der gewählten Sprache neu; offene Projekte bleiben erhalten.",
   "Not a valid meerCAD file: {msg}": "Keine gültige meerCAD-Datei: {msg}",
   "Could not read {name}": "{name} konnte nicht gelesen werden",
   "Undone: unsaved change": "Rückgängig: ungespeicherte Änderung",
@@ -17,7 +19,8 @@ export default {
   "Rebuild failed: {msg}": "Neu berechnen fehlgeschlagen: {msg}",
   "Project not found": "Projekt nicht gefunden",
   "Opening {name} …": "{name} wird geöffnet …",
-  "{name} did not fit into this device's memory and was closed. Tap it to try again.": "{name} hat nicht in den Speicher dieses Geräts gepasst und wurde geschlossen. Zum erneuten Versuch antippen.",
+  "{name} did not fit into this device's memory and was closed. Tap it to try again.":
+    "{name} hat nicht in den Speicher dieses Geräts gepasst und wurde geschlossen. Zum erneuten Versuch antippen.",
   "This design now uses inches": "Dieses Modell verwendet jetzt Zoll",
   "This design now uses millimetres": "Dieses Modell verwendet jetzt Millimeter",
   "Untitled part": "Unbenanntes Teil",
@@ -49,7 +52,8 @@ export default {
   "Your projects": "Deine Projekte",
   "Delete…": "Löschen …",
   "The project file goes to the Trash.": "Die Projektdatei kommt in den Papierkorb.",
-  "The project file is deleted. This cannot be undone.": "Die Projektdatei wird gelöscht. Das lässt sich nicht rückgängig machen.",
+  "The project file is deleted. This cannot be undone.":
+    "Die Projektdatei wird gelöscht. Das lässt sich nicht rückgängig machen.",
   "Delete part": "Teil löschen",
   "Could not delete the part: {msg}": "Teil konnte nicht gelöscht werden: {msg}",
   "A to Z": "A bis Z",
@@ -67,8 +71,10 @@ export default {
   "{order} — click to reverse": "{order} – klicken zum Umkehren",
   "Order: {order}": "Reihenfolge: {order}",
   "Show this folder in Finder": "Diesen Ordner im Finder zeigen",
-  "Saved as open {ext} files; folders here are real folders on disk. Drag a part onto a folder to move it.": "Als offene {ext}-Dateien gespeichert; Ordner hier sind echte Ordner auf der Festplatte. Zieh ein Teil auf einen Ordner, um es zu verschieben.",
-  "Saved as open {ext} files, in the Files app under On My {device} › meerCAD. Drag a part onto a folder to move it.": "Als offene {ext}-Dateien gespeichert, in der Dateien-App unter Auf meinem {device} › meerCAD. Zieh ein Teil auf einen Ordner, um es zu verschieben.",
+  "Saved as open {ext} files; folders here are real folders on disk. Drag a part onto a folder to move it.":
+    "Als offene {ext}-Dateien gespeichert; Ordner hier sind echte Ordner auf der Festplatte. Zieh ein Teil auf einen Ordner, um es zu verschieben.",
+  "Saved as open {ext} files, in the Files app under On My {device} › meerCAD. Drag a part onto a folder to move it.":
+    "Als offene {ext}-Dateien gespeichert, in der Dateien-App unter Auf meinem {device} › meerCAD. Zieh ein Teil auf einen Ordner, um es zu verschieben.",
   "{n} part": "{n} Teil",
   "{n} parts": "{n} Teile",
   "Folder actions": "Ordneraktionen",
@@ -76,7 +82,8 @@ export default {
   "Part actions": "Teilaktionen",
   // components/Home.tsx: selecting several parts
   Select: "Auswählen",
-  "Select several parts to move or delete them together": "Mehrere Teile auswählen, um sie gemeinsam zu verschieben oder zu löschen",
+  "Select several parts to move or delete them together":
+    "Mehrere Teile auswählen, um sie gemeinsam zu verschieben oder zu löschen",
   "Select none": "Nichts auswählen",
   "Done (Esc)": "Fertig (Esc)",
   "Selected parts": "Ausgewählte Teile",
@@ -94,7 +101,8 @@ export default {
   "Delete {n} part": "{n} Teil löschen",
   "Delete {n} parts": "{n} Teile löschen",
   "The project files go to the Trash.": "Die Projektdateien kommen in den Papierkorb.",
-  "The project files are deleted. This cannot be undone.": "Die Projektdateien werden gelöscht. Das lässt sich nicht rückgängig machen.",
+  "The project files are deleted. This cannot be undone.":
+    "Die Projektdateien werden gelöscht. Das lässt sich nicht rückgängig machen.",
   "Moved {n} part to {folder}": "{n} Teil nach {folder} verschoben",
   "Moved {n} parts to {folder}": "{n} Teile nach {folder} verschoben",
   "Could not move {n} part: {msg}": "{n} Teil konnte nicht verschoben werden: {msg}",
@@ -102,21 +110,26 @@ export default {
   "Could not delete {n} part: {msg}": "{n} Teil konnte nicht gelöscht werden: {msg}",
   "Could not delete {n} parts: {msg}": "{n} Teile konnten nicht gelöscht werden: {msg}",
   Examples: "Beispiele",
-  "Fully parametric — open one and change its variables. Hide this section in Settings.": "Voll parametrisch: Öffne eines und ändere seine Variablen. In den Einstellungen lässt sich dieser Bereich ausblenden.",
+  "Fully parametric — open one and change its variables. Hide this section in Settings.":
+    "Voll parametrisch: Öffne eines und ändere seine Variablen. In den Einstellungen lässt sich dieser Bereich ausblenden.",
   "Start page": "Startseite",
   "Show the example models": "Beispielmodelle zeigen",
   "Premium packs": "Premium-Pakete",
   "Only in test builds. The App Store version hides these packs until they are on sale; switch one off to see the app without it.":
     "Nur in Testversionen. Die App-Store-Version blendet diese Pakete aus, bis sie verkauft werden; schalte eins aus, um die App ohne es zu sehen.",
   "Mechanics and robotics": "Mechanik und Robotik",
-  "Joints and moving parts, motions with collision check, gears, springs, interference check, robot export (MJCF/URDF)": "Gelenke und bewegliche Teile, Bewegungsabläufe mit Kollisionsprüfung, Zahnräder, Federn, Überschneidungsprüfung, Roboter-Export (MJCF/URDF)",
+  "Joints and moving parts, motions with collision check, gears, springs, interference check, robot export (MJCF/URDF)":
+    "Gelenke und bewegliche Teile, Bewegungsabläufe mit Kollisionsprüfung, Zahnräder, Federn, Überschneidungsprüfung, Roboter-Export (MJCF/URDF)",
   "Scan and mesh": "Scan und Netze",
-  "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up, areas from drone photos": "3D-Scan mit Kamera oder LiDAR, Netze in bearbeitbare Teile umwandeln, Netzschnitte nachzeichnen, auf Scans messen, Abweichungs- und Wandstärken-Karte, Netze aufräumen, Gelände aus Drohnenfotos",
+  "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up, areas from drone photos":
+    "3D-Scan mit Kamera oder LiDAR, Netze in bearbeitbare Teile umwandeln, Netzschnitte nachzeichnen, auf Scans messen, Abweichungs- und Wandstärken-Karte, Netze aufräumen, Gelände aus Drohnenfotos",
   "Technical drawings": "Technische Zeichnungen",
   "Drawings as PDF, SVG and DXF": "Zeichnungen als PDF, SVG und DXF",
   "Versions and variants": "Versionen und Varianten",
-  "Named versions in the file, versions as backup files, variants, exporting all variants": "Benannte Versionen in der Datei, Versionen als Sicherungsdatei, Varianten, alle Varianten exportieren",
-  "Imported meshes are edited as whole parts: combine, cut, move or pattern them.": "Importierte Netze bearbeitest du als ganze Teile: kombinieren, abziehen, verschieben oder als Muster anordnen.",
+  "Named versions in the file, versions as backup files, variants, exporting all variants":
+    "Benannte Versionen in der Datei, Versionen als Sicherungsdatei, Varianten, alle Varianten exportieren",
+  "Imported meshes are edited as whole parts: combine, cut, move or pattern them.":
+    "Importierte Netze bearbeitest du als ganze Teile: kombinieren, abziehen, verschieben oder als Muster anordnen.",
   "About meerCAD": "Über meerCAD",
   Privacy: "Datenschutz",
   Licences: "Lizenzen",
@@ -133,7 +146,8 @@ export default {
   "Name plate": "Namensschild",
   "Raised and engraved text": "Erhabener und gravierter Text",
   "Stackable DIN box": "DIN-Stapelbox",
-  "Parametric for DIN A paper (variable din: 6, 5 or 4 for A6, A5, A4); two of a size stand exactly on the next larger one; prints without supports": "Parametrisch für DIN-A-Papier (Variable din: 6, 5 oder 4 für A6, A5, A4); zwei einer Größe stehen genau auf der nächstgrößeren; druckt ohne Stützen",
+  "Parametric for DIN A paper (variable din: 6, 5 or 4 for A6, A5, A4); two of a size stand exactly on the next larger one; prints without supports":
+    "Parametrisch für DIN-A-Papier (Variable din: 6, 5 oder 4 für A6, A5, A4); zwei einer Größe stehen genau auf der nächstgrößeren; druckt ohne Stützen",
   "Import…": "Importieren …",
   "View in AR (real size on the table)": "In AR ansehen (echte Größe auf dem Tisch)",
   "Export USDZ (AR on iPhone and iPad)": "USDZ exportieren (AR auf iPhone und iPad)",
@@ -142,7 +156,8 @@ export default {
   "Export robot (MJCF/URDF for simulation)": "Roboter exportieren (MJCF/URDF für Simulation)",
   "Preparing the robot for simulation": "Roboter für die Simulation wird vorbereitet",
   "Robot exported: {links} links, {joints} joints": "Roboter exportiert: {links} Glieder, {joints} Gelenke",
-  "The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; each part collides as a box, cylinder or sphere; joints without drive data are passive.": "Das Zip enthält eine MJCF-Datei für MuJoCo und mjlab, eine URDF für ROS und Isaac Sim und je Teil ein Netz. Die Massen kommen aus den Materialien der Teile; jedes Teil kollidiert als Quader, Zylinder oder Kugel; Gelenke ohne Antriebsdaten sind passiv.",
+  "The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; each part collides as a box, cylinder or sphere; joints without drive data are passive.":
+    "Das Zip enthält eine MJCF-Datei für MuJoCo und mjlab, eine URDF für ROS und Isaac Sim und je Teil ein Netz. Die Massen kommen aus den Materialien der Teile; jedes Teil kollidiert als Quader, Zylinder oder Kugel; Gelenke ohne Antriebsdaten sind passiv.",
   "Technical drawing (PDF, DXF)…": "Technische Zeichnung (PDF, DXF) …",
   "Millimetres (this design)": "Millimeter (dieses Modell)",
   "Inches (this design)": "Zoll (dieses Modell)",
@@ -154,10 +169,12 @@ export default {
   "Send to slicer": "An Slicer senden",
   "Opens the model as a 3MF in {name}": "Öffnet das Modell als 3MF in {name}",
   "Sent to {name}": "An {name} gesendet",
-  "Sent to {name}, moved parts where they are now": "An {name} gesendet, bewegte Teile an ihrer jetzigen Stelle",
+  "Sent to {name}, moved parts where they are now":
+    "An {name} gesendet, bewegte Teile an ihrer jetzigen Stelle",
   "Could not send to the slicer: {error}": "Senden an den Slicer fehlgeschlagen: {error}",
   "{name} is not installed on this Mac": "{name} ist auf diesem Mac nicht installiert",
-  "No slicer installed (Bambu Studio or PrusaSlicer)": "Kein Slicer installiert (Bambu Studio oder PrusaSlicer)",
+  "No slicer installed (Bambu Studio or PrusaSlicer)":
+    "Kein Slicer installiert (Bambu Studio oder PrusaSlicer)",
   "Sending to the slicer": "Sendet an den Slicer",
   "OBJ (rendering, other 3D tools)": "OBJ (Rendern, andere 3D-Programme)",
   "STEP (CAD exchange)": "STEP (CAD-Austausch)",
@@ -234,9 +251,11 @@ export default {
   "Export 3MF": "3MF exportieren",
   "Export OBJ": "OBJ exportieren",
   "Show texture": "Textur zeigen",
-  "Its texture was removed, as it belonged to the old triangles.": "Die Textur wurde entfernt, weil sie zu den alten Dreiecken gehörte.",
+  "Its texture was removed, as it belonged to the old triangles.":
+    "Die Textur wurde entfernt, weil sie zu den alten Dreiecken gehörte.",
   "Show without texture": "Ohne Textur zeigen",
-  "Exported as a zip: the OBJ with its materials and pictures": "Als Zip exportiert: das OBJ mit seinen Materialien und Bildern",
+  "Exported as a zip: the OBJ with its materials and pictures":
+    "Als Zip exportiert: das OBJ mit seinen Materialien und Bildern",
   "Export STEP": "STEP exportieren",
   "Technical drawing (PDF, SVG, DXF)": "Technische Zeichnung (PDF, SVG, DXF)",
   "Check whether parts overlap (interference)": "Prüfen, ob Teile sich überschneiden (Überschneidung)",
@@ -249,28 +268,36 @@ export default {
   "No matching command": "Kein passender Befehl",
   "Close (Esc)": "Schließen (Esc)",
   "Mouse navigation": "Mausnavigation",
-  "Left click always selects. Pick the scheme your hands already know.": "Linksklick wählt immer aus. Wähl das Schema, das deine Hände schon kennen.",
+  "Left click always selects. Pick the scheme your hands already know.":
+    "Linksklick wählt immer aus. Wähl das Schema, das deine Hände schon kennen.",
   Rotate: "Drehen",
   Pan: "Verschieben",
   Zoom: "Zoomen",
   "Reverse zoom direction (scroll up zooms out)": "Zoomrichtung umkehren (nach oben scrollen zoomt heraus)",
-  "Trackpad: two-finger swipe rotates, Shift + swipe pans, pinch or Ctrl + swipe zooms": "Trackpad: mit zwei Fingern wischen dreht, Shift + wischen verschiebt, Zwei-Finger-Zoom oder Ctrl + wischen zoomt",
+  "Trackpad: two-finger swipe rotates, Shift + swipe pans, pinch or Ctrl + swipe zooms":
+    "Trackpad: mit zwei Fingern wischen dreht, Shift + wischen verschiebt, Zwei-Finger-Zoom oder Ctrl + wischen zoomt",
   "Show shortcut badges on tools and menus": "Tastenkürzel an Werkzeugen und in Menüs zeigen",
   "Every badge in the app follows this choice.": "Alle Tastenkürzel in der App folgen dieser Wahl.",
   "Show all shortcuts": "Alle Tastenkürzel zeigen",
   "On the model": "Am Modell",
-  "Show dimensions and sizes (diameters, distances, drag values)": "Maße und Größen zeigen (Durchmesser, Abstände, Ziehwerte)",
+  "Show dimensions and sizes (diameters, distances, drag values)":
+    "Maße und Größen zeigen (Durchmesser, Abstände, Ziehwerte)",
   Units: "Einheiten",
   "New designs in": "Neue Modelle in",
   "Metric (mm)": "Metrisch (mm)",
   "Imperial (inches)": "Zoll (inch)",
-  "An open design switches in File → Millimetres / Inches. Switching never changes sizes, only how lengths are shown and typed.": "Ein offenes Modell stellst du unter Datei → Millimeter / Zoll um. Das ändert nie Größen, nur wie Längen angezeigt und eingegeben werden.",
+  "An open design switches in File → Millimetres / Inches. Switching never changes sizes, only how lengths are shown and typed.":
+    "Ein offenes Modell stellst du unter Datei → Millimeter / Zoll um. Das ändert nie Größen, nur wie Längen angezeigt und eingegeben werden.",
   Sketching: "Skizzieren",
-  "Grid: show it and snap to it (its spacing follows the zoom; also for drag arrows)": "Raster: anzeigen und daran einrasten (der Abstand folgt dem Zoom; gilt auch für Ziehpfeile)",
-  "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings and alignments": "Magnet: an Punkten, Linien, Modellkanten, Kreismitten, Mittelpunkten, Schnittpunkten und Ausrichtungen einrasten",
-  "Endpoints always snap so lines connect. Hold Alt (⌥) while drawing to place a point freely.": "Endpunkte rasten immer ein, damit Linien verbunden sind. Halte beim Zeichnen Alt (⌥), um einen Punkt frei zu setzen.",
+  "Grid: show it and snap to it (its spacing follows the zoom; also for drag arrows)":
+    "Raster: anzeigen und daran einrasten (der Abstand folgt dem Zoom; gilt auch für Ziehpfeile)",
+  "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings and alignments":
+    "Magnet: an Punkten, Linien, Modellkanten, Kreismitten, Mittelpunkten, Schnittpunkten und Ausrichtungen einrasten",
+  "Endpoints always snap so lines connect. Hold Alt (⌥) while drawing to place a point freely.":
+    "Endpunkte rasten immer ein, damit Linien verbunden sind. Halte beim Zeichnen Alt (⌥), um einen Punkt frei zu setzen.",
   "Projects folder": "Projektordner",
-  "Projects are plain .meercad files. Folders you create in meerCAD are real folders here.": "Projekte sind einfache .meercad-Dateien. Ordner, die du in meerCAD anlegst, sind hier echte Ordner.",
+  "Projects are plain .meercad files. Folders you create in meerCAD are real folders here.":
+    "Projekte sind einfache .meercad-Dateien. Ordner, die du in meerCAD anlegst, sind hier echte Ordner.",
   "folder::Show": "Zeigen",
   "Change…": "Ändern …",
   Joints: "Gelenke",
@@ -305,7 +332,8 @@ export default {
   General: "Allgemein",
   "Undo / Redo": "Rückgängig / Wiederholen",
   "Undo / Redo on iPhone and iPad": "Rückgängig / Wiederholen auf iPhone und iPad",
-  "2-finger tap or 3-finger swipe left / 3-finger tap or swipe right": "Mit 2 Fingern tippen oder mit 3 Fingern nach links wischen / mit 3 Fingern tippen oder nach rechts wischen",
+  "2-finger tap or 3-finger swipe left / 3-finger tap or swipe right":
+    "Mit 2 Fingern tippen oder mit 3 Fingern nach links wischen / mit 3 Fingern tippen oder nach rechts wischen",
   "Confirm tool": "Werkzeug bestätigen",
   "Enter / click empty space": "Enter / ins Leere klicken",
   "Cancel / clear selection": "Abbrechen / Auswahl aufheben",
@@ -314,61 +342,104 @@ export default {
   "Keyboard & mouse": "Tastatur & Maus",
   "Getting started": "Erste Schritte",
   "Your first part in 2 minutes": "Dein erstes Teil in 2 Minuten",
-  "Hover the grid's **Top** plane (or a flat face) and press [S] — or hover **Origin** in the feature list and pick a plane.": "Fahr mit dem Zeiger über die Ebene **Oben** im Raster (oder über eine ebene Fläche) und drück [S] – oder fahr in der Liste der Schritte über **Ursprung** und wähl eine Ebene.",
-  "Press [R], click a corner on the origin, click the opposite corner.": "Drück [R], klick eine Ecke auf den Ursprung und dann die gegenüberliegende Ecke.",
-  "Press [D], click the bottom line, click below it and type `40` [↵]. Dimension the side the same way.": "Drück [D], klick die untere Linie, klick darunter und tipp `40` [↵]. Bemaß die Seite genauso.",
-  "Press [↵] to finish the sketch, click inside the rectangle and **drag the arrow** up — or press [E] and type a distance.": "Drück [↵], um die Skizze zu beenden, klick in das Rechteck und **zieh den Pfeil** nach oben – oder drück [E] und tipp einen Abstand ein.",
-  "Click a top edge and drag its arrow away from the part to round it.": "Klick eine obere Kante an und zieh ihren Pfeil vom Teil weg, um sie abzurunden.",
+  "Hover the grid's **Top** plane (or a flat face) and press [S] — or hover **Origin** in the feature list and pick a plane.":
+    "Fahr mit dem Zeiger über die Ebene **Oben** im Raster (oder über eine ebene Fläche) und drück [S] – oder fahr in der Liste der Schritte über **Ursprung** und wähl eine Ebene.",
+  "Press [R], click a corner on the origin, click the opposite corner.":
+    "Drück [R], klick eine Ecke auf den Ursprung und dann die gegenüberliegende Ecke.",
+  "Press [D], click the bottom line, click below it and type `40` [↵]. Dimension the side the same way.":
+    "Drück [D], klick die untere Linie, klick darunter und tipp `40` [↵]. Bemaß die Seite genauso.",
+  "Press [↵] to finish the sketch, click inside the rectangle and **drag the arrow** up — or press [E] and type a distance.":
+    "Drück [↵], um die Skizze zu beenden, klick in das Rechteck und **zieh den Pfeil** nach oben – oder drück [E] und tipp einen Abstand ein.",
+  "Click a top edge and drag its arrow away from the part to round it.":
+    "Klick eine obere Kante an und zieh ihren Pfeil vom Teil weg, um sie abzurunden.",
   "Export → **STL** or **3MF** for your slicer.": "Exportieren → **STL** oder **3MF** für deinen Slicer.",
   "Navigating the 3D view": "In der 3D-Ansicht navigieren",
-  "**Trackpad**: swipe with two fingers to rotate, Shift + swipe to pan, pinch or Ctrl + swipe to zoom.": "**Trackpad**: mit zwei Fingern wischen dreht, Shift + wischen verschiebt, Zwei-Finger-Zoom oder Ctrl + wischen zoomt.",
-  "**Rotate**: right-drag (or drag the view cube) · **Pan**: middle-drag or Shift + right-drag · **Zoom**: wheel, towards the cursor.": "**Drehen**: mit rechter Maustaste ziehen (oder den Ansichtswürfel ziehen) · **Verschieben**: mit mittlerer Maustaste ziehen oder Shift + rechte Maustaste ziehen · **Zoomen**: Mausrad, zum Zeiger hin.",
-  "View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. [Mod+1]–[Mod+7] pick standard views, [Space] over a face looks straight at it, [Z] fits all.": "Ansichtswürfel: Flächen, Kanten und Ecken ergeben Standardansichten, Doppelklick setzt zurück, die Pfeile drehen die Ansicht um 90°. [Mod+1]–[Mod+7] wählen Standardansichten, [Space] über einer Fläche schaut direkt darauf, [Z] zeigt alles.",
-  "The box icon at the bottom right switches perspective / orthographic.": "Das Würfelsymbol unten rechts schaltet zwischen perspektivisch und orthografisch um.",
+  "**Trackpad**: swipe with two fingers to rotate, Shift + swipe to pan, pinch or Ctrl + swipe to zoom.":
+    "**Trackpad**: mit zwei Fingern wischen dreht, Shift + wischen verschiebt, Zwei-Finger-Zoom oder Ctrl + wischen zoomt.",
+  "**Rotate**: right-drag (or drag the view cube) · **Pan**: middle-drag or Shift + right-drag · **Zoom**: wheel, towards the cursor.":
+    "**Drehen**: mit rechter Maustaste ziehen (oder den Ansichtswürfel ziehen) · **Verschieben**: mit mittlerer Maustaste ziehen oder Shift + rechte Maustaste ziehen · **Zoomen**: Mausrad, zum Zeiger hin.",
+  "View cube: faces, edges and corners give standard views, double-click resets, arrows turn the view by 90°. [Mod+1]–[Mod+7] pick standard views, [Space] over a face looks straight at it, [Z] fits all.":
+    "Ansichtswürfel: Flächen, Kanten und Ecken ergeben Standardansichten, Doppelklick setzt zurück, die Pfeile drehen die Ansicht um 90°. [Mod+1]–[Mod+7] wählen Standardansichten, [Space] über einer Fläche schaut direkt darauf, [Z] zeigt alles.",
+  "The box icon at the bottom right switches perspective / orthographic.":
+    "Das Würfelsymbol unten rechts schaltet zwischen perspektivisch und orthografisch um.",
   "On iPhone and iPad": "Auf iPhone und iPad",
-  "**Fingers navigate**: one finger rotates, two fingers pan and pinch to zoom. **The Apple Pencil works**: it selects, draws in sketches and drags the arrows.": "**Mit den Fingern navigieren**: Ein Finger dreht, zwei Finger verschieben und zoomen durch Auf- und Zuziehen. **Der Apple Pencil funktioniert**: Er wählt aus, zeichnet in Skizzen und zieht die Pfeile.",
-  "**Undo**: tap with two fingers or swipe three fingers left · **Redo**: tap with three fingers or swipe right — or use the arrows at the top right. A short note says what was undone.": "**Rückgängig**: mit zwei Fingern tippen oder mit drei Fingern nach links wischen · **Wiederholen**: mit drei Fingern tippen oder nach rechts wischen – oder die Pfeile oben rechts nutzen. Ein kurzer Hinweis zeigt, was rückgängig gemacht wurde.",
-  "Long-press for the menus a right-click opens on the Mac. Double-tap or squeeze the Pencil to switch a sketch between selecting and drawing.": "Lange drücken öffnet die Menüs, die auf dem Mac ein Rechtsklick öffnet. Doppeltippen oder Drücken des Pencil wechselt in einer Skizze zwischen Auswählen und Zeichnen.",
+  "**Fingers navigate**: one finger rotates, two fingers pan and pinch to zoom. **The Apple Pencil works**: it selects, draws in sketches and drags the arrows.":
+    "**Mit den Fingern navigieren**: Ein Finger dreht, zwei Finger verschieben und zoomen durch Auf- und Zuziehen. **Der Apple Pencil funktioniert**: Er wählt aus, zeichnet in Skizzen und zieht die Pfeile.",
+  "**Undo**: tap with two fingers or swipe three fingers left · **Redo**: tap with three fingers or swipe right — or use the arrows at the top right. A short note says what was undone.":
+    "**Rückgängig**: mit zwei Fingern tippen oder mit drei Fingern nach links wischen · **Wiederholen**: mit drei Fingern tippen oder nach rechts wischen – oder die Pfeile oben rechts nutzen. Ein kurzer Hinweis zeigt, was rückgängig gemacht wurde.",
+  "Long-press for the menus a right-click opens on the Mac. Double-tap or squeeze the Pencil to switch a sketch between selecting and drawing.":
+    "Lange drücken öffnet die Menüs, die auf dem Mac ein Rechtsklick öffnet. Doppeltippen oder Drücken des Pencil wechselt in einer Skizze zwischen Auswählen und Zeichnen.",
   "Drawing and snapping": "Zeichnen und Einrasten",
-  "Tools: [L] line (keeps chaining; double-click or Esc ends, clicking the start closes), [R] rectangle, [Shift+R] center rectangle, [C] circle, [A] arc (center, start, end), [G] polygon, [P] point, [T] trim.": "Werkzeuge: [L] Linie (zeichnet weiter; Doppelklick oder Esc beendet, ein Klick auf den Anfang schließt), [R] Rechteck, [Shift+R] Rechteck vom Mittelpunkt, [C] Kreis, [A] Bogen (Mitte, Anfang, Ende), [G] Vieleck, [P] Punkt, [T] Trimmen.",
-  "The cursor snaps to existing points, onto curves and onto the axes — the tip next to the cursor tells you which. Nearly horizontal/vertical lines become exactly so.": "Der Zeiger rastet an vorhandenen Punkten, auf Kurven und auf den Achsen ein – der Hinweis neben dem Zeiger sagt dir, woran. Fast horizontale oder vertikale Linien werden genau horizontal oder vertikal.",
-  "[X] toggles construction geometry (dashed, ignored for profiles). [U] uses model edges as fixed references.": "[X] schaltet Hilfsgeometrie um (gestrichelt, zählt nicht für Profile). [U] nutzt Modellkanten als feste Bezüge.",
-  "Closed loops fill light blue — those are the profiles you can extrude.": "Geschlossene Konturen füllen sich hellblau – das sind die Profile, die du extrudieren kannst.",
+  "Tools: [L] line (keeps chaining; double-click or Esc ends, clicking the start closes), [R] rectangle, [Shift+R] center rectangle, [C] circle, [A] arc (center, start, end), [G] polygon, [P] point, [T] trim.":
+    "Werkzeuge: [L] Linie (zeichnet weiter; Doppelklick oder Esc beendet, ein Klick auf den Anfang schließt), [R] Rechteck, [Shift+R] Rechteck vom Mittelpunkt, [C] Kreis, [A] Bogen (Mitte, Anfang, Ende), [G] Vieleck, [P] Punkt, [T] Trimmen.",
+  "The cursor snaps to existing points, onto curves and onto the axes — the tip next to the cursor tells you which. Nearly horizontal/vertical lines become exactly so.":
+    "Der Zeiger rastet an vorhandenen Punkten, auf Kurven und auf den Achsen ein – der Hinweis neben dem Zeiger sagt dir, woran. Fast horizontale oder vertikale Linien werden genau horizontal oder vertikal.",
+  "[X] toggles construction geometry (dashed, ignored for profiles). [U] uses model edges as fixed references.":
+    "[X] schaltet Hilfsgeometrie um (gestrichelt, zählt nicht für Profile). [U] nutzt Modellkanten als feste Bezüge.",
+  "Closed loops fill light blue — those are the profiles you can extrude.":
+    "Geschlossene Konturen füllen sich hellblau – das sind die Profile, die du extrudieren kannst.",
   "Dimensions and constraints": "Maße und Bedingungen",
-  "[D], then click a line (length), circle (diameter), arc (radius), two points (distance — place the label to the side for horizontal/vertical) or two lines (angle). Type a value or an expression like `width / 2`.": "[D], dann eine Linie (Länge), einen Kreis (Durchmesser), einen Bogen (Radius), zwei Punkte (Abstand – setz die Beschriftung seitlich für horizontal/vertikal) oder zwei Linien (Winkel) anklicken. Tipp einen Wert oder einen Ausdruck wie `width / 2` ein.",
-  "Double-click any dimension to change it. Select geometry and add constraints with [Shift] + letter: [Shift+V] horizontal/vertical, [Shift+N] coincident, [Shift+T] tangent, [Shift+E] equal, [Shift+A] parallel, [Shift+P] perpendicular, [Shift+C] concentric, [Shift+M] midpoint, [Shift+S] symmetric, [Shift+L] lock.": "Doppelklick auf ein Maß ändert es. Wähl Geometrie aus und füg Bedingungen mit [Shift] + Buchstabe hinzu: [Shift+V] horizontal/vertikal, [Shift+N] deckungsgleich, [Shift+T] tangential, [Shift+E] gleich, [Shift+A] parallel, [Shift+P] senkrecht, [Shift+C] konzentrisch, [Shift+M] Mittelpunkt, [Shift+S] symmetrisch, [Shift+L] fixieren.",
-  "The badge top-left shows the remaining degrees of freedom; “Fully defined” means nothing can move by accident.": "Die Anzeige oben links zeigt die verbleibenden Freiheitsgrade; „Vollständig bestimmt“ heißt, dass sich nichts versehentlich bewegen kann.",
-  "Drag points or lines to try shapes — the solver keeps all constraints.": "Zieh Punkte oder Linien, um Formen auszuprobieren – alle Bedingungen bleiben erhalten.",
+  "[D], then click a line (length), circle (diameter), arc (radius), two points (distance — place the label to the side for horizontal/vertical) or two lines (angle). Type a value or an expression like `width / 2`.":
+    "[D], dann eine Linie (Länge), einen Kreis (Durchmesser), einen Bogen (Radius), zwei Punkte (Abstand – setz die Beschriftung seitlich für horizontal/vertikal) oder zwei Linien (Winkel) anklicken. Tipp einen Wert oder einen Ausdruck wie `width / 2` ein.",
+  "Double-click any dimension to change it. Select geometry and add constraints with [Shift] + letter: [Shift+V] horizontal/vertical, [Shift+N] coincident, [Shift+T] tangent, [Shift+E] equal, [Shift+A] parallel, [Shift+P] perpendicular, [Shift+C] concentric, [Shift+M] midpoint, [Shift+S] symmetric, [Shift+L] lock.":
+    "Doppelklick auf ein Maß ändert es. Wähl Geometrie aus und füg Bedingungen mit [Shift] + Buchstabe hinzu: [Shift+V] horizontal/vertikal, [Shift+N] deckungsgleich, [Shift+T] tangential, [Shift+E] gleich, [Shift+A] parallel, [Shift+P] senkrecht, [Shift+C] konzentrisch, [Shift+M] Mittelpunkt, [Shift+S] symmetrisch, [Shift+L] fixieren.",
+  "The badge top-left shows the remaining degrees of freedom; “Fully defined” means nothing can move by accident.":
+    "Die Anzeige oben links zeigt die verbleibenden Freiheitsgrade; „Vollständig bestimmt“ heißt, dass sich nichts versehentlich bewegen kann.",
+  "Drag points or lines to try shapes — the solver keeps all constraints.":
+    "Zieh Punkte oder Linien, um Formen auszuprobieren – alle Bedingungen bleiben erhalten.",
   "Push, pull, round and bevel": "Drücken, ziehen, abrunden und fasen",
-  "Select any face, flat or round → drag the knob: out adds material, in cuts.": "Wähl eine Fläche aus, eben oder rund → zieh den Griff: nach außen fügt Material hinzu, nach innen schneidet.",
-  "Select a sketch region → drag to extrude it.": "Wähl einen Skizzenbereich aus → zieh, um ihn zu extrudieren.",
-  "Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer.": "Wähl Kanten aus (Shift-Klick für mehrere) → zieh vom Teil weg für eine Rundung, zum Teil hin für eine Fase.",
-  "The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts.": "Die Schnellleiste neben deiner Auswahl bietet die passenden Werkzeuge mit ihren Tastenkürzeln. Klick auf den Wert neben einem Pfeil, um eine genaue Zahl einzutippen; ein Klick ins Leere übernimmt.",
-  "Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it.": "Wähl einen Schritt aus (in der Liste oder per Klick auf seine Flächen), um seine Werte und Skizzenmaße direkt am Modell zu sehen – klick einen an, um ihn zu ändern.",
+  "Select any face, flat or round → drag the knob: out adds material, in cuts.":
+    "Wähl eine Fläche aus, eben oder rund → zieh den Griff: nach außen fügt Material hinzu, nach innen schneidet.",
+  "Select a sketch region → drag to extrude it.":
+    "Wähl einen Skizzenbereich aus → zieh, um ihn zu extrudieren.",
+  "Select edges (Shift-click for several) → drag away from the part for a fillet, towards it for a chamfer.":
+    "Wähl Kanten aus (Shift-Klick für mehrere) → zieh vom Teil weg für eine Rundung, zum Teil hin für eine Fase.",
+  "The quick-action bar next to your selection offers the matching tools with their shortcuts. Click the value next to an arrow to type an exact number; clicking empty space accepts.":
+    "Die Schnellleiste neben deiner Auswahl bietet die passenden Werkzeuge mit ihren Tastenkürzeln. Klick auf den Wert neben einem Pfeil, um eine genaue Zahl einzutippen; ein Klick ins Leere übernimmt.",
+  "Select a feature (in the list or by clicking its faces) to see its values and its sketch dimensions right on the model — click one to change it.":
+    "Wähl einen Schritt aus (in der Liste oder per Klick auf seine Flächen), um seine Werte und Skizzenmaße direkt am Modell zu sehen – klick einen an, um ihn zu ändern.",
   "Features with exact values": "Schritte mit genauen Werten",
-  "Extrude [E]: New / Add / Remove / Intersect, blind, symmetric, two directions or through all.": "Extrudieren [E]: Neu / Hinzufügen / Entfernen / Schnittmenge, mit Abstand, symmetrisch, in zwei Richtungen oder durch alles.",
-  "Revolve [V] around an axis, line or edge. Fillet [F], Chamfer [C], Shell [H].": "Drehen [V] um eine Achse, Linie oder Kante. Abrunden [F], Fasen [C], Aushöhlen [H].",
-  "Patterns [L] / [O] and Mirror [I] copy extrudes/revolves or whole parts. Boolean [B] combines parts. Plane [N] adds offset construction planes.": "Muster [L] / [O] und Spiegeln [I] kopieren Extrusionen/Drehungen oder ganze Teile. Kombinieren [B] verbindet Teile. Ebene [N] fügt versetzte Hilfsebenen hinzu.",
-  "**Modify → Hole** with **Insert** makes holes for heat-set threaded inserts (M2–M10): pick the length, tap the face, or tap an edge to put the hole far enough in. **Also place the inserts** adds them as parts to the parts list; a warning shows where the wall around an insert is too thin.": "**Ändern → Bohrung** mit **Gewindeeinsatz** macht Bohrungen für Gewindeeinsätze zum Einschmelzen (M2–M10): Länge wählen, auf die Fläche tippen oder auf eine Kante, damit die Bohrung weit genug innen sitzt. **Einsätze als Teile mitsetzen** fügt sie als Teile der Stückliste hinzu; eine Warnung zeigt, wo die Wand um einen Einsatz zu dünn ist.",
-  "Dialogs preview live; [↵] accepts, [Esc] cancels. Drag the arrows in the viewport to set distances.": "Dialoge zeigen eine Live-Vorschau; [↵] übernimmt, [Esc] bricht ab. Zieh die Pfeile in der Ansicht, um Abstände festzulegen.",
+  "Extrude [E]: New / Add / Remove / Intersect, blind, symmetric, two directions or through all.":
+    "Extrudieren [E]: Neu / Hinzufügen / Entfernen / Schnittmenge, mit Abstand, symmetrisch, in zwei Richtungen oder durch alles.",
+  "Revolve [V] around an axis, line or edge. Fillet [F], Chamfer [C], Shell [H].":
+    "Drehen [V] um eine Achse, Linie oder Kante. Abrunden [F], Fasen [C], Aushöhlen [H].",
+  "Patterns [L] / [O] and Mirror [I] copy extrudes/revolves or whole parts. Boolean [B] combines parts. Plane [N] adds offset construction planes.":
+    "Muster [L] / [O] und Spiegeln [I] kopieren Extrusionen/Drehungen oder ganze Teile. Kombinieren [B] verbindet Teile. Ebene [N] fügt versetzte Hilfsebenen hinzu.",
+  "**Modify → Hole** with **Insert** makes holes for heat-set threaded inserts (M2–M10): pick the length, tap the face, or tap an edge to put the hole far enough in. **Also place the inserts** adds them as parts to the parts list; a warning shows where the wall around an insert is too thin.":
+    "**Ändern → Bohrung** mit **Gewindeeinsatz** macht Bohrungen für Gewindeeinsätze zum Einschmelzen (M2–M10): Länge wählen, auf die Fläche tippen oder auf eine Kante, damit die Bohrung weit genug innen sitzt. **Einsätze als Teile mitsetzen** fügt sie als Teile der Stückliste hinzu; eine Warnung zeigt, wo die Wand um einen Einsatz zu dünn ist.",
+  "Dialogs preview live; [↵] accepts, [Esc] cancels. Drag the arrows in the viewport to set distances.":
+    "Dialoge zeigen eine Live-Vorschau; [↵] übernimmt, [Esc] bricht ab. Zieh die Pfeile in der Ansicht, um Abstände festzulegen.",
   "History, rollback and variables": "Verlauf, Zurückrollen und Variablen",
-  "Double-click a feature to edit it; everything after it updates. Drag features to reorder.": "Doppelklick auf einen Schritt bearbeitet ihn; alles danach wird aktualisiert. Zieh Schritte, um sie umzuordnen.",
-  "Drag the blue bar under the features to roll back and insert steps earlier.": "Zieh den blauen Balken unter den Schritten, um zurückzurollen und Schritte weiter vorne einzufügen.",
-  "Add variables (e.g. `wall = 2 mm`) and use them in any value; renaming a variable updates every use.": "Leg Variablen an (z. B. `wall = 2 mm`) und nutz sie in jedem Wert; benennst du eine Variable um, ändert sich jede Verwendung mit.",
-  "Right-click a feature to suppress, rename or delete it.": "Rechtsklick auf einen Schritt, um ihn zu unterdrücken, umzubenennen oder zu löschen.",
+  "Double-click a feature to edit it; everything after it updates. Drag features to reorder.":
+    "Doppelklick auf einen Schritt bearbeitet ihn; alles danach wird aktualisiert. Zieh Schritte, um sie umzuordnen.",
+  "Drag the blue bar under the features to roll back and insert steps earlier.":
+    "Zieh den blauen Balken unter den Schritten, um zurückzurollen und Schritte weiter vorne einzufügen.",
+  "Add variables (e.g. `wall = 2 mm`) and use them in any value; renaming a variable updates every use.":
+    "Leg Variablen an (z. B. `wall = 2 mm`) und nutz sie in jedem Wert; benennst du eine Variable um, ändert sich jede Verwendung mit.",
+  "Right-click a feature to suppress, rename or delete it.":
+    "Rechtsklick auf einen Schritt, um ihn zu unterdrücken, umzubenennen oder zu löschen.",
   Files: "Dateien",
   "Saving, export and import": "Speichern, Export und Import",
-  "Projects save automatically as open `.meercad` files (readable JSON) — in the desktop app in Documents/meerCAD.": "Projekte werden automatisch als offene `.meercad`-Dateien gespeichert (lesbares JSON) – in der Desktop-App unter Dokumente/meerCAD.",
-  "Export: STL and 3MF for 3D printing, STEP for other CAD tools, OBJ for rendering and other 3D tools (terrains and scans keep their textures), DXF/SVG of a sketch for laser cutting.": "Export: STL und 3MF für den 3D-Druck, STEP für andere CAD-Programme, OBJ zum Rendern und für andere 3D-Programme (Gelände und Scans mit ihren Texturen), DXF/SVG einer Skizze zum Laserschneiden.",
-  "Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already.": "Mehrfarbdruck: Gib Teilen Farben (klick auf das Farbfeld in der Teileliste) und exportiere 3MF; Teile mit derselben Farbe kommen auf dasselbe Filament, so hat ein Mehrmaterial-Slicer sie schon zugeordnet.",
-  "Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.": "Technische Zeichnung (Menü Datei): Vorder-, Drauf-, Seiten- und isometrische Ansicht mit gestrichelten verdeckten Kanten, Gesamtmaßen und Schriftfeld auf einem Blatt A4–A2, als PDF, SVG oder DXF für die Werkstatt.",
-  "Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces.": "Import: Zieh STEP-, STL-, 3MF-, OBJ-, DXF- oder SVG-Dateien ins Fenster oder nutz Importieren [Mod+O]. In einem offenen Modell wird die Datei hinzugefügt; in der Projektübersicht beginnt sie ein neues Modell. Netze (STL, 3MF, OBJ) werden zu Volumenkörpern aus ebenen Flächen.",
+  "Projects save automatically as open `.meercad` files (readable JSON) — in the desktop app in Documents/meerCAD.":
+    "Projekte werden automatisch als offene `.meercad`-Dateien gespeichert (lesbares JSON) – in der Desktop-App unter Dokumente/meerCAD.",
+  "Export: STL and 3MF for 3D printing, STEP for other CAD tools, OBJ for rendering and other 3D tools (terrains and scans keep their textures), DXF/SVG of a sketch for laser cutting.":
+    "Export: STL und 3MF für den 3D-Druck, STEP für andere CAD-Programme, OBJ zum Rendern und für andere 3D-Programme (Gelände und Scans mit ihren Texturen), DXF/SVG einer Skizze zum Laserschneiden.",
+  "Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already.":
+    "Mehrfarbdruck: Gib Teilen Farben (klick auf das Farbfeld in der Teileliste) und exportiere 3MF; Teile mit derselben Farbe kommen auf dasselbe Filament, so hat ein Mehrmaterial-Slicer sie schon zugeordnet.",
+  "Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.":
+    "Technische Zeichnung (Menü Datei): Vorder-, Drauf-, Seiten- und isometrische Ansicht mit gestrichelten verdeckten Kanten, Gesamtmaßen und Schriftfeld auf einem Blatt A4–A2, als PDF, SVG oder DXF für die Werkstatt.",
+  "Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces.":
+    "Import: Zieh STEP-, STL-, 3MF-, OBJ-, DXF- oder SVG-Dateien ins Fenster oder nutz Importieren [Mod+O]. In einem offenen Modell wird die Datei hinzugefügt; in der Projektübersicht beginnt sie ein neues Modell. Netze (STL, 3MF, OBJ) werden zu Volumenkörpern aus ebenen Flächen.",
   "about::About": "Über",
   Licenses: "Lizenzen",
-  "meerCAD © 2026 Torben Berger UG (haftungsbeschränkt), all rights reserved. The file-format, I/O and naming libraries are MIT licensed, so other tools can read and write .meercad files.": "meerCAD © 2026 Torben Berger UG (haftungsbeschränkt), alle Rechte vorbehalten. Die Bibliotheken für Dateiformat, Ein-/Ausgabe und Benennung stehen unter der MIT-Lizenz, damit andere Programme .meercad-Dateien lesen und schreiben können.",
-  "Geometry by **Open CASCADE Technology** and sketch solving by **PlaneGCS** (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules.": "Geometrie von **Open CASCADE Technology** und Skizzenlöser **PlaneGCS** (FreeCAD), beide LGPL-2.1, unverändert als WebAssembly-Module eingebunden.",
-  "Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages.": "Gebaut mit Three.js, React, Electron und weiteren Paketen unter MIT-, ISC-, BSD- oder Apache-Lizenz.",
-  "Your models belong to you: projects are plain files on your device; nothing is uploaded.": "Deine Modelle gehören dir: Projekte sind einfache Dateien auf deinem Gerät; nichts wird hochgeladen.",
+  "meerCAD © 2026 Torben Berger UG (haftungsbeschränkt), all rights reserved. The file-format, I/O and naming libraries are MIT licensed, so other tools can read and write .meercad files.":
+    "meerCAD © 2026 Torben Berger UG (haftungsbeschränkt), alle Rechte vorbehalten. Die Bibliotheken für Dateiformat, Ein-/Ausgabe und Benennung stehen unter der MIT-Lizenz, damit andere Programme .meercad-Dateien lesen und schreiben können.",
+  "Geometry by **Open CASCADE Technology** and sketch solving by **PlaneGCS** (FreeCAD), both LGPL-2.1, used unmodified as WebAssembly modules.":
+    "Geometrie von **Open CASCADE Technology** und Skizzenlöser **PlaneGCS** (FreeCAD), beide LGPL-2.1, unverändert als WebAssembly-Module eingebunden.",
+  "Built with Three.js, React, Electron and other MIT/ISC/BSD/Apache-licensed packages.":
+    "Gebaut mit Three.js, React, Electron und weiteren Paketen unter MIT-, ISC-, BSD- oder Apache-Lizenz.",
+  "Your models belong to you: projects are plain files on your device; nothing is uploaded.":
+    "Deine Modelle gehören dir: Projekte sind einfache Dateien auf deinem Gerät; nichts wird hochgeladen.",
   "All licences": "Alle Lizenzen",
   "Privacy policy": "Datenschutzerklärung",
   "No warranty": "Keine Gewährleistung",
@@ -376,43 +447,62 @@ export default {
   "Terms of use": "Nutzungsvereinbarung",
   "tab::Terms": "Vereinbarung",
   "Text of the terms of use": "Text der Nutzungsvereinbarung",
-  "Please read to the end — the boxes below unlock then.": "Bitte bis zum Ende lesen – danach lassen sich die Haken setzen.",
+  "Please read to the end — the boxes below unlock then.":
+    "Bitte bis zum Ende lesen – danach lassen sich die Haken setzen.",
   "Thanks for reading. Please confirm each point:": "Danke fürs Lesen. Bitte bestätige jeden Punkt:",
   "meerCAD can only be used once you accept.": "meerCAD lässt sich erst nach deiner Zustimmung nutzen.",
   "Accept and get started": "Zustimmen und loslegen",
   "Accepted on {date} (version {version}, app {app})": "Zugestimmt am {date} (Version {version}, App {app})",
-  "meerCAD is a tool for hobby projects, not certified professional CAD.": "meerCAD ist ein Werkzeug für Hobbyprojekte, kein zertifiziertes Profi-CAD.",
-  "There is no guarantee that dimensions, calculations or exports are correct.": "Es gibt keine Garantie, dass Maße, Berechnungen oder Exporte stimmen.",
-  "I check dimensions, fits and strength myself before I print or use a part.": "Ich prüfe Maße, Passungen und Festigkeit selbst, bevor ich ein Teil drucke oder einsetze.",
-  "I do not use it for safety-critical, load-bearing or medical parts without my own expert check.": "Ich nutze es nicht für sicherheitskritische, tragende oder medizinische Teile ohne eigene fachliche Prüfung.",
-  "The AI assistant can make mistakes; I check what it builds.": "Der KI-Assistent kann Fehler machen; ich prüfe, was er baut.",
-  "I use meerCAD at my own risk and have read the terms of use and the EULA.": "Ich nutze meerCAD auf eigenes Risiko und habe die Nutzungsvereinbarung und die EULA gelesen.",
+  "meerCAD is a tool for hobby projects, not certified professional CAD.":
+    "meerCAD ist ein Werkzeug für Hobbyprojekte, kein zertifiziertes Profi-CAD.",
+  "There is no guarantee that dimensions, calculations or exports are correct.":
+    "Es gibt keine Garantie, dass Maße, Berechnungen oder Exporte stimmen.",
+  "I check dimensions, fits and strength myself before I print or use a part.":
+    "Ich prüfe Maße, Passungen und Festigkeit selbst, bevor ich ein Teil drucke oder einsetze.",
+  "I do not use it for safety-critical, load-bearing or medical parts without my own expert check.":
+    "Ich nutze es nicht für sicherheitskritische, tragende oder medizinische Teile ohne eigene fachliche Prüfung.",
+  "The AI assistant can make mistakes; I check what it builds.":
+    "Der KI-Assistent kann Fehler machen; ich prüfe, was er baut.",
+  "I use meerCAD at my own risk and have read the terms of use and the EULA.":
+    "Ich nutze meerCAD auf eigenes Risiko und habe die Nutzungsvereinbarung und die EULA gelesen.",
   "AI assistants": "KI-Assistenten",
   "Model with Claude via MCP": "Mit Claude über MCP modellieren",
-  "Click the plug icon in the top bar and enable **Allow assistants to control meerCAD**.": "Klick oben in der Leiste auf das Stecker-Symbol und schalte **Assistenten dürfen meerCAD steuern** ein.",
-  "Copy the shown configuration into Claude Desktop (Settings → Developer → Edit Config) or run the `claude mcp add …` command for Claude Code.": "Kopier die angezeigte Konfiguration in Claude Desktop (Settings → Developer → Edit Config) oder führ für Claude Code den Befehl `claude mcp add …` aus.",
-  "Ask for parts or changes, e.g. “make the plate 10 mm wider and add a third hole”. The assistant can pick and open projects, preview ideas and apply them — you see every step live and can undo.": "Bitte um Teile oder Änderungen, z. B. „mach die Platte 10 mm breiter und füg eine dritte Bohrung hinzu“. Der Assistent kann Projekte auswählen und öffnen, Ideen in der Vorschau zeigen und übernehmen – du siehst jeden Schritt live und kannst ihn rückgängig machen.",
+  "Click the plug icon in the top bar and enable **Allow assistants to control meerCAD**.":
+    "Klick oben in der Leiste auf das Stecker-Symbol und schalte **Assistenten dürfen meerCAD steuern** ein.",
+  "Copy the shown configuration into Claude Desktop (Settings → Developer → Edit Config) or run the `claude mcp add …` command for Claude Code.":
+    "Kopier die angezeigte Konfiguration in Claude Desktop (Settings → Developer → Edit Config) oder führ für Claude Code den Befehl `claude mcp add …` aus.",
+  "Ask for parts or changes, e.g. “make the plate 10 mm wider and add a third hole”. The assistant can pick and open projects, preview ideas and apply them — you see every step live and can undo.":
+    "Bitte um Teile oder Änderungen, z. B. „mach die Platte 10 mm breiter und füg eine dritte Bohrung hinzu“. Der Assistent kann Projekte auswählen und öffnen, Ideen in der Vorschau zeigen und übernehmen – du siehst jeden Schritt live und kannst ihn rückgängig machen.",
   "Close help": "Hilfe schließen",
   "Restart tour": "Tour neu starten",
   Shortcuts: "Tastenkürzel",
   "Welcome to meerCAD": "Willkommen bei meerCAD",
-  "A parametric CAD for makers. This short tour shows the basics — it takes about a minute. You can skip it now and restart it any time from **Help**.": "Ein parametrisches CAD für Maker. Diese kurze Tour zeigt die Grundlagen – sie dauert etwa eine Minute. Du kannst sie jetzt überspringen und jederzeit über **Hilfe** neu starten.",
+  "A parametric CAD for makers. This short tour shows the basics — it takes about a minute. You can skip it now and restart it any time from **Help**.":
+    "Ein parametrisches CAD für Maker. Diese kurze Tour zeigt die Grundlagen – sie dauert etwa eine Minute. Du kannst sie jetzt überspringen und jederzeit über **Hilfe** neu starten.",
   Tools: "Werkzeuge",
-  "Tools live in this rail, grouped by what they do: hover a group to open it. Every tool shows its shortcut, e.g. [S] Sketch, [E] Extrude, [F] Fillet. [X] searches all commands, [?] lists every shortcut.": "Die Werkzeuge sitzen in dieser Leiste, nach Aufgabe gruppiert: Fahr über eine Gruppe, um sie zu öffnen. Jedes Werkzeug zeigt sein Tastenkürzel, z. B. [S] Skizze, [E] Extrudieren, [F] Abrunden. [X] durchsucht alle Befehle, [?] listet alle Tastenkürzel auf.",
+  "Tools live in this rail, grouped by what they do: hover a group to open it. Every tool shows its shortcut, e.g. [S] Sketch, [E] Extrude, [F] Fillet. [X] searches all commands, [?] lists every shortcut.":
+    "Die Werkzeuge sitzen in dieser Leiste, nach Aufgabe gruppiert: Fahr über eine Gruppe, um sie zu öffnen. Jedes Werkzeug zeigt sein Tastenkürzel, z. B. [S] Skizze, [E] Extrudieren, [F] Abrunden. [X] durchsucht alle Befehle, [?] listet alle Tastenkürzel auf.",
   "Start with a sketch": "Mit einer Skizze beginnen",
-  "Hover **Origin** and pick **Top**, **Front** or **Right** — or select a flat face and press [S]. Draw lines, rectangles and circles; dimensions and constraints keep them exact.": "Fahr über **Ursprung** und wähl **Oben**, **Vorne** oder **Rechts** – oder wähl eine ebene Fläche aus und drück [S]. Zeichne Linien, Rechtecke und Kreise; Maße und Bedingungen halten sie genau.",
+  "Hover **Origin** and pick **Top**, **Front** or **Right** — or select a flat face and press [S]. Draw lines, rectangles and circles; dimensions and constraints keep them exact.":
+    "Fahr über **Ursprung** und wähl **Oben**, **Vorne** oder **Rechts** – oder wähl eine ebene Fläche aus und drück [S]. Zeichne Linien, Rechtecke und Kreise; Maße und Bedingungen halten sie genau.",
   "Move around": "Umsehen",
-  "**Right-drag** rotates, **middle-drag** or **Shift + right-drag** pans, the **wheel** zooms. [Z] fits everything.": "**Ziehen mit rechter Maustaste** dreht, **Ziehen mit mittlerer Maustaste** oder **Shift + rechte Maustaste** verschiebt, das **Mausrad** zoomt. [Z] zeigt alles.",
+  "**Right-drag** rotates, **middle-drag** or **Shift + right-drag** pans, the **wheel** zooms. [Z] fits everything.":
+    "**Ziehen mit rechter Maustaste** dreht, **Ziehen mit mittlerer Maustaste** oder **Shift + rechte Maustaste** verschiebt, das **Mausrad** zoomt. [Z] zeigt alles.",
   "View cube": "Ansichtswürfel",
-  "Click a face, edge or corner for a standard view, drag the cube to orbit, or use the arrows to turn the view by 90°.": "Klick auf eine Fläche, Kante oder Ecke für eine Standardansicht, zieh den Würfel zum Drehen oder dreh die Ansicht mit den Pfeilen um 90°.",
+  "Click a face, edge or corner for a standard view, drag the cube to orbit, or use the arrows to turn the view by 90°.":
+    "Klick auf eine Fläche, Kante oder Ecke für eine Standardansicht, zieh den Würfel zum Drehen oder dreh die Ansicht mit den Pfeilen um 90°.",
   "Edit directly": "Direkt bearbeiten",
-  "Click a face and **drag its arrow**: out adds material, in removes it. Click an edge and drag: away rounds it (fillet), towards the body bevels it (chamfer). Right-click anything for more actions.": "Klick auf eine Fläche und **zieh ihren Pfeil**: Nach außen fügt Material hinzu, nach innen entfernt es. Klick auf eine Kante und zieh: Weg vom Teil rundet sie ab (Rundung), zum Teil hin fast sie (Fase). Ein Rechtsklick zeigt überall weitere Aktionen.",
+  "Click a face and **drag its arrow**: out adds material, in removes it. Click an edge and drag: away rounds it (fillet), towards the body bevels it (chamfer). Right-click anything for more actions.":
+    "Klick auf eine Fläche und **zieh ihren Pfeil**: Nach außen fügt Material hinzu, nach innen entfernt es. Klick auf eine Kante und zieh: Weg vom Teil rundet sie ab (Rundung), zum Teil hin fast sie (Fase). Ein Rechtsklick zeigt überall weitere Aktionen.",
   "History and variables": "Verlauf und Variablen",
-  "Every step is recorded and stays editable — double-click to change it, drag the blue bar to roll back. **Variables** like `wall = 2 mm` can drive any dimension.": "Jeder Schritt wird aufgezeichnet und bleibt bearbeitbar – ein Doppelklick ändert ihn, mit dem blauen Balken rollst du zurück. **Variablen** wie `wall = 2 mm` können jedes Maß steuern.",
+  "Every step is recorded and stays editable — double-click to change it, drag the blue bar to roll back. **Variables** like `wall = 2 mm` can drive any dimension.":
+    "Jeder Schritt wird aufgezeichnet und bleibt bearbeitbar – ein Doppelklick ändert ihn, mit dem blauen Balken rollst du zurück. **Variablen** wie `wall = 2 mm` können jedes Maß steuern.",
   "Work with AI": "Mit KI arbeiten",
-  "Connect Claude or another assistant through MCP: it can build and change parts while you watch the live preview.": "Verbinde Claude oder einen anderen Assistenten über MCP: Er kann Teile bauen und ändern, während du in der Live-Vorschau zusiehst.",
+  "Connect Claude or another assistant through MCP: it can build and change parts while you watch the live preview.":
+    "Verbinde Claude oder einen anderen Assistenten über MCP: Er kann Teile bauen und ändern, während du in der Live-Vorschau zusiehst.",
   "You're ready": "Los geht's",
-  "Your projects are saved automatically. Find guides and how-tos under **Help**. Have fun building!": "Deine Projekte werden automatisch gespeichert. Anleitungen findest du unter **Hilfe**. Viel Spaß beim Konstruieren!",
+  "Your projects are saved automatically. Find guides and how-tos under **Help**. Have fun building!":
+    "Deine Projekte werden automatisch gespeichert. Anleitungen findest du unter **Hilfe**. Viel Spaß beim Konstruieren!",
   Introduction: "Einführung",
   "Skip tour (Esc)": "Tour überspringen (Esc)",
   Skip: "Überspringen",
@@ -420,17 +510,24 @@ export default {
   "Start modeling": "Loslegen",
   "Choose a projects folder": "Projektordner wählen",
   "Where should your projects live?": "Wo sollen deine Projekte liegen?",
-  "meerCAD saves every project as a .meercad file in a folder you choose, so your work stays yours even if you remove the app. Pick a folder you back up, or a synced one like iCloud Drive.": "meerCAD speichert jedes Projekt als .meercad-Datei in einem Ordner deiner Wahl, so bleibt deine Arbeit deine, auch wenn du die App entfernst. Wähl einen Ordner, den du sicherst, oder einen synchronisierten wie iCloud Drive.",
+  "meerCAD saves every project as a .meercad file in a folder you choose, so your work stays yours even if you remove the app. Pick a folder you back up, or a synced one like iCloud Drive.":
+    "meerCAD speichert jedes Projekt als .meercad-Datei in einem Ordner deiner Wahl, so bleibt deine Arbeit deine, auch wenn du die App entfernst. Wähl einen Ordner, den du sicherst, oder einen synchronisierten wie iCloud Drive.",
   "Choose another folder…": "Anderen Ordner wählen …",
   "On this Mac": "Auf diesem Mac",
   "Use this folder": "Diesen Ordner verwenden",
-  "Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.": "Parametrisches CAD für Maker: skizzieren, extrudieren, abrunden und drucken. Alles läuft auf deinem Gerät.",
-  "© 2026 Torben Berger UG (haftungsbeschränkt). The source code is public under the FSL-1.1-ALv2:": "© 2026 Torben Berger UG (haftungsbeschränkt). Der Quellcode ist öffentlich unter der FSL-1.1-ALv2:",
-  "meerCAD is a design tool, provided free of charge and as is, without warranty. All results (dimensions, masses, fits, overhangs, checks and any analysis) are estimates and can be wrong. Check every part yourself before you make or use it. Do not use meerCAD as the basis for anything whose failure could hurt people or cause serious damage, such as aircraft, vehicles, lifting gear, load-bearing structures, pressure vessels or medical devices, unless qualified professionals verify the design independently. As far as the law allows, we are not liable for parts or products designed or made with meerCAD; see the licence agreement at meercad.app/eula.": "meerCAD ist ein Konstruktionswerkzeug, unentgeltlich und ohne Gewähr. Alle Ergebnisse (Maße, Massen, Passungen, Überhänge, Prüfungen und jede Berechnung) sind Schätzungen und können falsch sein. Prüf jedes Teil selbst, bevor du es herstellst oder verwendest. Nutze meerCAD nicht als Grundlage für etwas, dessen Versagen Menschen verletzen oder schwere Schäden verursachen kann, etwa Luftfahrzeuge, Fahrzeuge, Hebezeug, tragende Konstruktionen, Druckbehälter oder Medizinprodukte, außer Fachleute prüfen die Konstruktion unabhängig. Soweit gesetzlich zulässig, haften wir nicht für Teile oder Produkte, die mit meerCAD entworfen oder hergestellt wurden; siehe die Lizenzvereinbarung unter meercad.app/eula.",
-  "meerCAD collects no personal data: no account, no analytics, no tracking. Your designs stay on your device.": "meerCAD sammelt keine persönlichen Daten: kein Konto, keine Analyse, kein Tracking. Deine Modelle bleiben auf deinem Gerät.",
+  "Parametric CAD for makers: sketch, extrude, fillet and print. Everything runs on your device.":
+    "Parametrisches CAD für Maker: skizzieren, extrudieren, abrunden und drucken. Alles läuft auf deinem Gerät.",
+  "© 2026 Torben Berger UG (haftungsbeschränkt). The source code is public under the FSL-1.1-ALv2:":
+    "© 2026 Torben Berger UG (haftungsbeschränkt). Der Quellcode ist öffentlich unter der FSL-1.1-ALv2:",
+  "meerCAD is a design tool, provided free of charge and as is, without warranty. All results (dimensions, masses, fits, overhangs, checks and any analysis) are estimates and can be wrong. Check every part yourself before you make or use it. Do not use meerCAD as the basis for anything whose failure could hurt people or cause serious damage, such as aircraft, vehicles, lifting gear, load-bearing structures, pressure vessels or medical devices, unless qualified professionals verify the design independently. As far as the law allows, we are not liable for parts or products designed or made with meerCAD; see the licence agreement at meercad.app/eula.":
+    "meerCAD ist ein Konstruktionswerkzeug, unentgeltlich und ohne Gewähr. Alle Ergebnisse (Maße, Massen, Passungen, Überhänge, Prüfungen und jede Berechnung) sind Schätzungen und können falsch sein. Prüf jedes Teil selbst, bevor du es herstellst oder verwendest. Nutze meerCAD nicht als Grundlage für etwas, dessen Versagen Menschen verletzen oder schwere Schäden verursachen kann, etwa Luftfahrzeuge, Fahrzeuge, Hebezeug, tragende Konstruktionen, Druckbehälter oder Medizinprodukte, außer Fachleute prüfen die Konstruktion unabhängig. Soweit gesetzlich zulässig, haften wir nicht für Teile oder Produkte, die mit meerCAD entworfen oder hergestellt wurden; siehe die Lizenzvereinbarung unter meercad.app/eula.",
+  "meerCAD collects no personal data: no account, no analytics, no tracking. Your designs stay on your device.":
+    "meerCAD sammelt keine persönlichen Daten: kein Konto, keine Analyse, kein Tracking. Deine Modelle bleiben auf deinem Gerät.",
   "Read the privacy policy": "Datenschutzerklärung lesen",
-  "Open CASCADE and PlaneGCS: GNU Lesser General Public License 2.1": "Open CASCADE und PlaneGCS: GNU Lesser General Public License 2.1",
-  "Both libraries are used unmodified; their source is linked above. The App Store apps are signed, so the WebAssembly modules cannot be swapped inside them. To use a modified version, build meerCAD yourself from its public source.": "Beide Bibliotheken werden unverändert verwendet; ihr Quellcode ist oben verlinkt. Die Apps aus dem App Store sind signiert, deshalb lassen sich die WebAssembly-Module darin nicht austauschen. Für eine geänderte Version meerCAD selbst aus dem öffentlichen Quellcode bauen.",
+  "Open CASCADE and PlaneGCS: GNU Lesser General Public License 2.1":
+    "Open CASCADE und PlaneGCS: GNU Lesser General Public License 2.1",
+  "Both libraries are used unmodified; their source is linked above. The App Store apps are signed, so the WebAssembly modules cannot be swapped inside them. To use a modified version, build meerCAD yourself from its public source.":
+    "Beide Bibliotheken werden unverändert verwendet; ihr Quellcode ist oben verlinkt. Die Apps aus dem App Store sind signiert, deshalb lassen sich die WebAssembly-Module darin nicht austauschen. Für eine geänderte Version meerCAD selbst aus dem öffentlichen Quellcode bauen.",
   Later: "Später",
   Download: "Herunterladen",
   "AI assistants (MCP): {status}": "KI-Assistenten (MCP): {status}",
@@ -438,28 +535,42 @@ export default {
   connecting: "verbindet",
   off: "aus",
   "Connect AI assistants (MCP)": "KI-Assistenten verbinden (MCP)",
-  "Lets Claude Desktop, Claude Code or any MCP client read and change the open model: create sketches and features, edit parameters, render views, measure and export. Everything stays on this computer.": "Lässt Claude Desktop, Claude Code oder jeden MCP-Client das offene Modell lesen und ändern: Skizzen und Schritte anlegen, Variablen bearbeiten, Ansichten rendern, messen und exportieren. Alles bleibt auf diesem Computer.",
+  "Lets Claude Desktop, Claude Code or any MCP client read and change the open model: create sketches and features, edit parameters, render views, measure and export. Everything stays on this computer.":
+    "Lässt Claude Desktop, Claude Code oder jeden MCP-Client das offene Modell lesen und ändern: Skizzen und Schritte anlegen, Variablen bearbeiten, Ansichten rendern, messen und exportieren. Alles bleibt auf diesem Computer.",
   "Allow assistants to control meerCAD": "Assistenten dürfen meerCAD steuern",
   "waiting for an assistant…": "wartet auf einen Assistenten …",
-  "Added to Claude Desktop ({file}). Restart Claude Desktop to connect.": "Zu Claude Desktop hinzugefügt ({file}). Starte Claude Desktop neu, um zu verbinden.",
-  "Could not update the Claude Desktop config: {msg}": "Die Konfiguration von Claude Desktop konnte nicht geändert werden: {msg}",
+  "Added to Claude Desktop ({file}). Restart Claude Desktop to connect.":
+    "Zu Claude Desktop hinzugefügt ({file}). Starte Claude Desktop neu, um zu verbinden.",
+  "Could not update the Claude Desktop config: {msg}":
+    "Die Konfiguration von Claude Desktop konnte nicht geändert werden: {msg}",
   "Add to Claude Desktop": "Zu Claude Desktop hinzufügen",
-  "Claude Desktop opens the meerCAD extension: confirm the installation there.": "Claude Desktop öffnet die meerCAD-Erweiterung: Bestätige dort die Installation.",
-  "Other assistants start the server with Node.js; install it from nodejs.org if you do not have it yet.": "Andere Assistenten starten den Server mit Node.js; installiere es von nodejs.org, falls du es noch nicht hast.",
-  "Installs meerCAD as an extension in Claude Desktop.": "Installiert meerCAD als Erweiterung in Claude Desktop.",
-  "Writes the entry below into Claude Desktop's config; other servers stay untouched.": "Schreibt den Eintrag unten in die Konfiguration von Claude Desktop; andere Server bleiben unverändert.",
-  "Or add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)": "Oder füg dies in die Konfiguration eines beliebigen MCP-Clients ein (Claude Desktop: Settings → Developer → Edit Config)",
+  "Claude Desktop opens the meerCAD extension: confirm the installation there.":
+    "Claude Desktop öffnet die meerCAD-Erweiterung: Bestätige dort die Installation.",
+  "Other assistants start the server with Node.js; install it from nodejs.org if you do not have it yet.":
+    "Andere Assistenten starten den Server mit Node.js; installiere es von nodejs.org, falls du es noch nicht hast.",
+  "Installs meerCAD as an extension in Claude Desktop.":
+    "Installiert meerCAD als Erweiterung in Claude Desktop.",
+  "Writes the entry below into Claude Desktop's config; other servers stay untouched.":
+    "Schreibt den Eintrag unten in die Konfiguration von Claude Desktop; andere Server bleiben unverändert.",
+  "Or add this to any MCP client configuration (Claude Desktop: Settings → Developer → Edit Config)":
+    "Oder füg dies in die Konfiguration eines beliebigen MCP-Clients ein (Claude Desktop: Settings → Developer → Edit Config)",
   "Configuration copied": "Konfiguration kopiert",
   "Copy configuration": "Konfiguration kopieren",
-  "An assistant is connected. Try: “Make a 60×40×4 mm mounting plate with two 4.5 mm holes”.": "Ein Assistent ist verbunden. Probier: „Mach eine Montageplatte 60×40×4 mm mit zwei Bohrungen 4.5 mm“.",
+  "An assistant is connected. Try: “Make a 60×40×4 mm mounting plate with two 4.5 mm holes”.":
+    "Ein Assistent ist verbunden. Probier: „Mach eine Montageplatte 60×40×4 mm mit zwei Bohrungen 4.5 mm“.",
   OK: "OK",
   Cancel: "Abbrechen",
   Done: "Fertig",
-  "Single letters for every tool, ⌘1–7 for views.": "Einzelne Buchstaben für jedes Werkzeug, ⌘1–7 für Ansichten.",
-  "S opens command search, P projects edges, F6 fits the view.": "S öffnet die Befehlssuche, P projiziert Kanten, F6 zeigt alles.",
-  "Shift+letter for features, Shift+1–7 for views, F fits, N looks normal to a face.": "Shift+Buchstabe für Schritte, Shift+1–7 für Ansichten, F zeigt alles, N schaut senkrecht auf eine Fläche.",
-  "Ctrl+1–7 for views, Ctrl+8 normal to, F fits.": "Ctrl+1–7 für Ansichten, Ctrl+8 senkrecht darauf, F zeigt alles.",
-  "Numpad views (Ctrl for the opposite side), Home fits.": "Ansichten auf dem Ziffernblock (Ctrl für die Gegenseite), Home zeigt alles.",
+  "Single letters for every tool, ⌘1–7 for views.":
+    "Einzelne Buchstaben für jedes Werkzeug, ⌘1–7 für Ansichten.",
+  "S opens command search, P projects edges, F6 fits the view.":
+    "S öffnet die Befehlssuche, P projiziert Kanten, F6 zeigt alles.",
+  "Shift+letter for features, Shift+1–7 for views, F fits, N looks normal to a face.":
+    "Shift+Buchstabe für Schritte, Shift+1–7 für Ansichten, F zeigt alles, N schaut senkrecht auf eine Fläche.",
+  "Ctrl+1–7 for views, Ctrl+8 normal to, F fits.":
+    "Ctrl+1–7 für Ansichten, Ctrl+8 senkrecht darauf, F zeigt alles.",
+  "Numpad views (Ctrl for the opposite side), Home fits.":
+    "Ansichten auf dem Ziffernblock (Ctrl für die Gegenseite), Home zeigt alles.",
   "Right drag": "Rechte Taste ziehen",
   "Middle drag or Shift + right drag": "Mittlere Taste ziehen oder Shift + rechte Taste ziehen",
   Wheel: "Mausrad",
@@ -471,11 +582,14 @@ export default {
   "Wheel or Ctrl + middle drag": "Mausrad oder Ctrl + mittlere Taste ziehen",
   "Trackpad / no middle button": "Trackpad / ohne mittlere Taste",
   "Two-finger swipe or right drag": "Mit zwei Fingern wischen oder rechte Taste ziehen",
-  "Shift + two-finger swipe or Shift + right drag": "Shift + mit zwei Fingern wischen oder Shift + rechte Taste ziehen",
-  "Pinch, Ctrl + two-finger swipe or Alt + right drag": "Zwei-Finger-Zoom, Ctrl + mit zwei Fingern wischen oder Alt + rechte Taste ziehen",
+  "Shift + two-finger swipe or Shift + right drag":
+    "Shift + mit zwei Fingern wischen oder Shift + rechte Taste ziehen",
+  "Pinch, Ctrl + two-finger swipe or Alt + right drag":
+    "Zwei-Finger-Zoom, Ctrl + mit zwei Fingern wischen oder Alt + rechte Taste ziehen",
   "Move your {n} project?": "Dein {n} Projekt mit verschieben?",
   "Move your {n} projects?": "Deine {n} Projekte mit verschieben?",
-  "They are currently in {dir}. Moving keeps your folder structure; nothing in the new folder is overwritten.": "Aktueller Ort: {dir}. Beim Verschieben bleibt deine Ordnerstruktur erhalten; im neuen Ordner wird nichts überschrieben.",
+  "They are currently in {dir}. Moving keeps your folder structure; nothing in the new folder is overwritten.":
+    "Aktueller Ort: {dir}. Beim Verschieben bleibt deine Ordnerstruktur erhalten; im neuen Ordner wird nichts überschrieben.",
   "Move projects": "Projekte verschieben",
   "Leave them": "Dort lassen",
   "Moved {n} project to {dir}": "{n} Projekt nach {dir} verschoben",
@@ -512,8 +626,10 @@ export default {
     "Du kannst es ansehen, drucken und exportieren und alles andere wie gewohnt ändern. Beim Speichern bleibt alles erhalten.",
   "Gears, springs, joints and motions are shown, move and play; changing them needs the Mechanics pack.":
     "Zahnräder, Federn, Gelenke und Bewegungsabläufe werden angezeigt, bewegt und abgespielt; ändern geht mit dem Paket Mechanik.",
-  "Terrain models are shown; the scan and mesh tools need the Scan and mesh pack.": "Geländemodelle werden angezeigt; die Scan- und Netzwerkzeuge gibt es mit dem Paket Scan und Netze.",
-  "Technical drawings need the Technical drawings pack.": "Technische Zeichnungen gibt es mit dem Paket Technische Zeichnungen.",
+  "Terrain models are shown; the scan and mesh tools need the Scan and mesh pack.":
+    "Geländemodelle werden angezeigt; die Scan- und Netzwerkzeuge gibt es mit dem Paket Scan und Netze.",
+  "Technical drawings need the Technical drawings pack.":
+    "Technische Zeichnungen gibt es mit dem Paket Technische Zeichnungen.",
   "Variants can be switched; the saved versions stay in the file and are shown with the Versions and variants pack.":
     "Varianten lassen sich umschalten; die gespeicherten Versionen bleiben in der Datei und werden mit dem Paket Versionen und Varianten angezeigt.",
   "{name} needs the {pack} pack": "{name} braucht das Paket {pack}",
@@ -521,7 +637,8 @@ export default {
     "Es kam mit dem Modell und bleibt, wird berechnet und exportiert wie es ist. Ändern geht mit dem Paket {pack}; löschen kannst du es trotzdem, und der Rest des Modells bleibt änderbar.",
   // Basic solids
   "Basic solid": "Grundkörper",
-  "A box, cylinder or sphere without a sketch: stand-ins, quick assemblies, blocks to cut with": "Quader, Zylinder oder Kugel ohne Skizze: Platzhalter, schnelle Baugruppen, Blöcke zum Ausschneiden",
+  "A box, cylinder or sphere without a sketch: stand-ins, quick assemblies, blocks to cut with":
+    "Quader, Zylinder oder Kugel ohne Skizze: Platzhalter, schnelle Baugruppen, Blöcke zum Ausschneiden",
   "primitive::Box": "Quader",
   "primitive::Cylinder": "Zylinder",
   "primitive::Sphere": "Kugel",

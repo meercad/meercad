@@ -6,25 +6,45 @@
  */
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
 // An iPhone-sized window before the app reads the screen size.
 vi.hoisted(() => {
-  (window as unknown as { happyDOM: { setViewport(v: { width: number; height: number }): void } }).happyDOM.setViewport({ width: 390, height: 844 });
+  (
+    window as unknown as { happyDOM: { setViewport(v: { width: number; height: number }): void } }
+  ).happyDOM.setViewport({ width: 390, height: 844 });
+
   // happy-dom reads "a, b" as both instead of either: answer a list as the browser does.
   const own = window.matchMedia.bind(window);
+
   window.matchMedia = (q: string) => {
     const parts = q.split(",").map((x) => own(x.trim()));
     const list = own(q);
-    return new Proxy(list, { get: (t, k) => (k === "matches" ? parts.some((p) => p.matches) : typeof Reflect.get(t, k) === "function" ? (Reflect.get(t, k) as (...a: unknown[]) => unknown).bind(t) : Reflect.get(t, k)) });
+
+    return new Proxy(list, {
+      get: (t, k) =>
+        k === "matches"
+          ? parts.some((p) => p.matches)
+          : typeof Reflect.get(t, k) === "function"
+            ? (Reflect.get(t, k) as (...a: unknown[]) => unknown).bind(t)
+            : Reflect.get(t, k),
+    });
   };
 });
-vi.mock("./lib/thumbnails", async (orig) => ({ ...(await orig<typeof import("./lib/thumbnails")>()), startBackgroundPictures: () => undefined, fillThumbnails: async () => undefined }));
+vi.mock("./lib/thumbnails", async (orig) => ({
+  ...(await orig<typeof import("./lib/thumbnails")>()),
+  startBackgroundPictures: () => undefined,
+  fillThumbnails: async () => undefined,
+}));
 import { App } from "./App";
 import { closeSketch, newProject, startFeature, startSketch, cancelDialog, useApp } from "./store";
 import { isCompact, usePhoneSheets } from "./lib/layout";
 import { renderUi } from "../test/ui";
 
 const settle = (ms = 50) => act(async () => new Promise((r) => setTimeout(r, ms)));
-const barButton = (label: string) => [...document.querySelectorAll<HTMLButtonElement>(".toolbar.rail button.tool")].find((b) => b.textContent?.trim() === label);
+const barButton = (label: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>(".toolbar.rail button.tool")].find(
+    (b) => b.textContent?.trim() === label,
+  );
 
 beforeAll(async () => {
   localStorage.setItem("meercad.tourDone", "1");
@@ -45,6 +65,7 @@ describe("the phone layout", () => {
   it("opens and closes the parts sheet from the bar", async () => {
     const parts = barButton("Parts")!;
     expect(parts).toBeDefined();
+
     const was = useApp.getState().sideOpen;
     await act(async () => void fireEvent.click(parts));
     expect(useApp.getState().sideOpen).toBe(!was);
@@ -57,6 +78,7 @@ describe("the phone layout", () => {
     await act(async () => startSketch({ ref: "origin.XY" }));
     await settle();
     expect(useApp.getState().sideOpen).toBe(false);
+
     const constrain = barButton("Constrain")!;
     expect(constrain).toBeDefined();
     await act(async () => void fireEvent.click(constrain));

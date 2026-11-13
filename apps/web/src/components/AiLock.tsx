@@ -14,15 +14,20 @@ import { AssistantBar } from "./AssistantTab";
 export function AiLock() {
   const lock = useApp((s) => s.aiLock);
   const tool = useApp((s) => s.aiActivity?.tool);
-  if (assistantWindow)
+
+  if (assistantWindow) {
     return (
       <>
         <div className={`ai-lock in-tab ${lock ? "busy" : ""}`} onContextMenu={(e) => e.preventDefault()} />
         <AssistantBar />
       </>
     );
+  }
+
   if (!lock) return null;
+
   const doing = toolLabel(tool);
+
   return (
     <div className="ai-lock" onContextMenu={(e) => e.preventDefault()}>
       <div className="ai-lock-bar" role="status">

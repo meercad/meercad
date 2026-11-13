@@ -21,7 +21,10 @@ function local(): TermsRecord | null {
 
 /** The record for the current text, if it is accepted; null otherwise. */
 export function termsRecord(): TermsRecord | null {
-  for (const r of [accepted, parseRecord(desktop?.shared?.initial[TERMS_KEY]), local()]) if (r && !needsAcceptance(r)) return r;
+  for (const r of [accepted, parseRecord(desktop?.shared?.initial[TERMS_KEY]), local()]) {
+    if (r && !needsAcceptance(r)) return r;
+  }
+
   return null;
 }
 
@@ -36,10 +39,12 @@ export function requireTerms(): void {
 export function saveTerms(record: TermsRecord): void {
   accepted = record;
   void desktop?.shared?.set(TERMS_KEY, record).catch(() => undefined);
+
   try {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(record));
   } catch {
     // On the Mac shared.json keeps it; elsewhere the screen shows again next start.
   }
+
   window.dispatchEvent(new Event("meercad:terms-accepted"));
 }

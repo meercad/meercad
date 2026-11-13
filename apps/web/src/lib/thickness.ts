@@ -9,9 +9,22 @@ import { startTask, useApp } from "../store";
 import { t } from "./i18n";
 import { measureWalls, type ThicknessStats, type WallMeasure } from "./wallMeasure";
 
-export { measureWalls, thinSpots, WALL_SAMPLES, type ThicknessStats, type ThinSpot, type WallMeasure } from "./wallMeasure";
+export {
+  measureWalls,
+  thinSpots,
+  WALL_SAMPLES,
+  type ThicknessStats,
+  type ThinSpot,
+  type WallMeasure,
+} from "./wallMeasure";
 
-export const useThickness = create<{ body: string | null; minWall: number; maps: Map<string, { positions: Float32Array; colors: Float32Array }>; stats: ThicknessStats | null; error?: string }>(() => ({
+export const useThickness = create<{
+  body: string | null;
+  minWall: number;
+  maps: Map<string, { positions: Float32Array; colors: Float32Array }>;
+  stats: ThicknessStats | null;
+  error?: string;
+}>(() => ({
   body: null,
   minWall: 1,
   maps: new Map(),
@@ -37,24 +50,39 @@ let run = 0;
 /** Shows a measurement taken already as the colour map of `body`. */
 export function showMeasured(body: string, m: WallMeasure): void {
   run++;
+
   const colors = new Float32Array(m.wall.length * 9);
-  for (let k = 0; k < m.wall.length; k++) for (let c = 0; c < 3; c++) colorFor(m.wall[k]!, m.stats.minWall, colors, k * 9 + c * 3);
-  useThickness.setState({ body, minWall: m.stats.minWall, maps: new Map([[body, { positions: m.positions, colors }]]), stats: m.stats, error: undefined });
+
+  for (let k = 0; k < m.wall.length; k++) {
+    for (let c = 0; c < 3; c++) colorFor(m.wall[k]!, m.stats.minWall, colors, k * 9 + c * 3);
+  }
+
+  useThickness.setState({
+    body,
+    minWall: m.stats.minWall,
+    maps: new Map([[body, { positions: m.positions, colors }]]),
+    stats: m.stats,
+    error: undefined,
+  });
 }
 
 async function update(): Promise<void> {
   const me = ++run;
   const { body, minWall } = useThickness.getState();
   if (!body) return;
+
   const part = useApp.getState().output?.meshes.find((m) => m.bodyId === body);
   if (!part) return useThickness.setState({ maps: new Map(), stats: null, error: "gone" });
+
   const task = startTask(t("Measuring the wall thickness"));
   let m: WallMeasure | null;
+
   try {
     m = await measureWalls(part, minWall, { aborted: () => me !== run, progress: (f) => task.update(f) });
   } finally {
     task.done();
   }
+
   if (m && me === run) showMeasured(body, m);
 }
 
@@ -64,13 +92,17 @@ const YELLOW = [0.95, 0.78, 0.25];
 const GREEN = [0.3, 0.72, 0.45];
 const GREY = [0.6, 0.6, 0.62];
 const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+
 function colorFor(d: number, minWall: number, out: Float32Array, o: number): void {
   let rgb = GREY;
+
   if (!Number.isNaN(d)) {
     const u = Math.max(0, Math.min(1, (d - minWall) / (2 * minWall)));
-    const [from, to, k] = d < minWall ? [RED, RED, 0] : u < 0.5 ? [RED, YELLOW, u * 2] : [YELLOW, GREEN, (u - 0.5) * 2];
+    const [from, to, k] =
+      d < minWall ? [RED, RED, 0] : u < 0.5 ? [RED, YELLOW, u * 2] : [YELLOW, GREEN, (u - 0.5) * 2];
     rgb = [0, 1, 2].map((c) => from[c]! + (to[c]! - from[c]!) * k);
   }
+
   for (let c = 0; c < 3; c++) out[o + c] = linear(rgb[c]!);
 }
 
