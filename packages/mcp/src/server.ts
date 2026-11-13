@@ -79,7 +79,7 @@ const launcher = createLauncher({
   // run on the app's own binary with it) the app would start as plain Node and quit at once.
   open: (args) =>
     spawn("open", args, { stdio: "ignore", detached: true, env: launchEnv(process.env) })
-      .on("error", (e) => log(`open: ${e.message}`))
+      .on("error", (error) => log(`open: ${error.message}`))
       .unref(),
   connected: async () => (await bridge.status()).connected,
   log,
@@ -131,9 +131,9 @@ async function call<T = unknown>(
 
   try {
     return await send();
-  } catch (e) {
+  } catch (error) {
     // The app is not running (or not connected): open it, so the user sees the work, and try once more.
-    if (!(e instanceof Error) || e.message !== NOT_CONNECTED) throw e;
+    if (!(error instanceof Error) || error.message !== NOT_CONNECTED) throw error;
 
     await ensureApp();
 
@@ -204,8 +204,11 @@ const guard =
   async (a: A) => {
     try {
       return withStaleNote((await fn(a)) as ReturnType<typeof text>);
-    } catch (e) {
-      return withStaleNote({ ...text(e instanceof Error ? e.message : String(e)), isError: true });
+    } catch (error) {
+      return withStaleNote({
+        ...text(error instanceof Error ? error.message : String(error)),
+        isError: true,
+      });
     }
   };
 
@@ -227,8 +230,10 @@ async function inlineImportFiles(ops: Record<string, unknown>[]): Promise<Record
 
     try {
       bytes = await readFile(path);
-    } catch (e) {
-      throw new Error(`import ${String(f["id"] ?? "")}: ${e instanceof Error ? e.message : String(e)}`);
+    } catch (error) {
+      throw new Error(
+        `import ${String(f["id"] ?? "")}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     const ext = extname(path).toLowerCase();
@@ -495,12 +500,15 @@ async function changed(
     return {
       content: [text(result).content[0]!, { type: "image" as const, data: r.png, mimeType: "image/png" }],
     };
-  } catch (e) {
+  } catch (error) {
     // The change went through: say so, and why there is no picture.
     return {
       content: [
         text(result).content[0]!,
-        { type: "text" as const, text: `no picture: ${e instanceof Error ? e.message : String(e)}` },
+        {
+          type: "text" as const,
+          text: `no picture: ${error instanceof Error ? error.message : String(error)}`,
+        },
       ],
     };
   }

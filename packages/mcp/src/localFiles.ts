@@ -63,8 +63,8 @@ const noAccess = (path: string, why: string) =>
 async function viaApp<T>(path: string, run: () => Promise<T>): Promise<T> {
   try {
     return await run();
-  } catch (e) {
-    throw noAccess(path, e instanceof Error ? e.message : String(e));
+  } catch (error) {
+    throw noAccess(path, error instanceof Error ? error.message : String(error));
   }
 }
 

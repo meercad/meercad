@@ -13,8 +13,10 @@ export function meercadDocument(
 
   try {
     json = JSON.parse(Buffer.from(bytes).toString("utf8"));
-  } catch (e) {
-    throw new Error(`"${file}" is not a meerCAD file: ${e instanceof Error ? e.message : String(e)}`);
+  } catch (error) {
+    throw new Error(
+      `"${file}" is not a meerCAD file: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   // A plain list of features (as add_features takes them) is a design of just those.

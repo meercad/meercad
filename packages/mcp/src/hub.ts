@@ -34,7 +34,7 @@ export interface BridgeStatus {
   hello: BridgeHello | null;
 }
 
-type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
+type Pending = { resolve: (v: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout };
 type Response = { id: number; result?: unknown; error?: string };
 
 export const NOT_CONNECTED =
@@ -127,18 +127,18 @@ export function createBridge(o: BridgeOptions) {
   function join(): void {
     if (stopped) return;
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    const socket = new WebSocket(`ws://127.0.0.1:${port}`);
     let welcomed = false;
     // An old server (newest wins) never welcomes: ask it to hand over, then take the port.
     const old = setTimeout(() => {
-      if (welcomed || ws.readyState !== ws.OPEN) return;
+      if (welcomed || socket.readyState !== socket.OPEN) return;
 
       log(`port ${port} is held by an older meerCAD MCP server; asking it to hand over`);
-      ws.send(JSON.stringify({ takeover: "meercad" }));
-      ws.close();
+      socket.send(JSON.stringify({ takeover: "meercad" }));
+      socket.close();
     }, o.welcomeMs ?? 1500);
-    ws.on("open", () => ws.send(JSON.stringify({ peer: "meercad", session } satisfies PeerHello)));
-    ws.on("message", (raw) => {
+    socket.on("open", () => socket.send(JSON.stringify({ peer: "meercad", session } satisfies PeerHello)));
+    socket.on("message", (raw) => {
       let msg: Response | HubWelcome;
 
       try {
@@ -151,7 +151,7 @@ export function createBridge(o: BridgeOptions) {
         welcomed = true;
         clearTimeout(old);
         role = "peer";
-        upstream = ws;
+        upstream = socket;
         log(`another meerCAD MCP server holds port ${port}; requests go through it`);
 
         return;
@@ -159,10 +159,10 @@ export function createBridge(o: BridgeOptions) {
 
       settle(msg);
     });
-    ws.on("close", () => {
+    socket.on("close", () => {
       clearTimeout(old);
 
-      if (upstream === ws) {
+      if (upstream === socket) {
         upstream = null;
         failAll("The connection to meerCAD was interrupted (another assistant session ended). Try again.");
       }
@@ -172,11 +172,11 @@ export function createBridge(o: BridgeOptions) {
       // The hub went away (or handed over): try to become the hub, else join the next one.
       later(start, 200 + Math.random() * 300);
     });
-    ws.on("error", () => undefined);
+    socket.on("error", () => undefined);
   }
 
-  function onConnection(ws: WebSocket): void {
-    ws.on("message", (raw) => {
+  function onConnection(socket: WebSocket): void {
+    socket.on("message", (raw) => {
       let msg: Record<string, unknown>;
 
       try {
@@ -193,32 +193,32 @@ export function createBridge(o: BridgeOptions) {
       }
 
       if (msg["peer"] === "meercad" && typeof msg["session"] === "string") {
-        peers.set(ws, msg["session"]);
-        ws.send(JSON.stringify({ hub: "meercad", version: HUB_VERSION } satisfies HubWelcome));
+        peers.set(socket, msg["session"]);
+        socket.send(JSON.stringify({ hub: "meercad", version: HUB_VERSION } satisfies HubWelcome));
 
         return;
       }
 
       if (msg["hello"] === "meercad") {
-        if (app && app !== ws) {
+        if (app && app !== socket) {
           app.close(4000, "replaced by a newer connection");
           // What waited on the old connection is never answered: fail it now, not at its timeout.
           appGone();
         }
 
-        app = ws;
+        app = socket;
         hello = msg as unknown as BridgeHello;
         log(`app connected (project: ${hello.project ?? "none"})`);
         // The app learns this server's session, to free its window when this connection ends.
-        ws.send(JSON.stringify({ event: "hub_session", session }));
+        socket.send(JSON.stringify({ event: "hub_session", session }));
 
         return;
       }
 
-      const peerSession = peers.get(ws);
-      if (peerSession !== undefined) return relay(ws, peerSession, msg);
+      const peerSession = peers.get(socket);
+      if (peerSession !== undefined) return relay(socket, peerSession, msg);
 
-      if (ws === app && typeof msg["id"] === "number") {
+      if (socket === app && typeof msg["id"] === "number") {
         const r = relayed.get(msg["id"]);
 
         if (r) {
@@ -231,16 +231,16 @@ export function createBridge(o: BridgeOptions) {
         settle(msg as unknown as Response);
       }
     });
-    ws.on("close", () => {
-      if (peers.has(ws)) {
-        const s = peers.get(ws)!;
-        peers.delete(ws);
-        for (const [id, r] of relayed) if (r.peer === ws) relayed.delete(id);
+    socket.on("close", () => {
+      if (peers.has(socket)) {
+        const s = peers.get(socket)!;
+        peers.delete(socket);
+        for (const [id, r] of relayed) if (r.peer === socket) relayed.delete(id);
         // The app may free that session's window.
         if (app?.readyState === app?.OPEN) app?.send(JSON.stringify({ event: "session_ended", session: s }));
       }
 
-      if (app === ws) {
+      if (app === socket) {
         app = null;
         hello = null;
         appGone();
@@ -290,7 +290,7 @@ export function createBridge(o: BridgeOptions) {
     }
 
     const id = ++seq;
-    const ws = target;
+    const socket = target;
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -299,7 +299,7 @@ export function createBridge(o: BridgeOptions) {
       }, timeoutMs);
       pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
       // tabs: this server knows params.project, so the app may give the session a tab per project.
-      ws.send(JSON.stringify({ id, method, params, client, session, tabs: "project" }));
+      socket.send(JSON.stringify({ id, method, params, client, session, tabs: "project" }));
     });
   }
 
@@ -323,7 +323,7 @@ export function createBridge(o: BridgeOptions) {
     stopped = true;
     clearTimeout(retry);
     upstream?.close();
-    for (const c of wss?.clients ?? []) c.terminate();
+    for (const socket of wss?.clients ?? []) socket.terminate();
 
     return new Promise((resolve) => (wss ? wss.close(() => resolve()) : resolve()));
   }

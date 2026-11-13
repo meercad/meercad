@@ -132,8 +132,8 @@ export function createLauncher(o: LauncherOptions) {
 
     try {
       o.open(openArgs(target));
-    } catch (e) {
-      o.log?.(`could not open the meerCAD app: ${e instanceof Error ? e.message : String(e)}`);
+    } catch (error) {
+      o.log?.(`could not open the meerCAD app: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return waitConnected(waitMs);
