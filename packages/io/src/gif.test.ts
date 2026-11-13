@@ -135,4 +135,29 @@ describe("GIF", () => {
       expect(d.palette[d.frames[0]![i]!]).toEqual(i % 3 === 0 ? [204, 60, 60] : [244, 244, 244]);
     }
   });
+
+  it("writes a picture larger than its first buffer (64 KB) whole", () => {
+    const w = 1000;
+    const h = 800;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    // Noise does not compress, so the file outgrows the writer's first buffer.
+    let seed = 1;
+    const red: boolean[] = [];
+
+    for (let i = 0; i < w * h; i++) {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      red.push(seed > 2147483648);
+      rgba.set(red[i] ? [200, 60, 60, 255] : [240, 240, 240, 255], i * 4);
+    }
+
+    const gif = encodeGif([{ width: w, height: h, rgba }]);
+    const d = decode(gif);
+
+    expect(gif.length).toBeGreaterThan(1 << 16);
+    expect(d.frames[0]!.length).toBe(w * h);
+
+    for (let i = 0; i < w * h; i += 997) {
+      expect(d.palette[d.frames[0]![i]!]).toEqual(red[i] ? [204, 60, 60] : [244, 244, 244]);
+    }
+  });
 });
