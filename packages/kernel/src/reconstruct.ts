@@ -629,15 +629,6 @@ function roundRun(run: Run, fit: MeshFit, n: Vec3, tol: number): { center: Vec3;
   return { center, radius };
 }
 
-function straight(points: Vec3[], tol: number): boolean {
-  const a = points[0]!;
-  const b = points[points.length - 1]!;
-  const d = sub(b, a);
-  const l = len(d);
-  if (l < tol) return false;
-  return points.every((q) => len(cross(sub(q, a), d)) / l <= tol * 2);
-}
-
 /** Douglas-Peucker. */
 function simplify(points: Vec3[], tol: number): Vec3[] {
   if (points.length <= 2) return points;

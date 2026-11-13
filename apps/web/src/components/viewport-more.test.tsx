@@ -204,16 +204,23 @@ describe("the 3D view, more", () => {
     warn.mockRestore();
   });
 
-  it("pans with a two-finger swipe when swipes do not orbit", async () => {
-    const nav = (vp as unknown as { navigation: Parameters<Viewport["setNavigation"]>[0] }).navigation;
-    vp.setNavigation(nav, false, false);
-    const cam = () => (vp as unknown as { camera: THREE.Camera }).camera;
-    const before = cam().position.clone();
-    await act(async () => void fireEvent.wheel(vp.canvas, { clientX: 400, clientY: 300, deltaX: 30, deltaY: 10, deltaMode: 0 }));
-    await act(async () => void fireEvent.wheel(vp.canvas, { clientX: 400, clientY: 300, deltaX: 30, deltaY: 10, deltaMode: 0 }));
-    vp.scene.updateMatrixWorld(true);
-    expect(cam().position.equals(before)).toBe(false);
-    vp.setNavigation(nav);
+  it("pans with a two-finger swipe and Shift", async () => {
+    const ctl = (vp as unknown as { controls: { pan: (x: number, y: number) => void } }).controls;
+    const pans: [number, number][] = [];
+    const own = ctl.pan.bind(ctl);
+    ctl.pan = (x, y) => (pans.push([x, y]), own(x, y));
+    // (happy-dom's WheelEvent drops the modifier keys: set Shift on the event itself.)
+    const swipe = () => {
+      const e = new WheelEvent("wheel", { clientX: 400, clientY: 300, deltaX: 30, deltaY: 10, deltaMode: 0, bubbles: true, cancelable: true });
+      Object.defineProperty(e, "shiftKey", { value: true });
+      vp.canvas.dispatchEvent(e);
+    };
+    await act(async () => swipe());
+    ctl.pan = own;
+    // The model follows the fingers: the scroll offsets the other way round.
+    expect(pans).toHaveLength(1);
+    expect(Math.sign(pans[0]![0])).toBe(-1);
+    expect(Math.sign(pans[0]![1])).toBe(-1);
   });
 
   it("fades the studio ground's shadow out towards its rim", () => {
