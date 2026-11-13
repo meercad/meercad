@@ -6,10 +6,10 @@
  * cancelled touch leaves nothing half done.
  */
 import { act, cleanup, fireEvent } from "@testing-library/react";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import type { Viewport } from "@meercad/viewport";
-import { apply, cancelDialog, currentDoc, getViewport, newProject, startFeature, undo, useApp } from "../store";
+import { apply, cancelDialog, currentDoc, getViewport, kernel, newProject, startFeature, undo, useApp } from "../store";
 import { usePrefs } from "../lib/keymap";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "./ViewportView";
@@ -161,5 +161,33 @@ describe("more clicks", () => {
     expect(useApp.getState().selection).toEqual([]);
     expect(vp.controls.enabled).toBe(true);
     expect(currentDoc().features).toHaveLength(3);
+  });
+
+  it("asks for a plane when a sketch waits for one and a click hits nothing flat; a failed measurement says why", async () => {
+    // Waiting for a sketch plane: a click on empty ground does nothing, on a part's flat top starts the sketch.
+    await act(async () => useApp.setState({ pickingSketchPlane: true } as never));
+    await press([200, 200, 0]);
+    expect(useApp.getState().sketchId ?? null).toBeNull();
+    await act(async () => useApp.setState({ pickingSketchPlane: false } as never));
+    const kernelMeasure = vi.spyOn(kernel, "measure").mockRejectedValueOnce(new Error("cannot measure that"));
+    useApp.setState({ measure: { active: true, picks: [], result: null } } as never);
+    await settle(450);
+    await press(TOP);
+    await settle();
+    expect(useApp.getState().toasts.at(-1)?.text).toBe("cannot measure that");
+    kernelMeasure.mockRestore();
+    useApp.setState({ measure: { active: false, picks: [], result: null } } as never);
+  });
+
+  it("accepts an open step by a click on empty space", async () => {
+    const before = currentDoc().features.length;
+    await act(async () => startFeature("primitive"));
+    await act(async () => useApp.setState((s) => ({ dialog: s.dialog ? { ...s.dialog, field: null } : null })));
+    await settle(450);
+    await press([300, 300, 0]);
+    expect(useApp.getState().dialog).toBeNull();
+    expect(currentDoc().features.length).toBe(before + 1);
+    await act(async () => void undo());
+    await rebuilt();
   });
 });
