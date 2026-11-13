@@ -1,12 +1,10 @@
 # Terms of use
 
-_Version 2026-11-12 · Torben Berger UG (haftungsbeschränkt)_
+Please read these terms before you use meerCAD.
 
-Please read these terms before you use meerCAD. You accept them once; if they change, the app asks again.
+## For hobby projects
 
-## A hobby project
-
-meerCAD is a hobby and leisure project. It is not tested or certified professional CAD software.
+meerCAD is a tool for hobby and leisure projects. It is not tested or certified professional CAD software.
 
 ## No guarantee of accuracy
 
@@ -30,14 +28,12 @@ An AI assistant connected through MCP can make mistakes. Check what it builds an
 
 ## Your data
 
-Back up your projects yourself. As far as the law allows, we are not liable for lost data.
+Back up your projects yourself.
 
 ## Liability
 
-You use meerCAD at your own risk. Liability is excluded as far as the law allows. This does not limit liability for intent or gross negligence, for injury to life, body or health, or under the German Product Liability Act (Produkthaftungsgesetz).
+You use meerCAD at your own risk. Liability is excluded. This does not limit liability for intent or gross negligence, for injury to life, body or health, or under the German Product Liability Act (Produkthaftungsgesetz).
 
 The end user licence agreement (EULA) also applies: https://meercad.app/eula
 
-## Your consent stays on your device
-
-meerCAD stores that you accepted (version, date, app version, language) only on your device. Nothing is sent to us or anyone else.
+_Torben Berger UG (haftungsbeschränkt) · Version 2026-11-12_

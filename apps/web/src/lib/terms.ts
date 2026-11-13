@@ -12,7 +12,7 @@ export const TERMS_KEY = "termsAccepted";
 
 /** The points the user ticks one by one (English; the screen translates them). */
 export const TERMS_POINTS = [
-  { id: "hobby", text: "meerCAD is a hobby project, not certified professional CAD." },
+  { id: "hobby", text: "meerCAD is a tool for hobby projects, not certified professional CAD." },
   { id: "accuracy", text: "There is no guarantee that dimensions, calculations or exports are correct." },
   { id: "check", text: "I check dimensions, fits and strength myself before I print or use a part." },
   { id: "safety", text: "I do not use it for safety-critical, load-bearing or medical parts without my own expert check." },

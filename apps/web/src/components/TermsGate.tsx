@@ -113,7 +113,7 @@ export function TermsGate({ onAccept }: { onAccept: () => void }) {
           ))}
         </ul>
         <p className="terms-note muted" id="terms-note">
-          {t("meerCAD can only be used once you accept. Your consent is stored only on this device.")}
+          {t("meerCAD can only be used once you accept.")}
         </p>
         <div className="ask-actions">
           <button className="btn primary terms-accept" disabled={!read || !all} onClick={() => void accept()}>

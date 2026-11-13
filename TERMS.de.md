@@ -1,12 +1,10 @@
 # Nutzungsvereinbarung
 
-_Version 2026-11-12 · Torben Berger UG (haftungsbeschränkt)_
+Bitte lies diese Vereinbarung, bevor du meerCAD nutzt.
 
-Bitte lies diese Vereinbarung, bevor du meerCAD nutzt. Du stimmst einmal zu; ändert sie sich, fragt die App erneut.
+## Für Hobbyprojekte
 
-## Ein Hobbyprojekt
-
-meerCAD ist ein Hobby- und Freizeitprojekt. Es ist keine geprüfte oder zertifizierte Profi-CAD-Software.
+meerCAD ist ein Werkzeug für Hobby- und Freizeitprojekte. Es ist keine geprüfte oder zertifizierte Profi-CAD-Software.
 
 ## Keine Garantie für Richtigkeit
 
@@ -30,14 +28,12 @@ Ein über MCP verbundener KI-Assistent kann Fehler machen. Prüf, was er baut un
 
 ## Deine Daten
 
-Sichere deine Projekte selbst. Soweit gesetzlich zulässig, haften wir nicht für Datenverlust.
+Sichere deine Projekte selbst.
 
 ## Haftung
 
-Du nutzt meerCAD auf eigenes Risiko. Die Haftung ist ausgeschlossen, soweit das Gesetz es zulässt. Unberührt bleibt die Haftung für Vorsatz und grobe Fahrlässigkeit, für Schäden aus der Verletzung von Leben, Körper oder Gesundheit und nach dem Produkthaftungsgesetz.
+Du nutzt meerCAD auf eigenes Risiko. Die Haftung ist ausgeschlossen. Unberührt bleibt die Haftung für Vorsatz und grobe Fahrlässigkeit, für Schäden aus der Verletzung von Leben, Körper oder Gesundheit und nach dem Produkthaftungsgesetz.
 
 Ergänzend gilt die Endnutzer-Lizenzvereinbarung (EULA): https://meercad.app/de/eula
 
-## Deine Zustimmung bleibt auf dem Gerät
-
-meerCAD speichert nur auf deinem Gerät, dass du zugestimmt hast (Version, Datum, App-Version, Sprache). Nichts davon wird an uns oder andere übertragen.
+_Torben Berger UG (haftungsbeschränkt) · Version 2026-11-12_
