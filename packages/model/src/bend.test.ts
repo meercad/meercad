@@ -127,4 +127,40 @@ describe("bent meshes", () => {
     expect(Math.max(...xs(out[0]!.corners))).toBeCloseTo(Math.min(...xs(out[1]!.corners)), 3);
     expect(() => bendMeshes([ruler.slice(18)], { mode: "bend", axis: [0, 1, 0], angle: 90 })).toThrow(/not closed/);
   });
+
+  it("refuses a ring whose ends differ in shape", () => {
+    // A strip with a loose block lying over its start only: bent full round, the start's end face
+    // (with the block's) would have to join the end's (without it).
+    const strip = box([0, 0, 0], [100, 10, 2]);
+    const block = box([0, 2, 2.5], [5, 8, 4]);
+    expect(() => bendMeshes([[...strip, ...block]], { mode: "bend", axis: [0, 1, 0], angle: 360 })).toThrow(/cannot be joined into a ring/);
+    // The strip alone closes into a ring.
+    const [ring] = bendMeshes([strip], { mode: "bend", axis: [0, 1, 0], angle: 360 });
+    expect(ring!.corners.length).toBeGreaterThan(0);
+  });
+});
+
+describe("welding a closed mesh", () => {
+  const flipped = (c: number[], t: number) => {
+    const out = [...c];
+    for (let k = 0; k < 3; k++) [out[t * 9 + 3 + k], out[t * 9 + 6 + k]] = [c[t * 9 + 6 + k]!, c[t * 9 + 3 + k]!];
+    return out;
+  };
+  const signed = (w: { positions: number[]; triangles: number[] }) => {
+    const c: number[] = [];
+    for (const i of w.triangles) c.push(w.positions[i * 3]!, w.positions[i * 3 + 1]!, w.positions[i * 3 + 2]!);
+    return volume(c);
+  };
+
+  it("turns a triangle wound the wrong way round", () => {
+    const w = weldClosed(flipped(box([0, 0, 0], [4, 3, 2]), 5), 1e-9);
+    expect(signed(w)).toBeCloseTo(24, 9);
+  });
+
+  it("turns an inside-out mesh outwards", () => {
+    let inside = box([0, 0, 0], [4, 3, 2]);
+    for (let t = 0; t < 12; t++) inside = flipped(inside, t);
+    expect(volume(inside)).toBeCloseTo(-24, 9);
+    expect(signed(weldClosed(inside, 1e-9))).toBeCloseTo(24, 9);
+  });
 });
