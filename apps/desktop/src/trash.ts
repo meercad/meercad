@@ -39,7 +39,7 @@ export async function moveToTrash(
 ): Promise<void> {
   try {
     await trashItem(path);
-  } catch (e) {
+  } catch (error) {
     if (!existsSync(path)) return; // gone after all
 
     try {
@@ -47,7 +47,7 @@ export async function moveToTrash(
       await mkdir(dir, { recursive: true });
       await rename(path, freeName(dir, basename(path)));
     } catch {
-      throw e;
+      throw error;
     }
   }
 }

@@ -197,9 +197,9 @@ const readShared = (): Record<string, unknown> => {
   }
 };
 
-ipcMain.on("shared:get", (e) => void (e.returnValue = readShared()));
+ipcMain.on("shared:get", (event) => void (event.returnValue = readShared()));
 /** The bridge port the window connects to: this build's own (see CHANNEL_PORTS). */
-ipcMain.on("mcp:port", (e) => void (e.returnValue = MCP_PORT));
+ipcMain.on("mcp:port", (event) => void (event.returnValue = MCP_PORT));
 
 /** Every page of the app: the window's, and each assistant's tab (a view inside the window). */
 function allContents(): WebContents[] {
@@ -221,11 +221,11 @@ function allContents(): WebContents[] {
  * closing: this runs from close and destroy events, where a send would throw.
  */
 function sendToAll(channel: string, arg: (wc: number) => unknown, except?: number): void {
-  for (const wc of allContents()) {
-    if (wc.id === except) continue;
+  for (const contents of allContents()) {
+    if (contents.id === except) continue;
 
     try {
-      wc.send(channel, arg(wc.id));
+      contents.send(channel, arg(contents.id));
     } catch {
       // closed meanwhile
     }
@@ -233,8 +233,8 @@ function sendToAll(channel: string, arg: (wc: number) => unknown, except?: numbe
 }
 
 /** The window a page is in (an assistant's tab is a view inside the app's one window). */
-const windowFor = (wc: WebContents): BrowserWindow | null =>
-  BrowserWindow.fromWebContents(wc) ?? (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null);
+const windowFor = (contents: WebContents): BrowserWindow | null =>
+  BrowserWindow.fromWebContents(contents) ?? (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null);
 
 // ---------------------------------------------------------------- MCP bridge host
 
@@ -248,8 +248,8 @@ let bridgeState: BridgeState = "off";
 /** What a window asked for while there was no first window: applied once the new one reports in. */
 let bridgeWanted: boolean | null = null;
 const broadcastBridge = () => sendToAll("mcp-status", () => bridgeState);
-ipcMain.on("mcp:status", (e, s: unknown) => {
-  if (!mainWindow || mainWindow.isDestroyed() || e.sender !== mainWindow.webContents) return;
+ipcMain.on("mcp:status", (event, s: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
   if (s !== "off" && s !== "connecting" && s !== "connected") return;
 
   bridgeState = s;
@@ -393,8 +393,8 @@ async function writeSidecar(id: string, thumbnail: string, look: number, bytes: 
     const tmp = `${sidecarPath(id)}.tmp`;
     await writeFile(tmp, text);
     await rename(tmp, sidecarPath(id));
-  } catch (e) {
-    console.warn(`picture next to ${id} not written:`, e);
+  } catch (error) {
+    console.warn(`picture next to ${id} not written:`, error);
   }
 }
 
@@ -516,7 +516,7 @@ ipcMain.handle("projects:load", async (_e, id: string) => {
 });
 ipcMain.handle(
   "projects:save",
-  async (e, p: { id: string; doc: unknown; thumbnail?: string; look?: number }) => {
+  async (event, p: { id: string; doc: unknown; thumbnail?: string; look?: number }) => {
     await mkdir(dirname(projectPath(p.id)), { recursive: true });
 
     // Write atomically so a crash never leaves a half-written project.
@@ -525,7 +525,7 @@ ipcMain.handle(
     await writeFile(tmp, bytes);
     await rename(tmp, projectPath(p.id));
     // Other windows drop what they keep of it in memory (a tab in the background).
-    sendToAll("project-saved", () => p.id, e.sender.id);
+    sendToAll("project-saved", () => p.id, event.sender.id);
 
     if (p.thumbnail?.startsWith("data:image/png;base64,")) {
       await mkdir(thumbsDir(), { recursive: true });
@@ -536,7 +536,7 @@ ipcMain.handle(
 );
 ipcMain.handle(
   "projects:thumbnail",
-  async (e, p: { id: string; thumbnail: string; look?: number; local?: boolean }) => {
+  async (event, p: { id: string; thumbnail: string; look?: number; local?: boolean }) => {
     if (!p.thumbnail.startsWith("data:image/png;base64,") || !existsSync(projectPath(p.id))) return;
 
     await mkdir(thumbsDir(), { recursive: true });
@@ -547,7 +547,7 @@ ipcMain.handle(
     }
 
     // An overview open in another window shows the new picture.
-    sendToAll("projects-changed", () => undefined, e.sender.id);
+    sendToAll("projects-changed", () => undefined, event.sender.id);
   },
 );
 ipcMain.handle("projects:shared-thumbnail", (_e, id: string) => readSidecar(id));
@@ -622,10 +622,10 @@ ipcMain.handle("projects:reveal", (_e, p?: string | { folder: string }) =>
 ipcMain.handle(
   "files:save",
   async (
-    e,
+    event,
     p: { name: string; data: Uint8Array | string; filters?: { name: string; extensions: string[] }[] },
   ) => {
-    const win = windowFor(e.sender);
+    const win = windowFor(event.sender);
     // The UI end-to-end run (tests/e2e/app.ts) saves without the dialog, into its own temp folder.
     const testDir = process.env["MEERCAD_E2E_SAVE_DIR"];
     const r = testDir
@@ -668,8 +668,8 @@ ipcMain.handle("files:write-local", async (_e, p: { path: unknown; base64: unkno
  */
 ipcMain.handle(
   "files:share",
-  async (e, p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => {
-    const win = windowFor(e.sender);
+  async (event, p: { name: string; data: Uint8Array | string; x?: number; y?: number }) => {
+    const win = windowFor(event.sender);
     // The UI end-to-end run (tests/e2e/app.ts): the file goes into its folder instead of the share menu.
     const testDir = process.env["MEERCAD_E2E_SAVE_DIR"];
 
@@ -735,10 +735,10 @@ ipcMain.handle("slicers:open", async (_e, p: { slicer: SlicerId; name: string; d
  * picks no folder. One build at a time; "photos:cancel" stops it.
  */
 let photoBuild: ChildProcess | null = null;
-ipcMain.handle("photos:build", async (e, given?: unknown) => {
+ipcMain.handle("photos:build", async (event, given?: unknown) => {
   if (photoBuild) throw new Error("busy");
 
-  const win = windowFor(e.sender);
+  const win = windowFor(event.sender);
   // MEERCAD_PHOTOS_DIR skips the folder dialog (automated tests of the whole build in the app).
   // An assistant (MCP) names the folder itself.
   const folder =
@@ -779,7 +779,7 @@ ipcMain.handle("photos:build", async (e, given?: unknown) => {
             };
 
             if (m.progress !== undefined) {
-              e.sender.send("photos-progress", { progress: m.progress, step: m.step });
+              event.sender.send("photos-progress", { progress: m.progress, step: m.step });
               // In the Dock too, so it can be followed from another app.
               win?.setProgressBar(m.step === "writing" ? 2 : m.progress);
             }
@@ -814,8 +814,8 @@ ipcMain.handle("photos:build", async (e, given?: unknown) => {
 });
 ipcMain.handle("photos:cancel", () => void photoBuild?.kill());
 // The page asks for the system's own text editing (a field or selected text has the focus).
-ipcMain.handle("edit:native", (e, cmd: "cut" | "copy" | "paste" | "selectAll") => {
-  if (["cut", "copy", "paste", "selectAll"].includes(cmd)) e.sender[cmd]();
+ipcMain.handle("edit:native", (event, cmd: "cut" | "copy" | "paste" | "selectAll") => {
+  if (["cut", "copy", "paste", "selectAll"].includes(cmd)) event.sender[cmd]();
 });
 ipcMain.handle("storage:status", async () => {
   await findICloud();
@@ -833,8 +833,8 @@ ipcMain.handle("storage:status", async () => {
  * Bookmarks of folders picked in this session (App Store build), saved once one becomes the projects folder.
  */
 const picked = new Map<string, string>();
-ipcMain.handle("storage:choose", async (e) => {
-  const win = windowFor(e.sender);
+ipcMain.handle("storage:choose", async (event) => {
+  const win = windowFor(event.sender);
   const r = await dialog.showOpenDialog(win!, {
     title: tr("Choose a folder for your meerCAD projects"),
     buttonLabel: tr("Use this folder"),
@@ -1060,10 +1060,10 @@ function applyUiScale(win: BrowserWindow): void {
   const f = uiScaleOf(win);
 
   // The assistants' tabs in the window take its size too.
-  for (const wc of win === mainWindow ? allContents() : [win.webContents]) {
-    if (Math.abs(wc.getZoomFactor() - f) > 1e-3) wc.setZoomFactor(f);
+  for (const contents of win === mainWindow ? allContents() : [win.webContents]) {
+    if (Math.abs(contents.getZoomFactor() - f) > 1e-3) contents.setZoomFactor(f);
 
-    wc.send("ui-scale", uiScaleState(win));
+    contents.send("ui-scale", uiScaleState(win));
   }
 
   placeAssistants();
@@ -1096,8 +1096,8 @@ function stepUiScale(dir: 1 | -1): void {
   if (next !== undefined) void setUiScale(next);
 }
 
-ipcMain.handle("ui:scale", (e) => {
-  const win = windowFor(e.sender);
+ipcMain.handle("ui:scale", (event) => {
+  const win = windowFor(event.sender);
 
   return win ? uiScaleState(win) : null;
 });
@@ -1121,14 +1121,14 @@ const webPreferences = (assistant: boolean) => ({
 });
 
 /** External links open in the browser; the app never navigates away from itself. */
-function guardNavigation(wc: WebContents): void {
-  wc.setWindowOpenHandler(({ url }) => {
+function guardNavigation(contents: WebContents): void {
+  contents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
 
     return { action: "deny" };
   });
-  wc.on("will-navigate", (e, url) => {
-    if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) e.preventDefault();
+  contents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("app://") && !url.startsWith(DEV_URL)) event.preventDefault();
   });
 }
 
@@ -1265,7 +1265,7 @@ function openAssistantView(session: string, client: string): AssistantView {
   view.setVisible(false);
   mainWindow.contentView.addChildView(view);
 
-  const wc = view.webContents;
+  const contents = view.webContents;
   const a: AssistantView = {
     view,
     session,
@@ -1279,11 +1279,11 @@ function openAssistantView(session: string, client: string): AssistantView {
     ready,
     markReady,
   };
-  assistantViews.set(wc.id, a);
+  assistantViews.set(contents.id, a);
   placeAssistants();
-  guardNavigation(wc);
+  guardNavigation(contents);
   // Its page holds keys back (it is the assistant's); ⌘, still opens the settings, in the window's page.
-  wc.on("before-input-event", (e, input) => {
+  contents.on("before-input-event", (e, input) => {
     if (
       input.type !== "keyDown" ||
       input.key !== "," ||
@@ -1302,13 +1302,13 @@ function openAssistantView(session: string, client: string): AssistantView {
     w.webContents.focus();
     w.webContents.send("menu", "settings");
   });
-  wc.on(
+  contents.on(
     "did-finish-load",
-    () => mainWindow && !mainWindow.isDestroyed() && wc.setZoomFactor(uiScaleOf(mainWindow)),
+    () => mainWindow && !mainWindow.isDestroyed() && contents.setZoomFactor(uiScaleOf(mainWindow)),
   );
 
-  const id = wc.id;
-  wc.once("destroyed", () => {
+  const id = contents.id;
+  contents.once("destroyed", () => {
     assistantViews.delete(id);
     if (!endedSessions.has(session)) endedSessions.set(session, "closed");
     if (shown?.session === session) shown = null;
@@ -1322,7 +1322,7 @@ function openAssistantView(session: string, client: string): AssistantView {
       c.reject(new Error(CLOSED));
     }
   });
-  void wc.loadURL(
+  void contents.loadURL(
     `${DEV ? DEV_URL : "app://meercad/"}?assistant=${encodeURIComponent(session)}&client=${encodeURIComponent(client)}`,
   );
   broadcastTabs();
@@ -1347,7 +1347,7 @@ function closeView(a: AssistantView): void {
 let bridgeCallSeq = 0;
 const bridgeCalls = new Map<
   number,
-  { window: number; resolve: (v: unknown) => void; reject: (e: Error) => void }
+  { window: number; resolve: (v: unknown) => void; reject: (error: Error) => void }
 >();
 
 ipcMain.handle("assistant:open", async (_e, p: { session: string; client: string }) => {
@@ -1389,11 +1389,11 @@ ipcMain.on("assistant:respond", (_e, p: { callId: number; result?: unknown; erro
   if (typeof p.error === "string") c.reject(new Error(p.error));
   else c.resolve(p.result);
 });
-ipcMain.on("assistant:ready", (e) => assistantOf(e.sender.id)?.markReady());
+ipcMain.on("assistant:ready", (event) => assistantOf(event.sender.id)?.markReady());
 ipcMain.handle("assistant:tabs", () => assistantTabs());
 /** An assistant's tab says which project it has open. */
-ipcMain.on("assistant:project", (e, p: unknown) => {
-  const a = assistantOf(e.sender.id);
+ipcMain.on("assistant:project", (event, p: unknown) => {
+  const a = assistantOf(event.sender.id);
   if (!a) return;
 
   const { id, name } = (p ?? {}) as { id?: unknown; name?: unknown };
@@ -1402,8 +1402,8 @@ ipcMain.on("assistant:project", (e, p: unknown) => {
   broadcastTabs();
 });
 /** An assistant's tab says whether it is working, and on what. */
-ipcMain.on("assistant:busy", (e, p: unknown) => {
-  const a = assistantOf(e.sender.id);
+ipcMain.on("assistant:busy", (event, p: unknown) => {
+  const a = assistantOf(event.sender.id);
   if (!a) return;
 
   const { busy, tool } = (p ?? {}) as { busy?: unknown; tool?: unknown };
@@ -1412,15 +1412,15 @@ ipcMain.on("assistant:busy", (e, p: unknown) => {
   broadcastTabs();
 });
 /** The window's page opens an assistant's tab (rect: its room in the page) or one of its own (null). */
-ipcMain.on("assistant:show", (e, p: unknown) => {
-  if (!mainWindow || mainWindow.isDestroyed() || e.sender !== mainWindow.webContents) return;
+ipcMain.on("assistant:show", (event, p: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
 
   const q = p as { session?: unknown; rect?: { x: number; y: number; width: number; height: number } } | null;
   shown = q && typeof q.session === "string" && q.rect ? { session: q.session, rect: q.rect } : null;
   placeAssistants();
 });
-ipcMain.handle("assistant:snapshot", async (e, session: unknown) => {
-  if (!mainWindow || mainWindow.isDestroyed() || e.sender !== mainWindow.webContents) return null;
+ipcMain.handle("assistant:snapshot", async (event, session: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return null;
 
   const a = [...assistantViews.values()].find(
     (x) => x.session === session && !x.view.webContents.isDestroyed(),
@@ -1492,8 +1492,8 @@ setInterval(
 ).unref();
 
 /** The Stop button in an assistant's tab: the window's page takes the tab over. */
-ipcMain.on("assistant:stop", (e) => {
-  const a = assistantOf(e.sender.id);
+ipcMain.on("assistant:stop", (event) => {
+  const a = assistantOf(event.sender.id);
   if (a && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("assistant-stop", a.session);
 });
 
@@ -1515,10 +1515,10 @@ async function openExternalFile(file: string): Promise<void> {
 
     mainWindow.webContents.send("open-project", id);
     mainWindow.focus();
-  } catch (e) {
+  } catch (error) {
     mainWindow.webContents.send(
       "error",
-      `Could not open ${basename(file)}: ${e instanceof Error ? e.message : String(e)}`,
+      `Could not open ${basename(file)}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }
