@@ -75,6 +75,28 @@ interface Edge {
 
 const TAU = 2 * Math.PI;
 
+/** One direction of travel along an edge; the two directions of an edge sit at indices 2n and 2n + 1. */
+interface HalfEdge {
+  edge: Edge;
+  forward: boolean;
+  from: number;
+  to: number;
+  /** Direction in which it leaves `from`. */
+  angle: number;
+}
+
+/** A closed walk along half-edges: counter-clockwise (positive area) round a face, clockwise round a hole. */
+interface Cycle {
+  loop: LoopEdge[];
+  area: number;
+  polygon: Vec2[];
+  /** Connected group of curves it belongs to; standalone circles get negative numbers. */
+  component: number;
+}
+
+/** The unbounded face outside everything. */
+const OUTSIDE = -1;
+
 export function findRegions(curves: readonly SolvedCurve[]): Region[] {
   const solid = expandSplines(curves).filter((c) => !c.construction);
   if (!solid.length) return [];
@@ -83,7 +105,63 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
   const eps = scale * 1e-9;
   const tol = scale * 1e-7;
 
-  // 1. split parameters per curve
+  const { vertexCount, edges, standaloneCircles } = splitIntoPieces(
+    solid,
+    crossingParameters(solid, eps),
+    tol,
+  );
+
+  dropDanglingEdges(edges, vertexCount);
+
+  const live = edges.filter((edge) => edge.alive);
+  const halves = halfEdgesOf(live);
+  const { cycles: walks, cycleOf } = traceCycles(halves);
+  const cycles = describeCycles(walks, halves, live, vertexCount, standaloneCircles);
+
+  const bounded = cycles.map((cycle, i) => i).filter((i) => cycles[i]!.area > tol * tol);
+  const outerCycles = cycles.map((cycle, i) => i).filter((i) => cycles[i]!.area < -tol * tol);
+  const holeOf = assignHoles(cycles, bounded, outerCycles);
+
+  // The face a cycle borders: itself when it runs round a face, otherwise the face its hole lies in.
+  const faceOfCycle = (cycle: number) => (cycles[cycle]!.area > 0 ? cycle : (holeOf.get(cycle) ?? OUTSIDE));
+  const neighbours = new FaceNeighbours();
+
+  for (let i = 0; i < halves.length; i += 2) {
+    neighbours.link(faceOfCycle(cycleOf[i]!), faceOfCycle(cycleOf[i + 1]!));
+  }
+
+  standaloneCircles.forEach((_, k) => {
+    const positive = walks.length + 2 * k;
+
+    neighbours.link(faceOfCycle(positive), faceOfCycle(positive + 1));
+  });
+
+  const depth = neighbours.depthsFromOutside();
+
+  return bounded.map((b) => {
+    const holes = outerCycles.filter((n) => holeOf.get(n) === b).map((n) => cycles[n]!);
+    const outer = cycles[b]!;
+    const keyOf = (loop: LoopEdge[]) => [...new Set(loop.map((edge) => edge.name))].sort().join("+");
+    const key = [keyOf(outer.loop), ...holes.map((cycle) => keyOf(cycle.loop)).sort()].join("|");
+    const polygons = [outer.polygon, ...holes.map((cycle) => cycle.polygon)];
+
+    return {
+      key,
+      outer: outer.loop,
+      holes: holes.map((cycle) => cycle.loop),
+      area: outer.area + holes.reduce((s, cycle) => s + cycle.area, 0),
+      depth: depth.get(b) ?? 1,
+      sample: interiorPoint(polygons),
+      polygons,
+    };
+  });
+}
+
+/**
+ * Per curve: the parameters where it is cut. Lines start with their two ends (0 and 1) and arcs
+ * with their start and end angle; every crossing with another curve adds one.
+ */
+function crossingParameters(solid: readonly Basic[], eps: number): Map<string, number[]> {
   const params = new Map<string, number[]>();
 
   for (const c of solid) {
@@ -99,290 +177,346 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
     }
   }
 
-  // 2. pieces
-  const verts: Vec2[] = [];
+  return params;
+}
+
+/**
+ * Cuts every curve at its crossings into pieces and joins them into a graph: each piece is an edge
+ * between two vertices, and ends closer than `tol` are one vertex. Circles nothing crosses stay
+ * apart: they have no vertex.
+ */
+function splitIntoPieces(
+  solid: readonly Basic[],
+  params: ReadonlyMap<string, number[]>,
+  tol: number,
+): { vertexCount: number; edges: Edge[]; standaloneCircles: Basic[] } {
+  const vertices: Vec2[] = [];
 
   const vertexAt = (p: Vec2): number => {
-    for (let i = 0; i < verts.length; i++) {
-      if (Math.hypot(verts[i]![0] - p[0], verts[i]![1] - p[1]) < tol) return i;
+    for (let i = 0; i < vertices.length; i++) {
+      if (distance2(p, vertices[i]!) < tol) return i;
     }
 
-    verts.push(p);
+    vertices.push(p);
 
-    return verts.length - 1;
+    return vertices.length - 1;
   };
 
   const edges: Edge[] = [];
-  const standalone: Basic[] = [];
+  const standaloneCircles: Basic[] = [];
 
-  for (const c of solid) {
-    const ps = params.get(c.id)!;
-
-    if (c.kind === "line") {
-      const ts = uniq(
-        ps.filter((t) => t >= -1e-12 && t <= 1 + 1e-12).sort((a, b) => a - b),
-        1e-9,
-      );
-      const pieces: Piece[] = [];
-
-      for (let k = 0; k + 1 < ts.length; k++) {
-        const a = lerp(c.a, c.b, ts[k]!);
-        const b = lerp(c.a, c.b, ts[k + 1]!);
-        if (distance2(a, b) > tol) pieces.push({ kind: "line", a, b });
-      }
-
-      pushPieces(c.id, pieces);
-    } else if (c.kind === "arc") {
-      const start = c.a0;
-      const span = sweep(c.a0, c.a1);
-      // A crossing within `tol` of an end is that end: solved arcs are off their ends by rounding,
-      // and splitting there would leave a sliver piece (and a region without area).
-      const at = Math.max(1e-9, tol / c.radius);
-      const rel = uniq(
-        ps
-          .map((a) => normAngle(a - start))
-          .map((r) => (r > span + at ? r - TAU : r))
-          .filter((r) => r >= -at && r <= span + at)
-          .map((r) => (Math.abs(r) < at ? 0 : Math.abs(r - span) < at ? span : r)),
-        at,
-      );
-      rel.sort((a, b) => a - b);
-      if (rel[0]! > at) rel.unshift(0);
-      if (rel.at(-1)! < span - at) rel.push(span);
-
-      const pieces: Piece[] = [];
-
-      for (let k = 0; k + 1 < rel.length; k++) {
-        pieces.push({
-          kind: "arc",
-          center: c.center,
-          radius: c.radius,
-          a0: start + rel[k]!,
-          a1: start + rel[k + 1]!,
-        });
-      }
-
-      pushPieces(c.id, pieces);
-    } else {
-      const at = Math.max(1e-9, tol / c.radius);
-      let as = uniq(
-        ps.map(normAngle).sort((a, b) => a - b),
-        at,
-      );
-      if (as.length > 1 && as[0]! + TAU - as.at(-1)! < at) as = as.slice(0, -1);
-
-      if (as.length === 0) {
-        standalone.push(c);
-        continue;
-      }
-
-      if (as.length === 1) as.push(as[0]! + Math.PI);
-
-      const pieces: Piece[] = [];
-
-      for (let k = 0; k < as.length; k++) {
-        const a0 = as[k]!;
-        const a1 = k + 1 < as.length ? as[k + 1]! : as[0]! + TAU;
-        pieces.push({ kind: "arc", center: c.center, radius: c.radius, a0, a1 });
-      }
-
-      pushPieces(c.id, pieces);
-    }
-  }
-
-  function pushPieces(curve: string, pieces: Piece[]): void {
+  const addPieces = (curve: string, pieces: Piece[]): void => {
     pieces.forEach((piece, k) => {
-      const [s, e] = ends(piece);
+      const [start, end] = ends(piece);
+
       edges.push({
         name: pieces.length > 1 ? `${curve}:${k}` : curve,
         curve,
         piece,
-        v0: vertexAt(s),
-        v1: vertexAt(e),
+        v0: vertexAt(start),
+        v1: vertexAt(end),
         alive: true,
       });
     });
+  };
+
+  for (const c of solid) {
+    const cuts = params.get(c.id)!;
+
+    if (c.kind === "line") {
+      addPieces(c.id, linePieces(c, cuts, tol));
+    } else if (c.kind === "arc") {
+      addPieces(c.id, arcPieces(c, cuts, tol));
+    } else {
+      const pieces = circlePieces(c, cuts, tol);
+
+      if (pieces) addPieces(c.id, pieces);
+      else standaloneCircles.push(c);
+    }
   }
 
-  // 3. drop dangling pieces (vertices of degree 1)
+  return { vertexCount: vertices.length, edges, standaloneCircles };
+}
+
+function linePieces(line: Extract<Basic, { kind: "line" }>, cuts: readonly number[], tol: number): Piece[] {
+  const ts = uniq(
+    cuts.filter((t) => t >= -1e-12 && t <= 1 + 1e-12).sort((a, b) => a - b),
+    1e-9,
+  );
+  const pieces: Piece[] = [];
+
+  for (let k = 0; k + 1 < ts.length; k++) {
+    const a = lerp(line.a, line.b, ts[k]!);
+    const b = lerp(line.a, line.b, ts[k + 1]!);
+    if (distance2(a, b) > tol) pieces.push({ kind: "line", a, b });
+  }
+
+  return pieces;
+}
+
+function arcPieces(arc: Extract<Basic, { kind: "arc" }>, cuts: readonly number[], tol: number): Piece[] {
+  const start = arc.a0;
+  const span = sweep(arc.a0, arc.a1);
+  // A crossing within `tol` of an end is that end: solved arcs are off their ends by rounding,
+  // and splitting there would leave a sliver piece (and a region without area).
+  const at = Math.max(1e-9, tol / arc.radius);
+  const rel = uniq(
+    cuts
+      .map((a) => normAngle(a - start))
+      .map((r) => (r > span + at ? r - TAU : r))
+      .filter((r) => r >= -at && r <= span + at)
+      .map((r) => (Math.abs(r) < at ? 0 : Math.abs(r - span) < at ? span : r)),
+    at,
+  );
+
+  rel.sort((a, b) => a - b);
+  if (rel[0]! > at) rel.unshift(0);
+  if (rel.at(-1)! < span - at) rel.push(span);
+
+  const pieces: Piece[] = [];
+
+  for (let k = 0; k + 1 < rel.length; k++) {
+    pieces.push({
+      kind: "arc",
+      center: arc.center,
+      radius: arc.radius,
+      a0: start + rel[k]!,
+      a1: start + rel[k + 1]!,
+    });
+  }
+
+  return pieces;
+}
+
+/** The arcs a circle falls into at its crossings; null when nothing crosses it. */
+function circlePieces(
+  circle: Extract<Basic, { kind: "circle" }>,
+  cuts: readonly number[],
+  tol: number,
+): Piece[] | null {
+  const at = Math.max(1e-9, tol / circle.radius);
+  let angles = uniq(
+    cuts.map(normAngle).sort((a, b) => a - b),
+    at,
+  );
+
+  // The first and the last crossing are the same point when they meet across 0.
+  if (angles.length > 1 && angles[0]! + TAU - angles.at(-1)! < at) angles = angles.slice(0, -1);
+  if (angles.length === 0) return null;
+  // A single crossing: cut the circle a second time opposite to it, so each piece has two ends.
+  if (angles.length === 1) angles.push(angles[0]! + Math.PI);
+
+  const pieces: Piece[] = [];
+
+  for (let k = 0; k < angles.length; k++) {
+    const a0 = angles[k]!;
+    const a1 = k + 1 < angles.length ? angles[k + 1]! : angles[0]! + TAU;
+
+    pieces.push({ kind: "arc", center: circle.center, radius: circle.radius, a0, a1 });
+  }
+
+  return pieces;
+}
+
+/** Marks pieces that lead nowhere as dead: an edge at a vertex no other edge reaches, again and again. */
+function dropDanglingEdges(edges: Edge[], vertexCount: number): void {
   for (let changed = true; changed;) {
     changed = false;
 
-    const deg = new Array<number>(verts.length).fill(0);
+    const degree = new Array<number>(vertexCount).fill(0);
 
     for (const edge of edges) {
       if (edge.alive) {
-        deg[edge.v0]!++;
-        deg[edge.v1]!++;
+        degree[edge.v0]!++;
+        degree[edge.v1]!++;
       }
     }
 
     for (const edge of edges) {
-      if (edge.alive && (deg[edge.v0] === 1 || deg[edge.v1] === 1)) {
+      if (edge.alive && (degree[edge.v0] === 1 || degree[edge.v1] === 1)) {
         edge.alive = false;
         changed = true;
       }
     }
   }
+}
 
-  const live = edges.filter((edge) => edge.alive);
-
-  // 4. half-edges sorted by direction around each vertex
-  interface Half {
-    edge: Edge;
-    fwd: boolean;
-    from: number;
-    to: number;
-    angle: number;
-  }
-
-  const halves: Half[] = [];
+function halfEdgesOf(live: readonly Edge[]): HalfEdge[] {
+  const halves: HalfEdge[] = [];
 
   for (const edge of live) {
-    halves.push({ edge: edge, fwd: true, from: edge.v0, to: edge.v1, angle: leaveAngle(edge.piece, true) });
-    halves.push({ edge: edge, fwd: false, from: edge.v1, to: edge.v0, angle: leaveAngle(edge.piece, false) });
+    halves.push({ edge, forward: true, from: edge.v0, to: edge.v1, angle: leaveAngle(edge.piece, true) });
+    halves.push({ edge, forward: false, from: edge.v1, to: edge.v0, angle: leaveAngle(edge.piece, false) });
   }
 
+  return halves;
+}
+
+/**
+ * Walks every face boundary: from a half-edge, turn at its end onto the next half-edge clockwise
+ * from the way back, until the walk closes. Each half-edge ends up in exactly one cycle.
+ */
+function traceCycles(halves: readonly HalfEdge[]): { cycles: number[][]; cycleOf: number[] } {
   const twin = (i: number) => i ^ 1;
+  // Per vertex: the half-edges leaving it, sorted by direction.
   const around = new Map<number, number[]>();
-  halves.forEach((h, i) => {
-    const list = around.get(h.from) ?? [];
+
+  halves.forEach((half, i) => {
+    const list = around.get(half.from) ?? [];
+
     list.push(i);
-    around.set(h.from, list);
+    around.set(half.from, list);
   });
+
   for (const list of around.values()) list.sort((a, b) => halves[a]!.angle - halves[b]!.angle);
 
   const next = (i: number): number => {
-    const t = twin(i);
-    const list = around.get(halves[t]!.from)!;
-    const k = list.indexOf(t);
+    const back = twin(i);
+    const list = around.get(halves[back]!.from)!;
+    const k = list.indexOf(back);
 
     return list[(k - 1 + list.length) % list.length]!;
   };
 
-  // 5. trace cycles
   const cycleOf = new Array<number>(halves.length).fill(-1);
   const cycles: number[][] = [];
 
   for (let i = 0; i < halves.length; i++) {
     if (cycleOf[i] !== -1) continue;
 
-    const cyc: number[] = [];
+    const cycle: number[] = [];
 
     for (let h = i; cycleOf[h] === -1; h = next(h)) {
       cycleOf[h] = cycles.length;
-      cyc.push(h);
-      if (cyc.length > halves.length) break;
+      cycle.push(h);
+      if (cycle.length > halves.length) break;
     }
 
-    cycles.push(cyc);
+    cycles.push(cycle);
   }
 
-  const loopOf = (cyc: number[]): LoopEdge[] =>
-    cyc.map((i) => {
-      const h = halves[i]!;
+  return { cycles, cycleOf };
+}
 
-      return { name: h.edge.name, curve: h.edge.curve, seg: toSegment(h.edge.piece, h.fwd) };
-    });
-
-  interface Cycle {
-    loop: LoopEdge[];
-    area: number;
-    polygon: Vec2[];
-    component: number;
-  }
-
-  // components via union-find on vertices
-  const parent = verts.map((_, i) => i);
+/**
+ * Loop, area, outline and connected component of every cycle. Standalone circles follow at the
+ * end: one counter-clockwise and one clockwise cycle each, in a component of their own.
+ */
+function describeCycles(
+  walks: readonly number[][],
+  halves: readonly HalfEdge[],
+  live: readonly Edge[],
+  vertexCount: number,
+  standaloneCircles: readonly Basic[],
+): Cycle[] {
+  // Components: union-find over the vertices.
+  const parent = Array.from({ length: vertexCount }, (_, i) => i);
   const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x]!)));
+
   for (const edge of live) parent[find(edge.v0)] = find(edge.v1);
 
-  const all: Cycle[] = cycles.map((cyc) => {
-    const loop = loopOf(cyc);
+  const cycles: Cycle[] = walks.map((walk) => {
+    const loop: LoopEdge[] = walk.map((i) => {
+      const half = halves[i]!;
 
-    return { loop, area: loopArea(loop), polygon: polygonOf(loop), component: find(halves[cyc[0]!]!.from) };
+      return { name: half.edge.name, curve: half.edge.curve, seg: toSegment(half.edge.piece, half.forward) };
+    });
+
+    return {
+      loop,
+      area: loopArea(loop),
+      polygon: polygonOf(loop),
+      component: find(halves[walk[0]!]!.from),
+    };
   });
-  // standalone circles: a positive and a negative cycle each, in their own component
-  standalone.forEach((c, k) => {
+
+  standaloneCircles.forEach((c, k) => {
     if (c.kind !== "circle") return;
 
-    const ccw: LoopEdge[] = [
-      { name: c.id, curve: c.id, seg: { kind: "circle", center: c.center, radius: c.radius, ccw: true } },
+    const circleLoop = (ccw: boolean): LoopEdge[] => [
+      { name: c.id, curve: c.id, seg: { kind: "circle", center: c.center, radius: c.radius, ccw } },
     ];
-    const cw: LoopEdge[] = [
-      { name: c.id, curve: c.id, seg: { kind: "circle", center: c.center, radius: c.radius, ccw: false } },
-    ];
-    const comp = -1 - k;
-    all.push({ loop: ccw, area: loopArea(ccw), polygon: polygonOf(ccw), component: comp });
-    all.push({ loop: cw, area: loopArea(cw), polygon: polygonOf(cw), component: comp });
+    const component = -1 - k;
+
+    for (const loop of [circleLoop(true), circleLoop(false)]) {
+      cycles.push({ loop, area: loopArea(loop), polygon: polygonOf(loop), component });
+    }
   });
 
-  const bounded = all.map((cycle, i) => i).filter((i) => all[i]!.area > tol * tol);
-  const outerCycles = all.map((cycle, i) => i).filter((i) => all[i]!.area < -tol * tol);
+  return cycles;
+}
 
-  // 6. assign each component's outer boundary as a hole of the smallest enclosing bounded face
-  const holeOf = new Map<number, number>(); // negative cycle -> bounded cycle (or -1 = unbounded)
+/**
+ * Each component's outer boundary (a clockwise cycle) is a hole of the smallest face of another
+ * component that encloses it, or of the unbounded face.
+ */
+function assignHoles(
+  cycles: readonly Cycle[],
+  bounded: readonly number[],
+  outerCycles: readonly number[],
+): Map<number, number> {
+  const holeOf = new Map<number, number>();
 
   for (const n of outerCycles) {
-    const probe = all[n]!.polygon[0]!;
-    let best = -1;
+    const probe = cycles[n]!.polygon[0]!;
+    let best = OUTSIDE;
 
     for (const b of bounded) {
-      if (all[b]!.component === all[n]!.component) continue;
-      if (pointInPolygon(probe, all[b]!.polygon) && (best === -1 || all[b]!.area < all[best]!.area)) best = b;
+      if (cycles[b]!.component === cycles[n]!.component) continue;
+
+      if (
+        pointInPolygon(probe, cycles[b]!.polygon) &&
+        (best === OUTSIDE || cycles[b]!.area < cycles[best]!.area)
+      ) {
+        best = b;
+      }
     }
 
     holeOf.set(n, best);
   }
 
-  // 7. depth by BFS over shared pieces, starting from the unbounded face (-1)
-  const faceOfCycle = (ci: number) => (all[ci]!.area > 0 ? ci : (holeOf.get(ci) ?? -1));
-  const adj = new Map<number, Set<number>>();
+  return holeOf;
+}
 
-  const link = (a: number, b: number) => {
+/** Which faces share a piece of curve, and from that how many curves lie between a face and the outside. */
+class FaceNeighbours {
+  private readonly adjacent = new Map<number, Set<number>>();
+
+  link(a: number, b: number): void {
     if (a === b) return;
 
-    (adj.get(a) ?? adj.set(a, new Set()).get(a)!).add(b);
-    (adj.get(b) ?? adj.set(b, new Set()).get(b)!).add(a);
-  };
-
-  for (let i = 0; i < halves.length; i += 2) link(faceOfCycle(cycleOf[i]!), faceOfCycle(cycleOf[i + 1]!));
-  standalone.forEach((_, k) => {
-    const pos = cycles.length + 2 * k;
-    link(faceOfCycle(pos), faceOfCycle(pos + 1));
-  });
-
-  const depth = new Map<number, number>([[-1, 0]]);
-
-  for (let queue = [-1]; queue.length;) {
-    const f = queue.shift()!;
-
-    for (const g of adj.get(f) ?? []) {
-      if (!depth.has(g)) {
-        depth.set(g, depth.get(f)! + 1);
-        queue.push(g);
-      }
-    }
+    this.of(a).add(b);
+    this.of(b).add(a);
   }
 
-  // 8. regions
-  return bounded.map((b) => {
-    const holes = outerCycles.filter((n) => holeOf.get(n) === b).map((n) => all[n]!);
-    const outer = all[b]!;
-    const keyOf = (loop: LoopEdge[]) => [...new Set(loop.map((edge) => edge.name))].sort().join("+");
-    const key = [keyOf(outer.loop), ...holes.map((cycle) => keyOf(cycle.loop)).sort()].join("|");
-    const polygons = [outer.polygon, ...holes.map((cycle) => cycle.polygon)];
+  private of(face: number): Set<number> {
+    let set = this.adjacent.get(face);
 
-    return {
-      key,
-      outer: outer.loop,
-      holes: holes.map((cycle) => cycle.loop),
-      area: outer.area + holes.reduce((s, cycle) => s + cycle.area, 0),
-      depth: depth.get(b) ?? 1,
-      sample: interiorPoint(polygons),
-      polygons,
-    };
-  });
+    if (!set) {
+      set = new Set();
+      this.adjacent.set(face, set);
+    }
+
+    return set;
+  }
+
+  /** Breadth-first from the unbounded face: the number of curves crossed to reach each face. */
+  depthsFromOutside(): Map<number, number> {
+    const depth = new Map<number, number>([[OUTSIDE, 0]]);
+
+    for (let queue = [OUTSIDE]; queue.length;) {
+      const face = queue.shift()!;
+
+      for (const neighbour of this.adjacent.get(face) ?? []) {
+        if (!depth.has(neighbour)) {
+          depth.set(neighbour, depth.get(face)! + 1);
+          queue.push(neighbour);
+        }
+      }
+    }
+
+    return depth;
+  }
 }
 
 /** Regions selected by a profile reference: explicit keys, or the even-odd rule for "all". */
