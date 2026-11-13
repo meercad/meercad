@@ -40,87 +40,94 @@ const CURVE_POINTS: Record<string, string[]> = {
 };
 
 /** Ids a sketch exposes: entities and their characteristic points ("l1.p1", "c1.center"). */
-export function sketchSymbols(sk: SketchFeature): { points: Set<string>; curves: Map<string, string> } {
+export function sketchSymbols(sketch: SketchFeature): { points: Set<string>; curves: Map<string, string> } {
   const points = new Set<string>(["origin"]);
   const curves = new Map<string, string>();
 
-  for (const e of sk.entities) {
-    if (e.type === "point") {
-      points.add(e.id);
-    } else if (e.type === "projection") {
-      curves.set(e.id, "projection");
+  for (const entity of sketch.entities) {
+    if (entity.type === "point") {
+      points.add(entity.id);
+    } else if (entity.type === "projection") {
+      curves.set(entity.id, "projection");
     } else {
-      curves.set(e.id, e.type);
-      for (const p of CURVE_POINTS[e.type] ?? []) points.add(`${e.id}.${p}`);
+      curves.set(entity.id, entity.type);
+      for (const pointName of CURVE_POINTS[entity.type] ?? []) points.add(`${entity.id}.${pointName}`);
     }
   }
 
   return { points, curves };
 }
 
-function checkSketch(sk: SketchFeature, at: string, errors: string[]): void {
+function checkSketch(sketch: SketchFeature, at: string, errors: string[]): void {
   const ids = new Set<string>();
   const types = new Map<string, string>();
 
-  for (const e of sk.entities) {
-    if (ids.has(e.id)) errors.push(`${at}: duplicate entity id ${e.id}`);
+  for (const entity of sketch.entities) {
+    if (ids.has(entity.id)) errors.push(`${at}: duplicate entity id ${entity.id}`);
 
-    ids.add(e.id);
-    types.set(e.id, e.type);
+    ids.add(entity.id);
+    types.set(entity.id, entity.type);
   }
 
-  const isPoint = (pid: string) => types.get(pid) === "point";
+  const isPoint = (pointId: string) => types.get(pointId) === "point";
 
-  for (const e of sk.entities) {
+  for (const entity of sketch.entities) {
     const refs =
-      e.type === "line"
-        ? [e.p1, e.p2]
-        : e.type === "circle"
-          ? [e.center]
-          : e.type === "arc"
-            ? [e.center, e.start, e.end]
-            : e.type === "spline"
-              ? e.points
+      entity.type === "line"
+        ? [entity.p1, entity.p2]
+        : entity.type === "circle"
+          ? [entity.center]
+          : entity.type === "arc"
+            ? [entity.center, entity.start, entity.end]
+            : entity.type === "spline"
+              ? entity.points
               : [];
 
-    if (e.type === "spline" && e.closed && e.points.length < 3) {
-      errors.push(`${at}: closed spline ${e.id} needs at least 3 points`);
+    if (entity.type === "spline" && entity.closed && entity.points.length < 3) {
+      errors.push(`${at}: closed spline ${entity.id} needs at least 3 points`);
     }
 
-    for (const r of refs) {
-      if (!isPoint(r)) errors.push(`${at}: entity ${e.id} refers to missing point "${r}"`);
+    for (const ref of refs) {
+      if (!isPoint(ref)) errors.push(`${at}: entity ${entity.id} refers to missing point "${ref}"`);
     }
   }
 
-  const { points, curves } = sketchSymbols(sk);
+  const { points, curves } = sketchSymbols(sketch);
   // Projected geometry exposes "<id>.<n>" curves and their points; only known at rebuild time.
-  const projected = (r: string) =>
-    [...curves].some(([cid, t]) => t === "projection" && r.startsWith(`${cid}.`));
-  const point = (r: string) => points.has(r) || projected(r);
-  const curve = (r: string) =>
-    (curves.has(r) && curves.get(r) !== "projection") || projected(r) || r === "origin.x" || r === "origin.y";
-  const cids = new Set<string>();
+  const projected = (ref: string) =>
+    [...curves].some(([curveId, curveType]) => curveType === "projection" && ref.startsWith(`${curveId}.`));
+  const isKnownPoint = (ref: string) => points.has(ref) || projected(ref);
+  const isKnownCurve = (ref: string) =>
+    (curves.has(ref) && curves.get(ref) !== "projection") ||
+    projected(ref) ||
+    ref === "origin.x" ||
+    ref === "origin.y";
+  const constraintIds = new Set<string>();
 
-  for (const c of sk.constraints) {
-    if (cids.has(c.id) || ids.has(c.id)) errors.push(`${at}: duplicate constraint id ${c.id}`);
+  for (const constraint of sketch.constraints) {
+    if (constraintIds.has(constraint.id) || ids.has(constraint.id)) {
+      errors.push(`${at}: duplicate constraint id ${constraint.id}`);
+    }
 
-    cids.add(c.id);
+    constraintIds.add(constraint.id);
 
-    const bad = (what: string, r: string) =>
-      errors.push(`${at}: constraint ${c.id} (${c.type}) refers to unknown ${what} "${r}"`);
+    const reportUnknown = (what: string, ref: string) =>
+      errors.push(
+        `${at}: constraint ${constraint.id} (${constraint.type}) refers to unknown ${what} "${ref}"`,
+      );
 
-    switch (c.type) {
+    switch (constraint.type) {
       case "coincident":
       case "horizontal_points":
       case "vertical_points":
-        if (!point(c.a)) bad("point", c.a);
-        if (!point(c.b)) bad("point", c.b);
+        if (!isKnownPoint(constraint.a)) reportUnknown("point", constraint.a);
+        if (!isKnownPoint(constraint.b)) reportUnknown("point", constraint.b);
 
         break;
       case "horizontal":
       case "vertical":
       case "length":
-        if (!curve(c.line)) bad("line", c.line);
+        if (!isKnownCurve(constraint.line)) reportUnknown("line", constraint.line);
 
         break;
       case "parallel":
@@ -129,42 +136,45 @@ function checkSketch(sk: SketchFeature, at: string, errors: string[]): void {
       case "tangent":
       case "equal":
       case "angle":
-        if (!curve(c.a)) bad("curve", c.a);
-        if (!curve(c.b)) bad("curve", c.b);
+        if (!isKnownCurve(constraint.a)) reportUnknown("curve", constraint.a);
+        if (!isKnownCurve(constraint.b)) reportUnknown("curve", constraint.b);
 
         break;
       case "point_on":
-        if (!point(c.point)) bad("point", c.point);
-        if (!curve(c.curve)) bad("curve", c.curve);
+        if (!isKnownPoint(constraint.point)) reportUnknown("point", constraint.point);
+        if (!isKnownCurve(constraint.curve)) reportUnknown("curve", constraint.curve);
 
         break;
       case "midpoint":
-        if (!point(c.point)) bad("point", c.point);
-        if (!curve(c.line)) bad("line", c.line);
+        if (!isKnownPoint(constraint.point)) reportUnknown("point", constraint.point);
+        if (!isKnownCurve(constraint.line)) reportUnknown("line", constraint.line);
 
         break;
       case "symmetric":
-        if (!point(c.a)) bad("point", c.a);
-        if (!point(c.b)) bad("point", c.b);
-        if (!curve(c.axis)) bad("line", c.axis);
+        if (!isKnownPoint(constraint.a)) reportUnknown("point", constraint.a);
+        if (!isKnownPoint(constraint.b)) reportUnknown("point", constraint.b);
+        if (!isKnownCurve(constraint.axis)) reportUnknown("line", constraint.axis);
 
         break;
       case "fix":
-        if (!point(c.point)) bad("point", c.point);
+        if (!isKnownPoint(constraint.point)) reportUnknown("point", constraint.point);
 
         break;
       case "distance":
-        if (!point(c.a)) bad("point", c.a);
-        if (!point(c.b) && !curve(c.b)) bad("point or line", c.b);
+        if (!isKnownPoint(constraint.a)) reportUnknown("point", constraint.a);
+
+        if (!isKnownPoint(constraint.b) && !isKnownCurve(constraint.b)) {
+          reportUnknown("point or line", constraint.b);
+        }
 
         break;
       case "radius":
       case "diameter":
-        if (!curve(c.curve)) bad("circle or arc", c.curve);
+        if (!isKnownCurve(constraint.curve)) reportUnknown("circle or arc", constraint.curve);
 
         break;
       case "arc_angle":
-        if (!curve(c.curve)) bad("arc", c.curve);
+        if (!isKnownCurve(constraint.curve)) reportUnknown("arc", constraint.curve);
 
         break;
     }
@@ -318,20 +328,24 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
   const seen = new Map<string, Feature>();
 
   const earlier = (fid: string, at: string, what: string, ops?: string[]) => {
-    const f = seen.get(fid);
-    if (!f) errors.push(`${at}: ${what} refers to unknown or later feature "${fid}"`);
-    else if (ops && !ops.includes(f.op)) errors.push(`${at}: ${what} "${fid}" must be a ${ops.join(" or ")}`);
+    const feature = seen.get(fid);
+
+    if (!feature) {
+      errors.push(`${at}: ${what} refers to unknown or later feature "${fid}"`);
+    } else if (ops && !ops.includes(feature.op)) {
+      errors.push(`${at}: ${what} "${fid}" must be a ${ops.join(" or ")}`);
+    }
   };
 
-  const planeSpec = (p: PlaneSpec, at: string) => {
-    if ("ref" in p && !p.ref.startsWith("origin.")) earlier(p.ref, at, "plane", ["plane"]);
+  const planeSpec = (plane: PlaneSpec, at: string) => {
+    if ("ref" in plane && !plane.ref.startsWith("origin.")) earlier(plane.ref, at, "plane", ["plane"]);
 
     if (
-      "ref" in p &&
-      p.ref.startsWith("origin.") &&
-      !["origin.XY", "origin.XZ", "origin.YZ"].includes(p.ref)
+      "ref" in plane &&
+      plane.ref.startsWith("origin.") &&
+      !["origin.XY", "origin.XZ", "origin.YZ"].includes(plane.ref)
     ) {
-      errors.push(`${at}: unknown plane "${p.ref}"`);
+      errors.push(`${at}: unknown plane "${plane.ref}"`);
     }
   };
 
@@ -359,308 +373,322 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
     }
   };
 
-  for (const f of doc.features) {
-    const at = `feature ${f.id}`;
-    if (seen.has(f.id)) errors.push(`${at}: duplicate id`);
+  for (const feature of doc.features) {
+    const at = `feature ${feature.id}`;
+    if (seen.has(feature.id)) errors.push(`${at}: duplicate id`);
 
-    switch (f.op) {
+    switch (feature.op) {
       case "sketch":
-        planeSpec(f.plane, at);
-        checkSketch(f, at, errors);
+        planeSpec(feature.plane, at);
+        checkSketch(feature, at, errors);
         break;
       case "plane":
-        planeSpec(f.base, at);
+        planeSpec(feature.base, at);
         break;
       case "extrude":
       case "revolve":
-        if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
+        if ("sketch" in feature.profile) earlier(feature.profile.sketch, at, "profile", ["sketch"]);
 
-        if (f.op === "extrude" && f.extent === "two_sided" && f.distance2 === undefined) {
+        if (feature.op === "extrude" && feature.extent === "two_sided" && feature.distance2 === undefined) {
           errors.push(`${at}: two_sided extrude needs distance2`);
         }
 
-        if (f.op === "revolve" && "line" in f.axis) {
-          earlier(f.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
+        if (feature.op === "revolve" && "line" in feature.axis) {
+          earlier(feature.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
         }
 
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "loft":
-        for (const p of f.profiles) if ("sketch" in p) earlier(p.sketch, at, "profile", ["sketch"]);
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        for (const profile of feature.profiles) {
+          if ("sketch" in profile) earlier(profile.sketch, at, "profile", ["sketch"]);
+        }
+
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "sweep":
-        if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
+        if ("sketch" in feature.profile) earlier(feature.profile.sketch, at, "profile", ["sketch"]);
 
-        earlier(f.path.sketch, at, "path", ["sketch"]);
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        earlier(feature.path.sketch, at, "path", ["sketch"]);
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "fillet":
       case "chamfer":
-        edgeSelectors(f.edges, at);
+        edgeSelectors(feature.edges, at);
         break;
       case "thread":
-        if ("select" in f.face && f.face.of !== undefined) earlier(f.face.of, at, "selector");
+        if ("select" in feature.face && feature.face.of !== undefined) {
+          earlier(feature.face.of, at, "selector");
+        }
 
         break;
       case "coil":
-        if ("sketch" in f.profile) earlier(f.profile.sketch, at, "profile", ["sketch"]);
-        if ("line" in f.axis) earlier(f.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
+        if ("sketch" in feature.profile) earlier(feature.profile.sketch, at, "profile", ["sketch"]);
+        if ("line" in feature.axis) earlier(feature.axis.line.split(".")[0]!, at, "axis", ["sketch"]);
 
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "spring":
       case "screw":
-        if (f.plane) planeSpec(f.plane, at);
+        if (feature.plane) planeSpec(feature.plane, at);
 
-        if (f.op === "screw" && f.kind === "nut" && f.head === "socket") {
+        if (feature.op === "screw" && feature.kind === "nut" && feature.head === "socket") {
           errors.push(`${at}: nuts are hex, round or knob`);
         }
 
-        if (f.op === "screw" && f.kind === "nut" && f.threadLength !== undefined) {
+        if (feature.op === "screw" && feature.kind === "nut" && feature.threadLength !== undefined) {
           errors.push(`${at}: threadLength is for screws`);
         }
 
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "gear":
-        if (f.meshWith) earlier(f.meshWith.gear, at, "meshWith", ["gear"]);
-        else if (f.module === undefined) errors.push(`${at}: a gear needs a module (or meshWith)`);
-        if (f.plane) planeSpec(f.plane, at);
-        if (f.kind !== "spur" && f.bore) errors.push(`${at}: only spur gears take a bore`);
-        if (f.kind !== "spur" && f.hub) errors.push(`${at}: only spur gears take a hub`);
+        if (feature.meshWith) earlier(feature.meshWith.gear, at, "meshWith", ["gear"]);
+        else if (feature.module === undefined) errors.push(`${at}: a gear needs a module (or meshWith)`);
+        if (feature.plane) planeSpec(feature.plane, at);
+        if (feature.kind !== "spur" && feature.bore) errors.push(`${at}: only spur gears take a bore`);
+        if (feature.kind !== "spur" && feature.hub) errors.push(`${at}: only spur gears take a hub`);
 
-        if (f.kind === "rack" && f.chamfer !== undefined) {
+        if (feature.kind === "rack" && feature.chamfer !== undefined) {
           errors.push(`${at}: racks have no tooth chamfer yet`);
         }
 
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "linear_pattern":
       case "circular_pattern":
       case "mirror": {
-        const ids = "features" in f.source ? f.source.features : f.source.bodies;
-        if ("features" in f.source) for (const s of ids) earlier(s, at, "pattern source");
+        const ids = "features" in feature.source ? feature.source.features : feature.source.bodies;
+        if ("features" in feature.source) for (const s of ids) earlier(s, at, "pattern source");
         else for (const s of ids) body(s, at, "pattern source");
-        if (f.op === "mirror") planeSpec(f.plane, at);
+        if (feature.op === "mirror") planeSpec(feature.plane, at);
 
         break;
       }
 
       case "transform":
       case "delete":
-        for (const b of f.bodies) body(b, at);
+        for (const b of feature.bodies) body(b, at);
         break;
       case "draft":
-        planeSpec(f.neutral, at);
+        planeSpec(feature.neutral, at);
         break;
       case "offset_face":
-        if (f.upTo) planeSpec(f.upTo, at);
+        if (feature.upTo) planeSpec(feature.upTo, at);
 
         break;
       case "lithophane":
-        if (f.plane) planeSpec(f.plane, at);
+        if (feature.plane) planeSpec(feature.plane, at);
 
         if (
-          !f.image.pixels.startsWith("blob:") &&
-          f.image.pixels.length !== Math.ceil((f.image.width * f.image.height) / 3) * 4
+          !feature.image.pixels.startsWith("blob:") &&
+          feature.image.pixels.length !== Math.ceil((feature.image.width * feature.image.height) / 3) * 4
         ) {
           errors.push(`${at}: image.pixels must hold width × height bytes (base64)`);
         }
 
         break;
       case "scale":
-        for (const b of f.bodies) body(b, at);
+        for (const b of feature.bodies) body(b, at);
         break;
       case "align":
-        if ("face" in f.from !== "face" in f.to) {
+        if ("face" in feature.from !== "face" in feature.to) {
           errors.push(`${at}: align needs two flat faces or two round faces (axisOf)`);
         }
 
-        for (const b of f.bodies ?? []) body(b, at);
+        for (const b of feature.bodies ?? []) body(b, at);
         break;
       case "standard_part":
-        planeSpec(f.plane, at);
-        if (f.kind !== "magnet" && !f.size) errors.push(`${at}: a ${f.kind} needs a size`);
+        planeSpec(feature.plane, at);
+        if (feature.kind !== "magnet" && !feature.size) errors.push(`${at}: a ${feature.kind} needs a size`);
 
         break;
       case "primitive":
-        if (f.shape === "box" && !f.size) errors.push(`${at}: a box needs a size [x, y, z]`);
+        if (feature.shape === "box" && !feature.size) errors.push(`${at}: a box needs a size [x, y, z]`);
 
-        if (f.shape !== "box" && f.diameter === undefined) {
-          errors.push(`${at}: a ${f.shape} needs a diameter`);
+        if (feature.shape !== "box" && feature.diameter === undefined) {
+          errors.push(`${at}: a ${feature.shape} needs a diameter`);
         }
 
-        if (f.shape === "cylinder" && f.height === undefined) errors.push(`${at}: a cylinder needs a height`);
+        if (feature.shape === "cylinder" && feature.height === undefined) {
+          errors.push(`${at}: a cylinder needs a height`);
+        }
 
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "text":
-        planeSpec(f.plane, at);
-        for (const t of f.targets ?? []) body(t, at, "target body");
+        planeSpec(feature.plane, at);
+        for (const t of feature.targets ?? []) body(t, at, "target body");
         break;
       case "gridfinity":
-        if (f.plane) planeSpec(f.plane, at);
+        if (feature.plane) planeSpec(feature.plane, at);
 
-        if (f.baseplate) {
-          earlier(f.baseplate, at, "baseplate", ["gridfinity"]);
+        if (feature.baseplate) {
+          earlier(feature.baseplate, at, "baseplate", ["gridfinity"]);
 
-          const bp = seen.get(f.baseplate);
+          const bp = seen.get(feature.baseplate);
 
           if (bp && bp.op === "gridfinity" && bp.kind !== "baseplate") {
-            errors.push(`${at}: "${f.baseplate}" is a bin, not a baseplate`);
+            errors.push(`${at}: "${feature.baseplate}" is a bin, not a baseplate`);
           }
         }
 
-        if (f.kind === "baseplate" && f.baseplate) {
+        if (feature.kind === "baseplate" && feature.baseplate) {
           errors.push(`${at}: a baseplate cannot sit in a baseplate`);
         }
 
-        if (f.kind === "bin" && f.drawer) errors.push(`${at}: drawer is for baseplates`);
+        if (feature.kind === "bin" && feature.drawer) errors.push(`${at}: drawer is for baseplates`);
 
-        if (f.kind === "bin" && (f.outline || f.bed || f.fill !== undefined)) {
+        if (feature.kind === "bin" && (feature.outline || feature.bed || feature.fill !== undefined)) {
           errors.push(`${at}: outline, fill and bed are for baseplates`);
         }
 
-        if (f.outline) earlier(f.outline.sketch, at, "outline", ["sketch"]);
-        if (f.outline && f.drawer) errors.push(`${at}: give a drawer or an outline, not both`);
+        if (feature.outline) earlier(feature.outline.sketch, at, "outline", ["sketch"]);
+        if (feature.outline && feature.drawer) errors.push(`${at}: give a drawer or an outline, not both`);
 
-        if (f.pocket) {
-          if (f.kind !== "bin") errors.push(`${at}: pocket is for bins`);
-          else body(f.pocket.body, at, "pocket body");
+        if (feature.pocket) {
+          if (feature.kind !== "bin") errors.push(`${at}: pocket is for bins`);
+          else body(feature.pocket.body, at, "pocket body");
         }
 
         if (
-          !f.units &&
-          !(f.kind === "bin" && f.pocket) &&
-          !(f.kind === "baseplate" && (f.drawer || f.outline))
+          !feature.units &&
+          !(feature.kind === "bin" && feature.pocket) &&
+          !(feature.kind === "baseplate" && (feature.drawer || feature.outline))
         ) {
           errors.push(`${at}: units are required`);
         }
 
         break;
       case "box":
-        if (f.plane) planeSpec(f.plane, at);
-        if (f.lid === "screw" && f.shape === "rect") errors.push(`${at}: screw lids need a round box`);
+        if (feature.plane) planeSpec(feature.plane, at);
 
-        if (f.lid === "screw" && f.depth !== undefined) {
+        if (feature.lid === "screw" && feature.shape === "rect") {
+          errors.push(`${at}: screw lids need a round box`);
+        }
+
+        if (feature.lid === "screw" && feature.depth !== undefined) {
           errors.push(`${at}: a round box has no depth (width is its diameter)`);
         }
 
         break;
       case "snap_hook":
-        planeSpec(f.plane, at);
-        for (const b of f.catchIn ?? []) body(b, at);
-        for (const b of f.targets ?? []) body(b, at);
+        planeSpec(feature.plane, at);
+        for (const b of feature.catchIn ?? []) body(b, at);
+        for (const b of feature.targets ?? []) body(b, at);
         break;
       case "wall":
-        if (f.plane) planeSpec(f.plane, at);
+        if (feature.plane) planeSpec(feature.plane, at);
 
-        if (f.board) {
-          earlier(f.board, at, "board", ["wall"]);
+        if (feature.board) {
+          earlier(feature.board, at, "board", ["wall"]);
 
-          const bd = seen.get(f.board);
+          const bd = seen.get(feature.board);
 
           if (bd && bd.op === "wall" && bd.kind !== "board") {
-            errors.push(`${at}: "${f.board}" is a holder, not a board`);
+            errors.push(`${at}: "${feature.board}" is a holder, not a board`);
           }
 
-          if (bd && bd.op === "wall" && bd.system !== f.system) {
-            errors.push(`${at}: "${f.board}" is a ${bd.system} board, not ${f.system}`);
+          if (bd && bd.op === "wall" && bd.system !== feature.system) {
+            errors.push(`${at}: "${feature.board}" is a ${bd.system} board, not ${feature.system}`);
           }
         }
 
-        if (f.kind === "board" && f.board) errors.push(`${at}: a board cannot sit on a board`);
+        if (feature.kind === "board" && feature.board) errors.push(`${at}: a board cannot sit on a board`);
 
-        if (f.accessory === "screw" && f.system !== "opengrid") {
+        if (feature.accessory === "screw" && feature.system !== "opengrid") {
           errors.push(`${at}: the screw snap is for openGrid boards`);
         }
 
         break;
       case "label":
-        if (f.plane) planeSpec(f.plane, at);
+        if (feature.plane) planeSpec(feature.plane, at);
 
-        if (!f.text?.trim() && (f.symbol ?? "none") === "none") {
+        if (!feature.text?.trim() && (feature.symbol ?? "none") === "none") {
           errors.push(`${at}: a label needs a text or a symbol`);
         }
 
         break;
       case "rib":
-        earlier(f.sketch, at, "sketch", ["sketch"]);
+        earlier(feature.sketch, at, "sketch", ["sketch"]);
         break;
       case "split":
-        planeSpec(f.plane, at);
-        for (const b of f.bodies) body(b, at);
+        planeSpec(feature.plane, at);
+        for (const b of feature.bodies) body(b, at);
 
-        if (f.connectors && (f.keep ?? "both") !== "both") {
+        if (feature.connectors && (feature.keep ?? "both") !== "both") {
           errors.push(`${at}: connectors need both pieces (keep "both")`);
         }
 
-        if (f.connectors?.points && f.connectors.kind === "dovetail") {
+        if (feature.connectors?.points && feature.connectors.kind === "dovetail") {
           errors.push(`${at}: points are for pins and dowels`);
         }
 
         break;
       case "mesh_convert":
-        body(f.body, at);
+        body(feature.body, at);
         break;
       case "bend":
-        for (const b of f.bodies) body(b, at);
+        for (const b of feature.bodies) body(b, at);
 
-        if (f.mode === "bend" ? f.angle === undefined && f.radius === undefined : f.radius === undefined) {
+        if (
+          feature.mode === "bend"
+            ? feature.angle === undefined && feature.radius === undefined
+            : feature.radius === undefined
+        ) {
           errors.push(
-            `${at}: ${f.mode === "bend" ? "a bend needs an angle or a radius" : `${f.mode} needs a radius`}`,
+            `${at}: ${feature.mode === "bend" ? "a bend needs an angle or a radius" : `${feature.mode} needs a radius`}`,
           );
         }
 
         break;
       case "hole":
-        planeSpec(f.plane, at);
+        planeSpec(feature.plane, at);
 
-        if (f.kind === "simple" ? f.diameter === undefined : !f.size) {
+        if (feature.kind === "simple" ? feature.diameter === undefined : !feature.size) {
           errors.push(
-            `${at}: a ${f.kind} hole needs ${f.kind === "simple" ? "a diameter" : "a size such as M3"}`,
+            `${at}: a ${feature.kind} hole needs ${feature.kind === "simple" ? "a diameter" : "a size such as M3"}`,
           );
         }
 
         break;
       case "boolean":
-        for (const b of [f.target, ...f.tools]) body(b, at);
-        if (f.tools.includes(f.target)) errors.push(`${at}: target cannot also be a tool`);
+        for (const b of [feature.target, ...feature.tools]) body(b, at);
+        if (feature.tools.includes(feature.target)) errors.push(`${at}: target cannot also be a tool`);
 
         break;
       default:
         break;
     }
 
-    seen.set(f.id, f);
+    seen.set(feature.id, feature);
   }
 
   if (doc.variants) {
     const names = new Set<string>();
 
-    for (const v of doc.variants) {
-      if (names.has(v.name)) errors.push(`variant "${v.name}": duplicate name`);
+    for (const variant of doc.variants) {
+      if (names.has(variant.name)) errors.push(`variant "${variant.name}": duplicate name`);
 
-      names.add(v.name);
+      names.add(variant.name);
 
-      for (const p of Object.keys(v.params)) {
-        if (!(p in doc.params)) errors.push(`variant "${v.name}": unknown parameter "${p}"`);
+      for (const p of Object.keys(variant.params)) {
+        if (!(p in doc.params)) errors.push(`variant "${variant.name}": unknown parameter "${p}"`);
       }
     }
   }
 
-  if (doc.variant !== undefined && !doc.variants?.some((v) => v.name === doc.variant)) {
+  if (doc.variant !== undefined && !doc.variants?.some((variant) => variant.name === doc.variant)) {
     errors.push(`variant "${doc.variant}" is in use but not defined`);
   }
 
   if (doc.versions) {
     const names = new Set<string>();
 
-    for (const v of doc.versions) {
-      if (names.has(v.name)) errors.push(`version "${v.name}": duplicate name`);
+    for (const version of doc.versions) {
+      if (names.has(version.name)) errors.push(`version "${version.name}": duplicate name`);
 
-      names.add(v.name);
+      names.add(version.name);
     }
   }
 
@@ -681,15 +709,15 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
 
     const motionIds = new Set<string>();
 
-    for (const m of mech.motions ?? []) {
-      const at = `motion ${m.id}`;
-      if (motionIds.has(m.id)) errors.push(`${at}: duplicate id`);
+    for (const motion of mech.motions ?? []) {
+      const at = `motion ${motion.id}`;
+      if (motionIds.has(motion.id)) errors.push(`${at}: duplicate id`);
 
-      motionIds.add(m.id);
+      motionIds.add(motion.id);
 
-      for (const k of m.keys) {
-        if (k.at > m.duration + 1e-9) {
-          errors.push(`${at}: a moment at ${k.at} s lies after the end (${m.duration} s)`);
+      for (const k of motion.keys) {
+        if (k.at > motion.duration + 1e-9) {
+          errors.push(`${at}: a moment at ${k.at} s lies after the end (${motion.duration} s)`);
         }
 
         // Cylindrical joints move as "<id>.turn" and "<id>.slide".
@@ -699,10 +727,14 @@ export function validateDocument(input: unknown): Validation<MeercadDocument> {
       }
     }
 
-    for (const c of mech.couplings ?? []) {
-      const at = `coupling ${c.id}`;
-      for (const r of [c.driver, c.driven]) if (!jointIds.has(r)) errors.push(`${at}: unknown joint "${r}"`);
-      if (c.driver === c.driven) errors.push(`${at}: a joint cannot drive itself`);
+    for (const coupling of mech.couplings ?? []) {
+      const at = `coupling ${coupling.id}`;
+
+      for (const r of [coupling.driver, coupling.driven]) {
+        if (!jointIds.has(r)) errors.push(`${at}: unknown joint "${r}"`);
+      }
+
+      if (coupling.driver === coupling.driven) errors.push(`${at}: a joint cannot drive itself`);
     }
   }
 

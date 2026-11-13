@@ -13,4 +13,5 @@ export {
 import type { ProfileRef } from "./types.js";
 
 /** Sketch id of a profile, or null for face profiles. */
-export const profileSketch = (p: ProfileRef): string | null => ("sketch" in p ? p.sketch : null);
+export const profileSketch = (profile: ProfileRef): string | null =>
+  "sketch" in profile ? profile.sketch : null;
