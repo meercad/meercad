@@ -2,7 +2,7 @@
  * Values shown at more kinds of steps in the 3D view (InlineValues.tsx), each typed over and checked
  * in the rebuilt part: a bend's angle, a wrap's radius and a spiral's gap; a wall holder's cells; a
  * label's width; a Gridfinity bin's cells and height (a bin round a part has none); and a value that
- * is no expression is refused.
+ * is no expression shows as the step's error.
  */
 import { act, cleanup, fireEvent } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -92,13 +92,18 @@ describe("values at more kinds of steps", () => {
     expect((await bbox("lb1")).max[0] - (await bbox("lb1")).min[0]).toBeCloseTo(40, 3);
   });
 
-  it("a bin's cells and height, none for a bin round a part, and a value that is no expression is refused", async () => {
+  it("a bin's cells and height, none for a bin round a part, and a value that is no expression shows as the step's error", async () => {
     apply({ type: "add_features", features: [
       { id: "gf1", op: "gridfinity", kind: "bin", units: [1, 1], height: 3 } as Feature,
       { id: "gf2", op: "gridfinity", kind: "bin", pocket: { body: "ex1" } } as Feature,
     ] });
     await show("gf1");
     await type(/^↕ 3/, "5");
+    // It is taken as written; the step then says what is wrong with it, and undo brings 5 back.
+    const st = (await rebuildNow()).report.features.find((f) => f.id === "gf1")!;
+    expect(st.status).toBe("error");
+    const { undo } = await import("../store");
+    await act(async () => undo());
     expect(feature<{ height: unknown }>("gf1").height).toBe(5);
     // Height 5 units: 35 mm plus the lip (4.4 mm).
     expect((await bbox("gf1")).max[2]).toBeCloseTo(35 + 4.4, 3);
@@ -106,6 +111,11 @@ describe("values at more kinds of steps", () => {
     expect(texts().filter((x) => /^▦/.test(x))).toEqual([]);
     await show("gf1");
     await type(/^↕ 5/, "nope +");
+    // It is taken as written; the step then says what is wrong with it, and undo brings 5 back.
+    const st = (await rebuildNow()).report.features.find((f) => f.id === "gf1")!;
+    expect(st.status).toBe("error");
+    const { undo } = await import("../store");
+    await act(async () => undo());
     expect(feature<{ height: unknown }>("gf1").height).toBe(5);
   });
 });
