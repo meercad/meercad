@@ -247,6 +247,18 @@ const mul = (a: Mat, b: Mat): Mat => {
   return r;
 };
 
+const XML_ENTITIES: Readonly<Record<string, string>> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" };
+
+/** The text an XML attribute stands for: named entities and character references read back. */
+function unescapeXml(text: string): string {
+  return text.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-z]+);/g, (whole, entity: string) => {
+    if (entity.startsWith("#x")) return String.fromCodePoint(parseInt(entity.slice(2), 16));
+    if (entity.startsWith("#")) return String.fromCodePoint(parseInt(entity.slice(1), 10));
+
+    return XML_ENTITIES[entity] ?? whole;
+  });
+}
+
 const attr = (tag: string, name: string) => new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(tag)?.[1];
 
 interface ModelObject {
@@ -285,7 +297,7 @@ export function read3mf(data: Uint8Array): (TriangleMesh & { name: string })[] {
       const [head, body] = [match[1]!, match[2]!];
       const obj: ModelObject = { components: [] };
       const name = attr(head, "name");
-      if (name) obj.name = name;
+      if (name) obj.name = unescapeXml(name);
 
       if (/<mesh\b/.test(body)) {
         const vertices: number[] = [];

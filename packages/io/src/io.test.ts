@@ -348,6 +348,24 @@ describe("files that are not what they claim to be", () => {
     expect(() => read3mf(new Uint8Array([1, 2, 3, 4]))).toThrow("not a 3MF file (it is not a zip package)");
   });
 
+  it("reads a part name with XML characters back as it was written", () => {
+    const name = `Lid <"A" & 'B'>`;
+    const [mesh] = read3mf(write3mf([{ ...triangle, name }]));
+
+    expect(mesh!.name).toBe(name);
+  });
+
+  it("reads character references and leaves an unknown entity as it stands", () => {
+    const model =
+      '<model unit="millimeter"><resources><object id="1" name="B&#252;gel &#x2460; &copy;"><mesh><vertices>' +
+      '<vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/></vertices>' +
+      '<triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object></resources>' +
+      '<build><item objectid="1"/></build></model>';
+    const [mesh] = read3mf(zipSync({ "3D/3dmodel.model": strToU8(model) }));
+
+    expect(mesh!.name).toBe("Bügel ① &copy;");
+  });
+
   it("escapes XML characters in a part name when writing a 3MF file", () => {
     const files = unzipSync(write3mf([{ ...triangle, name: `Lid <"A" & 'B'>` }]));
     const xml = Object.values(files)
