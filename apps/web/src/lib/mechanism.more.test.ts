@@ -5,10 +5,10 @@
  * closed when its crank turns: the joints still meet, the crank turned exactly as asked, and the
  * rocker's swing is found by driving it to its ends.
  */
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DocOp, Feature, Joint, JointAnchor, SketchEntity } from "@meercad/schema";
 import { apply, newProject, rebuildNow } from "../store";
-import { currentMechanism, currentPoses, jointValues, openForCheck, partDrag, restPose, setJointValue, swingRanges } from "./mechanism";
+import { currentMechanism, currentPoses, jointValues, openForCheck, partDrag, playJoint, restPose, setJointValue, stopPlaying, swingRanges, useMotion } from "./mechanism";
 
 const rect = (p: string, x: number, y: number, w: number, h: number): SketchEntity[] => [
   { id: `${p}1`, type: "point", x, y },
@@ -135,6 +135,33 @@ describe("a four-bar linkage", () => {
     expect(crank![1]).toBeGreaterThan(0);
     // Same linkage, same answer without working it out again.
     expect(swingRanges()).toBe(r);
+  });
+
+  it("plays the crank, turning back where the loop cannot go further", () => {
+    restPose();
+    let frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => (frames.push(cb), frames.length));
+    const caf = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => void (frames = []));
+    try {
+      const t0 = performance.now();
+      playJoint("j1");
+      expect(useMotion.getState().playing).toBe("j1");
+      const seen: number[] = [];
+      for (let k = 1; k <= 200 && frames.length; k++) {
+        const cb = frames.shift()!;
+        cb(t0 + k * 100);
+        seen.push(jointValues()["j1"]!);
+      }
+      // It went up and came back down: the crank cannot turn round.
+      const top = Math.max(...seen);
+      expect(top).toBeGreaterThan(5);
+      expect(seen.at(-1)!).toBeLessThan(top - 1);
+    } finally {
+      stopPlaying();
+      raf.mockRestore();
+      caf.mockRestore();
+      restPose();
+    }
   });
 
   it("drags the coupler and the loop follows", () => {
