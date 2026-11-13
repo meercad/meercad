@@ -27,6 +27,12 @@ describe("wall thickness", () => {
     expect(block!.stats.thin).toBe(0);
   });
 
+  it("a wall of exactly the minimum is not thin", async () => {
+    const m = await measureWalls(box([0, 0, 0], [20, 20, 2.4]), 2.4, { samples: WALL_SAMPLES.fast });
+    expect(m!.stats.thin).toBe(0);
+    expect(m!.spots).toEqual([]);
+  });
+
   it("box measures only the surface inside it", async () => {
     const m = await measureWalls(box([0, 0, 0], [20, 20, 0.6]), 1, { samples: WALL_SAMPLES.fast, box: { min: [0, 0, -1], max: [5, 5, 2] } });
     expect(m!.spots.every((p) => p.at[0] <= 5 && p.at[1] <= 5)).toBe(true);

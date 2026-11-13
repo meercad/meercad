@@ -376,9 +376,12 @@ export function signedDistance(c: MeshCollider, p: V3): number {
 /**
  * How far a ray from `o` along the unit direction `d` travels before it meets the mesh surface
  * (Infinity when it leaves without). Hits closer than `skip` are ignored, so a ray can start on
- * the surface it leaves.
+ * the surface it leaves. With `exit` only faces the ray leaves through count: faces whose winding
+ * normal points along the ray (1) or against it (-1, for meshes wound inside out). A ray that starts
+ * on a facet beside a nearly flush neighbour (a tangent seam, tessellated a little differently) first
+ * passes into that neighbour; this skips such hits.
  */
-export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6): number {
+export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6, exit?: 1 | -1): number {
   const T = c.tri;
   let best = Infinity;
   const inv = [1 / d[0], 1 / d[1], 1 / d[2]];
@@ -413,6 +416,8 @@ export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6): number 
       const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x;
       const det = e1x * px + e1y * py + e1z * pz;
       if (Math.abs(det) < 1e-14) continue;
+      // det = −d·(e1×e2): negative where the ray leaves through the face's front.
+      if (exit !== undefined && exit * det > 0) continue;
       const tx = o[0] - T[q]!, ty = o[1] - T[q + 1]!, tz = o[2] - T[q + 2]!;
       const u = (tx * px + ty * py + tz * pz) / det;
       if (u < 0 || u > 1) continue;
