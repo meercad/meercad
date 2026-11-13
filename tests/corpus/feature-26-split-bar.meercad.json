@@ -1,132 +1,130 @@
 {
- "format": "meercad/1",
- "params": {},
- "features": [
-  {
-   "id": "sk1",
-   "op": "sketch",
-   "plane": {
-    "ref": "origin.XY"
-   },
-   "entities": [
+  "format": "meercad/1",
+  "params": {},
+  "features": [
     {
-     "id": "lp1",
-     "type": "point",
-     "x": 0,
-     "y": 0
+      "id": "sk1",
+      "op": "sketch",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "lp1",
+          "type": "point",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "lp2",
+          "type": "point",
+          "x": 300,
+          "y": 0
+        },
+        {
+          "id": "lp3",
+          "type": "point",
+          "x": 300,
+          "y": 40
+        },
+        {
+          "id": "lp4",
+          "type": "point",
+          "x": 0,
+          "y": 40
+        },
+        {
+          "id": "l1",
+          "type": "line",
+          "p1": "lp1",
+          "p2": "lp2"
+        },
+        {
+          "id": "l2",
+          "type": "line",
+          "p1": "lp2",
+          "p2": "lp3"
+        },
+        {
+          "id": "l3",
+          "type": "line",
+          "p1": "lp3",
+          "p2": "lp4"
+        },
+        {
+          "id": "l4",
+          "type": "line",
+          "p1": "lp4",
+          "p2": "lp1"
+        },
+        {
+          "id": "h1c",
+          "type": "point",
+          "x": 50,
+          "y": 20
+        },
+        {
+          "id": "h1",
+          "type": "circle",
+          "center": "h1c",
+          "radius": 5
+        },
+        {
+          "id": "h2c",
+          "type": "point",
+          "x": 110,
+          "y": 20
+        },
+        {
+          "id": "h2",
+          "type": "circle",
+          "center": "h2c",
+          "radius": 5
+        },
+        {
+          "id": "h3c",
+          "type": "point",
+          "x": 250,
+          "y": 20
+        },
+        {
+          "id": "h3",
+          "type": "circle",
+          "center": "h3c",
+          "radius": 5
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "lp2",
-     "type": "point",
-     "x": 300,
-     "y": 0
+      "id": "ex1",
+      "op": "extrude",
+      "name": "Bar",
+      "profile": {
+        "sketch": "sk1"
+      },
+      "extent": "blind",
+      "distance": 20,
+      "mode": "new_body"
     },
     {
-     "id": "lp3",
-     "type": "point",
-     "x": 300,
-     "y": 40
+      "id": "pl1",
+      "op": "plane",
+      "name": "Middle",
+      "base": {
+        "ref": "origin.YZ"
+      },
+      "offset": 150
     },
     {
-     "id": "lp4",
-     "type": "point",
-     "x": 0,
-     "y": 40
-    },
-    {
-     "id": "l1",
-     "type": "line",
-     "p1": "lp1",
-     "p2": "lp2"
-    },
-    {
-     "id": "l2",
-     "type": "line",
-     "p1": "lp2",
-     "p2": "lp3"
-    },
-    {
-     "id": "l3",
-     "type": "line",
-     "p1": "lp3",
-     "p2": "lp4"
-    },
-    {
-     "id": "l4",
-     "type": "line",
-     "p1": "lp4",
-     "p2": "lp1"
-    },
-    {
-     "id": "h1c",
-     "type": "point",
-     "x": 50,
-     "y": 20
-    },
-    {
-     "id": "h1",
-     "type": "circle",
-     "center": "h1c",
-     "radius": 5
-    },
-    {
-     "id": "h2c",
-     "type": "point",
-     "x": 110,
-     "y": 20
-    },
-    {
-     "id": "h2",
-     "type": "circle",
-     "center": "h2c",
-     "radius": 5
-    },
-    {
-     "id": "h3c",
-     "type": "point",
-     "x": 250,
-     "y": 20
-    },
-    {
-     "id": "h3",
-     "type": "circle",
-     "center": "h3c",
-     "radius": 5
+      "id": "sp1",
+      "op": "split",
+      "name": "Split for printing",
+      "plane": {
+        "ref": "pl1"
+      },
+      "bodies": ["ex1"]
     }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex1",
-   "op": "extrude",
-   "name": "Bar",
-   "profile": {
-    "sketch": "sk1"
-   },
-   "extent": "blind",
-   "distance": 20,
-   "mode": "new_body"
-  },
-  {
-   "id": "pl1",
-   "op": "plane",
-   "name": "Middle",
-   "base": {
-    "ref": "origin.YZ"
-   },
-   "offset": 150
-  },
-  {
-   "id": "sp1",
-   "op": "split",
-   "name": "Split for printing",
-   "plane": {
-    "ref": "pl1"
-   },
-   "bodies": [
-    "ex1"
-   ]
-  }
- ],
- "rollback": null
+  ],
+  "rollback": null
 }

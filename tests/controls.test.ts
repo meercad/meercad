@@ -1,6 +1,15 @@
 /** Control schemes: within one place (the model, a sketch) every key means one thing. */
 import { describe, expect, it } from "vitest";
-import { actionIn, KEY_SCHEMES, keymapFor, matches, MODEL_CONTEXT, MOUSE_SCHEMES, SKETCH_CONTEXT, CONTROL_SCHEMES } from "../apps/web/src/lib/controls";
+import {
+  actionIn,
+  KEY_SCHEMES,
+  keymapFor,
+  matches,
+  MODEL_CONTEXT,
+  MOUSE_SCHEMES,
+  SKETCH_CONTEXT,
+  CONTROL_SCHEMES,
+} from "../apps/web/src/lib/controls";
 
 const key = (code: string, key: string, mods: { shift?: boolean; mod?: boolean; alt?: boolean } = {}) => ({
   code,
@@ -12,19 +21,28 @@ const key = (code: string, key: string, mods: { shift?: boolean; mod?: boolean; 
 });
 
 describe("control schemes", () => {
-  for (const s of KEY_SCHEMES)
-    for (const [where, ctx] of [["model", MODEL_CONTEXT], ["sketch", SKETCH_CONTEXT]] as const)
+  for (const s of KEY_SCHEMES) {
+    for (const [where, ctx] of [
+      ["model", MODEL_CONTEXT],
+      ["sketch", SKETCH_CONTEXT],
+    ] as const) {
       it(`${s.label}: no key does two things in the ${where}`, () => {
         const seen = new Map<string, string>();
         const clash: string[] = [];
-        for (const a of ctx)
+
+        for (const a of ctx) {
           for (const b of s.map[a]) {
             const before = seen.get(b);
             if (before) clash.push(`${b}: ${before} / ${a}`);
+
             seen.set(b, a);
           }
+        }
+
         expect(clash).toEqual([]);
       });
+    }
+  }
 
   it("every whole scheme has its keys and its mouse", () => {
     for (const c of CONTROL_SCHEMES) {
@@ -50,6 +68,7 @@ describe("control schemes", () => {
     expect(actionIn(map, key("KeyG", "g"), MODEL_CONTEXT)).toBe("transform");
     expect(actionIn(map, key("KeyA", "A", { shift: true }), SKETCH_CONTEXT)).toBe("sketch.line");
     expect(actionIn(map, key("Enter", "Enter"), SKETCH_CONTEXT)).toBe("confirm");
+
     const mouse = MOUSE_SCHEMES.find((m) => m.id === "plasticity")!;
     expect(mouse.nav.pan).toContainEqual({ button: "right" });
     expect(mouse.nav.orbit).toContainEqual({ button: "middle" });

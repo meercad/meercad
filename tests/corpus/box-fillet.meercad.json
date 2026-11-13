@@ -26,8 +26,20 @@
         { "id": "c7", "type": "length", "line": "l2", "value": "d" }
       ]
     },
-    { "id": "ex1", "op": "extrude", "profile": { "sketch": "sk1" }, "extent": "blind", "distance": "h", "mode": "new_body" },
-    { "id": "fi1", "op": "fillet", "edges": { "edge": ["ex1.end_cap", "ex1.side[sk1.l3]"] }, "radius": "wall" }
+    {
+      "id": "ex1",
+      "op": "extrude",
+      "profile": { "sketch": "sk1" },
+      "extent": "blind",
+      "distance": "h",
+      "mode": "new_body"
+    },
+    {
+      "id": "fi1",
+      "op": "fillet",
+      "edges": { "edge": ["ex1.end_cap", "ex1.side[sk1.l3]"] },
+      "radius": "wall"
+    }
   ],
   "rollback": null
 }

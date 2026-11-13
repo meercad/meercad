@@ -15,15 +15,24 @@ const root = join(import.meta.dirname, "..");
 // React from the app (the tests package has none of its own); typed just as far as used here.
 const fromWeb = createRequire(join(root, "apps/web/package.json"));
 type Root = { render(node: unknown): void; unmount(): void };
-const React = (await import(fromWeb.resolve("react"))) as { createElement(type: unknown, props: unknown): unknown; act(fn: () => unknown): Promise<void> };
-const { createRoot } = (await import(fromWeb.resolve("react-dom/client"))) as { createRoot(el: Element): Root };
+
+const React = (await import(fromWeb.resolve("react"))) as {
+  createElement(type: unknown, props: unknown): unknown;
+  act(fn: () => unknown): Promise<void>;
+};
+const { createRoot } = (await import(fromWeb.resolve("react-dom/client"))) as {
+  createRoot(el: Element): Root;
+};
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** happy-dom lays nothing out: the text box gets the sizes a window would give it. */
 const box = { scrollHeight: 2000, clientHeight: 300, scrollTop: 0 };
 const proto = (globalThis as unknown as { HTMLElement: { prototype: object } }).HTMLElement.prototype;
-const saved = (["scrollHeight", "clientHeight", "scrollTop"] as const).map((k) => [k, Object.getOwnPropertyDescriptor(proto, k)] as const);
-for (const k of ["scrollHeight", "clientHeight", "scrollTop"] as const)
+const saved = (["scrollHeight", "clientHeight", "scrollTop"] as const).map(
+  (k) => [k, Object.getOwnPropertyDescriptor(proto, k)] as const,
+);
+
+for (const k of ["scrollHeight", "clientHeight", "scrollTop"] as const) {
   Object.defineProperty(proto, k, {
     configurable: true,
     get(this: Element) {
@@ -33,6 +42,7 @@ for (const k of ["scrollHeight", "clientHeight", "scrollTop"] as const)
       if (this.classList.contains("terms-text") && k === "scrollTop") box.scrollTop = v;
     },
   });
+}
 
 /** ResizeObserver as a window has it: the test says when the box changes size. */
 let resized: (() => void)[] = [];
@@ -41,6 +51,7 @@ class FakeResizeObserver {
   observe() {
     resized.push(this.fn);
   }
+
   disconnect() {
     resized = resized.filter((f) => f !== this.fn);
   }
@@ -63,20 +74,36 @@ async function mount(env: Env = {}) {
   vi.resetModules();
   localStorage.clear();
   if (env.lang) localStorage.setItem("meercad.lang", env.lang);
-  const shared = { initial: {} as Record<string, unknown>, set: vi.fn((_k: string, _v: unknown) => Promise.resolve()) };
+
+  const shared = {
+    initial: {} as Record<string, unknown>,
+    set: vi.fn((_k: string, _v: unknown) => Promise.resolve()),
+  };
   const desktop = env.desktop
-    ? { shared, info: vi.fn(async () => (env.desktop!.infoFails ? Promise.reject(new Error("no info")) : { version: env.desktop!.version ?? "9.9.9" })) }
+    ? {
+        shared,
+        info: vi.fn(async () =>
+          env.desktop!.infoFails
+            ? Promise.reject(new Error("no info"))
+            : { version: env.desktop!.version ?? "9.9.9" },
+        ),
+      }
     : undefined;
   vi.doMock("../apps/web/src/lib/persistence", () => ({ desktop }));
   vi.doMock("../apps/web/src/lib/native", () => ({
     nativeApp: env.native?.app ?? false,
-    appVersion: async () => (env.native?.fails ? Promise.reject(new Error("no plugin")) : (env.native?.version ?? "")),
+    appVersion: async () =>
+      env.native?.fails ? Promise.reject(new Error("no plugin")) : (env.native?.version ?? ""),
   }));
   // The logo pulls in the whole app (store, kernel); the screen only shows it.
   vi.doMock("../apps/web/src/components/TopBar", () => ({ Logo: () => null }));
   vi.stubGlobal("ResizeObserver", env.resizeObserver === false ? undefined : FakeResizeObserver);
+
   // A .tsx file: loaded by path, since this package's type check has no JSX (vitest compiles it).
-  const { TermsGate, termsText } = (await import(GATE)) as { TermsGate: (p: { onAccept: () => void }) => unknown; termsText(): string };
+  const { TermsGate, termsText } = (await import(GATE)) as {
+    TermsGate: (p: { onAccept: () => void }) => unknown;
+    termsText(): string;
+  };
   const { termsAccepted } = await import("../apps/web/src/lib/termsStore");
   const onAccept = vi.fn();
   // Behind the screen: the app, with a key handler of its own.
@@ -91,6 +118,7 @@ async function mount(env: Env = {}) {
     reactRoot = createRoot(rootEl);
     reactRoot.render(React.createElement(TermsGate, { onAccept }));
   });
+
   return { onAccept, shared, desktop, termsText, termsAccepted, appKeys, behind };
 }
 
@@ -100,17 +128,21 @@ const acceptButton = () => q<HTMLButtonElement>("button.terms-accept");
 const textBox = () => q(".terms-text");
 const act = (fn: () => unknown) => React.act(fn);
 const click = (el: Element) => act(() => (el as HTMLElement).click());
+
 const key = (target: EventTarget, init: KeyboardEventInit, type = "keydown") => {
   const e = new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init });
   target.dispatchEvent(e);
+
   return e;
 };
+
 async function scrollToEnd() {
   await act(() => {
     box.scrollTop = box.scrollHeight - box.clientHeight;
     textBox().dispatchEvent(new Event("scroll"));
   });
 }
+
 async function tickAll() {
   for (const c of checkboxes()) if (!c.checked) await click(c);
 }
@@ -121,6 +153,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
   if (reactRoot) await act(() => reactRoot!.unmount());
+
   reactRoot = null;
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
@@ -131,6 +164,7 @@ afterEach(async () => {
 describe("terms of use screen", () => {
   it("is a modal dialog with the text, one box per point, one button and no way to close it", async () => {
     await mount();
+
     const dialog = q("[role=dialog]");
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(q("#terms-title").textContent).toBe("Terms of use");
@@ -138,7 +172,9 @@ describe("terms of use screen", () => {
     expect(checkboxes()).toHaveLength(TERMS_POINTS.length);
     for (const p of TERMS_POINTS) expect(rootEl.textContent).toContain(p.text);
     // No X, no Cancel, no Quit: the only button accepts.
-    expect([...rootEl.querySelectorAll("button")].map((b) => b.className)).toEqual(["btn primary terms-accept"]);
+    expect([...rootEl.querySelectorAll("button")].map((b) => b.className)).toEqual([
+      "btn primary terms-accept",
+    ]);
     expect(rootEl.querySelector("[aria-label=Close], .close, .x")).toBeNull();
   });
 
@@ -191,10 +227,12 @@ describe("terms of use screen", () => {
   it("enables Accept only with every box ticked; one missing box disables it", async () => {
     await mount();
     await scrollToEnd();
+
     for (let skip = 0; skip < TERMS_POINTS.length; skip++) {
       for (const [i, c] of checkboxes().entries()) if (c.checked !== (i !== skip)) await click(c);
       expect(acceptButton().disabled, `without ${TERMS_POINTS[skip]!.id}`).toBe(true);
     }
+
     await tickAll();
     expect(acceptButton().disabled).toBe(false);
     // Unticking one again.
@@ -230,11 +268,13 @@ describe("terms of use screen", () => {
     // Keys inside the screen never reach the app's own handlers.
     key(textBox(), { key: "z", metaKey: true });
     expect(appKeys).toEqual([]);
+
     // Keys aimed at the app behind (focus outside the screen) are swallowed, also when let go.
     for (const type of ["keydown", "keyup"]) {
       const e = key(behind, { key: "Delete" }, type);
       expect(e.defaultPrevented, type).toBe(true);
     }
+
     expect(appKeys).toEqual([]);
   });
 
@@ -244,18 +284,22 @@ describe("terms of use screen", () => {
     behind.focus();
     key(behind, { key: "Tab" });
     expect(document.activeElement).toBe(textBox());
+
     // Shift+Tab on the first stop goes to the last (the text box while the rest is locked).
     const back = key(textBox(), { key: "Tab", shiftKey: true });
     expect(back.defaultPrevented).toBe(true);
     await scrollToEnd();
     await tickAll();
+
     const last = acceptButton();
     textBox().focus();
     key(textBox(), { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(last);
+
     const fwd = key(last, { key: "Tab" });
     expect(fwd.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(textBox());
+
     // In between, Tab is left to the browser.
     const box1 = checkboxes()[0]!;
     box1.focus();
@@ -274,9 +318,15 @@ describe("terms of use screen", () => {
     await act(() => new Promise((r) => setTimeout(r, 0)));
     expect(onAccept).toHaveBeenCalledTimes(1);
     expect(termsAccepted()).toBe(true);
+
     const [k, record] = shared.set.mock.calls[0]!;
     expect(k).toBe(TERMS_KEY);
-    expect(record).toMatchObject({ version: TERMS_VERSION, appVersion: "1.7.0", lang: "en", points: TERMS_POINTS.map((p) => p.id) });
+    expect(record).toMatchObject({
+      version: TERMS_VERSION,
+      appVersion: "1.7.0",
+      lang: "en",
+      points: TERMS_POINTS.map((p) => p.id),
+    });
     expect(JSON.parse(localStorage.getItem(`meercad.${TERMS_KEY}`)!)).toEqual(record);
   });
 
@@ -287,11 +337,18 @@ describe("terms of use screen", () => {
     await click(acceptButton());
     await act(() => new Promise((r) => setTimeout(r, 0)));
     expect(onAccept).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(localStorage.getItem(`meercad.${TERMS_KEY}`)!)).toMatchObject({ version: TERMS_VERSION, appVersion: "1.7.0 (42)" });
+    expect(JSON.parse(localStorage.getItem(`meercad.${TERMS_KEY}`)!)).toMatchObject({
+      version: TERMS_VERSION,
+      appVersion: "1.7.0 (42)",
+    });
   });
 
   it("still accepts when the app's version cannot be read", async () => {
-    for (const env of [{ desktop: { infoFails: true } }, { native: { app: true, fails: true } }, { native: { app: false } }] as Env[]) {
+    for (const env of [
+      { desktop: { infoFails: true } },
+      { native: { app: true, fails: true } },
+      { native: { app: false } },
+    ] as Env[]) {
       const { onAccept } = await mount(env);
       await scrollToEnd();
       await tickAll();
@@ -322,6 +379,7 @@ describe("terms of use screen", () => {
     const { appKeys, behind } = await mount();
     await act(() => reactRoot!.unmount());
     reactRoot = null;
+
     const e = key(behind, { key: "Delete" });
     expect(e.defaultPrevented).toBe(false);
     expect(appKeys).toEqual(["Delete"]);
@@ -330,6 +388,8 @@ describe("terms of use screen", () => {
 
 // Leave HTMLElement as it was.
 afterAll(() => {
-  for (const [k, d] of saved) if (d) Object.defineProperty(proto, k, d);
-  else delete (proto as Record<string, unknown>)[k];
+  for (const [k, d] of saved) {
+    if (d) Object.defineProperty(proto, k, d);
+    else delete (proto as Record<string, unknown>)[k];
+  }
 });

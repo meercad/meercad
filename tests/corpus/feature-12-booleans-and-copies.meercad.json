@@ -1,140 +1,132 @@
 {
- "format": "meercad/1",
- "params": {},
- "features": [
-  {
-   "id": "sk1",
-   "op": "sketch",
-   "plane": {
-    "ref": "origin.XY"
-   },
-   "entities": [
+  "format": "meercad/1",
+  "params": {},
+  "features": [
     {
-     "id": "lp1",
-     "type": "point",
-     "x": -15,
-     "y": -15
+      "id": "sk1",
+      "op": "sketch",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "lp1",
+          "type": "point",
+          "x": -15,
+          "y": -15
+        },
+        {
+          "id": "lp2",
+          "type": "point",
+          "x": 15,
+          "y": -15
+        },
+        {
+          "id": "lp3",
+          "type": "point",
+          "x": 15,
+          "y": 15
+        },
+        {
+          "id": "lp4",
+          "type": "point",
+          "x": -15,
+          "y": 15
+        },
+        {
+          "id": "l1",
+          "type": "line",
+          "p1": "lp1",
+          "p2": "lp2"
+        },
+        {
+          "id": "l2",
+          "type": "line",
+          "p1": "lp2",
+          "p2": "lp3"
+        },
+        {
+          "id": "l3",
+          "type": "line",
+          "p1": "lp3",
+          "p2": "lp4"
+        },
+        {
+          "id": "l4",
+          "type": "line",
+          "p1": "lp4",
+          "p2": "lp1"
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "lp2",
-     "type": "point",
-     "x": 15,
-     "y": -15
+      "id": "ex1",
+      "op": "extrude",
+      "name": "Cube",
+      "profile": {
+        "sketch": "sk1"
+      },
+      "extent": "blind",
+      "distance": 30,
+      "mode": "new_body"
     },
     {
-     "id": "lp3",
-     "type": "point",
-     "x": 15,
-     "y": 15
+      "id": "pl1",
+      "op": "plane",
+      "name": "Below",
+      "base": {
+        "ref": "origin.XY"
+      },
+      "offset": -10
     },
     {
-     "id": "lp4",
-     "type": "point",
-     "x": -15,
-     "y": 15
+      "id": "sk2",
+      "op": "sketch",
+      "plane": {
+        "ref": "pl1"
+      },
+      "entities": [
+        {
+          "id": "cc",
+          "type": "point",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "c",
+          "type": "circle",
+          "center": "cc",
+          "radius": 8
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "l1",
-     "type": "line",
-     "p1": "lp1",
-     "p2": "lp2"
+      "id": "ex2",
+      "op": "extrude",
+      "name": "Pin",
+      "profile": {
+        "sketch": "sk2"
+      },
+      "extent": "blind",
+      "distance": 50,
+      "mode": "new_body"
     },
     {
-     "id": "l2",
-     "type": "line",
-     "p1": "lp2",
-     "p2": "lp3"
+      "id": "mv1",
+      "op": "transform",
+      "bodies": ["ex1"],
+      "translate": [45, 0, 0],
+      "copy": true
     },
     {
-     "id": "l3",
-     "type": "line",
-     "p1": "lp3",
-     "p2": "lp4"
-    },
-    {
-     "id": "l4",
-     "type": "line",
-     "p1": "lp4",
-     "p2": "lp1"
+      "id": "bo1",
+      "op": "boolean",
+      "operation": "subtract",
+      "target": "ex1",
+      "tools": ["ex2"]
     }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex1",
-   "op": "extrude",
-   "name": "Cube",
-   "profile": {
-    "sketch": "sk1"
-   },
-   "extent": "blind",
-   "distance": 30,
-   "mode": "new_body"
-  },
-  {
-   "id": "pl1",
-   "op": "plane",
-   "name": "Below",
-   "base": {
-    "ref": "origin.XY"
-   },
-   "offset": -10
-  },
-  {
-   "id": "sk2",
-   "op": "sketch",
-   "plane": {
-    "ref": "pl1"
-   },
-   "entities": [
-    {
-     "id": "cc",
-     "type": "point",
-     "x": 0,
-     "y": 0
-    },
-    {
-     "id": "c",
-     "type": "circle",
-     "center": "cc",
-     "radius": 8
-    }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex2",
-   "op": "extrude",
-   "name": "Pin",
-   "profile": {
-    "sketch": "sk2"
-   },
-   "extent": "blind",
-   "distance": 50,
-   "mode": "new_body"
-  },
-  {
-   "id": "mv1",
-   "op": "transform",
-   "bodies": [
-    "ex1"
-   ],
-   "translate": [
-    45,
-    0,
-    0
-   ],
-   "copy": true
-  },
-  {
-   "id": "bo1",
-   "op": "boolean",
-   "operation": "subtract",
-   "target": "ex1",
-   "tools": [
-    "ex2"
-   ]
-  }
- ],
- "rollback": null
+  ],
+  "rollback": null
 }

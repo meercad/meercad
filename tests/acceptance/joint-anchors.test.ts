@@ -15,9 +15,16 @@ const parts: Feature[] = [
 ];
 
 async function frames(anchors: JointAnchor[]) {
-  const joints: Joint[] = anchors.map((anchor, i) => ({ id: `j${i}`, type: "revolute", a: "exc", b: "ground", anchor }));
+  const joints: Joint[] = anchors.map((anchor, i) => ({
+    id: `j${i}`,
+    type: "revolute",
+    a: "exc",
+    b: "ground",
+    anchor,
+  }));
   const d: MeercadDocument = { ...doc(parts), mechanism: { joints } };
   const { report } = (await newSession()).rebuild(d);
+
   return report.joints;
 }
 
@@ -25,8 +32,16 @@ const near = (a: number[], b: number[]) => a.forEach((v, i) => expect(v).toBeClo
 
 describe("joint anchors", () => {
   it("takes the origin axes", async () => {
-    const f = await frames([{ axis: { ref: "origin.X" } }, { axis: { ref: "origin.Y" } }, { axis: { ref: "origin.Z" } }]);
-    expect(f.map((x) => x.axis)).toEqual([[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+    const f = await frames([
+      { axis: { ref: "origin.X" } },
+      { axis: { ref: "origin.Y" } },
+      { axis: { ref: "origin.Z" } },
+    ]);
+    expect(f.map((x) => x.axis)).toEqual([
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ]);
     expect(f.every((x) => !x.error && x.origin.every((v) => v === 0))).toBe(true);
   });
 
@@ -38,7 +53,10 @@ describe("joint anchors", () => {
   });
 
   it("takes a round edge's axis through its centre, and a straight edge through its start", async () => {
-    const [round, straight] = await frames([{ edge: { edge: ["exc.end_cap", "exc.side[skc.c]"] } }, { edge: { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] } }]);
+    const [round, straight] = await frames([
+      { edge: { edge: ["exc.end_cap", "exc.side[skc.c]"] } },
+      { edge: { edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] } },
+    ]);
     expect(round!.error).toBeUndefined();
     near(round!.origin, [100, 0, 10]);
     near(round!.axis.map(Math.abs), [0, 0, 1]);

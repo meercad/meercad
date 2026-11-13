@@ -21,29 +21,46 @@ function gradientPng(w: number, h: number): Buffer {
   const crcTable = Array.from({ length: 256 }, (_, n) => {
     let c = n;
     for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+
     return c >>> 0;
   });
+
   const crc = (b: Buffer) => {
     let c = 0xffffffff;
     for (const x of b) c = crcTable[(c ^ x) & 0xff]! ^ (c >>> 8);
+
     return (c ^ 0xffffffff) >>> 0;
   };
+
   const chunk = (type: string, data: Buffer) => {
     const len = Buffer.alloc(4);
     len.writeUInt32BE(data.length);
+
     const td = Buffer.concat([Buffer.from(type), data]);
     const c = Buffer.alloc(4);
     c.writeUInt32BE(crc(td));
+
     return Buffer.concat([len, td, c]);
   };
+
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(w, 0);
   ihdr.writeUInt32BE(h, 4);
   ihdr[8] = 8; // bit depth
   ihdr[9] = 0; // grey
+
   const rows = Buffer.alloc((w + 1) * h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) rows[y * (w + 1) + 1 + x] = Math.round((255 * x) / (w - 1));
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) rows[y * (w + 1) + 1 + x] = Math.round((255 * x) / (w - 1));
+  }
+
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 
 describe("sketch tools and pictures", () => {
@@ -59,7 +76,10 @@ describe("sketch tools and pictures", () => {
     await ui.closePart();
   });
 
-  const curves = () => ui.state<Curve[]>("s.output?.report.sketches.find((k) => k.id === s.sketchId)?.curves.filter((c) => !c.construction).map((c) => ({ id: c.id, kind: c.kind, a: c.a, b: c.b, center: c.center, radius: c.radius })) ?? []");
+  const curves = () =>
+    ui.state<Curve[]>(
+      "s.output?.report.sketches.find((k) => k.id === s.sketchId)?.curves.filter((c) => !c.construction).map((c) => ({ id: c.id, kind: c.kind, a: c.a, b: c.b, center: c.center, radius: c.radius })) ?? []",
+    );
 
   it("trim: the part of a line outside a rectangle goes, the line now ends on its edge", async () => {
     await ui.newPart();
@@ -68,6 +88,7 @@ describe("sketch tools and pictures", () => {
     await ui.rect([0, 0], 40, 30);
     await ui.line([20, -10], [20, 40]);
     await ui.settle();
+
     const before = (await curves()).filter((c) => c.kind === "line");
     expect(before).toHaveLength(5);
     await ui.tool("Trim");
@@ -75,9 +96,11 @@ describe("sketch tools and pictures", () => {
     await sleep(400);
     await ui.key("Escape");
     await ui.settle();
+
     const after = (await curves()).filter((c) => c.kind === "line");
     const vertical = after.filter((c) => Math.abs(c.a![0]! - 20) < 1e-6 && Math.abs(c.b![0]! - 20) < 1e-6);
     expect(vertical).toHaveLength(1);
+
     const ys = [vertical[0]!.a![1]!, vertical[0]!.b![1]!].sort((p, q) => p - q);
     expect(ys[0]).toBeCloseTo(-10, 6);
     expect(ys[1]).toBeCloseTo(30, 6);
@@ -94,6 +117,7 @@ describe("sketch tools and pictures", () => {
     await ui.clickSketch([40, 30]);
     await ui.key("Escape");
     await ui.settle();
+
     const arc = (await curves()).find((c) => c.kind === "arc");
     expect(arc, "the rounded corner").toBeTruthy();
     expect(arc!.radius).toBeCloseTo(5, 6);
@@ -104,7 +128,10 @@ describe("sketch tools and pictures", () => {
     await ui.feature("Create", "Extrude");
     await ui.field("Distance", 10);
     await ui.accept();
-    expect(await ui.state<number>("s.output.report.bodies[0].volume")).toBeCloseTo((1200 - 25 * (1 - Math.PI / 4)) * 10, 3);
+    expect(await ui.state<number>("s.output.report.bodies[0].volume")).toBeCloseTo(
+      (1200 - 25 * (1 - Math.PI / 4)) * 10,
+      3,
+    );
   });
 
   it("lithophane: a picture picked in the file dialog becomes a plate of the picture's proportions", async () => {
@@ -117,7 +144,12 @@ describe("sketch tools and pictures", () => {
     await ui.until("the picture in the step", "!!s.dialog?.feature.image?.pixels", 20000);
     await ui.accept();
     await ui.settle();
-    expect(await ui.state<string[]>("(s.output?.report.features ?? []).filter((f) => f.status === 'error').map((f) => f.message)")).toEqual([]);
+    expect(
+      await ui.state<string[]>(
+        "(s.output?.report.features ?? []).filter((f) => f.status === 'error').map((f) => f.message)",
+      ),
+    ).toEqual([]);
+
     const b = await ui.state<{ min: number[]; max: number[] }>("s.output.report.bodies[0].bbox");
     const size = b.max.map((v, i) => v - b.min[i]!);
     const [w, h] = [Math.max(size[0]!, size[1]!), Math.min(size[0]!, size[1]!)];

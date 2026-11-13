@@ -21,11 +21,15 @@ describe("previews next to the open design", () => {
     expect(p.meshes.find((m) => m.bodyId === "ex1")).toBe(before.meshes.find((m) => m.bodyId === "ex1"));
     // The open design is still whole: its state stays and the next rebuild comes from the cache.
     expect(s.state!.bodies.has("ex2")).toBe(true);
+
     const again = s.rebuild(open);
     expect(again.report.firstRecomputed).toBe(-1);
     expect(again.report.bodies.find((b) => b.id === "ex2")!.volume).toBeCloseTo(10 * 10 * 10, 3);
     // And a preview of something else entirely works too (thumbnails of other projects).
-    expect(s.preview(doc(design(5, 4))).report.bodies.find((b) => b.id === "ex2")!.volume).toBeCloseTo(4 * 10 * 5, 3);
+    expect(s.preview(doc(design(5, 4))).report.bodies.find((b) => b.id === "ex2")!.volume).toBeCloseTo(
+      4 * 10 * 5,
+      3,
+    );
     expect(s.rebuild(open).report.firstRecomputed).toBe(-1);
   });
 });

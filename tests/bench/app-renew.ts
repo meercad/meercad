@@ -8,16 +8,26 @@ import { sleep } from "../e2e/cdp.js";
 
 const [file, ...edits] = process.argv.slice(2);
 const app = await startApp();
+
 try {
   copyFileSync(file!, join(app.dir, "projects", "Bench.meercad"));
+
   const { page } = app;
   // Renew as soon as the kernel holds more than 100 MB: after the first build.
   await page.eval(`localStorage.setItem("meercad.kernel.renew", "100")`);
   await page.eval("location.reload()");
   await sleep(4000);
-  for (let i = 0; i < 100 && !(await page.eval<boolean>("!!window.meercadTest").catch(() => false)); i++) await sleep(250);
+
+  for (let i = 0; i < 100 && !(await page.eval<boolean>("!!window.meercadTest").catch(() => false)); i++) {
+    await sleep(250);
+  }
+
   await page.eval("meercadTest.store.refreshProjects()");
-  const id = await page.eval<string>("meercadTest.app.getState().projects.find((p) => p.name === 'Bench').id");
+
+  const id = await page.eval<string>(
+    "meercadTest.app.getState().projects.find((p) => p.name === 'Bench').id",
+  );
+
   const call = async (label: string, method: string, params: object = {}) => {
     const r = await page.eval<{ ms: number; note: string }>(`(async () => {
       const t0 = performance.now();
@@ -28,10 +38,14 @@ try {
         return { ms: performance.now() - t0, note: String(e) };
       }
     })()`);
-    const state = await page.eval<string>(`(() => { const k = meercadTest.store.kernel; const o = meercadTest.app.getState().output; return "renewed " + k.renewed + "×, " + o.meshes.length + " meshes shown, " + o.meshes.reduce((n, m) => n + m.indices.length / 3, 0) + " triangles"; })()`);
+    const state = await page.eval<string>(
+      `(() => { const k = meercadTest.store.kernel; const o = meercadTest.app.getState().output; return "renewed " + k.renewed + "×, " + o.meshes.length + " meshes shown, " + o.meshes.reduce((n, m) => n + m.indices.length / 3, 0) + " triangles"; })()`,
+    );
     console.log(`${label.padEnd(34)} ${(r.ms / 1000).toFixed(1).padStart(7)} s  ${r.note}; ${state}`);
   };
+
   await call("open_project", "open_project", { id });
+
   for (let round = 0; round < 2; round++) {
     for (const f of edits) {
       const patch = await page.eval<Record<string, unknown>>(`(() => {
@@ -45,14 +59,18 @@ try {
       })()`);
       await call(`apply_ops edit ${f}`, "apply_ops", { ops: [{ type: "edit_feature", id: f, patch }] });
     }
+
     // Time for the fresh kernel to build the design and take over.
     console.log("waiting 45 s");
     await sleep(45000);
   }
+
   await call("render_view", "render_view", { width: 400, height: 300 });
+
   const errors = page.takeErrors();
   console.log(errors.length ? `page errors: ${errors.slice(0, 8).join(" | ")}` : "no page errors");
 } finally {
   await app.stop();
 }
+
 process.exit(0);

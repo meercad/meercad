@@ -15,7 +15,11 @@ describe("packs a design uses", () => {
     const doc = {
       ...emptyDocument(),
       features: [box, gear, { id: "sp1", op: "spring" } as unknown as Feature],
-      mechanism: { joints: [{ id: "j1", type: "revolute", a: "ge1", b: "ground", anchor: { axis: { ref: "origin.Z" } } }] },
+      mechanism: {
+        joints: [
+          { id: "j1", type: "revolute", a: "ge1", b: "ground", anchor: { axis: { ref: "origin.Z" } } },
+        ],
+      },
       variants: [{ name: "Small", params: {} }],
       versions: [{ name: "v1", at: 0, state: { params: {}, features: [], rollback: null } }],
       references: [{ id: "rf1", name: "Park", format: "glb", data: "" }],
@@ -56,7 +60,9 @@ describe("the shared file", () => {
 
   it("is a valid meerCAD file either way", () => {
     expect(validateDocument(JSON.parse(JSON.stringify(sharedDoc(withVersions)))).ok).toBe(true);
-    expect(validateDocument(JSON.parse(JSON.stringify(sharedDoc(withVersions, { versions: true })))).ok).toBe(true);
+    expect(validateDocument(JSON.parse(JSON.stringify(sharedDoc(withVersions, { versions: true })))).ok).toBe(
+      true,
+    );
   });
 
   it("leaves a design without versions as it is", () => {

@@ -3,9 +3,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyDocument, type MeercadDocument } from "@meercad/schema";
 import { describe, expect, it, vi } from "vitest";
-import { BIG_STEPS, backgroundBuildAllowed, kernelKindFor, blankPixels, lookSince, needsPicture, pictureRunner, viewIsCurrent } from "../apps/web/src/lib/pictureState";
+import {
+  BIG_STEPS,
+  backgroundBuildAllowed,
+  kernelKindFor,
+  blankPixels,
+  lookSince,
+  needsPicture,
+  pictureRunner,
+  viewIsCurrent,
+} from "../apps/web/src/lib/pictureState";
 
 vi.mock("electron", () => ({ app: { getPath: () => tmpdir() } }));
+
 const { adoptSiblingData } = await import("../apps/desktop/src/legacy");
 
 /**
@@ -43,8 +53,13 @@ describe("project pictures", () => {
     const first = lookSince({ version: 1, since: 10 }, 2, 3000);
     expect(first).toEqual({ version: 2, since: 3000 });
     expect(lookSince(null, 2, 3000)).toEqual({ version: 2, since: 3000 });
-    expect(needsPicture({ updatedAt: 1000, thumbnail: "data:", thumbnailAt: 1000.5 }, false, first.since)).toBe(true);
-    expect(needsPicture({ updatedAt: 1000, thumbnail: "data:", thumbnailAt: 3500 }, false, first.since)).toBe(false);
+    expect(
+      needsPicture({ updatedAt: 1000, thumbnail: "data:", thumbnailAt: 1000.5 }, false, first.since),
+    ).toBe(true);
+    expect(needsPicture({ updatedAt: 1000, thumbnail: "data:", thumbnailAt: 3500 }, false, first.since)).toBe(
+      false,
+    );
+
     // Later starts keep the first time, so the new pictures stay.
     const stored = { version: 2, since: 3000 };
     expect(lookSince(stored, 2, 9000)).toBe(stored);
@@ -59,6 +74,7 @@ describe("project pictures", () => {
   it("that show nothing are made again, whatever their date", () => {
     const empty = new Uint8ClampedArray(96 * 72 * 4);
     expect(blankPixels(empty)).toBe(true);
+
     const drawn = empty.slice();
     drawn[(40 * 96 + 50) * 4 + 3] = 255;
     expect(blankPixels(drawn)).toBe(false);
@@ -71,10 +87,13 @@ describe("project pictures", () => {
     const sibling = join(root, "meerCAD WIP");
     mkdirSync(join(sibling, "thumbnails"), { recursive: true });
     writeFileSync(join(sibling, "settings.json"), "{}");
+
     const picture = join(sibling, "thumbnails", "a.png");
     writeFileSync(picture, "png");
+
     const then = new Date("2026-11-09T09:05:33Z");
     utimesSync(picture, then, then);
+
     const rc = join(root, "meerCAD RC");
     expect(await adoptSiblingData(rc, [sibling])).toBe(sibling);
     expect(Math.abs(statSync(join(rc, "thumbnails", "a.png")).mtimeMs - then.getTime())).toBeLessThan(1000);
@@ -96,12 +115,15 @@ describe("project pictures", () => {
       examples: () => {
         log.push(`examples ${round}`);
         if (round > 1) return Promise.resolve();
+
         examplesStarted();
+
         return new Promise<void>((r) => (finishExamples = r));
       },
     });
     const first = run();
     await started;
+
     // A project arrives while the slow examples are still being pictured.
     const second = run();
     finishExamples();
@@ -115,7 +137,9 @@ describe("project pictures", () => {
    * grew past what the system allows it.
    */
   it("on the iPad and iPhone are built in the background only for small designs and with no project open", () => {
-    const steps = (n: number) => ({ features: Array.from({ length: n }, () => ({}) as MeercadDocument["features"][number]) });
+    const steps = (n: number) => ({
+      features: Array.from({ length: n }, () => ({}) as MeercadDocument["features"][number]),
+    });
     const big = steps(BIG_STEPS + 1);
     const small = steps(BIG_STEPS);
     expect(backgroundBuildAllowed(big, { oneKernel: false, editorOpen: true })).toBe(true);
@@ -138,7 +162,8 @@ describe("project pictures", () => {
  * another device takes it only while the file is still the one pictured.
  */
 describe("pictures next to the project file", async () => {
-  const { formatSidecar, parseSidecar, sha256Hex, sidecarName, sidecarShows } = await import("../apps/web/src/lib/sharedPicture");
+  const { formatSidecar, parseSidecar, sha256Hex, sidecarName, sidecarShows } =
+    await import("../apps/web/src/lib/sharedPicture");
   const { createHash } = await import("node:crypto");
   const file = new TextEncoder().encode(`${JSON.stringify(emptyDocument(), null, 2)}\n`);
 
@@ -152,12 +177,20 @@ describe("pictures next to the project file", async () => {
 
   it("are taken only for the file as it was pictured", async () => {
     const sha256 = (await sha256Hex(file))!;
-    const text = formatSidecar({ size: file.length, sha256, look: 7, thumbnail: "data:image/png;base64,AAAA" });
+    const text = formatSidecar({
+      size: file.length,
+      sha256,
+      look: 7,
+      thumbnail: "data:image/png;base64,AAAA",
+    });
     const p = parseSidecar(text)!;
     expect(p).toEqual({ size: file.length, sha256, look: 7, thumbnail: "data:image/png;base64,AAAA" });
     expect(sidecarShows(p, { size: file.length, sha256 })).toBe(true);
+
     // Changed since (on another device): made again.
-    const changed = new TextEncoder().encode(`${JSON.stringify({ ...emptyDocument(), params: { w: "2 mm" } }, null, 2)}\n`);
+    const changed = new TextEncoder().encode(
+      `${JSON.stringify({ ...emptyDocument(), params: { w: "2 mm" } }, null, 2)}\n`,
+    );
     expect(sidecarShows(p, { size: changed.length, sha256: (await sha256Hex(changed))! })).toBe(false);
     expect(sidecarShows(p, { size: file.length, sha256: "0".repeat(64) })).toBe(false);
   });

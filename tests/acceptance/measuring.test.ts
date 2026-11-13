@@ -19,14 +19,26 @@ async function setup() {
   const { meshes } = s.rebuild(doc(part));
   const m = meshes[0]!;
   const oc = await getOcct();
-  const face = (tag: string): PickRef => ({ bodyId: "ex1", kind: "face", index: m.faceTags.findIndex((t) => t.includes(tag)) });
+  const face = (tag: string): PickRef => ({
+    bodyId: "ex1",
+    kind: "face",
+    index: m.faceTags.findIndex((t) => t.includes(tag)),
+  });
+
   /** The edge between two faces, by their tags. */
   const edge = (a: string, b: string): PickRef => {
     const fa = m.faceTags.findIndex((t) => t.includes(a));
     const fb = m.faceTags.findIndex((t) => t.includes(b));
-    return { bodyId: "ex1", kind: "edge", index: m.edgeFaces.findIndex((f) => f.includes(fa) && f.includes(fb)) };
+
+    return {
+      bodyId: "ex1",
+      kind: "edge",
+      index: m.edgeFaces.findIndex((f) => f.includes(fa) && f.includes(fb)),
+    };
   };
+
   const rows = (a: PickRef, b?: PickRef) => Object.fromEntries(measure(oc, s.state!, a, b).rows);
+
   return { s, oc, face, edge, rows };
 }
 
@@ -42,6 +54,7 @@ describe("measuring", () => {
   it("a hole: the wall's radius, its rim's radius and diameter and circumference", async () => {
     const { edge, face, rows } = await setup();
     expect(rows(face("ex1.side[sk1.h]"))["Radius"]).toBe("4 mm");
+
     const rim = rows(edge("ex1.end_cap", "ex1.side[sk1.h]"));
     expect(rim["Radius"]).toBe("4 mm");
     expect(rim["Diameter"]).toBe("8 mm");
@@ -56,7 +69,9 @@ describe("measuring", () => {
     expect(across["Angle"]).toBe("0 °");
     expect(rows(face("ex1.end_cap"), face("ex1.side[sk1.l1]"))["Angle"]).toBe("90 °");
     // Two edges at a corner: 90°; an edge along a face: 0° to it.
-    expect(rows(edge("ex1.end_cap", "ex1.side[sk1.l1]"), edge("ex1.end_cap", "ex1.side[sk1.l2]"))["Angle"]).toBe("90 °");
+    expect(
+      rows(edge("ex1.end_cap", "ex1.side[sk1.l1]"), edge("ex1.end_cap", "ex1.side[sk1.l2]"))["Angle"],
+    ).toBe("90 °");
     expect(rows(face("ex1.end_cap"), edge("ex1.end_cap", "ex1.side[sk1.l1]"))["Angle"]).toBe("0 °");
     // The hole's wall to its centre line: no angle for a round face.
     expect(rows(face("ex1.side[sk1.h]"), face("ex1.end_cap"))["Angle"]).toBeUndefined();
@@ -66,8 +81,12 @@ describe("measuring", () => {
 
   it("refuses a pick that no longer exists, and exports of nothing", async () => {
     const { s, oc } = await setup();
-    expect(() => measure(oc, s.state!, { bodyId: "zz", kind: "face", index: 0 })).toThrow(/selection no longer exists/);
-    expect(() => measure(oc, s.state!, { bodyId: "ex1", kind: "edge", index: 9999 })).toThrow(/selection no longer exists/);
+    expect(() => measure(oc, s.state!, { bodyId: "zz", kind: "face", index: 0 })).toThrow(
+      /selection no longer exists/,
+    );
+    expect(() => measure(oc, s.state!, { bodyId: "ex1", kind: "edge", index: 9999 })).toThrow(
+      /selection no longer exists/,
+    );
     expect(() => exportStep(oc, s.state!, ["zz"])).toThrow(/nothing to export/);
     expect(() => exportMeshes(oc, s.state!, ["zz"])).toThrow(/nothing to export/);
   });

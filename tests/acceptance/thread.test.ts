@@ -3,7 +3,8 @@ import type { RebuildReport } from "@meercad/kernel";
 import type { Feature } from "@meercad/schema";
 import { circle, corpus, doc, newSession, rect, sketch } from "./helpers.js";
 
-const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+const ok = (r: RebuildReport) =>
+  expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
 
 /** 20×20×5 base with a Ø`d` × 15 shaft on top (a shoulder at z = 5, a free end at z = 20). */
 const shaft = (d: number): Feature[] => [
@@ -22,8 +23,11 @@ describe("thread", () => {
   it("cuts an external M8 thread on a shaft up to its shoulder", async () => {
     const s = await newSession();
     const plain = s.rebuild(doc(shaft(8))).report;
-    const { report, meshes } = s.rebuild(doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" } }]));
+    const { report, meshes } = s.rebuild(
+      doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" } }]),
+    );
     ok(report);
+
     const removed = plain.bodies[0]!.volume - report.bodies[0]!.volume;
     // Between the minor and major cross-sections over the 15 mm length (ISO M8: d3 ≈ 6.47).
     expect(removed).toBeGreaterThan(15 * 0.15 * Math.PI * (16 - 3.233 ** 2));
@@ -43,10 +47,12 @@ describe("thread", () => {
     ok(tapDrill);
     // Both end up as the same M8 internal thread.
     expect(nominal.bodies[0]!.volume).toBeCloseTo(tapDrill.bodies[0]!.volume, 0);
+
     // More material than the plain Ø8 hole, less than a Ø6.647 (minor) bore.
     const full = 20 * 20 * 12;
     expect(nominal.bodies[0]!.volume).toBeGreaterThan(full - Math.PI * 16 * 12);
     expect(nominal.bodies[0]!.volume).toBeLessThan(full - Math.PI * 3.3235 ** 2 * 12 - 20);
+
     // Left-handed cuts the same amount.
     const left = s.rebuild(doc([...block(8), { ...thread, leftHanded: true } as Feature])).report;
     ok(left);
@@ -55,13 +61,34 @@ describe("thread", () => {
 
   it("supports a shorter length, a fine pitch, left-handed threads and clearance", async () => {
     const s = await newSession();
-    const base = s.rebuild(doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" } }])).report;
-    const short = s.rebuild(doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" }, size: "M8", pitch: 1, length: 6, leftHanded: true }])).report;
+    const base = s.rebuild(
+      doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" } }]),
+    ).report;
+    const short = s.rebuild(
+      doc([
+        ...shaft(8),
+        {
+          id: "th1",
+          op: "thread",
+          face: { face: "ex2.side[sk2.c1]" },
+          size: "M8",
+          pitch: 1,
+          length: 6,
+          leftHanded: true,
+        },
+      ]),
+    ).report;
     ok(short);
     expect(short.bodies[0]!.volume).toBeGreaterThan(base.bodies[0]!.volume);
-    const left = s.rebuild(doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" }, leftHanded: true }])).report;
+
+    const left = s.rebuild(
+      doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" }, leftHanded: true }]),
+    ).report;
     expect(left.bodies[0]!.volume).toBeCloseTo(base.bodies[0]!.volume, 0);
-    const loose = s.rebuild(doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" }, clearance: 0.15 }])).report;
+
+    const loose = s.rebuild(
+      doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" }, clearance: 0.15 }]),
+    ).report;
     ok(loose);
     expect(loose.bodies[0]!.volume).toBeLessThan(base.bodies[0]!.volume);
   });
@@ -69,17 +96,36 @@ describe("thread", () => {
   it("threads countersunk holes and chamfered shafts (stopping at the chamfer)", async () => {
     const s = await newSession();
     const plate = corpus("mounting-plate.meercad.json");
-    const holes = s.rebuild({ ...plate, features: [...plate.features, { id: "th1", op: "thread", face: { face: "ex2.side[sk2.h2]" } }, { id: "th2", op: "thread", face: { face: "ex2.side[sk2.h1]" }, clearance: 0.1 }] }).report;
+    const holes = s.rebuild({
+      ...plate,
+      features: [
+        ...plate.features,
+        { id: "th1", op: "thread", face: { face: "ex2.side[sk2.h2]" } },
+        { id: "th2", op: "thread", face: { face: "ex2.side[sk2.h1]" }, clearance: 0.1 },
+      ],
+    }).report;
     ok(holes);
-    const bolt = s.rebuild(doc([...shaft(8), { id: "ch1", op: "chamfer", edges: { edge: ["ex2.end_cap", "ex2.side[sk2.c1]"] }, distance: 1 }, { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" } }])).report;
+
+    const bolt = s.rebuild(
+      doc([
+        ...shaft(8),
+        { id: "ch1", op: "chamfer", edges: { edge: ["ex2.end_cap", "ex2.side[sk2.c1]"] }, distance: 1 },
+        { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" } },
+      ]),
+    ).report;
     ok(bolt);
   });
 
   it("explains what is wrong with a flat face or an unknown size", async () => {
     const s = await newSession();
-    const flat = s.rebuild(doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.end_cap" } }])).report;
+    const flat = s.rebuild(
+      doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.end_cap" } }]),
+    ).report;
     expect(flat.features.find((f) => f.id === "th1")?.message).toMatch(/round faces/);
-    const bad = s.rebuild(doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" }, size: "M7" }])).report;
+
+    const bad = s.rebuild(
+      doc([...shaft(8), { id: "th1", op: "thread", face: { face: "ex2.side[sk2.c1]" }, size: "M7" }]),
+    ).report;
     expect(bad.features.find((f) => f.id === "th1")?.message).toMatch(/give a pitch/);
   });
 });

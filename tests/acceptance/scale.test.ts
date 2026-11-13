@@ -9,9 +9,12 @@ const block: Feature[] = [
   sketch("sk1", { ref: "origin.XY" }, [...rect("l", 10, 0, 20, 10), ...circle("h", 20, 5, 2)]),
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 5, mode: "new_body" },
 ];
+
 async function run(f: Partial<Feature>) {
   const s = await newSession();
-  return s.rebuild(doc([...block, { id: "sc1", op: "scale", bodies: ["ex1"], factor: 2, ...f } as Feature])).report;
+
+  return s.rebuild(doc([...block, { id: "sc1", op: "scale", bodies: ["ex1"], factor: 2, ...f } as Feature]))
+    .report;
 }
 
 describe("scale", () => {
@@ -27,6 +30,7 @@ describe("scale", () => {
   it("scales about the origin, and to a measured size", async () => {
     const o = await run({ center: "origin" });
     expect(o.bodies[0]!.bbox.min[0]).toBeCloseTo(20, 6);
+
     // A scan measured 20.4 long that should be 20: factor 20 / 20.4.
     const fix = await run({ factor: "20 / 20.4" });
     const b = fix.bodies[0]!.bbox;

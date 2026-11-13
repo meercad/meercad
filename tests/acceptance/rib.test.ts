@@ -4,7 +4,8 @@ import type { Feature, SketchEntity } from "@meercad/schema";
 import { doc, newSession, rect, sketch } from "./helpers.js";
 
 const status = (r: RebuildReport, id: string) => r.features.find((f) => f.id === id)!;
-const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+const ok = (r: RebuildReport) =>
+  expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
 const line = (id: string, a: [number, number], b: [number, number]): SketchEntity[] => [
   { id: `${id}a`, type: "point", x: a[0], y: a[1] },
   { id: `${id}b`, type: "point", x: b[0], y: b[1] },
@@ -22,12 +23,17 @@ const BRACKET = 60 * 40 * 5 + 5 * 40 * 35;
 
 async function run(features: Feature[]) {
   const s = await newSession();
+
   return s.rebuild(doc(features)).report;
 }
 
 describe("rib", () => {
   it("fills from a line across the corner to the walls", async () => {
-    const r = await run([...bracket, sketch("sk3", { ref: "pl1" }, line("l1", [5, 30], [35, 5])), { id: "rb1", op: "rib", sketch: "sk3", thickness: 4 }]);
+    const r = await run([
+      ...bracket,
+      sketch("sk3", { ref: "pl1" }, line("l1", [5, 30], [35, 5])),
+      { id: "rb1", op: "rib", sketch: "sk3", thickness: 4 },
+    ]);
     ok(r);
     expect(r.bodies).toHaveLength(1);
     // A triangle with legs 25 (up the wall) and 30 (along the base), 4 thick.
@@ -36,14 +42,22 @@ describe("rib", () => {
 
   it("reaches the walls from a line that stops short of them", async () => {
     // From (10, 25) to (25, 10): on the same diagonal as x + z = 35, but shorter.
-    const r = await run([...bracket, sketch("sk3", { ref: "pl1" }, line("l1", [10, 25], [25, 10])), { id: "rb1", op: "rib", sketch: "sk3", thickness: 4 }]);
+    const r = await run([
+      ...bracket,
+      sketch("sk3", { ref: "pl1" }, line("l1", [10, 25], [25, 10])),
+      { id: "rb1", op: "rib", sketch: "sk3", thickness: 4 },
+    ]);
     ok(r);
     expect(r.bodies[0]!.volume).toBeCloseTo(BRACKET + 0.5 * 25 * 25 * 4, 2);
   });
 
   it("explains what is wrong", async () => {
     // A flipped rib opens away from the corner, towards nothing.
-    const r = await run([...bracket, sketch("sk3", { ref: "pl1" }, line("l1", [5, 30], [35, 5])), { id: "rb1", op: "rib", sketch: "sk3", thickness: 4, flip: true }]);
+    const r = await run([
+      ...bracket,
+      sketch("sk3", { ref: "pl1" }, line("l1", [5, 30], [35, 5])),
+      { id: "rb1", op: "rib", sketch: "sk3", thickness: 4, flip: true },
+    ]);
     expect(status(r, "rb1").message).toMatch(/does not meet a wall/);
   });
 });

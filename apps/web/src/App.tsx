@@ -484,7 +484,8 @@ export function App() {
         <Home />
       ) : (
         <div className={`app ${sideOpen ? "side-open" : ""} ${sheet ? "has-sheet" : ""}`}>
-          {/* An assistant's tab has its bar at the bottom (AiLock) instead: the window's page shows the tabs above it. */}
+          {/* An assistant's tab has its bar at the bottom (AiLock) instead:
+              the window's page shows the tabs above it. */}
           {assistantWindow ? null : <TopBar />}
           {sideOpen ? <SidePanel /> : null}
           <div className="right">

@@ -12,14 +12,25 @@ import { checkEveryStep, corpus } from "./helpers.js";
 const TIMEOUT = 600_000;
 
 describe("rebuilding only what a change touches: all files", () => {
-  for (const file of readdirSync(new URL("../corpus/", import.meta.url)).filter((f) => f.endsWith(".meercad.json")).sort()) {
-    it(`corpus ${file}`, async () => {
-      await checkEveryStep(corpus(file), file);
-    }, TIMEOUT);
+  for (const file of readdirSync(new URL("../corpus/", import.meta.url))
+    .filter((f) => f.endsWith(".meercad.json"))
+    .sort()) {
+    it(
+      `corpus ${file}`,
+      async () => {
+        await checkEveryStep(corpus(file), file);
+      },
+      TIMEOUT,
+    );
   }
+
   for (const m of MODELS) {
-    it(`model ${m.file}`, async () => {
-      await checkEveryStep(m.doc, m.file);
-    }, TIMEOUT);
+    it(
+      `model ${m.file}`,
+      async () => {
+        await checkEveryStep(m.doc, m.file);
+      },
+      TIMEOUT,
+    );
   }
 });

@@ -27,21 +27,28 @@ export class Ui {
       }
       return [r.left + r.width / 2, r.top + r.height / 2];
     })()`);
+
     return at;
   }
 
   async waitFind(selector: string, text?: string | null, opts = {}, ms = 10000): Promise<Vec2> {
     const end = Date.now() + ms;
+
     for (;;) {
       const at = await this.find(selector, text, opts);
       if (at) return at;
       if (Date.now() > end) throw new Error(`not on screen: ${selector}${text ? ` "${text}"` : ""}`);
+
       await sleep(150);
     }
   }
 
   /** Clicks a button (or other element) by its text, title or aria-label. */
-  async press(text: string, selector = "button, [role=menuitem], [role=button], a", opts = {}): Promise<void> {
+  async press(
+    text: string,
+    selector = "button, [role=menuitem], [role=button], a",
+    opts = {},
+  ): Promise<void> {
     const [x, y] = await this.waitFind(selector, text, opts);
     await this.page.click(x, y);
     await sleep(150);
@@ -66,6 +73,7 @@ export class Ui {
   async field(label: string, value: string | number): Promise<void> {
     const at = await this.fieldAt(label);
     if (!at) throw new Error(`no field "${label}"`);
+
     await this.page.click(at[0], at[1]);
     await sleep(80);
     await this.page.key("Meta+a");
@@ -78,6 +86,7 @@ export class Ui {
   async fieldN(label: string, n: number, value: string | number, which = 0): Promise<void> {
     const at = await this.fieldAt(label, "input", n, which);
     if (!at) throw new Error(`no input ${n} in "${label}"`);
+
     await this.page.click(at[0], at[1]);
     await sleep(80);
     await this.page.key("Meta+a");
@@ -93,6 +102,7 @@ export class Ui {
   async choose(label: string, option: string): Promise<void> {
     const at = await this.fieldAt(label, "select");
     if (!at) throw new Error(`no drop-down "${label}"`);
+
     const ok = await this.page.eval<true | string[]>(`(() => {
       const f = [...document.querySelectorAll(".fld")].find((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)});
       const sel = f.querySelector("select");
@@ -104,6 +114,7 @@ export class Ui {
       return true;
     })()`);
     if (ok !== true) throw new Error(`"${label}" has no option "${option}" (${ok})`);
+
     await sleep(200);
   }
 
@@ -120,6 +131,7 @@ export class Ui {
       return false;
     })()`);
     if (!ok) throw new Error(`no drop-down offers "${option}"`);
+
     await sleep(200);
   }
 
@@ -127,9 +139,11 @@ export class Ui {
   async accept(): Promise<void> {
     // The dialog's verdict follows its preview: let that finish first.
     await this.settle();
+
     // A slow preview can still hold an older verdict: a person looks again and presses once more.
     for (let i = 0; ; i++) {
       await this.press("Accept", "button.ok-btn");
+
       try {
         await this.until("the dialog to close", "!s.dialog", 4000);
         break;
@@ -138,10 +152,15 @@ export class Ui {
           await sleep(3000);
           continue;
         }
-        const why = await this.page.eval<string>(`[...document.querySelectorAll(".dialog .hint, .dialog .problem, .dialog [class*=warn], .dialog [class*=error]")].map((e) => e.textContent.trim()).join(" · ")`);
+
+        const why = await this.page.eval<string>(
+          `[...document.querySelectorAll(".dialog .hint, .dialog .problem, .dialog [class*=warn], .dialog [class*=error]")].map((e) => e.textContent.trim()).join(" · ")`,
+        );
+
         throw new Error(`the dialog does not accept: ${why || "(no reason shown)"}`);
       }
     }
+
     await this.settle();
   }
 
@@ -163,12 +182,16 @@ export class Ui {
       return s && [r.left + s[0], r.top + s[1]];
     })()`);
     if (!at) throw new Error(`point ${p} is not on screen`);
+
     return at;
   }
 
   /** Where a point of the open sketch (sketch mm) is on screen. */
   async sketchScreen([u, v]: Vec2): Promise<Vec2> {
-    const f = await this.state<{ origin: Vec3; u: Vec3; v: Vec3 }>(`s.output.report.sketches.find((k) => k.id === s.sketchId).frame`);
+    const f = await this.state<{ origin: Vec3; u: Vec3; v: Vec3 }>(
+      `s.output.report.sketches.find((k) => k.id === s.sketchId).frame`,
+    );
+
     return this.screenOf([0, 1, 2].map((i) => f.origin[i]! + f.u[i]! * u + f.v[i]! * v) as Vec3);
   }
 
@@ -182,7 +205,14 @@ export class Ui {
       const [x1] = await this.sketchScreen([size, 0]);
       const px = Math.abs(x1 - x0);
       if (px > 220 && px < 380) return;
-      await this.page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: x0, y: y0, deltaX: 0, deltaY: px < 220 ? -120 : 120 });
+
+      await this.page.call("Input.dispatchMouseEvent", {
+        type: "mouseWheel",
+        x: x0,
+        y: y0,
+        deltaX: 0,
+        deltaY: px < 220 ? -120 : 120,
+      });
       await sleep(120);
     }
   }
@@ -190,6 +220,7 @@ export class Ui {
   /** Clicks a point of the open sketch. */
   async clickSketch(uv: Vec2, { free = false } = {}): Promise<void> {
     let [x, y] = await this.sketchScreen(uv);
+
     // A constraint symbol can sit on the spot: a person clicks just beside it and the point snaps.
     if (!free) {
       const beside = await this.page.eval<Vec2 | null>(`(() => {
@@ -203,6 +234,7 @@ export class Ui {
       })()`);
       if (beside) [x, y] = beside;
     }
+
     // Alt held places the point freely, off the grid (as the sketch hint says).
     await this.page.click(x, y, { modifiers: free ? 1 : 0 });
     await sleep(150);
@@ -283,12 +315,14 @@ export class Ui {
       return "not visible from here";
     })()`);
     if (typeof at === "string") throw new Error(`${kind} ${test}: ${at}`);
+
     return at;
   }
 
   /** Clicks the model's edge matching `test` (see spotOf); with shift to add to a selection. */
   async clickEdge(test: string): Promise<void> {
     await this.steady();
+
     const [x, y] = await this.visibleSpot("edge", test);
     await this.page.click(x, y);
     await sleep(200);
@@ -298,6 +332,7 @@ export class Ui {
 
   async clickFace(test: string, { any = false } = {}): Promise<void> {
     await this.steady();
+
     const [x, y] = await this.visibleSpot("face", test, any);
     await this.page.click(x, y);
     await sleep(200);
@@ -311,8 +346,10 @@ export class Ui {
   async clickPlane(id: string, origin: Vec3, u: Vec3, v: Vec3): Promise<void> {
     // Construction planes show only with the bottom bar's Planes button on.
     if (!(await this.state<boolean>("s.showPlanes"))) await this.press("Planes", "button[title='Planes']");
+
     // Also lets a view change before this finish turning the camera, so the spot found is still the plane.
     await this.steady();
+
     const at = await this.page.eval<Vec2 | null>(`(() => {
       const vp = meercadTest.store.getViewport(), r = vp.renderer.domElement.getBoundingClientRect();
       const o = ${JSON.stringify(origin)}, u = ${JSON.stringify(u)}, v = ${JSON.stringify(v)};
@@ -331,18 +368,25 @@ export class Ui {
       return null;
     })()`);
     if (!at) throw new Error(`plane ${id} is not where it can be clicked`);
+
     await this.page.click(at[0], at[1]);
     await sleep(250);
   }
 
   /** Waits until the view stands still (a view change animates the camera for a moment). */
   async steady(): Promise<void> {
-    const probe = () => this.page.eval<string>(`JSON.stringify(meercadTest.store.getViewport().worldToScreen([0, 0, 0])?.map((v) => Math.round(v)))`);
+    const probe = () =>
+      this.page.eval<string>(
+        `JSON.stringify(meercadTest.store.getViewport().worldToScreen([0, 0, 0])?.map((v) => Math.round(v)))`,
+      );
     let last = await probe();
+
     for (let i = 0; i < 30; i++) {
       await sleep(120);
+
       const now = await probe();
       if (now === last) return;
+
       last = now;
     }
   }
@@ -350,20 +394,34 @@ export class Ui {
   /** Clicks a part (any visible face of the body with this id). */
   async clickBody(id: string): Promise<void> {
     await this.steady();
+
     const [x, y] = await this.visibleSpot("face", `(f) => f.body === ${JSON.stringify(id)}`, true);
     await this.page.click(x, y);
     await sleep(200);
   }
 
   /** Like spotOf; when the edge or face is hidden from here, turns the view the way a person would. */
-  private async visibleSpot(kind: "edge" | "face", test: string, any = false, faceOnly = false): Promise<Vec2> {
+  private async visibleSpot(
+    kind: "edge" | "face",
+    test: string,
+    any = false,
+    faceOnly = false,
+  ): Promise<Vec2> {
     let last: unknown;
+
     // From where it is, then isometric and turned round in quarter turns (the view cube's buttons).
-    for (const v of [null, "Isometric view", "Rotate view 90° left", "Rotate view 90° left", "Rotate view 90° left"]) {
+    for (const v of [
+      null,
+      "Isometric view",
+      "Rotate view 90° left",
+      "Rotate view 90° left",
+      "Rotate view 90° left",
+    ]) {
       if (v) {
         await this.press(v, ".icon-btn");
         await sleep(700);
       }
+
       try {
         return await this.spotOf(kind, test, any, faceOnly);
       } catch (e) {
@@ -371,9 +429,11 @@ export class Ui {
         if (!String(e).includes("not visible")) throw e;
       }
     }
+
     // Faces underneath or behind: the standard views (bottom, front, back, sides).
     for (const k of ["5", "2", "3", "6", "7"] as const) {
       await this.view(k);
+
       try {
         return await this.spotOf(kind, test, any, faceOnly);
       } catch (e) {
@@ -381,13 +441,16 @@ export class Ui {
         if (!String(e).includes("not visible")) throw e;
       }
     }
+
     throw last;
   }
 
   /** A standard view by its key (1 iso, 2 front, … 7 left, Z fit), as a person presses it. */
   async view(k: "1" | "2" | "3" | "4" | "5" | "6" | "7" | "z"): Promise<void> {
     // Keys go to a focused field; a person first clicks out of it.
-    await this.page.eval(`(document.activeElement instanceof HTMLElement && document.activeElement.blur(), true)`);
+    await this.page.eval(
+      `(document.activeElement instanceof HTMLElement && document.activeElement.blur(), true)`,
+    );
     await this.page.key(k);
     await sleep(700);
   }
@@ -401,6 +464,7 @@ export class Ui {
       const home = await this.find("button", "New part");
       if (home) await this.page.click(...home);
       else await this.press("New part", "button.tab-new");
+
       try {
         await this.waitFind(".rail button", "Sketch", {}, 5000);
         break;
@@ -408,26 +472,53 @@ export class Ui {
         if (i === 2) throw e;
       }
     }
+
     await this.settle();
   }
 
-  /** Starts a sketch on a plane: an origin plane from the bar ("Top", "Front", "Right") or another by its tag. */
+  /**
+   * Starts a sketch on a plane: an origin plane from the bar ("Top", "Front", "Right") or another by its tag.
+   */
   async sketchOn(plane: string): Promise<void> {
     // A plane or feature still selected from before would take the new sketch straight away: Esc clears it.
-    if (await this.state<boolean>("(s.selection.length > 0 || !!s.selectedFeature) && !s.dialog && !s.sketchId")) await this.view("1").then(() => this.key("Escape"));
+    if (
+      await this.state<boolean>("(s.selection.length > 0 || !!s.selectedFeature) && !s.dialog && !s.sketchId")
+    ) {
+      await this.view("1").then(() => this.key("Escape"));
+    }
+
     await this.press("Sketch", ".rail button");
+
     // A plane's tag high above the parts can be out of view: zoom out until it shows, as a person would.
     const shown = async () => {
       const at = await this.find(".plane-bar button, .plane-tag", plane, { exact: true });
-      return !!at && (await this.page.eval<boolean>(`${at[0]} > 160 && ${at[1]} > 120 && ${at[0]} < innerWidth - 20 && ${at[1]} < innerHeight - 60`));
+
+      return (
+        !!at &&
+        (await this.page.eval<boolean>(
+          `${at[0]} > 160 && ${at[1]} > 120 && ${at[0]} < innerWidth - 20 && ${at[1]} < innerHeight - 60`,
+        ))
+      );
     };
+
     for (let i = 0; i < 12 && !(await shown()); i++) {
-      const r = await this.page.eval<{ x: number; y: number }>(`(() => { const r = meercadTest.store.getViewport().renderer.domElement.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-      await this.page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: r.x, y: r.y, deltaX: 0, deltaY: 240 });
+      const r = await this.page.eval<{ x: number; y: number }>(
+        `(() => { const r = meercadTest.store.getViewport().renderer.domElement.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`,
+      );
+      await this.page.call("Input.dispatchMouseEvent", {
+        type: "mouseWheel",
+        x: r.x,
+        y: r.y,
+        deltaX: 0,
+        deltaY: 240,
+      });
       await sleep(250);
     }
+
     // The origin planes from the bar: their tags in the view can lie under an offset plane's tag.
-    await this.press(plane, ["Top", "Front", "Right"].includes(plane) ? ".plane-bar button" : ".plane-tag", { exact: true });
+    await this.press(plane, ["Top", "Front", "Right"].includes(plane) ? ".plane-bar button" : ".plane-tag", {
+      exact: true,
+    });
     await sleep(700);
   }
 
@@ -443,9 +534,12 @@ export class Ui {
   async tool(label: string, item?: string): Promise<void> {
     if (item) await this.menuItem(label, item);
     else await this.press(label, ".rail button");
+
     await sleep(200);
     // The tool starts fresh once the editor has drawn it: a click before that would be dropped.
-    await this.page.eval(`new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok(true))))`);
+    await this.page.eval(
+      `new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok(true))))`,
+    );
   }
 
   /** A rectangle from its first corner, with width and height typed. */
@@ -472,6 +566,7 @@ export class Ui {
   async polyline(start: Vec2, segments: [number, number][], close = true): Promise<void> {
     await this.tool("Line");
     await this.clickSketch(start);
+
     for (const [len, angle] of segments) {
       await this.type(String(len));
       await this.key("Tab");
@@ -479,6 +574,7 @@ export class Ui {
       await this.key("Enter");
       await sleep(150);
     }
+
     // Open: the chain stays on for more clicks; closed: clicking the start ends it.
     if (close) {
       await this.clickSketch(start);
@@ -501,16 +597,22 @@ export class Ui {
    */
   async entry(values: (string | number)[]): Promise<void> {
     await this.key("Tab");
+
     const end = Date.now() + 3000;
+
     while (!(await this.page.eval<boolean>(`!!document.activeElement?.closest(".draw-entry")`))) {
       if (Date.now() > end) throw new Error("the value fields did not open");
+
       await sleep(80);
     }
+
     for (const [i, v] of values.entries()) {
       if (i) await this.key("Tab");
+
       await this.page.key("Meta+a");
       if (v !== "") await this.type(String(v));
     }
+
     await this.key("Enter");
     await sleep(300);
   }
@@ -531,8 +633,16 @@ export class Ui {
     await sleep(150);
   }
 
-  /** A 3-point arc from `a` to `b`, bulging towards `side`, with its radius (or, for a half circle, its angle) typed. */
-  async arc(a: Vec2, b: Vec2, side: Vec2, size: { radius: number | string } | { angle: number | string }): Promise<void> {
+  /**
+   * A 3-point arc from `a` to `b`, bulging towards `side`, with its radius (or, for a half circle, its angle)
+   * typed.
+   */
+  async arc(
+    a: Vec2,
+    b: Vec2,
+    side: Vec2,
+    size: { radius: number | string } | { angle: number | string },
+  ): Promise<void> {
     await this.tool("Arc", "3-point arc");
     await this.clickSketch(a);
     await this.clickSketch(b);
@@ -546,6 +656,7 @@ export class Ui {
     for (const p of points) await this.clickSketch(p, { free: true });
     if (closed) await this.clickSketch(points[0]!, { free: true });
     else await this.key("Enter");
+
     await sleep(300);
   }
 
@@ -559,6 +670,7 @@ export class Ui {
       return [r.left + r.width / 2, r.top + r.height / 2];
     })()`);
     if (!at) throw new Error(`no sketch field "${label}"`);
+
     await this.page.click(at[0], at[1]);
     await sleep(80);
     // ⌘A does not select in a number field: clear it key by key.
@@ -567,6 +679,7 @@ export class Ui {
     await this.page.type(String(value));
     await this.page.key("Tab");
     await sleep(200);
+
     const now = await this.page.eval<number>(`meercadTest.sketch.getState().editSize`);
     if (now !== value) throw new Error(`the sketch field "${label}" holds ${now}, not ${value}`);
   }
@@ -590,6 +703,7 @@ export class Ui {
       return "there: " + JSON.stringify(hit && { ...hit, point: undefined });
     })()`);
     if (typeof at === "string" || !at) throw new Error(`nothing to pick near ${near}: ${test} (${at})`);
+
     await this.page.click(at[0], at[1]);
     await sleep(250);
   }
@@ -610,29 +724,58 @@ export class Ui {
     await this.tool("Dimension");
     for (const p of on) await this.clickSketch(p);
     await this.clickSketch(place);
+
     // The new dimension opens its value for typing.
     const end = Date.now() + 4000;
+
     while (!(await this.page.eval<boolean>(`document.activeElement?.classList.contains("value-input")`))) {
       if (Date.now() > end) throw new Error("the dimension did not open its value for typing");
+
       await sleep(100);
     }
+
     await this.page.key("Meta+a");
     await this.type(String(value));
     await this.key("Enter");
     await sleep(300);
   }
 
-  /** Selects sketch entities at the points (Select tool, shift for more) and applies a constraint from the panel. */
+  /**
+   * Selects sketch entities at the points (Select tool, shift for more) and applies a constraint from the
+   * panel.
+   */
   async constrain(name: string, at: Vec2[]): Promise<void> {
     await this.tool("Select");
+
     for (const [i, p] of at.entries()) {
       const [x, y] = await this.sketchScreen(p);
+
       if (i) {
-        await this.page.call("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1, modifiers: 8 });
-        await this.page.call("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1, modifiers: 8 });
-      } else await this.page.click(x, y);
+        await this.page.call("Input.dispatchMouseEvent", {
+          type: "mousePressed",
+          x,
+          y,
+          button: "left",
+          buttons: 1,
+          clickCount: 1,
+          modifiers: 8,
+        });
+        await this.page.call("Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          x,
+          y,
+          button: "left",
+          buttons: 0,
+          clickCount: 1,
+          modifiers: 8,
+        });
+      } else {
+        await this.page.click(x, y);
+      }
+
       await sleep(150);
     }
+
     await this.press(name, "button", { exact: false });
     await sleep(300);
   }
@@ -646,8 +789,10 @@ export class Ui {
   /** Waits until `expr` (on the app state `s`) holds. */
   async until(what: string, expr: string, ms = 15000): Promise<void> {
     const end = Date.now() + ms;
+
     while (!(await this.state<boolean>(expr))) {
       if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+
       await sleep(100);
     }
   }
@@ -669,15 +814,19 @@ export class Ui {
         return [r.left + Math.min(40, r.width / 2), r.top + r.height / 2];
       })()`);
     let at = await item();
+
     if (!at) {
       await this.press(group, ".rail button");
+
       const end = Date.now() + 3000;
       while (!(at = await item()) && Date.now() < end) await sleep(100);
       // The flyout slides in: wait until it stands still, then aim.
       await sleep(300);
       at = (await item()) ?? at;
     }
+
     if (!at) throw new Error(`no "${label}" under ${group}`);
+
     await this.page.click(at[0], at[1]);
     await sleep(200);
   }
@@ -686,21 +835,29 @@ export class Ui {
   async pickInto(label: string): Promise<void> {
     const at = await this.fieldAt(label, ".selbox");
     if (!at) throw new Error(`no pick box "${label}"`);
-    const active = await this.page.eval<boolean>(`[...document.querySelectorAll(".dialog .fld")].find((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)})?.querySelector(".selbox")?.classList.contains("active") ?? false`);
+
+    const active = await this.page.eval<boolean>(
+      `[...document.querySelectorAll(".dialog .fld")].find((f) => f.querySelector(".fld-label")?.textContent.trim() === ${JSON.stringify(label)})?.querySelector(".selbox")?.classList.contains("active") ?? false`,
+    );
     if (!active) await this.page.click(at[0], at[1]);
+
     await sleep(200);
   }
 
   /** Ticks a checkbox in the open dialog unless it is already ticked. */
   async checkOn(label: string): Promise<void> {
-    const on = await this.page.eval<boolean | null>(`(() => { const l = [...document.querySelectorAll(".dialog label.checkbox")].find((l) => l.textContent.trim() === ${JSON.stringify(label)}); return l ? !!l.querySelector("input")?.checked : null; })()`);
+    const on = await this.page.eval<boolean | null>(
+      `(() => { const l = [...document.querySelectorAll(".dialog label.checkbox")].find((l) => l.textContent.trim() === ${JSON.stringify(label)}); return l ? !!l.querySelector("input")?.checked : null; })()`,
+    );
     if (on === null) throw new Error(`no checkbox "${label}"`);
     if (!on) await this.check(label);
   }
 
   /** Unticks a checkbox in the open dialog if it is ticked. */
   async checkOff(label: string): Promise<void> {
-    const on = await this.page.eval<boolean | null>(`(() => { const l = [...document.querySelectorAll(".dialog label.checkbox")].find((l) => l.textContent.trim() === ${JSON.stringify(label)}); return l ? !!l.querySelector("input")?.checked : null; })()`);
+    const on = await this.page.eval<boolean | null>(
+      `(() => { const l = [...document.querySelectorAll(".dialog label.checkbox")].find((l) => l.textContent.trim() === ${JSON.stringify(label)}); return l ? !!l.querySelector("input")?.checked : null; })()`,
+    );
     if (on === null) throw new Error(`no checkbox "${label}"`);
     if (on) await this.check(label);
   }
@@ -721,6 +878,7 @@ export class Ui {
       return [r.left + r.width / 2, r.top + r.height / 2];
     })()`);
     if (!at) throw new Error(`no choice "${label}" number ${which + 1}`);
+
     await this.page.click(at[0], at[1]);
     await sleep(250);
   }
@@ -739,14 +897,17 @@ export class Ui {
         }
         return [r.left + r.width / 2, r.top + r.height / 2, b.classList.contains("on") || b.classList.contains("active") || b.classList.contains("primary") || b.getAttribute("aria-pressed") === "true"];
       })()`);
+
     for (let i = 0; i < 4; i++) {
       const b = await at();
       if (!b) throw new Error(`no choice "${label}" in the dialog`);
       if (b[2] && i > 0) return;
+
       await this.page.click(b[0], b[1]);
       await sleep(250);
       if ((await at())?.[2]) return;
     }
+
     throw new Error(`the choice "${label}" does not stay on`);
   }
 
@@ -757,14 +918,19 @@ export class Ui {
    */
   async closePart(): Promise<void> {
     for (let i = 0; i < 4; i++) {
-      const busy = await this.state<boolean>("!!(s.dialog || s.sketchId || s.pickingSketchPlane)").catch(() => false);
+      const busy = await this.state<boolean>("!!(s.dialog || s.sketchId || s.pickingSketchPlane)").catch(
+        () => false,
+      );
       if (!busy) break;
       if (await this.find("button.cancel-btn")) await this.press("Cancel", "button.cancel-btn");
       else if (await this.state<boolean>("!!s.sketchId")) await this.press("Finish", ".rail button");
       else await this.key("Escape");
+
       await sleep(300);
     }
+
     const close = await this.find("button", "Close tab");
+
     if (close) {
       await this.page.click(...close);
       await sleep(500);
@@ -776,8 +942,10 @@ export class Ui {
   /** Shows the side panel with history, parts and variables (the top bar's panel button). */
   async showSide(): Promise<boolean> {
     if (await this.find("button", "Add variable")) return false;
+
     await this.press("Show history, parts and variables", "button.side-toggle");
     await this.waitFind("button", "Add variable");
+
     return true;
   }
 
@@ -815,6 +983,7 @@ export class Ui {
       return [r.left + Math.min(30, r.width / 2), r.top + r.height / 2];
     })()`);
     if (!at) throw new Error(`no variable row "${name}"`);
+
     await this.page.click(at[0], at[1]);
     await this.page.key("Meta+a");
     await this.type(String(expr));
@@ -828,12 +997,22 @@ export class Ui {
   async zoomAt(p: Vec3, ticks: number): Promise<void> {
     const [x, y] = await this.screenOf(p);
     // The wheel over a panel scrolls the panel: a point under the dialog is zoomed on beside it.
-    const free = await this.page.eval<boolean>(`document.elementFromPoint(${x}, ${y}) === meercadTest.store.getViewport().renderer.domElement`);
+    const free = await this.page.eval<boolean>(
+      `document.elementFromPoint(${x}, ${y}) === meercadTest.store.getViewport().renderer.domElement`,
+    );
     if (!free) throw new Error(`point ${p} lies under a panel`);
+
     for (let i = 0; i < Math.abs(ticks); i++) {
-      await this.page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY: ticks > 0 ? -120 : 120 });
+      await this.page.call("Input.dispatchMouseEvent", {
+        type: "mouseWheel",
+        x,
+        y,
+        deltaX: 0,
+        deltaY: ticks > 0 ? -120 : 120,
+      });
       await sleep(80);
     }
+
     await sleep(300);
   }
 
@@ -846,10 +1025,16 @@ export class Ui {
   async settle(ms = 60000): Promise<void> {
     const end = Date.now() + ms;
     await sleep(200);
+
     for (;;) {
-      const busy = await this.page.eval<boolean>(`(() => { const s = meercadTest.app.getState(); return meercadTest.store.rebuilding() || s.tasks.length > 0; })()`).catch(() => true);
+      const busy = await this.page
+        .eval<boolean>(
+          `(() => { const s = meercadTest.app.getState(); return meercadTest.store.rebuilding() || s.tasks.length > 0; })()`,
+        )
+        .catch(() => true);
       if (!busy) return;
       if (Date.now() > end) throw new Error("rebuild did not finish");
+
       await sleep(150);
     }
   }

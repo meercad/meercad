@@ -10,6 +10,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 /** Just enough IndexedDB for openCache: stores of values by key, requests that answer on the next tick. */
 function fakeIndexedDb() {
   const stores = new Map<string, Map<string, unknown>>();
+
   const request = <T>(fn: () => T) => {
     const req: { result?: T; error?: unknown; onsuccess?: () => void; onerror?: () => void } = {};
     queueMicrotask(() => {
@@ -21,14 +22,22 @@ function fakeIndexedDb() {
         req.onerror?.();
       }
     });
+
     return req;
   };
+
   const db = {
     createObjectStore: (name: string) => stores.set(name, new Map()),
     transaction: (names: string | string[]) => {
-      const tx: { oncomplete?: () => void; onerror?: () => void; onabort?: () => void; objectStore: (n: string) => unknown } = {
+      const tx: {
+        oncomplete?: () => void;
+        onerror?: () => void;
+        onabort?: () => void;
+        objectStore: (n: string) => unknown;
+      } = {
         objectStore: (n: string) => {
           const s = stores.get(n)!;
+
           return {
             get: (k: string) => request(() => structuredClone(s.get(k))),
             put: (v: unknown, k: string) => request(() => s.set(k, structuredClone(v))),
@@ -40,9 +49,11 @@ function fakeIndexedDb() {
       };
       void names;
       setTimeout(() => tx.oncomplete?.(), 0);
+
       return tx;
     },
   };
+
   return {
     stores,
     open: () => {
@@ -52,6 +63,7 @@ function fakeIndexedDb() {
         req.onupgradeneeded?.();
         req.onsuccess?.();
       });
+
       return req;
     },
   };
@@ -65,6 +77,7 @@ beforeAll(async () => {
 });
 
 const opts = { build: "/assets/kernel.worker-abc123.js", coarse: 1, textures: true };
+
 function output(triangles: number): RebuildOutput {
   const mesh = {
     bodyId: "ex1",
@@ -77,6 +90,7 @@ function output(triangles: number): RebuildOutput {
     faceTags: [["ex1.side"]],
     edgeFaces: [],
   };
+
   return { report: { bodies: [] } as unknown as RebuildOutput["report"], meshes: [mesh], references: [] };
 }
 
@@ -97,6 +111,7 @@ describe("kept results for opening", () => {
   it("gives back a result only for the document it was made from", async () => {
     const out = output(10);
     await cache.writeOutput("Box.meercad", cache.outputKey(doc, opts), out);
+
     const back = await cache.readOutput("Box.meercad", cache.outputKey(doc, opts));
     expect(back?.meshes[0]!.indices.length).toBe(30);
     expect(back?.meshes[0]!.faceTags).toEqual([["ex1.side"]]);
@@ -113,6 +128,7 @@ describe("kept results for opening", () => {
   it("drops the least recently used results beyond its budget", async () => {
     // Three results of 300 kB in a budget of 768 kB (768 MB on a Mac): the oldest goes.
     cache.setBudget(768 * 1024);
+
     const big = (n: number) => output(Math.round((300 * 1024) / 84) + n);
     await cache.writeOutput("A.meercad", cache.outputKey(doc, opts), big(1));
     await new Promise((r) => setTimeout(r, 5));
@@ -123,7 +139,11 @@ describe("kept results for opening", () => {
     expect(fake.stores.get("outputs")!.has("B.meercad")).toBe(true);
     expect(fake.stores.get("outputs")!.has("C.meercad")).toBe(true);
     // A result too large for half the budget is not kept at all.
-    await cache.writeOutput("Huge.meercad", cache.outputKey(doc, opts), output(Math.round((400 * 1024) / 84)));
+    await cache.writeOutput(
+      "Huge.meercad",
+      cache.outputKey(doc, opts),
+      output(Math.round((400 * 1024) / 84)),
+    );
     expect(fake.stores.get("outputs")!.has("Huge.meercad")).toBe(false);
   });
 });

@@ -26,17 +26,27 @@ function check(r: Result, want: Expectation) {
   expect(r.failed).toEqual([]);
   expect(r.bodies).toHaveLength(want.bodies);
   expect(r.joints).toEqual([]);
+
   const volume = r.bodies.reduce((s, b) => s + b.volume, 0);
-  if (typeof want.volume === "number") expect(Math.abs(volume - want.volume) / want.volume, `volume ${volume} vs ${want.volume}`).toBeLessThan(0.005);
-  else if (want.volume) {
+
+  if (typeof want.volume === "number") {
+    expect(Math.abs(volume - want.volume) / want.volume, `volume ${volume} vs ${want.volume}`).toBeLessThan(
+      0.005,
+    );
+  } else if (want.volume) {
     expect(volume).toBeGreaterThan(want.volume[0]);
     expect(volume).toBeLessThan(want.volume[1]);
   }
+
   if (want.size) {
     const min = [0, 1, 2].map((i) => Math.min(...r.bodies.map((b) => b.bbox.min[i]!)));
     const max = [0, 1, 2].map((i) => Math.max(...r.bodies.map((b) => b.bbox.max[i]!)));
     const size = max.map((v, i) => v - min[i]!);
-    size.forEach((s, i) => expect(Math.abs(s - want.size![i]!), `size ${size.map((v) => v.toFixed(2)).join(" × ")}`).toBeLessThan(0.05));
+    size.forEach((s, i) =>
+      expect(Math.abs(s - want.size![i]!), `size ${size.map((v) => v.toFixed(2)).join(" × ")}`).toBeLessThan(
+        0.05,
+      ),
+    );
   }
 }
 
@@ -45,6 +55,7 @@ const result = async (ui: Ui) => {
   await ui.settle();
   // Volumes come in a moment after the shapes (the app measures them in the background).
   await ui.until("the parts' volumes", "s.output.report.bodies.every((b) => b.volume > 0)", 120000);
+
   return ui.state<Result>(`({
     failed: s.output.report.features.filter((f) => f.status !== "ok").map((f) => f.id + ": " + f.message),
     bodies: s.output.report.bodies.map((b) => ({ volume: b.volume, bbox: b.bbox })),
@@ -69,12 +80,15 @@ describe("test models built in the app", () => {
 
   for (const m of picked) {
     const script = SCRIPTS[m.file];
+
     if (!script) {
       it.todo(`${m.file}: ${m.name}`);
       continue;
     }
+
     it(`${m.file}: ${m.name}`, async () => {
       app.page.takeErrors();
+
       try {
         await ui.newPart();
         await script(ui);
@@ -85,11 +99,22 @@ describe("test models built in the app", () => {
         mkdirSync(dir, { recursive: true });
         await app.page.shot(join(dir, `${m.file} FAILED.png`)).catch(() => undefined);
         // And the design as far as it got, to look at in the app.
-        await ui.state("s.doc").then((d) => writeFileSync(join(dir, `${m.file} FAILED.meercad`), JSON.stringify(d, null, 2))).catch(() => undefined);
-        await ui.state("s.dialog?.feature ?? null").then((f) => f && writeFileSync(join(dir, `${m.file} FAILED dialog.json`), JSON.stringify(f, null, 2))).catch(() => undefined);
+        await ui
+          .state("s.doc")
+          .then((d) => writeFileSync(join(dir, `${m.file} FAILED.meercad`), JSON.stringify(d, null, 2)))
+          .catch(() => undefined);
+        await ui
+          .state("s.dialog?.feature ?? null")
+          .then(
+            (f) => f && writeFileSync(join(dir, `${m.file} FAILED dialog.json`), JSON.stringify(f, null, 2)),
+          )
+          .catch(() => undefined);
+
         throw e;
       }
+
       const r = await result(ui);
+
       if (out) {
         mkdirSync(out, { recursive: true });
         await ui.view("1");
@@ -97,7 +122,9 @@ describe("test models built in the app", () => {
         await app.page.shot(join(out, `${m.file}.png`));
         writeFileSync(join(out, `${m.file}.meercad`), JSON.stringify(await ui.state("s.doc"), null, 2));
       }
+
       check(r, m.expect);
+
       // The model's variants: each variable typed into its row in the Variables panel, the result
       // checked, the values put back.
       for (const v of m.variants ?? []) {
@@ -105,6 +132,7 @@ describe("test models built in the app", () => {
         check(await result(ui), v.expect);
         for (const k of Object.keys(v.params)) await ui.setVariable(k, m.doc.params[k]!);
       }
+
       expect(app.page.takeErrors(), "console errors").toEqual([]);
     });
   }

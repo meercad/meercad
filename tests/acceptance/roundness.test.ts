@@ -14,16 +14,26 @@ describe("round faces", () => {
   it("export STL triangles within 0.01 mm of the exact circle", async () => {
     const s = await newSession();
     s.rebuild(doc(disc));
+
     const stl = readStl(writeStl(exportMeshes(await getOcct(), s.state!)));
     let worst = 0;
+
     for (let i = 0; i < stl.vertices.length; i += 3) {
       const r = Math.hypot(stl.vertices[i]!, stl.vertices[i + 1]!);
       if (r > 1) worst = Math.max(worst, Math.abs(r - 20));
     }
+
     // Vertices lie on the circle; the chord between two of them sags at most the linear tolerance.
     expect(worst).toBeLessThan(1e-3);
+
     const segments = new Set<string>();
-    for (let i = 0; i < stl.vertices.length; i += 3) if (Math.hypot(stl.vertices[i]!, stl.vertices[i + 1]!) > 1) segments.add(Math.atan2(stl.vertices[i + 1]!, stl.vertices[i]!).toFixed(4));
+
+    for (let i = 0; i < stl.vertices.length; i += 3) {
+      if (Math.hypot(stl.vertices[i]!, stl.vertices[i + 1]!) > 1) {
+        segments.add(Math.atan2(stl.vertices[i + 1]!, stl.vertices[i]!).toFixed(4));
+      }
+    }
+
     const sag = 20 * (1 - Math.cos(Math.PI / segments.size));
     expect(sag).toBeLessThanOrEqual(0.0101);
   });

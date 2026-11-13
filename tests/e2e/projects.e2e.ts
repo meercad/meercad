@@ -21,6 +21,7 @@ describe("versions, units and the overview", () => {
   afterAll(async () => app?.stop());
 
   const volume = () => ui.state<number>("s.output?.report.bodies[0]?.volume ?? 0");
+
   async function command(name: string): Promise<void> {
     await ui.press("Search commands");
     await ui.type(name);
@@ -50,8 +51,13 @@ describe("versions, units and the overview", () => {
     await sleep(500);
     // Restoring asks nothing more or confirms; either way the design is the saved one again.
     if (await ui.find(".ask button", "Restore")) await ui.press("Restore", ".ask button");
+
     await ui.settle();
-    if (await ui.find(".versions-dialog button", "Close (Esc)")) await ui.press("Close (Esc)", ".versions-dialog button");
+
+    if (await ui.find(".versions-dialog button", "Close (Esc)")) {
+      await ui.press("Close (Esc)", ".versions-dialog button");
+    }
+
     expect(await volume()).toBeCloseTo(8000, 3);
     expect(await ui.state<string>("String(s.doc.params.side)")).toBe("20 mm");
   });
@@ -59,9 +65,14 @@ describe("versions, units and the overview", () => {
   it("an inch design shows and takes inches while the model stays exact in mm", async () => {
     // Settings › Units › New designs in: Imperial; then a new part.
     await command("Settings");
-    const sel = await ui.page.eval<[number, number] | null>(`(() => { const l = [...document.querySelectorAll("label.check")].find((l) => l.textContent.includes("New designs in")); const r = l?.querySelector("select")?.getBoundingClientRect(); return r ? [r.left + r.width / 2, r.top + r.height / 2] : null; })()`);
+
+    const sel = await ui.page.eval<[number, number] | null>(
+      `(() => { const l = [...document.querySelectorAll("label.check")].find((l) => l.textContent.includes("New designs in")); const r = l?.querySelector("select")?.getBoundingClientRect(); return r ? [r.left + r.width / 2, r.top + r.height / 2] : null; })()`,
+    );
     expect(sel, "the units choice in Settings").not.toBeNull();
-    await ui.page.eval(`(() => { const s = [...document.querySelectorAll("label.check")].find((l) => l.textContent.includes("New designs in")).querySelector("select"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "imperial"); s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+    await ui.page.eval(
+      `(() => { const s = [...document.querySelectorAll("label.check")].find((l) => l.textContent.includes("New designs in")).querySelector("select"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "imperial"); s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`,
+    );
     await ui.key("Escape");
     await sleep(300);
     await ui.newPart();
@@ -77,8 +88,13 @@ describe("versions, units and the overview", () => {
     await ui.closePart();
     await ui.closePart();
     if (await ui.state<boolean>("s.screen !== 'home'")) await ui.press("All projects");
+
     await ui.until("the overview", "s.screen === 'home'");
-    const projectFiles = () => readdirSync(join(app.dir, "projects"), { recursive: true }).map(String).filter((f) => f.endsWith(".meercad"));
+
+    const projectFiles = () =>
+      readdirSync(join(app.dir, "projects"), { recursive: true })
+        .map(String)
+        .filter((f) => f.endsWith(".meercad"));
     const before = projectFiles();
     expect(before.length).toBeGreaterThanOrEqual(2);
 

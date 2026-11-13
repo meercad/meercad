@@ -9,15 +9,27 @@ import { sleep } from "../e2e/cdp.js";
 
 const [file, ...edits] = process.argv.slice(2);
 const app = await startApp();
+
 try {
   copyFileSync(file!, join(app.dir, "projects", "Bench.meercad"));
+
   const { page } = app;
   await page.eval("meercadTest.store.refreshProjects()");
-  const id = await page.eval<string>("meercadTest.app.getState().projects.find((p) => p.name === 'Bench').id");
+
+  const id = await page.eval<string>(
+    "meercadTest.app.getState().projects.find((p) => p.name === 'Bench').id",
+  );
 
   // Resolves once a rebuild started by `start` has finished: first output shown, and finished.
   const measure = (start: string) =>
-    page.eval<{ first: number; done: number; kernel?: number; mesh?: number; tris: number; transfer?: number }>(`new Promise((res) => {
+    page.eval<{
+      first: number;
+      done: number;
+      kernel?: number;
+      mesh?: number;
+      tris: number;
+      transfer?: number;
+    }>(`new Promise((res) => {
       const { app, store } = meercadTest;
       const t0 = performance.now();
       const before = app.getState().output;
@@ -35,7 +47,9 @@ try {
       }, 50);
     })`);
   const show = (name: string, r: Awaited<ReturnType<typeof measure>>) =>
-    console.log(`${name.padEnd(28)} first ${(r.first / 1000).toFixed(1).padStart(6)} s  done ${(r.done / 1000).toFixed(1).padStart(6)} s  kernel ${((r.kernel ?? 0) / 1000).toFixed(1)} s  mesh ${((r.mesh ?? 0) / 1000).toFixed(1)} s  transfer ${((r.transfer ?? 0) / 1000).toFixed(1)} s  tris ${r.tris}`);
+    console.log(
+      `${name.padEnd(28)} first ${(r.first / 1000).toFixed(1).padStart(6)} s  done ${(r.done / 1000).toFixed(1).padStart(6)} s  kernel ${((r.kernel ?? 0) / 1000).toFixed(1)} s  mesh ${((r.mesh ?? 0) / 1000).toFixed(1)} s  transfer ${((r.transfer ?? 0) / 1000).toFixed(1)} s  tris ${r.tris}`,
+    );
 
   show("open (first time)", await measure(`void store.openProject(${JSON.stringify(id)})`));
   // The kept result is written once things are quiet.
@@ -44,6 +58,7 @@ try {
   await page.eval(`meercadTest.store.closeTab(${JSON.stringify(id)}, false)`);
   await sleep(2000);
   show("open again (kept result)", await measure(`void store.openProject(${JSON.stringify(id)})`));
+
   for (const f of edits) {
     // A small change of the feature's first number (size, diameter, height, …).
     const patch = await page.eval<Record<string, unknown>>(`(() => {
@@ -55,12 +70,21 @@ try {
       }
       throw new Error("no number to change on " + f.id);
     })()`);
-    const index = await page.eval<number>(`meercadTest.store.currentDoc().features.findIndex((x) => x.id === ${JSON.stringify(f)})`);
-    show(`edit #${index} ${f}`, await measure(`store.apply({ type: "edit_feature", id: ${JSON.stringify(f)}, patch: ${JSON.stringify(patch)} })`));
+    const index = await page.eval<number>(
+      `meercadTest.store.currentDoc().features.findIndex((x) => x.id === ${JSON.stringify(f)})`,
+    );
+    show(
+      `edit #${index} ${f}`,
+      await measure(
+        `store.apply({ type: "edit_feature", id: ${JSON.stringify(f)}, patch: ${JSON.stringify(patch)} })`,
+      ),
+    );
   }
+
   const errors = page.takeErrors();
   if (errors.length) console.log("page errors:", errors.slice(0, 5));
 } finally {
   await app.stop();
 }
+
 process.exit(0);

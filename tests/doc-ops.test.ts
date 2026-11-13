@@ -9,10 +9,29 @@ const feats: Feature[] = [
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
   { id: "ex2", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 5, mode: "new_body" },
 ];
-const base = (): MeercadDocument => ({ format: "meercad/1", params: {}, features: structuredClone(feats), rollback: null });
-const hinge: Joint = { id: "j1", type: "revolute", a: "ex2", b: "ex1", anchor: { axisOf: { face: "ex2.side[sk1.c1]" } }, limits: [-90, 90] };
-const slide: Joint = { id: "j2", type: "slider", a: "ex1", b: "ground", anchor: { axisOf: { face: "ex1.side[sk1.c1]" } } };
-const withJoints = () => applyOp(applyOp(base(), { type: "set_joint", joint: hinge }), { type: "set_joint", joint: slide });
+const base = (): MeercadDocument => ({
+  format: "meercad/1",
+  params: {},
+  features: structuredClone(feats),
+  rollback: null,
+});
+const hinge: Joint = {
+  id: "j1",
+  type: "revolute",
+  a: "ex2",
+  b: "ex1",
+  anchor: { axisOf: { face: "ex2.side[sk1.c1]" } },
+  limits: [-90, 90],
+};
+const slide: Joint = {
+  id: "j2",
+  type: "slider",
+  a: "ex1",
+  b: "ground",
+  anchor: { axisOf: { face: "ex1.side[sk1.c1]" } },
+};
+const withJoints = () =>
+  applyOp(applyOp(base(), { type: "set_joint", joint: hinge }), { type: "set_joint", joint: slide });
 
 describe("document ops", () => {
   it("rolls back to a feature and forward again, and refuses an unknown one", () => {
@@ -23,7 +42,10 @@ describe("document ops", () => {
   });
 
   it("replaces a coupling by id and deletes it", () => {
-    let d = applyOp(withJoints(), { type: "set_coupling", coupling: { id: "c1", driver: "j1", driven: "j2", ratio: 1 } });
+    let d = applyOp(withJoints(), {
+      type: "set_coupling",
+      coupling: { id: "c1", driver: "j1", driven: "j2", ratio: 1 },
+    });
     d = applyOp(d, { type: "set_coupling", coupling: { id: "c1", driver: "j1", driven: "j2", ratio: 2 } });
     expect(d.mechanism!.couplings).toEqual([{ id: "c1", driver: "j1", driven: "j2", ratio: 2 }]);
     d = applyOp(d, { type: "delete_coupling", id: "c1" });
@@ -42,7 +64,10 @@ describe("document ops", () => {
     expect(d.mechanism!.motions![0]!.keys.map((k) => k.at)).toEqual([0, 1, 2]);
     // The op's own object is not changed (it is cloned).
     expect(keys.map((k) => k.at)).toEqual([2, 0, 1]);
-    d = applyOp(d, { type: "set_motion", motion: { id: "m1", duration: 4, loop: true, keys: keys.slice(0, 2) } });
+    d = applyOp(d, {
+      type: "set_motion",
+      motion: { id: "m1", duration: 4, loop: true, keys: keys.slice(0, 2) },
+    });
     expect(d.mechanism!.motions).toHaveLength(1);
     expect(d.mechanism!.motions![0]).toMatchObject({ duration: 4, loop: true });
     d = applyOp(d, { type: "delete_motion", id: "m1" });
@@ -55,7 +80,10 @@ describe("document ops", () => {
     let d = applyOp(base(), { type: "set_reference", reference: ref });
     d = applyOp(d, { type: "set_reference", reference: { ...ref, name: "Room", hidden: true } });
     expect(d.references).toEqual([{ ...ref, name: "Room", hidden: true }]);
-    d = applyOp(applyOp(d, { type: "set_reference", reference: { ...ref, id: "r2" } }), { type: "delete_reference", id: "r1" });
+    d = applyOp(applyOp(d, { type: "set_reference", reference: { ...ref, id: "r2" } }), {
+      type: "delete_reference",
+      id: "r1",
+    });
     expect(d.references!.map((r) => r.id)).toEqual(["r2"]);
     d = applyOp(d, { type: "delete_reference", id: "r2" });
     expect(d.references).toBeUndefined();

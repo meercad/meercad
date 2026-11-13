@@ -7,12 +7,31 @@ function box(min: number[], max: number[]): BodyMesh {
   const [x0, y0, z0] = min as [number, number, number];
   const [x1, y1, z1] = max as [number, number, number];
   const v = [
-    [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
-    [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
+    [x0, y0, z0],
+    [x1, y0, z0],
+    [x1, y1, z0],
+    [x0, y1, z0],
+    [x0, y0, z1],
+    [x1, y0, z1],
+    [x1, y1, z1],
+    [x0, y1, z1],
   ];
-  const quads = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
+  const quads = [
+    [0, 3, 2, 1],
+    [4, 5, 6, 7],
+    [0, 1, 5, 4],
+    [1, 2, 6, 5],
+    [2, 3, 7, 6],
+    [3, 0, 4, 7],
+  ];
   const indices = quads.flatMap(([a, b, c, d]) => [a!, b!, c!, a!, c!, d!]);
-  return { bodyId: "b", positions: Float32Array.from(v.flat()), normals: new Float32Array(24), indices: Uint32Array.from(indices) } as unknown as BodyMesh;
+
+  return {
+    bodyId: "b",
+    positions: Float32Array.from(v.flat()),
+    normals: new Float32Array(24),
+    indices: Uint32Array.from(indices),
+  } as unknown as BodyMesh;
 }
 
 describe("wall thickness", () => {
@@ -22,14 +41,19 @@ describe("wall thickness", () => {
     expect(plate!.stats.thin).toBeGreaterThan(0.5);
     expect(plate!.spots.length).toBeGreaterThan(0);
     expect(plate!.spots[0]!.mm).toBeCloseTo(0.6, 1);
+
     const block = await measureWalls(box([0, 0, 0], [20, 20, 20]), 1, { samples: WALL_SAMPLES.fast });
     expect(block!.spots).toEqual([]);
     expect(block!.stats.thin).toBe(0);
   });
 
   it("box measures only the surface inside it", async () => {
-    const m = await measureWalls(box([0, 0, 0], [20, 20, 0.6]), 1, { samples: WALL_SAMPLES.fast, box: { min: [0, 0, -1], max: [5, 5, 2] } });
+    const m = await measureWalls(box([0, 0, 0], [20, 20, 0.6]), 1, {
+      samples: WALL_SAMPLES.fast,
+      box: { min: [0, 0, -1], max: [5, 5, 2] },
+    });
     expect(m!.spots.every((p) => p.at[0] <= 5 && p.at[1] <= 5)).toBe(true);
+
     const measured = [...m!.wall].filter((d) => !Number.isNaN(d)).length;
     expect(measured).toBeGreaterThan(0);
     expect(measured).toBeLessThan(m!.wall.length / 4);

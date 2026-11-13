@@ -20,9 +20,12 @@ describe("control schemes", () => {
 
   const tool = () => app.page.eval<string>("meercadTest.sketch.getState().tool");
   const paletteOpen = () => app.page.eval<boolean>("!!document.querySelector('.palette')");
+
   const rightClick = async () => {
     // Empty view beside the model, inside the canvas.
-    const [x, y] = await app.page.eval<[number, number]>(`(() => { const r = meercadTest.store.getViewport().renderer.domElement.getBoundingClientRect(); return [r.right - 80, r.bottom - 120]; })()`);
+    const [x, y] = await app.page.eval<[number, number]>(
+      `(() => { const r = meercadTest.store.getViewport().renderer.domElement.getBoundingClientRect(); return [r.right - 80, r.bottom - 120]; })()`,
+    );
     await app.page.click(x, y, { button: "right" });
     await sleep(250);
   };
@@ -53,7 +56,11 @@ describe("control schemes", () => {
     await ui.clickSketch([20, 15]);
     await rightClick();
     expect(await tool()).toBe("line");
-    expect(await ui.state<number>("s.doc.features.find((f) => f.id === s.sketchId).entities.filter((e) => e.type === 'line').length")).toBe(2);
+    expect(
+      await ui.state<number>(
+        "s.doc.features.find((f) => f.id === s.sketchId).entities.filter((e) => e.type === 'line').length",
+      ),
+    ).toBe(2);
     await rightClick();
     expect(await tool()).toBe("select");
     await rightClick();

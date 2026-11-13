@@ -19,10 +19,19 @@ const profile: Feature[] = [
   { id: "pl1", op: "plane", base: { ref: "origin.YZ" }, offset: 20 },
   sketch("sk3", { ref: "pl1" }, rect("q", 30, 30, 5, 5)),
 ];
+
 async function ring(axis: AxisRef, extra: Feature[] = [], shape: Feature[] = profile) {
-  const { report } = (await newSession()).rebuild(doc([...block, ...shape, ...extra, { id: "rv1", op: "revolve", profile: { sketch: "sk3" }, axis, angle: 360, mode: "new_body" }]));
+  const { report } = (await newSession()).rebuild(
+    doc([
+      ...block,
+      ...shape,
+      ...extra,
+      { id: "rv1", op: "revolve", profile: { sketch: "sk3" }, axis, angle: 360, mode: "new_body" },
+    ]),
+  );
   const st = report.features.find((f) => f.id === "rv1")!;
   expect(st.status, st.message ?? "").toBe("ok");
+
   return report.bodies.find((b) => b.id === "rv1")!;
 }
 
@@ -39,20 +48,44 @@ describe("revolving about axes from the model", () => {
   it("about a straight edge of the part: the block's long top edge at y = 20, z = 10", async () => {
     // A 5 × 5 square on the plane y = 20 through that edge (XZ moved to y = 20), at x 10..15 and
     // z 20..25: 10..15 mm above the edge, so 12.5 mm out on average.
-    const r = await ring({ edge: { edge: ["ex1.end_cap", "ex1.side[sk1.l3]"] } }, [], [
-      { id: "pl2", op: "plane", base: { ref: "origin.XZ" }, offset: -20 },
-      sketch("sk3", { ref: "pl2" }, rect("q", 10, 20, 5, 5)),
-    ]);
+    const r = await ring(
+      { edge: { edge: ["ex1.end_cap", "ex1.side[sk1.l3]"] } },
+      [],
+      [
+        { id: "pl2", op: "plane", base: { ref: "origin.XZ" }, offset: -20 },
+        sketch("sk3", { ref: "pl2" }, rect("q", 10, 20, 5, 5)),
+      ],
+    );
     expect(r.volume).toBeCloseTo(2 * Math.PI * 12.5 * 25, 6);
   });
 
   it("refuses an axis square to the sketch: it would make no solid", async () => {
-    const { report } = (await newSession()).rebuild(doc([...block, ...profile, { id: "rv1", op: "revolve", profile: { sketch: "sk3" }, axis: { ref: "origin.X" }, angle: 360, mode: "new_body" }]));
-    expect(report.features.find((f) => f.id === "rv1")).toMatchObject({ status: "error", message: expect.stringMatching(/stands square to the sketch/) });
+    const { report } = (await newSession()).rebuild(
+      doc([
+        ...block,
+        ...profile,
+        {
+          id: "rv1",
+          op: "revolve",
+          profile: { sketch: "sk3" },
+          axis: { ref: "origin.X" },
+          angle: 360,
+          mode: "new_body",
+        },
+      ]),
+    );
+    expect(report.features.find((f) => f.id === "rv1")).toMatchObject({
+      status: "error",
+      message: expect.stringMatching(/stands square to the sketch/),
+    });
   });
 
   it("about a sketch line", async () => {
-    const line = sketch("sk4", { ref: "pl1" }, [{ id: "a", type: "point", x: 10, y: 0 }, { id: "b", type: "point", x: 10, y: 50 }, { id: "ax", type: "line", p1: "a", p2: "b", construction: true } as never]);
+    const line = sketch("sk4", { ref: "pl1" }, [
+      { id: "a", type: "point", x: 10, y: 0 },
+      { id: "b", type: "point", x: 10, y: 50 },
+      { id: "ax", type: "line", p1: "a", p2: "b", construction: true } as never,
+    ]);
     const r = await ring({ line: "sk4.ax" }, [line]);
     // The line y = 10 on that plane is the hole's axis again.
     expect(r.volume).toBeCloseTo(2 * Math.PI * 22.5 * 25, 6);

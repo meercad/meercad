@@ -1,482 +1,467 @@
 {
- "format": "meercad/1",
- "params": {},
- "features": [
-  {
-   "id": "sk1",
-   "op": "sketch",
-   "plane": {
-    "ref": "origin.XY"
-   },
-   "entities": [
+  "format": "meercad/1",
+  "params": {},
+  "features": [
     {
-     "id": "gp1",
-     "type": "point",
-     "x": 0,
-     "y": 5
+      "id": "sk1",
+      "op": "sketch",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "gp1",
+          "type": "point",
+          "x": 0,
+          "y": 5
+        },
+        {
+          "id": "gp2",
+          "type": "point",
+          "x": 100,
+          "y": 5
+        },
+        {
+          "id": "gp3",
+          "type": "point",
+          "x": 100,
+          "y": -5
+        },
+        {
+          "id": "gp4",
+          "type": "point",
+          "x": 0,
+          "y": -5
+        },
+        {
+          "id": "gcp",
+          "type": "point",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "gcq",
+          "type": "point",
+          "x": 100,
+          "y": 0
+        },
+        {
+          "id": "gl1",
+          "type": "line",
+          "p1": "gp1",
+          "p2": "gp2"
+        },
+        {
+          "id": "ga1",
+          "type": "arc",
+          "center": "gcq",
+          "start": "gp3",
+          "end": "gp2"
+        },
+        {
+          "id": "gl2",
+          "type": "line",
+          "p1": "gp3",
+          "p2": "gp4"
+        },
+        {
+          "id": "ga2",
+          "type": "arc",
+          "center": "gcp",
+          "start": "gp1",
+          "end": "gp4"
+        },
+        {
+          "id": "gh1",
+          "type": "circle",
+          "center": "gcp",
+          "radius": 2.2
+        },
+        {
+          "id": "gh2",
+          "type": "circle",
+          "center": "gcq",
+          "radius": 2.2
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "gp2",
-     "type": "point",
-     "x": 100,
-     "y": 5
+      "id": "ex1",
+      "op": "extrude",
+      "name": "Ground",
+      "profile": {
+        "sketch": "sk1"
+      },
+      "extent": "blind",
+      "distance": 3,
+      "mode": "new_body"
     },
     {
-     "id": "gp3",
-     "type": "point",
-     "x": 100,
-     "y": -5
+      "id": "pl1",
+      "op": "plane",
+      "base": {
+        "ref": "origin.XY"
+      },
+      "offset": 3
     },
     {
-     "id": "gp4",
-     "type": "point",
-     "x": 0,
-     "y": -5
+      "id": "sk2",
+      "op": "sketch",
+      "plane": {
+        "ref": "pl1"
+      },
+      "entities": [
+        {
+          "id": "cp1",
+          "type": "point",
+          "x": -4,
+          "y": 0
+        },
+        {
+          "id": "cp2",
+          "type": "point",
+          "x": -4,
+          "y": 30
+        },
+        {
+          "id": "cp3",
+          "type": "point",
+          "x": 4,
+          "y": 30
+        },
+        {
+          "id": "cp4",
+          "type": "point",
+          "x": 4,
+          "y": 0
+        },
+        {
+          "id": "ccp",
+          "type": "point",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "ccq",
+          "type": "point",
+          "x": 0,
+          "y": 30
+        },
+        {
+          "id": "cl1",
+          "type": "line",
+          "p1": "cp1",
+          "p2": "cp2"
+        },
+        {
+          "id": "ca1",
+          "type": "arc",
+          "center": "ccq",
+          "start": "cp3",
+          "end": "cp2"
+        },
+        {
+          "id": "cl2",
+          "type": "line",
+          "p1": "cp3",
+          "p2": "cp4"
+        },
+        {
+          "id": "ca2",
+          "type": "arc",
+          "center": "ccp",
+          "start": "cp1",
+          "end": "cp4"
+        },
+        {
+          "id": "ch1",
+          "type": "circle",
+          "center": "ccp",
+          "radius": 2.2
+        },
+        {
+          "id": "ch2",
+          "type": "circle",
+          "center": "ccq",
+          "radius": 2.2
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "gcp",
-     "type": "point",
-     "x": 0,
-     "y": 0
+      "id": "ex2",
+      "op": "extrude",
+      "name": "Crank",
+      "profile": {
+        "sketch": "sk2"
+      },
+      "extent": "blind",
+      "distance": 3,
+      "mode": "new_body"
     },
     {
-     "id": "gcq",
-     "type": "point",
-     "x": 100,
-     "y": 0
+      "id": "sk3",
+      "op": "sketch",
+      "plane": {
+        "ref": "pl1"
+      },
+      "entities": [
+        {
+          "id": "rp1",
+          "type": "point",
+          "x": 96.137938,
+          "y": -1.041381
+        },
+        {
+          "id": "rp2",
+          "type": "point",
+          "x": 77.913765,
+          "y": 66.544709
+        },
+        {
+          "id": "rp3",
+          "type": "point",
+          "x": 85.637889,
+          "y": 68.627471
+        },
+        {
+          "id": "rp4",
+          "type": "point",
+          "x": 103.862062,
+          "y": 1.041381
+        },
+        {
+          "id": "rcp",
+          "type": "point",
+          "x": 100,
+          "y": 0
+        },
+        {
+          "id": "rcq",
+          "type": "point",
+          "x": 81.775827,
+          "y": 67.58609
+        },
+        {
+          "id": "rl1",
+          "type": "line",
+          "p1": "rp1",
+          "p2": "rp2"
+        },
+        {
+          "id": "ra1",
+          "type": "arc",
+          "center": "rcq",
+          "start": "rp3",
+          "end": "rp2"
+        },
+        {
+          "id": "rl2",
+          "type": "line",
+          "p1": "rp3",
+          "p2": "rp4"
+        },
+        {
+          "id": "ra2",
+          "type": "arc",
+          "center": "rcp",
+          "start": "rp1",
+          "end": "rp4"
+        },
+        {
+          "id": "rh1",
+          "type": "circle",
+          "center": "rcp",
+          "radius": 2.2
+        },
+        {
+          "id": "rh2",
+          "type": "circle",
+          "center": "rcq",
+          "radius": 2.2
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "gl1",
-     "type": "line",
-     "p1": "gp1",
-     "p2": "gp2"
+      "id": "ex3",
+      "op": "extrude",
+      "name": "Rocker",
+      "profile": {
+        "sketch": "sk3"
+      },
+      "extent": "blind",
+      "distance": 3,
+      "mode": "new_body"
     },
     {
-     "id": "ga1",
-     "type": "arc",
-     "center": "gcq",
-     "start": "gp3",
-     "end": "gp2"
+      "id": "pl2",
+      "op": "plane",
+      "base": {
+        "ref": "origin.XY"
+      },
+      "offset": 6
     },
     {
-     "id": "gl2",
-     "type": "line",
-     "p1": "gp3",
-     "p2": "gp4"
+      "id": "sk4",
+      "op": "sketch",
+      "plane": {
+        "ref": "pl2"
+      },
+      "entities": [
+        {
+          "id": "kp1",
+          "type": "point",
+          "x": -1.670493,
+          "y": 33.634481
+        },
+        {
+          "id": "kp2",
+          "type": "point",
+          "x": 80.105334,
+          "y": 71.220571
+        },
+        {
+          "id": "kp3",
+          "type": "point",
+          "x": 83.44632,
+          "y": 63.951609
+        },
+        {
+          "id": "kp4",
+          "type": "point",
+          "x": 1.670493,
+          "y": 26.365519
+        },
+        {
+          "id": "kcp",
+          "type": "point",
+          "x": 0,
+          "y": 30
+        },
+        {
+          "id": "kcq",
+          "type": "point",
+          "x": 81.775827,
+          "y": 67.58609
+        },
+        {
+          "id": "kl1",
+          "type": "line",
+          "p1": "kp1",
+          "p2": "kp2"
+        },
+        {
+          "id": "ka1",
+          "type": "arc",
+          "center": "kcq",
+          "start": "kp3",
+          "end": "kp2"
+        },
+        {
+          "id": "kl2",
+          "type": "line",
+          "p1": "kp3",
+          "p2": "kp4"
+        },
+        {
+          "id": "ka2",
+          "type": "arc",
+          "center": "kcp",
+          "start": "kp1",
+          "end": "kp4"
+        },
+        {
+          "id": "kh1",
+          "type": "circle",
+          "center": "kcp",
+          "radius": 2.2
+        },
+        {
+          "id": "kh2",
+          "type": "circle",
+          "center": "kcq",
+          "radius": 2.2
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "ga2",
-     "type": "arc",
-     "center": "gcp",
-     "start": "gp1",
-     "end": "gp4"
+      "id": "ex4",
+      "op": "extrude",
+      "name": "Coupler",
+      "profile": {
+        "sketch": "sk4"
+      },
+      "extent": "blind",
+      "distance": 3,
+      "mode": "new_body"
     },
     {
-     "id": "gh1",
-     "type": "circle",
-     "center": "gcp",
-     "radius": 2.2
+      "id": "mv1",
+      "op": "transform",
+      "bodies": ["ex1"],
+      "translate": [30, 0, 0]
     },
     {
-     "id": "gh2",
-     "type": "circle",
-     "center": "gcq",
-     "radius": 2.2
+      "id": "mv2",
+      "op": "transform",
+      "bodies": ["ex3", "ex1", "ex4", "ex2"],
+      "translate": [-6, 0, 0]
     }
-   ],
-   "constraints": []
+  ],
+  "mechanism": {
+    "joints": [
+      {
+        "id": "j1",
+        "name": "Crank",
+        "type": "revolute",
+        "a": "ex2",
+        "b": "ex1",
+        "anchor": {
+          "axisOf": {
+            "face": "ex2.side[sk2.ch1]"
+          }
+        }
+      },
+      {
+        "id": "j2",
+        "name": "Coupler on crank",
+        "type": "revolute",
+        "a": "ex4",
+        "b": "ex2",
+        "anchor": {
+          "axisOf": {
+            "face": "ex4.side[sk4.kh1]"
+          }
+        }
+      },
+      {
+        "id": "j3",
+        "name": "Rocker",
+        "type": "revolute",
+        "a": "ex3",
+        "b": "ex1",
+        "anchor": {
+          "axisOf": {
+            "face": "ex3.side[sk3.rh1]"
+          }
+        }
+      },
+      {
+        "id": "j4",
+        "name": "Coupler on rocker",
+        "type": "revolute",
+        "a": "ex4",
+        "b": "ex3",
+        "anchor": {
+          "axisOf": {
+            "face": "ex4.side[sk4.kh2]"
+          }
+        }
+      }
+    ]
   },
-  {
-   "id": "ex1",
-   "op": "extrude",
-   "name": "Ground",
-   "profile": {
-    "sketch": "sk1"
-   },
-   "extent": "blind",
-   "distance": 3,
-   "mode": "new_body"
-  },
-  {
-   "id": "pl1",
-   "op": "plane",
-   "base": {
-    "ref": "origin.XY"
-   },
-   "offset": 3
-  },
-  {
-   "id": "sk2",
-   "op": "sketch",
-   "plane": {
-    "ref": "pl1"
-   },
-   "entities": [
-    {
-     "id": "cp1",
-     "type": "point",
-     "x": -4,
-     "y": 0
-    },
-    {
-     "id": "cp2",
-     "type": "point",
-     "x": -4,
-     "y": 30
-    },
-    {
-     "id": "cp3",
-     "type": "point",
-     "x": 4,
-     "y": 30
-    },
-    {
-     "id": "cp4",
-     "type": "point",
-     "x": 4,
-     "y": 0
-    },
-    {
-     "id": "ccp",
-     "type": "point",
-     "x": 0,
-     "y": 0
-    },
-    {
-     "id": "ccq",
-     "type": "point",
-     "x": 0,
-     "y": 30
-    },
-    {
-     "id": "cl1",
-     "type": "line",
-     "p1": "cp1",
-     "p2": "cp2"
-    },
-    {
-     "id": "ca1",
-     "type": "arc",
-     "center": "ccq",
-     "start": "cp3",
-     "end": "cp2"
-    },
-    {
-     "id": "cl2",
-     "type": "line",
-     "p1": "cp3",
-     "p2": "cp4"
-    },
-    {
-     "id": "ca2",
-     "type": "arc",
-     "center": "ccp",
-     "start": "cp1",
-     "end": "cp4"
-    },
-    {
-     "id": "ch1",
-     "type": "circle",
-     "center": "ccp",
-     "radius": 2.2
-    },
-    {
-     "id": "ch2",
-     "type": "circle",
-     "center": "ccq",
-     "radius": 2.2
-    }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex2",
-   "op": "extrude",
-   "name": "Crank",
-   "profile": {
-    "sketch": "sk2"
-   },
-   "extent": "blind",
-   "distance": 3,
-   "mode": "new_body"
-  },
-  {
-   "id": "sk3",
-   "op": "sketch",
-   "plane": {
-    "ref": "pl1"
-   },
-   "entities": [
-    {
-     "id": "rp1",
-     "type": "point",
-     "x": 96.137938,
-     "y": -1.041381
-    },
-    {
-     "id": "rp2",
-     "type": "point",
-     "x": 77.913765,
-     "y": 66.544709
-    },
-    {
-     "id": "rp3",
-     "type": "point",
-     "x": 85.637889,
-     "y": 68.627471
-    },
-    {
-     "id": "rp4",
-     "type": "point",
-     "x": 103.862062,
-     "y": 1.041381
-    },
-    {
-     "id": "rcp",
-     "type": "point",
-     "x": 100,
-     "y": 0
-    },
-    {
-     "id": "rcq",
-     "type": "point",
-     "x": 81.775827,
-     "y": 67.58609
-    },
-    {
-     "id": "rl1",
-     "type": "line",
-     "p1": "rp1",
-     "p2": "rp2"
-    },
-    {
-     "id": "ra1",
-     "type": "arc",
-     "center": "rcq",
-     "start": "rp3",
-     "end": "rp2"
-    },
-    {
-     "id": "rl2",
-     "type": "line",
-     "p1": "rp3",
-     "p2": "rp4"
-    },
-    {
-     "id": "ra2",
-     "type": "arc",
-     "center": "rcp",
-     "start": "rp1",
-     "end": "rp4"
-    },
-    {
-     "id": "rh1",
-     "type": "circle",
-     "center": "rcp",
-     "radius": 2.2
-    },
-    {
-     "id": "rh2",
-     "type": "circle",
-     "center": "rcq",
-     "radius": 2.2
-    }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex3",
-   "op": "extrude",
-   "name": "Rocker",
-   "profile": {
-    "sketch": "sk3"
-   },
-   "extent": "blind",
-   "distance": 3,
-   "mode": "new_body"
-  },
-  {
-   "id": "pl2",
-   "op": "plane",
-   "base": {
-    "ref": "origin.XY"
-   },
-   "offset": 6
-  },
-  {
-   "id": "sk4",
-   "op": "sketch",
-   "plane": {
-    "ref": "pl2"
-   },
-   "entities": [
-    {
-     "id": "kp1",
-     "type": "point",
-     "x": -1.670493,
-     "y": 33.634481
-    },
-    {
-     "id": "kp2",
-     "type": "point",
-     "x": 80.105334,
-     "y": 71.220571
-    },
-    {
-     "id": "kp3",
-     "type": "point",
-     "x": 83.44632,
-     "y": 63.951609
-    },
-    {
-     "id": "kp4",
-     "type": "point",
-     "x": 1.670493,
-     "y": 26.365519
-    },
-    {
-     "id": "kcp",
-     "type": "point",
-     "x": 0,
-     "y": 30
-    },
-    {
-     "id": "kcq",
-     "type": "point",
-     "x": 81.775827,
-     "y": 67.58609
-    },
-    {
-     "id": "kl1",
-     "type": "line",
-     "p1": "kp1",
-     "p2": "kp2"
-    },
-    {
-     "id": "ka1",
-     "type": "arc",
-     "center": "kcq",
-     "start": "kp3",
-     "end": "kp2"
-    },
-    {
-     "id": "kl2",
-     "type": "line",
-     "p1": "kp3",
-     "p2": "kp4"
-    },
-    {
-     "id": "ka2",
-     "type": "arc",
-     "center": "kcp",
-     "start": "kp1",
-     "end": "kp4"
-    },
-    {
-     "id": "kh1",
-     "type": "circle",
-     "center": "kcp",
-     "radius": 2.2
-    },
-    {
-     "id": "kh2",
-     "type": "circle",
-     "center": "kcq",
-     "radius": 2.2
-    }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex4",
-   "op": "extrude",
-   "name": "Coupler",
-   "profile": {
-    "sketch": "sk4"
-   },
-   "extent": "blind",
-   "distance": 3,
-   "mode": "new_body"
-  },
-  {
-   "id": "mv1",
-   "op": "transform",
-   "bodies": [
-    "ex1"
-   ],
-   "translate": [
-    30,
-    0,
-    0
-   ]
-  },
-  {
-   "id": "mv2",
-   "op": "transform",
-   "bodies": [
-    "ex3",
-    "ex1",
-    "ex4",
-    "ex2"
-   ],
-   "translate": [
-    -6,
-    0,
-    0
-   ]
-  }
- ],
- "mechanism": {
-  "joints": [
-   {
-    "id": "j1",
-    "name": "Crank",
-    "type": "revolute",
-    "a": "ex2",
-    "b": "ex1",
-    "anchor": {
-     "axisOf": {
-      "face": "ex2.side[sk2.ch1]"
-     }
-    }
-   },
-   {
-    "id": "j2",
-    "name": "Coupler on crank",
-    "type": "revolute",
-    "a": "ex4",
-    "b": "ex2",
-    "anchor": {
-     "axisOf": {
-      "face": "ex4.side[sk4.kh1]"
-     }
-    }
-   },
-   {
-    "id": "j3",
-    "name": "Rocker",
-    "type": "revolute",
-    "a": "ex3",
-    "b": "ex1",
-    "anchor": {
-     "axisOf": {
-      "face": "ex3.side[sk3.rh1]"
-     }
-    }
-   },
-   {
-    "id": "j4",
-    "name": "Coupler on rocker",
-    "type": "revolute",
-    "a": "ex4",
-    "b": "ex3",
-    "anchor": {
-     "axisOf": {
-      "face": "ex4.side[sk4.kh2]"
-     }
-    }
-   }
-  ]
- },
- "rollback": null
+  "rollback": null
 }

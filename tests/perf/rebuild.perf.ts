@@ -34,10 +34,23 @@ const OPEN_BUDGET: Record<string, number> = {
   "model 32 Platte mit Normteilen": 4500,
 };
 
-const docs: [string, MeercadDocument, (typeof MODELS)[number] | undefined][] = MODELS.map((m) => [`model ${m.file}`, m.doc, m]);
+const docs: [string, MeercadDocument, (typeof MODELS)[number] | undefined][] = MODELS.map((m) => [
+  `model ${m.file}`,
+  m.doc,
+  m,
+]);
 const corpusDir = new URL("../corpus/", import.meta.url);
+
 // feature-* files are the single-feature demos, already covered by the test models.
-for (const f of readdirSync(corpusDir).filter((f) => !f.startsWith("feature-")).sort()) docs.push([`corpus ${f.replace(/\.meercad\.json$/, "")}`, JSON.parse(readFileSync(new URL(f, corpusDir), "utf8")) as MeercadDocument, undefined]);
+for (const f of readdirSync(corpusDir)
+  .filter((f) => !f.startsWith("feature-"))
+  .sort()) {
+  docs.push([
+    `corpus ${f.replace(/\.meercad\.json$/, "")}`,
+    JSON.parse(readFileSync(new URL(f, corpusDir), "utf8")) as MeercadDocument,
+    undefined,
+  ]);
+}
 
 let oc: OC;
 let solver: SketchSolver;
@@ -56,17 +69,22 @@ describe("rebuild performance", () => {
     // Opening: a fresh session each time, like opening the file in a new tab.
     let tris = 0;
     let faces = 0;
+
     const openOnce = () => {
       const s = new KernelSession(oc, solver);
       const r = s.rebuild(doc);
-      expect(r.report.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+      expect(
+        r.report.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`),
+      ).toEqual([]);
       tris = r.meshes.reduce((n, m) => n + m.indices.length / 3, 0);
       faces = r.report.bodies.reduce((n, b) => n + b.faces, 0);
       s.dispose();
     };
+
     // Median of 3; small parts are measured again with 9 runs, where one slow run would weigh too much.
     let open = time(openOnce, 3);
     if (open.value < 300) open = time(openOnce, 9);
+
     check(`${name}: open`, open, OPEN_BUDGET[name] ?? BUDGET.open);
     // Counts are the same on every machine: a jump in triangles makes the viewport slow.
     check(`${name}: triangles`, { value: tris, unit: "tris" }, 2_000_000);
@@ -75,20 +93,27 @@ describe("rebuild performance", () => {
     const s = new KernelSession(oc, solver);
     s.rebuild(doc);
     // Nothing changed: everything comes from the cache.
-    check(`${name}: unchanged`, time(() => s.rebuild(doc), 5), BUDGET.unchanged);
+    check(
+      `${name}: unchanged`,
+      time(() => s.rebuild(doc), 5),
+      BUDGET.unchanged,
+    );
 
     // A value change, as in the variables panel, back and forth.
     const variant = model?.variants?.[0];
+
     if (variant) {
       const changed = { ...doc, params: { ...doc.params, ...variant.params } };
       let flip = false;
       const change = time(() => {
         flip = !flip;
+
         const r = s.rebuild(flip ? changed : doc);
         expect(r.report.firstRecomputed).toBeGreaterThanOrEqual(0);
       }, 4);
       check(`${name}: change value`, change, Math.max(BUDGET.change, OPEN_BUDGET[name] ?? 0));
     }
+
     s.dispose();
   });
 });

@@ -32,6 +32,8 @@ export default [
       "**/coverage/**",
       "apps/ios/ios/**",
       "apps/web/public/**",
+      // The test models stay exactly as they were built.
+      "tests/models/**",
       ".claude/**",
     ],
   },
@@ -41,7 +43,8 @@ export default [
       parser: tseslint.parser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
-    // The last two are registered for the `eslint-disable` comments in the code; their rules are not switched on.
+    // The last two are registered for the `eslint-disable` comments in the code; their rules are not
+    // switched on.
     plugins: { "@stylistic": stylistic, "@typescript-eslint": tseslint.plugin, "react-hooks": reactHooks },
     linterOptions: { reportUnusedDisableDirectives: "off" },
     rules: {

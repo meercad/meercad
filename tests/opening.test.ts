@@ -15,6 +15,7 @@ import { sureTap } from "../apps/web/src/lib/gestures";
 function later<T = void>() {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((r) => (resolve = r));
+
   return { promise, resolve };
 }
 
@@ -23,7 +24,11 @@ describe("openGuard (tapping a card again while it opens)", () => {
     const guard = openGuard();
     const read = later();
     const open = vi.fn(async () => read.promise);
-    const taps = [guard.run("Emil Mini v4", open), guard.run("Emil Mini v4", open), guard.run("Emil Mini v4", open)];
+    const taps = [
+      guard.run("Emil Mini v4", open),
+      guard.run("Emil Mini v4", open),
+      guard.run("Emil Mini v4", open),
+    ];
     expect(open).toHaveBeenCalledTimes(1);
     expect(guard.busy("Emil Mini v4")).toBe(true);
     expect(new Set(taps).size).toBe(1);
@@ -51,10 +56,12 @@ describe("openGuard (tapping a card again while it opens)", () => {
     const readA = later();
     const readB = later();
     const shown: string[] = [];
+
     const opener = (name: string, read: Promise<void>) => async (current: () => boolean) => {
       await read;
       if (current()) shown.push(name);
     };
+
     const a = guard.run("a", opener("a", readA.promise));
     const b = guard.run("b", opener("b", readB.promise));
     readB.resolve();
@@ -69,10 +76,12 @@ describe("openGuard (tapping a card again while it opens)", () => {
     const readA = later();
     const readB = later();
     const shown: string[] = [];
+
     const opener = (name: string, read: Promise<void>) => async (current: () => boolean) => {
       await read;
       if (current()) shown.push(name);
     };
+
     const a = guard.run("a", opener("a", readA.promise));
     const b = guard.run("b", opener("b", readB.promise));
     void guard.run("a", opener("a", readA.promise));
@@ -105,8 +114,8 @@ describe("tasksOnEditor (one progress display while a design opens)", () => {
     const loadDoc = store.slice(store.indexOf("function loadDoc("));
     const update = loadDoc.slice(0, loadDoc.indexOf("syncDoc();"));
     expect(update).toMatch(/screen: "editor",[\s\S]*tasks: tasksOnEditor\(s\.tasks\)/);
-    expect(store).toMatch(/startTask\(t\("Opening \{name\} …"[^\n]*untilEditor: true/);
-    expect(home).toMatch(/startTask\(t\("Opening \{name\}"[^\n]*untilEditor: true/);
+    expect(store).toMatch(/startTask\(t\("Opening \{name\} …"[^;]*untilEditor: true/);
+    expect(home).toMatch(/startTask\(t\("Opening \{name\}"[^;]*untilEditor: true/);
     // Both go through a guard.
     expect(store).toMatch(/return opening\.run\(id,/);
     expect(home).toMatch(/return openingExamples\.run\(ex\.name,/);

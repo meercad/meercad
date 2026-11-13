@@ -9,7 +9,9 @@ describe("parts named in a call", () => {
     expect(partsNamed(["kopf", "kopf_schale"], ids, groups)).toEqual(["kopf_schale", "kopf_deckel"]);
   });
   it("an unknown name fails at once and names what comes close", () => {
-    expect(() => partsNamed(["kop"], ids, groups)).toThrow('no part "kop"; close: folder "Kopf", kopf_schale, kopf_deckel');
+    expect(() => partsNamed(["kop"], ids, groups)).toThrow(
+      'no part "kop"; close: folder "Kopf", kopf_schale, kopf_deckel',
+    );
     expect(() => partsNamed(["bein"], ids, groups)).toThrow(/^no part "bein"$/);
   });
 });

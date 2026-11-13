@@ -26,11 +26,15 @@ describe("materials for a two-material print", () => {
   it("weighs the parts and puts PETG and TPU on two filaments in the 3MF", async () => {
     const s = await newSession();
     let d = doc(parts);
-    d = applyOp(d, { type: "define_material", material: { id: "own1", name: "Black TPU", base: "tpu", color: "#1c1c1c" } });
+    d = applyOp(d, {
+      type: "define_material",
+      material: { id: "own1", name: "Black TPU", base: "tpu", color: "#1c1c1c" },
+    });
     d = applyOp(d, { type: "set_material", part: "ex1", material: "petg" });
     d = applyOp(d, { type: "set_material", part: "ex2", material: "own1" });
     d = applyOp(d, { type: "set_material", part: "ex3", material: "petg" });
     d = { ...d, partColors: { ex1: "#2f6fd6", ex3: "#2f6fd6" } };
+
     const out = s.rebuild(d);
     const vol = (id: string) => out.report.bodies.find((b) => b.id === id)!.volume;
 
@@ -39,8 +43,13 @@ describe("materials for a two-material print", () => {
     expect(massOf(vol("ex2"), partMaterial(d, "ex2")!)).toBeCloseTo(2 * 1.21, 4);
 
     // The own material brings its colour; the PETG parts keep the colour picked for them.
-    const colors = partColors(d, out.meshes.map((m) => m.bodyId), true);
+    const colors = partColors(
+      d,
+      out.meshes.map((m) => m.bodyId),
+      true,
+    );
     expect(colors.get("ex2")).toBe("#1c1c1c");
+
     const meshParts = threeMfParts(d, out.meshes, colors);
     expect(filamentSlots(meshParts).filaments).toEqual([
       { color: "#2F6FD6", material: "PETG", type: "PETG" },
@@ -50,16 +59,23 @@ describe("materials for a two-material print", () => {
     const file = write3mf(meshParts);
     const zip = unzipSync(file);
     const model = strFromU8(zip["3D/3dmodel.model"]!);
-    expect(model).toContain('<base name="PETG" displaycolor="#2F6FD6FF"/><base name="Black TPU" displaycolor="#1C1C1CFF"/>');
+    expect(model).toContain(
+      '<base name="PETG" displaycolor="#2F6FD6FF"/><base name="Black TPU" displaycolor="#1C1C1CFF"/>',
+    );
     expect(model).toMatch(/<m:pbmetallic name="PETG" metallicness="0" roughness="0\.18"\/>/);
+
     const prusa = strFromU8(zip["Metadata/Slic3r_PE_model.config"]!);
     const bambu = strFromU8(zip["Metadata/model_settings.config"]!);
-    const extruders = (xml: string) => [...xml.matchAll(/key="extruder" value="(\d)"/g)].map((m) => Number(m[1]));
+    const extruders = (xml: string) =>
+      [...xml.matchAll(/key="extruder" value="(\d)"/g)].map((m) => Number(m[1]));
     expect(extruders(prusa)).toEqual([1, 2, 1]);
     expect(extruders(bambu)).toEqual([1, 2, 1]);
+
     // Every object's triangle range covers its mesh, so the slicer loads it whole.
     const ranges = [...prusa.matchAll(/<volume firstid="0" lastid="(\d+)">/g)].map((m) => Number(m[1]) + 1);
-    const tris = [...model.matchAll(/<triangles>([\s\S]*?)<\/triangles>/g)].map((m) => m[1]!.match(/<triangle /g)!.length);
+    const tris = [...model.matchAll(/<triangles>([\s\S]*?)<\/triangles>/g)].map(
+      (m) => m[1]!.match(/<triangle /g)!.length,
+    );
     expect(ranges).toEqual(tris);
     expect(tris.every((n) => n >= 12)).toBe(true);
 
@@ -70,6 +86,7 @@ describe("materials for a two-material print", () => {
     // Without materials (the app's default): plain named parts, nothing for a slicer to map.
     const plainParts = threeMfParts(d, out.meshes, colors, false);
     expect(filamentSlots(plainParts).filaments).toEqual([]);
+
     const plain = unzipSync(write3mf(plainParts));
     const plainModel = strFromU8(plain["3D/3dmodel.model"]!);
     expect(plainModel).not.toContain("basematerials");

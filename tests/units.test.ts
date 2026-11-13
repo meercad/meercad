@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { validateDocument } from "@meercad/schema";
 import { evaluate } from "@meercad/model";
-import { convertMmText, fmtLen, isLengthParam, lengthExpr, lengthText, lengthValue, setUnitSource } from "../apps/web/src/lib/units";
+import {
+  convertMmText,
+  fmtLen,
+  isLengthParam,
+  lengthExpr,
+  lengthText,
+  lengthValue,
+  setUnitSource,
+} from "../apps/web/src/lib/units";
 
 setUnitSource(() => "in");
 
@@ -30,7 +38,11 @@ describe("inch designs", () => {
   });
 
   it("is a valid document field", () => {
-    expect(validateDocument({ format: "meercad/1", params: {}, features: [], rollback: null, units: "in" }).ok).toBe(true);
-    expect(validateDocument({ format: "meercad/1", params: {}, features: [], rollback: null, units: "ft" }).ok).toBe(false);
+    expect(
+      validateDocument({ format: "meercad/1", params: {}, features: [], rollback: null, units: "in" }).ok,
+    ).toBe(true);
+    expect(
+      validateDocument({ format: "meercad/1", params: {}, features: [], rollback: null, units: "ft" }).ok,
+    ).toBe(false);
   });
 });

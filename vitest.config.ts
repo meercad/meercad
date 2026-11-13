@@ -8,20 +8,33 @@ import { defineConfig } from "vitest/config";
  */
 function testKernelWorker() {
   const stub = fileURLToPath(new URL("./apps/web/test/kernelWorker.ts", import.meta.url));
+
   return {
     name: "meercad-test-kernel-worker",
     enforce: "pre" as const,
-    async resolveId(this: { resolve(id: string, importer?: string): Promise<{ id: string } | null> }, id: string, importer?: string) {
+    async resolveId(
+      this: { resolve(id: string, importer?: string): Promise<{ id: string } | null> },
+      id: string,
+      importer?: string,
+    ) {
       if (id.endsWith("?worker")) return stub;
       if (id.endsWith("?worker&url")) return "\0worker-url";
+
       // A file's URL (a .wasm the app loads): in Node its path on disk.
       if (id.endsWith("?url")) {
         const file = await this.resolve(id.slice(0, -4), importer);
+
         return file ? `/@file-path/${encodeURIComponent(file.id)}` : null;
       }
+
       return null;
     },
-    load: (id: string) => (id === "\0worker-url" ? "export default \"kernel.worker.js\";" : id.startsWith("/@file-path/") ? `export default ${JSON.stringify(decodeURIComponent(id.slice("/@file-path/".length)))};` : null),
+    load: (id: string) =>
+      id === "\0worker-url"
+        ? 'export default "kernel.worker.js";'
+        : id.startsWith("/@file-path/")
+          ? `export default ${JSON.stringify(decodeURIComponent(id.slice("/@file-path/".length)))};`
+          : null,
   };
 }
 
@@ -56,8 +69,15 @@ export const SLOW = [
   "packages/model/src/texture/texture.test.ts",
 ];
 
-/** App tests that take long (every menu entry, every tool built). They run in `pnpm test`, not on every commit. */
-export const WEB_SLOW = ["apps/web/src/menus.test.tsx", "apps/web/src/components/FeatureDialog.build.test.tsx", "apps/web/src/components/FeatureDialog.fields.test.tsx"];
+/**
+ * App tests that take long (every menu entry, every tool built). They run in `pnpm test`, not on every
+ * commit.
+ */
+export const WEB_SLOW = [
+  "apps/web/src/menus.test.tsx",
+  "apps/web/src/components/FeatureDialog.build.test.tsx",
+  "apps/web/src/components/FeatureDialog.fields.test.tsx",
+];
 
 /** `pnpm test:coverage`: coverage instrumentation slows the kernel tests down by about half again. */
 const COVERAGE = process.argv.some((a) => a.startsWith("--coverage"));
@@ -99,13 +119,24 @@ export default defineConfig({
         plugins: [testKernelWorker()],
         // TSX of the app (React 19, automatic runtime).
         oxc: { jsx: { runtime: "automatic" } },
-        test: { name: "web", environment: "happy-dom", include: ["apps/web/src/**/*.test.{ts,tsx}"], exclude: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"] },
+        test: {
+          name: "web",
+          environment: "happy-dom",
+          include: ["apps/web/src/**/*.test.{ts,tsx}"],
+          exclude: WEB_SLOW,
+          setupFiles: ["apps/web/test/setup.ts"],
+        },
       },
       {
         extends: true,
         plugins: [testKernelWorker()],
         oxc: { jsx: { runtime: "automatic" } },
-        test: { name: "web-slow", environment: "happy-dom", include: WEB_SLOW, setupFiles: ["apps/web/test/setup.ts"] },
+        test: {
+          name: "web-slow",
+          environment: "happy-dom",
+          include: WEB_SLOW,
+          setupFiles: ["apps/web/test/setup.ts"],
+        },
       },
       {
         extends: true,

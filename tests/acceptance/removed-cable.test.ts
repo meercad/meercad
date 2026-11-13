@@ -5,7 +5,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { applyOp, OpError } from "@meercad/model";
-import { validateDocument, withoutRemovedFeatures, type Feature, type MeercadDocument } from "@meercad/schema";
+import {
+  validateDocument,
+  withoutRemovedFeatures,
+  type Feature,
+  type MeercadDocument,
+} from "@meercad/schema";
 import { doc, newSession, rect, sketch } from "./helpers.js";
 
 const block: Feature[] = [
@@ -13,8 +18,20 @@ const block: Feature[] = [
   { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
 /** Cable steps as earlier versions wrote them: a round one fixed to the block, a ribbon with plugs. */
-const cab1 = { id: "cab1", op: "cable", points: [{ at: [0, 0, 10], on: "ex1" }, { at: [60, 0, 30] }], diameter: 2, material: "pvc" } as unknown as Feature;
-const cab2 = { id: "cab2", op: "cable", shape: "ribbon", points: [{ at: [0, 0, 0] }, { at: [50, 0, 0] }], start: { kind: "idc" } } as unknown as Feature;
+const cab1 = {
+  id: "cab1",
+  op: "cable",
+  points: [{ at: [0, 0, 10], on: "ex1" }, { at: [60, 0, 30] }],
+  diameter: 2,
+  material: "pvc",
+} as unknown as Feature;
+const cab2 = {
+  id: "cab2",
+  op: "cable",
+  shape: "ribbon",
+  points: [{ at: [0, 0, 0] }, { at: [50, 0, 0] }],
+  start: { kind: "idc" },
+} as unknown as Feature;
 
 /** A design that names the cables everywhere a part could be named. */
 function oldDesign(rollback: string | null = null): MeercadDocument {
@@ -25,7 +42,14 @@ function oldDesign(rollback: string | null = null): MeercadDocument {
       cab2,
       { id: "mv1", op: "transform", bodies: ["ex1", "cab1"], translate: [0, 0, 5] },
       { id: "mv2", op: "transform", bodies: ["cab2"], translate: [1, 0, 0] },
-      { id: "lp1", op: "linear_pattern", source: { bodies: ["cab1"] }, direction: { ref: "origin.X" }, count: 2, spacing: 10 },
+      {
+        id: "lp1",
+        op: "linear_pattern",
+        source: { bodies: ["cab1"] },
+        direction: { ref: "origin.X" },
+        count: 2,
+        spacing: 10,
+      },
       { id: "fi1", op: "fillet", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }], radius: 3 },
     ]),
     rollback,
@@ -50,6 +74,7 @@ describe("files with the removed cables", () => {
     const v = validateDocument(JSON.parse(JSON.stringify(oldDesign())));
     expect(v.ok ? [] : v.errors).toEqual([]);
     if (!v.ok) return;
+
     const d = v.value;
     expect(d.features.map((f) => f.id)).toEqual(["sk1", "ex1", "mv1", "fi1"]);
     expect(d.features.find((f) => f.id === "mv1")).toMatchObject({ bodies: ["ex1"] });
@@ -66,18 +91,30 @@ describe("files with the removed cables", () => {
   });
 
   it("move a rollback on a dropped step back to the step before", () => {
-    expect(withoutRemovedFeatures(oldDesign("cab2"))).toMatchObject({ removed: ["cab1", "cab2", "mv2", "lp1"], doc: { rollback: "ex1" } });
+    expect(withoutRemovedFeatures(oldDesign("cab2"))).toMatchObject({
+      removed: ["cab1", "cab2", "mv2", "lp1"],
+      doc: { rollback: "ex1" },
+    });
     expect(withoutRemovedFeatures(oldDesign("lp1")).doc.rollback).toBe("mv1");
     expect(withoutRemovedFeatures(oldDesign("fi1")).doc.rollback).toBe("fi1");
+
     const plain = doc(block);
     expect(withoutRemovedFeatures(plain)).toEqual({ doc: plain, removed: [] });
     expect(withoutRemovedFeatures("not a design")).toEqual({ doc: "not a design", removed: [] });
   });
 
   it("rebuild as the design without cables did, even when the steps reach the kernel", async () => {
-    const plain = (await newSession()).rebuild({ ...doc([...block, { id: "mv1", op: "transform", bodies: ["ex1"], translate: [0, 0, 5] }, { id: "fi1", op: "fillet", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }], radius: 3 }]) });
+    const plain = (await newSession()).rebuild({
+      ...doc([
+        ...block,
+        { id: "mv1", op: "transform", bodies: ["ex1"], translate: [0, 0, 5] },
+        { id: "fi1", op: "fillet", edges: [{ edge: ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"] }], radius: 3 },
+      ]),
+    });
     const r = (await newSession()).rebuild(oldDesign());
-    expect(r.report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+    expect(r.report.features.filter((f) => f.status !== "ok").map((f) => `${f.id}: ${f.message}`)).toEqual(
+      [],
+    );
     expect(r.report.features.map((f) => f.id)).toEqual(["sk1", "ex1", "mv1", "fi1"]);
     expect(r.report.bodies.map((b) => b.id)).toEqual(["ex1"]);
     expect(r.report.bodies[0]!.volume).toBeCloseTo(plain.report.bodies[0]!.volume, 6);

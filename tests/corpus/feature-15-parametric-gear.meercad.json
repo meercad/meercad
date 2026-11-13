@@ -1,131 +1,129 @@
 {
- "format": "meercad/1",
- "params": {
-  "teeth": 12,
-  "thickness": "6 mm"
- },
- "features": [
-  {
-   "id": "sk1",
-   "op": "sketch",
-   "plane": {
-    "ref": "origin.XY"
-   },
-   "entities": [
+  "format": "meercad/1",
+  "params": {
+    "teeth": 12,
+    "thickness": "6 mm"
+  },
+  "features": [
     {
-     "id": "o",
-     "type": "point",
-     "x": 0,
-     "y": 0
+      "id": "sk1",
+      "op": "sketch",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "o",
+          "type": "point",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "c1",
+          "type": "circle",
+          "center": "o",
+          "radius": 20
+        },
+        {
+          "id": "c2",
+          "type": "circle",
+          "center": "o",
+          "radius": 4
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "c1",
-     "type": "circle",
-     "center": "o",
-     "radius": 20
+      "id": "ex1",
+      "op": "extrude",
+      "name": "Wheel",
+      "profile": {
+        "sketch": "sk1"
+      },
+      "extent": "blind",
+      "distance": "thickness",
+      "mode": "new_body"
     },
     {
-     "id": "c2",
-     "type": "circle",
-     "center": "o",
-     "radius": 4
+      "id": "sk2",
+      "op": "sketch",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "tp1",
+          "type": "point",
+          "x": 19,
+          "y": -2
+        },
+        {
+          "id": "tp2",
+          "type": "point",
+          "x": 24,
+          "y": -2
+        },
+        {
+          "id": "tp3",
+          "type": "point",
+          "x": 24,
+          "y": 2
+        },
+        {
+          "id": "tp4",
+          "type": "point",
+          "x": 19,
+          "y": 2
+        },
+        {
+          "id": "t1",
+          "type": "line",
+          "p1": "tp1",
+          "p2": "tp2"
+        },
+        {
+          "id": "t2",
+          "type": "line",
+          "p1": "tp2",
+          "p2": "tp3"
+        },
+        {
+          "id": "t3",
+          "type": "line",
+          "p1": "tp3",
+          "p2": "tp4"
+        },
+        {
+          "id": "t4",
+          "type": "line",
+          "p1": "tp4",
+          "p2": "tp1"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "id": "ex2",
+      "op": "extrude",
+      "name": "Tooth",
+      "profile": {
+        "sketch": "sk2"
+      },
+      "extent": "blind",
+      "distance": "thickness",
+      "mode": "join"
+    },
+    {
+      "id": "cp1",
+      "op": "circular_pattern",
+      "source": {
+        "features": ["ex2"]
+      },
+      "axis": {
+        "ref": "origin.Z"
+      },
+      "count": "teeth"
     }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex1",
-   "op": "extrude",
-   "name": "Wheel",
-   "profile": {
-    "sketch": "sk1"
-   },
-   "extent": "blind",
-   "distance": "thickness",
-   "mode": "new_body"
-  },
-  {
-   "id": "sk2",
-   "op": "sketch",
-   "plane": {
-    "ref": "origin.XY"
-   },
-   "entities": [
-    {
-     "id": "tp1",
-     "type": "point",
-     "x": 19,
-     "y": -2
-    },
-    {
-     "id": "tp2",
-     "type": "point",
-     "x": 24,
-     "y": -2
-    },
-    {
-     "id": "tp3",
-     "type": "point",
-     "x": 24,
-     "y": 2
-    },
-    {
-     "id": "tp4",
-     "type": "point",
-     "x": 19,
-     "y": 2
-    },
-    {
-     "id": "t1",
-     "type": "line",
-     "p1": "tp1",
-     "p2": "tp2"
-    },
-    {
-     "id": "t2",
-     "type": "line",
-     "p1": "tp2",
-     "p2": "tp3"
-    },
-    {
-     "id": "t3",
-     "type": "line",
-     "p1": "tp3",
-     "p2": "tp4"
-    },
-    {
-     "id": "t4",
-     "type": "line",
-     "p1": "tp4",
-     "p2": "tp1"
-    }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex2",
-   "op": "extrude",
-   "name": "Tooth",
-   "profile": {
-    "sketch": "sk2"
-   },
-   "extent": "blind",
-   "distance": "thickness",
-   "mode": "join"
-  },
-  {
-   "id": "cp1",
-   "op": "circular_pattern",
-   "source": {
-    "features": [
-     "ex2"
-    ]
-   },
-   "axis": {
-    "ref": "origin.Z"
-   },
-   "count": "teeth"
-  }
- ],
- "rollback": null
+  ],
+  "rollback": null
 }

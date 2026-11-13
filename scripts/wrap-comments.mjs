@@ -9,7 +9,13 @@ const LIMIT = 110;
 const DIRECTIVE = /^\s*(eslint|@ts-|v8 |c8 |istanbul |prettier-|@vitest|#region|#endregion|\/ <reference)/;
 
 function parseFile(source, file) {
-  const options = { comment: true, tokens: true, loc: true, range: true, ecmaFeatures: { jsx: /x$/.test(file) } };
+  const options = {
+    comment: true,
+    tokens: true,
+    loc: true,
+    range: true,
+    ecmaFeatures: { jsx: /x$/.test(file) },
+  };
 
   return tseslint.parser.parseForESLint(source, options).ast;
 }
@@ -61,7 +67,10 @@ function wrapFile(file) {
       if (ownLines) {
         const prefix = `${before}// `;
 
-        edits.set(first, wrapWords(comment.value, LIMIT - prefix.length).map((text) => prefix + text));
+        edits.set(
+          first,
+          wrapWords(comment.value, LIMIT - prefix.length).map((text) => prefix + text),
+        );
       } else if (!/x$/.test(file) && before.trim() !== "") {
         // A trailing comment moves above its line.
         const indent = before.match(/^\s*/)[0];
@@ -84,7 +93,11 @@ function wrapFile(file) {
       const prefix = `${before} * `;
       const body = wrapWords(comment.value.replace(/^\*/, ""), LIMIT - prefix.length);
 
-      edits.set(first, [`${before}/*${isDoc ? "*" : ""}`, ...body.map((text) => prefix + text), `${before} */`]);
+      edits.set(first, [
+        `${before}/*${isDoc ? "*" : ""}`,
+        ...body.map((text) => prefix + text),
+        `${before} */`,
+      ]);
 
       continue;
     }
@@ -99,7 +112,10 @@ function wrapFile(file) {
       const hang = /^(- |\d+\. |@)/.test(text) ? "  " : "";
       const wrapped = wrapWords(text, LIMIT - star.length - inner.length - hang.length);
 
-      edits.set(index, wrapped.map((part, n) => star + inner + (n ? hang : "") + part));
+      edits.set(
+        index,
+        wrapped.map((part, n) => star + inner + (n ? hang : "") + part),
+      );
     }
   }
 

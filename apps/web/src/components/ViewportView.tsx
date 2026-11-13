@@ -1633,7 +1633,8 @@ export function ViewportView() {
         >
           <PencilLine />
         </button>
-        {/* Textures cost time on every rebuild: hidden, editing a textured part is quicker (exports keep them). */}
+        {/* Textures cost time on every rebuild: hidden, editing a textured part is quicker
+            (exports keep them). */}
         {hasTextures ? (
           <button
             className={`icon-btn sm phone-hide ${showTextures ? "active" : ""}`}

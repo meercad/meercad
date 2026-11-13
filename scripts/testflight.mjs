@@ -31,6 +31,7 @@ const run = (cmd, args, cwd = root) => {
   const r = spawnSync(cmd, args, { cwd, stdio: "inherit" });
   if (r.status !== 0) process.exit(r.status ?? 1);
 };
+
 const fail = (msg) => {
   console.error(`✗ ${msg}`);
   process.exit(1);
@@ -42,24 +43,41 @@ let keyId = process.env.ASC_KEY_ID;
 let issuerId = process.env.ASC_ISSUER_ID;
 let keyPath = process.env.ASC_KEY_PATH;
 const configFile = join(ascDir, "meercad.json");
+
 if ((!keyId || !issuerId) && existsSync(configFile)) {
   const c = JSON.parse(readFileSync(configFile, "utf8"));
   keyId ??= c.keyId;
   issuerId ??= c.issuerId;
   keyPath ??= c.keyPath;
 }
+
 // Without a key, Xcode signs and uploads with the Apple account it is signed in to (Settings → Accounts).
 let auth = ["-allowProvisioningUpdates"];
+
 if (keyId && issuerId) {
   keyPath ??= join(ascDir, "private_keys", `AuthKey_${keyId}.p8`);
   if (!existsSync(keyPath)) fail(`API key file not found: ${keyPath}`);
-  auth = [...auth, "-authenticationKeyPath", keyPath, "-authenticationKeyID", keyId, "-authenticationKeyIssuerID", issuerId];
-} else console.log("› no App Store Connect API key set up: using the Apple account signed in to Xcode");
+
+  auth = [
+    ...auth,
+    "-authenticationKeyPath",
+    keyPath,
+    "-authenticationKeyID",
+    keyId,
+    "-authenticationKeyIssuerID",
+    issuerId,
+  ];
+} else {
+  console.log("› no App Store Connect API key set up: using the Apple account signed in to Xcode");
+}
 
 const team = /DEVELOPMENT_TEAM = (\w+);/.exec(readFileSync(join(project, "project.pbxproj"), "utf8"))?.[1];
 if (!team) fail("no DEVELOPMENT_TEAM in the Xcode project");
+
 const d = new Date();
-const build = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()].map((n, i) => String(n).padStart(i ? 2 : 4, "0")).join("");
+const build = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()]
+  .map((n, i) => String(n).padStart(i ? 2 : 4, "0"))
+  .join("");
 
 const work = mkdtempSync(join(tmpdir(), "meercad-testflight-"));
 const archive = join(work, "meerCAD.xcarchive");
@@ -85,9 +103,37 @@ console.log(`› building the web app into the iOS project (build ${build})`);
 run("pnpm", ["--filter", "meercad-ios", "sync"]);
 
 console.log("› archiving");
-run("xcodebuild", ["-project", project, "-scheme", "App", "-configuration", "Release", "-destination", "generic/platform=iOS", "-archivePath", archive, `CURRENT_PROJECT_VERSION=${build}`, ...auth, "-quiet", "archive"]);
+run("xcodebuild", [
+  "-project",
+  project,
+  "-scheme",
+  "App",
+  "-configuration",
+  "Release",
+  "-destination",
+  "generic/platform=iOS",
+  "-archivePath",
+  archive,
+  `CURRENT_PROJECT_VERSION=${build}`,
+  ...auth,
+  "-quiet",
+  "archive",
+]);
 
 console.log(upload ? "› uploading to App Store Connect" : "› exporting the .ipa");
-run("xcodebuild", ["-exportArchive", "-archivePath", archive, "-exportOptionsPlist", options, "-exportPath", join(work, "export"), ...auth]);
+run("xcodebuild", [
+  "-exportArchive",
+  "-archivePath",
+  archive,
+  "-exportOptionsPlist",
+  options,
+  "-exportPath",
+  join(work, "export"),
+  ...auth,
+]);
 
-console.log(upload ? `✓ build ${build} uploaded; it shows up in TestFlight once App Store Connect has processed it (usually 5–15 min)` : `✓ build ${build} exported to ${join(work, "export")}`);
+console.log(
+  upload
+    ? `✓ build ${build} uploaded; it shows up in TestFlight once App Store Connect has processed it (usually 5–15 min)`
+    : `✓ build ${build} exported to ${join(work, "export")}`,
+);

@@ -1,22 +1,22 @@
 {
- "format": "meercad/1",
- "params": {
-  "m": 2,
-  "z": 20
- },
- "features": [
-  {
-   "id": "gr1",
-   "op": "gear",
-   "kind": "spur",
-   "teeth": "z",
-   "width": 10,
-   "mode": "new_body",
-   "module": "m",
-   "bore": {
-    "diameter": 8
-   }
-  }
- ],
- "rollback": null
+  "format": "meercad/1",
+  "params": {
+    "m": 2,
+    "z": 20
+  },
+  "features": [
+    {
+      "id": "gr1",
+      "op": "gear",
+      "kind": "spur",
+      "teeth": "z",
+      "width": 10,
+      "mode": "new_body",
+      "module": "m",
+      "bore": {
+        "diameter": 8
+      }
+    }
+  ],
+  "rollback": null
 }

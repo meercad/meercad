@@ -4,7 +4,19 @@ import { snapshot } from "../packages/model/src/versions.js";
 import { emptyDocument, type MeercadDocument } from "@meercad/schema";
 import { lightDocument, restoreElided } from "../apps/web/src/lib/elide";
 
-const doc = (): MeercadDocument => ({ ...emptyDocument(), features: [{ id: "im1", op: "import", format: "stl", fileName: "scan.stl", data: "D".repeat(5000), texture: { image: "J".repeat(4000), mime: "image/jpeg", uvs: "U".repeat(3000) } }] });
+const doc = (): MeercadDocument => ({
+  ...emptyDocument(),
+  features: [
+    {
+      id: "im1",
+      op: "import",
+      format: "stl",
+      fileName: "scan.stl",
+      data: "D".repeat(5000),
+      texture: { image: "J".repeat(4000), mime: "image/jpeg", uvs: "U".repeat(3000) },
+    },
+  ],
+});
 
 describe("ops for what the parts list shows", () => {
   it("sets and clears a part's colour", () => {
@@ -17,13 +29,24 @@ describe("ops for what the parts list shows", () => {
   it("draws parts see-through and solid again", () => {
     const d = applyOp(doc(), { type: "set_see_through", parts: ["im1", "ex1"], on: true });
     expect(d.seeThrough?.sort()).toEqual(["ex1", "im1"]);
-    expect(applyOp(applyOp(d, { type: "set_see_through", parts: ["im1"], on: false }), { type: "set_see_through", parts: ["ex1"], on: false }).seeThrough).toBeUndefined();
+    expect(
+      applyOp(applyOp(d, { type: "set_see_through", parts: ["im1"], on: false }), {
+        type: "set_see_through",
+        parts: ["ex1"],
+        on: false,
+      }).seeThrough,
+    ).toBeUndefined();
   });
 
   it("sets folders and order, and clears them", () => {
-    const d = applyOp(doc(), { type: "set_part_list", groups: [{ name: "Lid", parts: ["im1"] }], order: ["im1"] });
+    const d = applyOp(doc(), {
+      type: "set_part_list",
+      groups: [{ name: "Lid", parts: ["im1"] }],
+      order: ["im1"],
+    });
     expect(d.partGroups).toEqual([{ name: "Lid", parts: ["im1"] }]);
     expect(d.partOrder).toEqual(["im1"]);
+
     const cleared = applyOp(d, { type: "set_part_list", groups: null });
     expect(cleared.partGroups).toBeUndefined();
     expect(cleared.partOrder).toEqual(["im1"]);
@@ -59,15 +82,26 @@ describe("embedded files left out for assistants", () => {
     const d = doc();
     const f = lightDocument(d).features[0]!;
     if (f.op !== "import" || !f.texture) throw new Error("no texture");
-    const [op] = restoreElided([{ type: "edit_feature", id: "im1", patch: { texture: { ...f.texture, hidden: true } } }], d);
+
+    const [op] = restoreElided(
+      [{ type: "edit_feature", id: "im1", patch: { texture: { ...f.texture, hidden: true } } }],
+      d,
+    );
     const next = applyOp(d, op!);
     const g = next.features[0]!;
-    expect(g.op === "import" && g.texture).toEqual({ image: "J".repeat(4000), mime: "image/jpeg", uvs: "U".repeat(3000), hidden: true });
+    expect(g.op === "import" && g.texture).toEqual({
+      image: "J".repeat(4000),
+      mime: "image/jpeg",
+      uvs: "U".repeat(3000),
+      hidden: true,
+    });
     expect(g.op === "import" && g.data).toBe("D".repeat(5000));
   });
 
   it("refuse a placeholder where the model has nothing", () => {
-    expect(() => restoreElided([{ type: "edit_feature", id: "nope", patch: { data: "…elided:5000 chars…" } }], doc())).toThrow(/elided/);
+    expect(() =>
+      restoreElided([{ type: "edit_feature", id: "nope", patch: { data: "…elided:5000 chars…" } }], doc()),
+    ).toThrow(/elided/);
   });
 
   it("a whole document sent back with replace keeps its files", () => {

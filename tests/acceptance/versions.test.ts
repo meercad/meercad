@@ -4,9 +4,28 @@ import { validateDocument, type Feature } from "@meercad/schema";
 import { doc, newSession, rect, sketch } from "./helpers.js";
 
 const block = (): ReturnType<typeof doc> =>
-  doc([sketch("sk1", { ref: "origin.XY" }, rect("a", 0, 0, 10, 10)), { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "height", mode: "new_body" } as Feature], { height: 20 });
+  doc(
+    [
+      sketch("sk1", { ref: "origin.XY" }, rect("a", 0, 0, 10, 10)),
+      {
+        id: "ex1",
+        op: "extrude",
+        profile: { sketch: "sk1" },
+        extent: "blind",
+        distance: "height",
+        mode: "new_body",
+      } as Feature,
+    ],
+    { height: 20 },
+  );
 /** An imported "file" large enough to be kept once in the blobs. */
-const scan = (n: number): Feature => ({ id: `im${n}`, op: "import", format: "stl", fileName: "scan.stl", data: "A".repeat(10_000) });
+const scan = (n: number): Feature => ({
+  id: `im${n}`,
+  op: "import",
+  format: "stl",
+  fileName: "scan.stl",
+  data: "A".repeat(10_000),
+});
 
 describe("versions", () => {
   it("saves the design under a name and brings it back, the versions staying", async () => {
@@ -14,7 +33,17 @@ describe("versions", () => {
     let d = block();
     d = applyOp(d, { type: "save_version", name: "First" });
     d = applyOp(d, { type: "set_param", name: "height", expr: 40 });
-    d = applyOp(d, { type: "add_features", features: [{ id: "fi1", op: "fillet", edges: { select: "edges", of: "ex1", where: { face: "ex1.end_cap" } }, radius: 1 }] });
+    d = applyOp(d, {
+      type: "add_features",
+      features: [
+        {
+          id: "fi1",
+          op: "fillet",
+          edges: { select: "edges", of: "ex1", where: { face: "ex1.end_cap" } },
+          radius: 1,
+        },
+      ],
+    });
     expect(s.rebuild(d).report.bodies[0]!.bbox.max[2]).toBeCloseTo(40, 6);
     d = applyOp(d, { type: "save_version", name: "Rounded" });
     d = applyOp(d, { type: "restore_version", name: "First" });
@@ -49,12 +78,15 @@ describe("versions", () => {
     d = applyOp(d, { type: "set_param", name: "height", expr: 25 });
     d = applyOp(d, { type: "save_version", name: "Two" });
     expect(Object.keys(d.blobs!)).toHaveLength(1);
+
     const size = JSON.stringify(d).length;
     expect(size).toBeLessThan(2 * 10_000 + 5000);
     // Without the import the blob goes once no version needs it.
     d = applyOp(d, { type: "delete_feature", id: "im1" });
     d = applyOp(d, { type: "restore_version", name: "One" });
-    expect((d.features.find((f) => f.id === "im1") as Feature & { data: string }).data).toBe("A".repeat(10_000));
+    expect((d.features.find((f) => f.id === "im1") as Feature & { data: string }).data).toBe(
+      "A".repeat(10_000),
+    );
     d = applyOp(d, { type: "delete_version", name: "One" });
     d = applyOp(d, { type: "delete_version", name: "Two" });
     expect(d.blobs).toBeUndefined();
@@ -64,8 +96,18 @@ describe("versions", () => {
     let d = applyOp(block(), { type: "add_features", features: [scan(1)] });
     d = applyOp(d, { type: "save_version", name: "Then" });
     d = applyOp(d, { type: "edit_feature", id: "ex1", patch: { distance: 5 } });
-    d = applyOp(d, { type: "add_features", features: [{ id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: [], constraints: [] } as Feature] });
-    expect(versionChanges(d.versions![0]!.state, d)).toEqual({ added: ["sk2"], removed: [], changed: ["ex1"], other: false });
+    d = applyOp(d, {
+      type: "add_features",
+      features: [
+        { id: "sk2", op: "sketch", plane: { ref: "origin.XY" }, entities: [], constraints: [] } as Feature,
+      ],
+    });
+    expect(versionChanges(d.versions![0]!.state, d)).toEqual({
+      added: ["sk2"],
+      removed: [],
+      changed: ["ex1"],
+      other: false,
+    });
     d = applyOp(d, { type: "set_param", name: "height", expr: 1 });
     expect(versionChanges(d.versions![0]!.state, d).other).toBe(true);
     expect(designOf(d).versions).toBeUndefined();

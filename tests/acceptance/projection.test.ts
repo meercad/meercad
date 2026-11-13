@@ -21,8 +21,15 @@ const holeTop = { edge: ["ex1.end_cap", "ex2.side[sk2.k]"] };
 const roundTop = { edge: ["ex1.end_cap", "fi1.round[ex1.side[sk1.l2]|ex1.side[sk1.l3]]"] };
 
 async function curvesOf(plane: Parameters<typeof sketch>[1], edges: object[], extra: Feature[] = []) {
-  const { report } = (await newSession()).rebuild(doc([...block, sketch("sk3", plane, [{ id: "pr", type: "projection", edges: edges as never }]), ...extra]));
+  const { report } = (await newSession()).rebuild(
+    doc([
+      ...block,
+      sketch("sk3", plane, [{ id: "pr", type: "projection", edges: edges as never }]),
+      ...extra,
+    ]),
+  );
   const st = report.features.find((f) => f.id === "sk3")!;
+
   return { report, status: st, curves: report.sketches.find((s) => s.id === "sk3")?.curves ?? [] };
 }
 
@@ -31,6 +38,7 @@ describe("projected edges", () => {
     const { curves, status } = await curvesOf({ ref: "pl1" }, [holeTop]);
     expect(status.status).toBe("ok");
     expect(curves).toHaveLength(1);
+
     const c = curves[0] as { kind: string; center: [number, number]; radius: number; external?: boolean };
     expect(c.kind).toBe("circle");
     expect(c.radius).toBeCloseTo(4, 9);
@@ -54,14 +62,29 @@ describe("projected edges", () => {
     // On the block's bottom face the sketch looks up from below: the arc still spans its quarter.
     const { curves, status } = await curvesOf({ face: { face: "ex1.start_cap" } }, [roundTop]);
     expect(status.status).toBe("ok");
+
     const a = curves[0] as { center: [number, number]; radius: number; a0: number; a1: number };
     expect(a.radius).toBeCloseTo(5, 9);
+
     const span = ((a.a1 - a.a0 + 2 * Math.PI) % (2 * Math.PI)) * (180 / Math.PI);
     expect(span).toBeCloseTo(90, 6);
   });
 
   it("make a cylinder of the hole's size when extruded", async () => {
-    const { report } = await curvesOf({ ref: "pl1" }, [holeTop], [{ id: "ex3", op: "extrude", profile: { sketch: "sk3" }, extent: "blind", distance: 5, mode: "new_body" }]);
+    const { report } = await curvesOf(
+      { ref: "pl1" },
+      [holeTop],
+      [
+        {
+          id: "ex3",
+          op: "extrude",
+          profile: { sketch: "sk3" },
+          extent: "blind",
+          distance: 5,
+          mode: "new_body",
+        },
+      ],
+    );
     const cyl = report.bodies.find((b) => b.id === "ex3")!;
     expect(cyl.volume).toBeCloseTo(Math.PI * 16 * 5, 6);
     expect(cyl.bbox.min[2]).toBeCloseTo(30, 6);

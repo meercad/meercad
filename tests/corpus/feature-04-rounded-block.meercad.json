@@ -1,107 +1,95 @@
 {
- "format": "meercad/1",
- "params": {},
- "features": [
-  {
-   "id": "sk1",
-   "op": "sketch",
-   "plane": {
-    "ref": "origin.XY"
-   },
-   "entities": [
+  "format": "meercad/1",
+  "params": {},
+  "features": [
     {
-     "id": "lp1",
-     "type": "point",
-     "x": 0,
-     "y": 0
+      "id": "sk1",
+      "op": "sketch",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "lp1",
+          "type": "point",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "lp2",
+          "type": "point",
+          "x": 40,
+          "y": 0
+        },
+        {
+          "id": "lp3",
+          "type": "point",
+          "x": 40,
+          "y": 30
+        },
+        {
+          "id": "lp4",
+          "type": "point",
+          "x": 0,
+          "y": 30
+        },
+        {
+          "id": "l1",
+          "type": "line",
+          "p1": "lp1",
+          "p2": "lp2"
+        },
+        {
+          "id": "l2",
+          "type": "line",
+          "p1": "lp2",
+          "p2": "lp3"
+        },
+        {
+          "id": "l3",
+          "type": "line",
+          "p1": "lp3",
+          "p2": "lp4"
+        },
+        {
+          "id": "l4",
+          "type": "line",
+          "p1": "lp4",
+          "p2": "lp1"
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "lp2",
-     "type": "point",
-     "x": 40,
-     "y": 0
+      "id": "ex1",
+      "op": "extrude",
+      "profile": {
+        "sketch": "sk1"
+      },
+      "extent": "blind",
+      "distance": 10,
+      "mode": "new_body"
     },
     {
-     "id": "lp3",
-     "type": "point",
-     "x": 40,
-     "y": 30
-    },
-    {
-     "id": "lp4",
-     "type": "point",
-     "x": 0,
-     "y": 30
-    },
-    {
-     "id": "l1",
-     "type": "line",
-     "p1": "lp1",
-     "p2": "lp2"
-    },
-    {
-     "id": "l2",
-     "type": "line",
-     "p1": "lp2",
-     "p2": "lp3"
-    },
-    {
-     "id": "l3",
-     "type": "line",
-     "p1": "lp3",
-     "p2": "lp4"
-    },
-    {
-     "id": "l4",
-     "type": "line",
-     "p1": "lp4",
-     "p2": "lp1"
+      "id": "fi1",
+      "op": "fillet",
+      "name": "Round corners",
+      "edges": [
+        {
+          "edge": ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"]
+        },
+        {
+          "edge": ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"]
+        },
+        {
+          "edge": ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"]
+        },
+        {
+          "edge": ["ex1.side[sk1.l4]", "ex1.side[sk1.l1]"]
+        }
+      ],
+      "radius": 5
     }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex1",
-   "op": "extrude",
-   "profile": {
-    "sketch": "sk1"
-   },
-   "extent": "blind",
-   "distance": 10,
-   "mode": "new_body"
-  },
-  {
-   "id": "fi1",
-   "op": "fillet",
-   "name": "Round corners",
-   "edges": [
-    {
-     "edge": [
-      "ex1.side[sk1.l1]",
-      "ex1.side[sk1.l2]"
-     ]
-    },
-    {
-     "edge": [
-      "ex1.side[sk1.l2]",
-      "ex1.side[sk1.l3]"
-     ]
-    },
-    {
-     "edge": [
-      "ex1.side[sk1.l3]",
-      "ex1.side[sk1.l4]"
-     ]
-    },
-    {
-     "edge": [
-      "ex1.side[sk1.l4]",
-      "ex1.side[sk1.l1]"
-     ]
-    }
-   ],
-   "radius": 5
-  }
- ],
- "rollback": null
+  ],
+  "rollback": null
 }

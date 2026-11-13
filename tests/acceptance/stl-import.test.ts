@@ -15,6 +15,7 @@ async function stlOf(features: Feature[], drop = 0): Promise<{ data: string; vol
   const r = s.rebuild(doc(features)).report;
   const meshes = exportMeshes(await getOcct(), s.state!);
   if (drop) meshes[0]!.indices = meshes[0]!.indices.slice(0, meshes[0]!.indices.length - drop * 3);
+
   return { data: Buffer.from(writeStl(meshes)).toString("base64"), volume: r.bodies[0]!.volume };
 }
 
@@ -22,13 +23,17 @@ describe("STL import", () => {
   it("turns a closed mesh into a solid body, wherever it sits", async () => {
     const { data, volume } = await stlOf(part);
     const s = await newSession();
-    const r = s.rebuild(doc([{ id: "im1", op: "import", format: "stl", fileName: "plate.stl", data }])).report;
+    const r = s.rebuild(
+      doc([{ id: "im1", op: "import", format: "stl", fileName: "plate.stl", data }]),
+    ).report;
     expect(r.features.find((f) => f.id === "im1")?.status).toBe("ok");
     expect(r.bodies).toHaveLength(1);
     expect(r.bodies[0]!.volume).toBeCloseTo(volume, -1);
     expect(r.bodies[0]!.bbox.min[0]).toBeCloseTo(100, 1);
+
     // The mesh is shown with the file's own triangles, without meshing it again.
-    const m = s.rebuild(doc([{ id: "im1", op: "import", format: "stl", fileName: "plate.stl", data }])).meshes[0]!;
+    const m = s.rebuild(doc([{ id: "im1", op: "import", format: "stl", fileName: "plate.stl", data }]))
+      .meshes[0]!;
     expect(m.indices.length / 3).toBe(r.bodies[0]!.faces);
     expect(m.edgeRanges.length).toBe(0);
   });
@@ -36,8 +41,14 @@ describe("STL import", () => {
   it("keeps its triangles when moved", async () => {
     const { data } = await stlOf(part);
     const s = await newSession();
-    const r = s.rebuild(doc([{ id: "im1", op: "import", format: "stl", fileName: "plate.stl", data }, { id: "mv1", op: "transform", bodies: ["im1"], translate: [0, 0, 50] }]));
+    const r = s.rebuild(
+      doc([
+        { id: "im1", op: "import", format: "stl", fileName: "plate.stl", data },
+        { id: "mv1", op: "transform", bodies: ["im1"], translate: [0, 0, 50] },
+      ]),
+    );
     expect(r.report.features.filter((f) => f.status !== "ok")).toEqual([]);
+
     const zs = Array.from(r.meshes[0]!.positions).filter((_, i) => i % 3 === 2);
     expect(Math.min(...zs)).toBeCloseTo(50, 3);
     expect(r.meshes[0]!.indices.length / 3).toBe(r.report.bodies[0]!.faces);
@@ -50,7 +61,14 @@ describe("STL import", () => {
       doc([
         { id: "im1", op: "import", format: "stl", fileName: "plate.stl", data },
         sketch("sk2", { ref: "origin.XY" }, rect("q", 140, 115, 10, 10)),
-        { id: "ex2", op: "extrude", profile: { sketch: "sk2" }, extent: "through_all", distance: 1, mode: "cut" },
+        {
+          id: "ex2",
+          op: "extrude",
+          profile: { sketch: "sk2" },
+          extent: "through_all",
+          distance: 1,
+          mode: "cut",
+        },
       ]),
     ).report;
     expect(r.features.filter((f) => f.status !== "ok")).toEqual([]);

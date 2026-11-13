@@ -30,10 +30,17 @@ describe("functions of the app", () => {
     await ui.closePart();
   });
 
-  const bodies = () => ui.state<Body[]>("s.output?.report.bodies.map((b) => ({ id: b.id, volume: b.volume, bbox: b.bbox })) ?? []");
-  const failed = () => ui.state<string[]>("(s.output?.report.features ?? []).filter((f) => f.status === 'error').map((f) => f.id + ': ' + f.message)");
+  const bodies = () =>
+    ui.state<Body[]>(
+      "s.output?.report.bodies.map((b) => ({ id: b.id, volume: b.volume, bbox: b.bbox })) ?? []",
+    );
+  const failed = () =>
+    ui.state<string[]>(
+      "(s.output?.report.features ?? []).filter((f) => f.status === 'error').map((f) => f.id + ': ' + f.message)",
+    );
   const size = (b: Body) => b.bbox.max.map((v, i) => v - b.bbox.min[i]!);
   const toasts = () => ui.state<string[]>("s.toasts.map((t) => t.text)");
+
   async function command(name: string): Promise<void> {
     await ui.press("Search commands");
     await ui.type(name);
@@ -41,6 +48,7 @@ describe("functions of the app", () => {
     await ui.key("Enter");
     await sleep(300);
   }
+
   /** A new part with a basic solid: the default 20 mm cube, or with its size typed in. */
   async function cube(): Promise<void> {
     await ui.newPart();
@@ -50,6 +58,7 @@ describe("functions of the app", () => {
 
   it("basic solid: the default cube is 20 × 20 × 20 mm, 8000 mm³", async () => {
     await cube();
+
     const [b] = await bodies();
     expect(await failed()).toEqual([]);
     expect(b!.volume).toBeCloseTo(8000, 3);
@@ -65,12 +74,14 @@ describe("functions of the app", () => {
     expect(await bodies()).toHaveLength(0);
     await ui.key("Shift+Meta+z");
     await ui.settle();
+
     const [b] = await bodies();
     expect(b!.volume).toBeCloseTo(8000, 3);
   });
 
   it("delete key on a selected part removes it as a step that can be undone", async () => {
     await cube();
+
     const [b] = await bodies();
     // A double click selects the whole part.
     const at = await ui.spotOf("face", `(f) => f.body === ${JSON.stringify(b!.id)}`, true);
@@ -92,6 +103,7 @@ describe("functions of the app", () => {
     await ui.clickFace("(f) => f.normal[2] > 0.9");
     await ui.clickFace("(f) => f.normal[2] < -0.9");
     await ui.until("a measurement", "!!s.measure.result");
+
     const rows = await ui.state<[string, string][]>("s.measure.result.rows");
     expect(rows.find((r) => r[0] === "Distance")?.[1]).toBe("20 mm");
     await ui.key("Escape");
@@ -105,6 +117,7 @@ describe("functions of the app", () => {
     await ui.accept();
     expect((await bodies())[0]!.volume).toBeCloseTo(15 ** 3, 3);
     await ui.setVariable("side", "22.5 mm");
+
     const [b] = await bodies();
     expect(b!.volume).toBeCloseTo(22.5 ** 3, 3);
     size(b!).forEach((s) => expect(s).toBeCloseTo(22.5, 4));
@@ -115,8 +128,10 @@ describe("functions of the app", () => {
     await ui.feature("Create", "Screw and nut");
     await ui.accept();
     expect(await failed()).toEqual([]);
+
     const all = await bodies();
     expect(all.length).toBeGreaterThan(0);
+
     const s = size(all[0]!);
     const across = Math.max(s[0]!, s[1]!);
     // ISO 4017 M8: 13 mm across flats; the modelled hexagon has sharp corners, 13 / cos 30° = 15.01
@@ -132,6 +147,7 @@ describe("functions of the app", () => {
     await ui.feature("Create", "Spring");
     await ui.accept();
     expect(await failed()).toEqual([]);
+
     const s = size((await bodies())[0]!);
     expect(s[2]).toBeCloseTo(40, 0);
     // Ø 15 is the coil's mean diameter: the outside is one wire (1.5) larger.
@@ -144,6 +160,7 @@ describe("functions of the app", () => {
     await ui.feature("Create", "Wall storage");
     await ui.accept();
     expect(await failed()).toEqual([]);
+
     const s = size((await bodies())[0]!).sort((a, b) => b - a);
     expect(s[0]).toBeCloseTo(112, 0);
     expect(s[1]).toBeCloseTo(112, 0);
@@ -158,6 +175,7 @@ describe("functions of the app", () => {
     expect(await bodies()).toHaveLength(2);
     await command("Check whether parts overlap");
     await sleep(1500);
+
     const said = (await toasts()).join(" | ");
     expect(said).toMatch(/1 overlap: .*4000 mm³/);
   });
@@ -165,10 +183,20 @@ describe("functions of the app", () => {
   it("export OBJ: one object, the cube's volume", async () => {
     await cube();
     await command("Export OBJ");
+
     const end = Date.now() + 30000;
     let name: string | undefined;
-    while (!(name = readdirSync(app.saved).find((f) => f.endsWith(".obj"))) && Date.now() < end) await sleep(200);
-    if (!name) throw new Error(`no .obj saved: ${readdirSync(app.saved).join(", ")} · ${(await toasts()).join(" | ")}`);
+
+    while (!(name = readdirSync(app.saved).find((f) => f.endsWith(".obj"))) && Date.now() < end) {
+      await sleep(200);
+    }
+
+    if (!name) {
+      throw new Error(
+        `no .obj saved: ${readdirSync(app.saved).join(", ")} · ${(await toasts()).join(" | ")}`,
+      );
+    }
+
     const file = join(app.saved, name);
     const obj = readObj(readFileSync(file, "utf8"));
     const soup = new Float32Array(obj.indices.length * 3);
@@ -178,15 +206,20 @@ describe("functions of the app", () => {
 
   it("import: an STL picked in the file dialog becomes a part of its size", async () => {
     await ui.newPart();
+
     // A 30 × 20 × 10 box as an STL file, as one comes from elsewhere.
     const p = [0, 0, 0, 30, 0, 0, 30, 20, 0, 0, 20, 0, 0, 0, 10, 30, 0, 10, 30, 20, 10, 0, 20, 10];
-    const tri = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+    const tri = [
+      0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4,
+      7,
+    ];
     const dir = mkdtempSync(join(tmpdir(), "meercad-e2e-import-"));
     const file = join(dir, "block.stl");
     writeFileSync(file, writeStl([{ positions: new Float32Array(p), indices: new Uint32Array(tri) }]));
     await app.page.chooseFiles([file], () => command("Import / open file"));
     await ui.until("the imported part", "(s.output?.report.bodies.length ?? 0) > 0", 30000);
     await ui.settle();
+
     const [b] = await bodies();
     expect(b!.volume).toBeCloseTo(6000, 1);
     expect(size(b!).map((v) => +v.toFixed(3))).toEqual([30, 20, 10]);
@@ -194,7 +227,12 @@ describe("functions of the app", () => {
 
   it("standard views turn the camera to look along the axes", async () => {
     await cube();
-    const dir = () => ui.page.eval<number[]>("(() => { const c = meercadTest.store.getViewport().camera; const d = c.getWorldDirection(new c.position.constructor()); return [d.x, d.y, d.z].map((v) => Math.round(v * 100) / 100); })()");
+
+    const dir = () =>
+      ui.page.eval<number[]>(
+        "(() => { const c = meercadTest.store.getViewport().camera; const d = c.getWorldDirection(new c.position.constructor()); return [d.x, d.y, d.z].map((v) => Math.round(v * 100) / 100); })()",
+      );
+
     for (const [k, want] of [
       ["2", [0, 1, 0]],
       ["4", [0, 0, -1]],

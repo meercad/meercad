@@ -6,9 +6,12 @@ import type { Feature } from "@meercad/schema";
 import { doc, getOcct, newSession, rect, sketch } from "./helpers.js";
 
 const status = (r: RebuildReport, id: string) => r.features.find((f) => f.id === id)!;
-const ok = (r: RebuildReport) => expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+const ok = (r: RebuildReport) =>
+  expect(r.features.filter((f) => f.status === "error").map((f) => `${f.id}: ${f.message}`)).toEqual([]);
+
 const size = (r: RebuildReport, i = 0) => {
   const b = r.bodies[i]!.bbox;
+
   return [0, 1, 2].map((k) => b.max[k]! - b.min[k]!);
 };
 
@@ -21,6 +24,7 @@ const strip = (len: number, w: number, t: number): Feature[] => [
 async function build(features: Feature[]) {
   const s = await newSession();
   const out = s.rebuild(doc(features));
+
   return { ...out, session: s };
 }
 
@@ -28,15 +32,31 @@ async function build(features: Feature[]) {
 async function watertight(s: Awaited<ReturnType<typeof newSession>>) {
   const [m] = exportMeshes(await getOcct(), s.state!);
   const corners = new Float32Array(m!.indices.length * 3);
-  for (let i = 0; i < m!.indices.length; i++) corners.set(m!.positions.subarray(m!.indices[i]! * 3, m!.indices[i]! * 3 + 3), i * 3);
+
+  for (let i = 0; i < m!.indices.length; i++) {
+    corners.set(m!.positions.subarray(m!.indices[i]! * 3, m!.indices[i]! * 3 + 3), i * 3);
+  }
+
   expect(() => weldClosed(corners, 1e-4)).not.toThrow();
 }
 
 describe("bend", () => {
   it("rolls a 1 m strip into a flat spiral that fits a print bed", async () => {
     const t0 = performance.now();
-    const { report, session } = await build([...strip(1000, 20, 3), { id: "bd1", op: "bend", bodies: ["ex1"], mode: "spiral", axis: { ref: "origin.Z" }, radius: 20, gap: 1 }]);
+    const { report, session } = await build([
+      ...strip(1000, 20, 3),
+      {
+        id: "bd1",
+        op: "bend",
+        bodies: ["ex1"],
+        mode: "spiral",
+        axis: { ref: "origin.Z" },
+        radius: 20,
+        gap: 1,
+      },
+    ]);
     ok(report);
+
     const ms = performance.now() - t0;
     const [dx, dy, dz] = size(report);
     // Lies flat: still 3 mm high, about 2 × (20 + 2.7 turns × 21 mm + 20) across.
@@ -54,11 +74,21 @@ describe("bend", () => {
     const len = 2 * Math.PI * 30;
     const { report, session } = await build([
       ...strip(len, 12, 2),
-      { id: "tx1", op: "text", plane: { face: { face: "ex1.end_cap" } }, text: "MEER", position: [20, 3], size: 6, depth: 0.8, mode: "join" },
+      {
+        id: "tx1",
+        op: "text",
+        plane: { face: { face: "ex1.end_cap" } },
+        text: "MEER",
+        position: [20, 3],
+        size: 6,
+        depth: 0.8,
+        mode: "join",
+      },
       { id: "bd1", op: "bend", bodies: ["ex1"], mode: "wrap", axis: { ref: "origin.Y" }, radius: 30 },
     ]);
     ok(report);
     expect(status(report, "bd1").info?.["closed"]).toBe(1);
+
     const [dx, dy, dz] = size(report);
     // A ring round Y: inner radius 30, 2 mm wall plus the letters; 12 mm wide.
     expect(dy).toBeCloseTo(12, 3);
@@ -71,7 +101,10 @@ describe("bend", () => {
   it("bends an imported mesh part, which keeps its id", async () => {
     // 60 × 8 × 2 box as an STL file.
     const p = [0, 0, 0, 60, 0, 0, 60, 8, 0, 0, 8, 0, 0, 0, 2, 60, 0, 2, 60, 8, 2, 0, 8, 2];
-    const idx = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+    const idx = [
+      0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4,
+      7,
+    ];
     const bytes = writeStl([{ positions: Float32Array.from(p), indices: Uint32Array.from(idx) }]);
     const data = btoa(String.fromCharCode(...bytes));
     const { report } = await build([
@@ -85,8 +118,12 @@ describe("bend", () => {
   });
 
   it("bends by an angle", async () => {
-    const { report } = await build([...strip(100, 10, 2), { id: "bd1", op: "bend", bodies: ["ex1"], mode: "bend", axis: { ref: "origin.Y" }, angle: 180 }]);
+    const { report } = await build([
+      ...strip(100, 10, 2),
+      { id: "bd1", op: "bend", bodies: ["ex1"], mode: "bend", axis: { ref: "origin.Y" }, angle: 180 },
+    ]);
     ok(report);
+
     const R = 100 / Math.PI;
     const [dx, , dz] = size(report);
     // A half ring: across it the outer diameter, up it the outer radius.
@@ -96,11 +133,44 @@ describe("bend", () => {
   });
 
   it("explains what is wrong", async () => {
-    const r1 = (await build([...strip(1000, 20, 3), { id: "bd1", op: "bend", bodies: ["ex1"], mode: "spiral", axis: { ref: "origin.Z" }, radius: 20, gap: 0 }])).report;
+    const r1 = (
+      await build([
+        ...strip(1000, 20, 3),
+        {
+          id: "bd1",
+          op: "bend",
+          bodies: ["ex1"],
+          mode: "spiral",
+          axis: { ref: "origin.Z" },
+          radius: 20,
+          gap: 0,
+        },
+      ])
+    ).report;
     expect(status(r1, "bd1").message).toMatch(/turns would touch/);
-    const r2 = (await build([...strip(1000, 20, 3), { id: "bd1", op: "bend", bodies: ["ex1"], mode: "wrap", axis: { ref: "origin.Y" }, radius: 50 }])).report;
+
+    const r2 = (
+      await build([
+        ...strip(1000, 20, 3),
+        { id: "bd1", op: "bend", bodies: ["ex1"], mode: "wrap", axis: { ref: "origin.Y" }, radius: 50 },
+      ])
+    ).report;
     expect(status(r2, "bd1").message).toMatch(/overlap itself/);
-    const r3 = (await build([...strip(1000, 20, 3), { id: "bd1", op: "bend", bodies: ["ex1"], mode: "spiral", axis: { ref: "origin.Z" }, radius: 20, gap: 0.1 }])).report;
+
+    const r3 = (
+      await build([
+        ...strip(1000, 20, 3),
+        {
+          id: "bd1",
+          op: "bend",
+          bodies: ["ex1"],
+          mode: "spiral",
+          axis: { ref: "origin.Z" },
+          radius: 20,
+          gap: 0.1,
+        },
+      ])
+    ).report;
     expect(status(r3, "bd1").message).toMatch(/may fuse/);
   });
 });

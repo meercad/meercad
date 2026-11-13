@@ -15,23 +15,40 @@ const s = new KernelSession(oc, solver);
 let t = performance.now();
 s.rebuild(doc, { mesh: false, props: false });
 console.log(`rebuild ${((performance.now() - t) / 1000).toFixed(1)} s, ${s.state!.bodies.size} bodies`);
+
 // Part by part, to see which parts the time goes to.
 const per: { id: string; ms: number; tris: number }[] = [];
 t = performance.now();
+
 for (const b of s.state!.bodies.values()) {
   const t1 = performance.now();
   const [m] = exportMeshes(oc, s.state!, [b.bodyId]);
   per.push({ id: b.bodyId, ms: performance.now() - t1, tris: m!.indices.length / 3 });
 }
+
 console.log(`part by part ${((performance.now() - t) / 1000).toFixed(1)} s`);
-const sum = (xs: typeof per) => `${xs.length} parts, ${(xs.reduce((n, x) => n + x.ms, 0) / 1000).toFixed(1)} s, ${(xs.reduce((n, x) => n + x.tris, 0) / 1e6).toFixed(2)} M triangles`;
+
+const sum = (xs: typeof per) =>
+  `${xs.length} parts, ${(xs.reduce((n, x) => n + x.ms, 0) / 1000).toFixed(1)} s, ${(xs.reduce((n, x) => n + x.tris, 0) / 1e6).toFixed(2)} M triangles`;
 console.log("parts:", sum(per));
-for (const x of per.sort((a, b) => b.ms - a.ms).slice(0, 15)) console.log(`  ${x.id.padEnd(28)} ${(x.ms / 1000).toFixed(2)} s ${(x.tris / 1e3).toFixed(0)} k`);
+
+for (const x of per.sort((a, b) => b.ms - a.ms).slice(0, 15)) {
+  console.log(`  ${x.id.padEnd(28)} ${(x.ms / 1000).toFixed(2)} s ${(x.tris / 1e3).toFixed(0)} k`);
+}
+
 t = performance.now();
+
 const meshes = exportMeshes(oc, s.state!);
 const tris = meshes.reduce((n, m) => n + m.indices.length / 3, 0);
-console.log(`whole export (meshes kept) ${((performance.now() - t) / 1000).toFixed(1)} s, ${(tris / 1e6).toFixed(2)} M triangles`);
+console.log(
+  `whole export (meshes kept) ${((performance.now() - t) / 1000).toFixed(1)} s, ${(tris / 1e6).toFixed(2)} M triangles`,
+);
 t = performance.now();
-const data = write3mf(meshes.map((m) => ({ name: m.bodyId, positions: m.positions, indices: m.indices })) as never);
-console.log(`write 3mf ${((performance.now() - t) / 1000).toFixed(1)} s, ${(data.length / 2 ** 20).toFixed(0)} MB`);
+
+const data = write3mf(
+  meshes.map((m) => ({ name: m.bodyId, positions: m.positions, indices: m.indices })) as never,
+);
+console.log(
+  `write 3mf ${((performance.now() - t) / 1000).toFixed(1)} s, ${(data.length / 2 ** 20).toFixed(0)} MB`,
+);
 process.exit(0);

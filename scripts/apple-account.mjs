@@ -15,14 +15,20 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
 const arg = (name) => {
   const i = process.argv.indexOf(name);
+
   return i > 0 ? process.argv[i + 1] : undefined;
 };
+
 const team = arg("--team");
 const bundle = arg("--bundle-id");
+
 if (!team || !/^[A-Z0-9]{10}$/.test(team) || !bundle || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(bundle)) {
-  console.error("usage: node scripts/apple-account.mjs --team <10-character team id> --bundle-id <reverse.dns.id>");
+  console.error(
+    "usage: node scripts/apple-account.mjs --team <10-character team id> --bundle-id <reverse.dns.id>",
+  );
   process.exit(1);
 }
 
@@ -34,7 +40,8 @@ if (!oldTeam || !oldBundle) throw new Error(`no team or bundle id in ${xcodePath
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Replaces whole identifiers only, so "dev.meercad.app" does not touch "dev.meercad.app.wip" or ".rc". */
-const swap = (text, from, to) => text.replace(new RegExp(`(?<![\\w.~-])${escape(from)}(?![\\w-]|\\.\\w)`, "g"), to);
+const swap = (text, from, to) =>
+  text.replace(new RegExp(`(?<![\\w.~-])${escape(from)}(?![\\w-]|\\.\\w)`, "g"), to);
 const cloudPath = (id) => `iCloud~${id.replaceAll(".", "~")}`;
 
 const files = [
@@ -51,9 +58,11 @@ const files = [
   "packages/mcp/src/launchApp.ts",
   "packages/mcp/src/launchApp.test.ts",
 ];
+
 for (const file of files) {
   // Generated files (capacitor.config.json in the Xcode project) exist only after a sync.
   if (!existsSync(join(root, file))) continue;
+
   const before = readFileSync(join(root, file), "utf8");
   let text = swap(before, `${oldTeam}.${oldBundle}`, `${team}.${bundle}`);
   text = swap(text, `iCloud.${oldBundle}`, `iCloud.${bundle}`);
@@ -62,9 +71,11 @@ for (const file of files) {
   text = swap(text, oldBundle, bundle);
   text = text.replaceAll(cloudPath(oldBundle), cloudPath(bundle));
   text = swap(text, oldTeam, team);
+
   if (text !== before) {
     writeFileSync(join(root, file), text);
     console.log(`✓ ${file}`);
   }
 }
+
 console.log(`team ${oldTeam} → ${team}, bundle id ${oldBundle} → ${bundle}`);

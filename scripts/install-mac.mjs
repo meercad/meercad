@@ -31,8 +31,11 @@ const CHANNELS = {
 };
 const channel = process.argv[2];
 const c = CHANNELS[channel];
+
 if (!c) {
-  console.error(`usage: node scripts/install-mac.mjs <${Object.keys(CHANNELS).join("|")}> [--no-open] [--force]`);
+  console.error(
+    `usage: node scripts/install-mac.mjs <${Object.keys(CHANNELS).join("|")}> [--no-open] [--force]`,
+  );
   process.exit(2);
 }
 
@@ -45,20 +48,28 @@ const run = (cmd, args, cwd = root) => {
   const r = spawnSync(cmd, args, { cwd, stdio: "inherit" });
   if (r.status !== 0) process.exit(r.status ?? 1);
 };
+
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
 // Must match CHANNEL_PORTS in packages/mcp/src/protocol.ts.
 const protocol = readFileSync(join(root, "packages/mcp/src/protocol.ts"), "utf8");
+
 if (!new RegExp(`\\b${channel}: ${c.port}\\b`).test(protocol)) {
-  console.error(`✗ port ${c.port} of ${c.name} is not the one in packages/mcp/src/protocol.ts (CHANNEL_PORTS)`);
+  console.error(
+    `✗ port ${c.port} of ${c.name} is not the one in packages/mcp/src/protocol.ts (CHANNEL_PORTS)`,
+  );
   process.exit(1);
 }
 
 const dirty = git("status", "--porcelain") !== "";
+
 if (channel === "rc" && !process.argv.includes("--force")) {
   const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+
   if (branch !== "main" || dirty) {
-    console.error(`✗ meerCAD RC is built from a clean main only (here: ${branch}${dirty ? ", uncommitted changes" : ""}). Use pnpm wip, or --force.`);
+    console.error(
+      `✗ meerCAD RC is built from a clean main only (here: ${branch}${dirty ? ", uncommitted changes" : ""}). Use pnpm wip, or --force.`,
+    );
     process.exit(1);
   }
 }
@@ -88,17 +99,23 @@ const config = {
 };
 delete config.fileAssociations;
 delete config.dmg;
+
 const configFile = join(work, "electron-builder.json");
 writeFileSync(configFile, JSON.stringify(config, null, 2));
 
 console.log(`› packaging ${c.name} (${arch}, ${sha})`);
-run("pnpm", ["exec", "electron-builder", "--mac", "--dir", `--${arch}`, "--config", configFile, "--publish", "never"], desktop);
+run(
+  "pnpm",
+  ["exec", "electron-builder", "--mac", "--dir", `--${arch}`, "--config", configFile, "--publish", "never"],
+  desktop,
+);
 
 const outDir = join(desktop, output);
 const built = readdirSync(outDir)
   .filter((d) => d.startsWith("mac"))
   .map((d) => join(outDir, d, `${c.name}.app`))
   .find((p) => existsSync(p));
+
 if (!built) {
   console.error(`✗ no ${c.name}.app found in ${outDir}`);
   process.exit(1);
@@ -107,7 +124,14 @@ if (!built) {
 // Replace a running copy cleanly (it saves on quit); the other build keeps running. Only the app
 // itself counts, not MCP servers started from its bundle (they keep running for their assistant).
 spawnSync("osascript", ["-e", `tell application id "${c.appId}" to quit`], { stdio: "ignore" });
-for (let i = 0; i < 50 && spawnSync("pgrep", ["-f", `^${target}/Contents/MacOS/${c.name}$`]).status === 0; i++) spawnSync("sleep", ["0.2"]);
+
+for (
+  let i = 0;
+  i < 50 && spawnSync("pgrep", ["-f", `^${target}/Contents/MacOS/${c.name}$`]).status === 0;
+  i++
+) {
+  spawnSync("sleep", ["0.2"]);
+}
 
 console.log(`› installing to ${target}`);
 run("rm", ["-rf", target]);
@@ -117,4 +141,5 @@ spawnSync("xattr", ["-dr", "com.apple.quarantine", target], { stdio: "ignore" })
 run("rm", ["-rf", outDir]);
 
 if (!process.argv.includes("--no-open")) run("open", [target]);
+
 console.log(`✓ ${c.name} ${sha} installed (MCP port ${c.port})`);

@@ -8,20 +8,28 @@ import { loadOcct } from "@meercad/kernel";
 
 const [dir, mode = "single"] = process.argv.slice(2);
 if (!dir) throw new Error("usage: replay.ts <recordDir> [single|multi]");
+
 const oc: any = await loadOcct(undefined, mode === "multi");
-const index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8")) as { recs: { op: string; files: string[] }[]; bodies: string[] };
+const index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8")) as {
+  recs: { op: string; files: string[] }[];
+  bodies: string[];
+};
 const load = (f: string) => oc.BRepToolsWrapper.Read(readFileSync(join(dir, f), "utf8"));
+
 const median = (fn: () => void, runs = 5) => {
   const t: number[] = [];
+
   for (let i = 0; i < runs; i++) {
     const a = performance.now();
     fn();
     t.push(performance.now() - a);
   }
+
   return t.sort((x, y) => x - y)[runs >> 1]!;
 };
 
 const sums = new Map<string, [number, number]>();
+
 for (const r of index.recs) {
   const [a, b] = r.files.map(load);
   const ms = median(() => {
@@ -38,17 +46,21 @@ for (const r of index.recs) {
   const [n, t] = sums.get(r.op) ?? [0, 0];
   sums.set(r.op, [n + 1, t + ms]);
 }
+
 let total = 0;
+
 for (const [op, [n, ms]] of [...sums].sort()) {
   console.log(`${op.padEnd(20)} ${String(n).padStart(3)} calls  wasm ${ms.toFixed(1).padStart(8)} ms`);
   total += ms;
 }
+
 console.log(`${"total".padEnd(20)}            wasm ${total.toFixed(1).padStart(8)} ms`);
 
 for (const f of index.bodies) {
   const s = load(f);
   const box = new oc.Bnd_Box();
   oc.BRepBndLib.Add(s, box, false);
+
   const lo = box.CornerMin();
   const hi = box.CornerMax();
   const lin = Math.max(0.01, Math.hypot(hi.X() - lo.X(), hi.Y() - lo.Y(), hi.Z() - lo.Z()) * 5e-4);
@@ -66,4 +78,5 @@ for (const f of index.bodies) {
   });
   console.log(`${f}: mesh ${mesh.toFixed(1)} ms, volume+area ${props.toFixed(1)} ms`);
 }
+
 process.exit(0);

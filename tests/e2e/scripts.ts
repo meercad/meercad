@@ -13,7 +13,8 @@ const TOP_RING = (z: number) => `(e) => e.min[2] > ${z} - 0.01 && e.max[2] < ${z
 /** The flat face on top at height z. */
 const TOP_FACE = (z: number) => `(f) => f.normal[2] > 0.99 && Math.abs(f.center[2] - ${z}) < 0.01`;
 /** The upright edge standing at (x, y). */
-const VERTICAL_AT = (x: number, y: number) => `(e) => e.max[2] - e.min[2] > 1 && Math.abs(e.min[0] - ${x}) < 0.01 && Math.abs(e.max[0] - ${x}) < 0.01 && Math.abs(e.min[1] - ${y}) < 0.01 && Math.abs(e.max[1] - ${y}) < 0.01`;
+const VERTICAL_AT = (x: number, y: number) =>
+  `(e) => e.max[2] - e.min[2] > 1 && Math.abs(e.min[0] - ${x}) < 0.01 && Math.abs(e.max[0] - ${x}) < 0.01 && Math.abs(e.min[1] - ${y}) < 0.01 && Math.abs(e.max[1] - ${y}) < 0.01`;
 
 /**
  * A regular hexagon round the origin with flat top and bottom, `flats` across them: the polygon
@@ -22,11 +23,19 @@ const VERTICAL_AT = (x: number, y: number) => `(e) => e.max[2] - e.min[2] > 1 &&
  */
 async function hexagon(ui: Ui, flats: number | string) {
   // Drawn large so the clicks land clear of each other at the default zoom; the dimension shrinks it.
-  const r = 25, h = r * 0.866;
+  const r = 25,
+    h = r * 0.866;
   await ui.zoomSketch(2 * r);
   await ui.polygon([0, 0], [r, 0]);
   await ui.constrain("Horiz./Vert.", [[r / 5, h]]);
-  await ui.dimension([[r - 0.25 * (r / 2), 0.25 * h], [-r + 0.25 * (r / 2), -0.25 * h]], [0, -h - 8], flats);
+  await ui.dimension(
+    [
+      [r - 0.25 * (r / 2), 0.25 * h],
+      [-r + 0.25 * (r / 2), -0.25 * h],
+    ],
+    [0, -h - 8],
+    flats,
+  );
 }
 
 export const SCRIPTS: Record<string, Script> = {
@@ -42,7 +51,16 @@ export const SCRIPTS: Record<string, Script> = {
   "02 Lochplatte": async (ui) => {
     await ui.sketchOn("Top");
     await ui.rect([0, 0], 60, 40);
-    for (const c of [[8, 8], [52, 8], [8, 32], [52, 32]] as [number, number][]) await ui.circle(c, 5);
+
+    for (const c of [
+      [8, 8],
+      [52, 8],
+      [8, 32],
+      [52, 32],
+    ] as [number, number][]) {
+      await ui.circle(c, 5);
+    }
+
     await ui.finishSketch();
     await ui.feature("Create", "Extrude");
     await ui.field("Distance", 5);
@@ -70,7 +88,16 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Distance", 10);
     await ui.accept();
     await ui.feature("Modify", "Fillet");
-    for (const [x, y] of [[0, 0], [40, 0], [40, 30], [0, 30]]) await ui.clickEdge(VERTICAL_AT(x!, y!));
+
+    for (const [x, y] of [
+      [0, 0],
+      [40, 0],
+      [40, 30],
+      [0, 30],
+    ]) {
+      await ui.clickEdge(VERTICAL_AT(x!, y!));
+    }
+
     await ui.field("Radius", 5);
     await ui.accept();
   },
@@ -146,7 +173,16 @@ export const SCRIPTS: Record<string, Script> = {
   "09 T-Profil gespiegelt": async (ui) => {
     await ui.sketchOn("Front");
     // The last corner is clicked, not typed: its length follows from the others.
-    await ui.polyline([0, 0], [[40, 0], [4, 90], [36, 180], [26, 90]], false);
+    await ui.polyline(
+      [0, 0],
+      [
+        [40, 0],
+        [4, 90],
+        [36, 180],
+        [26, 90],
+      ],
+      false,
+    );
     await ui.clickSketch([0, 30]);
     await ui.clickSketch([0, 0]);
     await ui.key("Escape");
@@ -325,8 +361,12 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Teeth", 18);
     await ui.field("Direction from the partner", 0);
     await ui.accept();
+
     // Planets 2 and 3: new gears meshing with the ring, a third of a turn apart.
-    for (const [id, dir] of [["gr3", 120], ["gr4", 240]] as const) {
+    for (const [id, dir] of [
+      ["gr3", 120],
+      ["gr4", 240],
+    ] as const) {
       await ui.feature("Create", "Gear");
       await ui.until(id, `s.dialog?.feature.id === "${id}"`);
       await ui.choose("Meshes with", "Gear 1");
@@ -335,6 +375,7 @@ export const SCRIPTS: Record<string, Script> = {
       await ui.field("Direction from the partner", dir);
       await ui.accept();
     }
+
     await ui.feature("Create", "Gear");
     await ui.choose("Meshes with", "Gear 2");
     await ui.field("Teeth", 24);
@@ -395,7 +436,16 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Distance", 30);
     await ui.accept();
     await ui.feature("Modify", "Fillet");
-    for (const [x, y] of [[-40, -25], [40, -25], [40, 25], [-40, 25]]) await ui.clickEdge(VERTICAL_AT(x!, y!));
+
+    for (const [x, y] of [
+      [-40, -25],
+      [40, -25],
+      [40, 25],
+      [-40, 25],
+    ]) {
+      await ui.clickEdge(VERTICAL_AT(x!, y!));
+    }
+
     await ui.field("Radius", 5);
     await ui.accept();
     await ui.feature("Modify", "Shell");
@@ -491,7 +541,18 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Distance", 15);
     await ui.accept();
     await ui.feature("Modify", "Draft");
-    for (const n of [[1, 0], [-1, 0], [0, 1], [0, -1]]) await ui.clickFace(`(f) => Math.abs(f.normal[0] - ${n[0]}) < 0.01 && Math.abs(f.normal[1] - ${n[1]}) < 0.01`);
+
+    for (const n of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      await ui.clickFace(
+        `(f) => Math.abs(f.normal[0] - ${n[0]}) < 0.01 && Math.abs(f.normal[1] - ${n[1]}) < 0.01`,
+      );
+    }
+
     await ui.field("Angle", 3);
     await ui.option("Top");
     await ui.accept();
@@ -509,7 +570,16 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Distance", 4);
     await ui.accept();
     await ui.feature("Modify", "Fillet");
-    for (const [x, y] of [[-40, -15], [40, -15], [40, 15], [-40, 15]]) await ui.clickEdge(VERTICAL_AT(x!, y!));
+
+    for (const [x, y] of [
+      [-40, -15],
+      [40, -15],
+      [40, 15],
+      [-40, 15],
+    ]) {
+      await ui.clickEdge(VERTICAL_AT(x!, y!));
+    }
+
     await ui.field("Radius", 4);
     await ui.accept();
     await ui.feature("Create", "Text");
@@ -565,7 +635,9 @@ export const SCRIPTS: Record<string, Script> = {
     // The bore's wall: looked at from above and close.
     await ui.view("1");
     await ui.zoomAt([10, 10, 14], 5);
-    await ui.clickFace(`(f) => Math.abs(f.normal[2]) < 0.01 && Math.hypot(f.center[0] - 10, f.center[1] - 10) < 4.5`);
+    await ui.clickFace(
+      `(f) => Math.abs(f.normal[2]) < 0.01 && Math.hypot(f.center[0] - 10, f.center[1] - 10) < 4.5`,
+    );
     await ui.field("Distance", 0.1);
     await ui.accept();
     await ui.feature("Create", "Plane");
@@ -675,7 +747,11 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.option("Add");
     await ui.field("Distance", 40);
     await ui.accept();
-    for (const [k, y] of [[1, 8], [2, 32]] as const) {
+
+    for (const [k, y] of [
+      [1, 8],
+      [2, 32],
+    ] as const) {
       await ui.feature("Create", "Plane");
       await ui.option("Front");
       await ui.field("Offset", -y);
@@ -724,14 +800,17 @@ export const SCRIPTS: Record<string, Script> = {
     // Pin into the hole: its round side onto the hole's wall (axis onto axis).
     await ui.feature("Transform", "Align");
     await ui.clickFace(`(f) => f.body === "ex3" && Math.abs(f.normal[0]) < 0.01`, { any: true });
-    await ui.clickFace(`(f) => f.body === "ex1" && Math.abs(f.normal[2]) < 0.01 && Math.hypot(f.center[0] - 20, f.center[1] - 20) < 4.5`);
+    await ui.clickFace(
+      `(f) => f.body === "ex1" && Math.abs(f.normal[2]) < 0.01 && Math.hypot(f.center[0] - 20, f.center[1] - 20) < 4.5`,
+    );
     await ui.accept();
     // TODO: the block on top, turned 45° (its underside is not pickable from the standard views).
   },
 };
 
 /** A vertical edge of one part at (x, y). */
-const BODY_VERTICAL_AT = (body: string, x: number, y: number) => `(e) => e.body === ${JSON.stringify(body)} && ${VERTICAL_AT(x, y).slice(7)}`;
+const BODY_VERTICAL_AT = (body: string, x: number, y: number) =>
+  `(e) => e.body === ${JSON.stringify(body)} && ${VERTICAL_AT(x, y).slice(7)}`;
 /** A flat edge of one part at height z whose bounding box is centred at (x, y) (a line or a corner's arc). */
 const EDGE_CENTRED = (body: string, x: number, y: number, z: number) =>
   `(e) => e.body === ${JSON.stringify(body)} && e.max[2] - e.min[2] < 0.01 && Math.abs(e.min[2] - ${z}) < 0.01 && Math.abs((e.min[0] + e.max[0]) / 2 - ${x}) < 0.3 && Math.abs((e.min[1] + e.max[1]) / 2 - ${y}) < 0.3`;
@@ -743,28 +822,45 @@ const deg = (r: number) => +((r * 180) / Math.PI).toFixed(4);
  */
 async function roundCorners(ui: Ui, body: string, w: number, d: number, z: number, radius: string, cy = 0) {
   await ui.feature("Modify", "Fillet");
+
   // Each from above at an angle, turned round (the view cube's quarter turns) until it is in
   // front, then zoomed in on it.
-  for (const [sx, sy] of [[1, -1], [-1, -1], [-1, 1], [1, 1]] as const) {
+  for (const [sx, sy] of [
+    [1, -1],
+    [-1, -1],
+    [-1, 1],
+    [1, 1],
+  ] as const) {
     const at: [number, number, number] = [(sx * w) / 2, cy + (sy * d) / 2, z];
     const test = BODY_VERTICAL_AT(body, at[0], at[1]);
     let spot: [number, number] | null = null;
     let why = "";
+
     for (let turns = 0; turns < 4 && !spot; turns++) {
       await ui.view("1");
+
       for (let i = 0; i < turns; i++) {
         await ui.press("Rotate view 90° left", ".icon-btn");
         await new Promise((r) => setTimeout(r, 700));
       }
+
       await ui.zoomAt(at, 24).catch(() => undefined);
       await new Promise((r) => setTimeout(r, 500));
-      const px = await ui.page.eval<number>(`meercadTest.store.getViewport().pixelSize(${JSON.stringify(at)})`);
-      spot = await ui.spotOf("edge", test).catch((e) => ((why = `${String(e).slice(-22)} at ${px.toFixed(3)} mm/px`), null));
+
+      const px = await ui.page.eval<number>(
+        `meercadTest.store.getViewport().pixelSize(${JSON.stringify(at)})`,
+      );
+      spot = await ui
+        .spotOf("edge", test)
+        .catch((e) => ((why = `${String(e).slice(-22)} at ${px.toFixed(3)} mm/px`), null));
     }
+
     if (!spot) throw new Error(`corner ${at} of ${body} not to be picked from any side (${why})`);
+
     await ui.page.click(spot[0], spot[1]);
     await ui.settle();
   }
+
   await ui.field("Radius", radius);
   await ui.accept();
 }
@@ -802,32 +898,54 @@ async function place(ui: Ui, body: string, angle: number, [x, y]: [number, numbe
   await ui.clickBody(body);
   await ui.fieldN("Move by (X / Y / Z)", 0, x);
   await ui.fieldN("Move by (X / Y / Z)", 1, y);
+
   if (angle) {
     await ui.check("Rotate");
     await ui.field("Angle", angle);
   }
+
   await ui.accept();
 }
 
-/** A standard part: its kind, then a tap on the plane or face (`on`), then taps for the places, their positions typed. */
-async function standardPart(ui: Ui, part: string, opts: { size?: string; length?: string; cutLength?: string | number; turned?: number; on: () => Promise<void>; tap: () => Promise<void>; places: [string | number, string | number][] }) {
+/**
+ * A standard part: its kind, then a tap on the plane or face (`on`), then taps for the places, their
+ * positions typed.
+ */
+async function standardPart(
+  ui: Ui,
+  part: string,
+  opts: {
+    size?: string;
+    length?: string;
+    cutLength?: string | number;
+    turned?: number;
+    on: () => Promise<void>;
+    tap: () => Promise<void>;
+    places: [string | number, string | number][];
+  },
+) {
   await ui.feature("Create", "Standard part");
   await ui.choose("Part", part);
   if (opts.size) await ui.choose("Size", opts.size);
   if (opts.length) await ui.choose("Length", opts.length);
   if (opts.cutLength !== undefined) await ui.field("Length", opts.cutLength);
   if (opts.turned !== undefined) await ui.field("Turned", opts.turned);
+
   await opts.on();
+
   // A tap on a face places a part; on a plane only the plane is taken.
   let n = await ui.state<number>("s.dialog.feature.points.length");
+
   while (n < opts.places.length) {
     await opts.tap();
     n = await ui.state<number>("s.dialog.feature.points.length");
   }
+
   for (const [i, [u, v]] of opts.places.entries()) {
     await ui.fieldN(`Places (${opts.places.length})`, 2 * i, u);
     await ui.fieldN(`Places (${opts.places.length})`, 2 * i + 1, v);
   }
+
   await ui.accept();
 }
 
@@ -836,6 +954,7 @@ const STACK = (() => {
   const [play, wall, corner, band] = [1, 2.4, 8, 1];
   const margin = 2 * (play + (corner - wall) * (1 - Math.sqrt(0.5)) + wall + band);
   const steps = 6 - 5;
+
   return {
     w: 1000 * 2 ** (0.25 - 5 / 2) + margin * 2 ** Math.ceil(steps / 2) - 2 * band,
     d: 1000 * 2 ** (-0.25 - 5 / 2) + margin * 2 ** Math.floor(steps / 2) - 2 * band,
@@ -873,7 +992,10 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await ui.option("New");
     await ui.field("Distance", 3);
     await ui.accept();
-    await place(ui, "ex3", deg(Math.atan2(rocker[1], rocker[0] - 100)), [(100 + rocker[0]) / 2, rocker[1] / 2]);
+    await place(ui, "ex3", deg(Math.atan2(rocker[1], rocker[0] - 100)), [
+      (100 + rocker[0]) / 2,
+      rocker[1] / 2,
+    ]);
     await ui.feature("Create", "Plane");
     await ui.option("Top");
     await ui.field("Offset", 6);
@@ -885,7 +1007,10 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await ui.option("New");
     await ui.field("Distance", 3);
     await ui.accept();
-    await place(ui, "ex4", deg(Math.atan2(rocker[1] - crank[1], rocker[0] - crank[0])), [(crank[0] + rocker[0]) / 2, (crank[1] + rocker[1]) / 2]);
+    await place(ui, "ex4", deg(Math.atan2(rocker[1] - crank[1], rocker[0] - crank[0])), [
+      (crank[0] + rocker[0]) / 2,
+      (crank[1] + rocker[1]) / 2,
+    ]);
   },
 
   "25 Trichter und Rohrbogen": async (ui) => {
@@ -931,7 +1056,16 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await ui.rect([0, 0], 60, 40);
     await ui.tool("Tools", "Round a corner");
     await ui.sketchSize("Radius", 5);
-    for (const c of [[0, 0], [60, 0], [60, 40], [0, 40]] as [number, number][]) await ui.clickSketch(c);
+
+    for (const c of [
+      [0, 0],
+      [60, 0],
+      [60, 40],
+      [0, 40],
+    ] as [number, number][]) {
+      await ui.clickSketch(c);
+    }
+
     await ui.finishSketch();
     await ui.feature("Create", "Extrude");
     await ui.field("Distance", 5);
@@ -941,11 +1075,21 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await ui.rect([0, 0], 60, 40);
     await ui.tool("Tools", "Round a corner");
     await ui.sketchSize("Radius", 5);
-    for (const c of [[0, 0], [60, 0], [60, 40], [0, 40]] as [number, number][]) await ui.clickSketch(c);
+
+    for (const c of [
+      [0, 0],
+      [60, 0],
+      [60, 40],
+      [0, 40],
+    ] as [number, number][]) {
+      await ui.clickSketch(c);
+    }
+
     await ui.tool("Tools", "Offset curves");
     await ui.sketchSize("Offset", -3);
     await ui.clickSketch([30, 0]);
     await ui.tool("Select");
+
     const [x, y] = await ui.sketchScreen([30, 0]);
     await ui.page.click(x, y, { count: 2 });
     await ui.until("the outline selected", "meercadTest.sketch.getState().selection.length === 8");
@@ -973,7 +1117,17 @@ const MORE_SCRIPTS: Record<string, Script> = {
   "31 Griff mit Splines": async (ui) => {
     await ui.sketchOn("Top");
     await ui.zoomSketch(70);
-    await ui.spline([[0, 0], [40, -6], [90, 0], [92, 22], [45, 26], [2, 20]], true);
+    await ui.spline(
+      [
+        [0, 0],
+        [40, -6],
+        [90, 0],
+        [92, 22],
+        [45, 26],
+        [2, 20],
+      ],
+      true,
+    );
     await ui.circle([80, 12], 8, { free: true });
     await ui.finishSketch();
     await ui.feature("Create", "Extrude");
@@ -982,7 +1136,15 @@ const MORE_SCRIPTS: Record<string, Script> = {
     // The rod's path on the front plane, then its circle where the path starts.
     await ui.sketchOn("Front");
     await ui.zoomSketch(120);
-    await ui.spline([[120, 0], [120, 20], [135, 40], [160, 45]], false);
+    await ui.spline(
+      [
+        [120, 0],
+        [120, 20],
+        [135, 40],
+        [160, 45],
+      ],
+      false,
+    );
     await ui.finishSketch();
     await ui.sketchOn("Top");
     await ui.zoomSketch(110);
@@ -1000,6 +1162,7 @@ const MORE_SCRIPTS: Record<string, Script> = {
     await ui.option("Top");
     await ui.field("Offset", 5.6);
     await ui.accept();
+
     const top = `(f) => f.body === "ex1" && f.normal[2] > 0.99 && Math.abs(f.center[2] - 10) < 0.01`;
     // The screws on the counterbores' seats (the plane), placed by taps on the parallel top.
     await standardPart(ui, "Socket head cap screw ISO 4762", {
@@ -1007,7 +1170,10 @@ const MORE_SCRIPTS: Record<string, Script> = {
       length: "12",
       on: () => ui.clickPlane("pl1", [40, 20, 5.6], [70, 0, 0], [0, 40, 0]),
       tap: () => ui.clickFace(top, { any: true }),
-      places: [[10, 10], [10, 30]],
+      places: [
+        [10, 10],
+        [10, 30],
+      ],
     });
     await standardPart(ui, "Ball bearing", {
       size: "608",
@@ -1016,14 +1182,13 @@ const MORE_SCRIPTS: Record<string, Script> = {
       places: [[100, 20]],
     });
   },
-
-
 };
 
 /**
  * Models not yet run (todo), as far as they got on 08.11; not in SCRIPTS, so the run lists them as
  * todo. 40: green on its own, but in the full run the lead screw's plane click (pl1) does not
- * take and the tap on the plate's end sets the plane instead. 43: the lid's 2 mm corner edges (fillet, as in the original) do not pick yet. 39: the 1 mm
+ * take and the tap on the plate's end sets the plane instead. 43: the lid's 2 mm corner edges (fillet, as in
+ * the original) do not pick yet. 39: the 1 mm
  * of the rim tool's corners standing out of the bead, and the plinth tool lying flush inside its
  * ring, do not pick yet (hiding a part from the parts list, as a person would, is the next try).
  */
@@ -1038,9 +1203,15 @@ export const PENDING: Record<string, Script> = {
     await ui.feature("Create", "Extrude");
     await ui.field("Distance", "plate");
     await ui.accept();
+
     const top = `(f) => f.body === "ex1" && f.normal[2] > 0.99 && Math.abs(f.center[2] - 8) < 0.01`;
     const onTop = { on: () => ui.clickFace(top, { any: true }), tap: () => ui.clickFace(top, { any: true }) };
-    await standardPart(ui, "Linear guide rail", { size: "MGN12", cutLength: "travel", ...onTop, places: [[-120, 20]] });
+    await standardPart(ui, "Linear guide rail", {
+      size: "MGN12",
+      cutLength: "travel",
+      ...onTop,
+      places: [[-120, 20]],
+    });
     await ui.feature("Create", "Plane");
     await ui.option("Right");
     await ui.field("Offset", -130);
@@ -1057,7 +1228,15 @@ export const PENDING: Record<string, Script> = {
       tap: () => ui.clickFace(`(f) => f.body === "ex1" && f.normal[0] < -0.99`),
       places: [[-10, "plate + 14 mm"]],
     });
-    await standardPart(ui, "Aluminium profile", { size: "2020", cutLength: 60, ...onTop, places: [[-140, -28], [140, -28]] });
+    await standardPart(ui, "Aluminium profile", {
+      size: "2020",
+      cutLength: 60,
+      ...onTop,
+      places: [
+        [-140, -28],
+        [140, -28],
+      ],
+    });
     await standardPart(ui, "Corner bracket", { size: "2020", turned: -90, ...onTop, places: [[-130, -28]] });
     await standardPart(ui, "Corner bracket", { size: "2020", turned: 90, ...onTop, places: [[130, -28]] });
   },
@@ -1091,7 +1270,16 @@ export const PENDING: Record<string, Script> = {
     await ui.field("Distance", 25);
     await ui.accept();
     await ui.feature("Modify", "Fillet");
-    for (const [x, y] of [[-30, -110], [30, -110], [30, -70], [-30, -70]]) await ui.clickEdge(BODY_VERTICAL_AT("ex1", x!, y!));
+
+    for (const [x, y] of [
+      [-30, -110],
+      [30, -110],
+      [30, -70],
+      [-30, -70],
+    ]) {
+      await ui.clickEdge(BODY_VERTICAL_AT("ex1", x!, y!));
+    }
+
     await ui.field("Radius", 4);
     await ui.accept();
     await ui.feature("Modify", "Shell");
@@ -1113,9 +1301,14 @@ export const PENDING: Record<string, Script> = {
     await ui.accept();
     // Its corners, only 2 mm high: each looked at close up.
     await roundCorners(ui, "ex2", 60, 40, 26, "4", -90);
+
     // Two hooks under the lid, hanging from the rim's plane, their barbs into the case's long walls.
     const lidTop = `(f) => f.body === "ex2" && f.normal[2] > 0.99`;
-    for (const [x, turn] of [[27.8, 0], [-27.8, 180]] as const) {
+
+    for (const [x, turn] of [
+      [27.8, 0],
+      [-27.8, 180],
+    ] as const) {
       await ui.feature("Create", "Snap hook");
       await ui.clickPlane("pl1", [0, -20, 25], [120, 0, 0], [0, 120, 0]);
       await ui.clickFace(lidTop, { any: true });
@@ -1123,6 +1316,7 @@ export const PENDING: Record<string, Script> = {
       await ui.fieldN("Places (1)", 1, -90);
       await ui.press("Turn the other way", ".dialog button");
       if (turn) await ui.field("Barb points", turn);
+
       await ui.pickInto("Clicks into");
       await ui.clickBody("ex1");
       await ui.field("Play round the window", "play");
@@ -1132,17 +1326,39 @@ export const PENDING: Record<string, Script> = {
   "39 Stapelbox": async (ui) => {
     // The box by its front: its rim's top lies in one plane with the bead's, where either may answer.
     const BOX_SIDE = `(f) => f.body === "ex5" && f.normal[1] < -0.99 && f.center[2] > 20`;
+
     for (const [k, v] of [
-      ["din", 5], ["smallest", 6], ["play", "1 mm"], ["wall", "2.4 mm"], ["corner", "8 mm"], ["foot", "5 mm"], ["clearance", "0.4 mm"], ["band", "1 mm"], ["lip_h", "4 mm"], ["plinth_h", "6 mm"], ["height", "100 mm"],
-      ["paper_long", "1000 mm * 2 ^ (0.25 - din / 2)"], ["paper_short", "1000 mm * 2 ^ (-0.25 - din / 2)"],
-      ["margin", "2 * (play + (corner - wall) * (1 - sqrt(0.5)) + wall + band)"], ["steps", "smallest - din"],
-      ["width", "paper_long + margin * 2 ^ ceil(steps / 2) - 2 * band"], ["depth", "paper_short + margin * 2 ^ floor(steps / 2) - 2 * band"],
-      ["rim_round", "1.2 mm"], ["groove_h", "foot + 2 * clearance"],
-    ] as const) await ui.addVariable(k, v);
+      ["din", 5],
+      ["smallest", 6],
+      ["play", "1 mm"],
+      ["wall", "2.4 mm"],
+      ["corner", "8 mm"],
+      ["foot", "5 mm"],
+      ["clearance", "0.4 mm"],
+      ["band", "1 mm"],
+      ["lip_h", "4 mm"],
+      ["plinth_h", "6 mm"],
+      ["height", "100 mm"],
+      ["paper_long", "1000 mm * 2 ^ (0.25 - din / 2)"],
+      ["paper_short", "1000 mm * 2 ^ (-0.25 - din / 2)"],
+      ["margin", "2 * (play + (corner - wall) * (1 - sqrt(0.5)) + wall + band)"],
+      ["steps", "smallest - din"],
+      ["width", "paper_long + margin * 2 ^ ceil(steps / 2) - 2 * band"],
+      ["depth", "paper_short + margin * 2 ^ floor(steps / 2) - 2 * band"],
+      ["rim_round", "1.2 mm"],
+      ["groove_h", "foot + 2 * clearance"],
+    ] as const) {
+      await ui.addVariable(k, v);
+    }
+
     const { w, d } = STACK;
+
     // The bead round the rim and the plinth band first (rings round the box, rounded and bevelled
     // underneath), while their edges are still in view; then the box.
-    for (const [k, plane, offset, h, ring] of [[1, "pl1", "height - lip_h", "lip_h", 96], [3, "pl2", "foot + wall + clearance", "plinth_h", 7.8]] as const) {
+    for (const [k, plane, offset, h, ring] of [
+      [1, "pl1", "height - lip_h", "lip_h", 96],
+      [3, "pl2", "foot + wall + clearance", "plinth_h", 7.8],
+    ] as const) {
       await ui.feature("Create", "Plane");
       await ui.option("Top");
       await ui.field("Offset", offset);
@@ -1153,6 +1369,7 @@ export const PENDING: Record<string, Script> = {
       await ui.finishSketch();
       await ui.feature("Create", "Extrude");
       if (k > 1) await ui.option("New");
+
       await ui.field("Distance", h);
       await ui.accept();
       await roundCorners(ui, `ex${k}`, w + 2, d + 2, ring + 2, "corner + band");
@@ -1174,6 +1391,7 @@ export const PENDING: Record<string, Script> = {
       await ui.accept();
       await bevelOutsideBottom(ui, `ex${k}`, d + 2, ring, "band");
     }
+
     await ui.feature("Create", "Plane");
     await ui.option("Top");
     await ui.field("Offset", "foot");
@@ -1218,16 +1436,23 @@ export const PENDING: Record<string, Script> = {
     // The groove's corners in the foot, 5 mm high: from the front and the back, close up (so the
     // first one's radius arrow does not cover the second).
     await ui.feature("Modify", "Fillet");
-    for (const [sy, view] of [[-1, "2"], [1, "3"]] as const) {
+
+    for (const [sy, view] of [
+      [-1, "2"],
+      [1, "3"],
+    ] as const) {
       await ui.view(view);
       await ui.zoomAt([0, (sy * (d - 5.6)) / 2, 2.5], 22);
+
       for (const sx of sy < 0 ? [1, -1] : [-1, 1]) {
         const n = await ui.state<number>("s.dialog.feature.edges.length");
         await ui.clickEdge(BODY_VERTICAL_AT("ex5", sx * 3.8, (sy * (d - 5.6)) / 2));
+
         const now = await ui.state<string>("JSON.stringify(s.dialog.feature.edges)");
         if (JSON.parse(now).length !== n + 1) throw new Error(`groove corner ${sx}, ${sy} not added: ${now}`);
       }
     }
+
     await ui.field("Radius", "corner - wall - clearance");
     await ui.accept();
     // Above the foot the groove widens into the box's bottom: room for the rounded corners of two
@@ -1241,6 +1466,7 @@ export const PENDING: Record<string, Script> = {
     await ui.option("Remove");
     await ui.field("Distance", "groove_h - foot");
     await ui.accept();
+
     // Bead and plinth onto the box, the bead's top rounded.
     for (const ring of ["ex1", "ex3"]) {
       await ui.feature("Modify", "Boolean");
@@ -1249,6 +1475,7 @@ export const PENDING: Record<string, Script> = {
       await ui.clickBody(ring);
       await ui.accept();
     }
+
     // The rim's outer top edge rounded (one click takes the tangent loop); the inner one stays sharp
     // for the box above to settle on. Looked at close up, so the click lands on the edge.
     await ui.feature("Modify", "Fillet");
@@ -1258,13 +1485,15 @@ export const PENDING: Record<string, Script> = {
     await ui.field("Radius", "rim_round");
     await ui.accept();
   },
-
 };
 
 // With the scripts above (kept apart because they share the helpers in between).
 Object.assign(SCRIPTS, MORE_SCRIPTS);
 
-/** Model 24's plate: 80 × 40 × 10 with counterbores, a countersink, inserts and a tapped hole, tapped onto the top. */
+/**
+ * Model 24's plate: 80 × 40 × 10 with counterbores, a countersink, inserts and a tapped hole, tapped onto the
+ * top.
+ */
 async function holePlate(ui: Ui) {
   await ui.sketchOn("Top");
   await ui.rect([0, 0], 80, 40);
@@ -1272,22 +1501,40 @@ async function holePlate(ui: Ui) {
   await ui.feature("Create", "Extrude");
   await ui.field("Distance", 10);
   await ui.accept();
+
   const holes: [string, string, [number, number][], number?][] = [
-    ["Counterbore", "M4", [[10, 10], [10, 30]]],
+    [
+      "Counterbore",
+      "M4",
+      [
+        [10, 10],
+        [10, 30],
+      ],
+    ],
     ["Countersink", "M3", [[35, 20]]],
-    ["Insert", "M3", [[55, 10], [55, 30]]],
+    [
+      "Insert",
+      "M3",
+      [
+        [55, 10],
+        [55, 30],
+      ],
+    ],
     ["Thread", "M5", [[70, 20]], 8],
   ];
+
   for (const [kind, size, points, depth] of holes) {
     await ui.feature("Modify", "Hole");
     await ui.chooseAny(kind);
     await ui.chooseAny(size);
     // Each tap on the top face places a hole there.
     for (const [x, y] of points) await ui.clickAt([x, y, 10]);
+
     if (depth) {
       await ui.checkOff("Through all");
       await ui.field("Depth", depth);
     }
+
     await ui.accept();
   }
 }
@@ -1299,6 +1546,7 @@ async function splitAt150(ui: Ui, at = 150) {
   await ui.field("Offset", at);
   await ui.accept();
   await ui.feature("Modify", "Split");
+
   // Its pick box first (the dialog opens with none active), then the plane beside the part.
   const box = await ui.fieldAt("Split at", ".selbox");
   await ui.page.click(box![0], box![1]);

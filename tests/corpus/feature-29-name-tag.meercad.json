@@ -1,147 +1,129 @@
 {
- "format": "meercad/1",
- "params": {},
- "features": [
-  {
-   "id": "sk1",
-   "op": "sketch",
-   "plane": {
-    "ref": "origin.XY"
-   },
-   "entities": [
+  "format": "meercad/1",
+  "params": {},
+  "features": [
     {
-     "id": "lp1",
-     "type": "point",
-     "x": -40,
-     "y": -15
+      "id": "sk1",
+      "op": "sketch",
+      "plane": {
+        "ref": "origin.XY"
+      },
+      "entities": [
+        {
+          "id": "lp1",
+          "type": "point",
+          "x": -40,
+          "y": -15
+        },
+        {
+          "id": "lp2",
+          "type": "point",
+          "x": 40,
+          "y": -15
+        },
+        {
+          "id": "lp3",
+          "type": "point",
+          "x": 40,
+          "y": 15
+        },
+        {
+          "id": "lp4",
+          "type": "point",
+          "x": -40,
+          "y": 15
+        },
+        {
+          "id": "l1",
+          "type": "line",
+          "p1": "lp1",
+          "p2": "lp2"
+        },
+        {
+          "id": "l2",
+          "type": "line",
+          "p1": "lp2",
+          "p2": "lp3"
+        },
+        {
+          "id": "l3",
+          "type": "line",
+          "p1": "lp3",
+          "p2": "lp4"
+        },
+        {
+          "id": "l4",
+          "type": "line",
+          "p1": "lp4",
+          "p2": "lp1"
+        }
+      ],
+      "constraints": []
     },
     {
-     "id": "lp2",
-     "type": "point",
-     "x": 40,
-     "y": -15
+      "id": "ex1",
+      "op": "extrude",
+      "name": "Plate",
+      "profile": {
+        "sketch": "sk1"
+      },
+      "extent": "blind",
+      "distance": 4,
+      "mode": "new_body"
     },
     {
-     "id": "lp3",
-     "type": "point",
-     "x": 40,
-     "y": 15
+      "id": "fi1",
+      "op": "fillet",
+      "name": "Corners",
+      "edges": [
+        {
+          "edge": ["ex1.side[sk1.l1]", "ex1.side[sk1.l2]"]
+        },
+        {
+          "edge": ["ex1.side[sk1.l2]", "ex1.side[sk1.l3]"]
+        },
+        {
+          "edge": ["ex1.side[sk1.l3]", "ex1.side[sk1.l4]"]
+        },
+        {
+          "edge": ["ex1.side[sk1.l4]", "ex1.side[sk1.l1]"]
+        }
+      ],
+      "radius": 4
     },
     {
-     "id": "lp4",
-     "type": "point",
-     "x": -40,
-     "y": 15
+      "id": "tx1",
+      "op": "text",
+      "name": "Name",
+      "plane": {
+        "face": {
+          "face": "ex1.end_cap"
+        }
+      },
+      "text": "meerCAD",
+      "font": "sans-bold",
+      "align": "center",
+      "position": [0, 0],
+      "size": 8,
+      "depth": 1,
+      "mode": "join"
     },
     {
-     "id": "l1",
-     "type": "line",
-     "p1": "lp1",
-     "p2": "lp2"
-    },
-    {
-     "id": "l2",
-     "type": "line",
-     "p1": "lp2",
-     "p2": "lp3"
-    },
-    {
-     "id": "l3",
-     "type": "line",
-     "p1": "lp3",
-     "p2": "lp4"
-    },
-    {
-     "id": "l4",
-     "type": "line",
-     "p1": "lp4",
-     "p2": "lp1"
+      "id": "tx2",
+      "op": "text",
+      "name": "Label",
+      "plane": {
+        "face": {
+          "face": "ex1.end_cap"
+        }
+      },
+      "text": "Testmodell 29",
+      "align": "center",
+      "position": [0, -10],
+      "size": 4,
+      "depth": 0.6,
+      "mode": "cut"
     }
-   ],
-   "constraints": []
-  },
-  {
-   "id": "ex1",
-   "op": "extrude",
-   "name": "Plate",
-   "profile": {
-    "sketch": "sk1"
-   },
-   "extent": "blind",
-   "distance": 4,
-   "mode": "new_body"
-  },
-  {
-   "id": "fi1",
-   "op": "fillet",
-   "name": "Corners",
-   "edges": [
-    {
-     "edge": [
-      "ex1.side[sk1.l1]",
-      "ex1.side[sk1.l2]"
-     ]
-    },
-    {
-     "edge": [
-      "ex1.side[sk1.l2]",
-      "ex1.side[sk1.l3]"
-     ]
-    },
-    {
-     "edge": [
-      "ex1.side[sk1.l3]",
-      "ex1.side[sk1.l4]"
-     ]
-    },
-    {
-     "edge": [
-      "ex1.side[sk1.l4]",
-      "ex1.side[sk1.l1]"
-     ]
-    }
-   ],
-   "radius": 4
-  },
-  {
-   "id": "tx1",
-   "op": "text",
-   "name": "Name",
-   "plane": {
-    "face": {
-     "face": "ex1.end_cap"
-    }
-   },
-   "text": "meerCAD",
-   "font": "sans-bold",
-   "align": "center",
-   "position": [
-    0,
-    0
-   ],
-   "size": 8,
-   "depth": 1,
-   "mode": "join"
-  },
-  {
-   "id": "tx2",
-   "op": "text",
-   "name": "Label",
-   "plane": {
-    "face": {
-     "face": "ex1.end_cap"
-    }
-   },
-   "text": "Testmodell 29",
-   "align": "center",
-   "position": [
-    0,
-    -10
-   ],
-   "size": 4,
-   "depth": 0.6,
-   "mode": "cut"
-  }
- ],
- "rollback": null
+  ],
+  "rollback": null
 }

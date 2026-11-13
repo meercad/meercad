@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { acceptRecord, TERMS_KEY, TERMS_MCP_ERROR, TERMS_POINTS, type TermsRecord } from "../apps/web/src/lib/terms";
+import {
+  acceptRecord,
+  TERMS_KEY,
+  TERMS_MCP_ERROR,
+  TERMS_POINTS,
+  type TermsRecord,
+} from "../apps/web/src/lib/terms";
 
 /**
  * Where the consent to the terms of use is kept (termsStore.ts) and the lock it puts on assistants
@@ -17,31 +23,46 @@ const old = (): TermsRecord => ({ ...good(), version: "2020-01-01" });
 /** A localStorage over a Map; `broken` makes every call throw (private mode, blocked storage). */
 function storage(broken = false, entries: Record<string, string> = {}) {
   const map = new Map(Object.entries(entries));
+
   const fail = (): never => {
     throw new Error("storage blocked");
   };
+
   return {
     map,
     getItem: (k: string) => (broken ? fail() : (map.get(k) ?? null)),
     setItem: (k: string, v: string) => (broken ? fail() : void map.set(k, v)),
   };
 }
-const localWith = (r: unknown) => storage(false, { [LOCAL_KEY]: typeof r === "string" ? r : JSON.stringify(r) });
+
+const localWith = (r: unknown) =>
+  storage(false, { [LOCAL_KEY]: typeof r === "string" ? r : JSON.stringify(r) });
 
 /**
  * termsStore.ts loaded fresh (as at an app start) on a Mac with these shared flags, or with
  * `shared: undefined` on a device without them (iPad, iPhone: localStorage only).
  */
-async function load({ shared, local = storage() }: { shared?: Record<string, unknown>; local?: ReturnType<typeof storage> } = {}) {
+async function load({
+  shared,
+  local = storage(),
+}: { shared?: Record<string, unknown>; local?: ReturnType<typeof storage> } = {}) {
   vi.resetModules();
-  const sharedApi = shared ? { initial: shared, set: vi.fn((_k: string, _v: unknown) => Promise.resolve()) } : undefined;
-  vi.doMock("../apps/web/src/lib/persistence", () => ({ desktop: sharedApi ? { shared: sharedApi } : undefined }));
+
+  const sharedApi = shared
+    ? { initial: shared, set: vi.fn((_k: string, _v: unknown) => Promise.resolve()) }
+    : undefined;
+  vi.doMock("../apps/web/src/lib/persistence", () => ({
+    desktop: sharedApi ? { shared: sharedApi } : undefined,
+  }));
+
   const events: string[] = [];
   const win = new EventTarget();
   win.addEventListener("meercad:terms-accepted", (e) => events.push(e.type));
   vi.stubGlobal("window", win);
   vi.stubGlobal("localStorage", local);
+
   const store = await import("../apps/web/src/lib/termsStore");
+
   return { store, shared: sharedApi, local, events };
 }
 
@@ -93,19 +114,25 @@ describe("terms consent store", () => {
     for (const r of BAD) {
       const mac = await load({ shared: { [TERMS_KEY]: r } });
       expect(mac.store.termsAccepted(), `shared ${JSON.stringify(r)}`).toBe(false);
+
       const device = await load({ local: localWith(r) });
       expect(device.store.termsAccepted(), `local ${JSON.stringify(r)}`).toBe(false);
     }
   });
 
   it("a current record in one place counts even if the other holds an outdated one", async () => {
-    expect((await load({ shared: { [TERMS_KEY]: old() }, local: localWith(good()) })).store.termsAccepted()).toBe(true);
-    expect((await load({ shared: { [TERMS_KEY]: good() }, local: localWith(old()) })).store.termsAccepted()).toBe(true);
+    expect(
+      (await load({ shared: { [TERMS_KEY]: old() }, local: localWith(good()) })).store.termsAccepted(),
+    ).toBe(true);
+    expect(
+      (await load({ shared: { [TERMS_KEY]: good() }, local: localWith(old()) })).store.termsAccepted(),
+    ).toBe(true);
   });
 
   it("survives a localStorage that throws", async () => {
     const { store, events } = await load({ local: storage(true) });
     expect(store.termsAccepted()).toBe(false);
+
     // Saving still counts for this window and tells the app.
     const r = good();
     store.saveTerms(r);
@@ -116,6 +143,7 @@ describe("terms consent store", () => {
   it("saves to the shared flags and localStorage, counts at once, tells the app, and holds after a restart", async () => {
     const { store, shared, local, events } = await load({ shared: {} });
     expect(store.termsAccepted()).toBe(false);
+
     const r = good();
     store.saveTerms(r);
     expect(store.termsAccepted()).toBe(true);
@@ -124,7 +152,9 @@ describe("terms consent store", () => {
     expect(JSON.parse(local.map.get(LOCAL_KEY)!)).toEqual(r);
     expect(events).toEqual(["meercad:terms-accepted"]);
     // After a restart, from either place.
-    expect((await load({ shared: { [TERMS_KEY]: shared!.set.mock.calls[0]![1] } })).store.termsAccepted()).toBe(true);
+    expect(
+      (await load({ shared: { [TERMS_KEY]: shared!.set.mock.calls[0]![1] } })).store.termsAccepted(),
+    ).toBe(true);
     expect((await load({ local: localWith(local.map.get(LOCAL_KEY)!) })).store.termsAccepted()).toBe(true);
   });
 
@@ -156,9 +186,11 @@ describe("assistant lock (MCP) until the terms are accepted", () => {
   it("refuses again once the terms change, or the record is broken", async () => {
     const accepted = await load({ shared: { [TERMS_KEY]: good() } });
     expect(() => accepted.store.requireTerms()).not.toThrow();
+
     for (const r of BAD) {
       const mac = await load({ shared: { [TERMS_KEY]: r } });
       expect(() => mac.store.requireTerms(), `shared ${JSON.stringify(r)}`).toThrow(TERMS_MCP_ERROR);
+
       const device = await load({ local: localWith(r) });
       expect(() => device.store.requireTerms(), `local ${JSON.stringify(r)}`).toThrow(TERMS_MCP_ERROR);
     }
@@ -169,10 +201,15 @@ describe("assistant lock (MCP) until the terms are accepted", () => {
     // The only ways into the request handler: serve (every request, in the window and in each
     // assistant tab) and testCall (development builds' test hook, which no assistant reaches).
     expect([...src.matchAll(/\bhandle\(/g)].length).toBe(3); // the definition, serve, testCall
-    expect(src).toMatch(/export const testCall = [^\n]*=> handle\(/);
+    expect(src).toMatch(/export const testCall = [^;]*=>\s+handle\(/);
+
     // route (the window holding the connection) and serve (every request) lock first.
-    for (const fn of ["async function route(req: BridgeRequest)", "async function serve(req: BridgeRequest)"]) {
+    for (const fn of [
+      "async function route(req: BridgeRequest)",
+      "async function serve(req: BridgeRequest)",
+    ]) {
       expect(src, fn).toContain(fn);
+
       const body = src.slice(src.indexOf(fn));
       const first = body
         .slice(body.indexOf("{") + 1)
@@ -181,11 +218,15 @@ describe("assistant lock (MCP) until the terms are accepted", () => {
         .find((l) => l && !l.startsWith("//"));
       expect(first, fn).toBe("requireTerms();");
     }
+
     // The connection hands every request to route, the assistant tabs theirs to serve.
     expect(src).toContain("const result = await route(msg);");
     expect(src).toContain("serve(req as BridgeRequest).then(");
+
     // The test hook exists only in development builds (and in an iOS app a UI test started).
     const main = readFileSync(join(root, "apps/web/src/main.tsx"), "utf8");
-    expect(main.slice(0, main.indexOf("mcp: bridge.testCall"))).toMatch(/if \(import\.meta\.env\.DEV( \|\| uiTesting\(\))?\)\s*\n?\s*void Promise\.all/);
+    expect(main.slice(0, main.indexOf("mcp: bridge.testCall"))).toMatch(
+      /if \(import\.meta\.env\.DEV( \|\| uiTesting\(\))?\)\s*\{?\s*void Promise\.all/,
+    );
   });
 });
