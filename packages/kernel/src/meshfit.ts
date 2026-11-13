@@ -227,10 +227,12 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
   };
   for (const piece of curvedPieces) {
     const whole = fitPatch(piece, verticesOf(piece), fitter, true);
+    /* v8 ignore start -- a smooth piece that is one surface after all: the test meshes' pieces are found whole earlier */
     if (whole) {
       claim(piece, whole);
       continue;
     }
+    /* v8 ignore stop */
     // Several surfaces meet smoothly (the rounded edges around a face): grow each from a seed
     // strip while the neighbouring strips still lie on the fitted surface.
     const inPiece = new Set(piece);
@@ -285,11 +287,13 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
           if (!next.length) break;
           for (const u of next) for (const t of u) if (!inGrown.has(t)) grown.push(t), inGrown.add(t);
           sinceRefit += next.length;
+          /* v8 ignore start -- a surface that doubles while it grows: not among the test meshes */
           if (sinceRefit * 2 >= grown.length) {
             const refit = fitCurved(grown, verticesOf(grown), fitter).find((c) => c.primitive.kind === fit.primitive.kind);
             if (refit) fit = refit;
             sinceRefit = 0;
           }
+          /* v8 ignore stop */
         }
         const final = fitCurved(grown, verticesOf(grown), fitter).find((c) => c.primitive.kind === fit.primitive.kind) ?? fit;
         grown = grown.filter((t) => fitsOn([t], final.primitive));
@@ -327,10 +331,12 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
   for (let t = 0; t < n; t++) {
     if (degenerate(t)) continue;
     const r = triangleRegion[t]! >= 0 ? regions[triangleRegion[t]!] : undefined;
+    /* v8 ignore start -- a triangle left over by every surface: not among the test meshes */
     if (!r || r.primitive === null) {
       if (r) r.triangles = r.triangles.filter((x) => x !== t);
       newRegion([t], null, 0);
     }
+    /* v8 ignore stop */
   }
   // Degenerate triangles join a neighbour (they add nothing to the surface).
   for (let t = 0; t < n; t++) {

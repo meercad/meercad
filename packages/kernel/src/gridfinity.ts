@@ -272,6 +272,7 @@ function plateBody(oc: OC, arena: Arena, f: ResolvedGridfinity, frame: PlaneFram
     if (toOutline(p[0], p[1], outer[0], outer[1], G.plateRadius) < 1e-3) return name("side");
     if (n && n[2] > 0.99 && Math.abs(p[2] - floor) < 1e-6) return name("floor");
     if (Math.abs(p[0]) <= gx / 2 + 1e-3 && Math.abs(p[1]) <= gy / 2 + 1e-3) return name("pocket");
+    /* v8 ignore next -- every face lies on the outline or inside the grid: a guard only */
     return name("side");
   });
   const body = b.place(local, b.placement(frame, f.position), f.id);

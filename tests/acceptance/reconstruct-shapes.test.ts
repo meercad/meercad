@@ -72,6 +72,18 @@ describe("reconstruct shapes", () => {
     expect(Math.abs((await volumeOf(coarse)).volume / exact - 1)).toBeLessThan(0.15);
   });
 
+  it("draws a countersunk hole cut through its cone as a circle of the cone's size there", async () => {
+    // A disc Ø20, 4 high, with a hole Ø6 at the bottom widening from 1 mm up to Ø10 at the top.
+    const ring: [number, number][] = [[3, 0], [10, 0], [10, 4], [5, 4], [3, 1], [3, 0]];
+    const fit = fitMesh(turned(ring, 96));
+    const rb = reconstruct(fit);
+    const { volume } = await volumeOf(rb);
+    const hole = Math.PI * 9 * 1 + (Math.PI * 3 / 3) * (9 + 15 + 25);
+    const exact = Math.PI * 100 * 4 - hole;
+    // Built in straight layers: within a few per cent of the exact part.
+    expect(Math.abs(volume / exact - 1)).toBeLessThan(0.05);
+  });
+
   it("builds a domed top as a straight layer and says so", async () => {
     const fit = fitMesh(turned([[0, 0], [5, 0], [5, 10], ...arc(10, 5, 0, Math.PI / 2, 12).slice(1)], 64));
     const rb = reconstruct(fit);

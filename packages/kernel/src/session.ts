@@ -147,7 +147,10 @@ export class KernelSession {
         gears: gearViews(r.state, new Map(doc.features.flatMap((f) => (f.op === "gear" && f.meshWith ? [[f.id, f.meshWith.gear] as [string, string]] : [])))),
       },
       meshes,
+      // Nothing fills state.references any more (surroundings go to the view as scenery): always empty.
+      /* v8 ignore start */
       references: [...r.state.references.values()].map((m) => ({ id: m.id, positions: m.positions, indices: m.indices })),
+      /* v8 ignore stop */
     };
   }
 
@@ -159,11 +162,13 @@ export class KernelSession {
     // A finished mesh also serves a draft request; a draft is redone once the value is let go.
     if (hit && (hit.sig === tex.sig || hit.sig === `draft:${tex.sig}`) && (draft || !hit.sig.startsWith("draft:"))) return hit.mesh;
     let base = mesh;
+    /* v8 ignore start -- free-form faces only; a lithophane lies on planes and cylinders (see texture.ts) */
     if (needsFineBase(this.oc, body, tex.layers)) {
       // Curved faces need a base that follows the surface closely, or its facets show through.
       base = meshBody(this.oc, body, summary.bbox, 1, true);
       this.oc.BRepTools.Clean(body.shape, true);
     }
+    /* v8 ignore stop */
     const textured = texturedMesh(this.oc, body, base, tex.layers, draft ? "draft" : "display", this.meshCoarse);
     this.textureCache.set(body, { sig: draft ? `draft:${tex.sig}` : tex.sig, mesh: textured });
     return textured;

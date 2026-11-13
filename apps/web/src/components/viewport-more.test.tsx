@@ -119,6 +119,9 @@ describe("the 3D view, more", () => {
     expect(samePick(region, { ...region, key: "x" } as Pick)).toBe(false);
     expect(samePick(region, edge)).toBe(false);
     expect(samePick(null, null)).toBe(true);
+    const plane = { kind: "plane", planeId: "origin.XY", point: [0, 0, 0] } as unknown as Pick;
+    expect(samePick(plane, { ...plane } as Pick)).toBe(true);
+    expect(samePick(plane, { ...plane, planeId: "origin.YZ" } as Pick)).toBe(false);
   });
 
   it("steps the grid and the snap coarsely far out", () => {
@@ -137,6 +140,13 @@ describe("the 3D view, more", () => {
   it("makes a picture in the flat projection, and zooms it when framing", async () => {
     vp.setProjection("orthographic");
     expect(vp.snapshot(200, 100)).toMatch(/^data:image\/png/);
+    // A rendered picture twice as wide as high keeps the view's height and widens it.
+    const ortho = (vp as unknown as { ortho: { left: number; right: number; top: number; bottom: number } }).ortho;
+    const before = { left: ortho.left, right: ortho.right };
+    const img = vp.renderImage(400, 100);
+    expect([img.width, img.height]).toEqual([400, 100]);
+    expect(ortho.left).toBeCloseTo(before.left, 9);
+    expect(ortho.right).toBeCloseTo(before.right, 9);
     vp.fit(true);
     for (let i = 0; i < 20; i++) {
       await settle(30);

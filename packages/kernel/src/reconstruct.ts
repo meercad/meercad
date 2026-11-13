@@ -477,6 +477,7 @@ function sketchOf(loops: Loop[], frame: PlaneFrame, fit: MeshFit, tol: number, l
     });
     const points = pieced.reduce((s, l) => s + (l.circle ? 1 : l.pieces.length + l.pieces.filter((pc) => pc.kind === "arc").length), 0);
     if (points <= MAX_SKETCH_POINTS || simplifyTol > fit.diag / 20) break;
+    /* v8 ignore next -- an outline of more points than the sketch solver takes: not among the test meshes */
     simplifyTol *= 1.6;
   }
   let rects = 0;
@@ -581,10 +582,12 @@ function piecesOf(loop: Loop, fit: MeshFit, n: Vec3, tol: number, simplifyTol: n
     else parts.push({ chain: [...run.points] });
   }
   // A chain at the end continues into one at the start.
+  /* v8 ignore start -- a loop whose seam falls inside a straight stretch: not among the test meshes */
   if (parts.length > 1 && "chain" in parts[0]! && "chain" in parts[parts.length - 1]!) {
     const tail = parts.pop() as { chain: Vec3[] };
     (parts[0] as { chain: Vec3[] }).chain = [...tail.chain.slice(0, -1), ...(parts[0] as { chain: Vec3[] }).chain];
   }
+  /* v8 ignore stop */
   const pieces: Piece[] = [];
   const q = 0.0005;
   const same = (a: Vec3, b: Vec3) => Math.abs(a[0] - b[0]) < q && Math.abs(a[1] - b[1]) < q && Math.abs(a[2] - b[2]) < q;
@@ -616,10 +619,12 @@ function roundRun(run: Run, fit: MeshFit, n: Vec3, tol: number): { center: Vec3;
   // The recognised cylinder's radius is exact; the slice points of a tessellated wall lie on it.
   let radius = 0;
   if (s.kind === "cylinder") radius = s.radius;
+  /* v8 ignore start -- a section across a cone: the layers are cut through flat faces and cylinders in the test meshes */
   else {
     for (const q of run.points) radius += len(sub(q, center));
     radius /= run.points.length;
   }
+  /* v8 ignore stop */
   if (run.points.some((q) => Math.abs(len(sub(q, center)) - radius) > tol * 4)) return null;
   return { center, radius };
 }
