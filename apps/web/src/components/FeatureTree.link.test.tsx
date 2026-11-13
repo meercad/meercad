@@ -113,4 +113,26 @@ describe("dragging in the side panel", () => {
     await act(async () => void fireEvent.drop(group));
     expect(currentDoc().partGroups![0]!.parts.length).toBe(1);
   });
+
+  it("leaves everything as it was when a drag ends nowhere", async () => {
+    renderUi(<SidePanel />);
+    await rebuilt();
+    const before = JSON.stringify(currentDoc());
+    const bar = document.querySelector<HTMLElement>(".rollback-bar")!;
+    await act(async () => void fireEvent.dragStart(bar));
+    await act(async () => void fireEvent.dragEnd(bar));
+    const step = document.querySelector<HTMLElement>("ul.tree > li div.tree-item")!.closest("li")!;
+    await act(async () => void fireEvent.dragStart(step));
+    await act(async () => void fireEvent.dragEnd(step));
+    const part = document.querySelector<HTMLElement>("li.tree-item")!;
+    await act(async () => void fireEvent.dragStart(part));
+    const group = document.querySelector<HTMLElement>(".group-row");
+    if (group) {
+      await act(async () => void fireEvent.dragOver(group));
+      await act(async () => void fireEvent.dragLeave(group));
+      expect(group.className).not.toMatch(/\bover\b/);
+    }
+    await act(async () => void fireEvent.dragEnd(part));
+    expect(JSON.stringify(currentDoc())).toBe(before);
+  });
 });
