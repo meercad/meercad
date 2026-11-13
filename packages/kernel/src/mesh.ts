@@ -168,6 +168,24 @@ function momentsAbout(oc: OC, props: GProp_GProps, c: [number, number, number]):
   return [xx, yy, zz, (xx + yy) / 2 - about([1, 1, 0]), (xx + zz) / 2 - about([1, 0, 1]), (yy + zz) / 2 - about([0, 1, 1])];
 }
 
+/**
+ * Whether a part has edges along splines of many spans: sketch splines (fitted through their
+ * points) and what lofts or sweeps make of them. Circles, lines and the few-span curves of booleans
+ * and lofts through circles integrate exactly the quick way. Mesh parts have none.
+ */
+function hasSplines(oc: OC, body: Body): boolean {
+  if (body.sourceMesh) return false;
+  return body.edges.some((e) => {
+    if (oc.BRep_Tool.Degenerated(e)) return false;
+    const c = new oc.BRepAdaptor_Curve(e);
+    try {
+      return String(c.GetType()) === "GeomAbs_BSplineCurve" && c.NbKnots() >= 16;
+    } finally {
+      c.delete();
+    }
+  });
+}
+
 /** Bounding box and counts; with `props`, also volume and surface area (integrals, slow on curved parts). */
 export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
   const vol = new oc.GProp_GProps();
@@ -176,6 +194,20 @@ export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
   try {
     if (props) {
       if (body.preciseProps) oc.BRepGProp.VolumeProperties(body.shape, vol, 1e-5, false, false);
+      // Spline edges and faces: the quick integration takes too few points along curves of many
+      // spans (a symmetric spline profile came out 0.7 mm off centre, its volume 1 % off), and the
+      // exact one per span takes seconds on a gear. A fine triangulation (5 µm, or 1/50000 of the
+      // part's size) is within 0.01 % and quick; it is dropped again so the display meshes as before.
+      else if (hasSplines(oc, body)) {
+        const box = new oc.Bnd_Box();
+        oc.BRepBndLib.Add(body.shape, box, false);
+        const [lo, hi] = [box.CornerMin(), box.CornerMax()];
+        const diag = Math.hypot(hi.X() - lo.X(), hi.Y() - lo.Y(), hi.Z() - lo.Z());
+        [lo, hi, box].forEach((x) => x.delete());
+        new oc.BRepMesh_IncrementalMesh(body.shape, Math.max(0.005, diag * 2e-5), false, 0.1, false).delete();
+        oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, true);
+        oc.BRepTools.Clean(body.shape, true);
+      }
       else oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, false);
       oc.BRepGProp.SurfaceProperties(body.shape, surf, false, false);
     }

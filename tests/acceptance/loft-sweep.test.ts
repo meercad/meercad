@@ -138,6 +138,21 @@ describe("loft", () => {
     expect(r.bodies[0]!.area).toBeGreaterThan(1.6 * solid.bodies[0]!.area!);
   });
 
+  it("reports a symmetric spline profile's volume and centre right, extruded and lofted alike", async () => {
+    // Half of the hood's back station, mirrored: 14 points symmetric about x = 0.
+    const half: [number, number][] = [[43.6, -3], [43.026, 8.697], [41.206, 19.519], [35.998, 30.424], [27.855, 37.083], [16.497, 41.136], [6.026, 42.467]];
+    const pts = [...half, ...half.map(([x, y]): [number, number] => [-x, y]).reverse()];
+    const profile = (id: string, plane: string) => sketch(id, { ref: plane }, [...pts.map((p, k): SketchEntity => ({ id: `p${k}`, type: "point", x: p[0], y: p[1] })), { id: "s1", type: "spline", points: pts.map((_, k) => `p${k}`), closed: true }]);
+    const ex = await run([profile("sk0", "origin.XY"), { id: "ex1", op: "extrude", profile: { sketch: "sk0" }, extent: "blind", distance: 20, mode: "new_body" }]);
+    const lo = await run([at("pl0", 200), profile("sk0", "pl0"), at("pl1", 220), profile("sk1", "pl1"), { id: "lo1", op: "loft", profiles: [{ sketch: "sk0" }, { sketch: "sk1" }], mode: "new_body" }]);
+    ok(ex);
+    ok(lo);
+    // The quick integration put both 0.3 to 0.7 mm off centre and 1 % apart.
+    expect(Math.abs(ex.bodies[0]!.centroid![0])).toBeLessThan(0.01);
+    expect(Math.abs(lo.bodies[0]!.centroid![0])).toBeLessThan(0.01);
+    expect(Math.abs(lo.bodies[0]!.volume / ex.bodies[0]!.volume - 1)).toBeLessThan(5e-4);
+  });
+
   it("explains what is wrong", async () => {
     const r = await run([
       sketch("sk1", { ref: "origin.XY" }, [...square("a", 40), ...circle("h1", 0, 0, 5)]),
