@@ -4,7 +4,7 @@
  * sketch region is pulled up into a new part of the dragged height; editing a move shows its three
  * arrows at the moved part; a drag back to nothing cancels.
  */
-import { act, cleanup } from "@testing-library/react";
+import { act, cleanup, fireEvent } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
@@ -124,4 +124,25 @@ describe("more drag arrows", () => {
     expect((useApp.getState().dialog!.feature as { translate: unknown[] }).translate).toEqual([5, 3, 0]);
     await act(async () => cancelDialog());
   });
+
+  it("takes a typed value on an arrow's label, and ignores what is no number", async () => {
+    await select(wall());
+    const chip = () => [...document.querySelectorAll<HTMLButtonElement>(".handle-chip button")].find((b) => /^Ø/.test(b.textContent ?? ""))!;
+    await act(async () => void fireEvent.click(chip()));
+    let input = document.querySelector<HTMLInputElement>(".handle-chip input")!;
+    await act(async () => void fireEvent.change(input, { target: { value: "abc" } }));
+    await act(async () => void fireEvent.keyDown(input, { key: "Enter" }));
+    expect(currentDoc().params["hole"]).toMatch(/^8( mm)?$/);
+    await select(wall());
+    await act(async () => void fireEvent.click(chip()));
+    input = document.querySelector<HTMLInputElement>(".handle-chip input")!;
+    await act(async () => void fireEvent.change(input, { target: { value: "12" } }));
+    await act(async () => void fireEvent.keyDown(input, { key: "Enter" }));
+    await settle();
+    // The label shows the diameter: 12 typed is a 12 mm hole.
+    expect(currentDoc().params["hole"]).toMatch(/^12( mm)?$/);
+    await act(async () => undo());
+    await rebuilt();
+  });
 });
+
