@@ -554,7 +554,7 @@ export function Home() {
 const openingExamples = openGuard();
 
 /** A new project from an example; a large one is fetched first. */
-function openExample(ex: Example): Promise<void> {
+export function openExample(ex: Example): Promise<void> {
   return openingExamples.run(ex.name, () => openExampleNow(ex));
 }
 
