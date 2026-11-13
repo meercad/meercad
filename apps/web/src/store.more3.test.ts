@@ -49,6 +49,18 @@ describe("rebuilding", () => {
     expect(rebuilds.length).toBeGreaterThan(1);
   });
 
+  it("hints once that lithophane pictures can be hidden while a textured part rebuilds slowly", async () => {
+    await newProject(undefined, "Slow litho");
+    const real = performance.now.bind(performance);
+    let extra = 0;
+    // Every look at the clock is 4 s later: the rebuild takes "long".
+    vi.spyOn(performance, "now").mockImplementation(() => real() + (extra += 4000));
+    apply({ type: "add_features", features: [{ id: "li1", op: "lithophane", image: { width: 8, height: 8, pixels: picture }, width: 40 } as Feature] });
+    await idle();
+    vi.mocked(performance.now).mockRestore();
+    expect(toasts()).toMatch(/Lithophane pictures slow down rebuilding/);
+  });
+
   it("says when the kernel cannot rebuild, as a toast or on the preview", async () => {
     await newProject(undefined, "Broken kernel");
     vi.spyOn(kernel, "rebuild").mockRejectedValueOnce(new Error("out of memory"));
