@@ -249,9 +249,14 @@ export function gearShape(p: GearParams, opts: { rim?: number; length?: number }
 
     const gaps = externalOutline(p.teeth, mt, alphaT, df / 2, da / 2, (mt * Math.PI) / 2 + j / 2);
     const turn = Math.PI / p.teeth;
-    const inner = gaps.map((s) => ({
-      part: s.part === "tip" ? ("root" as const) : s.part === "root" ? ("tip" as const) : s.part,
-      pts: s.pts.map(([u, v]): Pt => [
+    const inner = gaps.map((segment) => ({
+      part:
+        segment.part === "tip"
+          ? ("root" as const)
+          : segment.part === "root"
+            ? ("tip" as const)
+            : segment.part,
+      pts: segment.pts.map(([u, v]): Pt => [
         u * Math.cos(turn) - v * Math.sin(turn),
         u * Math.sin(turn) + v * Math.cos(turn),
       ]),
@@ -352,7 +357,9 @@ export function gearShape(p: GearParams, opts: { rim?: number; length?: number }
   // Drop zero-length pieces (teeth reaching the rack's ends).
   return {
     outer: out.filter(
-      (s) => Math.hypot(s.pts[0]![0] - s.pts.at(-1)![0], s.pts[0]![1] - s.pts.at(-1)![1]) > 1e-9,
+      (segment) =>
+        Math.hypot(segment.pts[0]![0] - segment.pts.at(-1)![0], segment.pts[0]![1] - segment.pts.at(-1)![1]) >
+        1e-9,
     ),
   };
 }
@@ -361,9 +368,9 @@ export function gearShape(p: GearParams, opts: { rim?: number; length?: number }
 export function outlineArea(segments: OutlineSegment[]): number {
   let a = 0;
 
-  for (const s of segments) {
-    for (let i = 0; i + 1 < s.pts.length; i++) {
-      a += s.pts[i]![0] * s.pts[i + 1]![1] - s.pts[i + 1]![0] * s.pts[i]![1];
+  for (const segment of segments) {
+    for (let i = 0; i + 1 < segment.pts.length; i++) {
+      a += segment.pts[i]![0] * segment.pts[i + 1]![1] - segment.pts[i + 1]![0] * segment.pts[i]![1];
     }
   }
 

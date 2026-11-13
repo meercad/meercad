@@ -250,110 +250,121 @@ export type ResolvedFeature =
   | Extract<Feature, { op: "mirror" | "boolean" | "delete" | "import" | "loft" | "sweep" }>;
 
 /** Replaces every expression in a feature by its value (mm / degrees). Throws ExprError naming the field. */
-export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): ResolvedFeature {
-  const ev = (field: string, e: Expr) => {
+export function resolveFeature(feature: Feature, scope: ReadonlyMap<string, number>): ResolvedFeature {
+  const ev = (field: string, expr: Expr) => {
     try {
-      return evaluate(e, scope);
+      return evaluate(expr, scope);
     } catch (err) {
       throw new ExprError(`${field}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
-  const opt = (field: string, e: Expr | undefined) => (e === undefined ? undefined : ev(field, e));
+  const opt = (field: string, expr: Expr | undefined) => (expr === undefined ? undefined : ev(field, expr));
 
-  const count = (field: string, e: Expr | undefined) => {
-    if (e === undefined) return undefined;
+  const count = (field: string, expr: Expr | undefined) => {
+    if (expr === undefined) return undefined;
 
-    const n = Math.round(ev(field, e));
+    const n = Math.round(ev(field, expr));
     if (n < 1 || n > 1000) throw new ExprError(`${field}: count must be between 1 and 1000`);
 
     return n;
   };
 
-  switch (f.op) {
+  switch (feature.op) {
     case "sketch":
       return {
-        ...f,
-        constraints: f.constraints.map((c) =>
-          "value" in c ? { ...c, value: ev(`${c.id}`, c.value) } : c,
+        ...feature,
+        constraints: feature.constraints.map((constraint) =>
+          "value" in constraint
+            ? { ...constraint, value: ev(`${constraint.id}`, constraint.value) }
+            : constraint,
         ) as ResolvedSketchConstraint[],
       };
     case "plane":
-      return { ...f, offset: ev("offset", f.offset), angle: opt("angle", f.angle) };
+      return { ...feature, offset: ev("offset", feature.offset), angle: opt("angle", feature.angle) };
     case "extrude":
-      return { ...f, distance: ev("distance", f.distance), distance2: opt("distance2", f.distance2) };
+      return {
+        ...feature,
+        distance: ev("distance", feature.distance),
+        distance2: opt("distance2", feature.distance2),
+      };
     case "revolve":
-      return { ...f, angle: ev("angle", f.angle) };
+      return { ...feature, angle: ev("angle", feature.angle) };
     case "fillet":
-      return { ...f, radius: ev("radius", f.radius), radius2: opt("radius2", f.radius2) };
+      return { ...feature, radius: ev("radius", feature.radius), radius2: opt("radius2", feature.radius2) };
     case "chamfer":
-      return { ...f, distance: ev("distance", f.distance) };
+      return { ...feature, distance: ev("distance", feature.distance) };
     case "shell":
-      return { ...f, thickness: ev("thickness", f.thickness) };
+      return { ...feature, thickness: ev("thickness", feature.thickness) };
     case "thread":
       return {
-        ...f,
-        pitch: opt("pitch", f.pitch),
-        length: opt("length", f.length),
-        clearance: opt("clearance", f.clearance),
-        diameter: opt("diameter", f.diameter),
-        starts: count("starts", f.starts),
+        ...feature,
+        pitch: opt("pitch", feature.pitch),
+        length: opt("length", feature.length),
+        clearance: opt("clearance", feature.clearance),
+        diameter: opt("diameter", feature.diameter),
+        starts: count("starts", feature.starts),
       };
     case "coil":
-      return { ...f, pitch: ev("pitch", f.pitch), turns: ev("turns", f.turns), taper: opt("taper", f.taper) };
+      return {
+        ...feature,
+        pitch: ev("pitch", feature.pitch),
+        turns: ev("turns", feature.turns),
+        taper: opt("taper", feature.taper),
+      };
     case "spring": {
-      const { center, ...rest } = f;
+      const { center, ...rest } = feature;
 
       return {
         ...rest,
-        wire: ev("wire", f.wire),
-        diameter: ev("diameter", f.diameter),
-        coils: ev("coils", f.coils),
-        length: opt("length", f.length),
-        gap: opt("gap", f.gap),
-        legs: opt("legs", f.legs),
+        wire: ev("wire", feature.wire),
+        diameter: ev("diameter", feature.diameter),
+        coils: ev("coils", feature.coils),
+        length: opt("length", feature.length),
+        gap: opt("gap", feature.gap),
+        legs: opt("legs", feature.legs),
         ...(center
           ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] }
           : {}),
       };
     }
     case "screw": {
-      const { center, ...rest } = f;
+      const { center, ...rest } = feature;
 
       return {
         ...rest,
-        diameter: ev("diameter", f.diameter),
-        pitch: opt("pitch", f.pitch),
-        starts: count("starts", f.starts),
-        length: opt("length", f.length),
-        threadLength: opt("threadLength", f.threadLength),
-        clearance: opt("clearance", f.clearance),
+        diameter: ev("diameter", feature.diameter),
+        pitch: opt("pitch", feature.pitch),
+        starts: count("starts", feature.starts),
+        length: opt("length", feature.length),
+        threadLength: opt("threadLength", feature.threadLength),
+        clearance: opt("clearance", feature.clearance),
         ...(center
           ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] }
           : {}),
       };
     }
     case "gear": {
-      const { center, meshWith, bore, hub, ...rest } = f;
-      const teeth = Math.round(ev("teeth", f.teeth));
+      const { center, meshWith, bore, hub, ...rest } = feature;
+      const teeth = Math.round(ev("teeth", feature.teeth));
 
-      if (teeth < (f.kind === "rack" ? 1 : 4) || teeth > 1000) {
-        throw new ExprError(`teeth: must be between ${f.kind === "rack" ? 1 : 4} and 1000`);
+      if (teeth < (feature.kind === "rack" ? 1 : 4) || teeth > 1000) {
+        throw new ExprError(`teeth: must be between ${feature.kind === "rack" ? 1 : 4} and 1000`);
       }
 
       return {
         ...rest,
-        module: opt("module", f.module),
+        module: opt("module", feature.module),
         teeth,
-        width: ev("width", f.width),
-        pressureAngle: opt("pressureAngle", f.pressureAngle),
-        profileShift: opt("profileShift", f.profileShift),
-        helix: opt("helix", f.helix),
-        backlash: opt("backlash", f.backlash),
-        clearance: opt("clearance", f.clearance),
-        rotation: opt("rotation", f.rotation),
-        rim: opt("rim", f.rim),
-        chamfer: opt("chamfer", f.chamfer),
+        width: ev("width", feature.width),
+        pressureAngle: opt("pressureAngle", feature.pressureAngle),
+        profileShift: opt("profileShift", feature.profileShift),
+        helix: opt("helix", feature.helix),
+        backlash: opt("backlash", feature.backlash),
+        clearance: opt("clearance", feature.clearance),
+        rotation: opt("rotation", feature.rotation),
+        rim: opt("rim", feature.rim),
+        chamfer: opt("chamfer", feature.chamfer),
         ...(center
           ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] }
           : {}),
@@ -383,27 +394,27 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
     }
     case "linear_pattern":
       return {
-        ...f,
-        count: count("count", f.count)!,
-        spacing: ev("spacing", f.spacing),
-        count2: count("count2", f.count2),
-        spacing2: opt("spacing2", f.spacing2),
+        ...feature,
+        count: count("count", feature.count)!,
+        spacing: ev("spacing", feature.spacing),
+        count2: count("count2", feature.count2),
+        spacing2: opt("spacing2", feature.spacing2),
       };
     case "circular_pattern":
-      return { ...f, count: count("count", f.count)!, angle: opt("angle", f.angle) };
+      return { ...feature, count: count("count", feature.count)!, angle: opt("angle", feature.angle) };
     case "hole":
       return {
-        ...f,
-        points: f.points.map(
-          ([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number],
+        ...feature,
+        points: feature.points.map(
+          ([expr, v], i) => [ev(`points[${i}][0]`, expr), ev(`points[${i}][1]`, v)] as [number, number],
         ),
-        diameter: opt("diameter", f.diameter),
-        depth: opt("depth", f.depth),
-        allowance: opt("allowance", f.allowance),
-        length: opt("length", f.length),
+        diameter: opt("diameter", feature.diameter),
+        depth: opt("depth", feature.depth),
+        allowance: opt("allowance", feature.allowance),
+        length: opt("length", feature.length),
       };
     case "split": {
-      const { connectors: c, ...rest } = f;
+      const { connectors: c, ...rest } = feature;
       if (!c) return rest;
 
       return {
@@ -418,8 +429,8 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
           ...(c.points
             ? {
                 points: c.points.map(
-                  ([u, v], i) =>
-                    [ev(`connectors.points[${i}][0]`, u), ev(`connectors.points[${i}][1]`, v)] as [
+                  ([expr, v], i) =>
+                    [ev(`connectors.points[${i}][0]`, expr), ev(`connectors.points[${i}][1]`, v)] as [
                       number,
                       number,
                     ],
@@ -431,53 +442,55 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       };
     }
     case "draft":
-      return { ...f, angle: ev("angle", f.angle) };
+      return { ...feature, angle: ev("angle", feature.angle) };
     case "offset_face":
-      return { ...f, distance: ev("distance", f.distance) };
+      return { ...feature, distance: ev("distance", feature.distance) };
     case "scale":
-      return { ...f, factor: ev("factor", f.factor) };
+      return { ...feature, factor: ev("factor", feature.factor) };
     case "align":
-      return { ...f, offset: opt("offset", f.offset), angle: opt("angle", f.angle) };
+      return { ...feature, offset: opt("offset", feature.offset), angle: opt("angle", feature.angle) };
     case "standard_part":
       return {
-        ...f,
-        points: f.points.map(
-          ([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number],
+        ...feature,
+        points: feature.points.map(
+          ([expr, v], i) => [ev(`points[${i}][0]`, expr), ev(`points[${i}][1]`, v)] as [number, number],
         ),
-        length: opt("length", f.length),
-        diameter: opt("diameter", f.diameter),
-        height: opt("height", f.height),
-        angle: opt("angle", f.angle),
+        length: opt("length", feature.length),
+        diameter: opt("diameter", feature.diameter),
+        height: opt("height", feature.height),
+        angle: opt("angle", feature.angle),
       };
     case "primitive": {
       const v3 = (field: string, e: [Expr, Expr, Expr] | undefined): [number, number, number] | undefined =>
         e ? [ev(`${field}[0]`, e[0]), ev(`${field}[1]`, e[1]), ev(`${field}[2]`, e[2])] : undefined;
-      const size = v3("size", f.size);
-      const diameter = opt("diameter", f.diameter);
-      const height = opt("height", f.height);
-      const { size: _s, diameter: _d, height: _h, center: _c, ...rest } = f;
+      const size = v3("size", feature.size);
+      const diameter = opt("diameter", feature.diameter);
+      const height = opt("height", feature.height);
+      const { size: _s, diameter: _d, height: _h, center: _c, ...rest } = feature;
 
       return {
         ...rest,
         ...(size ? { size } : {}),
         ...(diameter !== undefined ? { diameter } : {}),
         ...(height !== undefined ? { height } : {}),
-        center: v3("center", f.center) ?? [0, 0, 0],
+        center: v3("center", feature.center) ?? [0, 0, 0],
       };
     }
     case "text":
       return {
-        ...f,
-        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
-        size: ev("size", f.size),
-        angle: opt("angle", f.angle) ?? 0,
-        depth: ev("depth", f.depth),
+        ...feature,
+        position: feature.position
+          ? [ev("position[0]", feature.position[0]), ev("position[1]", feature.position[1])]
+          : [0, 0],
+        size: ev("size", feature.size),
+        angle: opt("angle", feature.angle) ?? 0,
+        depth: ev("depth", feature.depth),
       };
     case "rib":
-      return { ...f, thickness: ev("thickness", f.thickness) };
+      return { ...feature, thickness: ev("thickness", feature.thickness) };
     case "gridfinity": {
-      const int = (field: string, e: Expr, lo: number, hi: number) => {
-        const n = Math.round(ev(field, e));
+      const int = (field: string, expr: Expr, lo: number, hi: number) => {
+        const n = Math.round(ev(field, expr));
         if (n < lo || n > hi) throw new ExprError(`${field}: must be between ${lo} and ${hi}`);
 
         return n;
@@ -485,10 +498,10 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
 
       const pair = (field: string, p: [Expr, Expr]) =>
         [ev(`${field}[0]`, p[0]), ev(`${field}[1]`, p[1])] as [number, number];
-      const { tab, pocket, ...rest } = f;
-      const auto = f.kind === "bin" && !!pocket;
+      const { tab, pocket, ...rest } = feature;
+      const auto = feature.kind === "bin" && !!pocket;
 
-      if (!f.units && !auto && !(f.kind === "baseplate" && (f.drawer || f.outline))) {
+      if (!feature.units && !auto && !(feature.kind === "baseplate" && (feature.drawer || feature.outline))) {
         throw new ExprError("units: required");
       }
 
@@ -496,9 +509,11 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         ...rest,
         // Baseplates in a drawer or outline count their cells themselves; pocket bins are sized in the
         // kernel.
-        units: f.units ? [int("units[0]", f.units[0], 1, 30), int("units[1]", f.units[1], 1, 30)] : [1, 1],
-        height: f.height === undefined ? 3 : int("height", f.height, 1, 40),
-        ...(pocket && f.kind === "bin"
+        units: feature.units
+          ? [int("units[0]", feature.units[0], 1, 30), int("units[1]", feature.units[1], 1, 30)]
+          : [1, 1],
+        height: feature.height === undefined ? 3 : int("height", feature.height, 1, 40),
+        ...(pocket && feature.kind === "bin"
           ? {
               pocket: {
                 body: pocket.body,
@@ -506,17 +521,17 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
                 clearance: opt("pocket.clearance", pocket.clearance) ?? 0.5,
                 grip: !!pocket.grip,
               },
-              ...(f.units ? {} : { autoUnits: true }),
-              ...(f.height === undefined ? { autoHeight: true } : {}),
+              ...(feature.units ? {} : { autoUnits: true }),
+              ...(feature.height === undefined ? { autoHeight: true } : {}),
             }
           : {}),
-        wall: opt("wall", f.wall),
-        floor: opt("floor", f.floor),
-        dividers: f.dividers
-          ? [int("dividers[0]", f.dividers[0], 0, 50), int("dividers[1]", f.dividers[1], 0, 50)]
+        wall: opt("wall", feature.wall),
+        floor: opt("floor", feature.floor),
+        dividers: feature.dividers
+          ? [int("dividers[0]", feature.dividers[0], 0, 50), int("dividers[1]", feature.dividers[1], 0, 50)]
           : [0, 0],
-        dividerThickness: opt("dividerThickness", f.dividerThickness),
-        scoop: opt("scoop", f.scoop),
+        dividerThickness: opt("dividerThickness", feature.dividerThickness),
+        scoop: opt("scoop", feature.scoop),
         ...(tab
           ? {
               tab: {
@@ -526,96 +541,110 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
               },
             }
           : {}),
-        magnetDiameter: opt("magnetDiameter", f.magnetDiameter),
-        magnetDepth: opt("magnetDepth", f.magnetDepth),
-        drawer: f.drawer ? pair("drawer", f.drawer) : undefined,
-        gap: opt("gap", f.gap),
-        bed: f.bed ? resolveBed(f.bed, pair) : undefined,
-        position: f.position ? pair("position", f.position) : [0, 0],
-        cell: f.cell ? [int("cell[0]", f.cell[0], 0, 100), int("cell[1]", f.cell[1], 0, 100)] : [0, 0],
+        magnetDiameter: opt("magnetDiameter", feature.magnetDiameter),
+        magnetDepth: opt("magnetDepth", feature.magnetDepth),
+        drawer: feature.drawer ? pair("drawer", feature.drawer) : undefined,
+        gap: opt("gap", feature.gap),
+        bed: feature.bed ? resolveBed(feature.bed, pair) : undefined,
+        position: feature.position ? pair("position", feature.position) : [0, 0],
+        cell: feature.cell
+          ? [int("cell[0]", feature.cell[0], 0, 100), int("cell[1]", feature.cell[1], 0, 100)]
+          : [0, 0],
       };
     }
     case "wall": {
-      const int = (field: string, e: Expr, lo: number, hi: number) => {
-        const n = Math.round(ev(field, e));
+      const int = (field: string, expr: Expr, lo: number, hi: number) => {
+        const n = Math.round(ev(field, expr));
         if (n < lo || n > hi) throw new ExprError(`${field}: must be between ${lo} and ${hi}`);
 
         return n;
       };
 
       return {
-        ...f,
-        units: [int("units[0]", f.units[0], 1, 60), int("units[1]", f.units[1], 1, 60)],
-        pitch: opt("pitch", f.pitch),
-        hole: opt("hole", f.hole),
-        thickness: opt("thickness", f.thickness),
-        plate: opt("plate", f.plate),
-        depth: opt("depth", f.depth),
-        size: opt("size", f.size),
-        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
-        cell: f.cell ? [int("cell[0]", f.cell[0], 0, 200), int("cell[1]", f.cell[1], 0, 200)] : [0, 0],
+        ...feature,
+        units: [int("units[0]", feature.units[0], 1, 60), int("units[1]", feature.units[1], 1, 60)],
+        pitch: opt("pitch", feature.pitch),
+        hole: opt("hole", feature.hole),
+        thickness: opt("thickness", feature.thickness),
+        plate: opt("plate", feature.plate),
+        depth: opt("depth", feature.depth),
+        size: opt("size", feature.size),
+        position: feature.position
+          ? [ev("position[0]", feature.position[0]), ev("position[1]", feature.position[1])]
+          : [0, 0],
+        cell: feature.cell
+          ? [int("cell[0]", feature.cell[0], 0, 200), int("cell[1]", feature.cell[1], 0, 200)]
+          : [0, 0],
       };
     }
     case "label":
       return {
-        ...f,
-        width: opt("width", f.width) ?? 36,
-        height: opt("height", f.height) ?? 11,
-        thickness: opt("thickness", f.thickness) ?? 1.2,
-        corner: opt("corner", f.corner) ?? 1,
-        size: opt("size", f.size),
-        depth: opt("depth", f.depth) ?? 0.6,
-        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
-        angle: opt("angle", f.angle) ?? 0,
+        ...feature,
+        width: opt("width", feature.width) ?? 36,
+        height: opt("height", feature.height) ?? 11,
+        thickness: opt("thickness", feature.thickness) ?? 1.2,
+        corner: opt("corner", feature.corner) ?? 1,
+        size: opt("size", feature.size),
+        depth: opt("depth", feature.depth) ?? 0.6,
+        position: feature.position
+          ? [ev("position[0]", feature.position[0]), ev("position[1]", feature.position[1])]
+          : [0, 0],
+        angle: opt("angle", feature.angle) ?? 0,
       };
 
     case "box":
-      return boxDefaults(f, (field, e) => opt(field, e as Expr | undefined));
+      return boxDefaults(feature, (field, e) => opt(field, e as Expr | undefined));
     case "snap_hook":
-      return snapHookDefaults(f, (field, e) => opt(field, e as Expr | undefined));
+      return snapHookDefaults(feature, (field, e) => opt(field, e as Expr | undefined));
     case "lithophane": {
-      const kind = f.kind ?? "lithophane";
+      const kind = feature.kind ?? "lithophane";
 
       return {
-        ...f,
+        ...feature,
         kind,
-        width: ev("width", f.width),
-        thickness: opt("thickness", f.thickness) ?? (kind === "relief" ? 1.6 : 0.8),
-        depth: opt("depth", f.depth) ?? (kind === "relief" ? 1.6 : 2.2),
-        frame: opt("frame", f.frame) ?? 0,
-        curve: opt("curve", f.curve) ?? 0,
-        position: f.position ? [ev("position[0]", f.position[0]), ev("position[1]", f.position[1])] : [0, 0],
+        width: ev("width", feature.width),
+        thickness: opt("thickness", feature.thickness) ?? (kind === "relief" ? 1.6 : 0.8),
+        depth: opt("depth", feature.depth) ?? (kind === "relief" ? 1.6 : 2.2),
+        frame: opt("frame", feature.frame) ?? 0,
+        curve: opt("curve", feature.curve) ?? 0,
+        position: feature.position
+          ? [ev("position[0]", feature.position[0]), ev("position[1]", feature.position[1])]
+          : [0, 0],
       };
     }
     case "mesh_convert":
-      return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
+      return {
+        ...feature,
+        tolerance: opt("tolerance", feature.tolerance),
+        angle: opt("angle", feature.angle),
+      };
     case "bend":
       return {
-        ...f,
-        angle: opt("angle", f.angle),
-        radius: opt("radius", f.radius),
-        gap: opt("gap", f.gap),
-        tolerance: opt("tolerance", f.tolerance),
+        ...feature,
+        angle: opt("angle", feature.angle),
+        radius: opt("radius", feature.radius),
+        gap: opt("gap", feature.gap),
+        tolerance: opt("tolerance", feature.tolerance),
       };
     case "transform": {
-      const { translate, rotate, ...rest } = f;
+      const { translate, rotate, ...rest } = feature;
 
       return {
         ...rest,
         ...(translate
-          ? { translate: translate.map((e, i) => ev(`translate[${i}]`, e)) as [number, number, number] }
+          ? { translate: translate.map((expr, i) => ev(`translate[${i}]`, expr)) as [number, number, number] }
           : {}),
         ...(rotate ? { rotate: { axis: rotate.axis, angle: ev("angle", rotate.angle) } } : {}),
       };
     }
     default:
-      return f;
+      return feature;
   }
 }
 
 /** Visits every expression in a feature (for renaming parameters). */
-export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
-  const g = structuredClone(f) as unknown as Record<string, unknown>;
+export function mapFeatureExprs(feature: Feature, fn: (expr: Expr) => Expr): Feature {
+  const g = structuredClone(feature) as unknown as Record<string, unknown>;
   const keys: Record<string, string[]> = {
     plane: ["offset", "angle"],
     extrude: ["distance", "distance2"],
@@ -693,60 +722,65 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     scale: ["factor"],
   };
 
-  if (f.op === "transform") {
+  if (feature.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
 
     const rot = g["rotate"] as { angle: Expr } | undefined;
     if (rot) rot.angle = fn(rot.angle);
   }
 
-  if (f.op === "text" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
+  if (feature.op === "text" && Array.isArray(g["position"])) {
+    g["position"] = (g["position"] as Expr[]).map(fn);
+  }
 
-  if (f.op === "primitive") {
+  if (feature.op === "primitive") {
     for (const k of ["size", "center"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
   }
 
-  if (f.op === "gridfinity") {
+  if (feature.op === "gridfinity") {
     for (const k of ["units", "dividers", "drawer", "position", "cell"]) {
       if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
     }
   }
 
-  if (f.op === "gridfinity" && g["bed"]) {
+  if (feature.op === "gridfinity" && g["bed"]) {
     const bed = g["bed"] as Record<string, Expr[] | string>;
     for (const k of ["size", "margin"]) if (Array.isArray(bed[k])) bed[k] = (bed[k] as Expr[]).map(fn);
   }
 
-  if (f.op === "gridfinity" && g["pocket"]) {
+  if (feature.op === "gridfinity" && g["pocket"]) {
     const pocket = g["pocket"] as Record<string, Expr>;
     for (const k of ["sink", "clearance"]) if (pocket[k] !== undefined) pocket[k] = fn(pocket[k]);
   }
 
-  if (f.op === "gridfinity" && g["tab"]) {
+  if (feature.op === "gridfinity" && g["tab"]) {
     const tab = g["tab"] as Record<string, Expr>;
     for (const k of ["width", "angle"]) if (tab[k] !== undefined) tab[k] = fn(tab[k]);
   }
 
-  if (f.op === "box" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
-  if (f.op === "snap_hook") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
+  if (feature.op === "box" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
+  if (feature.op === "snap_hook") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
 
-  if (f.op === "wall") {
+  if (feature.op === "wall") {
     for (const k of ["units", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
   }
 
-  if (f.op === "lithophane" && Array.isArray(g["position"])) {
+  if (feature.op === "lithophane" && Array.isArray(g["position"])) {
     g["position"] = (g["position"] as Expr[]).map(fn);
   }
 
-  if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
-  if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
-  if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
+  if (feature.op === "label" && Array.isArray(g["position"])) {
+    g["position"] = (g["position"] as Expr[]).map(fn);
+  }
 
-  if ((f.op === "spring" || f.op === "screw") && Array.isArray(g["center"])) {
+  if (feature.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
+  if (feature.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
+
+  if ((feature.op === "spring" || feature.op === "screw") && Array.isArray(g["center"])) {
     g["center"] = (g["center"] as Expr[]).map(fn);
   }
 
-  if (f.op === "gear") {
+  if (feature.op === "gear") {
     if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
 
     const nested = (o: unknown, ks: string[]) => {
@@ -759,9 +793,9 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     nested(g["hub"], ["diameter", "length"]);
   }
 
-  for (const k of keys[f.op] ?? []) if (g[k] !== undefined) g[k] = fn(g[k] as Expr);
+  for (const k of keys[feature.op] ?? []) if (g[k] !== undefined) g[k] = fn(g[k] as Expr);
 
-  if (f.op === "sketch") {
+  if (feature.op === "sketch") {
     for (const c of g["constraints"] as { value?: Expr }[]) if (c.value !== undefined) c.value = fn(c.value);
   }
 

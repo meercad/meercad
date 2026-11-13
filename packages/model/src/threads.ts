@@ -46,9 +46,9 @@ export const externalMinor = (d: number, pitch: number) => d - 1.226869 * pitch;
 
 /** Parses "M8" / "M2.5"; null when it is not a metric designation. */
 export function parseMetric(size: string): number | null {
-  const m = /^M(\d+(?:\.\d+)?)$/.exec(size.trim());
+  const match = /^M(\d+(?:\.\d+)?)$/.exec(size.trim());
 
-  return m ? Number(m[1]) : null;
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -65,15 +65,18 @@ export function threadFor(
     const d = parseMetric(size);
     if (d === null || !(d > 0)) throw new Error(`unknown thread size "${size}" (use e.g. M8)`);
 
-    const std = METRIC_THREADS.find((t) => t.d === d);
+    const std = METRIC_THREADS.find((thread) => thread.d === d);
     const p = pitch ?? std?.pitch;
     if (!p) throw new Error(`${size} is not a standard size; give a pitch`);
 
     return { size: std?.size ?? `M${d}`, d, pitch: p };
   }
 
-  const score = (t: MetricThread) =>
-    Math.min(Math.abs(dia - t.d), internal ? Math.abs(dia - internalMinor(t.d, t.pitch)) : Infinity);
+  const score = (thread: MetricThread) =>
+    Math.min(
+      Math.abs(dia - thread.d),
+      internal ? Math.abs(dia - internalMinor(thread.d, thread.pitch)) : Infinity,
+    );
   const best = [...METRIC_THREADS].sort((a, b) => score(a) - score(b))[0]!;
 
   return { size: best.size, d: best.d, pitch: pitch ?? best.pitch };
@@ -167,7 +170,7 @@ export function threadSpec(
 
   const lead = pitch! * starts;
 
-  if (profile !== "iso" || pitch !== METRIC_THREADS.find((t) => t.d === d)?.pitch || starts > 1) {
+  if (profile !== "iso" || pitch !== METRIC_THREADS.find((thread) => thread.d === d)?.pitch || starts > 1) {
     size = `${size}×${starts > 1 ? `${Math.round(lead * 100) / 100} P${pitch}` : pitch}`;
   }
 

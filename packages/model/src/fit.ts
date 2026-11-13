@@ -119,7 +119,7 @@ export function fitTestDocument(): MeercadDocument {
         name: "Engrave the gaps",
         operation: "subtract",
         target: "ex1",
-        tools: labels.map((l) => l.id),
+        tools: labels.map((feature) => feature.id),
       },
       {
         id: "sk2",

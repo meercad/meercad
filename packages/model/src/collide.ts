@@ -250,12 +250,16 @@ export function meshesCollide(
     m[2]! * p[0] + m[6]! * p[1] + m[10]! * p[2] + m[14]!,
   ];
 
-  const boxOf = (n: Node): { min: V3; max: V3 } => {
+  const boxOf = (node: Node): { min: V3; max: V3 } => {
     const min: V3 = [Infinity, Infinity, Infinity];
     const max: V3 = [-Infinity, -Infinity, -Infinity];
 
     for (let c = 0; c < 8; c++) {
-      const p = xf([c & 1 ? n.max[0] : n.min[0], c & 2 ? n.max[1] : n.min[1], c & 4 ? n.max[2] : n.min[2]]);
+      const p = xf([
+        c & 1 ? node.max[0] : node.min[0],
+        c & 2 ? node.max[1] : node.min[1],
+        c & 4 ? node.max[2] : node.min[2],
+      ]);
 
       for (let k = 0; k < 3; k++) {
         if (p[k]! < min[k]!) min[k] = p[k]!;
@@ -305,21 +309,21 @@ export function meshesCollide(
   };
 
   const moved = new Map<Node, { min: V3; max: V3 }>();
-  const boxB = (n: Node) => moved.get(n) ?? moved.set(n, boxOf(n)).get(n)!;
+  const boxB = (node: Node) => moved.get(node) ?? moved.set(node, boxOf(node)).get(node)!;
   const stack: [Node, Node][] = [[a.root, b.root]];
 
   while (stack.length) {
-    const [na, nb] = stack.pop()!;
-    if (!overlap(na, boxB(nb))) continue;
+    const [node, nb] = stack.pop()!;
+    if (!overlap(node, boxB(nb))) continue;
 
-    const leafA = !na.left;
+    const leafA = !node.left;
     const leafB = !nb.left;
 
     if (leafA && leafB) {
       const A = a.tri;
       for (let j = nb.start; j < nb.start + nb.count; j++) if (b.stamp[j] !== test) place(j);
 
-      for (let i = na.start; i < na.start + na.count; i++) {
+      for (let i = node.start; i < node.start + node.count; i++) {
         const ao = i * 9;
         const x0 = Math.min(A[ao]!, A[ao + 3]!, A[ao + 6]!),
           x1 = Math.max(A[ao]!, A[ao + 3]!, A[ao + 6]!);
@@ -360,10 +364,10 @@ export function meshesCollide(
     }
 
     // Descend the bigger box first.
-    const sizeA = na.max[0] - na.min[0] + na.max[1] - na.min[1] + na.max[2] - na.min[2];
+    const sizeA = node.max[0] - node.min[0] + node.max[1] - node.min[1] + node.max[2] - node.min[2];
     const sizeB = nb.max[0] - nb.min[0] + nb.max[1] - nb.min[1] + nb.max[2] - nb.min[2];
-    if (leafB || (!leafA && sizeA >= sizeB)) stack.push([na.left!, nb], [na.right!, nb]);
-    else stack.push([na, nb.left!], [na, nb.right!]);
+    if (leafB || (!leafA && sizeA >= sizeB)) stack.push([node.left!, nb], [node.right!, nb]);
+    else stack.push([node, nb.left!], [node, nb.right!]);
   }
 
   return false;
@@ -527,10 +531,10 @@ export function signedDistance(c: MeshCollider, p: V3): number {
   let sign = 1;
   const T = c.tri;
 
-  const boxDist2 = (n: Node) => {
-    const dx = px < n.min[0] ? n.min[0] - px : px > n.max[0] ? px - n.max[0] : 0;
-    const dy = py < n.min[1] ? n.min[1] - py : py > n.max[1] ? py - n.max[1] : 0;
-    const dz = pz < n.min[2] ? n.min[2] - pz : pz > n.max[2] ? pz - n.max[2] : 0;
+  const boxDist2 = (node: Node) => {
+    const dx = px < node.min[0] ? node.min[0] - px : px > node.max[0] ? px - node.max[0] : 0;
+    const dy = py < node.min[1] ? node.min[1] - py : py > node.max[1] ? py - node.max[1] : 0;
+    const dz = pz < node.min[2] ? node.min[2] - pz : pz > node.max[2] ? pz - node.max[2] : 0;
 
     return dx * dx + dy * dy + dz * dz;
   };
@@ -538,18 +542,18 @@ export function signedDistance(c: MeshCollider, p: V3): number {
   const stack: Node[] = [c.root];
 
   while (stack.length) {
-    const n = stack.pop()!;
-    if (boxDist2(n) >= best) continue;
+    const node = stack.pop()!;
+    if (boxDist2(node) >= best) continue;
 
-    if (n.left) {
+    if (node.left) {
       // Nearer child last, so it is searched first.
-      if (boxDist2(n.left) < boxDist2(n.right!)) stack.push(n.right!, n.left);
-      else stack.push(n.left, n.right!);
+      if (boxDist2(node.left) < boxDist2(node.right!)) stack.push(node.right!, node.left);
+      else stack.push(node.left, node.right!);
 
       continue;
     }
 
-    for (let i = n.start; i < n.start + n.count; i++) {
+    for (let i = node.start; i < node.start + node.count; i++) {
       closestOnTriangle(T, i * 9, px, py, pz);
 
       const dx = px - near[0]!,
@@ -585,13 +589,13 @@ export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6): number 
   let best = Infinity;
   const inv = [1 / d[0], 1 / d[1], 1 / d[2]];
 
-  const enter = (n: Node): number => {
+  const enter = (node: Node): number => {
     let lo = -Infinity;
     let hi = Infinity;
 
     for (let a = 0; a < 3; a++) {
-      let t1 = (n.min[a]! - o[a]!) * inv[a]!;
-      let t2 = (n.max[a]! - o[a]!) * inv[a]!;
+      let t1 = (node.min[a]! - o[a]!) * inv[a]!;
+      let t2 = (node.max[a]! - o[a]!) * inv[a]!;
       if (t1 > t2) [t1, t2] = [t2, t1];
       // A ray along a face of the box gives NaN: count it as inside on that axis.
       if (!Number.isNaN(t1)) lo = Math.max(lo, t1);
@@ -604,18 +608,18 @@ export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6): number 
   const stack: Node[] = [c.root];
 
   while (stack.length) {
-    const n = stack.pop()!;
-    if (enter(n) >= best) continue;
+    const node = stack.pop()!;
+    if (enter(node) >= best) continue;
 
-    if (n.left) {
+    if (node.left) {
       // Nearer child last, so it is searched first and the farther one is often skipped.
-      if (enter(n.left) < enter(n.right!)) stack.push(n.right!, n.left);
-      else stack.push(n.left, n.right!);
+      if (enter(node.left) < enter(node.right!)) stack.push(node.right!, node.left);
+      else stack.push(node.left, node.right!);
 
       continue;
     }
 
-    for (let i = n.start; i < n.start + n.count; i++) {
+    for (let i = node.start; i < node.start + node.count; i++) {
       // Möller–Trumbore.
       const q = i * 9;
       const e1x = T[q + 3]! - T[q]!,

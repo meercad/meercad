@@ -100,17 +100,17 @@ export interface ResolvedSnapHook extends Omit<
 
 /** Fills in the defaults of a box whose numbers are known (`num` gives an optional field's value). */
 export function boxDefaults(
-  f: BoxFeature,
+  feature: BoxFeature,
   num: (field: string, e: BoxFeature[keyof BoxFeature]) => number | undefined,
 ): ResolvedBox {
-  const n = (k: keyof BoxFeature) => num(k, f[k]);
+  const n = (k: keyof BoxFeature) => num(k, feature[k]);
   const wall = n("wall") ?? BOX.wall;
   const width = n("width")!;
-  const shape = f.lid === "screw" ? "round" : (f.shape ?? "rect");
+  const shape = feature.lid === "screw" ? "round" : (feature.shape ?? "rect");
   const starts = Math.round(n("starts") ?? 1);
 
   return {
-    ...f,
+    ...feature,
     shape,
     width,
     depth: shape === "round" ? width : (n("depth") ?? width),
@@ -125,7 +125,9 @@ export function boxDefaults(
     pitch: n("pitch") ?? BOX.pitch,
     neck: n("neck") ?? BOX.neck,
     starts,
-    position: f.position ? [num("position[0]", f.position[0])!, num("position[1]", f.position[1])!] : [0, 0],
+    position: feature.position
+      ? [num("position[0]", feature.position[0])!, num("position[1]", feature.position[1])!]
+      : [0, 0],
   };
 }
 
@@ -284,15 +286,15 @@ export function screwBoxSizes(b: ResolvedBox): ScrewBoxSizes {
 
 /** Fills in a snap hook's defaults. */
 export function snapHookDefaults(
-  f: SnapHookFeature,
+  feature: SnapHookFeature,
   num: (field: string, e: SnapHookFeature[keyof SnapHookFeature]) => number | undefined,
 ): ResolvedSnapHook {
-  const n = (k: keyof SnapHookFeature) => num(k, f[k]);
+  const n = (k: keyof SnapHookFeature) => num(k, feature[k]);
 
   return {
-    ...f,
-    points: f.points.map(
-      ([u, v], i) => [num(`points[${i}][0]`, u)!, num(`points[${i}][1]`, v)!] as [number, number],
+    ...feature,
+    points: feature.points.map(
+      ([expr, v], i) => [num(`points[${i}][0]`, expr)!, num(`points[${i}][1]`, v)!] as [number, number],
     ),
     angle: n("angle") ?? 0,
     length: n("length") ?? SNAP_HOOK.length,

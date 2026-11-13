@@ -230,13 +230,13 @@ export class Linkage {
         r.push(k * (this.value(poses, id, near[id] ?? t) - t));
       }
 
-      for (const c of this.couplings) {
-        const jd = this.joints.find((x) => x.id === c.driven);
+      for (const coupling of this.couplings) {
+        const jd = this.joints.find((x) => x.id === coupling.driven);
         const k = jd?.type === "revolute" ? 0.9 : 1;
         r.push(
           k *
-            (this.value(poses, c.driven, near[c.driven] ?? 0) -
-              c.ratio * this.value(poses, c.driver, near[c.driver] ?? 0)),
+            (this.value(poses, coupling.driven, near[coupling.driven] ?? 0) -
+              coupling.ratio * this.value(poses, coupling.driver, near[coupling.driver] ?? 0)),
         );
       }
 

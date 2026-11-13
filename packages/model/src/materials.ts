@@ -310,22 +310,22 @@ export const MATERIALS: readonly Material[] = [
   },
 ];
 
-const LIBRARY = new Map(MATERIALS.map((m) => [m.id, m]));
+const LIBRARY = new Map(MATERIALS.map((material) => [material.id, material]));
 
 /** An own material as a full material: its base under its own name, colour and density. */
-export function customMaterial(c: CustomMaterial): Material | undefined {
-  const base = LIBRARY.get(c.base);
+export function customMaterial(material: CustomMaterial): Material | undefined {
+  const base = LIBRARY.get(material.base);
   if (!base) return undefined;
 
   const { base: _b, ...rest } = base;
 
   return {
     ...rest,
-    id: c.id,
-    name: c.name,
-    density: c.density ?? base.density,
-    look: { ...base.look, ...(c.color ? { color: c.color } : {}) },
-    notes: c.notes ?? base.notes,
+    id: material.id,
+    name: material.name,
+    density: material.density ?? base.density,
+    look: { ...base.look, ...(material.color ? { color: material.color } : {}) },
+    notes: material.notes ?? base.notes,
     base: base.id,
   };
 }
@@ -337,9 +337,9 @@ export function materialById(
 ): Material | undefined {
   if (!id) return undefined;
 
-  const c = own.find((m) => m.id === id);
+  const material = own.find((material) => material.id === id);
 
-  return c ? customMaterial(c) : LIBRARY.get(id);
+  return material ? customMaterial(material) : LIBRARY.get(id);
 }
 
 /** The material a part is made of, or undefined. */
@@ -350,13 +350,13 @@ export const partMaterial = (
 
 /** Every material a document can use: its own first, then the library. */
 export const documentMaterials = (doc: Pick<MeercadDocument, "materials">): Material[] => [
-  ...(doc.materials ?? []).flatMap((c) => customMaterial(c) ?? []),
+  ...(doc.materials ?? []).flatMap((material) => customMaterial(material) ?? []),
   ...MATERIALS,
 ];
 
 /** A fresh id for an own material ("own1", "own2", …). */
 export function newMaterialId(doc: Pick<MeercadDocument, "materials">): string {
-  const used = new Set((doc.materials ?? []).map((m) => m.id));
+  const used = new Set((doc.materials ?? []).map((material) => material.id));
   let n = 1;
   while (used.has(`own${n}`)) n++;
 
@@ -364,7 +364,7 @@ export function newMaterialId(doc: Pick<MeercadDocument, "materials">): string {
 }
 
 /** Mass in grams of `volume` mm³ of a material. */
-export const massOf = (volume: number, m: Material): number => (volume / 1000) * m.density;
+export const massOf = (volume: number, material: Material): number => (volume / 1000) * material.density;
 
 /** Mass for display: grams below a kilogram, then kilograms. */
 export function formatMass(grams: number): string {
@@ -469,12 +469,12 @@ export function billOfMaterials(
 
   for (const p of parts) {
     const base = name(p.id).replace(/ \(\d+\)$/, "");
-    const m = materialById(materials[p.id], own);
+    const material = materialById(materials[p.id], own);
     const row = rows.find(
-      (r) =>
-        r.name === base &&
-        r.material === m?.name &&
-        Math.abs(r.volume - p.volume) <= 1e-6 * Math.max(1, p.volume),
+      (row) =>
+        row.name === base &&
+        row.material === material?.name &&
+        Math.abs(row.volume - p.volume) <= 1e-6 * Math.max(1, p.volume),
     );
 
     if (row) {
@@ -484,7 +484,7 @@ export function billOfMaterials(
         pos: rows.length + 1,
         name: base,
         qty: 1,
-        ...(m ? { material: m.name, mass: massOf(p.volume, m) } : {}),
+        ...(material ? { material: material.name, mass: massOf(p.volume, material) } : {}),
         volume: p.volume,
       });
     }
@@ -498,15 +498,15 @@ export function bomCsv(rows: readonly BomRow[]): string {
   const cell = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const lines = [["Pos", "Qty", "Name", "Material", "Mass each (g)", "Volume each (cm³)"].join(";")];
 
-  for (const r of rows) {
+  for (const row of rows) {
     lines.push(
       [
-        String(r.pos),
-        String(r.qty),
-        cell(r.name),
-        cell(r.material ?? ""),
-        r.mass !== undefined ? r.mass.toFixed(2) : "",
-        (r.volume / 1000).toFixed(3),
+        String(row.pos),
+        String(row.qty),
+        cell(row.name),
+        cell(row.material ?? ""),
+        row.mass !== undefined ? row.mass.toFixed(2) : "",
+        (row.volume / 1000).toFixed(3),
       ].join(";"),
     );
   }

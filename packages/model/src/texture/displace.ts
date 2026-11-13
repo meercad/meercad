@@ -142,8 +142,8 @@ function texturize(
   coarser: number,
 ): TexturedMesh | null {
   const layerOf = new Map<number, number>();
-  layers.forEach((l, i) => {
-    if (l.pitch > 0 && Number.isFinite(l.depth)) for (const f of l.faces) layerOf.set(f, i);
+  layers.forEach((layer, i) => {
+    if (layer.pitch > 0 && Number.isFinite(layer.depth)) for (const f of layer.faces) layerOf.set(f, i);
   });
   if (!layerOf.size) return null;
 
@@ -177,7 +177,14 @@ function texturize(
     const first = mesh.faceRanges[i]!,
       count = mesh.faceRanges[i + 1]!,
       face = mesh.faceRanges[i + 2]!;
-    const r: Range = { face, layer: layerOf.get(face) ?? -1, weld: [], nrm: [], tris: [], local: new Map() };
+    const range: Range = {
+      face,
+      layer: layerOf.get(face) ?? -1,
+      weld: [],
+      nrm: [],
+      tris: [],
+      local: new Map(),
+    };
     const byVertex = new Map<number, number>();
 
     for (let k = first; k < first + count; k++) {
@@ -185,31 +192,31 @@ function texturize(
       let l = byVertex.get(v);
 
       if (l === undefined) {
-        l = r.weld.length;
+        l = range.weld.length;
         byVertex.set(v, l);
-        r.weld.push(weldOf[v]!);
-        r.nrm.push(mesh.normals[v * 3]!, mesh.normals[v * 3 + 1]!, mesh.normals[v * 3 + 2]!);
-        if (!r.local.has(weldOf[v]!)) r.local.set(weldOf[v]!, l);
+        range.weld.push(weldOf[v]!);
+        range.nrm.push(mesh.normals[v * 3]!, mesh.normals[v * 3 + 1]!, mesh.normals[v * 3 + 2]!);
+        if (!range.local.has(weldOf[v]!)) range.local.set(weldOf[v]!, l);
       }
 
-      r.tris.push(l);
+      range.tris.push(l);
     }
 
     // Drop triangles that welding collapsed (degenerate slivers along a seam).
     const kept: number[] = [];
 
-    for (let t = 0; t < r.tris.length; t += 3) {
-      const a = r.weld[r.tris[t]!]!,
-        b = r.weld[r.tris[t + 1]!]!,
-        c = r.weld[r.tris[t + 2]!]!;
-      if (a !== b && b !== c && c !== a) kept.push(r.tris[t]!, r.tris[t + 1]!, r.tris[t + 2]!);
+    for (let t = 0; t < range.tris.length; t += 3) {
+      const a = range.weld[range.tris[t]!]!,
+        b = range.weld[range.tris[t + 1]!]!,
+        c = range.weld[range.tris[t + 2]!]!;
+      if (a !== b && b !== c && c !== a) kept.push(range.tris[t]!, range.tris[t + 1]!, range.tris[t + 2]!);
     }
 
-    r.tris = kept;
-    ranges.push(r);
+    range.tris = kept;
+    ranges.push(range);
   }
 
-  const selected = ranges.filter((r) => r.layer >= 0);
+  const selected = ranges.filter((range) => range.layer >= 0);
   if (!selected.length) return null;
 
   // ---- groups of chosen faces joined by smooth edges (per layer), from the original triangles
@@ -219,14 +226,14 @@ function texturize(
 
   {
     const seen = new Map<number, [number, number, number]>();
-    ranges.forEach((r, ri) => {
-      if (r.layer < 0) return;
+    ranges.forEach((range, ri) => {
+      if (range.layer < 0) return;
 
-      for (let t = 0; t < r.tris.length; t += 3) {
+      for (let t = 0; t < range.tris.length; t += 3) {
         for (let k = 0; k < 3; k++) {
-          const la = r.tris[t + k]!,
-            lb = r.tris[t + ((k + 1) % 3)]!;
-          const key = edgeKey(r.weld[la]!, r.weld[lb]!);
+          const la = range.tris[t + k]!,
+            lb = range.tris[t + ((k + 1) % 3)]!;
+          const key = edgeKey(range.weld[la]!, range.weld[lb]!);
           const other = seen.get(key);
 
           if (!other) {
@@ -235,14 +242,18 @@ function texturize(
           }
 
           const [oi, oa, ob] = other;
-          if (oi === ri || ranges[oi]!.layer !== r.layer) continue;
+          if (oi === ri || ranges[oi]!.layer !== range.layer) continue;
 
           const o = ranges[oi]!;
-          const n = (rr: Range, l: number): V3 => [rr.nrm[l * 3]!, rr.nrm[l * 3 + 1]!, rr.nrm[l * 3 + 2]!];
+          const n = (range: Range, l: number): V3 => [
+            range.nrm[l * 3]!,
+            range.nrm[l * 3 + 1]!,
+            range.nrm[l * 3 + 2]!,
+          ];
           // Same corners in the other face: oa/ob may be the other way round.
-          const [ma, mb] = o.weld[oa] === r.weld[la] ? [oa, ob] : [ob, oa];
+          const [ma, mb] = o.weld[oa] === range.weld[la] ? [oa, ob] : [ob, oa];
 
-          if (dot(n(r, la), n(o, ma)) > COS_SMOOTH && dot(n(r, lb), n(o, mb)) > COS_SMOOTH) {
+          if (dot(n(range, la), n(o, ma)) > COS_SMOOTH && dot(n(range, lb), n(o, mb)) > COS_SMOOTH) {
             parent[find(ri)] = find(oi);
           }
         }
@@ -250,7 +261,7 @@ function texturize(
     });
   }
 
-  const groupOf = ranges.map((r, i) => (r.layer < 0 ? -1 : find(i)));
+  const groupOf = ranges.map((range, i) => (range.layer < 0 ? -1 : find(i)));
 
   // Edges on the border of the texture (to an untextured face or another group), split along with it.
   const borderEdge = new Set<number>();
@@ -259,13 +270,13 @@ function texturize(
 
   {
     const owner = new Map<number, number>();
-    ranges.forEach((r, ri) => {
-      const g = r.layer < 0 ? -1 : groupOf[ri]!;
+    ranges.forEach((range, ri) => {
+      const g = range.layer < 0 ? -1 : groupOf[ri]!;
 
-      for (let t = 0; t < r.tris.length; t += 3) {
+      for (let t = 0; t < range.tris.length; t += 3) {
         for (let k = 0; k < 3; k++) {
-          const a = r.weld[r.tris[t + k]!]!,
-            b = r.weld[r.tris[t + ((k + 1) % 3)]!]!;
+          const a = range.weld[range.tris[t + k]!]!,
+            b = range.weld[range.tris[t + ((k + 1) % 3)]!]!;
           const key = edgeKey(a, b);
           const o = owner.get(key);
 
@@ -303,20 +314,20 @@ function texturize(
   // ---- how fine: about a corner per pixel, coarser if the triangle budget would be exceeded
   const area = layers.map(() => 0);
 
-  for (const r of selected) {
-    for (let t = 0; t < r.tris.length; t += 3) {
-      const a = P(r.weld[r.tris[t]!]!),
-        b = P(r.weld[r.tris[t + 1]!]!),
-        c = P(r.weld[r.tris[t + 2]!]!);
+  for (const range of selected) {
+    for (let t = 0; t < range.tris.length; t += 3) {
+      const a = P(range.weld[range.tris[t]!]!),
+        b = P(range.weld[range.tris[t + 1]!]!),
+        c = P(range.weld[range.tris[t + 2]!]!);
       const n = cross(sub(b, a), sub(c, a));
       const A = Math.hypot(n[0], n[1], n[2]) / 2;
-      area[r.layer]! += A;
+      area[range.layer]! += A;
     }
   }
 
   // A corner per pixel for export (`samples` 12), a little coarser on screen.
-  const spacing = layers.map((l, i) => {
-    const pixel = Math.sqrt(area[i]! / (l.image.width * l.image.height));
+  const spacing = layers.map((layer, i) => {
+    const pixel = Math.sqrt(area[i]! / (layer.image.width * layer.image.height));
 
     return Math.max(0.02, (pixel * 12) / opts.samples);
   });
@@ -329,7 +340,7 @@ function texturize(
 
   const mids = new Map<number, number>();
   // Edges cut for ladders whose other side still has them whole: they split on every face.
-  const rangeAt = new Map(ranges.map((r, i) => [r, i]));
+  const rangeAt = new Map(ranges.map((range, i) => [range, i]));
   const preset = ladders(
     ranges,
     spacing,
@@ -337,7 +348,7 @@ function texturize(
     pos,
     edgeKey,
     mids,
-    (r, a, b) => {
+    (range, a, b) => {
       return Math.sqrt(len2(a, b));
     },
     markMid,
@@ -355,12 +366,12 @@ function texturize(
       presetAt[key - a * 134217728] = 1;
     }
 
-    ranges.forEach((r, ri) => {
+    ranges.forEach((range, ri) => {
       if (preset.size) {
-        for (let t = 0; t < r.tris.length; t += 3) {
+        for (let t = 0; t < range.tris.length; t += 3) {
           for (let k = 0; k < 3; k++) {
-            const a = r.weld[r.tris[t + k]!]!,
-              b = r.weld[r.tris[t + ((k + 1) % 3)]!]!;
+            const a = range.weld[range.tris[t + k]!]!,
+              b = range.weld[range.tris[t + ((k + 1) % 3)]!]!;
             if (presetAt[a] !== 1 || presetAt[b] !== 1) continue;
 
             const key = edgeKey(a, b);
@@ -369,18 +380,18 @@ function texturize(
         }
       }
 
-      if (r.layer < 0) return;
+      if (range.layer < 0) return;
 
-      const h2 = spacing[r.layer]! ** 2;
+      const h2 = spacing[range.layer]! ** 2;
 
       // Each triangle's longest edge only (longest-edge bisection keeps the triangles well shaped).
-      for (let t = 0; t < r.tris.length; t += 3) {
+      for (let t = 0; t < range.tris.length; t += 3) {
         let best = -1,
           bestLen = h2;
 
         for (let k = 0; k < 3; k++) {
-          const a = r.weld[r.tris[t + k]!]!,
-            b = r.weld[r.tris[t + ((k + 1) % 3)]!]!;
+          const a = range.weld[range.tris[t + k]!]!,
+            b = range.weld[range.tris[t + ((k + 1) % 3)]!]!;
           const len = len2(a, b);
 
           if (len > bestLen) {
@@ -391,7 +402,10 @@ function texturize(
 
         if (best < 0) continue;
 
-        const key = edgeKey(r.weld[r.tris[t + best]!]!, r.weld[r.tris[t + ((best + 1) % 3)]!]!);
+        const key = edgeKey(
+          range.weld[range.tris[t + best]!]!,
+          range.weld[range.tris[t + ((best + 1) % 3)]!]!,
+        );
         if (!long.has(key)) long.set(key, ri);
       }
     });
@@ -418,8 +432,8 @@ function texturize(
         (pos[a * 3 + 1]! + pos[b * 3 + 1]!) / 2,
         (pos[a * 3 + 2]! + pos[b * 3 + 2]!) / 2,
       ];
-      const s = surfaces[ranges[long.get(key)!]!.face];
-      if (s?.kind === "cylinder") p = ontoCylinder(p, s);
+      const surface = surfaces[ranges[long.get(key)!]!.face];
+      if (surface?.kind === "cylinder") p = ontoCylinder(p, surface);
 
       pos.push(p[0], p[1], p[2]);
       mids.set(key, m);
@@ -428,35 +442,36 @@ function texturize(
       return m;
     };
 
-    for (const r of ranges) {
-      const s = surfaces[r.face];
+    for (const range of ranges) {
+      const surface = surfaces[range.face];
 
       const midLocal = (la: number, lb: number): number => {
-        const a = r.weld[la]!,
-          b = r.weld[lb]!;
+        const a = range.weld[la]!,
+          b = range.weld[lb]!;
         const w = midWeld(a, b, edgeKey(a, b));
-        let l = r.local.get(w);
+        let l = range.local.get(w);
         if (l !== undefined) return l;
 
-        l = r.weld.length;
-        r.weld.push(w);
+        l = range.weld.length;
+        range.weld.push(w);
 
         let n: V3;
 
-        if (s?.kind === "cylinder" && r.layer >= 0) {
-          const radial = radialOf(P(w), s);
-          const out = dot(radial, [r.nrm[la * 3]!, r.nrm[la * 3 + 1]!, r.nrm[la * 3 + 2]!]) >= 0 ? 1 : -1;
+        if (surface?.kind === "cylinder" && range.layer >= 0) {
+          const radial = radialOf(P(w), surface);
+          const out =
+            dot(radial, [range.nrm[la * 3]!, range.nrm[la * 3 + 1]!, range.nrm[la * 3 + 2]!]) >= 0 ? 1 : -1;
           n = [radial[0] * out, radial[1] * out, radial[2] * out];
         } else {
           n = norm([
-            r.nrm[la * 3]! + r.nrm[lb * 3]!,
-            r.nrm[la * 3 + 1]! + r.nrm[lb * 3 + 1]!,
-            r.nrm[la * 3 + 2]! + r.nrm[lb * 3 + 2]!,
+            range.nrm[la * 3]! + range.nrm[lb * 3]!,
+            range.nrm[la * 3 + 1]! + range.nrm[lb * 3 + 1]!,
+            range.nrm[la * 3 + 2]! + range.nrm[lb * 3 + 2]!,
           ]);
         }
 
-        r.nrm.push(n[0], n[1], n[2]);
-        r.local.set(w, l);
+        range.nrm.push(n[0], n[1], n[2]);
+        range.local.set(w, l);
 
         return l;
       };
@@ -466,14 +481,14 @@ function texturize(
       const c = [0, 0, 0];
       const split = [false, false, false];
 
-      for (let t = 0; t < r.tris.length; t += 3) {
-        c[0] = r.tris[t]!;
-        c[1] = r.tris[t + 1]!;
-        c[2] = r.tris[t + 2]!;
+      for (let t = 0; t < range.tris.length; t += 3) {
+        c[0] = range.tris[t]!;
+        c[1] = range.tris[t + 1]!;
+        c[2] = range.tris[t + 2]!;
 
-        const w0 = r.weld[c[0]]!,
-          w1 = r.weld[c[1]]!,
-          w2 = r.weld[c[2]]!;
+        const w0 = range.weld[c[0]]!,
+          w1 = range.weld[c[1]]!,
+          w2 = range.weld[c[2]]!;
         // Only edges between two corners of split edges can be split: most triangles skip the lookups.
         split[0] = hot[w0] === 1 && hot[w1] === 1 && long.has(edgeKey(w0, w1));
         split[1] = hot[w1] === 1 && hot[w2] === 1 && long.has(edgeKey(w1, w2));
@@ -511,8 +526,8 @@ function texturize(
           out.push(m0, i1, m1);
 
           const d = (x: number, y: number) => {
-            const a = P(r.weld[x]!),
-              b = P(r.weld[y]!);
+            const a = P(range.weld[x]!),
+              b = P(range.weld[y]!);
 
             return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
           };
@@ -522,7 +537,7 @@ function texturize(
         }
       }
 
-      if (changed) r.tris = out;
+      if (changed) range.tris = out;
     }
   }
 
@@ -534,23 +549,23 @@ function texturize(
   const firstNormal = new Float64Array(nW * 3);
   const groupsAt = new Map<number, number[]>(); // weld → groups, only where more than one meets
   const used = new Uint8Array(nW);
-  ranges.forEach((r, ri) => {
-    const mark = new Uint8Array(r.weld.length);
-    for (const l of r.tris) mark[l] = 1;
+  ranges.forEach((range, ri) => {
+    const mark = new Uint8Array(range.weld.length);
+    for (const l of range.tris) mark[l] = 1;
 
-    for (let l = 0; l < r.weld.length; l++) {
+    for (let l = 0; l < range.weld.length; l++) {
       if (!mark[l]) continue;
 
-      const w = r.weld[l]!;
+      const w = range.weld[l]!;
 
-      if (r.layer < 0) {
+      if (range.layer < 0) {
         used[w] = used[w]! | 1;
         continue;
       }
 
       used[w] = used[w]! | 2;
 
-      const n: V3 = [r.nrm[l * 3]!, r.nrm[l * 3 + 1]!, r.nrm[l * 3 + 2]!];
+      const n: V3 = [range.nrm[l * 3]!, range.nrm[l * 3 + 1]!, range.nrm[l * 3 + 2]!];
 
       if (firstRange[w] === -1) {
         firstRange[w] = ri;
@@ -574,7 +589,7 @@ function texturize(
       }
 
       // Each face adds its normal once per vertex.
-      if (r.local.get(w) === l || !r.local.has(w)) {
+      if (range.local.get(w) === l || !range.local.has(w)) {
         dirSum[w * 3]! += n[0];
         dirSum[w * 3 + 1]! += n[1];
         dirSum[w * 3 + 2]! += n[2];
@@ -587,7 +602,7 @@ function texturize(
   const groups = new Map<number, GroupMap>();
 
   for (const g of new Set(groupOf.filter((g) => g >= 0))) {
-    const members = ranges.map((r, i) => i).filter((i) => groupOf[i] === g);
+    const members = ranges.map((range, i) => i).filter((i) => groupOf[i] === g);
     groups.set(
       g,
       groupMapping(
@@ -615,7 +630,7 @@ function texturize(
       const ri =
         g === groupOf[firstRange[w]!]
           ? firstRange[w]!
-          : ranges.findIndex((r, i) => groupOf[i] === g && r.local.has(w));
+          : ranges.findIndex((range, i) => groupOf[i] === g && range.local.has(w));
       sum += map.height(w, ri, [dirSum[w * 3]!, dirSum[w * 3 + 1]!, dirSum[w * 3 + 2]!]);
     }
 
@@ -623,7 +638,7 @@ function texturize(
   }
 
   // ---- fade from the border: distances along the chosen faces' edges (Dijkstra, cut off at the fade)
-  const fadeOf = layers.map((l) => Math.max(0, l.fade ?? defaultFade(l.pitch)));
+  const fadeOf = layers.map((layer) => Math.max(0, layer.fade ?? defaultFade(layer.pitch)));
   const factor = new Float64Array(nW).fill(1);
   const maxFade = Math.max(...fadeOf);
 
@@ -637,9 +652,11 @@ function texturize(
       l.push(b);
     };
 
-    for (const r of selected) {
-      for (let t = 0; t < r.tris.length; t += 3) {
-        for (let k = 0; k < 3; k++) link(r.weld[r.tris[t + k]!]!, r.weld[r.tris[t + ((k + 1) % 3)]!]!);
+    for (const range of selected) {
+      for (let t = 0; t < range.tris.length; t += 3) {
+        for (let k = 0; k < 3; k++) {
+          link(range.weld[range.tris[t + k]!]!, range.weld[range.tris[t + ((k + 1) % 3)]!]!);
+        }
       }
     }
 
@@ -698,14 +715,14 @@ function texturize(
   const shared = new Float64Array(nW * 3);
   const localSums = new Map<Range, Float64Array>();
 
-  for (const r of selected) {
-    const acc = new Float64Array(r.weld.length * 3);
+  for (const range of selected) {
+    const acc = new Float64Array(range.weld.length * 3);
 
-    for (let t = 0; t < r.tris.length; t += 3) {
-      const [la, lb, lc] = [r.tris[t]!, r.tris[t + 1]!, r.tris[t + 2]!];
-      const a = P(r.weld[la]!),
-        b = P(r.weld[lb]!),
-        c = P(r.weld[lc]!);
+    for (let t = 0; t < range.tris.length; t += 3) {
+      const [la, lb, lc] = [range.tris[t]!, range.tris[t + 1]!, range.tris[t + 2]!];
+      const a = P(range.weld[la]!),
+        b = P(range.weld[lb]!),
+        c = P(range.weld[lc]!);
       const n = cross(sub(b, a), sub(c, a));
 
       for (const l of [la, lb, lc]) {
@@ -713,23 +730,23 @@ function texturize(
         acc[l * 3 + 1]! += n[1];
         acc[l * 3 + 2]! += n[2];
 
-        const w = r.weld[l]!;
+        const w = range.weld[l]!;
         shared[w * 3]! += n[0];
         shared[w * 3 + 1]! += n[1];
         shared[w * 3 + 2]! += n[2];
       }
     }
 
-    localSums.set(r, acc);
+    localSums.set(range, acc);
   }
 
   // ---- write out face by face
   let vCount = 0,
     iCount = 0;
 
-  for (const r of ranges) {
-    vCount += r.weld.length;
-    iCount += r.tris.length;
+  for (const range of ranges) {
+    vCount += range.weld.length;
+    iCount += range.tris.length;
   }
 
   const positions = new Float32Array(vCount * 3);
@@ -738,11 +755,11 @@ function texturize(
   const faceRanges = new Int32Array(ranges.length * 3);
   let vo = 0,
     io = 0;
-  ranges.forEach((r, ri) => {
-    const acc = localSums.get(r);
+  ranges.forEach((range, ri) => {
+    const acc = localSums.get(range);
 
-    for (let l = 0; l < r.weld.length; l++) {
-      const w = r.weld[l]!;
+    for (let l = 0; l < range.weld.length; l++) {
+      const w = range.weld[l]!;
       positions.set([pos[w * 3]!, pos[w * 3 + 1]!, pos[w * 3 + 2]!], (vo + l) * 3);
 
       let n: V3;
@@ -752,20 +769,20 @@ function texturize(
         const at = pinned[w] ? l : w;
         n = norm([src[at * 3]!, src[at * 3 + 1]!, src[at * 3 + 2]!]);
       } else {
-        n = [r.nrm[l * 3]!, r.nrm[l * 3 + 1]!, r.nrm[l * 3 + 2]!];
+        n = [range.nrm[l * 3]!, range.nrm[l * 3 + 1]!, range.nrm[l * 3 + 2]!];
       }
 
       normals.set(n, (vo + l) * 3);
     }
 
-    faceRanges.set([io, r.tris.length, r.face], ri * 3);
-    for (const l of r.tris) indices[io++] = vo + l;
-    vo += r.weld.length;
+    faceRanges.set([io, range.tris.length, range.face], ri * 3);
+    for (const l of range.tris) indices[io++] = vo + l;
+    vo += range.weld.length;
   });
 
   // Edges inside a textured group are covered by the texture: not drawn.
   const groupOfFace = new Map<number, number>();
-  ranges.forEach((r, i) => groupOfFace.set(r.face, groupOf[i]!));
+  ranges.forEach((range, i) => groupOfFace.set(range.face, groupOf[i]!));
 
   const keptEdges: number[] = [];
 
@@ -782,7 +799,7 @@ function texturize(
     indices,
     faceRanges,
     edgeRanges: Int32Array.from(keptEdges),
-    spacing: Math.max(...selected.map((r) => spacing[r.layer]!)),
+    spacing: Math.max(...selected.map((range) => spacing[range.layer]!)),
   };
 }
 
@@ -824,7 +841,7 @@ function upOn(n: V3): V3 {
   return norm([ref[0] - n[0] * t, ref[1] - n[1] * t, ref[2] - n[2] * t]);
 }
 
-const firstNormal = (r: Range): V3 => [r.nrm[0]!, r.nrm[1]!, r.nrm[2]!];
+const firstNormal = (range: Range): V3 => [range.nrm[0]!, range.nrm[1]!, range.nrm[2]!];
 
 /**
  * The axis a group of faces is unrolled about (`v` runs along it), or null when the group takes the
@@ -832,7 +849,7 @@ const firstNormal = (r: Range): V3 => [r.nrm[0]!, r.nrm[1]!, r.nrm[2]!];
  * faces parallel to it.
  */
 function groupAxis(members: Range[], surfaces: FaceSurface[], layer: TextureLayer): V3 | null {
-  const kinds = members.map((r) => surfaces[r.face] ?? { kind: "other" as const });
+  const kinds = members.map((range) => surfaces[range.face] ?? { kind: "other" as const });
   const cyl = kinds.find((k) => k.kind === "cylinder") as
     Extract<FaceSurface, { kind: "cylinder" }> | undefined;
   let axis: V3 | null = null;
@@ -846,13 +863,13 @@ function groupAxis(members: Range[], surfaces: FaceSurface[], layer: TextureLaye
         (k) => k.kind !== "cylinder" || Math.abs(Math.abs(dot(norm(k.axis), a)) - 1) < 1e-4,
       );
       const across = members.every(
-        (r, i) => kinds[i]!.kind !== "plane" || Math.abs(dot(firstNormal(r), a)) < 1e-3,
+        (range, i) => kinds[i]!.kind !== "plane" || Math.abs(dot(firstNormal(range), a)) < 1e-3,
       );
       if (parallel && across) axis = a;
     } else {
       const n0 = firstNormal(members[0]!);
 
-      if (members.every((r) => dot(firstNormal(r), n0) > 1 - 1e-6)) {
+      if (members.every((range) => dot(firstNormal(range), n0) > 1 - 1e-6)) {
         axis = upOn(n0);
 
         if (layer.up) {
@@ -875,7 +892,7 @@ function groupMapping(
   P: (w: number) => V3,
   footprint: number,
 ): GroupMap {
-  const kinds = members.map((r) => surfaces[r.face] ?? { kind: "other" as const });
+  const kinds = members.map((range) => surfaces[range.face] ?? { kind: "other" as const });
   const cyl = kinds.find((k) => k.kind === "cylinder") as
     Extract<FaceSurface, { kind: "cylinder" }> | undefined;
   const axis = groupAxis(members, surfaces, layer);
@@ -887,7 +904,7 @@ function groupMapping(
   const a = axis;
 
   // Unrolled coordinates: `u` round the axis (or across a flat face), `v` along it.
-  const localU: ((p: V3) => number)[] = members.map((r, i) => {
+  const localU: ((p: V3) => number)[] = members.map((range, i) => {
     const k = kinds[i]!;
 
     if (k.kind === "cylinder") {
@@ -901,7 +918,7 @@ function groupMapping(
       };
 
       // Cut the angle where the face has its widest gap, so it runs on without a jump.
-      const ts = [...new Set(r.weld)].map((w) => theta(P(w))).sort((x, y) => x - y);
+      const ts = [...new Set(range.weld)].map((w) => theta(P(w))).sort((x, y) => x - y);
       let cut = -Math.PI,
         gap = -1;
 
@@ -915,7 +932,7 @@ function groupMapping(
       }
 
       const c0 = cut > Math.PI ? cut - 2 * Math.PI : cut;
-      const out = dot(radialOf(P(r.weld[0]!), k), firstNormal(r)) >= 0 ? 1 : -1;
+      const out = dot(radialOf(P(range.weld[0]!), k), firstNormal(range)) >= 0 ? 1 : -1;
 
       return (p: V3) => {
         let t = theta(p);
@@ -925,7 +942,7 @@ function groupMapping(
       };
     }
 
-    const t = cross(a, firstNormal(r));
+    const t = cross(a, firstNormal(range));
 
     return (p: V3) => dot(p, t);
   });
@@ -935,8 +952,8 @@ function groupMapping(
   const uAt = new Map<number, number>();
   const rangeIndex = new Map(ids.map((id, i) => [id, i]));
   const facesAt = new Map<number, number[]>();
-  members.forEach((r, i) => {
-    for (const w of new Set(r.weld)) {
+  members.forEach((range, i) => {
+    for (const w of new Set(range.weld)) {
       const l = facesAt.get(w);
       if (l) l.push(i);
       else facesAt.set(w, [i]);
@@ -980,11 +997,11 @@ function groupMapping(
   if (perimeter < 1e-3) {
     perimeter = 0;
 
-    const angles = members.flatMap((r) => {
+    const angles = members.flatMap((range) => {
       const out: number[] = [];
 
-      for (let l = 0; l < r.weld.length; l++) {
-        const n: V3 = [r.nrm[l * 3]!, r.nrm[l * 3 + 1]!, r.nrm[l * 3 + 2]!];
+      for (let l = 0; l < range.weld.length; l++) {
+        const n: V3 = [range.nrm[l * 3]!, range.nrm[l * 3 + 1]!, range.nrm[l * 3 + 2]!];
         const e1 = norm(Math.abs(a[0]) < 0.9 ? cross(a, [1, 0, 0]) : cross(a, [0, 1, 0]));
         out.push(Math.atan2(dot(n, cross(a, e1)), dot(n, e1)));
       }
@@ -1144,7 +1161,7 @@ function ladders(
   pos: number[],
   edgeKey: (a: number, b: number) => number,
   mids: Map<number, number>,
-  measure: (r: Range, a: number, b: number) => number,
+  measure: (range: Range, a: number, b: number) => number,
   markMid: (a: number, b: number, key: number, m: number) => void,
 ): Set<number> {
   const preset = new Set<number>();
@@ -1152,20 +1169,24 @@ function ladders(
   const strips: { r: Range; t: number; apex: number }[] = [];
   const cutH = new Map<number, { h: number; s: FaceSurface | undefined; r: Range }>();
 
-  for (const r of ranges) {
-    if (r.layer < 0) continue;
+  for (const range of ranges) {
+    if (range.layer < 0) continue;
 
-    const h = spacing[r.layer]!;
+    const h = spacing[range.layer]!;
 
-    for (let t = 0; t < r.tris.length; t += 3) {
-      const w = [r.weld[r.tris[t]!]!, r.weld[r.tris[t + 1]!]!, r.weld[r.tris[t + 2]!]!];
-      const l = [measure(r, w[0]!, w[1]!), measure(r, w[1]!, w[2]!), measure(r, w[2]!, w[0]!)];
+    for (let t = 0; t < range.tris.length; t += 3) {
+      const w = [
+        range.weld[range.tris[t]!]!,
+        range.weld[range.tris[t + 1]!]!,
+        range.weld[range.tris[t + 2]!]!,
+      ];
+      const l = [measure(range, w[0]!, w[1]!), measure(range, w[1]!, w[2]!), measure(range, w[2]!, w[0]!)];
       const s = l.indexOf(Math.min(...l));
       const others = [l[(s + 1) % 3]!, l[(s + 2) % 3]!];
       if (!(Math.min(...others) > h && l[s]! < 0.2 * Math.min(...others))) continue;
 
       const apex = (s + 2) % 3;
-      strips.push({ r, t, apex });
+      strips.push({ r: range, t, apex });
 
       // The long edges, and the short one too when it is above the spacing (a strip wider than it).
       for (const [a, b] of [
@@ -1177,7 +1198,7 @@ function ladders(
 
         const key = edgeKey(w[a]!, w[b]!);
         const c = cutH.get(key);
-        if (!c || h < c.h) cutH.set(key, { h, s: c?.s ?? surfaces[r.face], r: c?.r ?? r });
+        if (!c || h < c.h) cutH.set(key, { h, s: c?.s ?? surfaces[range.face], r: c?.r ?? range });
       }
     }
   }
@@ -1187,12 +1208,12 @@ function ladders(
   // The points on each cut edge, from its lower welded corner to its higher one, by halving.
   const points = new Map<number, number[]>();
 
-  for (const [key, { h, s, r }] of cutH) {
+  for (const [key, { h, s: surface, r: range }] of cutH) {
     const a = Math.floor(key / 134217728),
       b = key % 134217728;
 
     const halve = (x: number, y: number): number[] => {
-      if (measure(r, x, y) <= h) return [];
+      if (measure(range, x, y) <= h) return [];
 
       const k = edgeKey(x, y);
       let m = mids.get(k);
@@ -1203,7 +1224,7 @@ function ladders(
           (pos[x * 3 + 1]! + pos[y * 3 + 1]!) / 2,
           (pos[x * 3 + 2]! + pos[y * 3 + 2]!) / 2,
         ];
-        if (s?.kind === "cylinder") p = ontoCylinder(p, s);
+        if (surface?.kind === "cylinder") p = ontoCylinder(p, surface);
 
         m = pos.length / 3;
         pos.push(p[0], p[1], p[2]);
@@ -1224,21 +1245,21 @@ function ladders(
   // Each strip as a ladder between its two long edges.
   const byRange = new Map<Range, Map<number, number[]>>();
 
-  for (const { r, t, apex } of strips) {
-    const c = [r.tris[t]!, r.tris[t + 1]!, r.tris[t + 2]!];
+  for (const { r: range, t, apex } of strips) {
+    const c = [range.tris[t]!, range.tris[t + 1]!, range.tris[t + 2]!];
     const v0 = c[apex]!,
       v1 = c[(apex + 1) % 3]!,
       v2 = c[(apex + 2) % 3]!;
 
     const chain = (from: number, to: number): number[] => {
-      const wa = r.weld[from]!,
-        wb = r.weld[to]!;
+      const wa = range.weld[from]!,
+        wb = range.weld[to]!;
       const ids = points.get(edgeKey(wa, wb));
       if (!ids) return [from, to];
 
       const along = wa < wb ? ids : [...ids].reverse();
       const out = [from];
-      for (const w of along) out.push(localFor(r, w, from, to, surfaces[r.face], pos));
+      for (const w of along) out.push(localFor(range, w, from, to, surfaces[range.face], pos));
       out.push(to);
 
       return out;
@@ -1250,7 +1271,7 @@ function ladders(
     if (L.length === 2 && R.length === 2 && F.length === 2) continue;
 
     const local = (x: number) =>
-      [pos[r.weld[x]! * 3]!, pos[r.weld[x]! * 3 + 1]!, pos[r.weld[x]! * 3 + 2]!] as V3;
+      [pos[range.weld[x]! * 3]!, pos[range.weld[x]! * 3 + 1]!, pos[range.weld[x]! * 3 + 2]!] as V3;
 
     const d2 = (x: number, y: number) => {
       const p = local(x),
@@ -1298,31 +1319,31 @@ function ladders(
       tris.push(L[n - 1]!, L[n]!, B[m - 1]!);
     }
 
-    let m = byRange.get(r);
-    if (!m) byRange.set(r, (m = new Map()));
+    let m = byRange.get(range);
+    if (!m) byRange.set(range, (m = new Map()));
 
     m.set(t, tris);
   }
 
-  for (const [r, replaced] of byRange) {
+  for (const [range, replaced] of byRange) {
     const out: number[] = [];
 
-    for (let t = 0; t < r.tris.length; t += 3) {
+    for (let t = 0; t < range.tris.length; t += 3) {
       const rep = replaced.get(t);
       if (rep) out.push(...rep);
-      else out.push(r.tris[t]!, r.tris[t + 1]!, r.tris[t + 2]!);
+      else out.push(range.tris[t]!, range.tris[t + 1]!, range.tris[t + 2]!);
     }
 
-    r.tris = out;
+    range.tris = out;
   }
 
   // Cut edges inside the ladders are gone; keep those still on a face whole, with their halves.
   const live = new Set<number>();
 
-  for (const r of ranges) {
-    for (let t = 0; t < r.tris.length; t += 3) {
+  for (const range of ranges) {
+    for (let t = 0; t < range.tris.length; t += 3) {
       for (let k = 0; k < 3; k++) {
-        const key = edgeKey(r.weld[r.tris[t + k]!]!, r.weld[r.tris[t + ((k + 1) % 3)]!]!);
+        const key = edgeKey(range.weld[range.tris[t + k]!]!, range.weld[range.tris[t + ((k + 1) % 3)]!]!);
         if (preset.has(key)) live.add(key);
       }
     }
@@ -1352,29 +1373,29 @@ function ladders(
  * cylinder's).
  */
 function localFor(
-  r: Range,
+  range: Range,
   w: number,
   a: number,
   b: number,
-  s: FaceSurface | undefined,
+  surface: FaceSurface | undefined,
   pos: number[],
 ): number {
-  const hit = r.local.get(w);
+  const hit = range.local.get(w);
   if (hit !== undefined) return hit;
 
-  const l = r.weld.length;
-  r.weld.push(w);
+  const l = range.weld.length;
+  range.weld.push(w);
 
-  const na: V3 = [r.nrm[a * 3]!, r.nrm[a * 3 + 1]!, r.nrm[a * 3 + 2]!];
+  const na: V3 = [range.nrm[a * 3]!, range.nrm[a * 3 + 1]!, range.nrm[a * 3 + 2]!];
   let n: V3;
 
-  if (s?.kind === "cylinder") {
-    const radial = radialOf([pos[w * 3]!, pos[w * 3 + 1]!, pos[w * 3 + 2]!], s);
+  if (surface?.kind === "cylinder") {
+    const radial = radialOf([pos[w * 3]!, pos[w * 3 + 1]!, pos[w * 3 + 2]!], surface);
     const out = dot(radial, na) >= 0 ? 1 : -1;
     n = [radial[0] * out, radial[1] * out, radial[2] * out];
   } else {
-    const pa = r.weld[a]!,
-      pb = r.weld[b]!;
+    const pa = range.weld[a]!,
+      pb = range.weld[b]!;
     const total =
       Math.hypot(
         pos[pa * 3]! - pos[pb * 3]!,
@@ -1387,11 +1408,11 @@ function localFor(
         pos[pa * 3 + 1]! - pos[w * 3 + 1]!,
         pos[pa * 3 + 2]! - pos[w * 3 + 2]!,
       ) / total;
-    n = norm([0, 1, 2].map((k) => r.nrm[a * 3 + k]! * (1 - f) + r.nrm[b * 3 + k]! * f) as V3);
+    n = norm([0, 1, 2].map((k) => range.nrm[a * 3 + k]! * (1 - f) + range.nrm[b * 3 + k]! * f) as V3);
   }
 
-  r.nrm.push(n[0], n[1], n[2]);
-  r.local.set(w, l);
+  range.nrm.push(n[0], n[1], n[2]);
+  range.local.set(w, l);
 
   return l;
 }

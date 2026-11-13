@@ -203,10 +203,10 @@ export class Mechanism {
       else this.byPart.set(j.a, j);
     }
 
-    for (const c of couplings) {
-      if (!this.byId.has(c.driver) || !this.byId.has(c.driven)) continue;
-      if (this.drivenBy.has(c.driven)) this.errors.push(`joint "${c.driven}" is driven twice`);
-      else this.drivenBy.set(c.driven, c);
+    for (const coupling of couplings) {
+      if (!this.byId.has(coupling.driver) || !this.byId.has(coupling.driven)) continue;
+      if (this.drivenBy.has(coupling.driven)) this.errors.push(`joint "${coupling.driven}" is driven twice`);
+      else this.drivenBy.set(coupling.driven, coupling);
     }
 
     for (const j of joints) {
@@ -227,10 +227,10 @@ export class Mechanism {
     let cur = id;
 
     for (let i = 0; i <= this.joints.length; i++) {
-      const c = this.drivenBy.get(cur);
-      if (!c) return cur;
+      const coupling = this.drivenBy.get(cur);
+      if (!coupling) return cur;
 
-      cur = c.driver;
+      cur = coupling.driver;
     }
 
     return null;
@@ -242,11 +242,11 @@ export class Mechanism {
     let cur = id;
 
     for (let i = 0; i <= this.joints.length; i++) {
-      const c = this.drivenBy.get(cur);
-      if (!c) return g;
+      const coupling = this.drivenBy.get(cur);
+      if (!coupling) return g;
 
-      g *= c.ratio;
-      cur = c.driver;
+      g *= coupling.ratio;
+      cur = coupling.driver;
     }
 
     return g;

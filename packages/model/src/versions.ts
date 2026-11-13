@@ -49,25 +49,34 @@ export function snapshot(
     return key;
   };
 
-  state.features = state.features.map((f): Feature => {
-    if (f.op === "lithophane") return { ...f, image: { ...f.image, pixels: keep(f.image.pixels) } };
-    if (f.op !== "import") return f;
+  state.features = state.features.map((feature): Feature => {
+    if (feature.op === "lithophane") {
+      return { ...feature, image: { ...feature.image, pixels: keep(feature.image.pixels) } };
+    }
+
+    if (feature.op !== "import") return feature;
 
     return {
-      ...f,
-      data: keep(f.data),
-      ...(f.texture
-        ? { texture: { ...f.texture, image: keep(f.texture.image), uvs: keep(f.texture.uvs) } }
+      ...feature,
+      data: keep(feature.data),
+      ...(feature.texture
+        ? {
+            texture: {
+              ...feature.texture,
+              image: keep(feature.texture.image),
+              uvs: keep(feature.texture.uvs),
+            },
+          }
         : {}),
     };
   });
-  state.references = state.references?.map((r) => {
-    if (r.data.length < INLINE) return r;
+  state.references = state.references?.map((reference) => {
+    if (reference.data.length < INLINE) return reference;
 
-    const key = blobKey(r.data);
-    blobs[key] = r.data;
+    const key = blobKey(reference.data);
+    blobs[key] = reference.data;
 
-    return { ...r, data: key };
+    return { ...reference, data: key };
   });
   if (!state.references) delete state.references;
 
@@ -77,18 +86,18 @@ export function snapshot(
 /** A version as a whole document, imports filled in again; the file's versions and blobs are kept. */
 export function restored(doc: MeercadDocument, version: Version): MeercadDocument {
   const state: VersionState = structuredClone(version.state);
-  state.features = state.features.map((f): Feature => {
-    if (f.op === "lithophane" && f.image.pixels.startsWith("blob:")) {
-      const pixels = doc.blobs?.[f.image.pixels];
+  state.features = state.features.map((feature): Feature => {
+    if (feature.op === "lithophane" && feature.image.pixels.startsWith("blob:")) {
+      const pixels = doc.blobs?.[feature.image.pixels];
 
       if (pixels === undefined) {
-        throw new Error(`version "${version.name}": the picture of ${f.name ?? f.id} is missing`);
+        throw new Error(`version "${version.name}": the picture of ${feature.name ?? feature.id} is missing`);
       }
 
-      return { ...f, image: { ...f.image, pixels } };
+      return { ...feature, image: { ...feature.image, pixels } };
     }
 
-    if (f.op !== "import") return f;
+    if (feature.op !== "import") return feature;
 
     const fill = (data: string) => {
       if (!data.startsWith("blob:")) return data;
@@ -96,30 +105,36 @@ export function restored(doc: MeercadDocument, version: Version): MeercadDocumen
       const full = doc.blobs?.[data];
 
       if (full === undefined) {
-        throw new Error(`version "${version.name}": the contents of ${f.fileName} are missing`);
+        throw new Error(`version "${version.name}": the contents of ${feature.fileName} are missing`);
       }
 
       return full;
     };
 
     return {
-      ...f,
-      data: fill(f.data),
-      ...(f.texture
-        ? { texture: { ...f.texture, image: fill(f.texture.image), uvs: fill(f.texture.uvs) } }
+      ...feature,
+      data: fill(feature.data),
+      ...(feature.texture
+        ? {
+            texture: {
+              ...feature.texture,
+              image: fill(feature.texture.image),
+              uvs: fill(feature.texture.uvs),
+            },
+          }
         : {}),
     };
   });
-  state.references = state.references?.map((r) => {
-    if (!r.data.startsWith("blob:")) return r;
+  state.references = state.references?.map((reference) => {
+    if (!reference.data.startsWith("blob:")) return reference;
 
-    const data = doc.blobs?.[r.data];
+    const data = doc.blobs?.[reference.data];
 
     if (data === undefined) {
-      throw new Error(`version "${version.name}": the contents of ${r.name} are missing`);
+      throw new Error(`version "${version.name}": the contents of ${reference.name} are missing`);
     }
 
-    return { ...r, data };
+    return { ...reference, data };
   });
   if (!state.references) delete state.references;
 
@@ -136,20 +151,20 @@ export function restored(doc: MeercadDocument, version: Version): MeercadDocumen
  * its imports filled in, without the other versions. Any meerCAD opens it as a project.
  */
 export function versionFile(doc: MeercadDocument, name: string): MeercadDocument {
-  const v = doc.versions?.find((x) => x.name === name);
+  const version = doc.versions?.find((x) => x.name === name);
 
-  if (!v) {
+  if (!version) {
     throw new Error(
       `unknown version "${name}"; saved: ${(doc.versions ?? []).map((x) => `"${x.name}"`).join(", ") || "none"}`,
     );
   }
 
-  return designOf(restored(doc, v));
+  return designOf(restored(doc, version));
 }
 
 /** A name for a version not taken yet: `name`, else "name (2)", "name (3)", … */
 export function freeVersionName(doc: MeercadDocument, name: string): string {
-  const taken = new Set((doc.versions ?? []).map((v) => v.name));
+  const taken = new Set((doc.versions ?? []).map((version) => version.name));
   const base = name.slice(0, 72);
   if (!taken.has(base)) return base;
 
@@ -161,16 +176,18 @@ export function pruneBlobs(doc: MeercadDocument): void {
   if (!doc.blobs) return;
 
   const used = new Set(
-    doc.versions?.flatMap((v) => [
-      ...v.state.features.flatMap((f) =>
-        (f.op === "import"
-          ? [f.data, f.texture?.image ?? "", f.texture?.uvs ?? ""]
-          : f.op === "lithophane"
-            ? [f.image.pixels]
+    doc.versions?.flatMap((version) => [
+      ...version.state.features.flatMap((feature) =>
+        (feature.op === "import"
+          ? [feature.data, feature.texture?.image ?? "", feature.texture?.uvs ?? ""]
+          : feature.op === "lithophane"
+            ? [feature.image.pixels]
             : []
         ).filter((d) => d.startsWith("blob:")),
       ),
-      ...(v.state.references ?? []).flatMap((r) => (r.data.startsWith("blob:") ? [r.data] : [])),
+      ...(version.state.references ?? []).flatMap((reference) =>
+        reference.data.startsWith("blob:") ? [reference.data] : [],
+      ),
     ]) ?? [],
   );
   for (const k of Object.keys(doc.blobs)) if (!used.has(k)) delete doc.blobs[k];
@@ -182,33 +199,35 @@ export function versionChanges(
   version: VersionState,
   design: MeercadDocument,
 ): { added: string[]; removed: string[]; changed: string[]; other: boolean } {
-  const then = new Map(version.features.map((f) => [f.id, f]));
-  const now = new Map(design.features.map((f) => [f.id, f]));
+  const then = new Map(version.features.map((feature) => [feature.id, feature]));
+  const now = new Map(design.features.map((feature) => [feature.id, feature]));
 
   const same = (a: Feature, b: Feature) => {
     // Imports compare by their file, not by the key a version keeps.
-    const strip = (f: Feature) =>
-      f.op === "import"
-        ? { ...f, data: f.data.startsWith("blob:") ? f.data : blobKey(f.data) }
-        : f.op === "lithophane"
+    const strip = (feature: Feature) =>
+      feature.op === "import"
+        ? { ...feature, data: feature.data.startsWith("blob:") ? feature.data : blobKey(feature.data) }
+        : feature.op === "lithophane"
           ? {
-              ...f,
+              ...feature,
               image: {
-                ...f.image,
+                ...feature.image,
                 pixels:
-                  f.image.pixels.startsWith("blob:") || f.image.pixels.length < INLINE
-                    ? f.image.pixels
-                    : blobKey(f.image.pixels),
+                  feature.image.pixels.startsWith("blob:") || feature.image.pixels.length < INLINE
+                    ? feature.image.pixels
+                    : blobKey(feature.image.pixels),
               },
             }
-          : f;
+          : feature;
 
     return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
   };
 
-  const added = design.features.filter((f) => !then.has(f.id)).map((f) => f.id);
-  const removed = version.features.filter((f) => !now.has(f.id)).map((f) => f.id);
-  const changed = design.features.filter((f) => then.has(f.id) && !same(then.get(f.id)!, f)).map((f) => f.id);
+  const added = design.features.filter((feature) => !then.has(feature.id)).map((feature) => feature.id);
+  const removed = version.features.filter((feature) => !now.has(feature.id)).map((feature) => feature.id);
+  const changed = design.features
+    .filter((feature) => then.has(feature.id) && !same(then.get(feature.id)!, feature))
+    .map((feature) => feature.id);
   const { features: _a, ...restThen } = version;
   const { features: _b, format: _c, versions: _d, blobs: _e, ...restNow } = design;
   // Reference models, like imports, compare by their file.
@@ -216,9 +235,9 @@ export function versionChanges(
     rest.references
       ? {
           ...rest,
-          references: rest.references.map((r) => ({
-            ...r,
-            data: r.data.startsWith("blob:") ? r.data : blobKey(r.data),
+          references: rest.references.map((reference) => ({
+            ...reference,
+            data: reference.data.startsWith("blob:") ? reference.data : blobKey(reference.data),
           })),
         }
       : rest;

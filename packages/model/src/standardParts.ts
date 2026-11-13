@@ -432,10 +432,10 @@ export function standardShape(
 
       try {
         ins = o.size ? insertDims(o.size, o.length) : undefined;
-      } catch (e) {
-        if (e instanceof InsertError) throw new StandardPartError(e.message);
+      } catch (error) {
+        if (error instanceof InsertError) throw new StandardPartError(error.message);
 
-        throw e;
+        throw error;
       }
 
       if (!ins) {
@@ -703,16 +703,16 @@ export function standardShape(
  * carriage slides on its rail; the screw turns and its nut slides along it, coupled by the lead.
  * Joints of these parts the feature no longer makes (moving part off, fewer places) are deleted.
  */
-export function standardMotionOps(f: StandardPartFeature, mech: Mechanism | undefined): DocOp[] {
-  const ids = f.points.map((_, k) => (k === 0 ? f.id : `${f.id}_${k + 1}`));
+export function standardMotionOps(feature: StandardPartFeature, mech: Mechanism | undefined): DocOp[] {
+  const ids = feature.points.map((_, k) => (k === 0 ? feature.id : `${feature.id}_${k + 1}`));
   const want = new Set<string>();
   const ops: DocOp[] = [];
-  const len: Expr = f.length ?? 200;
+  const len: Expr = feature.length ?? 200;
   const span = (minus: number): Expr =>
     typeof len === "number" ? +(len - minus).toFixed(3) : `(${len}) - ${minus} mm`;
 
-  if (f.withMoving && f.kind === "rail" && f.size && RAILS[f.size]) {
-    const r = RAILS[f.size]!;
+  if (feature.withMoving && feature.kind === "rail" && feature.size && RAILS[feature.size]) {
+    const r = RAILS[feature.size]!;
 
     for (const id of ids) {
       const jid = `j_${id}_carriage`;
@@ -721,7 +721,7 @@ export function standardMotionOps(f: StandardPartFeature, mech: Mechanism | unde
         type: "set_joint",
         joint: {
           id: jid,
-          name: `${f.size} carriage`,
+          name: `${feature.size} carriage`,
           type: "slider",
           a: `${id}_carriage`,
           b: id,
@@ -732,8 +732,8 @@ export function standardMotionOps(f: StandardPartFeature, mech: Mechanism | unde
     }
   }
 
-  if (f.withMoving && f.kind === "lead_screw" && f.size && LEAD_SCREWS[f.size]) {
-    const s = LEAD_SCREWS[f.size]!;
+  if (feature.withMoving && feature.kind === "lead_screw" && feature.size && LEAD_SCREWS[feature.size]) {
+    const s = LEAD_SCREWS[feature.size]!;
 
     for (const id of ids) {
       const screw = `j_${id}`,
@@ -743,13 +743,20 @@ export function standardMotionOps(f: StandardPartFeature, mech: Mechanism | unde
       const axis = { axisOf: { face: `${id}.rod` } };
       ops.push({
         type: "set_joint",
-        joint: { id: screw, name: `${f.size} turning`, type: "revolute", a: id, b: "ground", anchor: axis },
+        joint: {
+          id: screw,
+          name: `${feature.size} turning`,
+          type: "revolute",
+          a: id,
+          b: "ground",
+          anchor: axis,
+        },
       });
       ops.push({
         type: "set_joint",
         joint: {
           id: nut,
-          name: `${f.size} nut`,
+          name: `${feature.size} nut`,
           type: "slider",
           a: `${id}_nut`,
           b: "ground",
@@ -766,11 +773,13 @@ export function standardMotionOps(f: StandardPartFeature, mech: Mechanism | unde
   }
 
   // Joints this feature made before but no longer needs.
-  const mine = (j: string) => j === `j_${f.id}` || j.startsWith(`j_${f.id}_`);
+  const mine = (j: string) => j === `j_${feature.id}` || j.startsWith(`j_${feature.id}_`);
 
   // Couplings first: deleting a joint takes its couplings with it.
-  for (const c of mech?.couplings ?? []) {
-    if (c.id.startsWith(`c_${f.id}`) && !want.has(c.driven)) ops.push({ type: "delete_coupling", id: c.id });
+  for (const coupling of mech?.couplings ?? []) {
+    if (coupling.id.startsWith(`c_${feature.id}`) && !want.has(coupling.driven)) {
+      ops.push({ type: "delete_coupling", id: coupling.id });
+    }
   }
 
   for (const j of mech?.joints ?? []) {
@@ -789,22 +798,22 @@ export function withMotion(ops: DocOp[], doc: MeercadDocument): DocOp[] {
       op.type === "add_features"
         ? op.features
         : op.type === "edit_feature"
-          ? [{ ...(doc.features.find((f) => f.id === op.id) ?? {}), ...op.patch }]
+          ? [{ ...(doc.features.find((feature) => feature.id === op.id) ?? {}), ...op.patch }]
           : [];
 
     for (const f of fs as { op?: string }[]) {
       if (f.op !== "standard_part") continue;
 
-      const sp = Object.fromEntries(
+      const feature = Object.fromEntries(
         Object.entries(f).filter(([, v]) => v !== null),
       ) as unknown as StandardPartFeature;
 
       if (
-        sp.kind === "rail" ||
-        sp.kind === "lead_screw" ||
-        doc.mechanism?.joints.some((j) => j.id.startsWith(`j_${sp.id}`))
+        feature.kind === "rail" ||
+        feature.kind === "lead_screw" ||
+        doc.mechanism?.joints.some((j) => j.id.startsWith(`j_${feature.id}`))
       ) {
-        out.push(...standardMotionOps(sp, doc.mechanism));
+        out.push(...standardMotionOps(feature, doc.mechanism));
       }
     }
   }

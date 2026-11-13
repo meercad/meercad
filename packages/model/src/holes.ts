@@ -165,8 +165,8 @@ export function holeShape(
         ...depth,
       };
     case "tapped": {
-      const t = METRIC_THREADS.find((x) => x.d === row.d);
-      const pitch = t?.pitch ?? row.d * 0.15;
+      const thread = METRIC_THREADS.find((x) => x.d === row.d);
+      const pitch = thread?.pitch ?? row.d * 0.15;
 
       return { diameter: row.d - pitch + a, thread: { size: row.size, pitch }, ...depth };
     }
@@ -175,10 +175,10 @@ export function holeShape(
 
       try {
         ins = insertDims(row.size, o.length);
-      } catch (e) {
-        if (e instanceof InsertError) throw new HoleError(e.message);
+      } catch (error) {
+        if (error instanceof InsertError) throw new HoleError(error.message);
 
-        throw e;
+        throw error;
       }
 
       if (!ins) throw new HoleError(`no insert size for ${row.size}: use one of ${INSERT_SIZES.join(", ")}`);

@@ -8,17 +8,17 @@ import type { Feature, MeercadDocument } from "@meercad/schema";
 import { holeShape } from "./holes.js";
 
 export function drawingDocument(doc: MeercadDocument): MeercadDocument {
-  const features = doc.features.map((f): Feature => {
-    if (f.op === "thread") return { ...f, suppressed: true };
+  const features = doc.features.map((feature): Feature => {
+    if (feature.op === "thread") return { ...feature, suppressed: true };
 
-    if (f.op === "hole" && f.kind === "tapped" && f.size) {
-      const { diameter } = holeShape("tapped", { size: f.size });
-      const { size: _size, ...rest } = f;
+    if (feature.op === "hole" && feature.kind === "tapped" && feature.size) {
+      const { diameter } = holeShape("tapped", { size: feature.size });
+      const { size: _size, ...rest } = feature;
 
       return { ...rest, kind: "simple", diameter };
     }
 
-    return f;
+    return feature;
   });
 
   return { ...doc, features };

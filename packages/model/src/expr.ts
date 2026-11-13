@@ -42,22 +42,22 @@ type Token = { kind: "num"; value: number } | { kind: "id"; value: string } | { 
 
 function tokenize(src: string): Token[] {
   const tokens: Token[] = [];
-  const re =
+  const pattern =
     /\s*(?:(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|([-+*/^(),]))/y;
   let pos = 0;
 
   while (pos < src.length) {
     if (/^\s*$/.test(src.slice(pos))) break;
 
-    re.lastIndex = pos;
+    pattern.lastIndex = pos;
 
-    const m = re.exec(src);
-    if (!m) throw new ExprError(`unexpected character "${src.slice(pos).trim()[0]}" in "${src}"`);
-    if (m[1] !== undefined) tokens.push({ kind: "num", value: Number(m[1]) });
-    else if (m[2] !== undefined) tokens.push({ kind: "id", value: m[2] });
-    else tokens.push({ kind: "op", value: m[3]! });
+    const match = pattern.exec(src);
+    if (!match) throw new ExprError(`unexpected character "${src.slice(pos).trim()[0]}" in "${src}"`);
+    if (match[1] !== undefined) tokens.push({ kind: "num", value: Number(match[1]) });
+    else if (match[2] !== undefined) tokens.push({ kind: "id", value: match[2] });
+    else tokens.push({ kind: "op", value: match[3]! });
 
-    pos = re.lastIndex;
+    pos = pattern.lastIndex;
   }
 
   return tokens;
@@ -261,8 +261,8 @@ export function resolveParams(params: Readonly<Record<string, Expr>>): ParamReso
       }
 
       values.set(name, evaluate(expr, values));
-    } catch (e) {
-      errors.set(name, e instanceof Error ? e.message : String(e));
+    } catch (error) {
+      errors.set(name, error instanceof Error ? error.message : String(error));
     } finally {
       visiting.delete(name);
     }

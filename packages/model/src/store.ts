@@ -63,9 +63,9 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     }
     case "move_feature": {
       const i = indexOf(next, op.id);
-      const [f] = next.features.splice(i, 1);
+      const [feature] = next.features.splice(i, 1);
       const at = op.after === null ? 0 : indexOf(next, op.after) + 1;
-      next.features.splice(at, 0, f!);
+      next.features.splice(at, 0, feature!);
       break;
     }
     case "rename_param": {
@@ -77,28 +77,30 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       }
 
       next.params = Object.fromEntries(
-        Object.entries(next.params).map(([k, v]) => [
+        Object.entries(next.params).map(([k, expr]) => [
           k === op.name ? op.to : k,
-          renameInExpr(v, op.name, op.to),
+          renameInExpr(expr, op.name, op.to),
         ]),
       );
       if (next.autoParams) next.autoParams = next.autoParams.map((n) => (n === op.name ? op.to : n));
 
-      next.features = next.features.map((f) => mapFeatureExprs(f, (e) => renameInExpr(e, op.name, op.to)));
+      next.features = next.features.map((feature) =>
+        mapFeatureExprs(feature, (expr) => renameInExpr(expr, op.name, op.to)),
+      );
 
-      for (const v of next.variants ?? []) {
-        v.params = Object.fromEntries(
-          Object.entries(v.params).map(([k, e]) => [
+      for (const variant of next.variants ?? []) {
+        variant.params = Object.fromEntries(
+          Object.entries(variant.params).map(([k, expr]) => [
             k === op.name ? op.to : k,
-            renameInExpr(e, op.name, op.to),
+            renameInExpr(expr, op.name, op.to),
           ]),
         );
       }
 
       if (next.mechanism) {
-        const ren = (e: Expr) => renameInExpr(e, op.name, op.to);
+        const ren = (expr: Expr) => renameInExpr(expr, op.name, op.to);
         for (const j of next.mechanism.joints) if (j.limits) j.limits = [ren(j.limits[0]), ren(j.limits[1])];
-        for (const c of next.mechanism.couplings ?? []) c.ratio = ren(c.ratio);
+        for (const coupling of next.mechanism.couplings ?? []) coupling.ratio = ren(coupling.ratio);
         if (next.mechanism.clearance !== undefined) next.mechanism.clearance = ren(next.mechanism.clearance);
       }
 
@@ -114,7 +116,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
 
       if (op.expr === null) {
         delete next.params[op.name];
-        for (const v of next.variants ?? []) delete v.params[op.name];
+        for (const variant of next.variants ?? []) delete variant.params[op.name];
       } else {
         next.params[op.name] = op.expr;
       }
@@ -181,38 +183,45 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
 
       break;
     case "set_joint": {
-      const m = (next.mechanism ??= { joints: [] });
-      const i = m.joints.findIndex((j) => j.id === op.joint.id);
-      if (i >= 0) m.joints[i] = structuredClone(op.joint);
-      else m.joints.push(structuredClone(op.joint));
+      const mechanism = (next.mechanism ??= { joints: [] });
+      const i = mechanism.joints.findIndex((j) => j.id === op.joint.id);
+      if (i >= 0) mechanism.joints[i] = structuredClone(op.joint);
+      else mechanism.joints.push(structuredClone(op.joint));
 
       break;
     }
     case "delete_joint": {
-      const m = next.mechanism;
-      if (!m?.joints.some((j) => j.id === op.id)) throw new OpError(`unknown joint "${op.id}"`);
+      const mechanism = next.mechanism;
+      if (!mechanism?.joints.some((j) => j.id === op.id)) throw new OpError(`unknown joint "${op.id}"`);
 
-      m.joints = m.joints.filter((j) => j.id !== op.id);
+      mechanism.joints = mechanism.joints.filter((j) => j.id !== op.id);
+
       // Couplings of a deleted joint go with it.
-      if (m.couplings) m.couplings = m.couplings.filter((c) => c.driver !== op.id && c.driven !== op.id);
+      if (mechanism.couplings) {
+        mechanism.couplings = mechanism.couplings.filter(
+          (coupling) => coupling.driver !== op.id && coupling.driven !== op.id,
+        );
+      }
 
       // Motions forget the joint.
-      for (const mo of m.motions ?? []) {
-        for (const k of mo.keys) {
+      for (const motion of mechanism.motions ?? []) {
+        for (const k of motion.keys) {
           for (const j of Object.keys(k.values)) {
             if (j === op.id || j.startsWith(`${op.id}.`)) delete k.values[j];
           }
         }
       }
 
-      if (!m.joints.length && !m.couplings?.length && !m.motions?.length) delete next.mechanism;
+      if (!mechanism.joints.length && !mechanism.couplings?.length && !mechanism.motions?.length) {
+        delete next.mechanism;
+      }
 
       break;
     }
     case "set_coupling": {
-      const m = (next.mechanism ??= { joints: [] });
-      const list = (m.couplings ??= []);
-      const i = list.findIndex((c) => c.id === op.coupling.id);
+      const mechanism = (next.mechanism ??= { joints: [] });
+      const list = (mechanism.couplings ??= []);
+      const i = list.findIndex((coupling) => coupling.id === op.coupling.id);
       if (i >= 0) list[i] = structuredClone(op.coupling);
       else list.push(structuredClone(op.coupling));
 
@@ -234,46 +243,46 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       break;
     }
     case "define_material": {
-      const m = structuredClone(op.material);
+      const material = structuredClone(op.material);
 
-      if (MATERIALS.some((x) => x.id === m.id)) {
-        throw new OpError(`"${m.id}" is a library material; give your own material another id`);
+      if (MATERIALS.some((x) => x.id === material.id)) {
+        throw new OpError(`"${material.id}" is a library material; give your own material another id`);
       }
 
-      if (!materialById(m.base)) {
+      if (!materialById(material.base)) {
         throw new OpError(
-          `unknown base material "${m.base}": use one of ${MATERIALS.map((x) => x.id).join(", ")}`,
+          `unknown base material "${material.base}": use one of ${MATERIALS.map((x) => x.id).join(", ")}`,
         );
       }
 
       const list = (next.materials ??= []);
-      const i = list.findIndex((x) => x.id === m.id);
-      if (i >= 0) list[i] = m;
-      else list.push(m);
+      const i = list.findIndex((x) => x.id === material.id);
+      if (i >= 0) list[i] = material;
+      else list.push(material);
 
       break;
     }
     case "delete_material": {
       const list = next.materials ?? [];
-      const m = list.find((x) => x.id === op.id);
-      if (!m) throw new OpError(`no own material "${op.id}"`);
+      const material = list.find((x) => x.id === op.id);
+      if (!material) throw new OpError(`no own material "${op.id}"`);
 
       // Parts keep what they are made of: the base material.
       for (const [part, id] of Object.entries(next.partMaterials ?? {})) {
-        if (id === op.id) next.partMaterials![part] = m.base;
+        if (id === op.id) next.partMaterials![part] = material.base;
       }
 
-      next.materials = list.filter((x) => x !== m);
+      next.materials = list.filter((x) => x !== material);
       if (!next.materials.length) delete next.materials;
 
       break;
     }
     case "set_variant": {
       const list = (next.variants ??= []);
-      const i = list.findIndex((v) => v.name === op.name);
+      const i = list.findIndex((variant) => variant.name === op.name);
       const name = op.rename ?? op.name;
 
-      if (name !== op.name && list.some((v) => v.name === name)) {
+      if (name !== op.name && list.some((variant) => variant.name === name)) {
         throw new OpError(`a variant named "${name}" already exists`);
       }
 
@@ -285,9 +294,11 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       break;
     }
     case "delete_variant": {
-      if (!next.variants?.some((v) => v.name === op.name)) throw new OpError(`unknown variant "${op.name}"`);
+      if (!next.variants?.some((variant) => variant.name === op.name)) {
+        throw new OpError(`unknown variant "${op.name}"`);
+      }
 
-      next.variants = next.variants.filter((v) => v.name !== op.name);
+      next.variants = next.variants.filter((variant) => variant.name !== op.name);
       if (!next.variants.length) delete next.variants;
       if (next.variant === op.name) delete next.variant;
 
@@ -296,7 +307,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     case "use_variant": {
       if (op.name === null) {
         delete next.variant;
-      } else if (!next.variants?.some((v) => v.name === op.name)) {
+      } else if (!next.variants?.some((variant) => variant.name === op.name)) {
         throw new OpError(`unknown variant "${op.name}"`);
       } else {
         next.variant = op.name;
@@ -307,33 +318,38 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     case "save_version": {
       const blobs = { ...(next.blobs ?? {}) };
       // A design brought in from a file is checked like a replace, and saved as it is.
-      const v = snapshot(op.doc ? checked(designOf(op.doc)) : next, op.name, op.at ?? Date.now(), blobs);
-      next.versions = [...(next.versions ?? []).filter((x) => x.name !== op.name), v];
+      const version = snapshot(
+        op.doc ? checked(designOf(op.doc)) : next,
+        op.name,
+        op.at ?? Date.now(),
+        blobs,
+      );
+      next.versions = [...(next.versions ?? []).filter((x) => x.name !== op.name), version];
       next.blobs = blobs;
       pruneBlobs(next);
       break;
     }
     case "restore_version": {
-      const v = next.versions?.find((x) => x.name === op.name);
-      if (!v) throw new OpError(`unknown version "${op.name}"`);
+      const version = next.versions?.find((x) => x.name === op.name);
+      if (!version) throw new OpError(`unknown version "${op.name}"`);
 
       try {
-        return checked(restored(next, v));
-      } catch (e) {
-        throw e instanceof OpError
-          ? new OpError(`version "${op.name}" cannot be restored: ${e.message}`)
-          : new OpError(String((e as Error).message ?? e));
+        return checked(restored(next, version));
+      } catch (error) {
+        throw error instanceof OpError
+          ? new OpError(`version "${op.name}" cannot be restored: ${error.message}`)
+          : new OpError(String((error as Error).message ?? error));
       }
     }
     case "rename_version": {
-      const v = next.versions?.find((x) => x.name === op.name);
-      if (!v) throw new OpError(`unknown version "${op.name}"`);
+      const version = next.versions?.find((x) => x.name === op.name);
+      if (!version) throw new OpError(`unknown version "${op.name}"`);
 
       if (op.to !== op.name && next.versions!.some((x) => x.name === op.to)) {
         throw new OpError(`a version named "${op.to}" already exists`);
       }
 
-      v.name = op.to;
+      version.name = op.to;
       break;
     }
     case "delete_version": {
@@ -347,34 +363,37 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     }
     case "set_reference": {
       const list = (next.references ??= []);
-      const i = list.findIndex((r) => r.id === op.reference.id);
+      const i = list.findIndex((reference) => reference.id === op.reference.id);
       if (i >= 0) list[i] = structuredClone(op.reference);
       else list.push(structuredClone(op.reference));
 
       break;
     }
     case "delete_reference": {
-      if (!next.references?.some((r) => r.id === op.id)) {
+      if (!next.references?.some((reference) => reference.id === op.id)) {
         throw new OpError(`unknown reference model "${op.id}"`);
       }
 
-      next.references = next.references.filter((r) => r.id !== op.id);
+      next.references = next.references.filter((reference) => reference.id !== op.id);
       if (!next.references.length) delete next.references;
 
       break;
     }
     case "delete_coupling": {
-      const m = next.mechanism;
-      if (!m?.couplings?.some((c) => c.id === op.id)) throw new OpError(`unknown coupling "${op.id}"`);
+      const mechanism = next.mechanism;
 
-      m.couplings = m.couplings.filter((c) => c.id !== op.id);
-      if (!m.couplings.length) delete m.couplings;
+      if (!mechanism?.couplings?.some((coupling) => coupling.id === op.id)) {
+        throw new OpError(`unknown coupling "${op.id}"`);
+      }
+
+      mechanism.couplings = mechanism.couplings.filter((coupling) => coupling.id !== op.id);
+      if (!mechanism.couplings.length) delete mechanism.couplings;
 
       break;
     }
     case "set_motion": {
-      const m = (next.mechanism ??= { joints: [] });
-      const list = (m.motions ??= []);
+      const mechanism = (next.mechanism ??= { joints: [] });
+      const list = (mechanism.motions ??= []);
       const motion = structuredClone(op.motion);
       motion.keys.sort((a, b) => a.at - b.at);
 
@@ -385,11 +404,11 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       break;
     }
     case "delete_motion": {
-      const m = next.mechanism;
-      if (!m?.motions?.some((x) => x.id === op.id)) throw new OpError(`unknown motion "${op.id}"`);
+      const mechanism = next.mechanism;
+      if (!mechanism?.motions?.some((x) => x.id === op.id)) throw new OpError(`unknown motion "${op.id}"`);
 
-      m.motions = m.motions.filter((x) => x.id !== op.id);
-      if (!m.motions.length) delete m.motions;
+      mechanism.motions = mechanism.motions.filter((x) => x.id !== op.id);
+      if (!mechanism.motions.length) delete mechanism.motions;
 
       break;
     }
@@ -406,7 +425,7 @@ function checked(doc: unknown): MeercadDocument {
 }
 
 function indexOf(doc: MeercadDocument, id: string): number {
-  const i = doc.features.findIndex((f) => f.id === id);
+  const i = doc.features.findIndex((feature) => feature.id === id);
   if (i < 0) throw new OpError(`unknown feature "${id}"`);
 
   return i;
@@ -455,7 +474,7 @@ export function nextFeatureId(doc: MeercadDocument, op: Feature["op"]): string {
     scale: "sc",
     sweep: "sw",
   };
-  const used = new Set(doc.features.map((f) => f.id));
+  const used = new Set(doc.features.map((feature) => feature.id));
   let n = 1;
   while (used.has(`${prefix[op]}${n}`)) n++;
 
@@ -488,7 +507,7 @@ export class DocumentStore {
 
   /** Applies ops atomically as one undo step. Throws OpError and leaves the store unchanged on failure. */
   apply(...ops: DocOp[]): MeercadDocument {
-    const next = ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), this.doc);
+    const next = ops.reduce<MeercadDocument>((doc, op) => applyOp(doc, op), this.doc);
     this.history.length = this.position + 1;
     this.history.push(next);
     this.position++;
@@ -501,7 +520,7 @@ export class DocumentStore {
   amend(...ops: DocOp[]): MeercadDocument {
     if (this.position === 0) return this.apply(...ops);
 
-    const next = ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), this.doc);
+    const next = ops.reduce<MeercadDocument>((doc, op) => applyOp(doc, op), this.doc);
     this.history.length = this.position + 1;
     this.history[this.position] = next;
     this.emit();
@@ -523,13 +542,13 @@ export class DocumentStore {
     this.emit();
   }
 
-  subscribe(fn: Listener): () => void {
-    this.listeners.add(fn);
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
 
-    return () => this.listeners.delete(fn);
+    return () => this.listeners.delete(listener);
   }
 
   private emit(): void {
-    for (const fn of this.listeners) fn(this.doc);
+    for (const listener of this.listeners) listener(this.doc);
   }
 }

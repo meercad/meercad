@@ -104,10 +104,13 @@ export function effectiveParams(
 ): Record<string, Expr> {
   // The design's fit is there by name (`fit`); an own variable of that name (from before) wins.
   const params = { [FIT_VAR]: fitExpr(doc), ...doc.params };
-  const v = doc.variant !== undefined ? doc.variants?.find((x) => x.name === doc.variant) : undefined;
-  if (!v) return params;
+  const variant = doc.variant !== undefined ? doc.variants?.find((x) => x.name === doc.variant) : undefined;
+  if (!variant) return params;
 
-  return { ...params, ...Object.fromEntries(Object.entries(v.params).filter(([k]) => k in doc.params)) };
+  return {
+    ...params,
+    ...Object.fromEntries(Object.entries(variant.params).filter(([k]) => k in doc.params)),
+  };
 }
 
 export class RebuildEngine<S> {
@@ -148,10 +151,10 @@ export class RebuildEngine<S> {
 
     try {
       return { ...this.run(doc, onFeature, own), release };
-    } catch (e) {
+    } catch (error) {
       release();
 
-      throw e;
+      throw error;
     }
   }
 
@@ -177,25 +180,29 @@ export class RebuildEngine<S> {
     let stale: Map<string, CacheEntry<S>> | null = null;
     const adopted = new Set<CacheEntry<S>>();
 
-    for (const f of doc.features) {
+    for (const feature of doc.features) {
       if (rolledBack) {
-        statuses.push({ id: f.id, status: "rolled_back", ms: 0, cached: false });
+        statuses.push({ id: feature.id, status: "rolled_back", ms: 0, cached: false });
         continue;
       }
 
-      const off = f.suppressed;
+      const off = feature.suppressed;
       let resolved: ResolvedFeature | null = null;
       let resolveError: string | null = null;
 
       if (!off) {
         try {
-          resolved = resolveFeature(f, values);
-        } catch (e) {
-          resolveError = e instanceof Error ? e.message : String(e);
+          resolved = resolveFeature(feature, values);
+        } catch (error) {
+          resolveError = error instanceof Error ? error.message : String(error);
         }
       }
 
-      const def = off ? `S:${f.id}` : resolved ? JSON.stringify(resolved) : `E:${f.id}:${resolveError}`;
+      const def = off
+        ? `S:${feature.id}`
+        : resolved
+          ? JSON.stringify(resolved)
+          : `E:${feature.id}:${resolveError}`;
       key = hashString(`${key}|${def}`);
 
       const self = hashString(def);
@@ -209,7 +216,7 @@ export class RebuildEngine<S> {
         if (!own) this.cache.length = i;
       }
 
-      const old = stale?.get(f.id);
+      const old = stale?.get(feature.id);
       const replayed =
         old && old.own === self && old.footprint && !adopted.has(old) ? old.footprint.replay(state) : null;
 
@@ -235,7 +242,7 @@ export class RebuildEngine<S> {
         statuses.push({ ...old.status, ms: 0, cached: true });
         state = replayed;
       } else {
-        if (!off && resolved) onFeature?.(i, doc.features.length, f.id);
+        if (!off && resolved) onFeature?.(i, doc.features.length, feature.id);
 
         const tf = performance.now();
         let status: FeatureStatus;
@@ -243,9 +250,15 @@ export class RebuildEngine<S> {
         let footprint: Footprint<S> | undefined;
 
         if (off) {
-          status = { id: f.id, status: "suppressed", ms: 0, cached: false };
+          status = { id: feature.id, status: "suppressed", ms: 0, cached: false };
         } else if (!resolved) {
-          status = { id: f.id, status: "error", message: resolveError ?? "unresolved", ms: 0, cached: false };
+          status = {
+            id: feature.id,
+            status: "error",
+            message: resolveError ?? "unresolved",
+            ms: 0,
+            cached: false,
+          };
         } else {
           try {
             // Not for a fork: its states are released on their own, the cache's must stay.
@@ -258,18 +271,18 @@ export class RebuildEngine<S> {
 
             next = r.state;
             status = r.warnings?.length
-              ? { id: f.id, status: "warning", message: r.warnings.join("; "), ms: 0, cached: false }
-              : { id: f.id, status: "ok", ms: 0, cached: false };
+              ? { id: feature.id, status: "warning", message: r.warnings.join("; "), ms: 0, cached: false }
+              : { id: feature.id, status: "ok", ms: 0, cached: false };
             if (r.info) status.info = r.info;
-          } catch (e) {
+          } catch (error) {
             status = {
-              id: f.id,
+              id: feature.id,
               status: "error",
-              message: e instanceof Error ? e.message : String(e),
+              message: error instanceof Error ? error.message : String(error),
               ms: 0,
               cached: false,
             };
-            if (e instanceof FeatureError && e.hint) status.hint = e.hint;
+            if (error instanceof FeatureError && error.hint) status.hint = error.hint;
           }
         }
 
@@ -293,7 +306,7 @@ export class RebuildEngine<S> {
       }
 
       i++;
-      if (doc.rollback === f.id) rolledBack = true;
+      if (doc.rollback === feature.id) rolledBack = true;
     }
 
     // Earlier results nobody took over: newest first, as later states may use what earlier ones made.
