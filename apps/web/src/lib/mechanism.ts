@@ -334,8 +334,10 @@ function placedBox(m: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3
 function meshSlack(m: BodyMesh): number {
   const r = restBox(m);
   const diag = Math.hypot(r.max[0] - r.min[0], r.max[1] - r.min[1], r.max[2] - r.min[2]);
-  return Math.max(0.01, diag * 5e-4) * (matchMedia("(pointer: coarse)").matches ? 2 : 1);
+  return Math.max(0.01, diag * 5e-4) * coarseSlack;
 }
+/** Read once, as in the store: the check runs from a timer, which may fire after a test's page is gone. */
+const coarseSlack = matchMedia("(pointer: coarse)").matches ? 2 : 1;
 
 /** Parts that run into each other in the current pose, leaving out contacts that exist as drawn. */
 function findHits(): [string, string][] {
