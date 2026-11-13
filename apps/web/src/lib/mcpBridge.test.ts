@@ -95,6 +95,10 @@ describe("an assistant's requests in the app", () => {
     expect(w.shareThinnerThanMinWall).toBeCloseTo(1200 / 1400, 3);
     const thick = await call<{ thinnestMm: number; shareThinnerThanMinWall: number }>("wall_thickness", { part: "wall", minWall: 1, show: false, quality: "fast" });
     expect(thick.shareThinnerThanMinWall).toBe(0);
+    // Shown on the part, then measured quietly again: the map of a part shown goes.
+    const shown = await call<{ shown: boolean }>("wall_thickness", { part: "wall", minWall: 3, quality: "fast" });
+    expect(shown.shown).toBe(true);
+    await call("wall_thickness", { part: "wall", minWall: 3, quality: "fast", show: false });
     // The T's bar hangs over the post on 300 − 100 mm², flat.
     const p = await call<{ overhangMm2: number; onBedMm2: number; heightMm: number }>("print_check", { part: "post", show: false });
     expect(p.overhangMm2).toBeCloseTo(200, 0);
