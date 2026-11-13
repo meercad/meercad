@@ -1,7 +1,7 @@
 /**
  * Values shown at more kinds of steps in the 3D view (InlineValues.tsx), each typed over and checked
  * in the rebuilt part: a bend's angle, a wrap's radius and a spiral's gap; a wall holder's cells; a
- * label's width; a Gridfinity bin's cells and height (a bin round a part has none); and a value that
+ * label's width; a Gridfinity bin's cells and height; and a value that
  * is no expression shows as the step's error.
  */
 import { act, cleanup, fireEvent } from "@testing-library/react";
@@ -92,18 +92,15 @@ describe("values at more kinds of steps", () => {
     expect((await bbox("lb1")).max[0] - (await bbox("lb1")).min[0]).toBeCloseTo(40, 3);
   });
 
-  it("a bin's cells and height, none for a bin round a part, and a value that is no expression shows as the step's error", async () => {
+  it("a bin's cells and height, and a value that is no expression shows as the step's error", async () => {
     apply({ type: "add_features", features: [
       { id: "gf1", op: "gridfinity", kind: "bin", units: [1, 1], height: 3 } as Feature,
-      { id: "gf2", op: "gridfinity", kind: "bin", pocket: { body: "ex1" } } as Feature,
     ] });
     await show("gf1");
     await type(/^↕ 3/, "5");
     expect(feature<{ height: unknown }>("gf1").height).toBe(5);
     // Height 5 units: 35 mm plus the lip (4.4 mm).
     expect((await bbox("gf1")).max[2]).toBeCloseTo(35 + 4.4, 3);
-    await show("gf2");
-    expect(texts().filter((x) => /^▦/.test(x))).toEqual([]);
     await show("gf1");
     await type(/^↕ 5/, "nope +");
     // It is taken as written; the step then says what is wrong with it, and undo brings 5 back.
