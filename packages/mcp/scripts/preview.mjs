@@ -1,13 +1,26 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
 const client = new Client({ name: "claude-test", title: "Claude", version: "1" });
-await client.connect(new StdioClientTransport({ command: "node", args: [new URL("../dist/server.js", import.meta.url).pathname] }));
+await client.connect(
+  new StdioClientTransport({
+    command: "node",
+    args: [new URL("../dist/server.js", import.meta.url).pathname],
+  }),
+);
+
 const call = async (name, args = {}) => (await client.callTool({ name, arguments: args })).content[0].text;
-for (let i = 0; i < 40 && !JSON.parse(await call("status")).connected; i++) await new Promise((r) => setTimeout(r, 500));
+
+for (let i = 0; i < 40 && !JSON.parse(await call("status")).connected; i++) {
+  await new Promise((r) => setTimeout(r, 500));
+}
+
 console.log(await call("status"));
+
 const projects = JSON.parse(await call("list_projects"));
 const flange = projects.find((p) => p.name === "Flange") ?? projects[0];
 console.log("open:", (await call("open_project", { id: flange.id })).slice(0, 80));
+
 const r = JSON.parse(await call("preview_ops", { ops: [{ type: "set_param", name: "holes", expr: 12 }] }));
 console.log("preview:", r.features.map((f) => `${f.id}:${f.status}`).join(" "), "vol", r.bodies[0].volume);
 await new Promise((r) => setTimeout(r, 2500));

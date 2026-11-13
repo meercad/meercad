@@ -28,7 +28,8 @@ export const localPath = (path: string) => resolve(path.replace(/^~(?=\/|$)/, ho
  */
 const blocked = new Set<string>();
 /** The folders macOS guards (and the file's own folder elsewhere): one wait there blocks them all. */
-const guarded = () => ["Documents", "Desktop", "Downloads", "Library/Mobile Documents"].map((d) => resolve(homedir(), d));
+const guarded = () =>
+  ["Documents", "Desktop", "Downloads", "Library/Mobile Documents"].map((d) => resolve(homedir(), d));
 const guardOf = (file: string) => guarded().find((d) => file.startsWith(d + sep)) ?? dirname(file);
 const isBlocked = (path: string) => [...blocked].some((d) => path === d || path.startsWith(d + sep));
 
@@ -38,8 +39,15 @@ type Outcome<T> = { ok: T } | { error: NodeJS.ErrnoException } | null;
 async function within<T>(p: Promise<T>, ms: number): Promise<Outcome<T>> {
   let timer: NodeJS.Timeout | undefined;
   const late = new Promise<null>((r) => (timer = setTimeout(() => r(null), ms)));
+
   try {
-    return await Promise.race([p.then((ok) => ({ ok }), (error: NodeJS.ErrnoException) => ({ error })), late]);
+    return await Promise.race([
+      p.then(
+        (ok) => ({ ok }),
+        (error: NodeJS.ErrnoException) => ({ error }),
+      ),
+      late,
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -63,28 +71,46 @@ async function viaApp<T>(path: string, run: () => Promise<T>): Promise<T> {
 /** Reads a file, through the app when this server may not open it. */
 export async function readLocal(path: string, app: AppFiles, waitMs = LOCAL_WAIT_MS): Promise<Buffer> {
   const file = localPath(path);
+
   if (!isBlocked(file)) {
     const r = await within(readFile(file), waitMs);
     if (r && "ok" in r) return r.ok;
-    if (r && !denied(r.error)) throw new Error(`cannot read the file "${file}" (${r.error.code ?? r.error.message})`);
+
+    if (r && !denied(r.error)) {
+      throw new Error(`cannot read the file "${file}" (${r.error.code ?? r.error.message})`);
+    }
+
     if (!r) blocked.add(guardOf(file));
   }
+
   return Buffer.from(await viaApp(file, () => app.read(file)));
 }
 
 /** Writes a file (and its folder), through the app when this server may not write there. */
-export async function writeLocal(path: string, data: Uint8Array, app: AppFiles, waitMs = LOCAL_WAIT_MS): Promise<string> {
+export async function writeLocal(
+  path: string,
+  data: Uint8Array,
+  app: AppFiles,
+  waitMs = LOCAL_WAIT_MS,
+): Promise<string> {
   const file = localPath(path);
+
   if (!isBlocked(file)) {
     const r = await within(
       mkdir(dirname(file), { recursive: true }).then(() => writeFile(file, data)),
       waitMs,
     );
     if (r && "ok" in r) return file;
-    if (r && !denied(r.error)) throw new Error(`cannot write the file "${file}" (${r.error.code ?? r.error.message})`);
+
+    if (r && !denied(r.error)) {
+      throw new Error(`cannot write the file "${file}" (${r.error.code ?? r.error.message})`);
+    }
+
     if (!r) blocked.add(guardOf(file));
   }
+
   await viaApp(file, () => app.write(file, data));
+
   return file;
 }
 

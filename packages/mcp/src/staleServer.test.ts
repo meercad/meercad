@@ -7,14 +7,18 @@ function fakeFile() {
   const probe = {
     stamp: () => {
       if (f.gone) throw new Error("ENOENT");
+
       return f.stamp;
     },
     hash: () => {
       if (f.gone) throw new Error("ENOENT");
+
       f.reads++;
+
       return f.body;
     },
   };
+
   return { f, probe };
 }
 
@@ -39,6 +43,7 @@ describe("stale MCP server", () => {
     expect(stale()).toBe(true);
     a.f.body = "v1";
     expect(stale()).toBe(true);
+
     const b = fakeFile();
     const gone = staleCheck("/x/server.js", b.probe);
     b.f.gone = true;
@@ -55,9 +60,11 @@ describe("stale MCP server", () => {
     const { join } = await import("node:path");
     const { tmpdir } = await import("node:os");
     const dir = mkdtempSync(join(tmpdir(), "meercad-stale-"));
+
     try {
       const file = join(dir, "server.js");
       writeFileSync(file, "a");
+
       const stale = staleCheck(file);
       expect(stale()).toBe(false);
       writeFileSync(file, "b");

@@ -4,38 +4,49 @@ import { createBridge } from "./hub.js";
 
 const quiet = () => undefined;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function until<T>(fn: () => T | Promise<T>, ms = 4000): Promise<T> {
   const end = Date.now() + ms;
+
   for (;;) {
     const v = await fn();
     if (v) return v;
     if (Date.now() > end) throw new Error("timed out waiting");
+
     await wait(25);
   }
 }
+
 let nextPort = 47950 + Math.floor(Math.random() * 40);
 
-/** A stand-in for the meerCAD app: answers every request with its method and session, reconnects when dropped. */
+/**
+ * A stand-in for the meerCAD app: answers every request with its method and session, reconnects when dropped.
+ */
 function fakeApp(port: number) {
   const seen: { method: string; session: string; params: unknown }[] = [];
   const events: unknown[] = [];
   let ws: WebSocket | null = null;
   let closed = false;
+
   const connect = () => {
     if (closed) return;
+
     const s = new WebSocket(`ws://127.0.0.1:${port}`);
     ws = s;
     s.on("open", () => s.send(JSON.stringify({ hello: "meercad", version: "test", project: "P" })));
     s.on("message", (raw) => {
       const m = JSON.parse(String(raw));
       if (m.event) return void events.push(m);
+
       seen.push({ method: m.method, session: m.session, params: m.params });
       s.send(JSON.stringify({ id: m.id, result: { method: m.method, session: m.session } }));
     });
     s.on("close", () => setTimeout(connect, 50));
     s.on("error", () => undefined);
   };
+
   connect();
+
   return {
     seen,
     events,
@@ -60,9 +71,11 @@ describe("MCP bridge hub", () => {
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
     stops.push(a.stop);
     await until(() => a.role === "hub");
+
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
     stops.push(b.stop);
     await until(() => b.role === "peer");
+
     const app = fakeApp(port);
     stops.push(app.close);
     await until(async () => (await b.status()).connected);
@@ -78,9 +91,11 @@ describe("MCP bridge hub", () => {
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
     stops.push(a.stop);
     await until(() => a.role === "hub");
+
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
     stops.push(b.stop);
     await until(() => b.role === "peer");
+
     const app = fakeApp(port);
     stops.push(app.close);
     await until(async () => (await b.status()).connected);
@@ -94,9 +109,11 @@ describe("MCP bridge hub", () => {
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
     stops.push(a.stop);
     await until(() => a.role === "hub");
+
     const app = fakeApp(port);
     stops.push(app.close);
     await until(async () => (await a.status()).connected);
+
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
     await until(() => b.role === "peer");
     await b.stop();
@@ -109,9 +126,11 @@ describe("MCP bridge hub", () => {
     const port = nextPort++;
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
     await until(() => a.role === "hub");
+
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
     stops.push(b.stop);
     await until(() => b.role === "peer");
+
     const app = fakeApp(port);
     stops.push(app.close);
     await until(async () => (await b.status()).connected);
@@ -131,6 +150,7 @@ describe("MCP bridge hub", () => {
       }),
     );
     await new Promise((r) => old.on("listening", r));
+
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet, welcomeMs: 200 });
     stops.push(b.stop);
     for (const c of old.clients) c.terminate();
@@ -142,6 +162,7 @@ describe("MCP bridge hub", () => {
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
     stops.push(a.stop);
     await until(() => a.role === "hub");
+
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
     stops.push(b.stop);
     await until(() => b.role === "peer");
@@ -154,11 +175,13 @@ describe("MCP bridge hub", () => {
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
     stops.push(() => a.stop());
     await until(() => a.role === "hub");
+
     // An app that never answers.
     const first = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise((r) => first.on("open", r));
     first.send(JSON.stringify({ hello: "meercad", version: "1", project: "P" }));
     await until(async () => (await a.status()).connected);
+
     const waiting = a.call("get_model", {}, 5000);
     const second = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise((r) => second.on("open", r));
@@ -167,6 +190,7 @@ describe("MCP bridge hub", () => {
     expect((await a.status()).hello).toMatchObject({ version: "2" });
     // A request the app does not answer in time.
     await expect(a.call("get_model", {}, 50)).rejects.toThrow(/get_model timed out/);
+
     // An older server asking for the port is told no; the hub stays.
     const old = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise((r) => old.on("open", r));
@@ -184,16 +208,19 @@ describe("MCP bridge hub", () => {
     const a = createBridge({ port, session: "A", originAllowed: () => true, log: quiet });
     stops.push(() => a.stop());
     await until(() => a.role === "hub");
+
     const b = createBridge({ port, session: "B", originAllowed: () => true, log: quiet });
     stops.push(() => b.stop());
     await until(() => b.role === "peer");
     // The peer asks the hub's status itself: not connected yet.
     expect(await b.status()).toMatchObject({ role: "peer", connected: false });
     await expect(b.call("get_model")).rejects.toThrow(/not connected/);
+
     const app = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise((r) => app.on("open", r));
     app.send(JSON.stringify({ hello: "meercad", version: "1", project: "P" }));
     await until(async () => (await b.status()).connected);
+
     const waiting = b.call("get_model", {}, 5000);
     await wait(50);
     app.close();

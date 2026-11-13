@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { chooseTab, mayTakeOver, newTabKey, openBlock, openBlockMessage, TAKEOVER_IDLE_MS, tabOfSession } from "./protocol.js";
+import {
+  chooseTab,
+  mayTakeOver,
+  newTabKey,
+  openBlock,
+  openBlockMessage,
+  TAKEOVER_IDLE_MS,
+  tabOfSession,
+} from "./protocol.js";
 
 describe("a session's tabs, one per project", () => {
   const tab = (session: string, project: string | null) => ({ session, project });
@@ -25,13 +33,19 @@ describe("a session's tabs, one per project", () => {
 
   it("sends a call naming none to the session's only tab, and asks which when there are several", () => {
     expect(chooseTab([tab("a", "p1"), tab("b", "p2")], "a")).toEqual({ tab: tab("a", "p1") });
-    expect(chooseTab([tab("a", "p1"), tab("a~2", "p2")], "a")).toEqual({ several: [tab("a", "p1"), tab("a~2", "p2")] });
+    expect(chooseTab([tab("a", "p1"), tab("a~2", "p2")], "a")).toEqual({
+      several: [tab("a", "p1"), tab("a~2", "p2")],
+    });
     expect(chooseTab([tab("b", "p2")], "a")).toEqual({ none: "open" });
   });
 });
 
 describe("one open project per session", () => {
-  const tab = (session: string, project: string | null, name: string | null = null) => ({ session, project, name });
+  const tab = (session: string, project: string | null, name: string | null = null) => ({
+    session,
+    project,
+    name,
+  });
 
   it("lets a session open a project while it has none, and ignores other sessions' tabs", () => {
     expect(openBlock([], "a", [])).toBeNull();
@@ -43,6 +57,7 @@ describe("one open project per session", () => {
   it("refuses a second project while the session has one open, naming it and how it is freed", () => {
     const block = openBlock([tab("a", "p1", "Box")], "a", [], "p2");
     expect(block).toEqual({ tab: tab("a", "p1", "Box"), same: false });
+
     const msg = openBlockMessage(block!, 90_000);
     expect(msg).toContain('"Box" (id "p1")');
     expect(msg).toContain("last call 2 min ago");

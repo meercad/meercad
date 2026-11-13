@@ -15,7 +15,12 @@ export const DEFAULT_PORT = 47821;
 export const CHANNEL_PORTS = { prod: DEFAULT_PORT, rc: 47822, wip: 47823, testflight: 47824 } as const;
 export type Channel = keyof typeof CHANNEL_PORTS;
 /** The server's name in an assistant's MCP configuration: one entry per build, added next to the others. */
-export const CHANNEL_MCP_NAMES: Record<Channel, string> = { prod: "meercad", testflight: "meercad-testflight", rc: "meercad-rc", wip: "meercad-wip" };
+export const CHANNEL_MCP_NAMES: Record<Channel, string> = {
+  prod: "meercad",
+  testflight: "meercad-testflight",
+  rc: "meercad-rc",
+  wip: "meercad-wip",
+};
 
 export type BridgeMethod =
   | "get_model"
@@ -93,27 +98,39 @@ export const PROJECT_PARAM = "project";
  * The key of a session's tab: the session for its first tab, `<session>~<n>` for more (one per
  * project, see PROJECT_PARAM). The app's main process knows keys only, as the sessions of its tabs.
  */
-export const tabOfSession = (key: string, session: string) => key === session || key.startsWith(`${session}~`);
+export const tabOfSession = (key: string, session: string) =>
+  key === session || key.startsWith(`${session}~`);
 
 /** A key for a new tab of `session` that none of `taken` has. */
 export function newTabKey(session: string, taken: Iterable<string>): string {
   const used = new Set(taken);
   if (!used.has(session)) return session;
+
   let n = 2;
   while (used.has(`${session}~${n}`)) n++;
+
   return `${session}~${n}`;
 }
 
 /** Which of a session's tabs a request goes to (`project`: the project it names, see PROJECT_PARAM). */
-export type TabChoice<T> = { tab: T } | { none: "open" } | { none: "project"; project: string } | { several: T[] };
+export type TabChoice<T> =
+  { tab: T } | { none: "open" } | { none: "project"; project: string } | { several: T[] };
 
-export function chooseTab<T extends { session: string; project: string | null }>(tabs: readonly T[], session: string, project?: string): TabChoice<T> {
+export function chooseTab<T extends { session: string; project: string | null }>(
+  tabs: readonly T[],
+  session: string,
+  project?: string,
+): TabChoice<T> {
   const own = tabs.filter((t) => tabOfSession(t.session, session));
+
   if (project !== undefined) {
     const t = own.find((x) => x.project === project);
+
     return t ? { tab: t } : { none: "project", project };
   }
+
   if (own.length === 1) return { tab: own[0]! };
+
   return own.length ? { several: own } : { none: "open" };
 }
 
@@ -131,6 +148,7 @@ export const ASSISTANT_IDLE_MS = 30 * 60_000;
  * request for TAKEOVER_IDLE_MS. Another assistant's work in progress stays untouched.
  */
 export const TAKEOVER_IDLE_MS = 5 * 60_000;
+
 export function mayTakeOver(sameClient: boolean, idleMs: number | undefined): boolean {
   return sameClient || idleMs === undefined || idleMs >= TAKEOVER_IDLE_MS;
 }
@@ -145,32 +163,52 @@ export function mayTakeOver(sameClient: boolean, idleMs: number | undefined): bo
  */
 export type OpenBlock<T> = { tab: T; same: boolean } | { opening: true } | null;
 
-export function openBlock<T extends { session: string; project: string | null }>(tabs: readonly T[], session: string, opening: Iterable<string>, target?: string): OpenBlock<T> {
+export function openBlock<T extends { session: string; project: string | null }>(
+  tabs: readonly T[],
+  session: string,
+  opening: Iterable<string>,
+  target?: string,
+): OpenBlock<T> {
   const own = tabs.filter((t) => tabOfSession(t.session, session));
-  const held = own.find((t) => t.project !== null && t.project === target) ?? own.find((t) => t.project !== null);
+  const held =
+    own.find((t) => t.project !== null && t.project === target) ?? own.find((t) => t.project !== null);
   if (held) return { tab: held, same: target !== undefined && held.project === target };
   // A tab without a project (an open that failed) blocks nothing: the next open reuses it.
   if ([...opening].some((k) => tabOfSession(k, session))) return { opening: true };
+
   return null;
 }
 
 /** "12 s", "3 min": how long ago `at` was. */
-export const ago = (ms: number) => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.round(ms / 60_000)} min`);
+export const ago = (ms: number) =>
+  ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.round(ms / 60_000)} min`;
 
 /**
  * The refusal for an open that openBlock stopped: who holds what, why only one project at a time
  * works, and how it is freed. `lastCallMs`: how long ago the holding tab got its last request.
  */
-export function openBlockMessage(block: NonNullable<OpenBlock<{ project: string | null; name?: string | null }>>, lastCallMs?: number, idleMs = ASSISTANT_IDLE_MS): string {
+export function openBlockMessage(
+  block: NonNullable<OpenBlock<{ project: string | null; name?: string | null }>>,
+  lastCallMs?: number,
+  idleMs = ASSISTANT_IDLE_MS,
+): string {
   const idleMin = Math.round(idleMs / 60_000);
-  const why = "meerCAD cannot tell the chats on one connection apart (Claude Desktop runs a single meerCAD connection for all of its chats), so it allows one open project per connection: with two, calls of one chat could land in the other's project.";
+  const why =
+    "meerCAD cannot tell the chats on one connection apart (Claude Desktop runs a single meerCAD connection for all of its chats), so it allows one open project per connection: with two, calls of one chat could land in the other's project.";
   const free = `It is freed when that chat calls close_project, after ${idleMin} minutes without a call, or when the user clicks Take over in its meerCAD tab.`;
-  if ("opening" in block) return `Another chat on this meerCAD connection is opening a project right now. ${why} ${free} Tell the user, or try again later.`;
+
+  if ("opening" in block) {
+    return `Another chat on this meerCAD connection is opening a project right now. ${why} ${free} Tell the user, or try again later.`;
+  }
+
   const t = block.tab;
   const label = `"${t.name ?? t.project}" (id "${t.project}")`;
   const last = lastCallMs !== undefined ? ` (last call ${ago(lastCallMs)} ago)` : "";
-  if (block.same)
+
+  if (block.same) {
     return `Project ${label} is already open over this meerCAD connection${last}. If this chat opened it, just go on: it is still open, pass project: "${t.project}" with your calls. If not, another chat is working on it right now: don't change it, tell the user. ${why} ${free}`;
+  }
+
   return `Another chat is already working on project ${label} over this meerCAD connection${last}, so no second project can be opened now. ${why} If ${label} is your own and you are done with it, call close_project with project: "${t.project}" first, then open again. Otherwise tell the user that another chat is busy in meerCAD and wait. ${free}`;
 }
 
@@ -178,11 +216,18 @@ export function openBlockMessage(block: NonNullable<OpenBlock<{ project: string 
  * The assistants' tabs to hand back to the user now: idle for `idleMs` since their last request,
  * not working and with no request waiting for an answer.
  */
-export function idleAssistants<T extends { lastCall: number; busy: boolean; pending: number }>(tabs: Iterable<T>, now: number, idleMs = ASSISTANT_IDLE_MS): T[] {
+export function idleAssistants<T extends { lastCall: number; busy: boolean; pending: number }>(
+  tabs: Iterable<T>,
+  now: number,
+  idleMs = ASSISTANT_IDLE_MS,
+): T[] {
   return [...tabs].filter((a) => !a.busy && a.pending === 0 && now - a.lastCall >= idleMs);
 }
 
-/** Why a session has no tab any more: the user closed or took it over, the assistant closed it (close_project), or it sat idle. */
+/**
+ * Why a session has no tab any more: the user closed or took it over, the assistant closed it
+ * (close_project), or it sat idle.
+ */
 export type EndedTab = "closed" | "released" | "idle";
 
 /** Sent by the hub, not answered: a session's MCP server exited, or (on connecting) the hub's own session. */
@@ -219,7 +264,10 @@ export const INLINE_MAX = 72 * 1024 * 1024;
 /** How long the app keeps staged files that nobody fetches. */
 export const STAGE_KEEP_MS = 10 * 60_000;
 
-/** An export's files: base64 by name, or (big ones) staged in the app under a token, with their sizes in bytes. */
+/**
+ * An export's files: base64 by name, or (big ones) staged in the app under a token, with their sizes in
+ * bytes.
+ */
 export interface ExportedFiles {
   files: Record<string, string>;
   staged?: { token: string; sizes: Record<string, number> };
@@ -234,6 +282,7 @@ export interface ExportedFiles {
 export function exportTransport(total: number, stages: boolean): "inline" | "stage" | "too_big" {
   if (total <= STAGE_OVER) return "inline";
   if (stages) return "stage";
+
   return total <= INLINE_MAX ? "inline" : "too_big";
 }
 
@@ -252,20 +301,26 @@ export function stagedRequests(sizes: Record<string, number>, piece = STAGE_PIEC
   const requests: FilePiece[][] = [];
   let batch: FilePiece[] = [];
   let bytes = 0;
+
   for (const [name, size] of Object.entries(sizes)) {
     let offset = 0;
+
     do {
       const length = Math.min(piece, size - offset);
+
       if (batch.length && bytes + length > piece) {
         requests.push(batch);
         batch = [];
         bytes = 0;
       }
+
       batch.push({ name, offset, length });
       bytes += length;
       offset += length;
     } while (offset < size);
   }
+
   if (batch.length) requests.push(batch);
+
   return requests;
 }

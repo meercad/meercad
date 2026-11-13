@@ -10,10 +10,15 @@ const r = (v: number) => +v.toFixed(2);
  */
 export function insertSizes(a: { size?: string | undefined }) {
   const sizes = a.size ? [a.size] : INSERT_SIZES;
-  if (a.size && !INSERT_SIZES.includes(a.size)) throw new Error(`unknown insert size "${a.size}": use one of ${INSERT_SIZES.join(", ")}`);
+
+  if (a.size && !INSERT_SIZES.includes(a.size)) {
+    throw new Error(`unknown insert size "${a.size}": use one of ${INSERT_SIZES.join(", ")}`);
+  }
+
   return {
     inserts: sizes.map((size) => {
       const d = insertDims(size)!;
+
       return {
         size,
         lengths: insertLengths(size),
@@ -27,6 +32,6 @@ export function insertSizes(a: { size?: string | undefined }) {
       };
     }),
     notes:
-      "Sizes as the common makers recommend for knurled brass inserts in printed plastic (hole straight, 1 mm deeper than the insert). In a model use a hole feature with kind \"insert\", size, length (one of lengths, default the first) and withInserts:true to add the inserts as parts for the parts list; the rebuild warns where the wall is thinner than minWall. Check the data of the inserts you buy.",
+      'Sizes as the common makers recommend for knurled brass inserts in printed plastic (hole straight, 1 mm deeper than the insert). In a model use a hole feature with kind "insert", size, length (one of lengths, default the first) and withInserts:true to add the inserts as parts for the parts list; the rebuild warns where the wall is thinner than minWall. Check the data of the inserts you buy.',
   };
 }

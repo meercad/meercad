@@ -7,11 +7,15 @@ const slow = new Set<string>();
 // A file macOS guards: opening it waits (for the user's OK), it does not fail.
 vi.mock("node:fs/promises", async (orig) => {
   const fs = await orig<typeof import("node:fs/promises")>();
-  const hang = <T,>(p: string, run: () => Promise<T>) => ([...slow].some((d) => p.startsWith(d)) ? new Promise<T>(() => undefined) : run());
+  const hang = <T>(p: string, run: () => Promise<T>) =>
+    [...slow].some((d) => p.startsWith(d)) ? new Promise<T>(() => undefined) : run();
+
   return {
     ...fs,
-    readFile: ((p: string, ...a: unknown[]) => hang(p, () => (fs.readFile as (...x: unknown[]) => Promise<Buffer>)(p, ...a))) as typeof fs.readFile,
-    writeFile: ((p: string, ...a: unknown[]) => hang(p, () => (fs.writeFile as (...x: unknown[]) => Promise<void>)(p, ...a))) as typeof fs.writeFile,
+    readFile: ((p: string, ...a: unknown[]) =>
+      hang(p, () => (fs.readFile as (...x: unknown[]) => Promise<Buffer>)(p, ...a))) as typeof fs.readFile,
+    writeFile: ((p: string, ...a: unknown[]) =>
+      hang(p, () => (fs.writeFile as (...x: unknown[]) => Promise<void>)(p, ...a))) as typeof fs.writeFile,
   };
 });
 
@@ -26,7 +30,10 @@ beforeEach(async () => {
 });
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
-const app = () => ({ read: vi.fn(async () => new TextEncoder().encode("from app")), write: vi.fn(async () => undefined) });
+const app = () => ({
+  read: vi.fn(async () => new TextEncoder().encode("from app")),
+  write: vi.fn(async () => undefined),
+});
 
 describe("local files", () => {
   it("reads and writes directly where it may", async () => {
@@ -41,10 +48,12 @@ describe("local files", () => {
 
   it("hands a file that does not open in time to the app, and the next ones in that folder at once", async () => {
     slow.add(dir);
+
     const a = app();
     const t0 = performance.now();
     expect((await readLocal(join(dir, "t1.meercad"), a, 100)).toString()).toBe("from app");
     expect(performance.now() - t0).toBeGreaterThanOrEqual(90);
+
     const t1 = performance.now();
     await readLocal(join(dir, "other.meercad"), a, 5000);
     expect(performance.now() - t1).toBeLessThan(1000);
@@ -55,8 +64,11 @@ describe("local files", () => {
 
   it("says what to do when neither may reach the file", async () => {
     slow.add(dir);
+
     const a = { read: async () => Promise.reject(new Error("EPERM")), write: async () => undefined };
-    await expect(readLocal(join(dir, "x.meercad"), a, 50)).rejects.toThrow(/Privacy & Security.*another folder/s);
+    await expect(readLocal(join(dir, "x.meercad"), a, 50)).rejects.toThrow(
+      /Privacy & Security.*another folder/s,
+    );
   });
 
   it("reports a missing file at once", async () => {
@@ -69,10 +81,13 @@ describe("local files", () => {
     await writeFile(join(locked, "a.stl"), "x");
     await chmod(join(locked, "a.stl"), 0o000);
     await chmod(locked, 0o500);
+
     try {
       const a = app();
       expect(String(await readLocal(join(locked, "a.stl"), a, 5000))).toBe("from app");
-      expect(await writeLocal(join(locked, "b.stl"), new Uint8Array([1]), a, 5000)).toBe(join(locked, "b.stl"));
+      expect(await writeLocal(join(locked, "b.stl"), new Uint8Array([1]), a, 5000)).toBe(
+        join(locked, "b.stl"),
+      );
       expect(a.read).toHaveBeenCalledOnce();
       expect(a.write).toHaveBeenCalledOnce();
     } finally {
@@ -83,10 +98,15 @@ describe("local files", () => {
   it("reports a file it cannot write for another reason, and an app that fails with no message", async () => {
     await writeFile(join(dir, "plain"), "x");
     // A folder that is a file.
-    await expect(writeLocal(join(dir, "plain", "b.stl"), new Uint8Array([1]), app(), 5000)).rejects.toThrow(/cannot write the file .*\(E(EXIST|NOTDIR)\)/);
+    await expect(writeLocal(join(dir, "plain", "b.stl"), new Uint8Array([1]), app(), 5000)).rejects.toThrow(
+      /cannot write the file .*\(E(EXIST|NOTDIR)\)/,
+    );
     slow.add(dir);
+
     const a = { read: async () => Promise.reject("gone"), write: async () => Promise.reject("gone") };
-    await expect(writeLocal(join(dir, "c.stl"), new Uint8Array([1]), a, 20)).rejects.toThrow(/could not either \(gone\)/);
+    await expect(writeLocal(join(dir, "c.stl"), new Uint8Array([1]), a, 20)).rejects.toThrow(
+      /could not either \(gone\)/,
+    );
   });
 });
 
@@ -95,8 +115,16 @@ describe("meercad files", () => {
   const bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v));
   it("reads a saved design and a wrapped one", () => {
     expect(meercadDocument(bytes(doc), "a.meercad")).toEqual({ doc });
-    expect(meercadDocument(bytes({ name: "importtest", document: doc }), "t1.meercad")).toEqual({ doc, name: "importtest" });
-    expect(meercadDocument(bytes({ format: "meercad/1", features: [] }), "leg.meercad").doc).toEqual({ format: "meercad/1", params: {}, features: [], rollback: null });
+    expect(meercadDocument(bytes({ name: "importtest", document: doc }), "t1.meercad")).toEqual({
+      doc,
+      name: "importtest",
+    });
+    expect(meercadDocument(bytes({ format: "meercad/1", features: [] }), "leg.meercad").doc).toEqual({
+      format: "meercad/1",
+      params: {},
+      features: [],
+      rollback: null,
+    });
   });
   it("reads a plain list of features", () => {
     expect(meercadDocument(bytes([{ id: "b1", op: "primitive" }]), "feats.json").doc).toEqual(doc);

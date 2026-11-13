@@ -17,11 +17,18 @@ export interface Patience {
   readonly size: number;
 }
 
-type Entry = { started: number; result: Promise<unknown>; done: boolean; expire?: ReturnType<typeof setTimeout> };
+type Entry = {
+  started: number;
+  result: Promise<unknown>;
+  done: boolean;
+  expire?: ReturnType<typeof setTimeout>;
+};
 
 export function createPatience(o: { answerWithinMs: number; keepMs: number; now?: () => number }): Patience {
   const now = o.now ?? Date.now;
-  /** Runs that outlived their answer: only these are joined, a call answered in time leaves nothing behind. */
+  /**
+   * Runs that outlived their answer: only these are joined, a call answered in time leaves nothing behind.
+   */
   const late = new Map<string, Entry>();
 
   const wait = async <R>(key: string, e: Entry, stillWorking: (sinceMs: number) => R): Promise<R> => {
@@ -30,8 +37,16 @@ export function createPatience(o: { answerWithinMs: number; keepMs: number; now?
       timer = setTimeout(() => r("late"), o.answerWithinMs);
       timer.unref?.();
     });
+
     try {
-      const first = await Promise.race([e.result.then(() => "done" as const, () => "done" as const), deadline]);
+      const first = await Promise.race([
+        e.result.then(
+          () => "done" as const,
+          () => "done" as const,
+        ),
+        deadline,
+      ]);
+
       if (first === "late") {
         if (!late.has(key)) {
           late.set(key, e);
@@ -44,13 +59,16 @@ export function createPatience(o: { answerWithinMs: number; keepMs: number; now?
               e.expire.unref?.();
             });
         }
+
         return stillWorking(now() - e.started);
       }
+
       // Fetched: a later identical call is a new one.
       if (late.get(key) === e) {
         late.delete(key);
         clearTimeout(e.expire);
       }
+
       return (await e.result) as R;
     } finally {
       clearTimeout(timer);
@@ -61,9 +79,11 @@ export function createPatience(o: { answerWithinMs: number; keepMs: number; now?
     run<R>(key: string, run: () => Promise<R>, stillWorking: (sinceMs: number) => R): Promise<R> {
       const going = late.get(key);
       if (going) return wait(key, going, stillWorking);
+
       const e: Entry = { started: now(), result: run(), done: false };
       // An unfetched failure must not become an unhandled rejection.
       e.result.catch(() => undefined);
+
       return wait(key, e, stillWorking);
     },
     get size() {
@@ -75,6 +95,15 @@ export function createPatience(o: { answerWithinMs: number; keepMs: number; now?
 /** The key of a tool call: its name and its arguments, independent of key order. */
 export function callKey(tool: string, args: unknown): string {
   const sorted = (v: unknown): unknown =>
-    Array.isArray(v) ? v.map(sorted) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted((v as Record<string, unknown>)[k])])) : v;
+    Array.isArray(v)
+      ? v.map(sorted)
+      : v && typeof v === "object"
+        ? Object.fromEntries(
+            Object.keys(v)
+              .sort()
+              .map((k) => [k, sorted((v as Record<string, unknown>)[k])]),
+          )
+        : v;
+
   return `${tool} ${JSON.stringify(sorted(args ?? {}))}`;
 }

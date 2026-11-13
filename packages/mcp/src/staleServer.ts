@@ -16,6 +16,7 @@ export interface FileProbe {
   /** The file's contents' hash, read only when the stamp moved. */
   hash: (path: string) => string;
 }
+
 const nodeProbe: FileProbe = {
   stamp: (p) => statSync(p).mtimeMs,
   hash: (p) => createHash("sha1").update(readFileSync(p)).digest("hex"),
@@ -28,23 +29,29 @@ const nodeProbe: FileProbe = {
 export function staleCheck(path: string, probe: FileProbe = nodeProbe): () => boolean {
   let stamp: number;
   let hash: string;
+
   try {
     stamp = probe.stamp(path);
     hash = probe.hash(path);
   } catch {
     return () => false;
   }
+
   let stale = false;
+
   return () => {
     if (stale) return true;
+
     try {
       const now = probe.stamp(path);
       if (now === stamp) return false;
+
       stamp = now;
       stale = probe.hash(path) !== hash;
     } catch {
       stale = true;
     }
+
     return stale;
   };
 }

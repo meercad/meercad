@@ -19,10 +19,12 @@ describe("staged exports", () => {
   it("covers every byte of every file once", () => {
     const sizes = { x: 1000, y: 1, z: 333 };
     const got: Record<string, number> = {};
+
     for (const p of stagedRequests(sizes, 64).flat()) {
       expect(p.offset).toBe(got[p.name] ?? 0);
       got[p.name] = p.offset + p.length;
     }
+
     expect(got).toEqual(sizes);
   });
   it("stages big exports only for a server that asks, and never sends one too big for a message", () => {
