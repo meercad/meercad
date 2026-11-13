@@ -3075,7 +3075,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-replicad-opencascadejs 1.1.0 (LGPL-2.1-only)
+replicad-opencascadejs 1.2.1 (LGPL-2.1-only)
 ==============================================================================
 
 GNU LESSER GENERAL PUBLIC LICENSE

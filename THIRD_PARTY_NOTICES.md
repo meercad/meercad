@@ -14,7 +14,7 @@ version of either library (see "Build it yourself" in the README). Reverse engin
 modifications is permitted.
 
 - **Open CASCADE Technology (OCCT)** — geometry kernel, LGPL-2.1 with the OCCT exception. Source: https://github.com/Open-Cascade-SAS/OCCT
-  WebAssembly build `replicad-opencascadejs` (1.1.0): https://github.com/sgenoud/replicad.
+  WebAssembly build `replicad-opencascadejs` (1.2.1): https://github.com/sgenoud/replicad.
   The build contains OCCT's modelling and data-exchange modules only (no fonts, so no FreeType) and the Emscripten
   runtime (MIT; its libc is musl, MIT, and its C++ library libc++, Apache-2.0 with LLVM exception).
 - **PlaneGCS** — 2D constraint solver from FreeCAD, licensed LGPL-2.0-or-later and used under LGPL-2.1. Source: https://github.com/FreeCAD/FreeCAD (src/Mod/Sketcher/App/planegcs)
@@ -142,7 +142,7 @@ SIL Open Font License 1.1.
 | raw-body | 3.0.2 | MIT |
 | react | 19.3.1 | MIT |
 | react-dom | 19.3.1 | MIT |
-| replicad-opencascadejs | 1.1.0 | LGPL-2.1-only |
+| replicad-opencascadejs | 1.2.1 | LGPL-2.1-only |
 | require-from-string | 2.0.2 | MIT |
 | router | 2.2.0 | MIT |
 | safer-buffer | 2.1.2 | MIT |

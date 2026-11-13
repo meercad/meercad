@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { Arena } from "./arena.js";
 import { loadOcct, occtErrorMessage, reserveHeap, type OC } from "./occt.js";
@@ -63,12 +63,35 @@ describe("Arena", () => {
 
 describe("OCCT helpers", () => {
   it("loads the module from a given .wasm file", async () => {
-    const wasm = fileURLToPath(new URL("../../../node_modules/.pnpm/replicad-opencascadejs@1.1.0/node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url));
+    const wasm = createRequire(import.meta.url).resolve("replicad-opencascadejs/wasm");
     const oc = await loadOcct(wasm);
     const p = new oc.gp_Pnt(1, 2, 3);
     expect(p.Y()).toBe(2);
     p.delete();
   });
+
+  // The package up to 1.1.0 freed nothing on delete() (an empty function for most classes): every
+  // cut of a long design stayed in the kernel, about 1 MB per step, and a design of 1100 steps no
+  // longer fitted the iPhone. The address of a freed object is used again; the heap stays as it was.
+  it("gives a deleted object's memory back", async () => {
+    const oc = await loadOcct();
+    const heap = () => (oc as unknown as { wasmMemory: { buffer: ArrayBuffer } }).wasmMemory.buffer.byteLength;
+    const cut = () => {
+      const a = new Arena();
+      const box = (at: number) => a.track(a.track(new oc.BRepPrimAPI_MakeBox(a.track(new oc.gp_Pnt(at, at, at)), 10, 10, 10)).Shape());
+      const algo = a.track(new oc.BRepAlgoAPI_Cut(box(0), box(5), a.track(new oc.Message_ProgressRange())));
+      const props = a.track(new oc.GProp_GProps());
+      oc.BRepGProp.VolumeProperties(a.track(algo.Shape()), props, false, false, false);
+      const volume = props.Mass();
+      a.dispose();
+      return volume;
+    };
+    for (let i = 0; i < 20; i++) cut();
+    const before = heap();
+    // 1500 cuts kept 350 MB with the old package.
+    for (let i = 0; i < 1500; i++) expect(cut()).toBeCloseTo(875, 6);
+    expect(heap() - before).toBeLessThan(32 * 2 ** 20);
+  }, 60_000);
 
   it("loads the threaded build, also where the page hides SharedArrayBuffer (iPad)", async () => {
     const scope = globalThis as { SharedArrayBuffer?: unknown };
