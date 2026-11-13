@@ -24,6 +24,7 @@ import { callKey, createPatience } from "./patience.js";
 import { DEFAULT_PORT, PROJECT_PARAM, stagedRequests, type BridgeMethod, type ExportedFiles } from "./protocol.js";
 
 /** The port of the build this server ships in (server.json next to it, see CHANNEL_PORTS); MEERCAD_MCP_PORT wins (test runs). */
+/* v8 ignore start -- runs only in the real stdio process; tests run the server in-process (MEERCAD_MCP_INPROCESS) with MEERCAD_MCP_PORT set */
 function bundledPort(): number | undefined {
   try {
     const p = (JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "server.json"), "utf8")) as { port?: unknown }).port;
@@ -32,6 +33,7 @@ function bundledPort(): number | undefined {
     return undefined;
   }
 }
+/* v8 ignore stop */
 const port = Number(process.env["MEERCAD_MCP_PORT"] ?? bundledPort() ?? DEFAULT_PORT);
 // Only the app may connect: browsers always send Origin, and web pages cannot forge it.
 const extraOrigins = (process.env["MEERCAD_ORIGINS"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -49,7 +51,9 @@ const launcher = createLauncher({
   target: appTarget({ serverPath: fileURLToPath(import.meta.url), env: process.env, port, platform: process.platform }),
   // `open` hands its environment to the app: without ELECTRON_RUN_AS_NODE (the RC's and WIP's servers
   // run on the app's own binary with it) the app would start as plain Node and quit at once.
+  /* v8 ignore next -- opening the app is a real process start, see launchApp.test.ts for the logic */
   open: (args) => spawn("open", args, { stdio: "ignore", detached: true, env: launchEnv(process.env) }).on("error", (e) => log(`open: ${e.message}`)).unref(),
+  /* v8 ignore next -- asked only while the real app is being opened (tests set MEERCAD_NO_LAUNCH) */
   connected: async () => (await bridge.status()).connected,
   log,
 });
@@ -91,6 +95,7 @@ async function call<T = unknown>(method: BridgeMethod, params: Record<string, un
     // The app is not running (or not connected): open it, so the user sees the work, and try once more.
     if (!(e instanceof Error) || e.message !== NOT_CONNECTED) throw e;
     await ensureApp();
+    /* v8 ignore next -- the app connected while it was being opened (tests never open it) */
     return send();
   }
 }
@@ -824,6 +829,7 @@ server.registerTool(
 /** For the tests, which drive this server in the same process over a transport of their own (server.inprocess.test.ts). */
 export { server, bridge };
 
+/* v8 ignore start -- runs only in the real stdio process; tests run the server in-process (MEERCAD_MCP_INPROCESS) with MEERCAD_MCP_PORT set */
 if (!process.env["MEERCAD_MCP_INPROCESS"]) {
   await server.connect(new StdioServerTransport());
   // When the client goes away (stdin closes), exit so no orphan keeps the bridge port.
@@ -835,3 +841,4 @@ if (!process.env["MEERCAD_MCP_INPROCESS"]) {
   process.stdin.on("close", quit);
   log("MCP server ready on stdio");
 }
+/* v8 ignore stop */

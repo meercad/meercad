@@ -199,4 +199,26 @@ describe("MCP bridge hub", () => {
     app.close();
     await expect(waiting).rejects.toThrow(/the meerCAD app disconnected/);
   });
+
+  it("as a peer: ignores what is not JSON, and says the app is not there when the hub does not answer", async () => {
+    const port = nextPort++;
+    // A hub that welcomes peers but never answers their requests, after a line of noise.
+    const hub = new WebSocketServer({ host: "127.0.0.1", port });
+    hub.on("connection", (ws) => {
+      ws.send("not json {");
+      ws.send(JSON.stringify({ hub: "meercad" }));
+    });
+    await new Promise((r) => hub.on("listening", r));
+    const b = createBridge({ port, session: "P", originAllowed: () => true, log: quiet });
+    stops.push(() => b.stop());
+    stops.push(() => {
+      for (const c of hub.clients) c.terminate();
+      return new Promise((r) => hub.close(() => r(undefined)));
+    });
+    // Before it has found its place it knows no app.
+    expect(await b.status()).toMatchObject({ connected: false, hello: null });
+    await until(async () => (await b.status()).role === "peer", 6000);
+    expect(await b.status()).toEqual({ role: "peer", connected: false, hello: null });
+  }, 15_000);
 });
+

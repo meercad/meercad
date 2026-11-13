@@ -6,7 +6,7 @@
  * byte for byte. server.test.ts starts the built server over stdio as a separate process.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -271,6 +271,33 @@ describe("MCP server in process", () => {
     const plainDesign = join(dir, "Bare.meercad");
     writeFileSync(plainDesign, JSON.stringify(wrapped.document));
     expect(JSON.parse(textOf(await callTool("import_file", { path: plainDesign }))).name).toBe("Bare.meercad");
+  });
+
+  it("goes through the app for files this server may not touch", async () => {
+    // A folder this process may not enter (as macOS keeps an app's sandbox out of others' folders).
+    const locked = join(dir, "locked");
+    mkdirSync(locked);
+    writeFileSync(join(locked, "in.stl"), "x");
+    chmodSync(join(locked, "in.stl"), 0o000);
+    chmodSync(locked, 0o500);
+    if (app?.readyState !== WebSocket.OPEN) await connectApp();
+    while (!(await mod.bridge.status()).connected) await wait(20);
+    const appRead: string[] = [];
+    const appWrote: Record<string, string> = {};
+    answers["read_file"] = (p) => (appRead.push(String(p["path"])), { base64: b64("solid via app") });
+    answers["write_file"] = (p) => ((appWrote[String(p["path"])] = Buffer.from(String(p["base64"]), "base64").toString()), { ok: true });
+    answers["export"] = (p) => ({ files: { [`${p["name"]}.stl`]: b64("solid out") } });
+    try {
+      expect(JSON.parse(textOf(await callTool("import_file", { project: "P1", path: join(locked, "in.stl") })))).toMatchObject({ name: "in.stl" });
+      expect(appRead).toEqual([join(locked, "in.stl")]);
+      await callTool("export", { project: "P1", format: "stl", path: join(locked, "out.stl") });
+      expect(appWrote[join(locked, "out.stl")]).toBe("solid out");
+    } finally {
+      chmodSync(locked, 0o700);
+      delete answers["read_file"];
+      delete answers["write_file"];
+      delete answers["export"];
+    }
   });
 
   it("writes an export's files: one, several next to each other, per variant, and staged in pieces", async () => {

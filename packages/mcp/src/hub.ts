@@ -100,6 +100,7 @@ export function createBridge(o: BridgeOptions) {
         join();
         return;
       }
+      /* v8 ignore next -- other listen errors (no permission) do not happen on 127.0.0.1 */
       log(`bridge error: ${e.message}`);
     });
     server.on("connection", onConnection);
