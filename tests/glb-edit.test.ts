@@ -36,4 +36,15 @@ describe("cleaning up a scanned area", () => {
     expect(r.after).toBe(200);
     expect(r.pieces).toBe(2);
   });
+
+  it("keeps colours stored as small integers as they were", () => {
+    const square = [[0, 0, 0], [1500, 0, 0], [1500, 1500, 0], [0, 1500, 0]] as [number, number, number][];
+    for (const type of [5121, 5123, 5120, 5122] as const) {
+      const m = glb([{ x: 0, y: 0, z: 0, s: 1000 }, { x: 5000, y: 0, z: 0, s: 1000 }], type);
+      const kept = crop(m, square, true)!;
+      expect(kept.after, String(type)).toBe(2);
+      const acc = (json(kept.glb)["accessors"] as { componentType: number; count: number; normalized?: boolean }[])[1]!;
+      expect(acc).toMatchObject({ componentType: type, count: 4, normalized: true });
+    }
+  });
 });
