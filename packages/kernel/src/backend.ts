@@ -66,6 +66,7 @@ import { Arena } from "./arena.js";
 import { copyMap, trackState } from "./tracking.js";
 import { edgesIn, facesIn, partsReaching, reach } from "./lookup.js";
 import { Body, listToArray } from "./body.js";
+import { composeMoves } from "./copymesh.js";
 import { bodyBounds, booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
@@ -1358,13 +1359,21 @@ function moved(ctx: Ctx, body: Body, trsf: gp_Trsf, id: string, suffix: string):
   const t = ctx.g.transform(body.shape, trsf);
   const out = new Body(ctx.oc, ctx.arena, id, t.shape);
   const tags: string[][] = out.faces.map(() => []);
+  let inOrder = out.faces.length === body.faces.length;
   body.faces.forEach((face, i) => {
     const j = out.faceIndex(t.map(face));
+    if (j !== i) inOrder = false;
     if (j >= 0) tags[j]!.push(...(body.faceTags[i] ?? []).map((tag) => tag + suffix));
   });
   out.faceTags = tags.map((tg, i) => (tg.length ? tg : [`${id}.face[${i}]`]));
+  // The same part somewhere else (not scaled): its display mesh is the other's, moved the same way.
+  if (inOrder && !body.sourceMesh && Math.abs(Math.abs(trsf.ScaleFactor()) - 1) < 1e-12) {
+    const m: number[] = [];
+    for (let r = 1; r <= 3; r++) for (let c = 1; c <= 4; c++) m.push(trsf.Value(r, c));
+    out.copyOf = body.copyOf ? { root: body.copyOf.root, matrix: composeMoves(m, body.copyOf.matrix) } : { root: body, matrix: m };
+  }
   // A moved or copied mesh keeps its triangles, moved the same way (as long as faces keep their order).
-  if (body.sourceMesh && body.faces.every((f, i) => out.faceIndex(t.map(f)) === i)) {
+  if (body.sourceMesh && inOrder) {
     const src = body.sourceMesh;
     const m = new Float32Array(src.length);
     for (let i = 0; i < src.length; i += 3) {

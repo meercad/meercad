@@ -92,6 +92,11 @@ export function exportTolerance(diag: number): { linear: number; angular: number
   return { linear: Math.min(0.01, Math.max(0.001, diag * 1e-4)), angular: 0.05 };
 }
 
+/** Tolerances of the display mesh of a part whose box has the diagonal `diag` (`coarse` with the part's own factor in it). */
+export function displayTolerance(diag: number, coarse: number): { linear: number; angular: number } {
+  return { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
+}
+
 /**
  * Display tessellation: `coarse` > 1 loosens the tolerances by that factor (fewer triangles,
  * faster). `exact` asks for print/CNC quality instead (see `exportTolerance`).
@@ -100,7 +105,7 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse =
   if (body.sourceMesh) return sourceMeshOf(body, body.sourceMesh);
   const diag = Math.hypot(...bbox.max.map((v, i) => v - bbox.min[i]!));
   if (!exact) coarse *= body.displayCoarse;
-  const { linear, angular } = exact ? (body.exportTolerance ?? exportTolerance(diag)) : { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
+  const { linear, angular } = exact ? (body.exportTolerance ?? exportTolerance(diag)) : displayTolerance(diag, coarse);
 
   const faceByHash = new Map<number, number>();
   body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));

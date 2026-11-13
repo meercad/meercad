@@ -46,6 +46,12 @@ export class Body implements Topology {
    */
   exportTolerance: { linear: number; angular: number } | null = null;
   private samples: { faces: Vec3[]; edges: Vec3[] } | null = null;
+  /**
+   * For a part that is another part moved, turned or mirrored and nothing else: the first part of
+   * that chain and the way from there to here (rows of a 3×4 matrix). Its faces and edges come in
+   * the same order, so its display mesh is that part's mesh moved the same way (see CopyMeshes).
+   */
+  copyOf: { root: Body; matrix: number[] } | null = null;
 
   constructor(
     private readonly oc: OC,

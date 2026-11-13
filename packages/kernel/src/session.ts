@@ -3,6 +3,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import type { PlaneFrame, SketchSolver, SolveDiagnostics, SolvedCurve, Vec2 } from "@meercad/sketch";
 import { OcctBackend } from "./backend.js";
 import type { Body } from "./body.js";
+import { CopyMeshes } from "./copymesh.js";
 import { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
 import { gearViews, jointFrames, type GearView, type JointFrame } from "./joints.js";
 import type { OC } from "./occt.js";
@@ -76,6 +77,8 @@ export class KernelSession {
   /** Textured display meshes by body, with what they were made from (`sig`). */
   private textureCache = new WeakMap<Body, { sig: string; mesh: BodyMesh }>();
   private last: ModelState | null = null;
+  /** Meshes shared between parts that are copies of each other. */
+  private readonly copies: CopyMeshes;
   /** Tessellation tolerance factor (see meshBody); set before the first rebuild. */
   meshCoarse = 1;
 
@@ -84,6 +87,7 @@ export class KernelSession {
     solver: SketchSolver,
   ) {
     this.engine = new RebuildEngine(new OcctBackend(oc, solver));
+    this.copies = new CopyMeshes(oc);
   }
 
   rebuild(doc: MeercadDocument, opts: RebuildOptions = {}): RebuildOut {
@@ -110,14 +114,18 @@ export class KernelSession {
     const t = performance.now();
     const meshes: BodyMesh[] = [];
     const bodies: BodySummary[] = [];
+    const props = opts.props !== false;
+    // New parts are meshed finest first: of parts that are copies of each other the finest one is
+    // meshed and the others take its triangles (CopyMeshes), so none comes out coarser than alone.
+    const fresh = [...r.state.bodies.values()].filter((b) => !this.meshCache.has(b)).map((body) => {
+      const summary = summarizeBody(this.oc, body, props);
+      return { body, summary, linear: this.copies.tolerance(body, summary.bbox, this.meshCoarse).linear };
+    });
+    fresh.sort((a, b) => a.linear - b.linear);
+    for (const { body, summary } of fresh) this.meshCache.set(body, { summary, mesh: this.copies.mesh(body, summary.bbox, this.meshCoarse), props });
     for (const body of r.state.bodies.values()) {
-      const props = opts.props !== false;
-      let cached = this.meshCache.get(body);
-      if (!cached) {
-        const summary = summarizeBody(this.oc, body, props);
-        cached = { summary, mesh: meshBody(this.oc, body, summary.bbox, this.meshCoarse), props };
-        this.meshCache.set(body, cached);
-      } else if (props && !cached.props) {
+      const cached = this.meshCache.get(body)!;
+      if (props && !cached.props) {
         cached.summary = summarizeBody(this.oc, body, true);
         cached.props = true;
       }
