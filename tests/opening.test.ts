@@ -113,12 +113,12 @@ describe("tasksOnEditor (one progress display while a design opens)", () => {
     // loadDoc switches to the editor and ends the opening bars in the same update.
     const loadDoc = store.slice(store.indexOf("function loadDoc("));
     const update = loadDoc.slice(0, loadDoc.indexOf("syncDoc();"));
-    expect(update).toMatch(/screen: "editor",[\s\S]*tasks: tasksOnEditor\(s\.tasks\)/);
+    expect(update).toMatch(/screen: "editor",[\s\S]*tasks: tasksOnEditor\(state\.tasks\)/);
     expect(store).toMatch(/startTask\(t\("Opening \{name\} …"[^;]*untilEditor: true/);
     expect(home).toMatch(/startTask\(t\("Opening \{name\}"[^;]*untilEditor: true/);
     // Both go through a guard.
     expect(store).toMatch(/return opening\.run\(id,/);
-    expect(home).toMatch(/return openingExamples\.run\(ex\.name,/);
+    expect(home).toMatch(/return openingExamples\.run\(example\.name,/);
   });
 });
 
