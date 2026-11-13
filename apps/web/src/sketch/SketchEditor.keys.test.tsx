@@ -51,7 +51,8 @@ beforeEach(async () => {
   await act(async () => editFeature("sk1"));
   await act(async () => vp.lookFrom(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), false, new THREE.Vector3(30, 10, 0)));
   await settle(50);
-});
+  // A new project and its first rebuild: slow when the coverage run loads the machine.
+}, 60_000);
 afterEach(async () => {
   usePrefs.setState({ mouse: "meercad" } as never);
   if (useApp.getState().sketchId) await act(async () => closeSketch());
