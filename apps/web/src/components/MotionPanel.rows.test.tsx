@@ -99,4 +99,27 @@ describe("the joints panel's rows", () => {
     expect(currentDoc().mechanism!.joints.length).toBe(2);
     expect(toasts()).toMatch(/2 gear joints added/);
   });
+
+  it("names what a joint turns about: a gear's axis, a round face's axis, an edge; and sets limits", async () => {
+    const draftOf = (anchor: unknown) => act(async () => useMotion.setState({ draft: { joint: { id: "jx", type: "revolute", a: "cube", b: "ground", anchor, limits: [0, 90] } as never, isNew: true, field: null } }));
+    const anchorBox = () => [...document.querySelectorAll(".selbox")].map((b) => b.textContent).join(" | ");
+    await draftOf({ gear: "g1" });
+    expect(anchorBox()).toMatch(/Axis of g1/);
+    await draftOf({ axisOf: { face: "cube.end_cap" } });
+    expect(anchorBox()).toMatch(/cube/);
+    await draftOf({ edge: { select: "edges", of: "cube" } });
+    expect(anchorBox()).toMatch(/All edges of/);
+    // The box is a button: a click makes it the field to pick into, a second one stops.
+    const box = document.querySelectorAll<HTMLElement>(".selbox");
+    const anchorSel = [...box].find((b) => /All edges of/.test(b.textContent ?? ""))!;
+    await act(async () => void fireEvent.click(anchorSel));
+    expect(useMotion.getState().draft?.field).toBe("anchor");
+    await act(async () => void fireEvent.click(anchorSel));
+    expect(useMotion.getState().draft?.field).toBeNull();
+    const from = screen.getByText("From").parentElement!.querySelector("input")!;
+    await act(async () => void fireEvent.change(from, { target: { value: "10" } }));
+    await act(async () => void fireEvent.keyDown(from, { key: "Enter" }));
+    expect(useMotion.getState().draft?.joint.limits?.[0]).toBe(10);
+    await act(async () => useMotion.setState({ draft: null }));
+  });
 });
