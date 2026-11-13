@@ -121,3 +121,58 @@ describe("compareShapes", () => {
     expect(get(at(20, 0, 2), at(6, 0, 10), "Distance between axes")).toBeLessThan(0.05);
   });
 });
+
+describe("compareShapes on exact shapes, against values worked out by hand", () => {
+  const rest = { triangles: [], area: 1, deviation: 0 };
+  const floor: ScanShape = {
+    ...rest,
+    kind: "plane",
+    origin: [0, 0, 0],
+    normal: [0, 0, 1],
+    centroid: [0, 0, 0],
+  };
+  const cylinder = (origin: [number, number, number], axis: [number, number, number]): ScanShape => ({
+    ...rest,
+    kind: "cylinder",
+    origin,
+    axis,
+    radius: 2,
+    centroid: origin,
+  });
+  const sphere = (center: [number, number, number]): ScanShape => ({
+    ...rest,
+    kind: "sphere",
+    center,
+    radius: 3,
+    centroid: center,
+  });
+  const get = (a: ScanShape, b: ScanShape, label: string) => value(compareShapes(a, b), label);
+
+  it("gives how far an axis runs above a face it is parallel to", () => {
+    const lying = cylinder([5, 0, 7], [1, 0, 0]);
+
+    expect(get(floor, lying, "Angle to axis")).toBeCloseTo(0, 9);
+    expect(get(floor, lying, "Distance to axis")).toBeCloseTo(7, 9);
+    // The order of the two shapes does not matter.
+    expect(get(lying, floor, "Distance to axis")).toBeCloseTo(7, 9);
+  });
+
+  it("gives the distance from a face to a sphere's centre", () => {
+    expect(get(floor, sphere([4, 4, 9]), "Distance to centre")).toBeCloseTo(9, 9);
+  });
+
+  it("gives the closest distance between two axes that are not parallel", () => {
+    const alongX = cylinder([0, 0, 0], [1, 0, 0]);
+    const alongYAbove = cylinder([3, 0, 5], [0, 1, 0]);
+
+    expect(get(alongX, alongYAbove, "Angle between axes")).toBeCloseTo(90, 9);
+    expect(get(alongX, alongYAbove, "Closest distance between axes")).toBeCloseTo(5, 9);
+  });
+
+  it("gives the distances from a sphere's centre to an axis and to another centre", () => {
+    const alongZ = cylinder([0, 0, 0], [0, 0, 1]);
+
+    expect(get(alongZ, sphere([3, 4, 8]), "Distance centre to axis")).toBeCloseTo(5, 9);
+    expect(get(sphere([0, 0, 0]), sphere([2, 3, 6]), "Distance between centres")).toBeCloseTo(7, 9);
+  });
+});
