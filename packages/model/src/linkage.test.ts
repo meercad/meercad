@@ -128,4 +128,20 @@ describe("closed-loop linkages", () => {
     expect(p[0]).toBeLessThan(B[0] - 2);
     expect(r.residual).toBeLessThan(1e-4);
   });
+
+  it("holds a driven joint at its limit", () => {
+    const { joints } = fourBar(100, 30, 90, 70);
+    const limited = joints.map((joint) =>
+      joint.id === "crank" ? { ...joint, limits: [-20, 40] as [number, number] } : joint,
+    );
+    const L = new Linkage(limited);
+    const beyond = L.solve(new Map(), { crank: 75 });
+
+    expect(beyond.values["crank"]).toBeCloseTo(40, 4);
+    expect(beyond.residual).toBeLessThan(1e-4);
+
+    const below = L.solve(new Map(), { crank: -60 });
+
+    expect(below.values["crank"]).toBeCloseTo(-20, 4);
+  });
 });

@@ -125,6 +125,9 @@ describe("standard parts that cannot be made", () => {
       /length must be greater than zero/,
     );
     expect(() => standardShape("insert", { size: "M99" })).toThrow(/unknown size "M99"/);
+    expect(() => standardShape("insert", { size: "M3", length: 99 })).toThrow(
+      /M3 inserts come .* long, not 99 mm/,
+    );
     expect(() => standardShape("shaft", { size: "Ø999" })).toThrow(/unknown size "Ø999"/);
     expect(() => standardShape("magnet", { diameter: 0, height: 2 })).toThrow(
       /magnet needs a diameter and a height/,

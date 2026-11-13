@@ -83,4 +83,16 @@ describe("scan bins", () => {
       }),
     ).toThrow(/at least 2 × 1/);
   });
+
+  it("refuses a part without triangles, a sink outside 0–100 % and a bin too low for the pocket", () => {
+    const block = { corners: box(0, 0, 0, 60, 20, 10), clearance: 0.5, grip: false };
+
+    expect(() => planScanBin({ ...block, corners: [], sink: 0.5 })).toThrow("the part has no triangles");
+    expect(() => planScanBin({ ...block, sink: 0 })).toThrow(/sink in by more than 0 and at most 100 %/);
+    expect(() => planScanBin({ ...block, sink: 1.2 })).toThrow(/sink in by more than 0 and at most 100 %/);
+    // Sinking half of 10 mm with play needs 2 units (see above); 1 is too low.
+    expect(() => planScanBin({ ...block, sink: 0.5, height: 1 })).toThrow(
+      /the pocket is 5\.5 mm deep: the bin must be at least 2 units high/,
+    );
+  });
 });
