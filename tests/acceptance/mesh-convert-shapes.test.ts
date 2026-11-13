@@ -114,4 +114,10 @@ describe("mesh_convert of turned shapes", () => {
     await expect(convert(mesh, 0.01)).rejects.toThrow(/mostly freeform: \d+ faces, \d+% of the surface matches no plane/);
     expect(MAX_FACETS).toBe(1500);
   });
+
+  it("refuses a solid whose true surfaces hold more than 1 % beyond its coarse mesh", async () => {
+    // A cylinder meshed with 24 sides: the true cylinder holds 1.1 % more than the 24-gon prism
+    // (24·sin(15°)/(2π) = 0.9886), so it is refused instead of coming back quietly bigger.
+    await expect(convert(turned([[0, 0], [10, 0], [10, 10], [0, 10]], 24))).rejects.toThrow(/differs from the mesh .* by more than 1%/);
+  });
 });

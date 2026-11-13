@@ -122,5 +122,55 @@ describe("split", () => {
       ]);
       expect(status(thin, "sp1").message).toMatch(/too thin/);
     });
+
+    it("one pin stands in the middle of a square cut", async () => {
+      // A 30 × 30 post cut across: room for one pin, at the cut's centre.
+      const post: Feature[] = [
+        sketch("sk1", { ref: "origin.XY" }, rect("l", 0, 0, 100, 30)),
+        { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 30, mode: "new_body" },
+        at60,
+        { id: "sp1", op: "split", plane: { ref: "pl1" }, bodies: ["ex1"], connectors: { kind: "pins", size: 5, depth: 8, count: 1 } },
+      ];
+      const s = await newSession();
+      const { report, meshes } = s.rebuild(doc(post));
+      ok(report);
+      expect(vol(report, "ex1")).toBeCloseTo(40 * 30 * 30 + PI * 2.5 ** 2 * 8, 1);
+      // The pin's round side is centred on the cut: y = z = 15.
+      const m = meshes.find((x) => x.bodyId === "ex1")!;
+      let [lo, hi] = [[Infinity, Infinity], [-Infinity, -Infinity]];
+      for (let i = 0; i < m.positions.length; i += 3)
+        if (m.positions[i]! < 59) {
+          lo = [Math.min(lo[0]!, m.positions[i + 1]!), Math.min(lo[1]!, m.positions[i + 2]!)];
+          hi = [Math.max(hi[0]!, m.positions[i + 1]!), Math.max(hi[1]!, m.positions[i + 2]!)];
+        }
+      // (Picked among sample points of the cut, so within a sample's spacing of the middle.)
+      expect(Math.abs((lo[0]! + hi[0]!) / 2 - 15)).toBeLessThan(1);
+      expect(Math.abs((lo[1]! + hi[1]!) / 2 - 15)).toBeLessThan(1);
+    });
+
+    it("warns about a dowel that would come out of the side and leaves it out", async () => {
+      // The second dowel's hole (Ø6.5) at 1 mm from the side would break out of it.
+      const r = await run(splitWith({ kind: "dowels", size: 6, depth: 16, clearance: 0.25, points: [[10, 10], [1, 10]] }));
+      expect(status(r, "sp1").status).toBe("warning");
+      expect(status(r, "sp1").message).toMatch(/dowel 2 would come out of the part/);
+      expect(r.bodies.map((b) => b.id).sort()).toEqual(["ex1", "sp1", "sp1_dowel1"]);
+      expect(vol(r, "ex1")).toBeCloseTo(40 * 40 * 20 - PI * 3.25 ** 2 * 8.25, 1);
+    });
+
+    it("warns about a dovetail on a cut face too narrow for it, or mostly outside the part", async () => {
+      // Two bars side by side, cut across: a 4 mm one and a 20 mm one.
+      const pair = (connectors: Extract<Feature, { op: "split" }>["connectors"]): Feature[] => [
+        sketch("sk1", { ref: "origin.XY" }, [...rect("a", 0, 0, 100, 4), ...rect("b", 0, 20, 100, 20)]),
+        { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: 20, mode: "new_body" },
+        at60,
+        { id: "sp1", op: "split", plane: { ref: "pl1" }, bodies: ["ex1"], connectors },
+      ];
+      const narrow = await run(pair({ kind: "dovetail" }));
+      expect(status(narrow, "sp1").status).toBe("warning");
+      expect(status(narrow, "sp1").message).toMatch(/a cut face is too narrow for a dovetail/);
+      // Given a size, the 4 mm bar's tongue would mostly stick out of it.
+      const outside = await run(pair({ kind: "dovetail", size: 18, depth: 8 }));
+      expect(`${status(outside, "sp1").status} ${status(outside, "sp1").message}`).toMatch(/a dovetail would mostly lie outside the part/);
+    });
   });
 });

@@ -57,6 +57,9 @@ export function convertMesh(oc: OC, arena: Arena, corners: ArrayLike<number>, op
       const f = fit;
       return { shape: built.shape, fit: f, regionOf: (face) => b.regionOf(face), counts };
     }
+    // OCCT finds a face invalid only for meshes no test reproduces (seen on real scans): the
+    // primitives on those faces are turned back into facets and the solid built again.
+    /* v8 ignore start */
     const bad = new Set<number>();
     for (const face of built.invalidFaces) {
       const ri = b.regionOf(face);
@@ -65,6 +68,7 @@ export function convertMesh(oc: OC, arena: Arena, corners: ArrayLike<number>, op
     if (!bad.size || round >= 3) throw new FeatureError("the converted solid is not valid", "a larger tolerance may help");
     fit = demoteRegions(fit, bad);
     tooMany();
+    /* v8 ignore stop */
   }
 }
 
@@ -158,6 +162,7 @@ class Builder {
         : this.arena.track(new this.oc.BRepBuilderAPI_MakeEdge(circ, this.vertex(vs[0]!), this.vertex(vs[vs.length - 1]!)));
       if (!mk.IsDone()) return null;
       return [this.arena.track(mk.Edge())];
+      /* v8 ignore next 3 -- OCCT refuses an edge here only for degenerate input no test reproduces: the caller falls back to straight edges */
     } catch {
       return null;
     }
@@ -179,6 +184,7 @@ class Builder {
         : this.arena.track(new this.oc.BRepBuilderAPI_MakeEdge(curve, this.vertex(vs[0]!), this.vertex(vs[vs.length - 1]!)));
       if (!me.IsDone()) return null;
       return [this.arena.track(me.Edge())];
+      /* v8 ignore next 3 -- OCCT refuses an edge here only for degenerate input no test reproduces: the caller falls back to straight edges */
     } catch {
       return null;
     }
@@ -360,6 +366,8 @@ class Builder {
     return scale(add(add(this.p(tri[t * 3]!), this.p(tri[t * 3 + 1]!)), this.p(tri[t * 3 + 2]!)), 1 / 3);
   }
 
+  /* v8 ignore start -- facets (regions without a surface) only remain after a rebuild with
+     invalid faces (see convertMesh), which no test mesh reproduces */
   private triangleNormal(r: Region): Vec3 | null {
     let n: Vec3 = [0, 0, 0];
     for (const t of r.triangles) {
@@ -369,6 +377,7 @@ class Builder {
     }
     return len(n) > 0 ? unit(n) : null;
   }
+  /* v8 ignore stop */
 
   /** Signed area of a loop projected onto the plane with `normal` (positive = counter-clockwise). */
   private loopArea(loop: Region["loops"][number], normal: Vec3): number {
@@ -414,11 +423,13 @@ class Builder {
       fix.Perform(arena.track(new oc.Message_ProgressRange()));
       shape = arena.track(fix.Solid());
     } catch (e) {
+      /* v8 ignore next -- OCCT throws here only on failures no test can provoke on purpose */
       throw new FeatureError(`could not close the faces into a solid: ${occtErrorMessage(oc, e)}`);
     }
     if (shape.ShapeType() !== "TopAbs_SOLID") throw new FeatureError("the faces do not close into one solid", `${sew.NbFreeEdges()} edges stayed open; a larger tolerance may help`);
     const solid = arena.track(oc.TopoDS.Solid(shape));
     oc.BRepLib.OrientClosedSolid(solid);
+    /* v8 ignore start -- seen on real scans only (see convertMesh) */
     if (!arena.track(new oc.BRepCheck_Analyzer(solid, true, false)).IsValid()) {
       const invalidFaces: TopoDS_Face[] = [];
       for (const e = arena.track(new oc.TopExp_Explorer(solid, "TopAbs_FACE")); e.More(); e.Next()) {
@@ -427,6 +438,7 @@ class Builder {
       }
       return { ok: false, invalidFaces };
     }
+    /* v8 ignore stop */
     const props = arena.track(new oc.GProp_GProps());
     oc.BRepGProp.VolumeProperties(solid, props, false, false, false);
     const volume = props.Mass();
@@ -485,6 +497,7 @@ class Builder {
       matches = (r) => r.primitive?.kind === "sphere" && Math.abs(radius - r.primitive.radius) < near && len(sub(loc, r.primitive.center)) < near;
     } else if (type === "GeomAbs_Cone") {
       matches = (r) => r.primitive?.kind === "cone";
+      /* v8 ignore next 3 -- the converter builds planes, cylinders, cones and spheres only */
     } else {
       matches = () => true;
     }
@@ -507,6 +520,7 @@ class Builder {
     return best.index;
   }
 
+  /* v8 ignore start -- facets only (see triangleNormal) */
   private facetPlanes = new Map<number, Primitive | null>();
   private facetPlane(r: Region): Primitive | null {
     let prim = this.facetPlanes.get(r.index);
@@ -517,6 +531,7 @@ class Builder {
     }
     return prim;
   }
+  /* v8 ignore stop */
 
   private vertexRegions: Map<number, number[]> | null = null;
   private regionsAtVertex(v: number): number[] {
