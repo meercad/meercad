@@ -14,7 +14,7 @@ import { testCall } from "../lib/mcpBridge";
 import { apply, closeSketch, currentDoc, getViewport, rebuildNow, startSketch, useApp } from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "../components/ViewportView";
-import { setTool } from "./state";
+import { setTool, useSketchUi } from "./state";
 
 const rect: SketchEntity[] = [
   { id: "p1", type: "point", x: 100, y: 0 },
@@ -85,6 +85,12 @@ describe("geometry from the model", () => {
     await sketchAtHalfHeight();
     await act(async () => setTool("section"));
     await settle();
+    // The tolerance takes a positive number only.
+    const tol = screen.getByText("Tolerance").parentElement!.querySelector("input")!;
+    await act(async () => void fireEvent.change(tol, { target: { value: "0.1" } }));
+    expect(useSketchUi.getState().traceTol).toBe(0.1);
+    await act(async () => void fireEvent.change(tol, { target: { value: "0" } }));
+    expect(useSketchUi.getState().traceTol).toBe(0.1);
     await act(async () => void fireEvent.click(screen.getByText(/^Trace all \(1\)$/)));
     const out = await rebuildNow();
     expect(out.report.sketches.find((s) => s.id === sketch().id)!.regions[0]!.area).toBeCloseTo(600, 3);
