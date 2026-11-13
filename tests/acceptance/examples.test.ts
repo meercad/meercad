@@ -43,7 +43,8 @@ describe("home-screen examples", () => {
     for (const s of report.sketches) expect(s.diagnostics.dof, `${s.id} DOF`).toBe(0);
     // Most are one part; the gear pair has two, the hinged box three (box, lid, pin).
     expect(report.bodies).toHaveLength({ "Gear pair": 2, "Hinged box": 3, "Two-material grip": 2, "Linear axis": 9 }[ex.name] ?? 1);
-  });
+    // The coil takes about 145 s on the CI runner, longer than the usual limit.
+  }, 300_000);
 
   it("the examples fetched when opened are there and valid", () => {
     for (const ex of EXAMPLES.filter((e) => e.url)) {
