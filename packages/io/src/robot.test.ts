@@ -339,3 +339,71 @@ describe("writeRobot", () => {
     expect(s!.size[0]).toBeCloseTo(10, 0);
   });
 });
+
+describe("collision shapes turned any way", () => {
+  /** Row-major rotation matrix from a unit quaternion (w, x, y, z). */
+  const fromQuat = ([w, x, y, z]: number[]) => [
+    1 - 2 * (y! * y! + z! * z!), 2 * (x! * y! - z! * w!), 2 * (x! * z! + y! * w!),
+    2 * (x! * y! + z! * w!), 1 - 2 * (x! * x! + z! * z!), 2 * (y! * z! - x! * w!),
+    2 * (x! * z! - y! * w!), 2 * (y! * z! + x! * w!), 1 - 2 * (x! * x! + y! * y!),
+  ];
+  /** Row-major R = Rz(yaw)·Ry(pitch)·Rx(roll). */
+  const fromRpy = ([r, p, y]: number[]) => {
+    const [cr, sr, cp, sp, cy, sy] = [Math.cos(r!), Math.sin(r!), Math.cos(p!), Math.sin(p!), Math.cos(y!), Math.sin(y!)];
+    return [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr, sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr, -sp, cp * sr, cp * cr];
+  };
+  /** A 10 × 20 × 40 mm box about the origin, turned by the row-major matrix `m`. */
+  const turnedBox = (m: number[]): RobotPart => {
+    const p = box("p", [-5, -10, -20], [5, 10, 20]);
+    const q = p.mesh.positions;
+    for (let i = 0; i < q.length; i += 3) {
+      const [x, y, z] = [q[i]!, q[i + 1]!, q[i + 2]!];
+      for (let r = 0; r < 3; r++) q[i + r] = m[r * 3]! * x + m[r * 3 + 1]! * y + m[r * 3 + 2]! * z;
+    }
+    return p;
+  };
+  const turns: number[][] = [
+    // Half turns about each axis (the quaternion's x, y or z part is the largest), a quarter turn
+    // about Y (pitch ±90°: roll and yaw fold into one), and a few turns at odd angles.
+    fromQuat([0, 1, 0, 0]), fromQuat([0, 0, 1, 0]), fromQuat([0, 0, 0, 1]),
+    fromRpy([0, Math.PI / 2, 0]), fromRpy([0, -Math.PI / 2, 0.3]),
+    fromRpy([0.4, 0.2, 2.9]), fromRpy([2.8, -0.3, 0.1]), fromRpy([-2.5, 0.6, -2.7]),
+  ];
+
+  /** A rod (radius 5, 60 long, along Z) turned by `m`. */
+  const turnedRod = (m: number[]): RobotPart => {
+    const p = box("p", [-5, -5, -30], [5, 5, 30]);
+    const rod = cylinderMesh(5, -30, 30);
+    const q = new Float32Array(rod.positions);
+    for (let i = 0; i < q.length; i += 3) {
+      const [x, y, z] = [rod.positions[i]!, rod.positions[i + 1]!, rod.positions[i + 2]!];
+      for (let r = 0; r < 3; r++) q[i + r] = m[r * 3]! * x + m[r * 3 + 1]! * y + m[r * 3 + 2]! * z;
+    }
+    return { ...p, mesh: { positions: q, indices: rod.indices } };
+  };
+  // Rods tilted so the fitted cylinder's frame turns more than half way (each branch of the
+  // quaternion's largest part), and one standing on its side (pitch 90°).
+  const rods: number[][] = [fromRpy([0, -1.2, 0]), fromRpy([0, -1.2, -2.8]), fromRpy([0, 1.2, -1.5]), fromRpy([0, Math.PI / 2, 1.5]), fromRpy([0.4, Math.PI / 2, -1.5])];
+
+  it.each([...turns.map((m, i) => ["box", i, m] as const), ...rods.map((m, i) => ["cylinder", i, m] as const)])("%s %i: MJCF's quaternion and URDF's roll-pitch-yaw both give the fitted shape's turn", (type, _, m) => {
+    const part = type === "box" ? turnedBox(m) : turnedRod(m);
+    const fit = fitCollisionShape(part.mesh)!;
+    expect(fit.type).toBe(type);
+    const files = writeRobot([part], [], [], { name: "t" }).files;
+    const geom = /<geom name="[^"]*_collision"[^>]*quat="([^"]*)"/.exec(text(files, "t.xml"))!;
+    const q = geom[1]!.split(" ").map(Number);
+    const origin = /<collision[\s\S]*?<origin xyz="[^"]*" rpy="([^"]*)"/.exec(text(files, "t.urdf"))!;
+    const rpy = origin[1]!.split(" ").map(Number);
+    const a = fromQuat(q);
+    const b = fromRpy(rpy);
+    for (let k = 0; k < 9; k++) {
+      expect(a[k]).toBeCloseTo(fit.rotation[k]!, 4);
+      expect(b[k]).toBeCloseTo(fit.rotation[k]!, 4);
+    }
+    // The box's long side, the cylinder's axis, lies along the turned Z axis of the part.
+    const longest = type === "cylinder" ? 2 : fit.size.indexOf(Math.max(...fit.size));
+    const axis = [fit.rotation[longest]!, fit.rotation[3 + longest]!, fit.rotation[6 + longest]!];
+    const want = [m[2]!, m[5]!, m[8]!];
+    expect(Math.abs(axis[0]! * want[0]! + axis[1]! * want[1]! + axis[2]! * want[2]!)).toBeCloseTo(1, 4);
+  });
+});

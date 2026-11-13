@@ -111,6 +111,9 @@ describe("drawing sheets", () => {
     expect(pdf).toContain("/BaseFont /Helvetica");
     // Latin-1 characters as octal codes, brackets escaped.
     expect(pdf).toContain("Gr\\366\\337e \\33010 \\(Test\\)");
+    // Characters Helvetica's WinAnsi set cannot show become "?", backslashes are escaped.
+    const odd = new TextDecoder("latin1").decode(writeSheetPdf(layoutSheet(views, { title: { title: "M8 → 10 € a\\b" } })));
+    expect(odd).toContain("M8 ? 10 ? a\\\\b");
     // The xref offsets point at the objects.
     const xref = Number(/startxref\n(\d+)/.exec(pdf)![1]);
     expect(pdf.slice(xref, xref + 4)).toBe("xref");

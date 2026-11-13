@@ -57,6 +57,7 @@ describe("3MF / OBJ import", () => {
 
   it("reads back what it writes", () => {
     const [m] = read3mf(write3mf([{ ...cube, name: "Cube" }]));
+    expect(() => read3mf(new TextEncoder().encode("solid cube\nendsolid"))).toThrow(/not a 3MF file/);
     expect(m!.name).toBe("Cube");
     expect(m!.indices.length).toBe(36);
     expect(meshVolume(expand(m!))).toBeCloseTo(1);

@@ -103,4 +103,24 @@ describe("GIF", () => {
     const d = decode(encodeGif([{ width: w, height: h, rgba }]));
     for (let i = 0; i < w * h; i++) expect(d.palette[d.frames[0]![i]!]).toEqual(i % 3 === 0 ? [204, 60, 60] : [244, 244, 244]);
   });
+
+  it("writes a picture bigger than its first buffer whole (a noisy 320 × 240 frame)", () => {
+    const [w, h] = [320, 240];
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) >>> 16) & 255;
+    for (let i = 0; i < w * h; i++) rgba.set([rnd(), rnd(), rnd(), 255], i * 4);
+    const gif = encodeGif([{ width: w, height: h, rgba }]);
+    expect(gif.length).toBeGreaterThan(1 << 16);
+    const d = decode(gif);
+    expect(d.frames[0]!.length).toBe(w * h);
+    // Each pixel gets the nearest of the 256 colours kept: never farther than any other one.
+    for (let i = 0; i < w * h; i += 97) {
+      const px = [rgba[i * 4]!, rgba[i * 4 + 1]!, rgba[i * 4 + 2]!];
+      const dist = (c: number[]) => (c[0]! - px[0]!) ** 2 + (c[1]! - px[1]!) ** 2 + (c[2]! - px[2]!) ** 2;
+      const got = dist(d.palette[d.frames[0]![i]!]!);
+      // Within the 5-bit cell the pixel was matched in (up to 7 per channel off its own value).
+      expect(got).toBeLessThanOrEqual(Math.min(...d.palette.map(dist)) + 3 * 2 * 7 * 255);
+    }
+  });
 });
