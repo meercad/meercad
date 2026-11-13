@@ -56,7 +56,9 @@ export class Geom {
     const oc = this.oc;
     const arr = this.arena.track(new oc.NCollection_Array1_gp_Pnt(1, pts.length));
     pts.forEach((p, k) => arr.SetValue(k + 1, this.pnt(toWorld(frame, p))));
-    const fit = this.arena.track(new oc.GeomAPI_PointsToBSpline(arr, 3, 8, "GeomAbs_C2" as never, 1e-6));
+    // 0.1 µm is far below anything printable; a tighter fit gives one pole per sample point, and lofts
+    // through such curves come out with side faces missing.
+    const fit = this.arena.track(new oc.GeomAPI_PointsToBSpline(arr, 3, 8, "GeomAbs_C2" as never, 1e-4));
     return this.arena.track(this.arena.track(new oc.BRepBuilderAPI_MakeEdge(this.arena.track(fit.Curve()), v0, v1)).Edge());
   }
 

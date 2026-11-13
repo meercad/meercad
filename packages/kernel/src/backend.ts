@@ -601,7 +601,14 @@ function thruSections(ctx: Ctx, id: string, wires: TopoDS_Wire[], ruled: boolean
     throw new FeatureError(`loft failed: ${occtErrorMessage(oc, e)}`, "profiles with very different shapes or crossing each other cannot be joined");
   }
   if (!loft.IsDone()) throw new FeatureError("loft failed: the profiles could not be joined", "check that the profiles lie on different planes and do not cross");
-  const body = new Body(oc, arena, id, arena.track(loft.Shape()));
+  const shape = arena.track(loft.Shape());
+  // OCCT can report success with side faces missing (seen with finely fitted splines): say so here
+  // instead of handing on a broken part that later cuts and splits silently miss.
+  if (!arena.track(new oc.BRepCheck_Analyzer(shape, true, false, false)).IsValid()) {
+    throw new FeatureError("loft failed: the result is not a valid solid", "try fewer or simpler profiles, or profiles with the same number of edges");
+  }
+  const body = new Body(oc, arena, id, shape);
+  if (body.faces.length < 3) throw new FeatureError("loft failed: the side faces could not be built", "try fewer or simpler profiles, or profiles with the same number of edges");
   const first = body.faceIndex(arena.track(loft.FirstShape()));
   const last = body.faceIndex(arena.track(loft.LastShape()));
   let k = 0;

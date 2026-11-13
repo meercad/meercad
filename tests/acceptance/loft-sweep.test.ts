@@ -11,6 +11,36 @@ const frustum = (a1: number, a2: number, h: number) => (h / 3) * (a1 + a2 + Math
 const at = (id: string, z: number): Feature => ({ id, op: "plane", base: { ref: "origin.XY" }, offset: z });
 const square = (prefix: string, size: number) => rect(prefix, -size / 2, -size / 2, size, size);
 
+/** Closed spline through n points of an ellipse rx × ry. */
+function ellipse(prefix: string, n: number, rx: number, ry: number): SketchEntity[] {
+  const pts: SketchEntity[] = Array.from({ length: n }, (_, k) => ({ id: `${prefix}p${k}`, type: "point", x: rx * Math.cos((2 * PI * k) / n), y: ry * Math.sin((2 * PI * k) / n) }));
+  return [...pts, { id: `${prefix}s`, type: "spline", points: pts.map((p) => p.id), closed: true }];
+}
+/** A dome: an open spline over the top (13 points), closed below with three lines. */
+function dome(prefix: string, w: number, h: number): SketchEntity[] {
+  const p = (k: number) => `${prefix}p${k}`;
+  const pts: SketchEntity[] = Array.from({ length: 13 }, (_, k) => ({ id: p(k), type: "point", x: w * Math.cos((PI * k) / 12), y: h * Math.sin((PI * k) / 12) }));
+  return [
+    ...pts,
+    { id: `${prefix}q1`, type: "point", x: -w, y: -5 },
+    { id: `${prefix}q2`, type: "point", x: w, y: -5 },
+    { id: `${prefix}s`, type: "spline", points: pts.map((x) => x.id) },
+    { id: `${prefix}l1`, type: "line", p1: p(12), p2: `${prefix}q1` },
+    { id: `${prefix}l2`, type: "line", p1: `${prefix}q1`, p2: `${prefix}q2` },
+    { id: `${prefix}l3`, type: "line", p1: `${prefix}q2`, p2: p(0) },
+  ];
+}
+/** A loft through the given profiles, `step` apart along Z. */
+function loftThrough(sections: SketchEntity[][], step: number): Feature[] {
+  const f: Feature[] = [];
+  sections.forEach((e, i) => {
+    if (i) f.push(at(`pl${i}`, i * step));
+    f.push(sketch(`sk${i}`, { ref: i ? `pl${i}` : "origin.XY" }, e));
+  });
+  f.push({ id: "lo1", op: "loft", profiles: sections.map((_, i) => ({ sketch: `sk${i}` })), mode: "new_body" });
+  return f;
+}
+
 async function run(features: Feature[]) {
   const s = await newSession();
   return s.rebuild(doc(features)).report;
@@ -66,6 +96,23 @@ describe("loft", () => {
     ok(r);
     expect(r.bodies).toHaveLength(1);
     expect(r.bodies[0]!.volume).toBeCloseTo(40 * 40 * 10 + frustum(1600, 400, 30), 2);
+  });
+
+  it("lofts closed splines with many points into a whole solid", async () => {
+    const r = await run(loftThrough([ellipse("a", 14, 20, 10), ellipse("b", 14, 15, 8)], 30));
+    ok(r);
+    const b = r.bodies[0]!;
+    // Close to the frustum between the two ellipses; the broken loft lost a third of it.
+    expect(b.volume).toBeGreaterThan(0.99 * frustum(PI * 200, PI * 120, 30));
+    expect(b.volume).toBeLessThan(1.01 * frustum(PI * 200, PI * 120, 30));
+    expect(Math.abs(b.centroid[0])).toBeLessThan(1e-3);
+  });
+
+  it("lofts open splines closed with lines, and the part can be split", async () => {
+    const r = await run([...loftThrough([dome("a", 20, 15), dome("b", 18, 14), dome("c", 15, 12)], 20), { id: "sp1", op: "split", plane: { ref: "origin.YZ" }, bodies: [] }]);
+    ok(r);
+    expect(r.bodies).toHaveLength(2);
+    expect(Math.abs(r.bodies[0]!.volume / r.bodies[1]!.volume - 1)).toBeLessThan(1e-3);
   });
 
   it("explains what is wrong", async () => {
