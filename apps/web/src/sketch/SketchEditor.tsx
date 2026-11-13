@@ -623,6 +623,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       setSketchSelection([]);
     } catch (e) {
       if (e instanceof SketchEditError) toast(t("Cannot repeat: {reason}", { reason: e.message }), "error");
+      /* v8 ignore next -- the edits throw SketchEditError only; anything else is a bug */
       else throw e;
     }
   };
@@ -644,6 +645,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       commit(cornerEdit(sketch, shown.points, corner, ui.editSize, kind));
     } catch (e) {
       if (e instanceof SketchEditError) toast(kind === "fillet" ? t("Cannot round this corner: {reason}", { reason: e.message }) : t("Cannot bevel this corner: {reason}", { reason: e.message }), "error");
+      /* v8 ignore next -- the edits throw SketchEditError only; anything else is a bug */
       else throw e;
     }
   };
@@ -666,6 +668,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       commit(offsetCurves(sketch, shown.points, [...chain], ui.editSize));
     } catch (e) {
       if (e instanceof SketchEditError) toast(t("Cannot offset: {reason}", { reason: e.message }), "error");
+      /* v8 ignore next -- the edits throw SketchEditError only; anything else is a bug */
       else throw e;
     }
   };
