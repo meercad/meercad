@@ -1,9 +1,9 @@
 /** File import/export and share links. */
 import { filamentSlots, objFiles, parseStl, read3mf, readDxf, readGlb, readObj, write3mf, writeDxf, writeObj, writeRobot, writeStl, writeSvg, writeUsdz, writeZip, type Curve2, type ObjMesh, type RobotActuator, type RobotCollision, type RobotLink, type RobotPart, type TexturedMesh, type TriangleMesh } from "@meercad/io";
-import { withinBudget } from "../lib/importBudget";
+import { IMPORT_TRIANGLES, TRIANGLE_MS, withinBudget } from "../lib/importBudget";
 import type { BodyMesh } from "@meercad/kernel";
 import { SupersededError } from "@meercad/kernel/client";
-import { showNotice } from "./Ask";
+import { askConfirm, showNotice } from "./Ask";
 import { usePrefs } from "../lib/keymap";
 import { partColors } from "../lib/partColors";
 import { partName } from "../lib/features";
@@ -547,7 +547,7 @@ export const IMPORT_TYPES = ".step,.stp,.stl,.3mf,.obj,.dxf,.svg,.meercad,.json"
  * a new design named after the file. Meshes become solid bodies; a failed import says why.
  */
 /** Imports a file into the open design (or a new one); true when it came in without errors. */
-export async function importFile(file?: File | null, opts: { seeThrough?: boolean; texture?: MeshTexture; fullDetail?: boolean; lightened?: (l: { name: string; from: number; to: number }[]) => void } = {}): Promise<boolean> {
+export async function importFile(file?: File | null, opts: { seeThrough?: boolean; texture?: MeshTexture; detail?: MeshDetail; lightened?: (l: { name: string; from: number; to: number }[]) => void } = {}): Promise<boolean> {
   file ??= await pickFile(IMPORT_TYPES);
   if (!file) return false;
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -576,7 +576,7 @@ export async function importFile(file?: File | null, opts: { seeThrough?: boolea
   let features: Feature[];
   const reading = startTask(t("Reading {name}", { name: file.name }));
   try {
-    const read = await importFeatures(file, ext, !!opts.fullDetail);
+    const read = await importFeatures(file, ext, opts.detail ?? "ask");
     features = read.features;
     if (read.lightened.length) {
       const [from, to] = read.lightened.reduce(([a, b], l) => [a + l.from, b + l.to], [0, 0]);
@@ -612,14 +612,33 @@ export async function importFile(file?: File | null, opts: { seeThrough?: boolea
   return !!out && !failed.length;
 }
 
-async function importFeatures(file: File, ext: string, fullDetail: boolean): Promise<{ features: Feature[]; lightened: { name: string; from: number; to: number }[] }> {
+/**
+ * What to do with meshes finer than the import budget: ask (in the app), keep every triangle, or
+ * make them lighter without asking (the assistant, where nobody can answer).
+ */
+export type MeshDetail = "ask" | "full" | "light";
+
+/** Whether to make meshes of `triangles` together lighter, asking when `detail` says so. */
+export async function lighten(triangles: number, detail: MeshDetail): Promise<boolean> {
+  if (detail !== "ask") return detail === "light";
+  const minutes = Math.max(1, Math.round((triangles * TRIANGLE_MS) / 60_000));
+  return askConfirm({
+    title: t("Very fine mesh"),
+    message: t("The file has {count} triangles; importing them all takes about {minutes} min. Made lighter (at most {budget} triangles) it takes well under a minute and is still fine enough to print.", { count: triangles.toLocaleString(), minutes, budget: IMPORT_TRIANGLES.toLocaleString() }),
+    confirmLabel: t("Make lighter"),
+    cancelLabel: t("Keep everything"),
+  });
+}
+
+async function importFeatures(file: File, ext: string, detail: MeshDetail): Promise<{ features: Feature[]; lightened: { name: string; from: number; to: number }[] }> {
   // STEP assemblies come in as one part per solid.
   const imp = (fileName: string, format: "step" | "stl", bytes: Uint8Array): Feature => ({ id: "", op: "import", format, fileName, data: toBase64(bytes), ...(format === "step" ? { split: true } : {}) });
   const only = (features: Feature[]) => ({ features, lightened: [] });
   if (ext === "step" || ext === "stp") return only([imp(file.name, "step", new Uint8Array(await file.arrayBuffer()))]);
   // Meshes go in as STL, one body per object on the build plate (3MF), very fine ones made lighter.
-  const meshes = (named: { name: string; mesh: TriangleMesh; bytes?: Uint8Array }[]) => {
-    const fit = fullDetail ? { meshes: named.map((n) => n.mesh), lightened: [] } : withinBudget(named.map((n) => n.mesh));
+  const meshes = async (named: { name: string; mesh: TriangleMesh; bytes?: Uint8Array }[]) => {
+    const triangles = named.reduce((n, m) => n + m.mesh.indices.length / 3, 0);
+    const fit = triangles > IMPORT_TRIANGLES && (await lighten(triangles, detail)) ? withinBudget(named.map((n) => n.mesh)) : { meshes: named.map((n) => n.mesh), lightened: [] };
     const changed = new Set(fit.lightened.map((l) => l.index));
     return {
       features: named.map((n, i) => imp(n.name, "stl", !changed.has(i) && n.bytes ? n.bytes : writeStl([fit.meshes[i]!]))),

@@ -1,13 +1,19 @@
 /**
  * Very fine meshes made lighter before they are imported: the kernel turns every triangle into a
  * face of its own (about 0.3 ms each), so a 3MF with 1.5 million triangles would hold the app for
- * many minutes. Above the budget every mesh keeps its share of it, the finest ones losing the most.
+ * many minutes. Above the budget the app asks (the assistant does it without asking); made lighter,
+ * every mesh keeps its share of the budget, the finest ones losing the most.
  */
 import type { TriangleMesh } from "@meercad/io";
 import { repairMesh } from "@meercad/kernel/fit";
 
-/** Triangles one import may bring in, all files' meshes together (about a minute in the kernel). */
-export const IMPORT_TRIANGLES = 200_000;
+/** Kernel time per imported triangle (measured on a Mac: 100,000 triangles 29 s; phones and tablets are slower). */
+export const TRIANGLE_MS = 0.3;
+/**
+ * Triangles one import brings in without asking, all of a file's meshes together: about 30 s on a
+ * Mac, and still far finer than a print shows.
+ */
+export const IMPORT_TRIANGLES = 100_000;
 /** No mesh is made coarser than this. */
 const FLOOR = 2_000;
 

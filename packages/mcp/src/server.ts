@@ -762,7 +762,7 @@ server.registerTool(
     description: "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project (opened in this session's tab; no project needs to be open first). (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ; replace {path} and add_features {path, ids?} take the design or features of a .meercad file into the open project.)",
     inputSchema: {
       path: z.string(),
-      fullDetail: z.boolean().optional().describe("STL/3MF/OBJ: keep every triangle. Without it, meshes above 200,000 triangles together are made lighter first (each triangle costs the kernel about 0.3 ms; the answer lists what was reduced)"),
+      fullDetail: z.boolean().optional().describe("STL/3MF/OBJ: keep every triangle. Without it, a file's meshes above 100,000 triangles together are made lighter first (each triangle costs the kernel about 0.3 ms; the answer lists what was reduced)"),
       keep: z.boolean().optional().describe("WIP test build only: true saves the new project in the user's projects; without it, it goes to the build's own test folder (never in the user's list) so test runs leave nothing behind"),
     },
   },

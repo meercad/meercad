@@ -261,7 +261,7 @@ export async function importBytes(name: string, base64: string, fullDetail = fal
   const before = new Set(currentDoc().features.map((f) => f.id));
   const project = useApp.getState().project?.id;
   let lightened: { name: string; from: number; to: number }[] = [];
-  const r = await said(() => importFile(new File([bytes], name), { fullDetail, lightened: (l) => (lightened = l) }));
+  const r = await said(() => importFile(new File([bytes], name), { detail: fullDetail ? "full" : "light", lightened: (l) => (lightened = l) }));
   if (useApp.getState().project?.id !== project) return { ...r, openedProject: useApp.getState().project };
   useApp.setState({ sketchId: null });
   const added = currentDoc().features.filter((f) => !before.has(f.id)).map((f) => f.id);
