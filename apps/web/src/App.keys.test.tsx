@@ -193,6 +193,25 @@ describe("the Mac app's menu", () => {
     expect(changed).toBe(1);
   });
 
+  it("opens the guides from the palette, the tour and the shortcuts from there, and closes them", async () => {
+    await act(async () => void window.dispatchEvent(new Event("meercad:palette")));
+    // The palette toggles: it may have been open already.
+    if (!document.querySelector(".palette")) await act(async () => void window.dispatchEvent(new Event("meercad:palette")));
+    const input = document.querySelector<HTMLInputElement>(".palette input")!;
+    await act(async () => void fireEvent.change(input, { target: { value: "Help & guides" } }));
+    await act(async () => void fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".palette-list button")].find((b) => b.textContent?.includes("Help & guides"))!));
+    const restart = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("Restart tour"));
+    expect(restart()).toBeDefined();
+    await act(async () => void fireEvent.click([...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim().startsWith("Shortcuts"))!));
+    expect(document.querySelector(".shortcut-help, [aria-label='Keyboard shortcuts']")).not.toBeNull();
+    await key("Escape");
+    await act(async () => void fireEvent.click(restart()!));
+    expect(restart()).toBeUndefined();
+    expect(document.querySelector(".tour-card")).not.toBeNull();
+    await key("Escape");
+    expect(document.querySelector(".tour-card")).toBeNull();
+  });
+
   it("waits with menu commands while an assistant works", async () => {
     useApp.setState({ aiLock: { client: "Claude" } as never });
     const id = useApp.getState().project!.id;
