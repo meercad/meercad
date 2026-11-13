@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+coverage
+pnpm-lock.yaml
+*.meercad
+*.md
+licenses
+apps/ios/ios
+apps/web/public
+tests/models
+.claude

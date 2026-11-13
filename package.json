@@ -11,6 +11,8 @@
     "ios": "pnpm --filter meercad-ios sync && pnpm --filter meercad-ios open",
     "build": "pnpm --filter @meercad/web build",
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
+    "format": "prettier --write . && eslint --fix .",
+    "lint": "prettier --check . && eslint .",
     "test": "vitest run --project unit --project web --project web-slow --project integration --project integration-slow",
     "test:quick": "vitest run --project unit --project web --project integration",
     "test:coverage": "vitest run --project unit --project web --project web-slow --project integration --project integration-slow --coverage.enabled",
@@ -27,12 +29,17 @@
     "hooks": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
+    "@stylistic/eslint-plugin": "^5.10.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "5.0.5",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "happy-dom": "^21.0.4",
+    "prettier": "^3.10.1",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.2",
     "vitest": "^5.0.5"
   }
 }
