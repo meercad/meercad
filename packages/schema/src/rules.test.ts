@@ -4,7 +4,7 @@
  * never built into something unexpected.
  */
 import { describe, expect, it } from "vitest";
-import { validateDocument } from "./index.js";
+import { profileSketch, validateDocument } from "./index.js";
 
 const rect = {
   entities: [
@@ -388,5 +388,238 @@ describe("document rules", () => {
       doc([sk(), ex], { rollback: "zz9", autoParams: ["nope"] }),
       /rollback: unknown feature "zz9"[\s\S]*autoParams: unknown parameter "nope"/,
     );
+  });
+});
+
+describe("rules of the remaining features", () => {
+  const base = [sk(), ex];
+  const noPlane = { ref: "origin.XX" };
+
+  it.each([
+    [
+      "a thread on a face of an unknown feature",
+      [{ id: "th1", op: "thread", face: { select: "faces", of: "nope" } }],
+      [/th1: selector refers to unknown or later feature "nope"/],
+    ],
+    [
+      "a coil with an unknown profile, axis and target",
+      [
+        {
+          id: "co1",
+          op: "coil",
+          profile: { sketch: "sk9" },
+          axis: { line: "sk8.l1" },
+          pitch: 2,
+          turns: 3,
+          mode: "new_body",
+          targets: ["zz"],
+        },
+      ],
+      [
+        /co1: profile refers to unknown or later feature "sk9"/,
+        /co1: axis .*"sk8"/,
+        /co1: target body .*"zz"/,
+      ],
+    ],
+    [
+      "a spring on an unknown plane with an unknown target",
+      [
+        {
+          id: "sp9",
+          op: "spring",
+          kind: "compression",
+          wire: 1,
+          diameter: 8,
+          coils: 5,
+          mode: "new_body",
+          plane: noPlane,
+          targets: ["zz"],
+        },
+      ],
+      [/sp9: unknown plane "origin.XX"/, /sp9: target body .*"zz"/],
+    ],
+    [
+      "a nut with a socket head and a thread length",
+      [
+        {
+          id: "sc1",
+          op: "screw",
+          kind: "nut",
+          diameter: 4,
+          mode: "new_body",
+          head: "socket",
+          threadLength: 5,
+        },
+      ],
+      [/sc1: nuts are hex, round or knob/, /sc1: threadLength is for screws/],
+    ],
+    [
+      "a rack with a tooth chamfer",
+      [
+        {
+          id: "ge1",
+          op: "gear",
+          kind: "rack",
+          module: 1,
+          teeth: 10,
+          width: 5,
+          chamfer: 0.5,
+          mode: "new_body",
+        },
+      ],
+      [/ge1: racks have no tooth chamfer yet/],
+    ],
+    [
+      "a draft about an unknown plane",
+      [{ id: "dr1", op: "draft", faces: [{ face: "ex1.end_cap" }], angle: 3, neutral: noPlane }],
+      [/dr1: unknown plane "origin.XX"/],
+    ],
+    [
+      "a face moved up to an unknown plane",
+      [{ id: "of1", op: "offset_face", faces: [{ face: "ex1.end_cap" }], distance: 1, upTo: noPlane }],
+      [/of1: unknown plane "origin.XX"/],
+    ],
+    [
+      "a lithophane whose picture does not hold width × height bytes",
+      [
+        {
+          id: "li1",
+          op: "lithophane",
+          image: { width: 2, height: 2, pixels: "AA" },
+          width: 10,
+          plane: noPlane,
+        },
+      ],
+      [/li1: unknown plane "origin.XX"/, /li1: image.pixels must hold width × height bytes/],
+    ],
+    [
+      "a scale of an unknown body",
+      [{ id: "sl1", op: "scale", bodies: ["zz"], factor: 2 }],
+      [/sl1: body refers to unknown or later feature "zz"/],
+    ],
+    [
+      "a baseplate in a baseplate, with a pocket, and with both an outline and a drawer",
+      [
+        { id: "g1", op: "gridfinity", kind: "baseplate", units: [2, 2] },
+        {
+          id: "g2",
+          op: "gridfinity",
+          kind: "baseplate",
+          units: [1, 1],
+          baseplate: "g1",
+          pocket: { body: "ex1" },
+          outline: { sketch: "sk9" },
+          drawer: [100, 100],
+        },
+      ],
+      [
+        /g2: a baseplate cannot sit in a baseplate/,
+        /g2: outline refers to unknown or later feature "sk9"/,
+        /g2: give a drawer or an outline, not both/,
+        /g2: pocket is for bins/,
+      ],
+    ],
+    [
+      "a bin with a drawer, a fill and a pocket for an unknown body",
+      [
+        {
+          id: "g3",
+          op: "gridfinity",
+          kind: "bin",
+          units: [1, 1],
+          drawer: [100, 100],
+          fill: true,
+          pocket: { body: "zz" },
+        },
+      ],
+      [
+        /g3: drawer is for baseplates/,
+        /g3: outline, fill and bed are for baseplates/,
+        /g3: pocket body refers to unknown or later feature "zz"/,
+      ],
+    ],
+    [
+      "a round box with a depth",
+      [{ id: "bx1", op: "box", lid: "screw", width: 30, height: 20, depth: 10, plane: noPlane }],
+      [/bx1: unknown plane "origin.XX"/, /bx1: a round box has no depth/],
+    ],
+    [
+      "a snap hook on an unknown plane, catching in and joined to unknown bodies",
+      [{ id: "sh1", op: "snap_hook", plane: noPlane, points: [[1, 1]], catchIn: ["zz"], targets: ["yy"] }],
+      [/sh1: unknown plane "origin.XX"/, /sh1: body .*"zz"/, /sh1: body .*"yy"/],
+    ],
+    [
+      "wall parts on the wrong board",
+      [
+        { id: "w1", op: "wall", system: "opengrid", kind: "board", units: [2, 2] },
+        {
+          id: "w2",
+          op: "wall",
+          system: "pegboard",
+          kind: "holder",
+          units: [1, 1],
+          board: "w1",
+          accessory: "screw",
+          plane: noPlane,
+        },
+        { id: "w3", op: "wall", system: "opengrid", kind: "board", units: [1, 1], board: "w1" },
+        { id: "w4", op: "wall", system: "pegboard", kind: "holder", units: [1, 1], board: "w2" },
+      ],
+      [
+        /w2: unknown plane "origin.XX"/,
+        /w2: "w1" is a opengrid board, not pegboard/,
+        /w2: the screw snap is for openGrid boards/,
+        /w3: a board cannot sit on a board/,
+        /w4: "w2" is a holder, not a board/,
+      ],
+    ],
+    [
+      "a rib from an unknown sketch",
+      [{ id: "rb1", op: "rib", sketch: "sk9", thickness: 2 }],
+      [/rb1: sketch refers to unknown or later feature "sk9"/],
+    ],
+    [
+      "a split with dovetails at points",
+      [
+        {
+          id: "sp1",
+          op: "split",
+          plane: noPlane,
+          bodies: ["zz"],
+          connectors: { kind: "dovetail", points: [[1, 1]] },
+        },
+      ],
+      [/sp1: unknown plane "origin.XX"/, /sp1: body .*"zz"/, /sp1: points are for pins and dowels/],
+    ],
+    [
+      "a mesh conversion of an unknown body",
+      [{ id: "mc1", op: "mesh_convert", body: "zz" }],
+      [/mc1: body refers to unknown or later feature "zz"/],
+    ],
+  ])("refuses %s", (_name, extra, patterns) => {
+    for (const pattern of patterns) refuses(doc([...base, ...extra]), pattern);
+  });
+
+  it("takes the curves of projected model edges as references, but not the projection itself", () => {
+    const projection = { id: "pr1", type: "projection", edges: [{ edge: ["ex1.end_cap", "ex1.side"] }] };
+    const withProjection = (line: string) =>
+      doc([
+        ...base,
+        sk(
+          {
+            entities: [...rect.entities, projection] as typeof rect.entities,
+            constraints: [{ id: "c1", type: "horizontal", line }],
+          },
+          "sk2",
+        ),
+      ]);
+
+    expect(errorsOf(withProjection("pr1.0"))).toEqual([]);
+    refuses(withProjection("pr1"), /c1 \(horizontal\) refers to unknown line "pr1"/);
+  });
+
+  it("names the sketch of a sketch profile and nothing for a face profile", () => {
+    expect(profileSketch({ sketch: "sk1" })).toBe("sk1");
+    expect(profileSketch({ face: { face: "ex1.end_cap" } })).toBeNull();
   });
 });
