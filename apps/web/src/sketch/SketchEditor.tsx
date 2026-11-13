@@ -94,11 +94,11 @@ const COLORS = {
 };
 
 export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketchId: string }) {
-  const doc = useApp((s) => s.doc);
-  const output = useApp((s) => s.output);
+  const doc = useApp((state) => state.doc);
+  const output = useApp((state) => state.output);
   const ui = useSketchUi();
-  const sketch = doc.features.find((f) => f.id === sketchId) as SketchFeature | undefined;
-  const view = output?.report.sketches.find((s) => s.id === sketchId);
+  const sketch = doc.features.find((feature) => feature.id === sketchId) as SketchFeature | undefined;
+  const view = output?.report.sketches.find((sketchView) => sketchView.id === sketchId);
   const frame = view?.frame;
   const params = output?.report.params;
   const [solver, setSolver] = useState<SketchSolver | null>(null);
@@ -137,9 +137,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   }, [frame]);
   useEffect(() => () => setSketchSelection([]), []);
 
-  const external = useMemo(() => (view?.curves ?? []).filter((c) => c.external), [view]);
+  const external = useMemo(() => (view?.curves ?? []).filter((curve) => curve.external), [view]);
   useEffect(() => {
-    setExternalKinds(new Map(external.map((c) => [c.id, c.kind])));
+    setExternalKinds(new Map(external.map((curve) => [curve.id, curve.kind])));
   }, [external]);
 
   const resolvedConstraints = useMemo((): { list: ResolvedConstraint[]; bad: Set<string> } => {
@@ -147,13 +147,15 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     const scope = new Map(Object.entries(params ?? {}));
     const bad = new Set<string>();
-    const list = sketch.constraints.flatMap((c) => {
+    const list = sketch.constraints.flatMap((constraint) => {
       try {
         return (
-          resolveFeature({ ...sketch, constraints: [c] }, scope) as { constraints: ResolvedConstraint[] }
+          resolveFeature({ ...sketch, constraints: [constraint] }, scope) as {
+            constraints: ResolvedConstraint[];
+          }
         ).constraints;
       } catch {
-        bad.add(c.id);
+        bad.add(constraint.id);
 
         return [];
       }
@@ -167,7 +169,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     try {
       return solver.solve({ entities: sketch.entities, constraints: resolvedConstraints.list, external });
-    } catch (e) {
+    } catch (error) {
       return {
         points: new Map(),
         curves: [],
@@ -176,7 +178,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           ok: false,
           conflicting: [],
           redundant: [],
-          message: e instanceof Error ? e.message : String(e),
+          message: error instanceof Error ? error.message : String(error),
         },
       };
     }
@@ -198,11 +200,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       return writeSketch(next, merge);
     }
 
-    const s = solver.solve({ entities: next.entities, constraints: cons, external });
-    const entities = s.diagnostics.ok ? applySolution(next.entities, s) : next.entities;
+    const solved = solver.solve({ entities: next.entities, constraints: cons, external });
+    const entities = solved.diagnostics.ok ? applySolution(next.entities, solved) : next.entities;
 
-    if (!s.diagnostics.ok && s.diagnostics.conflicting.length) {
-      toast(t("Over-constrained: {list}", { list: s.diagnostics.conflicting.join(", ") }), "error");
+    if (!solved.diagnostics.ok && solved.diagnostics.conflicting.length) {
+      toast(t("Over-constrained: {list}", { list: solved.diagnostics.conflicting.join(", ") }), "error");
     }
 
     return writeSketch({ entities, constraints: next.constraints }, merge);
@@ -269,21 +271,21 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     group.matrix.copy(frameMatrix(frame));
 
     const full = shown.diagnostics.dof === 0 && shown.diagnostics.ok;
-    const isSel = (s: SketchSel) => ui.selection.some((x) => sameSel(x, s));
+    const isSel = (selection: SketchSel) => ui.selection.some((x) => sameSel(x, selection));
     const conflictCurves = new Set<string>();
 
     for (const cid of shown.diagnostics.conflicting) {
-      const c = sketch?.constraints.find((x) => x.id === cid);
-      if (c) for (const v of refsOf(c)) conflictCurves.add(v);
+      const constraint = sketch?.constraints.find((x) => x.id === cid);
+      if (constraint) for (const v of refsOf(constraint)) conflictCurves.add(v);
     }
 
     // Regions (closed profiles) as a light fill.
-    for (const r of regions) {
-      if (r.depth % 2 === 0) continue;
+    for (const region of regions) {
+      if (region.depth % 2 === 0) continue;
 
-      const shape = new THREE.Shape(r.polygons[0]!.map(([x, y]) => new THREE.Vector2(x, y)));
+      const shape = new THREE.Shape(region.polygons[0]!.map(([x, y]) => new THREE.Vector2(x, y)));
 
-      for (const h of r.polygons.slice(1)) {
+      for (const h of region.polygons.slice(1)) {
         shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
       }
 
@@ -314,23 +316,23 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       group.add(o);
     });
 
-    for (const c of shown.curves) {
-      const sel = isSel({ kind: "curve", id: c.id });
-      const hov = hover?.kind === "curve" && hover.id === c.id;
+    for (const curve of shown.curves) {
+      const sel = isSel({ kind: "curve", id: curve.id });
+      const hov = hover?.kind === "curve" && hover.id === curve.id;
       const color = sel
         ? COLORS.sel
         : hov
           ? COLORS.hover
-          : conflictCurves.has(c.id)
+          : conflictCurves.has(curve.id)
             ? COLORS.conflict
-            : c.external
+            : curve.external
               ? COLORS.external
-              : c.construction
+              : curve.construction
                 ? COLORS.construction
                 : full
                   ? COLORS.full
                   : COLORS.under;
-      group.add(curveObject(c, color, c.construction));
+      group.add(curveObject(curve, color, curve.construction));
     }
 
     // Points
@@ -384,8 +386,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     if (ts.snap) for (const obj of snapObjects(ts.snap, viewport.pixelSize(frame.origin))) group.add(obj);
 
     // Dimension lines
-    for (const c of sketch?.constraints ?? []) {
-      const geo = dimensionGeometry(c, shown);
+    for (const constraint of sketch?.constraints ?? []) {
+      const geo = dimensionGeometry(constraint, shown);
 
       if (geo) {
         const l = new THREE.LineSegments(
@@ -431,14 +433,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     let best: SolvedCurve | null = null;
     let bd = tol;
 
-    for (const c of shown.curves) {
-      if (exclude?.has(c.id)) continue;
+    for (const curve of shown.curves) {
+      if (exclude?.has(curve.id)) continue;
 
-      const d = curveDistance(c, p);
+      const d = curveDistance(curve, p);
 
       if (d < bd) {
         bd = d;
-        best = c;
+        best = curve;
       }
     }
 
@@ -448,8 +450,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   // Midpoints and crossings of the solved curves, for snapping.
   const snapTargets = useMemo(() => {
     const curves = shown?.curves ?? [];
-    const mids = curves.flatMap((c) =>
-      c.kind === "line" ? [{ id: c.id, pt: [(c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2] as Vec2 }] : [],
+    const mids = curves.flatMap((curve) =>
+      curve.kind === "line"
+        ? [{ id: curve.id, pt: [(curve.a[0] + curve.b[0]) / 2, (curve.a[1] + curve.b[1]) / 2] as Vec2 }]
+        : [],
     );
     const crosses: { pt: Vec2; a: string; b: string }[] = [];
 
@@ -506,14 +510,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         .sort((a, b) => near(a.pt) - near(b.pt))[0];
       if (cross) return { pos: cross.pt, curve: cross.a, curve2: cross.b, kind: "cross" };
 
-      const c = hitCurve(p, unit * 7, exclude);
-      if (c) return { pos: projectOnCurve(c, p), curve: c.id, kind: "curve" };
+      const curve = hitCurve(p, unit * 7, exclude);
+      if (curve) return { pos: projectOnCurve(curve, p), curve: curve.id, kind: "curve" };
 
       // The model's own edges in this plane: corners and circle centres, then anywhere on an edge.
       let corner: { pos: Vec2; d: number; kind: "point" | "center" } | null = null;
 
-      for (const e of modelEdges) {
-        const ends = e.center ? [] : [e.pts[0]!, e.pts[e.pts.length - 1]!];
+      for (const edge of modelEdges) {
+        const ends = edge.center ? [] : [edge.pts[0]!, edge.pts[edge.pts.length - 1]!];
 
         for (const q of ends) {
           if (near(q) < tol && (!corner || near(q) < corner.d)) {
@@ -521,8 +525,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           }
         }
 
-        if (e.center && near(e.center) < tol && (!corner || near(e.center) < corner.d)) {
-          corner = { pos: e.center, d: near(e.center), kind: "center" };
+        if (edge.center && near(edge.center) < tol && (!corner || near(edge.center) < corner.d)) {
+          corner = { pos: edge.center, d: near(edge.center), kind: "center" };
         }
       }
 
@@ -530,8 +534,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
       let onEdge: { pos: Vec2; dist: number } | null = null;
 
-      for (const e of modelEdges) {
-        const h = nearestOnPolyline(e.pts, p);
+      for (const edge of modelEdges) {
+        const h = nearestOnPolyline(edge.pts, p);
         if (h.dist < unit * 7 && (!onEdge || h.dist < onEdge.dist)) onEdge = h;
       }
 
@@ -562,8 +566,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     if (snapGeometry) {
       const alignTol = unit * 8;
-      const modelPoints = modelEdges.flatMap((e) =>
-        e.center ? [e.center] : [e.pts[0]!, e.pts[e.pts.length - 1]!],
+      const modelPoints = modelEdges.flatMap((edge) =>
+        edge.center ? [edge.center] : [edge.pts[0]!, edge.pts[edge.pts.length - 1]!],
       );
       const candidates: Vec2[] = [
         ...(from ? [from] : []),
@@ -596,47 +600,68 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
   // ---------------------------------------------------------------- building geometry
   const builder = (base: Draft) => {
-    const d: Draft = { entities: [...base.entities], constraints: [...base.constraints] };
+    const draft: Draft = { entities: [...base.entities], constraints: [...base.constraints] };
     const taken = new Set<string>();
-    const isEntityPoint = (id: string) => d.entities.some((e) => e.id === id && e.type === "point");
+    const isEntityPoint = (id: string) =>
+      draft.entities.some((entity) => entity.id === id && entity.type === "point");
 
     return {
-      d,
-      point(s: Snap, construction = false): string {
-        if (s.point && isEntityPoint(s.point)) return s.point;
+      d: draft,
+      point(snap: Snap, construction = false): string {
+        if (snap.point && isEntityPoint(snap.point)) return snap.point;
 
-        const id = freshId(d, "p", taken);
-        d.entities.push({
+        const id = freshId(draft, "p", taken);
+        draft.entities.push({
           id,
           type: "point",
-          x: s.pos[0],
-          y: s.pos[1],
+          x: snap.pos[0],
+          y: snap.pos[1],
           ...(construction ? { construction } : {}),
         });
 
-        if (s.point) {
-          d.constraints.push({ id: freshId(d, "c", taken), type: "coincident", a: id, b: s.point });
-        } else if (s.mid) {
-          d.constraints.push({ id: freshId(d, "c", taken), type: "midpoint", point: id, line: s.mid });
-        } else if (s.curve) {
-          d.constraints.push({ id: freshId(d, "c", taken), type: "point_on", point: id, curve: s.curve });
+        if (snap.point) {
+          draft.constraints.push({
+            id: freshId(draft, "c", taken),
+            type: "coincident",
+            a: id,
+            b: snap.point,
+          });
+        } else if (snap.mid) {
+          draft.constraints.push({
+            id: freshId(draft, "c", taken),
+            type: "midpoint",
+            point: id,
+            line: snap.mid,
+          });
+        } else if (snap.curve) {
+          draft.constraints.push({
+            id: freshId(draft, "c", taken),
+            type: "point_on",
+            point: id,
+            curve: snap.curve,
+          });
 
-          if (s.curve2) {
-            d.constraints.push({ id: freshId(d, "c", taken), type: "point_on", point: id, curve: s.curve2 });
+          if (snap.curve2) {
+            draft.constraints.push({
+              id: freshId(draft, "c", taken),
+              type: "point_on",
+              point: id,
+              curve: snap.curve2,
+            });
           }
         }
 
         return id;
       },
       entity(e: NewEntity, prefix: string): string {
-        const id = freshId(d, prefix, taken);
-        d.entities.push({ ...e, id } as SketchEntity);
+        const id = freshId(draft, prefix, taken);
+        draft.entities.push({ ...e, id } as SketchEntity);
 
         return id;
       },
       constraint(c: NewConstraint): string {
-        const id = freshId(d, "c", taken);
-        d.constraints.push({ ...c, id } as SketchConstraint);
+        const id = freshId(draft, "c", taken);
+        draft.constraints.push({ ...c, id } as SketchConstraint);
 
         return id;
       },
@@ -662,9 +687,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const onAxis = (pt: string, axis: "origin.x" | "origin.y") =>
       pt === "origin" ||
       bl.d.constraints.some(
-        (c) =>
-          (c.type === "point_on" && c.point === pt && c.curve === axis) ||
-          (c.type === "coincident" && ((c.a === pt && c.b === "origin") || (c.b === pt && c.a === "origin"))),
+        (constraint) =>
+          (constraint.type === "point_on" && constraint.point === pt && constraint.curve === axis) ||
+          (constraint.type === "coincident" &&
+            ((constraint.a === pt && constraint.b === "origin") ||
+              (constraint.b === pt && constraint.a === "origin"))),
       );
 
     if (ang < tolA || Math.abs(ang - Math.PI) < tolA) {
@@ -693,7 +720,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     corners[2] = b;
 
-    const ids = corners.map((c) => bl.point(c));
+    const ids = corners.map((snap) => bl.point(snap));
     const lines = ids.map((p, i) => bl.entity({ type: "line", p1: p, p2: ids[(i + 1) % 4]!, ...cons }, "l"));
     bl.constraint({ type: "horizontal", line: lines[0]! });
     bl.constraint({ type: "horizontal", line: lines[2]! });
@@ -711,11 +738,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     commit(bl.d);
   };
 
-  const addCircle = (c: Snap, r: number, diameter?: Expr) => {
+  const addCircle = (snap: Snap, r: number, diameter?: Expr) => {
     if (!sketch || r < px() * 2) return;
 
     const bl = builder(sketch);
-    const center = bl.point(c);
+    const center = bl.point(snap);
     const id = bl.entity({ type: "circle", center, radius: r, ...cons }, "c");
     setLastShape({ kind: "circle", id });
     if (diameter !== undefined) bl.constraint({ type: "diameter", curve: id, value: diameter });
@@ -723,16 +750,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     commit(bl.d);
   };
 
-  const addArc = (c: Snap, s: Snap, e: Snap, ccw: boolean, angle?: Expr) => {
+  const addArc = (snap: Snap, s: Snap, e: Snap, ccw: boolean, angle?: Expr) => {
     if (!sketch) return;
 
-    const r = distance2(c.pos, s.pos);
+    const r = distance2(snap.pos, s.pos);
     if (r < px() * 2) return;
 
     const bl = builder(sketch);
-    const center = bl.point(c);
-    const a = Math.atan2(e.pos[1] - c.pos[1], e.pos[0] - c.pos[0]);
-    const endOnCircle: Snap = { ...e, pos: [c.pos[0] + r * Math.cos(a), c.pos[1] + r * Math.sin(a)] };
+    const center = bl.point(snap);
+    const a = Math.atan2(e.pos[1] - snap.pos[1], e.pos[0] - snap.pos[0]);
+    const endOnCircle: Snap = { ...e, pos: [snap.pos[0] + r * Math.cos(a), snap.pos[1] + r * Math.sin(a)] };
     const start = bl.point(ccw ? s : endOnCircle);
     const end = bl.point(ccw ? endOnCircle : s);
     const id = bl.entity({ type: "arc", center, start, end, ...cons }, "a");
@@ -758,8 +785,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     const bl = builder(sketch);
     const center = bl.point({ pos: g.center });
-    const [sa, sb] = g.swapped ? [b, a] : [a, b];
-    const start = bl.point(sa);
+    const [snap, sb] = g.swapped ? [b, a] : [a, b];
+    const start = bl.point(snap);
     const end = bl.point(sb);
     const id = bl.entity({ type: "arc", center, start, end, ...cons }, "a");
     if (dims.radius !== undefined) bl.constraint({ type: "radius", curve: id, value: dims.radius });
@@ -770,19 +797,19 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   };
 
   /** Regular polygon inscribed in a construction circle; equal sides keep it regular. */
-  const addPolygon = (c: Snap, v: Vec2, sides = 6) => {
+  const addPolygon = (snap: Snap, v: Vec2, sides = 6) => {
     if (!sketch) return;
 
-    const r = distance2(c.pos, v);
+    const r = distance2(snap.pos, v);
     if (r < px() * 2) return;
 
     const bl = builder(sketch);
-    const center = bl.point(c);
+    const center = bl.point(snap);
     const circle = bl.entity({ type: "circle", center, radius: r, construction: true }, "c");
-    const a0 = Math.atan2(v[1] - c.pos[1], v[0] - c.pos[0]);
+    const a0 = Math.atan2(v[1] - snap.pos[1], v[0] - snap.pos[0]);
     const pts = Array.from({ length: sides }, (_, i) => {
       const a = a0 + (i * 2 * Math.PI) / sides;
-      const id = bl.point({ pos: [c.pos[0] + r * Math.cos(a), c.pos[1] + r * Math.sin(a)] });
+      const id = bl.point({ pos: [snap.pos[0] + r * Math.cos(a), snap.pos[1] + r * Math.sin(a)] });
       bl.constraint({ type: "point_on", point: id, curve: circle });
 
       return id;
@@ -818,14 +845,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const target = hitCurve(p, px() * 8);
     if (!target || target.external) return;
 
-    const others = shown.curves.filter((c) => c.id !== target.id && !c.construction);
-    const hits = others.flatMap((o) => intersectionPoints(target, o).map((pt) => ({ pt, curve: o.id })));
+    const others = shown.curves.filter((curve) => curve.id !== target.id && !curve.construction);
+    const hits = others.flatMap((curve) =>
+      intersectionPoints(target, curve).map((pt) => ({ pt, curve: curve.id })),
+    );
     const bl = builder({ entities: sketch.entities, constraints: sketch.constraints });
-    const d = bl.d;
+    const draft = bl.d;
 
     const drop = (id: string) => {
-      d.entities = d.entities.filter((e) => e.id !== id);
-      d.constraints = d.constraints.filter((c) => !refsOf(c).includes(id));
+      draft.entities = draft.entities.filter((entity) => entity.id !== id);
+      draft.constraints = draft.constraints.filter((constraint) => !refsOf(constraint).includes(id));
     };
 
     const endpoint = (h: { pt: Vec2; curve: string }) => {
@@ -834,7 +863,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (
         existing &&
         existing !== "origin" &&
-        d.entities.some((e) => e.id === existing && e.type === "point")
+        draft.entities.some((entity) => entity.id === existing && entity.type === "point")
       ) {
         return existing;
       }
@@ -852,8 +881,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const inner = hits.map((h) => ({ ...h, t: t(h.pt) })).filter((h) => h.t > 1e-6 && h.t < 1 - 1e-6);
       const before = inner.filter((h) => h.t < tc).sort((a, b) => b.t - a.t)[0];
       const after = inner.filter((h) => h.t > tc).sort((a, b) => a.t - b.t)[0];
-      const e = d.entities.find((x) => x.id === target.id);
-      if (e?.type !== "line") return;
+      const entity = draft.entities.find((x) => x.id === target.id);
+      if (entity?.type !== "line") return;
 
       if (!before && !after) {
         drop(target.id);
@@ -862,21 +891,26 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       // (the line then ended on a point that did not exist, and nothing was trimmed).
       else if (!before) {
         const p1 = endpoint(after!);
-        d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p1 } : x));
+        draft.entities = draft.entities.map((x) => (x.id === entity.id ? { ...entity, p1 } : x));
       } else if (!after) {
         const p2 = endpoint(before);
-        d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p2 } : x));
+        draft.entities = draft.entities.map((x) => (x.id === entity.id ? { ...entity, p2 } : x));
       } else {
         const [m1, m2] = [endpoint(before), endpoint(after)];
-        d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, p2: m1 } : x));
-        bl.entity({ type: "line", p1: m2, p2: e.p2, ...(e.construction ? { construction: true } : {}) }, "l");
+        draft.entities = draft.entities.map((x) => (x.id === entity.id ? { ...entity, p2: m1 } : x));
+        bl.entity(
+          { type: "line", p1: m2, p2: entity.p2, ...(entity.construction ? { construction: true } : {}) },
+          "l",
+        );
       }
 
       // Length dimensions on a trimmed line no longer describe it.
-      d.constraints = d.constraints.filter((c) => !(c.type === "length" && c.line === target.id));
+      draft.constraints = draft.constraints.filter(
+        (constraint) => !(constraint.type === "length" && constraint.line === target.id),
+      );
     } else if (target.kind === "spline") {
-      const e = d.entities.find((x) => x.id === target.id);
-      if (e?.type !== "spline") return;
+      const entity = draft.entities.find((x) => x.id === target.id);
+      if (entity?.type !== "spline") return;
 
       const pieces = trimSpline(
         target,
@@ -886,17 +920,22 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       if (!pieces.length) drop(target.id);
 
       const ids = pieces.map((piece) =>
-        piece.map((x) => ("point" in x ? e.points[x.point]! : endpoint(hits[x.cut]!))),
+        piece.map((x) => ("point" in x ? entity.points[x.point]! : endpoint(hits[x.cut]!))),
       );
       // The first piece keeps the spline's id (and what refers to it), the others are new.
-      d.entities = d.entities.map((x) =>
-        x.id === e.id && ids[0]
-          ? { id: e.id, type: "spline", points: ids[0], ...(e.construction ? { construction: true } : {}) }
+      draft.entities = draft.entities.map((x) =>
+        x.id === entity.id && ids[0]
+          ? {
+              id: entity.id,
+              type: "spline",
+              points: ids[0],
+              ...(entity.construction ? { construction: true } : {}),
+            }
           : x,
       );
 
       for (const points of ids.slice(1)) {
-        bl.entity({ type: "spline", points, ...(e.construction ? { construction: true } : {}) }, "s");
+        bl.entity({ type: "spline", points, ...(entity.construction ? { construction: true } : {}) }, "s");
       }
     } else {
       const ang = (q: Vec2) => Math.atan2(q[1] - target.center[1], q[0] - target.center[0]);
@@ -913,8 +952,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const after =
         inner.filter((h) => h.a > ac).sort((x, y) => x.a - y.a)[0] ??
         (target.kind === "circle" ? inner.sort((x, y) => x.a - y.a)[0] : undefined);
-      const e = d.entities.find((x) => x.id === target.id);
-      if (!e || (e.type !== "circle" && e.type !== "arc")) return;
+      const entity = draft.entities.find((x) => x.id === target.id);
+      if (!entity || (entity.type !== "circle" && entity.type !== "arc")) return;
 
       if (target.kind === "circle") {
         if (!before || !after || before === after) {
@@ -926,33 +965,33 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           bl.entity(
             {
               type: "arc",
-              center: e.center,
+              center: entity.center,
               start: endpoint(after),
               end: endpoint(before),
-              ...(e.construction ? { construction: true } : {}),
+              ...(entity.construction ? { construction: true } : {}),
             },
             "a",
           );
         }
-      } else if (e.type === "arc") {
+      } else if (entity.type === "arc") {
         if (!before && !after) {
           drop(target.id);
         } else if (!before) {
           const start = endpoint(after!);
-          d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, start } : x));
+          draft.entities = draft.entities.map((x) => (x.id === entity.id ? { ...entity, start } : x));
         } else if (!after) {
           const end = endpoint(before);
-          d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, end } : x));
+          draft.entities = draft.entities.map((x) => (x.id === entity.id ? { ...entity, end } : x));
         } else {
           const [m1, m2] = [endpoint(before), endpoint(after)];
-          d.entities = d.entities.map((x) => (x.id === e.id ? { ...e, end: m1 } : x));
+          draft.entities = draft.entities.map((x) => (x.id === entity.id ? { ...entity, end: m1 } : x));
           bl.entity(
             {
               type: "arc",
-              center: e.center,
+              center: entity.center,
               start: m2,
-              end: e.end,
-              ...(e.construction ? { construction: true } : {}),
+              end: entity.end,
+              ...(entity.construction ? { construction: true } : {}),
             },
             "a",
           );
@@ -962,7 +1001,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     // Drop points that no curve uses any more.
     const used = new Set(
-      d.entities.flatMap((x) =>
+      draft.entities.flatMap((x) =>
         x.type === "line"
           ? [x.p1, x.p2]
           : x.type === "circle"
@@ -978,10 +1017,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       (x) =>
         x.type === "point" &&
         !used.has(x.id) &&
-        sketch.entities.some((c) => c.type !== "point" && refsOfEntity(c).includes(x.id)),
+        sketch.entities.some((entity) => entity.type !== "point" && refsOfEntity(entity).includes(x.id)),
     );
-    for (const o of orphan) drop(o.id);
-    commit(d);
+    for (const entity of orphan) drop(entity.id);
+    commit(draft);
   };
 
   /** Ends the spline being drawn: a curve through the clicked points (at least two). */
@@ -992,7 +1031,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     if (!sketch || pts.length < 2) return rerender();
 
     const bl = builder(sketch);
-    const ids = pts.map((p) => bl.point(p, construction));
+    const ids = pts.map((snap) => bl.point(snap, construction));
     bl.entity(
       {
         type: "spline",
@@ -1027,9 +1066,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         ),
       );
       setSketchSelection([]);
-    } catch (e) {
-      if (e instanceof SketchEditError) toast(t("Cannot repeat: {reason}", { reason: e.message }), "error");
-      else throw e;
+    } catch (error) {
+      if (error instanceof SketchEditError) {
+        toast(t("Cannot repeat: {reason}", { reason: error.message }), "error");
+      } else {
+        throw error;
+      }
     }
   };
 
@@ -1039,7 +1081,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     // The nearest point where lines end (a corner on the origin is still a corner).
     const ends = new Set(
-      sketch.entities.flatMap((e) => (e.type === "line" && !e.construction ? [e.p1, e.p2] : [])),
+      sketch.entities.flatMap((entity) =>
+        entity.type === "line" && !entity.construction ? [entity.p1, entity.p2] : [],
+      ),
     );
     let corner: string | null = null;
     let best = px() * 12;
@@ -1054,16 +1098,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     try {
       commit(cornerEdit(sketch, shown.points, corner, ui.editSize, kind));
-    } catch (e) {
-      if (e instanceof SketchEditError) {
+    } catch (error) {
+      if (error instanceof SketchEditError) {
         toast(
           kind === "fillet"
-            ? t("Cannot round this corner: {reason}", { reason: e.message })
-            : t("Cannot bevel this corner: {reason}", { reason: e.message }),
+            ? t("Cannot round this corner: {reason}", { reason: error.message })
+            : t("Cannot bevel this corner: {reason}", { reason: error.message }),
           "error",
         );
       } else {
-        throw e;
+        throw error;
       }
     }
   };
@@ -1075,37 +1119,48 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const target = hitCurve(p, px() * 8);
     if (!target || target.external) return;
 
-    const ends = (e: SketchEntity) =>
-      e.type === "line" ? [e.p1, e.p2] : e.type === "arc" ? [e.start, e.end] : [];
-    const curves = sketch.entities.filter((e) => (e.type === "line" || e.type === "arc") && !e.construction);
+    const ends = (entity: SketchEntity) =>
+      entity.type === "line"
+        ? [entity.p1, entity.p2]
+        : entity.type === "arc"
+          ? [entity.start, entity.end]
+          : [];
+    const curves = sketch.entities.filter(
+      (entity) => (entity.type === "line" || entity.type === "arc") && !entity.construction,
+    );
     const chain = new Set([target.id]);
 
     // Everything joined end to end with the clicked curve.
     for (let grew = true; grew;) {
       grew = false;
 
-      const pts = new Set(curves.filter((c) => chain.has(c.id)).flatMap(ends));
+      const pts = new Set(curves.filter((entity) => chain.has(entity.id)).flatMap(ends));
 
-      for (const c of curves) {
-        if (!chain.has(c.id) && ends(c).some((q) => pts.has(q))) (chain.add(c.id), (grew = true));
+      for (const entity of curves) {
+        if (!chain.has(entity.id) && ends(entity).some((q) => pts.has(q))) {
+          (chain.add(entity.id), (grew = true));
+        }
       }
     }
 
     try {
       commit(offsetCurves(sketch, shown.points, [...chain], ui.editSize));
-    } catch (e) {
-      if (e instanceof SketchEditError) toast(t("Cannot offset: {reason}", { reason: e.message }), "error");
-      else throw e;
+    } catch (error) {
+      if (error instanceof SketchEditError) {
+        toast(t("Cannot offset: {reason}", { reason: error.message }), "error");
+      } else {
+        throw error;
+      }
     }
   };
 
-  const addPoint = (s: Snap) => {
+  const addPoint = (snap: Snap) => {
     if (!sketch) return;
 
     const bl = builder(sketch);
-    if (s.point) return;
+    if (snap.point) return;
 
-    bl.point(s, construction);
+    bl.point(snap, construction);
     commit(bl.d);
   };
 
@@ -1114,7 +1169,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     if (!sketch || !shown) return;
 
     const label: [number, number] = [round(at[0]), round(at[1])];
-    const kindOf = (id: string) => shown.curves.find((c) => c.id === id)?.kind;
+    const kindOf = (id: string) => shown.curves.find((curve) => curve.id === id)?.kind;
     const P = (id: string) => shown.points.get(id)!;
     let c: NewConstraint | null = null;
 
@@ -1175,11 +1230,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         c = { type: "distance", a: pt, b: cv, value: round(curveDistance(curve, P(pt), true)), label };
       }
     } else if (a.kind === "curve" && b?.kind === "curve") {
-      const ca = shown.curves.find((x) => x.id === a.id);
+      const curve = shown.curves.find((x) => x.id === a.id);
       const cb = shown.curves.find((x) => x.id === b.id);
 
-      if (ca?.kind === "line" && cb?.kind === "line") {
-        const d1: Vec2 = [ca.b[0] - ca.a[0], ca.b[1] - ca.a[1]];
+      if (curve?.kind === "line" && cb?.kind === "line") {
+        const d1: Vec2 = [curve.b[0] - curve.a[0], curve.b[1] - curve.a[1]];
         const d2: Vec2 = [cb.b[0] - cb.a[0], cb.b[1] - cb.a[1]];
         const cross = d1[0] * d2[1] - d1[1] * d2[0];
         const dotp = d1[0] * d2[0] + d1[1] * d2[1];
@@ -1190,7 +1245,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             type: "distance",
             a: `${b.id}.p1`,
             b: a.id,
-            value: round(curveDistance(ca, cb.a, true)),
+            value: round(curveDistance(curve, cb.a, true)),
             label,
           };
         } else {
@@ -1218,15 +1273,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   };
 
   /** Draws a line from the pending point to `s` and continues the chain (or closes it on its first point). */
-  const lineTo = (s: Snap, length?: Expr) => {
+  const lineTo = (snap: Snap, length?: Expr) => {
     const start = ts.points[0];
     if (!start) return;
 
-    const made = addLine(start, s, length);
+    const made = addLine(start, snap, length);
     if (!made) return;
 
     const chainStart = ts.points[1] ?? { pos: start.pos, point: made[0] };
-    ts.points = s.point && s.point === chainStart.point ? [] : [{ pos: s.pos, point: made[1] }, chainStart];
+    ts.points =
+      snap.point && snap.point === chainStart.point ? [] : [{ pos: snap.pos, point: made[1] }, chainStart];
     if (!ts.points.length) setTip(null);
   };
 
@@ -1323,22 +1379,22 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     const expr = (i: number) =>
       entry.fields[i]?.trim() ? entryExpr(entry.fields[i]!, isAngleField(ui.tool, i)) : undefined;
-    const s: Snap = { pos: target };
+    const snap: Snap = { pos: target };
 
     if (ui.tool === "line") {
-      lineTo(s, expr(0));
+      lineTo(snap, expr(0));
     } else if (ui.tool === "rect" || ui.tool === "rect_center") {
-      addRect(ts.points[0]!, s, ui.tool === "rect_center", { w: expr(0), h: expr(1) });
+      addRect(ts.points[0]!, snap, ui.tool === "rect_center", { w: expr(0), h: expr(1) });
       ts.points = [];
     } else if (ui.tool === "circle") {
-      const c = ts.points[0]!;
-      addCircle(c, distance2(c.pos, target), expr(0));
+      const snap = ts.points[0]!;
+      addCircle(snap, distance2(snap.pos, target), expr(0));
       ts.points = [];
     } else if (ui.tool === "arc") {
       add3PointArc(ts.points[0]!, ts.points[1]!, target, { radius: expr(0), angle: expr(1) });
       ts.points = [];
     } else if (ui.tool === "arc_center") {
-      addArc(ts.points[0]!, ts.points[1]!, s, ts.sweep >= 0, expr(0));
+      addArc(ts.points[0]!, ts.points[1]!, snap, ts.sweep >= 0, expr(0));
       ts.points = [];
     }
 
@@ -1386,10 +1442,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   }>({ down: null, dragState: null, box: null, right: null });
   const pressRef = useRef(new Press(() => {}));
   // Moves are handled once per frame by whichever onMove the latest render installed.
-  const moveRef = useRef<(e: PointerEvent) => void>(() => {});
-  const moveFrame = useRef(perFrame((e: PointerEvent) => moveRef.current(e))).current;
+  const moveRef = useRef<(event: PointerEvent) => void>(() => {});
+  const moveFrame = useRef(perFrame((event: PointerEvent) => moveRef.current(event))).current;
   useEffect(() => {
-    const el = viewport.canvas;
+    const element = viewport.canvas;
     // Gesture state lives in a ref: this effect re-subscribes on every render, which may happen mid-drag.
     const g = gesture.current;
     // Fingers navigate here. Before any pen was used, a still tap stands in for a click.
@@ -1399,8 +1455,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const pt = hitPoint(p, px() * 9);
       if (pt && pt !== "origin") return { kind: "point", id: pt };
 
-      const c = hitCurve(p, px() * 7);
-      if (c) return { kind: "curve", id: c.id };
+      const curve = hitCurve(p, px() * 7);
+      if (curve) return { kind: "curve", id: curve.id };
       if (pt) return { kind: "point", id: pt };
 
       return null;
@@ -1411,21 +1467,21 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const fingerDraws = () => !viewport.penSeen;
     const touches = new Set<number>();
 
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") press.move(e);
-      if (e.pointerType !== "touch" || (fingerDraws() && touches.size === 1)) moveFrame(e);
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") press.move(event);
+      if (event.pointerType !== "touch" || (fingerDraws() && touches.size === 1)) moveFrame(event);
     };
 
-    moveRef.current = (e: PointerEvent) => {
-      const p = toSketch(e);
+    moveRef.current = (event: PointerEvent) => {
+      const p = toSketch(event);
       if (!p || !shown) return;
 
       const tool = useSketchUi.getState().tool;
-      const r = el.getBoundingClientRect();
-      cursorScreen.current = { x: e.clientX - r.left, y: e.clientY - r.top };
+      const rect = element.getBoundingClientRect();
+      cursorScreen.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
 
-      if (g.down && e.buttons === 1 && tool === "select") {
-        if (!g.down.moved && Math.hypot(e.clientX - g.down.x, e.clientY - g.down.y) < 4) return;
+      if (g.down && event.buttons === 1 && tool === "select") {
+        if (!g.down.moved && Math.hypot(event.clientX - g.down.x, event.clientY - g.down.y) < 4) return;
 
         g.down.moved = true;
 
@@ -1463,7 +1519,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                 .filter((x) => x.type !== "point" && refsOfEntity(x).includes(id))
                 .map((x) => x.id),
             ]);
-            const sn = snap(targets[id]!, exclude, undefined, e.altKey);
+            const sn = snap(targets[id]!, exclude, undefined, event.altKey);
             targets[id] = sn.pos;
             ts.snap = sn;
             ts.cursor = sn.pos;
@@ -1472,8 +1528,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           const radiusDrag =
             g.down.target?.kind === "curve" &&
             sketch.entities.find((x) => x.id === g.down!.target!.id)?.type === "circle" &&
-            e.altKey;
-          const s = solver.solve(
+            event.altKey;
+          const solved = solver.solve(
             { entities: sketch.entities, constraints: resolvedConstraints.list, external },
             radiusDrag
               ? {
@@ -1487,8 +1543,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                 }
               : { drag: targets },
           );
-          g.dragState.solved = s;
-          setDrag(s);
+          g.dragState.solved = solved;
+          setDrag(solved);
 
           return;
         }
@@ -1503,7 +1559,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         return;
       }
 
-      if (e.buttons && !g.down?.started) return;
+      if (event.buttons && !g.down?.started) return;
 
       // Hover + tool previews
       if (tool === "select" || tool === "pattern" || tool === "dimension" || EDIT_TOOLS.has(tool)) {
@@ -1524,7 +1580,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const s: Snap =
         tool === "select" || tool === "pattern" || tool === "dimension" || EDIT_TOOLS.has(tool)
           ? { pos: p }
-          : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
+          : snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, event.altKey);
       ts.cursor = s.pos;
       // Tools that place points show where the next one will land.
       ts.snap = POINT_TOOLS.has(tool) ? s : null;
@@ -1534,8 +1590,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         const len = distance2(a, s.pos);
         const ang = (Math.atan2(s.pos[1] - a[1], s.pos[0] - a[0]) * 180) / Math.PI;
         setTip({
-          x: e.clientX - r.left,
-          y: e.clientY - r.top,
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
           text: `${fmtLen(len)}  ${fmt(((ang % 360) + 360) % 360)}°`,
         });
       } else if (tool === "arc" && ts.points.length === 2) {
@@ -1543,8 +1599,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         setTip(
           g
             ? {
-                x: e.clientX - r.left,
-                y: e.clientY - r.top,
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
                 text: `R ${fmtLen(g.radius)}  ∠ ${fmt((g.sweep * 180) / Math.PI)}°`,
               }
             : null,
@@ -1552,8 +1608,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       } else if (tool === "arc" && ts.points.length === 1) {
         const a = ts.points[0]!.pos;
         setTip({
-          x: e.clientX - r.left,
-          y: e.clientY - r.top,
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
           text: fmtLen(distance2(a, s.pos)),
         });
       } else if ((tool === "circle" || tool === "arc_center") && ts.points.length) {
@@ -1576,29 +1632,29 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         }
 
         setTip({
-          x: e.clientX - r.left,
-          y: e.clientY - r.top,
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
           text: `R ${fmtLen(distance2(c, s.pos))}`,
         });
       } else if (tool === "polygon" && ts.points.length) {
         const c = ts.points[0]!.pos;
         setTip({
-          x: e.clientX - r.left,
-          y: e.clientY - r.top,
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
           text: t("hexagon R {r}", { r: fmtLen(distance2(c, s.pos)) }),
         });
       } else if ((tool === "rect" || tool === "rect_center") && ts.points.length) {
         const a = ts.points[0]!.pos;
         const k = tool === "rect_center" ? 2 : 1;
         setTip({
-          x: e.clientX - r.left,
-          y: e.clientY - r.top,
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
           text: `${inUnit(Math.abs(s.pos[0] - a[0]) * k)} × ${fmtLen(Math.abs(s.pos[1] - a[1]) * k)}`,
         });
       } else {
         setTip(
           s.kind && s.kind !== "grid"
-            ? { x: e.clientX - r.left, y: e.clientY - r.top, text: SNAP_LABEL[s.kind] }
+            ? { x: event.clientX - rect.left, y: event.clientY - rect.top, text: SNAP_LABEL[s.kind] }
             : null,
         );
       }
@@ -1606,19 +1662,23 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       rerender();
     };
 
-    const onDown = (e: PointerEvent) => {
+    const onDown = (event: PointerEvent) => {
       moveFrame.flush();
-      if (e.pointerType === "mouse" && e.button === 2) g.right = { x: e.clientX, y: e.clientY };
-      if (e.pointerType !== "mouse") press.down(e);
 
-      if (e.pointerType === "touch") {
-        touches.add(e.pointerId);
+      if (event.pointerType === "mouse" && event.button === 2) {
+        g.right = { x: event.clientX, y: event.clientY };
+      }
+
+      if (event.pointerType !== "mouse") press.down(event);
+
+      if (event.pointerType === "touch") {
+        touches.add(event.pointerId);
         if (!fingerDraws()) return;
         // A second finger means navigating: drop what the first one started.
         if (touches.size > 1) return dropGesture();
       }
 
-      start(e);
+      start(event);
     };
 
     const dropGesture = () => {
@@ -1634,10 +1694,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       rerender();
     };
 
-    const start = (e: PointerEvent) => {
-      if (e.button !== 0) return;
+    const start = (event: PointerEvent) => {
+      if (event.button !== 0) return;
 
-      const p = toSketch(e);
+      const p = toSketch(event);
       if (!p) return;
 
       const tool = useSketchUi.getState().tool;
@@ -1645,64 +1705,64 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       const started = DRAG_TOOLS.has(tool) && !ts.points.length;
 
       if (started) {
-        ts.points = [snap(p, undefined, undefined, e.altKey)];
+        ts.points = [snap(p, undefined, undefined, event.altKey)];
         setEntry(null);
       }
 
-      g.down = { x: e.clientX, y: e.clientY, p, target: targetAt(p), moved: false, started };
+      g.down = { x: event.clientX, y: event.clientY, p, target: targetAt(p), moved: false, started };
 
       // A finger tap is replayed after it lifted, when its pointer can no longer be captured.
-      if ((tool === "select" || started) && (e.pointerType !== "touch" || fingerDraws())) {
+      if ((tool === "select" || started) && (event.pointerType !== "touch" || fingerDraws())) {
         try {
-          el.setPointerCapture(e.pointerId);
+          element.setPointerCapture(event.pointerId);
         } catch {
           // the pointer is already gone (a tap replayed after it lifted)
         }
       }
     };
 
-    const onUp = (e: PointerEvent) => {
-      if (e.pointerType === "mouse" && e.button === 2) {
+    const onUp = (event: PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button === 2) {
         const r = g.right;
         g.right = null;
 
-        if (r && Math.hypot(e.clientX - r.x, e.clientY - r.y) <= 4 && rightClick() === "confirm") {
+        if (r && Math.hypot(event.clientX - r.x, event.clientY - r.y) <= 4 && rightClick() === "confirm") {
           confirmStep();
         }
 
         return;
       }
 
-      if (e.pointerType !== "touch") moveFrame.flush();
+      if (event.pointerType !== "touch") moveFrame.flush();
 
-      const r = e.pointerType === "mouse" ? null : press.up(e);
-      if (e.pointerType === "touch") touches.delete(e.pointerId);
+      const r = event.pointerType === "mouse" ? null : press.up(event);
+      if (event.pointerType === "touch") touches.delete(event.pointerId);
 
-      if (e.pointerType !== "touch" || fingerDraws()) {
-        finish(e);
-        if (r === "double") onDbl(e);
+      if (event.pointerType !== "touch" || fingerDraws()) {
+        finish(event);
+        if (r === "double") onDbl(event);
       }
     };
 
-    const finish = (e: PointerEvent) => {
-      if (e.button !== 0 || !g.down) return;
+    const finish = (event: PointerEvent) => {
+      if (event.button !== 0 || !g.down) return;
 
       const d = g.down;
       g.down = null;
 
-      const p = toSketch(e);
+      const p = toSketch(event);
       if (!p || !sketch) return;
 
       const tool = useSketchUi.getState().tool;
 
       if (g.dragState) {
-        const s = g.dragState.solved;
+        const solved = g.dragState.solved;
         g.dragState = null;
         ts.snap = null;
         setDrag(null);
 
-        if (s?.diagnostics.ok) {
-          commit({ entities: applySolution(sketch.entities, s), constraints: sketch.constraints });
+        if (solved?.diagnostics.ok) {
+          commit({ entities: applySolution(sketch.entities, solved), constraints: sketch.constraints });
         }
 
         return;
@@ -1718,38 +1778,40 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           if (id !== "origin" && inside(q)) sel.push({ kind: "point", id });
         }
 
-        for (const c of shown!.curves) {
-          if (curveSamples(c).every(inside)) sel.push({ kind: "curve", id: c.id });
+        for (const curve of shown!.curves) {
+          if (curveSamples(curve).every(inside)) sel.push({ kind: "curve", id: curve.id });
         }
 
         g.box = null;
         ts.points = [];
-        setSketchSelection(e.shiftKey ? [...useSketchUi.getState().selection, ...sel] : sel);
+        setSketchSelection(event.shiftKey ? [...useSketchUi.getState().selection, ...sel] : sel);
 
         return;
       }
 
       if (d.moved && tool === "select") return;
 
-      const dragged = d.started && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6;
+      const dragged = d.started && Math.hypot(event.clientX - d.x, event.clientY - d.y) > 6;
       // A plain click on a drawing tool only placed the first point (on press).
       if (d.started && !dragged) return rerender();
 
-      const s = snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, e.altKey);
+      const s = snap(p, undefined, tool === "line" ? ts.points[0]?.pos : undefined, event.altKey);
 
       switch (tool) {
         case "pattern":
         case "select": {
-          const t = d.target;
+          const selection = d.target;
           const cur = useSketchUi.getState().selection;
-          if (!t) return setSketchSelection([]);
+          if (!selection) return setSketchSelection([]);
 
-          if (e.shiftKey || e.metaKey || e.ctrlKey) {
+          if (event.shiftKey || event.metaKey || event.ctrlKey) {
             setSketchSelection(
-              cur.some((x) => sameSel(x, t)) ? cur.filter((x) => !sameSel(x, t)) : [...cur, t],
+              cur.some((x) => sameSel(x, selection))
+                ? cur.filter((x) => !sameSel(x, selection))
+                : [...cur, selection],
             );
           } else {
-            setSketchSelection([t]);
+            setSketchSelection([selection]);
           }
 
           return;
@@ -1786,8 +1848,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           if (!ts.points.length) {
             ts.points = [s];
           } else {
-            const c = ts.points[0]!;
-            addCircle(c, distance2(c.pos, s.pos));
+            const snap = ts.points[0]!;
+            addCircle(snap, distance2(snap.pos, s.pos));
             ts.points = [];
             setTip(null);
           }
@@ -1856,21 +1918,25 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         case "offset":
           return offsetAt(p);
         case "dimension": {
-          const t = targetAt(p);
+          const selection = targetAt(p);
 
           if (!ts.dimFirst) {
-            if (!t) return;
+            if (!selection) return;
 
-            ts.dimFirst = t;
-            setSketchSelection([t]);
+            ts.dimFirst = selection;
+            setSketchSelection([selection]);
 
             // A single line/circle/arc gets its dimension placed on the next click.
             return rerender();
           }
 
-          if (t && !(t.kind === ts.dimFirst.kind && t.id === ts.dimFirst.id) && !ts.points.length) {
-            ts.points = [{ pos: p, point: `${t.kind}:${t.id}` }];
-            setSketchSelection([ts.dimFirst, t]);
+          if (
+            selection &&
+            !(selection.kind === ts.dimFirst.kind && selection.id === ts.dimFirst.id) &&
+            !ts.points.length
+          ) {
+            ts.points = [{ pos: p, point: `${selection.kind}:${selection.id}` }];
+            setSketchSelection([ts.dimFirst, selection]);
 
             return rerender();
           }
@@ -1898,7 +1964,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           return traceSection([sections[i]!]);
         }
         case "project": {
-          const pick = viewport.pick(e.clientX, e.clientY, new Set(["edge"]));
+          const pick = viewport.pick(event.clientX, event.clientY, new Set(["edge"]));
           const sel = pick ? edgeSelectorForPick(pick, useApp.getState().output?.meshes ?? []) : null;
           if (!sel) return toast(t("Click a model edge to project it into the sketch"), "error");
 
@@ -1911,7 +1977,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       }
     };
 
-    const onDbl = (e: MouseEvent) => {
+    const onDbl = (event: MouseEvent) => {
       const tool = useSketchUi.getState().tool;
 
       if (tool === "line") {
@@ -1922,21 +1988,21 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
       if (tool === "spline") return finishSpline();
 
-      const p = toSketch(e);
+      const p = toSketch(event);
 
       if (tool === "select" && p) {
-        const t = targetAt(p);
+        const selection = targetAt(p);
 
-        if (t?.kind === "curve" && sketch) {
+        if (selection?.kind === "curve" && sketch) {
           // Select the whole connected chain.
-          setSketchSelection(connectedCurves(sketch, t.id).map((id) => ({ kind: "curve", id })));
+          setSketchSelection(connectedCurves(sketch, selection.id).map((id) => ({ kind: "curve", id })));
         }
       }
     };
 
-    const onCancel = (e: PointerEvent) => {
-      press.up(e);
-      touches.delete(e.pointerId);
+    const onCancel = (event: PointerEvent) => {
+      press.up(event);
+      touches.delete(event.pointerId);
     };
 
     const onLeave = () => {
@@ -1947,20 +2013,20 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       rerender();
     };
 
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerdown", onDown);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onCancel);
-    el.addEventListener("dblclick", onDbl);
-    el.addEventListener("pointerleave", onLeave);
+    element.addEventListener("pointermove", onMove);
+    element.addEventListener("pointerdown", onDown);
+    element.addEventListener("pointerup", onUp);
+    element.addEventListener("pointercancel", onCancel);
+    element.addEventListener("dblclick", onDbl);
+    element.addEventListener("pointerleave", onLeave);
 
     return () => {
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerdown", onDown);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onCancel);
-      el.removeEventListener("dblclick", onDbl);
-      el.removeEventListener("pointerleave", onLeave);
+      element.removeEventListener("pointermove", onMove);
+      element.removeEventListener("pointerdown", onDown);
+      element.removeEventListener("pointerup", onUp);
+      element.removeEventListener("pointercancel", onCancel);
+      element.removeEventListener("dblclick", onDbl);
+      element.removeEventListener("pointerleave", onLeave);
     };
   });
 
@@ -1985,43 +2051,54 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
   // ---------------------------------------------------------------- keyboard
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (event: KeyboardEvent) => {
       if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement
       ) {
         return;
       }
 
       // Every key goes through the active control scheme (lib/controls).
-      const action = actionFor(e, SKETCH_CONTEXT);
+      const action = actionFor(event, SKETCH_CONTEXT);
 
       if (action === "select_all") {
-        e.preventDefault();
+        event.preventDefault();
 
         return selectAll();
       }
 
-      if (e.metaKey || e.ctrlKey) return;
+      if (event.metaKey || event.ctrlKey) return;
 
       // Typing a number while drawing opens exact-value fields at the cursor.
       const fields = ENTRY_FIELDS[useSketchUi.getState().tool];
       const needed = ENTRY_AFTER_TWO.has(useSketchUi.getState().tool) ? 2 : 1;
 
-      if (fields && ts.points.length >= needed && !e.altKey && (/^[0-9.]$/.test(e.key) || e.key === "Tab")) {
-        e.preventDefault();
+      if (
+        fields &&
+        ts.points.length >= needed &&
+        !event.altKey &&
+        (/^[0-9.]$/.test(event.key) || event.key === "Tab")
+      ) {
+        event.preventDefault();
         // Keys typed quickly can arrive before the fields have focus: they go on into the open fields.
         setEntry((cur) => {
           if (!cur) {
-            return { fields: fields.map((_, i) => (i === 0 && e.key !== "Tab" ? e.key : "")), active: 0 };
+            return {
+              fields: fields.map((_, i) => (i === 0 && event.key !== "Tab" ? event.key : "")),
+              active: 0,
+            };
           }
 
-          if (e.key === "Tab") {
-            return { ...cur, active: (cur.active + (e.shiftKey ? fields.length - 1 : 1)) % fields.length };
+          if (event.key === "Tab") {
+            return {
+              ...cur,
+              active: (cur.active + (event.shiftKey ? fields.length - 1 : 1)) % fields.length,
+            };
           }
 
-          return { ...cur, fields: cur.fields.map((f, i) => (i === cur.active ? f + e.key : f)) };
+          return { ...cur, fields: cur.fields.map((f, i) => (i === cur.active ? f + event.key : f)) };
         });
 
         return;
@@ -2077,18 +2154,22 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
       const m = frameMatrix(frame);
 
-      for (const el of layer.current.querySelectorAll<HTMLElement>("[data-x]")) {
-        const v = new THREE.Vector3(Number(el.dataset["x"]), Number(el.dataset["y"]), 0).applyMatrix4(m);
+      for (const element of layer.current.querySelectorAll<HTMLElement>("[data-x]")) {
+        const v = new THREE.Vector3(
+          Number(element.dataset["x"]),
+          Number(element.dataset["y"]),
+          0,
+        ).applyMatrix4(m);
         const s = viewport.worldToScreen([v.x, v.y, v.z]);
 
         if (!s) {
-          el.style.display = "none";
+          element.style.display = "none";
           continue;
         }
 
-        el.style.display = "";
-        el.style.left = `${s[0]}px`;
-        el.style.top = `${s[1]}px`;
+        element.style.display = "";
+        element.style.left = `${s[0]}px`;
+        element.style.top = `${s[1]}px`;
       }
     };
 
@@ -2104,16 +2185,22 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     text: string;
     value: number;
     length: boolean;
-    make: (v: Expr) => NewConstraint;
+    make: (expr: Expr) => NewConstraint;
   }[] = [];
-  const lastCurve = lastShape && shown?.curves.find((c) => c.id === lastShape.id);
+  const lastCurve = lastShape && shown?.curves.find((curve) => curve.id === lastShape.id);
 
   if (sketch && lastCurve) {
     const has = (t: string[]) =>
       sketch.constraints.some(
-        (c) =>
-          t.includes(c.type) &&
-          ("line" in c ? c.line : "curve" in c ? c.curve : "a" in c ? c.a : "") === lastCurve.id,
+        (constraint) =>
+          t.includes(constraint.type) &&
+          ("line" in constraint
+            ? constraint.line
+            : "curve" in constraint
+              ? constraint.curve
+              : "a" in constraint
+                ? constraint.a
+                : "") === lastCurve.id,
       );
     const id = lastCurve.id;
 
@@ -2129,7 +2216,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           text: fmtLen(len),
           value: len,
           length: true,
-          make: (v) => ({ type: "length", line: id, value: v }),
+          make: (expr) => ({ type: "length", line: id, value: expr }),
         });
       }
 
@@ -2140,7 +2227,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           text: `∠ ${fmt(deg)}°`,
           value: +deg.toFixed(2),
           length: false,
-          make: (v) => ({ type: "angle", a: id, b: "origin.x", value: v }),
+          make: (expr) => ({ type: "angle", a: id, b: "origin.x", value: expr }),
         });
       }
     } else if (lastCurve.kind === "spline") {
@@ -2153,7 +2240,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           text: `⌀ ${fmtLen(lastCurve.radius * 2)}`,
           value: lastCurve.radius * 2,
           length: true,
-          make: (v) => ({ type: "diameter", curve: id, value: v }),
+          make: (expr) => ({ type: "diameter", curve: id, value: expr }),
         });
       }
     } else {
@@ -2170,7 +2257,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           text: `R ${fmtLen(lastCurve.radius)}`,
           value: lastCurve.radius,
           length: true,
-          make: (v) => ({ type: "radius", curve: id, value: v }),
+          make: (expr) => ({ type: "radius", curve: id, value: expr }),
         });
       }
 
@@ -2181,17 +2268,17 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           text: `∠ ${fmt(sw)}°`,
           value: +sw.toFixed(2),
           length: false,
-          make: (v) => ({ type: "arc_angle", curve: id, value: v }),
+          make: (expr) => ({ type: "arc_angle", curve: id, value: expr }),
         });
       }
     }
   }
 
-  const addQuickDim = (make: (v: Expr) => NewConstraint, v: Expr) => {
+  const addQuickDim = (make: (expr: Expr) => NewConstraint, expr: Expr) => {
     if (!sketch) return;
 
     const bl = builder(sketch);
-    bl.constraint(make(v));
+    bl.constraint(make(expr));
     commit(bl.d);
   };
 
@@ -2209,15 +2296,15 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             className={`value-chip quick-dim ${q.key}`}
             data-x={q.at[0]}
             data-y={q.at[1]}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             {typingQuick === q.key ? (
               <InlineInput
                 value={q.value}
                 length={q.length}
-                onDone={(v) => {
+                onDone={(expr) => {
                   setTypingQuick(null);
-                  if (v !== null) addQuickDim(q.make, v);
+                  if (expr !== null) addQuickDim(q.make, expr);
                 }}
               />
             ) : (
@@ -2231,19 +2318,25 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           l.id === editing ? (
             <div key={l.id} className="sketch-label sel" data-x={l.at[0]} data-y={l.at[1]}>
               <ValueInput
-                value={(sketch.constraints.find((c) => c.id === l.id) as { value: Expr }).value}
+                value={
+                  (sketch.constraints.find((constraint) => constraint.id === l.id) as { value: Expr }).value
+                }
                 unit={
-                  ["angle", "arc_angle"].includes(sketch.constraints.find((c) => c.id === l.id)?.type ?? "")
+                  ["angle", "arc_angle"].includes(
+                    sketch.constraints.find((constraint) => constraint.id === l.id)?.type ?? "",
+                  )
                     ? "deg"
                     : "mm"
                 }
-                suggest={sketch.constraints.find((c) => c.id === l.id)?.type ?? "dimension"}
-                onDone={(v) => {
+                suggest={sketch.constraints.find((constraint) => constraint.id === l.id)?.type ?? "dimension"}
+                onDone={(expr) => {
                   setEditing(null);
-                  if (v === null) return;
+                  if (expr === null) return;
 
-                  const constraints = sketch.constraints.map((c) =>
-                    c.id === l.id ? ({ ...c, value: v } as SketchConstraint) : c,
+                  const constraints = sketch.constraints.map((constraint) =>
+                    constraint.id === l.id
+                      ? ({ ...constraint, value: expr } as SketchConstraint)
+                      : constraint,
                   );
                   commit({ entities: sketch.entities, constraints }, true);
                 }}
@@ -2254,16 +2347,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
               key={l.id}
               data-x={l.at[0]}
               data-y={l.at[1]}
-              className={`${l.dimension ? "sketch-label" : "glyph"} ${ui.selection.some((s) => s.kind === "constraint" && s.id === l.id) ? "sel" : ""} ${conflicting.has(l.id) ? "conflict" : ""}`}
+              className={`${l.dimension ? "sketch-label" : "glyph"} ${ui.selection.some((selection) => selection.kind === "constraint" && selection.id === l.id) ? "sel" : ""} ${conflicting.has(l.id) ? "conflict" : ""}`}
               title={l.title}
               // While drawing, a click on a dimension or symbol means the spot below it (a midpoint, a
               // centre).
               style={POINT_TOOLS.has(ui.tool) ? { pointerEvents: "none" } : undefined}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                const t: SketchSel = { kind: "constraint", id: l.id };
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                const selection: SketchSel = { kind: "constraint", id: l.id };
                 const cur = useSketchUi.getState().selection;
-                setSketchSelection(e.shiftKey ? [...cur, t] : [t]);
+                setSketchSelection(event.shiftKey ? [...cur, selection] : [selection]);
               }}
               onDoubleClick={() => l.dimension && setEditing(l.id)}
             >
@@ -2280,7 +2373,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           <div
             className="draw-entry"
             style={{ left: cursorScreen.current.x, top: cursorScreen.current.y }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             {ENTRY_FIELDS[ui.tool]!.map((label, i) => (
               <label
@@ -2293,27 +2386,30 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
               >
                 <span>{label}</span>
                 <input
-                  ref={(el) => {
-                    entryInputs.current[i] = el;
+                  ref={(element) => {
+                    entryInputs.current[i] = element;
                   }}
                   value={entry.fields[i] ?? ""}
                   placeholder={i === 0 ? "" : t("auto")}
-                  onFocus={(e) => entry.active !== i && setEntry({ ...entry, active: i })}
-                  onChange={(e) =>
-                    setEntry({ ...entry, fields: entry.fields.map((f, j) => (j === i ? e.target.value : f)) })
+                  onFocus={(event) => entry.active !== i && setEntry({ ...entry, active: i })}
+                  onChange={(event) =>
+                    setEntry({
+                      ...entry,
+                      fields: entry.fields.map((f, j) => (j === i ? event.target.value : f)),
+                    })
                   }
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
 
-                    if (e.key === "Enter") {
+                    if (event.key === "Enter") {
                       finishEntry();
-                    } else if (e.key === "Escape") {
+                    } else if (event.key === "Escape") {
                       setEntry(null);
-                    } else if (e.key === "Tab") {
-                      e.preventDefault();
+                    } else if (event.key === "Tab") {
+                      event.preventDefault();
 
                       const n = ENTRY_FIELDS[ui.tool]!.length;
-                      setEntry({ ...entry, active: (i + (e.shiftKey ? n - 1 : 1)) % n });
+                      setEntry({ ...entry, active: (i + (event.shiftKey ? n - 1 : 1)) % n });
                     }
                   }}
                 />
@@ -2393,8 +2489,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                       type="number"
                       style={{ width: 64 }}
                       value={ui.pattern[k]}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
+                      onChange={(event) => {
+                        const v = Number(event.target.value);
 
                         if (Number.isFinite(v)) {
                           useSketchUi.setState({
@@ -2426,8 +2522,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
                   min="0.01"
                   style={{ width: 80 }}
                   value={ui.traceTol}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
+                  onChange={(event) => {
+                    const v = Number(event.target.value);
                     if (Number.isFinite(v) && v > 0) useSketchUi.setState({ traceTol: v });
                   }}
                 />
@@ -2476,11 +2572,11 @@ function SizeInput({ value, onChange }: { value: number; onChange: (v: number) =
       inputMode="decimal"
       style={{ width: 80 }}
       value={text}
-      onChange={(e) => {
-        setText(e.target.value);
+      onChange={(event) => {
+        setText(event.target.value);
 
-        const v = Number(e.target.value.replace(",", "."));
-        if (e.target.value.trim() && Number.isFinite(v)) onChange(v);
+        const v = Number(event.target.value.replace(",", "."));
+        if (event.target.value.trim() && Number.isFinite(v)) onChange(v);
       }}
       onBlur={() => setText(String(value))}
     />
@@ -2686,66 +2782,70 @@ function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
   }
 }
 
-function applySolution(entities: SketchEntity[], s: SolvedSketch): SketchEntity[] {
-  return entities.map((e) => {
-    if (e.type === "point") {
-      const p = s.points.get(e.id);
+function applySolution(entities: SketchEntity[], solved: SolvedSketch): SketchEntity[] {
+  return entities.map((entity) => {
+    if (entity.type === "point") {
+      const p = solved.points.get(entity.id);
 
-      return p ? { ...e, x: round(p[0]), y: round(p[1]) } : e;
+      return p ? { ...entity, x: round(p[0]), y: round(p[1]) } : entity;
     }
 
-    if (e.type === "circle") {
-      const c = s.curves.find((x) => x.id === e.id);
+    if (entity.type === "circle") {
+      const curve = solved.curves.find((x) => x.id === entity.id);
 
-      return c?.kind === "circle" ? { ...e, radius: round(c.radius) } : e;
+      return curve?.kind === "circle" ? { ...entity, radius: round(curve.radius) } : entity;
     }
 
-    return e;
+    return entity;
   });
 }
 
-function pointEntries(sk: SketchFeature | undefined, s: SolvedSketch): [string, Vec2][] {
+function pointEntries(sketch: SketchFeature | undefined, solved: SolvedSketch): [string, Vec2][] {
   const out: [string, Vec2][] = [["origin", [0, 0]]];
 
-  for (const e of sk?.entities ?? []) {
-    if (e.type === "point") {
-      const p = s.points.get(e.id);
-      if (p) out.push([e.id, p]);
+  for (const entity of sketch?.entities ?? []) {
+    if (entity.type === "point") {
+      const p = solved.points.get(entity.id);
+      if (p) out.push([entity.id, p]);
     }
   }
 
-  for (const c of s.curves) {
-    if (!c.external) continue;
+  for (const curve of solved.curves) {
+    if (!curve.external) continue;
 
-    for (const k of c.kind === "line"
+    for (const k of curve.kind === "line"
       ? ["p1", "p2"]
-      : c.kind === "arc"
+      : curve.kind === "arc"
         ? ["center", "start", "end"]
         : ["center"]) {
-      const p = s.points.get(`${c.id}.${k}`);
-      if (p) out.push([`${c.id}.${k}`, p]);
+      const p = solved.points.get(`${curve.id}.${k}`);
+      if (p) out.push([`${curve.id}.${k}`, p]);
     }
   }
 
   return out;
 }
 
-function curvePointIds(sk: SketchFeature, id: string): string[] {
-  const e = sk.entities.find((x) => x.id === id);
-  if (!e) return [];
-  if (e.type === "line") return [e.p1, e.p2];
-  if (e.type === "circle") return [e.center];
-  if (e.type === "arc") return [e.center, e.start, e.end];
+function curvePointIds(sketch: SketchFeature, id: string): string[] {
+  const entity = sketch.entities.find((x) => x.id === id);
+  if (!entity) return [];
+  if (entity.type === "line") return [entity.p1, entity.p2];
+  if (entity.type === "circle") return [entity.center];
+  if (entity.type === "arc") return [entity.center, entity.start, entity.end];
 
   return [];
 }
 
-function connectedCurves(sk: SketchFeature, start: string): string[] {
+function connectedCurves(sketch: SketchFeature, start: string): string[] {
   // Joined end to end only: concentric arcs share their centre point without being one chain.
   const pts = (id: string) => {
-    const e = sk.entities.find((x) => x.id === id);
+    const entity = sketch.entities.find((x) => x.id === id);
 
-    return e?.type === "line" ? [e.p1, e.p2] : e?.type === "arc" ? [e.start, e.end] : [];
+    return entity?.type === "line"
+      ? [entity.p1, entity.p2]
+      : entity?.type === "arc"
+        ? [entity.start, entity.end]
+        : [];
   };
 
   const seen = new Set([start]);
@@ -2755,12 +2855,12 @@ function connectedCurves(sk: SketchFeature, start: string): string[] {
     const c = queue.shift()!;
     const ends = new Set(pts(c));
 
-    for (const e of sk.entities) {
-      if (seen.has(e.id) || (e.type !== "line" && e.type !== "arc")) continue;
+    for (const entity of sketch.entities) {
+      if (seen.has(entity.id) || (entity.type !== "line" && entity.type !== "arc")) continue;
 
-      if (pts(e.id).some((p) => ends.has(p))) {
-        seen.add(e.id);
-        queue.push(e.id);
+      if (pts(entity.id).some((p) => ends.has(p))) {
+        seen.add(entity.id);
+        queue.push(entity.id);
       }
     }
   }
@@ -2768,54 +2868,62 @@ function connectedCurves(sk: SketchFeature, start: string): string[] {
   return [...seen];
 }
 
-function curveSamples(c: SolvedCurve): Vec2[] {
-  if (c.kind === "line") return [c.a, c.b];
-  if (c.kind === "spline") return c.pts;
+function curveSamples(curve: SolvedCurve): Vec2[] {
+  if (curve.kind === "line") return [curve.a, curve.b];
+  if (curve.kind === "spline") return curve.pts;
 
   const n = 16;
   const [a0, sw] =
-    c.kind === "circle"
+    curve.kind === "circle"
       ? [0, 2 * Math.PI]
-      : [c.a0, (c.a1 - c.a0 + 4 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
+      : [curve.a0, (curve.a1 - curve.a0 + 4 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
 
   return Array.from(
     { length: n + 1 },
     (_, i) =>
       [
-        c.center[0] + c.radius * Math.cos(a0 + (sw * i) / n),
-        c.center[1] + c.radius * Math.sin(a0 + (sw * i) / n),
+        curve.center[0] + curve.radius * Math.cos(a0 + (sw * i) / n),
+        curve.center[1] + curve.radius * Math.sin(a0 + (sw * i) / n),
       ] as Vec2,
   );
 }
 
-function curveDistance(c: SolvedCurve, p: Vec2, infinite = false): number {
-  if (c.kind === "spline") return Math.min(...c.pts.slice(1).map((b, k) => segDistance(c.pts[k]!, b, p)));
-
-  if (c.kind === "line") {
-    const d: Vec2 = [c.b[0] - c.a[0], c.b[1] - c.a[1]];
-    const l2 = d[0] * d[0] + d[1] * d[1] || 1;
-    let t = ((p[0] - c.a[0]) * d[0] + (p[1] - c.a[1]) * d[1]) / l2;
-    if (!infinite) t = Math.max(0, Math.min(1, t));
-
-    return Math.hypot(c.a[0] + d[0] * t - p[0], c.a[1] + d[1] * t - p[1]);
+function curveDistance(curve: SolvedCurve, p: Vec2, infinite = false): number {
+  if (curve.kind === "spline") {
+    return Math.min(...curve.pts.slice(1).map((b, k) => segDistance(curve.pts[k]!, b, p)));
   }
 
-  const r = distance2(c.center, p);
+  if (curve.kind === "line") {
+    const d: Vec2 = [curve.b[0] - curve.a[0], curve.b[1] - curve.a[1]];
+    const l2 = d[0] * d[0] + d[1] * d[1] || 1;
+    let t = ((p[0] - curve.a[0]) * d[0] + (p[1] - curve.a[1]) * d[1]) / l2;
+    if (!infinite) t = Math.max(0, Math.min(1, t));
 
-  if (c.kind === "arc") {
-    const a = Math.atan2(p[1] - c.center[1], p[0] - c.center[0]);
-    const rel = (a - c.a0 + 4 * Math.PI) % (2 * Math.PI);
-    const span = (c.a1 - c.a0 + 4 * Math.PI) % (2 * Math.PI) || 2 * Math.PI;
+    return Math.hypot(curve.a[0] + d[0] * t - p[0], curve.a[1] + d[1] * t - p[1]);
+  }
+
+  const r = distance2(curve.center, p);
+
+  if (curve.kind === "arc") {
+    const a = Math.atan2(p[1] - curve.center[1], p[0] - curve.center[0]);
+    const rel = (a - curve.a0 + 4 * Math.PI) % (2 * Math.PI);
+    const span = (curve.a1 - curve.a0 + 4 * Math.PI) % (2 * Math.PI) || 2 * Math.PI;
 
     if (rel > span) {
-      const s: Vec2 = [c.center[0] + c.radius * Math.cos(c.a0), c.center[1] + c.radius * Math.sin(c.a0)];
-      const e: Vec2 = [c.center[0] + c.radius * Math.cos(c.a1), c.center[1] + c.radius * Math.sin(c.a1)];
+      const s: Vec2 = [
+        curve.center[0] + curve.radius * Math.cos(curve.a0),
+        curve.center[1] + curve.radius * Math.sin(curve.a0),
+      ];
+      const e: Vec2 = [
+        curve.center[0] + curve.radius * Math.cos(curve.a1),
+        curve.center[1] + curve.radius * Math.sin(curve.a1),
+      ];
 
       return Math.min(distance2(s, p), distance2(e, p));
     }
   }
 
-  return Math.abs(r - c.radius);
+  return Math.abs(r - curve.radius);
 }
 
 /** Distance from p to the segment a–b. */
@@ -2829,19 +2937,19 @@ function segDistance(a: Vec2, b: Vec2, p: Vec2): number {
   return Math.hypot(a[0] + d[0] * t - p[0], a[1] + d[1] * t - p[1]);
 }
 
-function projectOnCurve(c: SolvedCurve, p: Vec2): Vec2 {
-  if (c.kind === "spline") {
+function projectOnCurve(curve: SolvedCurve, p: Vec2): Vec2 {
+  if (curve.kind === "spline") {
     // The nearest point on the nearest piece.
-    let best: Vec2 = c.pts[0]!;
+    let best: Vec2 = curve.pts[0]!;
     let bd = Infinity;
 
-    for (let k = 1; k < c.pts.length; k++) {
+    for (let k = 1; k < curve.pts.length; k++) {
       const q = projectOnCurve(
         {
           id: "",
           kind: "line",
-          a: c.pts[k - 1]!,
-          b: c.pts[k]!,
+          a: curve.pts[k - 1]!,
+          b: curve.pts[k]!,
           p1: "",
           p2: "",
           construction: false,
@@ -2856,35 +2964,38 @@ function projectOnCurve(c: SolvedCurve, p: Vec2): Vec2 {
     return best;
   }
 
-  if (c.kind === "line") {
-    const d: Vec2 = [c.b[0] - c.a[0], c.b[1] - c.a[1]];
+  if (curve.kind === "line") {
+    const d: Vec2 = [curve.b[0] - curve.a[0], curve.b[1] - curve.a[1]];
     const t = Math.max(
       0,
-      Math.min(1, ((p[0] - c.a[0]) * d[0] + (p[1] - c.a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1] || 1)),
+      Math.min(
+        1,
+        ((p[0] - curve.a[0]) * d[0] + (p[1] - curve.a[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1] || 1),
+      ),
     );
 
-    return [c.a[0] + d[0] * t, c.a[1] + d[1] * t];
+    return [curve.a[0] + d[0] * t, curve.a[1] + d[1] * t];
   }
 
-  const a = Math.atan2(p[1] - c.center[1], p[0] - c.center[0]);
+  const a = Math.atan2(p[1] - curve.center[1], p[0] - curve.center[0]);
 
-  return [c.center[0] + c.radius * Math.cos(a), c.center[1] + c.radius * Math.sin(a)];
+  return [curve.center[0] + curve.radius * Math.cos(a), curve.center[1] + curve.radius * Math.sin(a)];
 }
 
-function refsOfEntity(e: SketchEntity): string[] {
-  return e.type === "line"
-    ? [e.p1, e.p2]
-    : e.type === "circle"
-      ? [e.center]
-      : e.type === "arc"
-        ? [e.center, e.start, e.end]
-        : e.type === "spline"
-          ? e.points
+function refsOfEntity(entity: SketchEntity): string[] {
+  return entity.type === "line"
+    ? [entity.p1, entity.p2]
+    : entity.type === "circle"
+      ? [entity.center]
+      : entity.type === "arc"
+        ? [entity.center, entity.start, entity.end]
+        : entity.type === "spline"
+          ? entity.points
           : [];
 }
 
-function refsOf(c: SketchConstraint): string[] {
-  return Object.entries(c)
+function refsOf(constraint: SketchConstraint): string[] {
+  return Object.entries(constraint)
     .filter(([k, v]) => k !== "id" && k !== "type" && typeof v === "string")
     .map(([, v]) => (v as string).split(".")[0]!);
 }
@@ -2894,35 +3005,37 @@ let dotTex: THREE.Texture | null = null;
 function dotTexture(): THREE.Texture {
   if (dotTex) return dotTex;
 
-  const c = document.createElement("canvas");
-  c.width = c.height = 32;
+  const element = document.createElement("canvas");
+  element.width = element.height = 32;
 
-  const g = c.getContext("2d")!;
+  const g = element.getContext("2d")!;
   g.fillStyle = "#fff";
   g.beginPath();
   g.arc(16, 16, 14, 0, Math.PI * 2);
   g.fill();
-  dotTex = new THREE.CanvasTexture(c);
+  dotTex = new THREE.CanvasTexture(element);
 
   return dotTex;
 }
 
-function curveObject(c: SolvedCurve, color: number, dashed: boolean): THREE.Object3D {
-  const pts = curveSamples(c.kind === "line" ? c : { ...c }).map(([x, y]) => new THREE.Vector3(x, y, 0));
+function curveObject(curve: SolvedCurve, color: number, dashed: boolean): THREE.Object3D {
+  const pts = curveSamples(curve.kind === "line" ? curve : { ...curve }).map(
+    ([x, y]) => new THREE.Vector3(x, y, 0),
+  );
 
-  if (c.kind === "circle" || c.kind === "arc") {
+  if (curve.kind === "circle" || curve.kind === "arc") {
     const n = 96;
     const [a0, sw] =
-      c.kind === "circle"
+      curve.kind === "circle"
         ? [0, 2 * Math.PI]
-        : [c.a0, (c.a1 - c.a0 + 4 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
+        : [curve.a0, (curve.a1 - curve.a0 + 4 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
     pts.length = 0;
 
     for (let i = 0; i <= n; i++) {
       pts.push(
         new THREE.Vector3(
-          c.center[0] + c.radius * Math.cos(a0 + (sw * i) / n),
-          c.center[1] + c.radius * Math.sin(a0 + (sw * i) / n),
+          curve.center[0] + curve.radius * Math.cos(a0 + (sw * i) / n),
+          curve.center[1] + curve.radius * Math.sin(a0 + (sw * i) / n),
           0,
         ),
       );
@@ -2957,7 +3070,7 @@ function previewObjects(
   const p0 = ts.points[0]?.pos;
   if (!p0) return out;
   if (tool === "line") line([p0, cur]);
-  if (tool === "spline") line(splinePoints([...ts.points.map((p) => p.pos), cur]));
+  if (tool === "spline") line(splinePoints([...ts.points.map((snap) => snap.pos), cur]));
   if (tool === "rect") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
 
   if (tool === "rect_center") {
@@ -3049,9 +3162,9 @@ function previewObjects(
  * Marker for what the cursor snapped to (square = endpoint, triangle = midpoint, X = crossing), plus
  * alignment guides.
  */
-function snapObjects(sn: Snap, unit: number): THREE.Object3D[] {
+function snapObjects(snap: Snap, unit: number): THREE.Object3D[] {
   const out: THREE.Object3D[] = [];
-  const [x, y] = sn.pos;
+  const [x, y] = snap.pos;
   const r = unit * 5;
 
   const add = (pts: Vec2[], kind: "loop" | "segments" | "line", color: number, dashed = false) => {
@@ -3071,10 +3184,10 @@ function snapObjects(sn: Snap, unit: number): THREE.Object3D[] {
     out.push(o);
   };
 
-  for (const [a, b] of sn.guides ?? []) add([a, b], "line", COLORS.guide, true);
+  for (const [a, b] of snap.guides ?? []) add([a, b], "line", COLORS.guide, true);
 
   // The landing point itself: a dot with a light halo so it reads on the grid, the model and lines.
-  const onGeometry = sn.kind && sn.kind !== "grid";
+  const onGeometry = snap.kind && snap.kind !== "grid";
 
   for (const [size, color] of [
     [13, 0xffffff],
@@ -3099,7 +3212,7 @@ function snapObjects(sn: Snap, unit: number): THREE.Object3D[] {
     out.push(dot);
   }
 
-  switch (sn.kind) {
+  switch (snap.kind) {
     case "point":
       add(
         [
@@ -3284,10 +3397,10 @@ const CONSTRAINT_NAMES: Record<string, string> = {
 const constraintName = (type: string) => CONSTRAINT_NAMES[type] ?? type;
 
 /** Positions for dimension values and constraint glyphs (sketch coordinates). */
-function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
+function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): Label[] {
   const out: Label[] = [];
-  const P = (r: string) => s.points.get(r);
-  const curve = (id: string) => s.curves.find((c) => c.id === id);
+  const P = (r: string) => solved.points.get(r);
+  const curve = (id: string) => solved.curves.find((curve) => curve.id === id);
 
   const mid = (id: string): Vec2 | null => {
     const c = curve(id);
@@ -3304,8 +3417,8 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
   // Glyphs sharing a spot are fanned out along x (in sketch units, scaled by the sketch size).
   const size = Math.max(
     10,
-    ...s.curves.map((c) =>
-      c.kind === "line" ? distance2(c.a, c.b) : c.kind === "spline" ? 10 : c.radius * 2,
+    ...solved.curves.map((curve) =>
+      curve.kind === "line" ? distance2(curve.a, curve.b) : curve.kind === "spline" ? 10 : curve.radius * 2,
     ),
   );
   const used = new Map<string, number>();
@@ -3318,77 +3431,87 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
   };
 
   // Lengths in an inch design are converted and say so; mm designs keep the bare number.
-  const valueText = (v: Expr, unit: string) =>
-    typeof v !== "number" ? `${v}` : unit === "" && docUnit() === "in" ? fmtLen(v) : `${fmt(v)}${unit}`;
+  const valueText = (expr: Expr, unit: string) =>
+    typeof expr !== "number"
+      ? `${expr}`
+      : unit === "" && docUnit() === "in"
+        ? fmtLen(expr)
+        : `${fmt(expr)}${unit}`;
 
-  for (const c of sk.constraints) {
-    if ("value" in c) {
-      let at: Vec2 | null = c.label ?? null;
+  for (const constraint of sketch.constraints) {
+    if ("value" in constraint) {
+      let at: Vec2 | null = constraint.label ?? null;
 
       if (!at) {
-        if (c.type === "length") {
-          at = mid(c.line);
-        } else if (c.type === "radius" || c.type === "diameter") {
-          at = mid(c.curve);
-        } else if (c.type === "angle") {
-          at = mid(c.a);
-        } else if (c.type === "arc_angle") {
+        if (constraint.type === "length") {
+          at = mid(constraint.line);
+        } else if (constraint.type === "radius" || constraint.type === "diameter") {
+          at = mid(constraint.curve);
+        } else if (constraint.type === "angle") {
+          at = mid(constraint.a);
+        } else if (constraint.type === "arc_angle") {
           // Inside the arc, halfway between its centre and its middle.
-          const cv = curve(c.curve);
-          const m = mid(c.curve);
+          const cv = curve(constraint.curve);
+          const m = mid(constraint.curve);
           at =
             cv && (cv.kind === "arc" || cv.kind === "circle") && m
               ? [(cv.center[0] + m[0]) / 2, (cv.center[1] + m[1]) / 2]
               : m;
-        } else if (c.type === "distance") {
-          const a = P(c.a);
-          const b = P(c.b) ?? mid(c.b);
+        } else if (constraint.type === "distance") {
+          const a = P(constraint.a);
+          const b = P(constraint.b) ?? mid(constraint.b);
           at = a && b ? [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] : null;
         }
       }
 
       if (!at) continue;
 
-      const unit = c.type === "angle" || c.type === "arc_angle" ? "°" : "";
+      const unit = constraint.type === "angle" || constraint.type === "arc_angle" ? "°" : "";
       const prefix =
-        c.type === "diameter" ? "⌀" : c.type === "radius" ? "R" : c.type === "arc_angle" ? "∠" : "";
+        constraint.type === "diameter"
+          ? "⌀"
+          : constraint.type === "radius"
+            ? "R"
+            : constraint.type === "arc_angle"
+              ? "∠"
+              : "";
       out.push({
-        id: c.id,
+        id: constraint.id,
         at,
-        text: `${prefix}${valueText(c.value, unit)}`,
+        text: `${prefix}${valueText(constraint.value, unit)}`,
         title: t("{type} {id} — double-click to edit, Del to remove", {
-          type: constraintName(c.type),
-          id: c.id,
+          type: constraintName(constraint.type),
+          id: constraint.id,
         }),
         dimension: true,
       });
       continue;
     }
 
-    const g = GLYPH[c.type] ?? "?";
+    const g = GLYPH[constraint.type] ?? "?";
     let at: Vec2 | null = null;
 
-    if (c.type === "horizontal" || c.type === "vertical") {
-      at = mid(c.line);
+    if (constraint.type === "horizontal" || constraint.type === "vertical") {
+      at = mid(constraint.line);
     } else if (
-      c.type === "parallel" ||
-      c.type === "perpendicular" ||
-      c.type === "tangent" ||
-      c.type === "equal" ||
-      c.type === "collinear"
+      constraint.type === "parallel" ||
+      constraint.type === "perpendicular" ||
+      constraint.type === "tangent" ||
+      constraint.type === "equal" ||
+      constraint.type === "collinear"
     ) {
-      at = mid(c.a);
-    } else if (c.type === "midpoint") {
-      at = P(c.point) ?? null;
-    } else if (c.type === "point_on" || c.type === "fix") {
-      at = P(c.type === "fix" ? c.point : c.point) ?? null;
-    } else if (c.type === "symmetric") {
-      at = mid(c.axis);
-    } else if (c.type === "horizontal_points" || c.type === "vertical_points") {
-      const a = P(c.a);
-      const b = P(c.b);
+      at = mid(constraint.a);
+    } else if (constraint.type === "midpoint") {
+      at = P(constraint.point) ?? null;
+    } else if (constraint.type === "point_on" || constraint.type === "fix") {
+      at = P(constraint.type === "fix" ? constraint.point : constraint.point) ?? null;
+    } else if (constraint.type === "symmetric") {
+      at = mid(constraint.axis);
+    } else if (constraint.type === "horizontal_points" || constraint.type === "vertical_points") {
+      const a = P(constraint.a);
+      const b = P(constraint.b);
       at = a && b ? [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] : null;
-    } else if (c.type === "coincident") {
+    } else if (constraint.type === "coincident") {
       continue;
     }
 
@@ -3396,10 +3519,13 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
 
     const key = `${at[0].toFixed(3)},${at[1].toFixed(3)}`;
     out.push({
-      id: c.id,
+      id: constraint.id,
       at: offset(at, key),
       text: g,
-      title: t("{type} ({id}) — click to select, Del to remove", { type: constraintName(c.type), id: c.id }),
+      title: t("{type} ({id}) — click to select, Del to remove", {
+        type: constraintName(constraint.type),
+        id: constraint.id,
+      }),
       dimension: false,
     });
   }
@@ -3407,35 +3533,35 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
   return out;
 }
 
-function dimensionGeometry(c: SketchConstraint, s: SolvedSketch): Vec2[] | null {
-  if (!("value" in c) || !c.label) return null;
+function dimensionGeometry(constraint: SketchConstraint, solved: SolvedSketch): Vec2[] | null {
+  if (!("value" in constraint) || !constraint.label) return null;
 
-  const L = c.label;
+  const L = constraint.label;
   const seg = (a: Vec2, b: Vec2): Vec2[] => [a, b];
 
-  if (c.type === "length" || c.type === "distance") {
+  if (constraint.type === "length" || constraint.type === "distance") {
     let a: Vec2 | undefined;
     let b: Vec2 | undefined;
 
-    if (c.type === "length") {
-      const line = s.curves.find((x) => x.id === c.line);
+    if (constraint.type === "length") {
+      const line = solved.curves.find((x) => x.id === constraint.line);
       if (line?.kind !== "line") return null;
 
       [a, b] = [line.a, line.b];
     } else {
-      a = s.points.get(c.a);
-      b = s.points.get(c.b);
+      a = solved.points.get(constraint.a);
+      b = solved.points.get(constraint.b);
 
       if (!b) {
-        const line = s.curves.find((x) => x.id === c.b);
+        const line = solved.curves.find((x) => x.id === constraint.b);
         if (line?.kind === "line" && a) b = projectOnCurve(line, a);
       }
     }
 
     if (!a || !b) return null;
 
-    if (c.type === "distance" && c.axis) {
-      const ax = c.axis === "x";
+    if (constraint.type === "distance" && constraint.axis) {
+      const ax = constraint.axis === "x";
       const a2: Vec2 = ax ? [a[0], L[1]] : [L[0], a[1]];
       const b2: Vec2 = ax ? [b[0], L[1]] : [L[0], b[1]];
 
@@ -3452,32 +3578,32 @@ function dimensionGeometry(c: SketchConstraint, s: SolvedSketch): Vec2[] | null 
     return [...seg(a, a2), ...seg(b, b2), ...seg(a2, b2)];
   }
 
-  if (c.type === "radius" || c.type === "diameter") {
-    const cv = s.curves.find((x) => x.id === c.curve);
-    if (!cv || cv.kind === "line" || cv.kind === "spline") return null;
+  if (constraint.type === "radius" || constraint.type === "diameter") {
+    const curve = solved.curves.find((x) => x.id === constraint.curve);
+    if (!curve || curve.kind === "line" || curve.kind === "spline") return null;
 
-    const ang = Math.atan2(L[1] - cv.center[1], L[0] - cv.center[0]);
+    const ang = Math.atan2(L[1] - curve.center[1], L[0] - curve.center[0]);
     const onCurve: Vec2 = [
-      cv.center[0] + cv.radius * Math.cos(ang),
-      cv.center[1] + cv.radius * Math.sin(ang),
+      curve.center[0] + curve.radius * Math.cos(ang),
+      curve.center[1] + curve.radius * Math.sin(ang),
     ];
 
-    return c.type === "diameter"
-      ? [[cv.center[0] - cv.radius * Math.cos(ang), cv.center[1] - cv.radius * Math.sin(ang)], L]
-      : ([cv.center, L].concat([onCurve, L]) as Vec2[]);
+    return constraint.type === "diameter"
+      ? [[curve.center[0] - curve.radius * Math.cos(ang), curve.center[1] - curve.radius * Math.sin(ang)], L]
+      : ([curve.center, L].concat([onCurve, L]) as Vec2[]);
   }
 
-  if (c.type === "arc_angle") {
+  if (constraint.type === "arc_angle") {
     // Spokes from the centre to both ends show what the angle measures.
-    const cv = s.curves.find((x) => x.id === c.curve);
-    if (!cv || cv.kind !== "arc") return null;
+    const curve = solved.curves.find((x) => x.id === constraint.curve);
+    if (!curve || curve.kind !== "arc") return null;
 
     const end = (a: number): Vec2 => [
-      cv.center[0] + cv.radius * Math.cos(a),
-      cv.center[1] + cv.radius * Math.sin(a),
+      curve.center[0] + curve.radius * Math.cos(a),
+      curve.center[1] + curve.radius * Math.sin(a),
     ];
 
-    return [cv.center, end(cv.a0), cv.center, end(cv.a1)];
+    return [curve.center, end(curve.a0), curve.center, end(curve.a1)];
   }
 
   return null;

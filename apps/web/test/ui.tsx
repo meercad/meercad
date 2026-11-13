@@ -29,15 +29,17 @@ export async function pickMenu(label: string | RegExp): Promise<void> {
   const item = await waitFor(() => {
     const found = screen
       .getAllByRole("menuitem")
-      .find((el) =>
-        typeof label === "string" ? el.textContent?.startsWith(label) : label.test(el.textContent ?? ""),
+      .find((element) =>
+        typeof label === "string"
+          ? element.textContent?.startsWith(label)
+          : label.test(element.textContent ?? ""),
       );
 
     if (!found) {
       throw new Error(
         `no menu entry ${String(label)}: ${screen
           .getAllByRole("menuitem")
-          .map((e) => e.textContent)
+          .map((element) => element.textContent)
           .join(" | ")}`,
       );
     }
@@ -64,8 +66,8 @@ export async function answer(text?: string | null): Promise<void> {
 }
 
 /** Opens the context menu of an element. */
-export async function contextMenu(el: Element): Promise<void> {
-  await act(async () => void fireEvent.contextMenu(el, { clientX: 10, clientY: 10 }));
+export async function contextMenu(element: Element): Promise<void> {
+  await act(async () => void fireEvent.contextMenu(element, { clientX: 10, clientY: 10 }));
 }
 
 /**

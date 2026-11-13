@@ -120,15 +120,15 @@ async function watchICloud(): Promise<void> {
 }
 
 /** A path below the projects' place as Filesystem options: relative to Documents, or a file URL in iCloud. */
-function at(r: Root, path: string): { path: string; directory?: Directory } {
-  if (r.kind === "local") return { path, directory: DOCS };
+function at(root: Root, path: string): { path: string; directory?: Directory } {
+  if (root.kind === "local") return { path, directory: DOCS };
 
-  return { path: r.base + path.split("/").filter(Boolean).map(encodeURIComponent).join("/") };
+  return { path: root.base + path.split("/").filter(Boolean).map(encodeURIComponent).join("/") };
 }
 
-const renameOpts = (r: Root, from: string, to: string) => {
-  const a = at(r, from),
-    b = at(r, to);
+const renameOpts = (root: Root, from: string, to: string) => {
+  const a = at(root, from),
+    b = at(root, to);
 
   return {
     from: a.path,
@@ -161,16 +161,16 @@ const thumbExists = (path: string) =>
     () => true,
     () => false,
   );
-const exists = (r: Root, path: string) =>
-  Filesystem.stat(at(r, path)).then(
+const exists = (root: Root, path: string) =>
+  Filesystem.stat(at(root, path)).then(
     () => true,
     () => false,
   );
 
-async function ensureDir(r: Root, path: string): Promise<void> {
-  if (!path || (await exists(r, path))) return;
+async function ensureDir(root: Root, path: string): Promise<void> {
+  if (!path || (await exists(root, path))) return;
 
-  await Filesystem.mkdir({ ...at(r, path), recursive: true });
+  await Filesystem.mkdir({ ...at(root, path), recursive: true });
 }
 
 /** Where the Scan plugin keeps its captures (photos, meshes): not a project folder. */
@@ -180,18 +180,18 @@ const hidden = (folder: string, name: string) => name.startsWith(".") || (!folde
 const PLACEHOLDER = /^\.(.+\.meercad)\.icloud$/;
 
 /** All .meercad files below a folder: ids ("Folder/Name") and the file that stands for each now. */
-async function projectFiles(r: Root, folder = ""): Promise<{ id: string; file: string }[]> {
+async function projectFiles(root: Root, folder = ""): Promise<{ id: string; file: string }[]> {
   const out: { id: string; file: string }[] = [];
   let entries;
 
   try {
-    entries = (await Filesystem.readdir(at(r, folder))).files;
+    entries = (await Filesystem.readdir(at(root, folder))).files;
   } catch {
     return out;
   }
 
   for (const e of entries) {
-    const cloud = r.kind === "icloud" ? PLACEHOLDER.exec(e.name) : null;
+    const cloud = root.kind === "icloud" ? PLACEHOLDER.exec(e.name) : null;
 
     if (cloud) {
       out.push({ id: joinId(folder, cloud[1]!).slice(0, -EXT.length), file: joinId(folder, e.name) });
@@ -201,21 +201,21 @@ async function projectFiles(r: Root, folder = ""): Promise<{ id: string; file: s
     if (hidden(folder, e.name)) continue;
 
     const rel = joinId(folder, e.name);
-    if (e.type === "directory") out.push(...(await projectFiles(r, rel)));
+    if (e.type === "directory") out.push(...(await projectFiles(root, rel)));
     else if (e.name.endsWith(EXT)) out.push({ id: rel.slice(0, -EXT.length), file: rel });
   }
 
   return out;
 }
 
-const projectIds = async (r: Root, folder = "") => (await projectFiles(r, folder)).map((p) => p.id);
+const projectIds = async (root: Root, folder = "") => (await projectFiles(root, folder)).map((p) => p.id);
 
-async function folderList(r: Root, folder = ""): Promise<string[]> {
+async function folderList(root: Root, folder = ""): Promise<string[]> {
   const out: string[] = [];
   let entries;
 
   try {
-    entries = (await Filesystem.readdir(at(r, folder))).files;
+    entries = (await Filesystem.readdir(at(root, folder))).files;
   } catch {
     return out;
   }
@@ -224,16 +224,16 @@ async function folderList(r: Root, folder = ""): Promise<string[]> {
     if (e.type !== "directory" || hidden(folder, e.name)) continue;
 
     const rel = joinId(folder, e.name);
-    out.push(rel, ...(await folderList(r, rel)));
+    out.push(rel, ...(await folderList(root, rel)));
   }
 
   return out;
 }
 
-async function uniqueId(r: Root, name: string, folder = ""): Promise<string> {
+async function uniqueId(root: Root, name: string, folder = ""): Promise<string> {
   const base = safeName(name, "Untitled part");
   let id = joinId(folder, base);
-  for (let n = 2; await exists(r, projectPath(id)); n++) id = joinId(folder, `${base} ${n}`);
+  for (let n = 2; await exists(root, projectPath(id)); n++) id = joinId(folder, `${base} ${n}`);
 
   return id;
 }
@@ -264,15 +264,15 @@ async function moveThumb(from: string, to: string): Promise<void> {
   await Filesystem.rename({ from: thumbPath(from), to: thumbPath(to), directory: LIB, toDirectory: LIB });
 }
 
-async function moveProject(r: Root, from: string, to: string): Promise<void> {
+async function moveProject(root: Root, from: string, to: string): Promise<void> {
   if (from === to) return;
 
-  await ensureDir(r, folderOf(to));
-  await Filesystem.rename(renameOpts(r, projectPath(from), projectPath(to)));
+  await ensureDir(root, folderOf(to));
+  await Filesystem.rename(renameOpts(root, projectPath(from), projectPath(to)));
   await moveThumb(from, to);
 
-  if (await exists(r, sidecarPath(from))) {
-    await Filesystem.rename(renameOpts(r, sidecarPath(from), sidecarPath(to))).catch(() => undefined);
+  if (await exists(root, sidecarPath(from))) {
+    await Filesystem.rename(renameOpts(root, sidecarPath(from), sidecarPath(to))).catch(() => undefined);
   }
 }
 
@@ -280,9 +280,9 @@ async function moveProject(r: Root, from: string, to: string): Promise<void> {
 const sidecarPath = (id: string) => joinId(folderOf(id), sidecarName(nameOf(id) + EXT));
 
 /** A project file's bytes, read by the web view (see readDoc); in iCloud fetched first. */
-async function fileBytes(r: Root, id: string): Promise<Uint8Array> {
-  const where = at(r, projectPath(id));
-  if (r.kind === "icloud") await ICloud.download({ url: where.path });
+async function fileBytes(root: Root, id: string): Promise<Uint8Array> {
+  const where = at(root, projectPath(id));
+  if (root.kind === "icloud") await ICloud.download({ url: where.path });
 
   try {
     const uri = where.directory
@@ -301,7 +301,7 @@ async function fileBytes(r: Root, id: string): Promise<Uint8Array> {
 
 /** Keeps the picture next to the project's file, for `bytes`, the file as it is now. Never fails. */
 async function writeSidecar(
-  r: Root,
+  root: Root,
   id: string,
   thumbnail: string,
   look: number,
@@ -312,20 +312,20 @@ async function writeSidecar(
     if (!sha256) return;
 
     await Filesystem.writeFile({
-      ...at(r, sidecarPath(id)),
+      ...at(root, sidecarPath(id)),
       data: formatSidecar({ size: bytes.length, sha256, look, thumbnail }),
       encoding: Encoding.UTF8,
       recursive: true,
     });
-  } catch (e) {
-    console.warn(`picture next to ${id} not written: ${String(e)}`);
+  } catch (error) {
+    console.warn(`picture next to ${id} not written: ${String(error)}`);
   }
 }
 
 /** The picture next to the project's file if it shows the file as it is now (see sharedPicture.ts). */
-async function readSidecar(r: Root, id: string): Promise<{ thumbnail: string; look: number } | null> {
-  const where = at(r, sidecarPath(id));
-  if (r.kind === "icloud") await ICloud.download({ url: where.path, timeout: 20 }).catch(() => undefined);
+async function readSidecar(root: Root, id: string): Promise<{ thumbnail: string; look: number } | null> {
+  const where = at(root, sidecarPath(id));
+  if (root.kind === "icloud") await ICloud.download({ url: where.path, timeout: 20 }).catch(() => undefined);
 
   let text: string;
 
@@ -338,7 +338,7 @@ async function readSidecar(r: Root, id: string): Promise<{ thumbnail: string; lo
   const shared = parseSidecar(text);
   if (!shared) return null;
 
-  const bytes = await fileBytes(r, id);
+  const bytes = await fileBytes(root, id);
   const sha256 = shared.size === bytes.length ? await sha256Hex(bytes) : null;
 
   return sha256 && sidecarShows(shared, { size: bytes.length, sha256 })
@@ -346,8 +346,13 @@ async function readSidecar(r: Root, id: string): Promise<{ thumbnail: string; lo
     : null;
 }
 
-const writeDoc = (r: Root, id: string, text: string) =>
-  Filesystem.writeFile({ ...at(r, projectPath(id)), data: text, encoding: Encoding.UTF8, recursive: true });
+const writeDoc = (root: Root, id: string, text: string) =>
+  Filesystem.writeFile({
+    ...at(root, projectPath(id)),
+    data: text,
+    encoding: Encoding.UTF8,
+    recursive: true,
+  });
 const docText = (doc: unknown) => `${JSON.stringify(doc, null, 2)}\n`;
 
 /**
@@ -358,9 +363,9 @@ const docText = (doc: unknown) => `${JSON.stringify(doc, null, 2)}\n`;
  * 40 MB (the robot) the page then held several copies at once, over 1 GB for a moment, which the
  * iPhone did not allow it. The plugin is the way back should the web view not reach the file.
  */
-async function readDoc(r: Root, id: string): Promise<MeercadDocument> {
-  const where = at(r, projectPath(id));
-  if (r.kind === "icloud") await ICloud.download({ url: where.path });
+async function readDoc(root: Root, id: string): Promise<MeercadDocument> {
+  const where = at(root, projectPath(id));
+  if (root.kind === "icloud") await ICloud.download({ url: where.path });
 
   try {
     const uri = where.directory
@@ -368,8 +373,8 @@ async function readDoc(r: Root, id: string): Promise<MeercadDocument> {
       : where.path;
     const res = await fetch(Capacitor.convertFileSrc(uri));
     if (res.ok) return (await res.json()) as MeercadDocument;
-  } catch (e) {
-    console.warn(`reading ${id} in the web view failed, reading it through the plugin: ${String(e)}`);
+  } catch (error) {
+    console.warn(`reading ${id} in the web view failed, reading it through the plugin: ${String(error)}`);
   }
 
   return JSON.parse(
@@ -651,7 +656,7 @@ export function onFileOpened(
     })();
   };
 
-  const sub = App.addListener("appUrlOpen", (e) => handle(e.url));
+  const sub = App.addListener("appUrlOpen", (event) => handle(event.url));
   void App.getLaunchUrl().then((r) => r?.url && handle(r.url));
 
   return () => void sub.then((s) => s.remove());

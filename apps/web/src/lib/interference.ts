@@ -15,8 +15,10 @@ export async function checkInterference(): Promise<void> {
   const pairs = await kernel.clearances(ids, {}, 0);
   const features = useApp.getState().doc.features;
   const name = (id: string) => partName(id, features);
-  const overlaps = pairs.filter((p) => p.overlap > 1e-3).sort((a, b) => b.overlap - a.overlap);
-  const touching = pairs.filter((p) => p.overlap <= 1e-3 && p.distance < 1e-4).length;
+  const overlaps = pairs
+    .filter((clearance) => clearance.overlap > 1e-3)
+    .sort((a, b) => b.overlap - a.overlap);
+  const touching = pairs.filter((clearance) => clearance.overlap <= 1e-3 && clearance.distance < 1e-4).length;
 
   if (!overlaps.length) {
     return toast(
@@ -28,7 +30,10 @@ export async function checkInterference(): Promise<void> {
 
   const list = overlaps
     .slice(0, 4)
-    .map((p) => `${name(p.a)} · ${name(p.b)}: ${p.overlap.toFixed(p.overlap < 10 ? 2 : 0)} mm³`)
+    .map(
+      (clearance) =>
+        `${name(clearance.a)} · ${name(clearance.b)}: ${clearance.overlap.toFixed(clearance.overlap < 10 ? 2 : 0)} mm³`,
+    )
     .join("; ");
   toast(
     tn(overlaps.length, "{n} overlap: {list}", "{n} overlaps: {list}", {

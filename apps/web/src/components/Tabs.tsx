@@ -20,12 +20,12 @@ import { t } from "../lib/i18n";
 const DRAG_TYPE = "application/x-meercad-tab";
 
 export function TabStrip() {
-  const tabs = useApp((s) => s.tabs);
-  const activeId = useApp((s) => (s.screen === "editor" ? s.project?.id : null));
-  const saveState = useApp((s) => s.saveState);
-  const tasks = useApp((s) => s.tasks);
-  const assistantTabs = useApp((s) => s.assistantTabs);
-  const openAssistant = useApp((s) => s.assistantTab);
+  const tabs = useApp((state) => state.tabs);
+  const activeId = useApp((state) => (state.screen === "editor" ? state.project?.id : null));
+  const saveState = useApp((state) => state.saveState);
+  const tasks = useApp((state) => state.tasks);
+  const assistantTabs = useApp((state) => state.assistantTabs);
+  const openAssistant = useApp((state) => state.assistantTab);
   const [editing, setEditing] = useState(false);
   const [dropBefore, setDropBefore] = useState<string | null>(null);
   const strip = useRef<HTMLDivElement>(null);
@@ -50,27 +50,27 @@ export function TabStrip() {
               `${tab.folder ? `${tab.folder.split("/").join(" › ")} › ` : ""}${tab.name}`,
             )}
             draggable={!editing}
-            onDragStart={(e) => {
-              e.dataTransfer.setData(DRAG_TYPE, tab.id);
-              e.dataTransfer.effectAllowed = "move";
+            onDragStart={(event) => {
+              event.dataTransfer.setData(DRAG_TYPE, tab.id);
+              event.dataTransfer.effectAllowed = "move";
             }}
-            onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
 
-              e.preventDefault();
+              event.preventDefault();
               setDropBefore(tab.id);
             }}
             onDragLeave={() => setDropBefore(null)}
-            onDrop={(e) => {
-              e.preventDefault();
+            onDrop={(event) => {
+              event.preventDefault();
               setDropBefore(null);
 
-              const id = e.dataTransfer.getData(DRAG_TYPE);
+              const id = event.dataTransfer.getData(DRAG_TYPE);
               if (id && id !== tab.id) moveTab(id, tab.id);
             }}
             onClick={() => void openProject(tab.id)}
-            onKeyDown={(e) => e.key === "Enter" && !editing && void openProject(tab.id)}
-            onAuxClick={(e) => e.button === 1 && closeTab(tab.id)}
+            onKeyDown={(event) => event.key === "Enter" && !editing && void openProject(tab.id)}
+            onAuxClick={(event) => event.button === 1 && closeTab(tab.id)}
             onDoubleClick={() => active && setEditing(true)}
           >
             {active && editing ? (
@@ -79,19 +79,19 @@ export function TabStrip() {
                 className="tab-name-input"
                 defaultValue={tab.name}
                 aria-label={t("Project name")}
-                onFocus={(e) => e.target.select()}
-                onClick={(e) => e.stopPropagation()}
-                onBlur={(e) => {
+                onFocus={(event) => event.target.select()}
+                onClick={(event) => event.stopPropagation()}
+                onBlur={(event) => {
                   setEditing(false);
-                  void renameProject(e.target.value);
+                  void renameProject(event.target.value);
                 }}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                  if (event.key === "Enter") (event.target as HTMLInputElement).blur();
 
-                  if (e.key === "Escape") {
-                    (e.target as HTMLInputElement).value = tab.name;
-                    (e.target as HTMLInputElement).blur();
+                  if (event.key === "Escape") {
+                    (event.target as HTMLInputElement).value = tab.name;
+                    (event.target as HTMLInputElement).blur();
                   }
                 }}
               />
@@ -112,8 +112,8 @@ export function TabStrip() {
             <button
               className="tab-close"
               title={t("Close tab (⌘W)")}
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
                 closeTab(tab.id);
               }}
             >
@@ -141,7 +141,7 @@ export function TabStrip() {
               .filter(Boolean)
               .join("\n")}
             onClick={() => showAssistantTab(a.session)}
-            onKeyDown={(e) => e.key === "Enter" && showAssistantTab(a.session)}
+            onKeyDown={(event) => event.key === "Enter" && showAssistantTab(a.session)}
           >
             {a.busy && <AiOrb busy small />}
             <span className="tab-name">{a.name ?? t("Opening…")}</span>
@@ -149,8 +149,8 @@ export function TabStrip() {
             <button
               className="tab-close"
               title={t("Close: the assistant stops working on it")}
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
                 void handOverAssistantTab(a.session, false);
               }}
             >

@@ -95,7 +95,7 @@ function polygon(points: [number, number][]): SketchEntity[] {
 export function roomDocument(scan: RoomScan, names: RoomNames): MeercadDocument {
   // The floor at height 0.
   const bottoms = [...scan.walls, ...scan.floors].map(
-    (s) => s.center[2] - (scan.floors.includes(s) ? 0 : s.size[1] / 2),
+    (surface) => surface.center[2] - (scan.floors.includes(surface) ? 0 : surface.size[1] / 2),
   );
   const floorZ = bottoms.length ? Math.min(...bottoms) : 0;
   const features: Feature[] = [];
@@ -159,17 +159,17 @@ export function roomDocument(scan: RoomScan, names: RoomNames): MeercadDocument 
   };
 
   // Floor: its measured outline, or the box around the walls.
-  const floor = scan.floors.find((f) => (f.corners?.length ?? 0) >= 3);
+  const floor = scan.floors.find((surface) => (surface.corners?.length ?? 0) >= 3);
   let outline: [number, number][] | null = floor ? floor.corners!.map((c) => [r(c[0]), r(c[1])]) : null;
 
   if (!outline && scan.walls.length) {
-    const xs = scan.walls.flatMap((w) => [
-      w.center[0] - (w.along[0] * w.size[0]) / 2,
-      w.center[0] + (w.along[0] * w.size[0]) / 2,
+    const xs = scan.walls.flatMap((surface) => [
+      surface.center[0] - (surface.along[0] * surface.size[0]) / 2,
+      surface.center[0] + (surface.along[0] * surface.size[0]) / 2,
     ]);
-    const ys = scan.walls.flatMap((w) => [
-      w.center[1] - (w.along[1] * w.size[0]) / 2,
-      w.center[1] + (w.along[1] * w.size[0]) / 2,
+    const ys = scan.walls.flatMap((surface) => [
+      surface.center[1] - (surface.along[1] * surface.size[0]) / 2,
+      surface.center[1] + (surface.along[1] * surface.size[0]) / 2,
     ]);
     outline = [
       [r(Math.min(...xs)), r(Math.min(...ys))],
@@ -183,24 +183,24 @@ export function roomDocument(scan: RoomScan, names: RoomNames): MeercadDocument 
 
   // Walls, a little longer than measured so neighbours meet at the corners.
   const wallBody = new Map<string, string>();
-  scan.walls.forEach((w, i) => {
-    const bottom = w.center[2] - w.size[1] / 2 - floorZ;
+  scan.walls.forEach((surface, i) => {
+    const bottom = surface.center[2] - surface.size[1] / 2 - floorZ;
     wallBody.set(
-      w.id,
+      surface.id,
       box(
         names.wall(i + 1),
         bottom,
-        footprint(w.center[0], w.center[1], w.along, w.size[0] + WALL, WALL),
-        w.size[1],
+        footprint(surface.center[0], surface.center[1], surface.along, surface.size[0] + WALL, WALL),
+        surface.size[1],
         "new_body",
       ),
     );
   });
 
   // Doors, windows and openings cut through their wall (or the nearest one).
-  const nearest = (s: RoomSurface) =>
+  const nearest = (surface: RoomSurface) =>
     scan.walls.reduce<{ w: RoomSurface; d: number } | null>((best, w) => {
-      const [dx, dy] = [s.center[0] - w.center[0], s.center[1] - w.center[1]];
+      const [dx, dy] = [surface.center[0] - w.center[0], surface.center[1] - w.center[1]];
       const d = Math.abs(dx * -w.along[1] + dy * w.along[0]);
 
       return !best || d < best.d ? { w, d } : best;
@@ -211,17 +211,17 @@ export function roomDocument(scan: RoomScan, names: RoomNames): MeercadDocument 
     [scan.windows, names.window],
     [scan.openings, names.opening],
   ] as const) {
-    for (const s of list) {
-      const wall = (s.wall && scan.walls.find((w) => w.id === s.wall)) || nearest(s);
+    for (const surface of list) {
+      const wall = (surface.wall && scan.walls.find((w) => w.id === surface.wall)) || nearest(surface);
       const target = wall && wallBody.get(wall.id);
       if (!wall || !target) continue;
 
-      const bottom = s.center[2] - s.size[1] / 2 - floorZ;
+      const bottom = surface.center[2] - surface.size[1] / 2 - floorZ;
       box(
         name,
         Math.max(0, bottom),
-        footprint(s.center[0], s.center[1], wall.along, s.size[0], WALL + 100),
-        s.size[1] - Math.max(0, -bottom),
+        footprint(surface.center[0], surface.center[1], wall.along, surface.size[0], WALL + 100),
+        surface.size[1] - Math.max(0, -bottom),
         "cut",
         [target],
       );

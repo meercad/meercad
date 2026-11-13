@@ -12,12 +12,12 @@ import { secondsLeft } from "../lib/eta";
 const SHOW_AFTER_MS = 350;
 
 export function Tasks() {
-  const tasks = useApp((s) => s.tasks);
+  const tasks = useApp((state) => state.tasks);
   const [, tick] = useState(0);
   // Re-render when the youngest hidden task becomes old enough to show.
   useEffect(() => {
     const now = performance.now();
-    const waits = tasks.map((t) => SHOW_AFTER_MS - (now - t.since)).filter((w) => w > 0);
+    const waits = tasks.map((task) => SHOW_AFTER_MS - (now - task.since)).filter((w) => w > 0);
     if (!waits.length) return;
 
     const id = window.setTimeout(() => tick((n) => n + 1), Math.min(...waits) + 5);
@@ -26,7 +26,7 @@ export function Tasks() {
   }, [tasks]);
 
   // Long tasks count their time every second.
-  const long = tasks.some((t) => t.long);
+  const long = tasks.some((task) => task.long);
   useEffect(() => {
     if (!long) return;
 
@@ -36,7 +36,7 @@ export function Tasks() {
   }, [long]);
 
   const now = performance.now();
-  const shown = tasks.filter((t) => now - t.since >= SHOW_AFTER_MS);
+  const shown = tasks.filter((task) => now - task.since >= SHOW_AFTER_MS);
   if (!shown.length) return null;
 
   return (

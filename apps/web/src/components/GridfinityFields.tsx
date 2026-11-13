@@ -56,7 +56,7 @@ export function Seg<T extends string>({
 }
 
 export function PlaneBox({ placeholder, value }: { placeholder: string; value: string }) {
-  const active = useApp((s) => s.dialog?.field === "plane");
+  const active = useApp((state) => state.dialog?.field === "plane");
 
   return (
     <div
@@ -76,7 +76,7 @@ export function PlaneBox({ placeholder, value }: { placeholder: string; value: s
   );
 }
 
-export const num = (e: Expr | undefined, fallback: number) => (typeof e === "number" ? e : fallback);
+export const num = (expr: Expr | undefined, fallback: number) => (typeof expr === "number" ? expr : fallback);
 
 /** A whole number with − and + beside it (no keyboard needed). */
 export function Count({
@@ -88,7 +88,7 @@ export function Count({
   value: Expr | undefined;
   min: number;
   max: number;
-  onChange: (v: Expr) => void;
+  onChange: (expr: Expr) => void;
 }) {
   const n = num(value, min);
 
@@ -191,8 +191,8 @@ export function Examples<P>({
       <select
         className="field"
         value=""
-        onChange={(e) => {
-          const item = items[Number(e.target.value)];
+        onChange={(event) => {
+          const item = items[Number(event.target.value)];
           if (item) onPick(item.patch);
         }}
       >
@@ -207,16 +207,19 @@ export function Examples<P>({
   );
 }
 
-export function GridfinityFields({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
-  const features = useApp((s) => s.doc.features);
-  const kernelInfo = useApp((s) => s.output?.report.features.find((x) => x.id === f.id)?.info);
-  if (f.kind === "bin" && f.pocket) return <PartBinFields f={f} set={set} info={kernelInfo} />;
+export function GridfinityFields({ f: feature, set }: { f: Of<"gridfinity">; set: SetFn }) {
+  const features = useApp((state) => state.doc.features);
+  const kernelInfo = useApp((state) => state.output?.report.features.find((x) => x.id === feature.id)?.info);
 
-  return <GridFields f={f} set={set} features={features} kernelInfo={kernelInfo} />;
+  if (feature.kind === "bin" && feature.pocket) {
+    return <PartBinFields f={feature} set={set} info={kernelInfo} />;
+  }
+
+  return <GridFields f={feature} set={set} features={features} kernelInfo={kernelInfo} />;
 }
 
 function GridFields({
-  f,
+  f: feature,
   set,
   features,
   kernelInfo,
@@ -227,19 +230,19 @@ function GridFields({
   kernelInfo: Record<string, number> | undefined;
 }) {
   const plates = features.filter(
-    (x): x is Of<"gridfinity"> => x.op === "gridfinity" && x.kind === "baseplate" && x.id !== f.id,
+    (x): x is Of<"gridfinity"> => x.op === "gridfinity" && x.kind === "baseplate" && x.id !== feature.id,
   );
-  const bin = f.kind === "bin";
-  const fu = f.units ?? [1, 1];
+  const bin = feature.kind === "bin";
+  const fu = feature.units ?? [1, 1];
   const units: [number, number] = [num(fu[0], 1), num(fu[1], 1)];
-  const height = num(f.height, 3);
+  const height = num(feature.height, 3);
   const pair = (
     k: "units" | "dividers" | "cell" | "drawer" | "position",
     i: number,
-    v: Expr,
+    expr: Expr,
     base: [Expr, Expr],
-  ) => set({ [k]: base.map((x, j) => (j === i ? v : x)) });
-  const div = f.dividers ?? [0, 0];
+  ) => set({ [k]: base.map((x, j) => (j === i ? expr : x)) });
+  const div = feature.dividers ?? [0, 0];
 
   const usePreset = (patch: Preset["patch"]) => {
     setWantOutline(false);
@@ -253,9 +256,9 @@ function GridFields({
   const sketches = features.filter((x): x is Of<"sketch"> => x.op === "sketch");
   // The mode follows the feature (presets change it too); "outline" before a sketch is picked is kept here.
   const [wantOutline, setWantOutline] = useState(false);
-  const mode: "cells" | "area" | "outline" = f.outline
+  const mode: "cells" | "area" | "outline" = feature.outline
     ? "outline"
-    : f.drawer
+    : feature.drawer
       ? "area"
       : wantOutline
         ? "outline"
@@ -267,13 +270,15 @@ function GridFields({
     if (m === "cells") {
       set({ drawer: undefined, outline: undefined, gap: undefined, fill: undefined });
     } else if (m === "area") {
-      set({ drawer: f.drawer ?? [400, 300], outline: undefined });
+      set({ drawer: feature.drawer ?? [400, 300], outline: undefined });
     } else {
       set({
         drawer: undefined,
         outline: sketches.length
           ? {
-              sketch: (sketches.find((x) => x.id === f.outline?.sketch) ?? sketches[sketches.length - 1]!).id,
+              sketch: (
+                sketches.find((x) => x.id === feature.outline?.sketch) ?? sketches[sketches.length - 1]!
+              ).id,
             }
           : undefined,
         plane: undefined,
@@ -292,9 +297,9 @@ function GridFields({
         units,
         height,
         [num(div[0], 0), num(div[1], 0)],
-        num(f.wall, GRIDFINITY.wall),
-        num(f.dividerThickness ?? f.wall, GRIDFINITY.wall),
-        num(f.floor, height >= 2 ? GRIDFINITY.binFloor : GRIDFINITY.footHeight + 0.85),
+        num(feature.wall, GRIDFINITY.wall),
+        num(feature.dividerThickness ?? feature.wall, GRIDFINITY.wall),
+        num(feature.floor, height >= 2 ? GRIDFINITY.binFloor : GRIDFINITY.footHeight + 0.85),
       );
       info = t("{w} × {d} × {h} outside ({lip} with the lip)", {
         w: mm(s.width),
@@ -303,10 +308,10 @@ function GridFields({
         lip: mm(s.top),
       });
 
-      if (!f.solid) {
+      if (!feature.solid) {
         info += ` · ${c.count > 1 ? t("{n} compartments of {w} × {d}", { n: c.count, w: mm(c.width), d: mm(c.depth) }) : t("inside {w} × {d}", { w: mm(c.width), d: mm(c.depth) })}`;
       }
-    } else if ((f.outline || f.bed) && kernelInfo?.["cells"] !== undefined) {
+    } else if ((feature.outline || feature.bed) && kernelInfo?.["cells"] !== undefined) {
       const k = kernelInfo;
       info = t("{n} cells ({x} × {y}) on {w} × {d}", {
         n: k["cells"]!,
@@ -317,14 +322,17 @@ function GridFields({
       });
 
       if (k["borderX"] !== undefined) {
-        info += ` · ${t(f.fill === false ? "left empty {bx} and {by}" : "border {bx} and {by}", { bx: mm(k["borderX"]), by: mm(k["borderY"]!) })}`;
+        info += ` · ${t(feature.fill === false ? "left empty {bx} and {by}" : "border {bx} and {by}", { bx: mm(k["borderX"]), by: mm(k["borderY"]!) })}`;
       }
 
-      if (f.bed) {
+      if (feature.bed) {
         info += ` · ${t("{n} pieces, the largest {w} × {d}", { n: k["pieces"]!, w: mm(k["largestX"]!), d: mm(k["largestY"]!) })}`;
       }
-    } else if (f.drawer) {
-      const fit = drawerFit([num(f.drawer[0], 400), num(f.drawer[1], 300)], num(f.gap, 0.5));
+    } else if (feature.drawer) {
+      const fit = drawerFit(
+        [num(feature.drawer[0], 400), num(feature.drawer[1], 300)],
+        num(feature.gap, 0.5),
+      );
       info = t("{x} × {y} cells, border {bx} and {by}", {
         x: fit.units[0],
         y: fit.units[1],
@@ -337,14 +345,14 @@ function GridFields({
         d: mm(units[1] * GRIDFINITY.pitch),
       });
     }
-  } catch (e) {
-    info = e instanceof Error ? e.message : "";
+  } catch (error) {
+    info = error instanceof Error ? error.message : "";
   }
 
   return (
     <>
       <Examples items={PRESETS} onPick={usePreset} />
-      <KindSeg f={f} set={set} />
+      <KindSeg f={feature} set={set} />
       {!bin ? (
         <Seg
           value={mode}
@@ -360,16 +368,16 @@ function GridFields({
         <div className="row">
           <Field label={t("Area width")}>
             <ExprInput
-              value={f.drawer?.[0] ?? 400}
-              onCommit={(v) => pair("drawer", 0, v, f.drawer ?? [400, 300])}
-              onLive={(v) => pair("drawer", 0, v, f.drawer ?? [400, 300])}
+              value={feature.drawer?.[0] ?? 400}
+              onCommit={(expr) => pair("drawer", 0, expr, feature.drawer ?? [400, 300])}
+              onLive={(expr) => pair("drawer", 0, expr, feature.drawer ?? [400, 300])}
             />
           </Field>
           <Field label={t("Area depth")}>
             <ExprInput
-              value={f.drawer?.[1] ?? 300}
-              onCommit={(v) => pair("drawer", 1, v, f.drawer ?? [400, 300])}
-              onLive={(v) => pair("drawer", 1, v, f.drawer ?? [400, 300])}
+              value={feature.drawer?.[1] ?? 300}
+              onCommit={(expr) => pair("drawer", 1, expr, feature.drawer ?? [400, 300])}
+              onLive={(expr) => pair("drawer", 1, expr, feature.drawer ?? [400, 300])}
             />
           </Field>
         </div>
@@ -379,10 +387,12 @@ function GridFields({
           <Field label={t("Outline (sketch)")}>
             <select
               className="field"
-              value={f.outline?.sketch ?? ""}
-              onChange={(e) => set({ outline: e.target.value ? { sketch: e.target.value } : undefined })}
+              value={feature.outline?.sketch ?? ""}
+              onChange={(event) =>
+                set({ outline: event.target.value ? { sketch: event.target.value } : undefined })
+              }
             >
-              {f.outline ? null : <option value="">{t("Pick a sketch")}</option>}
+              {feature.outline ? null : <option value="">{t("Pick a sketch")}</option>}
               {sketches.map((x) => (
                 <option key={x.id} value={x.id}>
                   {featureName(x)}
@@ -399,13 +409,13 @@ function GridFields({
       {!bin && mode !== "cells" ? (
         <>
           <Field label={t("Gap to the edge")}>
-            <ExprInput value={f.gap} placeholder="0.5" onCommit={(gap) => set({ gap })} />
+            <ExprInput value={feature.gap} placeholder="0.5" onCommit={(gap) => set({ gap })} />
           </Field>
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={f.fill !== false}
-              onChange={(e) => set({ fill: e.target.checked ? undefined : false })}
+              checked={feature.fill !== false}
+              onChange={(event) => set({ fill: event.target.checked ? undefined : false })}
             />{" "}
             {t("Fill the rest with a solid border")}
           </label>
@@ -414,10 +424,10 @@ function GridFields({
       {bin || mode === "cells" ? (
         <div className="row">
           <Field label={t("Cells wide")}>
-            <Count value={fu[0]} min={1} max={30} onChange={(v) => pair("units", 0, v, fu)} />
+            <Count value={fu[0]} min={1} max={30} onChange={(expr) => pair("units", 0, expr, fu)} />
           </Field>
           <Field label={t("Cells deep")}>
-            <Count value={fu[1]} min={1} max={30} onChange={(v) => pair("units", 1, v, fu)} />
+            <Count value={fu[1]} min={1} max={30} onChange={(expr) => pair("units", 1, expr, fu)} />
           </Field>
         </div>
       ) : null}
@@ -425,41 +435,45 @@ function GridFields({
         <label className="checkbox">
           <input
             type="checkbox"
-            checked={!!f.bed}
-            onChange={(e) => set({ bed: e.target.checked ? { size: DEFAULT_BED } : undefined })}
+            checked={!!feature.bed}
+            onChange={(event) => set({ bed: event.target.checked ? { size: DEFAULT_BED } : undefined })}
           />{" "}
           {t("Cut into pieces for the print bed")}
         </label>
       ) : null}
-      {!bin && f.bed ? (
+      {!bin && feature.bed ? (
         <>
           <div className="row">
             <Field label={t("Bed width")}>
               <ExprInput
-                value={f.bed.size[0]}
-                onCommit={(v) => set({ bed: { ...f.bed, size: [v, f.bed!.size[1]] } })}
+                value={feature.bed.size[0]}
+                onCommit={(expr) => set({ bed: { ...feature.bed, size: [expr, feature.bed!.size[1]] } })}
               />
             </Field>
             <Field label={t("Bed depth")}>
               <ExprInput
-                value={f.bed.size[1]}
-                onCommit={(v) => set({ bed: { ...f.bed, size: [f.bed!.size[0], v] } })}
+                value={feature.bed.size[1]}
+                onCommit={(expr) => set({ bed: { ...feature.bed, size: [feature.bed!.size[0], expr] } })}
               />
             </Field>
           </div>
           <div className="row">
             <Field label={t("Unusable width")}>
               <ExprInput
-                value={f.bed.margin?.[0]}
+                value={feature.bed.margin?.[0]}
                 placeholder="0"
-                onCommit={(v) => set({ bed: { ...f.bed, margin: [v, f.bed?.margin?.[1] ?? 0] } })}
+                onCommit={(expr) =>
+                  set({ bed: { ...feature.bed, margin: [expr, feature.bed?.margin?.[1] ?? 0] } })
+                }
               />
             </Field>
             <Field label={t("Unusable depth")}>
               <ExprInput
-                value={f.bed.margin?.[1]}
+                value={feature.bed.margin?.[1]}
                 placeholder="0"
-                onCommit={(v) => set({ bed: { ...f.bed, margin: [f.bed?.margin?.[0] ?? 0, v] } })}
+                onCommit={(expr) =>
+                  set({ bed: { ...feature.bed, margin: [feature.bed?.margin?.[0] ?? 0, expr] } })
+                }
               />
             </Field>
           </div>
@@ -473,7 +487,7 @@ function GridFields({
       {bin ? (
         <div className="row">
           <Field label={t("Height (units)")}>
-            <Count value={f.height ?? 3} min={1} max={40} onChange={(height) => set({ height })} />
+            <Count value={feature.height ?? 3} min={1} max={40} onChange={(height) => set({ height })} />
           </Field>
           <div style={{ flex: 1 }} />
         </div>
@@ -483,16 +497,16 @@ function GridFields({
         <>
           <div className="row">
             <Field label={t("Dividers across")}>
-              <Count value={div[0]} min={0} max={50} onChange={(v) => pair("dividers", 0, v, div)} />
+              <Count value={div[0]} min={0} max={50} onChange={(expr) => pair("dividers", 0, expr, div)} />
             </Field>
             <Field label={t("Dividers along")}>
-              <Count value={div[1]} min={0} max={50} onChange={(v) => pair("dividers", 1, v, div)} />
+              <Count value={div[1]} min={0} max={50} onChange={(expr) => pair("dividers", 1, expr, div)} />
             </Field>
           </div>
           <div className="row">
             <Field label={t("Wall")}>
               <ExprInput
-                value={f.wall}
+                value={feature.wall}
                 placeholder={String(GRIDFINITY.wall)}
                 onCommit={(wall) => set({ wall })}
                 onLive={(wall) => set({ wall })}
@@ -500,7 +514,7 @@ function GridFields({
             </Field>
             <Field label={t("Floor height")}>
               <ExprInput
-                value={f.floor}
+                value={feature.floor}
                 placeholder={String(height >= 2 ? GRIDFINITY.binFloor : GRIDFINITY.footHeight + 0.85)}
                 onCommit={(floor) => set({ floor })}
               />
@@ -509,15 +523,15 @@ function GridFields({
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={f.scoop !== undefined}
-              onChange={(e) => set({ scoop: e.target.checked ? 10 : undefined })}
+              checked={feature.scoop !== undefined}
+              onChange={(event) => set({ scoop: event.target.checked ? 10 : undefined })}
             />{" "}
             {t("Scoop: a finger slide at the front")}
           </label>
-          {f.scoop !== undefined ? (
+          {feature.scoop !== undefined ? (
             <Field label={t("Scoop radius")}>
               <ExprInput
-                value={f.scoop}
+                value={feature.scoop}
                 onCommit={(scoop) => set({ scoop })}
                 onLive={(scoop) => set({ scoop })}
               />
@@ -526,37 +540,39 @@ function GridFields({
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={!!f.tab}
-              onChange={(e) => set({ tab: e.target.checked ? {} : undefined })}
+              checked={!!feature.tab}
+              onChange={(event) => set({ tab: event.target.checked ? {} : undefined })}
             />{" "}
             {t("Label tab at the back")}
           </label>
-          {f.tab ? (
+          {feature.tab ? (
             <>
               <Seg
-                value={f.tab.style ?? "full"}
+                value={feature.tab.style ?? "full"}
                 options={[
                   ["full", t("Full width")],
                   ["left", t("Left")],
                   ["center", t("Centre")],
                   ["right", t("Right")],
                 ]}
-                onChange={(style) => set({ tab: { ...f.tab, style: style === "full" ? undefined : style } })}
+                onChange={(style) =>
+                  set({ tab: { ...feature.tab, style: style === "full" ? undefined : style } })
+                }
               />
               <div className="row">
                 <Field label={t("Tab width")}>
                   <ExprInput
-                    value={f.tab.width}
+                    value={feature.tab.width}
                     placeholder={String(GRIDFINITY.tabWidth)}
-                    onCommit={(width) => set({ tab: { ...f.tab, width } })}
+                    onCommit={(width) => set({ tab: { ...feature.tab, width } })}
                   />
                 </Field>
                 <Field label={t("Tab angle")}>
                   <ExprInput
-                    value={f.tab.angle}
+                    value={feature.tab.angle}
                     unit="deg"
                     placeholder={String(GRIDFINITY.tabAngle)}
-                    onCommit={(angle) => set({ tab: { ...f.tab, angle } })}
+                    onCommit={(angle) => set({ tab: { ...feature.tab, angle } })}
                   />
                 </Field>
               </div>
@@ -565,16 +581,16 @@ function GridFields({
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={f.lip !== false}
-              onChange={(e) => set({ lip: e.target.checked ? undefined : false })}
+              checked={feature.lip !== false}
+              onChange={(event) => set({ lip: event.target.checked ? undefined : false })}
             />{" "}
             {t("Stacking lip")}
           </label>
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={!!f.solid}
-              onChange={(e) => set({ solid: e.target.checked || undefined })}
+              checked={!!feature.solid}
+              onChange={(event) => set({ solid: event.target.checked || undefined })}
             />{" "}
             {t("Solid (cut your own pockets)")}
           </label>
@@ -582,8 +598,8 @@ function GridFields({
       ) : (
         <Field label={t("Floor below the cells")}>
           <ExprInput
-            value={f.floor}
-            placeholder={f.magnets || f.screws ? String(GRIDFINITY.plateFloorWithHoles) : "0"}
+            value={feature.floor}
+            placeholder={feature.magnets || feature.screws ? String(GRIDFINITY.plateFloorWithHoles) : "0"}
             onCommit={(floor) => set({ floor })}
           />
         </Field>
@@ -592,16 +608,16 @@ function GridFields({
         <label className="checkbox">
           <input
             type="checkbox"
-            checked={!!f.magnets}
-            onChange={(e) => set({ magnets: e.target.checked || undefined })}
+            checked={!!feature.magnets}
+            onChange={(event) => set({ magnets: event.target.checked || undefined })}
           />{" "}
           {t("Magnet holes")}
         </label>
         <label className="checkbox">
           <input
             type="checkbox"
-            checked={!!f.screws}
-            onChange={(e) => set({ screws: e.target.checked || undefined })}
+            checked={!!feature.screws}
+            onChange={(event) => set({ screws: event.target.checked || undefined })}
           />{" "}
           {t("Screw holes")}
         </label>
@@ -610,13 +626,13 @@ function GridFields({
         <Field label={t("Stands in")}>
           <select
             className="field"
-            value={f.baseplate ?? ""}
-            onChange={(e) =>
+            value={feature.baseplate ?? ""}
+            onChange={(event) =>
               set(
-                e.target.value
+                event.target.value
                   ? {
-                      baseplate: e.target.value,
-                      cell: f.cell ?? [0, 0],
+                      baseplate: event.target.value,
+                      cell: feature.cell ?? [0, 0],
                       plane: undefined,
                       position: undefined,
                     }
@@ -625,31 +641,31 @@ function GridFields({
             }
           >
             <option value="">{t("Nothing (place freely)")}</option>
-            {plates.map((p) => (
-              <option key={p.id} value={p.id}>
-                {featureName(p)}
+            {plates.map((feature) => (
+              <option key={feature.id} value={feature.id}>
+                {featureName(feature)}
               </option>
             ))}
           </select>
         </Field>
       ) : null}
-      {f.baseplate ? (
+      {feature.baseplate ? (
         <>
           <div className="row">
             <Field label={t("Cell (column)")}>
               <Count
-                value={f.cell?.[0] ?? 0}
+                value={feature.cell?.[0] ?? 0}
                 min={0}
                 max={100}
-                onChange={(v) => pair("cell", 0, v, f.cell ?? [0, 0])}
+                onChange={(expr) => pair("cell", 0, expr, feature.cell ?? [0, 0])}
               />
             </Field>
             <Field label={t("Cell (row)")}>
               <Count
-                value={f.cell?.[1] ?? 0}
+                value={feature.cell?.[1] ?? 0}
                 min={0}
                 max={100}
-                onChange={(v) => pair("cell", 1, v, f.cell ?? [0, 0])}
+                onChange={(expr) => pair("cell", 1, expr, feature.cell ?? [0, 0])}
               />
             </Field>
           </div>
@@ -657,25 +673,25 @@ function GridFields({
             <ShieldCheck /> {t("Check fit")}
           </button>
         </>
-      ) : !bin && f.outline ? null : (
+      ) : !bin && feature.outline ? null : (
         <>
           <Field label={t("On")}>
             <PlaneBox
-              value={describePlane(f.plane ?? { ref: "origin.XY" })}
+              value={describePlane(feature.plane ?? { ref: "origin.XY" })}
               placeholder={t("Tap a plane or flat face where it stands")}
             />
           </Field>
           <div className="row">
             <Field label={t("Position x")}>
               <ExprInput
-                value={f.position?.[0] ?? 0}
-                onCommit={(v) => pair("position", 0, v, f.position ?? [0, 0])}
+                value={feature.position?.[0] ?? 0}
+                onCommit={(expr) => pair("position", 0, expr, feature.position ?? [0, 0])}
               />
             </Field>
             <Field label={t("Position y")}>
               <ExprInput
-                value={f.position?.[1] ?? 0}
-                onCommit={(v) => pair("position", 1, v, f.position ?? [0, 0])}
+                value={feature.position?.[1] ?? 0}
+                onCommit={(expr) => pair("position", 1, expr, feature.position ?? [0, 0])}
               />
             </Field>
           </div>
@@ -695,8 +711,8 @@ function GridFields({
 }
 
 /** Bin, baseplate, or a bin with a nest for a part (a scan or any other part). */
-function KindSeg({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
-  const value = f.kind === "bin" && f.pocket ? "part" : f.kind;
+function KindSeg({ f: feature, set }: { f: Of<"gridfinity">; set: SetFn }) {
+  const value = feature.kind === "bin" && feature.pocket ? "part" : feature.kind;
 
   return (
     <Seg
@@ -734,8 +750,8 @@ function KindSeg({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
           set({
             kind,
             pocket: undefined,
-            units: f.units ?? [1, 1],
-            height: f.height ?? 3,
+            units: feature.units ?? [1, 1],
+            height: feature.height ?? 3,
             drawer: undefined,
             outline: undefined,
             gap: undefined,
@@ -746,7 +762,7 @@ function KindSeg({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
           set({
             kind,
             pocket: undefined,
-            units: f.units ?? [1, 1],
+            units: feature.units ?? [1, 1],
             baseplate: undefined,
             cell: undefined,
             dividers: undefined,
@@ -767,7 +783,7 @@ function KindSeg({ f, set }: { f: Of<"gridfinity">; set: SetFn }) {
  * takes as few cells as hold it (or fixed sizes) and is built where the part lies.
  */
 function PartBinFields({
-  f,
+  f: feature,
   set,
   info,
 }: {
@@ -775,12 +791,12 @@ function PartBinFields({
   set: SetFn;
   info: Record<string, number> | undefined;
 }) {
-  const features = useApp((s) => s.doc.features);
+  const features = useApp((state) => state.doc.features);
   const plates = features.filter(
     (x): x is Of<"gridfinity"> => x.op === "gridfinity" && x.kind === "baseplate",
   );
-  const p = f.pocket!;
-  const auto = !f.units;
+  const p = feature.pocket!;
+  const auto = !feature.units;
   const setPocket = (patch: Partial<NonNullable<Of<"gridfinity">["pocket"]>>) =>
     set({ pocket: { ...p, ...patch } });
   const sizeText =
@@ -795,7 +811,7 @@ function PartBinFields({
 
   return (
     <>
-      <KindSeg f={f} set={set} />
+      <KindSeg f={feature} set={set} />
       <Field label={t("Part to hold")}>
         <PickBox
           field="pocket"
@@ -825,7 +841,7 @@ function PartBinFields({
         <input
           type="checkbox"
           checked={!!p.grip}
-          onChange={(e) => setPocket({ grip: e.target.checked || undefined })}
+          onChange={(event) => setPocket({ grip: event.target.checked || undefined })}
         />{" "}
         {t("Finger grip across the part")}
       </label>
@@ -833,9 +849,9 @@ function PartBinFields({
         <input
           type="checkbox"
           checked={auto}
-          onChange={(e) =>
+          onChange={(event) =>
             set(
-              e.target.checked
+              event.target.checked
                 ? { units: undefined, height: undefined }
                 : { units: [info?.["width"] ?? 1, info?.["depth"] ?? 1], height: info?.["height"] ?? 3 },
             )
@@ -846,13 +862,23 @@ function PartBinFields({
       {!auto ? (
         <div className="row">
           <Field label={t("Cells wide")}>
-            <Count value={f.units![0]} min={1} max={30} onChange={(v) => set({ units: [v, f.units![1]] })} />
+            <Count
+              value={feature.units![0]}
+              min={1}
+              max={30}
+              onChange={(expr) => set({ units: [expr, feature.units![1]] })}
+            />
           </Field>
           <Field label={t("Cells deep")}>
-            <Count value={f.units![1]} min={1} max={30} onChange={(v) => set({ units: [f.units![0], v] })} />
+            <Count
+              value={feature.units![1]}
+              min={1}
+              max={30}
+              onChange={(expr) => set({ units: [feature.units![0], expr] })}
+            />
           </Field>
           <Field label={t("Height (units)")}>
-            <Count value={f.height ?? 3} min={1} max={40} onChange={(height) => set({ height })} />
+            <Count value={feature.height ?? 3} min={1} max={40} onChange={(height) => set({ height })} />
           </Field>
         </div>
       ) : null}
@@ -861,16 +887,16 @@ function PartBinFields({
         <label className="checkbox">
           <input
             type="checkbox"
-            checked={f.lip !== false}
-            onChange={(e) => set({ lip: e.target.checked ? undefined : false })}
+            checked={feature.lip !== false}
+            onChange={(event) => set({ lip: event.target.checked ? undefined : false })}
           />{" "}
           {t("Stacking lip")}
         </label>
         <label className="checkbox">
           <input
             type="checkbox"
-            checked={!!f.magnets}
-            onChange={(e) => set({ magnets: e.target.checked || undefined })}
+            checked={!!feature.magnets}
+            onChange={(event) => set({ magnets: event.target.checked || undefined })}
           />{" "}
           {t("Magnet holes")}
         </label>
@@ -879,11 +905,11 @@ function PartBinFields({
         <Field label={t("Stands in")}>
           <select
             className="field"
-            value={f.baseplate ?? ""}
-            onChange={(e) =>
+            value={feature.baseplate ?? ""}
+            onChange={(event) =>
               set(
-                e.target.value
-                  ? { baseplate: e.target.value, cell: f.cell ?? [0, 0], plane: undefined }
+                event.target.value
+                  ? { baseplate: event.target.value, cell: feature.cell ?? [0, 0], plane: undefined }
                   : { baseplate: undefined, cell: undefined },
               )
             }
@@ -897,29 +923,29 @@ function PartBinFields({
           </select>
         </Field>
       ) : null}
-      {f.baseplate ? (
+      {feature.baseplate ? (
         <div className="row">
           <Field label={t("Cell (column)")}>
             <Count
-              value={f.cell?.[0] ?? 0}
+              value={feature.cell?.[0] ?? 0}
               min={0}
               max={100}
-              onChange={(v) => set({ cell: [v, f.cell?.[1] ?? 0] })}
+              onChange={(expr) => set({ cell: [expr, feature.cell?.[1] ?? 0] })}
             />
           </Field>
           <Field label={t("Cell (row)")}>
             <Count
-              value={f.cell?.[1] ?? 0}
+              value={feature.cell?.[1] ?? 0}
               min={0}
               max={100}
-              onChange={(v) => set({ cell: [f.cell?.[0] ?? 0, v] })}
+              onChange={(expr) => set({ cell: [feature.cell?.[0] ?? 0, expr] })}
             />
           </Field>
         </div>
       ) : (
         <Field label={t("Stands on")}>
           <PlaneBox
-            value={describePlane(f.plane ?? { ref: "origin.XY" })}
+            value={describePlane(feature.plane ?? { ref: "origin.XY" })}
             placeholder={t("Tap a plane or flat face where it stands")}
           />
         </Field>
@@ -958,8 +984,8 @@ const LABEL_PRESETS: { label: string; patch: Partial<Of<"label">> }[] = [
   { label: t("Drawer front"), patch: { width: 60, height: 20, thickness: 1.6 } },
 ];
 
-export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
-  const symbol = f.symbol ?? "none";
+export function LabelFields({ f: feature, set }: { f: Of<"label">; set: SetFn }) {
+  const symbol = feature.symbol ?? "none";
 
   return (
     <>
@@ -991,8 +1017,8 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
         <textarea
           className="field"
           rows={2}
-          value={f.text ?? ""}
-          onChange={(e) => set({ text: e.target.value || undefined })}
+          value={feature.text ?? ""}
+          onChange={(event) => set({ text: event.target.value || undefined })}
         />
       </Field>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -1004,8 +1030,8 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
             onClick={() =>
               set({
                 text:
-                  /×/.test(f.text ?? "") && /^M[\d.]+/.test(f.text ?? "")
-                    ? (f.text ?? "").replace(/^M[\d.]+/, m)
+                  /×/.test(feature.text ?? "") && /^M[\d.]+/.test(feature.text ?? "")
+                    ? (feature.text ?? "").replace(/^M[\d.]+/, m)
                     : m,
               })
             }
@@ -1018,7 +1044,7 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
             key={l}
             className="btn"
             style={{ height: 26, padding: "0 8px" }}
-            onClick={() => set({ text: `${(f.text ?? "M3").replace(/×.*$/, "")}${l}` })}
+            onClick={() => set({ text: `${(feature.text ?? "M3").replace(/×.*$/, "")}${l}` })}
           >
             {l}
           </button>
@@ -1026,7 +1052,7 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
       </div>
       <Field label={t("Result")}>
         <Seg
-          value={f.style ?? "raised"}
+          value={feature.style ?? "raised"}
           options={[
             ["raised", t("Raised")],
             ["engraved", t("Engraved")],
@@ -1037,15 +1063,15 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
       <label className="checkbox">
         <input
           type="checkbox"
-          checked={!!f.separate}
-          onChange={(e) => set({ separate: e.target.checked || undefined })}
+          checked={!!feature.separate}
+          onChange={(event) => set({ separate: event.target.checked || undefined })}
         />{" "}
         {t("Two colours: the marking as its own part")}
       </label>
       <div className="row">
         <Field label={t("Width")}>
           <ExprInput
-            value={f.width}
+            value={feature.width}
             placeholder="36"
             onCommit={(width) => set({ width })}
             onLive={(width) => set({ width })}
@@ -1053,7 +1079,7 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
         </Field>
         <Field label={t("Height")}>
           <ExprInput
-            value={f.height}
+            value={feature.height}
             placeholder="11"
             onCommit={(height) => set({ height })}
             onLive={(height) => set({ height })}
@@ -1062,21 +1088,27 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
       </div>
       <div className="row">
         <Field label={t("Thickness")}>
-          <ExprInput value={f.thickness} placeholder="1.2" onCommit={(thickness) => set({ thickness })} />
+          <ExprInput
+            value={feature.thickness}
+            placeholder="1.2"
+            onCommit={(thickness) => set({ thickness })}
+          />
         </Field>
-        <Field label={f.style === "engraved" ? t("Depth") : t("Height")}>
-          <ExprInput value={f.depth} placeholder="0.6" onCommit={(depth) => set({ depth })} />
+        <Field label={feature.style === "engraved" ? t("Depth") : t("Height")}>
+          <ExprInput value={feature.depth} placeholder="0.6" onCommit={(depth) => set({ depth })} />
         </Field>
       </div>
       <div className="row">
         <Field label={t("Letter height")}>
-          <ExprInput value={f.size} placeholder={t("fit")} onCommit={(size) => set({ size })} />
+          <ExprInput value={feature.size} placeholder={t("fit")} onCommit={(size) => set({ size })} />
         </Field>
         <Field label={t("Font")}>
           <select
             className="field"
-            value={f.font ?? "sans"}
-            onChange={(e) => set({ font: e.target.value === "sans" ? undefined : e.target.value })}
+            value={feature.font ?? "sans"}
+            onChange={(event) =>
+              set({ font: event.target.value === "sans" ? undefined : event.target.value })
+            }
           >
             <option value="sans">{t("Sans")}</option>
             <option value="sans-bold">{t("Sans bold")}</option>
@@ -1086,26 +1118,26 @@ export function LabelFields({ f, set }: { f: Of<"label">; set: SetFn }) {
       </div>
       <Field label={t("On")}>
         <PlaneBox
-          value={describePlane(f.plane ?? { ref: "origin.XY" })}
+          value={describePlane(feature.plane ?? { ref: "origin.XY" })}
           placeholder={t("Tap a flat face where the label goes")}
         />
       </Field>
       <div className="row">
         <Field label={t("Position x")}>
           <ExprInput
-            value={f.position?.[0] ?? 0}
-            onCommit={(x) => set({ position: [x, f.position?.[1] ?? 0] })}
+            value={feature.position?.[0] ?? 0}
+            onCommit={(x) => set({ position: [x, feature.position?.[1] ?? 0] })}
           />
         </Field>
         <Field label={t("Position y")}>
           <ExprInput
-            value={f.position?.[1] ?? 0}
-            onCommit={(y) => set({ position: [f.position?.[0] ?? 0, y] })}
+            value={feature.position?.[1] ?? 0}
+            onCommit={(y) => set({ position: [feature.position?.[0] ?? 0, y] })}
           />
         </Field>
         <Field label={t("Angle")}>
           <ExprInput
-            value={f.angle ?? 0}
+            value={feature.angle ?? 0}
             unit="deg"
             onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })}
           />

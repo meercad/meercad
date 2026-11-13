@@ -81,26 +81,26 @@ export function traceSections(
   tol: number,
   construction: boolean,
 ): { draft: Draft; curves: number } {
-  const d: Draft = { entities: [...base.entities], constraints: [...base.constraints] };
+  const draft: Draft = { entities: [...base.entities], constraints: [...base.constraints] };
   const taken = new Set<string>();
   const cons = construction ? { construction: true } : {};
 
   const point = (q: Vec2): string => {
-    const id = freshId(d, "p", taken);
-    d.entities.push({ id, type: "point", x: q[0], y: q[1] });
+    const id = freshId(draft, "p", taken);
+    draft.entities.push({ id, type: "point", x: q[0], y: q[1] });
 
     return id;
   };
 
   const entity = (e: NewEntity, prefix: string): string => {
-    const id = freshId(d, prefix, taken);
-    d.entities.push({ ...e, id } as SketchEntity);
+    const id = freshId(draft, prefix, taken);
+    draft.entities.push({ ...e, id } as SketchEntity);
 
     return id;
   };
 
   const constraint = (c: NewConstraint) =>
-    d.constraints.push({ ...c, id: freshId(d, "c", taken) } as SketchConstraint);
+    draft.constraints.push({ ...c, id: freshId(draft, "c", taken) } as SketchConstraint);
   let curves = 0;
 
   for (const chain of chains) {
@@ -151,7 +151,7 @@ export function traceSections(
     }
   }
 
-  return { draft: d, curves };
+  return { draft: draft, curves };
 }
 
 /** Unit direction of travel along a piece (from `a` to `b`) at a point on it. */

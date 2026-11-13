@@ -96,19 +96,19 @@ export function toggleTheme(): void {
 export const openPalette = (): void => void window.dispatchEvent(new Event("meercad:palette"));
 
 export function TopBar() {
-  const sideOpen = useApp((s) => s.sideOpen);
-  const canUndo = useApp((s) => s.canUndo);
-  const canRedo = useApp((s) => s.canRedo);
-  const inDialog = useApp((s) => !!s.dialog);
-  const sketches = useApp((s) => s.output?.report.sketches) ?? NONE;
-  const features = useApp((s) => s.doc.features);
-  const project = useApp((s) => s.project);
-  const tabs = useApp((s) => s.tabs);
+  const sideOpen = useApp((state) => state.sideOpen);
+  const canUndo = useApp((state) => state.canUndo);
+  const canRedo = useApp((state) => state.canRedo);
+  const inDialog = useApp((state) => !!state.dialog);
+  const sketches = useApp((state) => state.output?.report.sketches) ?? NONE;
+  const features = useApp((state) => state.doc.features);
+  const project = useApp((state) => state.project);
+  const tabs = useApp((state) => state.tabs);
   const compact = useCompact();
   const nameBtn = useRef<HTMLButtonElement>(null);
-  const units = useApp((s) => s.doc.units ?? "mm");
-  const variants = useApp((s) => s.doc.variants?.length ?? 0);
-  const hasJoints = useApp((s) => (s.doc.mechanism?.joints.length ?? 0) > 0);
+  const units = useApp((state) => state.doc.units ?? "mm");
+  const variants = useApp((state) => state.doc.variants?.length ?? 0);
+  const hasJoints = useApp((state) => (state.doc.mechanism?.joints.length ?? 0) > 0);
   const slicers = useSlicers((s) => s.slicers);
   const searchKey = useKey("palette");
   // Command search for every tool and command; on touch screens this button is the way in.
@@ -127,9 +127,9 @@ export function TopBar() {
   const moreBtn = useRef<HTMLButtonElement>(null);
 
   const sketchName = (id: string) => {
-    const f = features.find((x) => x.id === id);
+    const feature = features.find((x) => x.id === id);
 
-    return f ? featureName(f) : id;
+    return feature ? featureName(feature) : id;
   };
 
   const on = (yes: boolean) => (yes ? <Check /> : <span className="menu-icon-gap" />);
@@ -173,12 +173,12 @@ export function TopBar() {
         ]
       : []),
     "sep",
-    ...sketches.map((s) => ({
-      label: sketchName(s.id),
+    ...sketches.map((sketchView) => ({
+      label: sketchName(sketchView.id),
       icon: <PenLine />,
       submenu: [
-        { label: t("DXF (laser)"), icon: <FileDown />, onClick: () => exportSketch(s.id, "dxf") },
-        { label: "SVG", icon: <FileDown />, onClick: () => exportSketch(s.id, "svg") },
+        { label: t("DXF (laser)"), icon: <FileDown />, onClick: () => exportSketch(sketchView.id, "dxf") },
+        { label: "SVG", icon: <FileDown />, onClick: () => exportSketch(sketchView.id, "svg") },
       ],
     })),
   ];
@@ -258,16 +258,16 @@ export function TopBar() {
   };
 
   const openFile = () => {
-    const r = fileBtn.current!.getBoundingClientRect();
-    showMenu(r.right, r.bottom + 6, fileItems(), { alignRight: true });
+    const rect = fileBtn.current!.getBoundingClientRect();
+    showMenu(rect.right, rect.bottom + 6, fileItems(), { alignRight: true });
   };
 
   const openMore = () => {
-    const r = moreBtn.current!.getBoundingClientRect();
+    const rect = moreBtn.current!.getBoundingClientRect();
     // The phone has no File button: its items come first here.
     showMenu(
-      r.right,
-      r.bottom + 6,
+      rect.right,
+      rect.bottom + 6,
       [
         ...(compact ? [...fileItems(), "sep" as const] : []),
         { label: t("View"), icon: <Eye />, submenu: viewItems() },
@@ -305,12 +305,12 @@ export function TopBar() {
 
   // Phone: the project name stands in for the tab strip and switches between open projects.
   const openProjects = () => {
-    const r = nameBtn.current!.getBoundingClientRect();
-    showMenu(r.left, r.bottom + 6, [
-      ...tabs.map((t) => ({
-        label: t.name,
-        icon: t.id === project?.id ? <Check /> : <span className="menu-icon-gap" />,
-        onClick: () => void openProject(t.id),
+    const rect = nameBtn.current!.getBoundingClientRect();
+    showMenu(rect.left, rect.bottom + 6, [
+      ...tabs.map((tab) => ({
+        label: tab.name,
+        icon: tab.id === project?.id ? <Check /> : <span className="menu-icon-gap" />,
+        onClick: () => void openProject(tab.id),
       })),
       "sep",
       { label: t("New part"), icon: <Plus />, onClick: () => void newProject() },

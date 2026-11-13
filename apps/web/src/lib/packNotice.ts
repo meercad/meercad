@@ -22,7 +22,7 @@ const without = (id: PackId): string =>
     ),
   })[id];
 
-const packName = (id: PackId) => t(PACKS.find((p) => p.id === id)!.name);
+const packName = (id: PackId) => t(PACKS.find((pack) => pack.id === id)!.name);
 
 /** The note for a design, or null when every pack it uses is on here. */
 export function packNote(doc: MeercadDocument): { title: string; message: string } | null {

@@ -62,18 +62,18 @@ export function restoreElided(ops: DocOp[], doc: MeercadDocument): DocOp[] {
           ...op,
           patch: fill(
             op.patch,
-            doc.features.find((f) => f.id === op.id),
+            doc.features.find((feature) => feature.id === op.id),
           ) as Record<string, unknown>,
         };
       case "add_features":
         return {
           ...op,
           features: op.features.map(
-            (f) =>
+            (feature) =>
               fill(
-                f,
-                doc.features.find((x) => x.id === f.id),
-              ) as typeof f,
+                feature,
+                doc.features.find((x) => x.id === feature.id),
+              ) as typeof feature,
           ),
         };
       case "set_reference":
@@ -81,7 +81,7 @@ export function restoreElided(ops: DocOp[], doc: MeercadDocument): DocOp[] {
           ...op,
           reference: fill(
             op.reference,
-            doc.references?.find((r) => r.id === op.reference.id),
+            doc.references?.find((reference) => reference.id === op.reference.id),
           ) as typeof op.reference,
         };
       case "replace":

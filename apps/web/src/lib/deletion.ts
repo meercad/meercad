@@ -20,12 +20,12 @@ function wholeBodies(selection: Pick[]): string[] {
   const meshes = useApp.getState().output?.meshes ?? [];
   const byBody = new Map<string, Set<number>>();
 
-  for (const p of selection) {
-    if (p.kind === "face") byBody.set(p.bodyId, (byBody.get(p.bodyId) ?? new Set()).add(p.face));
+  for (const pick of selection) {
+    if (pick.kind === "face") byBody.set(pick.bodyId, (byBody.get(pick.bodyId) ?? new Set()).add(pick.face));
   }
 
   return [...byBody]
-    .filter(([id, faces]) => meshes.find((m) => m.bodyId === id)?.faceTags.length === faces.size)
+    .filter(([id, faces]) => meshes.find((mesh) => mesh.bodyId === id)?.faceTags.length === faces.size)
     .map(([id]) => id);
 }
 
@@ -44,25 +44,26 @@ export function deleteBodies(bodies: string[]): void {
   }
 }
 
-const sameEdge = (s: EdgeSelector, a: string, b: string) =>
-  "edge" in s && ((s.edge[0] === a && s.edge[1] === b) || (s.edge[0] === b && s.edge[1] === a));
+const sameEdge = (selector: EdgeSelector, a: string, b: string) =>
+  "edge" in selector &&
+  ((selector.edge[0] === a && selector.edge[1] === b) || (selector.edge[0] === b && selector.edge[1] === a));
 
 /** One op that removes what a face stands for, or a reason why it can't be done that way. */
 /** Fillets and chamfers on the edges of a face that is going away would fail; drop those edges too. */
 function cleanupEdgesOf(tag: string): DocOp[] {
   const ops: DocOp[] = [];
 
-  for (const f of currentDoc().features) {
-    if (f.op !== "fillet" && f.op !== "chamfer") continue;
+  for (const feature of currentDoc().features) {
+    if (feature.op !== "fillet" && feature.op !== "chamfer") continue;
 
-    const edges = (Array.isArray(f.edges) ? f.edges : [f.edges]) as EdgeSelector[];
-    const rest = edges.filter((s) => !JSON.stringify(s).includes(JSON.stringify(tag)));
+    const edges = (Array.isArray(feature.edges) ? feature.edges : [feature.edges]) as EdgeSelector[];
+    const rest = edges.filter((selector) => !JSON.stringify(selector).includes(JSON.stringify(tag)));
     if (rest.length === edges.length) continue;
 
     ops.push(
       rest.length
-        ? { type: "edit_feature", id: f.id, patch: { edges: rest } }
-        : { type: "delete_feature", id: f.id },
+        ? { type: "edit_feature", id: feature.id, patch: { edges: rest } }
+        : { type: "delete_feature", id: feature.id },
     );
   }
 
@@ -78,13 +79,13 @@ function opForFace(
   const tag = p.tags[0];
   if (!tag) return { problem: t("This face has no name to work with") };
 
-  const owner = doc.features.find((f) => f.id === tag.split(/[.@[]/)[0]);
+  const owner = doc.features.find((feature) => feature.id === tag.split(/[.@[]/)[0]);
   if (!owner) return { problem: t("Could not find the feature that made this face") };
 
   const copy = /@([\w-]+)\.\d+$/.exec(tag);
 
   if (copy) {
-    const pattern = doc.features.find((f) => f.id === copy[1]);
+    const pattern = doc.features.find((feature) => feature.id === copy[1]);
 
     return {
       problem: t("This is a copy made by {name}. Lower its count, or delete the pattern.", {
@@ -100,7 +101,7 @@ function opForFace(
   if (edge && (owner.op === "fillet" || owner.op === "chamfer")) {
     const [, a, b] = edge as unknown as [string, string, string];
     const edges = (Array.isArray(owner.edges) ? owner.edges : [owner.edges]) as EdgeSelector[];
-    const rest = edges.filter((s) => !sameEdge(s, a, b));
+    const rest = edges.filter((selector) => !sameEdge(selector, a, b));
 
     if (rest.length === edges.length) {
       return {
@@ -125,7 +126,7 @@ function opForFace(
 
   if (side && (owner.op === "extrude" || owner.op === "revolve") && "sketch" in owner.profile) {
     const [, sketchId, curveId] = side as unknown as [string, string, string];
-    const view = useApp.getState().output?.report.sketches.find((s) => s.id === sketchId);
+    const view = useApp.getState().output?.report.sketches.find((sketchView) => sketchView.id === sketchId);
 
     if (view) {
       const all = view.regions.filter((r) => r.depth % 2 === 1).map((r) => r.key);
@@ -152,8 +153,8 @@ export async function deleteModelSelection(): Promise<void> {
   const { selection, selectedFeature, doc } = useApp.getState();
 
   if (!selection.length) {
-    const f = selectedFeature ? doc.features.find((x) => x.id === selectedFeature) : undefined;
-    if (f) await deleteFeature(f);
+    const feature = selectedFeature ? doc.features.find((x) => x.id === selectedFeature) : undefined;
+    if (feature) await deleteFeature(feature);
 
     return;
   }
@@ -161,11 +162,11 @@ export async function deleteModelSelection(): Promise<void> {
   const bodies = wholeBodies(selection);
   if (bodies.length) return deleteBodies(bodies);
 
-  const faces = selection.filter((p): p is FacePick => p.kind === "face");
+  const faces = selection.filter((pick): pick is FacePick => pick.kind === "face");
 
   if (!faces.length) {
     toast(
-      selection.some((p) => p.kind === "edge")
+      selection.some((pick) => pick.kind === "edge")
         ? t("Edges can't be deleted on their own — select a face, or double-click to select the whole part")
         : t("Nothing here can be deleted"),
     );
@@ -213,7 +214,7 @@ export async function deleteModelSelection(): Promise<void> {
     }
   }
 
-  if (ops.length === 1 || new Set(ops.map((o) => ("id" in o ? o.id : ""))).size === ops.length) {
+  if (ops.length === 1 || new Set(ops.map((op) => ("id" in op ? op.id : ""))).size === ops.length) {
     if (apply(...ops)) {
       useApp.setState({ selection: [] });
       toast(

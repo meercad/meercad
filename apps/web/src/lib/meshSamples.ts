@@ -7,9 +7,9 @@ import type { BodyMesh } from "@meercad/kernel";
  * too (the part's own mesh has corners only at their outlines). At most `budget` triangles, unless
  * the mesh itself has more.
  */
-export function refine(m: BodyMesh, budget = 200_000): Float32Array {
-  const P = m.positions;
-  const I = m.indices;
+export function refine(mesh: BodyMesh, budget = 200_000): Float32Array {
+  const P = mesh.positions;
+  const I = mesh.indices;
   let area = 0;
   const lo = [Infinity, Infinity, Infinity];
   const hi = [-Infinity, -Infinity, -Infinity];

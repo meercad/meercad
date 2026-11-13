@@ -78,14 +78,14 @@ export function outputKey(doc: MeercadDocument, opts: MeshOptions): string {
 export function outputBytes(o: RebuildOutput): number {
   let n = 0;
 
-  for (const m of o.meshes) {
+  for (const mesh of o.meshes) {
     n +=
-      m.positions.byteLength +
-      m.normals.byteLength +
-      m.indices.byteLength +
-      m.faceRanges.byteLength +
-      m.edgeLines.byteLength +
-      m.edgeRanges.byteLength;
+      mesh.positions.byteLength +
+      mesh.normals.byteLength +
+      mesh.indices.byteLength +
+      mesh.faceRanges.byteLength +
+      mesh.edgeLines.byteLength +
+      mesh.edgeRanges.byteLength;
   }
 
   for (const r of o.references) n += r.positions.byteLength + r.indices.byteLength;
@@ -117,11 +117,11 @@ function db(): Promise<IDBDatabase | null> {
   return opened;
 }
 
-const done = (tx: IDBTransaction) =>
+const done = (transaction: IDBTransaction) =>
   new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
   });
 const result = <T>(req: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
@@ -134,12 +134,12 @@ const written = new Map<string, string>();
 
 /** The kept result for `project`, if it was made from exactly `key`. */
 export async function readOutput(project: string, key: string): Promise<RebuildOutput | null> {
-  const d = await db();
-  if (!d) return null;
+  const database = await db();
+  if (!database) return null;
 
   try {
-    const tx = d.transaction([OUTPUTS, META], "readwrite");
-    const stored = (await result(tx.objectStore(OUTPUTS).get(project))) as Stored | undefined;
+    const transaction = database.transaction([OUTPUTS, META], "readwrite");
+    const stored = (await result(transaction.objectStore(OUTPUTS).get(project))) as Stored | undefined;
 
     if (!stored || stored.key !== key) {
       // Whatever this window wrote is gone or outdated (storage cleared, another window): write again.
@@ -148,11 +148,10 @@ export async function readOutput(project: string, key: string): Promise<RebuildO
       return null;
     }
 
-    const meta = (await result(tx.objectStore(META).get(project))) as Meta | undefined;
-    tx.objectStore(META).put(
-      { bytes: meta?.bytes ?? outputBytes(stored.output), at: Date.now() } satisfies Meta,
-      project,
-    );
+    const meta = (await result(transaction.objectStore(META).get(project))) as Meta | undefined;
+    transaction
+      .objectStore(META)
+      .put({ bytes: meta?.bytes ?? outputBytes(stored.output), at: Date.now() } satisfies Meta, project);
 
     return stored.output;
   } catch {
@@ -167,11 +166,11 @@ export async function writeOutput(project: string, key: string, output: RebuildO
   const bytes = outputBytes(output);
   if (bytes > BUDGET / 2) return;
 
-  const d = await db();
-  if (!d) return;
+  const database = await db();
+  if (!database) return;
 
   try {
-    const metaTx = d.transaction(META, "readonly");
+    const metaTx = database.transaction(META, "readonly");
     const all = new Map<string, Meta>();
     const keys = (await result(metaTx.objectStore(META).getAllKeys())) as string[];
     const metas = (await result(metaTx.objectStore(META).getAll())) as Meta[];
@@ -188,16 +187,16 @@ export async function writeOutput(project: string, key: string, output: RebuildO
       total -= m.bytes;
     }
 
-    const tx = d.transaction([OUTPUTS, META], "readwrite");
+    const transaction = database.transaction([OUTPUTS, META], "readwrite");
 
     for (const k of drop) {
-      tx.objectStore(OUTPUTS).delete(k);
-      tx.objectStore(META).delete(k);
+      transaction.objectStore(OUTPUTS).delete(k);
+      transaction.objectStore(META).delete(k);
     }
 
-    tx.objectStore(OUTPUTS).put({ key, output } satisfies Stored, project);
-    tx.objectStore(META).put({ bytes, at: Date.now() } satisfies Meta, project);
-    await done(tx);
+    transaction.objectStore(OUTPUTS).put({ key, output } satisfies Stored, project);
+    transaction.objectStore(META).put({ bytes, at: Date.now() } satisfies Meta, project);
+    await done(transaction);
     written.set(project, key);
   } catch {
     // Out of space or storage cleared: the project simply builds when opened.
@@ -208,14 +207,14 @@ export async function writeOutput(project: string, key: string, output: RebuildO
 export async function dropOutput(project: string): Promise<void> {
   written.delete(project);
 
-  const d = await db();
-  if (!d) return;
+  const database = await db();
+  if (!database) return;
 
   try {
-    const tx = d.transaction([OUTPUTS, META], "readwrite");
-    tx.objectStore(OUTPUTS).delete(project);
-    tx.objectStore(META).delete(project);
-    await done(tx);
+    const transaction = database.transaction([OUTPUTS, META], "readwrite");
+    transaction.objectStore(OUTPUTS).delete(project);
+    transaction.objectStore(META).delete(project);
+    await done(transaction);
   } catch {
     // Left for the budget to remove.
   }

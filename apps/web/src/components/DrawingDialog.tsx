@@ -60,23 +60,23 @@ export function DrawingDialog() {
   const [views, setViews] = useState<SheetView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [withBom, setWithBom] = useState(true);
-  const doc = useApp((s) => s.doc);
-  const output = useApp((s) => s.output);
+  const doc = useApp((state) => state.doc);
+  const output = useApp((state) => state.output);
 
   useEffect(() => {
     const show = () => {
       setTitle((cur) => cur || baseName());
 
       // The parts' material when they all share one.
-      const d = useApp.getState().doc;
-      const ids = new Set(Object.values(d.partMaterials ?? {}));
-      const only = ids.size === 1 ? materialById([...ids][0]!, d.materials) : undefined;
+      const doc = useApp.getState().doc;
+      const ids = new Set(Object.values(doc.partMaterials ?? {}));
+      const only = ids.size === 1 ? materialById([...ids][0]!, doc.materials) : undefined;
       if (only) setMaterial((m) => m || (only.base ? only.name : t(only.name)));
 
       setOpen(true);
     };
 
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
     window.addEventListener("meercad:drawing", show);
     window.addEventListener("keydown", onKey);
 
@@ -101,7 +101,7 @@ export function DrawingDialog() {
     kernel
       .drawing(chosen, undefined, drawingDocument(currentDoc()))
       .then((v) => live && setViews(v))
-      .catch((e: Error) => live && setError(e.message));
+      .catch((error: Error) => live && setError(error.message));
 
     return () => {
       live = false;
@@ -152,7 +152,7 @@ export function DrawingDialog() {
         className="modal settings drawing-dialog"
         role="dialog"
         aria-label={t("Technical drawing")}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="settings-head">
           <h2>{t("Technical drawing")}</h2>
@@ -176,7 +176,7 @@ export function DrawingDialog() {
           <div className="drawing-side col" style={{ gap: 10 }}>
             <label className="fld">
               <span className="fld-label">{t("Title")}</span>
-              <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <input className="field" value={title} onChange={(event) => setTitle(event.target.value)} />
             </label>
             <label className="fld">
               <span className="fld-label">{t("Material")}</span>
@@ -184,12 +184,12 @@ export function DrawingDialog() {
                 className="field"
                 value={material}
                 placeholder={t("e.g. PETG, aluminium")}
-                onChange={(e) => setMaterial(e.target.value)}
+                onChange={(event) => setMaterial(event.target.value)}
               />
             </label>
             <label className="fld">
               <span className="fld-label">{t("Drawn by")}</span>
-              <input className="field" value={drawnBy} onChange={(e) => setDrawnBy(e.target.value)} />
+              <input className="field" value={drawnBy} onChange={(event) => setDrawnBy(event.target.value)} />
             </label>
             <div className="fld">
               <span className="fld-label">{t("Sheet")}</span>
@@ -208,9 +208,9 @@ export function DrawingDialog() {
                   <input
                     type="checkbox"
                     checked={chosen.includes(v)}
-                    onChange={(e) =>
+                    onChange={(event) =>
                       setChosen((c) =>
-                        e.target.checked
+                        event.target.checked
                           ? VIEWS.map(([x]) => x).filter((x) => c.includes(x) || x === v)
                           : c.filter((x) => x !== v),
                       )
@@ -222,7 +222,11 @@ export function DrawingDialog() {
             </div>
             {bom.length > 1 ? (
               <label className="checkbox">
-                <input type="checkbox" checked={withBom} onChange={(e) => setWithBom(e.target.checked)} />{" "}
+                <input
+                  type="checkbox"
+                  checked={withBom}
+                  onChange={(event) => setWithBom(event.target.checked)}
+                />{" "}
                 {t("Parts list on the sheet ({n} lines)", { n: bom.length })}
               </label>
             ) : null}

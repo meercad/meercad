@@ -15,16 +15,16 @@ import { t } from "./i18n";
 export function convertMeshPart(bodyId: string): void {
   const doc = currentDoc();
   const name = partName(bodyId, doc.features);
-  const existing = doc.features.find((f) => f.op === "mesh_convert" && f.body === bodyId);
+  const existing = doc.features.find((feature) => feature.op === "mesh_convert" && feature.body === bodyId);
 
   if (existing) {
-    const st = useApp.getState().output?.report.features.find((f) => f.id === existing.id);
+    const status = useApp.getState().output?.report.features.find((status) => status.id === existing.id);
 
-    if (st?.status === "error") {
+    if (status?.status === "error") {
       toast(
         t("Converting {name} failed: {error}", {
           name,
-          error: (st.message ?? t("unknown error")) + (st.hint ? ` (${st.hint})` : ""),
+          error: (status.message ?? t("unknown error")) + (status.hint ? ` (${status.hint})` : ""),
         }),
         "error",
       );
@@ -41,14 +41,18 @@ export function convertMeshPart(bodyId: string): void {
 
   useApp.setState({ selection: [] });
   toast(t("Converting {name}…", { name }));
-  void statusOf(id).then((st) => {
-    if (!st) return;
+  void statusOf(id).then((status) => {
+    if (!status) return;
 
-    if (st.status === "error") {
+    if (status.status === "error") {
       toast(
         t(
           "Converting {name} failed: {error}. The mesh stays as it was; raise the tolerance in step {step} or undo.",
-          { name, error: (st.message ?? t("unknown error")) + (st.hint ? ` (${st.hint})` : ""), step: id },
+          {
+            name,
+            error: (status.message ?? t("unknown error")) + (status.hint ? ` (${status.hint})` : ""),
+            step: id,
+          },
         ),
         "error",
       );
@@ -57,7 +61,7 @@ export function convertMeshPart(bodyId: string): void {
       toast(
         t("{name} has editable faces now{details}. Undo brings the mesh back.", {
           name,
-          details: st.message ? ` (${st.message})` : "",
+          details: status.message ? ` (${status.message})` : "",
         }),
       );
     }
@@ -65,14 +69,14 @@ export function convertMeshPart(bodyId: string): void {
 }
 
 export async function rebuildMeshPart(bodyId: string): Promise<void> {
-  const s = useApp.getState();
-  const mesh = s.output?.meshes.find((m) => m.bodyId === bodyId);
+  const state = useApp.getState();
+  const mesh = state.output?.meshes.find((mesh) => mesh.bodyId === bodyId);
   const doc = currentDoc();
   const name = partName(bodyId, doc.features);
   if (!mesh) return toast(t("{name} is not in the model", { name }), "error");
 
   let n = 1;
-  while (doc.features.some((f) => f.id.startsWith(`rb${n}_`))) n++;
+  while (doc.features.some((feature) => feature.id.startsWith(`rb${n}_`))) n++;
 
   const prefix = `rb${n}`;
   let plan: ReturnType<typeof reconstruct>;
@@ -90,9 +94,12 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
     const fit = fitMesh(corners);
     meshVolume = fit.volume;
     plan = reconstruct(fit, { prefix });
-  } catch (e) {
+  } catch (error) {
     return toast(
-      t("Could not rebuild {name}: {error}", { name, error: e instanceof Error ? e.message : String(e) }),
+      t("Could not rebuild {name}: {error}", {
+        name,
+        error: error instanceof Error ? error.message : String(error),
+      }),
       "error",
     );
   }
@@ -113,7 +120,7 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
   if (result.error) return toast(t("Rebuilt {name}, but {error}", { name, error: result.error }), "error");
 
   // The mesh stays as the reference to compare against, hidden.
-  useApp.setState((st) => ({ hidden: new Set([...st.hidden, bodyId]) }));
+  useApp.setState((state) => ({ hidden: new Set([...state.hidden, bodyId]) }));
 
   const off = Math.abs(result.volume - meshVolume) / meshVolume;
   toast(
@@ -142,26 +149,28 @@ export async function rebuildMeshPart(bodyId: string): Promise<void> {
  */
 function statusOf(id: string): Promise<FeatureStatus | null> {
   return waitFor(() => {
-    const s = useApp.getState();
-    if (!s.doc.features.some((f) => f.id === id)) return null;
-    if (s.building) return undefined;
+    const state = useApp.getState();
+    if (!state.doc.features.some((feature) => feature.id === id)) return null;
+    if (state.building) return undefined;
 
-    const st = s.output?.report.features.find((f) => f.id === id);
+    const status = state.output?.report.features.find((status) => status.id === id);
 
-    return !st || st.status === "rolled_back" ? undefined : st;
+    return !status || status.status === "rolled_back" ? undefined : status;
   });
 }
 
 /** Volume of the rebuilt body, or the first step that failed. */
 function builtVolume(prefix: string, body: string): Promise<{ volume: number; error?: string } | null> {
   return waitFor(() => {
-    const s = useApp.getState();
-    if (!s.doc.features.some((f) => f.id === body)) return null;
+    const state = useApp.getState();
+    if (!state.doc.features.some((feature) => feature.id === body)) return null;
 
-    const out = s.output;
-    if (s.building || !out) return undefined;
+    const out = state.output;
+    if (state.building || !out) return undefined;
 
-    const failed = out.report.features.find((f) => f.id.startsWith(`${prefix}_`) && f.status === "error");
+    const failed = out.report.features.find(
+      (status) => status.id.startsWith(`${prefix}_`) && status.status === "error",
+    );
 
     if (failed) {
       return {

@@ -32,18 +32,18 @@ const scale = (a: Vec3, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
 /** How far from the edge the hole's centre goes, mm; undefined when the hole's size is not known yet. */
-export function edgeInset(f: Extract<Feature, { op: "hole" }>): number | undefined {
+export function edgeInset(feature: Extract<Feature, { op: "hole" }>): number | undefined {
   let shape: HoleShape;
 
   try {
     const num = (e: unknown) => (typeof e === "number" ? e : undefined);
-    shape = holeShape(f.kind, {
-      size: f.size,
-      diameter: num(f.diameter),
-      fit: f.fit,
-      depth: num(f.depth),
-      allowance: num(f.allowance),
-      length: num(f.length),
+    shape = holeShape(feature.kind, {
+      size: feature.size,
+      diameter: num(feature.diameter),
+      fit: feature.fit,
+      depth: num(feature.depth),
+      allowance: num(feature.allowance),
+      length: num(feature.length),
     });
   } catch {
     return undefined;

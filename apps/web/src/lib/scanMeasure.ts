@@ -29,20 +29,20 @@ const prepared = new WeakMap<Float32Array, ScanMesh>();
 
 /** The welded scan of a part's display mesh (prepared once per mesh). */
 export function scanOf(bodyId: string): ScanMesh | null {
-  const m = useApp.getState().output?.meshes.find((x) => x.bodyId === bodyId);
-  if (!m) return null;
+  const mesh = useApp.getState().output?.meshes.find((x) => x.bodyId === bodyId);
+  if (!mesh) return null;
 
-  let s = prepared.get(m.positions);
+  let s = prepared.get(mesh.positions);
 
   if (!s) {
-    const corners = new Float32Array(m.indices.length * 3);
+    const corners = new Float32Array(mesh.indices.length * 3);
 
-    for (let i = 0; i < m.indices.length; i++) {
-      corners.set(m.positions.subarray(m.indices[i]! * 3, m.indices[i]! * 3 + 3), i * 3);
+    for (let i = 0; i < mesh.indices.length; i++) {
+      corners.set(mesh.positions.subarray(mesh.indices[i]! * 3, mesh.indices[i]! * 3 + 3), i * 3);
     }
 
     s = scanMesh(corners);
-    prepared.set(m.positions, s);
+    prepared.set(mesh.positions, s);
   }
 
   return s;
@@ -70,8 +70,8 @@ function refit(): void {
   const shapes: { bodyId: string; shape: ScanShape }[] = [];
 
   for (const p of picks) {
-    const m = scanOf(p.bodyId);
-    const shape = m ? shapeAt(m, nearestTriangle(m, p.point), tol) : null;
+    const mesh = scanOf(p.bodyId);
+    const shape = mesh ? shapeAt(mesh, nearestTriangle(mesh, p.point), tol) : null;
     if (shape) shapes.push({ bodyId: p.bodyId, shape });
   }
 
@@ -86,9 +86,9 @@ function refit(): void {
   }
 
   useScanMeasure.setState({ picks: picks.filter((_, i) => i < shapes.length), shapes });
-  useApp.setState((s) => ({
+  useApp.setState((state) => ({
     measure: {
-      ...s.measure,
+      ...state.measure,
       picks: [],
       result: shapes.length ? { rows: rows(shapes.map((x) => x.shape)) } : null,
     },
@@ -132,7 +132,7 @@ function fmt(v: ShapeValue): string {
 }
 
 // Closing the Measure tool, a new model or another project drops the shapes.
-useApp.subscribe((s, prev) => {
+useApp.subscribe((state, prev) => {
   if (!useScanMeasure.getState().picks.length) return;
-  if (!s.measure.active || s.project?.id !== prev.project?.id) clearScanMeasure();
+  if (!state.measure.active || state.project?.id !== prev.project?.id) clearScanMeasure();
 });

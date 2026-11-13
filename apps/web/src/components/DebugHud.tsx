@@ -62,16 +62,16 @@ export function DebugHud() {
     let upAt = 0;
     let afterUpMs: number | null = null;
 
-    const both = (f: (c: Counts) => void) => {
+    const both = (f: (counts: Counts) => void) => {
       f(sec);
       if (down) f(press);
     };
 
-    const onMove = (e: PointerEvent) =>
-      both((c) => {
-        c.moves++;
-        if (e.pointerType === "pen") c.pen++;
-        if (e.pointerType === "touch") c.touch++;
+    const onMove = (event: PointerEvent) =>
+      both((counts) => {
+        counts.moves++;
+        if (event.pointerType === "pen") counts.pen++;
+        if (event.pointerType === "touch") counts.touch++;
       });
 
     const onDown = () => {
@@ -89,14 +89,14 @@ export function DebugHud() {
 
     kernel.rebuild = (doc, opts) => {
       const t0 = performance.now();
-      both((c) => c.requests++);
+      both((counts) => counts.requests++);
 
       return original(doc, opts).then(
         (r) => {
           const trip = performance.now() - t0;
-          both((c) => {
-            c.results++;
-            c.rebuildMs.push(trip);
+          both((counts) => {
+            counts.results++;
+            counts.rebuildMs.push(trip);
           });
 
           const t = r.report.timing;
@@ -123,7 +123,7 @@ export function DebugHud() {
           return r;
         },
         (e: unknown) => {
-          both((c) => c.superseded++);
+          both((counts) => counts.superseded++);
 
           throw e;
         },
@@ -133,7 +133,7 @@ export function DebugHud() {
     let raf = 0;
 
     const frame = () => {
-      both((c) => c.frames++);
+      both((counts) => counts.frames++);
       raf = requestAnimationFrame(frame);
     };
 
@@ -159,8 +159,8 @@ export function DebugHud() {
     };
   }, []);
 
-  const previewing = useApp((s) => s.previewing);
-  const kernelInfo = useApp((s) => s.kernel.info);
+  const previewing = useApp((state) => state.previewing);
+  const kernelInfo = useApp((state) => state.kernel.info);
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
   const { sec, press } = view;
   const lines = [
@@ -201,15 +201,15 @@ function copyText(text: string): void {
     return;
   }
 
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.setAttribute("readonly", "");
-  Object.assign(ta.style, { position: "fixed", top: "0", left: "0", opacity: "0", fontSize: "16px" });
-  document.body.appendChild(ta);
-  ta.select();
-  ta.setSelectionRange(0, text.length);
+  const element = document.createElement("textarea");
+  element.value = text;
+  element.setAttribute("readonly", "");
+  Object.assign(element.style, { position: "fixed", top: "0", left: "0", opacity: "0", fontSize: "16px" });
+  document.body.appendChild(element);
+  element.select();
+  element.setSelectionRange(0, text.length);
   document.execCommand("copy");
-  ta.remove();
+  element.remove();
 }
 
 /**

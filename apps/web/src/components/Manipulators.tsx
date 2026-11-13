@@ -61,11 +61,11 @@ import { bendInfo } from "../lib/bend";
 import { capDrag } from "../lib/capDrag";
 import { t } from "../lib/i18n";
 
-const num = (e: Expr | undefined, fallback = 0): number => {
-  if (e === undefined) return fallback;
+const num = (expr: Expr | undefined, fallback = 0): number => {
+  if (expr === undefined) return fallback;
 
   try {
-    return evaluate(e, new Map(Object.entries(useApp.getState().baseOutput?.report.params ?? {})));
+    return evaluate(expr, new Map(Object.entries(useApp.getState().baseOutput?.report.params ?? {})));
   } catch {
     return fallback;
   }
@@ -75,11 +75,11 @@ const num = (e: Expr | undefined, fallback = 0): number => {
 const holeLinks = new Map<string, { what: string; unlink: () => void } | null>();
 
 export function Manipulators({ viewport }: { viewport: Viewport }) {
-  const dialog = useApp((s) => s.dialog);
-  const selection = useApp((s) => s.selection);
-  const base = useApp((s) => s.baseOutput);
-  const sketchId = useApp((s) => s.sketchId);
-  const measure = useApp((s) => s.measure.active);
+  const dialog = useApp((state) => state.dialog);
+  const selection = useApp((state) => state.selection);
+  const base = useApp((state) => state.baseOutput);
+  const sketchId = useApp((state) => state.sketchId);
+  const measure = useApp((state) => state.measure.active);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   /** Push/pull drafts follow the drag direction (out = add, in = remove). */
   const autoMode = useRef(false);
@@ -97,8 +97,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           : id === "hole"
             ? `Ø ${fmtLen(2 * v)}`
             : fmtLen(v);
-    viewport.onHandleDrag = (h, v, screen) =>
-      setTip(h && screen ? { x: screen[0], y: screen[1], text: label(h.id, v) } : null);
+    viewport.onHandleDrag = (handle, v, screen) =>
+      setTip(handle && screen ? { x: screen[0], y: screen[1], text: label(handle.id, v) } : null);
 
     return () => {
       viewport.onHandleDrag = null;
@@ -110,8 +110,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
   });
 
   // The push/pull stand-in goes once the kernel has caught up with the last value.
-  const output = useApp((s) => s.output);
-  const previewError = useApp((s) => s.previewError);
+  const output = useApp((state) => state.output);
+  const previewError = useApp((state) => state.previewError);
   useEffect(() => {
     if (!slow.current && !rebuilding()) viewport.setGhost(null);
   }, [viewport, output, previewError, dialog]);
@@ -123,27 +123,27 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
    */
   const slow = useRef<{ timer: number; ghost: ReturnType<typeof profileTriangles> } | null>(null);
 
-  function slowDrag(h: Handle): Handle {
+  function slowDrag(handle: Handle): Handle {
     return {
-      ...h,
+      ...handle,
       onStart: () => {
         if (rebuildIsSlow()) {
           holdRebuilds(true);
           slow.current = { timer: 0, ghost: null };
         }
 
-        h.onStart?.();
+        handle.onStart?.();
       },
       onDrag: (v) => {
-        h.onDrag(v);
+        handle.onDrag(v);
 
         const s = slow.current;
         if (!s) return;
 
-        const { dialog: d, baseOutput: b } = useApp.getState();
+        const { dialog: dialog, baseOutput: b } = useApp.getState();
 
-        if (h.id === "extrude" && d?.feature.op === "extrude" && b) {
-          s.ghost ??= profileTriangles(b, d.feature.profile);
+        if (handle.id === "extrude" && dialog?.feature.op === "extrude" && b) {
+          s.ghost ??= profileTriangles(b, dialog.feature.profile);
           if (s.ghost) viewport.setGhost({ ...s.ghost, distance: v });
         }
 
@@ -158,7 +158,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         slow.current = null;
         if (s) window.clearTimeout(s.timer);
 
-        h.onEnd(v);
+        handle.onEnd(v);
         if (s) holdRebuilds(false);
       },
     };
@@ -176,14 +176,14 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
     const d = dialog;
 
     if (d) {
-      const f = d.feature;
+      const feature = d.feature;
 
-      if (f.op === "extrude" && f.extent !== "through_all") {
-        const a = profileAnchor(out, f.profile);
+      if (feature.op === "extrude" && feature.extent !== "through_all") {
+        const a = profileAnchor(out, feature.profile);
         if (!a) return [];
 
-        const value = num(f.distance, 10) * (f.flip ? -1 : 1);
-        const g = grabbed.current?.feature === f.id ? grabbed.current : null;
+        const value = num(feature.distance, 10) * (feature.flip ? -1 : 1);
+        const g = grabbed.current?.feature === feature.id ? grabbed.current : null;
 
         return [
           {
@@ -197,8 +197,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         ];
       }
 
-      if ((f.op === "fillet" || f.op === "chamfer") && asArray(f.edges).length) {
-        const a = edgeSelectorAnchor(out, asArray(f.edges)[0] as EdgeSelector);
+      if ((feature.op === "fillet" || feature.op === "chamfer") && asArray(feature.edges).length) {
+        const a = edgeSelectorAnchor(out, asArray(feature.edges)[0] as EdgeSelector);
         if (!a) return [];
 
         return [
@@ -206,17 +206,17 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             id: "fillet",
             origin: a.origin,
             dir: a.dir,
-            value: num(f.op === "fillet" ? f.radius : f.distance, 1),
+            value: num(feature.op === "fillet" ? feature.radius : feature.distance, 1),
             min: 0.05,
-            onDrag: (v) => updateDraft(f.op === "fillet" ? { radius: v } : { distance: v }),
+            onDrag: (v) => updateDraft(feature.op === "fillet" ? { radius: v } : { distance: v }),
             onEnd: () => undefined,
           },
         ];
       }
 
-      if (f.op === "transform" && f.bodies[0]) {
-        const t = (f.translate ?? [0, 0, 0]).map((e) => num(e, 0)) as [number, number, number];
-        const c = bodyCenter(out, f.bodies[0]);
+      if (feature.op === "transform" && feature.bodies[0]) {
+        const t = (feature.translate ?? [0, 0, 0]).map((expr) => num(expr, 0)) as [number, number, number];
+        const c = bodyCenter(out, feature.bodies[0]);
         if (!c) return [];
 
         // The base output may already include this move when editing it: anchor at the original spot.
@@ -227,10 +227,10 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           t,
           (i, v) =>
             updateDraft(
-              (g) =>
+              (feature) =>
                 ({
-                  ...g,
-                  translate: ((g as Extract<Feature, { op: "transform" }>).translate ?? [0, 0, 0]).map(
+                  ...feature,
+                  translate: ((feature as Extract<Feature, { op: "transform" }>).translate ?? [0, 0, 0]).map(
                     (x, j) => (j === i ? v : x),
                   ) as [Expr, Expr, Expr],
                 }) as Feature,
@@ -239,17 +239,17 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         );
       }
 
-      if (f.op === "bend") {
+      if (feature.op === "bend") {
         // One arrow for the radius: a spiral's from its centre to where it starts; a bend's or a
         // ring's from the middle of the part (which stays put) towards the centre.
-        const info = bendInfo(useApp.getState().output, f.id);
+        const info = bendInfo(useApp.getState().output, feature.id);
         if (!info) return [];
 
         const c: V3 = [info["cx"]!, info["cy"]!, info["cz"]!];
         const o: V3 = [info["ox"]!, info["oy"]!, info["oz"]!];
         const r = info["radius"]!;
 
-        if (f.mode === "spiral") {
+        if (feature.mode === "spiral") {
           return [
             {
               id: "bend",
@@ -273,12 +273,12 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             dir: o.map((x) => -x) as V3,
             value: r,
             min:
-              f.mode === "bend"
+              feature.mode === "bend"
                 ? Math.max(half * 1.05, len / (2 * Math.PI))
                 : Math.max(0.5, len / (2 * Math.PI)),
             onDrag: (v) =>
               updateDraft(
-                f.mode === "bend"
+                feature.mode === "bend"
                   ? { angle: +Math.min(360, (len / v) * (180 / Math.PI)).toFixed(1), radius: undefined }
                   : { radius: +v.toFixed(2) },
               ),
@@ -287,8 +287,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         ];
       }
 
-      if (f.op === "shell" && f.faces[0]) {
-        const a = faceSelectorAnchor(out, f.faces[0]);
+      if (feature.op === "shell" && feature.faces[0]) {
+        const a = faceSelectorAnchor(out, feature.faces[0]);
         if (!a) return [];
 
         return [
@@ -296,7 +296,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             id: "shell",
             origin: a.origin,
             dir: a.normal.map((x) => -x) as typeof a.normal,
-            value: num(f.thickness, 2),
+            value: num(feature.thickness, 2),
             min: 0.05,
             onDrag: (v) => updateDraft({ thickness: v }),
             onEnd: () => undefined,
@@ -309,12 +309,12 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 
     const sel = selection;
     // A whole part is selected (double-click): show move arrows along X/Y/Z.
-    const bodyIds = new Set(sel.map((p) => (p.kind === "face" ? p.bodyId : null)));
+    const bodyIds = new Set(sel.map((pick) => (pick.kind === "face" ? pick.bodyId : null)));
     const whole =
       sel.length > 1 &&
       bodyIds.size === 1 &&
       !bodyIds.has(null) &&
-      out.meshes.find((m) => m.bodyId === [...bodyIds][0])?.faceTags.length === sel.length;
+      out.meshes.find((mesh) => mesh.bodyId === [...bodyIds][0])?.faceTags.length === sel.length;
 
     if (whole) {
       const bodyId = [...bodyIds][0]!;
@@ -326,8 +326,11 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         [0, 0, 0],
         (i, v) =>
           updateDraft(
-            (g) =>
-              ({ ...g, translate: [0, 1, 2].map((j) => (j === i ? v : 0)) as [Expr, Expr, Expr] }) as Feature,
+            (feature) =>
+              ({
+                ...feature,
+                translate: [0, 1, 2].map((j) => (j === i ? v : 0)) as [Expr, Expr, Expr],
+              }) as Feature,
           ),
         (v) => finish(v),
         () =>
@@ -347,8 +350,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 
     if (sel.length === 1 && sel[0]!.kind === "face") {
       const p = sel[0]!;
-      const m = out.meshes.find((x) => x.bodyId === p.bodyId);
-      const a = m ? faceAnchor(m, p.face) : null;
+      const mesh = out.meshes.find((x) => x.bodyId === p.bodyId);
+      const a = mesh ? faceAnchor(mesh, p.face) : null;
       const fs = faceSelectorForPick(p, out.meshes);
       if (!a || !fs) return [];
 
@@ -358,7 +361,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       const dir = p.normal ? a.normal : (p.surface ?? a.normal);
       // The end face of an extrusion: the drag changes its distance (or the variable behind it),
       // so what was cut through the part later still goes through.
-      const cap = p.normal ? capDrag(currentDoc(), p.tags ?? [], (e) => num(e, NaN), docUnit()) : null;
+      const cap = p.normal ? capDrag(currentDoc(), p.tags ?? [], (expr) => num(expr, NaN), docUnit()) : null;
 
       if (cap && Number.isFinite(cap.distance)) {
         const back = origin.map((x, i) => x - dir[i]! * cap.distance) as V3;
@@ -405,8 +408,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 
     if (sel.length === 1 && sel[0]!.kind === "region") {
       const p = sel[0]!;
-      const sk = out.report.sketches.find((s) => s.id === p.sketchId);
-      if (!sk) return [];
+      const sketchView = out.report.sketches.find((sketchView) => sketchView.id === p.sketchId);
+      if (!sketchView) return [];
 
       const a = profileAnchor(out, { sketch: p.sketchId, regions: [p.key] });
       if (!a) return [];
@@ -439,13 +442,13 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       ];
     }
 
-    const edges = sel.filter((p) => p.kind === "edge");
+    const edges = sel.filter((pick) => pick.kind === "edge");
 
     if (edges.length && edges.length === sel.length) {
       const first = edges[0]! as Extract<Pick, { kind: "edge" }>;
-      const m = out.meshes.find((x) => x.bodyId === first.bodyId);
+      const mesh = out.meshes.find((x) => x.bodyId === first.bodyId);
       const sels = edges.map((p) => edgeSelectorForPick(p, out.meshes)).filter((x): x is EdgeSelector => !!x);
-      const a = m ? edgeAnchor(m, first.edge) : null;
+      const a = mesh ? edgeAnchor(mesh, first.edge) : null;
       if (!a || !sels.length) return [];
 
       // Out along the bisector rounds the edge, in towards the material bevels it.
@@ -487,17 +490,18 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
     holeLinks.delete("hole");
 
     for (const tag of pick.tags ?? []) {
-      const m = /^[\w-]+\.side\[([\w-]+)\.([\w-]+)\]/.exec(tag);
-      if (!m) continue;
+      const match = /^[\w-]+\.side\[([\w-]+)\.([\w-]+)\]/.exec(tag);
+      if (!match) continue;
 
-      const [, sketchId, curveId] = m as unknown as [string, string, string];
+      const [, sketchId, curveId] = match as unknown as [string, string, string];
       const doc = currentDoc();
-      const sk = doc.features.find(
-        (f): f is Extract<Feature, { op: "sketch" }> => f.id === sketchId && f.op === "sketch",
+      const sketch = doc.features.find(
+        (feature): feature is Extract<Feature, { op: "sketch" }> =>
+          feature.id === sketchId && feature.op === "sketch",
       );
-      const view = out.report.sketches.find((s) => s.id === sketchId);
-      const curve = view?.curves.find((c) => c.id === curveId);
-      if (!sk || !view || curve?.kind !== "circle") continue;
+      const view = out.report.sketches.find((sketchView) => sketchView.id === sketchId);
+      const curve = view?.curves.find((curve) => curve.id === curveId);
+      if (!sketch || !view || curve?.kind !== "circle") continue;
 
       const { origin: o, u, v } = view.frame;
       // Measure the selected wall itself: pattern and mirror copies sit elsewhere than the sketch circle.
@@ -518,25 +522,28 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       for (let grew = true; grew;) {
         grew = false;
 
-        for (const c of sk.constraints) {
+        for (const constraint of sketch.constraints) {
           if (
-            c.type !== "equal" ||
-            !(group.has(c.a) || group.has(c.b)) ||
-            (group.has(c.a) && group.has(c.b))
+            constraint.type !== "equal" ||
+            !(group.has(constraint.a) || group.has(constraint.b)) ||
+            (group.has(constraint.a) && group.has(constraint.b))
           ) {
             continue;
           }
 
-          group.add(c.a).add(c.b);
+          group.add(constraint.a).add(constraint.b);
           grew = true;
         }
       }
 
-      const dim = (sk.constraints.find(
-        (c) => (c.type === "radius" || c.type === "diameter") && c.curve === curveId,
+      const dim = (sketch.constraints.find(
+        (constraint) =>
+          (constraint.type === "radius" || constraint.type === "diameter") && constraint.curve === curveId,
       ) ??
-        sk.constraints.find((c) => (c.type === "radius" || c.type === "diameter") && group.has(c.curve))) as
-        { id: string; type: "radius" | "diameter"; curve: string; value: Expr } | undefined;
+        sketch.constraints.find(
+          (constraint) =>
+            (constraint.type === "radius" || constraint.type === "diameter") && group.has(constraint.curve),
+        )) as { id: string; type: "radius" | "diameter"; curve: string; value: Expr } | undefined;
       const params = doc.params;
 
       const write = (r: number, quiet: boolean) => {
@@ -556,27 +563,32 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           return run({ type: "set_param", name: dim.value, expr });
         }
 
-        const latest = currentDoc().features.find((f) => f.id === sketchId) as typeof sk;
+        const latest = currentDoc().features.find((feature) => feature.id === sketchId) as typeof sketch;
 
         return run({
           type: "edit_feature",
           id: sketchId,
           patch: dim
             ? {
-                constraints: latest.constraints.map((c) =>
-                  c.id === dim.id ? ({ ...c, value } as typeof c) : c,
+                constraints: latest.constraints.map((constraint) =>
+                  constraint.id === dim.id ? ({ ...constraint, value } as typeof constraint) : constraint,
                 ),
               }
             : {
-                entities: latest.entities.map((e) =>
-                  group.has(e.id) && e.type === "circle" ? { ...e, radius: +r.toFixed(3) } : e,
+                entities: latest.entities.map((entity) =>
+                  group.has(entity.id) && entity.type === "circle"
+                    ? { ...entity, radius: +r.toFixed(3) }
+                    : entity,
                 ),
               },
         });
       };
 
-      const equal = sk.constraints.filter(
-        (c) => c.type === "equal" && (("a" in c && c.a === curveId) || ("b" in c && c.b === curveId)),
+      const equal = sketch.constraints.filter(
+        (constraint) =>
+          constraint.type === "equal" &&
+          (("a" in constraint && constraint.a === curveId) ||
+            ("b" in constraint && constraint.b === curveId)),
       );
       const byVar =
         dim &&
@@ -597,20 +609,25 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
                 .filter(Boolean)
                 .join(t(" and ")),
               unlink: () => {
-                const latest = currentDoc().features.find((f) => f.id === sketchId) as typeof sk;
+                const latest = currentDoc().features.find(
+                  (feature) => feature.id === sketchId,
+                ) as typeof sketch;
                 const r = curve.radius;
                 apply({
                   type: "edit_feature",
                   id: sketchId,
                   patch: {
                     constraints: latest.constraints
-                      .filter((c) => !equal.some((e) => e.id === c.id))
+                      .filter((constraint) => !equal.some((e) => e.id === constraint.id))
                       // Only this circle's own dimension is frozen; one on another circle of the group stays
                       // as it is.
-                      .map((c) =>
-                        dim && c.id === dim.id && dim.curve === curveId
-                          ? ({ ...c, value: +(dim.type === "diameter" ? 2 * r : r).toFixed(3) } as typeof c)
-                          : c,
+                      .map((constraint) =>
+                        dim && constraint.id === dim.id && dim.curve === curveId
+                          ? ({
+                              ...constraint,
+                              value: +(dim.type === "diameter" ? 2 * r : r).toFixed(3),
+                            } as typeof constraint)
+                          : constraint,
                       ),
                   },
                 });
@@ -668,7 +685,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 
     // A draft that cannot be built stays open, now as a dialog, so its problem can be fixed.
     if (!commitDialog()) {
-      useApp.setState((s) => (s.dialog ? { dialog: { ...s.dialog, gesture: false } } : {}));
+      useApp.setState((state) => (state.dialog ? { dialog: { ...state.dialog, gesture: false } } : {}));
     }
   }
 
@@ -688,18 +705,18 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 /** Floating action bar next to the selection, with the shortcut of every action. */
 /** Actions for the current selection, docked at the bottom so they never cover a drag arrow. */
 function QuickActions({ selection }: { selection: Pick[] }) {
-  usePrefs((s) => s.keys);
+  usePrefs((prefs) => prefs.keys);
 
   const last = selection.at(-1)!;
   const meshes = useApp.getState().output?.meshes ?? [];
-  const kinds = new Set(selection.map((p) => p.kind));
+  const kinds = new Set(selection.map((pick) => pick.kind));
   const actions: { icon: ReactNode; label: string; kbd?: string | undefined; run: () => void }[] = [];
-  const partIds = new Set(selection.map((p) => (p.kind === "face" ? p.bodyId : "")));
+  const partIds = new Set(selection.map((pick) => (pick.kind === "face" ? pick.bodyId : "")));
   const wholePart =
     selection.length > 1 &&
     partIds.size === 1 &&
     !partIds.has("") &&
-    meshes.find((m) => m.bodyId === [...partIds][0])?.faceTags.length === selection.length;
+    meshes.find((mesh) => mesh.bodyId === [...partIds][0])?.faceTags.length === selection.length;
 
   if (wholePart) {
     actions.push({
@@ -761,7 +778,7 @@ function QuickActions({ selection }: { selection: Pick[] }) {
       run: () => startFeature("shell"),
     });
 
-    const lastMesh = last.kind === "face" ? meshes.find((m) => m.bodyId === last.bodyId) : undefined;
+    const lastMesh = last.kind === "face" ? meshes.find((mesh) => mesh.bodyId === last.bodyId) : undefined;
 
     if (selection.length === 1 && last.kind === "face" && lastMesh && isCylinderFace(lastMesh, last.face)) {
       actions.push({
@@ -830,7 +847,7 @@ function QuickActions({ selection }: { selection: Pick[] }) {
   if (!actions.length) return null;
 
   return (
-    <div className="quick-actions docked" onPointerDown={(e) => e.stopPropagation()}>
+    <div className="quick-actions docked" onPointerDown={(event) => event.stopPropagation()}>
       {actions.map((a) => (
         <button
           key={a.label}
@@ -858,58 +875,58 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
     return () => clearInterval(t);
   }, []);
 
-  const showValues = usePrefs((s) => s.showValues);
+  const showValues = usePrefs((prefs) => prefs.showValues);
   const handles = (viewport as unknown as { handles: Handle[] }).handles ?? [];
   if (viewport.draggingHandle || !showValues) return null;
 
   return (
     <div className="overlay-layer">
-      {handles.map((h) => {
-        const s = viewport.handleTipScreen(h.id);
+      {handles.map((handle) => {
+        const s = viewport.handleTipScreen(handle.id);
         if (!s) return null;
 
         // Hole handles carry the radius but show and take the diameter.
-        const scale = h.id === "hole" ? 2 : 1;
-        const shown = +(h.value * scale).toFixed(4);
+        const scale = handle.id === "hole" ? 2 : 1;
+        const shown = +(handle.value * scale).toFixed(4);
         const text =
-          h.id === "edge"
+          handle.id === "edge"
             ? t("drag: out = fillet, in = chamfer")
-            : `${h.id === "hole" ? "Ø " : ""}${fmtLen(shown)}`;
+            : `${handle.id === "hole" ? "Ø " : ""}${fmtLen(shown)}`;
 
         return (
           <div
-            key={h.id}
+            key={handle.id}
             className="value-chip handle-chip"
             style={{ left: s[0] + 16, top: s[1] - 16 }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
           >
-            {typing === h.id ? (
+            {typing === handle.id ? (
               <InlineInput
                 value={shown}
                 length
-                onDone={(v) => {
+                onDone={(expr) => {
                   setTyping(null);
-                  if (v === null) return;
+                  if (expr === null) return;
 
-                  const n = num(v, NaN) / scale;
+                  const n = num(expr, NaN) / scale;
                   if (!Number.isFinite(n)) return;
 
-                  h.onStart?.();
-                  h.onDrag(n);
-                  h.onEnd(n);
+                  handle.onStart?.();
+                  handle.onDrag(n);
+                  handle.onEnd(n);
                 }}
               />
             ) : (
               <>
-                <button onClick={() => setTyping(h.id)} title={t("Click to type a value")}>
+                <button onClick={() => setTyping(handle.id)} title={t("Click to type a value")}>
                   {text}
                 </button>
-                {holeLinks.get(h.id) ? (
+                {holeLinks.get(handle.id) ? (
                   <button
                     className="unlink"
-                    onClick={() => holeLinks.get(h.id)!.unlink()}
+                    onClick={() => holeLinks.get(handle.id)!.unlink()}
                     title={t("Changes together with {what}. Click to change only this hole.", {
-                      what: holeLinks.get(h.id)!.what,
+                      what: holeLinks.get(handle.id)!.what,
                     })}
                   >
                     <Link2Off />

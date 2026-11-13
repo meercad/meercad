@@ -14,15 +14,15 @@ export function partLooks(doc: MeercadDocument, bodyIds: readonly string[]): Map
   const out = new Map<string, BodyLook>();
 
   for (const id of bodyIds) {
-    const m = partMaterial(doc, id);
-    if (m) out.set(id, lookOf(m));
+    const material = partMaterial(doc, id);
+    if (material) out.set(id, lookOf(material));
   }
 
   return out;
 }
 
-export const lookOf = (m: Material): BodyLook => {
-  const { color: _c, ...look } = m.look;
+export const lookOf = (material: Material): BodyLook => {
+  const { color: _c, ...look } = material.look;
 
   return look;
 };
@@ -55,15 +55,15 @@ export const deleteOwnMaterial = (id: string) => apply({ type: "delete_material"
 export const pickerMaterials = (doc: MeercadDocument) => documentMaterials(doc);
 
 /** A material's name in the interface language (own materials keep the name the user gave). */
-export const materialName = (m: Material) => (m.base ? m.name : t(m.name));
+export const materialName = (material: Material) => (material.base ? material.name : t(material.name));
 
 /** Facts about a material, one per line: density, print temperatures, hardness. */
-export function materialFacts(m: Material): string[] {
-  const facts = [t("{d} g/cm³", { d: m.density })];
-  if (m.nozzle) facts.push(t("Nozzle {a}–{b} °C", { a: m.nozzle[0], b: m.nozzle[1] }));
-  if (m.bed) facts.push(t("Bed {a}–{b} °C", { a: m.bed[0], b: m.bed[1] }));
-  if (m.shore) facts.push(t("Shore {s}", { s: m.shore }));
-  if (m.kind === "print" && !m.filament) facts.push(t("Resin printer"));
+export function materialFacts(material: Material): string[] {
+  const facts = [t("{d} g/cm³", { d: material.density })];
+  if (material.nozzle) facts.push(t("Nozzle {a}–{b} °C", { a: material.nozzle[0], b: material.nozzle[1] }));
+  if (material.bed) facts.push(t("Bed {a}–{b} °C", { a: material.bed[0], b: material.bed[1] }));
+  if (material.shore) facts.push(t("Shore {s}", { s: material.shore }));
+  if (material.kind === "print" && !material.filament) facts.push(t("Resin printer"));
 
   return facts;
 }
@@ -75,21 +75,24 @@ const swatchCache = new Map<string, string>();
  * shown in `fallback` (the part's colour). Drawn once and kept.
  */
 export function materialSwatches(materials: readonly Material[], fallback: string): Map<string, string> {
-  const key = (m: Material) => `${JSON.stringify(m.look)}|${(m.look.color ?? fallback).toLowerCase()}`;
-  const missing = materials.filter((m) => !swatchCache.has(key(m)));
-  const vp = getViewport();
+  const key = (material: Material) =>
+    `${JSON.stringify(material.look)}|${(material.look.color ?? fallback).toLowerCase()}`;
+  const missing = materials.filter((material) => !swatchCache.has(key(material)));
+  const viewport = getViewport();
 
-  if (missing.length && vp) {
-    const urls = vp.swatches(
-      missing.map((m) => ({ look: lookOf(m), color: m.look.color ?? fallback })),
+  if (missing.length && viewport) {
+    const urls = viewport.swatches(
+      missing.map((material) => ({ look: lookOf(material), color: material.look.color ?? fallback })),
       96,
     );
-    missing.forEach((m, i) => swatchCache.set(key(m), urls[i]!));
+    missing.forEach((material, i) => swatchCache.set(key(material), urls[i]!));
   }
 
   return new Map(
-    materials.flatMap((m) =>
-      swatchCache.has(key(m)) ? [[m.id, swatchCache.get(key(m))!] as [string, string]] : [],
+    materials.flatMap((material) =>
+      swatchCache.has(key(material))
+        ? [[material.id, swatchCache.get(key(material))!] as [string, string]]
+        : [],
     ),
   );
 }

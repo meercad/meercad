@@ -96,8 +96,8 @@ export function download(name: string, data: BlobPart): void {
         : data instanceof Uint8Array
           ? data
           : new Uint8Array(data as ArrayBuffer);
-    void shareFile(name, payload).catch((e: Error) =>
-      toast(t("Could not share {name}: {error}", { name, error: e.message }), "error"),
+    void shareFile(name, payload).catch((error: Error) =>
+      toast(t("Could not share {name}: {error}", { name, error: error.message }), "error"),
     );
 
     return;
@@ -154,13 +154,13 @@ export async function meshExportFiles(
   const name = opts.name ?? baseName();
   const ids = exportIds(opts.parts);
   const surroundings =
-    format === "obj" && !opts.parts && (currentDoc().references ?? []).some((r) => !r.hidden);
+    format === "obj" && !opts.parts && (currentDoc().references ?? []).some((reference) => !reference.hidden);
   if (!ids.length && !surroundings) throw new Error(t("Nothing to export"));
 
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
   const meshes = ids.length
-    ? (await kernel.exportMeshes(ids)).map((m) =>
-        poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m,
+    ? (await kernel.exportMeshes(ids)).map((mesh) =>
+        poses.has(mesh.bodyId) ? motion.placeMesh(mesh, poses.get(mesh.bodyId)!) : mesh,
       )
     : [];
 
@@ -188,8 +188,8 @@ export async function exportMesh(format: MeshFormat): Promise<void> {
       (names.length > 1 ? writeZip(files) : files[names[0]!]!) as BlobPart,
     );
     if (format === "3mf") tellFilaments(meshes);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     if (msg === t("Nothing to export")) return toast(msg, "error");
 
     toast(t("{format} export failed: {error}", { format: format.toUpperCase(), error: msg }), "error");
@@ -232,8 +232,8 @@ export async function sendToSlicer(slicer: SlicerId): Promise<void> {
       moved ? t("Sent to {name}, moved parts where they are now", { name }) : t("Sent to {name}", { name }),
     );
     tellFilaments(meshes);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     toast(
       msg === t("Nothing to export") ? msg : t("Could not send to the slicer: {error}", { error: msg }),
       "error",
@@ -252,26 +252,26 @@ export async function usdzFile(
   if (!ids.length) throw new Error(t("Nothing to export"));
 
   const poses = opts.posed === false ? new Map<string, number[]>() : shownPoses(ids);
-  const meshes = (await kernel.exportMeshes(ids)).map((m) =>
-    poses.has(m.bodyId) ? motion.placeMesh(m, poses.get(m.bodyId)!) : m,
+  const meshes = (await kernel.exportMeshes(ids)).map((mesh) =>
+    poses.has(mesh.bodyId) ? motion.placeMesh(mesh, poses.get(mesh.bodyId)!) : mesh,
   );
   const doc = currentDoc();
   const colors = partColors(
     doc,
-    meshes.map((m) => m.bodyId),
+    meshes.map((mesh) => mesh.bodyId),
     usePrefs.getState().colorParts,
   );
 
   return writeUsdz(
-    meshes.map((m) => {
-      const look = partMaterial(doc, m.bodyId)?.look;
+    meshes.map((mesh) => {
+      const look = partMaterial(doc, mesh.bodyId)?.look;
 
       return {
-        positions: m.positions,
-        indices: m.indices,
-        normals: m.normals,
-        name: partName(m.bodyId, doc.features),
-        ...(colors.get(m.bodyId) ? { color: colors.get(m.bodyId)! } : {}),
+        positions: mesh.positions,
+        indices: mesh.indices,
+        normals: mesh.normals,
+        name: partName(mesh.bodyId, doc.features),
+        ...(colors.get(mesh.bodyId) ? { color: colors.get(mesh.bodyId)! } : {}),
         ...(look ? { metalness: look.metalness, roughness: look.roughness } : {}),
       };
     }),
@@ -293,8 +293,8 @@ export async function viewInAr(): Promise<void> {
     if (nativeApp) return await showInAr(name, data);
 
     download(name, data as BlobPart);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     toast(
       msg === t("Nothing to export")
         ? msg
@@ -352,7 +352,7 @@ export async function robotFiles(
 
   const keep = new Set(ids);
   const left = new Set(all.filter((id) => !keep.has(id)));
-  const meshes = new Map(out.meshes.map((m) => [m.bodyId, m]));
+  const meshes = new Map(out.meshes.map((mesh) => [mesh.bodyId, mesh]));
   const colors = partColors(doc, ids, true);
   const pla = materialById("pla")!;
   const warnings: string[] = [];
@@ -422,8 +422,11 @@ export async function robotFiles(
       ...(j.limits ? { limits: j.limits } : {}),
     })),
     mech.couplings
-      .filter((c) => joints.some((j) => j.id === c.driver) && joints.some((j) => j.id === c.driven))
-      .map((c) => ({ driver: c.driver, driven: c.driven, ratio: c.ratio })),
+      .filter(
+        (coupling) =>
+          joints.some((j) => j.id === coupling.driver) && joints.some((j) => j.id === coupling.driven),
+      )
+      .map((coupling) => ({ driver: coupling.driver, driven: coupling.driven, ratio: coupling.ratio })),
     {
       name,
       ...(opts.floating !== undefined ? { floating: opts.floating } : {}),
@@ -449,8 +452,8 @@ export async function exportRobot(): Promise<void> {
       title: t("Robot exported: {links} links, {joints} joints", { links: links.length, joints }),
       message: `${t("The zip holds an MJCF file for MuJoCo and mjlab, a URDF for ROS and Isaac Sim, and one mesh per part. Masses come from the parts' materials; each part collides as a box, cylinder or sphere; joints without drive data are passive.")}${warnings.length ? `\n\n${warnings.join("\n")}` : ""}`,
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     toast(
       msg === t("Nothing to export")
         ? msg
@@ -469,21 +472,21 @@ function objParts(meshes: readonly BodyMesh[]): (ObjMesh & { image?: { data: Uin
   const { doc } = useApp.getState();
   const colors = partColors(
     doc,
-    meshes.map((m) => m.bodyId),
+    meshes.map((mesh) => mesh.bodyId),
     usePrefs.getState().colorParts,
   );
 
-  return meshes.map((m) => {
-    const tex = exportTexture(doc.features, m);
+  return meshes.map((mesh) => {
+    const tex = exportTexture(doc.features, mesh);
 
     return {
-      positions: m.positions,
-      indices: m.indices,
-      name: partName(m.bodyId, doc.features),
+      positions: mesh.positions,
+      indices: mesh.indices,
+      name: partName(mesh.bodyId, doc.features),
       ...(tex
         ? { uvs: tex.uvs, image: tex.image }
-        : colors.get(m.bodyId)
-          ? { color: colors.get(m.bodyId)! }
+        : colors.get(mesh.bodyId)
+          ? { color: colors.get(mesh.bodyId)! }
           : {}),
     };
   });
@@ -497,20 +500,20 @@ function surroundingMeshes(): (TexturedMesh & { name: string })[] {
   const doc = currentDoc();
   const views = sceneryOf(doc);
 
-  return (doc.references ?? []).flatMap((r) => {
-    const view = views.find((v) => v.id === r.id);
-    if (r.hidden || !view) return [];
+  return (doc.references ?? []).flatMap((reference) => {
+    const view = views.find((v) => v.id === reference.id);
+    if (reference.hidden || !view) return [];
 
     const pieces = readGlb(new Uint8Array(view.data));
 
     return pieces.map((m, k) => {
-      if (r.scale && r.scale !== 1) {
+      if (reference.scale && reference.scale !== 1) {
         const p = new Float32Array(m.positions);
-        for (let i = 0; i < p.length; i++) p[i] = p[i]! * r.scale;
+        for (let i = 0; i < p.length; i++) p[i] = p[i]! * reference.scale;
         m = { ...m, positions: p };
       }
 
-      return { ...m, name: pieces.length > 1 ? `${r.name} ${k + 1}` : r.name };
+      return { ...m, name: pieces.length > 1 ? `${reference.name} ${k + 1}` : reference.name };
     });
   });
 }
@@ -537,7 +540,7 @@ export function filamentsOf(meshes: readonly BodyMesh[], materials?: boolean) {
   const doc = currentDoc();
   const colors = partColors(
     doc,
-    meshes.map((m) => m.bodyId),
+    meshes.map((mesh) => mesh.bodyId),
     usePrefs.getState().colorParts,
   );
 
@@ -549,11 +552,11 @@ function tellFilaments(meshes: readonly BodyMesh[]): void {
   const filaments = filamentsOf(meshes);
   if (filaments.length < 2) return;
 
-  const lines = filaments.map((f, i) =>
+  const lines = filaments.map((filament, i) =>
     t("Filament {n}: {material} {color}", {
       n: i + 1,
-      material: f.material ?? t("any material"),
-      color: f.color,
+      material: filament.material ?? t("any material"),
+      color: filament.color,
     }),
   );
   void showNotice({
@@ -569,7 +572,7 @@ function meshFile(format: MeshFormat, meshes: BodyMesh[], materials?: boolean): 
   const { doc } = useApp.getState();
   const colors = partColors(
     doc,
-    meshes.map((m) => m.bodyId),
+    meshes.map((mesh) => mesh.bodyId),
     usePrefs.getState().colorParts,
   );
   if (format === "obj") return new TextEncoder().encode(writeObj(objParts(meshes)));
@@ -591,11 +594,11 @@ export async function exportVariants(format: MeshFormat | "step"): Promise<void>
       `${baseName()}-${t("variants")}.zip`,
       writeZip(await variantFiles(format, (k, n) => task.update(k / n))) as BlobPart,
     );
-  } catch (e) {
+  } catch (error) {
     toast(
       t("{format} export failed: {error}", {
         format: format.toUpperCase(),
-        error: e instanceof Error ? e.message : String(e),
+        error: error instanceof Error ? error.message : String(error),
       }),
       "error",
     );
@@ -623,19 +626,19 @@ export async function variantFiles(
   holdRebuilds(true);
 
   try {
-    for (const [k, v] of variants.entries()) {
+    for (const [k, variant] of variants.entries()) {
       progress?.(k, variants.length);
 
       // A rebuild the app had already asked for (the edit just before) may overtake this one: build it again.
-      const build = () => kernel.rebuild({ ...designOf(doc), variant: v.name }, { props: false });
+      const build = () => kernel.rebuild({ ...designOf(doc), variant: variant.name }, { props: false });
       const out = await build().catch((e: unknown) =>
         e instanceof SupersededError ? build() : Promise.reject(e),
       );
-      const failed = out.report.features.find((f) => f.status === "error");
+      const failed = out.report.features.find((status) => status.status === "error");
 
       if (failed) {
         throw new Error(
-          t("variant “{name}” does not build: {error}", { name: v.name, error: failed.message ?? "" }),
+          t("variant “{name}” does not build: {error}", { name: variant.name, error: failed.message ?? "" }),
         );
       }
 
@@ -644,10 +647,14 @@ export async function variantFiles(
         .map((b) => b.id)
         .filter((id) => (parts ? parts.includes(id) : !hidden.has(id)));
       const ids = shown;
-      const file = `${safe(baseName())}-${safe(v.name)}.${format}`;
+      const file = `${safe(baseName())}-${safe(variant.name)}.${format}`;
 
       if (format === "obj") {
-        const obj = objExport(`${safe(baseName())}-${safe(v.name)}`, await kernel.exportMeshes(ids), false);
+        const obj = objExport(
+          `${safe(baseName())}-${safe(variant.name)}`,
+          await kernel.exportMeshes(ids),
+          false,
+        );
         Object.assign(files, obj);
       } else {
         files[file] =
@@ -706,17 +713,17 @@ export async function exportStep(): Promise<void> {
 
     download(`${baseName()}.step`, data as BlobPart);
 
-    if (currentDoc().features.some((f) => f.op === "lithophane" && !f.suppressed)) {
+    if (currentDoc().features.some((feature) => feature.op === "lithophane" && !feature.suppressed)) {
       toast(
         t("STEP keeps the smooth plate: the lithophane's picture comes along in STL, 3MF and OBJ"),
         "info",
       );
     }
-  } catch (e) {
+  } catch (error) {
     toast(
       t("{format} export failed: {error}", {
         format: "STEP",
-        error: e instanceof Error ? e.message : String(e),
+        error: error instanceof Error ? error.message : String(error),
       }),
       "error",
     );
@@ -725,21 +732,23 @@ export async function exportStep(): Promise<void> {
 
 /** Curves of a sketch (excluding construction geometry) for laser/plotter formats. */
 export function sketchCurves(sketchId: string): Curve2[] {
-  const sk = useApp.getState().output?.report.sketches.find((s) => s.id === sketchId);
+  const sketchView = useApp
+    .getState()
+    .output?.report.sketches.find((sketchView) => sketchView.id === sketchId);
 
   return (
-    (sk?.curves ?? [])
-      .filter((c) => !c.construction)
+    (sketchView?.curves ?? [])
+      .filter((curve) => !curve.construction)
       // Splines go out as the fine polyline of their samples.
-      .flatMap((c): Curve2[] =>
-        c.kind === "spline"
-          ? c.pts.slice(1).map((b, k) => ({ kind: "line", a: c.pts[k]!, b }))
+      .flatMap((curve): Curve2[] =>
+        curve.kind === "spline"
+          ? curve.pts.slice(1).map((b, k) => ({ kind: "line", a: curve.pts[k]!, b }))
           : [
-              c.kind === "line"
-                ? { kind: "line", a: c.a, b: c.b }
-                : c.kind === "circle"
-                  ? { kind: "circle", center: c.center, radius: c.radius }
-                  : { kind: "arc", center: c.center, radius: c.radius, a0: c.a0, a1: c.a1 },
+              curve.kind === "line"
+                ? { kind: "line", a: curve.a, b: curve.b }
+                : curve.kind === "circle"
+                  ? { kind: "circle", center: curve.center, radius: curve.radius }
+                  : { kind: "arc", center: curve.center, radius: curve.radius, a0: curve.a0, a1: curve.a1 },
             ],
       )
   );
@@ -765,8 +774,8 @@ export function readDesignFile(text: string): { doc: MeercadDocument; name?: str
 
   try {
     json = JSON.parse(text);
-  } catch (e) {
-    throw new Error(t("Not a valid meerCAD file: {error}", { error: (e as Error).message }));
+  } catch (error) {
+    throw new Error(t("Not a valid meerCAD file: {error}", { error: (error as Error).message }));
   }
 
   const inner =
@@ -797,8 +806,8 @@ export function saveVersionFile(name: string): void {
       `${baseName()} - ${fileSafe(name)}.meercad`,
       JSON.stringify(versionFile(currentDoc(), name), null, 2),
     );
-  } catch (e) {
-    toast((e as Error).message, "error");
+  } catch (error) {
+    toast((error as Error).message, "error");
   }
 }
 
@@ -816,8 +825,8 @@ export async function importVersionFile(file?: File | null): Promise<string[]> {
 
   try {
     read = readDesignFile(await file.text());
-  } catch (e) {
-    toast((e as Error).message, "error");
+  } catch (error) {
+    toast((error as Error).message, "error");
 
     return [];
   }
@@ -828,7 +837,7 @@ export async function importVersionFile(file?: File | null): Promise<string[]> {
 
   const add = (name: string, at: number, design: MeercadDocument) => {
     // A backup brought in twice adds nothing: a version of that name holding that design is there.
-    const held = doc.versions?.find((v) => v.name === name);
+    const held = doc.versions?.find((version) => version.name === name);
     if (held && unchanged(versionChanges(held.state, design))) return;
 
     const op: DocOp = { type: "save_version", name: freeVersionName(doc, name), at, doc: designOf(design) };
@@ -837,9 +846,9 @@ export async function importVersionFile(file?: File | null): Promise<string[]> {
   };
 
   try {
-    for (const v of from.versions ?? []) add(v.name, v.at, restored(from, v));
+    for (const version of from.versions ?? []) add(version.name, version.at, restored(from, version));
 
-    const same = (from.versions ?? []).some((v) => unchanged(versionChanges(v.state, from)));
+    const same = (from.versions ?? []).some((version) => unchanged(versionChanges(version.state, from)));
 
     if (!same) {
       // A file saved from Versions is named "<project> - <version>": the version's name is the rest.
@@ -852,8 +861,11 @@ export async function importVersionFile(file?: File | null): Promise<string[]> {
         from,
       );
     }
-  } catch (e) {
-    toast(t("Could not bring in {name}: {error}", { name: file.name, error: (e as Error).message }), "error");
+  } catch (error) {
+    toast(
+      t("Could not bring in {name}: {error}", { name: file.name, error: (error as Error).message }),
+      "error",
+    );
 
     return [];
   }
@@ -866,7 +878,7 @@ export async function importVersionFile(file?: File | null): Promise<string[]> {
 
   if (!apply(...ops)) return [];
 
-  return ops.map((o) => (o as { name: string }).name);
+  return ops.map((op) => (op as { name: string }).name);
 }
 
 const unchanged = (c: { added: string[]; changed: string[]; removed: string[]; other: boolean }) =>
@@ -913,8 +925,8 @@ export async function importFile(
 
     try {
       read = readDesignFile(await file.text());
-    } catch (e) {
-      toast((e as Error).message, "error");
+    } catch (error) {
+      toast((error as Error).message, "error");
 
       return false;
     }
@@ -943,11 +955,11 @@ export async function importFile(
 
   try {
     features = await importFeatures(file, ext);
-  } catch (e) {
+  } catch (error) {
     toast(
       t("Could not import {name}: {error}", {
         name: file.name,
-        error: e instanceof Error ? e.message : String(e),
+        error: error instanceof Error ? error.message : String(error),
       }),
       "error",
     );
@@ -962,22 +974,24 @@ export async function importFile(
   }
 
   // A scan's picture goes onto its mesh (one mesh per file, so it is the first import).
-  const mesh = features.find((f) => f.op === "import" && f.format === "stl");
+  const mesh = features.find((feature) => feature.op === "import" && feature.format === "stl");
   if (opts.texture && mesh?.op === "import") mesh.texture = opts.texture;
 
   const doc = currentDoc();
   let n = 0;
 
-  for (const f of features) {
-    f.id = nextFeatureId(
+  for (const feature of features) {
+    feature.id = nextFeatureId(
       { ...doc, features: [...doc.features, ...features.slice(0, n++)] },
-      f.op === "sketch" ? "sketch" : "import",
+      feature.op === "sketch" ? "sketch" : "import",
     );
   }
 
   const add = { type: "add_features" as const, features };
   // A part to model against (a scan) comes in see-through, in the same step.
-  const meshes = opts.seeThrough ? features.filter((f) => f.op === "import").map((f) => f.id) : [];
+  const meshes = opts.seeThrough
+    ? features.filter((feature) => feature.op === "import").map((feature) => feature.id)
+    : [];
 
   if (
     !(meshes.length
@@ -987,7 +1001,7 @@ export async function importFile(
     return false;
   }
 
-  const sketch = features.find((f) => f.op === "sketch");
+  const sketch = features.find((feature) => feature.op === "sketch");
 
   if (sketch) {
     openSketch(sketch.id);
@@ -999,7 +1013,9 @@ export async function importFile(
 
   const out = await rebuildNow().catch(() => null);
   const failed =
-    out?.report.features.filter((r) => features.some((f) => f.id === r.id) && r.status === "error") ?? [];
+    out?.report.features.filter(
+      (status) => features.some((feature) => feature.id === status.id) && status.status === "error",
+    ) ?? [];
 
   if (failed.length) {
     toast(
@@ -1109,10 +1125,11 @@ export function readSvg(text: string): Curve2[] {
   const vb = (svg.getAttribute("viewBox") ?? "").split(/[\s,]+/).map(Number);
   const width = svg.getAttribute("width") ?? "";
   const unitScale = (() => {
-    const m = /^([\d.]+)\s*(mm|cm|in|px)?$/.exec(width);
+    const match = /^([\d.]+)\s*(mm|cm|in|px)?$/.exec(width);
 
-    if (m && vb.length === 4 && vb[2]) {
-      const mm = Number(m[1]) * ({ mm: 1, cm: 10, in: 25.4, px: 25.4 / 96 }[m[2] ?? "px"] ?? 25.4 / 96);
+    if (match && vb.length === 4 && vb[2]) {
+      const mm =
+        Number(match[1]) * ({ mm: 1, cm: 10, in: 25.4, px: 25.4 / 96 }[match[2] ?? "px"] ?? 25.4 / 96);
 
       return mm / vb[2];
     }
@@ -1121,7 +1138,7 @@ export function readSvg(text: string): Curve2[] {
   })();
   const out: Curve2[] = [];
   const P = (x: number, y: number): [number, number] => [x * unitScale, -y * unitScale];
-  const num = (el: Element, a: string) => Number(el.getAttribute(a) ?? 0);
+  const num = (element: Element, a: string) => Number(element.getAttribute(a) ?? 0);
 
   const poly = (pts: [number, number][], closed: boolean) => {
     for (let i = 0; i + 1 < pts.length; i++) {
@@ -1131,16 +1148,25 @@ export function readSvg(text: string): Curve2[] {
     if (closed && pts.length > 2) out.push({ kind: "line", a: P(...pts.at(-1)!), b: P(...pts[0]!) });
   };
 
-  for (const el of svg.querySelectorAll("line,rect,circle,ellipse,polyline,polygon,path")) {
-    switch (el.tagName.toLowerCase()) {
+  for (const element of svg.querySelectorAll("line,rect,circle,ellipse,polyline,polygon,path")) {
+    switch (element.tagName.toLowerCase()) {
       case "line":
-        out.push({ kind: "line", a: P(num(el, "x1"), num(el, "y1")), b: P(num(el, "x2"), num(el, "y2")) });
+        out.push({
+          kind: "line",
+          a: P(num(element, "x1"), num(element, "y1")),
+          b: P(num(element, "x2"), num(element, "y2")),
+        });
         break;
       case "rect": {
-        const [x, y, w, h] = [num(el, "x"), num(el, "y"), num(el, "width"), num(el, "height")];
+        const [x, y, w, h] = [
+          num(element, "x"),
+          num(element, "y"),
+          num(element, "width"),
+          num(element, "height"),
+        ];
         // Rounded corners: rx and ry, either standing for both, at most half the side.
-        const has = (a: string) => el.hasAttribute(a) && el.getAttribute(a) !== "auto";
-        let [rx, ry] = [has("rx") ? num(el, "rx") : NaN, has("ry") ? num(el, "ry") : NaN];
+        const has = (a: string) => element.hasAttribute(a) && element.getAttribute(a) !== "auto";
+        let [rx, ry] = [has("rx") ? num(element, "rx") : NaN, has("ry") ? num(element, "ry") : NaN];
         if (Number.isNaN(rx)) rx = Number.isNaN(ry) ? 0 : ry;
         if (Number.isNaN(ry)) ry = rx;
 
@@ -1178,7 +1204,12 @@ export function readSvg(text: string): Curve2[] {
         break;
       }
       case "ellipse": {
-        const [cx, cy, rx, ry] = [num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry")];
+        const [cx, cy, rx, ry] = [
+          num(element, "cx"),
+          num(element, "cy"),
+          num(element, "rx"),
+          num(element, "ry"),
+        ];
 
         if (rx === ry) {
           out.push({ kind: "circle", center: P(cx, cy), radius: rx * unitScale });
@@ -1195,23 +1226,23 @@ export function readSvg(text: string): Curve2[] {
         break;
       }
       case "circle": {
-        const c = P(num(el, "cx"), num(el, "cy"));
-        out.push({ kind: "circle", center: c, radius: num(el, "r") * unitScale });
+        const c = P(num(element, "cx"), num(element, "cy"));
+        out.push({ kind: "circle", center: c, radius: num(element, "r") * unitScale });
         break;
       }
       case "polyline":
       case "polygon": {
-        const ns = (el.getAttribute("points") ?? "")
+        const ns = (element.getAttribute("points") ?? "")
           .trim()
           .split(/[\s,]+/)
           .map(Number);
         const pts: [number, number][] = [];
         for (let i = 0; i + 1 < ns.length; i += 2) pts.push([ns[i]!, ns[i + 1]!]);
-        poly(pts, el.tagName.toLowerCase() === "polygon");
+        poly(pts, element.tagName.toLowerCase() === "polygon");
         break;
       }
       case "path":
-        for (const sub of pathPolylines(el.getAttribute("d") ?? "")) poly(sub.pts, sub.closed);
+        for (const sub of pathPolylines(element.getAttribute("d") ?? "")) poly(sub.pts, sub.closed);
         break;
     }
   }

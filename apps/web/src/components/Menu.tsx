@@ -71,35 +71,35 @@ export function MenuHost() {
   useLayoutEffect(() => {
     if (!menu || !ref.current) return;
 
-    const r = ref.current.getBoundingClientRect();
-    if (!stack.length) rootWidth.current = r.width;
+    const rect = ref.current.getBoundingClientRect();
+    if (!stack.length) rootWidth.current = rect.width;
 
-    const top = menu.above ? menu.y - r.height : menu.y;
+    const top = menu.above ? menu.y - rect.height : menu.y;
     // A submenu keeps the top edge of its parent (bottom edge for menus that open upwards), so it doesn't
     // jump.
-    const left = menu.alignRight ? menu.x - r.width : menu.x;
+    const left = menu.alignRight ? menu.x - rect.width : menu.x;
     setPos({
-      left: Math.max(8, Math.min(left, innerWidth - r.width - 8)),
-      top: Math.max(8, Math.min(top, innerHeight - r.height - 8)),
+      left: Math.max(8, Math.min(left, innerWidth - rect.width - 8)),
+      top: Math.max(8, Math.min(top, innerHeight - rect.height - 8)),
     });
   }, [menu, stack]);
   useEffect(() => {
     if (!menu) return;
 
-    const close = (e: Event) => {
-      if (e instanceof KeyboardEvent) {
-        if ((e.key === "Escape" || e.key === "ArrowLeft") && stack.length) {
-          e.preventDefault();
-          e.stopPropagation();
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent) {
+        if ((event.key === "Escape" || event.key === "ArrowLeft") && stack.length) {
+          event.preventDefault();
+          event.stopPropagation();
           setStack((s) => s.slice(0, -1));
 
           return;
         }
 
-        if (e.key !== "Escape") return;
+        if (event.key !== "Escape") return;
       }
 
-      if (e instanceof PointerEvent && ref.current?.contains(e.target as Node)) return;
+      if (event instanceof PointerEvent && ref.current?.contains(event.target as Node)) return;
 
       setMenu(null);
     };

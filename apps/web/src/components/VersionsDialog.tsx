@@ -16,8 +16,8 @@ import { importVersionFile, saveVersionFile } from "./io";
 export const openVersions = () => window.dispatchEvent(new Event("meercad:versions"));
 
 /** How the design now differs from a version: "2 new steps · 1 step changed", or "Same as now". */
-function changesText(v: Version): string {
-  const c = versionChanges(v.state, currentDoc());
+function changesText(version: Version): string {
+  const c = versionChanges(version.state, currentDoc());
   const parts = [
     c.added.length ? tn(c.added.length, "{n} new step", "{n} new steps") : null,
     c.changed.length ? tn(c.changed.length, "{n} step changed", "{n} steps changed") : null,
@@ -31,13 +31,13 @@ function changesText(v: Version): string {
 const nextName = (versions: readonly Version[]) => {
   for (let n = versions.length + 1; ; n++) {
     const name = t("Version {n}", { n });
-    if (!versions.some((v) => v.name === name)) return name;
+    if (!versions.some((version) => version.name === name)) return name;
   }
 };
 
 export function VersionsDialog() {
   const [open, setOpen] = useState(false);
-  const versions = useApp((s) => s.doc.versions) ?? [];
+  const versions = useApp((state) => state.doc.versions) ?? [];
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<{ name: string; to: string } | null>(null);
 
@@ -48,7 +48,7 @@ export function VersionsDialog() {
       setOpen(true);
     };
 
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
     window.addEventListener("meercad:versions", show);
     window.addEventListener("keydown", onKey);
 
@@ -68,19 +68,19 @@ export function VersionsDialog() {
     }
   };
 
-  const preview = (v: Version) => {
+  const preview = (version: Version) => {
     try {
       useApp.setState({
-        proposalDoc: designOf(applyOp(currentDoc(), { type: "restore_version", name: v.name })),
+        proposalDoc: designOf(applyOp(currentDoc(), { type: "restore_version", name: version.name })),
       });
       scheduleRebuild();
       setOpen(false);
-    } catch (e) {
-      toast((e as Error).message, "error");
+    } catch (error) {
+      toast((error as Error).message, "error");
     }
   };
 
-  const restore = (v: Version) => {
+  const restore = (version: Version) => {
     // Nothing gets lost: the design as it is now is kept as a version unless one holds it already.
     const doc = currentDoc();
     const kept = (doc.versions ?? []).some((x) => {
@@ -88,7 +88,7 @@ export function VersionsDialog() {
 
       return !c.added.length && !c.changed.length && !c.removed.length && !c.other;
     });
-    const before = t("Before “{name}”", { name: v.name });
+    const before = t("Before “{name}”", { name: version.name });
     const ops = [
       ...(kept
         ? []
@@ -100,15 +100,15 @@ export function VersionsDialog() {
                 : before,
             },
           ]),
-      { type: "restore_version" as const, name: v.name },
+      { type: "restore_version" as const, name: version.name },
     ];
 
     if (apply(...ops)) {
       useApp.setState({ proposalDoc: null });
       toast(
         kept
-          ? t("Restored “{name}”", { name: v.name })
-          : t("Restored “{name}”; the design before is kept as a version", { name: v.name }),
+          ? t("Restored “{name}”", { name: version.name })
+          : t("Restored “{name}”; the design before is kept as a version", { name: version.name }),
       );
     }
   };
@@ -134,7 +134,7 @@ export function VersionsDialog() {
         className="modal settings versions-dialog"
         role="dialog"
         aria-label={t("Versions")}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="settings-head">
           <h2>{t("Versions")}</h2>
@@ -158,8 +158,8 @@ export function VersionsDialog() {
             style={{ flex: 1, minWidth: 160 }}
             value={name}
             placeholder={nextName(versions)}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && save()}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && save()}
           />
           <button className="btn primary" onClick={save}>
             <History /> {t("Save version")}
@@ -174,59 +174,62 @@ export function VersionsDialog() {
         </div>
         {versions.length ? (
           <ul className="version-list">
-            {[...versions].reverse().map((v) => (
-              <li key={v.name}>
+            {[...versions].reverse().map((version) => (
+              <li key={version.name}>
                 <div className="version-main">
-                  {editing?.name === v.name ? (
+                  {editing?.name === version.name ? (
                     <input
                       className="field"
                       autoFocus
                       value={editing.to}
-                      onChange={(e) => setEditing({ ...editing, to: e.target.value })}
+                      onChange={(event) => setEditing({ ...editing, to: event.target.value })}
                       onBlur={rename}
-                      onKeyDown={(e) =>
-                        e.key === "Enter"
+                      onKeyDown={(event) =>
+                        event.key === "Enter"
                           ? rename()
-                          : e.key === "Escape" && (e.stopPropagation(), setEditing(null))
+                          : event.key === "Escape" && (event.stopPropagation(), setEditing(null))
                       }
                     />
                   ) : (
-                    <b>{v.name}</b>
+                    <b>{version.name}</b>
                   )}
                   <span className="muted small">
-                    {new Date(v.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} ·{" "}
-                    {changesText(v)}
+                    {new Date(version.at).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}{" "}
+                    · {changesText(version)}
                   </span>
                 </div>
                 <div className="version-actions">
                   <button
                     className="icon-btn"
                     title={t("Look at it (the design stays as it is)")}
-                    onClick={() => preview(v)}
+                    onClick={() => preview(version)}
                   >
                     <Eye />
                   </button>
-                  <button className="icon-btn" title={t("Restore")} onClick={() => restore(v)}>
+                  <button className="icon-btn" title={t("Restore")} onClick={() => restore(version)}>
                     <RotateCcw />
                   </button>
                   <button
                     className="icon-btn"
                     title={t("Save as a file…")}
-                    onClick={() => saveVersionFile(v.name)}
+                    onClick={() => saveVersionFile(version.name)}
                   >
                     <Download />
                   </button>
                   <button
                     className="icon-btn"
                     title={t("Rename")}
-                    onClick={() => setEditing({ name: v.name, to: v.name })}
+                    onClick={() => setEditing({ name: version.name, to: version.name })}
                   >
                     <Pencil />
                   </button>
                   <button
                     className="icon-btn"
                     title={t("Delete")}
-                    onClick={() => apply({ type: "delete_version", name: v.name })}
+                    onClick={() => apply({ type: "delete_version", name: version.name })}
                   >
                     <Trash2 />
                   </button>

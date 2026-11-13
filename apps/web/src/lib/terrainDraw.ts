@@ -44,7 +44,8 @@ export const useTerrainDraw = create<{
   painting: false,
 }));
 
-const shown = (): ReferenceModel[] => (currentDoc().references ?? []).filter((r) => !r.hidden);
+const shown = (): ReferenceModel[] =>
+  (currentDoc().references ?? []).filter((reference) => !reference.hidden);
 
 /** Starts drawing a line, an area, a note or a point on a terrain (the one clicked, or the first shown). */
 export function startMarking(kind: DrawKind, ref?: string): void {
@@ -163,8 +164,8 @@ async function placeNote(p: Vec3): Promise<void> {
   if (!s.ref) return;
 
   if (s.kind === "point") {
-    const count = (currentDoc().references?.find((r) => r.id === s.ref)?.marks ?? []).filter(
-      (m) => m.kind === "point",
+    const count = (currentDoc().references?.find((reference) => reference.id === s.ref)?.marks ?? []).filter(
+      (mark) => mark.kind === "point",
     ).length;
     const name = await askText({
       title: t("Point"),
@@ -190,8 +191,8 @@ async function placeNote(p: Vec3): Promise<void> {
 function newMarkId(ref: string): string {
   const used = new Set(
     currentDoc()
-      .references?.find((r) => r.id === ref)
-      ?.marks?.map((m) => m.id),
+      .references?.find((reference) => reference.id === ref)
+      ?.marks?.map((mark) => mark.id),
   );
   let n = 1;
   while (used.has(`m${n}`)) n++;
@@ -200,22 +201,22 @@ function newMarkId(ref: string): string {
 }
 
 function saveMark(ref: string, mark: TerrainMark): void {
-  const r = currentDoc().references?.find((x) => x.id === ref);
+  const reference = currentDoc().references?.find((x) => x.id === ref);
 
-  if (r) {
+  if (reference) {
     apply({
       type: "set_reference",
-      reference: { ...r, marks: [...(r.marks ?? []).filter((m) => m.id !== mark.id), mark] },
+      reference: { ...reference, marks: [...(reference.marks ?? []).filter((m) => m.id !== mark.id), mark] },
     });
   }
 }
 
 export function deleteMark(ref: string, id: string): void {
-  const r = currentDoc().references?.find((x) => x.id === ref);
-  if (!r) return;
+  const reference = currentDoc().references?.find((x) => x.id === ref);
+  if (!reference) return;
 
-  const marks = (r.marks ?? []).filter((m) => m.id !== id);
-  const { marks: _old, ...rest } = r;
+  const marks = (reference.marks ?? []).filter((mark) => mark.id !== id);
+  const { marks: _old, ...rest } = reference;
   apply({ type: "set_reference", reference: marks.length ? { ...rest, marks } : rest });
 }
 
@@ -236,12 +237,12 @@ export async function editMark(ref: string, mark: TerrainMark): Promise<void> {
 // ---------------------------------------------------------------- following the ground
 
 /** Height above the ground lines are drawn at, so the ground does not hide them. */
-const lift = (vp: Viewport) => Math.max(30, vp.sceneryStep * 0.4);
+const lift = (viewport: Viewport) => Math.max(30, viewport.sceneryStep * 0.4);
 
 /** The points with the ground in between: each stretch split finer than the terrain's detail. */
-export function drape(points: readonly Vec3[], closed: boolean, vp: Viewport): Vec3[] {
-  const step = Math.max(vp.sceneryStep, 1);
-  const up = lift(vp);
+export function drape(points: readonly Vec3[], closed: boolean, viewport: Viewport): Vec3[] {
+  const step = Math.max(viewport.sceneryStep, 1);
+  const up = lift(viewport);
   const out: Vec3[] = [];
   const n = closed ? points.length : points.length - 1;
 
@@ -256,27 +257,27 @@ export function drape(points: readonly Vec3[], closed: boolean, vp: Viewport): V
         y = a[1] + (b[1] - a[1]) * u;
       // The surface the clicked points lie on (the floor, not the ceiling above it).
       const near = a[2] + (b[2] - a[2]) * u;
-      out.push([x, y, (vp.sceneryHeight(x, y, near) ?? near) + up]);
+      out.push([x, y, (viewport.sceneryHeight(x, y, near) ?? near) + up]);
     }
   }
 
   const last = points[closed ? 0 : points.length - 1];
-  if (last) out.push([last[0], last[1], (vp.sceneryHeight(last[0], last[1], last[2]) ?? last[2]) + up]);
+  if (last) out.push([last[0], last[1], (viewport.sceneryHeight(last[0], last[1], last[2]) ?? last[2]) + up]);
 
   return out;
 }
 
 /** An area's surface following the ground, as triangles (corners, no index). */
-export function drapeFill(points: readonly Vec3[], vp: Viewport): Float32Array {
+export function drapeFill(points: readonly Vec3[], viewport: Viewport): Float32Array {
   const contour = points.map((p) => new THREE.Vector2(p[0], p[1]));
   if (THREE.ShapeUtils.isClockWise(contour)) contour.reverse();
 
   const tris = THREE.ShapeUtils.triangulateShape(contour, []);
-  const step = Math.max(vp.sceneryStep * 2, 1);
-  const up = lift(vp) * 0.5;
+  const step = Math.max(viewport.sceneryStep * 2, 1);
+  const up = lift(viewport) * 0.5;
   const out: number[] = [];
   const level = points.reduce((s, p) => s + p[2], 0) / points.length;
-  const at = (x: number, y: number) => out.push(x, y, (vp.sceneryHeight(x, y, level) ?? level) + up);
+  const at = (x: number, y: number) => out.push(x, y, (viewport.sceneryHeight(x, y, level) ?? level) + up);
 
   const split = (a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2, depth: number) => {
     const ab = a.distanceTo(b),
@@ -311,8 +312,8 @@ export function drapeFill(points: readonly Vec3[], vp: Viewport): Float32Array {
  * A band of the given width lying on the ground along a line (triangles, corners, no index): a highlighter
  * stroke.
  */
-export function ribbon(line: readonly Vec3[], width: number, vp: Viewport): Float32Array {
-  const up = lift(vp) * 0.7;
+export function ribbon(line: readonly Vec3[], width: number, viewport: Viewport): Float32Array {
+  const up = lift(viewport) * 0.7;
   const half = width / 2;
   const sides: [Vec3, Vec3][] = line.map((p, i) => {
     const a = line[Math.max(0, i - 1)]!,
@@ -322,7 +323,11 @@ export function ribbon(line: readonly Vec3[], width: number, vp: Viewport): Floa
       l = Math.hypot(dx, dy) || 1;
     const nx = (-dy / l) * half,
       ny = (dx / l) * half;
-    const at = (x: number, y: number): Vec3 => [x, y, (vp.sceneryHeight(x, y, p[2] - lift(vp)) ?? p[2]) + up];
+    const at = (x: number, y: number): Vec3 => [
+      x,
+      y,
+      (viewport.sceneryHeight(x, y, p[2] - lift(viewport)) ?? p[2]) + up,
+    ];
 
     return [at(p[0] + nx, p[1] + ny), at(p[0] - nx, p[1] - ny)];
   });
@@ -410,59 +415,69 @@ export function marksForView(
   lines: DrawnMark[];
   labels: TerrainLabel[];
 } {
-  const vp = getViewport();
+  const viewport = getViewport();
   const lines: DrawnMark[] = [];
   const labels: ReturnType<typeof marksForView>["labels"] = [];
-  if (!vp || !vp.sceneryStep) return { lines, labels };
+  if (!viewport || !viewport.sceneryStep) return { lines, labels };
 
-  const up = lift(vp);
+  const up = lift(viewport);
 
-  for (const r of refs ?? []) {
-    if (r.hidden) continue;
+  for (const reference of refs ?? []) {
+    if (reference.hidden) continue;
 
-    for (const m of r.marks ?? []) {
-      if (m.kind === "note" || m.kind === "point") {
-        const p = m.points[0]!;
-        const ground: Vec3 = [p[0], p[1], vp.sceneryHeight(p[0], p[1], p[2]) ?? p[2]];
+    for (const mark of reference.marks ?? []) {
+      if (mark.kind === "note" || mark.kind === "point") {
+        const p = mark.points[0]!;
+        const ground: Vec3 = [p[0], p[1], viewport.sceneryHeight(p[0], p[1], p[2]) ?? p[2]];
         labels.push({
-          key: `${r.id}/${m.id}`,
-          ref: r.id,
-          mark: m,
+          key: `${reference.id}/${mark.id}`,
+          ref: reference.id,
+          mark: mark,
           at: ground,
-          kind: m.kind,
-          title: m.kind === "note" ? (m.text ?? "") : (m.text ?? t("Point")),
-          ...(m.kind === "point" ? { detail: placeText(r, ground) } : {}),
-          color: m.color,
+          kind: mark.kind,
+          title: mark.kind === "note" ? (mark.text ?? "") : (mark.text ?? t("Point")),
+          ...(mark.kind === "point" ? { detail: placeText(reference, ground) } : {}),
+          color: mark.color,
         });
         continue;
       }
 
-      if (m.kind === "stroke") {
+      if (mark.kind === "stroke") {
         lines.push({
-          id: `${r.id}/${m.id}`,
+          id: `${reference.id}/${mark.id}`,
           points: [],
-          color: m.color,
-          fill: ribbon(drape(m.points, false, vp), m.width ?? vp.sceneryStep * STROKE_WIDTHS.m, vp),
+          color: mark.color,
+          fill: ribbon(
+            drape(mark.points, false, viewport),
+            mark.width ?? viewport.sceneryStep * STROKE_WIDTHS.m,
+            viewport,
+          ),
           fillOpacity: 0.55,
         });
         continue;
       }
 
-      const area = m.kind === "area";
-      const points = drape(m.points, area, vp);
-      const fill = area ? drapeFill(m.points, vp) : undefined;
-      lines.push({ id: `${r.id}/${m.id}`, points, closed: false, color: m.color, ...(fill ? { fill } : {}) });
+      const area = mark.kind === "area";
+      const points = drape(mark.points, area, viewport);
+      const fill = area ? drapeFill(mark.points, viewport) : undefined;
+      lines.push({
+        id: `${reference.id}/${mark.id}`,
+        points,
+        closed: false,
+        color: mark.color,
+        ...(fill ? { fill } : {}),
+      });
 
-      const value = area ? squareMetres(areaOf(m.points, fill!).ground) : metres(lengthOf(points));
+      const value = area ? squareMetres(areaOf(mark.points, fill!).ground) : metres(lengthOf(points));
       labels.push({
-        key: `${r.id}/${m.id}`,
-        ref: r.id,
-        mark: m,
-        at: area ? centreOf(m.points, vp) : points[Math.floor(points.length / 2)]!,
+        key: `${reference.id}/${mark.id}`,
+        ref: reference.id,
+        mark: mark,
+        at: area ? centreOf(mark.points, viewport) : points[Math.floor(points.length / 2)]!,
         kind: "value",
         title: value,
-        ...(m.text ? { detail: m.text } : {}),
-        color: m.color,
+        ...(mark.text ? { detail: mark.text } : {}),
+        color: mark.color,
       });
     }
   }
@@ -475,7 +490,7 @@ export function marksForView(
     const lifted = pts.map((p): Vec3 => [p[0], p[1], p[2] + up]);
     lines.push({ id: "measure", points: lifted, color: "#ffffff", width: 2.5, dashed: ms.points.length < 2 });
 
-    const ref = (refs ?? []).find((r) => r.id === ms.ref);
+    const ref = (refs ?? []).find((reference) => reference.id === ms.ref);
 
     if (pts.length === 2) {
       const [head, ...rest] = distanceText(pts[0]!, pts[1]!).split(" · ");
@@ -507,7 +522,11 @@ export function marksForView(
       id: "drawing",
       points: [],
       color: drawing.kind === "erase" ? "#e03131" : drawing.color,
-      fill: ribbon(drape(drawing.points, false, vp), vp.sceneryStep * STROKE_WIDTHS[drawing.width], vp),
+      fill: ribbon(
+        drape(drawing.points, false, viewport),
+        viewport.sceneryStep * STROKE_WIDTHS[drawing.width],
+        viewport,
+      ),
       fillOpacity: 0.55,
     });
   }
@@ -519,8 +538,8 @@ export function marksForView(
   ) {
     const pts = drawing.hover ? [...drawing.points, drawing.hover] : drawing.points;
     const area = drawing.kind !== "line" && pts.length >= 3;
-    const points = drape(pts, area, vp);
-    const fill = area ? drapeFill(pts, vp) : undefined;
+    const points = drape(pts, area, viewport);
+    const fill = area ? drapeFill(pts, viewport) : undefined;
     lines.push({
       id: "drawing",
       points,
@@ -542,12 +561,12 @@ export function marksForView(
 }
 
 /** The middle of an area, on the ground: where its label goes. */
-function centreOf(points: readonly Vec3[], vp: Viewport): Vec3 {
+function centreOf(points: readonly Vec3[], viewport: Viewport): Vec3 {
   const x = points.reduce((s, p) => s + p[0], 0) / points.length,
     y = points.reduce((s, p) => s + p[1], 0) / points.length;
   const level = points.reduce((s, p) => s + p[2], 0) / points.length;
 
-  return [x, y, (vp.sceneryHeight(x, y, level) ?? level) + lift(vp)];
+  return [x, y, (viewport.sceneryHeight(x, y, level) ?? level) + lift(viewport)];
 }
 
 // ---------------------------------------------------------------- measuring, staking out, scale
@@ -591,9 +610,9 @@ export function startScaling(ref: string): void {
 
 async function scaleTo(a: Vec3, b: Vec3): Promise<void> {
   const ref = useTerrainMeasure.getState().ref;
-  const r = currentDoc().references?.find((x) => x.id === ref);
+  const reference = currentDoc().references?.find((x) => x.id === ref);
   const now = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
-  if (!r || now < 1) return clearTerrainMeasure();
+  if (!reference || now < 1) return clearTerrainMeasure();
 
   const answer = await askText({
     title: t("Correct the scale"),
@@ -612,9 +631,11 @@ async function scaleTo(a: Vec3, b: Vec3): Promise<void> {
   apply({
     type: "set_reference",
     reference: {
-      ...r,
-      scale: (r.scale ?? 1) * k,
-      ...(r.marks ? { marks: r.marks.map((m) => ({ ...m, points: m.points.map(scaled) })) } : {}),
+      ...reference,
+      scale: (reference.scale ?? 1) * k,
+      ...(reference.marks
+        ? { marks: reference.marks.map((mark) => ({ ...mark, points: mark.points.map(scaled) })) }
+        : {}),
     },
   });
   toast(
@@ -638,18 +659,18 @@ export function distanceText(a: Vec3, b: Vec3): string {
  * Where a point is: metres east and north of the terrain's origin and its height; with GPS also its latitude
  * and longitude.
  */
-export function placeText(r: ReferenceModel, p: Vec3): string {
+export function placeText(reference: ReferenceModel, p: Vec3): string {
   const local = t("E {e} · N {n} · height {h}", {
     e: (p[0] / 1000).toFixed(2),
     n: (p[1] / 1000).toFixed(2),
     h: (p[2] / 1000).toFixed(2),
   });
-  if (!r.geo) return local;
+  if (!reference.geo) return local;
 
-  const lat = r.geo.lat + p[1] / 1000 / 111_320;
-  const lon = r.geo.lon + p[0] / 1000 / (111_320 * Math.cos((r.geo.lat * Math.PI) / 180));
+  const lat = reference.geo.lat + p[1] / 1000 / 111_320;
+  const lon = reference.geo.lon + p[0] / 1000 / (111_320 * Math.cos((reference.geo.lat * Math.PI) / 180));
 
-  return `${local}\n${lat.toFixed(7)}, ${lon.toFixed(7)} · ${(r.geo.alt + p[2] / 1000).toFixed(1)} m`;
+  return `${local}\n${lat.toFixed(7)}, ${lon.toFixed(7)} · ${(reference.geo.alt + p[2] / 1000).toFixed(1)} m`;
 }
 
 // ---------------------------------------------------------------- cleaning up
@@ -661,14 +682,14 @@ type Edit = ReturnType<typeof keepTriangles>;
  * Runs after the next paint so the busy note shows first (a large scan takes a moment).
  */
 export async function cleanUp(ref: string, edit: (glb: Uint8Array) => Edit, done: string): Promise<void> {
-  const r = currentDoc().references?.find((x) => x.id === ref);
-  if (!r) return;
+  const reference = currentDoc().references?.find((x) => x.id === ref);
+  if (!reference) return;
 
   const task = startTask(t("Cleaning up"));
   await new Promise((res) => setTimeout(res, 30));
 
   try {
-    const result = edit(Uint8Array.from(atob(r.data), (c) => c.charCodeAt(0)));
+    const result = edit(Uint8Array.from(atob(reference.data), (c) => c.charCodeAt(0)));
     if (!result) return toast(t("Nothing there to remove."));
     if (!result.after) return toast(t("That would remove everything: nothing was changed."), "error");
 
@@ -678,7 +699,7 @@ export async function cleanUp(ref: string, edit: (glb: Uint8Array) => Edit, done
       data += String.fromCharCode(...result.glb.subarray(i, i + 0x8000));
     }
 
-    apply({ type: "set_reference", reference: { ...r, data: btoa(data) } });
+    apply({ type: "set_reference", reference: { ...reference, data: btoa(data) } });
     toast(
       t("{what}: {n} of {total} triangles removed. Undo brings them back.", {
         what: done,
@@ -686,8 +707,8 @@ export async function cleanUp(ref: string, edit: (glb: Uint8Array) => Edit, done
         total: result.before.toLocaleString(),
       }),
     );
-  } catch (e) {
-    toast(t("Could not clean up: {error}", { error: (e as Error).message }), "error");
+  } catch (error) {
+    toast(t("Could not clean up: {error}", { error: (error as Error).message }), "error");
   } finally {
     task.done();
   }

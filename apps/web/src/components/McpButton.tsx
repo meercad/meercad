@@ -30,7 +30,7 @@ export function McpButton() {
   useEffect(() => {
     if (!open) return;
 
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const esc = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", esc);
 
     return () => window.removeEventListener("keydown", esc);
@@ -57,7 +57,7 @@ export function McpButton() {
               <div
                 className="modal"
                 style={{ width: "min(620px, 94vw)" }}
-                onPointerDown={(e) => e.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
               >
                 <div className="dialog-head">
                   <Plug className="ficon" />
@@ -76,7 +76,7 @@ export function McpButton() {
                     <input
                       type="checkbox"
                       checked={status !== "off"}
-                      onChange={(e) => setBridgeEnabled(e.target.checked)}
+                      onChange={(event) => setBridgeEnabled(event.target.checked)}
                     />
                     {t("Allow assistants to control meerCAD")}
                     <span className="muted">

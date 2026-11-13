@@ -13,7 +13,7 @@ import { useApp, useDocUnit } from "../store";
 export function SnapControls({ viewport }: { viewport: Viewport | null }) {
   const { snapGrid, snapGeometry } = usePrefs();
   const unit = useDocUnit();
-  const sketchId = useApp((s) => s.sketchId);
+  const sketchId = useApp((state) => state.sketchId);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   useEffect(() => viewport?.onChange(tick), [viewport]);
 

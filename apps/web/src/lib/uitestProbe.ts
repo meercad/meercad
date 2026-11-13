@@ -45,16 +45,16 @@ export function probeState(
   busy: () => boolean = () => false,
   screenOf: (p: [number, number, number]) => number[] | null = () => null,
 ): ProbeState {
-  const s = app.getState();
+  const state = app.getState();
 
   const rect = (sel: string): [number, number, number, number] | null => {
-    const el = document.querySelector(sel);
-    if (!el) return null;
+    const element = document.querySelector(sel);
+    if (!element) return null;
 
-    const r = el.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
 
-    return r.width && r.height
-      ? [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]
+    return rect.width && rect.height
+      ? [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)]
       : null;
   };
 
@@ -64,22 +64,22 @@ export function probeState(
     visible: Math.round(window.visualViewport?.width ?? window.innerWidth),
     layout: document.documentElement.clientWidth,
     compact: document.documentElement.hasAttribute("data-compact"),
-    screen: s.screen,
+    screen: state.screen,
     busy: busy(),
-    sideOpen: s.sideOpen,
-    sketch: s.sketchId,
-    dialog: s.dialog ? `${s.dialog.feature.op}:${s.dialog.feature.id}` : null,
-    features: s.doc.features.map((f) => f.id),
-    params: s.doc.params,
-    bodies: (s.output?.report.bodies ?? []).map((b) => ({
+    sideOpen: state.sideOpen,
+    sketch: state.sketchId,
+    dialog: state.dialog ? `${state.dialog.feature.op}:${state.dialog.feature.id}` : null,
+    features: state.doc.features.map((feature) => feature.id),
+    params: state.doc.params,
+    bodies: (state.output?.report.bodies ?? []).map((b) => ({
       id: b.id,
       volume: Number.isFinite(b.volume) ? +b.volume.toFixed(3) : -1 /* not worked out yet (a preview) */,
       size: [0, 1, 2].map((k) => +(b.bbox.max[k]! - b.bbox.min[k]!).toFixed(3)),
     })),
-    errors: (s.output?.report.features ?? [])
-      .filter((f) => f.status === "error")
-      .map((f) => `${f.id}: ${f.message ?? ""}`),
-    toasts: [...document.querySelectorAll(".toast")].map((t) => t.textContent ?? ""),
+    errors: (state.output?.report.features ?? [])
+      .filter((status) => status.status === "error")
+      .map((status) => `${status.id}: ${status.message ?? ""}`),
+    toasts: [...document.querySelectorAll(".toast")].map((element) => element.textContent ?? ""),
     axes: (() => {
       const canvas = document.querySelector("canvas")?.getBoundingClientRect();
 
@@ -94,19 +94,21 @@ export function probeState(
       return o && x && y && z ? { o, x, y, z } : null;
     })(),
     sketchInfo: (() => {
-      const sk = s.sketchId ? s.doc.features.find((f) => f.id === s.sketchId) : null;
-      if (!sk || sk.op !== "sketch") return null;
+      const feature = state.sketchId
+        ? state.doc.features.find((feature) => feature.id === state.sketchId)
+        : null;
+      if (!feature || feature.op !== "sketch") return null;
 
-      const view = s.output?.report.sketches.find((v) => v.id === sk.id);
+      const view = state.output?.report.sketches.find((sketchView) => sketchView.id === feature.id);
 
       return {
-        lines: sk.entities.filter((e) => e.type === "line" && !e.construction).length,
-        circles: sk.entities.filter((e) => e.type === "circle").length,
+        lines: feature.entities.filter((entity) => entity.type === "line" && !entity.construction).length,
+        circles: feature.entities.filter((entity) => entity.type === "circle").length,
         dof: view?.diagnostics.dof ?? null,
         regions: view?.regions.filter((r) => r.depth % 2 === 1).map((r) => +r.area.toFixed(3)) ?? [],
       };
     })(),
-    measure: s.measure.result ? s.measure.result.rows : null,
+    measure: state.measure.result ? state.measure.result.rows : null,
     rects: {
       side: rect(".side"),
       dialog: rect(".dialog"),
@@ -124,18 +126,18 @@ export function installProbe(
   busy: () => boolean,
   screenOf: (p: [number, number, number]) => number[] | null,
 ): void {
-  const el = document.createElement("div");
-  el.id = "uitest-probe";
+  const element = document.createElement("div");
+  element.id = "uitest-probe";
   // Read by the screen-reader tree (a static text) but not drawn: the usual "visually hidden" style.
-  el.style.cssText =
+  element.style.cssText =
     "position:fixed;left:0;top:0;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;pointer-events:none";
-  document.body.appendChild(el);
+  document.body.appendChild(element);
 
   let last = "";
 
   const tick = () => {
     const text = `UITEST ${JSON.stringify(probeState(app, busy, screenOf))}`;
-    if (text !== last) el.textContent = last = text;
+    if (text !== last) element.textContent = last = text;
   };
 
   setInterval(tick, 200);

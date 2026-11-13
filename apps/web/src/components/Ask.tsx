@@ -113,11 +113,11 @@ export function AskHost() {
         role="alertdialog"
         aria-modal="true"
         aria-label={req.title}
-        onPointerDown={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Escape") cancel();
-          if (e.key === "Enter") ok();
+        onPointerDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === "Escape") cancel();
+          if (event.key === "Enter") ok();
         }}
       >
         <h3>{req.title}</h3>
@@ -129,7 +129,7 @@ export function AskHost() {
               ref={input}
               value={text}
               readOnly={req.cancelLabel === null}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(event) => setText(event.target.value)}
             />
           </label>
         ) : null}

@@ -50,18 +50,21 @@ function Seg<T extends string>({
 
 type Shape = "flat" | "curved" | "round";
 
-export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }) {
+export function LithophaneFields({ f: feature, set }: { f: Of<"lithophane">; set: SetFn }) {
   const file = useRef<HTMLInputElement>(null);
-  const kind = f.kind ?? "lithophane";
+  const kind = feature.kind ?? "lithophane";
   const relief = kind === "relief";
-  const has = !!f.image.pixels && !f.image.pixels.startsWith("blob:");
+  const has = !!feature.image.pixels && !feature.image.pixels.startsWith("blob:");
   // The preview shows what the light (lithophane) or the shadows (relief) will show: a lithophane
   // is dark where it is thick.
-  const preview = useMemo(() => (has ? heightImageUrl(f.image, !!f.invert) : null), [has, f.image, f.invert]);
-  const curve = typeof f.curve === "number" ? f.curve : f.curve === undefined ? 0 : 120;
+  const preview = useMemo(
+    () => (has ? heightImageUrl(feature.image, !!feature.invert) : null),
+    [has, feature.image, feature.invert],
+  );
+  const curve = typeof feature.curve === "number" ? feature.curve : feature.curve === undefined ? 0 : 120;
   const shape: Shape = curve >= 360 ? "round" : curve > 0 ? "curved" : "flat";
-  const width = typeof f.width === "number" ? f.width : 100;
-  const height = has ? (width * f.image.height) / f.image.width : 0;
+  const width = typeof feature.width === "number" ? feature.width : 100;
+  const height = has ? (width * feature.image.height) / feature.image.width : 0;
 
   const choose = async (blob: File | undefined) => {
     if (!blob) return;
@@ -70,11 +73,13 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
       const image = await heightImageFromFile(blob, { max: PHOTO_PIXELS, stretch: true });
       set({
         image,
-        ...(f.name ? {} : { name: blob.name.replace(/\.[^.]+$/, "").slice(0, 60) || undefined }),
+        ...(feature.name ? {} : { name: blob.name.replace(/\.[^.]+$/, "").slice(0, 60) || undefined }),
       });
-    } catch (e) {
+    } catch (error) {
       toast(
-        t("Could not read the picture: {msg}", { msg: e instanceof Error ? e.message : String(e) }),
+        t("Could not read the picture: {msg}", {
+          msg: error instanceof Error ? error.message : String(error),
+        }),
         "error",
       );
     }
@@ -93,7 +98,7 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
             <ImagePlus /> {has ? t("Other photo…") : t("Choose a photo…")}
           </button>
           {has ? (
-            <span className="muted small">{`${f.image.width} × ${f.image.height} px · ${width.toFixed(0)} × ${height.toFixed(0)} mm`}</span>
+            <span className="muted small">{`${feature.image.width} × ${feature.image.height} px · ${width.toFixed(0)} × ${height.toFixed(0)} mm`}</span>
           ) : null}
         </div>
       </Field>
@@ -102,7 +107,7 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
         type="file"
         accept="image/*"
         hidden
-        onChange={(e) => void choose(e.target.files?.[0]).finally(() => (e.target.value = ""))}
+        onChange={(event) => void choose(event.target.files?.[0]).finally(() => (event.target.value = ""))}
       />
       <Field label={t("Kind")}>
         <Seg
@@ -140,30 +145,30 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
       {shape === "curved" ? (
         <Field label={t("Bend")}>
           <SliderValue
-            value={f.curve}
+            value={feature.curve}
             fallback={120}
             min={10}
             max={350}
             step={5}
             unit="deg"
-            onChange={(c) => set({ curve: c ?? 120 })}
+            onChange={(expr) => set({ curve: expr ?? 120 })}
           />
         </Field>
       ) : null}
       <Field label={shape === "round" ? t("Circumference") : t("Picture width")}>
         <SliderValue
-          value={f.width}
+          value={feature.width}
           fallback={100}
           min={20}
           max={shape === "round" ? 600 : 250}
           step={1}
           unit="mm"
-          onChange={(w) => set({ width: w ?? 100 })}
+          onChange={(expr) => set({ width: expr ?? 100 })}
         />
       </Field>
       <Field label={relief ? t("Base plate") : t("Thinnest (bright)")}>
         <SliderValue
-          value={f.thickness}
+          value={feature.thickness}
           fallback={relief ? 1.6 : 0.8}
           min={0.4}
           max={5}
@@ -175,7 +180,7 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
       </Field>
       <Field label={relief ? t("Relief height") : t("Added at dark parts")}>
         <SliderValue
-          value={f.depth}
+          value={feature.depth}
           fallback={relief ? 1.6 : 2.2}
           min={0.2}
           max={8}
@@ -187,7 +192,7 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
       </Field>
       <Field label={t("Frame")}>
         <SliderValue
-          value={f.frame}
+          value={feature.frame}
           fallback={0}
           min={0}
           max={15}
@@ -200,28 +205,28 @@ export function LithophaneFields({ f, set }: { f: Of<"lithophane">; set: SetFn }
       <label className="checkbox">
         <input
           type="checkbox"
-          checked={!!f.invert}
-          onChange={(e) => set({ invert: e.target.checked || undefined })}
+          checked={!!feature.invert}
+          onChange={(event) => set({ invert: event.target.checked || undefined })}
         />{" "}
         {t("Swap dark and bright")}
       </label>
       <Field label={t("On")}>
         <PlaneBox
-          value={describePlane(f.plane ?? { ref: "origin.XY" })}
+          value={describePlane(feature.plane ?? { ref: "origin.XY" })}
           placeholder={t("Tap a flat face where the plate goes")}
         />
       </Field>
       <div className="row">
         <Field label={t("Position x")}>
           <ExprInput
-            value={f.position?.[0] ?? 0}
-            onCommit={(x) => set({ position: [x, f.position?.[1] ?? 0] })}
+            value={feature.position?.[0] ?? 0}
+            onCommit={(x) => set({ position: [x, feature.position?.[1] ?? 0] })}
           />
         </Field>
         <Field label={t("Position y")}>
           <ExprInput
-            value={f.position?.[1] ?? 0}
-            onCommit={(y) => set({ position: [f.position?.[0] ?? 0, y] })}
+            value={feature.position?.[1] ?? 0}
+            onCommit={(y) => set({ position: [feature.position?.[0] ?? 0, y] })}
           />
         </Field>
       </div>

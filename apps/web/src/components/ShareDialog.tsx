@@ -56,8 +56,8 @@ export function ShareDialog() {
   const [open, setOpen] = useState(false);
   const [withVersions, setWithVersions] = useState(false);
   const [busy, setBusy] = useState(false);
-  const doc = useApp((s) => s.doc);
-  const project = useApp((s) => s.project);
+  const doc = useApp((state) => state.doc);
+  const project = useApp((state) => state.project);
 
   useEffect(() => {
     const show = () => {
@@ -67,7 +67,7 @@ export function ShareDialog() {
       setOpen(true);
     };
 
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
     window.addEventListener("meercad:share", show);
     window.addEventListener("keydown", onKey);
 
@@ -90,8 +90,8 @@ export function ShareDialog() {
       // The design as it is now, edits of the last moment included.
       await share(name, shareText(currentDoc(), withVersions));
       setOpen(false);
-    } catch (e) {
-      toast(t("Could not share {name}: {error}", { name, error: (e as Error).message }), "error");
+    } catch (error) {
+      toast(t("Could not share {name}: {error}", { name, error: (error as Error).message }), "error");
     } finally {
       setBusy(false);
     }
@@ -103,7 +103,7 @@ export function ShareDialog() {
         className="modal settings share-dialog"
         role="dialog"
         aria-label={t("Share design")}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="settings-head">
           <h2>{t("Share design")}</h2>
@@ -125,7 +125,7 @@ export function ShareDialog() {
             <input
               type="checkbox"
               checked={withVersions}
-              onChange={(e) => setWithVersions(e.target.checked)}
+              onChange={(event) => setWithVersions(event.target.checked)}
             />
             <span>{tn(versions, "Include the saved version", "Include the {n} saved versions")}</span>
           </label>
@@ -135,7 +135,7 @@ export function ShareDialog() {
             {packs.map((u) => (
               <p key={u.pack}>
                 {t("Uses {pack}: {what}.", {
-                  pack: t(PACKS.find((p) => p.id === u.pack)!.name),
+                  pack: t(PACKS.find((pack) => pack.id === u.pack)!.name),
                   what: u.what.map((w) => WHAT[w] ?? w).join(", "),
                 })}
               </p>

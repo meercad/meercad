@@ -115,7 +115,8 @@ function load(): Prefs {
 export const usePrefs = create<Prefs>(load);
 
 // Badges are hidden with one class on the root, so every Kbd follows without extra wiring.
-const applyRootClasses = (p: Prefs) => document.documentElement.classList.toggle("hide-kbd", !p.showKeys);
+const applyRootClasses = (prefs: Prefs) =>
+  document.documentElement.classList.toggle("hide-kbd", !prefs.showKeys);
 applyRootClasses(usePrefs.getState());
 usePrefs.subscribe(applyRootClasses);
 
@@ -141,12 +142,12 @@ export function keyFor(action: Action): string | undefined {
 
 /** Re-renders when the preset changes. */
 export function useKey(action: Action): string | undefined {
-  const scheme = usePrefs((s) => s.keys);
+  const scheme = usePrefs((prefs) => prefs.keys);
 
   return keymapFor(scheme)[action][0];
 }
 
 /** The first action among `actions` that this event triggers in the active preset. */
-export function actionFor<A extends Action>(e: KeyboardEvent, actions: readonly A[]): A | undefined {
-  return actionIn(keymapFor(usePrefs.getState().keys), e, actions);
+export function actionFor<A extends Action>(event: KeyboardEvent, actions: readonly A[]): A | undefined {
+  return actionIn(keymapFor(usePrefs.getState().keys), event, actions);
 }

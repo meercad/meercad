@@ -4,7 +4,7 @@ import { packsUsed, type PackId } from "./packUse";
 
 /** Rectangle anchored at the origin with width/height dimensions. */
 function rect(
-  w: Expr,
+  expr: Expr,
   h: Expr,
   centered: boolean,
   x = 40,
@@ -29,7 +29,7 @@ function rect(
       id: "c5",
       type: "length",
       line: "l1",
-      value: w,
+      value: expr,
       label: [centered ? 0 : x / 2, centered ? -y / 2 - 6 : -6],
     },
     {
@@ -619,9 +619,9 @@ export interface Example {
  * The premium packs an example needs to be shown and changed. Variants do not count: without the
  * pack its variables still change it (a DIN box's `din`).
  */
-export const examplePacks = (ex: Example): PackId[] =>
-  ex.packs ??
-  packsUsed(ex.doc)
+export const examplePacks = (example: Example): PackId[] =>
+  example.packs ??
+  packsUsed(example.doc)
     .map((u) => u.pack)
     .filter((p) => p !== "versions");
 

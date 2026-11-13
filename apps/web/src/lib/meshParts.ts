@@ -11,7 +11,9 @@ export function meshBodyIds(
   features: readonly Feature[],
   meshes: readonly { bodyId: string; faceTags: string[][] }[],
 ): Set<string> {
-  const ids = features.filter((f) => f.op === "import" && f.format === "stl").map((f) => `${f.id}.`);
+  const ids = features
+    .filter((feature) => feature.op === "import" && feature.format === "stl")
+    .map((feature) => `${feature.id}.`);
   const out = new Set<string>();
   if (!ids.length) return out;
 

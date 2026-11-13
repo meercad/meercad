@@ -22,21 +22,21 @@ import { setSketchSelection, useSketchUi, type SketchSel } from "./state";
 
 export function activeSketch(): SketchFeature | null {
   const id = useApp.getState().sketchId;
-  const f = id ? currentDoc().features.find((x) => x.id === id) : undefined;
+  const feature = id ? currentDoc().features.find((x) => x.id === id) : undefined;
 
-  return f?.op === "sketch" ? f : null;
+  return feature?.op === "sketch" ? feature : null;
 }
 
 /**
  * Writes new entities/constraints for the active sketch. `merge` folds the change into the last undo step.
  */
 export function writeSketch(next: Pick<SketchFeature, "entities" | "constraints">, merge = false): boolean {
-  const sk = activeSketch();
-  if (!sk) return false;
+  const sketch = activeSketch();
+  if (!sketch) return false;
 
   const op = {
     type: "edit_feature" as const,
-    id: sk.id,
+    id: sketch.id,
     patch: { entities: next.entities, constraints: next.constraints },
   };
 
@@ -48,7 +48,11 @@ export function freshId(
   prefix: string,
   taken: Set<string> = new Set(),
 ): string {
-  const used = new Set([...sk.entities.map((e) => e.id), ...sk.constraints.map((c) => c.id), ...taken]);
+  const used = new Set([
+    ...sk.entities.map((entity) => entity.id),
+    ...sk.constraints.map((constraint) => constraint.id),
+    ...taken,
+  ]);
   let n = 1;
   while (used.has(`${prefix}${n}`)) n++;
   taken.add(`${prefix}${n}`);
@@ -58,12 +62,15 @@ export function freshId(
 
 /** Kind of a referenced curve id within the sketch (including projected curves "pr.0"). */
 export function curveKind(
-  sk: SketchFeature,
+  sketch: SketchFeature,
   id: string,
   external: Map<string, string>,
 ): "line" | "circle" | "arc" | null {
-  const e = sk.entities.find((x) => x.id === id);
-  if (e && (e.type === "line" || e.type === "circle" || e.type === "arc")) return e.type;
+  const entity = sketch.entities.find((x) => x.id === id);
+
+  if (entity && (entity.type === "line" || entity.type === "circle" || entity.type === "arc")) {
+    return entity.type;
+  }
 
   return (
     (external.get(id) as "line" | "circle" | "arc" | undefined) ??
@@ -107,19 +114,21 @@ export const CONSTRAINT_TOOLS: { type: ConstraintKind; icon: Icon; label: string
 
 /** Creates constraints of `type` from the current selection. */
 export function applyConstraint(type: string): void {
-  const sk = activeSketch();
-  if (!sk) return;
+  const sketch = activeSketch();
+  if (!sketch) return;
 
   const sel = useSketchUi.getState().selection;
-  const pts = sel.filter((s) => s.kind === "point").map((s) => s.id);
-  const curves = sel.filter((s) => s.kind === "curve").map((s) => s.id);
-  const kinds = curves.map((c) => curveKind(sk, c, externalKinds));
+  const pts = sel.filter((selection) => selection.kind === "point").map((s) => s.id);
+  const curves = sel.filter((selection) => selection.kind === "curve").map((s) => s.id);
+  const kinds = curves.map((c) => curveKind(sketch, c, externalKinds));
   const lines = curves.filter((_, i) => kinds[i] === "line");
   const rounds = curves.filter((_, i) => kinds[i] === "circle" || kinds[i] === "arc");
-  const splines = curves.filter((c) => sk.entities.some((e) => e.id === c && e.type === "spline"));
+  const splines = curves.filter((c) =>
+    sketch.entities.some((entity) => entity.id === c && entity.type === "spline"),
+  );
   const taken = new Set<string>();
   const out: SketchConstraint[] = [];
-  const id = () => freshId(sk, "c", taken);
+  const id = () => freshId(sketch, "c", taken);
   const need = (msg: string) =>
     toast(
       t("{tool}: select {what}", {
@@ -136,7 +145,7 @@ export function applyConstraint(type: string): void {
       out.push({ id: id(), type: "coincident", a: `${rounds[0]}.center`, b: `${rounds[i]}.center` });
     }
 
-    if (writeSketch({ entities: sk.entities, constraints: [...sk.constraints, ...out] })) {
+    if (writeSketch({ entities: sketch.entities, constraints: [...sketch.constraints, ...out] })) {
       setSketchSelection([]);
     }
 
@@ -146,16 +155,16 @@ export function applyConstraint(type: string): void {
   if (type === "hv") {
     // Snap each line to whichever axis it is closer to.
     const solvedAt = (pid: string): [number, number] => {
-      const e = sk.entities.find((x) => x.id === pid);
+      const entity = sketch.entities.find((x) => x.id === pid);
 
-      return e?.type === "point" ? [e.x, e.y] : [0, 0];
+      return entity?.type === "point" ? [entity.x, entity.y] : [0, 0];
     };
 
     for (const l of lines) {
-      const e = sk.entities.find((x) => x.id === l);
-      if (e?.type !== "line") continue;
+      const entity = sketch.entities.find((x) => x.id === l);
+      if (entity?.type !== "line") continue;
 
-      const [a, b] = [solvedAt(e.p1), solvedAt(e.p2)];
+      const [a, b] = [solvedAt(entity.p1), solvedAt(entity.p2)];
       out.push({
         id: id(),
         type: Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]) ? "horizontal" : "vertical",
@@ -175,7 +184,7 @@ export function applyConstraint(type: string): void {
 
     if (!out.length) return need(t("lines or two points"));
 
-    if (writeSketch({ entities: sk.entities, constraints: [...sk.constraints, ...out] })) {
+    if (writeSketch({ entities: sketch.entities, constraints: [...sketch.constraints, ...out] })) {
       setSketchSelection([]);
     }
 
@@ -232,16 +241,16 @@ export function applyConstraint(type: string): void {
       if (curves.length === 2 && splines.length) {
         // A spline takes a tangent only at an end it shares with the other curve.
         const ends = (c: string) => {
-          const e = sk.entities.find((x) => x.id === c);
+          const entity = sketch.entities.find((x) => x.id === c);
 
-          return e?.type === "spline"
-            ? e.closed
+          return entity?.type === "spline"
+            ? entity.closed
               ? []
-              : [e.points[0], e.points[e.points.length - 1]]
-            : e?.type === "line"
-              ? [e.p1, e.p2]
-              : e?.type === "arc"
-                ? [e.start, e.end]
+              : [entity.points[0], entity.points[entity.points.length - 1]]
+            : entity?.type === "line"
+              ? [entity.p1, entity.p2]
+              : entity?.type === "arc"
+                ? [entity.start, entity.end]
                 : [];
         };
 
@@ -282,10 +291,10 @@ export function applyConstraint(type: string): void {
       const targets = [...pts];
 
       for (const c of curves) {
-        const e = sk.entities.find((x) => x.id === c);
-        if (e?.type === "line") targets.push(e.p1, e.p2);
-        if (e?.type === "circle") targets.push(e.center);
-        if (e?.type === "arc") targets.push(e.center, e.start, e.end);
+        const entity = sketch.entities.find((x) => x.id === c);
+        if (entity?.type === "line") targets.push(entity.p1, entity.p2);
+        if (entity?.type === "circle") targets.push(entity.center);
+        if (entity?.type === "arc") targets.push(entity.center, entity.start, entity.end);
       }
 
       if (!targets.length) return need(t("points or curves"));
@@ -297,21 +306,23 @@ export function applyConstraint(type: string): void {
       return;
   }
 
-  if (writeSketch({ entities: sk.entities, constraints: [...sk.constraints, ...out] })) {
+  if (writeSketch({ entities: sketch.entities, constraints: [...sketch.constraints, ...out] })) {
     setSketchSelection([]);
   }
 }
 
 export function toggleConstruction(): void {
-  const sk = activeSketch();
-  const sel = useSketchUi.getState().selection.filter((s) => s.kind === "curve" || s.kind === "point");
+  const sketch = activeSketch();
+  const sel = useSketchUi
+    .getState()
+    .selection.filter((selection) => selection.kind === "curve" || selection.kind === "point");
 
-  if (sk && sel.length) {
+  if (sketch && sel.length) {
     const ids = new Set(sel.map((s) => s.id));
-    const entities = sk.entities.map((e) =>
-      ids.has(e.id) ? ({ ...e, construction: !e.construction } as SketchEntity) : e,
+    const entities = sketch.entities.map((entity) =>
+      ids.has(entity.id) ? ({ ...entity, construction: !entity.construction } as SketchEntity) : entity,
     );
-    writeSketch({ entities, constraints: sk.constraints });
+    writeSketch({ entities, constraints: sketch.constraints });
 
     return;
   }
@@ -321,59 +332,74 @@ export function toggleConstruction(): void {
 
 /** Deletes selected geometry/constraints plus everything that depended on them. */
 export function deleteSelection(): void {
-  const sk = activeSketch();
+  const sketch = activeSketch();
   const sel = useSketchUi.getState().selection;
-  if (!sk || !sel.length) return;
+  if (!sketch || !sel.length) return;
 
-  const gone = new Set(sel.filter((s) => s.kind !== "constraint").map((s) => s.id));
-  const goneC = new Set(sel.filter((s) => s.kind === "constraint").map((s) => s.id));
+  const gone = new Set(sel.filter((selection) => selection.kind !== "constraint").map((s) => s.id));
+  const goneC = new Set(sel.filter((selection) => selection.kind === "constraint").map((s) => s.id));
 
   // Removing a point removes curves using it; removing a curve removes its now-unused points.
-  for (const e of sk.entities) {
-    if (e.type === "line" && (gone.has(e.p1) || gone.has(e.p2))) gone.add(e.id);
-    if (e.type === "circle" && gone.has(e.center)) gone.add(e.id);
-    if (e.type === "arc" && (gone.has(e.center) || gone.has(e.start) || gone.has(e.end))) gone.add(e.id);
+  for (const entity of sketch.entities) {
+    if (entity.type === "line" && (gone.has(entity.p1) || gone.has(entity.p2))) gone.add(entity.id);
+    if (entity.type === "circle" && gone.has(entity.center)) gone.add(entity.id);
+
+    if (
+      entity.type === "arc" &&
+      (gone.has(entity.center) || gone.has(entity.start) || gone.has(entity.end))
+    ) {
+      gone.add(entity.id);
+    }
   }
 
   const usedPoints = new Set<string>();
 
-  for (const e of sk.entities) {
-    if (gone.has(e.id)) continue;
-    if (e.type === "line") [e.p1, e.p2].forEach((p) => usedPoints.add(p));
-    if (e.type === "circle") usedPoints.add(e.center);
-    if (e.type === "arc") [e.center, e.start, e.end].forEach((p) => usedPoints.add(p));
+  for (const entity of sketch.entities) {
+    if (gone.has(entity.id)) continue;
+    if (entity.type === "line") [entity.p1, entity.p2].forEach((p) => usedPoints.add(p));
+    if (entity.type === "circle") usedPoints.add(entity.center);
+    if (entity.type === "arc") [entity.center, entity.start, entity.end].forEach((p) => usedPoints.add(p));
   }
 
-  for (const e of sk.entities) {
-    if (e.type !== "point" || usedPoints.has(e.id) || sel.some((s) => s.id === e.id)) continue;
+  for (const entity of sketch.entities) {
+    if (
+      entity.type !== "point" ||
+      usedPoints.has(entity.id) ||
+      sel.some((selection) => selection.id === entity.id)
+    ) {
+      continue;
+    }
 
-    const ownedByDeleted = sk.entities.some(
+    const ownedByDeleted = sketch.entities.some(
       (c) =>
         gone.has(c.id) &&
-        ((c.type === "line" && (c.p1 === e.id || c.p2 === e.id)) ||
-          (c.type === "circle" && c.center === e.id) ||
-          (c.type === "arc" && [c.center, c.start, c.end].includes(e.id))),
+        ((c.type === "line" && (c.p1 === entity.id || c.p2 === entity.id)) ||
+          (c.type === "circle" && c.center === entity.id) ||
+          (c.type === "arc" && [c.center, c.start, c.end].includes(entity.id))),
     );
-    if (ownedByDeleted) gone.add(e.id);
+    if (ownedByDeleted) gone.add(entity.id);
   }
 
-  const refs = (c: SketchConstraint) =>
-    Object.entries(c)
+  const refs = (constraint: SketchConstraint) =>
+    Object.entries(constraint)
       .filter(([k, v]) => k !== "id" && k !== "type" && typeof v === "string")
       .map(([, v]) => v as string);
-  const touches = (c: SketchConstraint) => refs(c).some((r) => gone.has(r) || gone.has(r.split(".")[0]!));
-  const entities = sk.entities.filter((e) => !gone.has(e.id));
-  const constraints = sk.constraints.filter((c) => !goneC.has(c.id) && !touches(c));
+  const touches = (constraint: SketchConstraint) =>
+    refs(constraint).some((r) => gone.has(r) || gone.has(r.split(".")[0]!));
+  const entities = sketch.entities.filter((entity) => !gone.has(entity.id));
+  const constraints = sketch.constraints.filter(
+    (constraint) => !goneC.has(constraint.id) && !touches(constraint),
+  );
   if (writeSketch({ entities, constraints })) setSketchSelection([]);
 }
 
 export function selectAll(): void {
-  const sk = activeSketch();
-  if (!sk) return;
+  const sketch = activeSketch();
+  if (!sketch) return;
 
   setSketchSelection(
-    sk.entities
-      .filter((e) => e.type !== "projection")
+    sketch.entities
+      .filter((entity) => entity.type !== "projection")
       .map((e): SketchSel => ({ kind: e.type === "point" ? "point" : "curve", id: e.id })),
   );
 }

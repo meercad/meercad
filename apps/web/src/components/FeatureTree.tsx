@@ -143,13 +143,13 @@ export function SidePanel() {
       <button
         className="sheet-grip"
         onClick={() => toggleSide(false)}
-        onPointerDown={(e) => {
-          const y0 = e.clientY;
-          const el = e.currentTarget;
-          el.setPointerCapture?.(e.pointerId);
+        onPointerDown={(event) => {
+          const y0 = event.clientY;
+          const el = event.currentTarget;
+          el.setPointerCapture?.(event.pointerId);
 
-          const move = (m: PointerEvent) => {
-            if (m.clientY - y0 > 40) done(true);
+          const move = (event: PointerEvent) => {
+            if (event.clientY - y0 > 40) done(true);
           };
 
           const done = (close = false) => {
@@ -180,41 +180,41 @@ export function SidePanel() {
 }
 
 function FeatureList() {
-  const doc = useApp((s) => s.doc);
-  const statuses = useApp((s) => s.output?.report.features);
-  const previewing = useApp((s) => s.previewing);
-  const dialog = useApp((s) => s.dialog);
-  const sketchId = useApp((s) => s.sketchId);
-  const selected = useApp((s) => s.selectedFeature);
-  const hidden = useApp((s) => s.hidden);
+  const doc = useApp((state) => state.doc);
+  const statuses = useApp((state) => state.output?.report.features);
+  const previewing = useApp((state) => state.previewing);
+  const dialog = useApp((state) => state.dialog);
+  const sketchId = useApp((state) => state.sketchId);
+  const selected = useApp((state) => state.selectedFeature);
+  const hidden = useApp((state) => state.hidden);
   const [drag, setDrag] = useState<{ kind: "feature" | "rollback"; id: string } | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
   const [open, toggle] = useSection("features");
-  const picked = useApp((s) => s.featureSelection);
+  const picked = useApp((state) => state.featureSelection);
   // Only a selection that still includes the active feature counts (it may have been changed elsewhere).
   const multi = picked.length > 1 && selected !== null && picked.includes(selected) ? picked : [];
 
-  const select = (f: Feature, i: number, e: React.MouseEvent) => {
+  const select = (feature: Feature, i: number, event: React.MouseEvent) => {
     const ids = doc.features.map((x) => x.id);
-    let next = [f.id];
+    let next = [feature.id];
 
-    if (e.metaKey || e.ctrlKey) {
+    if (event.metaKey || event.ctrlKey) {
       const base = multi.length ? multi : selected ? [selected] : [];
-      next = base.includes(f.id) ? base.filter((x) => x !== f.id) : [...base, f.id];
-    } else if (e.shiftKey && selected) {
+      next = base.includes(feature.id) ? base.filter((x) => x !== feature.id) : [...base, feature.id];
+    } else if (event.shiftKey && selected) {
       const a = ids.indexOf(selected);
       next = ids.slice(Math.min(a, i), Math.max(a, i) + 1);
     }
 
     useApp.setState({
-      selectedFeature: next.includes(f.id) ? f.id : (next.at(-1) ?? null),
+      selectedFeature: next.includes(feature.id) ? feature.id : (next.at(-1) ?? null),
       featureSelection: next,
     });
   };
 
-  const status = new Map((previewing ? [] : (statuses ?? [])).map((f) => [f.id, f]));
+  const status = new Map((previewing ? [] : (statuses ?? [])).map((status) => [status.id, status]));
   const rollbackIndex = doc.rollback
-    ? doc.features.findIndex((f) => f.id === doc.rollback)
+    ? doc.features.findIndex((feature) => feature.id === doc.rollback)
     : doc.features.length - 1;
 
   const onDrop = (index: number) => {
@@ -226,7 +226,7 @@ function FeatureList() {
         id: index === 0 ? null : index >= doc.features.length ? null : doc.features[index - 1]!.id,
       });
     } else {
-      const from = doc.features.findIndex((f) => f.id === drag.id);
+      const from = doc.features.findIndex((feature) => feature.id === drag.id);
 
       if (from !== index && from + 1 !== index) {
         apply({ type: "move_feature", id: drag.id, after: index === 0 ? null : doc.features[index - 1]!.id });
@@ -239,45 +239,62 @@ function FeatureList() {
 
   if (doc.rollback === null && dropAt === null) void 0;
 
-  const menu = (f: Feature, x: number, y: number) =>
+  const menu = (feature: Feature, x: number, y: number) =>
     showMenu(x, y, [
-      { label: t("Edit"), icon: <Pencil />, kbd: "↵", onClick: () => editFeature(f.id) },
+      { label: t("Edit"), icon: <Pencil />, kbd: "↵", onClick: () => editFeature(feature.id) },
       {
         label: t("Rename"),
         icon: <Pencil />,
         onClick: async () => {
-          const name = await askText({ title: t("Rename feature"), label: t("Name"), value: featureName(f) });
-          if (name !== null) apply({ type: "edit_feature", id: f.id, patch: { name: name.trim() || null } });
+          const name = await askText({
+            title: t("Rename feature"),
+            label: t("Name"),
+            value: featureName(feature),
+          });
+
+          if (name !== null) {
+            apply({ type: "edit_feature", id: feature.id, patch: { name: name.trim() || null } });
+          }
         },
       },
       {
-        label: f.suppressed ? t("Unsuppress") : t("Suppress"),
-        icon: f.suppressed ? <Eye /> : <EyeOff />,
+        label: feature.suppressed ? t("Unsuppress") : t("Suppress"),
+        icon: feature.suppressed ? <Eye /> : <EyeOff />,
         onClick: () =>
-          apply({ type: "edit_feature", id: f.id, patch: { suppressed: f.suppressed ? null : true } }),
+          apply({
+            type: "edit_feature",
+            id: feature.id,
+            patch: { suppressed: feature.suppressed ? null : true },
+          }),
       },
       {
         label: t("Roll back to here"),
         icon: <SkipBack />,
-        onClick: () => apply({ type: "set_rollback", id: f.id }),
+        onClick: () => apply({ type: "set_rollback", id: feature.id }),
       },
-      ...(f.op === "sketch"
+      ...(feature.op === "sketch"
         ? [
             {
-              label: hidden.has(f.id) ? t("Show sketch") : t("Hide sketch"),
-              icon: hidden.has(f.id) ? <Eye /> : <EyeOff />,
-              onClick: () => toggleHidden(f.id),
+              label: hidden.has(feature.id) ? t("Show sketch") : t("Hide sketch"),
+              icon: hidden.has(feature.id) ? <Eye /> : <EyeOff />,
+              onClick: () => toggleHidden(feature.id),
             },
-            { label: t("Export DXF"), icon: <FileDown />, onClick: () => exportSketch(f.id, "dxf") },
-            { label: t("Export SVG"), icon: <FileDown />, onClick: () => exportSketch(f.id, "svg") },
+            { label: t("Export DXF"), icon: <FileDown />, onClick: () => exportSketch(feature.id, "dxf") },
+            { label: t("Export SVG"), icon: <FileDown />, onClick: () => exportSketch(feature.id, "svg") },
           ]
         : []),
       // Also for a mesh that failed to import (a scan with holes): cleaning it up can close them.
-      ...(f.op === "import" && f.format === "stl" && hasPack("scan")
-        ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(f.id) }]
+      ...(feature.op === "import" && feature.format === "stl" && hasPack("scan")
+        ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(feature.id) }]
         : []),
       "sep",
-      { label: t("Delete"), icon: <Trash />, danger: true, kbd: "⌫", onClick: () => void deleteFeature(f) },
+      {
+        label: t("Delete"),
+        icon: <Trash />,
+        danger: true,
+        kbd: "⌫",
+        onClick: () => void deleteFeature(feature),
+      },
     ]);
 
   return (
@@ -319,61 +336,64 @@ function FeatureList() {
                 ))}
               </span>
             </li>
-            {doc.features.map((f, i) => {
-              const st = status.get(f.id);
-              const Icon = FEATURES[f.op].icon;
+            {doc.features.map((feature, i) => {
+              const st = status.get(feature.id);
+              const Icon = FEATURES[feature.op].icon;
               const rolledBack = i > rollbackIndex;
               const cls = [
                 "tree-item",
-                selected === f.id || multi.includes(f.id) ? "selected" : "",
-                dialog?.feature.id === f.id || sketchId === f.id ? "editing" : "",
-                f.suppressed || rolledBack ? "dim" : "",
+                selected === feature.id || multi.includes(feature.id) ? "selected" : "",
+                dialog?.feature.id === feature.id || sketchId === feature.id ? "editing" : "",
+                feature.suppressed || rolledBack ? "dim" : "",
                 st?.status === "error" ? "err" : st?.status === "warning" ? "warn" : "",
                 dropAt === i ? "drop-before" : "",
               ].join(" ");
 
               return (
                 <li
-                  key={f.id}
-                  onDragOver={(e) => (e.preventDefault(), setDropAt(i))}
+                  key={feature.id}
+                  onDragOver={(event) => (event.preventDefault(), setDropAt(i))}
                   onDrop={() => onDrop(i)}
                 >
                   <div
                     className={cls}
                     draggable
-                    onDragStart={() => setDrag({ kind: "feature", id: f.id })}
+                    onDragStart={() => setDrag({ kind: "feature", id: feature.id })}
                     onDragEnd={() => (setDrag(null), setDropAt(null))}
-                    onClick={(e) => select(f, i, e)}
-                    onDoubleClick={() => editFeature(f.id)}
-                    onContextMenu={(e) => (e.preventDefault(), menu(f, e.clientX, e.clientY))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") editFeature(f.id);
-                      if (e.key === "Delete" || e.key === "Backspace") void deleteFeature(f);
+                    onClick={(event) => select(feature, i, event)}
+                    onDoubleClick={() => editFeature(feature.id)}
+                    onContextMenu={(event) => (
+                      event.preventDefault(),
+                      menu(feature, event.clientX, event.clientY)
+                    )}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") editFeature(feature.id);
+                      if (event.key === "Delete" || event.key === "Backspace") void deleteFeature(feature);
                     }}
                     tabIndex={0}
                     title={
                       st?.message ??
-                      `${FEATURES[f.op].label}${st && !st.cached ? ` · ${st.ms.toFixed(1)} ms` : ""}`
+                      `${FEATURES[feature.op].label}${st && !st.cached ? ` · ${st.ms.toFixed(1)} ms` : ""}`
                     }
                   >
                     <Icon className="ficon" />
-                    <span className="tree-label">{featureName(f)}</span>
+                    <span className="tree-label">{featureName(feature)}</span>
                     <span className="actions">
-                      {f.op === "sketch" ? (
+                      {feature.op === "sketch" ? (
                         <button
                           className="icon-btn sm"
-                          title={hidden.has(f.id) ? t("Show") : t("Hide")}
-                          onClick={(e) => (e.stopPropagation(), toggleHidden(f.id))}
+                          title={hidden.has(feature.id) ? t("Show") : t("Hide")}
+                          onClick={(event) => (event.stopPropagation(), toggleHidden(feature.id))}
                         >
-                          {hidden.has(f.id) ? <EyeOff /> : <Eye />}
+                          {hidden.has(feature.id) ? <EyeOff /> : <Eye />}
                         </button>
                       ) : null}
                       <button
                         className="icon-btn sm"
                         title={t("Edit")}
-                        onClick={(e) => (
-                          e.stopPropagation(),
-                          f.op === "sketch" ? openSketch(f.id) : editFeature(f.id)
+                        onClick={(event) => (
+                          event.stopPropagation(),
+                          feature.op === "sketch" ? openSketch(feature.id) : editFeature(feature.id)
                         )}
                       >
                         <Pencil />
@@ -401,7 +421,7 @@ function FeatureList() {
               );
             })}
             <li
-              onDragOver={(e) => (e.preventDefault(), setDropAt(doc.features.length))}
+              onDragOver={(event) => (event.preventDefault(), setDropAt(doc.features.length))}
               onDrop={() => onDrop(doc.features.length)}
               style={{ height: 24 }}
               className={dropAt === doc.features.length ? "tree-item drop-before" : ""}
@@ -450,12 +470,14 @@ const LINKABLE: Partial<Record<Feature["op"], { field: string; label: string; un
 
 /** Offers to drive equal values of the picked features (same kind) from one new variable. */
 function LinkBar({ ids }: { ids: string[] }) {
-  const doc = useApp((s) => s.doc);
-  const values = useApp((s) => s.output?.report.params) ?? EMPTY;
-  const feats = ids.map((id) => doc.features.find((f) => f.id === id)).filter((f): f is Feature => !!f);
+  const doc = useApp((state) => state.doc);
+  const values = useApp((state) => state.output?.report.params) ?? EMPTY;
+  const feats = ids
+    .map((id) => doc.features.find((feature) => feature.id === id))
+    .filter((feature): feature is Feature => !!feature);
   const op = feats[0]?.op;
 
-  if (!op || feats.some((f) => f.op !== op)) {
+  if (!op || feats.some((feature) => feature.op !== op)) {
     return (
       <div className="link-bar muted">
         {t("{n} features picked · pick features of one kind to link their values", { n: feats.length })}
@@ -468,7 +490,7 @@ function LinkBar({ ids }: { ids: string[] }) {
   const scope = new Map(Object.entries(values));
   const rows = (LINKABLE[op] ?? []).flatMap(({ field, label, unit }) => {
     const exprs = feats.map(
-      (f) => (f as unknown as Record<string, unknown>)[field] as string | number | undefined,
+      (feature) => (feature as unknown as Record<string, unknown>)[field] as string | number | undefined,
     );
     if (exprs.some((e) => e === undefined)) return [];
 
@@ -516,7 +538,11 @@ function LinkBar({ ids }: { ids: string[] }) {
     if (
       apply(
         { type: "set_param", name: n, expr, auto: true },
-        ...feats.map((f) => ({ type: "edit_feature" as const, id: f.id, patch: { [r.field]: n } })),
+        ...feats.map((feature) => ({
+          type: "edit_feature" as const,
+          id: feature.id,
+          patch: { [r.field]: n },
+        })),
       )
     ) {
       toast(
@@ -562,7 +588,7 @@ function LinkBar({ ids }: { ids: string[] }) {
 }
 
 const exprs = (feats: Feature[], field: string) =>
-  feats.map((f) => (f as unknown as Record<string, unknown>)[field]);
+  feats.map((feature) => (feature as unknown as Record<string, unknown>)[field]);
 
 /** Draws a part see-through as a reference, or solid again (saved in the design). */
 export function toggleSeeThrough(id: string): void {
@@ -571,8 +597,8 @@ export function toggleSeeThrough(id: string): void {
 }
 
 export function toggleHidden(id: string): void {
-  useApp.setState((s) => {
-    const hidden = new Set(s.hidden);
+  useApp.setState((state) => {
+    const hidden = new Set(state.hidden);
     if (hidden.has(id)) hidden.delete(id);
     else hidden.add(id);
 
@@ -580,17 +606,19 @@ export function toggleHidden(id: string): void {
   });
 }
 
-export async function deleteFeature(f: Feature): Promise<void> {
+export async function deleteFeature(feature: Feature): Promise<void> {
   const doc = useApp.getState().doc;
   const dependents = doc.features.filter(
     (g) =>
-      g !== f && JSON.stringify(g).includes(`"${f.id}`) && doc.features.indexOf(g) > doc.features.indexOf(f),
+      g !== feature &&
+      JSON.stringify(g).includes(`"${feature.id}`) &&
+      doc.features.indexOf(g) > doc.features.indexOf(feature),
   );
 
   if (
     dependents.length &&
     !(await askConfirm({
-      title: t("Delete {name}?", { name: featureName(f) }),
+      title: t("Delete {name}?", { name: featureName(feature) }),
       message: t("It is used by {names}. Those will be deleted too.", {
         names: dependents.map(featureName).join(", "),
       }),
@@ -601,28 +629,30 @@ export async function deleteFeature(f: Feature): Promise<void> {
     return;
   }
 
-  const ops = [...dependents].reverse().map((g) => ({ type: "delete_feature" as const, id: g.id }));
+  const ops = [...dependents]
+    .reverse()
+    .map((feature) => ({ type: "delete_feature" as const, id: feature.id }));
 
-  if (apply(...ops, { type: "delete_feature", id: f.id })) {
-    toast(t("Deleted {name}", { name: featureName(f) }));
+  if (apply(...ops, { type: "delete_feature", id: feature.id })) {
+    toast(t("Deleted {name}", { name: featureName(feature) }));
   }
 }
 
 /** Parts list: drag to reorder, drop onto a folder to group; order and folders are saved in the file. */
 function Bodies() {
   const mechanics = usePack("mechanics");
-  const bodies = useApp((s) => s.output?.report.bodies) ?? NONE;
-  const doc = useApp((s) => s.doc);
-  const hidden = useApp((s) => s.hidden);
+  const bodies = useApp((state) => state.output?.report.bodies) ?? NONE;
+  const doc = useApp((state) => state.doc);
+  const hidden = useApp((state) => state.hidden);
   // Parts selected as a whole (in the view or here) stand out in the list.
-  const selection = useApp((s) => s.selection);
+  const selection = useApp((state) => state.selection);
   const picked = new Set(selectedParts(selection));
   const [open, toggle] = useSection("parts");
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
-  const colorParts = usePrefs((s) => s.colorParts);
-  const printBed = usePrefs((s) => s.printBed);
+  const colorParts = usePrefs((prefs) => prefs.colorParts);
+  const printBed = usePrefs((prefs) => prefs.printBed);
   if (!bodies.length) return null;
 
   const oversize = new Set(tooBig(bodies, printBed).map((b) => b.id));
@@ -698,8 +728,8 @@ function Bodies() {
   };
 
   const setHidden = (list: string[], hide: boolean) =>
-    useApp.setState((st) => {
-      const h = new Set(st.hidden);
+    useApp.setState((state) => {
+      const h = new Set(state.hidden);
 
       for (const id of list) {
         if (hide) h.add(id);
@@ -709,17 +739,17 @@ function Bodies() {
       return { hidden: h };
     });
   const dropProps = (target: string | null) => ({
-    onDragOver: (e: React.DragEvent) => {
+    onDragOver: (event: React.DragEvent) => {
       if (!drag) return;
 
-      e.preventDefault();
-      e.stopPropagation();
+      event.preventDefault();
+      event.stopPropagation();
       setOver(target ?? "end");
     },
     onDragLeave: () => setOver(null),
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    onDrop: (event: React.DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
       if (drag) move(drag, target);
 
       setDrag(null);
@@ -745,9 +775,11 @@ function Bodies() {
     openMaterialPicker(selectedParts().includes(id) ? selectedParts() : [id]);
 
   const massText = (id: string, volume: number) => {
-    const m = partMaterial(doc, id);
+    const material = partMaterial(doc, id);
 
-    return m && Number.isFinite(volume) ? ` · ${formatMass(massOf(volume, m))} ${materialName(m)}` : "";
+    return material && Number.isFinite(volume)
+      ? ` · ${formatMass(massOf(volume, material))} ${materialName(material)}`
+      : "";
   };
 
   // The browser's own colour picker (works with mouse and touch alike).
@@ -767,8 +799,8 @@ function Bodies() {
       <li
         key={id}
         className={`tree-item ${hidden.has(id) ? "dim" : ""} ${nested ? "nested" : ""} ${over === id ? "drop-before" : ""} ${picked.has(id) ? "selected" : ""}`}
-        ref={picked.has(id) ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
-        onClick={(e) => selectParts([id], e.shiftKey || e.metaKey || e.ctrlKey)}
+        ref={picked.has(id) ? (element) => element?.scrollIntoView({ block: "nearest" }) : undefined}
+        onClick={(event) => selectParts([id], event.shiftKey || event.metaKey || event.ctrlKey)}
         title={t("{faces} faces · {size} — drag to reorder or onto a group", {
           faces: b.faces,
           size: `${b.bbox.max.map((v, i) => inUnit(v - b.bbox.min[i]!)).join(" × ")} ${docUnit()}`,
@@ -776,9 +808,9 @@ function Bodies() {
         draggable
         onDragStart={() => setDrag(id)}
         onDragEnd={() => (setDrag(null), setOver(null))}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          showMenu(e.clientX, e.clientY, [
+        onContextMenu={(event) => {
+          event.preventDefault();
+          showMenu(event.clientX, event.clientY, [
             { label: t("New group with this part"), icon: <FolderPlus />, onClick: () => void newGroup(id) },
             ...groups
               .filter((g) => !g.parts.includes(id))
@@ -858,7 +890,7 @@ function Bodies() {
                     icon: <Wand2 />,
                     onClick: () => void rebuildMeshPart(id),
                   },
-                  ...(doc.features.some((f) => f.id === id && f.op === "import")
+                  ...(doc.features.some((feature) => feature.id === id && feature.op === "import")
                     ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }]
                     : []),
                 ]
@@ -878,15 +910,15 @@ function Bodies() {
           className="part-swatch"
           title={t("Colour and material")}
           style={{ background: colors.get(id) ?? PART_PALETTE[0] }}
-          onClick={(e) => {
-            e.stopPropagation();
+          onClick={(event) => {
+            event.stopPropagation();
 
             // Colour, material and going back to the automatic colour, in one place (mouse and touch).
-            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            const m = partMaterial(doc, id);
-            showMenu(r.left, r.bottom + 4, [
+            const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+            const material = partMaterial(doc, id);
+            showMenu(rect.left, rect.bottom + 4, [
               {
-                label: m ? t("Material: {name}…", { name: materialName(m) }) : t("Material…"),
+                label: material ? t("Material: {name}…", { name: materialName(material) }) : t("Material…"),
                 icon: <Weight />,
                 onClick: () => pickMaterial(id),
               },
@@ -903,8 +935,8 @@ function Bodies() {
               className="too-big"
               title={t("Too big for the print bed")}
               aria-label={t("Too big for the print bed")}
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
 
                 const size = partSize(b.bbox)
                   .map((v) => inUnit(v))
@@ -931,10 +963,10 @@ function Bodies() {
               role="button"
               tabIndex={0}
               title={t("Material…")}
-              onClick={(e) => (e.stopPropagation(), pickMaterial(id))}
-              onKeyDown={(e) =>
-                (e.key === "Enter" || e.key === " ") &&
-                (e.preventDefault(), e.stopPropagation(), pickMaterial(id))
+              onClick={(event) => (event.stopPropagation(), pickMaterial(id))}
+              onKeyDown={(event) =>
+                (event.key === "Enter" || event.key === " ") &&
+                (event.preventDefault(), event.stopPropagation(), pickMaterial(id))
               }
             >
               {partMaterial(doc, id) ? massText(id, b.volume) : ` · ${t("No material")}`}
@@ -1002,9 +1034,9 @@ function Bodies() {
                     )
                   }
                   onDoubleClick={() => void renameGroup(g.name)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    showMenu(e.clientX, e.clientY, [
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    showMenu(event.clientX, event.clientY, [
                       { label: t("Rename"), icon: <Pencil />, onClick: () => void renameGroup(g.name) },
                       {
                         label: allHidden ? t("Show all") : t("Hide all"),
@@ -1035,7 +1067,7 @@ function Bodies() {
                     <button
                       className="icon-btn sm"
                       title={allHidden ? t("Show all") : t("Hide all")}
-                      onClick={(e) => (e.stopPropagation(), setHidden(g.parts, !allHidden))}
+                      onClick={(event) => (event.stopPropagation(), setHidden(g.parts, !allHidden))}
                     >
                       {allHidden ? <EyeOff /> : <Eye />}
                     </button>
@@ -1123,16 +1155,16 @@ function Bodies() {
 
 /** Models shown with the design but not built into it (an area from drone photos). */
 function References() {
-  const refs = useApp((s) => s.doc.references);
+  const refs = useApp((state) => state.doc.references);
   const [open, toggle] = useSection("references");
   if (!refs?.length) return null;
 
-  const set = (r: ReferenceModel, patch: Partial<ReferenceModel>) =>
-    apply({ type: "set_reference", reference: { ...r, ...patch } });
+  const set = (reference: ReferenceModel, patch: Partial<ReferenceModel>) =>
+    apply({ type: "set_reference", reference: { ...reference, ...patch } });
 
-  const rename = async (r: ReferenceModel) => {
-    const name = (await askText({ title: t("Rename"), label: t("Name"), value: r.name }))?.trim();
-    if (name) set(r, { name });
+  const rename = async (reference: ReferenceModel) => {
+    const name = (await askText({ title: t("Rename"), label: t("Name"), value: reference.name }))?.trim();
+    if (name) set(reference, { name });
   };
 
   return (
@@ -1142,76 +1174,92 @@ function References() {
       </SectionHead>
       {open ? (
         <ul className="tree">
-          {refs.map((r) => (
+          {refs.map((reference) => (
             <li
-              key={r.id}
-              className={`tree-item ${r.hidden ? "dim" : ""}`}
+              key={reference.id}
+              className={`tree-item ${reference.hidden ? "dim" : ""}`}
               title={
-                r.geo
+                reference.geo
                   ? t("Placed by GPS at {lat}, {lon}", {
-                      lat: r.geo.lat.toFixed(6),
-                      lon: r.geo.lon.toFixed(6),
+                      lat: reference.geo.lat.toFixed(6),
+                      lon: reference.geo.lon.toFixed(6),
                     })
                   : undefined
               }
-              onContextMenu={(e) => {
-                e.preventDefault();
-                showMenu(e.clientX, e.clientY, [
-                  { label: t("Mark a line"), icon: <Pencil />, onClick: () => startMarking("line", r.id) },
-                  { label: t("Mark an area"), icon: <Shapes />, onClick: () => startMarking("area", r.id) },
+              onContextMenu={(event) => {
+                event.preventDefault();
+                showMenu(event.clientX, event.clientY, [
+                  {
+                    label: t("Mark a line"),
+                    icon: <Pencil />,
+                    onClick: () => startMarking("line", reference.id),
+                  },
+                  {
+                    label: t("Mark an area"),
+                    icon: <Shapes />,
+                    onClick: () => startMarking("area", reference.id),
+                  },
                   {
                     label: t("Highlighter"),
                     icon: <Highlighter />,
-                    onClick: () => startMarking("stroke", r.id),
+                    onClick: () => startMarking("stroke", reference.id),
                   },
-                  { label: t("Pin a note"), icon: <StickyNote />, onClick: () => startMarking("note", r.id) },
+                  {
+                    label: t("Pin a note"),
+                    icon: <StickyNote />,
+                    onClick: () => startMarking("note", reference.id),
+                  },
                   {
                     label: t("Set a stake-out point"),
                     icon: <MapPin />,
-                    onClick: () => startMarking("point", r.id),
+                    onClick: () => startMarking("point", reference.id),
                   },
-                  { label: t("Correct the scale…"), icon: <Ruler />, onClick: () => startScaling(r.id) },
+                  {
+                    label: t("Correct the scale…"),
+                    icon: <Ruler />,
+                    onClick: () => startScaling(reference.id),
+                  },
                   {
                     label: t("Clean up…"),
                     icon: <Eraser />,
-                    onClick: () => cleanUpMenu(r.id, e.clientX, e.clientY),
+                    onClick: () => cleanUpMenu(reference.id, event.clientX, event.clientY),
                   },
                   "sep" as const,
-                  { label: t("Rename…"), icon: <Pencil />, onClick: () => void rename(r) },
+                  { label: t("Rename…"), icon: <Pencil />, onClick: () => void rename(reference) },
                   {
-                    label: r.hidden ? t("Show") : t("Hide"),
-                    icon: r.hidden ? <Eye /> : <EyeOff />,
-                    onClick: () => set(r, { hidden: !r.hidden || undefined }),
+                    label: reference.hidden ? t("Show") : t("Hide"),
+                    icon: reference.hidden ? <Eye /> : <EyeOff />,
+                    onClick: () => set(reference, { hidden: !reference.hidden || undefined }),
                   },
                   "sep" as const,
                   {
                     label: t("Delete"),
                     icon: <Trash />,
                     danger: true,
-                    onClick: () => apply({ type: "delete_reference", id: r.id }),
+                    onClick: () => apply({ type: "delete_reference", id: reference.id }),
                   },
                 ]);
               }}
             >
               <MapIcon className="ficon" />
               <span className="tree-label">
-                {r.name}{" "}
-                {r.marks?.length ? (
-                  <span className="muted">· {tn(r.marks.length, "{n} mark", "{n} marks")}</span>
+                {reference.name}{" "}
+                {reference.marks?.length ? (
+                  <span className="muted">· {tn(reference.marks.length, "{n} mark", "{n} marks")}</span>
                 ) : null}
               </span>
               <span className="actions" style={{ display: "flex" }}>
                 <button
                   className="icon-btn sm"
-                  title={r.hidden ? t("Show") : t("Hide")}
-                  onClick={() => set(r, { hidden: !r.hidden || undefined })}
+                  title={reference.hidden ? t("Show") : t("Hide")}
+                  onClick={() => set(reference, { hidden: !reference.hidden || undefined })}
                 >
-                  {r.hidden ? <EyeOff /> : <Eye />}
+                  {reference.hidden ? <EyeOff /> : <Eye />}
                 </button>
                 <button
                   className="icon-btn sm"
                   title={t("Delete")}
-                  onClick={() => apply({ type: "delete_reference", id: r.id })}
+                  onClick={() => apply({ type: "delete_reference", id: reference.id })}
                 >
                   <Trash />
                 </button>
@@ -1225,12 +1273,12 @@ function References() {
 }
 
 function Params() {
-  const params = useApp((s) => s.doc.params);
-  const auto = useApp((s) => s.doc.autoParams) ?? NONE;
-  const doc = useApp((s) => s.doc);
-  const values = useApp((s) => s.output?.report.params) ?? EMPTY;
-  const unit = useApp((s) => s.doc.units ?? "mm");
-  const errors = useApp((s) => s.output?.report.paramErrors) ?? EMPTY;
+  const params = useApp((state) => state.doc.params);
+  const auto = useApp((state) => state.doc.autoParams) ?? NONE;
+  const doc = useApp((state) => state.doc);
+  const values = useApp((state) => state.output?.report.params) ?? EMPTY;
+  const unit = useApp((state) => state.doc.units ?? "mm");
+  const errors = useApp((state) => state.output?.report.paramErrors) ?? EMPTY;
   const [adding, setAdding] = useState<{ name: string; expr: string } | null>(null);
   const [open, toggle] = useSection("variables");
   const [ownOpen, toggleOwn] = useSection("variables.own");
@@ -1240,11 +1288,11 @@ function Params() {
   // Without the pack a design that already has variants keeps them, but no new ones are made.
   const variantsPack = usePack("versions");
   const variants = doc.variants ?? [];
-  const active = variants.find((v) => v.name === doc.variant);
+  const active = variants.find((variant) => variant.name === doc.variant);
   const [query, setQuery] = useState("");
   const used = (name: string) =>
     JSON.stringify(doc.features).match(new RegExp(`\\b${name}\\b`)) ||
-    Object.values(params).some((e) => referencedNames(e).includes(name));
+    Object.values(params).some((expr) => referencedNames(expr).includes(name));
   const q = query.trim().toLowerCase();
   const matches = (n: string) =>
     !q || n.toLowerCase().includes(q) || String(params[n]).toLowerCase().includes(q);
@@ -1257,10 +1305,10 @@ function Params() {
   // With a variant in use, its values show and are edited in place of the plain ones.
   const fromVariant = (name: string) => !!active && name in active.params;
   const shown = (name: string) => (fromVariant(name) ? active!.params[name]! : params[name]!);
-  const setValue = (name: string, v: Expr) =>
+  const setValue = (name: string, expr: Expr) =>
     fromVariant(name)
-      ? apply({ type: "set_variant", name: active!.name, params: { ...active!.params, [name]: v } })
-      : apply({ type: "set_param", name, expr: v });
+      ? apply({ type: "set_variant", name: active!.name, params: { ...active!.params, [name]: expr } })
+      : apply({ type: "set_param", name, expr: expr });
 
   const addVariant = async () => {
     const name = await askText({
@@ -1284,7 +1332,7 @@ function Params() {
   };
 
   const variantMenu = (name: string, x: number, y: number) => {
-    const v = variants.find((x) => x.name === name)!;
+    const variant = variants.find((x) => x.name === name)!;
     showMenu(x, y, [
       {
         label: t("Rename…"),
@@ -1298,7 +1346,7 @@ function Params() {
           });
 
           if (to?.trim() && to.trim() !== name) {
-            apply({ type: "set_variant", name, params: v.params, rename: to.trim() });
+            apply({ type: "set_variant", name, params: variant.params, rename: to.trim() });
           }
         },
       },
@@ -1316,9 +1364,9 @@ function Params() {
       className={`param-row ${isAuto ? "auto" : ""} ${fromVariant(name) ? "in-variant" : ""}`}
       title={fromVariant(name) ? t("Value of variant {name}", { name: active!.name }) : undefined}
       key={name}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        showMenu(e.clientX, e.clientY, [
+      onContextMenu={(event) => {
+        event.preventDefault();
+        showMenu(event.clientX, event.clientY, [
           isAuto
             ? {
                 label: t("Move to my variables"),
@@ -1338,8 +1386,8 @@ function Params() {
         defaultValue={name}
         title={name}
         key={`${name}-n`}
-        onBlur={(e) => {
-          const to = e.target.value.trim();
+        onBlur={(event) => {
+          const to = event.target.value.trim();
 
           // Renaming a variable makes it yours.
           if (
@@ -1350,10 +1398,10 @@ function Params() {
               ...(isAuto ? [{ type: "set_param" as const, name: to, expr: params[name]!, auto: false }] : []),
             )
           ) {
-            e.target.value = name;
+            event.target.value = name;
           }
         }}
-        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        onKeyDown={(event) => event.key === "Enter" && (event.target as HTMLInputElement).blur()}
       />
       {/* A length variable in an inch design shows its result and takes plain numbers in inches. */}
       <ExprInput
@@ -1361,7 +1409,7 @@ function Params() {
         value={shown(name)}
         unit={unit === "in" && isLengthParam(name, params) ? "mm" : ""}
         quiet
-        onCommit={(v) => setValue(name, v)}
+        onCommit={(expr) => setValue(name, expr)}
       />
       <span
         className="val"
@@ -1440,8 +1488,8 @@ function Params() {
                 className="field"
                 placeholder={t("Search variables")}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => event.key === "Escape" && setQuery("")}
                 aria-label={t("Search variables")}
               />
               {query ? (
@@ -1485,19 +1533,22 @@ function Params() {
                     >
                       {t("Plain values")}
                     </button>
-                    {variants.map((v) => (
+                    {variants.map((variant) => (
                       <button
-                        key={v.name}
+                        key={variant.name}
                         role="radio"
-                        aria-checked={active?.name === v.name}
-                        className={`variant-chip ${active?.name === v.name ? "on" : ""}`}
+                        aria-checked={active?.name === variant.name}
+                        className={`variant-chip ${active?.name === variant.name ? "on" : ""}`}
                         onClick={() =>
-                          active?.name !== v.name && apply({ type: "use_variant", name: v.name })
+                          active?.name !== variant.name && apply({ type: "use_variant", name: variant.name })
                         }
-                        onDoubleClick={(e) => variantMenu(v.name, e.clientX, e.clientY)}
-                        onContextMenu={(e) => (e.preventDefault(), variantMenu(v.name, e.clientX, e.clientY))}
+                        onDoubleClick={(event) => variantMenu(variant.name, event.clientX, event.clientY)}
+                        onContextMenu={(event) => (
+                          event.preventDefault(),
+                          variantMenu(variant.name, event.clientX, event.clientY)
+                        )}
                       >
-                        {v.name}
+                        {variant.name}
                       </button>
                     ))}
                   </div>
@@ -1520,21 +1571,21 @@ function Params() {
                 className="field name-input"
                 autoFocus
                 value={adding.name}
-                onChange={(e) => setAdding({ ...adding, name: e.target.value })}
+                onChange={(event) => setAdding({ ...adding, name: event.target.value })}
               />
               <input
                 className="field expr"
                 value={adding.expr}
-                onChange={(e) => setAdding({ ...adding, expr: e.target.value })}
-                onKeyDown={(e) => {
+                onChange={(event) => setAdding({ ...adding, expr: event.target.value })}
+                onKeyDown={(event) => {
                   if (
-                    e.key === "Enter" &&
+                    event.key === "Enter" &&
                     apply({ type: "set_param", name: adding.name.trim(), expr: parseExpr(adding.expr) })
                   ) {
                     setAdding(null);
                   }
 
-                  if (e.key === "Escape") setAdding(null);
+                  if (event.key === "Escape") setAdding(null);
                 }}
               />
               <button

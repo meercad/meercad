@@ -94,7 +94,7 @@ export function MotionPanel() {
   // Without the pack the joints of a design someone shared are there to look at and move, not to change.
   const canEdit = usePack("mechanics");
   // Joint symbols in the scene can be switched off to watch the motion alone.
-  const showJoints = usePrefs((s) => s.showJoints);
+  const showJoints = usePrefs((prefs) => prefs.showJoints);
   const [filming, setFilming] = useState<string | null>(null);
 
   const film = async (id: string) => {
@@ -105,8 +105,8 @@ export function MotionPanel() {
       const gif = await renderMotionGif(id, from, to);
       const project = useApp.getState().project?.name ?? "meerCAD";
       download(`${project} ${id}.gif`, gif as BlobPart);
-    } catch (e) {
-      toast(t("Could not make the video: {error}", { error: (e as Error).message }), "error");
+    } catch (error) {
+      toast(t("Could not make the video: {error}", { error: (error as Error).message }), "error");
     } finally {
       setFilming(null);
     }
@@ -114,10 +114,10 @@ export function MotionPanel() {
 
   useMotion((s) => s.tick);
 
-  const doc = useApp((s) => s.doc);
-  useApp((s) => s.output);
+  const doc = useApp((state) => state.doc);
+  useApp((state) => state.output);
 
-  const dialog = useApp((s) => !!s.dialog);
+  const dialog = useApp((state) => !!state.dialog);
   if (!open || dialog) return null;
 
   const features = doc.features;
@@ -130,7 +130,7 @@ export function MotionPanel() {
   const joints = doc.mechanism?.joints ?? [];
   const couplings = doc.mechanism?.couplings ?? [];
   const gearsWithout = (useApp.getState().output?.report.gears ?? []).filter(
-    (g) => !joints.some((j) => j.a === g.id),
+    (gear) => !joints.some((j) => j.a === gear.id),
   ).length;
   const name = (id: string) => (id === "ground" ? t("Ground") : partName(id, features));
   const close = () => useMotion.setState({ open: false, draft: null });
@@ -169,7 +169,7 @@ export function MotionPanel() {
               </p>
             )}
             {joints.map((j) => {
-              const driven = couplings.find((c) => c.driven === j.id);
+              const driven = couplings.find((coupling) => coupling.driven === j.id);
               // A cylindrical joint has a value for its turn and one for its slide.
               const parts: [string, "revolute" | "slider", string?][] =
                 j.type === "cylindrical"
@@ -242,13 +242,13 @@ export function MotionPanel() {
                             value={seen}
                             // A free turn goes on from where it is: 179° → -179° is two degrees on, not a
                             // turn back.
-                            onChange={(e) => (
+                            onChange={(event) => (
                               stopPlaying(),
                               setJointValue(
                                 id,
                                 turning
-                                  ? (v ?? 0) + wrapDegrees(Number(e.target.value) - seen)
-                                  : Number(e.target.value),
+                                  ? (v ?? 0) + wrapDegrees(Number(event.target.value) - seen)
+                                  : Number(event.target.value),
                               )
                             )}
                           />
@@ -272,7 +272,7 @@ export function MotionPanel() {
               );
             })}
             {Object.entries(problems)
-              .filter(([id]) => couplings.some((c) => c.id === id))
+              .filter(([id]) => couplings.some((coupling) => coupling.id === id))
               .map(([id, p]) => (
                 <div key={id} className="callout warn">
                   {id}: {p}
@@ -331,7 +331,7 @@ export function MotionPanel() {
 
 /** Next free motion id (m1, m2, …). */
 function nextMotionId(list: readonly Motion[]): string {
-  for (let k = 1; ; k++) if (!list.some((m) => m.id === `m${k}`)) return `m${k}`;
+  for (let k = 1; ; k++) if (!list.some((motion) => motion.id === `m${k}`)) return `m${k}`;
 }
 
 /**
@@ -341,7 +341,7 @@ function nextMotionId(list: readonly Motion[]): string {
  */
 function MotionsSection() {
   // The fallback stays outside the selector: a new [] on every call would re-render forever.
-  const motions = useApp((s) => s.doc.mechanism?.motions) ?? [];
+  const motions = useApp((state) => state.doc.mechanism?.motions) ?? [];
   const playingMotion = useMotion((s) => s.playingMotion);
   // Without the pack the motions of a shared design play, film and check, but do not change.
   const canEdit = usePack("mechanics");
@@ -349,14 +349,14 @@ function MotionsSection() {
     {},
   );
   const [filming, setFilming] = useState<string | null>(null);
-  const features = useApp((s) => s.doc.features);
-  const update = (m: Motion) => apply({ type: "set_motion", motion: m });
+  const features = useApp((state) => state.doc.features);
+  const update = (motion: Motion) => apply({ type: "set_motion", motion: motion });
 
-  const check = async (m: Motion) => {
-    setChecks((c) => ({ ...c, [m.id]: { running: true } }));
+  const check = async (motion: Motion) => {
+    setChecks((c) => ({ ...c, [motion.id]: { running: true } }));
 
     try {
-      const r = await checkMotionRun(m.id, 24);
+      const r = await checkMotionRun(motion.id, 24);
       const pairs = [...new Map(r.collisions.map((c) => [`${c.a}|${c.b}`, c])).values()];
       const text = pairs.length
         ? t("Collides at {times}: {parts}", {
@@ -368,20 +368,26 @@ function MotionsSection() {
               joints: [...new Set(r.held.map((h) => h.joint))].join(", "),
             })
           : t("No collision in {n} poses.", { n: r.frames });
-      setChecks((c) => ({ ...c, [m.id]: { running: false, text, bad: pairs.length > 0 } }));
-    } catch (e) {
-      setChecks((c) => ({ ...c, [m.id]: { running: false, text: (e as Error).message, bad: true } }));
+      setChecks((c) => ({ ...c, [motion.id]: { running: false, text, bad: pairs.length > 0 } }));
+    } catch (error) {
+      setChecks((c) => ({
+        ...c,
+        [motion.id]: { running: false, text: (error as Error).message, bad: true },
+      }));
     }
   };
 
-  const film = async (m: Motion) => {
-    setFilming(m.id);
+  const film = async (motion: Motion) => {
+    setFilming(motion.id);
 
     try {
-      const gif = await renderMotionGif("", 0, 0, 36, {}, m.id);
-      download(`${useApp.getState().project?.name ?? "meerCAD"} ${m.name ?? m.id}.gif`, gif as BlobPart);
-    } catch (e) {
-      toast(t("Could not make the video: {error}", { error: (e as Error).message }), "error");
+      const gif = await renderMotionGif("", 0, 0, 36, {}, motion.id);
+      download(
+        `${useApp.getState().project?.name ?? "meerCAD"} ${motion.name ?? motion.id}.gif`,
+        gif as BlobPart,
+      );
+    } catch (error) {
+      toast(t("Could not make the video: {error}", { error: (error as Error).message }), "error");
     } finally {
       setFilming(null);
     }
@@ -400,32 +406,32 @@ function MotionsSection() {
           )}
         </p>
       ) : null}
-      {motions.map((m) => {
-        const c = checks[m.id];
+      {motions.map((motion) => {
+        const c = checks[motion.id];
 
         return (
-          <div key={m.id} className="joint-row">
+          <div key={motion.id} className="joint-row">
             <div className="joint-head">
               <button
-                className={`icon-btn sm ${playingMotion === m.id ? "active" : ""}`}
-                title={playingMotion === m.id ? t("Stop") : t("Play the motion")}
-                onClick={() => (playingMotion === m.id ? stopPlaying() : playMotion(m.id))}
+                className={`icon-btn sm ${playingMotion === motion.id ? "active" : ""}`}
+                title={playingMotion === motion.id ? t("Stop") : t("Play the motion")}
+                onClick={() => (playingMotion === motion.id ? stopPlaying() : playMotion(motion.id))}
               >
-                {playingMotion === m.id ? <Pause /> : <Play />}
+                {playingMotion === motion.id ? <Pause /> : <Play />}
               </button>
               <input
                 className="field"
-                value={m.name ?? ""}
-                placeholder={m.id}
+                value={motion.name ?? ""}
+                placeholder={motion.id}
                 readOnly={!canEdit}
-                onChange={(e) => update({ ...m, name: e.target.value || undefined })}
+                onChange={(event) => update({ ...motion, name: event.target.value || undefined })}
                 style={{ flex: 1 }}
               />
               <button
-                className={`icon-btn sm ${filming === m.id ? "active" : ""}`}
+                className={`icon-btn sm ${filming === motion.id ? "active" : ""}`}
                 title={t("Save a video (GIF) of this motion")}
                 disabled={!!filming}
-                onClick={() => void film(m)}
+                onClick={() => void film(motion)}
               >
                 <Film />
               </button>
@@ -433,7 +439,7 @@ function MotionsSection() {
                 <button
                   className="icon-btn sm"
                   title={t("Delete")}
-                  onClick={() => (stopPlaying(), apply({ type: "delete_motion", id: m.id }))}
+                  onClick={() => (stopPlaying(), apply({ type: "delete_motion", id: motion.id }))}
                 >
                   <Trash2 />
                 </button>
@@ -448,30 +454,30 @@ function MotionsSection() {
                   min={0.1}
                   step={0.1}
                   disabled={!canEdit}
-                  value={m.duration}
-                  onChange={(e) => {
-                    const d = Number(e.target.value);
-                    if (d > 0) update({ ...m, duration: Math.max(d, ...m.keys.map((k) => k.at)) });
+                  value={motion.duration}
+                  onChange={(event) => {
+                    const d = Number(event.target.value);
+                    if (d > 0) update({ ...motion, duration: Math.max(d, ...motion.keys.map((k) => k.at)) });
                   }}
                 />
               </label>
               <label className="checkbox">
                 <input
                   type="checkbox"
-                  checked={!!m.loop}
+                  checked={!!motion.loop}
                   disabled={!canEdit}
-                  onChange={(e) => update({ ...m, loop: e.target.checked || undefined })}
+                  onChange={(event) => update({ ...motion, loop: event.target.checked || undefined })}
                 />{" "}
                 {t("Loop")}
               </label>
             </div>
             <div className="motion-keys">
-              {m.keys.map((k) => (
+              {motion.keys.map((k) => (
                 <span key={k.at} className="chip">
                   <button
                     className="link"
                     title={t("Show this pose")}
-                    onClick={() => (stopPlaying(), showMotionAt(m, k.at))}
+                    onClick={() => (stopPlaying(), showMotionAt(motion, k.at))}
                   >
                     {k.at.toFixed(2)} s
                   </button>
@@ -481,9 +487,9 @@ function MotionsSection() {
                       title={t("Delete")}
                       // The last moment takes the motion with it: a motion without moments is none.
                       onClick={() =>
-                        m.keys.length > 1
-                          ? update({ ...m, keys: m.keys.filter((x) => x !== k) })
-                          : (stopPlaying(), apply({ type: "delete_motion", id: m.id }))
+                        motion.keys.length > 1
+                          ? update({ ...motion, keys: motion.keys.filter((x) => x !== k) })
+                          : (stopPlaying(), apply({ type: "delete_motion", id: motion.id }))
                       }
                     >
                       <X />
@@ -496,7 +502,7 @@ function MotionsSection() {
               {canEdit ? (
                 <button
                   className="btn"
-                  onClick={() => (stopPlaying(), addPoseToMotion(m.id))}
+                  onClick={() => (stopPlaying(), addPoseToMotion(motion.id))}
                   title={t("Adds the pose shown now as the next moment")}
                 >
                   <Plus /> {t("Add this pose")}
@@ -504,7 +510,7 @@ function MotionsSection() {
               ) : null}
               <button
                 className="btn"
-                onClick={() => void check(m)}
+                onClick={() => void check(motion)}
                 disabled={c?.running}
                 title={t("Check for collisions")}
               >
@@ -532,7 +538,7 @@ function ClearanceResults() {
   const check = useMotion((s) => s.check);
   const free = useMotion((s) => s.free);
   const tick = useMotion((s) => s.tick);
-  const features = useApp((s) => s.doc.features);
+  const features = useApp((state) => state.doc.features);
   const want = wantedClearance();
   const stale = check && !check.running && JSON.stringify(check.free) !== JSON.stringify({ ...free, tick });
   const name = (id: string) => partName(id, features);
@@ -549,21 +555,28 @@ function ClearanceResults() {
           {!check.error && !check.results.length ? (
             <span className="muted small">{t("No part comes near another.")}</span>
           ) : null}
-          {check.results.map((r) => {
-            const level = r.overlap > 1e-3 || r.distance < 1e-4 ? "bad" : r.distance < want ? "warn" : "ok";
+          {check.results.map((clearance) => {
+            const level =
+              clearance.overlap > 1e-3 || clearance.distance < 1e-4
+                ? "bad"
+                : clearance.distance < want
+                  ? "warn"
+                  : "ok";
 
             return (
-              <div key={`${r.a}|${r.b}`} className={`clearance-row ${level}`}>
+              <div key={`${clearance.a}|${clearance.b}`} className={`clearance-row ${level}`}>
                 <span className="dot" />
                 <span className="pair">
-                  {name(r.a)} · {name(r.b)}
+                  {name(clearance.a)} · {name(clearance.b)}
                 </span>
                 <b>
-                  {r.overlap > 1e-3
-                    ? t("overlap {volume} mm³", { volume: r.overlap.toFixed(r.overlap < 10 ? 2 : 0) })
-                    : r.distance < 1e-4
+                  {clearance.overlap > 1e-3
+                    ? t("overlap {volume} mm³", {
+                        volume: clearance.overlap.toFixed(clearance.overlap < 10 ? 2 : 0),
+                      })
+                    : clearance.distance < 1e-4
                       ? t("touching")
-                      : `${r.distance.toFixed(2)} mm`}
+                      : `${clearance.distance.toFixed(2)} mm`}
                 </b>
               </div>
             );
@@ -604,7 +617,7 @@ function PickBox({ field, text, placeholder }: { field: JointField; text: string
 
 function JointForm() {
   const draft = useMotion((s) => s.draft)!;
-  const features = useApp((s) => s.doc.features);
+  const features = useApp((state) => state.doc.features);
   const j = draft.joint;
   const name = (id: string) => (id === "ground" ? t("Ground") : id ? partName(id, features) : "");
   const unit = j.type === "slider" ? "mm" : "deg";
@@ -669,8 +682,8 @@ function JointForm() {
             <input
               type="checkbox"
               checked={!!j.limits}
-              onChange={(e) =>
-                updateJointDraft({ limits: e.target.checked ? (turns ? [0, 90] : [0, 20]) : undefined })
+              onChange={(event) =>
+                updateJointDraft({ limits: event.target.checked ? (turns ? [0, 90] : [0, 20]) : undefined })
               }
             />{" "}
             {j.type === "cylindrical" ? t("Limits of the turn") : t("Limits")}
@@ -682,7 +695,7 @@ function JointForm() {
                 <ExprInput
                   value={j.limits[0]}
                   unit={unit}
-                  onCommit={(v) => updateJointDraft({ limits: [v, j.limits![1]] })}
+                  onCommit={(expr) => updateJointDraft({ limits: [expr, j.limits![1]] })}
                 />
               </div>
               <div className="fld" style={{ flex: 1 }}>
@@ -690,7 +703,7 @@ function JointForm() {
                 <ExprInput
                   value={j.limits[1]}
                   unit={unit}
-                  onCommit={(v) => updateJointDraft({ limits: [j.limits![0], v] })}
+                  onCommit={(expr) => updateJointDraft({ limits: [j.limits![0], expr] })}
                 />
               </div>
             </div>
@@ -701,7 +714,9 @@ function JointForm() {
                 <input
                   type="checkbox"
                   checked={!!j.travel}
-                  onChange={(e) => updateJointDraft({ travel: e.target.checked ? [0, 20] : undefined })}
+                  onChange={(event) =>
+                    updateJointDraft({ travel: event.target.checked ? [0, 20] : undefined })
+                  }
                 />{" "}
                 {t("Limits of the slide")}
               </label>
@@ -712,7 +727,7 @@ function JointForm() {
                     <ExprInput
                       value={j.travel[0]}
                       unit="mm"
-                      onCommit={(v) => updateJointDraft({ travel: [v, j.travel![1]] })}
+                      onCommit={(expr) => updateJointDraft({ travel: [expr, j.travel![1]] })}
                     />
                   </div>
                   <div className="fld" style={{ flex: 1 }}>
@@ -720,7 +735,7 @@ function JointForm() {
                     <ExprInput
                       value={j.travel[1]}
                       unit="mm"
-                      onCommit={(v) => updateJointDraft({ travel: [j.travel![0], v] })}
+                      onCommit={(expr) => updateJointDraft({ travel: [j.travel![0], expr] })}
                     />
                   </div>
                 </div>
@@ -735,7 +750,7 @@ function JointForm() {
           className="field"
           value={j.name ?? ""}
           placeholder={j.id}
-          onChange={(e) => updateJointDraft({ name: e.target.value || undefined })}
+          onChange={(event) => updateJointDraft({ name: event.target.value || undefined })}
         />
       </div>
       <div className="row" style={{ justifyContent: "flex-end" }}>

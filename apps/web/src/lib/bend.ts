@@ -57,7 +57,7 @@ export function bendDefaults(mode: Bend["mode"], box: Box): Partial<Bend> {
 
 /** What the kernel reported for a bend step (from its last good build), or null. */
 export function bendInfo(out: RebuildOutput | null, id: string): Record<string, number> | null {
-  return out?.report.features.find((f) => f.id === id)?.info ?? null;
+  return out?.report.features.find((status) => status.id === id)?.info ?? null;
 }
 
 /** One line on what the bend comes to. */
@@ -89,8 +89,8 @@ export function describeBend(mode: Bend["mode"], info: Record<string, number>): 
 }
 
 /** A clear warning about the turns of a spiral, or null. */
-export function gapProblem(f: Bend, gap: number | undefined): { text: string; error: boolean } | null {
-  if (f.mode !== "spiral" || gap === undefined) return null;
+export function gapProblem(feature: Bend, gap: number | undefined): { text: string; error: boolean } | null {
+  if (feature.mode !== "spiral" || gap === undefined) return null;
   if (!(gap > 0)) return { text: t("The turns would overlap: the gap must be more than 0 mm."), error: true };
   if (gap < 0.3) return { text: t("Turns closer than 0.3 mm may fuse when printed."), error: false };
 

@@ -68,7 +68,7 @@ export function PickBox({
   placeholder: string;
   onRemove?: (i: number) => void;
 }) {
-  const active = useApp((s) => s.dialog?.field === field);
+  const active = useApp((state) => state.dialog?.field === field);
 
   return (
     <div
@@ -82,7 +82,7 @@ export function PickBox({
           <span className="chip" key={i} title={item}>
             <span>{item}</span>
             {onRemove ? (
-              <button onClick={(e) => (e.stopPropagation(), onRemove(i))} aria-label={t("Remove")}>
+              <button onClick={(event) => (event.stopPropagation(), onRemove(i))} aria-label={t("Remove")}>
                 <X />
               </button>
             ) : null}
@@ -97,7 +97,7 @@ export function PickBox({
   );
 }
 
-const num = (e: Expr | undefined, fallback: number) => (typeof e === "number" ? e : fallback);
+const num = (expr: Expr | undefined, fallback: number) => (typeof expr === "number" ? expr : fallback);
 const mm = (v: number) => `${+v.toFixed(1)} mm`;
 
 function Count({
@@ -109,7 +109,7 @@ function Count({
   value: Expr | undefined;
   min: number;
   max: number;
-  onChange: (v: Expr) => void;
+  onChange: (expr: Expr) => void;
 }) {
   const n = num(value, min);
 
@@ -170,17 +170,19 @@ const BOX_PRESETS: { label: string; patch: Partial<Of<"box">> }[] = [
   { label: t("Quick-turn jar"), patch: { lid: "screw", width: 50, height: 60, starts: 2, pitch: 3 } },
 ];
 
-export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
-  const screw = f.lid === "screw";
-  const round = screw || f.shape === "round";
-  const pair = (i: number, v: Expr) =>
-    set({ position: (f.position ?? [0, 0]).map((x, j) => (j === i ? v : x)) });
+export function BoxFields({ f: feature, set }: { f: Of<"box">; set: SetFn }) {
+  const screw = feature.lid === "screw";
+  const round = screw || feature.shape === "round";
+  const pair = (i: number, expr: Expr) =>
+    set({ position: (feature.position ?? [0, 0]).map((x, j) => (j === i ? expr : x)) });
 
   // What the numbers come to (only when they are plain numbers).
   let info = "";
 
   try {
-    const r = boxDefaults(f, (_k, e) => (e === undefined ? undefined : typeof e === "number" ? e : NaN));
+    const r = boxDefaults(feature, (_k, e) =>
+      e === undefined ? undefined : typeof e === "number" ? e : NaN,
+    );
 
     if ([r.width, r.depth, r.height, r.wall, r.clearance].some((v) => !Number.isFinite(v))) {
       info = "";
@@ -197,15 +199,15 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
         ? t("Inside ⌀{d}, {h} deep", { d: mm(s.inner[0]), h: mm(s.depthInside) })
         : t("Inside {w} × {d}, {h} deep", { w: mm(s.inner[0]), d: mm(s.inner[1]), h: mm(s.depthInside) });
     }
-  } catch (e) {
-    info = e instanceof Error ? e.message : "";
+  } catch (error) {
+    info = error instanceof Error ? error.message : "";
   }
 
   return (
     <>
       <Examples items={BOX_PRESETS} onPick={(patch) => set({ ...BOX_CLEAR, ...patch })} />
       <Seg
-        value={f.lid}
+        value={feature.lid}
         options={[
           ["snap", t("Snap lid")],
           ["screw", t("Screw lid")],
@@ -228,7 +230,7 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       />
       {!screw ? (
         <Seg
-          value={f.shape ?? "rect"}
+          value={feature.shape ?? "rect"}
           options={[
             ["rect", t("Rectangular")],
             ["round", t("Round")],
@@ -241,7 +243,7 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       <div className="row">
         <Field label={round ? t("Diameter") : t("Width")}>
           <ExprInput
-            value={f.width}
+            value={feature.width}
             onCommit={(width) => set({ width })}
             onLive={(width) => set({ width })}
           />
@@ -249,7 +251,7 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
         {!round ? (
           <Field label={t("Depth")}>
             <ExprInput
-              value={f.depth ?? f.width}
+              value={feature.depth ?? feature.width}
               onCommit={(depth) => set({ depth })}
               onLive={(depth) => set({ depth })}
             />
@@ -257,7 +259,7 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
         ) : null}
         <Field label={t("Height")}>
           <ExprInput
-            value={f.height}
+            value={feature.height}
             onCommit={(height) => set({ height })}
             onLive={(height) => set({ height })}
           />
@@ -266,11 +268,11 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       <p className="muted small">{info}</p>
       <div className="row">
         <Field label={t("Wall")}>
-          <ExprInput value={f.wall} placeholder={String(BOX.wall)} onCommit={(wall) => set({ wall })} />
+          <ExprInput value={feature.wall} placeholder={String(BOX.wall)} onCommit={(wall) => set({ wall })} />
         </Field>
         <Field label={t("Play")}>
           <ExprInput
-            value={f.clearance}
+            value={feature.clearance}
             placeholder={String(DEFAULT_CLEARANCE)}
             onCommit={(clearance) => set({ clearance })}
           />
@@ -278,7 +280,7 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
         {!round ? (
           <Field label={t("Corner radius")}>
             <ExprInput
-              value={f.corner}
+              value={feature.corner}
               placeholder={String(BOX.corner)}
               onCommit={(corner) => set({ corner })}
             />
@@ -288,14 +290,22 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       {screw ? (
         <div className="row">
           <Field label={t("Pitch")}>
-            <ExprInput value={f.pitch} placeholder={String(BOX.pitch)} onCommit={(pitch) => set({ pitch })} />
+            <ExprInput
+              value={feature.pitch}
+              placeholder={String(BOX.pitch)}
+              onCommit={(pitch) => set({ pitch })}
+            />
           </Field>
           <Field label={t("Neck height")}>
-            <ExprInput value={f.neck} placeholder={String(BOX.neck)} onCommit={(neck) => set({ neck })} />
+            <ExprInput
+              value={feature.neck}
+              placeholder={String(BOX.neck)}
+              onCommit={(neck) => set({ neck })}
+            />
           </Field>
           <Field label={t("Starts")}>
             <Count
-              value={f.starts ?? 1}
+              value={feature.starts ?? 1}
               min={1}
               max={4}
               onChange={(starts) => set({ starts: starts === 1 ? undefined : starts })}
@@ -306,11 +316,15 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
         <>
           <div className="row">
             <Field label={t("Snap")}>
-              <ExprInput value={f.snap} placeholder={String(BOX.snap)} onCommit={(snap) => set({ snap })} />
+              <ExprInput
+                value={feature.snap}
+                placeholder={String(BOX.snap)}
+                onCommit={(snap) => set({ snap })}
+              />
             </Field>
             <Field label={t("Lip height")}>
               <ExprInput
-                value={f.lipHeight}
+                value={feature.lipHeight}
                 placeholder={String(BOX.lipHeight)}
                 onCommit={(lipHeight) => set({ lipHeight })}
               />
@@ -319,8 +333,8 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={f.notch !== false}
-              onChange={(e) => set({ notch: e.target.checked ? undefined : false })}
+              checked={feature.notch !== false}
+              onChange={(event) => set({ notch: event.target.checked ? undefined : false })}
             />{" "}
             {t("Notch to open it with a finger nail")}
           </label>
@@ -329,12 +343,12 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       <label className="checkbox">
         <input
           type="checkbox"
-          checked={f.layout === "closed"}
-          onChange={(e) => set({ layout: e.target.checked ? "closed" : undefined })}
+          checked={feature.layout === "closed"}
+          onChange={(event) => set({ layout: event.target.checked ? "closed" : undefined })}
         />{" "}
         {t("Lid on the box (to look at it closed)")}
       </label>
-      {f.layout === "closed" ? (
+      {feature.layout === "closed" ? (
         <button className="btn" onClick={() => void checkInterference()}>
           <ShieldCheck /> {t("Check fit")}
         </button>
@@ -342,16 +356,16 @@ export function BoxFields({ f, set }: { f: Of<"box">; set: SetFn }) {
       <Field label={t("On")}>
         <PickBox
           field="plane"
-          items={[describePlane(f.plane ?? { ref: "origin.XY" })]}
+          items={[describePlane(feature.plane ?? { ref: "origin.XY" })]}
           placeholder={t("Tap a plane or flat face where it stands")}
         />
       </Field>
       <div className="row">
         <Field label={t("Position x")}>
-          <ExprInput value={f.position?.[0] ?? 0} onCommit={(v) => pair(0, v)} />
+          <ExprInput value={feature.position?.[0] ?? 0} onCommit={(expr) => pair(0, expr)} />
         </Field>
         <Field label={t("Position y")}>
-          <ExprInput value={f.position?.[1] ?? 0} onCommit={(v) => pair(1, v)} />
+          <ExprInput value={feature.position?.[1] ?? 0} onCommit={(expr) => pair(1, expr)} />
         </Field>
       </div>
       <p className="muted small">
@@ -378,13 +392,20 @@ const HOOK_PRESETS: { label: string; patch: Partial<Of<"snap_hook">> }[] = [
 ];
 
 /** How much a hook bends, and for which plastics that is fine. */
-function strainText(f: Of<"snap_hook">): { text: string; ok: boolean } | null {
+function strainText(feature: Of<"snap_hook">): { text: string; ok: boolean } | null {
   const h = {
-    length: num(f.length, SNAP_HOOK.length),
-    thickness: num(f.thickness, SNAP_HOOK.thickness),
-    overhang: num(f.overhang, SNAP_HOOK.overhang),
+    length: num(feature.length, SNAP_HOOK.length),
+    thickness: num(feature.thickness, SNAP_HOOK.thickness),
+    overhang: num(feature.overhang, SNAP_HOOK.overhang),
   };
-  if ([f.length, f.thickness, f.overhang].some((e) => e !== undefined && typeof e !== "number")) return null;
+
+  if (
+    [feature.length, feature.thickness, feature.overhang].some(
+      (expr) => expr !== undefined && typeof expr !== "number",
+    )
+  ) {
+    return null;
+  }
 
   const e = snapHookStrain(h);
   const pct = `${(e * 100).toFixed(1)} %`;
@@ -412,10 +433,10 @@ function strainText(f: Of<"snap_hook">): { text: string; ok: boolean } | null {
   };
 }
 
-export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
-  const features = useApp((s) => s.doc.features);
-  const strain = strainText(f);
-  const angle = num(f.angle, 0);
+export function SnapHookFields({ f: feature, set }: { f: Of<"snap_hook">; set: SetFn }) {
+  const features = useApp((state) => state.doc.features);
+  const strain = strainText(feature);
+  const angle = num(feature.angle, 0);
 
   return (
     <>
@@ -423,7 +444,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
       <div className="row">
         <Field label={t("Length")}>
           <ExprInput
-            value={f.length}
+            value={feature.length}
             placeholder={String(SNAP_HOOK.length)}
             onCommit={(length) => set({ length })}
             onLive={(length) => set({ length })}
@@ -431,7 +452,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
         </Field>
         <Field label={t("Thickness")}>
           <ExprInput
-            value={f.thickness}
+            value={feature.thickness}
             placeholder={String(SNAP_HOOK.thickness)}
             onCommit={(thickness) => set({ thickness })}
             onLive={(thickness) => set({ thickness })}
@@ -439,7 +460,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
         </Field>
         <Field label={t("Width")}>
           <ExprInput
-            value={f.width}
+            value={feature.width}
             placeholder={String(SNAP_HOOK.width)}
             onCommit={(width) => set({ width })}
           />
@@ -448,7 +469,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
       <div className="row">
         <Field label={t("Overhang")}>
           <ExprInput
-            value={f.overhang}
+            value={feature.overhang}
             placeholder={String(SNAP_HOOK.overhang)}
             onCommit={(overhang) => set({ overhang })}
             onLive={(overhang) => set({ overhang })}
@@ -456,7 +477,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
         </Field>
         <Field label={t("Lead-in")}>
           <ExprInput
-            value={f.insertAngle}
+            value={feature.insertAngle}
             unit="deg"
             placeholder={String(SNAP_HOOK.insertAngle)}
             onCommit={(insertAngle) => set({ insertAngle })}
@@ -464,7 +485,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
         </Field>
         <Field label={t("Holding angle")}>
           <ExprInput
-            value={f.retainAngle}
+            value={feature.retainAngle}
             unit="deg"
             placeholder={String(SNAP_HOOK.retainAngle)}
             onCommit={(retainAngle) => set({ retainAngle })}
@@ -477,38 +498,42 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
           <div style={{ flex: 1 }}>
             <PickBox
               field="plane"
-              items={[describePlane(f.plane)]}
+              items={[describePlane(feature.plane)]}
               placeholder={t("Tap a flat face where the hook stands")}
             />
           </div>
           <button
-            className={`icon-btn ${f.flip ? "active" : ""}`}
+            className={`icon-btn ${feature.flip ? "active" : ""}`}
             title={t("Turn the other way")}
             aria-label={t("Turn the other way")}
-            onClick={() => set({ flip: f.flip ? undefined : true })}
+            onClick={() => set({ flip: feature.flip ? undefined : true })}
           >
             <ArrowLeftRight />
           </button>
         </div>
       </Field>
-      <Field label={t("Places ({n})", { n: f.points.length })}>
+      <Field label={t("Places ({n})", { n: feature.points.length })}>
         <PickBox
           field="points"
           items={
-            f.points.length
-              ? [tn(f.points.length, "{n} hook: tap the face to add", "{n} hooks: tap the face to add")]
+            feature.points.length
+              ? [tn(feature.points.length, "{n} hook: tap the face to add", "{n} hooks: tap the face to add")]
               : []
           }
           placeholder={t("Tap the face to place hooks")}
         />
-        {f.points.map((pt, i) => (
+        {feature.points.map((pt, i) => (
           <div className="row" key={i}>
             {[0, 1].map((k) => (
               <div key={k} style={{ flex: 1 }}>
                 <ExprInput
                   value={pt[k]}
-                  onCommit={(v) =>
-                    set({ points: f.points.map((q, j) => (j === i ? (k === 0 ? [v, q[1]] : [q[0], v]) : q)) })
+                  onCommit={(expr) =>
+                    set({
+                      points: feature.points.map((q, j) =>
+                        j === i ? (k === 0 ? [expr, q[1]] : [q[0], expr]) : q,
+                      ),
+                    })
                   }
                 />
               </div>
@@ -517,7 +542,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
               className="icon-btn sm"
               title={t("Remove")}
               aria-label={t("Remove")}
-              onClick={() => set({ points: f.points.filter((_, j) => j !== i) })}
+              onClick={() => set({ points: feature.points.filter((_, j) => j !== i) })}
             >
               <X />
             </button>
@@ -528,7 +553,7 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
         <div className="row" style={{ alignItems: "center" }}>
           <div style={{ flex: 1 }}>
             <ExprInput
-              value={f.angle ?? 0}
+              value={feature.angle ?? 0}
               unit="deg"
               onCommit={(a) => set({ angle: a === 0 ? undefined : a })}
             />
@@ -546,18 +571,18 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
       <Field label={t("Clicks into")}>
         <PickBox
           field="catchIn"
-          items={(f.catchIn ?? []).map((id) => partName(id, features))}
+          items={(feature.catchIn ?? []).map((id) => partName(id, features))}
           placeholder={t("Tap the part the hook clicks into (optional)")}
           onRemove={(i) => {
-            const catchIn = (f.catchIn ?? []).filter((_, j) => j !== i);
+            const catchIn = (feature.catchIn ?? []).filter((_, j) => j !== i);
             set({ catchIn: catchIn.length ? catchIn : undefined });
           }}
         />
       </Field>
-      {f.catchIn?.length ? (
+      {feature.catchIn?.length ? (
         <Field label={t("Play round the window")}>
           <ExprInput
-            value={f.clearance}
+            value={feature.clearance}
             placeholder={String(DEFAULT_CLEARANCE)}
             onCommit={(clearance) => set({ clearance })}
           />
@@ -566,8 +591,8 @@ export function SnapHookFields({ f, set }: { f: Of<"snap_hook">; set: SetFn }) {
       <label className="checkbox">
         <input
           type="checkbox"
-          checked={f.mode === "new_body"}
-          onChange={(e) => set({ mode: e.target.checked ? "new_body" : undefined })}
+          checked={feature.mode === "new_body"}
+          onChange={(event) => set({ mode: event.target.checked ? "new_body" : undefined })}
         />{" "}
         {t("Hooks as a part of their own")}
       </label>

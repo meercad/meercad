@@ -85,7 +85,7 @@ export function setOverhangLimit(limit: number): void {
 }
 
 const meshOf = (body: string): BodyMesh | undefined =>
-  useApp.getState().output?.meshes.find((m) => m.bodyId === body);
+  useApp.getState().output?.meshes.find((mesh) => mesh.bodyId === body);
 
 /**
  * The print check of a part as it stands (or printed with `down` onto the plate), and the best orientation
@@ -96,11 +96,11 @@ export function checkPart(
   limit = usePrintCheck.getState().limit,
   down: V3 = AS_IT_STANDS,
 ): { check: PrintCheck; stats: PrintStats } | null {
-  const m = meshOf(body);
-  if (!m) return null;
+  const mesh = meshOf(body);
+  if (!mesh) return null;
 
-  const check = printCheck(m.positions, m.indices, down, limit);
-  const [best] = rankOrientations(m.positions, m.indices, limit);
+  const check = printCheck(mesh.positions, mesh.indices, down, limit);
+  const [best] = rankOrientations(mesh.positions, mesh.indices, limit);
   const l = Math.hypot(...down) || 1;
   const same = best
     ? (best.down[0] * down[0] + best.down[1] * down[1] + best.down[2] * down[2]) / l > 0.9999
@@ -134,9 +134,9 @@ function update(): void {
   const { body, limit, down } = usePrintCheck.getState();
   if (!body) return;
 
-  const m = meshOf(body);
-  const r = m ? checkPart(body, limit, down) : null;
-  if (!m || !r) return usePrintCheck.setState({ maps: new Map(), stats: null, error: "gone" });
+  const mesh = meshOf(body);
+  const r = mesh ? checkPart(body, limit, down) : null;
+  if (!mesh || !r) return usePrintCheck.setState({ maps: new Map(), stats: null, error: "gone" });
 
   const n = r.check.kind.length;
   const positions = new Float32Array(n * 9);
@@ -146,10 +146,10 @@ function update(): void {
     const rgb = r.check.kind[k] === SURFACE_OVERHANG ? RED : r.check.kind[k] === SURFACE_PLATE ? BLUE : GREEN;
 
     for (let c = 0; c < 3; c++) {
-      const v = m.indices[k * 3 + c]! * 3;
+      const v = mesh.indices[k * 3 + c]! * 3;
 
       for (let a = 0; a < 3; a++) {
-        positions[k * 9 + c * 3 + a] = m.positions[v + a]!;
+        positions[k * 9 + c * 3 + a] = mesh.positions[v + a]!;
         colors[k * 9 + c * 3 + a] = linear(rgb[a]!);
       }
     }
@@ -172,20 +172,20 @@ export const PRINT_COLORS = { overhang: css(RED), ok: css(GREEN), plate: css(BLU
 
 /** Outward normal of a flat face of a part, from its own triangles (null for a curved face). */
 export function faceNormal(body: string, face: number): V3 | null {
-  const m = meshOf(body);
-  if (!m) return null;
+  const mesh = meshOf(body);
+  if (!mesh) return null;
 
-  const sign = outwardSign(m.positions, m.indices);
-  const P = m.positions,
-    I = m.indices;
+  const sign = outwardSign(mesh.positions, mesh.indices);
+  const P = mesh.positions,
+    I = mesh.indices;
   const sum: V3 = [0, 0, 0];
   let area = 0;
 
-  for (let r = 0; r < m.faceRanges.length; r += 3) {
-    if (m.faceRanges[r + 2] !== face) continue;
+  for (let r = 0; r < mesh.faceRanges.length; r += 3) {
+    if (mesh.faceRanges[r + 2] !== face) continue;
 
-    const first = m.faceRanges[r]!,
-      count = m.faceRanges[r + 1]!;
+    const first = mesh.faceRanges[r]!,
+      count = mesh.faceRanges[r + 1]!;
 
     for (let i = first; i < first + count; i += 3) {
       const a = I[i]! * 3,
@@ -216,8 +216,8 @@ export function faceNormal(body: string, face: number): V3 | null {
  * then about X with the shift.
  */
 export function layDown(body: string, down: V3): boolean {
-  const m = meshOf(body);
-  if (!m) return false;
+  const mesh = meshOf(body);
+  if (!mesh) return false;
 
   const name = partName(body, currentDoc().features);
   const { aboutZ, aboutX } = turnsToLay(down);
@@ -225,7 +225,7 @@ export function layDown(body: string, down: V3): boolean {
     hi = [-Infinity, -Infinity, -Infinity];
   const lo2 = [Infinity, Infinity, Infinity],
     hi2 = [-Infinity, -Infinity, -Infinity];
-  const P = m.positions;
+  const P = mesh.positions;
 
   for (let i = 0; i < P.length; i += 3) {
     const p: V3 = [P[i]!, P[i + 1]!, P[i + 2]!];
@@ -285,16 +285,16 @@ export function layDown(body: string, down: V3): boolean {
  * area-weighted normal of all its triangles facing within about 5° of it.
  */
 function meshFlatNormal(body: string, near: V3): V3 | null {
-  const m = meshOf(body);
-  if (!m) return null;
+  const mesh = meshOf(body);
+  if (!mesh) return null;
 
   const l0 = Math.hypot(...near);
   if (!l0) return null;
 
   const h: V3 = [near[0] / l0, near[1] / l0, near[2] / l0];
-  const sign = outwardSign(m.positions, m.indices);
-  const P = m.positions,
-    I = m.indices;
+  const sign = outwardSign(mesh.positions, mesh.indices);
+  const P = mesh.positions,
+    I = mesh.indices;
   const sum: V3 = [0, 0, 0];
 
   for (let i = 0; i < I.length; i += 3) {
@@ -336,8 +336,8 @@ export function pickFaceToLay(on = true): void {
   usePrintCheck.setState({ picking: on });
   if (!on) return;
 
-  const keys = (e: KeyboardEvent) => {
-    if (actionFor(e, COMMON_ACTIONS) === "cancel") usePrintCheck.setState({ picking: false });
+  const keys = (event: KeyboardEvent) => {
+    if (actionFor(event, COMMON_ACTIONS) === "cancel") usePrintCheck.setState({ picking: false });
   };
 
   window.addEventListener("keydown", keys, true);
@@ -366,8 +366,8 @@ export function printBestWayUp(body: string): void {
   layDown(body, r.stats.best.down);
 }
 
-useApp.subscribe((s, prev) => {
+useApp.subscribe((state, prev) => {
   if (!usePrintCheck.getState().body) return;
-  if (s.project?.id !== prev.project?.id || s.screen !== "editor") hidePrintCheck();
-  else if (s.output !== prev.output && !s.previewing) update();
+  if (state.project?.id !== prev.project?.id || state.screen !== "editor") hidePrintCheck();
+  else if (state.output !== prev.output && !state.previewing) update();
 });

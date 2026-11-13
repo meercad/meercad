@@ -19,23 +19,23 @@ import { TabStrip } from "./Tabs";
 /** In the window's page: the top bar with the tabs, and room for the assistant's tab below it. */
 export function AssistantPane({ session }: { session: string }) {
   const slot = useRef<HTMLDivElement>(null);
-  const tab = useApp((s) => s.assistantTabs.find((a) => a.session === session));
+  const tab = useApp((state) => state.assistantTabs.find((a) => a.session === session));
   // The assistant's page lies over this page, above anything drawn here: while a dialog or menu of
   // this page is open (settings, about, the MCP dialog, a tab's menu…), a picture of it stands in.
   const covered = useCovered();
   const [still, setStill] = useState<string | null>(null);
   useEffect(() => {
-    const el = slot.current;
+    const element = slot.current;
     const a = desktop?.assistant;
-    if (!el || !a) return;
+    if (!element || !a) return;
 
     let gone = false;
 
     const place = () => {
       if (covered) return;
 
-      const r = el.getBoundingClientRect();
-      a.show({ session, rect: { x: r.left, y: r.top, width: r.width, height: r.height } });
+      const rect = element.getBoundingClientRect();
+      a.show({ session, rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height } });
     };
 
     if (covered) {
@@ -53,13 +53,13 @@ export function AssistantPane({ session }: { session: string }) {
       place();
     }
 
-    const ro = new ResizeObserver(place);
-    ro.observe(el);
+    const observer = new ResizeObserver(place);
+    observer.observe(element);
     window.addEventListener("resize", place);
 
     return () => {
       gone = true;
-      ro.disconnect();
+      observer.disconnect();
       window.removeEventListener("resize", place);
     };
   }, [session, covered]);
@@ -112,9 +112,9 @@ function useCovered(): boolean {
 
 /** In an assistant's tab: who is working and on what, and Take over. */
 export function AssistantBar() {
-  const lock = useApp((s) => s.aiLock);
-  const tool = useApp((s) => s.aiActivity?.tool);
-  const project = useApp((s) => s.project);
+  const lock = useApp((state) => state.aiLock);
+  const tool = useApp((state) => state.aiActivity?.tool);
+  const project = useApp((state) => state.project);
   const client = assistantWindow?.client ?? lock?.client ?? "Claude";
   const busy = !!lock;
   const doing = busy ? toolLabel(tool) : null;

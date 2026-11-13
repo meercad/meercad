@@ -100,7 +100,7 @@ let retry: number | undefined;
 let wanted = false;
 /** When this app lost the connection to another meerCAD app recently. */
 let replaced: number[] = [];
-const listeners = new Set<(s: Status) => void>();
+const listeners = new Set<(status: Status) => void>();
 let status: Status = "off";
 /** The window's page holds the connection; the assistants' tabs show its state and ask it to switch. */
 const hostWindow = !assistantWindow;
@@ -113,7 +113,7 @@ const setStatus = (s: Status) => {
 
 export const bridgeStatus = () => status;
 
-export const onBridgeStatus = (fn: (s: Status) => void) => {
+export const onBridgeStatus = (fn: (status: Status) => void) => {
   listeners.add(fn);
 
   return () => listeners.delete(fn);
@@ -218,7 +218,7 @@ function connect(): void {
     );
   };
 
-  ws.onclose = (e) => {
+  ws.onclose = (event) => {
     socket = null;
 
     // The server this page talked to has gone: its session has ended (the others reconnect), its tab is the
@@ -237,7 +237,7 @@ function connect(): void {
 
     // Another meerCAD app (e.g. the WIP build next to the release) took the connection: take it back
     // only when this one is used again, instead of the two swapping it every few seconds.
-    if (e.code === 4000) {
+    if (event.code === 4000) {
       const now = Date.now();
       replaced = replaced.filter((t) => now - t < 30_000).concat(now);
       // Older builds grab it back unconditionally; after a few swaps, wait for the next focus.
@@ -252,8 +252,8 @@ function connect(): void {
 
   ws.onerror = () => ws.close();
 
-  ws.onmessage = async (e) => {
-    const msg = JSON.parse(String(e.data)) as BridgeRequest | BridgeEvent;
+  ws.onmessage = async (event) => {
+    const msg = JSON.parse(String(event.data)) as BridgeRequest | BridgeEvent;
 
     if ("event" in msg) {
       if (msg.event === "hub_session") hubSession = msg.session;
@@ -305,7 +305,7 @@ async function handOverSession(session: string): Promise<void> {
   const keys = new Set([
     session,
     ...((await desktop?.assistant?.tabs()) ?? [])
-      .map((t) => t.session)
+      .map((tab) => tab.session)
       .filter((k) => tabOfSession(k, session)),
   ]);
   await Promise.all([...keys].map((k) => handOverAssistantTab(k)));
@@ -322,8 +322,8 @@ const lastTab = new Map<string, string>();
 const lastCall = new Map<string, number>();
 
 /** A tab named for the assistant: the project and its id. */
-const tabLabel = (t: AssistantTab) =>
-  `"${t.name ?? t.project ?? "nothing yet"}"${t.project ? ` (id "${t.project}")` : ""}`;
+const tabLabel = (tab: AssistantTab) =>
+  `"${tab.name ?? tab.project ?? "nothing yet"}"${tab.project ? ` (id "${tab.project}")` : ""}`;
 
 /** Requests that need no project: with several tabs and no project named, the user's page answers them. */
 const PROJECTLESS = new Set([
@@ -363,7 +363,7 @@ async function route(req: BridgeRequest): Promise<unknown> {
 
   const client = clientLabel(req.client);
   const tabs = await a.tabs();
-  const mine = tabs.filter((t) => tabOfSession(t.session, session));
+  const mine = tabs.filter((tab) => tabOfSession(tab.session, session));
 
   /**
    * Opens (or reuses) the tab `key` and serves the request there; the answer names the project for later
@@ -380,7 +380,7 @@ async function route(req: BridgeRequest): Promise<unknown> {
       if (front) showAssistantTab(key);
 
       const result = await a.call(tab, req);
-      const now = (await a.tabs()).find((t) => t.session === key);
+      const now = (await a.tabs()).find((tab) => tab.session === key);
 
       if (now?.project) {
         lastTab.set(session, key);
@@ -396,7 +396,7 @@ async function route(req: BridgeRequest): Promise<unknown> {
       return {
         ...r,
         ...("project" in r ? {} : { project: { id: now.project, name: now.name } }),
-        ...(mine.some((t) => t.session !== key)
+        ...(mine.some((tab) => tab.session !== key)
           ? {
               hint: `You have more than one project open now: pass project: "${now.project}" with every call for this one.`,
             }
@@ -410,8 +410,8 @@ async function route(req: BridgeRequest): Promise<unknown> {
   // A tab of the session left without a project (an open that failed) is reused.
   const freshKey = () =>
     perProject
-      ? (mine.find((t) => t.project === null && !opening.has(t.session))?.session ??
-        newTabKey(session, [...tabs.map((t) => t.session), ...opening]))
+      ? (mine.find((tab) => tab.project === null && !opening.has(tab.session))?.session ??
+        newTabKey(session, [...tabs.map((tab) => tab.session), ...opening]))
       : session;
 
   // Importing a design opens it as a new project, like new_project.
@@ -456,13 +456,13 @@ async function route(req: BridgeRequest): Promise<unknown> {
     const key = perProject ? freshKey() : session;
     // The user's tab of it closes: a project is open in one tab only. Was it the one in front, the
     // assistant's tab comes to the front instead.
-    const s = useApp.getState();
-    const front = s.screen === "editor" && s.project?.id === id;
+    const state = useApp.getState();
+    const front = state.screen === "editor" && state.project?.id === id;
 
     return openIn(
       key,
       async () => {
-        if (s.project?.id === id || s.tabs.some((x) => x.id === id)) await releaseProject(id);
+        if (state.project?.id === id || state.tabs.some((x) => x.id === id)) await releaseProject(id);
       },
       front,
     );
@@ -479,7 +479,7 @@ async function route(req: BridgeRequest): Promise<unknown> {
             ...r,
             project: null,
             tab: "several: pass project with your calls",
-            projects: pick.several.map((t) => ({ id: t.project, name: t.name })),
+            projects: pick.several.map((tab) => ({ id: tab.project, name: tab.name })),
           }
         : r;
     }
@@ -607,17 +607,17 @@ function initAssistantWindow(): void {
   let work = "";
 
   const report = () => {
-    const s = useApp.getState();
-    document.title = `${s.project?.name ?? "meerCAD"} · ${assistantWindow!.client}`;
+    const state = useApp.getState();
+    document.title = `${state.project?.name ?? "meerCAD"} · ${assistantWindow!.client}`;
 
-    const project = s.project ? JSON.stringify([s.project.id, s.project.name]) : "";
+    const project = state.project ? JSON.stringify([state.project.id, state.project.name]) : "";
 
     if (project !== shown) {
       shown = project;
-      a.project(s.project ? { id: s.project.id, name: s.project.name } : null);
+      a.project(state.project ? { id: state.project.id, name: state.project.name } : null);
     }
 
-    const busy = { busy: !!s.aiLock, tool: s.aiLock ? (s.aiActivity?.tool ?? null) : null };
+    const busy = { busy: !!state.aiLock, tool: state.aiLock ? (state.aiActivity?.tool ?? null) : null };
 
     if (JSON.stringify(busy) !== work) {
       work = JSON.stringify(busy);
@@ -692,12 +692,12 @@ export function stopAssistant(): void {
 for (const type of ["keydown", "keyup"] as const) {
   window.addEventListener(
     type,
-    (e) => {
+    (event) => {
       if (!useApp.getState().aiLock && !assistantWindow) return;
-      if (e.target instanceof Element && e.target.closest(".ai-lock-bar, .assistant-bar")) return;
+      if (event.target instanceof Element && event.target.closest(".ai-lock-bar, .assistant-bar")) return;
 
-      e.preventDefault();
-      e.stopImmediatePropagation();
+      event.preventDefault();
+      event.stopImmediatePropagation();
     },
     true,
   );
@@ -786,7 +786,7 @@ function touchedBy(ops: readonly DocOp[]): { ids: Set<string>; shown: Shown } {
 
   for (const op of ops) {
     if (op.type === "add_features") {
-      for (const f of op.features) ids.add(f.id);
+      for (const feature of op.features) ids.add(feature.id);
     } else if (op.type === "edit_feature" || op.type === "delete_feature" || op.type === "move_feature") {
       ids.add(op.id);
     } else if (op.type === "replace") {
@@ -845,12 +845,12 @@ function summary(out: RebuildOutput) {
   );
 
   return {
-    features: r.features.map((f) => ({
-      id: f.id,
-      status: f.status,
-      ...(f.message ? { message: f.message } : {}),
-      ...(f.hint ? { hint: f.hint } : {}),
-      ...(f.info ? { info: reportInfo(f.info) } : {}),
+    features: r.features.map((status) => ({
+      id: status.id,
+      status: status.status,
+      ...(status.message ? { message: status.message } : {}),
+      ...(status.hint ? { hint: status.hint } : {}),
+      ...(status.info ? { info: reportInfo(status.info) } : {}),
     })),
     params: r.params,
     ...(Object.keys(r.paramErrors).length ? { paramErrors: r.paramErrors } : {}),
@@ -887,11 +887,11 @@ function summary(out: RebuildOutput) {
           },
         }
       : {}),
-    sketches: r.sketches.map((s) => ({
-      id: s.id,
-      dof: s.diagnostics.dof,
-      ok: s.diagnostics.ok,
-      regions: s.regions.map((g) => g.key),
+    sketches: r.sketches.map((sketchView) => ({
+      id: sketchView.id,
+      dof: sketchView.diagnostics.dof,
+      ok: sketchView.diagnostics.ok,
+      regions: sketchView.regions.map((g) => g.key),
     })),
     ...(r.joints.length
       ? {
@@ -905,11 +905,11 @@ function summary(out: RebuildOutput) {
       : {}),
     ...(r.gears.length
       ? {
-          gears: r.gears.map((g) => ({
-            ...g,
-            radius: Number.isFinite(g.radius) ? +g.radius.toFixed(4) : null,
-            origin: g.origin.map((v) => +v.toFixed(3)),
-            axis: g.axis.map((v) => +v.toFixed(4)),
+          gears: r.gears.map((gear) => ({
+            ...gear,
+            radius: Number.isFinite(gear.radius) ? +gear.radius.toFixed(4) : null,
+            origin: gear.origin.map((v) => +v.toFixed(3)),
+            axis: gear.axis.map((v) => +v.toFixed(4)),
           })),
         }
       : {}),
@@ -1023,7 +1023,12 @@ async function handle(req: BridgeRequest): Promise<unknown> {
           project: useApp.getState().project,
           document: p["full"] ? designOf(doc) : tools.lightDocument(doc),
           ...(doc.versions
-            ? { versions: doc.versions.map((v) => ({ name: v.name, at: new Date(v.at).toISOString() })) }
+            ? {
+                versions: doc.versions.map((version) => ({
+                  name: version.name,
+                  at: new Date(version.at).toISOString(),
+                })),
+              }
             : {}),
           rebuild: modelSummary(await rebuildNow()),
         };
@@ -1031,12 +1036,12 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     case "get_sketch": {
       needProject();
 
-      const sk = (await rebuildNow()).report.sketches.find((s) => s.id === p["id"]);
-      if (!sk) throw new Error(`sketch "${String(p["id"])}" not found`);
+      const sketchView = (await rebuildNow()).report.sketches.find((sketchView) => sketchView.id === p["id"]);
+      if (!sketchView) throw new Error(`sketch "${String(p["id"])}" not found`);
 
       return {
-        ...sk,
-        regions: sk.regions.map(({ key, depth, area, sample }) => ({ key, depth, area, sample })),
+        ...sketchView,
+        regions: sketchView.regions.map(({ key, depth, area, sample }) => ({ key, depth, area, sample })),
       };
     }
     case "get_status": {
@@ -1077,14 +1082,14 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       // Rails with carriages and lead screws with nuts get their joints, as in the app.
       const ops = withMotion(tools.restoreElided(p["ops"] as DocOp[], currentDoc()), currentDoc());
       // Validate first so a bad op returns a precise error instead of a toast.
-      ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
+      ops.reduce<MeercadDocument>((doc, op) => applyOp(doc, op), currentDoc());
 
       const before = useApp.getState().output;
       if (!apply(...ops)) throw new Error("ops were rejected");
 
       // Nothing to build after saving a version: the answer is there at once.
       if (ops.length && ops.every((op) => VERSION_OPS.has(op.type)) && p["detail"] !== "full") {
-        return { ok: true, versions: (currentDoc().versions ?? []).map((v) => v.name) };
+        return { ok: true, versions: (currentDoc().versions ?? []).map((version) => version.name) };
       }
 
       const out = await rebuildNow();
@@ -1098,7 +1103,7 @@ async function handle(req: BridgeRequest): Promise<unknown> {
       needProject();
 
       const ops = tools.restoreElided(p["ops"] as DocOp[], currentDoc());
-      const doc = ops.reduce<MeercadDocument>((d, op) => applyOp(d, op), currentDoc());
+      const doc = ops.reduce<MeercadDocument>((doc, op) => applyOp(doc, op), currentDoc());
       const sandbox = await kernel.sandbox(doc);
       const t = touchedBy(ops);
       const result =
@@ -1260,19 +1265,19 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         scale: sheet.scaleLabel,
         paper: `${sheet.width} × ${sheet.height} mm`,
         views: views.map((v) => v.name),
-        parts: bom.map((r) => ({
-          pos: r.pos,
-          qty: r.qty,
-          name: r.name,
-          ...(r.material ? { material: r.material } : {}),
+        parts: bom.map((row) => ({
+          pos: row.pos,
+          qty: row.qty,
+          name: row.name,
+          ...(row.material ? { material: row.material } : {}),
         })),
       };
     }
     case "set_view": {
-      const vp = getViewport();
-      if (!vp) throw new Error("viewport not ready");
-      if (p["view"] === "fit") vp.fit();
-      else vp.setView(p["view"] as "iso");
+      const viewport = getViewport();
+      if (!viewport) throw new Error("viewport not ready");
+      if (p["view"] === "fit") viewport.fit();
+      else viewport.setView(p["view"] as "iso");
 
       return "ok";
     }
@@ -1312,7 +1317,9 @@ async function handle(req: BridgeRequest): Promise<unknown> {
         slicer: r.slicer,
         file: r.file,
         moved: r.moved,
-        ...(filaments.length > 1 ? { filaments: filaments.map((f, i) => ({ slot: i + 1, ...f })) } : {}),
+        ...(filaments.length > 1
+          ? { filaments: filaments.map((filament, i) => ({ slot: i + 1, ...filament })) }
+          : {}),
       };
     }
     case "export": {
@@ -1367,18 +1374,18 @@ async function handle(req: BridgeRequest): Promise<unknown> {
     }
     case "list_materials": {
       const doc = currentDoc();
-      const describe = (m: ReturnType<typeof documentMaterials>[number]) => ({
-        id: m.id,
-        name: m.name,
-        ...(m.base ? { base: m.base } : {}),
-        density: m.density,
-        kind: m.kind,
-        ...(m.filament ? { filament: m.filament } : {}),
-        ...(m.nozzle ? { nozzleC: m.nozzle } : {}),
-        ...(m.bed ? { bedC: m.bed } : {}),
-        ...(m.shore ? { shore: m.shore } : {}),
-        look: m.look,
-        notes: m.notes,
+      const describe = (material: ReturnType<typeof documentMaterials>[number]) => ({
+        id: material.id,
+        name: material.name,
+        ...(material.base ? { base: material.base } : {}),
+        density: material.density,
+        kind: material.kind,
+        ...(material.filament ? { filament: material.filament } : {}),
+        ...(material.nozzle ? { nozzleC: material.nozzle } : {}),
+        ...(material.bed ? { bedC: material.bed } : {}),
+        ...(material.shore ? { shore: material.shore } : {}),
+        look: material.look,
+        notes: material.notes,
       });
 
       return { materials: documentMaterials(doc).map(describe), parts: doc.partMaterials ?? {} };
@@ -1454,9 +1461,9 @@ async function handle(req: BridgeRequest): Promise<unknown> {
 
       playMotion(String(p["motion"]));
 
-      const m = motionById(String(p["motion"]));
+      const motion = motionById(String(p["motion"]));
 
-      return `playing "${m.name ?? m.id}" in the app (${m.duration} s${m.loop ? ", looping" : ""}); play_motion with motion null stops it`;
+      return `playing "${motion.name ?? motion.id}" in the app (${motion.duration} s${motion.loop ? ", looping" : ""}); play_motion with motion null stops it`;
     }
     case "measure": {
       needProject();
@@ -1473,9 +1480,9 @@ async function handle(req: BridgeRequest): Promise<unknown> {
           return { bodyId: r.body, kind: "edge" as const, index: r.edges[0]! };
         }
 
-        const r = resolveFaces(sel as FaceSelector, topos)[0]!;
+        const faceRef = resolveFaces(sel as FaceSelector, topos)[0]!;
 
-        return { bodyId: r.body, kind: "face" as const, index: r.faces[0]! };
+        return { bodyId: faceRef.body, kind: "face" as const, index: faceRef.faces[0]! };
       };
 
       return kernel.measure(ref(p["a"]), p["b"] ? ref(p["b"]) : undefined);

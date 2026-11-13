@@ -31,29 +31,31 @@ export function imageSizes(view: {
 
 /** Renders the view at a size and saves it as a PNG. */
 export async function saveRender(
-  vp: Viewport,
+  viewport: Viewport,
   width: number,
   height: number,
   transparent: boolean,
 ): Promise<void> {
   try {
-    const canvas = vp.renderImage(width, height, { transparent });
+    const canvas = viewport.renderImage(width, height, { transparent });
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!blob) throw new Error(t("the picture could not be encoded"));
 
     download(`${baseName()} ${canvas.width}x${canvas.height}.png`, new Uint8Array(await blob.arrayBuffer()));
-  } catch (e) {
+  } catch (error) {
     toast(
-      t("Could not save the picture: {error}", { error: e instanceof Error ? e.message : String(e) }),
+      t("Could not save the picture: {error}", {
+        error: error instanceof Error ? error.message : String(error),
+      }),
       "error",
     );
   }
 }
 
-export function RenderBar({ vp, onExit }: { vp: Viewport; onExit: () => void }) {
-  const [spin, setSpin] = useState(vp.turntable);
+export function RenderBar({ vp: viewport, onExit }: { vp: Viewport; onExit: () => void }) {
+  const [spin, setSpin] = useState(viewport.turntable);
   const [transparent, setTransparent] = useState(false);
-  useEffect(() => () => vp.setTurntable(false), [vp]);
+  useEffect(() => () => viewport.setTurntable(false), [viewport]);
 
   return (
     <div className="render-bar" role="toolbar" aria-label={t("Rendered view")}>
@@ -62,7 +64,7 @@ export function RenderBar({ vp, onExit }: { vp: Viewport; onExit: () => void }) 
         title={spin ? t("Stop turning") : t("Turntable: turn the model slowly")}
         aria-pressed={spin}
         onClick={() => {
-          vp.setTurntable(!spin);
+          viewport.setTurntable(!spin);
           setSpin(!spin);
         }}
       >
@@ -81,16 +83,16 @@ export function RenderBar({ vp, onExit }: { vp: Viewport; onExit: () => void }) 
       <button
         className="icon-btn"
         title={t("Save a high-resolution picture of this view")}
-        onClick={(e) => {
-          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          const el = vp.renderer.domElement;
+        onClick={(event) => {
+          const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+          const element = viewport.renderer.domElement;
           showMenu(
-            r.left,
-            r.bottom + 6,
-            imageSizes({ width: el.clientWidth, height: el.clientHeight }).map((s) => ({
+            rect.left,
+            rect.bottom + 6,
+            imageSizes({ width: element.clientWidth, height: element.clientHeight }).map((s) => ({
               label: s.label,
               icon: <ImageDown />,
-              onClick: () => void saveRender(vp, s.width, s.height, transparent),
+              onClick: () => void saveRender(viewport, s.width, s.height, transparent),
             })),
           );
         }}

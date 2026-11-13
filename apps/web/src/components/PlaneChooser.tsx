@@ -23,31 +23,31 @@ export function PlaneChooser({ viewport, planes }: { viewport: Viewport; planes:
   // Tags sit at the middle of each plane's square and follow the camera.
   useEffect(() => {
     const place = () => {
-      for (const el of layer.current?.querySelectorAll<HTMLElement>("[data-plane]") ?? []) {
-        const p = planes.find((x) => x.id === el.dataset["plane"]);
-        if (!p) continue;
+      for (const element of layer.current?.querySelectorAll<HTMLElement>("[data-plane]") ?? []) {
+        const plane = planes.find((x) => x.id === element.dataset["plane"]);
+        if (!plane) continue;
 
-        const h = p.size / 2;
-        const { origin: o, u, v } = p.frame;
+        const h = plane.size / 2;
+        const { origin: o, u, v } = plane.frame;
         const s = viewport.worldToScreen([
           o[0] + (u[0] + v[0]) * h,
           o[1] + (u[1] + v[1]) * h,
           o[2] + (u[2] + v[2]) * h,
         ]);
-        el.style.display = s ? "" : "none";
-        if (s) el.style.transform = `translate(${s[0]}px, ${s[1]}px) translate(-50%, -50%)`;
+        element.style.display = s ? "" : "none";
+        if (s) element.style.transform = `translate(${s[0]}px, ${s[1]}px) translate(-50%, -50%)`;
       }
     };
 
     place();
 
     const off = viewport.onChange(place);
-    const ro = new ResizeObserver(place);
-    ro.observe(viewport.canvas);
+    const observer = new ResizeObserver(place);
+    observer.observe(viewport.canvas);
 
     return () => {
       off();
-      ro.disconnect();
+      observer.disconnect();
     };
   }, [viewport, planes]);
 
@@ -62,34 +62,34 @@ export function PlaneChooser({ viewport, planes }: { viewport: Viewport; planes:
   return (
     <>
       <div className="plane-tags" ref={layer}>
-        {planes.map((p) => (
+        {planes.map((plane) => (
           <button
-            key={p.id}
-            data-plane={p.id}
+            key={plane.id}
+            data-plane={plane.id}
             className="plane-tag"
-            style={{ "--plane": colorOf(p.id) } as React.CSSProperties}
-            onPointerEnter={() => hover(p.id)}
+            style={{ "--plane": colorOf(plane.id) } as React.CSSProperties}
+            onPointerEnter={() => hover(plane.id)}
             onPointerLeave={() => hover(null)}
-            onClick={() => pick(p.id)}
+            onClick={() => pick(plane.id)}
           >
-            {p.label}
+            {plane.label}
           </button>
         ))}
       </div>
       <div className="plane-bar" role="toolbar" aria-label={t("Sketch plane")}>
         <span>{t("Sketch on")}</span>
         {planes
-          .filter((p) => p.id.startsWith("origin."))
-          .map((p) => (
+          .filter((plane) => plane.id.startsWith("origin."))
+          .map((plane) => (
             <button
-              key={p.id}
-              style={{ "--plane": colorOf(p.id) } as React.CSSProperties}
-              onPointerEnter={() => hover(p.id)}
+              key={plane.id}
+              style={{ "--plane": colorOf(plane.id) } as React.CSSProperties}
+              onPointerEnter={() => hover(plane.id)}
               onPointerLeave={() => hover(null)}
-              onClick={() => pick(p.id)}
+              onClick={() => pick(plane.id)}
             >
               <i />
-              {p.label}
+              {plane.label}
             </button>
           ))}
         <span className="muted">{t("or click a flat face")}</span>

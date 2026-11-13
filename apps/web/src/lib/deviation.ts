@@ -57,7 +57,7 @@ async function update(): Promise<void> {
   if (!body || !mesh) return;
 
   const meshes = useApp.getState().output?.meshes ?? [];
-  const part = meshes.find((m) => m.bodyId === body);
+  const part = meshes.find((mesh) => mesh.bodyId === body);
   const ref = meshes.find((m) => m.bodyId === mesh);
   if (!part || !ref) return useDeviation.setState({ maps: new Map(), stats: null, error: "gone" });
 
@@ -148,8 +148,8 @@ function colorFor(value: number, out: Float32Array, o: number): void {
 export const DEVIATION_GRADIENT = `linear-gradient(90deg, rgb(${BLUE.map((c) => c * 255).join(",")}), rgb(${GREEN.map((c) => c * 255).join(",")}), rgb(${RED.map((c) => c * 255).join(",")}))`;
 
 // A new result (the part was edited) is measured again; another project closes it.
-useApp.subscribe((s, prev) => {
+useApp.subscribe((state, prev) => {
   if (!useDeviation.getState().body) return;
-  if (s.project?.id !== prev.project?.id || s.screen !== "editor") hideDeviation();
-  else if (s.output !== prev.output && !s.previewing) void update();
+  if (state.project?.id !== prev.project?.id || state.screen !== "editor") hideDeviation();
+  else if (state.output !== prev.output && !state.previewing) void update();
 });

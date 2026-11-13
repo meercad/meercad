@@ -173,9 +173,9 @@ const HIT_COLOR = "#d93f3f";
 function confirmByRightClick(): boolean {
   if (rightClick() !== "confirm") return false;
 
-  const s = useApp.getState();
-  if (s.dialog) commitDialog();
-  else if (s.measure.active) useApp.setState({ measure: { active: false, picks: [], result: null } });
+  const state = useApp.getState();
+  if (state.dialog) commitDialog();
+  else if (state.measure.active) useApp.setState({ measure: { active: false, picks: [], result: null } });
   else return false;
 
   return true;
@@ -183,36 +183,42 @@ function confirmByRightClick(): boolean {
 
 export function ViewportView() {
   const host = useRef<HTMLDivElement>(null);
-  const [vp, setVp] = useState<Viewport | null>(null);
+  const [viewport, setVp] = useState<Viewport | null>(null);
   const fitKey = useKey("fit");
-  const output = useApp((s) => s.output);
-  const hidden = useApp((s) => s.hidden);
-  const showPlanes = useApp((s) => s.showPlanes);
-  const showSketches = useApp((s) => s.showSketches);
-  const showValues = usePrefs((s) => s.showValues);
-  const showTextures = usePrefs((s) => s.showTextures);
-  const hasTextures = useApp((s) => s.doc.features.some((f) => f.op === "lithophane" && !f.suppressed));
-  const colorParts = usePrefs((s) => s.colorParts);
-  const sketchId = useApp((s) => s.sketchId);
-  const dialog = useApp((s) => s.dialog);
-  const selection = useApp((s) => s.selection);
-  const measure = useApp((s) => s.measure);
-  const pickingPlane = useApp((s) => s.pickingSketchPlane);
+  const output = useApp((state) => state.output);
+  const hidden = useApp((state) => state.hidden);
+  const showPlanes = useApp((state) => state.showPlanes);
+  const showSketches = useApp((state) => state.showSketches);
+  const showValues = usePrefs((prefs) => prefs.showValues);
+  const showTextures = usePrefs((prefs) => prefs.showTextures);
+  const hasTextures = useApp((state) =>
+    state.doc.features.some((feature) => feature.op === "lithophane" && !feature.suppressed),
+  );
+  const colorParts = usePrefs((prefs) => prefs.colorParts);
+  const sketchId = useApp((state) => state.sketchId);
+  const dialog = useApp((state) => state.dialog);
+  const selection = useApp((state) => state.selection);
+  const measure = useApp((state) => state.measure);
+  const pickingPlane = useApp((state) => state.pickingSketchPlane);
   const placing = useTerrainPlace((s) => !!s.body) || usePrintCheck((s) => s.picking);
-  const doc = useApp((s) => s.doc);
+  const doc = useApp((state) => state.doc);
   // Deviation from a mesh as a colour map on the part.
   const heat = useDeviation((s) => s.maps);
   const wall = useThickness((s) => s.maps);
   const print = usePrintCheck((s) => s.maps);
-  useEffect(() => vp?.setBodyHeat(print.size ? print : wall.size ? wall : heat), [vp, heat, wall, print]);
+  useEffect(
+    () => viewport?.setBodyHeat(print.size ? print : wall.size ? wall : heat),
+    [viewport, heat, wall, print],
+  );
 
   const layingOnFace = usePrintCheck((s) => s.picking);
   // Reference models (an area from drone photos) around the design.
   const references = doc.references;
   const [sceneryReady, setSceneryReady] = useState(0);
   useEffect(
-    () => void vp?.setScenery(sceneryOf({ ...doc, references })).then(() => setSceneryReady((n) => n + 1)),
-    [vp, references],
+    () =>
+      void viewport?.setScenery(sceneryOf({ ...doc, references })).then(() => setSceneryReady((n) => n + 1)),
+    [viewport, references],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lines, areas and notes on it, with the one being drawn.
@@ -221,23 +227,29 @@ export function ViewportView() {
   // takes the pointer before the view's own handling, so painting never turns the view.
   const painting = drawing.kind === "stroke" || drawing.kind === "erase";
   useEffect(() => {
-    const el = host.current;
-    if (!vp || !el || !painting) return;
+    const element = host.current;
+    if (!viewport || !element || !painting) return;
 
     let active: number | null = null;
 
-    const down = (e: PointerEvent) => {
-      if (active !== null || e.target !== vp.canvas || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const down = (event: PointerEvent) => {
+      if (
+        active !== null ||
+        event.target !== viewport.canvas ||
+        (event.pointerType === "mouse" && event.button !== 0)
+      ) {
+        return;
+      }
 
-      const hit = vp.sceneryHit(e.clientX, e.clientY);
+      const hit = viewport.sceneryHit(event.clientX, event.clientY);
       if (!hit) return;
 
-      e.stopPropagation();
-      e.preventDefault();
-      active = e.pointerId;
+      event.stopPropagation();
+      event.preventDefault();
+      active = event.pointerId;
 
       try {
-        vp.canvas.setPointerCapture(e.pointerId);
+        viewport.canvas.setPointerCapture(event.pointerId);
       } catch {
         // A pointer the browser no longer knows: the stroke still follows it while over the view.
       }
@@ -245,35 +257,35 @@ export function ViewportView() {
       beginStroke(hit.point, hit.id);
     };
 
-    const move = (e: PointerEvent) => {
-      if (e.pointerId !== active) return;
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== active) return;
 
-      e.stopPropagation();
+      event.stopPropagation();
 
-      const hit = vp.sceneryHit(e.clientX, e.clientY);
+      const hit = viewport.sceneryHit(event.clientX, event.clientY);
       if (hit) extendStroke(hit.point);
     };
 
-    const up = (e: PointerEvent) => {
-      if (e.pointerId !== active) return;
+    const up = (event: PointerEvent) => {
+      if (event.pointerId !== active) return;
 
-      e.stopPropagation();
+      event.stopPropagation();
       active = null;
       endStroke();
     };
 
-    el.addEventListener("pointerdown", down, true);
-    el.addEventListener("pointermove", move, true);
-    el.addEventListener("pointerup", up, true);
-    el.addEventListener("pointercancel", up, true);
+    element.addEventListener("pointerdown", down, true);
+    element.addEventListener("pointermove", move, true);
+    element.addEventListener("pointerup", up, true);
+    element.addEventListener("pointercancel", up, true);
 
     return () => {
-      el.removeEventListener("pointerdown", down, true);
-      el.removeEventListener("pointermove", move, true);
-      el.removeEventListener("pointerup", up, true);
-      el.removeEventListener("pointercancel", up, true);
+      element.removeEventListener("pointerdown", down, true);
+      element.removeEventListener("pointermove", move, true);
+      element.removeEventListener("pointerup", up, true);
+      element.removeEventListener("pointercancel", up, true);
     };
-  }, [vp, painting]);
+  }, [viewport, painting]);
 
   const terrainMeasure = useTerrainMeasure();
   useEffect(() => {
@@ -281,26 +293,26 @@ export function ViewportView() {
   }, [measure.active, terrainMeasure]);
 
   const marks = useMemo(
-    () => (vp ? marksForView(references, drawing) : { lines: [], labels: [] }),
-    [vp, references, drawing, terrainMeasure, sceneryReady],
+    () => (viewport ? marksForView(references, drawing) : { lines: [], labels: [] }),
+    [viewport, references, drawing, terrainMeasure, sceneryReady],
   ); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => vp?.setSceneryMarks(marks.lines), [vp, marks]);
+  useEffect(() => viewport?.setSceneryMarks(marks.lines), [viewport, marks]);
 
   // Shapes fitted on a scan in the Measure tool, laid over the triangles they cover.
   const scanShapes = useScanMeasure((s) => s.shapes);
   useEffect(() => {
-    if (!vp || !scanShapes.length) return;
+    if (!viewport || !scanShapes.length) return;
 
     const group = new THREE.Group();
     scanShapes.forEach(({ bodyId, shape }, i) => {
-      const m = scanOf(bodyId);
-      if (!m) return;
+      const mesh = scanOf(bodyId);
+      if (!mesh) return;
 
       const pos = new Float32Array(shape.triangles.length * 9);
       shape.triangles.forEach((tri, k) => {
         for (let c = 0; c < 3; c++) {
           pos.set(
-            m.positions.subarray(m.triangles[tri * 3 + c]! * 3, m.triangles[tri * 3 + c]! * 3 + 3),
+            mesh.positions.subarray(mesh.triangles[tri * 3 + c]! * 3, mesh.triangles[tri * 3 + c]! * 3 + 3),
             k * 9 + c * 3,
           );
         }
@@ -321,52 +333,52 @@ export function ViewportView() {
       });
       group.add(new THREE.Mesh(g, mat));
     });
-    vp.overlay.add(group);
-    vp.invalidate();
+    viewport.overlay.add(group);
+    viewport.invalidate();
 
     return () => {
-      vp.overlay.remove(group);
+      viewport.overlay.remove(group);
       group.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.geometry.dispose();
           (o.material as THREE.Material).dispose();
         }
       });
-      vp.invalidate();
+      viewport.invalidate();
     };
-  }, [vp, scanShapes]);
+  }, [viewport, scanShapes]);
 
   // Parts that run into each other while the joints panel is open show red.
   // So do parts that cannot move further this way (links in line, a joint at its limit).
   const hits = useMotion((s) => (s.open ? s.hits : NO_HITS));
   const blocked = useMotion((s) => (s.open ? s.blocked : NO_PARTS));
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
     const colors = partColors(doc, output?.report.bodies.map((b) => b.id) ?? [], colorParts);
     const red = [...hits.flat(), ...blocked];
-    vp.setBodyColors(
+    viewport.setBodyColors(
       red.length ? new Map([...colors, ...red.map((id): [string, string] => [id, HIT_COLOR])]) : colors,
     );
-  }, [vp, doc, output, colorParts, hits, blocked]);
+  }, [viewport, doc, output, colorParts, hits, blocked]);
   // Materials give parts their finish (PBR).
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
-    vp.setBodyLooks(partLooks(doc, output?.report.bodies.map((b) => b.id) ?? []));
-  }, [vp, doc, output]);
+    viewport.setBodyLooks(partLooks(doc, output?.report.bodies.map((b) => b.id) ?? []));
+  }, [viewport, doc, output]);
 
-  const kernelState = useApp((s) => s.kernel);
-  const previewing = useApp((s) => s.previewing);
+  const kernelState = useApp((state) => state.kernel);
+  const previewing = useApp((state) => state.previewing);
   const [ortho, setOrtho] = useState(false);
   const [mode, setMode] = useState<DisplayMode>("shaded_edges");
   // Grid contrast follows the light/dark theme.
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
     const apply = () => {
       const t = document.documentElement.dataset["theme"];
-      vp.setDark(t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
+      viewport.setDark(t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
     };
 
     apply();
@@ -381,7 +393,7 @@ export function ViewportView() {
       mo.disconnect();
       mq.removeEventListener("change", apply);
     };
-  }, [vp]);
+  }, [viewport]);
 
   const [box, setBox] = useState<{
     x0: number;
@@ -395,7 +407,7 @@ export function ViewportView() {
 
   const [busy, setBusy] = useState(false);
   // Rebuilds that take a noticeable moment say so in the status line.
-  const building = useApp((s) => s.building);
+  const building = useApp((state) => state.building);
   const [slowBuild, setSlowBuild] = useState(false);
   useEffect(() => {
     if (!building) return setSlowBuild(false);
@@ -406,29 +418,29 @@ export function ViewportView() {
   }, [building]);
 
   useEffect(() => {
-    const v = new Viewport(host.current!);
+    const viewport = new Viewport(host.current!);
     // Named for screen readers (and the touch tests, which aim gestures with several fingers at it).
-    v.renderer.domElement.setAttribute("role", "img");
-    v.renderer.domElement.setAttribute("aria-label", t("3D view"));
-    setVp(v);
-    setViewport(v);
+    viewport.renderer.domElement.setAttribute("role", "img");
+    viewport.renderer.domElement.setAttribute("aria-label", t("3D view"));
+    setVp(viewport);
+    setViewport(viewport);
 
     const applyNav = () => {
-      const p = usePrefs.getState();
-      v.setNavigation(navigationFor(p.mouse), p.invertZoom, p.swipeOrbits);
+      const prefs = usePrefs.getState();
+      viewport.setNavigation(navigationFor(prefs.mouse), prefs.invertZoom, prefs.swipeOrbits);
       // The grid button shows the grid and snaps to it; off, it is hidden and nothing snaps to it.
-      v.setGridVisible(p.snapGrid);
-      v.invalidate();
+      viewport.setGridVisible(prefs.snapGrid);
+      viewport.invalidate();
     };
 
     // The grid follows the zoom in the design's unit. Drag arrows move in finer round steps (not the
     // grid's), or freely with the grid off.
-    v.gridSteps = (pixel) => gridLevels(pixel, docUnit());
+    viewport.gridSteps = (pixel) => gridLevels(pixel, docUnit());
 
-    v.handleStep = (pixel) => {
-      const p = usePrefs.getState();
+    viewport.handleStep = (pixel) => {
+      const prefs = usePrefs.getState();
 
-      return p.snapGrid ? dragStep(pixel, docUnit()) : 0.01;
+      return prefs.snapGrid ? dragStep(pixel, docUnit()) : 0.01;
     };
 
     applyNav();
@@ -438,13 +450,13 @@ export function ViewportView() {
     return () => {
       offPrefs();
       setViewport(null);
-      v.dispose();
+      viewport.dispose();
     };
   }, []);
 
   // The grid is laid out in the design's unit.
-  const designUnits = useApp((s) => s.doc.units);
-  useEffect(() => vp?.invalidate(), [vp, designUnits]);
+  const designUnits = useApp((state) => state.doc.units);
+  useEffect(() => viewport?.invalidate(), [viewport, designUnits]);
 
   // Scene
   const scene = useMemo<SceneData | null>(() => {
@@ -458,15 +470,18 @@ export function ViewportView() {
     const picksSketches = ["extrude", "revolve", "loft", "sweep", "rib"].includes(dialog?.feature.op ?? "");
     const sketches: SketchView[] = r.sketches
       .filter(
-        (s) =>
-          !hidden.has(s.id) &&
-          (s.id === sketchId || !consumed.has(s.id) || picksSketches || hiddenOverride(s.id)),
+        (sketchView) =>
+          !hidden.has(sketchView.id) &&
+          (sketchView.id === sketchId ||
+            !consumed.has(sketchView.id) ||
+            picksSketches ||
+            hiddenOverride(sketchView.id)),
       )
-      .map((s) => ({
-        id: s.id,
-        frame: s.frame,
-        curves: s.curves,
-        regions: s.regions.map((g) => ({ key: g.key, polygons: g.polygons })),
+      .map((sketchView) => ({
+        id: sketchView.id,
+        frame: sketchView.frame,
+        curves: sketchView.curves,
+        regions: sketchView.regions.map((g) => ({ key: g.key, polygons: g.polygons })),
       }));
     const planes: PlaneView[] = [
       ...Object.entries(ORIGIN_FRAMES).map(([id, frame]) => ({
@@ -478,7 +493,7 @@ export function ViewportView() {
       })),
       ...r.planes.map((p) => ({
         id: p.id,
-        label: doc.features.find((f) => f.id === p.id)?.name ?? p.id,
+        label: doc.features.find((feature) => feature.id === p.id)?.name ?? p.id,
         frame: p.frame,
         size: size * 0.6,
         color: CUSTOM_PLANE_COLOR,
@@ -486,10 +501,10 @@ export function ViewportView() {
     ];
     // Mesh parts show no edges: they would outline every triangle.
     const meshParts = meshBodyIds(doc.features, output.meshes);
-    const bodies = output.meshes.map((m) =>
-      meshParts.has(m.bodyId) && m.edgeRanges.length
-        ? { ...m, edgeLines: new Float32Array(), edgeRanges: new Int32Array() }
-        : m,
+    const bodies = output.meshes.map((mesh) =>
+      meshParts.has(mesh.bodyId) && mesh.edgeRanges.length
+        ? { ...mesh, edgeLines: new Float32Array(), edgeRanges: new Int32Array() }
+        : mesh,
     );
 
     return {
@@ -505,41 +520,41 @@ export function ViewportView() {
 
   useEffect(() => {
     // No model yet (a project is opening): clear the view instead of showing the previous one.
-    if (!vp) return;
+    if (!viewport) return;
 
-    const st = useApp.getState();
+    const state = useApp.getState();
     // Mesh parts light up as a whole on hover and selection.
-    vp.setWholeBodies(meshBodyIds(st.doc.features, st.output?.meshes ?? []));
-    vp.setScene(scene ?? EMPTY_SCENE);
-    if (!scene) vp.resetFraming();
-  }, [vp, scene]);
+    viewport.setWholeBodies(meshBodyIds(state.doc.features, state.output?.meshes ?? []));
+    viewport.setScene(scene ?? EMPTY_SCENE);
+    if (!scene) viewport.resetFraming();
+  }, [viewport, scene]);
   // Scanned parts wear their picture (unless it is switched off on the part).
   useEffect(
-    () => vp?.setBodyTextures(bodyTextures(doc.features, output?.meshes ?? [])),
-    [vp, doc.features, output],
+    () => viewport?.setBodyTextures(bodyTextures(doc.features, output?.meshes ?? [])),
+    [viewport, doc.features, output],
   );
 
   // Phone: sheets cover the lower part of the view; the model centres in the space above them.
   const motionOpen = useMotion((s) => s.open);
-  const sideOpen = useApp((s) => s.sideOpen);
+  const sideOpen = useApp((state) => state.sideOpen);
   const phoneConstraints = usePhoneSheets((s) => s.constraints);
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
     const sheets = () => [
       ...document.querySelectorAll<HTMLElement>(".dialog, .measure-card, .side, .constraint-palette.open"),
     ];
 
     const update = () => {
-      if (!isCompact()) return vp.setBottomInset(0);
+      if (!isCompact()) return viewport.setBottomInset(0);
 
-      const box = vp.canvas.getBoundingClientRect();
-      const top = Math.min(box.bottom, ...sheets().map((el) => el.getBoundingClientRect().top));
-      vp.setBottomInset(Math.max(0, box.bottom - top));
+      const box = viewport.canvas.getBoundingClientRect();
+      const top = Math.min(box.bottom, ...sheets().map((element) => element.getBoundingClientRect().top));
+      viewport.setBottomInset(Math.max(0, box.bottom - top));
     };
 
-    const ro = new ResizeObserver(update);
-    sheets().forEach((el) => ro.observe(el));
+    const observer = new ResizeObserver(update);
+    sheets().forEach((element) => observer.observe(element));
     update();
 
     // Sheets slide in: measure again once they have arrived.
@@ -547,11 +562,11 @@ export function ViewportView() {
     window.addEventListener("resize", update);
 
     return () => {
-      ro.disconnect();
+      observer.disconnect();
       window.clearTimeout(t);
       window.removeEventListener("resize", update);
     };
-  }, [vp, dialog, measure.active, sideOpen, sketchId, phoneConstraints, motionOpen]);
+  }, [viewport, dialog, measure.active, sideOpen, sketchId, phoneConstraints, motionOpen]);
 
   // Moving parts: poses from the joint values; parts can be dragged while the joints panel is open.
   const motionFree = useMotion((s) => s.free);
@@ -560,9 +575,9 @@ export function ViewportView() {
   const placeMove = useTerrainPlace((s) => s.move);
   const placeBody = useTerrainPlace((s) => s.body);
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
-    vp.partDrag = motionOpen && !dialog ? partDrag : null;
+    viewport.partDrag = motionOpen && !dialog ? partDrag : null;
 
     const poses = currentPoses();
 
@@ -572,19 +587,19 @@ export function ViewportView() {
       }
     }
 
-    vp.setPoses(poses);
-  }, [vp, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog, placeBody, placeMove]);
+    viewport.setPoses(poses);
+  }, [viewport, motionOpen, motionFree, motionTick, output, doc.mechanism, dialog, placeBody, placeMove]);
 
   // Joint symbols while the joints panel is open; the one being edited stands out.
   // Switched off they stay away so the motion shows alone, except for the joint being edited.
   const motionDraft = useMotion((s) => s.draft);
-  const showJoints = usePrefs((s) => s.showJoints);
+  const showJoints = usePrefs((prefs) => prefs.showJoints);
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
     const joints = doc.mechanism?.joints ?? [];
     const frames = output?.report.joints ?? [];
-    vp.setJointGlyphs(
+    viewport.setJointGlyphs(
       motionOpen
         ? joints.flatMap((j) => {
             const f = frames.find((x) => x.id === j.id);
@@ -621,28 +636,28 @@ export function ViewportView() {
           })
         : [],
     );
-  }, [vp, motionOpen, output, doc.mechanism, motionDraft?.joint.id, showJoints]);
+  }, [viewport, motionOpen, output, doc.mechanism, motionDraft?.joint.id, showJoints]);
 
   const hasBodies = !!output?.report.bodies.length;
   useEffect(
     () =>
-      vp?.setPlanesVisible(
+      viewport?.setPlanesVisible(
         !sketchId &&
           (showPlanes || !hasBodies || pickingPlane || dialog?.field === "plane" || dialog?.field === "base"),
       ),
-    [vp, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field],
+    [viewport, sketchId, showPlanes, hasBodies, pickingPlane, dialog?.field],
   );
   useEffect(
-    () => vp?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"),
-    [vp, pickingPlane, dialog?.field],
+    () => viewport?.setPlaneEmphasis(pickingPlane || dialog?.field === "plane" || dialog?.field === "base"),
+    [viewport, pickingPlane, dialog?.field],
   );
-  useEffect(() => vp?.setSketchesVisible(showSketches), [vp, showSketches]);
-  useEffect(() => vp?.setFingerDraws(!!sketchId), [vp, sketchId]);
+  useEffect(() => viewport?.setSketchesVisible(showSketches), [viewport, showSketches]);
+  useEffect(() => viewport?.setFingerDraws(!!sketchId), [viewport, sketchId]);
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
-    vp.setSelection(measure.active ? measure.picks : selection);
-  }, [vp, selection, measure]);
+    viewport.setSelection(measure.active ? measure.picks : selection);
+  }, [viewport, selection, measure]);
   useEffect(() => {
     setBusy(true);
 
@@ -652,34 +667,34 @@ export function ViewportView() {
   }, [output]);
 
   const kinds = (): ReadonlySet<PickKind> => {
-    const s = useApp.getState();
-    if (s.pickingSketchPlane) return new Set(["plane", "face"]);
-    if (s.measure.active) return new Set(["face", "edge"]);
-    if (s.dialog) return pickKindsFor(s.dialog);
+    const state = useApp.getState();
+    if (state.pickingSketchPlane) return new Set(["plane", "face"]);
+    if (state.measure.active) return new Set(["face", "edge"]);
+    if (state.dialog) return pickKindsFor(state.dialog);
 
     return DEFAULT_KINDS;
   };
 
   // Pointer handling (sketch mode is handled by the sketch editor)
   useEffect(() => {
-    if (!vp) return;
+    if (!viewport) return;
 
-    const el = vp.canvas;
+    const element = viewport.canvas;
     let down: { x: number; y: number; button: number; empty: boolean } | null = null;
     /** The last plain click, to catch the second click of a double-click on a face. */
     let lastClick: { at: number; x: number; y: number; body: string | null } | null = null;
     let doubleDone = -Infinity;
     let filter: "all" | "face" | "edge" = "all";
 
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (event: KeyboardEvent) => {
       if (!boxRef.current) return;
 
-      const k = e.key.toLowerCase();
+      const k = event.key.toLowerCase();
 
       // While box-selecting, F = faces only, E = edges only, Tab cycles.
       if (k === "f" || k === "e" || k === "tab") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        event.preventDefault();
+        event.stopImmediatePropagation();
         filter =
           k === "f"
             ? "face"
@@ -704,16 +719,16 @@ export function ViewportView() {
     let boxNow: typeof box = null;
     let navOff = false;
     const press = new Press(
-      (x, y, e) => {
+      (x, y, event) => {
         if (useApp.getState().sketchId || boxRef.current) return;
 
         down = null;
-        contextMenu(vp.pick(x, y, kinds()), x, y);
+        contextMenu(viewport.pick(x, y, kinds()), x, y);
 
         // Should the finger move on, it drags out an area instead of orbiting.
-        if (e.pointerType === "touch") {
+        if (event.pointerType === "touch") {
           navOff = true;
-          vp.controls.enabled = false;
+          viewport.controls.enabled = false;
         }
       },
       (x, y) => {
@@ -729,26 +744,32 @@ export function ViewportView() {
       else redo();
     });
 
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") {
-        press.move(e);
-        multi.move(e);
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") {
+        press.move(event);
+        multi.move(event);
       }
 
-      if ((e.pointerType === "touch" && !area) || useApp.getState().sketchId) return;
+      if ((event.pointerType === "touch" && !area) || useApp.getState().sketchId) return;
 
-      moveFrame(e);
+      moveFrame(event);
     };
 
-    const showBox = (x0: number, y0: number, e: PointerEvent) => {
-      const r = el.getBoundingClientRect();
-      boxNow = { x0: x0 - r.left, y0: y0 - r.top, x1: e.clientX - r.left, y1: e.clientY - r.top, filter };
+    const showBox = (x0: number, y0: number, event: PointerEvent) => {
+      const rect = element.getBoundingClientRect();
+      boxNow = {
+        x0: x0 - rect.left,
+        y0: y0 - rect.top,
+        x1: event.clientX - rect.left,
+        y1: event.clientY - rect.top,
+        filter,
+      };
       setBox(boxNow);
     };
 
     // Hover picking and box sizing raycast the model: once per frame is plenty.
-    const moveFrame = perFrame((e: PointerEvent) => {
-      if (area) return showBox(area.x, area.y, e);
+    const moveFrame = perFrame((event: PointerEvent) => {
+      if (area) return showBox(area.x, area.y, event);
 
       const d = down;
 
@@ -756,30 +777,30 @@ export function ViewportView() {
         d &&
         d.button === 0 &&
         d.empty &&
-        e.buttons === 1 &&
+        event.buttons === 1 &&
         !useApp.getState().dialog &&
-        Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4
+        Math.hypot(event.clientX - d.x, event.clientY - d.y) > 4
       ) {
         press.cancel();
 
-        return showBox(d.x, d.y, e);
+        return showBox(d.x, d.y, event);
       }
 
-      if (e.buttons) return;
+      if (event.buttons) return;
 
       // Setting a part onto the terrain or drawing on it: the ground under the pointer is what counts.
       const ms = useTerrainMeasure.getState();
       const measuring = ms.scale || (useApp.getState().measure.active && ms.points.length === 1);
 
       if (useTerrainPlace.getState().body || useTerrainDraw.getState().kind || measuring) {
-        const hit = vp.sceneryHit(e.clientX, e.clientY);
+        const hit = viewport.sceneryHit(event.clientX, event.clientY);
         if (useTerrainPlace.getState().body && hit) previewPlace(hit.point);
         if (useTerrainDraw.getState().kind) useTerrainDraw.setState({ hover: hit?.point ?? null });
         if (measuring) useTerrainMeasure.setState({ hover: hit?.point ?? null });
         if (!measuring || ms.scale) return;
       }
 
-      vp.setHover(vp.pick(e.clientX, e.clientY, kinds()));
+      viewport.setHover(viewport.pick(event.clientX, event.clientY, kinds()));
     });
 
     const finishBox = (additive: boolean) => {
@@ -789,17 +810,19 @@ export function ViewportView() {
 
       setBox(null);
 
-      const r = el.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
       const enclosed = b.x1 >= b.x0;
       const ks = new Set<"face" | "edge">(b.filter === "all" ? ["face", "edge"] : [b.filter]);
       const meshParts = meshBodyIds(useApp.getState().doc.features, useApp.getState().output?.meshes ?? []);
       // Box selection skips mesh parts' triangles (they are picked as whole parts).
-      const picks = vp
-        .boxSelect(b.x0 + r.left, b.y0 + r.top, b.x1 + r.left, b.y1 + r.top, enclosed, ks)
-        .filter((p) => !((p.kind === "face" || p.kind === "edge") && meshParts.has(p.bodyId)));
+      const picks = viewport
+        .boxSelect(b.x0 + rect.left, b.y0 + rect.top, b.x1 + rect.left, b.y1 + rect.top, enclosed, ks)
+        .filter((pick) => !((pick.kind === "face" || pick.kind === "edge") && meshParts.has(pick.bodyId)));
       const cur = useApp.getState().selection;
       useApp.setState({
-        selection: additive ? [...cur, ...picks.filter((p) => !cur.some((c) => samePick(c, p)))] : picks,
+        selection: additive
+          ? [...cur, ...picks.filter((pick) => !cur.some((c) => samePick(c, pick)))]
+          : picks,
         selectedFeature: null,
       });
     };
@@ -808,27 +831,27 @@ export function ViewportView() {
       if (!navOff) return;
 
       navOff = false;
-      vp.controls.enabled = true;
+      viewport.controls.enabled = true;
     };
 
-    const onDown = (e: PointerEvent) => {
-      multi.down(e);
-      if (e.pointerType !== "mouse" && !useApp.getState().sketchId) press.down(e);
-      if (e.pointerType === "touch") return;
+    const onDown = (event: PointerEvent) => {
+      multi.down(event);
+      if (event.pointerType !== "mouse" && !useApp.getState().sketchId) press.down(event);
+      if (event.pointerType === "touch") return;
 
       moveFrame.cancel();
       filter = "all";
       down = {
-        x: e.clientX,
-        y: e.clientY,
-        button: e.button,
-        empty: e.button === 0 && !vp.pick(e.clientX, e.clientY, kinds()),
+        x: event.clientX,
+        y: event.clientY,
+        button: event.button,
+        empty: event.button === 0 && !viewport.pick(event.clientX, event.clientY, kinds()),
       };
     };
 
-    const onUp = (e: PointerEvent) => {
-      const gesture = e.pointerType === "mouse" ? null : press.up(e);
-      multi.up(e);
+    const onUp = (event: PointerEvent) => {
+      const gesture = event.pointerType === "mouse" ? null : press.up(event);
+      multi.up(event);
       restoreNav();
 
       if (area) {
@@ -839,13 +862,16 @@ export function ViewportView() {
         return finishBox(false);
       }
 
-      if (e.pointerType === "touch") {
+      if (event.pointerType === "touch") {
         if (useApp.getState().sketchId) return;
-        if (gesture === "tap") onClick(vp.pick(e.clientX, e.clientY, kinds()), true, [e.clientX, e.clientY]);
+
+        if (gesture === "tap") {
+          onClick(viewport.pick(event.clientX, event.clientY, kinds()), true, [event.clientX, event.clientY]);
+        }
 
         if (gesture === "double") {
-          const pick = vp.pick(e.clientX, e.clientY, new Set(["face"]));
-          if (pick?.kind === "face" && pick.normal) vp.lookAtFace(pick.point, pick.normal);
+          const pick = viewport.pick(event.clientX, event.clientY, new Set(["face"]));
+          if (pick?.kind === "face" && pick.normal) viewport.lookAtFace(pick.point, pick.normal);
         }
 
         return;
@@ -855,25 +881,37 @@ export function ViewportView() {
 
       const d = down;
       down = null;
-      if (gesture === "double" && e.pointerType === "pen") return onDbl(e);
-      if (boxNow || boxRef.current) return finishBox(e.shiftKey);
-      if (!d || useApp.getState().sketchId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
+      if (gesture === "double" && event.pointerType === "pen") return onDbl(event);
+      if (boxNow || boxRef.current) return finishBox(event.shiftKey);
 
-      const pick = vp.pick(e.clientX, e.clientY, kinds());
-      if (d.button === 2) return confirmByRightClick() ? undefined : contextMenu(pick, e.clientX, e.clientY);
+      if (!d || useApp.getState().sketchId || Math.hypot(event.clientX - d.x, event.clientY - d.y) > 4) {
+        return;
+      }
+
+      const pick = viewport.pick(event.clientX, event.clientY, kinds());
+
+      if (d.button === 2) {
+        return confirmByRightClick() ? undefined : contextMenu(pick, event.clientX, event.clientY);
+      }
+
       if (d.button !== 0) return;
 
       // The second click of a double-click on a face selects its part right away: going through
       // the face again and then the part made the highlight and the steps list flicker.
       const now = performance.now();
       const prev = lastClick;
-      lastClick = { at: now, x: e.clientX, y: e.clientY, body: pick?.kind === "face" ? pick.bodyId : null };
+      lastClick = {
+        at: now,
+        x: event.clientX,
+        y: event.clientY,
+        body: pick?.kind === "face" ? pick.bodyId : null,
+      };
 
       if (
         prev?.body &&
         (!pick || pick.kind === "face") &&
         now - prev.at < DOUBLE_MS &&
-        Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 6 &&
+        Math.hypot(event.clientX - prev.x, event.clientY - prev.y) < 6 &&
         !useApp.getState().dialog &&
         !useApp.getState().measure.active &&
         !useTerrainDraw.getState().kind
@@ -881,34 +919,37 @@ export function ViewportView() {
         lastClick = null;
         doubleDone = now;
 
-        return selectParts([prev.body], e.shiftKey || e.metaKey || e.ctrlKey, true);
+        return selectParts([prev.body], event.shiftKey || event.metaKey || event.ctrlKey, true);
       }
 
-      onClick(pick, e.shiftKey || e.metaKey || e.ctrlKey || e.pointerType === "pen", [e.clientX, e.clientY]);
+      onClick(pick, event.shiftKey || event.metaKey || event.ctrlKey || event.pointerType === "pen", [
+        event.clientX,
+        event.clientY,
+      ]);
     };
 
-    const onDbl = (e: MouseEvent) => {
+    const onDbl = (event: MouseEvent) => {
       // Already handled on the second click.
       if (performance.now() - doubleDone < DOUBLE_MS) return;
       if (useTerrainDraw.getState().kind) return finishMarking();
       if (useApp.getState().sketchId || useApp.getState().dialog) return;
 
-      const pick = vp.pick(e.clientX, e.clientY, DEFAULT_KINDS);
+      const pick = viewport.pick(event.clientX, event.clientY, DEFAULT_KINDS);
 
       // Double-clicking a face selects its whole part; other entities open their feature.
       if (pick?.kind === "face") {
-        return selectParts([pick.bodyId], e.shiftKey || e.metaKey || e.ctrlKey, true);
+        return selectParts([pick.bodyId], event.shiftKey || event.metaKey || event.ctrlKey, true);
       }
 
       const fid = pick ? featureOfPick(pick) : null;
       if (fid) editFeature(fid);
     };
 
-    const onCancel = (e: PointerEvent) => {
-      press.up(e);
-      multi.up(e);
+    const onCancel = (event: PointerEvent) => {
+      press.up(event);
+      multi.up(event);
       restoreNav();
-      if (e.pointerType === "touch" && !area) return;
+      if (event.pointerType === "touch" && !area) return;
 
       moveFrame.cancel();
       area = null;
@@ -917,31 +958,31 @@ export function ViewportView() {
       setBox(null);
     };
 
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerdown", onDown);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onCancel);
-    el.addEventListener("dblclick", onDbl);
+    element.addEventListener("pointermove", onMove);
+    element.addEventListener("pointerdown", onDown);
+    element.addEventListener("pointerup", onUp);
+    element.addEventListener("pointercancel", onCancel);
+    element.addEventListener("dblclick", onDbl);
 
     return () => {
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerdown", onDown);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onCancel);
-      el.removeEventListener("dblclick", onDbl);
+      element.removeEventListener("pointermove", onMove);
+      element.removeEventListener("pointerdown", onDown);
+      element.removeEventListener("pointerup", onUp);
+      element.removeEventListener("pointercancel", onCancel);
+      element.removeEventListener("dblclick", onDbl);
       window.removeEventListener("keydown", onKey, true);
       press.cancel();
       moveFrame.cancel();
       restoreNav();
     };
-  }, [vp]);
+  }, [viewport]);
 
   const onClick = (pick: Pick | null, additive: boolean, at?: [number, number]) => {
-    const s = useApp.getState();
+    const state = useApp.getState();
 
     // Drawing on the terrain: each click is a point where it meets the ground.
     if (useTerrainDraw.getState().kind) {
-      const hit = at && vp?.sceneryHit(at[0], at[1]);
+      const hit = at && viewport?.sceneryHit(at[0], at[1]);
       if (hit) addMarkPoint(hit.point, hit.id);
 
       return;
@@ -949,7 +990,7 @@ export function ViewportView() {
 
     // A part waiting to be set onto the terrain goes where it is clicked.
     if (useTerrainPlace.getState().body) {
-      const hit = at && vp?.sceneryHit(at[0], at[1]);
+      const hit = at && viewport?.sceneryHit(at[0], at[1]);
       if (hit) placeAt(hit.point);
       else toast(t("Click on the terrain"), "error");
 
@@ -967,34 +1008,34 @@ export function ViewportView() {
     // Measuring on the terrain, or the two ends of a known distance to scale it by.
     const ms = useTerrainMeasure.getState();
 
-    if (ms.scale || (s.measure.active && !pick)) {
-      const hit = at && vp?.sceneryHit(at[0], at[1]);
+    if (ms.scale || (state.measure.active && !pick)) {
+      const hit = at && viewport?.sceneryHit(at[0], at[1]);
       if (hit) return measurePoint(hit.point, hit.id);
       if (ms.scale) return;
     }
 
-    if (!s.dialog && jointPick(pick)) return;
+    if (!state.dialog && jointPick(pick)) return;
 
-    if (s.pickingSketchPlane) {
+    if (state.pickingSketchPlane) {
       // On the terrain (no part or plane in the way): a level sketch at that height.
-      const ground = !pick && at ? vp?.sceneryHit(at[0], at[1]) : null;
+      const ground = !pick && at ? viewport?.sceneryHit(at[0], at[1]) : null;
       if (ground) return sketchOnTerrain(ground.point);
       if (!pick) return;
 
-      const spec = planeSpecForPick(pick, s.output?.meshes ?? []);
+      const spec = planeSpecForPick(pick, state.output?.meshes ?? []);
       if (spec) startSketch(spec);
       else toast(t("Pick a plane or a flat face"), "error");
 
       return;
     }
 
-    if (s.measure.active) {
+    if (state.measure.active) {
       // On a scan or other mesh part: the shape the surface follows there.
       if (
         pick &&
         (pick.kind === "face" || pick.kind === "edge") &&
         hasPack("scan") &&
-        meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId)
+        meshBodyIds(state.doc.features, state.output?.meshes ?? []).has(pick.bodyId)
       ) {
         return measureOnScan(pick.bodyId, pick.point);
       }
@@ -1006,23 +1047,23 @@ export function ViewportView() {
       }
 
       const picks =
-        s.measure.picks.length >= 2 || (!additive && s.measure.picks.length >= 2)
+        state.measure.picks.length >= 2 || (!additive && state.measure.picks.length >= 2)
           ? [pick]
-          : [...s.measure.picks.filter((p) => !samePick(p, pick)), pick].slice(-2);
+          : [...state.measure.picks.filter((p) => !samePick(p, pick)), pick].slice(-2);
       useApp.setState({ measure: { active: true, picks, result: null } });
 
-      const ref = (p: Pick) =>
-        p.kind === "face"
-          ? { bodyId: p.bodyId, kind: "face" as const, index: p.face }
-          : p.kind === "edge"
-            ? { bodyId: p.bodyId, kind: "edge" as const, index: p.edge }
+      const ref = (pick: Pick) =>
+        pick.kind === "face"
+          ? { bodyId: pick.bodyId, kind: "face" as const, index: pick.face }
+          : pick.kind === "edge"
+            ? { bodyId: pick.bodyId, kind: "edge" as const, index: pick.edge }
             : null;
       const [a, b] = picks.map(ref);
 
       if (a) {
         void kernel.measure(a, b ?? undefined).then(
-          (result) => useApp.setState((st) => ({ measure: { ...st.measure, result } })),
-          (e: Error) => toast(e.message, "error"),
+          (result) => useApp.setState((state) => ({ measure: { ...state.measure, result } })),
+          (error: Error) => toast(error.message, "error"),
         );
       }
 
@@ -1033,16 +1074,16 @@ export function ViewportView() {
     const onMesh =
       pick &&
       (pick.kind === "face" || pick.kind === "edge") &&
-      meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId);
+      meshBodyIds(state.doc.features, state.output?.meshes ?? []).has(pick.bodyId);
 
-    if (s.dialog) {
-      if (onMesh && s.dialog.field && !PART_FIELDS.has(s.dialog.field)) {
+    if (state.dialog) {
+      if (onMesh && state.dialog.field && !PART_FIELDS.has(state.dialog.field)) {
         return toast(meshHint(hasPack("scan")));
       }
 
-      if (pick && s.dialog.field) dialogPick?.(pick, additive);
+      if (pick && state.dialog.field) dialogPick?.(pick, additive);
       // Clicking empty space accepts the tool unless a selection field is waiting.
-      else if (!pick && !s.dialog.field) commitDialog();
+      else if (!pick && !state.dialog.field) commitDialog();
 
       return;
     }
@@ -1050,13 +1091,13 @@ export function ViewportView() {
     if (!pick) return useApp.setState({ selection: [], selectedFeature: null });
 
     if (onMesh) {
-      const m = s.output?.meshes.find((x) => x.bodyId === pick.bodyId);
+      const mesh = state.output?.meshes.find((x) => x.bodyId === pick.bodyId);
 
-      if (m) {
+      if (mesh) {
         useApp.setState({
-          selection: m.faceTags.map((tags, face) => ({
+          selection: mesh.faceTags.map((tags, face) => ({
             kind: "face" as const,
-            bodyId: m.bodyId,
+            bodyId: mesh.bodyId,
             face,
             tags,
             point: pick.point,
@@ -1069,19 +1110,19 @@ export function ViewportView() {
       return;
     }
 
-    const i = s.selection.findIndex((x) => samePick(x, pick));
+    const i = state.selection.findIndex((x) => samePick(x, pick));
     const selection = additive
       ? i >= 0
-        ? s.selection.filter((_, j) => j !== i)
-        : [...s.selection, pick]
+        ? state.selection.filter((_, j) => j !== i)
+        : [...state.selection, pick]
       : [pick];
     useApp.setState({ selection, selectedFeature: featureOfPick(pick) });
   };
 
   const contextMenu = (pick: Pick | null, x: number, y: number) => {
-    const s = useApp.getState();
-    if (s.dialog || s.sketchId) return;
-    if (pick && !s.selection.some((p) => samePick(p, pick))) useApp.setState({ selection: [pick] });
+    const state = useApp.getState();
+    if (state.dialog || state.sketchId) return;
+    if (pick && !state.selection.some((p) => samePick(p, pick))) useApp.setState({ selection: [pick] });
 
     const start = (op: FeatureOp) => () => startFeature(op);
     const fid = pick ? featureOfPick(pick) : null;
@@ -1121,7 +1162,7 @@ export function ViewportView() {
           }),
       },
     ];
-    const ground = !pick ? vp?.sceneryHit(x, y) : null;
+    const ground = !pick ? viewport?.sceneryHit(x, y) : null;
 
     if (!pick) {
       return showMenu(x, y, [
@@ -1174,24 +1215,27 @@ export function ViewportView() {
         ...(hasClip()
           ? [{ label: t("Paste"), icon: <ClipboardPaste />, kbd: "Mod+V", onClick: () => void pasteParts() }]
           : []),
-        { label: t("Fit view"), icon: <Focus />, kbd: fitKey, onClick: () => vp?.fit() },
+        { label: t("Fit view"), icon: <Focus />, kbd: fitKey, onClick: () => viewport?.fit() },
         {
-          label: s.showPlanes ? t("Hide planes") : t("Show planes"),
+          label: state.showPlanes ? t("Hide planes") : t("Show planes"),
           icon: <Layers />,
-          onClick: () => useApp.setState({ showPlanes: !s.showPlanes }),
+          onClick: () => useApp.setState({ showPlanes: !state.showPlanes }),
         },
         { label: t("Show all parts"), icon: <Eye />, onClick: () => useApp.setState({ hidden: new Set() }) },
       ]);
     }
 
-    if (pick.kind === "face" && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId)) {
-      const m = s.output?.meshes.find((b) => b.bodyId === pick.bodyId);
+    if (
+      pick.kind === "face" &&
+      meshBodyIds(state.doc.features, state.output?.meshes ?? []).has(pick.bodyId)
+    ) {
+      const mesh = state.output?.meshes.find((b) => b.bodyId === pick.bodyId);
 
-      if (m) {
+      if (mesh) {
         useApp.setState({
-          selection: m.faceTags.map((tags, face) => ({
+          selection: mesh.faceTags.map((tags, face) => ({
             kind: "face" as const,
-            bodyId: m.bodyId,
+            bodyId: mesh.bodyId,
             face,
             tags,
             point: pick.point,
@@ -1233,7 +1277,7 @@ export function ViewportView() {
         },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         {
-          label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"),
+          label: state.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"),
           icon: <Ghost />,
           onClick: () => toggleSeeThrough(pick.bodyId),
         },
@@ -1301,7 +1345,7 @@ export function ViewportView() {
                 label: t("New sketch on face"),
                 icon: <Pencil />,
                 kbd: "S",
-                onClick: () => startSketch(planeSpecForPick(pick, s.output?.meshes ?? []) ?? undefined),
+                onClick: () => startSketch(planeSpecForPick(pick, state.output?.meshes ?? []) ?? undefined),
               },
             ]
           : []),
@@ -1336,7 +1380,7 @@ export function ViewportView() {
         },
         ...terrainItems(pick.bodyId, { set: <ArrowDownToLine />, place: <MapPin /> }),
         {
-          label: s.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"),
+          label: state.doc.seeThrough?.includes(pick.bodyId) ? t("Show solid") : t("Show see-through"),
           icon: <Ghost />,
           onClick: () => toggleSeeThrough(pick.bodyId),
         },
@@ -1414,8 +1458,8 @@ export function ViewportView() {
                 icon: <Trash />,
                 danger: true,
                 onClick: () => {
-                  const f = useApp.getState().doc.features.find((x) => x.id === pick.planeId);
-                  if (f) void deleteFeature(f);
+                  const feature = useApp.getState().doc.features.find((x) => x.id === pick.planeId);
+                  if (feature) void deleteFeature(feature);
                 },
               },
             ]),
@@ -1423,22 +1467,22 @@ export function ViewportView() {
     }
   };
 
-  const featureOfPick = (p: Pick): string | null => {
+  const featureOfPick = (pick: Pick): string | null => {
     const docNow = useApp.getState().doc;
-    if (p.kind === "region" || p.kind === "sketch_curve") return p.sketchId;
-    if (p.kind === "plane") return p.planeId.startsWith("origin.") ? null : p.planeId;
+    if (pick.kind === "region" || pick.kind === "sketch_curve") return pick.sketchId;
+    if (pick.kind === "plane") return pick.planeId.startsWith("origin.") ? null : pick.planeId;
 
-    if (p.kind === "face") {
+    if (pick.kind === "face") {
       // The latest feature that tagged this face is the most specific owner.
-      const ids = p.tags.map((t) => t.split(/[.@[]/)[0]!);
+      const ids = pick.tags.map((t) => t.split(/[.@[]/)[0]!);
 
       for (let i = docNow.features.length - 1; i >= 0; i--) {
         if (ids.includes(docNow.features[i]!.id)) return docNow.features[i]!.id;
       }
     }
 
-    if (p.kind === "edge" || p.kind === "face") {
-      return docNow.features.find((f) => f.id === p.bodyId)?.id ?? null;
+    if (pick.kind === "edge" || pick.kind === "face") {
+      return docNow.features.find((feature) => feature.id === pick.bodyId)?.id ?? null;
     }
 
     return null;
@@ -1449,12 +1493,12 @@ export function ViewportView() {
       className={`view ${dialog?.field || pickingPlane || measure.active || placing ? "picking" : ""}`}
       ref={host}
     >
-      {vp ? <ViewCube viewport={vp} /> : null}
-      {vp ? <Manipulators viewport={vp} /> : null}
-      {vp ? <InlineValues viewport={vp} /> : null}
-      {vp && sketchId ? <SketchEditor viewport={vp} sketchId={sketchId} /> : null}
-      {vp && pickingPlane && scene ? <PlaneChooser viewport={vp} planes={scene.planes} /> : null}
-      {vp && marks.labels.length ? <TerrainLabels viewport={vp} labels={marks.labels} /> : null}
+      {viewport ? <ViewCube viewport={viewport} /> : null}
+      {viewport ? <Manipulators viewport={viewport} /> : null}
+      {viewport ? <InlineValues viewport={viewport} /> : null}
+      {viewport && sketchId ? <SketchEditor viewport={viewport} sketchId={sketchId} /> : null}
+      {viewport && pickingPlane && scene ? <PlaneChooser viewport={viewport} planes={scene.planes} /> : null}
+      {viewport && marks.labels.length ? <TerrainLabels viewport={viewport} labels={marks.labels} /> : null}
       <TerrainHud />
       <AiActivity />
       {box ? (
@@ -1474,8 +1518,11 @@ export function ViewportView() {
         </div>
       ) : null}
       {measure.active ? <MeasureCard /> : null}
-      {mode === "rendered" && vp ? (
-        <RenderBar vp={vp} onExit={() => (vp.setDisplayMode("shaded_edges"), setMode("shaded_edges"))} />
+      {mode === "rendered" && viewport ? (
+        <RenderBar
+          vp={viewport}
+          onExit={() => (viewport.setDisplayMode("shaded_edges"), setMode("shaded_edges"))}
+        />
       ) : null}
       <LoadingOverlay />
       <DeviationLegend />
@@ -1514,17 +1561,17 @@ export function ViewportView() {
                 : t("Ready"))}
       </div>
       <div className="view-controls">
-        <SnapControls viewport={vp} />
+        <SnapControls viewport={viewport} />
         <span className="bar-sep" aria-hidden />
-        <button className="icon-btn sm" title={withKey(t("Fit all"), fitKey)} onClick={() => vp?.fit()}>
+        <button className="icon-btn sm" title={withKey(t("Fit all"), fitKey)} onClick={() => viewport?.fit()}>
           <Scan />
         </button>
         {/* Phone: the less used view switches share one menu, so the column stays short. */}
         <button
           className="icon-btn sm phone-only"
           title={t("View options")}
-          onClick={(e) => {
-            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          onClick={(event) => {
+            const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
             const check = (on: boolean) => (on ? "✓ " : "   ");
             const modes: [DisplayMode, string][] = [
               ["shaded_edges", t("Shaded with edges")],
@@ -1535,18 +1582,18 @@ export function ViewportView() {
               ["rendered", t("Rendered")],
             ];
             showMenu(
-              r.left - 6,
-              r.top,
+              rect.left - 6,
+              rect.top,
               [
                 ...modes.map(([m, label]) => ({
-                  label: `${check(vp?.mode === m)}${label}`,
-                  onClick: () => (vp?.setDisplayMode(m), setMode(m)),
+                  label: `${check(viewport?.mode === m)}${label}`,
+                  onClick: () => (viewport?.setDisplayMode(m), setMode(m)),
                 })),
                 "sep" as const,
                 {
                   label: `${check(ortho)}${t("Orthographic")}`,
                   onClick: () => {
-                    vp?.setProjection(ortho ? "perspective" : "orthographic");
+                    viewport?.setProjection(ortho ? "perspective" : "orthographic");
                     setOrtho(!ortho);
                   },
                 },
@@ -1587,7 +1634,7 @@ export function ViewportView() {
             ortho ? t("Orthographic (click for perspective)") : t("Perspective (click for orthographic)")
           }
           onClick={() => {
-            vp?.setProjection(ortho ? "perspective" : "orthographic");
+            viewport?.setProjection(ortho ? "perspective" : "orthographic");
             setOrtho(!ortho);
           }}
         >
@@ -1596,8 +1643,8 @@ export function ViewportView() {
         <button
           className="icon-btn sm mode-btn phone-hide"
           title={t("Display mode")}
-          onClick={(e) => {
-            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          onClick={(event) => {
+            const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
             const modes: [DisplayMode, string][] = [
               ["shaded_edges", t("Shaded with edges")],
               ["shaded", t("Shaded")],
@@ -1607,11 +1654,11 @@ export function ViewportView() {
               ["rendered", t("Rendered")],
             ];
             showMenu(
-              r.left,
-              r.top - 6,
+              rect.left,
+              rect.top - 6,
               modes.map(([m, label]) => ({
-                label: `${vp?.mode === m ? "✓ " : "   "}${label}`,
-                onClick: () => (vp?.setDisplayMode(m), setMode(m)),
+                label: `${viewport?.mode === m ? "✓ " : "   "}${label}`,
+                onClick: () => (viewport?.setDisplayMode(m), setMode(m)),
               })),
               { above: true },
             );
@@ -1681,7 +1728,7 @@ function hiddenOverride(_id: string): boolean {
 }
 
 function MeasureCard() {
-  const m = useApp((s) => s.measure);
+  const m = useApp((state) => state.measure);
   const scan = useScanMeasure();
 
   return (
@@ -1728,8 +1775,8 @@ function MeasureCard() {
               min="0.01"
               style={{ width: 72 }}
               defaultValue={scan.tol}
-              onChange={(e) => {
-                const v = Number(e.target.value);
+              onChange={(event) => {
+                const v = Number(event.target.value);
                 if (Number.isFinite(v) && v > 0) setScanTolerance(v);
               }}
             />
@@ -1760,19 +1807,19 @@ function MeasureCard() {
 
 /** The measured part's volume and, with a material, its mass. */
 function PartMass({ picks }: { picks: readonly Pick[] }) {
-  const doc = useApp((s) => s.doc);
-  const bodies = useApp((s) => s.output?.report.bodies);
-  const id = picks.find((p): p is Extract<Pick, { bodyId: string }> => "bodyId" in p)?.bodyId;
+  const doc = useApp((state) => state.doc);
+  const bodies = useApp((state) => state.output?.report.bodies);
+  const id = picks.find((pick): pick is Extract<Pick, { bodyId: string }> => "bodyId" in pick)?.bodyId;
   const body = id ? bodies?.find((b) => b.id === id) : undefined;
   if (!body || !Number.isFinite(body.volume)) return null;
 
-  const m = partMaterial(doc, body.id);
+  const material = partMaterial(doc, body.id);
 
   return (
     <p className="small" style={{ margin: "8px 0 0" }}>
       <b>{partName(body.id, doc.features)}</b> · {t("{v} cm³", { v: (body.volume / 1000).toFixed(2) })}
-      {m ? (
-        ` · ${formatMass(massOf(body.volume, m))} ${materialName(m)}`
+      {material ? (
+        ` · ${formatMass(massOf(body.volume, material))} ${materialName(material)}`
       ) : (
         <span className="muted"> · {t("no material, so no mass")}</span>
       )}
@@ -1781,8 +1828,8 @@ function PartMass({ picks }: { picks: readonly Pick[] }) {
 }
 
 function AiActivity() {
-  const activity = useApp((s) => (s.aiLock ? null : s.aiActivity));
-  const previewing = useApp((s) => !!s.proposalDoc);
+  const activity = useApp((state) => (state.aiLock ? null : state.aiActivity));
+  const previewing = useApp((state) => !!state.proposalDoc);
   if (!activity && !previewing) return null;
 
   return (
@@ -1814,11 +1861,11 @@ function AiActivity() {
 
 /** Centered while the geometry engine starts or a project's model is computed for the first time. */
 function LoadingOverlay() {
-  const kernelState = useApp((s) => s.kernel);
-  const hasOutput = useApp((s) => !!s.output);
-  const features = useApp((s) => s.doc.features.length);
-  const progress = useApp((s) => s.buildProgress);
-  const doc = useApp((s) => s.doc);
+  const kernelState = useApp((state) => state.kernel);
+  const hasOutput = useApp((state) => !!state.output);
+  const features = useApp((state) => state.doc.features.length);
+  const progress = useApp((state) => state.buildProgress);
+  const doc = useApp((state) => state.doc);
   const text = kernelState.error
     ? null
     : !kernelState.ready && !hasOutput
@@ -1830,7 +1877,9 @@ function LoadingOverlay() {
 
   // Which step the first build is at, once the kernel reports it.
   const step =
-    kernelState.ready && progress ? doc.features.find((f) => f.id === progress.feature) : undefined;
+    kernelState.ready && progress
+      ? doc.features.find((feature) => feature.id === progress.feature)
+      : undefined;
 
   return (
     <div className="loading-overlay" role="status" aria-live="polite">
@@ -1863,16 +1912,16 @@ function LoadingOverlay() {
 
 /** "Deviation from <mesh>" for each mesh part in the model (a scan, the mesh a part was rebuilt from). */
 function deviationItems(body: string): { label: string; icon: React.ReactNode; onClick: () => void }[] {
-  const s = useApp.getState();
+  const state = useApp.getState();
 
   if (useDeviation.getState().body === body) {
     return [{ label: t("Hide deviation"), icon: <ScanSearch />, onClick: hideDeviation }];
   }
 
-  const meshes = [...meshBodyIds(s.doc.features, s.output?.meshes ?? [])].filter((id) => id !== body);
+  const meshes = [...meshBodyIds(state.doc.features, state.output?.meshes ?? [])].filter((id) => id !== body);
 
   return meshes.map((mesh) => ({
-    label: t("Deviation from {mesh}", { mesh: partName(mesh, s.doc.features) }),
+    label: t("Deviation from {mesh}", { mesh: partName(mesh, state.doc.features) }),
     icon: <ScanSearch />,
     onClick: () => (hideThickness(), hidePrintCheck(), showDeviation(body, mesh)),
   }));
@@ -1904,10 +1953,10 @@ function printItem(body: string): { label: string; icon: React.ReactNode; onClic
 
 /** Triangles in a binary STL import's file (from its header), 0 when unknown. */
 function fileTriangles(body: string): number {
-  const f = importOf(body);
-  if (!f) return 0;
+  const feature = importOf(body);
+  if (!feature) return 0;
 
-  const head = Uint8Array.from(atob(f.data.slice(0, 112)), (c) => c.charCodeAt(0));
+  const head = Uint8Array.from(atob(feature.data.slice(0, 112)), (c) => c.charCodeAt(0));
 
   return head.length >= 84 ? new DataView(head.buffer).getUint32(80, true) : 0;
 }
@@ -1915,8 +1964,10 @@ function fileTriangles(body: string): number {
 /** Options for cleaning up a mesh part, and its triangle count now. */
 function MeshRepairCard() {
   const r = useMeshRepair();
-  const features = useApp((s) => s.doc.features);
-  const shown = useApp((s) => (r.body ? s.output?.meshes.find((m) => m.bodyId === r.body) : undefined));
+  const features = useApp((state) => state.doc.features);
+  const shown = useApp((state) =>
+    r.body ? state.output?.meshes.find((mesh) => mesh.bodyId === r.body) : undefined,
+  );
   // A mesh that failed to import (open) has no part: count the file's triangles instead.
   const triangles = shown ? shown.indices.length / 3 : r.body ? fileTriangles(r.body) : 0;
   if (!r.body) return null;
@@ -1926,7 +1977,7 @@ function MeshRepairCard() {
       <input
         type="checkbox"
         checked={r[key]}
-        onChange={(e) => useMeshRepair.setState({ [key]: e.target.checked })}
+        onChange={(event) => useMeshRepair.setState({ [key]: event.target.checked })}
       />
       <span>{label}</span>
     </label>
@@ -1958,8 +2009,8 @@ function MeshRepairCard() {
             min="0.001"
             style={{ width: 64 }}
             defaultValue={r.tolerance}
-            onChange={(e) => {
-              const v = Number(e.target.value);
+            onChange={(event) => {
+              const v = Number(event.target.value);
               if (Number.isFinite(v) && v > 0) useMeshRepair.setState({ tolerance: v });
             }}
           />
@@ -1985,7 +2036,7 @@ function MeshRepairCard() {
 /** Scale, thinnest spot and the minimum wall of the thickness map. */
 function ThicknessLegend() {
   const { body, stats, error, minWall } = useThickness();
-  const features = useApp((s) => s.doc.features);
+  const features = useApp((state) => state.doc.features);
   if (!body) return null;
 
   return (
@@ -2017,8 +2068,8 @@ function ThicknessLegend() {
               min="0.1"
               style={{ width: 64 }}
               defaultValue={minWall}
-              onChange={(e) => {
-                const v = Number(e.target.value);
+              onChange={(event) => {
+                const v = Number(event.target.value);
                 if (Number.isFinite(v) && v > 0) setMinWall(v);
               }}
             />
@@ -2051,7 +2102,7 @@ function ThicknessLegend() {
 /** Colours, overhang limit, support estimate and the best way up of the printability map. */
 function PrintCheckCard() {
   const { body, stats, error, limit, picking } = usePrintCheck();
-  const features = useApp((s) => s.doc.features);
+  const features = useApp((state) => state.doc.features);
   if (!body) return null;
 
   const cm2 = (mm2: number) => `${(mm2 / 100).toFixed(mm2 < 1000 ? 1 : 0)} cm²`;
@@ -2092,8 +2143,8 @@ function PrintCheckCard() {
               max="89"
               style={{ width: 56 }}
               defaultValue={limit}
-              onChange={(e) => {
-                const v = Number(e.target.value);
+              onChange={(event) => {
+                const v = Number(event.target.value);
                 if (Number.isFinite(v) && v >= 0 && v < 90) setOverhangLimit(v);
               }}
             />
@@ -2142,7 +2193,7 @@ function PrintCheckCard() {
 /** Scale and numbers of the deviation map. */
 function DeviationLegend() {
   const { body, mesh, stats, error } = useDeviation();
-  const features = useApp((s) => s.doc.features);
+  const features = useApp((state) => state.doc.features);
   if (!body || !mesh) return null;
 
   const mm = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)} mm`;

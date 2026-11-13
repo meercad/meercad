@@ -209,7 +209,7 @@ function loadTabs(): Tab[] {
 
   try {
     return (JSON.parse(localStorage.getItem("meercad.tabs") ?? "[]") as Tab[]).filter(
-      (t) => typeof t.id === "string",
+      (tab) => typeof tab.id === "string",
     );
   } catch {
     return [];
@@ -228,7 +228,7 @@ function setTabs(tabs: Tab[]): void {
 }
 
 let viewportRef: Viewport | null = null;
-export const setViewport = (v: Viewport | null) => (viewportRef = v);
+export const setViewport = (viewport: Viewport | null) => (viewportRef = viewport);
 export const getViewport = () => viewportRef;
 
 export const useApp = create<State>(() => ({
@@ -294,13 +294,13 @@ const get = useApp.getState;
 
 // A tool that opens takes over the history's highlight: only the step being edited stays marked
 // (none for a new one), so two things never look active at once.
-useApp.subscribe((s, prev) => {
-  const id = s.dialog && !s.dialog.isNew ? s.dialog.feature.id : null;
+useApp.subscribe((state, prev) => {
+  const id = state.dialog && !state.dialog.isNew ? state.dialog.feature.id : null;
 
   if (
-    s.dialog &&
-    (!prev.dialog || prev.dialog.feature.id !== s.dialog.feature.id) &&
-    (s.selectedFeature !== id || s.featureSelection.length)
+    state.dialog &&
+    (!prev.dialog || prev.dialog.feature.id !== state.dialog.feature.id) &&
+    (state.selectedFeature !== id || state.featureSelection.length)
   ) {
     set({ selectedFeature: id, featureSelection: [] });
   }
@@ -357,13 +357,15 @@ export function startTask(
   } = {},
 ): { update(progress: number | null, detail?: string): void; done(): void } {
   const id = ++taskId;
-  set((s) => ({ tasks: [...s.tasks, { id, label, progress, since: performance.now(), ...options }] }));
+  set((state) => ({
+    tasks: [...state.tasks, { id, label, progress, since: performance.now(), ...options }],
+  }));
 
   return {
     update(p, detail) {
       const now = performance.now();
-      set((s) => ({
-        tasks: s.tasks.map((x) => {
+      set((state) => ({
+        tasks: state.tasks.map((x) => {
           if (x.id !== id) return x;
 
           const from = x.progressFrom ?? (p !== null ? now : undefined);
@@ -383,7 +385,7 @@ export function startTask(
       }));
     },
     done() {
-      set((s) => ({ tasks: s.tasks.filter((x) => x.id !== id) }));
+      set((state) => ({ tasks: state.tasks.filter((x) => x.id !== id) }));
     },
   };
 }
@@ -422,9 +424,9 @@ function rebuildTask(): { onProgress: RebuildProgress; done(): void } {
 export function toast(text: string, kind: Toast["kind"] = "info"): void {
   const id = ++toastId;
   // The same message again replaces the one showing rather than stacking up.
-  set((s) => ({ toasts: [...s.toasts.filter((t) => t.text !== text), { id, text, kind }] }));
+  set((state) => ({ toasts: [...state.toasts.filter((toast) => toast.text !== text), { id, text, kind }] }));
   setTimeout(
-    () => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+    () => set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })),
     kind === "error" ? 6000 : 3000,
   );
 }
@@ -444,8 +446,8 @@ export function apply(...ops: DocOp[]): boolean {
     syncDoc();
 
     return true;
-  } catch (e) {
-    toast(e instanceof OpError ? e.message : String(e), "error");
+  } catch (error) {
+    toast(error instanceof OpError ? error.message : String(error), "error");
 
     return false;
   }
@@ -458,8 +460,8 @@ export function applyQuiet(...ops: DocOp[]): boolean {
     syncDoc();
 
     return true;
-  } catch (e) {
-    toast(e instanceof OpError ? e.message : String(e), "error");
+  } catch (error) {
+    toast(error instanceof OpError ? error.message : String(error), "error");
 
     return false;
   }
@@ -493,18 +495,18 @@ export function redo(): void {
 
 /** A short name for what changed between two documents, for undo/redo feedback. */
 function describeStep(from: MeercadDocument, to: MeercadDocument): string {
-  const ids = (d: MeercadDocument) => new Set(d.features.map((f) => f.id));
+  const ids = (doc: MeercadDocument) => new Set(doc.features.map((feature) => feature.id));
   const [a, b] = [ids(from), ids(to)];
-  const added = to.features.find((f) => !a.has(f.id));
+  const added = to.features.find((feature) => !a.has(feature.id));
   if (added) return featureName(added);
 
-  const removed = from.features.find((f) => !b.has(f.id));
+  const removed = from.features.find((feature) => !b.has(feature.id));
   if (removed) return t("delete {name}", { name: featureName(removed) });
 
   const changed = to.features.find(
-    (f, i) =>
-      JSON.stringify(f) !== JSON.stringify(from.features.find((g) => g.id === f.id)) ||
-      from.features[i]?.id !== f.id,
+    (feature, i) =>
+      JSON.stringify(feature) !== JSON.stringify(from.features.find((g) => g.id === feature.id)) ||
+      from.features[i]?.id !== feature.id,
   );
   if (changed) return featureName(changed);
   if (JSON.stringify(from.params) !== JSON.stringify(to.params)) return t("variables");
@@ -518,24 +520,26 @@ export const currentDoc = () => docStore.doc;
 
 /** The document the viewport should show: proposal, draft preview or the real document. */
 function displayDoc(): { doc: MeercadDocument; preview: boolean; problem: string | null } {
-  const s = get();
-  if (s.proposalDoc) return { doc: s.proposalDoc, preview: true, problem: null };
+  const state = get();
+  if (state.proposalDoc) return { doc: state.proposalDoc, preview: true, problem: null };
 
-  const d = s.dialog;
-  if (!d) return { doc: docStore.doc, preview: false, problem: null };
+  const dialog = state.dialog;
+  if (!dialog) return { doc: docStore.doc, preview: false, problem: null };
 
-  const problem = draftProblem(d.feature);
+  const problem = draftProblem(dialog.feature);
   if (problem) return { doc: docStore.doc, preview: false, problem };
 
   const doc = structuredClone(docStore.doc);
 
-  if (d.isNew) {
-    const at = doc.rollback ? doc.features.findIndex((f) => f.id === doc.rollback) + 1 : doc.features.length;
-    doc.features.splice(at, 0, d.feature);
-    if (doc.rollback) doc.rollback = d.feature.id;
+  if (dialog.isNew) {
+    const at = doc.rollback
+      ? doc.features.findIndex((feature) => feature.id === doc.rollback) + 1
+      : doc.features.length;
+    doc.features.splice(at, 0, dialog.feature);
+    if (doc.rollback) doc.rollback = dialog.feature.id;
   } else {
-    const i = doc.features.findIndex((f) => f.id === d.feature.id);
-    if (i >= 0) doc.features[i] = d.feature;
+    const i = doc.features.findIndex((feature) => feature.id === dialog.feature.id);
+    if (i >= 0) doc.features[i] = dialog.feature;
   }
 
   return { doc, preview: true, problem: null };
@@ -570,11 +574,11 @@ export async function rebuildNow(): Promise<RebuildOutput> {
       set({ building: false });
 
       return output;
-    } catch (e) {
-      if (!(e instanceof SupersededError)) {
+    } catch (error) {
+      if (!(error instanceof SupersededError)) {
         set({ building: false });
 
-        throw e;
+        throw error;
       }
     } finally {
       task.done();
@@ -600,17 +604,17 @@ function remapSelection(selection: Pick[], before: RebuildOutput | null, after: 
   const bodyInfo = (id: string) => {
     if (bodies.has(id)) return bodies.get(id)!;
 
-    const m = after.meshes.find((x) => x.bodyId === id);
+    const mesh = after.meshes.find((x) => x.bodyId === id);
     const old = before?.meshes.find((x) => x.bodyId === id);
-    const info = m
+    const info = mesh
       ? {
           same:
             !!old &&
-            (old === m ||
-              (old.faceTags.length === m.faceTags.length &&
-                old.faceTags.every((t, i) => t.join() === m.faceTags[i]!.join()))),
+            (old === mesh ||
+              (old.faceTags.length === mesh.faceTags.length &&
+                old.faceTags.every((t, i) => t.join() === mesh.faceTags[i]!.join()))),
           byTags: null,
-          tags: m.faceTags,
+          tags: mesh.faceTags,
         }
       : null;
     bodies.set(id, info);
@@ -620,29 +624,29 @@ function remapSelection(selection: Pick[], before: RebuildOutput | null, after: 
 
   const out: Pick[] = [];
 
-  for (const p of selection) {
-    if (p.kind !== "face" && p.kind !== "edge") {
-      out.push(p);
+  for (const pick of selection) {
+    if (pick.kind !== "face" && pick.kind !== "edge") {
+      out.push(pick);
       continue;
     }
 
-    const info = bodyInfo(p.bodyId);
+    const info = bodyInfo(pick.bodyId);
     if (!info) continue;
 
     if (info.same) {
-      out.push(p);
+      out.push(pick);
       continue;
     }
 
-    if (p.kind === "face") {
+    if (pick.kind === "face") {
       info.byTags ??= new Map(info.tags.map((t, i) => [t.join(), i]));
 
-      const face = info.byTags.get(p.tags.join());
-      if (face !== undefined) out.push({ ...p, face, tags: info.tags[face]! });
+      const face = info.byTags.get(pick.tags.join());
+      if (face !== undefined) out.push({ ...pick, face, tags: info.tags[face]! });
     }
   }
 
-  return out.length === selection.length && out.every((p, i) => p === selection[i]) ? selection : out;
+  return out.length === selection.length && out.every((pick, i) => pick === selection[i]) ? selection : out;
 }
 
 let rebuildQueued = false;
@@ -671,8 +675,8 @@ let draftTextures = false;
 const SLOW_TEXTURE_MS = 3000;
 let texturesHinted = false;
 // Showing or hiding textures rebuilds the meshes (the geometry comes from the cache).
-usePrefs.subscribe((p, prev) => {
-  if (p.showTextures !== prev.showTextures) scheduleRebuild();
+usePrefs.subscribe((prefs, prev) => {
+  if (prefs.showTextures !== prev.showTextures) scheduleRebuild();
 });
 
 /** Counts rebuild requests, so a fine texture that a newer edit overtook is not shown. */
@@ -713,7 +717,7 @@ export function scheduleRebuild(): void {
     // Lithophane pictures take a while at full detail: the part shows first with a coarse picture,
     // and the fine one follows (the geometry is not computed again for it).
     const textures = usePrefs.getState().showTextures;
-    const textured = doc.features.some((f) => f.op === "lithophane" && !f.suppressed);
+    const textured = doc.features.some((feature) => feature.op === "lithophane" && !feature.suppressed);
     const quick = textures && !draftTextures && textured;
     // The tab this rebuild is for: its result is not shown if another tab came to the front meanwhile.
     const store = docStore;
@@ -817,32 +821,34 @@ kernel.ready.then(
           : ", single thread: page not cross-origin isolated";
     set({ kernel: { ready: true, info: `Kernel ready (${initMs.toFixed(0)} ms${mode})` } });
   },
-  (e: Error) => set({ kernel: { ready: false, info: "Kernel failed", error: e.message } }),
+  (error: Error) => set({ kernel: { ready: false, info: "Kernel failed", error: error.message } }),
 );
 
 // ---------------------------------------------------------------- feature dialogs
 
 /** Whether the selection is on a part made from an imported mesh (edited only as a whole). */
 export function selectionOnMesh(): boolean {
-  const s = get();
-  const meshParts = meshBodyIds(docStore.doc.features, s.output?.meshes ?? []);
+  const state = get();
+  const meshParts = meshBodyIds(docStore.doc.features, state.output?.meshes ?? []);
 
-  return s.selection.some((p) => (p.kind === "face" || p.kind === "edge") && meshParts.has(p.bodyId));
+  return state.selection.some(
+    (pick) => (pick.kind === "face" || pick.kind === "edge") && meshParts.has(pick.bodyId),
+  );
 }
 
 /** Hides the parts (and sketches) the selection touches. */
 export function hideSelectedParts(): void {
-  const s = get();
+  const state = get();
   const ids = new Set<string>();
 
-  for (const p of s.selection) {
-    if (p.kind === "face" || p.kind === "edge") ids.add(p.bodyId);
-    else if (p.kind === "region" || p.kind === "sketch_curve") ids.add(p.sketchId);
+  for (const pick of state.selection) {
+    if (pick.kind === "face" || pick.kind === "edge") ids.add(pick.bodyId);
+    else if (pick.kind === "region" || pick.kind === "sketch_curve") ids.add(pick.sketchId);
   }
 
   if (!ids.size) return;
 
-  set({ hidden: new Set([...s.hidden, ...ids]), selection: [] });
+  set({ hidden: new Set([...state.hidden, ...ids]), selection: [] });
 }
 
 let lastStarted: FeatureOp | null = null;
@@ -850,9 +856,9 @@ let lastStarted: FeatureOp | null = null;
 export const lastStartedFeature = (): FeatureOp | null => lastStarted;
 
 export function startFeature(op: FeatureOp): void {
-  const s = get();
+  const state = get();
   lastStarted = op;
-  if (s.dialog) cancelDialog();
+  if (state.dialog) cancelDialog();
 
   if (FACE_TOOLS.has(op) && selectionOnMesh()) {
     if (op === "sketch") set({ selection: [] });
@@ -871,14 +877,14 @@ export function startFeature(op: FeatureOp): void {
 }
 
 export function editFeature(id: string): void {
-  const f = docStore.doc.features.find((x) => x.id === id);
-  if (!f) return;
+  const feature = docStore.doc.features.find((x) => x.id === id);
+  if (!feature) return;
   if (get().dialog) cancelDialog();
-  if (f.op === "sketch") return openSketch(id);
+  if (feature.op === "sketch") return openSketch(id);
   // A design shared with someone keeps its gears and springs, but only the pack changes them.
-  if (refuseLocked(f, featureName(f))) return;
+  if (refuseLocked(feature, featureName(feature))) return;
 
-  set({ dialog: { feature: structuredClone(f), isNew: false, field: null }, selection: [] });
+  set({ dialog: { feature: structuredClone(feature), isNew: false, field: null }, selection: [] });
   scheduleRebuild();
 }
 
@@ -917,27 +923,27 @@ export function startDraft(feature: Feature): void {
   scheduleRebuild();
 }
 
-export function updateDraft(patch: Partial<Feature> | ((f: Feature) => Feature)): void {
-  const d = get().dialog;
-  if (!d) return;
+export function updateDraft(patch: Partial<Feature> | ((feature: Feature) => Feature)): void {
+  const dialog = get().dialog;
+  if (!dialog) return;
 
   const feature = stripUndefined(
-    typeof patch === "function" ? patch(d.feature) : ({ ...d.feature, ...patch } as Feature),
+    typeof patch === "function" ? patch(dialog.feature) : ({ ...dialog.feature, ...patch } as Feature),
   );
-  set({ dialog: { ...d, feature } });
+  set({ dialog: { ...dialog, feature } });
   scheduleRebuild();
 }
 
 export function setDialogField(field: string | null): void {
-  const d = get().dialog;
-  if (d) set({ dialog: { ...d, field } });
+  const dialog = get().dialog;
+  if (dialog) set({ dialog: { ...dialog, field } });
 }
 
 export function commitDialog(): boolean {
-  const d = get().dialog;
-  if (!d) return false;
+  const dialog = get().dialog;
+  if (!dialog) return false;
 
-  const problem = draftProblem(d.feature);
+  const problem = draftProblem(dialog.feature);
 
   if (problem) {
     toast(problem, "error");
@@ -948,14 +954,14 @@ export function commitDialog(): boolean {
   let ok: boolean;
 
   // A rail with its carriage or a lead screw with its nut gets the joints that make them move.
-  if (d.isNew) {
-    ok = apply(...withMotion([{ type: "add_features", features: [d.feature] }], docStore.doc));
+  if (dialog.isNew) {
+    ok = apply(...withMotion([{ type: "add_features", features: [dialog.feature] }], docStore.doc));
   } else {
     // Keys the draft dropped must be deleted (null) rather than merged back from the original.
-    const original = docStore.doc.features.find((f) => f.id === d.feature.id) ?? {};
-    const patch: Record<string, unknown> = { ...(d.feature as unknown as Record<string, unknown>) };
+    const original = docStore.doc.features.find((feature) => feature.id === dialog.feature.id) ?? {};
+    const patch: Record<string, unknown> = { ...(dialog.feature as unknown as Record<string, unknown>) };
     for (const k of Object.keys(original)) if (!(k in patch)) patch[k] = null;
-    ok = apply(...withMotion([{ type: "edit_feature", id: d.feature.id, patch }], docStore.doc));
+    ok = apply(...withMotion([{ type: "edit_feature", id: dialog.feature.id, patch }], docStore.doc));
   }
 
   if (ok) {
@@ -1027,7 +1033,7 @@ function firstField(op: FeatureOp): string | null {
 }
 
 /** Installed by the dialog component: routes a viewport pick into the active selection field. */
-export let dialogPick: ((p: Pick, additive: boolean) => void) | null = null;
+export let dialogPick: ((pick: Pick, additive: boolean) => void) | null = null;
 export const setDialogPick = (fn: typeof dialogPick) => (dialogPick = fn);
 
 // ---------------------------------------------------------------- sketch mode
@@ -1081,11 +1087,14 @@ export async function refreshProjects(): Promise<void> {
   set({ projects, folders, folder: folders.includes(get().folder) ? get().folder : "" });
 
   // Tabs of projects that no longer exist close; names follow renames made elsewhere.
-  const byId = new Map(projects.map((p) => [p.id, p]));
+  const byId = new Map(projects.map((project) => [project.id, project]));
   const tabs = get()
-    .tabs.filter((t) => byId.has(t.id) || t.id === get().project?.id)
-    .map((t) => (byId.has(t.id) ? { ...t, name: byId.get(t.id)!.name } : t));
-  if (tabs.length !== get().tabs.length || tabs.some((t, i) => t.name !== get().tabs[i]!.name)) setTabs(tabs);
+    .tabs.filter((tab) => byId.has(tab.id) || tab.id === get().project?.id)
+    .map((tab) => (byId.has(tab.id) ? { ...tab, name: byId.get(tab.id)!.name } : tab));
+
+  if (tabs.length !== get().tabs.length || tabs.some((tab, i) => tab.name !== get().tabs[i]!.name)) {
+    setTabs(tabs);
+  }
 }
 
 /** Another window saved a project: a copy kept in memory for a tab in the background would be stale. */
@@ -1147,7 +1156,7 @@ async function openProjectNow(id: string, current: () => boolean): Promise<void>
   await flushSave(true);
 
   const cached = tabStores.get(id);
-  const tab = get().tabs.find((t) => t.id === id);
+  const tab = get().tabs.find((tab) => tab.id === id);
 
   if (cached && tab) {
     if (!current()) return;
@@ -1185,12 +1194,12 @@ async function openProjectNow(id: string, current: () => boolean): Promise<void>
  */
 setUnitSource(() => get().doc.units ?? "mm");
 setFeatureLabels((id) => {
-  const f = get().doc.features.find((x) => x.id === id);
+  const feature = get().doc.features.find((x) => x.id === id);
 
-  return f ? featureName(f) : id;
+  return feature ? featureName(feature) : id;
 });
 /** The open design's length unit, for components that re-render when it changes. */
-export const useDocUnit = (): LengthUnit => useApp((s) => s.doc.units ?? "mm");
+export const useDocUnit = (): LengthUnit => useApp((state) => state.doc.units ?? "mm");
 
 export function setDesignUnits(units: "mm" | "in"): void {
   const doc = docStore.doc;
@@ -1244,7 +1253,9 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
 
   if (cleaned.removed.length) {
     const gone = new Set(
-      doc.features.filter((f) => cleaned.removed.includes(f.id)).map((f) => (f as { op: string }).op),
+      doc.features
+        .filter((feature) => cleaned.removed.includes(feature.id))
+        .map((feature) => (feature as { op: string }).op),
     );
     doc = cleaned.doc;
 
@@ -1293,17 +1304,17 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   docStore = store ?? new DocumentStore(doc);
   tabStores.set(meta.id, docStore);
 
-  if (!get().tabs.some((t) => t.id === meta.id)) {
+  if (!get().tabs.some((tab) => tab.id === meta.id)) {
     setTabs([
       ...get().tabs,
       { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) },
     ]);
   }
 
-  set((s) => ({
+  set((state) => ({
     screen: "editor",
     // The editor shows its own progress from here on ("Building the model").
-    tasks: tasksOnEditor(s.tasks),
+    tasks: tasksOnEditor(state.tasks),
     assistantTab: null,
     project: meta,
     dialog: null,
@@ -1380,8 +1391,8 @@ export const undoAvailable = () => docStore.canUndo;
 export function goHome(): void {
   noteOpening(null);
 
-  const p = get().project;
-  if (p) tabStores.set(p.id, docStore);
+  const project = get().project;
+  if (project) tabStores.set(project.id, docStore);
 
   void flushSave(true).then(refreshProjects);
   set({ screen: "home", assistantTab: null, project: null, sketchId: null, dialog: null });
@@ -1394,8 +1405,8 @@ export function goHome(): void {
 export function showAssistantTab(session: string): void {
   if (get().assistantTab === session) return;
 
-  const p = get().project;
-  if (p) tabStores.set(p.id, docStore);
+  const project = get().project;
+  if (project) tabStores.set(project.id, docStore);
 
   // Saves before the project is let go (flushSave reads it right away).
   void flushSave(true);
@@ -1444,7 +1455,7 @@ export async function handOverAssistantTab(
       // Its copy in memory (if the user had it open before) is stale.
       tabStores.delete(project.id);
 
-      if (!get().tabs.some((t) => t.id === project.id)) {
+      if (!get().tabs.some((tab) => tab.id === project.id)) {
         setTabs([...get().tabs, { id: project.id, name: project.name }]);
       }
 
@@ -1459,18 +1470,21 @@ export async function handOverAssistantTab(
 }
 
 export async function renameProject(name: string): Promise<void> {
-  const p = get().project;
-  if (!p || !name.trim() || name.trim() === p.name) return;
+  const project = get().project;
+  if (!project || !name.trim() || name.trim() === project.name) return;
 
   await flushSave();
 
   try {
-    const meta = await renameProjectFile(p.id, name.trim());
-    set({ project: { ...p, ...meta } });
-    retargetTab(p.id, meta);
+    const meta = await renameProjectFile(project.id, name.trim());
+    set({ project: { ...project, ...meta } });
+    retargetTab(project.id, meta);
     history.replaceState(null, "", `#/p/${encodeURIComponent(meta.id)}`);
-  } catch (e) {
-    toast(t("Could not rename: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error");
+  } catch (error) {
+    toast(
+      t("Could not rename: {msg}", { msg: error instanceof Error ? error.message : String(error) }),
+      "error",
+    );
   }
 }
 
@@ -1496,12 +1510,15 @@ let thumbDoc: MeercadDocument | null = null;
 let thumbTimer: number | undefined;
 
 function scheduleThumbnail(): void {
-  const p = get().project;
-  if (!p || thumbDoc === docStore.doc) return;
+  const project = get().project;
+  if (!project || thumbDoc === docStore.doc) return;
 
   clearTimeout(thumbTimer);
   thumbTimer = window.setTimeout(() => {
-    if (get().project?.id !== p.id || get().sketchId || get().dialog || thumbDoc === docStore.doc) return;
+    if (get().project?.id !== project.id || get().sketchId || get().dialog || thumbDoc === docStore.doc) {
+      return;
+    }
+
     // A pending save takes the picture along.
     if (get().saveState !== "saved") return void flushSave();
 
@@ -1510,7 +1527,7 @@ function scheduleThumbnail(): void {
     if (!thumbnail) return;
 
     thumbDoc = doc;
-    saveThumbnail(p.id, thumbnail).catch(() => undefined);
+    saveThumbnail(project.id, thumbnail).catch(() => undefined);
   }, 1200);
 }
 
@@ -1540,8 +1557,8 @@ function snapshot(): string | undefined {
 export async function flushSave(withThumbnail = false): Promise<void> {
   clearTimeout(saveTimer);
 
-  const p = get().project;
-  if (!p || (get().saveState === "saved" && !withThumbnail)) return;
+  const project = get().project;
+  if (!project || (get().saveState === "saved" && !withThumbnail)) return;
 
   set({ saveState: "saving" });
 
@@ -1549,13 +1566,16 @@ export async function flushSave(withThumbnail = false): Promise<void> {
   const thumbnail = snapshot();
 
   try {
-    await saveProject({ ...p, updatedAt: Date.now(), doc, ...(thumbnail ? { thumbnail } : {}) });
-    if (thumbnail && get().project?.id === p.id) thumbDoc = doc;
+    await saveProject({ ...project, updatedAt: Date.now(), doc, ...(thumbnail ? { thumbnail } : {}) });
+    if (thumbnail && get().project?.id === project.id) thumbDoc = doc;
 
     set({ saveState: "saved" });
-  } catch (e) {
+  } catch (error) {
     set({ saveState: "unsaved" });
-    toast(t("Could not save: {msg}", { msg: e instanceof Error ? e.message : String(e) }), "error");
+    toast(
+      t("Could not save: {msg}", { msg: error instanceof Error ? error.message : String(error) }),
+      "error",
+    );
   }
 }
 
@@ -1575,7 +1595,7 @@ if (import.meta.env.DEV) {
 /** Closes a tab; the active one switches to its neighbour (or home). */
 export function closeTab(id: string, remember = true): void {
   const tabs = get().tabs;
-  const i = tabs.findIndex((t) => t.id === id);
+  const i = tabs.findIndex((tab) => tab.id === id);
   if (i < 0) return;
   if (remember) closedTabs.push(id);
 
@@ -1583,7 +1603,7 @@ export function closeTab(id: string, remember = true): void {
 
   const finish = () => {
     tabStores.delete(id);
-    setTabs(get().tabs.filter((t) => t.id !== id));
+    setTabs(get().tabs.filter((tab) => tab.id !== id));
   };
 
   if (!active) return finish();
@@ -1602,12 +1622,12 @@ export function closeTab(id: string, remember = true): void {
  */
 export async function releaseProject(id: string): Promise<void> {
   const tabs = get().tabs;
-  const i = tabs.findIndex((t) => t.id === id);
+  const i = tabs.findIndex((tab) => tab.id === id);
   const active = get().project?.id === id && get().screen === "editor";
   if (active) await flushSave(true);
 
   tabStores.delete(id);
-  if (i >= 0) setTabs(get().tabs.filter((t) => t.id !== id));
+  if (i >= 0) setTabs(get().tabs.filter((tab) => tab.id !== id));
   if (!active) return;
 
   const next = tabs[i + 1] ?? tabs[i - 1];
@@ -1629,7 +1649,7 @@ export function reopenClosedTab(): void {
  */
 export function cycleTab(step: 1 | -1): void {
   const all = [
-    ...get().tabs.map((t) => ({ id: t.id, session: null as string | null })),
+    ...get().tabs.map((tab) => ({ id: tab.id, session: null as string | null })),
     ...get().assistantTabs.map((a) => ({ id: "", session: a.session as string | null })),
   ];
   if (!all.length) return;
@@ -1644,11 +1664,11 @@ export function cycleTab(step: 1 | -1): void {
 }
 
 export function moveTab(id: string, before: string | null): void {
-  const tabs = get().tabs.filter((t) => t.id !== id);
-  const tab = get().tabs.find((t) => t.id === id);
+  const tabs = get().tabs.filter((tab) => tab.id !== id);
+  const tab = get().tabs.find((tab) => tab.id === id);
   if (!tab) return;
 
-  const at = before ? tabs.findIndex((t) => t.id === before) : tabs.length;
+  const at = before ? tabs.findIndex((tab) => tab.id === before) : tabs.length;
   tabs.splice(at < 0 ? tabs.length : at, 0, tab);
   setTabs(tabs);
 }
@@ -1663,8 +1683,10 @@ export function retargetTab(oldId: string, meta: { id: string; name: string; fol
   }
 
   setTabs(
-    get().tabs.map((t) =>
-      t.id === oldId ? { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) } : t,
+    get().tabs.map((tab) =>
+      tab.id === oldId
+        ? { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) }
+        : tab,
     ),
   );
 }

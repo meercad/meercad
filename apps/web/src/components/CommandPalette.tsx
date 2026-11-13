@@ -113,9 +113,9 @@ export function CommandPalette({
   const [q, setQ] = useState("");
   const [i, setI] = useState(0);
   const input = useRef<HTMLInputElement>(null);
-  const sketchId = useApp((s) => s.sketchId);
-  const screen = useApp((s) => s.screen);
-  const keys = usePrefs((s) => s.keys);
+  const sketchId = useApp((state) => state.sketchId);
+  const screen = useApp((state) => state.screen);
+  const keys = usePrefs((prefs) => prefs.keys);
   const packs = usePremium();
 
   useEffect(() => {
@@ -235,7 +235,7 @@ export function CommandPalette({
         {
           group: G.view,
           label: t("Toggle planes"),
-          run: () => useApp.setState((s) => ({ showPlanes: !s.showPlanes })),
+          run: () => useApp.setState((state) => ({ showPlanes: !state.showPlanes })),
         },
         { group: G.file, label: t("Export STL"), run: () => void exportMesh("stl") },
         { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
@@ -331,7 +331,7 @@ export function CommandPalette({
     <div className="modal-backdrop palette-backdrop" onPointerDown={() => setOpen(false)}>
       <div
         className="palette"
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
         role="dialog"
         aria-label={t("Command search")}
       >
@@ -341,20 +341,20 @@ export function CommandPalette({
             ref={input}
             value={q}
             placeholder={t("Search commands…")}
-            onChange={(e) => {
-              setQ(e.target.value);
+            onChange={(event) => {
+              setQ(event.target.value);
               setI(0);
             }}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Escape") setOpen(false);
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Escape") setOpen(false);
 
-              if (e.key === "ArrowDown") {
-                (e.preventDefault(), setI((x) => Math.min(results.length - 1, x + 1)));
+              if (event.key === "ArrowDown") {
+                (event.preventDefault(), setI((x) => Math.min(results.length - 1, x + 1)));
               }
 
-              if (e.key === "ArrowUp") (e.preventDefault(), setI((x) => Math.max(0, x - 1)));
-              if (e.key === "Enter") run(results[i]);
+              if (event.key === "ArrowUp") (event.preventDefault(), setI((x) => Math.max(0, x - 1)));
+              if (event.key === "Enter") run(results[i]);
             }}
           />
           <Kbd k="Esc" />

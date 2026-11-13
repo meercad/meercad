@@ -10,48 +10,54 @@ type Vec3 = [number, number, number];
 const cache = new WeakMap<BodyMesh, Topology>();
 
 /** Topology of a tessellated body, with sample points computed from the mesh. */
-export function meshTopology(m: BodyMesh): Topology {
-  let t = cache.get(m);
-  if (t) return t;
+export function meshTopology(mesh: BodyMesh): Topology {
+  let topology = cache.get(mesh);
+  if (topology) return topology;
 
-  const edgePoints: Vec3[] = m.edgeFaces.map(() => [0, 0, 0]);
+  const edgePoints: Vec3[] = mesh.edgeFaces.map(() => [0, 0, 0]);
 
-  for (let g = 0; g < m.edgeRanges.length; g += 3) {
-    const [start, count, e] = [m.edgeRanges[g]!, m.edgeRanges[g + 1]!, m.edgeRanges[g + 2]!];
+  for (let g = 0; g < mesh.edgeRanges.length; g += 3) {
+    const [start, count, e] = [mesh.edgeRanges[g]!, mesh.edgeRanges[g + 1]!, mesh.edgeRanges[g + 2]!];
     if (e < 0 || count < 1) continue;
 
     const a = (start + Math.floor((count - 1) / 2)) * 3;
     const b = (start + Math.ceil((count - 1) / 2)) * 3;
-    edgePoints[e] = [0, 1, 2].map((k) => (m.edgeLines[a + k]! + m.edgeLines[b + k]!) / 2) as Vec3;
+    edgePoints[e] = [0, 1, 2].map((k) => (mesh.edgeLines[a + k]! + mesh.edgeLines[b + k]!) / 2) as Vec3;
   }
 
-  const facePoints: Vec3[] = m.faceTags.map(() => [0, 0, 0]);
+  const facePoints: Vec3[] = mesh.faceTags.map(() => [0, 0, 0]);
 
-  for (let g = 0; g < m.faceRanges.length; g += 3) {
-    const [start, , f] = [m.faceRanges[g]!, m.faceRanges[g + 1]!, m.faceRanges[g + 2]!];
+  for (let g = 0; g < mesh.faceRanges.length; g += 3) {
+    const [start, , f] = [mesh.faceRanges[g]!, mesh.faceRanges[g + 1]!, mesh.faceRanges[g + 2]!];
     if (f < 0) continue;
 
-    const [a, b, c] = [m.indices[start]! * 3, m.indices[start + 1]! * 3, m.indices[start + 2]! * 3];
+    const [a, b, c] = [mesh.indices[start]! * 3, mesh.indices[start + 1]! * 3, mesh.indices[start + 2]! * 3];
     facePoints[f] = [0, 1, 2].map(
-      (k) => (m.positions[a + k]! + m.positions[b + k]! + m.positions[c + k]!) / 3,
+      (k) => (mesh.positions[a + k]! + mesh.positions[b + k]! + mesh.positions[c + k]!) / 3,
     ) as Vec3;
   }
 
-  t = { bodyId: m.bodyId, faceTags: m.faceTags, edgeFaces: m.edgeFaces, edgePoints, facePoints };
-  cache.set(m, t);
+  topology = {
+    bodyId: mesh.bodyId,
+    faceTags: mesh.faceTags,
+    edgeFaces: mesh.edgeFaces,
+    edgePoints,
+    facePoints,
+  };
+  cache.set(mesh, topology);
 
-  return t;
+  return topology;
 }
 
-export function edgeSelectorForPick(p: Pick, meshes: readonly BodyMesh[]): EdgeSelector | null {
-  if (p.kind === "edge") {
-    const m = meshes.find((x) => x.bodyId === p.bodyId);
+export function edgeSelectorForPick(pick: Pick, meshes: readonly BodyMesh[]): EdgeSelector | null {
+  if (pick.kind === "edge") {
+    const mesh = meshes.find((x) => x.bodyId === pick.bodyId);
 
-    return m ? selectorForEdge(meshTopology(m), p.edge) : null;
+    return mesh ? selectorForEdge(meshTopology(mesh), pick.edge) : null;
   }
 
-  if (p.kind === "face") {
-    const tag = p.tags[0];
+  if (pick.kind === "face") {
+    const tag = pick.tags[0];
 
     return tag ? { select: "edges", where: { face: tag } } : null;
   }
@@ -59,33 +65,33 @@ export function edgeSelectorForPick(p: Pick, meshes: readonly BodyMesh[]): EdgeS
   return null;
 }
 
-export function faceSelectorForPick(p: Pick, meshes: readonly BodyMesh[]): FaceSelector | null {
-  if (p.kind !== "face") return null;
+export function faceSelectorForPick(pick: Pick, meshes: readonly BodyMesh[]): FaceSelector | null {
+  if (pick.kind !== "face") return null;
 
-  const m = meshes.find((x) => x.bodyId === p.bodyId);
+  const mesh = meshes.find((x) => x.bodyId === pick.bodyId);
 
-  return m ? selectorForFace(meshTopology(m), p.face) : null;
+  return mesh ? selectorForFace(meshTopology(mesh), pick.face) : null;
 }
 
-export function planeSpecForPick(p: Pick, meshes: readonly BodyMesh[]): PlaneSpec | null {
-  if (p.kind === "plane") return { ref: p.planeId };
+export function planeSpecForPick(pick: Pick, meshes: readonly BodyMesh[]): PlaneSpec | null {
+  if (pick.kind === "plane") return { ref: pick.planeId };
 
-  if (p.kind === "face" && p.normal) {
-    const f = faceSelectorForPick(p, meshes);
+  if (pick.kind === "face" && pick.normal) {
+    const selector = faceSelectorForPick(pick, meshes);
 
-    return f ? { face: f } : null;
+    return selector ? { face: selector } : null;
   }
 
   return null;
 }
 
-export function axisForPick(p: Pick, meshes: readonly BodyMesh[]): AxisRef | null {
-  if (p.kind === "sketch_curve") return { line: `${p.sketchId}.${p.curveId}` };
+export function axisForPick(pick: Pick, meshes: readonly BodyMesh[]): AxisRef | null {
+  if (pick.kind === "sketch_curve") return { line: `${pick.sketchId}.${pick.curveId}` };
 
-  if (p.kind === "edge") {
-    const e = edgeSelectorForPick(p, meshes);
+  if (pick.kind === "edge") {
+    const selector = edgeSelectorForPick(pick, meshes);
 
-    return e ? { edge: e } : null;
+    return selector ? { edge: selector } : null;
   }
 
   return null;
@@ -133,36 +139,39 @@ const KIND: Record<string, string> = {
  * A face tag in words: "ex1.end_cap" → "Extrude 1 · end face", "ex1.side[sk1.l2]" → "Extrude 1 · side l2".
  */
 function short(tag: string): string {
-  const m = /^([^.[]+)\.([^[]+)(?:\[(.*)\])?$/.exec(tag);
-  if (!m) return tag;
+  const match = /^([^.[]+)\.([^[]+)(?:\[(.*)\])?$/.exec(tag);
+  if (!match) return tag;
 
-  const [, fid, kind, ref] = m;
+  const [, fid, kind, ref] = match;
   const what = KIND[kind!] ?? kind!.replace(/_/g, " ");
 
   return `${featureLabel(fid!)} · ${what}${ref ? ` ${ref.split(".").pop()}` : ""}`;
 }
 
-export function describeEdgeSelector(s: EdgeSelector): string {
-  if ("edge" in s) return t("Edge: {a} / {b}", { a: short(s.edge[0]), b: short(s.edge[1]) });
-  if (s.where?.face) return t("Edges of {face}", { face: short(s.where.face) });
-
-  return t("All edges of {feature}", { feature: s.of ? featureLabel(s.of) : "?" });
-}
-
-export function describeFaceSelector(s: FaceSelector): string {
-  if ("face" in s) return short(s.face);
-
-  return `${t("Faces")} ${s.where?.normal ?? ""} ${s.pick ?? ""}`.trim();
-}
-
-export function describePlane(p: PlaneSpec): string {
-  if ("ref" in p) {
-    return p.ref.startsWith("origin.")
-      ? t("{plane} plane", { plane: PLANE_LABELS[p.ref] ?? p.ref })
-      : featureLabel(p.ref);
+export function describeEdgeSelector(selector: EdgeSelector): string {
+  if ("edge" in selector) {
+    return t("Edge: {a} / {b}", { a: short(selector.edge[0]), b: short(selector.edge[1]) });
   }
 
-  return describeFaceSelector(p.face);
+  if (selector.where?.face) return t("Edges of {face}", { face: short(selector.where.face) });
+
+  return t("All edges of {feature}", { feature: selector.of ? featureLabel(selector.of) : "?" });
+}
+
+export function describeFaceSelector(selector: FaceSelector): string {
+  if ("face" in selector) return short(selector.face);
+
+  return `${t("Faces")} ${selector.where?.normal ?? ""} ${selector.pick ?? ""}`.trim();
+}
+
+export function describePlane(plane: PlaneSpec): string {
+  if ("ref" in plane) {
+    return plane.ref.startsWith("origin.")
+      ? t("{plane} plane", { plane: PLANE_LABELS[plane.ref] ?? plane.ref })
+      : featureLabel(plane.ref);
+  }
+
+  return describeFaceSelector(plane.face);
 }
 
 export function describeAxis(a: AxisRef): string {

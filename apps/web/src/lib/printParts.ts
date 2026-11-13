@@ -17,14 +17,14 @@ export function partFilament(
   id: string,
   color: string | undefined,
 ): Filament | undefined {
-  const m = partMaterial(doc, id);
+  const material = partMaterial(doc, id);
   const picked = doc.partColors?.[id];
-  if (!m) return picked ? { color: picked } : undefined;
+  if (!material) return picked ? { color: picked } : undefined;
 
   return {
-    color: color ?? m.look.color ?? PART_PALETTE[0],
-    material: m.name,
-    ...(m.filament ? { type: m.filament } : {}),
+    color: color ?? material.look.color ?? PART_PALETTE[0],
+    material: material.name,
+    ...(material.filament ? { type: material.filament } : {}),
   };
 }
 

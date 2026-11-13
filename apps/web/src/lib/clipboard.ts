@@ -20,42 +20,42 @@ export function selectedParts(selection: readonly Pick[] = useApp.getState().sel
   const meshes = useApp.getState().output?.meshes ?? [];
   const faces = new Map<string, Set<number>>();
 
-  for (const p of selection) {
-    if (p.kind === "face") faces.set(p.bodyId, (faces.get(p.bodyId) ?? new Set()).add(p.face));
+  for (const pick of selection) {
+    if (pick.kind === "face") faces.set(pick.bodyId, (faces.get(pick.bodyId) ?? new Set()).add(pick.face));
   }
 
   return [...faces]
-    .filter(([id, f]) => meshes.find((m) => m.bodyId === id)?.faceTags.length === f.size)
+    .filter(([id, f]) => meshes.find((mesh) => mesh.bodyId === id)?.faceTags.length === f.size)
     .map(([id]) => id);
 }
 
 /** Selects whole parts (all their faces), replacing the selection or adding to it. */
 export function selectParts(ids: readonly string[], add = false, keepFeature = false): void {
-  const s = useApp.getState();
+  const state = useApp.getState();
   const picks: Pick[] = [];
 
   for (const id of ids) {
-    const m = s.output?.meshes.find((x) => x.bodyId === id);
-    if (!m) continue;
+    const mesh = state.output?.meshes.find((x) => x.bodyId === id);
+    if (!mesh) continue;
 
-    const c = m.positions;
+    const c = mesh.positions;
     const point: [number, number, number] = [c[0] ?? 0, c[1] ?? 0, c[2] ?? 0];
-    m.faceTags.forEach((tags, face) =>
+    mesh.faceTags.forEach((tags, face) =>
       picks.push({ kind: "face", bodyId: id, face, tags, point, normal: null }),
     );
   }
 
   useApp.setState({
     selection: add
-      ? [...s.selection.filter((p) => !(p.kind === "face" && ids.includes(p.bodyId))), ...picks]
+      ? [...state.selection.filter((pick) => !(pick.kind === "face" && ids.includes(pick.bodyId))), ...picks]
       : picks,
     ...(keepFeature ? {} : { selectedFeature: null }),
   });
 }
 
 export function selectAll(): void {
-  const s = useApp.getState();
-  const ids = (s.output?.meshes ?? []).map((m) => m.bodyId).filter((id) => !s.hidden.has(id));
+  const state = useApp.getState();
+  const ids = (state.output?.meshes ?? []).map((mesh) => mesh.bodyId).filter((id) => !state.hidden.has(id));
   if (!ids.length) return;
 
   selectParts(ids);
@@ -71,10 +71,10 @@ let pastes = 0;
 export const hasClip = (): boolean => !!clip;
 
 export function copyParts(ids = selectedParts()): boolean {
-  const s = useApp.getState();
-  const meshes = (s.output?.meshes ?? []).filter((m) => ids.includes(m.bodyId));
+  const state = useApp.getState();
+  const meshes = (state.output?.meshes ?? []).filter((mesh) => ids.includes(mesh.bodyId));
 
-  if (!meshes.length || !s.project) {
+  if (!meshes.length || !state.project) {
     toast(t("Select a part first (double-click it, or pick it in the list)."), "error");
 
     return false;
@@ -82,7 +82,7 @@ export function copyParts(ids = selectedParts()): boolean {
 
   const name =
     ids.length === 1 ? partName(ids[0]!, currentDoc().features) : t("{n} parts", { n: ids.length });
-  clip = { project: s.project.id, parts: ids, stl: writeStl(meshes) as Uint8Array, name };
+  clip = { project: state.project.id, parts: ids, stl: writeStl(meshes) as Uint8Array, name };
   pastes = 0;
   toast(tn(ids.length, "Copied {n} part", "Copied {n} parts"));
 
@@ -98,10 +98,11 @@ export function cutParts(): void {
 export async function pasteParts(): Promise<void> {
   if (!clip) return toast(t("Nothing copied yet."), "error");
 
-  const s = useApp.getState();
+  const state = useApp.getState();
   const doc = currentDoc();
   const here =
-    s.project?.id === clip.project && clip.parts.every((id) => s.output?.meshes.some((m) => m.bodyId === id));
+    state.project?.id === clip.project &&
+    clip.parts.every((id) => state.output?.meshes.some((mesh) => mesh.bodyId === id));
 
   if (!here) {
     // Another project (or the parts are gone): their shape as a mesh part.
@@ -115,9 +116,9 @@ export async function pasteParts(): Promise<void> {
   let lo = Infinity,
     hi = -Infinity;
 
-  for (const m of s.output!.meshes.filter((x) => clip!.parts.includes(x.bodyId))) {
-    for (let i = 0; i < m.positions.length; i += 3) {
-      ((lo = Math.min(lo, m.positions[i]!)), (hi = Math.max(hi, m.positions[i]!)));
+  for (const mesh of state.output!.meshes.filter((x) => clip!.parts.includes(x.bodyId))) {
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      ((lo = Math.min(lo, mesh.positions[i]!)), (hi = Math.max(hi, mesh.positions[i]!)));
     }
   }
 

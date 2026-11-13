@@ -12,13 +12,16 @@ import { AssistantBar } from "./AssistantTab";
  * stop it. Keys are held back in mcpBridge.
  */
 export function AiLock() {
-  const lock = useApp((s) => s.aiLock);
-  const tool = useApp((s) => s.aiActivity?.tool);
+  const lock = useApp((state) => state.aiLock);
+  const tool = useApp((state) => state.aiActivity?.tool);
 
   if (assistantWindow) {
     return (
       <>
-        <div className={`ai-lock in-tab ${lock ? "busy" : ""}`} onContextMenu={(e) => e.preventDefault()} />
+        <div
+          className={`ai-lock in-tab ${lock ? "busy" : ""}`}
+          onContextMenu={(event) => event.preventDefault()}
+        />
         <AssistantBar />
       </>
     );
@@ -29,7 +32,7 @@ export function AiLock() {
   const doing = toolLabel(tool);
 
   return (
-    <div className="ai-lock" onContextMenu={(e) => e.preventDefault()}>
+    <div className="ai-lock" onContextMenu={(event) => event.preventDefault()}>
       <div className="ai-lock-bar" role="status">
         <AiOrb busy />
         <span>

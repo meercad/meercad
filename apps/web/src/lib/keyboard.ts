@@ -20,16 +20,16 @@ export function installKeyboardDetection(): void {
 
   const apply = () => root.classList.toggle("no-keyboard", coarse.matches && !fine.matches && !seen);
 
-  const onKey = (e: KeyboardEvent) => {
-    const t = e.target as HTMLElement | null;
+  const onKey = (event: KeyboardEvent) => {
+    const element = event.target as HTMLElement | null;
     const typing =
-      !!t &&
-      (t.isContentEditable ||
-        t instanceof HTMLInputElement ||
-        t instanceof HTMLTextAreaElement ||
-        t instanceof HTMLSelectElement);
+      !!element &&
+      (element.isContentEditable ||
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement);
     // The on-screen keyboard only types into fields and has no ⌘, ⌃, ⌥, Esc, Tab or arrows.
-    if (typing && !e.metaKey && !e.ctrlKey && !e.altKey && !NAV_KEYS.has(e.key)) return;
+    if (typing && !event.metaKey && !event.ctrlKey && !event.altKey && !NAV_KEYS.has(event.key)) return;
 
     seen = true;
 

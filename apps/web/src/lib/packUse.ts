@@ -29,9 +29,9 @@ export function packsUsed(doc: MeercadDocument): PackUse[] {
   const add = (pack: PackId, what: string) =>
     (use.get(pack) ?? use.set(pack, new Set()).get(pack)!).add(what);
 
-  for (const f of doc.features) {
-    if (f.op === "gear") add("mechanics", "gears");
-    else if (f.op === "spring") add("mechanics", "springs");
+  for (const feature of doc.features) {
+    if (feature.op === "gear") add("mechanics", "gears");
+    else if (feature.op === "spring") add("mechanics", "springs");
   }
 
   if (doc.mechanism?.joints.length) add("mechanics", "joints");

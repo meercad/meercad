@@ -51,10 +51,10 @@ export interface Shot {
 const HIGHLIGHT = "#ff8a3d";
 
 function viewport() {
-  const vp = getViewport();
-  if (!vp) throw new Error("viewport not ready");
+  const viewport = getViewport();
+  if (!viewport) throw new Error("viewport not ready");
 
-  return vp;
+  return viewport;
 }
 
 /** Face picks for selectors, to paint them as selected. */
@@ -64,15 +64,15 @@ function facePicks(selectors: readonly FaceSelector[]): Pick[] {
   const picks: Pick[] = [];
 
   for (const sel of selectors) {
-    for (const r of resolveFaces(sel, topos)) {
-      const m = meshes.find((x) => x.bodyId === r.body)!;
+    for (const faceRef of resolveFaces(sel, topos)) {
+      const mesh = meshes.find((x) => x.bodyId === faceRef.body)!;
 
-      for (const face of r.faces) {
+      for (const face of faceRef.faces) {
         picks.push({
           kind: "face",
-          bodyId: r.body,
+          bodyId: faceRef.body,
           face,
-          tags: m.faceTags[face] ?? [],
+          tags: mesh.faceTags[face] ?? [],
           point: [0, 0, 0],
           normal: null,
         });
@@ -86,16 +86,16 @@ function facePicks(selectors: readonly FaceSelector[]): Pick[] {
 }
 
 /** The shot with folder names in focus and highlight turned into their parts (see partsNamed). */
-function resolveShot(s: Shot): Shot {
-  const st = useApp.getState();
-  const ids = st.output?.report.bodies.map((b) => b.id) ?? [];
-  const groups = st.doc.partGroups ?? [];
+function resolveShot(shot: Shot): Shot {
+  const state = useApp.getState();
+  const ids = state.output?.report.bodies.map((b) => b.id) ?? [];
+  const groups = state.doc.partGroups ?? [];
 
   return {
-    ...s,
-    ...(s.focus ? { focus: partsNamed(s.focus, ids, groups) } : {}),
-    ...(s.highlight?.parts
-      ? { highlight: { ...s.highlight, parts: partsNamed(s.highlight.parts, ids, groups) } }
+    ...shot,
+    ...(shot.focus ? { focus: partsNamed(shot.focus, ids, groups) } : {}),
+    ...(shot.highlight?.parts
+      ? { highlight: { ...shot.highlight, parts: partsNamed(shot.highlight.parts, ids, groups) } }
       : {}),
   };
 }
@@ -120,8 +120,8 @@ function renderOptions(shot: Shot, box?: { min: V3; max: V3 }) {
 }
 
 /** A PNG (data URL) of the model as shown now (moving parts in their pose). */
-export function renderShot(s: Shot): string {
-  return viewport().render(renderOptions(s, s.box));
+export function renderShot(shot: Shot): string {
+  return viewport().render(renderOptions(shot, shot.box));
 }
 
 const loadImage = (url: string) =>
@@ -145,9 +145,9 @@ function jointSteps(joint: string, values: number[]): Step[] {
 
 /** Steps through a motion's moments. */
 function motionSteps(id: string, times: number[]): Step[] {
-  const m = motionById(id);
+  const motion = motionById(id);
 
-  return times.map((t) => () => void showMotionAt(m, t));
+  return times.map((t) => () => void showMotionAt(motion, t));
 }
 
 /**
@@ -221,7 +221,7 @@ export async function renderMotionSheet(
   from: number,
   to: number,
   frames = 9,
-  s: Shot = {},
+  shot: Shot = {},
   collisions = true,
   motionId?: string,
 ): Promise<{ png: string; frames: { value: number; collisions: string[] }[] }> {
@@ -233,7 +233,7 @@ export async function renderMotionSheet(
   const steps = run ? motionSteps(run.id, values) : jointSteps(joint, values);
   const cols = n <= 3 ? n : n <= 4 ? 2 : n <= 9 ? 3 : 4;
   const rows = Math.ceil(n / cols);
-  const width = Math.round(s.width ?? 1200);
+  const width = Math.round(shot.width ?? 1200);
   const cw = Math.floor(width / cols);
   const ch = Math.floor(cw * 0.75);
   const label = 22;
@@ -249,12 +249,12 @@ export async function renderMotionSheet(
   const name = run ? (run.name ?? run.id) : joint;
   const features = useApp.getState().doc.features;
   const out: { value: number; collisions: string[] }[] = [];
-  await framesOf(steps, { ...s, width: cw, height: ch }, async (url, i) => {
+  await framesOf(steps, { ...shot, width: cw, height: ch }, async (url, i) => {
     const value = values[i]!;
     const hits = collisions
       ? (await clearanceNow()).pairs
-          .filter((c) => c.overlap > 1e-3)
-          .map((c) => `${partName(c.a, features)} · ${partName(c.b, features)}`)
+          .filter((clearance) => clearance.overlap > 1e-3)
+          .map((clearance) => `${partName(clearance.a, features)} · ${partName(clearance.b, features)}`)
       : [];
     out.push({ value: +value.toFixed(3), collisions: hits });
 
@@ -286,7 +286,7 @@ export async function renderMotionGif(
   from: number,
   to: number,
   frames = 36,
-  s: Shot = {},
+  shot: Shot = {},
   motionId?: string,
 ): Promise<Uint8Array> {
   const n = Math.max(4, Math.min(120, Math.round(frames)));
@@ -311,15 +311,15 @@ export async function renderMotionGif(
     steps = jointSteps(joint, fullTurn ? there : [...there, ...there.slice(1, -1).reverse()]);
   }
 
-  const width = Math.round(s.width ?? 480);
-  const height = Math.round(s.height ?? 360);
+  const width = Math.round(shot.width ?? 480);
+  const height = Math.round(shot.height ?? 360);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
 
   const g = canvas.getContext("2d", { willReadFrequently: true })!;
   const rgba: Uint8ClampedArray[] = [];
-  await framesOf(steps, { ...s, width, height }, async (url) => {
+  await framesOf(steps, { ...shot, width, height }, async (url) => {
     g.fillStyle = "#ffffff";
     g.fillRect(0, 0, width, height);
     g.drawImage(await loadImage(url), 0, 0, width, height);

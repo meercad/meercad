@@ -140,9 +140,9 @@ export function jointValues(): Record<string, number> {
 
 /** The mechanism as it can move now, with a message per joint that cannot. */
 export function currentMechanism(): { mech: motion.Mechanism; problems: Record<string, string> } {
-  const s = useApp.getState();
-  const doc = s.doc;
-  const report = s.output?.report;
+  const state = useApp.getState();
+  const doc = state.doc;
+  const report = state.output?.report;
   const problems: Record<string, string> = {};
   const scope = new Map(Object.entries(report?.params ?? {}));
   const num = (e: string | number) => evaluate(e, scope);
@@ -176,8 +176,8 @@ export function currentMechanism(): { mech: motion.Mechanism; problems: Record<s
       try {
         limits = range(j.limits);
         travel = range(j.travel);
-      } catch (e) {
-        problems[j.id] = `limits: ${(e as Error).message}`;
+      } catch (error) {
+        problems[j.id] = `limits: ${(error as Error).message}`;
         continue;
       }
 
@@ -200,11 +200,11 @@ export function currentMechanism(): { mech: motion.Mechanism; problems: Record<s
 
   const couplings: motion.MotionCoupling[] = [];
 
-  for (const c of doc.mechanism?.couplings ?? []) {
+  for (const coupling of doc.mechanism?.couplings ?? []) {
     try {
-      couplings.push({ driver: c.driver, driven: c.driven, ratio: num(c.ratio) });
-    } catch (e) {
-      problems[c.id] = `ratio: ${(e as Error).message}`;
+      couplings.push({ driver: coupling.driver, driven: coupling.driven, ratio: num(coupling.ratio) });
+    } catch (error) {
+      problems[coupling.id] = `ratio: ${(error as Error).message}`;
     }
   }
 
@@ -407,21 +407,21 @@ export function joinedParts(
 // ---------------------------------------------------------------- collisions while moving
 
 const colliders = new WeakMap<BodyMesh, MeshCollider>();
-const colliderOf = (m: BodyMesh) =>
-  colliders.get(m) ?? colliders.set(m, new MeshCollider(m.positions, m.indices)).get(m)!;
+const colliderOf = (mesh: BodyMesh) =>
+  colliders.get(mesh) ?? colliders.set(mesh, new MeshCollider(mesh.positions, mesh.indices)).get(mesh)!;
 /**
  * A mesh's box at rest, straight from its vertices: cheap, so the trees (slow to build for a few
  * hundred parts with millions of triangles) are made only for parts whose boxes meet.
  */
 const restBoxes = new WeakMap<BodyMesh, { min: motion.V3; max: motion.V3 }>();
 
-function restBox(m: BodyMesh): { min: motion.V3; max: motion.V3 } {
-  const hit = restBoxes.get(m);
+function restBox(mesh: BodyMesh): { min: motion.V3; max: motion.V3 } {
+  const hit = restBoxes.get(mesh);
   if (hit) return hit;
 
   const min: motion.V3 = [Infinity, Infinity, Infinity];
   const max: motion.V3 = [-Infinity, -Infinity, -Infinity];
-  const p = m.positions;
+  const p = mesh.positions;
 
   for (let i = 0; i < p.length; i += 3) {
     for (let k = 0; k < 3; k++) {
@@ -432,7 +432,7 @@ function restBox(m: BodyMesh): { min: motion.V3; max: motion.V3 } {
   }
 
   const box = { min, max };
-  restBoxes.set(m, box);
+  restBoxes.set(mesh, box);
 
   return box;
 }
@@ -444,8 +444,8 @@ function restBox(m: BodyMesh): { min: motion.V3; max: motion.V3 } {
 let rest: { meshes: BodyMesh[]; touching: Map<string, boolean> } | null = null;
 
 /** Box of a mesh in a pose. */
-function placedBox(m: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3; max: motion.V3 } {
-  const r = restBox(m);
+function placedBox(mesh: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3; max: motion.V3 } {
+  const r = restBox(mesh);
   const min: motion.V3 = [Infinity, Infinity, Infinity];
   const max: motion.V3 = [-Infinity, -Infinity, -Infinity];
 
@@ -472,8 +472,8 @@ function placedBox(m: BodyMesh, pose: motion.Mat4 | undefined): { min: motion.V3
  * up to this much although the real surfaces only slide on each other. Touch screens get looser
  * meshes (see store).
  */
-function meshSlack(m: BodyMesh): number {
-  const r = restBox(m);
+function meshSlack(mesh: BodyMesh): number {
+  const r = restBox(mesh);
   const diag = Math.hypot(r.max[0] - r.min[0], r.max[1] - r.min[1], r.max[2] - r.min[2]);
 
   return Math.max(0.01, diag * 5e-4) * (matchMedia("(pointer: coarse)").matches ? 2 : 1);
@@ -492,7 +492,7 @@ function findHits(): [string, string][] {
     return !!p && p.some((v, i) => Math.abs(v - motion.IDENTITY[i]!) > 1e-9);
   };
 
-  const boxes = new Map(meshes.map((m) => [m.bodyId, placedBox(m, poses.get(m.bodyId))]));
+  const boxes = new Map(meshes.map((mesh) => [mesh.bodyId, placedBox(mesh, poses.get(mesh.bodyId))]));
   const hits: [string, string][] = [];
 
   for (let i = 0; i < meshes.length; i++) {
@@ -564,8 +564,8 @@ function scheduleHits(): void {
 useMotion.subscribe((s, prev) => {
   if (s.open !== prev.open || s.free !== prev.free || s.tick !== prev.tick) scheduleHits();
 });
-useApp.subscribe((s, prev) => {
-  if (s.output !== prev.output && useMotion.getState().open) scheduleHits();
+useApp.subscribe((state, prev) => {
+  if (state.output !== prev.output && useMotion.getState().open) scheduleHits();
 });
 
 /**
@@ -602,11 +602,11 @@ export function toggleJoints(): void {
 }
 
 // One mode at a time: a tool, a sketch or measuring closes the joints panel (and puts the parts back).
-useApp.subscribe((s, prev) => {
+useApp.subscribe((state, prev) => {
   const started =
-    (s.dialog && !prev.dialog) ||
-    (s.sketchId && !prev.sketchId) ||
-    (s.measure.active && !prev.measure.active);
+    (state.dialog && !prev.dialog) ||
+    (state.sketchId && !prev.sketchId) ||
+    (state.measure.active && !prev.measure.active);
   if (started && useMotion.getState().open) toggleJoints();
 });
 
@@ -711,45 +711,45 @@ export function deleteJoint(id: string): void {
  * gears in mesh are coupled by their teeth.
  */
 export function jointsFromGears(): number {
-  const s = useApp.getState();
-  const gears = s.output?.report.gears ?? [];
+  const state = useApp.getState();
+  const gears = state.output?.report.gears ?? [];
   const doc = currentDoc();
   const joints = doc.mechanism?.joints ?? [];
   const couplings = doc.mechanism?.couplings ?? [];
-  const bodies = new Set(s.output?.report.bodies.map((b) => b.id) ?? []);
+  const bodies = new Set(state.output?.report.bodies.map((b) => b.id) ?? []);
   const jointOf = new Map(joints.map((j) => [j.a, j.id]));
   const ids = joints.map((j) => j.id);
-  const cids = couplings.map((c) => c.id);
+  const cids = couplings.map((coupling) => coupling.id);
   const newJoints: Joint[] = [];
   const newCouplings: Coupling[] = [];
 
-  for (const g of gears) {
-    if (!bodies.has(g.id) || jointOf.has(g.id)) continue;
+  for (const gear of gears) {
+    if (!bodies.has(gear.id) || jointOf.has(gear.id)) continue;
 
     const id = nextId("j", ids);
     ids.push(id);
-    jointOf.set(g.id, id);
+    jointOf.set(gear.id, id);
     newJoints.push({
       id,
-      name: `${g.kind === "rack" ? "Slide" : "Turn"} ${g.id}`,
-      type: g.kind === "rack" ? "slider" : "revolute",
-      a: g.id,
+      name: `${gear.kind === "rack" ? "Slide" : "Turn"} ${gear.id}`,
+      type: gear.kind === "rack" ? "slider" : "revolute",
+      a: gear.id,
       b: "ground",
-      anchor: { gear: g.id },
+      anchor: { gear: gear.id },
     });
   }
 
-  for (const g of gears) {
-    const p = g.meshWith ? gears.find((x) => x.id === g.meshWith) : undefined;
+  for (const gear of gears) {
+    const p = gear.meshWith ? gears.find((x) => x.id === gear.meshWith) : undefined;
     const driver = p && jointOf.get(p.id);
-    const driven = jointOf.get(g.id);
-    if (!p || !driver || !driven || couplings.some((c) => c.driven === driven)) continue;
+    const driven = jointOf.get(gear.id);
+    if (!p || !driver || !driven || couplings.some((coupling) => coupling.driven === driven)) continue;
 
     // driven value = ratio × driver value; outside gears turn the other way, a ring the same way.
     let ratio: number;
-    if (p.kind === "rack") ratio = 180 / (Math.PI * g.radius);
-    else if (g.kind === "rack") ratio = (Math.PI * p.radius) / 180;
-    else ratio = (p.kind === "spur" && g.kind === "spur" ? -1 : 1) * (p.teeth / g.teeth);
+    if (p.kind === "rack") ratio = 180 / (Math.PI * gear.radius);
+    else if (gear.kind === "rack") ratio = (Math.PI * p.radius) / 180;
+    else ratio = (p.kind === "spur" && gear.kind === "spur" ? -1 : 1) * (p.teeth / gear.teeth);
 
     const id = nextId("c", cids);
     cids.push(id);
@@ -852,9 +852,9 @@ export function stopPlaying(): void {
 
 /** The design's motion with this id. */
 export function motionById(id: string): Motion {
-  const m = currentDoc().mechanism?.motions?.find((x) => x.id === id);
+  const motion = currentDoc().mechanism?.motions?.find((x) => x.id === id);
 
-  if (!m) {
+  if (!motion) {
     throw new Error(
       `no motion "${id}"${
         currentDoc().mechanism?.motions?.length
@@ -866,7 +866,7 @@ export function motionById(id: string): Motion {
     );
   }
 
-  return m;
+  return motion;
 }
 
 /**
@@ -888,7 +888,7 @@ export function showMotionAt(m: Motion, t: number): { joint: string; wanted: num
 export function playMotion(id: string): void {
   stopPlaying();
 
-  const m = motionById(id);
+  const motion = motionById(id);
   openForCheck();
 
   const t0 = performance.now();
@@ -917,18 +917,19 @@ export function addPoseToMotion(id: string, at?: number): void {
       .map(([j, v]) => [j, +v.toFixed(3)]),
   );
   const existing = currentDoc().mechanism?.motions?.find((x) => x.id === id);
-  const m: Motion = existing
+  const motion: Motion = existing
     ? structuredClone(existing)
     : { id, name: t("Motion"), duration: 2, loop: true, keys: [] };
   // Half a second after the last moment; past the end, the motion grows (it used to replace the last moment
   // there).
-  const when = at ?? (m.keys.length ? +((m.keys[m.keys.length - 1]!.at ?? 0) + 0.5).toFixed(3) : 0);
-  m.keys = [...m.keys.filter((k) => Math.abs(k.at - when) > 1e-9), { at: when, values }].sort(
+  const when =
+    at ?? (motion.keys.length ? +((motion.keys[motion.keys.length - 1]!.at ?? 0) + 0.5).toFixed(3) : 0);
+  motion.keys = [...motion.keys.filter((k) => Math.abs(k.at - when) > 1e-9), { at: when, values }].sort(
     (a, b) => a.at - b.at,
   );
-  if (when > m.duration) m.duration = when;
+  if (when > motion.duration) motion.duration = when;
 
-  apply({ type: "set_motion", motion: m });
+  apply({ type: "set_motion", motion: motion });
 }
 
 /** Pairs that touch on purpose: held together by a fixed joint, or meeting at a joint they turn on. */
@@ -980,26 +981,38 @@ export async function checkMotionRun(
 
       if (!base) {
         base = new Map(currentPoses());
-        overlapping = now.pairs.filter((c) => c.overlap > 1e-3);
+        overlapping = now.pairs.filter((clearance) => clearance.overlap > 1e-3);
       } else {
-        for (const c of overlapping) {
-          if (now.together?.[c.a] === now.together?.[c.b]) {
-            collisions.push({ at: t3, a: c.a, b: c.b, overlap: +c.overlap.toFixed(3) });
+        for (const clearance of overlapping) {
+          if (now.together?.[clearance.a] === now.together?.[clearance.b]) {
+            collisions.push({
+              at: t3,
+              a: clearance.a,
+              b: clearance.b,
+              overlap: +clearance.overlap.toFixed(3),
+            });
           }
         }
       }
 
-      for (const c of now.pairs) {
-        if (c.overlap > 1e-3) collisions.push({ at: t3, a: c.a, b: c.b, overlap: +c.overlap.toFixed(3) });
+      for (const clearance of now.pairs) {
+        if (clearance.overlap > 1e-3) {
+          collisions.push({ at: t3, a: clearance.a, b: clearance.b, overlap: +clearance.overlap.toFixed(3) });
+        }
 
-        const key = `${c.a}|${c.b}`;
+        const key = `${clearance.a}|${clearance.b}`;
         // Parts that touch by design (a servo on its link) are no news; their overlaps still count.
-        if (touching.has([c.a, c.b].sort().join("|"))) continue;
+        if (touching.has([clearance.a, clearance.b].sort().join("|"))) continue;
 
         const cur = smallest.get(key);
 
-        if (!cur || c.distance < cur.distance) {
-          smallest.set(key, { a: c.a, b: c.b, distance: +c.distance.toFixed(3), at: t3 });
+        if (!cur || clearance.distance < cur.distance) {
+          smallest.set(key, {
+            a: clearance.a,
+            b: clearance.b,
+            distance: +clearance.distance.toFixed(3),
+            at: t3,
+          });
         }
       }
     }
@@ -1035,10 +1048,10 @@ export function wantedClearance(): number {
     }
   };
 
-  const c = doc.mechanism?.clearance;
+  const expr = doc.mechanism?.clearance;
 
   try {
-    return c === undefined ? fallback() : evaluate(c, scope);
+    return expr === undefined ? fallback() : evaluate(expr, scope);
   } catch {
     return fallback();
   }
@@ -1071,8 +1084,8 @@ export async function checkClearance(): Promise<void> {
         results: results.sort((x, y) => x.distance - y.distance || y.overlap - x.overlap),
       },
     });
-  } catch (e) {
-    useMotion.setState({ check: { running: false, free, results: [], error: (e as Error).message } });
+  } catch (error) {
+    useMotion.setState({ check: { running: false, free, results: [], error: (error as Error).message } });
   }
 }
 
@@ -1212,7 +1225,7 @@ export async function clearanceNow(
   const jointed = new Set(mech.joints.filter((j) => j.type !== "fixed").map((j) => j.a));
   const pairs = (
     await kernel.clearances(moving, Object.fromEntries(currentPoses()), Math.max(2, want * 2), [], rigid)
-  ).filter((c) => jointed.has(c.a) || jointed.has(c.b));
+  ).filter((clearance) => jointed.has(clearance.a) || jointed.has(clearance.b));
 
   return {
     wanted: want,
@@ -1266,25 +1279,25 @@ export async function checkMotion(
       const pairs = (await clearanceNow(base ?? undefined)).pairs;
       base ??= new Map(currentPoses());
 
-      for (const c of pairs) {
-        const key = `${c.a}|${c.b}`;
+      for (const clearance of pairs) {
+        const key = `${clearance.a}|${clearance.b}`;
         const cur = smallest.get(key);
 
-        if (!cur || c.distance < cur.distance) {
-          smallest.set(key, { a: c.a, b: c.b, distance: c.distance, at: v });
+        if (!cur || clearance.distance < cur.distance) {
+          smallest.set(key, { a: clearance.a, b: clearance.b, distance: clearance.distance, at: v });
         }
 
         // Parts that touch by design (fixed together, or meeting at their joint) only count when they
         // overlap.
-        const designed = touching.has([c.a, c.b].sort().join("|"));
+        const designed = touching.has([clearance.a, clearance.b].sort().join("|"));
 
-        if (!firstContact && (c.overlap > 1e-3 || (c.distance < 1e-4 && !designed))) {
+        if (!firstContact && (clearance.overlap > 1e-3 || (clearance.distance < 1e-4 && !designed))) {
           firstContact = {
             value: v,
-            a: c.a,
-            b: c.b,
-            kind: c.overlap > 1e-3 ? "overlap" : "touch",
-            overlap: c.overlap,
+            a: clearance.a,
+            b: clearance.b,
+            kind: clearance.overlap > 1e-3 ? "overlap" : "touch",
+            overlap: clearance.overlap,
           };
         }
       }
@@ -1460,42 +1473,40 @@ export async function sweepCheck(o: {
       const found = await kernel.clearances(movers, Object.fromEntries(poses), within, skip, rigid);
       base ??= new Map(poses);
 
-      for (const f of found) {
-        if (!mover.has(f.a) && !mover.has(f.b)) continue;
+      for (const clearance of found) {
+        if (!mover.has(clearance.a) && !mover.has(clearance.b)) continue;
 
-        const key = [f.a, f.b].sort().join("|");
+        const key = [clearance.a, clearance.b].sort().join("|");
         if (firstDone) movedApart.add(key);
 
         const designed = touching.has(key);
-        const p = pairs.get(key) ?? {
-          a: f.a,
-          b: f.b,
+        const pair = pairs.get(key) ?? {
+          a: clearance.a,
+          b: clearance.b,
           firstCollision: null,
           maxOverlapMm3: 0,
           minDistance: Infinity,
           minDistanceAt: label(c),
         };
 
-        if (f.distance < p.minDistance) {
-          p.minDistance = +f.distance.toFixed(3);
-          p.minDistanceAt = label(c);
+        if (clearance.distance < pair.minDistance) {
+          pair.minDistance = +clearance.distance.toFixed(3);
+          pair.minDistanceAt = label(c);
         }
 
-        if (f.overlap > p.maxOverlapMm3) {
-          p.maxOverlapMm3 = +f.overlap.toFixed(3);
-          p.maxOverlapAt = label(c);
+        if (clearance.overlap > pair.maxOverlapMm3) {
+          pair.maxOverlapMm3 = +clearance.overlap.toFixed(3);
+          pair.maxOverlapAt = label(c);
 
-          if (f.points) {
-            p.where = [0, 1, 2].map((k) => +((f.points![0][k]! + f.points![1][k]!) / 2).toFixed(2)) as [
-              number,
-              number,
-              number,
-            ];
+          if (clearance.points) {
+            pair.where = [0, 1, 2].map(
+              (k) => +((clearance.points![0][k]! + clearance.points![1][k]!) / 2).toFixed(2),
+            ) as [number, number, number];
           }
         }
 
-        if (p.firstCollision === null && f.overlap >= touchBelow) p.firstCollision = label(c);
-        if (!designed || f.overlap > 0) pairs.set(key, p);
+        if (pair.firstCollision === null && clearance.overlap >= touchBelow) pair.firstCollision = label(c);
+        if (!designed || clearance.overlap > 0) pairs.set(key, pair);
       }
 
       firstDone = true;
@@ -1510,8 +1521,8 @@ export async function sweepCheck(o: {
   // Two moving parts that kept their places to each other (a servo and its bracket on one link) are no news.
   const mover = new Set(movers);
   const list = [...pairs.entries()]
-    .filter(([key, p]) => !(mover.has(p.a) && mover.has(p.b)) || movedApart.has(key))
-    .map(([, p]) => p);
+    .filter(([key, pair]) => !(mover.has(pair.a) && mover.has(pair.b)) || movedApart.has(key))
+    .map(([, pair]) => pair);
 
   return {
     poses: combos.length,
@@ -1519,11 +1530,11 @@ export async function sweepCheck(o: {
     against: others.length,
     leftOut: { fasteners: fasteners.size },
     collisions: list
-      .filter((p) => p.maxOverlapMm3 >= touchBelow)
+      .filter((pair) => pair.maxOverlapMm3 >= touchBelow)
       .sort((x, y) => y.maxOverlapMm3 - x.maxOverlapMm3)
       .slice(0, most),
     closest: list
-      .filter((p) => p.maxOverlapMm3 < touchBelow && !touching.has([p.a, p.b].sort().join("|")))
+      .filter((pair) => pair.maxOverlapMm3 < touchBelow && !touching.has([pair.a, pair.b].sort().join("|")))
       .sort((x, y) => x.minDistance - y.minDistance)
       .slice(0, most),
     held: held.slice(0, most),

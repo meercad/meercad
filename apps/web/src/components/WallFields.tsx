@@ -61,20 +61,21 @@ const PRESETS: { label: string; patch: Partial<Wall> }[] = [
 
 const ACCESSORIES: Accessory[] = ["hook", "ring", "shelf", "bin", "plain", "screw"];
 
-export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
-  const features = useApp((s) => s.doc.features);
+export function WallFields({ f: feature, set }: { f: Wall; set: SetFn }) {
+  const features = useApp((state) => state.doc.features);
   const boards = features.filter(
-    (x): x is Wall => x.op === "wall" && x.kind === "board" && x.id !== f.id && x.system === f.system,
+    (x): x is Wall =>
+      x.op === "wall" && x.kind === "board" && x.id !== feature.id && x.system === feature.system,
   );
-  const board = boards.find((x) => x.id === f.board);
-  const holder = f.kind === "holder";
-  const og = f.system === "opengrid";
-  const acc = f.accessory ?? "hook";
-  const units: [number, number] = [num(f.units[0], 1), num(f.units[1], 1)];
-  const pair = (k: "units" | "cell" | "position", i: number, v: Expr, base: [Expr, Expr]) =>
-    set({ [k]: base.map((x, j) => (j === i ? v : x)) });
+  const board = boards.find((x) => x.id === feature.board);
+  const holder = feature.kind === "holder";
+  const og = feature.system === "opengrid";
+  const acc = feature.accessory ?? "hook";
+  const units: [number, number] = [num(feature.units[0], 1), num(feature.units[1], 1)];
+  const pair = (k: "units" | "cell" | "position", i: number, expr: Expr, base: [Expr, Expr]) =>
+    set({ [k]: base.map((x, j) => (j === i ? expr : x)) });
   // A holder takes the sizes of the board it sits on.
-  const src = board ?? f;
+  const src = board ?? feature;
   const peg = pegboard(
     src.grid,
     num(src.pitch, NaN) || undefined,
@@ -84,21 +85,22 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
   const pitch = og ? OPENGRID.pitch : peg.pitch;
 
   const usePreset = (p: Partial<Wall>) => {
-    const system = p.system ?? f.system;
-    const keep = p.kind === "holder" && system === f.system && f.kind === "holder";
+    const system = p.system ?? feature.system;
+    const keep = p.kind === "holder" && system === feature.system && feature.kind === "holder";
     const onBoard =
       p.kind === "holder" && !keep
         ? [...features]
             .reverse()
             .find(
-              (x): x is Wall => x.op === "wall" && x.kind === "board" && x.system === system && x.id !== f.id,
+              (x): x is Wall =>
+                x.op === "wall" && x.kind === "board" && x.system === system && x.id !== feature.id,
             )
         : undefined;
     set({
       ...CLEAR,
       ...(p.kind === "board" ? { board: undefined, cell: undefined } : {}),
       ...(onBoard
-        ? { board: onBoard.id, cell: f.cell ?? [0, 0], plane: undefined, position: undefined }
+        ? { board: onBoard.id, cell: feature.cell ?? [0, 0], plane: undefined, position: undefined }
         : {}),
       ...p,
       system,
@@ -128,7 +130,7 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
     info = t("{w} × {h} outside, {t} thick", {
       w: mm(units[0] * pitch),
       h: mm(units[1] * pitch),
-      t: mm(og ? (f.variant === "lite" ? OPENGRID.lite : OPENGRID.full) : peg.thickness),
+      t: mm(og ? (feature.variant === "lite" ? OPENGRID.lite : OPENGRID.full) : peg.thickness),
     });
   } else if (acc === "screw") {
     info = t("A snap {w} square, {t} deep, screwed to the wall through its middle", {
@@ -142,7 +144,7 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
     });
   }
 
-  const bins = Math.round(num(f.size, WALL.bins));
+  const bins = Math.round(num(feature.size, WALL.bins));
   const needCells = acc === "bin" ? binShelfCells(bins, pitch) : 0;
 
   if (holder && acc === "bin" && units[0] < needCells) {
@@ -153,7 +155,7 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
     <>
       <Examples items={PRESETS} onPick={usePreset} />
       <Seg
-        value={f.system}
+        value={feature.system}
         options={[
           ["opengrid", "openGrid"],
           ["pegboard", t("Pegboard")],
@@ -164,12 +166,12 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
             system,
             board: undefined,
             cell: undefined,
-            ...(holder ? { accessory: acc === "screw" ? undefined : f.accessory } : {}),
+            ...(holder ? { accessory: acc === "screw" ? undefined : feature.accessory } : {}),
           })
         }
       />
       <Seg
-        value={f.kind}
+        value={feature.kind}
         options={[
           ["board", t("Board")],
           ["holder", t("Holder")],
@@ -193,7 +195,7 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
       {og && !board ? (
         <Field label={t("Thickness")}>
           <Seg
-            value={f.variant ?? "full"}
+            value={feature.variant ?? "full"}
             options={[
               ["full", t("Full (6.8 mm)")],
               ["lite", t("Lite (4 mm)")],
@@ -207,10 +209,10 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
           <Field label={t("Hole pattern")}>
             <select
               className="field"
-              value={f.grid ?? "us_quarter"}
-              onChange={(e) =>
+              value={feature.grid ?? "us_quarter"}
+              onChange={(event) =>
                 set({
-                  grid: e.target.value === "us_quarter" ? undefined : e.target.value,
+                  grid: event.target.value === "us_quarter" ? undefined : event.target.value,
                   pitch: undefined,
                   hole: undefined,
                   thickness: undefined,
@@ -227,15 +229,17 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
           <div className="row">
             <Field label={t("Hole spacing")}>
               <ExprInput
-                value={f.pitch}
-                placeholder={String(PEGBOARDS[f.grid ?? "us_quarter"].pitch)}
+                value={feature.pitch}
+                placeholder={String(PEGBOARDS[feature.grid ?? "us_quarter"].pitch)}
                 onCommit={(pitch) => set({ pitch })}
               />
             </Field>
-            <Field label={PEGBOARDS[f.grid ?? "us_quarter"].square ? t("Hole side") : t("Hole diameter")}>
+            <Field
+              label={PEGBOARDS[feature.grid ?? "us_quarter"].square ? t("Hole side") : t("Hole diameter")}
+            >
               <ExprInput
-                value={f.hole}
-                placeholder={String(PEGBOARDS[f.grid ?? "us_quarter"].hole)}
+                value={feature.hole}
+                placeholder={String(PEGBOARDS[feature.grid ?? "us_quarter"].hole)}
                 onCommit={(hole) => set({ hole })}
               />
             </Field>
@@ -243,8 +247,8 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
           <div className="row">
             <Field label={t("Board thickness")}>
               <ExprInput
-                value={f.thickness}
-                placeholder={String(PEGBOARDS[f.grid ?? "us_quarter"].thickness)}
+                value={feature.thickness}
+                placeholder={String(PEGBOARDS[feature.grid ?? "us_quarter"].thickness)}
                 onCommit={(thickness) => set({ thickness })}
               />
             </Field>
@@ -271,10 +275,20 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
       {acc !== "screw" || !holder ? (
         <div className="row">
           <Field label={t("Cells across")}>
-            <Count value={f.units[0]} min={1} max={60} onChange={(v) => pair("units", 0, v, f.units)} />
+            <Count
+              value={feature.units[0]}
+              min={1}
+              max={60}
+              onChange={(expr) => pair("units", 0, expr, feature.units)}
+            />
           </Field>
           <Field label={t("Cells up")}>
-            <Count value={f.units[1]} min={1} max={60} onChange={(v) => pair("units", 1, v, f.units)} />
+            <Count
+              value={feature.units[1]}
+              min={1}
+              max={60}
+              onChange={(expr) => pair("units", 1, expr, feature.units)}
+            />
           </Field>
         </div>
       ) : null}
@@ -283,24 +297,29 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
         <label className="checkbox">
           <input
             type="checkbox"
-            checked={!!f.screws}
-            onChange={(e) => set({ screws: e.target.checked || undefined })}
+            checked={!!feature.screws}
+            onChange={(event) => set({ screws: event.target.checked || undefined })}
           />{" "}
           {t("Screw holes next to the corners")}
         </label>
       ) : null}
       {holder ? (
-        <AccessoryFields f={f} set={set} acc={acc} cellsFor={(n) => binShelfCells(n, pitch)} />
+        <AccessoryFields f={feature} set={set} acc={acc} cellsFor={(n) => binShelfCells(n, pitch)} />
       ) : null}
       {holder && boards.length ? (
         <Field label={t("Hangs on")}>
           <select
             className="field"
-            value={f.board ?? ""}
-            onChange={(e) =>
+            value={feature.board ?? ""}
+            onChange={(event) =>
               set(
-                e.target.value
-                  ? { board: e.target.value, cell: f.cell ?? [0, 0], plane: undefined, position: undefined }
+                event.target.value
+                  ? {
+                      board: event.target.value,
+                      cell: feature.cell ?? [0, 0],
+                      plane: undefined,
+                      position: undefined,
+                    }
                   : { board: undefined, cell: undefined },
               )
             }
@@ -314,23 +333,23 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
           </select>
         </Field>
       ) : null}
-      {f.board ? (
+      {feature.board ? (
         <>
           <div className="row">
             <Field label={t("Cell (column)")}>
               <Count
-                value={f.cell?.[0] ?? 0}
+                value={feature.cell?.[0] ?? 0}
                 min={0}
                 max={200}
-                onChange={(v) => pair("cell", 0, v, f.cell ?? [0, 0])}
+                onChange={(expr) => pair("cell", 0, expr, feature.cell ?? [0, 0])}
               />
             </Field>
             <Field label={t("Cell (row)")}>
               <Count
-                value={f.cell?.[1] ?? 0}
+                value={feature.cell?.[1] ?? 0}
                 min={0}
                 max={200}
-                onChange={(v) => pair("cell", 1, v, f.cell ?? [0, 0])}
+                onChange={(expr) => pair("cell", 1, expr, feature.cell ?? [0, 0])}
               />
             </Field>
           </div>
@@ -342,21 +361,21 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
         <>
           <Field label={t("On")}>
             <PlaneBox
-              value={describePlane(f.plane ?? { ref: "origin.XY" })}
+              value={describePlane(feature.plane ?? { ref: "origin.XY" })}
               placeholder={t("Tap a plane or flat face where it lies")}
             />
           </Field>
           <div className="row">
             <Field label={t("Position x")}>
               <ExprInput
-                value={f.position?.[0] ?? 0}
-                onCommit={(v) => pair("position", 0, v, f.position ?? [0, 0])}
+                value={feature.position?.[0] ?? 0}
+                onCommit={(expr) => pair("position", 0, expr, feature.position ?? [0, 0])}
               />
             </Field>
             <Field label={t("Position y")}>
               <ExprInput
-                value={f.position?.[1] ?? 0}
-                onCommit={(v) => pair("position", 1, v, f.position ?? [0, 0])}
+                value={feature.position?.[1] ?? 0}
+                onCommit={(expr) => pair("position", 1, expr, feature.position ?? [0, 0])}
               />
             </Field>
           </div>
@@ -376,7 +395,7 @@ export function WallFields({ f, set }: { f: Wall; set: SetFn }) {
 }
 
 function AccessoryFields({
-  f,
+  f: feature,
   set,
   acc,
   cellsFor,
@@ -389,7 +408,11 @@ function AccessoryFields({
   const plate =
     acc !== "screw" ? (
       <Field label={t("Plate")}>
-        <ExprInput value={f.plate} placeholder={String(WALL.plate)} onCommit={(plate) => set({ plate })} />
+        <ExprInput
+          value={feature.plate}
+          placeholder={String(WALL.plate)}
+          onCommit={(plate) => set({ plate })}
+        />
       </Field>
     ) : null;
   const two = (
@@ -402,8 +425,8 @@ function AccessoryFields({
           <ExprInput
             value={value}
             placeholder={String(fallback)}
-            onCommit={(v) => set({ [key]: v })}
-            onLive={(v) => set({ [key]: v })}
+            onCommit={(expr) => set({ [key]: expr })}
+            onLive={(expr) => set({ [key]: expr })}
           />
         </Field>
       ))}
@@ -414,31 +437,31 @@ function AccessoryFields({
   switch (acc) {
     case "hook":
       return two(
-        [t("Reach"), f.depth, WALL.hookDepth, "depth"],
-        [t("Tip height"), f.size, WALL.hookRise, "size"],
+        [t("Reach"), feature.depth, WALL.hookDepth, "depth"],
+        [t("Tip height"), feature.size, WALL.hookRise, "size"],
       );
     case "ring":
       return two(
-        [t("Inner diameter"), f.size, WALL.ringDiameter, "size"],
-        [t("Gap to the plate"), f.depth, WALL.ringDepth, "depth"],
+        [t("Inner diameter"), feature.size, WALL.ringDiameter, "size"],
+        [t("Gap to the plate"), feature.depth, WALL.ringDepth, "depth"],
       );
     case "shelf":
       return two(
-        [t("Depth"), f.depth, WALL.shelfDepth, "depth"],
-        [t("Lip height"), f.size, WALL.shelfLip, "size"],
+        [t("Depth"), feature.depth, WALL.shelfDepth, "depth"],
+        [t("Lip height"), feature.size, WALL.shelfLip, "size"],
       );
     case "bin":
       return (
         <div className="row">
           <Field label={t("Bins (42 mm)")}>
             <Count
-              value={f.size ?? WALL.bins}
+              value={feature.size ?? WALL.bins}
               min={1}
               max={10}
               onChange={(size) =>
                 set(
                   typeof size === "number"
-                    ? { size, units: [Math.max(num(f.units[0], 1), cellsFor(size)), f.units[1]] }
+                    ? { size, units: [Math.max(num(feature.units[0], 1), cellsFor(size)), feature.units[1]] }
                     : { size },
                 )
               }
@@ -450,7 +473,11 @@ function AccessoryFields({
     case "screw":
       return (
         <Field label={t("Screw diameter")}>
-          <ExprInput value={f.size} placeholder={String(WALL.screw)} onCommit={(size) => set({ size })} />
+          <ExprInput
+            value={feature.size}
+            placeholder={String(WALL.screw)}
+            onCommit={(size) => set({ size })}
+          />
         </Field>
       );
     default:

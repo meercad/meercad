@@ -60,15 +60,15 @@ import { lightDocument } from "./elide";
 /** A saved version's design (light, like get_model), without restoring it. */
 export function versionDocument(name: string): MeercadDocument {
   const doc = currentDoc();
-  const v = doc.versions?.find((x) => x.name === name);
+  const version = doc.versions?.find((x) => x.name === name);
 
-  if (!v) {
+  if (!version) {
     throw new Error(
       `no version "${name}"; saved: ${(doc.versions ?? []).map((x) => x.name).join(", ") || "none"}`,
     );
   }
 
-  return lightDocument(restored(doc, v));
+  return lightDocument(restored(doc, version));
 }
 
 // ---------------------------------------------------------------- what the app said
@@ -142,10 +142,17 @@ export async function interference(
 
   return {
     overlaps: pairs
-      .filter((p) => p.overlap > 1e-3)
+      .filter((clearance) => clearance.overlap > 1e-3)
       .sort((a, b) => b.overlap - a.overlap)
-      .map((p) => ({ a: p.a, b: p.b, names: [name(p.a), name(p.b)], overlapMm3: round(p.overlap) })),
-    touching: pairs.filter((p) => p.overlap <= 1e-3 && p.distance < 1e-4).map((p) => [p.a, p.b]),
+      .map((clearance) => ({
+        a: clearance.a,
+        b: clearance.b,
+        names: [name(clearance.a), name(clearance.b)],
+        overlapMm3: round(clearance.overlap),
+      })),
+    touching: pairs
+      .filter((clearance) => clearance.overlap <= 1e-3 && clearance.distance < 1e-4)
+      .map((clearance) => [clearance.a, clearance.b]),
     ...(left
       ? {
           unchecked: left,
@@ -167,7 +174,7 @@ export async function wallThickness(
   await rebuildNow();
   needPart(part);
 
-  const mesh = useApp.getState().output?.meshes.find((m) => m.bodyId === part);
+  const mesh = useApp.getState().output?.meshes.find((mesh) => mesh.bodyId === part);
   if (!mesh) throw new Error(`part "${part}" has no shape to measure`);
 
   const show = o.show !== false;
@@ -209,7 +216,11 @@ export async function wallThickness(
       : {}),
     ...(stats.at ? { thinnestAt: vec(stats.at) } : {}),
     shareThinnerThanMinWall: round(stats.thin, 4),
-    thinSpots: m.spots.map((p) => ({ at: vec(p.at), mm: round(p.mm), areaMm2: round(p.areaMm2, 1) })),
+    thinSpots: m.spots.map((spot) => ({
+      at: vec(spot.at),
+      mm: round(spot.mm),
+      areaMm2: round(spot.areaMm2, 1),
+    })),
     shown: show,
   };
 }
@@ -265,7 +276,7 @@ export async function printCheck(
   }
 
   const s = r.stats;
-  const mesh = useApp.getState().output!.meshes.find((m) => m.bodyId === part)!;
+  const mesh = useApp.getState().output!.meshes.find((mesh) => mesh.bodyId === part)!;
   const collider = new MeshCollider(mesh.positions, mesh.indices);
   const where = supportDetails(mesh.positions, mesh.indices, r.check, down, (o, d) =>
     rayDistance(collider, o, d, 1e-6),
@@ -310,7 +321,7 @@ export async function printCheck(
 /** The direction that puts a flat face of the part on the bed: the face's outward normal. */
 function downOnto(part: string, sel: FaceSelector): Vec3 {
   const meshes = useApp.getState().output?.meshes ?? [];
-  const hits = resolveFaces(sel, meshes.map(meshTopology)).filter((h) => h.body === part);
+  const hits = resolveFaces(sel, meshes.map(meshTopology)).filter((faceRef) => faceRef.body === part);
   const face = hits[0]?.faces[0];
   if (face === undefined) throw new Error(`down: the selector matches no face of "${part}"`);
 
@@ -381,14 +392,14 @@ export async function rebuildMesh(part: string) {
   await rebuildNow();
   needPart(part);
 
-  const before = new Set(currentDoc().features.map((f) => f.id));
+  const before = new Set(currentDoc().features.map((feature) => feature.id));
   const r = await said(() => rebuildMeshPart(part));
 
   return {
     ...r,
     added: currentDoc()
-      .features.filter((f) => !before.has(f.id))
-      .map((f) => f.id),
+      .features.filter((feature) => !before.has(feature.id))
+      .map((feature) => feature.id),
   };
 }
 
@@ -405,8 +416,8 @@ export async function measureScan(
   await rebuildNow();
 
   const shape = (id: string, p: Vec3) => {
-    const m = scanOf(needPart(id));
-    const s = m ? shapeAt(m, nearestTriangle(m, p), tolerance) : null;
+    const mesh = scanOf(needPart(id));
+    const s = mesh ? shapeAt(mesh, nearestTriangle(mesh, p), tolerance) : null;
 
     if (!s) {
       throw new Error(
@@ -441,7 +452,10 @@ export async function gearJoints() {
   return {
     jointsAdded: n,
     joints: currentDoc().mechanism?.joints.map((j) => j.id) ?? [],
-    couplings: currentDoc().mechanism?.couplings?.map((c) => `${c.driver} → ${c.driven} × ${c.ratio}`) ?? [],
+    couplings:
+      currentDoc().mechanism?.couplings?.map(
+        (coupling) => `${coupling.driver} → ${coupling.driven} × ${coupling.ratio}`,
+      ) ?? [],
   };
 }
 
@@ -450,7 +464,7 @@ export async function gearJoints() {
 /** Imports a file as the app does (also DXF/SVG as a sketch, and .meercad as a new project). */
 export async function importBytes(name: string, base64: string) {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const before = new Set(currentDoc().features.map((f) => f.id));
+  const before = new Set(currentDoc().features.map((feature) => feature.id));
   const project = useApp.getState().project?.id;
   const r = await said(() => importFile(new File([bytes], name)));
   if (useApp.getState().project?.id !== project) return { ...r, openedProject: useApp.getState().project };
@@ -460,8 +474,8 @@ export async function importBytes(name: string, base64: string) {
   return {
     ...r,
     added: currentDoc()
-      .features.filter((f) => !before.has(f.id))
-      .map((f) => f.id),
+      .features.filter((feature) => !before.has(feature.id))
+      .map((feature) => feature.id),
   };
 }
 
@@ -511,7 +525,9 @@ export async function exportFiles(
 
   return {
     files: r.files,
-    ...(filaments.length > 1 ? { filaments: filaments.map((f, i) => ({ slot: i + 1, ...f })) } : {}),
+    ...(filaments.length > 1
+      ? { filaments: filaments.map((filament, i) => ({ slot: i + 1, ...filament })) }
+      : {}),
   };
 }
 
@@ -548,33 +564,35 @@ export async function newFolder(parent: string, name: string) {
 }
 
 export async function moveOpenProject(folder: string) {
-  const p = useApp.getState().project;
-  if (!p) throw new Error("No project is open.");
+  const project = useApp.getState().project;
+  if (!project) throw new Error("No project is open.");
 
-  const meta = await moveProject(p.id, folder);
-  useApp.setState({ project: { ...p, ...meta } });
+  const meta = await moveProject(project.id, folder);
+  useApp.setState({ project: { ...project, ...meta } });
   await refreshProjects();
 
   return { project: useApp.getState().project };
 }
 
 /** The examples the user's app shows: those its packs can show and change. */
-const shownExamples = () => EXAMPLES.filter((e) => examplePacks(e).every(hasPack));
+const shownExamples = () => EXAMPLES.filter((example) => examplePacks(example).every(hasPack));
 
 export const examples = () =>
-  shownExamples().map((e, i) => ({ id: i, name: e.name, description: e.description }));
+  shownExamples().map((example, i) => ({ id: i, name: example.name, description: example.description }));
 
 /** Opens an example as a new project (a copy: the example itself never changes). */
 export async function openExample(which: number | string) {
   const list = shownExamples();
-  const ex =
+  const example =
     typeof which === "number"
       ? list[which]
-      : list.find((e) => e.name.toLowerCase() === String(which).toLowerCase());
-  if (!ex) throw new Error(`no example ${String(which)}; see list_examples`);
+      : list.find((example) => example.name.toLowerCase() === String(which).toLowerCase());
+  if (!example) throw new Error(`no example ${String(which)}; see list_examples`);
 
-  const doc = ex.url ? ((await (await fetch(ex.url)).json()) as MeercadDocument) : structuredClone(ex.doc);
-  await newProject(doc, t(ex.name));
+  const doc = example.url
+    ? ((await (await fetch(example.url)).json()) as MeercadDocument)
+    : structuredClone(example.doc);
+  await newProject(doc, t(example.name));
 
   return { project: useApp.getState().project };
 }
@@ -585,7 +603,7 @@ export async function openExample(which: number | string) {
  * The shown terrains once the viewport has loaded them (opening a project decodes them in the background).
  */
 async function terrainReady() {
-  if (!(currentDoc().references ?? []).some((r) => !r.hidden)) {
+  if (!(currentDoc().references ?? []).some((reference) => !reference.hidden)) {
     throw new Error("no terrain or scanned area is shown in this design");
   }
 
@@ -598,12 +616,12 @@ async function terrainReady() {
  */
 export async function terrainHeights(points: [number, number][]) {
   const box = await terrainReady();
-  const vp = getViewport()!;
+  const viewport = getViewport()!;
 
   return {
     extent: { min: vec(box.min), max: vec(box.max) },
     points: points.map(([x, y]) => {
-      const h = vp.sceneryHeight(x, y);
+      const h = viewport.sceneryHeight(x, y);
 
       return { x, y, z: h === null ? null : round(h) };
     }),
@@ -640,7 +658,7 @@ export async function photoTerrain(folder: string) {
   if (!desktop) throw new Error("models from photos are built by the Mac app");
 
   const { buildTerrain } = await import("./terrain");
-  const before = new Set((currentDoc().references ?? []).map((r) => r.id));
+  const before = new Set((currentDoc().references ?? []).map((reference) => reference.id));
   const r = await said(() => buildTerrain(folder));
   const added = (currentDoc().references ?? []).filter((x) => !before.has(x.id));
 

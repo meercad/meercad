@@ -1,13 +1,13 @@
 import { useApp } from "../store";
 
 export function Toasts() {
-  const toasts = useApp((s) => s.toasts);
+  const toasts = useApp((state) => state.toasts);
 
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((t) => (
-        <div key={t.id} className={`toast ${t.kind}`}>
-          {t.text}
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`toast ${toast.kind}`}>
+          {toast.text}
         </div>
       ))}
     </div>

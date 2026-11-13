@@ -30,20 +30,20 @@ export class Press {
   private lastTap: { x: number; y: number; t: number } | null = null;
 
   constructor(
-    private onLong: (x: number, y: number, e: PointerEvent) => void,
+    private onLong: (x: number, y: number, event: PointerEvent) => void,
     private onLongDrag?: (x: number, y: number) => void,
   ) {}
 
-  down(e: PointerEvent): void {
-    if (e.pointerType === "touch") this.touches.add(e.pointerId);
+  down(event: PointerEvent): void {
+    if (event.pointerType === "touch") this.touches.add(event.pointerId);
 
     this.cancel();
     if (this.touches.size > 1) return;
 
     const c = {
-      id: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
       t: performance.now(),
       timer: 0,
       fired: false,
@@ -51,15 +51,20 @@ export class Press {
     };
     c.timer = window.setTimeout(() => {
       c.fired = true;
-      this.onLong(c.x, c.y, e);
+      this.onLong(c.x, c.y, event);
     }, LONG_PRESS_MS);
     this.cur = c;
   }
 
-  move(e: PointerEvent): void {
+  move(event: PointerEvent): void {
     const c = this.cur;
 
-    if (!c || c.id !== e.pointerId || c.dragging || Math.hypot(e.clientX - c.x, e.clientY - c.y) <= SLOP) {
+    if (
+      !c ||
+      c.id !== event.pointerId ||
+      c.dragging ||
+      Math.hypot(event.clientX - c.x, event.clientY - c.y) <= SLOP
+    ) {
       return;
     }
 
@@ -70,15 +75,15 @@ export class Press {
   }
 
   /** How the press ended: a tap, the second tap of a double tap, a long press, or a drag (null). */
-  up(e: PointerEvent): PressResult {
-    this.touches.delete(e.pointerId);
+  up(event: PointerEvent): PressResult {
+    this.touches.delete(event.pointerId);
 
     const c = this.cur;
-    if (!c || c.id !== e.pointerId) return null;
+    if (!c || c.id !== event.pointerId) return null;
 
     window.clearTimeout(c.timer);
     this.cur = null;
-    if (e.type === "pointercancel") return null;
+    if (event.type === "pointercancel") return null;
     if (c.fired) return c.dragging ? "long-drag" : "long";
 
     const now = performance.now();
@@ -117,8 +122,8 @@ export class MultiTouch {
 
   constructor(private on: (g: MultiGesture) => void) {}
 
-  down(e: PointerEvent): void {
-    if (e.pointerType !== "touch") return;
+  down(event: PointerEvent): void {
+    if (event.pointerType !== "touch") return;
 
     if (!this.pts.size) {
       this.done = [];
@@ -127,23 +132,28 @@ export class MultiTouch {
       this.cancelled = false;
     }
 
-    this.pts.set(e.pointerId, { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
+    this.pts.set(event.pointerId, {
+      x0: event.clientX,
+      y0: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+    });
     this.max = Math.max(this.max, this.pts.size);
   }
 
-  move(e: PointerEvent): void {
-    const p = this.pts.get(e.pointerId);
-    if (p) Object.assign(p, { x: e.clientX, y: e.clientY });
+  move(event: PointerEvent): void {
+    const p = this.pts.get(event.pointerId);
+    if (p) Object.assign(p, { x: event.clientX, y: event.clientY });
   }
 
-  up(e: PointerEvent): void {
-    const p = this.pts.get(e.pointerId);
+  up(event: PointerEvent): void {
+    const p = this.pts.get(event.pointerId);
     if (!p) return;
 
-    this.pts.delete(e.pointerId);
-    if (e.type === "pointercancel") this.cancelled = true;
+    this.pts.delete(event.pointerId);
+    if (event.type === "pointercancel") this.cancelled = true;
 
-    this.done.push({ dx: e.clientX - p.x0, dy: e.clientY - p.y0 });
+    this.done.push({ dx: event.clientX - p.x0, dy: event.clientY - p.y0 });
     if (this.pts.size || this.cancelled || this.max < 2) return;
 
     const n = this.done.length;
@@ -176,25 +186,27 @@ export function installLongPressMenus(): () => void {
     );
   });
 
-  const down = (e: PointerEvent) => {
-    if (e.pointerType === "mouse") return;
+  const down = (event: PointerEvent) => {
+    if (event.pointerType === "mouse") return;
 
     target =
-      e.target instanceof Element && !e.target.closest("canvas, input, textarea, select") ? e.target : null;
-    if (target) press.down(e);
+      event.target instanceof Element && !event.target.closest("canvas, input, textarea, select")
+        ? event.target
+        : null;
+    if (target) press.down(event);
     else press.cancel();
   };
 
-  const move = (e: PointerEvent) => e.pointerType !== "mouse" && press.move(e);
-  const up = (e: PointerEvent) => e.pointerType !== "mouse" && press.up(e);
+  const move = (event: PointerEvent) => event.pointerType !== "mouse" && press.move(event);
+  const up = (event: PointerEvent) => event.pointerType !== "mouse" && press.up(event);
 
   // The release after a long press would otherwise also click what is under the finger.
-  const click = (e: MouseEvent) => {
+  const click = (event: MouseEvent) => {
     if (performance.now() - suppressClick > 1000) return;
 
     suppressClick = 0;
-    e.preventDefault();
-    e.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   window.addEventListener("pointerdown", down, true);

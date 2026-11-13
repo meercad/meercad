@@ -62,9 +62,9 @@ export async function changeProjectsFolder(
     );
 
     return r.dir;
-  } catch (e) {
+  } catch (error) {
     toast(
-      t("Could not use that folder: {msg}", { msg: e instanceof Error ? e.message : String(e) }),
+      t("Could not use that folder: {msg}", { msg: error instanceof Error ? error.message : String(error) }),
       "error",
     );
 
@@ -113,8 +113,8 @@ export async function switchNativeStorage(to: "local" | "icloud"): Promise<boole
     );
 
     return true;
-  } catch (e) {
-    toast(e instanceof Error ? e.message : String(e), "error");
+  } catch (error) {
+    toast(error instanceof Error ? error.message : String(error), "error");
 
     return false;
   }

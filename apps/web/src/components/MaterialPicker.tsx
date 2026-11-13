@@ -30,11 +30,23 @@ import "../materials.css";
 export const openMaterialPicker = (parts: readonly string[]) =>
   window.dispatchEvent(new CustomEvent("meercad:materials", { detail: [...parts] }));
 
-const GROUPS: { key: string; label: string; test: (m: Material) => boolean }[] = [
-  { key: "own", label: t("Your materials"), test: (m) => !!m.base },
-  { key: "filament", label: t("Filament"), test: (m) => !m.base && m.kind === "print" && !!m.filament },
-  { key: "resin", label: t("Resin"), test: (m) => !m.base && m.kind === "print" && !m.filament },
-  { key: "other", label: t("Metal, wood and more"), test: (m) => !m.base && m.kind !== "print" },
+const GROUPS: { key: string; label: string; test: (material: Material) => boolean }[] = [
+  { key: "own", label: t("Your materials"), test: (material) => !!material.base },
+  {
+    key: "filament",
+    label: t("Filament"),
+    test: (material) => !material.base && material.kind === "print" && !!material.filament,
+  },
+  {
+    key: "resin",
+    label: t("Resin"),
+    test: (material) => !material.base && material.kind === "print" && !material.filament,
+  },
+  {
+    key: "other",
+    label: t("Metal, wood and more"),
+    test: (material) => !material.base && material.kind !== "print",
+  },
 ];
 
 interface Draft {
@@ -50,19 +62,19 @@ export function MaterialPicker() {
   const [query, setQuery] = useState("");
   const [focus, setFocus] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const doc = useApp((s) => s.doc);
-  const bodies = useApp((s) => s.output?.report.bodies);
-  const colorParts = usePrefs((s) => s.colorParts);
+  const doc = useApp((state) => state.doc);
+  const bodies = useApp((state) => state.output?.report.bodies);
+  const colorParts = usePrefs((prefs) => prefs.colorParts);
 
   useEffect(() => {
-    const show = (e: Event) => {
-      setParts((e as CustomEvent<string[]>).detail);
+    const show = (event: Event) => {
+      setParts((event as CustomEvent<string[]>).detail);
       setQuery("");
       setDraft(null);
       setFocus(null);
     };
 
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setParts(null);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setParts(null);
     window.addEventListener("meercad:materials", show);
     window.addEventListener("keydown", onKey);
 
@@ -87,19 +99,21 @@ export function MaterialPicker() {
   if (!parts) return null;
 
   const current = sharedMaterial(doc, parts);
-  const shown = focus ? (all.find((m) => m.id === focus) ?? current) : current;
+  const shown = focus ? (all.find((material) => material.id === focus) ?? current) : current;
   const q = query.trim().toLowerCase();
-  const matches = (m: Material) =>
+  const matches = (material: Material) =>
     !q ||
-    [materialName(m), m.name, m.filament ?? "", m.notes, t(m.notes)].some((s) => s.toLowerCase().includes(q));
+    [materialName(material), material.name, material.filament ?? "", material.notes, t(material.notes)].some(
+      (s) => s.toLowerCase().includes(q),
+    );
   const volume = parts.reduce((sum, id) => sum + (bodies?.find((b) => b.id === id)?.volume ?? 0), 0);
   const title =
     parts.length === 1 ? partName(parts[0]!, doc.features) : tn(parts.length, "{n} part", "{n} parts");
   const mixed = !current && parts.some((p) => partMaterial(doc, p));
 
-  const choose = (m: Material) => {
-    setFocus(m.id);
-    if (current?.id !== m.id || mixed) assignMaterial(parts, m.id);
+  const choose = (material: Material) => {
+    setFocus(material.id);
+    if (current?.id !== material.id || mixed) assignMaterial(parts, material.id);
   };
 
   const startOwn = (from: Material) =>
@@ -110,8 +124,8 @@ export function MaterialPicker() {
       density: "",
     });
 
-  const editOwn = (m: Material) => {
-    const own = doc.materials?.find((x) => x.id === m.id);
+  const editOwn = (material: Material) => {
+    const own = doc.materials?.find((x) => x.id === material.id);
 
     if (own) {
       setDraft({
@@ -154,7 +168,7 @@ export function MaterialPicker() {
         className="modal settings material-picker"
         role="dialog"
         aria-label={t("Material")}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="settings-head">
           <h2>
@@ -172,13 +186,13 @@ export function MaterialPicker() {
             value={query}
             autoFocus={fineKeys}
             placeholder={t("Search materials")}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
           />
         </div>
         <div className="mat-body">
           <div className="mat-groups">
             {GROUPS.map((g) => {
-              const list = all.filter((m) => g.test(m) && matches(m));
+              const list = all.filter((material) => g.test(material) && matches(material));
               if (!list.length && g.key !== "own") return null;
               if (!list.length && q) return null;
 
@@ -186,21 +200,24 @@ export function MaterialPicker() {
                 <section key={g.key}>
                   <h3>{g.label}</h3>
                   <div className="mat-grid">
-                    {list.map((m) => (
+                    {list.map((material) => (
                       <button
-                        key={m.id}
-                        className={`mat-tile ${current?.id === m.id ? "chosen" : ""} ${shown?.id === m.id ? "focus" : ""}`}
-                        onClick={() => choose(m)}
-                        title={t(m.notes)}
+                        key={material.id}
+                        className={`mat-tile ${current?.id === material.id ? "chosen" : ""} ${shown?.id === material.id ? "focus" : ""}`}
+                        onClick={() => choose(material)}
+                        title={t(material.notes)}
                       >
-                        {swatches.get(m.id) ? (
-                          <img src={swatches.get(m.id)} alt="" draggable={false} />
+                        {swatches.get(material.id) ? (
+                          <img src={swatches.get(material.id)} alt="" draggable={false} />
                         ) : (
-                          <span className="mat-dot" style={{ background: m.look.color ?? partColor }} />
+                          <span
+                            className="mat-dot"
+                            style={{ background: material.look.color ?? partColor }}
+                          />
                         )}
-                        <span className="mat-name">{materialName(m)}</span>
-                        <span className="mat-sub">{m.density} g/cm³</span>
-                        {current?.id === m.id ? <Check className="mat-check" /> : null}
+                        <span className="mat-name">{materialName(material)}</span>
+                        <span className="mat-sub">{material.density} g/cm³</span>
+                        {current?.id === material.id ? <Check className="mat-check" /> : null}
                       </button>
                     ))}
                     {g.key === "own" && !q ? (
@@ -225,8 +242,8 @@ export function MaterialPicker() {
                   <input
                     className="field"
                     value={draft.name}
-                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                    onKeyDown={(e) => e.key === "Enter" && saveDraft()}
+                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                    onKeyDown={(event) => event.key === "Enter" && saveDraft()}
                   />
                 </label>
                 <label>
@@ -234,11 +251,11 @@ export function MaterialPicker() {
                   <select
                     className="field"
                     value={draft.base}
-                    onChange={(e) => setDraft({ ...draft, base: e.target.value })}
+                    onChange={(event) => setDraft({ ...draft, base: event.target.value })}
                   >
-                    {MATERIALS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {t(m.name)}
+                    {MATERIALS.map((material) => (
+                      <option key={material.id} value={material.id}>
+                        {t(material.name)}
                       </option>
                     ))}
                   </select>
@@ -248,7 +265,7 @@ export function MaterialPicker() {
                   <input
                     type="color"
                     value={draft.color}
-                    onChange={(e) => setDraft({ ...draft, color: e.target.value })}
+                    onChange={(event) => setDraft({ ...draft, color: event.target.value })}
                   />
                   <code>{draft.color.toUpperCase()}</code>
                 </label>
@@ -258,8 +275,10 @@ export function MaterialPicker() {
                     className="field"
                     inputMode="decimal"
                     value={draft.density}
-                    placeholder={String(MATERIALS.find((m) => m.id === draft.base)?.density ?? "")}
-                    onChange={(e) => setDraft({ ...draft, density: e.target.value })}
+                    placeholder={String(
+                      MATERIALS.find((material) => material.id === draft.base)?.density ?? "",
+                    )}
+                    onChange={(event) => setDraft({ ...draft, density: event.target.value })}
                   />
                 </label>
                 <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
@@ -280,7 +299,9 @@ export function MaterialPicker() {
                 {shown.base ? (
                   <p className="muted small">
                     {t("Based on {material}", {
-                      material: t(MATERIALS.find((m) => m.id === shown.base)?.name ?? shown.base),
+                      material: t(
+                        MATERIALS.find((material) => material.id === shown.base)?.name ?? shown.base,
+                      ),
                     })}
                   </p>
                 ) : null}

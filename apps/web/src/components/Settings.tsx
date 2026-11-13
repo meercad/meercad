@@ -40,13 +40,13 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   useEffect(() => {
     const toggle = () => setOpen((o) => !o);
 
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-        e.preventDefault();
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
+        event.preventDefault();
         toggle();
       }
 
-      if (e.key === "Escape") setOpen(false);
+      if (event.key === "Escape") setOpen(false);
     };
 
     window.addEventListener("meercad:settings", toggle);
@@ -88,7 +88,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
         className="modal settings"
         role="dialog"
         aria-label={t("Settings")}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="settings-head">
           <h2>{t("Settings")}</h2>
@@ -207,7 +207,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.invertZoom}
-              onChange={(e) => setPrefs({ invertZoom: e.target.checked })}
+              onChange={(event) => setPrefs({ invertZoom: event.target.checked })}
             />
             {t("Reverse zoom direction (scroll up zooms out)")}
           </label>
@@ -215,7 +215,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.swipeOrbits}
-              onChange={(e) => setPrefs({ swipeOrbits: e.target.checked })}
+              onChange={(event) => setPrefs({ swipeOrbits: event.target.checked })}
             />
             {t("Trackpad: two-finger swipe rotates, Shift + swipe pans, pinch or Ctrl + swipe zooms")}
           </label>
@@ -241,7 +241,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.showKeys}
-              onChange={(e) => setPrefs({ showKeys: e.target.checked })}
+              onChange={(event) => setPrefs({ showKeys: event.target.checked })}
             />
             {t("Show shortcut badges on tools and menus")}
           </label>
@@ -261,7 +261,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.showValues}
-              onChange={(e) => setPrefs({ showValues: e.target.checked })}
+              onChange={(event) => setPrefs({ showValues: event.target.checked })}
             />
             {t("Show dimensions and sizes (diameters, distances, drag values)")}
           </label>
@@ -275,7 +275,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.showExamples}
-              onChange={(e) => setPrefs({ showExamples: e.target.checked })}
+              onChange={(event) => setPrefs({ showExamples: event.target.checked })}
             />
             {t("Show the example models")}
           </label>
@@ -286,16 +286,16 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <h3>
               <Gem /> {t("Premium packs")}
             </h3>
-            {PACKS.map((p) => (
-              <label className="check" key={p.id}>
+            {PACKS.map((pack) => (
+              <label className="check" key={pack.id}>
                 <input
                   type="checkbox"
-                  checked={!premium.off[p.id]}
-                  onChange={(e) => setPack(p.id, e.target.checked)}
+                  checked={!premium.off[pack.id]}
+                  onChange={(event) => setPack(pack.id, event.target.checked)}
                 />
                 <span>
-                  {t(p.name)}
-                  <small className="muted pack-contents">{t(p.contents)}</small>
+                  {t(pack.name)}
+                  <small className="muted pack-contents">{t(pack.contents)}</small>
                 </span>
               </label>
             ))}
@@ -315,7 +315,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             {t("New designs in")}
             <select
               value={prefs.units}
-              onChange={(e) => setPrefs({ units: e.target.value as "metric" | "imperial" })}
+              onChange={(event) => setPrefs({ units: event.target.value as "metric" | "imperial" })}
             >
               <option value="metric">{t("Metric (mm)")}</option>
               <option value="imperial">{t("Imperial (inches)")}</option>
@@ -341,14 +341,14 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
               key={prefs.printerFit ?? "none"}
               defaultValue={prefs.printerFit ?? ""}
               placeholder={String(DEFAULT_FIT)}
-              onBlur={(e) => {
-                const v = e.target.value.trim().replace(",", ".");
+              onBlur={(event) => {
+                const v = event.target.value.trim().replace(",", ".");
                 const n = Number(v);
                 if (!v) setPrefs({ printerFit: null });
                 else if (n >= 0 && n <= 1) setPrefs({ printerFit: n });
-                else e.target.value = prefs.printerFit === null ? "" : String(prefs.printerFit);
+                else event.target.value = prefs.printerFit === null ? "" : String(prefs.printerFit);
               }}
-              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              onKeyDown={(event) => event.key === "Enter" && (event.target as HTMLInputElement).blur()}
             />
             mm
           </label>
@@ -364,7 +364,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.threeMfMaterials}
-              onChange={(e) => setPrefs({ threeMfMaterials: e.target.checked })}
+              onChange={(event) => setPrefs({ threeMfMaterials: event.target.checked })}
             />
             {t("3MF with materials and colours (slicers then ask which filament each one is)")}
           </label>
@@ -378,7 +378,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.snapGrid}
-              onChange={(e) => setPrefs({ snapGrid: e.target.checked })}
+              onChange={(event) => setPrefs({ snapGrid: event.target.checked })}
             />
             {t("Grid: show it and snap to it (its spacing follows the zoom; also for drag arrows)")}
           </label>
@@ -386,7 +386,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             <input
               type="checkbox"
               checked={prefs.snapGeometry}
-              onChange={(e) => setPrefs({ snapGeometry: e.target.checked })}
+              onChange={(event) => setPrefs({ snapGeometry: event.target.checked })}
             />
             {t(
               "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings and alignments",
@@ -500,7 +500,7 @@ const pct = (f: number) => `${Math.round(f * 100)} %`;
 
 /** The printer's build volume, for the warning on parts that do not fit (parts list, Split). */
 function PrintBedSection({ children }: { children?: ReactNode }) {
-  const bed = usePrefs((p) => p.printBed);
+  const bed = usePrefs((prefs) => prefs.printBed);
   const [custom, setCustom] = useState(false);
   const preset = bed && !custom ? BED_PRESETS.find((p) => p.size.every((v, i) => v === bed[i])) : undefined;
   const shown = bed ?? DEFAULT_BED;
@@ -520,7 +520,7 @@ function PrintBedSection({ children }: { children?: ReactNode }) {
         <input
           type="checkbox"
           checked={!!bed}
-          onChange={(e) => setPrefs({ printBed: e.target.checked ? DEFAULT_BED : null })}
+          onChange={(event) => setPrefs({ printBed: event.target.checked ? DEFAULT_BED : null })}
         />
         {t("Warn when a part does not fit the print bed")}
       </label>
@@ -530,8 +530,8 @@ function PrintBedSection({ children }: { children?: ReactNode }) {
             {t("Build volume")}
             <select
               value={preset?.id ?? "custom"}
-              onChange={(e) => {
-                const p = BED_PRESETS.find((x) => x.id === e.target.value);
+              onChange={(event) => {
+                const p = BED_PRESETS.find((x) => x.id === event.target.value);
                 setCustom(!p);
                 if (p) setPrefs({ printBed: p.size });
               }}
@@ -555,8 +555,8 @@ function PrintBedSection({ children }: { children?: ReactNode }) {
                     min={10}
                     max={5000}
                     defaultValue={shown[i]}
-                    onBlur={(e) => setAxis(i, Number(e.target.value))}
-                    onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                    onBlur={(event) => setAxis(i, Number(event.target.value))}
+                    onKeyDown={(event) => event.key === "Enter" && (event.target as HTMLInputElement).blur()}
                   />
                   mm
                 </label>

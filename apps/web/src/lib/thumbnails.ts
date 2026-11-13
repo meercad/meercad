@@ -196,19 +196,19 @@ function failed(): Record<string, number> {
   }
 }
 
-function markFailed(p: ProjectMeta): void {
+function markFailed(project: ProjectMeta): void {
   try {
-    localStorage.setItem(FAILED_KEY, JSON.stringify({ ...failed(), [p.id]: p.updatedAt }));
+    localStorage.setItem(FAILED_KEY, JSON.stringify({ ...failed(), [project.id]: project.updatedAt }));
   } catch {
     // Without storage it is tried again next time.
   }
 }
 
 /** Parts in the colours and materials the editor shows them in. */
-function paintAsEditor(vp: Viewport, doc: MeercadDocument, output: RebuildOutput): void {
+function paintAsEditor(viewport: Viewport, doc: MeercadDocument, output: RebuildOutput): void {
   const ids = output.report.bodies.map((b) => b.id);
-  vp.setBodyColors(partColors(doc, ids, usePrefs.getState().colorParts));
-  vp.setBodyLooks(partLooks(doc, ids));
+  viewport.setBodyColors(partColors(doc, ids, usePrefs.getState().colorParts));
+  viewport.setBodyLooks(partLooks(doc, ids));
 }
 
 type ExampleDoc = { name: string; thumbnail?: string; doc: MeercadDocument };
@@ -245,17 +245,17 @@ export function startBackgroundPictures(examples: readonly ExampleDoc[]): void {
 
   let seen = useApp.getState().projects;
   let open = editorOpen();
-  useApp.subscribe((s) => {
-    if (oneKernel && (s.project !== null) !== open) {
-      open = s.project !== null;
+  useApp.subscribe((state) => {
+    if (oneKernel && (state.project !== null) !== open) {
+      open = state.project !== null;
       // The editor's kernel needs the room now; back on the overview, the pictures go on.
       if (open) stopBuild?.();
       else void runPictures();
     }
 
-    if (s.projects === seen) return;
+    if (state.projects === seen) return;
 
-    seen = s.projects;
+    seen = state.projects;
     void runPictures();
   });
   void refreshProjects().then(() => runPictures());
@@ -270,8 +270,8 @@ const blank = new Map<string, boolean>();
 const BLANK_MAX = 40_000;
 
 async function findBlank(projects: readonly ProjectMeta[]): Promise<void> {
-  for (const p of projects) {
-    const url = p.thumbnail;
+  for (const project of projects) {
+    const url = project.thumbnail;
     if (!url || blank.has(url)) continue;
 
     if (url.length > BLANK_MAX) {
@@ -292,25 +292,25 @@ async function findBlank(projects: readonly ProjectMeta[]): Promise<void> {
   }
 }
 
-const triedKey = (p: ProjectMeta) => `${p.id}@${p.updatedAt}`;
+const triedKey = (project: ProjectMeta) => `${project.id}@${project.updatedAt}`;
 
 async function fillMissingThumbnails(): Promise<void> {
   let host: HTMLDivElement | null = null;
-  let vp: Viewport | null = null;
+  let viewport: Viewport | null = null;
 
   try {
     for (;;) {
       await findBlank(useApp.getState().projects);
 
-      const s = useApp.getState();
+      const state = useApp.getState();
       const gaveUp = failed();
       // The project open in the editor gets its picture from there.
-      const next = s.projects.find(
-        (p) =>
-          p.id !== s.project?.id &&
-          needsPicture(p, blank.get(p.thumbnail ?? "") ?? false, currentLookSince()) &&
-          !tried.has(triedKey(p)) &&
-          gaveUp[p.id] !== p.updatedAt,
+      const next = state.projects.find(
+        (project) =>
+          project.id !== state.project?.id &&
+          needsPicture(project, blank.get(project.thumbnail ?? "") ?? false, currentLookSince()) &&
+          !tried.has(triedKey(project)) &&
+          gaveUp[project.id] !== project.updatedAt,
       );
       if (!next) return;
 
@@ -327,9 +327,9 @@ async function fillMissingThumbnails(): Promise<void> {
       const shared = await takeSharedThumbnail(next.id).catch(() => null);
 
       if (shared) {
-        useApp.setState((st) => ({
-          projects: st.projects.map((p) =>
-            p.id === next.id ? { ...p, thumbnail: shared, thumbnailAt: Date.now() } : p,
+        useApp.setState((state) => ({
+          projects: state.projects.map((project) =>
+            project.id === next.id ? { ...project, thumbnail: shared, thumbnailAt: Date.now() } : project,
           ),
         }));
         continue;
@@ -366,33 +366,35 @@ async function fillMissingThumbnails(): Promise<void> {
           continue;
         }
 
-        if (!vp) {
+        if (!viewport) {
           host = document.createElement("div");
           host.style.cssText =
             "position:fixed;left:-10000px;top:0;width:480px;height:360px;pointer-events:none";
           document.body.append(host);
-          vp = new Viewport(host);
+          viewport = new Viewport(host);
         }
 
         // Mesh parts without their triangle outlines, as in the editor.
         const meshParts = meshBodyIds(project.doc.features, output.meshes);
-        const bodies = output.meshes.map((m) =>
-          meshParts.has(m.bodyId) ? { ...m, edgeLines: new Float32Array(), edgeRanges: new Int32Array() } : m,
+        const bodies = output.meshes.map((mesh) =>
+          meshParts.has(mesh.bodyId)
+            ? { ...mesh, edgeLines: new Float32Array(), edgeRanges: new Int32Array() }
+            : mesh,
         );
-        vp.setScene({ bodies, sketches: [], planes: [], references: [] });
-        paintAsEditor(vp, project.doc, output);
-        await vp.setScenery(sceneryOf(project.doc));
-        vp.setView("iso", false);
+        viewport.setScene({ bodies, sketches: [], planes: [], references: [] });
+        paintAsEditor(viewport, project.doc, output);
+        await viewport.setScenery(sceneryOf(project.doc));
+        viewport.setView("iso", false);
 
-        const thumbnail = vp.snapshot(480, 360, true);
+        const thumbnail = viewport.snapshot(480, 360, true);
         await saveThumbnail(next.id, thumbnail);
-        useApp.setState((st) => ({
-          projects: st.projects.map((p) =>
-            p.id === next.id ? { ...p, thumbnail, thumbnailAt: Date.now() } : p,
+        useApp.setState((state) => ({
+          projects: state.projects.map((project) =>
+            project.id === next.id ? { ...project, thumbnail, thumbnailAt: Date.now() } : project,
           ),
         }));
-      } catch (e) {
-        if (e instanceof Stopped) {
+      } catch (error) {
+        if (error instanceof Stopped) {
           tried.delete(triedKey(next));
 
           return;
@@ -400,11 +402,11 @@ async function fillMissingThumbnails(): Promise<void> {
 
         // A broken or very slow file stays without one.
         markFailed(next);
-        console.warn(`no picture for ${next.id}:`, e);
+        console.warn(`no picture for ${next.id}:`, error);
       }
     }
   } finally {
-    vp?.dispose();
+    viewport?.dispose();
     host?.remove();
   }
 }
@@ -464,7 +466,7 @@ async function fillExampleThumbnails(
   done: () => void,
 ): Promise<void> {
   let host: HTMLDivElement | null = null;
-  let vp: Viewport | null = null;
+  let viewport: Viewport | null = null;
 
   try {
     for (const ex of examples) {
@@ -477,19 +479,19 @@ async function fillExampleThumbnails(
         const output = await build(ex.doc, EXAMPLE_LIMIT_MS, { example: key });
         if (!output.meshes.length) continue;
 
-        if (!vp) {
+        if (!viewport) {
           host = document.createElement("div");
           host.style.cssText =
             "position:fixed;left:-10000px;top:0;width:480px;height:360px;pointer-events:none";
           document.body.append(host);
-          vp = new Viewport(host);
+          viewport = new Viewport(host);
         }
 
-        vp.setScene({ bodies: output.meshes, sketches: [], planes: [], references: [] });
-        paintAsEditor(vp, ex.doc, output);
-        vp.setView("iso", false);
+        viewport.setScene({ bodies: output.meshes, sketches: [], planes: [], references: [] });
+        paintAsEditor(viewport, ex.doc, output);
+        viewport.setView("iso", false);
 
-        const shot = vp.snapshot(480, 360, true);
+        const shot = viewport.snapshot(480, 360, true);
         exampleShots.set(key, shot);
 
         try {
@@ -499,15 +501,15 @@ async function fillExampleThumbnails(
         }
 
         done();
-      } catch (e) {
-        if (e instanceof Stopped) return;
+      } catch (error) {
+        if (error instanceof Stopped) return;
 
         exampleFailed(key);
-        console.warn(`no picture for example ${ex.name}:`, e);
+        console.warn(`no picture for example ${ex.name}:`, error);
       }
     }
   } finally {
-    vp?.dispose();
+    viewport?.dispose();
     host?.remove();
   }
 }

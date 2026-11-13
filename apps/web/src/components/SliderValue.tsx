@@ -9,13 +9,13 @@ import { ExprInput } from "./ExprInput";
 import "./slider-value.css";
 
 /** A value as a number, or `fallback` when it is an expression that does not work out. */
-function useNumber(e: Expr | undefined, fallback: number): number {
-  const params = useApp((s) => s.output?.report.params);
-  if (e === undefined) return fallback;
-  if (typeof e === "number") return e;
+function useNumber(expr: Expr | undefined, fallback: number): number {
+  const params = useApp((state) => state.output?.report.params);
+  if (expr === undefined) return fallback;
+  if (typeof expr === "number") return expr;
 
   try {
-    return evaluate(e, new Map(Object.entries(params ?? {})));
+    return evaluate(expr, new Map(Object.entries(params ?? {})));
   } catch {
     return fallback;
   }
@@ -41,7 +41,7 @@ export function SliderValue({
   max: number;
   step: number;
   unit: "mm" | "deg" | "";
-  onChange: (v: Expr | undefined) => void;
+  onChange: (expr: Expr | undefined) => void;
   placeholder?: string;
 }) {
   const n = useNumber(value, fallback);
@@ -59,7 +59,7 @@ export function SliderValue({
         onPointerUp={end}
         onPointerCancel={end}
         onBlur={end}
-        onChange={(e) => onChange(Number(Number(e.target.value).toFixed(3)))}
+        onChange={(event) => onChange(Number(Number(event.target.value).toFixed(3)))}
       />
       <div className="slider-value-text">
         <ExprInput

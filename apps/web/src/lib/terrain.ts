@@ -85,8 +85,8 @@ export async function buildTerrain(folder?: string): Promise<void> {
     if (project && useApp.getState().project?.id !== project) await openProject(project);
 
     addTerrain(result, bytes);
-  } catch (e) {
-    const message = (e as Error).message ?? String(e);
+  } catch (error) {
+    const message = (error as Error).message ?? String(error);
 
     if (!/cancelled/.test(message)) {
       toast(
@@ -158,19 +158,27 @@ const decoded = new Map<string, ArrayBuffer>();
 /** The design's reference models as the viewport takes them (each file decoded once). */
 export function sceneryOf(doc: MeercadDocument): SceneryView[] {
   const list = doc.references ?? [];
-  for (const key of decoded.keys()) if (!list.some((r) => r.data === key)) decoded.delete(key);
 
-  return list.map((r) => {
-    let data = decoded.get(r.data);
+  for (const key of decoded.keys()) {
+    if (!list.some((reference) => reference.data === key)) decoded.delete(key);
+  }
+
+  return list.map((reference) => {
+    let data = decoded.get(reference.data);
 
     if (!data) {
-      const raw = atob(r.data);
+      const raw = atob(reference.data);
       const bytes = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-      decoded.set(r.data, (data = bytes.buffer));
+      decoded.set(reference.data, (data = bytes.buffer));
     }
 
-    return { id: r.id, data, ...(r.hidden ? { hidden: true } : {}), ...(r.scale ? { scale: r.scale } : {}) };
+    return {
+      id: reference.id,
+      data,
+      ...(reference.hidden ? { hidden: true } : {}),
+      ...(reference.scale ? { scale: reference.scale } : {}),
+    };
   });
 }
 
@@ -187,7 +195,8 @@ export const useTerrainPlace = create<{
 }>(() => ({ body: null, offset: 0, move: null }));
 
 /** Whether the design has a reference model shown, so parts can be set onto it. */
-export const hasTerrain = (): boolean => (useApp.getState().doc.references ?? []).some((r) => !r.hidden);
+export const hasTerrain = (): boolean =>
+  (useApp.getState().doc.references ?? []).some((reference) => !reference.hidden);
 
 /**
  * Starts a sketch on a level plane at the height of a point on the terrain: an outline drawn there
@@ -228,17 +237,17 @@ function moveOnto(
   at: readonly [number, number, number] | undefined,
   offset: number,
 ): [number, number, number] | null {
-  const vp = getViewport();
-  const m = useApp.getState().output?.meshes.find((x) => x.bodyId === body);
-  if (!vp || !m) return null;
+  const viewport = getViewport();
+  const mesh = useApp.getState().output?.meshes.find((x) => x.bodyId === body);
+  if (!viewport || !mesh) return null;
 
   const lo = [Infinity, Infinity, Infinity],
     hi = [-Infinity, -Infinity, -Infinity];
 
-  for (let i = 0; i < m.positions.length; i += 3) {
+  for (let i = 0; i < mesh.positions.length; i += 3) {
     for (let k = 0; k < 3; k++) {
-      lo[k] = Math.min(lo[k]!, m.positions[i + k]!);
-      hi[k] = Math.max(hi[k]!, m.positions[i + k]!);
+      lo[k] = Math.min(lo[k]!, mesh.positions[i + k]!);
+      hi[k] = Math.max(hi[k]!, mesh.positions[i + k]!);
     }
   }
 
@@ -251,7 +260,7 @@ function moveOnto(
 
   for (let i = 0; i <= 6; i++) {
     for (let j = 0; j <= 6; j++) {
-      const h = vp.sceneryHeight(
+      const h = viewport.sceneryHeight(
         lo[0]! + dx + ((hi[0]! - lo[0]!) * i) / 6,
         lo[1]! + dy + ((hi[1]! - lo[1]!) * j) / 6,
         near,
@@ -303,14 +312,14 @@ export function setOnTerrain(body: string): void {
 export function startPlacing(body: string): void {
   useTerrainPlace.setState({ body, move: null });
 
-  const keys = (e: KeyboardEvent) => {
-    if (actionFor(e, COMMON_ACTIONS) === "cancel") useTerrainPlace.setState({ body: null, move: null });
+  const keys = (event: KeyboardEvent) => {
+    if (actionFor(event, COMMON_ACTIONS) === "cancel") useTerrainPlace.setState({ body: null, move: null });
 
     // Arrow keys raise and lower it: 10 mm a step, 100 mm with Shift.
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      e.preventDefault();
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      event.preventDefault();
       setPlaceOffset(
-        useTerrainPlace.getState().offset + (e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 100 : 10),
+        useTerrainPlace.getState().offset + (event.key === "ArrowUp" ? 1 : -1) * (event.shiftKey ? 100 : 10),
       );
     }
   };

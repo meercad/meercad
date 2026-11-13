@@ -81,10 +81,10 @@ try {
 
 /** Runs a keyboard action from the active shortcut preset (see lib/keymap). */
 function runModelAction(action: ModelAction): void {
-  const s = useApp.getState();
-  const vp = getViewport();
-  const hovered = vp?.hovered ?? null;
-  if (action.startsWith("view.")) return vp?.setView(action.slice(5) as StandardView);
+  const state = useApp.getState();
+  const viewport = getViewport();
+  const hovered = viewport?.hovered ?? null;
+  if (action.startsWith("view.")) return viewport?.setView(action.slice(5) as StandardView);
 
   switch (action) {
     case "palette":
@@ -99,18 +99,18 @@ function runModelAction(action: ModelAction): void {
     case "unhide_all":
       return useApp.setState({ hidden: new Set() });
     case "fit":
-      return vp?.fit();
+      return viewport?.fit();
     case "normal":
-      if (hovered?.kind === "face" && hovered.normal) vp?.viewFrom(hovered.normal);
+      if (hovered?.kind === "face" && hovered.normal) viewport?.viewFrom(hovered.normal);
 
       return;
     case "measure":
-      return useApp.setState({ measure: { active: !s.measure.active, picks: [], result: null } });
+      return useApp.setState({ measure: { active: !state.measure.active, picks: [], result: null } });
     case "joints":
-      return hasPack("mechanics") || s.doc.mechanism?.joints.length ? toggleJoints() : undefined;
+      return hasPack("mechanics") || state.doc.mechanism?.joints.length ? toggleJoints() : undefined;
     case "sketch":
       if (hovered && (hovered.kind === "plane" || (hovered.kind === "face" && hovered.normal))) {
-        const spec = planeSpecForPick(hovered, s.output?.meshes ?? []);
+        const spec = planeSpecForPick(hovered, state.output?.meshes ?? []);
         if (spec) return startSketch(spec);
       }
 
@@ -125,11 +125,11 @@ function runModelAction(action: ModelAction): void {
 /** `start`: the page has just loaded (also after the iPhone ended it). */
 async function route(start = false): Promise<void> {
   const hash = location.hash;
-  const m = /^#\/p\/(.+)$/.exec(hash);
-  const s = useApp.getState();
+  const match = /^#\/p\/(.+)$/.exec(hash);
+  const state = useApp.getState();
 
-  if (m) {
-    const id = decodeURIComponent(m[1]!);
+  if (match) {
+    const id = decodeURIComponent(match[1]!);
 
     // The page was ended while opening this design (out of memory on the iPhone or iPad): the
     // overview instead of the same again, round and round. A tap on it tries once more.
@@ -145,19 +145,19 @@ async function route(start = false): Promise<void> {
       return;
     }
 
-    if (s.screen !== "editor" || s.project?.id !== id) await openProject(id);
-  } else if (s.screen === "editor") {
+    if (state.screen !== "editor" || state.project?.id !== id) await openProject(id);
+  } else if (state.screen === "editor") {
     goHome();
   }
 }
 
 export function App() {
-  const screen = useApp((s) => s.screen);
-  const assistantTab = useApp((s) => s.assistantTab);
-  const sideOpen = useApp((s) => s.sideOpen);
+  const screen = useApp((state) => state.screen);
+  const assistantTab = useApp((state) => state.assistantTab);
+  const sideOpen = useApp((state) => state.sideOpen);
   const motionOpen = useMotion((s) => s.open);
-  const sheet = useApp((s) => !!s.dialog || s.measure.active) || motionOpen;
-  const sketching = useApp((s) => !!s.sketchId);
+  const sheet = useApp((state) => !!state.dialog || state.measure.active) || motionOpen;
+  const sketching = useApp((state) => !!state.sketchId);
   // Phone: the parts sheet makes way for a sketch or another sheet (a feature's dialog, measuring).
   // In a sketch the bar has no Parts button to close it again, and it covered half the sketch.
   useEffect(() => {
@@ -233,11 +233,11 @@ export function App() {
         cmd === "duplicate"
       ) {
         // Text in a field (or selected on the page) is edited as text; otherwise the command acts on parts.
-        const el = document.activeElement;
+        const element = document.activeElement;
         const text =
-          el instanceof HTMLInputElement ||
-          el instanceof HTMLTextAreaElement ||
-          (el as HTMLElement | null)?.isContentEditable ||
+          element instanceof HTMLInputElement ||
+          element instanceof HTMLTextAreaElement ||
+          (element as HTMLElement | null)?.isContentEditable ||
           !!window.getSelection()?.toString();
 
         if (text || useApp.getState().screen !== "editor") {
@@ -247,10 +247,15 @@ export function App() {
         }
       } else if (cmd === "undo" || cmd === "redo") {
         // In a text field the menu undoes typing; everywhere else it undoes the model.
-        const el = document.activeElement;
-        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) document.execCommand(cmd);
-        else if (cmd === "undo") undo();
-        else redo();
+        const element = document.activeElement;
+
+        if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+          document.execCommand(cmd);
+        } else if (cmd === "undo") {
+          undo();
+        } else {
+          redo();
+        }
       }
     });
     const offOpen = desktop.on("open-project", (id) => void openProject(id));
@@ -309,25 +314,25 @@ export function App() {
   }, []);
   // Tabs: the usual browser/editor keys.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      const k = e.key.toLowerCase();
-      const run = (fn: () => void) => (e.preventDefault(), e.stopImmediatePropagation(), fn());
-      if (e.ctrlKey && e.key === "Tab") return run(() => cycleTab(e.shiftKey ? -1 : 1));
+    const onKey = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      const k = event.key.toLowerCase();
+      const run = (fn: () => void) => (event.preventDefault(), event.stopImmediatePropagation(), fn());
+      if (event.ctrlKey && event.key === "Tab") return run(() => cycleTab(event.shiftKey ? -1 : 1));
       if (!mod) return;
-      if (k === "t" && e.shiftKey) return run(reopenClosedTab);
-      if (k === "t" && !e.altKey) return run(() => void newProject());
+      if (k === "t" && event.shiftKey) return run(reopenClosedTab);
+      if (k === "t" && !event.altKey) return run(() => void newProject());
 
-      if (k === "w" && !e.shiftKey && (useApp.getState().project || useApp.getState().assistantTab)) {
+      if (k === "w" && !event.shiftKey && (useApp.getState().project || useApp.getState().assistantTab)) {
         return run(closeCurrentTab);
       }
 
-      if (e.shiftKey && (e.code === "BracketRight" || e.code === "BracketLeft")) {
-        return run(() => cycleTab(e.code === "BracketRight" ? 1 : -1));
+      if (event.shiftKey && (event.code === "BracketRight" || event.code === "BracketLeft")) {
+        return run(() => cycleTab(event.code === "BracketRight" ? 1 : -1));
       }
 
-      if (e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-        return run(() => cycleTab(e.key === "ArrowRight" ? 1 : -1));
+      if (event.altKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
+        return run(() => cycleTab(event.key === "ArrowRight" ? 1 : -1));
       }
     };
 
@@ -336,10 +341,10 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
-      if (e.key === "?" && !typing) setHelp((h) => !h);
-      if (e.key === "Escape") setHelp(false);
+    const onKey = (event: KeyboardEvent) => {
+      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+      if (event.key === "?" && !typing) setHelp((h) => !h);
+      if (event.key === "Escape") setHelp(false);
     };
 
     window.addEventListener("keydown", onKey);
@@ -348,58 +353,58 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const s = useApp.getState();
-      if (s.screen !== "editor") return;
+    const onKey = (event: KeyboardEvent) => {
+      const state = useApp.getState();
+      if (state.screen !== "editor") return;
 
       const typing =
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement;
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement;
 
       // The desktop Edit menu no longer does text undo itself (its Undo acts on the model).
-      if ((e.metaKey || e.ctrlKey) && typing && (e.key === "z" || e.key === "Z")) {
-        e.preventDefault();
-        document.execCommand(e.shiftKey ? "redo" : "undo");
+      if ((event.metaKey || event.ctrlKey) && typing && (event.key === "z" || event.key === "Z")) {
+        event.preventDefault();
+        document.execCommand(event.shiftKey ? "redo" : "undo");
 
         return;
       }
 
-      if ((e.metaKey || e.ctrlKey) && !typing) {
-        const k = e.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && !typing) {
+        const k = event.key.toLowerCase();
 
         if (k === "z") {
-          e.preventDefault();
-          if (e.shiftKey) redo();
+          event.preventDefault();
+          if (event.shiftKey) redo();
           else undo();
         } else if (k === "y") {
-          e.preventDefault();
+          event.preventDefault();
           redo();
-        } else if (k === "h" && e.altKey) {
-          e.preventDefault();
+        } else if (k === "h" && event.altKey) {
+          event.preventDefault();
           toggleSide();
         } else if (k === "\\") {
-          e.preventDefault();
+          event.preventDefault();
           toggleSide();
         } else if (k === "o") {
-          e.preventDefault();
+          event.preventDefault();
           void importFile();
         } else if (
           !desktop &&
-          !e.shiftKey &&
-          !e.altKey &&
+          !event.shiftKey &&
+          !event.altKey &&
           (k === "a" || k === "c" || k === "x" || k === "v" || k === "d") &&
-          !s.sketchId &&
-          !s.dialog
+          !state.sketchId &&
+          !state.dialog
         ) {
           // The iPad with a keyboard (on the Mac the Edit menu sends these).
-          e.preventDefault();
+          event.preventDefault();
           partCommand(({ a: "selectAll", c: "copy", x: "cut", v: "paste", d: "duplicate" } as const)[k]);
         } else {
-          const action = actionFor(e, MODEL_ACTIONS);
+          const action = actionFor(event, MODEL_ACTIONS);
 
           if (action) {
-            e.preventDefault();
+            event.preventDefault();
             runModelAction(action);
           }
         }
@@ -407,45 +412,49 @@ export function App() {
         return;
       }
 
-      if (typing || s.sketchId) return;
+      if (typing || state.sketchId) return;
 
       // Every key goes through the active control scheme (lib/controls).
-      const action = actionFor(e, MODEL_CONTEXT);
+      const action = actionFor(event, MODEL_CONTEXT);
       if (!action) return;
 
       if (action === "cancel") {
-        if (s.dialog) return cancelDialog();
-        if (s.pickingSketchPlane) return useApp.setState({ pickingSketchPlane: false });
-        if (s.measure.active) return useApp.setState({ measure: { active: false, picks: [], result: null } });
+        if (state.dialog) return cancelDialog();
+        if (state.pickingSketchPlane) return useApp.setState({ pickingSketchPlane: false });
+
+        if (state.measure.active) {
+          return useApp.setState({ measure: { active: false, picks: [], result: null } });
+        }
+
         if (useMotion.getState().draft) return useMotion.setState({ draft: null });
         if (useMotion.getState().open) return toggleJoints();
 
         return useApp.setState({ selection: [], selectedFeature: null });
       }
 
-      if (action === "confirm" && s.dialog) return void commitDialog();
-      if (s.dialog) return;
+      if (action === "confirm" && state.dialog) return void commitDialog();
+      if (state.dialog) return;
 
       if (action === "delete") {
-        e.preventDefault();
-        if (s.selection.length || s.selectedFeature) void deleteModelSelection();
+        event.preventDefault();
+        if (state.selection.length || state.selectedFeature) void deleteModelSelection();
 
         return;
       }
 
       if (action === "confirm") {
-        if (s.selectedFeature) editFeature(s.selectedFeature);
+        if (state.selectedFeature) editFeature(state.selectedFeature);
 
         return;
       }
 
       if (action === "select_all") {
-        e.preventDefault();
+        event.preventDefault();
 
         return partCommand("selectAll");
       }
 
-      e.preventDefault();
+      event.preventDefault();
       runModelAction(action);
     };
 
@@ -455,17 +464,18 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onDrop = (e: DragEvent) => {
-      if (!e.dataTransfer?.files.length) return;
+    const onDrop = (event: DragEvent) => {
+      if (!event.dataTransfer?.files.length) return;
 
-      e.preventDefault();
+      event.preventDefault();
       // Nothing is imported behind the terms of use.
       if (!termsAccepted()) return;
 
-      void importFile(e.dataTransfer.files[0]);
+      void importFile(event.dataTransfer.files[0]);
     };
 
-    const onOver = (e: DragEvent) => e.dataTransfer?.types.includes("Files") && e.preventDefault();
+    const onOver = (event: DragEvent) =>
+      event.dataTransfer?.types.includes("Files") && event.preventDefault();
     window.addEventListener("drop", onDrop);
     window.addEventListener("dragover", onOver);
 
@@ -534,15 +544,15 @@ export function App() {
 
 /** ⌘W: closes the open tab, also an assistant's (it stops working on it; its project is saved). */
 function closeCurrentTab(): void {
-  const s = useApp.getState();
-  if (s.assistantTab) void handOverAssistantTab(s.assistantTab, false);
-  else if (s.project) closeTab(s.project.id);
+  const state = useApp.getState();
+  if (state.assistantTab) void handOverAssistantTab(state.assistantTab, false);
+  else if (state.project) closeTab(state.project.id);
 }
 
 /** Select all, copy, cut, paste or duplicate whole parts (see lib/clipboard). */
 function partCommand(cmd: "cut" | "copy" | "paste" | "selectAll" | "duplicate"): void {
-  const s = useApp.getState();
-  if (s.screen !== "editor" || s.sketchId || s.dialog) return;
+  const state = useApp.getState();
+  if (state.screen !== "editor" || state.sketchId || state.dialog) return;
   if (cmd === "selectAll") selectAll();
   else if (cmd === "copy") copyParts();
   else if (cmd === "cut") cutParts();

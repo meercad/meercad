@@ -130,7 +130,7 @@ export function ShortcutHelp({ onClose }: { onClose: () => void }) {
     <div className="modal-backdrop" onPointerDown={onClose}>
       <div
         className="modal"
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
         role="dialog"
         aria-label={t("Keyboard shortcuts")}
       >

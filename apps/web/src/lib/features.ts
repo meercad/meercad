@@ -316,7 +316,7 @@ export const TOOLBAR: FeatureOp[] = [
 /** A new feature with sensible defaults; selections start empty and are filled from the viewport. */
 export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
   const id = nextFeatureId(doc, op);
-  const lastSketch = [...doc.features].reverse().find((f) => f.op === "sketch");
+  const lastSketch = [...doc.features].reverse().find((feature) => feature.op === "sketch");
   const lastSketchUsed = lastSketch && sketchesUsed(doc.features).has(lastSketch.id);
   const profile = lastSketch && !lastSketchUsed ? { sketch: lastSketch.id } : { sketch: "" };
   const noEdges: EdgeSelector[] = [];
@@ -331,7 +331,9 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
         profile,
         extent: "blind",
         distance: 10,
-        mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import")
+        mode: doc.features.some(
+          (feature) => feature.op === "extrude" || feature.op === "revolve" || feature.op === "import",
+        )
           ? "join"
           : "new_body",
       };
@@ -354,7 +356,9 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
         axis: { ref: "origin.Z" },
         pitch: 5,
         turns: 5,
-        mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import")
+        mode: doc.features.some(
+          (feature) => feature.op === "extrude" || feature.op === "revolve" || feature.op === "import",
+        )
           ? "join"
           : "new_body",
       };
@@ -416,12 +420,12 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
         op,
         profiles: [],
         mode: doc.features.some(
-          (f) =>
-            f.op === "extrude" ||
-            f.op === "revolve" ||
-            f.op === "loft" ||
-            f.op === "sweep" ||
-            f.op === "import",
+          (feature) =>
+            feature.op === "extrude" ||
+            feature.op === "revolve" ||
+            feature.op === "loft" ||
+            feature.op === "sweep" ||
+            feature.op === "import",
         )
           ? "join"
           : "new_body",
@@ -433,12 +437,12 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
         profile,
         path: { sketch: "" },
         mode: doc.features.some(
-          (f) =>
-            f.op === "extrude" ||
-            f.op === "revolve" ||
-            f.op === "loft" ||
-            f.op === "sweep" ||
-            f.op === "import",
+          (feature) =>
+            feature.op === "extrude" ||
+            feature.op === "revolve" ||
+            feature.op === "loft" ||
+            feature.op === "sweep" ||
+            feature.op === "import",
         )
           ? "join"
           : "new_body",
@@ -464,7 +468,8 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       const plate = [...doc.features]
         .reverse()
         .find(
-          (f): f is Extract<Feature, { op: "gridfinity" }> => f.op === "gridfinity" && f.kind === "baseplate",
+          (feature): feature is Extract<Feature, { op: "gridfinity" }> =>
+            feature.op === "gridfinity" && feature.kind === "baseplate",
         );
 
       if (plate) {
@@ -485,7 +490,10 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
       // A new holder goes onto the last board, beside the holders already on it.
       const board = [...doc.features]
         .reverse()
-        .find((f): f is Extract<Feature, { op: "wall" }> => f.op === "wall" && f.kind === "board");
+        .find(
+          (feature): feature is Extract<Feature, { op: "wall" }> =>
+            feature.op === "wall" && feature.kind === "board",
+        );
 
       if (board) {
         return {
@@ -512,7 +520,11 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
         size: [20, 20, 20],
         center: [0, 0, 10],
         mode: doc.features.some(
-          (f) => f.op === "extrude" || f.op === "revolve" || f.op === "import" || f.op === "primitive",
+          (feature) =>
+            feature.op === "extrude" ||
+            feature.op === "revolve" ||
+            feature.op === "import" ||
+            feature.op === "primitive",
         )
           ? "join"
           : "new_body",
@@ -532,7 +544,9 @@ export function draftFeature(op: FeatureOp, doc: MeercadDocument): Feature {
         text: "meerCAD",
         size: 8,
         depth: 1,
-        mode: doc.features.some((f) => f.op === "extrude" || f.op === "revolve" || f.op === "import")
+        mode: doc.features.some(
+          (feature) => feature.op === "extrude" || feature.op === "revolve" || feature.op === "import",
+        )
           ? "join"
           : "new_body",
       };
@@ -562,12 +576,12 @@ function freeWallCell(doc: MeercadDocument, board: Extract<Feature, { op: "wall"
   const [bx, by] = [n(board.units[0], 1), n(board.units[1], 1)];
   const taken = new Set<string>();
 
-  for (const f of doc.features) {
-    if (f.op === "wall" && f.board === board.id) {
-      const [ci, cj] = [n(f.cell?.[0], 0), n(f.cell?.[1], 0)];
+  for (const feature of doc.features) {
+    if (feature.op === "wall" && feature.board === board.id) {
+      const [ci, cj] = [n(feature.cell?.[0], 0), n(feature.cell?.[1], 0)];
 
-      for (let i = 0; i < n(f.units?.[0], 1); i++) {
-        for (let j = 0; j < n(f.units?.[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
+      for (let i = 0; i < n(feature.units?.[0], 1); i++) {
+        for (let j = 0; j < n(feature.units?.[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
       }
     }
   }
@@ -583,12 +597,12 @@ function freeCell(doc: MeercadDocument, plate: Extract<Feature, { op: "gridfinit
   const [px, py] = plate.drawer || !plate.units ? [0, 0] : [n(plate.units[0], 1), n(plate.units[1], 1)];
   const taken = new Set<string>();
 
-  for (const f of doc.features) {
-    if (f.op === "gridfinity" && f.baseplate === plate.id) {
-      const [ci, cj] = [n(f.cell?.[0], 0), n(f.cell?.[1], 0)];
+  for (const feature of doc.features) {
+    if (feature.op === "gridfinity" && feature.baseplate === plate.id) {
+      const [ci, cj] = [n(feature.cell?.[0], 0), n(feature.cell?.[1], 0)];
 
-      for (let i = 0; i < n(f.units?.[0], 1); i++) {
-        for (let j = 0; j < n(f.units?.[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
+      for (let i = 0; i < n(feature.units?.[0], 1); i++) {
+        for (let j = 0; j < n(feature.units?.[1], 1); j++) taken.add(`${ci + i},${cj + j}`);
       }
     }
   }
@@ -599,40 +613,46 @@ function freeCell(doc: MeercadDocument, plate: Extract<Feature, { op: "gridfinit
 }
 
 /** Why a draft cannot be built yet (missing selections), or null. */
-export function draftProblem(f: Feature): string | null {
-  switch (f.op) {
+export function draftProblem(feature: Feature): string | null {
+  switch (feature.op) {
     case "extrude":
     case "revolve":
-      return "face" in f.profile || f.profile.sketch ? null : t("Select sketch regions or a face as profile");
+      return "face" in feature.profile || feature.profile.sketch
+        ? null
+        : t("Select sketch regions or a face as profile");
     case "fillet":
     case "chamfer":
-      return (Array.isArray(f.edges) ? f.edges.length : 1) ? null : t("Select edges");
+      return (Array.isArray(feature.edges) ? feature.edges.length : 1) ? null : t("Select edges");
     case "shell":
-      return f.faces.length ? null : t("Select faces to remove");
+      return feature.faces.length ? null : t("Select faces to remove");
     case "thread":
-      return "face" in f.face && !f.face.face ? t("Select a hole wall or a round shaft") : null;
+      return "face" in feature.face && !feature.face.face ? t("Select a hole wall or a round shaft") : null;
     case "linear_pattern":
     case "circular_pattern":
     case "mirror":
-      return ("features" in f.source ? f.source.features : f.source.bodies).length
+      return ("features" in feature.source ? feature.source.features : feature.source.bodies).length
         ? null
         : t("Select features or bodies to copy");
     case "boolean":
-      return !f.target ? t("Select the target body") : f.tools.length ? null : t("Select tool bodies");
+      return !feature.target
+        ? t("Select the target body")
+        : feature.tools.length
+          ? null
+          : t("Select tool bodies");
     case "transform":
-      return f.bodies.length ? null : t("Select parts to move");
+      return feature.bodies.length ? null : t("Select parts to move");
     case "delete":
-      return f.bodies.length ? null : t("Select parts to delete");
+      return feature.bodies.length ? null : t("Select parts to delete");
     case "import":
-      return f.data ? null : t("Choose a file");
+      return feature.data ? null : t("Choose a file");
     case "mesh_convert":
-      return f.body ? null : t("Select a mesh part");
+      return feature.body ? null : t("Select a mesh part");
     case "gridfinity":
-      return f.pocket && !f.pocket.body ? t("Pick the part the bin should hold") : null;
+      return feature.pocket && !feature.pocket.body ? t("Pick the part the bin should hold") : null;
     case "scale":
-      return f.bodies.length ? null : t("Pick the parts to scale");
+      return feature.bodies.length ? null : t("Pick the parts to scale");
     case "bend":
-      return f.bodies.length ? null : t("Pick the parts to bend");
+      return feature.bodies.length ? null : t("Pick the parts to bend");
     case "align": {
       const empty = (s: Feature & { op: "align" }, k: "from" | "to") => {
         const v = s[k];
@@ -641,40 +661,40 @@ export function draftProblem(f: Feature): string | null {
         return "face" in sel && !sel.face;
       };
 
-      return empty(f, "from")
+      return empty(feature, "from")
         ? t("Pick the face of the part to move")
-        : empty(f, "to")
+        : empty(feature, "to")
           ? t("Pick the face to set it onto")
           : null;
     }
     case "standard_part":
-      return f.points.length ? null : t("Tap a flat face where the part goes");
+      return feature.points.length ? null : t("Tap a flat face where the part goes");
     case "draft":
-      return f.faces.length ? null : t("Pick the side faces to draft");
+      return feature.faces.length ? null : t("Pick the side faces to draft");
     case "offset_face":
-      return f.faces.length ? null : t("Pick the faces to move");
+      return feature.faces.length ? null : t("Pick the faces to move");
     case "rib":
-      return f.sketch ? null : t("Pick the rib's line in a sketch");
+      return feature.sketch ? null : t("Pick the rib's line in a sketch");
     case "loft":
-      return f.profiles.length >= 2
+      return feature.profiles.length >= 2
         ? null
         : t("Pick at least two profiles in order: sketch regions or flat faces");
     case "coil":
-      return "face" in f.profile || f.profile.sketch
+      return "face" in feature.profile || feature.profile.sketch
         ? null
         : t("Pick the profile: sketch regions beside the axis");
     case "sweep":
-      return !("face" in f.profile) && !f.profile.sketch
+      return !("face" in feature.profile) && !feature.profile.sketch
         ? t("Pick the profile: sketch regions")
-        : f.path.sketch
+        : feature.path.sketch
           ? null
           : t("Pick the path: lines and arcs of a sketch");
     case "hole":
-      return f.points.length ? null : t("Tap a flat face where the hole goes");
+      return feature.points.length ? null : t("Tap a flat face where the hole goes");
     case "snap_hook":
-      return f.points.length ? null : t("Tap a flat face where the hook stands");
+      return feature.points.length ? null : t("Tap a flat face where the hook stands");
     case "lithophane":
-      return f.image.pixels ? null : t("Choose a photo");
+      return feature.image.pixels ? null : t("Choose a photo");
     default:
       return null;
   }
@@ -690,14 +710,14 @@ export const WALL_ACCESSORIES: Record<NonNullable<Extract<Feature, { op: "wall" 
   screw: t("Screw snap"),
 };
 
-export function featureName(f: Feature): string {
-  if (!f.name && f.op === "standard_part") {
+export function featureName(feature: Feature): string {
+  if (!feature.name && feature.op === "standard_part") {
     // A standard part is named by what it is, e.g. "M3×12 ISO 4762".
     try {
-      const length = typeof f.length === "number" ? f.length : undefined;
-      const diameter = typeof f.diameter === "number" ? f.diameter : undefined;
-      const height = typeof f.height === "number" ? f.height : undefined;
-      const shape = standardShape(f.kind, { size: f.size, length, diameter, height });
+      const length = typeof feature.length === "number" ? feature.length : undefined;
+      const diameter = typeof feature.diameter === "number" ? feature.diameter : undefined;
+      const height = typeof feature.height === "number" ? feature.height : undefined;
+      const shape = standardShape(feature.kind, { size: feature.size, length, diameter, height });
 
       return shape.labelText ? t(shape.labelText.text, shape.labelText.values) : shape.label;
     } catch {
@@ -706,44 +726,62 @@ export function featureName(f: Feature): string {
   }
 
   // Bins and baseplates by their size ("Bin 2×1×3", "Baseplate 4×3"), labels by their text.
-  if (!f.name && f.op === "gridfinity" && f.pocket && !f.units) return t("Bin for a part");
+  if (!feature.name && feature.op === "gridfinity" && feature.pocket && !feature.units) {
+    return t("Bin for a part");
+  }
 
   if (
-    !f.name &&
-    f.op === "gridfinity" &&
-    typeof f.units?.[0] === "number" &&
-    typeof f.units[1] === "number"
+    !feature.name &&
+    feature.op === "gridfinity" &&
+    typeof feature.units?.[0] === "number" &&
+    typeof feature.units[1] === "number"
   ) {
-    return f.kind === "bin"
-      ? `${t("Bin")} ${f.units[0]}×${f.units[1]}×${typeof f.height === "number" ? f.height : 3}`
-      : f.drawer || f.outline
-        ? `${t("Baseplate")} ${f.id.replace(/^\D+/, "")}`
-        : `${t("Baseplate")} ${f.units[0]}×${f.units[1]}`;
+    return feature.kind === "bin"
+      ? `${t("Bin")} ${feature.units[0]}×${feature.units[1]}×${typeof feature.height === "number" ? feature.height : 3}`
+      : feature.drawer || feature.outline
+        ? `${t("Baseplate")} ${feature.id.replace(/^\D+/, "")}`
+        : `${t("Baseplate")} ${feature.units[0]}×${feature.units[1]}`;
   }
 
   // Boxes by their size ("Box 80×60×40", "Jar ⌀60×50").
-  if (!f.name && f.op === "box" && typeof f.width === "number" && typeof f.height === "number") {
-    return f.lid === "screw" || f.shape === "round"
-      ? `${t(f.lid === "screw" ? "Jar" : "Round box")} ⌀${f.width}×${f.height}`
-      : `${t("Box")} ${f.width}×${typeof f.depth === "number" ? f.depth : f.width}×${f.height}`;
+  if (
+    !feature.name &&
+    feature.op === "box" &&
+    typeof feature.width === "number" &&
+    typeof feature.height === "number"
+  ) {
+    return feature.lid === "screw" || feature.shape === "round"
+      ? `${t(feature.lid === "screw" ? "Jar" : "Round box")} ⌀${feature.width}×${feature.height}`
+      : `${t("Box")} ${feature.width}×${typeof feature.depth === "number" ? feature.depth : feature.width}×${feature.height}`;
   }
 
   // Wall boards by system and size ("openGrid 4×4", "Pegboard 6×4"), holders by what they hold ("Hook 1×1").
-  if (!f.name && f.op === "wall" && typeof f.units[0] === "number" && typeof f.units[1] === "number") {
-    const size = `${f.units[0]}×${f.units[1]}`;
-    if (f.kind === "board") return `${f.system === "opengrid" ? "openGrid" : t("Pegboard")} ${size}`;
+  if (
+    !feature.name &&
+    feature.op === "wall" &&
+    typeof feature.units[0] === "number" &&
+    typeof feature.units[1] === "number"
+  ) {
+    const size = `${feature.units[0]}×${feature.units[1]}`;
 
-    return `${WALL_ACCESSORIES[f.accessory ?? "hook"]} ${size}`;
+    if (feature.kind === "board") {
+      return `${feature.system === "opengrid" ? "openGrid" : t("Pegboard")} ${size}`;
+    }
+
+    return `${WALL_ACCESSORIES[feature.accessory ?? "hook"]} ${size}`;
   }
 
-  if (!f.name && f.op === "label" && f.text?.trim()) return `${t("Label")} ${f.text.trim().split("\n")[0]}`;
-  if (f.name) return f.name;
+  if (!feature.name && feature.op === "label" && feature.text?.trim()) {
+    return `${t("Label")} ${feature.text.trim().split("\n")[0]}`;
+  }
+
+  if (feature.name) return feature.name;
 
   // "Extrude 3" from ex3; an id without a number (an assistant's "base", "lid") is shown as it is,
   // so two such parts are not both just "Extrude".
-  const n = f.id.replace(/^\D+/, "");
+  const n = feature.id.replace(/^\D+/, "");
 
-  return `${FEATURES[f.op].label} ${n || f.id}`;
+  return `${FEATURES[feature.op].label} ${n || feature.id}`;
 }
 
 /**
@@ -753,8 +791,13 @@ export function featureName(f: Feature): string {
 export function partName(id: string, features: readonly Feature[]): string {
   let best: Feature | undefined;
 
-  for (const f of features) {
-    if ((id === f.id || id.startsWith(`${f.id}_`)) && f.id.length > (best?.id.length ?? 0)) best = f;
+  for (const feature of features) {
+    if (
+      (id === feature.id || id.startsWith(`${feature.id}_`)) &&
+      feature.id.length > (best?.id.length ?? 0)
+    ) {
+      best = feature;
+    }
   }
 
   if (!best) return id;
@@ -821,8 +864,13 @@ const FASTENERS = new Set([
 export function isFastener(id: string, features: readonly Feature[]): boolean {
   let best: Feature | undefined;
 
-  for (const f of features) {
-    if ((id === f.id || id.startsWith(`${f.id}_`)) && f.id.length > (best?.id.length ?? 0)) best = f;
+  for (const feature of features) {
+    if (
+      (id === feature.id || id.startsWith(`${feature.id}_`)) &&
+      feature.id.length > (best?.id.length ?? 0)
+    ) {
+      best = feature;
+    }
   }
 
   if (!best) return false;
@@ -841,16 +889,21 @@ export function isFastener(id: string, features: readonly Feature[]): boolean {
 /** Sketches that a feature builds on (they are hidden once used, like a consumed profile). */
 export function sketchesUsed(features: readonly Feature[]): Set<string> {
   return new Set(
-    features.flatMap((f) => {
-      if (f.op === "extrude" || f.op === "revolve" || f.op === "coil") {
-        return "sketch" in f.profile ? [f.profile.sketch] : [];
+    features.flatMap((feature) => {
+      if (feature.op === "extrude" || feature.op === "revolve" || feature.op === "coil") {
+        return "sketch" in feature.profile ? [feature.profile.sketch] : [];
       }
 
-      if (f.op === "rib") return [f.sketch];
-      if (f.op === "loft") return f.profiles.flatMap((p) => ("sketch" in p ? [p.sketch] : []));
+      if (feature.op === "rib") return [feature.sketch];
 
-      if (f.op === "sweep") {
-        return ["sketch" in f.profile ? f.profile.sketch : "", f.path.sketch].filter(Boolean);
+      if (feature.op === "loft") {
+        return feature.profiles.flatMap((profile) => ("sketch" in profile ? [profile.sketch] : []));
+      }
+
+      if (feature.op === "sweep") {
+        return ["sketch" in feature.profile ? feature.profile.sketch : "", feature.path.sketch].filter(
+          Boolean,
+        );
       }
 
       return [];

@@ -13,10 +13,12 @@ export function Markdown({ text }: { text: string }) {
     const line = lines[i]!;
     if (!line.trim()) continue;
 
-    const h = /^(#{1,3})\s+(.*)$/.exec(line);
+    const match = /^(#{1,3})\s+(.*)$/.exec(line);
 
-    if (h) {
-      out.push(h[1]!.length === 1 ? <h3 key={i}>{inline(h[2]!)}</h3> : <h4 key={i}>{inline(h[2]!)}</h4>);
+    if (match) {
+      out.push(
+        match[1]!.length === 1 ? <h3 key={i}>{inline(match[2]!)}</h3> : <h4 key={i}>{inline(match[2]!)}</h4>,
+      );
       continue;
     }
 
@@ -91,14 +93,14 @@ export function Markdown({ text }: { text: string }) {
 
 function inline(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
-  const re = /(`[^`]+`|\*\*[^*]+\*\*|_[^_]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s)]+)/g;
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|_[^_]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s)]+)/g;
   let last = 0;
 
-  for (const m of text.matchAll(re)) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
+  for (const match of text.matchAll(pattern)) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
 
-    const t = m[0];
-    const k = `${m.index}`;
+    const t = match[0];
+    const k = `${match.index}`;
 
     if (t.startsWith("`")) {
       parts.push(<code key={k}>{t.slice(1, -1)}</code>);
@@ -121,7 +123,7 @@ function inline(text: string): ReactNode[] {
       );
     }
 
-    last = m.index + t.length;
+    last = match.index + t.length;
   }
 
   if (last < text.length) parts.push(text.slice(last));

@@ -73,17 +73,19 @@ function cardTap(id: string) {
   if (!tap) cardTaps.set(id, (tap = sureTap(() => void openProject(id))));
 
   const tapper = tap;
-  const onCard = (e: PointerEvent) => !(e.target instanceof Element && e.target.closest(".card button"));
+  const onCard = (event: PointerEvent) =>
+    !(event.target instanceof Element && event.target.closest(".card button"));
 
   return {
     onClick: tapper.onClick,
-    onPointerDown: (e: PointerEvent) => (onCard(e) ? tapper.onPointerDown(e) : tapper.onPointerCancel()),
-    onPointerUp: (e: PointerEvent) => onCard(e) && tapper.onPointerUp(e),
+    onPointerDown: (event: PointerEvent) =>
+      onCard(event) ? tapper.onPointerDown(event) : tapper.onPointerCancel(),
+    onPointerUp: (event: PointerEvent) => onCard(event) && tapper.onPointerUp(event),
     onPointerCancel: tapper.onPointerCancel,
   };
 }
 
-const dragging = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
+const dragging = (event: DragEvent) => event.dataTransfer.types.includes(DRAG_TYPE);
 const parentOf = (f: string) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
 /** `text` is a translated message with a {msg} placeholder for the error. */
 const fail = (text: string) => (e: unknown) =>
@@ -132,7 +134,8 @@ const byName = (a: string, b: string) =>
 
 /** Projects in the chosen order; names break ties so the order never jumps. */
 function sortProjects(list: ProjectMeta[], s: Sort): ProjectMeta[] {
-  const value = (p: ProjectMeta) => (s.key === "created" ? (p.createdAt ?? p.updatedAt) : p.updatedAt);
+  const value = (project: ProjectMeta) =>
+    s.key === "created" ? (project.createdAt ?? project.updatedAt) : project.updatedAt;
   const cmp = (a: ProjectMeta, b: ProjectMeta) =>
     (s.key === "name" ? byName(a.name, b.name) : value(a) - value(b)) || byName(a.name, b.name);
 
@@ -312,7 +315,7 @@ function folderMenu(f: string, x: number, y: number): void {
       onClick: async () => {
         const count = useApp
           .getState()
-          .projects.filter((p) => p.folder === f || p.folder?.startsWith(`${f}/`)).length;
+          .projects.filter((project) => project.folder === f || project.folder?.startsWith(`${f}/`)).length;
         const ok = await askConfirm({
           title: t("Delete “{name}”?", { name }),
           message: count
@@ -327,23 +330,23 @@ function folderMenu(f: string, x: number, y: number): void {
   ]);
 }
 
-function projectMenu(p: ProjectMeta, x: number, y: number): void {
+function projectMenu(project: ProjectMeta, x: number, y: number): void {
   const { folders } = useApp.getState();
-  const current = p.folder ?? "";
+  const current = project.folder ?? "";
   const targets = ["", ...folders].filter((f) => f !== current);
   showMenu(x, y, [
-    { label: t("Open"), icon: <Box />, onClick: () => void openProject(p.id) },
+    { label: t("Open"), icon: <Box />, onClick: () => void openProject(project.id) },
     ...targets.map((f) => ({
       label: t("Move to {folder}", { folder: f ? f.split("/").join(" › ") : t("Your projects") }),
       icon: <FolderInput />,
-      onClick: () => void moveTo(p.id, f),
+      onClick: () => void moveTo(project.id, f),
     })),
     ...(desktop
       ? [
           {
             label: t("Show in Finder"),
             icon: <FolderOpen />,
-            onClick: () => void desktop!.projects.reveal(p.id),
+            onClick: () => void desktop!.projects.reveal(project.id),
           },
         ]
       : []),
@@ -354,27 +357,30 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
       danger: true,
       onClick: async () => {
         const ok = await askConfirm({
-          title: t("Delete “{name}”?", { name: p.name }),
+          title: t("Delete “{name}”?", { name: project.name }),
           message: desktop
             ? t("The project file goes to the Trash.")
             : t("The project file is deleted. This cannot be undone."),
           confirmLabel: t("Delete part"),
           danger: true,
         });
-        if (ok) await deleteProject(p.id).then(refreshProjects, fail(t("Could not delete the part: {msg}")));
+
+        if (ok) {
+          await deleteProject(project.id).then(refreshProjects, fail(t("Could not delete the part: {msg}")));
+        }
       },
     },
   ]);
 }
 
 export function Home() {
-  const projects = useApp((s) => s.projects);
-  const folders = useApp((s) => s.folders);
+  const projects = useApp((state) => state.projects);
+  const folders = useApp((state) => state.folders);
   // Only the examples this app can show and change with the packs it has.
   usePremium();
 
-  const examples = EXAMPLES.filter((ex) => examplePacks(ex).every(hasPack));
-  const folder = useApp((s) => s.folder);
+  const examples = EXAMPLES.filter((example) => examplePacks(example).every(hasPack));
+  const folder = useApp((state) => state.folder);
   const prefs = usePrefs();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [sort, setSort] = useState(loadSort);
@@ -398,40 +404,43 @@ export function Home() {
     .filter((f) => parentOf(f) === folder)
     .sort((a, b) => (sort.key === "name" && !sort.asc ? -byName(a, b) : byName(a, b)));
   const here = sortProjects(
-    projects.filter((p) => (p.folder ?? "") === folder),
+    projects.filter((project) => (project.folder ?? "") === folder),
     sort,
   );
   // Selecting several parts: tap/click toggles while `selecting`; Cmd/Ctrl/Shift-click starts it.
   const [selecting, setSelecting] = useState(false);
   const [sel, setSel] = useState(EMPTY_SELECTION);
   // Projects an assistant works on in its tab: a click opens that tab.
-  const assistantTabs = useApp((s) => s.assistantTabs);
-  const order = here.map((p) => p.id);
+  const assistantTabs = useApp((state) => state.assistantTabs);
+  const order = here.map((project) => project.id);
   const orderKey = order.join("\n");
   const stopSelecting = () => (setSelecting(false), setSel(EMPTY_SELECTION));
   useEffect(stopSelecting, [folder]);
-  useEffect(() => setSel((s) => keepShown(s, orderKey ? orderKey.split("\n") : [])), [orderKey]);
+  useEffect(
+    () => setSel((selection) => keepShown(selection, orderKey ? orderKey.split("\n") : [])),
+    [orderKey],
+  );
   useEffect(() => {
     if (!selecting) return;
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector(".ask-backdrop, .modal-backdrop, .menu")) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || document.querySelector(".ask-backdrop, .modal-backdrop, .menu")) return;
 
       const typing =
-        e.target instanceof HTMLElement &&
-        (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+        event.target instanceof HTMLElement &&
+        (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName));
       if (typing) return;
-      if (e.key === "Escape") return (e.preventDefault(), stopSelecting());
+      if (event.key === "Escape") return (event.preventDefault(), stopSelecting());
 
-      if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+      if (event.key === "a" && (event.metaKey || event.ctrlKey)) {
         return (
-          e.preventDefault(),
-          setSel((s) => ({ ids: orderKey ? orderKey.split("\n") : [], anchor: s.anchor }))
+          event.preventDefault(),
+          setSel((selection) => ({ ids: orderKey ? orderKey.split("\n") : [], anchor: selection.anchor }))
         );
       }
 
-      if ((e.key === "Delete" || e.key === "Backspace") && sel.ids.length) {
-        return (e.preventDefault(), void deleteMany(sel.ids).then((ok) => ok && stopSelecting()));
+      if ((event.key === "Delete" || event.key === "Backspace") && sel.ids.length) {
+        return (event.preventDefault(), void deleteMany(sel.ids).then((ok) => ok && stopSelecting()));
       }
     };
 
@@ -440,9 +449,9 @@ export function Home() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selecting, orderKey, sel.ids]);
 
-  const pickCard = (e: MouseEvent | null, id: string) => {
+  const pickCard = (event: MouseEvent | null, id: string) => {
     setSelecting(true);
-    setSel((s) => clickSelect(s, order, id, !!e?.shiftKey));
+    setSel((selection) => clickSelect(selection, order, id, !!event?.shiftKey));
   };
 
   const allSelected = order.length > 0 && order.every((id) => sel.ids.includes(id));
@@ -462,11 +471,11 @@ export function Home() {
       .map((label, i, all) => ({ path: all.slice(0, i + 1).join("/"), label })),
   ];
 
-  const dropOn = async (e: DragEvent, target: string) => {
-    e.preventDefault();
+  const dropOn = async (event: DragEvent, target: string) => {
+    event.preventDefault();
     setDropTarget(null);
 
-    const ids = e.dataTransfer.getData(DRAG_TYPE).split("\n").filter(Boolean);
+    const ids = event.dataTransfer.getData(DRAG_TYPE).split("\n").filter(Boolean);
     if (ids.length > 1) await moveMany(ids, target).then(stopSelecting);
     else if (ids[0]) await moveTo(ids[0], target);
   };
@@ -512,8 +521,8 @@ export function Home() {
                 <button
                   className={`crumb ${i === crumbs.length - 1 ? "current" : ""}`}
                   onClick={() => useApp.setState({ folder: c.path })}
-                  onDragOver={(e) => dragging(e) && e.preventDefault()}
-                  onDrop={(e) => void dropOn(e, c.path)}
+                  onDragOver={(event) => dragging(event) && event.preventDefault()}
+                  onDrop={(event) => void dropOn(event, c.path)}
                 >
                   {c.label}
                 </button>
@@ -525,7 +534,7 @@ export function Home() {
             <>
               <button
                 className="btn"
-                onClick={() => setSel((s) => toggleAll(s, order))}
+                onClick={() => setSel((selection) => toggleAll(selection, order))}
                 disabled={!order.length}
               >
                 {allSelected ? t("Select none") : t("Select all")}
@@ -547,11 +556,11 @@ export function Home() {
               <button
                 className="btn"
                 title={t("Sort parts")}
-                onClick={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect();
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
                   showMenu(
-                    r.left,
-                    r.bottom + 4,
+                    rect.left,
+                    rect.bottom + 4,
                     (Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({
                       label: SORT_LABELS[k],
                       icon: k === sort.key ? <Check /> : <span />,
@@ -609,7 +618,9 @@ export function Home() {
             </div>
           </button>
           {subfolders.map((f) => {
-            const count = projects.filter((p) => p.folder === f || p.folder?.startsWith(`${f}/`)).length;
+            const count = projects.filter(
+              (project) => project.folder === f || project.folder?.startsWith(`${f}/`),
+            ).length;
             const name = f.slice(f.lastIndexOf("/") + 1);
 
             return (
@@ -619,16 +630,19 @@ export function Home() {
                 role="button"
                 tabIndex={0}
                 onClick={() => useApp.setState({ folder: f })}
-                onKeyDown={(e) => e.key === "Enter" && useApp.setState({ folder: f })}
-                onContextMenu={(e) => (e.preventDefault(), folderMenu(f, e.clientX, e.clientY))}
-                onDragOver={(e) => {
-                  if (!dragging(e)) return;
+                onKeyDown={(event) => event.key === "Enter" && useApp.setState({ folder: f })}
+                onContextMenu={(event) => (
+                  event.preventDefault(),
+                  folderMenu(f, event.clientX, event.clientY)
+                )}
+                onDragOver={(event) => {
+                  if (!dragging(event)) return;
 
-                  e.preventDefault();
+                  event.preventDefault();
                   setDropTarget(f);
                 }}
                 onDragLeave={() => setDropTarget(null)}
-                onDrop={(e) => void dropOn(e, f)}
+                onDrop={(event) => void dropOn(event, f)}
               >
                 <div className="thumb">
                   <Folder />
@@ -641,7 +655,10 @@ export function Home() {
                   <button
                     className="icon-btn sm"
                     title={t("Folder actions")}
-                    onClick={(e) => (e.stopPropagation(), folderMenu(f, e.clientX, e.clientY))}
+                    onClick={(event) => (
+                      event.stopPropagation(),
+                      folderMenu(f, event.clientX, event.clientY)
+                    )}
                   >
                     <Ellipsis />
                   </button>
@@ -649,49 +666,56 @@ export function Home() {
               </div>
             );
           })}
-          {here.map((p) => {
-            const picked = sel.ids.includes(p.id);
-            const held = assistantTabs.find((a) => a.project === p.id);
+          {here.map((project) => {
+            const picked = sel.ids.includes(project.id);
+            const held = assistantTabs.find((a) => a.project === project.id);
 
             return (
               <div
                 className={`card ${selecting ? "selecting" : ""} ${picked ? "selected" : ""}`}
-                key={p.id}
+                key={project.id}
                 role={selecting ? "checkbox" : "button"}
                 aria-checked={selecting ? picked : undefined}
                 tabIndex={0}
                 draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(DRAG_TYPE, picked && sel.ids.length > 1 ? sel.ids.join("\n") : p.id);
-                  e.dataTransfer.effectAllowed = "move";
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(
+                    DRAG_TYPE,
+                    picked && sel.ids.length > 1 ? sel.ids.join("\n") : project.id,
+                  );
+                  event.dataTransfer.effectAllowed = "move";
                 }}
                 // Shift-click would select the text on the page as well.
-                onMouseDown={(e) => e.shiftKey && e.preventDefault()}
-                {...(selecting ? {} : cardTap(p.id))}
-                onClick={(e) =>
-                  selecting || e.metaKey || e.ctrlKey || e.shiftKey
-                    ? pickCard(e, p.id)
-                    : cardTap(p.id).onClick()
+                onMouseDown={(event) => event.shiftKey && event.preventDefault()}
+                {...(selecting ? {} : cardTap(project.id))}
+                onClick={(event) =>
+                  selecting || event.metaKey || event.ctrlKey || event.shiftKey
+                    ? pickCard(event, project.id)
+                    : cardTap(project.id).onClick()
                 }
-                onKeyDown={(e) => {
-                  if (selecting && (e.key === " " || e.key === "Enter")) {
-                    return (e.preventDefault(), pickCard(null, p.id));
+                onKeyDown={(event) => {
+                  if (selecting && (event.key === " " || event.key === "Enter")) {
+                    return (event.preventDefault(), pickCard(null, project.id));
                   }
 
-                  if (e.key === "Enter") void openProject(p.id);
+                  if (event.key === "Enter") void openProject(project.id);
                 }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
+                onContextMenu={(event) => {
+                  event.preventDefault();
 
                   if (picked && sel.ids.length > 1) {
-                    selectionMenu(sel.ids, folder, e.clientX, e.clientY, stopSelecting);
+                    selectionMenu(sel.ids, folder, event.clientX, event.clientY, stopSelecting);
                   } else {
-                    projectMenu(p, e.clientX, e.clientY);
+                    projectMenu(project, event.clientX, event.clientY);
                   }
                 }}
               >
                 <div className="thumb">
-                  {p.thumbnail ? <img src={p.thumbnail} alt="" draggable={false} /> : <Box size={32} />}
+                  {project.thumbnail ? (
+                    <img src={project.thumbnail} alt="" draggable={false} />
+                  ) : (
+                    <Box size={32} />
+                  )}
                   {selecting ? (
                     <span className="pick-mark">{picked ? <CircleCheck /> : <Circle />}</span>
                   ) : null}
@@ -710,9 +734,9 @@ export function Home() {
                       title={t("{client} stops working on it; the project opens in a tab of yours", {
                         client: held.client,
                       })}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handOverAssistantTab(held.session).then(() => openProject(p.id));
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handOverAssistantTab(held.session).then(() => openProject(project.id));
                       }}
                     >
                       <LockOpen />
@@ -722,18 +746,21 @@ export function Home() {
                 </div>
                 <div className="meta">
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <b>{p.name}</b>
+                    <b>{project.name}</b>
                     <small>
-                      {sort.key === "created" && p.createdAt
-                        ? t("Created {when}", { when: ago(p.createdAt) })
-                        : ago(p.updatedAt)}
+                      {sort.key === "created" && project.createdAt
+                        ? t("Created {when}", { when: ago(project.createdAt) })
+                        : ago(project.updatedAt)}
                     </small>
                   </div>
                   {selecting ? null : (
                     <button
                       className="icon-btn sm"
                       title={t("Part actions")}
-                      onClick={(e) => (e.stopPropagation(), projectMenu(p, e.clientX, e.clientY))}
+                      onClick={(event) => (
+                        event.stopPropagation(),
+                        projectMenu(project, event.clientX, event.clientY)
+                      )}
                     >
                       <Ellipsis />
                     </button>
@@ -753,9 +780,9 @@ export function Home() {
             <button
               className="btn"
               disabled={!sel.ids.length}
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                selectionMenu(sel.ids, folder, r.left, r.top - 4, stopSelecting, {
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                selectionMenu(sel.ids, folder, rect.left, rect.top - 4, stopSelecting, {
                   above: true,
                   moveOnly: true,
                 });
@@ -792,19 +819,22 @@ export function Home() {
                   {t("Fully parametric — open one and change its variables. Hide this section in Settings.")}
                 </p>
                 <div className="grid">
-                  {examples.map((ex) => (
-                    <button className="card" key={ex.name} onClick={() => void openExample(ex)}>
+                  {examples.map((example) => (
+                    <button className="card" key={example.name} onClick={() => void openExample(example)}>
                       <div className="thumb">
-                        {(ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)) ? (
-                          <img src={ex.thumbnail ?? exampleThumbnail(ex.name, ex.doc)!} alt="" />
+                        {(example.thumbnail ?? exampleThumbnail(example.name, example.doc)) ? (
+                          <img
+                            src={example.thumbnail ?? exampleThumbnail(example.name, example.doc)!}
+                            alt=""
+                          />
                         ) : (
                           <Box size={32} />
                         )}
                       </div>
                       <div className="meta">
                         <div style={{ minWidth: 0 }}>
-                          <b>{t(ex.name)}</b>
-                          <small>{t(ex.description)}</small>
+                          <b>{t(example.name)}</b>
+                          <small>{t(example.description)}</small>
                         </div>
                       </div>
                     </button>
@@ -843,20 +873,23 @@ export function Home() {
 const openingExamples = openGuard();
 
 /** A new project from an example; a large one is fetched first. */
-function openExample(ex: Example): Promise<void> {
-  return openingExamples.run(ex.name, () => openExampleNow(ex));
+function openExample(example: Example): Promise<void> {
+  return openingExamples.run(example.name, () => openExampleNow(example));
 }
 
-async function openExampleNow(ex: Example): Promise<void> {
-  if (!ex.url) return newProject(structuredClone(ex.doc), t(ex.name), true);
+async function openExampleNow(example: Example): Promise<void> {
+  if (!example.url) return newProject(structuredClone(example.doc), t(example.name), true);
 
-  const task = startTask(t("Opening {name}", { name: t(ex.name) }), null, { untilEditor: true });
+  const task = startTask(t("Opening {name}", { name: t(example.name) }), null, { untilEditor: true });
 
   try {
-    const doc = (await (await fetch(ex.url)).json()) as MeercadDocument;
-    await newProject(doc, t(ex.name));
-  } catch (e) {
-    toast(t("Could not open {name}: {error}", { name: t(ex.name), error: (e as Error).message }), "error");
+    const doc = (await (await fetch(example.url)).json()) as MeercadDocument;
+    await newProject(doc, t(example.name));
+  } catch (error) {
+    toast(
+      t("Could not open {name}: {error}", { name: t(example.name), error: (error as Error).message }),
+      "error",
+    );
   } finally {
     task.done();
   }

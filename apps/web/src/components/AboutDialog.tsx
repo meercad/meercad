@@ -23,8 +23,8 @@ export function AboutDialog() {
   const [version, setVersion] = useState<string | null>(null);
 
   useEffect(() => {
-    const open = (e: Event) => setTab(((e as CustomEvent<Tab | undefined>).detail ?? "about") as Tab);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setTab(null);
+    const open = (event: Event) => setTab(((event as CustomEvent<Tab | undefined>).detail ?? "about") as Tab);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setTab(null);
     window.addEventListener("meercad:about", open);
     window.addEventListener("keydown", onKey);
 
@@ -60,7 +60,7 @@ export function AboutDialog() {
         className="modal settings about"
         role="dialog"
         aria-label={t("About meerCAD")}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="settings-head">
           <h2>meerCAD{version ? <span className="muted"> {version}</span> : null}</h2>

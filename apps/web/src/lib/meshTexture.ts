@@ -64,9 +64,11 @@ export function textureFeature(
   mesh: Pick<BodyMesh, "source">,
 ): (ImportFeature & { texture: MeshTexture }) | null {
   const id = mesh.source?.feature;
-  const f = id ? features.find((x) => x.id === id) : undefined;
+  const feature = id ? features.find((x) => x.id === id) : undefined;
 
-  return f?.op === "import" && f.texture ? (f as ImportFeature & { texture: MeshTexture }) : null;
+  return feature?.op === "import" && feature.texture
+    ? (feature as ImportFeature & { texture: MeshTexture })
+    : null;
 }
 
 /** Coordinates for every vertex of a part's mesh, or null when it does not show the file's triangles. */
@@ -75,14 +77,14 @@ export const meshUvs = (mesh: Pick<BodyMesh, "source" | "positions">, t: MeshTex
 
 /** The pictures the viewport lays on parts: every shown scan whose texture is switched on. */
 export function bodyTextures(features: readonly Feature[], meshes: readonly BodyMesh[]): BodyTexture[] {
-  return meshes.flatMap((m) => {
-    const f = textureFeature(features, m);
+  return meshes.flatMap((mesh) => {
+    const f = textureFeature(features, mesh);
     if (!f || f.texture.hidden) return [];
 
-    const uvs = meshUvs(m, f.texture);
+    const uvs = meshUvs(mesh, f.texture);
 
     return uvs
-      ? [{ bodyId: m.bodyId, uvs, image: picture(f.texture), key: `${f.id}:${f.texture.image.length}` }]
+      ? [{ bodyId: mesh.bodyId, uvs, image: picture(f.texture), key: `${f.id}:${f.texture.image.length}` }]
       : [];
   });
 }
@@ -116,10 +118,10 @@ export function partTexture(
   meshes: readonly BodyMesh[],
   bodyId: string,
 ): { feature: string; shown: boolean } | null {
-  const m = meshes.find((x) => x.bodyId === bodyId);
-  const f = m ? textureFeature(features, m) : null;
+  const mesh = meshes.find((x) => x.bodyId === bodyId);
+  const f = mesh ? textureFeature(features, mesh) : null;
 
-  return f && m && meshUvs(m, f.texture) ? { feature: f.id, shown: !f.texture.hidden } : null;
+  return f && mesh && meshUvs(mesh, f.texture) ? { feature: f.id, shown: !f.texture.hidden } : null;
 }
 
 /** The part menu's switch for a scan's picture, or null for parts without one. */
@@ -132,13 +134,13 @@ export function textureToggle(bodyId: string): { label: string; shown: boolean; 
     label: found.shown ? t("Show without texture") : t("Show texture"),
     shown: found.shown,
     onClick: () => {
-      const f = useApp.getState().doc.features.find((x) => x.id === found.feature);
-      if (f?.op !== "import" || !f.texture) return;
+      const feature = useApp.getState().doc.features.find((x) => x.id === found.feature);
+      if (feature?.op !== "import" || !feature.texture) return;
 
-      const { hidden: _h, ...rest } = f.texture;
+      const { hidden: _h, ...rest } = feature.texture;
       apply({
         type: "edit_feature",
-        id: f.id,
+        id: feature.id,
         patch: { texture: found.shown ? { ...rest, hidden: true } : rest },
       });
     },

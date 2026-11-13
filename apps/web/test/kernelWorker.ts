@@ -6,14 +6,14 @@
 import { startKernelWorker } from "@meercad/kernel/worker";
 import type { WorkerRequest, WorkerResponse } from "@meercad/kernel";
 
-type Listener = (e: MessageEvent<WorkerResponse>) => void;
+type Listener = (event: MessageEvent<WorkerResponse>) => void;
 
 export default class TestKernelWorker {
   static started = 0;
   readonly name: string;
   terminated = false;
   private readonly listeners = new Set<Listener>();
-  private inbox: ((e: MessageEvent<WorkerRequest>) => void) | null = null;
+  private inbox: ((event: MessageEvent<WorkerRequest>) => void) | null = null;
 
   constructor(opts: { name?: string } = {}) {
     this.name = opts.name ?? "kernel";
@@ -25,7 +25,7 @@ export default class TestKernelWorker {
         const copy = structuredClone(msg);
         setTimeout(() => {
           if (!this.terminated) {
-            for (const l of this.listeners) l({ data: copy } as MessageEvent<WorkerResponse>);
+            for (const listener of this.listeners) listener({ data: copy } as MessageEvent<WorkerResponse>);
           }
         });
       },
@@ -33,12 +33,12 @@ export default class TestKernelWorker {
     });
   }
 
-  addEventListener(type: string, fn: Listener): void {
-    if (type === "message") this.listeners.add(fn);
+  addEventListener(type: string, listener: Listener): void {
+    if (type === "message") this.listeners.add(listener);
   }
 
-  removeEventListener(type: string, fn: Listener): void {
-    if (type === "message") this.listeners.delete(fn);
+  removeEventListener(type: string, listener: Listener): void {
+    if (type === "message") this.listeners.delete(listener);
   }
 
   postMessage(msg: WorkerRequest): void {

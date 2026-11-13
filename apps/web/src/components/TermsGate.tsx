@@ -43,50 +43,52 @@ export function TermsGate({ onAccept }: { onAccept: () => void }) {
   useLayoutEffect(() => {
     check();
 
-    const el = box.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    const element = box.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
 
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
+    const observer = new ResizeObserver(check);
+    observer.observe(element);
 
-    return () => ro.disconnect();
+    return () => observer.disconnect();
   }, []);
 
   // Keys stay in this screen: nothing behind it reacts, Escape does nothing, Tab cannot leave it.
   useEffect(() => {
-    const el = root.current!;
+    const element = root.current!;
     box.current?.focus();
 
-    const outside = (e: KeyboardEvent) => {
-      if (e.target instanceof Node && el.contains(e.target)) return;
+    const outside = (event: KeyboardEvent) => {
+      if (event.target instanceof Node && element.contains(event.target)) return;
 
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (e.type === "keydown" && e.key === "Tab") box.current?.focus();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.type === "keydown" && event.key === "Tab") box.current?.focus();
     };
 
-    const inside = (e: KeyboardEvent) => {
-      e.stopPropagation();
-      if (e.key === "Escape") e.preventDefault();
-      if (e.key !== "Tab") return;
+    const inside = (event: KeyboardEvent) => {
+      event.stopPropagation();
+      if (event.key === "Escape") event.preventDefault();
+      if (event.key !== "Tab") return;
 
       const items = [
-        ...el.querySelectorAll<HTMLElement>("[tabindex='0'], input:not(:disabled), button:not(:disabled)"),
+        ...element.querySelectorAll<HTMLElement>(
+          "[tabindex='0'], input:not(:disabled), button:not(:disabled)",
+        ),
       ];
       const first = items[0];
       const last = items.at(-1);
-      if (e.shiftKey && document.activeElement === first) (e.preventDefault(), last?.focus());
-      else if (!e.shiftKey && document.activeElement === last) (e.preventDefault(), first?.focus());
+      if (event.shiftKey && document.activeElement === first) (event.preventDefault(), last?.focus());
+      else if (!event.shiftKey && document.activeElement === last) (event.preventDefault(), first?.focus());
     };
 
     for (const type of ["keydown", "keyup"] as const) window.addEventListener(type, outside, true);
-    el.addEventListener("keydown", inside);
-    el.addEventListener("keyup", inside);
+    element.addEventListener("keydown", inside);
+    element.addEventListener("keyup", inside);
 
     return () => {
       for (const type of ["keydown", "keyup"] as const) window.removeEventListener(type, outside, true);
-      el.removeEventListener("keydown", inside);
-      el.removeEventListener("keyup", inside);
+      element.removeEventListener("keydown", inside);
+      element.removeEventListener("keyup", inside);
     };
   }, []);
 

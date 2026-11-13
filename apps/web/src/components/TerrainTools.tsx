@@ -60,23 +60,23 @@ export function TerrainHud() {
   const draw = useTerrainDraw();
   const place = useTerrainPlace();
   const measure = useTerrainMeasure();
-  const features = useApp((s) => s.doc.features);
+  const features = useApp((state) => state.doc.features);
   // Keys while drawing (from the control scheme): confirm finishes, cancel cancels, delete takes the last
   // point back.
   useEffect(() => {
     if (!draw.kind) return;
 
-    const keys = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement | null)?.closest("input, textarea")) return;
+    const keys = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement | null)?.closest("input, textarea")) return;
 
-      const action = actionFor(e, COMMON_ACTIONS);
+      const action = actionFor(event, COMMON_ACTIONS);
       if (action === "confirm") finishMarking();
       else if (action === "cancel") cancelMarking();
       else if (action === "delete") undoMarkPoint();
       else return;
 
-      e.preventDefault();
-      e.stopPropagation();
+      event.preventDefault();
+      event.stopPropagation();
     };
 
     window.addEventListener("keydown", keys, true);
@@ -214,7 +214,9 @@ export function TerrainHud() {
           type="number"
           step={step}
           value={place.offset}
-          onChange={(e) => Number.isFinite(e.target.valueAsNumber) && setPlaceOffset(e.target.valueAsNumber)}
+          onChange={(event) =>
+            Number.isFinite(event.target.valueAsNumber) && setPlaceOffset(event.target.valueAsNumber)
+          }
           aria-label={t("Height above the ground")}
         />
         <span className="muted">mm</span>
@@ -285,20 +287,20 @@ export function TerrainLabels({ viewport, labels }: { viewport: Viewport; labels
               <button
                 className="icon-btn sm"
                 title={l.mark.kind === "note" ? t("Edit note…") : t("Name…")}
-                onClick={(e) => (e.stopPropagation(), void editMark(l.ref, l.mark!))}
+                onClick={(event) => (event.stopPropagation(), void editMark(l.ref, l.mark!))}
               >
                 <Pencil />
               </button>
               <button
                 className="icon-btn sm"
                 title={t("Delete")}
-                onClick={(e) => (e.stopPropagation(), setOpen(null), deleteMark(l.ref, l.mark!.id))}
+                onClick={(event) => (event.stopPropagation(), setOpen(null), deleteMark(l.ref, l.mark!.id))}
               >
                 <Trash />
               </button>
             </span>
           ) : null;
-        const toggle = (e: React.MouseEvent) => (e.stopPropagation(), setOpen(isOpen ? null : l.key));
+        const toggle = (event: React.MouseEvent) => (event.stopPropagation(), setOpen(isOpen ? null : l.key));
 
         return (
           <div

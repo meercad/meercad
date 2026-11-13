@@ -10,9 +10,9 @@ export const parseExpr = (s: string): Expr => (NUM.test(s) ? Number(s) : s.trim(
 
 interface Props {
   value: Expr | undefined;
-  onCommit: (e: Expr) => void;
+  onCommit: (expr: Expr) => void;
   /** Called on every arrow-key nudge and valid keystroke for live previews. */
-  onLive?: (e: Expr) => void;
+  onLive?: (expr: Expr) => void;
   unit?: "mm" | "deg" | "";
   autoFocus?: boolean;
   placeholder?: string;
@@ -37,7 +37,7 @@ export function ExprInput({
   integer,
   quiet,
 }: Props) {
-  const params = useApp((s) => s.output?.report.params);
+  const params = useApp((state) => state.output?.report.params);
   const du = useDocUnit();
   const length = unit === "mm";
   const shown = length ? lengthText(value, du) : value === undefined ? "" : String(value);
@@ -66,8 +66,8 @@ export function ExprInput({
     if (!t.trim() || error) return setText(shown);
     if (t.trim() === shown) return;
 
-    const e = parse(t);
-    if (e !== value) onCommit(e);
+    const expr = parse(t);
+    if (expr !== value) onCommit(expr);
   };
 
   return (
@@ -80,57 +80,57 @@ export function ExprInput({
         // On touch screens focusing pops up the keyboard (e.g. when a drag opens a dialog): tap to type.
         autoFocus={autoFocus && !touchScreen}
         spellCheck={false}
-        onChange={(e) => {
-          setText(e.target.value);
+        onChange={(event) => {
+          setText(event.target.value);
 
-          if (onLive && e.target.value.trim()) {
+          if (onLive && event.target.value.trim()) {
             try {
-              evaluate(parse(e.target.value), new Map(Object.entries(params ?? {})));
-              onLive(parse(e.target.value));
+              evaluate(parse(event.target.value), new Map(Object.entries(params ?? {})));
+              onLive(parse(event.target.value));
             } catch {
               // incomplete expression while typing
             }
           }
         }}
         onBlur={() => commit()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
             commit();
-            (e.target as HTMLInputElement).blur();
+            (event.target as HTMLInputElement).blur();
           }
 
-          if (e.key === "Escape") {
+          if (event.key === "Escape") {
             setText(shown);
-            (e.target as HTMLInputElement).blur();
+            (event.target as HTMLInputElement).blur();
           }
 
-          const m = /^\s*(-?\d+(?:\.\d+)?)\s*(mm|in|deg|°)?\s*$/.exec(text);
+          const match = /^\s*(-?\d+(?:\.\d+)?)\s*(mm|in|deg|°)?\s*$/.exec(text);
 
-          if ((e.key === "ArrowUp" || e.key === "ArrowDown") && m) {
-            e.preventDefault();
+          if ((event.key === "ArrowUp" || event.key === "ArrowDown") && match) {
+            event.preventDefault();
 
             // Inch values step in 1/8 in (Shift: 1 in, Alt: 1/64 in).
-            const inch = length && du === "in" && (!m[2] || m[2] === "in");
+            const inch = length && du === "in" && (!match[2] || match[2] === "in");
             const base = integer
               ? 1
               : inch
-                ? e.shiftKey
+                ? event.shiftKey
                   ? 1
-                  : e.altKey
+                  : event.altKey
                     ? 1 / 64
                     : 1 / 8
-                : e.shiftKey
+                : event.shiftKey
                   ? 10
-                  : e.altKey
+                  : event.altKey
                     ? 0.1
                     : 1;
-            const step = base * (e.key === "ArrowUp" ? 1 : -1);
-            const n = Math.round((parseFloat(m[1]!) + step) * 10000) / 10000;
-            const next = m[2] ? `${n} ${m[2]}` : String(n);
+            const step = base * (event.key === "ArrowUp" ? 1 : -1);
+            const n = Math.round((parseFloat(match[1]!) + step) * 10000) / 10000;
+            const next = match[2] ? `${n} ${match[2]}` : String(n);
             setText(next);
 
-            const ex = parse(next);
-            (onLive ?? onCommit)(ex);
+            const expr = parse(next);
+            (onLive ?? onCommit)(expr);
           }
         }}
       />

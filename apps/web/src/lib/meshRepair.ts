@@ -29,25 +29,25 @@ export const closeMeshRepair = () => useMeshRepair.setState({ body: null });
 
 /** The import step whose file a mesh part comes from, or null for a mesh changed by other steps. */
 export function importOf(body: string) {
-  const f = currentDoc().features.find((x) => x.id === body);
+  const feature = currentDoc().features.find((x) => x.id === body);
 
-  return f?.op === "import" && f.format === "stl" ? f : null;
+  return feature?.op === "import" && feature.format === "stl" ? feature : null;
 }
 
 export async function runMeshRepair(): Promise<void> {
   const { body, removePieces, fillHoles, reduce, tolerance } = useMeshRepair.getState();
   if (!body) return;
 
-  const f = importOf(body);
+  const feature = importOf(body);
   const name = partName(body, currentDoc().features);
-  if (!f) return toast(t("{name} is not an imported mesh", { name }), "error");
+  if (!feature) return toast(t("{name} is not an imported mesh", { name }), "error");
 
   const task = startTask(t("Cleaning up {name}", { name }));
   // Let the task show before the work blocks the page.
   await new Promise((r) => setTimeout(r, 30));
 
   try {
-    const mesh = parseStl(Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0)));
+    const mesh = parseStl(Uint8Array.from(atob(feature.data), (c) => c.charCodeAt(0)));
     const corners = new Float32Array(mesh.indices.length * 3);
 
     for (let i = 0; i < mesh.indices.length; i++) {
@@ -69,8 +69,8 @@ export async function runMeshRepair(): Promise<void> {
     if (
       !apply({
         type: "edit_feature",
-        id: f.id,
-        patch: { data: btoa(s), ...(f.texture ? { texture: null } : {}) },
+        id: feature.id,
+        patch: { data: btoa(s), ...(feature.texture ? { texture: null } : {}) },
       })
     ) {
       return;
@@ -87,11 +87,14 @@ export async function runMeshRepair(): Promise<void> {
           pieces: report.piecesRemoved,
           holes: report.holesFilled,
         },
-      ) + (f.texture ? ` ${t("Its texture was removed, as it belonged to the old triangles.")}` : ""),
+      ) + (feature.texture ? ` ${t("Its texture was removed, as it belonged to the old triangles.")}` : ""),
     );
-  } catch (e) {
+  } catch (error) {
     toast(
-      t("Could not clean up {name}: {error}", { name, error: e instanceof Error ? e.message : String(e) }),
+      t("Could not clean up {name}: {error}", {
+        name,
+        error: error instanceof Error ? error.message : String(error),
+      }),
       "error",
     );
   } finally {
@@ -100,10 +103,13 @@ export async function runMeshRepair(): Promise<void> {
 }
 
 // Another project or the part gone: close the card.
-useApp.subscribe((s, prev) => {
+useApp.subscribe((state, prev) => {
   const body = useMeshRepair.getState().body;
 
-  if (body && (s.project?.id !== prev.project?.id || !s.doc.features.some((f) => f.id === body))) {
+  if (
+    body &&
+    (state.project?.id !== prev.project?.id || !state.doc.features.some((feature) => feature.id === body))
+  ) {
     closeMeshRepair();
   }
 });

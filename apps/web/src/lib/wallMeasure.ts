@@ -163,11 +163,11 @@ export function thinSpots(
     if (x.d >= minWall) break;
 
     const near = spots.find(
-      (p) => Math.hypot(p.at[0] - x.c[0]!, p.at[1] - x.c[1]!, p.at[2] - x.c[2]!) <= reach,
+      (spot) => Math.hypot(spot.at[0] - x.c[0]!, spot.at[1] - x.c[1]!, spot.at[2] - x.c[2]!) <= reach,
     );
     if (near) near.areaMm2 += x.a;
     else if (spots.length < 200) spots.push({ at: [x.c[0]!, x.c[1]!, x.c[2]!], mm: x.d, areaMm2: x.a });
   }
 
-  return spots.filter((p) => p.areaMm2 >= 0.01).slice(0, most);
+  return spots.filter((spot) => spot.areaMm2 >= 0.01).slice(0, most);
 }

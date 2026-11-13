@@ -70,8 +70,8 @@ export async function scanObject(mode: ScanMode = "object"): Promise<void> {
 
   try {
     r = await Scan.scan({ mode, lang });
-  } catch (e) {
-    const err = e as { code?: string; message?: string };
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
     console.info("scan failed", err.code, err.message);
     if (err.code !== "cancelled") toast(err.message ?? t("Scanning failed"), "error");
 

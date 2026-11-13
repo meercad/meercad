@@ -44,8 +44,8 @@ export async function scanRoom(): Promise<void> {
 
   try {
     scan = await Room.scanRoom({ lang });
-  } catch (e) {
-    const err = e as { code?: string; message?: string };
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
     if (err.code !== "cancelled") toast(err.message ?? t("Scanning failed"), "error");
 
     return;
@@ -88,8 +88,8 @@ export async function scanArea(): Promise<void> {
     const file = await Filesystem.readFile({ path: `file://${r.path}` });
     const bytes = Uint8Array.from(atob(file.data as string), (c) => c.charCodeAt(0));
     addTerrain({ ...r, folder: "" }, bytes);
-  } catch (e) {
-    const err = e as { code?: string; message?: string };
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
     if (err.code !== "cancelled") toast(err.message ?? t("Scanning failed"), "error");
   }
 }

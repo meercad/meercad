@@ -71,7 +71,7 @@ async function update(): Promise<void> {
   const { body, minWall } = useThickness.getState();
   if (!body) return;
 
-  const part = useApp.getState().output?.meshes.find((m) => m.bodyId === body);
+  const part = useApp.getState().output?.meshes.find((mesh) => mesh.bodyId === body);
   if (!part) return useThickness.setState({ maps: new Map(), stats: null, error: "gone" });
 
   const task = startTask(t("Measuring the wall thickness"));
@@ -109,8 +109,8 @@ function colorFor(d: number, minWall: number, out: Float32Array, o: number): voi
 /** CSS gradient of the scale, for the legend (minimum wall to three times it). */
 export const THICKNESS_GRADIENT = `linear-gradient(90deg, rgb(${RED.map((c) => c * 255).join(",")}), rgb(${YELLOW.map((c) => c * 255).join(",")}), rgb(${GREEN.map((c) => c * 255).join(",")}))`;
 
-useApp.subscribe((s, prev) => {
+useApp.subscribe((state, prev) => {
   if (!useThickness.getState().body) return;
-  if (s.project?.id !== prev.project?.id || s.screen !== "editor") hideThickness();
-  else if (s.output !== prev.output && !s.previewing) void update();
+  if (state.project?.id !== prev.project?.id || state.screen !== "editor") hideThickness();
+  else if (state.output !== prev.output && !state.previewing) void update();
 });

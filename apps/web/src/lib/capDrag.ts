@@ -24,34 +24,42 @@ export interface CapDrag {
 export function capDrag(
   doc: MeercadDocument,
   tags: readonly string[],
-  value: (e: Expr) => number,
+  value: (expr: Expr) => number,
   unit: LengthUnit = "mm",
 ): CapDrag | null {
   const caps = new Set<string>();
 
   for (const tag of tags) {
     // Faces of pattern and mirror copies (`…@lp1.2`) belong to the copy, not to the extrusion itself.
-    const m = /^([\w-]+)\.end_cap$/.exec(tag);
-    if (m) caps.add(m[1]!);
+    const match = /^([\w-]+)\.end_cap$/.exec(tag);
+    if (match) caps.add(match[1]!);
   }
 
   if (caps.size !== 1) return null;
 
   const id = [...caps][0]!;
-  const f = doc.features.find(
+  const feature = doc.features.find(
     (x): x is Extract<Feature, { op: "extrude" }> => x.id === id && x.op === "extrude",
   );
-  if (!f || f.extent !== "blind" || f.suppressed || (f.mode !== "new_body" && f.mode !== "join")) return null;
+
+  if (
+    !feature ||
+    feature.extent !== "blind" ||
+    feature.suppressed ||
+    (feature.mode !== "new_body" && feature.mode !== "join")
+  ) {
+    return null;
+  }
 
   let distance: number;
 
   try {
-    distance = value(f.distance);
+    distance = value(feature.distance);
   } catch {
     return null;
   }
 
-  const expr = f.distance;
+  const expr = feature.distance;
 
   if (typeof expr === "string" && expr.trim() in doc.params) {
     const param = expr.trim();

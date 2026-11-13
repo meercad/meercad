@@ -48,11 +48,11 @@ export function ValueInput({
   value: Expr;
   unit?: ValueUnit;
   suggest: string;
-  onDone: (v: Expr | null) => void;
+  onDone: (expr: Expr | null) => void;
 }) {
-  const params = useApp((s) => s.doc.params);
-  const auto = useApp((s) => s.doc.autoParams);
-  const values = useApp((s) => s.output?.report.params) ?? {};
+  const params = useApp((state) => state.doc.params);
+  const auto = useApp((state) => state.doc.autoParams);
+  const values = useApp((state) => state.output?.report.params) ?? {};
   const initial = unit === "mm" ? lengthText(value) : String(value);
   const [text, setText] = useState(initial);
   const [active, setActive] = useState(-1);
@@ -64,11 +64,11 @@ export function ValueInput({
     [active],
   );
 
-  const finish = (v: Expr | null) => {
+  const finish = (expr: Expr | null) => {
     if (done.current) return;
 
     done.current = true;
-    onDone(v);
+    onDone(expr);
   };
 
   const scope = new Map(Object.entries(values));
@@ -139,13 +139,13 @@ export function ValueInput({
           className={`value-input ${valid ? "" : "invalid"}`}
           value={naming}
           aria-label={t("Variable name")}
-          onFocus={(e) => e.target.select()}
-          onChange={(e) => setNaming(e.target.value)}
+          onFocus={(event) => event.target.select()}
+          onChange={(event) => setNaming(event.target.value)}
           onBlur={() => finish(null)}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter" && valid) createVariable(naming);
-            if (e.key === "Escape") setNaming(null);
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Enter" && valid) createVariable(naming);
+            if (event.key === "Escape") setNaming(null);
           }}
         />
         <div className="value-menu">
@@ -168,25 +168,25 @@ export function ValueInput({
         className="value-input"
         value={text}
         aria-label={t("Value")}
-        onFocus={(e) => e.target.select()}
-        onChange={(e) => {
-          setText(e.target.value);
+        onFocus={(event) => event.target.select()}
+        onChange={(event) => {
+          setText(event.target.value);
           setActive(-1);
         }}
         onBlur={() => finish(typedValue())}
-        onKeyDown={(e) => {
-          e.stopPropagation();
+        onKeyDown={(event) => {
+          event.stopPropagation();
 
-          if (e.key === "ArrowDown") {
-            (e.preventDefault(), setActive((a) => Math.min(options.length - 1, a + 1)));
+          if (event.key === "ArrowDown") {
+            (event.preventDefault(), setActive((a) => Math.min(options.length - 1, a + 1)));
           }
 
-          if (e.key === "ArrowUp") (e.preventDefault(), setActive((a) => Math.max(-1, a - 1)));
-          if (e.key === "Enter") pick(active);
-          if (e.key === "Escape") finish(null);
+          if (event.key === "ArrowUp") (event.preventDefault(), setActive((a) => Math.max(-1, a - 1)));
+          if (event.key === "Enter") pick(active);
+          if (event.key === "Escape") finish(null);
         }}
       />
-      <div className="value-menu" onMouseDown={(e) => e.preventDefault()}>
+      <div className="value-menu" onMouseDown={(event) => event.preventDefault()}>
         <div className="value-menu-list" ref={list}>
           {options.map((o, i) =>
             o.kind === "param" ? (

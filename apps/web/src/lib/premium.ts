@@ -57,7 +57,7 @@ function loadOff(): PremiumState["off"] {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, unknown>;
 
-    return Object.fromEntries(PACKS.filter((p) => raw[p.id] === false).map((p) => [p.id, true]));
+    return Object.fromEntries(PACKS.filter((pack) => raw[pack.id] === false).map((pack) => [pack.id, true]));
   } catch {
     return {};
   }
@@ -88,7 +88,7 @@ export function missingPacks(doc: MeercadDocument): PackUse[] {
 export function lockedBy(f: Parameters<typeof featurePack>[0]): Pack | null {
   const id = featurePack(f);
 
-  return id && !hasPack(id) ? PACKS.find((p) => p.id === id)! : null;
+  return id && !hasPack(id) ? PACKS.find((pack) => pack.id === id)! : null;
 }
 
 export function setPack(id: PackId, on: boolean): void {
@@ -101,7 +101,7 @@ export function setPack(id: PackId, on: boolean): void {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify(Object.fromEntries(PACKS.map((p) => [p.id, !off[p.id]]))),
+      JSON.stringify(Object.fromEntries(PACKS.map((pack) => [pack.id, !off[pack.id]]))),
     );
   } catch {
     // the switches just won't persist

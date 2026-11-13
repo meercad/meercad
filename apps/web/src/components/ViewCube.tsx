@@ -73,8 +73,8 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
     const update = () => {
       const r = new THREE.Matrix4().makeRotationFromQuaternion(viewport.cameraQuaternion.clone().invert());
       FACES.forEach((f, i) => {
-        const el = refs.current[i];
-        if (!el) return;
+        const element = refs.current[i];
+        if (!element) return;
 
         const tr = (v: V) => new THREE.Vector3(...v).applyMatrix4(r);
         const [u, v, n] = [tr(f.u), tr(f.v), tr(f.n)];
@@ -99,24 +99,24 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
           n.z * half,
           1,
         ];
-        el.style.transform = `matrix3d(${m.map((x) => x.toFixed(5)).join(",")})`;
-        el.style.visibility = n.z > 0.01 ? "visible" : "hidden";
-        el.style.zIndex = String(Math.round(n.z * 100) + 100);
-        el.style.filter = `brightness(${(0.86 + 0.14 * n.z).toFixed(3)})`;
+        element.style.transform = `matrix3d(${m.map((x) => x.toFixed(5)).join(",")})`;
+        element.style.visibility = n.z > 0.01 ? "visible" : "hidden";
+        element.style.zIndex = String(Math.round(n.z * 100) + 100);
+        element.style.filter = `brightness(${(0.86 + 0.14 * n.z).toFixed(3)})`;
       });
 
       // Axis triad from the left-front-bottom corner, along the cube's edges and a little beyond.
       const corner = new THREE.Vector3(-half, -half, -half).applyMatrix4(r);
       AXES.forEach((a, i) => {
-        const g = axisRefs.current[i];
-        if (!g) return;
+        const element = axisRefs.current[i];
+        if (!element) return;
 
         const end = new THREE.Vector3(...a.dir)
           .multiplyScalar(SIZE + AXIS_OVERHANG)
           .add(new THREE.Vector3(-half, -half, -half))
           .applyMatrix4(r);
         const [x1, y1, x2, y2] = [corner.x + half, -corner.y + half, end.x + half, -end.y + half];
-        const line = g.querySelector("line")!;
+        const line = element.querySelector("line")!;
         line.setAttribute("x1", x1.toFixed(1));
         line.setAttribute("y1", y1.toFixed(1));
         line.setAttribute("x2", x2.toFixed(1));
@@ -125,11 +125,11 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
         const dx = x2 - x1;
         const dy = y2 - y1;
         const len = Math.hypot(dx, dy) || 1;
-        const label = g.querySelector("text")!;
+        const label = element.querySelector("text")!;
         label.setAttribute("x", (x2 + (dx / len) * 7).toFixed(1));
         label.setAttribute("y", (y2 + (dy / len) * 7).toFixed(1));
         // An axis pointing at or away from the viewer collapses to a dot: hide its label.
-        g.style.opacity = len < 12 ? "0" : "1";
+        element.style.opacity = len < 12 ? "0" : "1";
       });
     };
 
@@ -141,43 +141,43 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
   // Drag anywhere on the cube to orbit; a short click selects a view.
   const drag = useRef<{ x: number; y: number; moved: boolean; dir: V | null } | null>(null);
 
-  const onDown = (e: React.PointerEvent) => {
+  const onDown = (event: React.PointerEvent) => {
     // Remember which cell was pressed: pointer capture below would retarget the pointerup.
-    const raw = (e.target as HTMLElement).dataset["dir"];
+    const raw = (event.target as HTMLElement).dataset["dir"];
     drag.current = {
-      x: e.clientX,
-      y: e.clientY,
+      x: event.clientX,
+      y: event.clientY,
       moved: false,
       dir: raw ? (raw.split(",").map(Number) as V) : null,
     };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   };
 
-  const onMove = (e: React.PointerEvent) => {
+  const onMove = (event: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
 
-    const dx = e.clientX - d.x;
-    const dy = e.clientY - d.y;
+    const dx = event.clientX - d.x;
+    const dy = event.clientY - d.y;
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
 
     d.moved = true;
-    d.x = e.clientX;
-    d.y = e.clientY;
+    d.x = event.clientX;
+    d.y = event.clientY;
     viewport.orbit(-dx * 0.012, -dy * 0.012);
   };
 
   // Fingers and pens get no dblclick on iPad: two quick taps reset the view like a double click.
   const lastTap = useRef(0);
 
-  const onUp = (e: React.PointerEvent) => {
+  const onUp = (event: React.PointerEvent) => {
     const d = drag.current;
     drag.current = null;
-    e.stopPropagation();
+    event.stopPropagation();
     if (!d || d.moved) return;
 
     const now = performance.now();
-    const double = e.pointerType !== "mouse" && now - lastTap.current < 350;
+    const double = event.pointerType !== "mouse" && now - lastTap.current < 350;
     lastTap.current = double ? 0 : now;
     if (double) viewport.setView("iso");
     else if (d.dir) viewport.viewFrom(d.dir);
@@ -198,7 +198,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
         {AXES.map((a, i) => (
           <g
             key={a.name}
-            ref={(el) => void (axisRefs.current[i] = el)}
+            ref={(element) => void (axisRefs.current[i] = element)}
             style={{ color: AXIS_COLORS[a.name] }}
           >
             <line />
@@ -215,7 +215,7 @@ export function ViewCube({ viewport }: { viewport: Viewport }) {
         {FACES.map((f, i) => (
           <div
             key={f.label}
-            ref={(el) => void (refs.current[i] = el)}
+            ref={(element) => void (refs.current[i] = element)}
             className="face"
             style={{ "--tint": f.tint } as React.CSSProperties}
           >

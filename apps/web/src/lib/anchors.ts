@@ -18,19 +18,19 @@ const norm = (v: Vec3): Vec3 => {
  * Area-weighted centroid and average normal of a face's triangles. On a curved face that centroid
  * may lie off the surface (inside a cylinder), so the vertex nearest to it and its normal are used.
  */
-export function faceAnchor(m: BodyMesh, face: number): { origin: Vec3; normal: Vec3 } | null {
+export function faceAnchor(mesh: BodyMesh, face: number): { origin: Vec3; normal: Vec3 } | null {
   let cx = 0,
     cy = 0,
     cz = 0,
     area = 0;
   const n: Vec3 = [0, 0, 0];
 
-  for (let g = 0; g < m.faceRanges.length; g += 3) {
-    if (m.faceRanges[g + 2] !== face) continue;
+  for (let g = 0; g < mesh.faceRanges.length; g += 3) {
+    if (mesh.faceRanges[g + 2] !== face) continue;
 
-    for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t += 3) {
-      const [a, b, c] = [m.indices[t]! * 3, m.indices[t + 1]! * 3, m.indices[t + 2]! * 3];
-      const p = m.positions;
+    for (let t = mesh.faceRanges[g]!; t < mesh.faceRanges[g]! + mesh.faceRanges[g + 1]!; t += 3) {
+      const [a, b, c] = [mesh.indices[t]! * 3, mesh.indices[t + 1]! * 3, mesh.indices[t + 2]! * 3];
+      const p = mesh.positions;
       const u = [p[b]! - p[a]!, p[b + 1]! - p[a + 1]!, p[b + 2]! - p[a + 2]!];
       const v = [p[c]! - p[a]!, p[c + 1]! - p[a + 1]!, p[c + 2]! - p[a + 2]!];
       const cr: Vec3 = [
@@ -57,46 +57,46 @@ export function faceAnchor(m: BodyMesh, face: number): { origin: Vec3; normal: V
   let best = -1;
   let bd = Infinity;
 
-  for (let g = 0; g < m.faceRanges.length; g += 3) {
-    if (m.faceRanges[g + 2] !== face) continue;
+  for (let g = 0; g < mesh.faceRanges.length; g += 3) {
+    if (mesh.faceRanges[g + 2] !== face) continue;
 
-    for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
-      const i = m.indices[t]! * 3;
+    for (let t = mesh.faceRanges[g]!; t < mesh.faceRanges[g]! + mesh.faceRanges[g + 1]!; t++) {
+      const i = mesh.indices[t]! * 3;
       const dd =
-        (m.positions[i]! - centroid[0]) ** 2 +
-        (m.positions[i + 1]! - centroid[1]) ** 2 +
-        (m.positions[i + 2]! - centroid[2]) ** 2;
+        (mesh.positions[i]! - centroid[0]) ** 2 +
+        (mesh.positions[i + 1]! - centroid[1]) ** 2 +
+        (mesh.positions[i + 2]! - centroid[2]) ** 2;
       if (dd < bd) ((bd = dd), (best = i));
     }
   }
 
   return {
-    origin: [m.positions[best]!, m.positions[best + 1]!, m.positions[best + 2]!],
-    normal: norm([m.normals[best]!, m.normals[best + 1]!, m.normals[best + 2]!]),
+    origin: [mesh.positions[best]!, mesh.positions[best + 1]!, mesh.positions[best + 2]!],
+    normal: norm([mesh.normals[best]!, mesh.normals[best + 1]!, mesh.normals[best + 2]!]),
   };
 }
 
 export function faceSelectorAnchor(out: RebuildOutput, sel: FaceSelector) {
   try {
     const refs = resolveFaces(sel, out.meshes.map(meshTopology));
-    const r = refs[0];
-    const m = r && out.meshes.find((x) => x.bodyId === r.body);
+    const faceRef = refs[0];
+    const mesh = faceRef && out.meshes.find((x) => x.bodyId === faceRef.body);
 
-    return m && r ? faceAnchor(m, r.faces[0]!) : null;
+    return mesh && faceRef ? faceAnchor(mesh, faceRef.faces[0]!) : null;
   } catch {
     return null;
   }
 }
 
 /** Edge midpoint and the outward bisector of its two faces (the direction a fillet grows into). */
-export function edgeAnchor(m: BodyMesh, edge: number): { origin: Vec3; dir: Vec3 } | null {
-  const topo = meshTopology(m);
+export function edgeAnchor(mesh: BodyMesh, edge: number): { origin: Vec3; dir: Vec3 } | null {
+  const topo = meshTopology(mesh);
   const p = topo.edgePoints?.[edge];
-  const faces = m.edgeFaces[edge] ?? [];
+  const faces = mesh.edgeFaces[edge] ?? [];
   if (!p || faces.length < 2) return null;
 
-  const n1 = faceAnchor(m, faces[0]!)?.normal;
-  const n2 = faceAnchor(m, faces[1]!)?.normal;
+  const n1 = faceAnchor(mesh, faces[0]!)?.normal;
+  const n2 = faceAnchor(mesh, faces[1]!)?.normal;
   if (!n1 || !n2) return null;
 
   return { origin: p, dir: norm([n1[0] + n2[0], n1[1] + n2[1], n1[2] + n2[2]]) };
@@ -105,9 +105,9 @@ export function edgeAnchor(m: BodyMesh, edge: number): { origin: Vec3; dir: Vec3
 export function edgeSelectorAnchor(out: RebuildOutput, sel: EdgeSelector) {
   try {
     const r = resolveEdges([sel], out.meshes.map(meshTopology));
-    const m = out.meshes.find((x) => x.bodyId === r.body);
+    const mesh = out.meshes.find((x) => x.bodyId === r.body);
 
-    return m ? edgeAnchor(m, r.edges[0]!) : null;
+    return mesh ? edgeAnchor(mesh, r.edges[0]!) : null;
   } catch {
     return null;
   }
@@ -120,18 +120,18 @@ export function profileAnchor(
 ): { origin: Vec3; normal: Vec3 } | null {
   if ("face" in profile) return faceSelectorAnchor(out, profile.face);
 
-  const sk = out.report.sketches.find((s) => s.id === profile.sketch);
-  if (!sk) return null;
+  const sketchView = out.report.sketches.find((sketchView) => sketchView.id === profile.sketch);
+  if (!sketchView) return null;
 
   const regions = Array.isArray(profile.regions)
-    ? sk.regions.filter((r) => (profile.regions as string[]).includes(r.key))
-    : sk.regions.filter((r) => r.depth % 2 === 1);
+    ? sketchView.regions.filter((r) => (profile.regions as string[]).includes(r.key))
+    : sketchView.regions.filter((r) => r.depth % 2 === 1);
   if (!regions.length) return null;
 
   // The largest region's interior point.
   const r = regions.reduce((a, b) => (b.area > a.area ? b : a));
 
-  return { origin: toWorld(sk.frame, r.sample), normal: sk.frame.normal };
+  return { origin: toWorld(sketchView.frame, r.sample), normal: sketchView.frame.normal };
 }
 
 /**
@@ -140,7 +140,7 @@ export function profileAnchor(
  * picks the radial direction closest to `radial`.
  */
 export function cylinderAnchor(
-  m: BodyMesh,
+  mesh: BodyMesh,
   face: number,
   prefer: Vec3,
   radial: Vec3,
@@ -148,13 +148,13 @@ export function cylinderAnchor(
   const pts: Vec3[] = [];
   const nrm: Vec3[] = [];
 
-  for (let g = 0; g < m.faceRanges.length; g += 3) {
-    if (m.faceRanges[g + 2] !== face) continue;
+  for (let g = 0; g < mesh.faceRanges.length; g += 3) {
+    if (mesh.faceRanges[g + 2] !== face) continue;
 
-    for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
-      const i = m.indices[t]! * 3;
-      pts.push([m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!]);
-      nrm.push([m.normals[i]!, m.normals[i + 1]!, m.normals[i + 2]!]);
+    for (let t = mesh.faceRanges[g]!; t < mesh.faceRanges[g]! + mesh.faceRanges[g + 1]!; t++) {
+      const i = mesh.indices[t]! * 3;
+      pts.push([mesh.positions[i]!, mesh.positions[i + 1]!, mesh.positions[i + 2]!]);
+      nrm.push([mesh.normals[i]!, mesh.normals[i + 1]!, mesh.normals[i + 2]!]);
     }
   }
 
@@ -215,15 +215,15 @@ export function cylinderAnchor(
 }
 
 /** Whether a face is (part of) a cylinder: every normal perpendicular to one axis, and curved. */
-export function isCylinderFace(m: BodyMesh, face: number): boolean {
+export function isCylinderFace(mesh: BodyMesh, face: number): boolean {
   const nrm: Vec3[] = [];
 
-  for (let g = 0; g < m.faceRanges.length; g += 3) {
-    if (m.faceRanges[g + 2] !== face) continue;
+  for (let g = 0; g < mesh.faceRanges.length; g += 3) {
+    if (mesh.faceRanges[g + 2] !== face) continue;
 
-    for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
-      const i = m.indices[t]! * 3;
-      nrm.push([m.normals[i]!, m.normals[i + 1]!, m.normals[i + 2]!]);
+    for (let t = mesh.faceRanges[g]!; t < mesh.faceRanges[g]! + mesh.faceRanges[g + 1]!; t++) {
+      const i = mesh.indices[t]! * 3;
+      nrm.push([mesh.normals[i]!, mesh.normals[i + 1]!, mesh.normals[i + 2]!]);
     }
   }
 
@@ -266,21 +266,21 @@ export function profileTriangles(
 
   if ("face" in profile) {
     try {
-      const r = resolveFaces(profile.face, out.meshes.map(meshTopology))[0];
-      const m = r && out.meshes.find((x) => x.bodyId === r.body);
-      const face = r?.faces[0];
-      const a = m && face !== undefined ? faceAnchor(m, face) : null;
-      if (!m || !a) return null;
+      const faceRef = resolveFaces(profile.face, out.meshes.map(meshTopology))[0];
+      const mesh = faceRef && out.meshes.find((x) => x.bodyId === faceRef.body);
+      const face = faceRef?.faces[0];
+      const a = mesh && face !== undefined ? faceAnchor(mesh, face) : null;
+      if (!mesh || !a) return null;
 
       const nrm: number[] = [];
 
-      for (let g = 0; g < m.faceRanges.length; g += 3) {
-        if (m.faceRanges[g + 2] !== face) continue;
+      for (let g = 0; g < mesh.faceRanges.length; g += 3) {
+        if (mesh.faceRanges[g + 2] !== face) continue;
 
-        for (let t = m.faceRanges[g]!; t < m.faceRanges[g]! + m.faceRanges[g + 1]!; t++) {
-          const i = m.indices[t]! * 3;
-          tris.push(m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!);
-          nrm.push(m.normals[i]!, m.normals[i + 1]!, m.normals[i + 2]!);
+        for (let t = mesh.faceRanges[g]!; t < mesh.faceRanges[g]! + mesh.faceRanges[g + 1]!; t++) {
+          const i = mesh.indices[t]! * 3;
+          tris.push(mesh.positions[i]!, mesh.positions[i + 1]!, mesh.positions[i + 2]!);
+          nrm.push(mesh.normals[i]!, mesh.normals[i + 1]!, mesh.normals[i + 2]!);
         }
       }
 
@@ -293,12 +293,12 @@ export function profileTriangles(
     }
   }
 
-  const sk = out.report.sketches.find((s) => s.id === profile.sketch);
-  if (!sk) return null;
+  const sketchView = out.report.sketches.find((sketchView) => sketchView.id === profile.sketch);
+  if (!sketchView) return null;
 
   const regions = Array.isArray(profile.regions)
-    ? sk.regions.filter((r) => (profile.regions as string[]).includes(r.key))
-    : sk.regions.filter((r) => r.depth % 2 === 1);
+    ? sketchView.regions.filter((r) => (profile.regions as string[]).includes(r.key))
+    : sketchView.regions.filter((r) => r.depth % 2 === 1);
 
   for (const r of regions) {
     const [outer, ...holes] = r.polygons.map((poly) => poly.map(([x, y]) => new THREE.Vector2(x, y)));
@@ -307,9 +307,9 @@ export function profileTriangles(
     const all = [outer, ...holes].flat();
 
     for (const tri of THREE.ShapeUtils.triangulateShape(outer, holes)) {
-      for (const k of tri) tris.push(...toWorld(sk.frame, [all[k]!.x, all[k]!.y]));
+      for (const k of tri) tris.push(...toWorld(sketchView.frame, [all[k]!.x, all[k]!.y]));
     }
   }
 
-  return tris.length ? { triangles: new Float32Array(tris), normal: sk.frame.normal } : null;
+  return tris.length ? { triangles: new Float32Array(tris), normal: sketchView.frame.normal } : null;
 }

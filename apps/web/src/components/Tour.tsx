@@ -136,11 +136,11 @@ export function Tour({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      e.stopPropagation();
-      if (e.key === "Escape") close();
-      if (e.key === "ArrowRight" || e.key === "Enter") i < STEPS.length - 1 ? setI(i + 1) : close();
-      if (e.key === "ArrowLeft" && i > 0) setI(i - 1);
+    const onKey = (event: KeyboardEvent) => {
+      event.stopPropagation();
+      if (event.key === "Escape") close();
+      if (event.key === "ArrowRight" || event.key === "Enter") i < STEPS.length - 1 ? setI(i + 1) : close();
+      if (event.key === "ArrowLeft" && i > 0) setI(i - 1);
     };
 
     window.addEventListener("keydown", onKey, true);

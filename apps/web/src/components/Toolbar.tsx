@@ -96,7 +96,7 @@ type RailEntry = RailTool | RailGroup | "sep";
 /** Finishing a sketch has to answer the first tap (see sureTap). */
 const finishTap = sureTap(closeSketch);
 
-const isGroup = (e: RailEntry): e is RailGroup => typeof e === "object" && "tools" in e;
+const isGroup = (entry: RailEntry): entry is RailGroup => typeof entry === "object" && "tools" in entry;
 
 const withKbd = (key: string | undefined) => (key ? { kbd: key } : {});
 
@@ -121,16 +121,16 @@ function sketchTool(tool: SketchTool, icon: Icon, label: string, current: Sketch
 }
 
 function useEntries(): RailEntry[] {
-  const sketchId = useApp((s) => s.sketchId);
-  const activeOp = useApp((s) => s.dialog?.feature.op);
-  const measure = useApp((s) => s.measure.active);
+  const sketchId = useApp((state) => state.sketchId);
+  const activeOp = useApp((state) => state.dialog?.feature.op);
+  const measure = useApp((state) => state.measure.active);
   const joints = useMotion((s) => s.open);
   const ui = useSketchUi();
-  usePrefs((s) => s.keys); // badges follow the shortcut preset
+  usePrefs((prefs) => prefs.keys); // badges follow the shortcut preset
 
   const mechanics = usePack("mechanics");
   // A design with joints shows them without the pack too (to look at and move, not to change).
-  const hasJoints = useApp((s) => !!s.doc.mechanism?.joints.length);
+  const hasJoints = useApp((state) => !!state.doc.mechanism?.joints.length);
   const scanPack = usePack("scan");
   const canScanHere = useCanScan();
   const scan = (canScanHere || canBuildTerrain) && scanPack;
@@ -277,8 +277,8 @@ function useEntries(): RailEntry[] {
       hint: t("Distances, angles and radii"),
       active: measure,
       run: () =>
-        useApp.setState((s) => ({
-          measure: { active: !s.measure.active, picks: [], result: null },
+        useApp.setState((state) => ({
+          measure: { active: !state.measure.active, picks: [], result: null },
           dialog: null,
         })),
     },
@@ -370,24 +370,24 @@ export function Toolbar() {
   const compact = useCompact();
   // Phone: import is in the "⋯" menu and finishing a sketch in its header bar.
   const entries = useEntries().filter(
-    (e) => !(compact && typeof e === "object" && (e.id === "import" || e.id === "finish")),
+    (entry) => !(compact && typeof entry === "object" && (entry.id === "import" || entry.id === "finish")),
   );
   const [open, setOpen] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
   const closeTimer = useRef<number>(0);
   const rail = useRef<HTMLDivElement>(null);
-  const sideOpen = useApp((s) => s.sideOpen);
-  const sketching = useApp((s) => !!s.sketchId);
+  const sideOpen = useApp((state) => state.sideOpen);
+  const sketching = useApp((state) => !!state.sketchId);
   const constraints = usePhoneSheets((s) => s.constraints);
 
   useEffect(() => {
     if (!open) return;
 
-    const away = (e: PointerEvent) => {
-      if (!rail.current?.contains(e.target as Node)) setOpen(null);
+    const away = (event: PointerEvent) => {
+      if (!rail.current?.contains(event.target as Node)) setOpen(null);
     };
 
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
+    const esc = (event: KeyboardEvent) => event.key === "Escape" && setOpen(null);
     window.addEventListener("pointerdown", away);
     window.addEventListener("keydown", esc);
 
@@ -398,7 +398,7 @@ export function Toolbar() {
   }, [open]);
 
   // Any tool started by shortcut closes an open flyout.
-  const entryKey = entries.map((e) => (typeof e === "object" ? e.id : e)).join();
+  const entryKey = entries.map((entry) => (typeof entry === "object" ? entry.id : entry)).join();
   useEffect(() => setOpen(null), [entryKey]);
 
   const hover = (id: string | null) => {
@@ -418,21 +418,21 @@ export function Toolbar() {
   const [more, setMore] = useState<"left" | "right" | "both" | undefined>();
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = scroller.current;
-    if (!el || !compact) return setMore(undefined);
+    const element = scroller.current;
+    if (!element || !compact) return setMore(undefined);
 
     const update = () => {
-      const left = el.scrollLeft > 4;
-      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      const left = element.scrollLeft > 4;
+      const right = element.scrollLeft + element.clientWidth < element.scrollWidth - 4;
       setMore(left && right ? "both" : left ? "left" : right ? "right" : undefined);
     };
 
     update();
-    el.addEventListener("scroll", update, { passive: true });
+    element.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
 
     return () => {
-      el.removeEventListener("scroll", update);
+      element.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
   }, [compact, entryKey]);
@@ -442,7 +442,7 @@ export function Toolbar() {
       className="toolbar rail"
       ref={rail}
       aria-label={t("Tools")}
-      onPointerLeave={(e) => e.pointerType === "mouse" && hover(null)}
+      onPointerLeave={(event) => event.pointerType === "mouse" && hover(null)}
       data-more={more}
     >
       <div className="rail-items" ref={scroller}>
@@ -464,48 +464,48 @@ export function Toolbar() {
           )
         ) : null}
         {compact ? <div className="sep" /> : null}
-        {entries.map((e, i) => {
-          if (e === "sep") return <div className="sep" key={`sep${i}`} />;
+        {entries.map((entry, i) => {
+          if (entry === "sep") return <div className="sep" key={`sep${i}`} />;
 
-          if (!isGroup(e)) {
+          if (!isGroup(entry)) {
             return (
               <button
-                key={e.id}
-                className={`tool ${e.active ? "active" : ""} ${e.primary ? "primary" : ""}`}
-                title={`${e.label}${e.hint ? ` — ${e.hint}` : ""}`}
+                key={entry.id}
+                className={`tool ${entry.active ? "active" : ""} ${entry.primary ? "primary" : ""}`}
+                title={`${entry.label}${entry.hint ? ` — ${entry.hint}` : ""}`}
                 onPointerEnter={() => hover(null)}
-                {...(e.id === "finish" ? finishTap : { onClick: () => run(e) })}
+                {...(entry.id === "finish" ? finishTap : { onClick: () => run(entry) })}
               >
-                <e.icon />
-                <span>{e.label}</span>
-                {e.kbd ? <Kbd k={e.kbd} /> : null}
+                <entry.icon />
+                <span>{entry.label}</span>
+                {entry.kbd ? <Kbd k={entry.kbd} /> : null}
               </button>
             );
           }
 
-          const active = e.tools.find((t) => t.active);
-          const GroupIcon = active?.icon ?? e.icon;
+          const active = entry.tools.find((t) => t.active);
+          const GroupIcon = active?.icon ?? entry.icon;
 
           return (
             <div
               className="rail-group"
-              key={e.id}
-              onPointerEnter={(ev) => !compact && ev.pointerType === "mouse" && hover(e.id)}
+              key={entry.id}
+              onPointerEnter={(event) => !compact && event.pointerType === "mouse" && hover(entry.id)}
             >
               <button
-                className={`tool group ${active ? "active" : ""} ${open === e.id ? "open" : ""}`}
+                className={`tool group ${active ? "active" : ""} ${open === entry.id ? "open" : ""}`}
                 aria-haspopup="menu"
-                aria-expanded={open === e.id}
-                onClick={(ev) => {
+                aria-expanded={open === entry.id}
+                onClick={(event) => {
                   // Phone: the group opens as a menu above the bar (the bar scrolls sideways and would clip a
                   // flyout).
                   if (compact) {
-                    const r = ev.currentTarget.getBoundingClientRect();
+                    const rect = event.currentTarget.getBoundingClientRect();
 
                     return showMenu(
-                      r.left,
-                      r.top - 8,
-                      e.tools.map((t) => ({ label: t.label, icon: <t.icon />, onClick: () => run(t) })),
+                      rect.left,
+                      rect.top - 8,
+                      entry.tools.map((t) => ({ label: t.label, icon: <t.icon />, onClick: () => run(t) })),
                       { above: true },
                     );
                   }
@@ -513,18 +513,18 @@ export function Toolbar() {
                   // Fingers and pens do not hover: a tap opens the group and keeps it open (a lift of the
                   // finger used to count as leaving the rail and closed it again at once).
                   window.clearTimeout(closeTimer.current);
-                  setPinned(open !== e.id || !pinned);
-                  setOpen(open === e.id && pinned ? null : e.id);
+                  setPinned(open !== entry.id || !pinned);
+                  setOpen(open === entry.id && pinned ? null : entry.id);
                 }}
               >
                 <GroupIcon />
-                <span>{e.label}</span>
+                <span>{entry.label}</span>
                 <i className="rail-more" />
               </button>
-              {open === e.id ? (
-                <RailFlyout label={e.label}>
-                  <div className="rail-flyout-title">{e.label}</div>
-                  {e.tools.map((t) => (
+              {open === entry.id ? (
+                <RailFlyout label={entry.label}>
+                  <div className="rail-flyout-title">{entry.label}</div>
+                  {entry.tools.map((t) => (
                     <button
                       key={t.id}
                       role="menuitem"
@@ -557,28 +557,28 @@ export function Toolbar() {
 function RailFlyout({ label, children }: { label: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const element = ref.current;
+    if (!element) return;
 
     const fit = () => {
-      el.classList.remove("two-columns");
-      el.style.transform = "";
-      el.style.maxHeight = "";
+      element.classList.remove("two-columns");
+      element.style.transform = "";
+      element.style.maxHeight = "";
 
       const margin = 8;
       const room = innerHeight - 2 * margin;
-      let r = el.getBoundingClientRect();
+      let rect = element.getBoundingClientRect();
 
-      if (r.height > room && innerWidth - r.left > 2 * r.width + margin) {
-        el.classList.add("two-columns");
-        r = el.getBoundingClientRect();
+      if (rect.height > room && innerWidth - rect.left > 2 * rect.width + margin) {
+        element.classList.add("two-columns");
+        rect = element.getBoundingClientRect();
       }
 
-      if (r.height > room) el.style.maxHeight = `${room}px`;
+      if (rect.height > room) element.style.maxHeight = `${room}px`;
 
-      const h = Math.min(r.height, room);
-      const shift = Math.max(margin - r.top, Math.min(0, innerHeight - margin - (r.top + h)));
-      if (shift) el.style.transform = `translateY(${shift}px)`;
+      const h = Math.min(rect.height, room);
+      const shift = Math.max(margin - rect.top, Math.min(0, innerHeight - margin - (rect.top + h)));
+      if (shift) element.style.transform = `translateY(${shift}px)`;
     };
 
     fit();
