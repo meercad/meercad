@@ -112,6 +112,29 @@ describe("gridfinity baseplates", () => {
     for (const tag of ["bp1.hole", "bp1.floor", "bp1.pocket", "bp1.top", "bp1.bottom"]) expect(tags).toContain(tag);
   });
 
+  it("countersinks a screw hole in every cell of a drawer's plate", async () => {
+    const plain = body((await build([plate({ drawer: [300, 200], floor: 3.4 })])).report, "bp1").volume;
+    const { report, meshes } = await build([plate({ drawer: [300, 200], screws: true })]);
+    ok(report);
+    // 7 × 4 cells, each with a Ø3 hole through the 3.4 mm floor, its top countersunk to the head.
+    const r = G.plateScrewDiameter / 2;
+    const k = G.plateScrewHead / 2 - r;
+    const floor = 3.4;
+    const rTop = r + ((G.plateScrewHead / 2 + 0.5 - r) * k) / (k + 0.5);
+    const hole = Math.PI * r * r * (floor - k) + (Math.PI * k / 3) * (r * r + r * rTop + rTop * rTop);
+    expect(plain - body(report, "bp1").volume).toBeCloseTo(28 * hole, 1);
+    expect(new Set(meshes.find((m) => m.bodyId === "bp1")!.faceTags.flat())).toContain("bp1.hole");
+  });
+
+  it("hollows a bin without a lip straight up from the floor", async () => {
+    const { report } = await build([bin({ height: 3, lip: false })]);
+    ok(report);
+    const [W, H, t, floor] = [41.5, 21, G.wall, G.binFloor];
+    const b = body(report, "gf1");
+    expect(b.bbox.max[2]).toBeCloseTo(H, 6);
+    expect(b.volume).toBeCloseTo(footVolume + area(W, W, 3.75, 0) * (H - 4.75) - area(W - 2 * t, W - 2 * t, 3.75 - t, 0) * (H - floor), 1);
+  });
+
   it("fills a drawer: whole cells centred, the rest as border", async () => {
     const { report } = await build([plate({ drawer: [300, 200] })]);
     ok(report);
