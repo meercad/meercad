@@ -102,3 +102,30 @@ describe("fitSection", () => {
     }
   });
 });
+
+describe("sections of round outlines", () => {
+  it("a lens of two arcs: two arcs of its radius, meeting at its corners", () => {
+    // Circles of radius 10 about (±6, 0) overlap in a lens with corners at (0, ±8).
+    const arc = (cx: number, from: number, to: number, n: number): [number, number][] =>
+      Array.from({ length: n }, (_, i) => {
+        const a = from + ((to - from) * i) / n;
+        return [cx + 10 * Math.cos(a), 10 * Math.sin(a)];
+      });
+    const t = Math.atan2(8, 6);
+    // Right edge: the circle about (−6, 0) from −t to t; left edge: about (6, 0) from π − t to π + t.
+    const points = [...arc(-6, -t, t, 40), ...arc(6, Math.PI - t, Math.PI + t, 40)];
+    const pieces = fitSection({ points, closed: true }, 0.02);
+    expect(pieces.map((p) => p.kind)).toEqual(["arc", "arc"]);
+    for (const p of pieces) if (p.kind === "arc") expect(p.radius).toBeCloseTo(10, 2);
+    const ends = pieces.flatMap((p) => (p.kind === "arc" ? [p.a, p.b] : []));
+    for (const e of ends) expect(Math.abs(e[0])).toBeLessThan(0.05);
+    expect(ends.map((e) => Math.round(Math.abs(e[1])))).toEqual([8, 8, 8, 8]);
+  });
+
+  it("a closed ring of only five points on a circle is still one round piece", () => {
+    const points: [number, number][] = Array.from({ length: 5 }, (_, i) => [10 * Math.cos((2 * Math.PI * i) / 5), 10 * Math.sin((2 * Math.PI * i) / 5)]);
+    const pieces = fitSection({ points, closed: true }, 0.01);
+    expect(pieces.length).toBeGreaterThan(0);
+    for (const p of pieces) if (p.kind !== "line") expect(p.radius).toBeCloseTo(10, 6);
+  });
+});

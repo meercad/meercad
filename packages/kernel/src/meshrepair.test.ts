@@ -89,4 +89,34 @@ describe("repairMesh", () => {
     expect(closed(m.indices)).toBe(true);
     expect(volume(m)).toBeCloseTo(1000, 6);
   });
+
+  it("closes a missing face on every side of a box, whichever way its rim runs", () => {
+    for (let face = 0; face < 6; face++) {
+      const m = repairMesh(box([10, 20, 30], 1, [0, 0, 0], face), { fillHoles: true });
+      expect(m.report.holesFilled, `face ${face}`).toBe(1);
+      expect(closed(m.indices), `face ${face}`).toBe(true);
+      expect(volume(m), `face ${face}`).toBeCloseTo(6000, 6);
+    }
+  });
+
+  it("closes a hole that bends round an edge of the box", () => {
+    // The corner square of the bottom and the one of the front next to it are gone: one hole, folded 90°.
+    const full = box([10, 10, 10], 2);
+    const corners: number[] = [];
+    for (let t = 0; t < full.length / 9; t++) {
+      const c = full.slice(t * 9, t * 9 + 9);
+      // Triangles of the bottom's and the front's corner squares at the shared edge's start.
+      const xs = [c[0]!, c[3]!, c[6]!], ys = [c[1]!, c[4]!, c[7]!], zs = [c[2]!, c[5]!, c[8]!];
+      const bottomCorner = zs.every((z) => z === 0) && xs.every((x) => x <= 5) && ys.every((y) => y <= 5);
+      const frontCorner = ys.every((y) => y === 0) && xs.every((x) => x <= 5) && zs.every((z) => z <= 5);
+      if (bottomCorner || frontCorner) continue;
+      corners.push(...c);
+    }
+    const m = repairMesh(corners, { fillHoles: true });
+    expect(m.report.holesFilled).toBe(1);
+    expect(closed(m.indices)).toBe(true);
+    // The fill cuts the corner off diagonally or bridges it: the volume stays within the missing cube's.
+    expect(volume(m)).toBeGreaterThan(1000 - 125);
+    expect(volume(m)).toBeLessThanOrEqual(1000 + 1e-6);
+  });
 });

@@ -130,6 +130,8 @@ export function fitSection(chain: SectionChain, tol: number): SectionPiece[] {
     const s = sharpest(pts, tol * 3);
     const first = segment(ring(s), tol);
     if (first.length > 1) pts = ring((s + first[0]!.j) % pts.length);
+    // A closed ring in one run would be a whole circle, which is taken above: a guard only.
+    /* v8 ignore next */
     else pts = ring(s);
     raw = first.length > 1 ? segment(pts, tol) : first;
   } else raw = segment(pts, tol);
