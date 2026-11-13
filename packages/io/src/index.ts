@@ -5,7 +5,31 @@ export { objFiles, readObj, writeMtl, writeObj, type ObjMesh } from "./obj.js";
 export { readGlb, type TexturedMesh } from "./glb.js";
 export { writeDxf, readDxf, writeSvg } from "./dxf.js";
 export type { Curve2 } from "./curves.js";
-export { layoutSheet, SHEET_LABELS, writeSheetDxf, writeSheetPdf, writeSheetSvg, type Paper, type Sheet, type SheetBomRow, type SheetLabels, type SheetView, type TitleBlock } from "./drawing.js";
+export {
+  layoutSheet,
+  SHEET_LABELS,
+  writeSheetDxf,
+  writeSheetPdf,
+  writeSheetSvg,
+  type Paper,
+  type Sheet,
+  type SheetBomRow,
+  type SheetLabels,
+  type SheetView,
+  type TitleBlock,
+} from "./drawing.js";
 export { writeZip } from "./zip.js";
 export { storedZip, writeUsda, writeUsdz, type UsdzMesh } from "./usdz.js";
-export { fitCollisionShape, writeRobot, type CollisionShape, type RobotActuator, type RobotCollision, type RobotCoupling, type RobotExport, type RobotJoint, type RobotLink, type RobotOptions, type RobotPart } from "./robot.js";
+export {
+  fitCollisionShape,
+  writeRobot,
+  type CollisionShape,
+  type RobotActuator,
+  type RobotCollision,
+  type RobotCoupling,
+  type RobotExport,
+  type RobotJoint,
+  type RobotLink,
+  type RobotOptions,
+  type RobotPart,
+} from "./robot.js";

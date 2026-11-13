@@ -26,6 +26,7 @@ export function writeUsdz(meshes: readonly UsdzMesh[]): Uint8Array {
 /** Valid USD prim names, unique among their siblings. */
 function primNames(names: readonly string[]): string[] {
   const seen = new Set<string>();
+
   return names.map((raw) => {
     let base = raw
       .replace(/[äöüÄÖÜß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", Ä: "Ae", Ö: "Oe", Ü: "Ue", ß: "ss" })[c]!)
@@ -35,9 +36,11 @@ function primNames(names: readonly string[]): string[] {
       .replace(/^_+|_+$/g, "");
     if (!base) base = "Part";
     if (/^[0-9]/.test(base)) base = `_${base}`;
+
     let name = base;
     for (let n = 2; seen.has(name); n++) name = `${base}_${n}`;
     seen.add(name);
+
     return name;
   });
 }
@@ -45,38 +48,50 @@ function primNames(names: readonly string[]): string[] {
 /** sRGB "#rrggbb" as linear RGB, which UsdPreviewSurface expects for constant colours. */
 function linearRgb(hex: string | undefined): [number, number, number] {
   const ok = hex && /^#[0-9a-f]{6}$/i.test(hex) ? hex : "#c4cfdc";
+
   return [1, 3, 5].map((k) => {
     const c = parseInt(ok.slice(k, k + 2), 16) / 255;
+
     return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
 }
 
 const num = (x: number) => {
   const r = Math.round(x * 1e6) / 1e6;
+
   return Object.is(r, -0) ? "0" : String(r);
 };
-const clamp01 = (x: number | undefined, fallback: number) => (x === undefined || !Number.isFinite(x) ? fallback : Math.min(1, Math.max(0, x)));
+
+const clamp01 = (x: number | undefined, fallback: number) =>
+  x === undefined || !Number.isFinite(x) ? fallback : Math.min(1, Math.max(0, x));
 
 /** The USD text (usda) of the parts; see writeUsdz. */
 export function writeUsda(meshes: readonly UsdzMesh[]): string {
   // Bounds in design coordinates (mm, Z up), to stand the whole on the table, centred.
   const lo = [Infinity, Infinity, Infinity];
   const hi = [-Infinity, -Infinity, -Infinity];
-  for (const m of meshes)
-    for (let i = 0; i < m.positions.length; i += 3)
+
+  for (const m of meshes) {
+    for (let i = 0; i < m.positions.length; i += 3) {
       for (let k = 0; k < 3; k++) {
         const v = m.positions[i + k]!;
         if (v < lo[k]!) lo[k] = v;
         if (v > hi[k]!) hi[k] = v;
       }
+    }
+  }
+
   if (!Number.isFinite(lo[0]!)) throw new Error("nothing to show: no triangles");
+
   const cx = (lo[0]! + hi[0]!) / 2;
   const cy = (lo[1]! + hi[1]!) / 2;
   const floor = lo[2]!;
   // Design (x, y, z) in mm, Z up → USD (x, z, -y) in metres, Y up: a quarter turn about X, so the
   // triangles keep their winding and the part keeps its handedness.
-  const point = (p: ArrayLike<number>, i: number) => `(${num((p[i]! - cx) / 1000)}, ${num((p[i + 2]! - floor) / 1000)}, ${num(-(p[i + 1]! - cy) / 1000)})`;
-  const normal = (n: ArrayLike<number>, i: number) => `(${num(n[i]!)}, ${num(n[i + 2]!)}, ${num(-n[i + 1]!)})`;
+  const point = (p: ArrayLike<number>, i: number) =>
+    `(${num((p[i]! - cx) / 1000)}, ${num((p[i + 2]! - floor) / 1000)}, ${num(-(p[i + 1]! - cy) / 1000)})`;
+  const normal = (n: ArrayLike<number>, i: number) =>
+    `(${num(n[i]!)}, ${num(n[i + 2]!)}, ${num(-n[i + 1]!)})`;
 
   const names = primNames(meshes.map((m, i) => m.name ?? `Part ${i + 1}`));
   const out: string[] = [
@@ -96,6 +111,7 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
     '    def Scope "Materials"',
     "    {",
   ];
+
   for (const [i, m] of meshes.entries()) {
     const [r, g, b] = linearRgb(m.color);
     out.push(
@@ -113,20 +129,30 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
       "        }",
     );
   }
+
   out.push("    }");
+
   for (const [i, m] of meshes.entries()) {
     const n = m.positions.length / 3;
     const pts: string[] = [];
     const elo = [Infinity, Infinity, Infinity];
     const ehi = [-Infinity, -Infinity, -Infinity];
+
     for (let v = 0; v < n; v++) {
       pts.push(point(m.positions, v * 3));
-      const u = [(m.positions[v * 3]! - cx) / 1000, (m.positions[v * 3 + 2]! - floor) / 1000, -(m.positions[v * 3 + 1]! - cy) / 1000];
+
+      const u = [
+        (m.positions[v * 3]! - cx) / 1000,
+        (m.positions[v * 3 + 2]! - floor) / 1000,
+        -(m.positions[v * 3 + 1]! - cy) / 1000,
+      ];
+
       for (let k = 0; k < 3; k++) {
         if (u[k]! < elo[k]!) elo[k] = u[k]!;
         if (u[k]! > ehi[k]!) ehi[k] = u[k]!;
       }
     }
+
     const tris = m.indices.length / 3;
     out.push(
       "",
@@ -140,29 +166,45 @@ export function writeUsda(meshes: readonly UsdzMesh[]): string {
       `        int[] faceVertexIndices = [${Array.from(m.indices).join(", ")}]`,
       `        rel material:binding = </Model/Materials/M_${names[i]}>`,
     );
+
     if (m.normals && m.normals.length === m.positions.length) {
       const ns: string[] = [];
       for (let v = 0; v < n; v++) ns.push(normal(m.normals, v * 3));
-      out.push(`        normal3f[] normals = [${ns.join(", ")}] (`, '            interpolation = "vertex"', "        )");
+      out.push(
+        `        normal3f[] normals = [${ns.join(", ")}] (`,
+        '            interpolation = "vertex"',
+        "        )",
+      );
     }
-    out.push(`        point3f[] points = [${pts.join(", ")}]`, '        uniform token subdivisionScheme = "none"', "    }");
+
+    out.push(
+      `        point3f[] points = [${pts.join(", ")}]`,
+      '        uniform token subdivisionScheme = "none"',
+      "    }",
+    );
   }
+
   out.push("}", "");
+
   return out.join("\n");
 }
 
 let crcTable: Uint32Array | undefined;
+
 function crc32(data: Uint8Array): number {
   if (!crcTable) {
     crcTable = new Uint32Array(256);
+
     for (let n = 0; n < 256; n++) {
       let c = n;
       for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
       crcTable[n] = c >>> 0;
     }
   }
+
   let c = 0xffffffff;
   for (let i = 0; i < data.length; i++) c = crcTable[(c ^ data[i]!) & 0xff]! ^ (c >>> 8);
+
   return (c ^ 0xffffffff) >>> 0;
 }
 
@@ -174,6 +216,7 @@ export function storedZip(files: readonly { name: string; data: Uint8Array }[]):
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
+
   for (const f of files) {
     const name = new TextEncoder().encode(f.name);
     const crc = crc32(f.data);
@@ -194,6 +237,7 @@ export function storedZip(files: readonly { name: string; data: Uint8Array }[]):
     local.set(name, 30);
     lv.setUint16(30 + name.length, 0x1986, true); // padding field, as Pixar's own writer uses
     lv.setUint16(32 + name.length, pad, true);
+
     const head = new Uint8Array(46 + name.length);
     const hv = new DataView(head.buffer);
     hv.setUint32(0, 0x02014b50, true);
@@ -211,6 +255,7 @@ export function storedZip(files: readonly { name: string; data: Uint8Array }[]):
     central.push(head);
     offset += local.length + f.data.length;
   }
+
   const centralSize = central.reduce((s, c) => s + c.length, 0);
   const end = new Uint8Array(22);
   const ev = new DataView(end.buffer);
@@ -219,11 +264,14 @@ export function storedZip(files: readonly { name: string; data: Uint8Array }[]):
   ev.setUint16(10, files.length, true);
   ev.setUint32(12, centralSize, true);
   ev.setUint32(16, offset, true);
+
   const out = new Uint8Array(offset + centralSize + 22);
   let at = 0;
+
   for (const p of [...parts, ...central, end]) {
     out.set(p, at);
     at += p.length;
   }
+
   return out;
 }
