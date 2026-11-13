@@ -144,6 +144,20 @@ describe("bend mapping", () => {
       makeBender(ruler, { mode: "spiral", axis: [0, 0, 1], radius: 20, gap: 0.1 }).warnings.join(),
     ).toMatch(/may fuse/);
   });
+
+  it("refuses a bend by no angle, by more than a full turn, and one too fine to triangulate", () => {
+    const strip = box([0, 0, 0], [100, 10, 2]);
+
+    expect(() => makeBender(strip, { mode: "bend", axis: [0, 1, 0], angle: 0 })).toThrow(
+      /the bend angle must be greater than zero/,
+    );
+    expect(() => makeBender(strip, { mode: "bend", axis: [0, 1, 0], angle: 400 })).toThrow(
+      /a bend goes at most once round/,
+    );
+    expect(() =>
+      bendMeshes([ruler], { mode: "spiral", axis: [0, 0, 1], radius: 20, gap: 1, tolerance: 1e-9 }),
+    ).toThrow(/bending this finely needs too many triangles/);
+  });
 });
 
 describe("bent meshes", () => {
