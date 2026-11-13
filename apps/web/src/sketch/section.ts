@@ -13,6 +13,7 @@ import type { Feature, SketchConstraint, SketchEntity, SketchFeature } from "@me
 import type { Vec2 } from "@meercad/sketch";
 import { meshBodyIds } from "../lib/meshParts";
 import { freshId } from "./actions";
+import { distance2 } from "@meercad/sketch";
 
 type Draft = Pick<SketchFeature, "entities" | "constraints">;
 type NewEntity = SketchEntity extends infer E ? (E extends unknown ? Omit<E, "id"> : never) : never;
@@ -156,12 +157,12 @@ export function traceSections(
 /** Unit direction of travel along a piece (from `a` to `b`) at a point on it. */
 function direction(pc: Exclude<SectionPiece, { kind: "circle" }>, at: Vec2): Vec2 {
   if (pc.kind === "line") {
-    const l = Math.hypot(pc.b[0] - pc.a[0], pc.b[1] - pc.a[1]) || 1;
+    const l = distance2(pc.a, pc.b) || 1;
 
     return [(pc.b[0] - pc.a[0]) / l, (pc.b[1] - pc.a[1]) / l];
   }
 
-  const r = Math.hypot(at[0] - pc.center[0], at[1] - pc.center[1]) || 1;
+  const r = distance2(pc.center, at) || 1;
   const [rx, ry] = [(at[0] - pc.center[0]) / r, (at[1] - pc.center[1]) / r];
 
   return pc.ccw ? [-ry, rx] : [ry, -rx];

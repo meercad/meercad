@@ -73,6 +73,7 @@ import { currentMechanism, currentPoses } from "../lib/mechanism";
 import { sceneryOf } from "../lib/terrain";
 import { exportTexture } from "../lib/meshTexture";
 import { refreshSlicers, slicerFor, type SlicerId } from "../lib/slicers";
+import { distance2 } from "@meercad/sketch";
 
 const FILTERS: Record<string, { name: string; extensions: string[] }> = {
   stl: { name: t("STL mesh"), extensions: ["stl"] },
@@ -1081,7 +1082,7 @@ export function curvesToSketch(curves: Curve2[]): {
 
   for (const c of curves) {
     if (c.kind === "line") {
-      if (Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1]) < tol) continue;
+      if (distance2(c.a, c.b) < tol) continue;
 
       entities.push({ id: `l${++k}`, type: "line", p1: point(...c.a), p2: point(...c.b) });
     } else if (c.kind === "circle") {

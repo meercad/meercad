@@ -6,7 +6,7 @@
  * stable when dimensions change without changing topology.
  */
 
-import { arcPoint, sweep, type SolvedCurve, type Vec2 } from "./geometry.js";
+import { arcPoint, sweep, type SolvedCurve, type Vec2, distance2 } from "./geometry.js";
 
 /** Lines, circles and arcs: what regions are built from (splines become short lines first). */
 type Basic = Exclude<SolvedCurve, { kind: "spline" }>;
@@ -128,7 +128,7 @@ export function findRegions(curves: readonly SolvedCurve[]): Region[] {
       for (let k = 0; k + 1 < ts.length; k++) {
         const a = lerp(c.a, c.b, ts[k]!);
         const b = lerp(c.a, c.b, ts[k + 1]!);
-        if (Math.hypot(b[0] - a[0], b[1] - a[1]) > tol) pieces.push({ kind: "line", a, b });
+        if (distance2(a, b) > tol) pieces.push({ kind: "line", a, b });
       }
 
       pushPieces(c.id, pieces);
@@ -540,7 +540,7 @@ function interiorPoint(polys: Vec2[][]): Vec2 {
     for (let i = 0; i < outer.length; i++) {
       const a = outer[i]!;
       const b = outer[(i + 1) % outer.length]!;
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const len = distance2(a, b);
       if (len === 0) continue;
 
       const m: Vec2 = [
@@ -673,5 +673,5 @@ export function intersectionPoints(a: SolvedCurve, b: SolvedCurve): Vec2[] {
   }
 
   // Neighbouring pieces of a spline meet at their shared sample point: keep it once.
-  return out.filter((p, i) => out.findIndex((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-9) === i);
+  return out.filter((p, i) => out.findIndex((q) => distance2(p, q) < 1e-9) === i);
 }

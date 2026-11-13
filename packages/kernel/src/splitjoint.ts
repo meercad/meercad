@@ -8,7 +8,7 @@
  */
 
 import { FeatureError, type ResolvedSplit } from "@meercad/model";
-import { toWorld, type PlaneFrame, type Vec3 } from "@meercad/sketch";
+import { toWorld, type PlaneFrame, type Vec3, distance2 } from "@meercad/sketch";
 import type { TopoDS_Shape } from "replicad-opencascadejs";
 import type { Arena } from "./arena.js";
 import { Body } from "./body.js";
@@ -113,7 +113,7 @@ export function placePins(pts: { p: P2; d: number }[], reach: number, count: num
     ok.reduce((a, s) => a + s.p[0], 0) / ok.length,
     ok.reduce((a, s) => a + s.p[1], 0) / ok.length,
   ];
-  const dist = (a: P2, b: P2) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const dist = (a: P2, b: P2) => distance2(b, a);
 
   // One pin: the roomiest point nearest the middle. More: spread out, starting far from the middle.
   if (count === 1) {

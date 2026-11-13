@@ -11,7 +11,14 @@ import {
   type SketchPrimitive,
 } from "@salusoft89/planegcs";
 import type { SketchConstraint, SketchEntity } from "@meercad/schema";
-import { splinePoints, sweep, type SolvedCurve, type SolvedSketch, type Vec2 } from "./geometry.js";
+import {
+  splinePoints,
+  sweep,
+  type SolvedCurve,
+  type SolvedSketch,
+  type Vec2,
+  distance2,
+} from "./geometry.js";
 
 /** A sketch constraint whose expression has been evaluated (mm / degrees). */
 export type ResolvedConstraint = SketchConstraint extends infer C
@@ -229,7 +236,7 @@ function buildPrimitives(
       const c = at(e.center);
       const s = at(e.start);
       const t = at(e.end);
-      const radius = Math.hypot(s[0] - c[0], s[1] - c[1]) || 1;
+      const radius = distance2(c, s) || 1;
       const a0 = Math.atan2(s[1] - c[1], s[0] - c[0]);
       const a1 = a0 + sweep(a0, Math.atan2(t[1] - c[1], t[0] - c[0]));
       curves.push({

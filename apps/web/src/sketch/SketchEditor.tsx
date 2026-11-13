@@ -412,7 +412,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     for (const [id, q] of pointEntries(sketch, shown)) {
       if (exclude?.has(id)) continue;
 
-      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      const d = distance2(p, q);
 
       // A sketch point sitting on the origin wins over the origin itself: a chain started there
       // closes on its own first point instead of getting a second one tied to the origin.
@@ -491,7 +491,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     const { snapGrid, snapGeometry } = usePrefs.getState();
     const unit = px();
     const tol = unit * 10;
-    const near = (q: Vec2) => Math.hypot(q[0] - p[0], q[1] - p[1]);
+    const near = (q: Vec2) => distance2(p, q);
     const pt = hitPoint(p, tol, exclude);
     if (pt) return { pos: shown.points.get(pt)!, point: pt, kind: "point" };
 
@@ -647,7 +647,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const cons = construction ? { construction: true } : {};
 
   const addLine = (a: Snap, b: Snap, length?: Expr): [string, string] | null => {
-    if (!sketch || Math.hypot(b.pos[0] - a.pos[0], b.pos[1] - a.pos[1]) < px() * 2) return null;
+    if (!sketch || distance2(a.pos, b.pos) < px() * 2) return null;
 
     const bl = builder(sketch);
     const p1 = bl.point(a);
@@ -726,7 +726,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const addArc = (c: Snap, s: Snap, e: Snap, ccw: boolean, angle?: Expr) => {
     if (!sketch) return;
 
-    const r = Math.hypot(s.pos[0] - c.pos[0], s.pos[1] - c.pos[1]);
+    const r = distance2(c.pos, s.pos);
     if (r < px() * 2) return;
 
     const bl = builder(sketch);
@@ -773,7 +773,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const addPolygon = (c: Snap, v: Vec2, sides = 6) => {
     if (!sketch) return;
 
-    const r = Math.hypot(v[0] - c.pos[0], v[1] - c.pos[1]);
+    const r = distance2(c.pos, v);
     if (r < px() * 2) return;
 
     const bl = builder(sketch);
@@ -1046,7 +1046,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     for (const id of ends) {
       const q = shown.points.get(id);
-      const d = q ? Math.hypot(q[0] - p[0], q[1] - p[1]) : Infinity;
+      const d = q ? distance2(p, q) : Infinity;
       if (d < best) [corner, best] = [id, d];
     }
 
@@ -1126,14 +1126,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         c = {
           type: "length",
           line: a.id,
-          value: round(Math.hypot(curve.b[0] - curve.a[0], curve.b[1] - curve.a[1])),
+          value: round(distance2(curve.a, curve.b)),
           label,
         };
       } else if (curve.kind === "circle") {
         c = { type: "diameter", curve: a.id, value: round(curve.radius * 2), label };
       } else if (curve.kind === "arc") {
         // Placed inside the arc, near its centre: the angle it sweeps; further out: its radius.
-        const inside = Math.hypot(at[0] - curve.center[0], at[1] - curve.center[1]) < curve.radius * 0.6;
+        const inside = distance2(curve.center, at) < curve.radius * 0.6;
         c = inside
           ? {
               type: "arc_angle",
@@ -1160,7 +1160,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           type: "distance",
           a: a.id,
           b: b.id,
-          value: round(Math.hypot(pb[0] - pa[0], pb[1] - pa[1])),
+          value: round(distance2(pa, pb)),
           label,
         };
       }
@@ -1266,10 +1266,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     if (!entry || !ts.points.length) return null;
 
     const a = ts.points[0]!.pos;
-    const cur =
-      ts.cursor && Math.hypot(ts.cursor[0] - a[0], ts.cursor[1] - a[1]) > 1e-9
-        ? ts.cursor
-        : ([a[0] + 1, a[1]] as Vec2);
+    const cur = ts.cursor && distance2(a, ts.cursor) > 1e-9 ? ts.cursor : ([a[0] + 1, a[1]] as Vec2);
     const toward = Math.atan2(cur[1] - a[1], cur[0] - a[0]);
     const [f0, f1] = [
       valueOf(entry.fields[0], isAngleField(ui.tool, 0)),
@@ -1309,7 +1306,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         const st = ts.points[1]?.pos;
         if (!st || f0 === null || f0 <= 0 || f0 >= 360) return null;
 
-        const r = Math.hypot(st[0] - a[0], st[1] - a[1]);
+        const r = distance2(a, st);
         const end =
           Math.atan2(st[1] - a[1], st[0] - a[0]) + (ts.sweep >= 0 ? 1 : -1) * ((f0 * Math.PI) / 180);
 
@@ -1335,7 +1332,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       ts.points = [];
     } else if (ui.tool === "circle") {
       const c = ts.points[0]!;
-      addCircle(c, Math.hypot(target[0] - c.pos[0], target[1] - c.pos[1]), expr(0));
+      addCircle(c, distance2(c.pos, target), expr(0));
       ts.points = [];
     } else if (ui.tool === "arc") {
       add3PointArc(ts.points[0]!, ts.points[1]!, target, { radius: expr(0), angle: expr(1) });
@@ -1534,7 +1531,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
       if (tool === "line" && ts.points.length) {
         const a = ts.points[0]!.pos;
-        const len = Math.hypot(s.pos[0] - a[0], s.pos[1] - a[1]);
+        const len = distance2(a, s.pos);
         const ang = (Math.atan2(s.pos[1] - a[1], s.pos[0] - a[0]) * 180) / Math.PI;
         setTip({
           x: e.clientX - r.left,
@@ -1557,7 +1554,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         setTip({
           x: e.clientX - r.left,
           y: e.clientY - r.top,
-          text: fmtLen(Math.hypot(s.pos[0] - a[0], s.pos[1] - a[1])),
+          text: fmtLen(distance2(a, s.pos)),
         });
       } else if ((tool === "circle" || tool === "arc_center") && ts.points.length) {
         const c = ts.points[0]!.pos;
@@ -1581,14 +1578,14 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         setTip({
           x: e.clientX - r.left,
           y: e.clientY - r.top,
-          text: `R ${fmtLen(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1]))}`,
+          text: `R ${fmtLen(distance2(c, s.pos))}`,
         });
       } else if (tool === "polygon" && ts.points.length) {
         const c = ts.points[0]!.pos;
         setTip({
           x: e.clientX - r.left,
           y: e.clientY - r.top,
-          text: t("hexagon R {r}", { r: fmtLen(Math.hypot(s.pos[0] - c[0], s.pos[1] - c[1])) }),
+          text: t("hexagon R {r}", { r: fmtLen(distance2(c, s.pos)) }),
         });
       } else if ((tool === "rect" || tool === "rect_center") && ts.points.length) {
         const a = ts.points[0]!.pos;
@@ -1790,7 +1787,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             ts.points = [s];
           } else {
             const c = ts.points[0]!;
-            addCircle(c, Math.hypot(s.pos[0] - c.pos[0], s.pos[1] - c.pos[1]));
+            addCircle(c, distance2(c.pos, s.pos));
             ts.points = [];
             setTip(null);
           }
@@ -1812,7 +1809,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           if (ts.points.length < 2) {
             const last = ts.points[ts.points.length - 1];
 
-            if (!last || Math.hypot(s.pos[0] - last.pos[0], s.pos[1] - last.pos[1]) > px() * 2) {
+            if (!last || distance2(last.pos, s.pos) > px() * 2) {
               ts.points = [...ts.points, s];
             }
           } else {
@@ -1830,14 +1827,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           const onFirst =
             first &&
             ts.points.length >= 3 &&
-            (s.point
-              ? s.point === first.point
-              : Math.hypot(s.pos[0] - first.pos[0], s.pos[1] - first.pos[1]) < px() * 6);
+            (s.point ? s.point === first.point : distance2(first.pos, s.pos) < px() * 6);
           if (onFirst) return finishSpline(true);
 
           const last = ts.points[ts.points.length - 1];
 
-          if (!last || Math.hypot(s.pos[0] - last.pos[0], s.pos[1] - last.pos[1]) > px() * 2) {
+          if (!last || distance2(last.pos, s.pos) > px() * 2) {
             ts.points = [...ts.points, s];
           }
 
@@ -2124,7 +2119,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
     if (lastCurve.kind === "line") {
       const [a, b] = [lastCurve.a, lastCurve.b];
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const len = distance2(a, b);
       const deg = ((((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI) % 180) + 180) % 180;
 
       if (!has(["length"])) {
@@ -2534,7 +2529,7 @@ function arcThrough(
   m: Vec2,
 ): { center: Vec2; radius: number; start: Vec2; end: Vec2; sweep: number; swapped: boolean } | null {
   const d = 2 * (a[0] * (b[1] - m[1]) + b[0] * (m[1] - a[1]) + m[0] * (a[1] - b[1]));
-  if (Math.abs(d) < 1e-9 * Math.max(1, Math.hypot(b[0] - a[0], b[1] - a[1]) ** 2)) return null;
+  if (Math.abs(d) < 1e-9 * Math.max(1, distance2(a, b) ** 2)) return null;
 
   const sq = (p: Vec2) => p[0] * p[0] + p[1] * p[1];
   const center: Vec2 = [
@@ -2549,7 +2544,7 @@ function arcThrough(
 
   return {
     center,
-    radius: Math.hypot(a[0] - center[0], a[1] - center[1]),
+    radius: distance2(center, a),
     start,
     end,
     sweep: ccw(ang(start), ang(end)),
@@ -2805,7 +2800,7 @@ function curveDistance(c: SolvedCurve, p: Vec2, infinite = false): number {
     return Math.hypot(c.a[0] + d[0] * t - p[0], c.a[1] + d[1] * t - p[1]);
   }
 
-  const r = Math.hypot(p[0] - c.center[0], p[1] - c.center[1]);
+  const r = distance2(c.center, p);
 
   if (c.kind === "arc") {
     const a = Math.atan2(p[1] - c.center[1], p[0] - c.center[0]);
@@ -2816,7 +2811,7 @@ function curveDistance(c: SolvedCurve, p: Vec2, infinite = false): number {
       const s: Vec2 = [c.center[0] + c.radius * Math.cos(c.a0), c.center[1] + c.radius * Math.sin(c.a0)];
       const e: Vec2 = [c.center[0] + c.radius * Math.cos(c.a1), c.center[1] + c.radius * Math.sin(c.a1)];
 
-      return Math.min(Math.hypot(p[0] - s[0], p[1] - s[1]), Math.hypot(p[0] - e[0], p[1] - e[1]));
+      return Math.min(distance2(s, p), distance2(e, p));
     }
   }
 
@@ -2854,7 +2849,7 @@ function projectOnCurve(c: SolvedCurve, p: Vec2): Vec2 {
         },
         p,
       );
-      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      const d = distance2(p, q);
       if (d < bd) [best, bd] = [q, d];
     }
 
@@ -2980,7 +2975,7 @@ function previewObjects(
   if (tool === "select") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
 
   if (tool === "polygon") {
-    const r = Math.hypot(cur[0] - p0[0], cur[1] - p0[1]);
+    const r = distance2(p0, cur);
     const a0 = Math.atan2(cur[1] - p0[1], cur[0] - p0[0]);
     line(
       Array.from(
@@ -3018,7 +3013,7 @@ function previewObjects(
   }
 
   if (tool === "circle" || (tool === "arc_center" && ts.points.length === 1)) {
-    const r = Math.hypot(cur[0] - p0[0], cur[1] - p0[1]);
+    const r = distance2(p0, cur);
     line(
       Array.from(
         { length: 65 },
@@ -3033,7 +3028,7 @@ function previewObjects(
 
   if (tool === "arc_center" && ts.points.length === 2) {
     const s = ts.points[1]!.pos;
-    const r = Math.hypot(s[0] - p0[0], s[1] - p0[1]);
+    const r = distance2(p0, s);
     const a0 = Math.atan2(s[1] - p0[1], s[0] - p0[0]);
     line(
       Array.from(
@@ -3234,11 +3229,9 @@ function roundCenter(pts: Vec2[]): Vec2 | null {
     (sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d,
     (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d,
   ];
-  const r = Math.hypot(a[0] - center[0], a[1] - center[1]);
+  const r = distance2(center, a);
 
-  return pts.every((p) => Math.abs(Math.hypot(p[0] - center[0], p[1] - center[1]) - r) < r * 0.01 + 1e-4)
-    ? center
-    : null;
+  return pts.every((p) => Math.abs(distance2(center, p) - r) < r * 0.01 + 1e-4) ? center : null;
 }
 
 /** Closest point on a polyline and how far it is. */
@@ -3250,7 +3243,7 @@ function nearestOnPolyline(pts: Vec2[], p: Vec2): { pos: Vec2; dist: number } {
     const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
     const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
     const q: Vec2 = [a[0] + dx * t, a[1] + dy * t];
-    const dist = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    const dist = distance2(p, q);
     if (dist < best.dist) best = { pos: q, dist };
   }
 
@@ -3312,11 +3305,7 @@ function constraintLabels(sk: SketchFeature, s: SolvedSketch): Label[] {
   const size = Math.max(
     10,
     ...s.curves.map((c) =>
-      c.kind === "line"
-        ? Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1])
-        : c.kind === "spline"
-          ? 10
-          : c.radius * 2,
+      c.kind === "line" ? distance2(c.a, c.b) : c.kind === "spline" ? 10 : c.radius * 2,
     ),
   );
   const used = new Map<string, number>();

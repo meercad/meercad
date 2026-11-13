@@ -4,6 +4,7 @@
  * on the main thread.
  */
 import { fitCircle } from "./meshfit.js";
+import { distance2 } from "@meercad/sketch";
 
 export type Vec2 = [number, number];
 
@@ -188,7 +189,7 @@ export function fitSection(chain: SectionChain, tol: number): SectionPiece[] {
 
     if (la && lb) {
       const x = meet(la, lb);
-      if (x && Math.hypot(x[0] - q[0], x[1] - q[1]) < tol * 10) q = x;
+      if (x && distance2(q, x) < tol * 10) q = x;
     } else if ((la && after.arc) || (lb && before.arc)) {
       // A line running into an arc: where it touches the circle, when it does (within the
       // tolerance), else the break moved onto the circle. A tangent line fits a little way into
@@ -216,7 +217,7 @@ export function fitSection(chain: SectionChain, tol: number): SectionPiece[] {
 
     if (r.arc) {
       pieces.push({ kind: "arc", center: [r.arc.cx, r.arc.cy], radius: r.arc.r, a, b, ccw: r.arc.sweep > 0 });
-    } else if (Math.hypot(b[0] - a[0], b[1] - a[1]) > tol * 0.1) {
+    } else if (distance2(a, b) > tol * 0.1) {
       pieces.push({ kind: "line", a, b });
     }
   }
@@ -268,7 +269,7 @@ function dedupe(points: Vec2[], closed: boolean, eps: number): Vec2[] {
 
   for (const p of points) {
     const q = out[out.length - 1];
-    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > eps) out.push(p);
+    if (!q || distance2(q, p) > eps) out.push(p);
   }
 
   while (
@@ -294,12 +295,12 @@ function sharpest(pts: Vec2[], span: number): number {
 
     for (let k = 1; k < n / 2; k++) {
       a = pts[(i - k + n) % n]!;
-      if (Math.hypot(a[0] - p[0], a[1] - p[1]) >= span) break;
+      if (distance2(p, a) >= span) break;
     }
 
     for (let k = 1; k < n / 2; k++) {
       b = pts[(i + k) % n]!;
-      if (Math.hypot(b[0] - p[0], b[1] - p[1]) >= span) break;
+      if (distance2(p, b) >= span) break;
     }
 
     const d1 = Math.atan2(p[1] - a[1], p[0] - a[0]);

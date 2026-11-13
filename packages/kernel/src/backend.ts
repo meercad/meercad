@@ -73,6 +73,7 @@ import {
   type SketchSolver,
   type SolvedCurve,
   type Vec3,
+  distance2,
 } from "@meercad/sketch";
 import type {
   TopoDS_Edge,
@@ -1051,7 +1052,7 @@ function pathWire(f: SweepFeature, ctx: Ctx): TopoDS_Wire {
   const verts: { p: [number, number]; v: TopoDS_Vertex; n: number }[] = [];
 
   const vertex = (p: [number, number]) => {
-    let hit = verts.find((x) => Math.hypot(x.p[0] - p[0], x.p[1] - p[1]) < tol * 100);
+    let hit = verts.find((x) => distance2(p, x.p) < tol * 100);
     if (!hit) verts.push((hit = { p, v: g.vertex(toWorld(sk.frame, p)), n: 0 }));
 
     hit.n++;

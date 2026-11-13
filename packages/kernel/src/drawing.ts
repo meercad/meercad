@@ -9,6 +9,7 @@ import type { TopoDS_Shape } from "replicad-opencascadejs";
 import { Arena } from "./arena.js";
 import type { OC } from "./occt.js";
 import type { ModelState } from "./state.js";
+import { distance2 } from "@meercad/sketch";
 
 /** "section": the front view of the parts cut in half through the middle (section A-A). */
 export type ViewName = "front" | "back" | "top" | "bottom" | "left" | "right" | "iso" | "section";
@@ -232,7 +233,7 @@ function polylines(oc: OC, arena: Arena, s: TopoDS_Shape): Polyline[] {
     const a = at(t0),
       m = at((t0 + t1) / 2),
       b = at(t1);
-    const approx = Math.hypot(m[0] - a[0], m[1] - a[1]) + Math.hypot(b[0] - m[0], b[1] - m[1]);
+    const approx = distance2(a, m) + distance2(m, b);
     const n = Math.max(8, Math.min(400, Math.ceil(approx / 0.2)));
     out.push(Array.from({ length: n + 1 }, (_, i) => at(t0 + ((t1 - t0) * i) / n)));
   }
@@ -310,7 +311,7 @@ function endOnCircles(
         : 1);
     const hole = outward < 0;
 
-    if (!out.some((o) => Math.hypot(o.c[0] - at[0], o.c[1] - at[1]) < 1e-6 && Math.abs(o.r - r) < 1e-6)) {
+    if (!out.some((o) => distance2(at, o.c) < 1e-6 && Math.abs(o.r - r) < 1e-6)) {
       out.push({ c: at, r, hole });
     }
   }
