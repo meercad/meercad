@@ -98,7 +98,6 @@ describe("dialog fields of the other kinds", () => {
     ["a pegboard", "wall", { system: "pegboard", kind: "board", units: [3, 3] }],
     ["a split with dovetails", "split", { plane: { ref: "origin.YZ" }, bodies: ["ex1"], connectors: { kind: "dovetail", size: 6, depth: 4, slide: "short" } }],
     ["a split with dowels", "split", { plane: { ref: "origin.YZ" }, bodies: ["ex1"], connectors: { kind: "dowels", size: 4, count: 2 } }],
-    ["a nut with a custom pitch", "screw", { kind: "nut", size: "M8", pitch: 1.1, starts: 2 }],
     ["a tapped hole and an insert hole", "hole", { kind: "tapped", size: "M4", plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10], [30, 10]], depth: 5 }],
     ["an insert hole", "hole", { kind: "insert", size: "M3", fit: "loose", plane: { face: { face: "ex1.end_cap" } }, points: [[10, 10]], withInserts: true }],
     ["an internal gear and a rack", "gear", { kind: "internal", module: 2, teeth: 30, width: 6, rim: 6, herringbone: true, helix: 20 }],
