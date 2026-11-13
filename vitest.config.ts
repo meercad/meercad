@@ -83,7 +83,7 @@ export default defineConfig({
         "packages/kernel/src/**": { lines: 100 },
         "packages/mcp/src/**": { lines: 100 },
         "packages/viewport/src/**": { lines: 100 },
-        "apps/web/src/**": { lines: 93 },
+        "apps/web/src/**": { lines: 93.5 },
       },
     },
     projects: [
