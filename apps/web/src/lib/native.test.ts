@@ -11,6 +11,8 @@ import { emptyDocument, type MeercadDocument } from "@meercad/schema";
 const fs = new Map<string, { data: string; mtime: number; ctime: number }>();
 const dirs = new Set<string>();
 let cloudOn = true;
+/** Plugin calls that fail (a build without the plugin, the system refusing). */
+const broken = new Set<string>();
 const listeners: Record<string, ((e: { url: string }) => void)[]> = {};
 const shared: unknown[] = [];
 const CLOUD = "file:///iCloud/meerCAD/";
@@ -25,13 +27,19 @@ vi.mock("@capacitor/core", () => ({
   registerPlugin: (name: string) =>
     name === "ICloud"
       ? {
-          status: async () => ({ available: cloudOn, url: cloudOn ? CLOUD : undefined }),
+          status: async () => {
+            if (broken.has("status")) throw new Error("no iCloud plugin");
+            return { available: cloudOn, url: cloudOn ? CLOUD : undefined };
+          },
           download: async () => undefined,
           watch: async () => undefined,
           addListener: async (_e: string, fn: () => void) => ((listeners["change"] ??= []).push(fn as never), { remove: async () => undefined }),
         }
       : name === "AR"
-        ? { available: async () => ({ ar: true }), show: async (o: { url: string }) => void shared.push(o) }
+        ? { available: async () => {
+            if (broken.has("ar")) throw new Error("no AR plugin");
+            return { ar: true };
+          }, show: async (o: { url: string }) => void shared.push(o) }
         : { addListener: async () => ({ remove: async () => undefined }) },
 }));
 vi.mock("@capacitor/app", () => ({
@@ -122,6 +130,7 @@ beforeEach(() => {
   shared.length = 0;
   localStorage.clear();
   cloudOn = true;
+  broken.clear();
 });
 
 describe("project files on the iPad and iPhone", () => {
@@ -239,5 +248,13 @@ describe("project files on the iPad and iPhone", () => {
     }
     await new Promise((r) => setTimeout(r, 20));
     expect(opened).toContainEqual({ name: "Shared", text: JSON.stringify(docOf(4)) });
+  });
+
+  it("has no iCloud folder and no AR when their plugins fail", async () => {
+    broken.add("status");
+    broken.add("ar");
+    const n = await fresh();
+    expect(await n.iCloudFolder()).toBeNull();
+    expect(await n.arAvailable()).toBe(false);
   });
 });
