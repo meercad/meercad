@@ -54,7 +54,7 @@ integration-slow) and fails when a package's line coverage drops below its thres
 `vitest.config.ts`; CI runs it as the job "coverage". The goal is 100 % everywhere. Each threshold
 is where its package stands, so coverage can only go up: raise it when tests are added, never lower
 it. Nov 2026: every package 100 % (ai, naming, schema, io, sketch, model, kernel, MCP, viewport),
-the app 87.7 % (≈ 1860 tests, 26 min on a Mac mini with 4 workers: more workers starve each other
+the app 96 % (≈ 2050 tests, 19 min on a Mac mini with 4 workers: more workers starve each other
 of memory there, so web-slow and integration-slow run after the rest, each on its own). Code no test
 can reach on purpose (OCCT failing inside a boolean, guards that cannot trigger, the MCP server's
 stdio start) is marked `/* v8 ignore start -- why */ … /* v8 ignore stop */` with its reason; a
