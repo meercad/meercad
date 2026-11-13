@@ -1522,10 +1522,11 @@ export class Viewport {
         const hov = this.hover?.kind === "region" && this.hover.sketchId === sketch && this.hover.key === region;
         (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.5 : hov ? 0.32 : REGION_OPACITY;
       }
-      if (curve !== undefined && o instanceof THREE.Line) {
+      // Sketch curves are fat lines (Line2), not THREE.Line.
+      if (curve !== undefined && o instanceof Line2) {
         const sel = this.selected.some((s) => s.kind === "sketch_curve" && s.sketchId === sketch && s.curveId === curve);
         const hov = this.hover?.kind === "sketch_curve" && this.hover.sketchId === sketch && this.hover.curveId === curve;
-        const mat = o.material as THREE.LineBasicMaterial;
+        const mat = o.material as unknown as THREE.LineBasicMaterial;
         if (mat.userData["base"] === undefined) mat.userData["base"] = mat.color.getHex();
         mat.color.setHex(sel ? C.edgeSel.getHex() : hov ? C.edgeHover.getHex() : (mat.userData["base"] as number));
       }

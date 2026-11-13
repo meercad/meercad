@@ -12,6 +12,7 @@ import { samePick, THREE, type Pick, type Viewport } from "@meercad/viewport";
 import { apply, getViewport, newProject } from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "./ViewportView";
+import { glb } from "../../../../tests/glbs";
 
 const rect: SketchEntity[] = [
   { id: "p1", type: "point", x: 0, y: 0 },
@@ -91,11 +92,21 @@ describe("the 3D view, more", () => {
     g.traverse((o) => (o as unknown as { material?: { resolution?: THREE.Vector2 } }).material?.resolution?.set(vp.canvas.clientWidth || 1280, vp.canvas.clientHeight || 800));
     const p = vp.pick(at[0], at[1], new Set(["sketch_curve"] as const));
     expect(p).toMatchObject({ kind: "sketch_curve", sketchId: "sk1", curveId: "l1" });
+    const lineOf = () => g.children[0]!.children.find((o) => (o.userData as { curve?: string }).curve === "l1") as unknown as { material: { color: THREE.Color } };
+    const base = lineOf().material.color.getHex();
     vp.setSelection([p!]);
+    // Picked, the line takes the selection's colour; let go, its own again.
+    const picked = lineOf().material.color.getHex();
+    expect(picked).not.toBe(base);
+    vp.setSelection([]);
     vp.setHover(p);
+    expect(lineOf().material.color.getHex()).not.toBe(base);
+    expect(lineOf().material.color.getHex()).not.toBe(picked);
+    vp.setSelection([p!]);
     expect(samePick(vp.hovered, p)).toBe(true);
     vp.setSelection([]);
     vp.setHover(null);
+    expect(lineOf().material.color.getHex()).toBe(base);
     vp.setScene(data);
   });
 
@@ -211,11 +222,24 @@ describe("the 3D view, more", () => {
     document.body.append(host);
     const { Viewport } = vpModule;
     const other = new Viewport(host);
+    // Its own grid steps (the app sets others): far out the coarsest.
+    expect(other.gridSteps(1e6).minor).toBe(50000);
+    expect(other.gridSteps(0.01).minor).toBe(0.5);
     const stage = (other as unknown as { stage: { dispose(): void } }).stage;
     const spy = vi.spyOn(stage, "dispose");
     other.dispose();
     expect(spy).toHaveBeenCalledOnce();
     host.remove();
+  });
+
+  it("sees far enough for surroundings a kilometre across", async () => {
+    const area = glb([{ x: 0, y: 0, z: 0, s: 1_000_000 }]);
+    await act(async () => vp.setScenery([{ id: "land", data: area.buffer.slice(area.byteOffset, area.byteOffset + area.byteLength) as ArrayBuffer }]));
+    (vp as unknown as { updateClipping(): void }).updateClipping();
+    const far = (vp as unknown as { persp: { far: number } }).persp.far;
+    // Twice the area's diagonal at least (2 × √2 km), beyond the 100 m kept otherwise.
+    expect(far).toBeGreaterThan(2 * Math.SQRT2 * 1_000_000);
+    await act(async () => vp.setScenery([]));
   });
 });
 
