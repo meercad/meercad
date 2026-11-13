@@ -115,6 +115,29 @@ describe("loft", () => {
     expect(Math.abs(r.bodies[0]!.volume / r.bodies[1]!.volume - 1)).toBeLessThan(1e-3);
   });
 
+  it("lofts a hood through closed 14-point splines on XZ stations and shells it", async () => {
+    // Three stations of a printed robot head's hood (83 × 46 mm at the back, tapering to the nose).
+    const stations: [number, [number, number][]][] = [
+      [-3, [[43.6, -3], [43.026, 8.697], [41.206, 19.519], [35.998, 30.424], [27.855, 37.083], [16.497, 41.136], [6.026, 42.467], [-6.026, 42.467], [-16.497, 41.136], [-27.855, 37.083], [-35.998, 30.424], [-41.206, 19.519], [-43.026, 8.697], [-43.6, -3]]],
+      [95, [[39.01, -3], [38.124, 7.769], [36.321, 17.506], [31.918, 27.648], [25.18, 34.468], [15.03, 38.785], [5.511, 40.232], [-5.511, 40.232], [-15.03, 38.785], [-25.18, 34.468], [-31.918, 27.648], [-36.321, 17.506], [-38.124, 7.769], [-39.01, -3]]],
+      [126.5, [[8.68, -3], [10.647, 1.051], [10.024, 3.045], [7.984, 4.566], [6.079, 5.986], [3.666, 7.237], [1.373, 7.806], [-1.373, 7.806], [-3.666, 7.237], [-6.079, 5.986], [-7.984, 4.566], [-10.024, 3.045], [-10.647, 1.051], [-8.68, -3]]],
+    ];
+    const f: Feature[] = stations.flatMap(([offset, pts], i) => [
+      { id: `pl${i}`, op: "plane", base: { ref: "origin.XZ" }, offset } as Feature,
+      sketch(`sk${i}`, { ref: `pl${i}` }, [...pts.map((p, k): SketchEntity => ({ id: `p${k}`, type: "point", x: p[0], y: p[1] })), { id: "s1", type: "spline", points: pts.map((_, k) => `p${k}`), closed: true }]),
+    ]);
+    f.push({ id: "lo1", op: "loft", profiles: stations.map((_, i) => ({ sketch: `sk${i}` })), mode: "new_body" });
+    const solid = await run(f);
+    ok(solid);
+    const full = solid.bodies[0]!.volume;
+    expect(full).toBeGreaterThan(200_000);
+    const r = await run([...f, { id: "sh1", op: "shell", faces: [{ face: "lo1.start_cap" }, { face: "lo1.end_cap" }], thickness: 2 }]);
+    ok(r);
+    // A 2 mm skin: far less than the solid, and its surface well over one and a half times the solid's (inside and out, less the openings).
+    expect(r.bodies[0]!.volume).toBeLessThan(full / 3);
+    expect(r.bodies[0]!.area).toBeGreaterThan(1.6 * solid.bodies[0]!.area!);
+  });
+
   it("explains what is wrong", async () => {
     const r = await run([
       sketch("sk1", { ref: "origin.XY" }, [...square("a", 40), ...circle("h1", 0, 0, 5)]),
