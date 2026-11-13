@@ -2,15 +2,36 @@ export { loadOcct, occtErrorMessage, type OC } from "./occt.js";
 export { Arena } from "./arena.js";
 export { Body } from "./body.js";
 export { OcctBackend } from "./backend.js";
-export { fitMesh, surfaceDistance, type MeshFit, type Primitive, type Region, type Segment, type FitOptions } from "./meshfit.js";
+export {
+  fitMesh,
+  surfaceDistance,
+  type MeshFit,
+  type Primitive,
+  type Region,
+  type Segment,
+  type FitOptions,
+} from "./meshfit.js";
 export { convertMesh, MAX_FACETS, type ConvertResult } from "./meshconvert.js";
-export { reconstruct, type Reconstruction, type Measurement as ReconstructMeasurement } from "./reconstruct.js";
+export {
+  reconstruct,
+  type Reconstruction,
+  type Measurement as ReconstructMeasurement,
+} from "./reconstruct.js";
 export type { ModelState, SketchResult, ToolRecord } from "./state.js";
 export type { GearView, JointFrame } from "./joints.js";
 export { meshBody, summarizeBody, type BodyMesh, type BodySummary } from "./mesh.js";
 export { KernelSession, type RebuildReport, type SketchView, type ReferenceView } from "./session.js";
 export { drawingViews, type DrawingView, type Polyline, type ViewName } from "./drawing.js";
-export { clearances, exportMeshes, exportStep, measure, type StepPart, type Clearance, type PickRef, type Measurement } from "./tools.js";
+export {
+  clearances,
+  exportMeshes,
+  exportStep,
+  measure,
+  type StepPart,
+  type Clearance,
+  type PickRef,
+  type Measurement,
+} from "./tools.js";
 export type { WorkerRequest, WorkerResponse } from "./protocol.js";
 export { KernelClient, SupersededError, type RebuildOutput, type RebuildProgress } from "./client.js";
 export { replayTrace } from "./tracking.js";

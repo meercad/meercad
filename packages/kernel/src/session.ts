@@ -43,7 +43,9 @@ export interface RebuildReport {
   gears: GearView[];
   /** Wall-clock milestones (ms since the epoch, comparable across threads) for diagnostics. */
   timing?: Partial<RebuildTiming>;
-  /** Size of the kernel's memory after this rebuild (bytes; of 4 GB it can have), see Renewal in client.ts. */
+  /**
+   * Size of the kernel's memory after this rebuild (bytes; of 4 GB it can have), see Renewal in client.ts.
+   */
   kernelMemory?: number;
 }
 
@@ -89,6 +91,7 @@ export class KernelSession {
   rebuild(doc: MeercadDocument, opts: RebuildOptions = {}): RebuildOut {
     const r = this.engine.rebuild(doc, opts.onFeature);
     this.last = r.state;
+
     return this.output(doc, r, opts);
   }
 
@@ -99,6 +102,7 @@ export class KernelSession {
    */
   preview(doc: MeercadDocument, opts: RebuildOptions = {}): RebuildOut {
     const r = this.engine.fork(doc, opts.onFeature);
+
     try {
       return this.output(doc, r, opts);
     } finally {
@@ -110,9 +114,11 @@ export class KernelSession {
     const t = performance.now();
     const meshes: BodyMesh[] = [];
     const bodies: BodySummary[] = [];
+
     for (const body of r.state.bodies.values()) {
       const props = opts.props !== false;
       let cached = this.meshCache.get(body);
+
       if (!cached) {
         const summary = summarizeBody(this.oc, body, props);
         cached = { summary, mesh: meshBody(this.oc, body, summary.bbox, this.meshCoarse), props };
@@ -121,17 +127,33 @@ export class KernelSession {
         cached.summary = summarizeBody(this.oc, body, true);
         cached.props = true;
       }
+
       bodies.push(cached.summary);
-      if (opts.mesh !== false) meshes.push(opts.textures === false ? cached.mesh : this.withTextures(r.state, body, cached.mesh, cached.summary, opts.draft === true));
+
+      if (opts.mesh !== false) {
+        meshes.push(
+          opts.textures === false
+            ? cached.mesh
+            : this.withTextures(r.state, body, cached.mesh, cached.summary, opts.draft === true),
+        );
+      }
     }
+
     const sketches: SketchView[] = [...r.state.sketches.values()].map((s) => ({
       id: s.id,
       frame: s.frame,
       points: [...s.solved.points].map(([id, [x, y]]) => [id, x, y]),
       curves: s.solved.curves,
-      regions: s.regions.map((g) => ({ key: g.key, depth: g.depth, area: g.area, polygons: g.polygons, sample: g.sample })),
+      regions: s.regions.map((g) => ({
+        key: g.key,
+        depth: g.depth,
+        area: g.area,
+        polygons: g.polygons,
+        sample: g.sample,
+      })),
       diagnostics: s.solved.diagnostics,
     }));
+
     return {
       report: {
         features: r.features,
@@ -144,42 +166,85 @@ export class KernelSession {
         meshMs: performance.now() - t,
         firstRecomputed: r.firstRecomputed,
         joints: jointFrames(this.oc, r.state, doc.mechanism),
-        gears: gearViews(r.state, new Map(doc.features.flatMap((f) => (f.op === "gear" && f.meshWith ? [[f.id, f.meshWith.gear] as [string, string]] : [])))),
+        gears: gearViews(
+          r.state,
+          new Map(
+            doc.features.flatMap((f) =>
+              f.op === "gear" && f.meshWith ? [[f.id, f.meshWith.gear] as [string, string]] : [],
+            ),
+          ),
+        ),
       },
       meshes,
-      references: [...r.state.references.values()].map((m) => ({ id: m.id, positions: m.positions, indices: m.indices })),
+      references: [...r.state.references.values()].map((m) => ({
+        id: m.id,
+        positions: m.positions,
+        indices: m.indices,
+      })),
     };
   }
 
-  /** A body's display mesh with its height pictures (lithophanes), if it has any (cached while they stay the same). */
-  private withTextures(state: ModelState, body: Body, mesh: BodyMesh, summary: BodySummary, draft: boolean): BodyMesh {
+  /**
+   * A body's display mesh with its height pictures (lithophanes), if it has any (cached while they stay the
+   * same).
+   */
+  private withTextures(
+    state: ModelState,
+    body: Body,
+    mesh: BodyMesh,
+    summary: BodySummary,
+    draft: boolean,
+  ): BodyMesh {
     const tex = texturesOf(state, body);
     if (!tex) return mesh;
+
     const hit = this.textureCache.get(body);
+
     // A finished mesh also serves a draft request; a draft is redone once the value is let go.
-    if (hit && (hit.sig === tex.sig || hit.sig === `draft:${tex.sig}`) && (draft || !hit.sig.startsWith("draft:"))) return hit.mesh;
+    if (
+      hit &&
+      (hit.sig === tex.sig || hit.sig === `draft:${tex.sig}`) &&
+      (draft || !hit.sig.startsWith("draft:"))
+    ) {
+      return hit.mesh;
+    }
+
     let base = mesh;
+
     if (needsFineBase(this.oc, body, tex.layers)) {
       // Curved faces need a base that follows the surface closely, or its facets show through.
       base = meshBody(this.oc, body, summary.bbox, 1, true);
       this.oc.BRepTools.Clean(body.shape, true);
     }
-    const textured = texturedMesh(this.oc, body, base, tex.layers, draft ? "draft" : "display", this.meshCoarse);
+
+    const textured = texturedMesh(
+      this.oc,
+      body,
+      base,
+      tex.layers,
+      draft ? "draft" : "display",
+      this.meshCoarse,
+    );
     this.textureCache.set(body, { sig: draft ? `draft:${tex.sig}` : tex.sig, mesh: textured });
+
     return textured;
   }
 
   /** Summaries with volume and area for the last rebuild's bodies, filling in what `props: false` skipped. */
   bodyProps(): BodySummary[] {
     const out: BodySummary[] = [];
+
     for (const body of this.last?.bodies.values() ?? []) {
       const cached = this.meshCache.get(body);
+
       if (cached && !cached.props) {
         cached.summary = summarizeBody(this.oc, body, true);
         cached.props = true;
       }
+
       out.push(cached?.summary ?? summarizeBody(this.oc, body, true));
     }
+
     return out;
   }
 

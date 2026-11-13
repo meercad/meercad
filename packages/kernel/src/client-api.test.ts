@@ -15,34 +15,62 @@ class FakeWorker {
   addEventListener(_: "message", fn: (e: MessageEvent<WorkerResponse>) => void) {
     this.fn = fn;
   }
+
   postMessage(req: WorkerRequest) {
     this.sent.push(req);
+
     const a = this.answer(req);
-    for (const m of a === null ? [] : Array.isArray(a) ? a : [a]) queueMicrotask(() => this.fn?.({ data: m } as MessageEvent<WorkerResponse>));
+
+    for (const m of a === null ? [] : Array.isArray(a) ? a : [a]) {
+      queueMicrotask(() => this.fn?.({ data: m } as MessageEvent<WorkerResponse>));
+    }
   }
+
   say(m: WorkerResponse) {
     this.fn?.({ data: m } as MessageEvent<WorkerResponse>);
   }
+
   terminate() {
     this.terminated = true;
   }
 }
+
 const W = (w: FakeWorker) => w as unknown as Worker;
-const doc = (extra: object = {}) => ({ format: "meercad/1", params: {}, features: [], rollback: null, ...extra }) as never;
-const built = (seq: number): WorkerResponse => ({ type: "rebuilt", seq, report: { bodies: [], features: [] } as never, meshes: [], references: [] });
+const doc = (extra: object = {}) =>
+  ({ format: "meercad/1", params: {}, features: [], rollback: null, ...extra }) as never;
+const built = (seq: number): WorkerResponse => ({
+  type: "rebuilt",
+  seq,
+  report: { bodies: [], features: [] } as never,
+  meshes: [],
+  references: [],
+});
 
 describe("kernel client calls", () => {
   it("each call returns its own answer", async () => {
     const w = new FakeWorker((req) => {
       switch (req.type) {
-        case "sandbox": return built(req.seq);
-        case "props": return { type: "props", seq: req.seq, bodies: [{ id: "b", volume: 8 }] as never };
-        case "export_step": return { type: "exported", seq: req.seq, data: new Uint8Array([1, 2]) };
-        case "export_mesh": return { type: "exported_mesh", seq: req.seq, meshes: [{ bodyId: "b" }] as never };
-        case "clearance": return { type: "clearances", seq: req.seq, result: [{ a: "x", b: "y", distance: 1, overlap: 0 }] as never, left: 3 };
-        case "drawing": return { type: "drawn", seq: req.seq, views: [{ name: "front" }] as never };
-        case "measure": return { type: "measured", seq: req.seq, result: { rows: [["Distance", "5 mm"]] } as never };
-        default: return null;
+        case "sandbox":
+          return built(req.seq);
+        case "props":
+          return { type: "props", seq: req.seq, bodies: [{ id: "b", volume: 8 }] as never };
+        case "export_step":
+          return { type: "exported", seq: req.seq, data: new Uint8Array([1, 2]) };
+        case "export_mesh":
+          return { type: "exported_mesh", seq: req.seq, meshes: [{ bodyId: "b" }] as never };
+        case "clearance":
+          return {
+            type: "clearances",
+            seq: req.seq,
+            result: [{ a: "x", b: "y", distance: 1, overlap: 0 }] as never,
+            left: 3,
+          };
+        case "drawing":
+          return { type: "drawn", seq: req.seq, views: [{ name: "front" }] as never };
+        case "measure":
+          return { type: "measured", seq: req.seq, result: { rows: [["Distance", "5 mm"]] } as never };
+        default:
+          return null;
       }
     });
     const c = new KernelClient(W(w));
@@ -50,19 +78,44 @@ describe("kernel client calls", () => {
     expect(await c.bodyProps()).toEqual([{ id: "b", volume: 8 }]);
     expect(await c.exportStep(["b"], [{ id: "b", name: "Box" }])).toEqual(new Uint8Array([1, 2]));
     expect(await c.exportMeshes(["b"])).toEqual([{ bodyId: "b" }]);
-    expect(await c.overlaps(["x"], { budgetMs: 10 })).toEqual({ pairs: [{ a: "x", b: "y", distance: 1, overlap: 0 }], left: 3 });
+    expect(await c.overlaps(["x"], { budgetMs: 10 })).toEqual({
+      pairs: [{ a: "x", b: "y", distance: 1, overlap: 0 }],
+      left: 3,
+    });
     expect(await c.clearances(["x"], {}, 2, ["wire"], { x: 1, y: 1 })).toHaveLength(1);
     expect(await c.drawing(["front"], ["b"], doc())).toEqual([{ name: "front" }]);
-    expect((await c.measure({ bodyId: "b", kind: "face", index: 0 }, { bodyId: "b", kind: "face", index: 1 })).rows[0]).toEqual(["Distance", "5 mm"]);
-    expect(w.sent.find((r) => r.type === "export_step")).toMatchObject({ bodies: ["b"], parts: [{ id: "b", name: "Box" }] });
-    expect(w.sent.find((r) => r.type === "clearance" && "skip" in r)).toMatchObject({ within: 2, skip: ["wire"], rigid: { x: 1, y: 1 } });
+    expect(
+      (await c.measure({ bodyId: "b", kind: "face", index: 0 }, { bodyId: "b", kind: "face", index: 1 }))
+        .rows[0],
+    ).toEqual(["Distance", "5 mm"]);
+    expect(w.sent.find((r) => r.type === "export_step")).toMatchObject({
+      bodies: ["b"],
+      parts: [{ id: "b", name: "Box" }],
+    });
+    expect(w.sent.find((r) => r.type === "clearance" && "skip" in r)).toMatchObject({
+      within: 2,
+      skip: ["wire"],
+      rigid: { x: 1, y: 1 },
+    });
   });
 
   it("refuses an answer of the wrong kind for every call", async () => {
     const w = new FakeWorker((req) => ({ type: "configured", seq: req.seq }) as WorkerResponse);
     const c = new KernelClient(W(w));
-    for (const call of [() => c.rebuild(doc()), () => c.sandbox(doc()), () => c.bodyProps(), () => c.exportStep(), () => c.exportMeshes(), () => c.overlaps([]), () => c.clearances([], {}), () => c.drawing([]), () => c.measure({ bodyId: "b", kind: "face", index: 0 })])
+
+    for (const call of [
+      () => c.rebuild(doc()),
+      () => c.sandbox(doc()),
+      () => c.bodyProps(),
+      () => c.exportStep(),
+      () => c.exportMeshes(),
+      () => c.overlaps([]),
+      () => c.clearances([], {}),
+      () => c.drawing([]),
+      () => c.measure({ bodyId: "b", kind: "face", index: 0 }),
+    ]) {
       await expect(call()).rejects.toThrow("unexpected response");
+    }
   });
 
   it("passes progress on, reports failures, and tells a superseded rebuild apart", async () => {
@@ -75,7 +128,11 @@ describe("kernel client calls", () => {
     );
     const c = new KernelClient(W(w));
     const steps: string[] = [];
-    await c.rebuild(doc({ n: 1 }), { onProgress: (p) => steps.push(`${p.index}/${p.total} ${p.feature}`), props: false, draft: true });
+    await c.rebuild(doc({ n: 1 }), {
+      onProgress: (p) => steps.push(`${p.index}/${p.total} ${p.feature}`),
+      props: false,
+      draft: true,
+    });
     expect(steps).toEqual(["1/2 ex1"]);
     expect(w.sent[0]).toMatchObject({ props: false });
     await expect(c.rebuild(doc({ n: 2 }))).rejects.toBeInstanceOf(SupersededError);
@@ -99,18 +156,34 @@ describe("kernel client calls", () => {
   });
 
   it("without a way to replace a broken worker, its requests fail", async () => {
-    const w = new FakeWorker((req) => ({ type: "crashed", seq: req.seq, message: "out of memory", threads: false }));
+    const w = new FakeWorker((req) => ({
+      type: "crashed",
+      seq: req.seq,
+      message: "out of memory",
+      threads: false,
+    }));
     await expect(new KernelClient(W(w)).bodyProps()).rejects.toThrow("out of memory");
   });
 
   it("sends the design without saved versions, their files and picture textures", async () => {
     const w = new FakeWorker((req) => built(req.seq));
     const c = new KernelClient(W(w));
-    await c.rebuild(doc({ versions: [{ name: "v1" }], blobs: { x: "y" }, features: [{ id: "im1", op: "import", texture: { image: "big" } }, { id: "ex1", op: "extrude" }] }));
+    await c.rebuild(
+      doc({
+        versions: [{ name: "v1" }],
+        blobs: { x: "y" },
+        features: [
+          { id: "im1", op: "import", texture: { image: "big" } },
+          { id: "ex1", op: "extrude" },
+        ],
+      }),
+    );
+
     const sent = w.sent[0] as unknown as { doc: Record<string, unknown> };
     expect(sent.doc["versions"]).toBeUndefined();
     expect(sent.doc["blobs"]).toBeUndefined();
     expect((sent.doc["features"] as object[])[0]).toEqual({ id: "im1", op: "import" });
+
     // A plain design goes as it is.
     const plain = doc();
     await c.rebuild(plain);

@@ -12,9 +12,13 @@ export type OC = OpenCascadeInstance;
  */
 export async function loadOcct(wasmUrl?: string, threads = false): Promise<OC> {
   if (threads) exposeSharedArrayBuffer();
-  const { default: init } = threads ? await import("replicad-opencascadejs/multi") : await import("replicad-opencascadejs");
+
+  const { default: init } = threads
+    ? await import("replicad-opencascadejs/multi")
+    : await import("replicad-opencascadejs");
   const oc = await init(wasmUrl ? { locateFile: () => wasmUrl } : {});
   if (threads) oc.BOPAlgo_Options.SetParallelMode(true);
+
   return oc;
 }
 
@@ -27,7 +31,12 @@ export async function loadOcct(wasmUrl?: string, threads = false): Promise<OC> {
 function exposeSharedArrayBuffer(): void {
   const scope = globalThis as { SharedArrayBuffer?: unknown };
   if (scope.SharedArrayBuffer) return;
-  scope.SharedArrayBuffer = new WebAssembly.Memory({ initial: 0, maximum: 0, shared: true }).buffer.constructor;
+
+  scope.SharedArrayBuffer = new WebAssembly.Memory({
+    initial: 0,
+    maximum: 0,
+    shared: true,
+  }).buffer.constructor;
 }
 
 /**
@@ -41,14 +50,22 @@ function exposeSharedArrayBuffer(): void {
  * threaded build shares its memory, which is never moved, and needs none of this.)
  */
 export function reserveHeap(oc: OC, bytes: number): number {
-  const m = oc as unknown as { _emscripten_builtin_malloc?: (n: number) => number; _emscripten_builtin_free?: (p: number) => void; wasmMemory: { buffer: ArrayBuffer } };
+  const m = oc as unknown as {
+    _emscripten_builtin_malloc?: (n: number) => number;
+    _emscripten_builtin_free?: (p: number) => void;
+    wasmMemory: { buffer: ArrayBuffer };
+  };
   if (!m._emscripten_builtin_malloc || !m._emscripten_builtin_free) return 0;
+
   for (let n = bytes; n >= 256 * 2 ** 20; n -= 256 * 2 ** 20) {
     const p = m._emscripten_builtin_malloc(n);
     if (!p) continue;
+
     m._emscripten_builtin_free(p);
+
     return m.wasmMemory.buffer.byteLength;
   }
+
   return 0;
 }
 
@@ -64,16 +81,22 @@ export function crashOf(oc: OC): string | undefined {
 
 /** Converts whatever OCCT threw (C++ exceptions arrive as WebAssembly.Exception) into a message. */
 export function occtErrorMessage(oc: OC, e: unknown): string {
-  const RuntimeError = (globalThis as { WebAssembly?: { RuntimeError?: new (...a: never[]) => Error } }).WebAssembly?.RuntimeError;
+  const RuntimeError = (globalThis as { WebAssembly?: { RuntimeError?: new (...a: never[]) => Error } })
+    .WebAssembly?.RuntimeError;
   if (RuntimeError && e instanceof RuntimeError && !crashes.has(oc)) crashes.set(oc, e.message);
-  const WasmException = (globalThis as { WebAssembly?: { Exception?: new (...a: never[]) => object } }).WebAssembly?.Exception;
+
+  const WasmException = (globalThis as { WebAssembly?: { Exception?: new (...a: never[]) => object } })
+    .WebAssembly?.Exception;
+
   if (WasmException && e instanceof WasmException) {
     try {
       const [type, message] = oc.getExceptionMessage(e as Parameters<OC["getExceptionMessage"]>[0]);
+
       return message ? `${type}: ${message}` : type;
     } catch {
       return "OCCT exception";
     }
   }
+
   return e instanceof Error ? e.message : String(e);
 }

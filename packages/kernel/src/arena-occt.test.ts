@@ -63,7 +63,12 @@ describe("Arena", () => {
 
 describe("OCCT helpers", () => {
   it("loads the module from a given .wasm file", async () => {
-    const wasm = fileURLToPath(new URL("../../../node_modules/.pnpm/replicad-opencascadejs@1.1.0/node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url));
+    const wasm = fileURLToPath(
+      new URL(
+        "../../../node_modules/.pnpm/replicad-opencascadejs@1.1.0/node_modules/replicad-opencascadejs/dist/replicad_single.wasm",
+        import.meta.url,
+      ),
+    );
     const oc = await loadOcct(wasm);
     const p = new oc.gp_Pnt(1, 2, 3);
     expect(p.Y()).toBe(2);
@@ -74,9 +79,11 @@ describe("OCCT helpers", () => {
     const scope = globalThis as { SharedArrayBuffer?: unknown };
     const original = scope.SharedArrayBuffer;
     delete scope.SharedArrayBuffer;
+
     try {
       const oc = await loadOcct(undefined, true);
       expect(scope.SharedArrayBuffer).toBe(original);
+
       // A cut in parallel mode: a 10 mm cube less a 5 mm cube at its corner.
       const a = new oc.BRepPrimAPI_MakeBox(10, 10, 10).Shape();
       const b = new oc.BRepPrimAPI_MakeBox(5, 5, 5).Shape();
@@ -94,6 +101,7 @@ describe("OCCT helpers", () => {
 
   it("reserves memory in steps of 256 MB down from the wish, or says it cannot", () => {
     expect(reserveHeap({} as OC, 2 ** 30)).toBe(0);
+
     const asked: number[] = [];
     const freed: number[] = [];
     const fake = {
@@ -104,17 +112,31 @@ describe("OCCT helpers", () => {
     expect(reserveHeap(fake, 2 ** 30)).toBe(600 * 2 ** 20);
     expect(asked).toEqual([1024, 768, 512].map((m) => m * 2 ** 20));
     expect(freed).toEqual([4096]);
+
     const never = { ...(fake as object), _emscripten_builtin_malloc: () => 0 } as unknown as OC;
     expect(reserveHeap(never, 2 ** 30)).toBe(0);
   });
 
   it("turns OCCT's exceptions into words", () => {
     // Tag and Exception are newer than the TypeScript DOM types.
-    const W = WebAssembly as unknown as { Tag: new (d: { parameters: string[] }) => object; Exception: new (tag: object, payload: unknown[]) => object };
+    const W = WebAssembly as unknown as {
+      Tag: new (d: { parameters: string[] }) => object;
+      Exception: new (tag: object, payload: unknown[]) => object;
+    };
     const ex = new W.Exception(new W.Tag({ parameters: [] }), []);
     const says = (r: () => [string, string]) => ({ getExceptionMessage: r }) as unknown as OC;
-    expect(occtErrorMessage(says(() => ["Standard_Failure", "BRep_API: command not done"]), ex)).toBe("Standard_Failure: BRep_API: command not done");
-    expect(occtErrorMessage(says(() => ["StdFail_NotDone", ""]), ex)).toBe("StdFail_NotDone");
+    expect(
+      occtErrorMessage(
+        says(() => ["Standard_Failure", "BRep_API: command not done"]),
+        ex,
+      ),
+    ).toBe("Standard_Failure: BRep_API: command not done");
+    expect(
+      occtErrorMessage(
+        says(() => ["StdFail_NotDone", ""]),
+        ex,
+      ),
+    ).toBe("StdFail_NotDone");
     expect(
       occtErrorMessage(
         says(() => {

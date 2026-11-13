@@ -29,7 +29,10 @@ export class Body implements Topology {
    * re-meshing thousands of triangle faces, which OCCT does slowly and with a lot of memory.
    */
   sourceMesh: Float32Array | null = null;
-  /** Volume and inertia need the precise integral (long curved sweeps, where the quick one is several per cent off). */
+  /**
+   * Volume and inertia need the precise integral (long curved sweeps, where the quick one is several per cent
+   * off).
+   */
   preciseProps = false;
   /** The import feature whose file `sourceMesh` comes from (triangle i is the file's triangle i). */
   sourceFeature: string | null = null;
@@ -63,19 +66,23 @@ export class Body implements Topology {
 
   private get edgeIndexed(): { edges: TopoDS_Edge[]; map: ShapeIndex; faces: number[][] } {
     if (this.edgeData) return this.edgeData;
+
     const { oc } = this;
     const [map, edges] = indexShapes(oc, this.arena, this.shape, "TopAbs_EDGE", (s) => oc.TopoDS.Edge(s));
     const faces: number[][] = edges.map(() => []);
     this.faces.forEach((face, fi) => {
       const ex = new oc.TopExp_Explorer(face, "TopAbs_EDGE");
+
       for (; ex.More(); ex.Next()) {
         const edge = ex.Current();
         const adj = faces[map.find(edge)];
         edge.delete();
         if (adj && !adj.includes(fi)) adj.push(fi);
       }
+
       ex.delete();
     });
+
     return (this.edgeData = { edges, map, faces });
   }
 
@@ -108,6 +115,7 @@ export class Body implements Topology {
 
   get faceInfo(): FaceInfo[] {
     if (!this.info) this.info = this.faces.map((f) => faceInfo(this.oc, this.arena, f));
+
     return this.info;
   }
 }
@@ -118,42 +126,58 @@ type Vec3 = [number, number, number];
 function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
   const faceByHash = new Map<number, number>();
   body.faces.forEach((f, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(f, HASH_BOUND), i));
+
   const edgeByHash = new Map<number, number>();
   body.edges.forEach((e, i) => edgeByHash.set(oc.ReplicadShapeHasher.HashCode(e, HASH_BOUND), i));
+
   const m = oc.ReplicadMeshExtractor.extract(body.shape, 0.1, 0.5, true);
   const em = oc.ReplicadEdgeMeshExtractor.extract(body.shape, 0.1, 0.5);
+
   try {
     const buf = oc.wasmMemory.buffer;
     const pos = new Float32Array(buf, m.getVerticesPtr() >>> 0, m.getVerticesSize());
     const tri = new Uint32Array(buf, m.getTrianglesPtr() >>> 0, m.getTrianglesSize());
     const groups = new Int32Array(buf, m.getFaceGroupsPtr() >>> 0, m.getFaceGroupsSize());
     const faces: Vec3[] = body.faces.map(() => [0, 0, 0]);
+
     for (let g = 0; g < groups.length; g += 3) {
       const fi = faceByHash.get(groups[g + 2]!);
       if (fi === undefined || groups[g + 1]! < 3) continue;
+
       // Centroid of the largest triangle: robust inside point even for thin faces.
       let best = -1;
       let bestArea = -1;
+
       for (let t = groups[g]!; t < groups[g]! + groups[g + 1]!; t += 3) {
         const [a, b, c] = [tri[t]! * 3, tri[t + 1]! * 3, tri[t + 2]! * 3];
         const u = [pos[b]! - pos[a]!, pos[b + 1]! - pos[a + 1]!, pos[b + 2]! - pos[a + 2]!];
         const v = [pos[c]! - pos[a]!, pos[c + 1]! - pos[a + 1]!, pos[c + 2]! - pos[a + 2]!];
-        const area = Math.hypot(u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!);
+        const area = Math.hypot(
+          u[1]! * v[2]! - u[2]! * v[1]!,
+          u[2]! * v[0]! - u[0]! * v[2]!,
+          u[0]! * v[1]! - u[1]! * v[0]!,
+        );
+
         if (area > bestArea) {
           bestArea = area;
           best = t;
         }
       }
+
       const [a, b, c] = [tri[best]! * 3, tri[best + 1]! * 3, tri[best + 2]! * 3];
       faces[fi] = [0, 1, 2].map((k) => (pos[a + k]! + pos[b + k]! + pos[c + k]!) / 3) as Vec3;
     }
+
     const lines = new Float32Array(buf, em.getLinesPtr() >>> 0, em.getLinesSize());
     const eg = new Int32Array(buf, em.getEdgeGroupsPtr() >>> 0, em.getEdgeGroupsSize());
     const edges: Vec3[] = body.edges.map(() => [0, 0, 0]);
+
     for (let g = 0; g < eg.length; g += 3) {
       const ei = edgeByHash.get(eg[g + 2]!);
       if (ei === undefined || eg[g + 1]! < 1) continue;
+
       const count = eg[g + 1]!;
+
       if (count % 2 === 0) {
         const a = (eg[g]! + count / 2 - 1) * 3;
         const b = (eg[g]! + count / 2) * 3;
@@ -163,6 +187,7 @@ function samplePoints(oc: OC, body: Body): { faces: Vec3[]; edges: Vec3[] } {
         edges[ei] = [lines[a]!, lines[a + 1]!, lines[a + 2]!];
       }
     }
+
     return { faces, edges };
   } finally {
     m.delete();
@@ -184,14 +209,23 @@ class ShapeIndex {
   add(s: TopoDS_Shape): number {
     const h = this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND);
     const at = this.byHash.get(h);
+
     if (at === undefined) {
       this.byHash.set(h, this.shapes.length);
+
       return this.shapes.push(s) - 1;
     }
-    const hit = typeof at === "number" ? (this.shapes[at]!.IsSame(s) ? at : -1) : (at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1);
+
+    const hit =
+      typeof at === "number"
+        ? this.shapes[at]!.IsSame(s)
+          ? at
+          : -1
+        : (at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1);
     if (hit !== -1) return hit;
     if (typeof at === "number") this.byHash.set(h, [at, this.shapes.length]);
     else at.push(this.shapes.length);
+
     return this.shapes.push(s) - 1;
   }
 
@@ -199,46 +233,67 @@ class ShapeIndex {
     const at = this.byHash.get(this.oc.ReplicadShapeHasher.HashCode(s, HASH_BOUND));
     if (at === undefined) return -1;
     if (typeof at === "number") return this.shapes[at]!.IsSame(s) ? at : -1;
+
     return at.find((i) => this.shapes[i]!.IsSame(s)) ?? -1;
   }
 }
 
 /** Index of the distinct sub-shapes of a type, plus those shapes in index order. */
-/** The distinct faces or edges of a shape in the order an explorer meets them, as `cast` makes them, and their index. */
-function indexShapes<T extends TopoDS_Shape>(oc: OC, arena: Arena, shape: TopoDS_Shape, type: "TopAbs_FACE" | "TopAbs_EDGE", cast: (s: TopoDS_Shape) => T): [ShapeIndex, T[]] {
+/**
+ * The distinct faces or edges of a shape in the order an explorer meets them, as `cast` makes them, and their
+ * index.
+ */
+function indexShapes<T extends TopoDS_Shape>(
+  oc: OC,
+  arena: Arena,
+  shape: TopoDS_Shape,
+  type: "TopAbs_FACE" | "TopAbs_EDGE",
+  cast: (s: TopoDS_Shape) => T,
+): [ShapeIndex, T[]] {
   const index = new ShapeIndex(oc);
   const unique: T[] = [];
   const ex = new oc.TopExp_Explorer(shape, type);
+
   for (; ex.More(); ex.Next()) {
     const s = ex.Current();
+
     if (index.find(s) === -1) {
       const typed = arena.track(cast(s));
       index.add(typed);
       unique.push(typed);
     }
+
     s.delete();
   }
+
   ex.delete();
+
   return [index, unique];
 }
 
 function faceInfo(oc: OC, arena: Arena, face: TopoDS_Face): FaceInfo {
   const props = arena.track(new oc.GProp_GProps());
   oc.BRepGProp.SurfaceProperties(face, props, false, false);
+
   const surf = arena.track(new oc.BRepAdaptor_Surface(face, true));
   if (surf.GetType() !== "GeomAbs_Plane") return { planar: false, normal: null, area: props.Mass() };
+
   const d = arena.track(arena.track(arena.track(surf.Plane()).Axis()).Direction());
   const s = face.Orientation() === "TopAbs_REVERSED" ? -1 : 1;
+
   return { planar: true, normal: [s * d.X(), s * d.Y(), s * d.Z()], area: props.Mass() };
 }
 
 /** Drains an OCCT list into an array (the list is consumed). */
 export function listToArray(arena: Arena, list: NCollection_List_TopoDS_Shape): TopoDS_Shape[] {
   const out: TopoDS_Shape[] = [];
+
   while (!list.IsEmpty()) {
     out.push(arena.track(list.First()));
     list.RemoveFirst();
   }
+
   list.delete();
+
   return out;
 }

@@ -9,59 +9,101 @@ function box(size: V3, n: number, offset: V3 = [0, 0, 0], skipFace = -1): number
   // Each face: origin corner and two edge directions, ordered so u × v points out.
   const [x, y, z] = size;
   const faces: [V3, V3, V3][] = [
-    [[0, 0, 0], [0, y, 0], [x, 0, 0]],
-    [[0, 0, z], [x, 0, 0], [0, y, 0]],
-    [[0, 0, 0], [x, 0, 0], [0, 0, z]],
-    [[0, y, 0], [0, 0, z], [x, 0, 0]],
-    [[0, 0, 0], [0, 0, z], [0, y, 0]],
-    [[x, 0, 0], [0, y, 0], [0, 0, z]],
+    [
+      [0, 0, 0],
+      [0, y, 0],
+      [x, 0, 0],
+    ],
+    [
+      [0, 0, z],
+      [x, 0, 0],
+      [0, y, 0],
+    ],
+    [
+      [0, 0, 0],
+      [x, 0, 0],
+      [0, 0, z],
+    ],
+    [
+      [0, y, 0],
+      [0, 0, z],
+      [x, 0, 0],
+    ],
+    [
+      [0, 0, 0],
+      [0, 0, z],
+      [0, y, 0],
+    ],
+    [
+      [x, 0, 0],
+      [0, y, 0],
+      [0, 0, z],
+    ],
   ];
   faces.forEach(([o, u, v], f) => {
-    for (let i = 0; i < n; i++)
+    for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         if (f === skipFace && i === 0 && j === 0) continue;
-        const p = (a: number, b: number): V3 => [0, 1, 2].map((k) => offset[k]! + o[k]! + (u[k]! * a) / n + (v[k]! * b) / n) as V3;
+
+        const p = (a: number, b: number): V3 =>
+          [0, 1, 2].map((k) => offset[k]! + o[k]! + (u[k]! * a) / n + (v[k]! * b) / n) as V3;
         const [a, b, c, d] = [p(i, j), p(i + 1, j), p(i + 1, j + 1), p(i, j + 1)];
         out.push(...a, ...b, ...c, ...a, ...c, ...d);
       }
+    }
   });
+
   return out;
 }
 
 function sphere(r: number, n: number): number[] {
   const out: number[] = [];
+
   const p = (i: number, j: number): V3 => {
     const th = (Math.PI * i) / n;
     const ph = (Math.PI * j) / n;
+
     return [r * Math.sin(th) * Math.cos(ph), r * Math.sin(th) * Math.sin(ph), r * Math.cos(th)];
   };
-  for (let i = 0; i < n; i++)
+
+  for (let i = 0; i < n; i++) {
     for (let j = 0; j < 2 * n; j++) {
       const [a, b, c, d] = [p(i, j), p(i + 1, j), p(i + 1, j + 1), p(i, j + 1)];
       if (i > 0) out.push(...a, ...b, ...d);
       if (i < n - 1) out.push(...b, ...c, ...d);
     }
+  }
+
   return out;
 }
 
 function closed(indices: Uint32Array): boolean {
   const use = new Map<string, number>();
-  for (let t = 0; t < indices.length; t += 3)
+
+  for (let t = 0; t < indices.length; t += 3) {
     for (let e = 0; e < 3; e++) {
       const [a, b] = [indices[t + e]!, indices[t + ((e + 1) % 3)]!];
       const k = a < b ? `${a},${b}` : `${b},${a}`;
       use.set(k, (use.get(k) ?? 0) + 1);
     }
+  }
+
   return [...use.values()].every((u) => u === 2);
 }
 
 function volume(m: { positions: Float32Array; indices: Uint32Array }): number {
   let v = 0;
   const p = (i: number): V3 => [m.positions[i * 3]!, m.positions[i * 3 + 1]!, m.positions[i * 3 + 2]!];
+
   for (let t = 0; t < m.indices.length; t += 3) {
     const [a, b, c] = [p(m.indices[t]!), p(m.indices[t + 1]!), p(m.indices[t + 2]!)];
-    v += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+    v +=
+      (a[0] * (b[1] * c[2] - b[2] * c[1]) -
+        a[1] * (b[0] * c[2] - b[2] * c[0]) +
+        a[2] * (b[0] * c[1] - b[1] * c[0])) /
+      6;
   }
+
   return v;
 }
 
@@ -78,12 +120,20 @@ describe("repairMesh", () => {
     const m = repairMesh(sphere(10, 40), { reduce: 0.05 });
     expect(m.report.after).toBeLessThan(m.report.before * 0.6);
     expect(closed(m.indices)).toBe(true);
-    for (let i = 0; i < m.positions.length; i += 3) expect(Math.abs(Math.hypot(m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!) - 10)).toBeLessThan(0.06);
+
+    for (let i = 0; i < m.positions.length; i += 3) {
+      expect(
+        Math.abs(Math.hypot(m.positions[i]!, m.positions[i + 1]!, m.positions[i + 2]!) - 10),
+      ).toBeLessThan(0.06);
+    }
   });
 
   it("removes loose bits and closes holes", () => {
     const debris = box([0.5, 0.5, 0.5], 1, [40, 0, 0]);
-    const m = repairMesh([...box([10, 10, 10], 4, [0, 0, 0], 2), ...debris], { removePieces: true, fillHoles: true });
+    const m = repairMesh([...box([10, 10, 10], 4, [0, 0, 0], 2), ...debris], {
+      removePieces: true,
+      fillHoles: true,
+    });
     expect(m.report.piecesRemoved).toBe(1);
     expect(m.report.holesFilled).toBe(1);
     expect(closed(m.indices)).toBe(true);

@@ -18,7 +18,15 @@ interface WorkerScope {
  * `wasm.occtThreads` asks for the multi-threaded OCCT build (the page must be cross-origin
  * isolated); if it fails to start, the worker falls back to the single-threaded `wasm.occt`.
  */
-export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occtThreads?: string; planegcs?: string; /** Bytes the single-threaded kernel takes at once (see reserveHeap). */ reserve?: number } = {}): void {
+export function startKernelWorker(
+  scope: WorkerScope,
+  wasm: {
+    occt?: string;
+    occtThreads?: string;
+    planegcs?: string;
+    /** Bytes the single-threaded kernel takes at once (see reserveHeap). */ reserve?: number;
+  } = {},
+): void {
   let oc: OC | null = null;
   let solver: SketchSolver | null = null;
   let session: KernelSession | null = null;
@@ -32,27 +40,34 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
   scope.addEventListener("message", (e) => {
     const req = e.data;
     if ("seq" in req) received.set(req.seq, now());
+
     if (req.type === "rebuild" || req.type === "sandbox") {
       const i = queue.findIndex((q) => q.type === req.type);
+
       if (i >= 0) {
         scope.postMessage({ type: "failed", seq: queue[i]!.seq, message: "superseded" });
         received.delete(queue[i]!.seq);
         queue.splice(i, 1);
       }
     }
+
     queue.push(req);
     void pump();
   });
 
   async function pump(): Promise<void> {
     if (busy || !session) return;
+
     busy = true;
     await new Promise((r) => setTimeout(r, 0));
+
     const req = queue.shift();
+
     try {
       if (req) handle(req);
     } finally {
       if (req) received.delete(req.seq);
+
       busy = false;
       if (queue.length) void pump();
     }
@@ -62,18 +77,23 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
     // Replies wait until it is clear OCCT came through; a result from a broken module is not sent.
     const replies: [WorkerResponse, Transferable[]?][] = [];
     const post = (msg: WorkerResponse, transfer?: Transferable[]) => replies.push([msg, transfer]);
+
     try {
       run(req, post);
     } catch (err) {
       post({ type: "failed", seq: req.seq, message: oc ? occtErrorMessage(oc, err) : String(err) });
     }
+
     const crash = oc && crashOf(oc);
+
     if (crash) {
       // Stop here: the page replaces this worker and sends the open requests to the new one.
       session = null;
       scope.postMessage({ type: "crashed", seq: req.seq, message: crash, threads });
+
       return;
     }
+
     for (const [msg, transfer] of replies) scope.postMessage(msg, transfer);
   }
 
@@ -87,17 +107,25 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
           draft: req.draft === true,
           textures: req.textures !== false,
           // Sent at once, not with the replies: the page shows how far the rebuild has got.
-          onFeature: (index, total, feature) => scope.postMessage({ type: "progress", seq: req.seq, index, total, feature }),
+          onFeature: (index, total, feature) =>
+            scope.postMessage({ type: "progress", seq: req.seq, index, total, feature }),
         });
         r.report.timing = { recv: received.get(req.seq) ?? start, start, post: now() };
         r.report.kernelMemory = oc!.wasmMemory.buffer.byteLength;
+
         const before = req.fresh ? new Set<BodyMesh>() : lastSent;
         lastSent = new Set(r.meshes);
-        post({ type: "rebuilt", seq: req.seq, ...r, meshes: r.meshes.map((m) => (before.has(m) ? { bodyId: m.bodyId, kept: true as const } : m)) });
+        post({
+          type: "rebuilt",
+          seq: req.seq,
+          ...r,
+          meshes: r.meshes.map((m) => (before.has(m) ? { bodyId: m.bodyId, kept: true as const } : m)),
+        });
         break;
       }
       case "sandbox": {
-        // Next to the open design: what it shares with it is not built again (a whole Mini v4 takes over a minute).
+        // Next to the open design: what it shares with it is not built again (a whole Mini v4 takes over a
+        // minute).
         const r = session!.preview(req.doc);
         r.report.kernelMemory = oc!.wasmMemory.buffer.byteLength;
         post({ type: "rebuilt", seq: req.seq, ...r });
@@ -122,24 +150,49 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
         post({ type: "props", seq: req.seq, bodies: session!.bodyProps() });
         break;
       case "clearance":
-      {
-        const limits = { ...(req.box ? { box: req.box } : {}), ...(req.budgetMs !== undefined ? { budgetMs: req.budgetMs } : {}), left: 0 };
-        const result = clearances(oc!, session!.state!, req.moving, req.poses, req.within, req.skip, req.rigid, limits);
-        post({ type: "clearances", seq: req.seq, result, ...(limits.left ? { left: limits.left } : {}) });
-      }
+        {
+          const limits = {
+            ...(req.box ? { box: req.box } : {}),
+            ...(req.budgetMs !== undefined ? { budgetMs: req.budgetMs } : {}),
+            left: 0,
+          };
+          const result = clearances(
+            oc!,
+            session!.state!,
+            req.moving,
+            req.poses,
+            req.within,
+            req.skip,
+            req.rigid,
+            limits,
+          );
+          post({ type: "clearances", seq: req.seq, result, ...(limits.left ? { left: limits.left } : {}) });
+        }
+
         break;
       case "drawing": {
         if (!req.doc) {
-          post({ type: "drawn", seq: req.seq, views: drawingViews(oc!, session!.state!, req.views, req.bodies) });
+          post({
+            type: "drawn",
+            seq: req.seq,
+            views: drawingViews(oc!, session!.state!, req.views, req.bodies),
+          });
           break;
         }
+
         const sandbox = new KernelSession(oc!, solver!);
+
         try {
           sandbox.rebuild(req.doc, { mesh: false, props: false });
-          post({ type: "drawn", seq: req.seq, views: drawingViews(oc!, sandbox.state!, req.views, req.bodies) });
+          post({
+            type: "drawn",
+            seq: req.seq,
+            views: drawingViews(oc!, sandbox.state!, req.views, req.bodies),
+          });
         } finally {
           sandbox.dispose();
         }
+
         break;
       }
       case "measure":
@@ -153,6 +206,7 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
   const occt = threads
     ? loadOcct(wasm.occtThreads, true).catch(() => {
         threads = false;
+
         return loadOcct(wasm.occt);
       })
     : loadOcct(wasm.occt);
@@ -160,11 +214,13 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
     ([loaded, s]) => {
       oc = loaded;
       if (wasm.reserve && !threads) reserveHeap(loaded, wasm.reserve);
+
       solver = s;
       session = new KernelSession(loaded, s);
       scope.postMessage({ type: "ready", initMs: performance.now() - t0, threads });
       void pump();
     },
-    (err: unknown) => scope.postMessage({ type: "fatal", message: `failed to load geometry kernel: ${String(err)}` }),
+    (err: unknown) =>
+      scope.postMessage({ type: "fatal", message: `failed to load geometry kernel: ${String(err)}` }),
   );
 }

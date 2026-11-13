@@ -11,17 +11,23 @@ export type TextFont = keyof typeof FONTS;
 export type Loop = [number, number][];
 
 const cache = new Map<TextFont, Font>();
+
 function font(name: TextFont): Font {
   let f = cache.get(name);
+
   if (!f) {
     const bytes = Uint8Array.from(atob(FONTS[name]), (c) => c.charCodeAt(0));
     cache.set(name, (f = parse(bytes.buffer)));
   }
+
   return f;
 }
 
 /** The outlines of a text, and the characters the font does not have. */
-export function textLoops(text: string, o: { font?: TextFont; size: number; align?: "left" | "center" | "right" }): { loops: Loop[]; missing: string[] } {
+export function textLoops(
+  text: string,
+  o: { font?: TextFont; size: number; align?: "left" | "center" | "right" },
+): { loops: Loop[]; missing: string[] } {
   const f = font(o.font ?? "sans");
   const os2 = (f.tables as { os2?: { sCapHeight?: number } }).os2;
   const cap = os2?.sCapHeight || f.ascender * 0.7;
@@ -33,6 +39,7 @@ export function textLoops(text: string, o: { font?: TextFont; size: number; alig
   const missing = new Set<string>();
   text.split("\n").forEach((line, k) => {
     for (const ch of line) if (ch.trim() && f.charToGlyphIndex(ch) === 0) missing.add(ch);
+
     const width = f.getAdvanceWidth(line, fontSize);
     const x0 = o.align === "center" ? -width / 2 : o.align === "right" ? -width : 0;
     const path = f.getPath(line, x0, 0, fontSize);
@@ -40,13 +47,17 @@ export function textLoops(text: string, o: { font?: TextFont; size: number; alig
     let at: [number, number] = [0, 0];
     // The font's y runs downwards; the plane's upwards. Each line sits lineHeight below the last.
     const pt = (x: number, y: number): [number, number] => [x, -y - k * lineHeight];
+
     const close = () => {
       if (cur.length >= 3) loops.push(cur);
+
       cur = [];
     };
+
     const curve = (n: number, f: (t: number) => [number, number]) => {
       for (let i = 1; i <= n; i++) cur.push(pt(...f(i / n)));
     };
+
     for (const c of path.commands) {
       if (c.type === "M") {
         close();
@@ -58,55 +69,76 @@ export function textLoops(text: string, o: { font?: TextFont; size: number; alig
       } else if (c.type === "Q") {
         const [x0, y0] = at;
         const n = Math.max(2, Math.ceil(Math.hypot(c.x - x0, c.y - y0) / step));
-        curve(n, (t) => [(1 - t) ** 2 * x0 + 2 * (1 - t) * t * c.x1 + t * t * c.x, (1 - t) ** 2 * y0 + 2 * (1 - t) * t * c.y1 + t * t * c.y]);
+        curve(n, (t) => [
+          (1 - t) ** 2 * x0 + 2 * (1 - t) * t * c.x1 + t * t * c.x,
+          (1 - t) ** 2 * y0 + 2 * (1 - t) * t * c.y1 + t * t * c.y,
+        ]);
         at = [c.x, c.y];
       } else if (c.type === "C") {
         const [x0, y0] = at;
         const n = Math.max(3, Math.ceil(Math.hypot(c.x - x0, c.y - y0) / step));
-        const b = (t: number, p0: number, p1: number, p2: number, p3: number) => (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t * t * p2 + t ** 3 * p3;
+        const b = (t: number, p0: number, p1: number, p2: number, p3: number) =>
+          (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t * t * p2 + t ** 3 * p3;
         curve(n, (t) => [b(t, x0, c.x1, c.x2, c.x), b(t, y0, c.y1, c.y2, c.y)]);
         at = [c.x, c.y];
-      } else if (c.type === "Z") close();
+      } else if (c.type === "Z") {
+        close();
+      }
     }
+
     close();
   });
+
   // Drop repeated points (a closing point equal to the first, zero-length pieces).
   const clean = loops
-    .map((l) => l.filter((p, i) => Math.hypot(p[0] - l[(i + 1) % l.length]![0], p[1] - l[(i + 1) % l.length]![1]) > 1e-6))
+    .map((l) =>
+      l.filter(
+        (p, i) => Math.hypot(p[0] - l[(i + 1) % l.length]![0], p[1] - l[(i + 1) % l.length]![1]) > 1e-6,
+      ),
+    )
     .filter((l) => l.length >= 3 && Math.abs(area(l)) > 1e-6);
+
   return { loops: clean, missing: [...missing] };
 }
 
 /** Signed area (counter-clockwise positive). */
 export function area(l: Loop): number {
   let a = 0;
+
   for (let i = 0; i < l.length; i++) {
     const [x0, y0] = l[i]!;
     const [x1, y1] = l[(i + 1) % l.length]!;
     a += x0 * y1 - x1 * y0;
   }
+
   return a / 2;
 }
 
 export function inside(p: [number, number], l: Loop): boolean {
   let c = false;
+
   for (let i = 0, j = l.length - 1; i < l.length; j = i++) {
     const [xi, yi] = l[i]!;
     const [xj, yj] = l[j]!;
     if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c;
   }
+
   return c;
 }
 
 /** Outlines grouped into shapes: each outer loop with the holes directly inside it (even-odd). */
 export function nest(loops: Loop[]): { outer: Loop; holes: Loop[] }[] {
   const depth = loops.map((l, i) => loops.filter((o, j) => j !== i && inside(l[0]!, o)).length);
-  const shapes = loops.flatMap((l, i) => (depth[i]! % 2 === 0 ? [{ i, outer: area(l) > 0 ? l : [...l].reverse(), holes: [] as Loop[] }] : []));
+  const shapes = loops.flatMap((l, i) =>
+    depth[i]! % 2 === 0 ? [{ i, outer: area(l) > 0 ? l : [...l].reverse(), holes: [] as Loop[] }] : [],
+  );
   loops.forEach((l, i) => {
     if (depth[i]! % 2 === 0) return;
+
     // The hole belongs to the innermost outer loop around it.
     const owner = shapes.filter((s) => inside(l[0]!, loops[s.i]!) && depth[s.i] === depth[i]! - 1)[0];
     owner?.holes.push(area(l) < 0 ? l : [...l].reverse());
   });
+
   return shapes.map(({ outer, holes }) => ({ outer, holes }));
 }

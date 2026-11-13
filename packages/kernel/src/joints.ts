@@ -35,8 +35,10 @@ export interface GearView {
 
 const norm = (v: V3): V3 => {
   const l = Math.hypot(...v);
+
   return [v[0] / l, v[1] / l, v[2] / l];
 };
+
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 export function gearViews(state: ModelState, meshWith: ReadonlyMap<string, string>): GearView[] {
@@ -50,6 +52,7 @@ export function gearViews(state: ModelState, meshWith: ReadonlyMap<string, strin
     const z = g.width / 2;
     const n = g.frame.normal;
     const p = g.params;
+
     return {
       id,
       kind: p.kind,
@@ -64,13 +67,20 @@ export function gearViews(state: ModelState, meshWith: ReadonlyMap<string, strin
 
 export function jointFrames(oc: OC, state: ModelState, mechanism: Mechanism | undefined): JointFrame[] {
   if (!mechanism) return [];
+
   const arena = new Arena();
+
   try {
     return mechanism.joints.map((j) => {
       try {
         return { id: j.id, ...anchorFrame(oc, arena, state, j.anchor) };
       } catch (e) {
-        return { id: j.id, origin: [0, 0, 0], axis: [0, 0, 1], error: e instanceof Error ? e.message : occtErrorMessage(oc, e) };
+        return {
+          id: j.id,
+          origin: [0, 0, 0],
+          axis: [0, 0, 1],
+          error: e instanceof Error ? e.message : occtErrorMessage(oc, e),
+        };
       }
     });
   } finally {
@@ -80,23 +90,37 @@ export function jointFrames(oc: OC, state: ModelState, mechanism: Mechanism | un
 
 function anchorFrame(oc: OC, arena: Arena, state: ModelState, anchor: JointAnchor): { origin: V3; axis: V3 } {
   const bodies = [...state.bodies.values()];
+
   if ("axis" in anchor) {
-    const axis: V3 = anchor.axis.ref === "origin.X" ? [1, 0, 0] : anchor.axis.ref === "origin.Y" ? [0, 1, 0] : [0, 0, 1];
+    const axis: V3 =
+      anchor.axis.ref === "origin.X" ? [1, 0, 0] : anchor.axis.ref === "origin.Y" ? [0, 1, 0] : [0, 0, 1];
+
     return { origin: [0, 0, 0], axis };
   }
+
   if ("gear" in anchor) {
     const g = gearViews(state, new Map()).find((x) => x.id === anchor.gear);
     if (!g) throw new Error(`gear "${anchor.gear}" not found`);
+
     return { origin: g.origin, axis: g.axis };
   }
+
   if ("axisOf" in anchor) {
     const refs = resolveFaces(anchor.axisOf, bodies);
-    if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) throw new Error("the axis needs exactly one round face");
+
+    if (refs.reduce((n, r) => n + r.faces.length, 0) !== 1) {
+      throw new Error("the axis needs exactly one round face");
+    }
+
     const body = state.bodies.get(refs[0]!.body)!;
     const face = body.faces[refs[0]!.faces[0]!]!;
     const surf = arena.track(new oc.BRepAdaptor_Surface(face, true));
     const type = surf.GetType();
-    if (type !== "GeomAbs_Cylinder") throw new Error("the face is not round: pick a hole, a shaft or a round edge");
+
+    if (type !== "GeomAbs_Cylinder") {
+      throw new Error("the face is not round: pick a hole, a shaft or a round edge");
+    }
+
     const pos = arena.track(arena.track(surf.Cylinder()).Position());
     const loc = arena.track(pos.Location());
     const d = arena.track(pos.Direction());
@@ -105,29 +129,42 @@ function anchorFrame(oc: OC, arena: Arena, state: ModelState, anchor: JointAncho
     // Centre the origin on the face along the axis.
     const ts: number[] = [];
     const ex = arena.track(new oc.TopExp_Explorer(face, "TopAbs_VERTEX"));
+
     for (; ex.More(); ex.Next()) {
       const p = arena.track(oc.BRep_Tool.Pnt(arena.track(oc.TopoDS.Vertex(arena.track(ex.Current())))));
       ts.push(dot([p.X() - o[0], p.Y() - o[1], p.Z() - o[2]], axis));
     }
+
     const t = ts.length ? (Math.min(...ts) + Math.max(...ts)) / 2 : 0;
+
     return { origin: [o[0] + axis[0] * t, o[1] + axis[1] * t, o[2] + axis[2] * t], axis };
   }
+
   const ref = resolveEdges([anchor.edge], bodies);
   if (ref.edges.length !== 1) throw new Error("the axis needs exactly one edge");
+
   const edge = state.bodies.get(ref.body)!.edges[ref.edges[0]!]!;
   const curve = arena.track(new oc.BRepAdaptor_Curve(edge));
   const type = curve.GetType();
+
   if (type === "GeomAbs_Circle") {
     const circ = arena.track(curve.Circle());
     const pos = arena.track(circ.Position());
     const loc = arena.track(pos.Location());
     const d = arena.track(pos.Direction());
+
     return { origin: [loc.X(), loc.Y(), loc.Z()], axis: norm([d.X(), d.Y(), d.Z()]) };
   }
+
   if (type !== "GeomAbs_Line") throw new Error("the edge must be straight or round");
+
   const p0 = arena.track(curve.Value(curve.FirstParameter()));
   const p1 = arena.track(curve.Value(curve.LastParameter()));
   const a: V3 = [p0.X(), p0.Y(), p0.Z()];
   const b: V3 = [p1.X(), p1.Y(), p1.Z()];
-  return { origin: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], axis: norm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]) };
+
+  return {
+    origin: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
+    axis: norm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]),
+  };
 }

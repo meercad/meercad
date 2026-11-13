@@ -11,13 +11,17 @@ export class Arena {
 
   track<T extends Deletable>(obj: T): T {
     if (this.disposed) throw new Error("arena already disposed");
+
     this.items.push(obj);
+
     return obj;
   }
 
   dispose(): void {
     if (this.disposed) return;
+
     this.disposed = true;
+
     for (let i = this.items.length - 1; i >= 0; i--) {
       try {
         this.items[i]!.delete();
@@ -25,6 +29,7 @@ export class Arena {
         // already deleted elsewhere; nothing to do
       }
     }
+
     this.items = [];
     for (const a of this.adopted) a.dispose();
     this.adopted = [];
@@ -45,11 +50,15 @@ export class Arena {
    */
   trim(): void {
     if (this.disposed) return;
+
     const kept: Deletable[] = [];
+
     for (let i = this.items.length - 1; i >= 0; i--) {
       const item = this.items[i]!;
-      if (isShape(item)) kept.push(item);
-      else {
+
+      if (isShape(item)) {
+        kept.push(item);
+      } else {
         try {
           item.delete();
         } catch {
@@ -57,6 +66,7 @@ export class Arena {
         }
       }
     }
+
     this.items = kept.reverse();
   }
 
@@ -66,6 +76,7 @@ export class Arena {
       const name = (item as object).constructor?.name ?? "?";
       into.set(name, (into.get(name) ?? 0) + 1);
     }
+
     return into;
   }
 

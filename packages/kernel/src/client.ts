@@ -21,7 +21,13 @@ export class SupersededError extends Error {
 }
 
 export type RebuildProgress = (p: { index: number; total: number; feature: string }) => void;
-type Pending = { req: WorkerRequest; retried: boolean; resolve: (r: WorkerResponse) => void; reject: (e: Error) => void; onProgress?: RebuildProgress };
+type Pending = {
+  req: WorkerRequest;
+  retried: boolean;
+  resolve: (r: WorkerResponse) => void;
+  reject: (e: Error) => void;
+  onProgress?: RebuildProgress;
+};
 type Distribute<T> = T extends unknown ? Omit<T, "seq"> : never;
 
 /**
@@ -39,6 +45,7 @@ export interface Renewal {
   /** … and has grown by this much since the design was first built in it (bytes; default 600 MB). */
   grown?: number;
 }
+
 const GB = 2 ** 30;
 
 /** A kernel being warmed up to take over (see Renewal). */
@@ -53,10 +60,17 @@ interface Spare {
 
 const sameArray = (a: ArrayLike<number>, b: ArrayLike<number>) => {
   if (a.length !== b.length) return false;
+
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+
   return true;
 };
-const sameMesh = (a: BodyMesh, b: BodyMesh) => sameArray(a.indices, b.indices) && sameArray(a.positions, b.positions) && sameArray(a.faceRanges, b.faceRanges) && sameArray(a.edgeLines, b.edgeLines);
+
+const sameMesh = (a: BodyMesh, b: BodyMesh) =>
+  sameArray(a.indices, b.indices) &&
+  sameArray(a.positions, b.positions) &&
+  sameArray(a.faceRanges, b.faceRanges) &&
+  sameArray(a.edgeLines, b.edgeLines);
 
 /**
  * Main-thread handle to the kernel worker. When OCCT breaks inside the worker (a WebAssembly runtime
@@ -108,38 +122,57 @@ export class KernelClient {
     this.known = new Map();
     worker.addEventListener("message", (e: MessageEvent<WorkerResponse>) => {
       if (worker !== this.worker) return;
+
       this.lastReceived = performance.timeOrigin + performance.now();
+
       const msg = e.data;
       if (msg.type === "ready") return this.onReady({ initMs: msg.initMs, threads: msg.threads });
+
       if (msg.type === "fatal") {
         const err = new Error(msg.message);
         this.onFatal(err);
         for (const p of this.pending.values()) p.reject(err);
         this.pending.clear();
+
         return;
       }
+
       if (msg.type === "crashed") return this.crashed(msg);
+
       const p = this.pending.get(msg.seq);
+
       if (msg.type === "rebuilt" && (!p || p.req.type === "rebuild")) {
         // Every main-session result moves the known meshes on, also one nobody waits for any more.
         const meshes = this.restore(msg.meshes);
+
         if (!meshes) {
           this.pending.delete(msg.seq);
+
           return p?.reject(new Error("the geometry kernel's meshes got out of step; build again"));
         }
+
         msg.meshes = meshes;
       }
+
       // The worker's memory, whichever session built (previews and pictures too).
       const memory = msg.type === "rebuilt" ? msg.report.kernelMemory : undefined;
       if (memory) this.memory = { start: this.memory.start || memory, now: memory };
       if (!p) return;
-      if (msg.type === "progress") return p.onProgress?.({ index: msg.index, total: msg.total, feature: msg.feature });
+
+      if (msg.type === "progress") {
+        return p.onProgress?.({ index: msg.index, total: msg.total, feature: msg.feature });
+      }
+
       this.pending.delete(msg.seq);
-      if (msg.type === "failed") p.reject(msg.message === "superseded" ? new SupersededError() : new Error(msg.message));
-      else {
+
+      if (msg.type === "failed") {
+        p.reject(msg.message === "superseded" ? new SupersededError() : new Error(msg.message));
+      } else {
         if (msg.type === "rebuilt" && p.req.type === "rebuild") this.lastRebuild = p.req;
+
         p.resolve(msg);
       }
+
       if (this.spare) this.takeOver();
       else this.renew();
     });
@@ -149,28 +182,44 @@ export class KernelClient {
   private renew(): void {
     const r = this.renewal;
     if (!r || this.spare || !this.lastRebuild) return;
-    if (this.memory.now < (r.above ?? 2.6 * GB) || this.memory.now - this.memory.start < (r.grown ?? 0.6 * GB)) return;
+
+    if (
+      this.memory.now < (r.above ?? 2.6 * GB) ||
+      this.memory.now - this.memory.start < (r.grown ?? 0.6 * GB)
+    ) {
+      return;
+    }
+
     const worker = r.worker();
     const spare: Spare = { worker, built: null, building: null, meshes: [], memory: 0 };
     this.spare = spare;
     worker.addEventListener("message", (e: MessageEvent<WorkerResponse>) => {
       if (this.spare !== spare) return;
+
       const msg = e.data;
+
       if (msg.type === "fatal" || msg.type === "crashed" || msg.type === "failed") {
         // No fresh kernel this time: go on in the running one, and try again when it has grown more.
         worker.terminate();
         this.spare = null;
         this.memory.start = this.memory.now;
+
         return;
       }
+
       if (msg.type !== "rebuilt") return;
+
       spare.built = spare.building;
       spare.building = null;
       spare.meshes = msg.meshes as BodyMesh[];
       spare.memory = msg.report.kernelMemory ?? 0;
       this.takeOver();
     });
-    if (this.coarse !== null) worker.postMessage({ type: "configure", seq: -1, meshCoarse: this.coarse } satisfies WorkerRequest);
+
+    if (this.coarse !== null) {
+      worker.postMessage({ type: "configure", seq: -1, meshCoarse: this.coarse } satisfies WorkerRequest);
+    }
+
     this.warm(spare);
   }
 
@@ -184,6 +233,7 @@ export class KernelClient {
     const spare = this.spare;
     if (!spare || !spare.built || spare.building || this.pending.size) return;
     if (spare.built !== this.lastRebuild) return this.warm(spare);
+
     const before = this.known;
     this.spare = null;
     this.worker.terminate();
@@ -193,6 +243,7 @@ export class KernelClient {
     this.known = new Map(
       spare.meshes.map((m) => {
         const had = before?.get(m.bodyId);
+
         return [m.bodyId, had && sameMesh(had, m) ? had : m];
       }),
     );
@@ -203,43 +254,67 @@ export class KernelClient {
   private restore(list: (BodyMesh | KeptMesh)[]): BodyMesh[] | null {
     const known = this.known;
     const out: BodyMesh[] = [];
+
     for (const m of list) {
       const mesh = "kept" in m ? known?.get(m.bodyId) : m;
+
       if (!mesh) {
         this.known = null;
+
         return null;
       }
+
       out.push(mesh);
     }
+
     this.known = new Map(out.map((m) => [m.bodyId, m]));
+
     return out;
   }
 
   private crashed(msg: Extract<WorkerResponse, { type: "crashed" }>): void {
     const culprit = this.pending.get(msg.seq);
+
     if (!this.replace) {
       for (const p of this.pending.values()) p.reject(new Error(msg.message));
       this.pending.clear();
+
       return;
     }
+
     console.warn(`geometry kernel broke (${msg.message}); starting a new one`);
     this.worker.terminate();
     this.spare?.worker.terminate();
     this.spare = null;
+
     // A kernel that broke when it was nearly full ran out of memory: a fresh one of the same kind
     // has room again. Otherwise the model broke OCCT, and `replace` gives a kernel that copes better.
     const full = this.renewal && this.memory.now > 3.2 * GB;
     this.memory = { start: 0, now: 0 };
     this.attach(full ? this.renewal!.worker() : this.replace({ threads: msg.threads, message: msg.message }));
-    if (this.coarse !== null) this.worker.postMessage({ type: "configure", seq: ++this.seq, meshCoarse: this.coarse } satisfies WorkerRequest);
+
+    if (this.coarse !== null) {
+      this.worker.postMessage({
+        type: "configure",
+        seq: ++this.seq,
+        meshCoarse: this.coarse,
+      } satisfies WorkerRequest);
+    }
+
     if (culprit?.retried) {
       this.pending.delete(msg.seq);
       culprit.reject(new Error(`the geometry kernel broke: ${msg.message}`));
     }
+
     if (culprit) culprit.retried = true;
+
     // The new worker knows no model yet: the last one first, unless a newer rebuild is waiting.
     const open = [...this.pending.entries()].sort(([a], [b]) => a - b);
-    if (this.lastRebuild && !open.some(([, p]) => p.req.type === "rebuild")) this.worker.postMessage({ ...this.lastRebuild, seq: ++this.seq });
+
+    if (this.lastRebuild && !open.some(([, p]) => p.req.type === "rebuild")) {
+      this.worker.postMessage({ ...this.lastRebuild, seq: ++this.seq });
+    }
+
     for (const [, p] of open) this.worker.postMessage(p.req);
   }
 
@@ -252,7 +327,9 @@ export class KernelClient {
    */
   restartIfAbove(above: number, worker: () => Worker): boolean {
     if (this.memory.now <= above) return false;
+
     this.restart(worker());
+
     return true;
   }
 
@@ -269,7 +346,15 @@ export class KernelClient {
     this.lastRebuild = null;
     this.memory = { start: 0, now: 0 };
     this.attach(worker);
-    if (this.coarse !== null) this.worker.postMessage({ type: "configure", seq: ++this.seq, meshCoarse: this.coarse } satisfies WorkerRequest);
+
+    if (this.coarse !== null) {
+      this.worker.postMessage({
+        type: "configure",
+        seq: ++this.seq,
+        meshCoarse: this.coarse,
+      } satisfies WorkerRequest);
+    }
+
     this.renewed++;
   }
 
@@ -277,11 +362,25 @@ export class KernelClient {
    * Rebuilds the document. Older rebuilds still queued reject with SupersededError. `props: false`
    * leaves out volume and surface area (NaN), which are slow to integrate on curved parts.
    */
-  async rebuild(doc: MeercadDocument, opts: { props?: boolean; draft?: boolean; textures?: boolean; onProgress?: RebuildProgress } = {}): Promise<RebuildOutput> {
+  async rebuild(
+    doc: MeercadDocument,
+    opts: { props?: boolean; draft?: boolean; textures?: boolean; onProgress?: RebuildProgress } = {},
+  ): Promise<RebuildOutput> {
     const sent = performance.timeOrigin + performance.now();
-    const r = await this.send({ type: "rebuild", doc: design(doc), ...(this.known ? {} : { fresh: true }), ...(opts.props === false ? { props: false } : {}), ...(opts.draft ? { draft: true } : {}), ...(opts.textures === false ? { textures: false } : {}) }, opts.onProgress);
+    const r = await this.send(
+      {
+        type: "rebuild",
+        doc: design(doc),
+        ...(this.known ? {} : { fresh: true }),
+        ...(opts.props === false ? { props: false } : {}),
+        ...(opts.draft ? { draft: true } : {}),
+        ...(opts.textures === false ? { textures: false } : {}),
+      },
+      opts.onProgress,
+    );
     if (r.type !== "rebuilt") throw new Error("unexpected response");
     if (r.report.timing) r.report.timing = { ...r.report.timing, sent, received: this.lastReceived };
+
     return { report: r.report, meshes: r.meshes as BodyMesh[], references: r.references };
   }
 
@@ -289,6 +388,7 @@ export class KernelClient {
   async sandbox(doc: MeercadDocument): Promise<RebuildOutput> {
     const r = await this.send({ type: "sandbox", doc: design(doc) });
     if (r.type !== "rebuilt") throw new Error("unexpected response");
+
     // A sandbox session never names a mesh as kept.
     return { report: r.report, meshes: r.meshes as BodyMesh[], references: r.references };
   }
@@ -303,12 +403,18 @@ export class KernelClient {
   async bodyProps(): Promise<BodySummary[]> {
     const r = await this.send({ type: "props" });
     if (r.type !== "props") throw new Error("unexpected response");
+
     return r.bodies;
   }
 
   async exportStep(bodies?: string[], parts?: StepPart[]): Promise<Uint8Array> {
-    const r = await this.send({ type: "export_step", ...(bodies ? { bodies } : {}) , ...(parts ? { parts } : {}) });
+    const r = await this.send({
+      type: "export_step",
+      ...(bodies ? { bodies } : {}),
+      ...(parts ? { parts } : {}),
+    });
     if (r.type !== "exported") throw new Error("unexpected response");
+
     return r.data;
   }
 
@@ -316,6 +422,7 @@ export class KernelClient {
   async exportMeshes(bodies?: string[]): Promise<BodyMesh[]> {
     const r = await this.send({ type: "export_mesh", ...(bodies ? { bodies } : {}) });
     if (r.type !== "exported_mesh") throw new Error("unexpected response");
+
     return r.meshes;
   }
 
@@ -328,35 +435,69 @@ export class KernelClient {
    * when left out), only parts reaching into `box`, and at most `budgetMs` of work; `left` counts
    * the pairs there was no time for.
    */
-  async overlaps(parts: string[], limits: { box?: { min: [number, number, number]; max: [number, number, number] }; budgetMs?: number } = {}): Promise<{ pairs: Clearance[]; left: number }> {
+  async overlaps(
+    parts: string[],
+    limits: {
+      box?: { min: [number, number, number]; max: [number, number, number] };
+      budgetMs?: number;
+    } = {},
+  ): Promise<{ pairs: Clearance[]; left: number }> {
     const r = await this.send({ type: "clearance", moving: parts, poses: {}, within: 0, ...limits });
     if (r.type !== "clearances") throw new Error("unexpected response");
+
     return { pairs: r.result, left: r.left ?? 0 };
   }
 
-  async clearances(moving: string[], poses: Record<string, number[]>, within?: number, skip?: string[], rigid?: Record<string, number>): Promise<Clearance[]> {
-    const r = await this.send({ type: "clearance", moving, poses, ...(within !== undefined ? { within } : {}), ...(skip?.length ? { skip } : {}), ...(rigid && Object.keys(rigid).length ? { rigid } : {}) });
+  async clearances(
+    moving: string[],
+    poses: Record<string, number[]>,
+    within?: number,
+    skip?: string[],
+    rigid?: Record<string, number>,
+  ): Promise<Clearance[]> {
+    const r = await this.send({
+      type: "clearance",
+      moving,
+      poses,
+      ...(within !== undefined ? { within } : {}),
+      ...(skip?.length ? { skip } : {}),
+      ...(rigid && Object.keys(rigid).length ? { rigid } : {}),
+    });
     if (r.type !== "clearances") throw new Error("unexpected response");
+
     return r.result;
   }
 
   /** Views of the parts for a technical drawing, visible and hidden lines. */
   async drawing(views: ViewName[], bodies?: string[], doc?: MeercadDocument): Promise<DrawingView[]> {
-    const r = await this.send({ type: "drawing", views, ...(bodies ? { bodies } : {}), ...(doc ? { doc: design(doc) } : {}) });
+    const r = await this.send({
+      type: "drawing",
+      views,
+      ...(bodies ? { bodies } : {}),
+      ...(doc ? { doc: design(doc) } : {}),
+    });
     if (r.type !== "drawn") throw new Error("unexpected response");
+
     return r.views;
   }
 
   async measure(a: PickRef, b?: PickRef): Promise<Measurement> {
     const r = await this.send({ type: "measure", a, ...(b ? { b } : {}) });
     if (r.type !== "measured") throw new Error("unexpected response");
+
     return r.result;
   }
 
   private send(req: Distribute<WorkerRequest>, onProgress?: RebuildProgress): Promise<WorkerResponse> {
     return new Promise((resolve, reject) => {
       const full = { ...req, seq: ++this.seq } as WorkerRequest;
-      this.pending.set(full.seq, { req: full, retried: false, resolve, reject, ...(onProgress ? { onProgress } : {}) });
+      this.pending.set(full.seq, {
+        req: full,
+        retried: false,
+        resolve,
+        reject,
+        ...(onProgress ? { onProgress } : {}),
+      });
       this.worker.postMessage(full);
     });
   }
@@ -373,7 +514,14 @@ export class KernelClient {
 function design(doc: MeercadDocument): MeercadDocument {
   const textured = doc.features.some((f) => f.op === "import" && f.texture);
   if (!doc.versions && !doc.blobs && !textured) return doc;
+
   const { versions: _v, blobs: _b, ...rest } = doc;
-  if (textured) rest.features = rest.features.map((f) => (f.op === "import" && f.texture ? (({ texture: _t, ...plain }) => plain)(f) : f));
+
+  if (textured) {
+    rest.features = rest.features.map((f) =>
+      f.op === "import" && f.texture ? (({ texture: _t, ...plain }) => plain)(f) : f,
+    );
+  }
+
   return rest;
 }
