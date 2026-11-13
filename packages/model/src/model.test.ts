@@ -35,7 +35,10 @@ describe("DocumentStore", () => {
     expect(s.doc.params).toEqual({ height: "height * 2", w: "height + 1mm" });
     expect(s.doc.features[1]).toMatchObject({ distance: "height" });
     expect(() => s.apply({ type: "move_feature", id: "fi1", after: "sk1" })).toThrow(/later feature/);
-    s.apply({ type: "add_features", features: [{ id: "sk2", op: "sketch", plane: { ref: "origin.XZ" }, entities: [], constraints: [] }] });
+    s.apply({
+      type: "add_features",
+      features: [{ id: "sk2", op: "sketch", plane: { ref: "origin.XZ" }, entities: [], constraints: [] }],
+    });
     s.apply({ type: "move_feature", id: "sk2", after: null });
     expect(s.doc.features.map((f) => f.id)).toEqual(["sk2", "sk1", "ex1", "fi1"]);
   });
@@ -43,7 +46,9 @@ describe("DocumentStore", () => {
   it("applies ops, supports undo/redo, rejects invalid ops atomically", () => {
     const s = new DocumentStore();
     s.apply({ type: "set_param", name: "h", expr: "10 mm" });
-    expect(() => s.apply({ type: "set_param", name: "w", expr: 1 }, { type: "delete_feature", id: "x" })).toThrow(OpError);
+    expect(() =>
+      s.apply({ type: "set_param", name: "w", expr: 1 }, { type: "delete_feature", id: "x" }),
+    ).toThrow(OpError);
     expect(s.doc.params).toEqual({ h: "10 mm" });
     s.undo();
     expect(s.doc.params).toEqual({});
@@ -53,7 +58,10 @@ describe("DocumentStore", () => {
 
   it("keeps track of variables an assistant created", () => {
     const s = new DocumentStore();
-    s.apply({ type: "set_param", name: "wall", expr: "2 mm", auto: true }, { type: "set_param", name: "mine", expr: 3 });
+    s.apply(
+      { type: "set_param", name: "wall", expr: "2 mm", auto: true },
+      { type: "set_param", name: "mine", expr: 3 },
+    );
     expect(s.doc.autoParams).toEqual(["wall"]);
     s.apply({ type: "set_param", name: "wall", expr: "3 mm" });
     expect(s.doc.autoParams).toEqual(["wall"]);
@@ -61,7 +69,10 @@ describe("DocumentStore", () => {
     expect(s.doc.autoParams).toEqual(["thickness"]);
     s.apply({ type: "set_param", name: "thickness", expr: "3 mm", auto: false });
     expect(s.doc.autoParams).toBeUndefined();
-    s.apply({ type: "set_param", name: "x", expr: 1, auto: true }, { type: "set_param", name: "x", expr: null });
+    s.apply(
+      { type: "set_param", name: "x", expr: 1, auto: true },
+      { type: "set_param", name: "x", expr: null },
+    );
     expect(s.doc.autoParams).toBeUndefined();
   });
 });
@@ -75,10 +86,12 @@ const fake = (): KernelBackend<string[]> & { runs: string[]; disposed: number } 
     execute(f: Parameters<KernelBackend<string[]>["execute"]>[0], prev: string[]) {
       k.runs.push(f.id);
       if (f.op === "fillet" && f.radius > 5) throw new FeatureError("radius too large", "try ≤ 5");
+
       return { state: [...prev, f.id] };
     },
     dispose: () => void k.disposed++,
   };
+
   return k;
 };
 
@@ -87,7 +100,14 @@ const doc = (h: number | string, r = 2): MeercadDocument => ({
   params: { h },
   features: [
     { id: "sk1", op: "sketch", plane: { ref: "origin.XY" }, entities: [], constraints: [] },
-    { id: "ex1", op: "extrude", profile: { sketch: "sk1" }, extent: "blind", distance: "h", mode: "new_body" },
+    {
+      id: "ex1",
+      op: "extrude",
+      profile: { sketch: "sk1" },
+      extent: "blind",
+      distance: "h",
+      mode: "new_body",
+    },
     { id: "fi1", op: "fillet", edges: { select: "edges", of: "ex1" }, radius: r },
   ],
   rollback: null,
@@ -100,6 +120,7 @@ describe("RebuildEngine", () => {
     e.rebuild(doc(10));
     expect(k.runs).toEqual(["sk1", "ex1", "fi1"]);
     k.runs.length = 0;
+
     const r = e.rebuild(doc(12));
     expect(k.runs).toEqual(["ex1", "fi1"]);
     expect(r.firstRecomputed).toBe(1);
@@ -115,6 +136,7 @@ describe("RebuildEngine", () => {
     const e = new RebuildEngine(k);
     e.rebuild(doc(10));
     k.runs.length = 0;
+
     const f = e.fork(doc(10, 3));
     // Only the changed fillet is built; sketch and extrude come from the cache.
     expect(k.runs).toEqual(["fi1"]);
@@ -128,6 +150,7 @@ describe("RebuildEngine", () => {
     expect(k.runs).toEqual([]);
     // A failing preview releases what it built, and the cache stays.
     k.runs.length = 0;
+
     const bad = e.fork(doc(12, 9));
     expect(k.runs).toEqual(["ex1", "fi1"]);
     bad.release();
@@ -149,6 +172,7 @@ describe("RebuildEngine", () => {
 
     const d2 = { ...doc(1), rollback: "ex1" };
     d2.features[0] = { ...d2.features[0]!, suppressed: true };
+
     const r2 = new RebuildEngine(fake()).rebuild(d2);
     expect(r2.features.map((f) => f.status)).toEqual(["suppressed", "ok", "rolled_back"]);
   });

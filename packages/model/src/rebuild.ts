@@ -19,7 +19,10 @@ export interface ExecResult<S> {
   warnings?: string[];
   /** Numbers about the result for the interface (e.g. what a bend comes to). */
   info?: Record<string, number>;
-  /** The state uses objects of the `earlier` state handed to `execute`: that state must not be disposed apart from it. */
+  /**
+   * The state uses objects of the `earlier` state handed to `execute`: that state must not be disposed apart
+   * from it.
+   */
   keepsEarlier?: boolean;
 }
 
@@ -46,7 +49,12 @@ export interface KernelBackend<S> {
    * backend may keep what is still right (the parts a move did not have to move again); it then
    * says so with `keepsEarlier` and the new state owns the earlier one's resources.
    */
-  execute(feature: ResolvedFeature, prev: S, note?: (footprint: Footprint<S>) => void, earlier?: S): ExecResult<S>;
+  execute(
+    feature: ResolvedFeature,
+    prev: S,
+    note?: (footprint: Footprint<S>) => void,
+    earlier?: S,
+  ): ExecResult<S>;
   /** Releases resources owned by `state` (but not those it shares with earlier states). */
   dispose(state: S): void;
 }
@@ -91,11 +99,14 @@ interface CacheEntry<S> {
  * Failed features pass the previous state through so later features can still be evaluated.
  */
 /** The document's parameters with the values of the variant in use put in. */
-export function effectiveParams(doc: Pick<MeercadDocument, "params" | "variants" | "variant" | "fit">): Record<string, Expr> {
+export function effectiveParams(
+  doc: Pick<MeercadDocument, "params" | "variants" | "variant" | "fit">,
+): Record<string, Expr> {
   // The design's fit is there by name (`fit`); an own variable of that name (from before) wins.
   const params = { [FIT_VAR]: fitExpr(doc), ...doc.params };
   const v = doc.variant !== undefined ? doc.variants?.find((x) => x.name === doc.variant) : undefined;
   if (!v) return params;
+
   return { ...params, ...Object.fromEntries(Object.entries(v.params).filter(([k]) => k in doc.params)) };
 }
 
@@ -108,7 +119,10 @@ export class RebuildEngine<S> {
   }
 
   /** `onFeature` is told before each feature that has to be computed (not those taken from cache). */
-  rebuild(doc: MeercadDocument, onFeature?: (index: number, total: number, id: string) => void): RebuildResult<S> {
+  rebuild(
+    doc: MeercadDocument,
+    onFeature?: (index: number, total: number, id: string) => void,
+  ): RebuildResult<S> {
     return this.run(doc, onFeature, null);
   }
 
@@ -117,26 +131,40 @@ export class RebuildEngine<S> {
    * features the two share from the start come from the cache, only the rest are computed. The
    * caller must `release` the result when done with it; the cached states stay.
    */
-  fork(doc: MeercadDocument, onFeature?: (index: number, total: number, id: string) => void): RebuildResult<S> & { release: () => void } {
+  fork(
+    doc: MeercadDocument,
+    onFeature?: (index: number, total: number, id: string) => void,
+  ): RebuildResult<S> & { release: () => void } {
     const own: { state: S; prev: S }[] = [];
+
     const release = () => {
       // Newest first, as in evictFrom.
-      for (let j = own.length - 1; j >= 0; j--) if (own[j]!.state !== own[j]!.prev) this.backend.dispose(own[j]!.state);
+      for (let j = own.length - 1; j >= 0; j--) {
+        if (own[j]!.state !== own[j]!.prev) this.backend.dispose(own[j]!.state);
+      }
+
       own.length = 0;
     };
+
     try {
       return { ...this.run(doc, onFeature, own), release };
     } catch (e) {
       release();
+
       throw e;
     }
   }
 
   /** `own`: a fork's states, kept apart from the cache (null: the cache is updated). */
-  private run(doc: MeercadDocument, onFeature: ((index: number, total: number, id: string) => void) | undefined, own: { state: S; prev: S }[] | null): RebuildResult<S> {
+  private run(
+    doc: MeercadDocument,
+    onFeature: ((index: number, total: number, id: string) => void) | undefined,
+    own: { state: S; prev: S }[] | null,
+  ): RebuildResult<S> {
     const t0 = performance.now();
     // A file from an earlier version may hold steps this one no longer has: they are left out.
     doc = withoutRemovedFeatures(doc).doc;
+
     const { values, errors } = resolveParams(effectiveParams(doc));
     const statuses: FeatureStatus[] = [];
     let state = this.root;
@@ -154,9 +182,11 @@ export class RebuildEngine<S> {
         statuses.push({ id: f.id, status: "rolled_back", ms: 0, cached: false });
         continue;
       }
+
       const off = f.suppressed;
       let resolved: ResolvedFeature | null = null;
       let resolveError: string | null = null;
+
       if (!off) {
         try {
           resolved = resolveFeature(f, values);
@@ -164,19 +194,25 @@ export class RebuildEngine<S> {
           resolveError = e instanceof Error ? e.message : String(e);
         }
       }
+
       const def = off ? `S:${f.id}` : resolved ? JSON.stringify(resolved) : `E:${f.id}:${resolveError}`;
       key = hashString(`${key}|${def}`);
+
       const self = hashString(def);
 
       const hit = firstRecomputed === -1 ? this.cache[i] : undefined;
+
       if (!(hit && hit.key === key) && firstRecomputed === -1) {
         firstRecomputed = i;
         stale = new Map(this.cache.slice(i).map((e) => [e.status.id, e]));
         // A fork leaves the cache as it is and only looks at its entries.
         if (!own) this.cache.length = i;
       }
+
       const old = stale?.get(f.id);
-      const replayed = old && old.own === self && old.footprint && !adopted.has(old) ? old.footprint.replay(state) : null;
+      const replayed =
+        old && old.own === self && old.footprint && !adopted.has(old) ? old.footprint.replay(state) : null;
+
       if (hit && hit.key === key) {
         state = hit.state;
         statuses.push({ ...hit.status, ms: 0, cached: true });
@@ -184,15 +220,28 @@ export class RebuildEngine<S> {
         // Unchanged step on unchanged parts: its earlier result, laid on the new state.
         // The result's resources stay the earlier entry's: a fork has nothing of its own to release here.
         adopted.add(old);
-        if (!own) this.cache[i] = { key, own: self, state: replayed, prev: state, status: old.status, footprint: old.footprint! };
+
+        if (!own) {
+          this.cache[i] = {
+            key,
+            own: self,
+            state: replayed,
+            prev: state,
+            status: old.status,
+            footprint: old.footprint!,
+          };
+        }
+
         statuses.push({ ...old.status, ms: 0, cached: true });
         state = replayed;
       } else {
         if (!off && resolved) onFeature?.(i, doc.features.length, f.id);
+
         const tf = performance.now();
         let status: FeatureStatus;
         let next = state;
         let footprint: Footprint<S> | undefined;
+
         if (off) {
           status = { id: f.id, status: "suppressed", ms: 0, cached: false };
         } else if (!resolved) {
@@ -200,9 +249,13 @@ export class RebuildEngine<S> {
         } else {
           try {
             // Not for a fork: its states are released on their own, the cache's must stay.
-            const earlier = !own && old && old.own === self && !adopted.has(old) && old.state !== old.prev ? old.state : undefined;
+            const earlier =
+              !own && old && old.own === self && !adopted.has(old) && old.state !== old.prev
+                ? old.state
+                : undefined;
             const r = this.backend.execute(resolved, state, (fp) => (footprint = fp), earlier);
             if (r.keepsEarlier && old) adopted.add(old);
+
             next = r.state;
             status = r.warnings?.length
               ? { id: f.id, status: "warning", message: r.warnings.join("; "), ms: 0, cached: false }
@@ -219,18 +272,35 @@ export class RebuildEngine<S> {
             if (e instanceof FeatureError && e.hint) status.hint = e.hint;
           }
         }
+
         status.ms = performance.now() - tf;
-        if (own) own.push({ state: next, prev: state });
-        else this.cache[i] = { key, own: self, state: next, prev: state, status, ...(footprint ? { footprint } : {}) };
+
+        if (own) {
+          own.push({ state: next, prev: state });
+        } else {
+          this.cache[i] = {
+            key,
+            own: self,
+            state: next,
+            prev: state,
+            status,
+            ...(footprint ? { footprint } : {}),
+          };
+        }
+
         state = next;
         statuses.push(status);
       }
+
       i++;
       if (doc.rollback === f.id) rolledBack = true;
     }
+
     // Earlier results nobody took over: newest first, as later states may use what earlier ones made.
     if (stale && !own) {
-      for (const e of [...stale.values()].reverse()) if (!adopted.has(e) && e.state !== e.prev) this.backend.dispose(e.state);
+      for (const e of [...stale.values()].reverse()) {
+        if (!adopted.has(e) && e.state !== e.prev) this.backend.dispose(e.state);
+      }
     }
     // Entries past the end (steps deleted at the end of the timeline, or rolled back) stay as they
     // were when nothing changed before them; after a change they belong to the stale ones above.
@@ -256,6 +326,7 @@ export class RebuildEngine<S> {
       const entry = this.cache[j]!;
       if (entry.state !== entry.prev) this.backend.dispose(entry.state);
     }
+
     this.cache.length = Math.min(this.cache.length, index);
   }
 }

@@ -40,7 +40,24 @@ export const SNAP_HOOK = {
 
 export class ClosureError extends Error {}
 
-export interface ResolvedBox extends Omit<BoxFeature, "width" | "depth" | "height" | "wall" | "floor" | "corner" | "lidThickness" | "clearance" | "snap" | "lipHeight" | "pitch" | "neck" | "starts" | "position" | "shape"> {
+export interface ResolvedBox extends Omit<
+  BoxFeature,
+  | "width"
+  | "depth"
+  | "height"
+  | "wall"
+  | "floor"
+  | "corner"
+  | "lidThickness"
+  | "clearance"
+  | "snap"
+  | "lipHeight"
+  | "pitch"
+  | "neck"
+  | "starts"
+  | "position"
+  | "shape"
+> {
   shape: "rect" | "round";
   width: number;
   depth: number;
@@ -58,7 +75,18 @@ export interface ResolvedBox extends Omit<BoxFeature, "width" | "depth" | "heigh
   position: [number, number];
 }
 
-export interface ResolvedSnapHook extends Omit<SnapHookFeature, "points" | "angle" | "length" | "thickness" | "width" | "overhang" | "insertAngle" | "retainAngle" | "clearance"> {
+export interface ResolvedSnapHook extends Omit<
+  SnapHookFeature,
+  | "points"
+  | "angle"
+  | "length"
+  | "thickness"
+  | "width"
+  | "overhang"
+  | "insertAngle"
+  | "retainAngle"
+  | "clearance"
+> {
   points: [number, number][];
   angle: number;
   length: number;
@@ -71,12 +99,16 @@ export interface ResolvedSnapHook extends Omit<SnapHookFeature, "points" | "angl
 }
 
 /** Fills in the defaults of a box whose numbers are known (`num` gives an optional field's value). */
-export function boxDefaults(f: BoxFeature, num: (field: string, e: BoxFeature[keyof BoxFeature]) => number | undefined): ResolvedBox {
+export function boxDefaults(
+  f: BoxFeature,
+  num: (field: string, e: BoxFeature[keyof BoxFeature]) => number | undefined,
+): ResolvedBox {
   const n = (k: keyof BoxFeature) => num(k, f[k]);
   const wall = n("wall") ?? BOX.wall;
   const width = n("width")!;
   const shape = f.lid === "screw" ? "round" : (f.shape ?? "rect");
   const starts = Math.round(n("starts") ?? 1);
+
   return {
     ...f,
     shape,
@@ -143,48 +175,97 @@ const check = (ok: boolean, message: string) => {
 
 function common(b: ResolvedBox) {
   check(b.wall >= 0.8 && b.wall <= 10, "the wall must be between 0.8 and 10 mm thick");
-  check(b.floor >= 0.6 && b.floor <= b.height - 2, "the bottom must be at least 0.6 mm thick and leave room inside");
+  check(
+    b.floor >= 0.6 && b.floor <= b.height - 2,
+    "the bottom must be at least 0.6 mm thick and leave room inside",
+  );
   check(b.lidThickness >= 0.6 && b.lidThickness <= 20, "the lid must be between 0.6 and 20 mm thick");
   check(b.clearance >= 0 && b.clearance <= 1, "the clearance must be between 0 and 1 mm");
-  check(b.width >= 15 && b.width <= 1000 && b.depth >= 15 && b.depth <= 1000, "the box must be between 15 and 1000 mm wide and deep");
+  check(
+    b.width >= 15 && b.width <= 1000 && b.depth >= 15 && b.depth <= 1000,
+    "the box must be between 15 and 1000 mm wide and deep",
+  );
   check(b.height >= 8 && b.height <= 1000, "the box must be between 8 and 1000 mm high");
 }
 
 export function snapBoxSizes(b: ResolvedBox): SnapBoxSizes {
   common(b);
-  const t = b.wall, c = b.clearance, s = b.snap;
+
+  const t = b.wall,
+    c = b.clearance,
+    s = b.snap;
   check(s >= 0.2 && s <= 2, "the snap must be between 0.2 and 2 mm");
-  check(s + 0.6 <= t, `a ${s} mm snap needs a wall of at least ${(s + 0.6).toFixed(1)} mm (the groove is cut into it)`);
+  check(
+    s + 0.6 <= t,
+    `a ${s} mm snap needs a wall of at least ${(s + 0.6).toFixed(1)} mm (the groove is cut into it)`,
+  );
+
   const inner: [number, number] = [b.width - 2 * t, b.depth - 2 * t];
   const innerCorner = Math.max(0, b.corner - t);
-  if (b.shape === "rect") check(b.corner >= 0 && b.corner <= Math.min(b.width, b.depth) / 2, "the corner radius must fit the box");
+
+  if (b.shape === "rect") {
+    check(b.corner >= 0 && b.corner <= Math.min(b.width, b.depth) / 2, "the corner radius must fit the box");
+  }
+
   const lip = Math.min(Math.max(0.75 * t, 1.2), 2);
   const lipOuter: [number, number] = [inner[0] - 2 * c, inner[1] - 2 * c];
   check(Math.min(...lipOuter) > 2 * lip + 4, "the box is too small for its lid's lip");
+
   const beadFlat = 0.4;
   const depthInside = b.height - b.floor;
   const minLip = 2 * (s + beadFlat) + 1.6;
-  check(b.lipHeight >= minLip && b.lipHeight <= depthInside - 1, `the lip must reach between ${minLip.toFixed(1)} and ${(depthInside - 1).toFixed(1)} mm into the box`);
+  check(
+    b.lipHeight >= minLip && b.lipHeight <= depthInside - 1,
+    `the lip must reach between ${minLip.toFixed(1)} and ${(depthInside - 1).toFixed(1)} mm into the box`,
+  );
+
   // The bead sits near the lip's free end, where it gives most easily.
   const beadZ = b.height - b.lipHeight + 0.8 + s + beadFlat;
-  return { inner, innerCorner, lipOuter, lipCorner: Math.max(0, innerCorner - c), lip, beadZ, beadFlat, depthInside };
+
+  return {
+    inner,
+    innerCorner,
+    lipOuter,
+    lipCorner: Math.max(0, innerCorner - c),
+    lip,
+    beadZ,
+    beadFlat,
+    depthInside,
+  };
 }
 
 export function screwBoxSizes(b: ResolvedBox): ScrewBoxSizes {
   common(b);
-  const R = b.width / 2, t = b.wall, c = b.clearance, P = b.pitch;
+
+  const R = b.width / 2,
+    t = b.wall,
+    c = b.clearance,
+    P = b.pitch;
   check(P >= 1.5 && P <= 10, "the pitch must be between 1.5 and 10 mm");
   check(b.starts >= 1 && b.starts <= 4, "a thread has 1 to 4 starts");
+
   const threadDepth = 0.25 * P;
   const skirt = R - t;
   const neckOuter = skirt - threadDepth - c;
   const neckInner = neckOuter - t;
-  check(neckInner >= 4, `the jar is too narrow for its wall and thread: make it at least ${(2 * (R - neckInner + 4)).toFixed(0)} mm wide`);
+  check(
+    neckInner >= 4,
+    `the jar is too narrow for its wall and thread: make it at least ${(2 * (R - neckInner + 4)).toFixed(0)} mm wide`,
+  );
+
   const shoulder = b.height - b.neck;
-  check(b.neck >= P + 3 && b.neck <= b.height - b.floor - 2, `the neck must be between ${(P + 3).toFixed(1)} and ${(b.height - b.floor - 2).toFixed(1)} mm high`);
+  check(
+    b.neck >= P + 3 && b.neck <= b.height - b.floor - 2,
+    `the neck must be between ${(P + 3).toFixed(1)} and ${(b.height - b.floor - 2).toFixed(1)} mm high`,
+  );
   // Inside, the wall narrows from the box to the neck at 45° below the shoulder.
-  check(shoulder - (R - neckOuter) >= b.floor + 1, "the jar is too low for its neck: make it taller or the neck shorter");
+  check(
+    shoulder - (R - neckOuter) >= b.floor + 1,
+    "the jar is too low for its neck: make it taller or the neck shorter",
+  );
+
   const capGap = Math.max(0.5, 2 * c);
+
   return {
     radius: R,
     inner: R - t,
@@ -202,11 +283,17 @@ export function screwBoxSizes(b: ResolvedBox): ScrewBoxSizes {
 }
 
 /** Fills in a snap hook's defaults. */
-export function snapHookDefaults(f: SnapHookFeature, num: (field: string, e: SnapHookFeature[keyof SnapHookFeature]) => number | undefined): ResolvedSnapHook {
+export function snapHookDefaults(
+  f: SnapHookFeature,
+  num: (field: string, e: SnapHookFeature[keyof SnapHookFeature]) => number | undefined,
+): ResolvedSnapHook {
   const n = (k: keyof SnapHookFeature) => num(k, f[k]);
+
   return {
     ...f,
-    points: f.points.map(([u, v], i) => [num(`points[${i}][0]`, u)!, num(`points[${i}][1]`, v)!] as [number, number]),
+    points: f.points.map(
+      ([u, v], i) => [num(`points[${i}][0]`, u)!, num(`points[${i}][1]`, v)!] as [number, number],
+    ),
     angle: n("angle") ?? 0,
     length: n("length") ?? SNAP_HOOK.length,
     thickness: n("thickness") ?? SNAP_HOOK.thickness,
@@ -218,7 +305,12 @@ export function snapHookDefaults(f: SnapHookFeature, num: (field: string, e: Sna
   };
 }
 
-export function checkSnapHook(h: Pick<ResolvedSnapHook, "length" | "thickness" | "width" | "overhang" | "insertAngle" | "retainAngle" | "clearance">): void {
+export function checkSnapHook(
+  h: Pick<
+    ResolvedSnapHook,
+    "length" | "thickness" | "width" | "overhang" | "insertAngle" | "retainAngle" | "clearance"
+  >,
+): void {
   check(h.length >= 2 && h.length <= 200, "the hook must be between 2 and 200 mm long");
   check(h.thickness >= 0.6 && h.thickness <= 20, "the hook must be between 0.6 and 20 mm thick");
   check(h.width >= 1 && h.width <= 200, "the hook must be between 1 and 200 mm wide");
@@ -233,8 +325,12 @@ export function checkSnapHook(h: Pick<ResolvedSnapHook, "length" | "thickness" |
  * at x = 0, its back at −thickness), z up the beam from the face. Counter-clockwise, closed. A 45°
  * fillet-like web at the back of the root takes the bending stress there.
  */
-export function snapHookProfile(h: Pick<ResolvedSnapHook, "length" | "thickness" | "overhang" | "insertAngle" | "retainAngle">): { points: [number, number][]; top: number; catchZ: number } {
-  const t = h.thickness, y = h.overhang, L = h.length;
+export function snapHookProfile(
+  h: Pick<ResolvedSnapHook, "length" | "thickness" | "overhang" | "insertAngle" | "retainAngle">,
+): { points: [number, number][]; top: number; catchZ: number } {
+  const t = h.thickness,
+    y = h.overhang,
+    L = h.length;
   const rad = (d: number) => (d * Math.PI) / 180;
   const catchOuter = L + (h.retainAngle >= 89.999 ? 0 : y / Math.tan(rad(h.retainAngle)));
   const land = Math.min(0.5, y * 0.5);
@@ -251,6 +347,7 @@ export function snapHookProfile(h: Pick<ResolvedSnapHook, "length" | "thickness"
     [-t, leadTop],
     [-t, web],
   ];
+
   return { points, top: leadTop, catchZ: L };
 }
 

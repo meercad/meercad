@@ -4,7 +4,13 @@
   "private": true,
   "type": "module",
   "license": "FSL-1.1-ALv2",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit -p ." },
-  "dependencies": { "@meercad/schema": "workspace:*" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@meercad/schema": "workspace:*"
+  }
 }

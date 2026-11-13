@@ -5,7 +5,14 @@ import { transformPoint, type Mat4, type MotionJoint, type V3 } from "./motion.j
 const Z: V3 = [0, 0, 1];
 const rad = (d: number) => (d * Math.PI) / 180;
 const deg = (r: number) => (r * 180) / Math.PI;
-const rev = (id: string, a: string, b: string, origin: V3): MotionJoint => ({ id, type: "revolute", a, b, origin, axis: Z });
+const rev = (id: string, a: string, b: string, origin: V3): MotionJoint => ({
+  id,
+  type: "revolute",
+  a,
+  b,
+  origin,
+  axis: Z,
+});
 
 /** Upper intersection of circles (c1, r1) and (c2, r2) in the plane. */
 function meet(c1: [number, number], r1: number, c2: [number, number], r2: number): [number, number] {
@@ -16,6 +23,7 @@ function meet(c1: [number, number], r1: number, c2: [number, number], r2: number
   const h = Math.sqrt(Math.max(0, r1 * r1 - a * a));
   const mx = c1[0] + (a * dx) / d;
   const my = c1[1] + (a * dy) / d;
+
   return [mx - (h * dy) / d, my + (h * dx) / d];
 }
 
@@ -23,12 +31,20 @@ function meet(c1: [number, number], r1: number, c2: [number, number], r2: number
 function fourBar(g: number, c: number, k: number, r: number) {
   const A: [number, number] = [0, c];
   const B = meet(A, k, [g, 0], r);
-  const joints = [rev("crank", "crank", "ground", [0, 0, 0]), rev("pinA", "coupler", "crank", [A[0], A[1], 0]), rev("rocker", "rocker", "ground", [g, 0, 0]), rev("pinB", "coupler", "rocker", [B[0], B[1], 0])];
+  const joints = [
+    rev("crank", "crank", "ground", [0, 0, 0]),
+    rev("pinA", "coupler", "crank", [A[0], A[1], 0]),
+    rev("rocker", "rocker", "ground", [g, 0, 0]),
+    rev("pinB", "coupler", "rocker", [B[0], B[1], 0]),
+  ];
+
   const rockerAngle = (crank: number) => {
     const a: [number, number] = [c * Math.cos(rad(crank)), c * Math.sin(rad(crank))];
     const b = meet(a, k, [g, 0], r);
+
     return deg(Math.atan2(b[1], b[0] - g));
   };
+
   return { joints, rockerAngle, B };
 }
 
@@ -36,14 +52,17 @@ describe("closed-loop linkages", () => {
   it("drives a crank-rocker round and round, matching the closed form", () => {
     const { joints, rockerAngle } = fourBar(100, 30, 90, 70);
     expect(hasLoops(joints)).toBe(true);
+
     const L = new Linkage(joints);
     let poses: Map<string, Mat4> = new Map();
     const rest = rockerAngle(90);
+
     for (let step = 15; step <= 720; step += 15) {
       const r = L.solve(poses, { crank: step });
       expect(r.ok, `crank ${step}°`).toBe(true);
       poses = r.poses;
       expect(r.values["crank"]).toBeCloseTo(step, 4);
+
       // The rocker's turn from where it was drawn equals the closed-form angle change.
       const want = rockerAngle(90 + step) - rest;
       expect(Math.abs(((r.values["rocker"]! - want + 540) % 360) - 180)).toBeLessThan(0.05);
@@ -63,10 +82,12 @@ describe("closed-loop linkages", () => {
     ];
     const L = new Linkage(joints);
     let poses: Map<string, Mat4> = new Map();
+
     for (let step = 10; step <= 360; step += 10) {
       const r = L.solve(poses, { crank: step });
       expect(r.ok, `crank ${step}°`).toBe(true);
       poses = r.poses;
+
       const t = rad(90 + step);
       const x = rr * Math.cos(t) + Math.sqrt(l * l - rr * rr * Math.sin(t) ** 2);
       expect(r.values["slide"]).toBeCloseTo(x - xRest, 2);
@@ -92,8 +113,17 @@ describe("closed-loop linkages", () => {
     const L = new Linkage(joints);
     // Pull the rocker's pin a little to the left, looking down onto the plane.
     const target: V3 = [B[0] - 5, B[1], 0];
-    const r = L.solve(new Map(), {}, { part: "rocker", local: [B[0], B[1], 0], ray: { origin: [target[0], target[1], 100], dir: [0, 0, -1] } });
+    const r = L.solve(
+      new Map(),
+      {},
+      {
+        part: "rocker",
+        local: [B[0], B[1], 0],
+        ray: { origin: [target[0], target[1], 100], dir: [0, 0, -1] },
+      },
+    );
     expect(r.ok).toBe(true);
+
     const p = transformPoint(r.poses.get("rocker")!, [B[0], B[1], 0]);
     expect(p[0]).toBeLessThan(B[0] - 2);
     expect(r.residual).toBeLessThan(1e-4);

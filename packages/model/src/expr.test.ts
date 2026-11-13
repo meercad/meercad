@@ -85,7 +85,25 @@ describe("functions", () => {
 });
 
 describe("refused input never becomes a silent number", () => {
-  it.each(["", "   ", "wall +", "(1 + 2", "1 + 2)", "foo", "2 / 0", "1 / (wall - 2)", "1 $ 2", "nope(1)", "max()", "sqrt(-1)", "1 2", "wall wall", "10 ^ 400", "asin(2)", "1,2"])("rejects %j", (src) => {
+  it.each([
+    "",
+    "   ",
+    "wall +",
+    "(1 + 2",
+    "1 + 2)",
+    "foo",
+    "2 / 0",
+    "1 / (wall - 2)",
+    "1 $ 2",
+    "nope(1)",
+    "max()",
+    "sqrt(-1)",
+    "1 2",
+    "wall wall",
+    "10 ^ 400",
+    "asin(2)",
+    "1,2",
+  ])("rejects %j", (src) => {
     expect(() => ev(src)).toThrow();
   });
   it("rejects numbers that are not finite", () => {
@@ -96,7 +114,13 @@ describe("refused input never becomes a silent number", () => {
 
 describe("variables depending on variables", () => {
   it("resolves in dependency order whatever order they are listed in", () => {
-    const r = resolveParams({ outer: "inner + 2 * wall", inner: "bore + 2 * gap", bore: "8 mm", gap: "0.2", wall: "1.6" });
+    const r = resolveParams({
+      outer: "inner + 2 * wall",
+      inner: "bore + 2 * gap",
+      bore: "8 mm",
+      gap: "0.2",
+      wall: "1.6",
+    });
     expect(r.errors.size).toBe(0);
     expect(r.values.get("inner")).toBeCloseTo(8.4, 12);
     expect(r.values.get("outer")).toBeCloseTo(11.6, 12);
@@ -114,7 +138,11 @@ describe("variables depending on variables", () => {
   });
 
   it("lists referenced names without units, constants or functions", () => {
-    expect(referencedNames("max(width, 2 mm) * pi + wall / 1in + cos(angle)").sort()).toEqual(["angle", "wall", "width"]);
+    expect(referencedNames("max(width, 2 mm) * pi + wall / 1in + cos(angle)").sort()).toEqual([
+      "angle",
+      "wall",
+      "width",
+    ]);
     expect(referencedNames(5)).toEqual([]);
   });
 

@@ -1,4 +1,11 @@
-export { evaluate, resolveParams, referencedNames, renameInExpr, ExprError, type ParamResolution } from "./expr.js";
+export {
+  evaluate,
+  resolveParams,
+  referencedNames,
+  renameInExpr,
+  ExprError,
+  type ParamResolution,
+} from "./expr.js";
 export { hashString } from "./hash.js";
 export * from "./resolve.js";
 export * from "./threads.js";

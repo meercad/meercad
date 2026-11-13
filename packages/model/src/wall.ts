@@ -53,7 +53,10 @@ export const OPENGRID = {
   snapCorner: 4.818,
   snapFrontCorner: 3.3,
   snapLite: 3.4,
-  /** The catch on each side: 11 mm long, 0.4 mm proud, from 0.2 to 2 mm above the snap's base (+3.4 on a full snap). */
+  /**
+   * The catch on each side: 11 mm long, 0.4 mm proud, from 0.2 to 2 mm above the snap's base (+3.4 on a full
+   * snap).
+   */
   nubLength: 11,
   nubHeight: 0.4,
   /** Behind each catch a 0.6 mm slot 1 mm in from the edge frees a 0.7 mm spring 12.4 mm long. */
@@ -65,12 +68,13 @@ export const OPENGRID = {
 export type PegGrid = "us_quarter" | "us_eighth" | "metric_25" | "square_38";
 
 /** Pegboard presets: hole pitch, hole size (round diameter or square side), board thickness, shape. */
-export const PEGBOARDS: Record<PegGrid, { pitch: number; hole: number; thickness: number; square: boolean }> = {
-  us_quarter: { pitch: 25.4, hole: 7.1, thickness: 6.35, square: false },
-  us_eighth: { pitch: 25.4, hole: 4.8, thickness: 3.2, square: false },
-  metric_25: { pitch: 25, hole: 5, thickness: 3, square: false },
-  square_38: { pitch: 38, hole: 10, thickness: 1.5, square: true },
-};
+export const PEGBOARDS: Record<PegGrid, { pitch: number; hole: number; thickness: number; square: boolean }> =
+  {
+    us_quarter: { pitch: 25.4, hole: 7.1, thickness: 6.35, square: false },
+    us_eighth: { pitch: 25.4, hole: 4.8, thickness: 3.2, square: false },
+    metric_25: { pitch: 25, hole: 5, thickness: 3, square: false },
+    square_38: { pitch: 38, hole: 10, thickness: 1.5, square: true },
+  };
 
 /** English names for the pegboard presets. */
 export const PEGBOARD_NAMES: Record<PegGrid, string> = {
@@ -102,6 +106,7 @@ export class WallError extends Error {}
 export function openGridWall(z: number): number {
   return interp(OPENGRID.wall, z);
 }
+
 /** The reach of the crossing nodes at a depth (full board, from the back). */
 export function openGridNode(z: number): number {
   return interp(OPENGRID.node, z);
@@ -109,11 +114,13 @@ export function openGridNode(z: number): number {
 
 function interp(table: readonly (readonly [number, number])[], z: number): number {
   if (z <= table[0]![0]) return table[0]![1];
+
   for (let i = 1; i < table.length; i++) {
     const [z1, v1] = table[i]!;
     const [z0, v0] = table[i - 1]!;
     if (z <= z1) return v0 + ((v1 - v0) * (z - z0)) / (z1 - z0);
   }
+
   return table[table.length - 1]![1];
 }
 
@@ -124,19 +131,32 @@ function interp(table: readonly (readonly [number, number])[], z: number): numbe
 export function openGridOpening(variant: "full" | "lite"): { z: number; loop: [number, number][] }[] {
   const T = variant === "lite" ? OPENGRID.lite : OPENGRID.full;
   const off = OPENGRID.full - T;
-  const zs = [...new Set([...OPENGRID.wall.map(([z]) => z), ...OPENGRID.node.map(([z]) => z), off].filter((z) => z >= off - 1e-9))].sort((a, b) => a - b);
+  const zs = [
+    ...new Set(
+      [...OPENGRID.wall.map(([z]) => z), ...OPENGRID.node.map(([z]) => z), off].filter(
+        (z) => z >= off - 1e-9,
+      ),
+    ),
+  ].sort((a, b) => a - b);
   const half = OPENGRID.pitch / 2;
+
   return zs.map((z) => {
-    const w = openGridWall(z), n = openGridNode(z);
+    const w = openGridWall(z),
+      n = openGridNode(z);
     const a = half - w; // half the opening's width
     const b = OPENGRID.pitch - n - a; // where the corner cut meets the edge, |x| + |y| = pitch − node
+
     return { z: z - off, loop: octagon(a, b) };
   });
 }
 
-/** A square of half-width a with its corners cut where |x| + |y| = a + b (b ≤ a), counter-clockwise from (a, −b). */
+/**
+ * A square of half-width a with its corners cut where |x| + |y| = a + b (b ≤ a), counter-clockwise from (a,
+ * −b).
+ */
 export function octagon(a: number, b: number): [number, number][] {
   b = Math.min(b, a);
+
   return [
     [a, -b],
     [a, b],
@@ -150,16 +170,30 @@ export function octagon(a: number, b: number): [number, number][] {
 }
 
 /** Board size for a wall area: as many whole cells as fit, and what is left on each side. */
-export function wallFit(system: "opengrid" | "pegboard", size: [number, number], pitch: number = OPENGRID.pitch): { units: [number, number]; border: [number, number] } {
+export function wallFit(
+  system: "opengrid" | "pegboard",
+  size: [number, number],
+  pitch: number = OPENGRID.pitch,
+): { units: [number, number]; border: [number, number] } {
   const units: [number, number] = [Math.floor(size[0] / pitch + 1e-9), Math.floor(size[1] / pitch + 1e-9)];
-  if (units[0] < 1 || units[1] < 1) throw new WallError(`the ${system === "opengrid" ? "openGrid" : "pegboard"} needs at least ${pitch} mm`);
+
+  if (units[0] < 1 || units[1] < 1) {
+    throw new WallError(`the ${system === "opengrid" ? "openGrid" : "pegboard"} needs at least ${pitch} mm`);
+  }
+
   return { units, border: [(size[0] - units[0] * pitch) / 2, (size[1] - units[1] * pitch) / 2] };
 }
 
 /** The pegboard sizes a feature uses: its preset with any overrides. */
 export function pegboard(grid: PegGrid | undefined, pitch?: number, hole?: number, thickness?: number) {
   const p = PEGBOARDS[grid ?? "us_quarter"];
-  return { pitch: pitch ?? p.pitch, hole: hole ?? p.hole, thickness: thickness ?? p.thickness, square: p.square };
+
+  return {
+    pitch: pitch ?? p.pitch,
+    hole: hole ?? p.hole,
+    thickness: thickness ?? p.thickness,
+    square: p.square,
+  };
 }
 
 /** Holder cells needed for a Gridfinity shelf of `bins` bins (42 mm each plus 1.5 mm side walls). */

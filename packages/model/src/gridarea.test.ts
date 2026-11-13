@@ -28,6 +28,7 @@ describe("areaPlan", () => {
     expect(plan.units).toEqual([71, 35]);
     expect(plan.cells).toHaveLength(71 * 35);
     expect(plan.origin[0]).toBeCloseTo(-71 * 21, 9);
+
     const [xs, ys] = plan.cuts;
     const bed = plan.turned ? [320, 340] : [340, 320];
     for (const w of widths(xs)) expect(w).toBeLessThanOrEqual(bed[0]! + 1e-9);
@@ -52,19 +53,50 @@ describe("areaPlan", () => {
   });
   it("fills an L-shaped outline with whole cells only, a gap from its edge", () => {
     // 300 × 200 with the top-right 150 × 100 missing.
-    const L: Poly2 = [[0, 0], [300, 0], [300, 100], [150, 100], [150, 200], [0, 200]];
+    const L: Poly2 = [
+      [0, 0],
+      [300, 0],
+      [300, 100],
+      [150, 100],
+      [150, 200],
+      [0, 200],
+    ];
     const plan = areaPlan({ loops: [L], gap: 0.5 });
-    const inside = (x: number, y: number) => x >= 0.5 - 1e-9 && y >= 0.5 - 1e-9 && ((x <= 299.5 + 1e-9 && y <= 99.5 + 1e-9) || (x <= 149.5 + 1e-9 && y <= 199.5 + 1e-9));
+    const inside = (x: number, y: number) =>
+      x >= 0.5 - 1e-9 &&
+      y >= 0.5 - 1e-9 &&
+      ((x <= 299.5 + 1e-9 && y <= 99.5 + 1e-9) || (x <= 149.5 + 1e-9 && y <= 199.5 + 1e-9));
+
     for (const [i, j] of plan.cells) {
-      const x = plan.origin[0] + i * P, y = plan.origin[1] + j * P;
-      for (const [cx, cy] of [[x, y], [x + P, y], [x, y + P], [x + P, y + P]]) expect(inside(cx!, cy!)).toBe(true);
+      const x = plan.origin[0] + i * P,
+        y = plan.origin[1] + j * P;
+
+      for (const [cx, cy] of [
+        [x, y],
+        [x + P, y],
+        [x, y + P],
+        [x + P, y + P],
+      ]) {
+        expect(inside(cx!, cy!)).toBe(true);
+      }
     }
+
     // Lined up with the outline's corner, 7 cells fit along the bottom and 2 rows; 3 more in the upright.
     expect(plan.cells.length).toBe(7 * 2 + 3 * 2);
   });
   it("leaves out a hole in the outline", () => {
-    const outer: Poly2 = [[0, 0], [210, 0], [210, 210], [0, 210]];
-    const hole: Poly2 = [[90, 90], [90, 120], [120, 120], [120, 90]];
+    const outer: Poly2 = [
+      [0, 0],
+      [210, 0],
+      [210, 210],
+      [0, 210],
+    ];
+    const hole: Poly2 = [
+      [90, 90],
+      [90, 120],
+      [120, 120],
+      [120, 90],
+    ];
     const plan = areaPlan({ loops: [outer, hole], gap: 0 });
     expect(plan.cells).toHaveLength(24);
   });

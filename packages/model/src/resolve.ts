@@ -39,9 +39,15 @@ import { evaluate, ExprError } from "./expr.js";
 import { boxDefaults, snapHookDefaults, type ResolvedBox, type ResolvedSnapHook } from "./closures.js";
 
 /** `T` with the expression fields `K` evaluated to numbers. */
-type R<T, K extends keyof T> = Omit<T, K> & { [P in K]: undefined extends T[P] ? number | undefined : number };
+type R<T, K extends keyof T> = Omit<T, K> & {
+  [P in K]: undefined extends T[P] ? number | undefined : number;
+};
 
-export type ResolvedSketchConstraint = SketchConstraint extends infer C ? (C extends { value: Expr } ? R<C, "value"> : C) : never;
+export type ResolvedSketchConstraint = SketchConstraint extends infer C
+  ? C extends { value: Expr }
+    ? R<C, "value">
+    : C
+  : never;
 export type ResolvedSketch = Omit<SketchFeature, "constraints"> & { constraints: ResolvedSketchConstraint[] };
 export type ResolvedPlane = R<PlaneFeature, "offset" | "angle">;
 export type ResolvedExtrude = R<ExtrudeFeature, "distance" | "distance2">;
@@ -51,31 +57,81 @@ export type ResolvedChamfer = R<ChamferFeature, "distance">;
 export type ResolvedShell = R<ShellFeature, "thickness">;
 export type ResolvedThread = R<ThreadFeature, "pitch" | "length" | "clearance" | "diameter" | "starts">;
 export type ResolvedCoil = R<CoilFeature, "pitch" | "turns" | "taper">;
-export type ResolvedSpring = R<Omit<SpringFeature, "center">, "wire" | "diameter" | "coils" | "length" | "gap" | "legs"> & { center?: [number, number] };
-export type ResolvedScrew = R<Omit<ScrewFeature, "center">, "diameter" | "pitch" | "starts" | "length" | "threadLength" | "clearance"> & { center?: [number, number] };
+export type ResolvedSpring = R<
+  Omit<SpringFeature, "center">,
+  "wire" | "diameter" | "coils" | "length" | "gap" | "legs"
+> & { center?: [number, number] };
+export type ResolvedScrew = R<
+  Omit<ScrewFeature, "center">,
+  "diameter" | "pitch" | "starts" | "length" | "threadLength" | "clearance"
+> & { center?: [number, number] };
 export type ResolvedLinearPattern = R<LinearPatternFeature, "count" | "spacing" | "count2" | "spacing2">;
 export type ResolvedCircularPattern = R<CircularPatternFeature, "count" | "angle">;
 export type ResolvedGear = R<
   Omit<GearFeature, "center" | "meshWith" | "bore" | "hub">,
-  "module" | "teeth" | "width" | "pressureAngle" | "profileShift" | "helix" | "backlash" | "clearance" | "rotation" | "rim" | "chamfer"
+  | "module"
+  | "teeth"
+  | "width"
+  | "pressureAngle"
+  | "profileShift"
+  | "helix"
+  | "backlash"
+  | "clearance"
+  | "rotation"
+  | "rim"
+  | "chamfer"
 > & {
   center?: [number, number];
   meshWith?: { gear: string; direction?: number };
   bore?: { diameter: number; allowance?: number; shape?: "round" | "d_flat" | "hex"; flat?: number };
   hub?: { diameter: number; length: number; side?: "front" | "back" | "both" };
 };
-export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance" | "length"> & { points: [number, number][]; diameter?: number; depth?: number; allowance?: number; length?: number };
+export type ResolvedHole = Omit<HoleFeature, "points" | "diameter" | "depth" | "allowance" | "length"> & {
+  points: [number, number][];
+  diameter?: number;
+  depth?: number;
+  allowance?: number;
+  length?: number;
+};
 export type ResolvedRib = R<RibFeature, "thickness">;
 export type ResolvedDraft = R<DraftFeature, "angle">;
 export type ResolvedOffsetFace = R<OffsetFaceFeature, "distance">;
 export type ResolvedScale = R<ScaleFeature, "factor">;
 export type ResolvedAlign = R<AlignFeature, "offset" | "angle">;
-export type ResolvedStandardPart = Omit<StandardPartFeature, "points" | "length" | "diameter" | "height" | "angle"> & { points: [number, number][]; length?: number; diameter?: number; height?: number; angle?: number };
-export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & { position: [number, number]; size: number; angle: number; depth: number };
-export type ResolvedPrimitive = Omit<PrimitiveFeature, "size" | "diameter" | "height" | "center"> & { size?: [number, number, number]; diameter?: number; height?: number; center: [number, number, number] };
+export type ResolvedStandardPart = Omit<
+  StandardPartFeature,
+  "points" | "length" | "diameter" | "height" | "angle"
+> & { points: [number, number][]; length?: number; diameter?: number; height?: number; angle?: number };
+export type ResolvedText = Omit<TextFeature, "position" | "size" | "angle" | "depth"> & {
+  position: [number, number];
+  size: number;
+  angle: number;
+  depth: number;
+};
+export type ResolvedPrimitive = Omit<PrimitiveFeature, "size" | "diameter" | "height" | "center"> & {
+  size?: [number, number, number];
+  diameter?: number;
+  height?: number;
+  center: [number, number, number];
+};
 export type ResolvedGridfinity = Omit<
   GridfinityFeature,
-  "units" | "height" | "wall" | "floor" | "dividers" | "dividerThickness" | "scoop" | "tab" | "magnetDiameter" | "magnetDepth" | "drawer" | "position" | "cell" | "gap" | "bed" | "pocket"
+  | "units"
+  | "height"
+  | "wall"
+  | "floor"
+  | "dividers"
+  | "dividerThickness"
+  | "scoop"
+  | "tab"
+  | "magnetDiameter"
+  | "magnetDepth"
+  | "drawer"
+  | "position"
+  | "cell"
+  | "gap"
+  | "bed"
+  | "pocket"
 > & {
   /** A bin's nest for a part: `sink` as a share (0..1), `clearance` in mm. */
   pocket?: { body: string; sink: number; clearance: number; grip: boolean };
@@ -99,7 +155,10 @@ export type ResolvedGridfinity = Omit<
   position: [number, number];
   cell: [number, number];
 };
-export type ResolvedWall = Omit<WallFeature, "units" | "pitch" | "hole" | "thickness" | "plate" | "depth" | "size" | "position" | "cell"> & {
+export type ResolvedWall = Omit<
+  WallFeature,
+  "units" | "pitch" | "hole" | "thickness" | "plate" | "depth" | "size" | "position" | "cell"
+> & {
   units: [number, number];
   pitch?: number;
   hole?: number;
@@ -110,7 +169,10 @@ export type ResolvedWall = Omit<WallFeature, "units" | "pitch" | "hole" | "thick
   position: [number, number];
   cell: [number, number];
 };
-export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" | "corner" | "size" | "depth" | "position" | "angle"> & {
+export type ResolvedLabel = Omit<
+  LabelFeature,
+  "width" | "height" | "thickness" | "corner" | "size" | "depth" | "position" | "angle"
+> & {
   width: number;
   height: number;
   thickness: number;
@@ -122,9 +184,21 @@ export type ResolvedLabel = Omit<LabelFeature, "width" | "height" | "thickness" 
 };
 /** A split with its connector numbers worked out; unset ones keep their defaults (chosen from the cut). */
 export type ResolvedSplit = Omit<SplitFeature, "connectors"> & {
-  connectors?: { kind: "pins" | "dowels" | "dovetail"; slide?: "long" | "short"; size?: number; depth?: number; clearance?: number; count?: number; points?: [number, number][]; angle?: number };
+  connectors?: {
+    kind: "pins" | "dowels" | "dovetail";
+    slide?: "long" | "short";
+    size?: number;
+    depth?: number;
+    clearance?: number;
+    count?: number;
+    points?: [number, number][];
+    angle?: number;
+  };
 };
-export type ResolvedLithophane = Omit<LithophaneFeature, "width" | "thickness" | "depth" | "frame" | "curve" | "position"> & {
+export type ResolvedLithophane = Omit<
+  LithophaneFeature,
+  "width" | "thickness" | "depth" | "frame" | "curve" | "position"
+> & {
   kind: "lithophane" | "relief";
   width: number;
   thickness: number;
@@ -135,7 +209,10 @@ export type ResolvedLithophane = Omit<LithophaneFeature, "width" | "thickness" |
 };
 export type ResolvedMeshConvert = R<MeshConvertFeature, "tolerance" | "angle">;
 export type ResolvedBend = R<BendFeature, "angle" | "radius" | "gap" | "tolerance">;
-export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & { translate?: [number, number, number]; rotate?: { axis: AxisRef; angle: number } };
+export type ResolvedTransform = Omit<TransformFeature, "translate" | "rotate"> & {
+  translate?: [number, number, number];
+  rotate?: { axis: AxisRef; angle: number };
+};
 export type ResolvedFeature =
   | ResolvedTransform
   | ResolvedSketch
@@ -181,18 +258,25 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       throw new ExprError(`${field}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
+
   const opt = (field: string, e: Expr | undefined) => (e === undefined ? undefined : ev(field, e));
+
   const count = (field: string, e: Expr | undefined) => {
     if (e === undefined) return undefined;
+
     const n = Math.round(ev(field, e));
     if (n < 1 || n > 1000) throw new ExprError(`${field}: count must be between 1 and 1000`);
+
     return n;
   };
+
   switch (f.op) {
     case "sketch":
       return {
         ...f,
-        constraints: f.constraints.map((c) => ("value" in c ? { ...c, value: ev(`${c.id}`, c.value) } : c)) as ResolvedSketchConstraint[],
+        constraints: f.constraints.map((c) =>
+          "value" in c ? { ...c, value: ev(`${c.id}`, c.value) } : c,
+        ) as ResolvedSketchConstraint[],
       };
     case "plane":
       return { ...f, offset: ev("offset", f.offset), angle: opt("angle", f.angle) };
@@ -207,11 +291,19 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
     case "shell":
       return { ...f, thickness: ev("thickness", f.thickness) };
     case "thread":
-      return { ...f, pitch: opt("pitch", f.pitch), length: opt("length", f.length), clearance: opt("clearance", f.clearance), diameter: opt("diameter", f.diameter), starts: count("starts", f.starts) };
+      return {
+        ...f,
+        pitch: opt("pitch", f.pitch),
+        length: opt("length", f.length),
+        clearance: opt("clearance", f.clearance),
+        diameter: opt("diameter", f.diameter),
+        starts: count("starts", f.starts),
+      };
     case "coil":
       return { ...f, pitch: ev("pitch", f.pitch), turns: ev("turns", f.turns), taper: opt("taper", f.taper) };
     case "spring": {
       const { center, ...rest } = f;
+
       return {
         ...rest,
         wire: ev("wire", f.wire),
@@ -220,11 +312,14 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         length: opt("length", f.length),
         gap: opt("gap", f.gap),
         legs: opt("legs", f.legs),
-        ...(center ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] } : {}),
+        ...(center
+          ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] }
+          : {}),
       };
     }
     case "screw": {
       const { center, ...rest } = f;
+
       return {
         ...rest,
         diameter: ev("diameter", f.diameter),
@@ -233,13 +328,19 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         length: opt("length", f.length),
         threadLength: opt("threadLength", f.threadLength),
         clearance: opt("clearance", f.clearance),
-        ...(center ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] } : {}),
+        ...(center
+          ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] }
+          : {}),
       };
     }
     case "gear": {
       const { center, meshWith, bore, hub, ...rest } = f;
       const teeth = Math.round(ev("teeth", f.teeth));
-      if (teeth < (f.kind === "rack" ? 1 : 4) || teeth > 1000) throw new ExprError(`teeth: must be between ${f.kind === "rack" ? 1 : 4} and 1000`);
+
+      if (teeth < (f.kind === "rack" ? 1 : 4) || teeth > 1000) {
+        throw new ExprError(`teeth: must be between ${f.kind === "rack" ? 1 : 4} and 1000`);
+      }
+
       return {
         ...rest,
         module: opt("module", f.module),
@@ -253,20 +354,49 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
         rotation: opt("rotation", f.rotation),
         rim: opt("rim", f.rim),
         chamfer: opt("chamfer", f.chamfer),
-        ...(center ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] } : {}),
-        ...(meshWith ? { meshWith: { gear: meshWith.gear, direction: opt("meshWith.direction", meshWith.direction) } } : {}),
-        ...(bore ? { bore: { ...bore, diameter: ev("bore.diameter", bore.diameter), allowance: opt("bore.allowance", bore.allowance), flat: opt("bore.flat", bore.flat) } } : {}),
-        ...(hub ? { hub: { ...hub, diameter: ev("hub.diameter", hub.diameter), length: ev("hub.length", hub.length) } } : {}),
+        ...(center
+          ? { center: [ev("center[0]", center[0]), ev("center[1]", center[1])] as [number, number] }
+          : {}),
+        ...(meshWith
+          ? { meshWith: { gear: meshWith.gear, direction: opt("meshWith.direction", meshWith.direction) } }
+          : {}),
+        ...(bore
+          ? {
+              bore: {
+                ...bore,
+                diameter: ev("bore.diameter", bore.diameter),
+                allowance: opt("bore.allowance", bore.allowance),
+                flat: opt("bore.flat", bore.flat),
+              },
+            }
+          : {}),
+        ...(hub
+          ? {
+              hub: {
+                ...hub,
+                diameter: ev("hub.diameter", hub.diameter),
+                length: ev("hub.length", hub.length),
+              },
+            }
+          : {}),
       };
     }
     case "linear_pattern":
-      return { ...f, count: count("count", f.count)!, spacing: ev("spacing", f.spacing), count2: count("count2", f.count2), spacing2: opt("spacing2", f.spacing2) };
+      return {
+        ...f,
+        count: count("count", f.count)!,
+        spacing: ev("spacing", f.spacing),
+        count2: count("count2", f.count2),
+        spacing2: opt("spacing2", f.spacing2),
+      };
     case "circular_pattern":
       return { ...f, count: count("count", f.count)!, angle: opt("angle", f.angle) };
     case "hole":
       return {
         ...f,
-        points: f.points.map(([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number]),
+        points: f.points.map(
+          ([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number],
+        ),
         diameter: opt("diameter", f.diameter),
         depth: opt("depth", f.depth),
         allowance: opt("allowance", f.allowance),
@@ -275,6 +405,7 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
     case "split": {
       const { connectors: c, ...rest } = f;
       if (!c) return rest;
+
       return {
         ...rest,
         connectors: {
@@ -284,7 +415,17 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
           depth: opt("connectors.depth", c.depth),
           clearance: opt("connectors.clearance", c.clearance),
           count: count("connectors.count", c.count),
-          ...(c.points ? { points: c.points.map(([u, v], i) => [ev(`connectors.points[${i}][0]`, u), ev(`connectors.points[${i}][1]`, v)] as [number, number]) } : {}),
+          ...(c.points
+            ? {
+                points: c.points.map(
+                  ([u, v], i) =>
+                    [ev(`connectors.points[${i}][0]`, u), ev(`connectors.points[${i}][1]`, v)] as [
+                      number,
+                      number,
+                    ],
+                ),
+              }
+            : {}),
           angle: opt("connectors.angle", c.angle),
         },
       };
@@ -300,19 +441,29 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
     case "standard_part":
       return {
         ...f,
-        points: f.points.map(([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number]),
+        points: f.points.map(
+          ([u, v], i) => [ev(`points[${i}][0]`, u), ev(`points[${i}][1]`, v)] as [number, number],
+        ),
         length: opt("length", f.length),
         diameter: opt("diameter", f.diameter),
         height: opt("height", f.height),
         angle: opt("angle", f.angle),
       };
     case "primitive": {
-      const v3 = (field: string, e: [Expr, Expr, Expr] | undefined): [number, number, number] | undefined => (e ? [ev(`${field}[0]`, e[0]), ev(`${field}[1]`, e[1]), ev(`${field}[2]`, e[2])] : undefined);
+      const v3 = (field: string, e: [Expr, Expr, Expr] | undefined): [number, number, number] | undefined =>
+        e ? [ev(`${field}[0]`, e[0]), ev(`${field}[1]`, e[1]), ev(`${field}[2]`, e[2])] : undefined;
       const size = v3("size", f.size);
       const diameter = opt("diameter", f.diameter);
       const height = opt("height", f.height);
       const { size: _s, diameter: _d, height: _h, center: _c, ...rest } = f;
-      return { ...rest, ...(size ? { size } : {}), ...(diameter !== undefined ? { diameter } : {}), ...(height !== undefined ? { height } : {}), center: v3("center", f.center) ?? [0, 0, 0] };
+
+      return {
+        ...rest,
+        ...(size ? { size } : {}),
+        ...(diameter !== undefined ? { diameter } : {}),
+        ...(height !== undefined ? { height } : {}),
+        center: v3("center", f.center) ?? [0, 0, 0],
+      };
     }
     case "text":
       return {
@@ -328,30 +479,53 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       const int = (field: string, e: Expr, lo: number, hi: number) => {
         const n = Math.round(ev(field, e));
         if (n < lo || n > hi) throw new ExprError(`${field}: must be between ${lo} and ${hi}`);
+
         return n;
       };
-      const pair = (field: string, p: [Expr, Expr]) => [ev(`${field}[0]`, p[0]), ev(`${field}[1]`, p[1])] as [number, number];
+
+      const pair = (field: string, p: [Expr, Expr]) =>
+        [ev(`${field}[0]`, p[0]), ev(`${field}[1]`, p[1])] as [number, number];
       const { tab, pocket, ...rest } = f;
       const auto = f.kind === "bin" && !!pocket;
-      if (!f.units && !auto && !(f.kind === "baseplate" && (f.drawer || f.outline))) throw new ExprError("units: required");
+
+      if (!f.units && !auto && !(f.kind === "baseplate" && (f.drawer || f.outline))) {
+        throw new ExprError("units: required");
+      }
+
       return {
         ...rest,
-        // Baseplates in a drawer or outline count their cells themselves; pocket bins are sized in the kernel.
+        // Baseplates in a drawer or outline count their cells themselves; pocket bins are sized in the
+        // kernel.
         units: f.units ? [int("units[0]", f.units[0], 1, 30), int("units[1]", f.units[1], 1, 30)] : [1, 1],
         height: f.height === undefined ? 3 : int("height", f.height, 1, 40),
         ...(pocket && f.kind === "bin"
           ? {
-              pocket: { body: pocket.body, sink: (opt("pocket.sink", pocket.sink) ?? 50) / 100, clearance: opt("pocket.clearance", pocket.clearance) ?? 0.5, grip: !!pocket.grip },
+              pocket: {
+                body: pocket.body,
+                sink: (opt("pocket.sink", pocket.sink) ?? 50) / 100,
+                clearance: opt("pocket.clearance", pocket.clearance) ?? 0.5,
+                grip: !!pocket.grip,
+              },
               ...(f.units ? {} : { autoUnits: true }),
               ...(f.height === undefined ? { autoHeight: true } : {}),
             }
           : {}),
         wall: opt("wall", f.wall),
         floor: opt("floor", f.floor),
-        dividers: f.dividers ? [int("dividers[0]", f.dividers[0], 0, 50), int("dividers[1]", f.dividers[1], 0, 50)] : [0, 0],
+        dividers: f.dividers
+          ? [int("dividers[0]", f.dividers[0], 0, 50), int("dividers[1]", f.dividers[1], 0, 50)]
+          : [0, 0],
         dividerThickness: opt("dividerThickness", f.dividerThickness),
         scoop: opt("scoop", f.scoop),
-        ...(tab ? { tab: { style: tab.style, width: opt("tab.width", tab.width), angle: opt("tab.angle", tab.angle) } } : {}),
+        ...(tab
+          ? {
+              tab: {
+                style: tab.style,
+                width: opt("tab.width", tab.width),
+                angle: opt("tab.angle", tab.angle),
+              },
+            }
+          : {}),
         magnetDiameter: opt("magnetDiameter", f.magnetDiameter),
         magnetDepth: opt("magnetDepth", f.magnetDepth),
         drawer: f.drawer ? pair("drawer", f.drawer) : undefined,
@@ -365,8 +539,10 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       const int = (field: string, e: Expr, lo: number, hi: number) => {
         const n = Math.round(ev(field, e));
         if (n < lo || n > hi) throw new ExprError(`${field}: must be between ${lo} and ${hi}`);
+
         return n;
       };
+
       return {
         ...f,
         units: [int("units[0]", f.units[0], 1, 60), int("units[1]", f.units[1], 1, 60)],
@@ -399,6 +575,7 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
       return snapHookDefaults(f, (field, e) => opt(field, e as Expr | undefined));
     case "lithophane": {
       const kind = f.kind ?? "lithophane";
+
       return {
         ...f,
         kind,
@@ -413,12 +590,21 @@ export function resolveFeature(f: Feature, scope: ReadonlyMap<string, number>): 
     case "mesh_convert":
       return { ...f, tolerance: opt("tolerance", f.tolerance), angle: opt("angle", f.angle) };
     case "bend":
-      return { ...f, angle: opt("angle", f.angle), radius: opt("radius", f.radius), gap: opt("gap", f.gap), tolerance: opt("tolerance", f.tolerance) };
+      return {
+        ...f,
+        angle: opt("angle", f.angle),
+        radius: opt("radius", f.radius),
+        gap: opt("gap", f.gap),
+        tolerance: opt("tolerance", f.tolerance),
+      };
     case "transform": {
       const { translate, rotate, ...rest } = f;
+
       return {
         ...rest,
-        ...(translate ? { translate: translate.map((e, i) => ev(`translate[${i}]`, e)) as [number, number, number] } : {}),
+        ...(translate
+          ? { translate: translate.map((e, i) => ev(`translate[${i}]`, e)) as [number, number, number] }
+          : {}),
         ...(rotate ? { rotate: { axis: rotate.axis, angle: ev("angle", rotate.angle) } } : {}),
       };
     }
@@ -441,7 +627,19 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     coil: ["pitch", "turns", "taper"],
     spring: ["wire", "diameter", "coils", "length", "gap", "legs"],
     screw: ["diameter", "pitch", "starts", "length", "threadLength", "clearance"],
-    gear: ["module", "teeth", "width", "pressureAngle", "profileShift", "helix", "backlash", "clearance", "rotation", "rim", "chamfer"],
+    gear: [
+      "module",
+      "teeth",
+      "width",
+      "pressureAngle",
+      "profileShift",
+      "helix",
+      "backlash",
+      "clearance",
+      "rotation",
+      "rim",
+      "chamfer",
+    ],
     linear_pattern: ["count", "spacing", "count2", "spacing2"],
     circular_pattern: ["count", "angle"],
     mesh_convert: ["tolerance", "angle"],
@@ -453,64 +651,131 @@ export function mapFeatureExprs(f: Feature, fn: (e: Expr) => Expr): Feature {
     text: ["size", "angle", "depth"],
     primitive: ["diameter", "height"],
     standard_part: ["length", "diameter", "height", "angle"],
-    gridfinity: ["height", "wall", "floor", "dividerThickness", "scoop", "magnetDiameter", "magnetDepth", "gap"],
+    gridfinity: [
+      "height",
+      "wall",
+      "floor",
+      "dividerThickness",
+      "scoop",
+      "magnetDiameter",
+      "magnetDepth",
+      "gap",
+    ],
     label: ["width", "height", "thickness", "corner", "size", "depth", "angle"],
-    box: ["width", "depth", "height", "wall", "floor", "corner", "lidThickness", "clearance", "snap", "lipHeight", "pitch", "neck", "starts"],
-    snap_hook: ["angle", "length", "thickness", "width", "overhang", "insertAngle", "retainAngle", "clearance"],
+    box: [
+      "width",
+      "depth",
+      "height",
+      "wall",
+      "floor",
+      "corner",
+      "lidThickness",
+      "clearance",
+      "snap",
+      "lipHeight",
+      "pitch",
+      "neck",
+      "starts",
+    ],
+    snap_hook: [
+      "angle",
+      "length",
+      "thickness",
+      "width",
+      "overhang",
+      "insertAngle",
+      "retainAngle",
+      "clearance",
+    ],
     wall: ["pitch", "hole", "thickness", "plate", "depth", "size"],
     lithophane: ["width", "thickness", "depth", "frame", "curve"],
     align: ["offset", "angle"],
     scale: ["factor"],
   };
+
   if (f.op === "transform") {
     if (Array.isArray(g["translate"])) g["translate"] = (g["translate"] as Expr[]).map(fn);
+
     const rot = g["rotate"] as { angle: Expr } | undefined;
     if (rot) rot.angle = fn(rot.angle);
   }
+
   if (f.op === "text" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
-  if (f.op === "primitive") for (const k of ["size", "center"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
-  if (f.op === "gridfinity") for (const k of ["units", "dividers", "drawer", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
+
+  if (f.op === "primitive") {
+    for (const k of ["size", "center"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
+  }
+
+  if (f.op === "gridfinity") {
+    for (const k of ["units", "dividers", "drawer", "position", "cell"]) {
+      if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
+    }
+  }
+
   if (f.op === "gridfinity" && g["bed"]) {
     const bed = g["bed"] as Record<string, Expr[] | string>;
     for (const k of ["size", "margin"]) if (Array.isArray(bed[k])) bed[k] = (bed[k] as Expr[]).map(fn);
   }
+
   if (f.op === "gridfinity" && g["pocket"]) {
     const pocket = g["pocket"] as Record<string, Expr>;
     for (const k of ["sink", "clearance"]) if (pocket[k] !== undefined) pocket[k] = fn(pocket[k]);
   }
+
   if (f.op === "gridfinity" && g["tab"]) {
     const tab = g["tab"] as Record<string, Expr>;
     for (const k of ["width", "angle"]) if (tab[k] !== undefined) tab[k] = fn(tab[k]);
   }
+
   if (f.op === "box" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "snap_hook") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
-  if (f.op === "wall") for (const k of ["units", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
-  if (f.op === "lithophane" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
+
+  if (f.op === "wall") {
+    for (const k of ["units", "position", "cell"]) if (Array.isArray(g[k])) g[k] = (g[k] as Expr[]).map(fn);
+  }
+
+  if (f.op === "lithophane" && Array.isArray(g["position"])) {
+    g["position"] = (g["position"] as Expr[]).map(fn);
+  }
+
   if (f.op === "label" && Array.isArray(g["position"])) g["position"] = (g["position"] as Expr[]).map(fn);
   if (f.op === "standard_part") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
   if (f.op === "hole") g["points"] = (g["points"] as Expr[][]).map((pt) => pt.map(fn));
-  if ((f.op === "spring" || f.op === "screw") && Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
+
+  if ((f.op === "spring" || f.op === "screw") && Array.isArray(g["center"])) {
+    g["center"] = (g["center"] as Expr[]).map(fn);
+  }
+
   if (f.op === "gear") {
     if (Array.isArray(g["center"])) g["center"] = (g["center"] as Expr[]).map(fn);
+
     const nested = (o: unknown, ks: string[]) => {
       const r = o as Record<string, Expr> | undefined;
       if (r) for (const k of ks) if (r[k] !== undefined) r[k] = fn(r[k]);
     };
+
     nested(g["meshWith"], ["direction"]);
     nested(g["bore"], ["diameter", "allowance", "flat"]);
     nested(g["hub"], ["diameter", "length"]);
   }
+
   for (const k of keys[f.op] ?? []) if (g[k] !== undefined) g[k] = fn(g[k] as Expr);
+
   if (f.op === "sketch") {
     for (const c of g["constraints"] as { value?: Expr }[]) if (c.value !== undefined) c.value = fn(c.value);
   }
+
   return g as unknown as Feature;
 }
 
 /** A baseplate's print bed: its size less the margin that cannot be printed on. */
-function resolveBed(bed: NonNullable<GridfinityFeature["bed"]>, pair: (field: string, p: [Expr, Expr]) => [number, number]): NonNullable<ResolvedGridfinity["bed"]> {
+function resolveBed(
+  bed: NonNullable<GridfinityFeature["bed"]>,
+  pair: (field: string, p: [Expr, Expr]) => [number, number],
+): NonNullable<ResolvedGridfinity["bed"]> {
   const size = pair("bed.size", bed.size);
   const margin = bed.margin ? pair("bed.margin", bed.margin) : [0, 0];
   if (margin.some((m) => m < 0)) throw new ExprError("bed.margin: must not be negative");
+
   return { size, usable: [size[0] - margin[0]!, size[1] - margin[1]!] };
 }

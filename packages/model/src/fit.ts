@@ -71,19 +71,56 @@ export function fitTestDocument(): MeercadDocument {
   FIT_TEST_STEPS.forEach((gap, i) => {
     const x = xs[i % cols]!;
     const y = rows[Math.floor(i / cols)]!;
-    holes.push({ id: `ho${i + 1}`, op: "hole", name: `Gap ${fitLabel(gap)}`, plane: { face: { face: "ex1.end_cap" } }, points: [[x, y]], kind: "simple", diameter: `pin + ${2 * gap} mm` });
-    labels.push({ id: `tx${i + 1}`, op: "text", name: `Label ${fitLabel(gap)}`, plane: { face: { face: "ex1.end_cap" } }, text: fitLabel(gap), font: "sans-bold", align: "center", position: [x, y - 8.5], size: "3.5 mm", depth: "0.6 mm", mode: "new_body", flip: true });
+    holes.push({
+      id: `ho${i + 1}`,
+      op: "hole",
+      name: `Gap ${fitLabel(gap)}`,
+      plane: { face: { face: "ex1.end_cap" } },
+      points: [[x, y]],
+      kind: "simple",
+      diameter: `pin + ${2 * gap} mm`,
+    });
+    labels.push({
+      id: `tx${i + 1}`,
+      op: "text",
+      name: `Label ${fitLabel(gap)}`,
+      plane: { face: { face: "ex1.end_cap" } },
+      text: fitLabel(gap),
+      font: "sans-bold",
+      align: "center",
+      position: [x, y - 8.5],
+      size: "3.5 mm",
+      depth: "0.6 mm",
+      mode: "new_body",
+      flip: true,
+    });
   });
+
   return {
     format: FORMAT,
     params: { pin: "8 mm", thickness: "5 mm", length: "14 mm" },
     features: [
       plate,
-      { id: "ex1", op: "extrude", name: "Plate", profile: { sketch: "sk1" }, extent: "blind", distance: "thickness", mode: "new_body" },
+      {
+        id: "ex1",
+        op: "extrude",
+        name: "Plate",
+        profile: { sketch: "sk1" },
+        extent: "blind",
+        distance: "thickness",
+        mode: "new_body",
+      },
       ...holes,
       ...labels,
       // All numbers cut at once: one by one, every cut has to work through the letters cut before.
-      { id: "bo1", op: "boolean", name: "Engrave the gaps", operation: "subtract", target: "ex1", tools: labels.map((l) => l.id) },
+      {
+        id: "bo1",
+        op: "boolean",
+        name: "Engrave the gaps",
+        operation: "subtract",
+        target: "ex1",
+        tools: labels.map((l) => l.id),
+      },
       {
         id: "sk2",
         op: "sketch",
@@ -98,9 +135,23 @@ export function fitTestDocument(): MeercadDocument {
           { id: "k2", type: "fix", point: "q" },
         ],
       },
-      { id: "ex2", op: "extrude", name: "Pin", profile: { sketch: "sk2" }, extent: "blind", distance: "length", mode: "new_body" },
+      {
+        id: "ex2",
+        op: "extrude",
+        name: "Pin",
+        profile: { sketch: "sk2" },
+        extent: "blind",
+        distance: "length",
+        mode: "new_body",
+      },
       // Chamfered ends, so the first layer's squish does not decide the fit.
-      { id: "ch1", op: "chamfer", name: "Pin ends", edges: [{ edge: ["ex2.end_cap", "ex2.side[sk2.c]"] }, { edge: ["ex2.start_cap", "ex2.side[sk2.c]"] }], distance: "0.5 mm" },
+      {
+        id: "ch1",
+        op: "chamfer",
+        name: "Pin ends",
+        edges: [{ edge: ["ex2.end_cap", "ex2.side[sk2.c]"] }, { edge: ["ex2.start_cap", "ex2.side[sk2.c]"] }],
+        distance: "0.5 mm",
+      },
     ],
     rollback: null,
   };

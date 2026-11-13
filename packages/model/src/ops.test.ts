@@ -7,18 +7,47 @@ import { type Feature, type MeercadDocument } from "@meercad/schema";
 import { applyOp, DocumentStore, nextFeatureId, OpError } from "./store.js";
 
 const sketch = (id: string): Feature =>
-  ({ id, op: "sketch", plane: { ref: "origin.XY" }, entities: [{ id: "p1", type: "point", x: 0, y: 0 }, { id: "p2", type: "point", x: 5, y: 0 }, { id: "l1", type: "line", p1: "p1", p2: "p2" }], constraints: [{ id: "c1", type: "length", line: "l1", value: "w" }] }) as Feature;
-const extrude = (id: string, sk: string, distance: string | number = "w"): Feature => ({ id, op: "extrude", profile: { sketch: sk }, extent: "blind", distance, mode: "new_body" }) as Feature;
-const base = (): MeercadDocument => ({ format: "meercad/1", params: { w: "5 mm", h: "w * 2" }, features: [sketch("sk1"), extrude("ex1", "sk1"), extrude("ex2", "sk1", "h")], rollback: null });
+  ({
+    id,
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: [
+      { id: "p1", type: "point", x: 0, y: 0 },
+      { id: "p2", type: "point", x: 5, y: 0 },
+      { id: "l1", type: "line", p1: "p1", p2: "p2" },
+    ],
+    constraints: [{ id: "c1", type: "length", line: "l1", value: "w" }],
+  }) as Feature;
+const extrude = (id: string, sk: string, distance: string | number = "w"): Feature =>
+  ({ id, op: "extrude", profile: { sketch: sk }, extent: "blind", distance, mode: "new_body" }) as Feature;
+const base = (): MeercadDocument => ({
+  format: "meercad/1",
+  params: { w: "5 mm", h: "w * 2" },
+  features: [sketch("sk1"), extrude("ex1", "sk1"), extrude("ex2", "sk1", "h")],
+  rollback: null,
+});
 const ids = (d: MeercadDocument) => d.features.map((f) => f.id);
 const refuses = (d: MeercadDocument, op: unknown, msg: RegExp) => expect(() => applyOp(d, op)).toThrow(msg);
 
 describe("steps", () => {
   it("adds at the end, after a given step, at the start, or after the rollback point", () => {
     const d = base();
-    expect(ids(applyOp(d, { type: "add_features", features: [extrude("ex3", "sk1", 1)] }))).toEqual(["sk1", "ex1", "ex2", "ex3"]);
-    expect(ids(applyOp(d, { type: "add_features", after: "ex1", features: [extrude("ex3", "sk1", 1)] }))).toEqual(["sk1", "ex1", "ex3", "ex2"]);
-    expect(ids(applyOp(d, { type: "add_features", after: null, features: [sketch("sk0")] }))).toEqual(["sk0", "sk1", "ex1", "ex2"]);
+    expect(ids(applyOp(d, { type: "add_features", features: [extrude("ex3", "sk1", 1)] }))).toEqual([
+      "sk1",
+      "ex1",
+      "ex2",
+      "ex3",
+    ]);
+    expect(
+      ids(applyOp(d, { type: "add_features", after: "ex1", features: [extrude("ex3", "sk1", 1)] })),
+    ).toEqual(["sk1", "ex1", "ex3", "ex2"]);
+    expect(ids(applyOp(d, { type: "add_features", after: null, features: [sketch("sk0")] }))).toEqual([
+      "sk0",
+      "sk1",
+      "ex1",
+      "ex2",
+    ]);
+
     const rolled = applyOp(d, { type: "set_rollback", id: "ex1" });
     const added = applyOp(rolled, { type: "add_features", features: [extrude("ex3", "sk1", 1)] });
     expect(ids(added)).toEqual(["sk1", "ex1", "ex3", "ex2"]);
@@ -28,6 +57,7 @@ describe("steps", () => {
   it("edits a step, removes fields set to null, and never changes its id", () => {
     const d = applyOp(base(), { type: "edit_feature", id: "ex1", patch: { distance: 7, flip: true } });
     expect(d.features[1]).toMatchObject({ distance: 7, flip: true });
+
     const back = applyOp(d, { type: "edit_feature", id: "ex1", patch: { flip: null } });
     expect("flip" in back.features[1]!).toBe(false);
     refuses(d, { type: "edit_feature", id: "ex1", patch: { id: "zz" } }, /cannot change a feature id/);
@@ -35,20 +65,30 @@ describe("steps", () => {
   });
 
   it("deleting the rollback step moves the rollback point to the step before", () => {
-    const d = applyOp(applyOp(base(), { type: "set_rollback", id: "ex1" }), { type: "delete_feature", id: "ex1" });
+    const d = applyOp(applyOp(base(), { type: "set_rollback", id: "ex1" }), {
+      type: "delete_feature",
+      id: "ex1",
+    });
     expect(d.rollback).toBe("sk1");
     expect(ids(d)).toEqual(["sk1", "ex2"]);
   });
 
   it("moves a step after another or to the start", () => {
-    expect(ids(applyOp(base(), { type: "move_feature", id: "ex2", after: "sk1" }))).toEqual(["sk1", "ex2", "ex1"]);
+    expect(ids(applyOp(base(), { type: "move_feature", id: "ex2", after: "sk1" }))).toEqual([
+      "sk1",
+      "ex2",
+      "ex1",
+    ]);
     // Moved before its sketch, a step would refer to a later one: refused, nothing changes.
     refuses(base(), { type: "move_feature", id: "ex1", after: null }, /unknown or later feature "sk1"/);
   });
 
   it("refuses a rollback to a step that does not exist", () => {
     refuses(base(), { type: "set_rollback", id: "nope" }, /unknown feature/);
-    expect(applyOp(applyOp(base(), { type: "set_rollback", id: "ex1" }), { type: "set_rollback", id: null }).rollback).toBeNull();
+    expect(
+      applyOp(applyOp(base(), { type: "set_rollback", id: "ex1" }), { type: "set_rollback", id: null })
+        .rollback,
+    ).toBeNull();
   });
 });
 
@@ -58,7 +98,25 @@ describe("variables", () => {
     d = applyOp(d, { type: "set_param", name: "a", expr: "w + 1", auto: true });
     d = applyOp(d, { type: "set_variant", name: "big", params: { w: "9 mm" } });
     d = applyOp(d, { type: "set_fit", fit: "w / 50" });
-    d = { ...d, mechanism: { joints: [{ id: "j1", type: "slider", a: "ex1", b: "ex2", anchor: { axis: { ref: "origin.X" } }, limits: [0, "w"] }, { id: "j2", type: "revolute", a: "ex2", b: "ground", anchor: { axis: { ref: "origin.Z" } } }], couplings: [{ id: "k1", driver: "j1", driven: "j2", ratio: "w" }], clearance: "w / 10" } } as MeercadDocument;
+    d = {
+      ...d,
+      mechanism: {
+        joints: [
+          {
+            id: "j1",
+            type: "slider",
+            a: "ex1",
+            b: "ex2",
+            anchor: { axis: { ref: "origin.X" } },
+            limits: [0, "w"],
+          },
+          { id: "j2", type: "revolute", a: "ex2", b: "ground", anchor: { axis: { ref: "origin.Z" } } },
+        ],
+        couplings: [{ id: "k1", driver: "j1", driven: "j2", ratio: "w" }],
+        clearance: "w / 10",
+      },
+    } as MeercadDocument;
+
     const r = applyOp(d, { type: "rename_param", name: "w", to: "width" });
     const text = JSON.stringify(r);
     expect(text).not.toMatch(/\bw\b(?![a-z])/);
@@ -66,7 +124,9 @@ describe("variables", () => {
     expect(r.variants![0]!.params).toEqual({ width: "9 mm" });
     expect(r.fit).toBe("width / 50");
     expect(r.mechanism!.joints[0]!.limits).toEqual([0, "width"]);
-    expect((r.features[0] as Extract<Feature, { op: "sketch" }>).constraints[0]).toMatchObject({ value: "width" });
+    expect((r.features[0] as Extract<Feature, { op: "sketch" }>).constraints[0]).toMatchObject({
+      value: "width",
+    });
   });
 
   it("refuses renaming to a name in use, from an unknown one, or to the fit", () => {
@@ -101,7 +161,12 @@ describe("variants and versions", () => {
     expect(d.variant).toBeUndefined();
     d = applyOp(d, { type: "delete_variant", name: "B" });
     expect(d.variants).toBeUndefined();
-    expect(applyOp(applyOp(base(), { type: "set_variant", name: "A", params: {} }), { type: "use_variant", name: null }).variant).toBeUndefined();
+    expect(
+      applyOp(applyOp(base(), { type: "set_variant", name: "A", params: {} }), {
+        type: "use_variant",
+        name: null,
+      }).variant,
+    ).toBeUndefined();
   });
 
   it("saves, renames, restores and deletes versions", () => {
@@ -111,11 +176,15 @@ describe("variants and versions", () => {
     d = applyOp(d, { type: "save_version", name: "v2", at: 2 });
     refuses(d, { type: "rename_version", name: "v1", to: "v2" }, /already exists/);
     d = applyOp(d, { type: "rename_version", name: "v1", to: "first" });
+
     const r = applyOp(d, { type: "restore_version", name: "first" });
     expect(r.params["w"]).toBe("5 mm");
     refuses(d, { type: "restore_version", name: "zz" }, /unknown version/);
     refuses(d, { type: "delete_version", name: "zz" }, /unknown version/);
-    d = applyOp(applyOp(d, { type: "delete_version", name: "first" }), { type: "delete_version", name: "v2" });
+    d = applyOp(applyOp(d, { type: "delete_version", name: "first" }), {
+      type: "delete_version",
+      name: "v2",
+    });
     expect(d.versions).toBeUndefined();
   });
 });
@@ -129,7 +198,11 @@ describe("parts and joints", () => {
     d = applyOp(d, { type: "set_see_through", parts: ["ex1", "ex2"], on: true });
     d = applyOp(d, { type: "set_see_through", parts: ["ex1", "ex2"], on: false });
     expect(d.seeThrough).toBeUndefined();
-    d = applyOp(d, { type: "set_part_list", groups: [{ name: "Box", parts: ["ex1"] }], order: ["ex2", "ex1"] });
+    d = applyOp(d, {
+      type: "set_part_list",
+      groups: [{ name: "Box", parts: ["ex1"] }],
+      order: ["ex2", "ex1"],
+    });
     expect(d.partOrder).toEqual(["ex2", "ex1"]);
     d = applyOp(d, { type: "set_part_list", groups: [], order: [] });
     expect(d.partGroups).toBeUndefined();
@@ -141,12 +214,31 @@ describe("parts and joints", () => {
   });
 
   it("deleting a joint takes its couplings and its moments in motions with it", () => {
-    let d = applyOp(base(), { type: "set_joint", joint: { id: "j1", type: "revolute", a: "ex1", b: "ground", anchor: { axis: { ref: "origin.Z" } } } });
-    d = applyOp(d, { type: "set_joint", joint: { id: "j2", type: "revolute", a: "ex2", b: "ground", anchor: { axis: { ref: "origin.Z" } } } });
-    d = applyOp(d, { type: "set_joint", joint: { id: "j2", type: "slider", a: "ex2", b: "ground", anchor: { axis: { ref: "origin.X" } } } });
+    let d = applyOp(base(), {
+      type: "set_joint",
+      joint: { id: "j1", type: "revolute", a: "ex1", b: "ground", anchor: { axis: { ref: "origin.Z" } } },
+    });
+    d = applyOp(d, {
+      type: "set_joint",
+      joint: { id: "j2", type: "revolute", a: "ex2", b: "ground", anchor: { axis: { ref: "origin.Z" } } },
+    });
+    d = applyOp(d, {
+      type: "set_joint",
+      joint: { id: "j2", type: "slider", a: "ex2", b: "ground", anchor: { axis: { ref: "origin.X" } } },
+    });
     expect(d.mechanism!.joints[1]!.type).toBe("slider");
     d = applyOp(d, { type: "set_coupling", coupling: { id: "k1", driver: "j1", driven: "j2", ratio: 2 } });
-    d = applyOp(d, { type: "set_motion", motion: { id: "m1", duration: 2, keys: [{ at: 0, values: { j1: 0, j2: 0 } }, { at: 2, values: { j1: 90, j2: 10 } }] } });
+    d = applyOp(d, {
+      type: "set_motion",
+      motion: {
+        id: "m1",
+        duration: 2,
+        keys: [
+          { at: 0, values: { j1: 0, j2: 0 } },
+          { at: 2, values: { j1: 90, j2: 10 } },
+        ],
+      },
+    });
     d = applyOp(d, { type: "delete_joint", id: "j1" });
     expect(d.mechanism!.couplings ?? []).toEqual([]);
     expect(d.mechanism!.motions![0]!.keys.map((k) => Object.keys(k.values))).toEqual([["j2"], ["j2"]]);
@@ -174,10 +266,12 @@ describe("undo history", () => {
     off();
     s.undo();
     expect(seen).toEqual([4, 4, 4, 3, 4]);
+
     // A failing change leaves the history alone.
     const before = s.doc;
     expect(() => s.apply({ type: "delete_feature", id: "nope" })).toThrow(OpError);
     expect(s.doc).toBe(before);
+
     // Amending with nothing to amend is a new step.
     const fresh = new DocumentStore(base());
     fresh.amend({ type: "set_param", name: "w", expr: 6 });
@@ -185,7 +279,47 @@ describe("undo history", () => {
   });
 
   it("gives every kind of step a free id of its own", () => {
-    const ops = ["sketch", "primitive", "plane", "extrude", "revolve", "fillet", "chamfer", "shell", "thread", "gear", "coil", "spring", "screw", "linear_pattern", "circular_pattern", "mirror", "boolean", "transform", "delete", "import", "mesh_convert", "bend", "hole", "loft", "split", "rib", "draft", "offset_face", "text", "standard_part", "gridfinity", "label", "box", "snap_hook", "wall", "lithophane", "align", "scale", "sweep"] as const;
+    const ops = [
+      "sketch",
+      "primitive",
+      "plane",
+      "extrude",
+      "revolve",
+      "fillet",
+      "chamfer",
+      "shell",
+      "thread",
+      "gear",
+      "coil",
+      "spring",
+      "screw",
+      "linear_pattern",
+      "circular_pattern",
+      "mirror",
+      "boolean",
+      "transform",
+      "delete",
+      "import",
+      "mesh_convert",
+      "bend",
+      "hole",
+      "loft",
+      "split",
+      "rib",
+      "draft",
+      "offset_face",
+      "text",
+      "standard_part",
+      "gridfinity",
+      "label",
+      "box",
+      "snap_hook",
+      "wall",
+      "lithophane",
+      "align",
+      "scale",
+      "sweep",
+    ] as const;
     for (const op of ops) expect(nextFeatureId(base(), op), op).toMatch(/^[a-z]+\d+$/);
     expect(nextFeatureId(base(), "extrude")).toBe("ex3");
     expect(nextFeatureId(base(), "sketch")).toBe("sk2");

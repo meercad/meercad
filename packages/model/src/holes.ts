@@ -86,8 +86,15 @@ export class InsertError extends Error {}
 export function insertDims(size: string, length?: number): InsertDims | undefined {
   const r = INSERTS[size];
   if (!r) return undefined;
+
   const L = length ?? r.lengths[0]!;
-  if (!r.lengths.some((x) => Math.abs(x - L) < 1e-6)) throw new InsertError(`${size} inserts come ${r.lengths.length === 1 ? "only" : "in"} ${r.lengths.map((x) => `${x} mm`).join(", ")} long, not ${L} mm`);
+
+  if (!r.lengths.some((x) => Math.abs(x - L) < 1e-6)) {
+    throw new InsertError(
+      `${size} inserts come ${r.lengths.length === 1 ? "only" : "in"} ${r.lengths.map((x) => `${x} mm`).join(", ")} long, not ${L} mm`,
+    );
+  }
+
   return { size, hole: r.hole, outer: r.outer, length: L, wall: r.wall };
 }
 
@@ -116,41 +123,73 @@ export class HoleError extends Error {}
  * The hole for a kind and size. `allowance` widens every diameter (printed holes come out small);
  * `depth` is the bore depth for blind holes (inserts default to the insert length plus 1 mm).
  */
-export function holeShape(kind: HoleKind, o: { size?: string | undefined; diameter?: number | undefined; fit?: HoleFit | undefined; depth?: number | undefined; allowance?: number | undefined; length?: number | undefined }): HoleShape {
+export function holeShape(
+  kind: HoleKind,
+  o: {
+    size?: string | undefined;
+    diameter?: number | undefined;
+    fit?: HoleFit | undefined;
+    depth?: number | undefined;
+    allowance?: number | undefined;
+    length?: number | undefined;
+  },
+): HoleShape {
   const a = o.allowance ?? 0;
+
   if (kind === "simple") {
     if (!(o.diameter! > 0)) throw new HoleError("a simple hole needs a diameter");
+
     return { diameter: o.diameter! + a, ...(o.depth !== undefined ? { depth: o.depth } : {}) };
   }
+
   const row = ROWS.find((r) => r.size === o.size);
   if (!row) throw new HoleError(`unknown size "${o.size ?? ""}": use one of ${HOLE_SIZES.join(", ")}`);
+
   const fit = o.fit === "close" ? 0 : o.fit === "loose" ? 2 : 1;
   const depth = o.depth !== undefined ? { depth: o.depth } : {};
+
   switch (kind) {
     case "clearance":
       return { diameter: row.clearance[fit] + a, ...depth };
     case "counterbore":
       // Head height plus a little, so the head sits just below the surface.
-      return { diameter: row.clearance[fit] + a, counterbore: { diameter: row.counterbore[0] + a, depth: row.counterbore[1] + 0.4 }, ...depth };
+      return {
+        diameter: row.clearance[fit] + a,
+        counterbore: { diameter: row.counterbore[0] + a, depth: row.counterbore[1] + 0.4 },
+        ...depth,
+      };
     case "countersink":
-      return { diameter: row.clearance[fit] + a, countersink: { diameter: row.countersink + 0.4 + a }, ...depth };
+      return {
+        diameter: row.clearance[fit] + a,
+        countersink: { diameter: row.countersink + 0.4 + a },
+        ...depth,
+      };
     case "tapped": {
       const t = METRIC_THREADS.find((x) => x.d === row.d);
       const pitch = t?.pitch ?? row.d * 0.15;
+
       return { diameter: row.d - pitch + a, thread: { size: row.size, pitch }, ...depth };
     }
     case "insert": {
       let ins: InsertDims | undefined;
+
       try {
         ins = insertDims(row.size, o.length);
       } catch (e) {
         if (e instanceof InsertError) throw new HoleError(e.message);
+
         throw e;
       }
+
       if (!ins) throw new HoleError(`no insert size for ${row.size}: use one of ${INSERT_SIZES.join(", ")}`);
+
       // 1 mm deeper than the insert: room for the plastic it pushes down.
       const depth = o.depth ?? ins.length + 1;
-      if (depth < ins.length) throw new HoleError(`the hole must be at least as deep as the insert (${ins.length} mm)`);
+
+      if (depth < ins.length) {
+        throw new HoleError(`the hole must be at least as deep as the insert (${ins.length} mm)`);
+      }
+
       return { diameter: ins.hole + a, depth, insert: ins };
     }
   }

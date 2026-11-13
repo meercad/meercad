@@ -26,11 +26,14 @@ function sampleImage(img: HeightImage, a: number, b: number): number {
   const aspect = img.height / img.width;
   const x = fract(a) * img.width - 0.5;
   const y = (1 - fract(b / aspect)) * img.height - 0.5;
-  const x0 = Math.floor(x), y0 = Math.floor(y);
-  const tx = x - x0, ty = y - y0;
+  const x0 = Math.floor(x),
+    y0 = Math.floor(y);
+  const tx = x - x0,
+    ty = y - y0;
   const px = (i: number, j: number) => img.pixels[mod(j, img.height) * img.width + mod(i, img.width)]! / 255;
   const top = px(x0, y0) * (1 - tx) + px(x0 + 1, y0) * tx;
   const bottom = px(x0, y0 + 1) * (1 - tx) + px(x0 + 1, y0 + 1) * tx;
+
   return top * (1 - ty) + bottom * ty;
 }
 
@@ -40,19 +43,27 @@ function sampleImage(img: HeightImage, a: number, b: number): number {
  * pixels go on; when `wrap` is set the left and right sides join (a picture round a closed tube).
  */
 export function imageFit(img: HeightImage, invert = false, wrap = false): (s: number, t: number) => number {
-  const W = img.width, H = img.height;
+  const W = img.width,
+    H = img.height;
+
   const px = (i: number, j: number) => {
     const x = wrap ? mod(i, W) : i < 0 ? 0 : i >= W ? W - 1 : i;
     const y = j < 0 ? 0 : j >= H ? H - 1 : j;
+
     return img.pixels[y * W + x]! / 255;
   };
+
   return (s, t) => {
-    const x = (wrap ? fract(s) : s) * W - 0.5, y = t * H - 0.5;
-    const x0 = Math.floor(x), y0 = Math.floor(y);
-    const tx = x - x0, ty = y - y0;
+    const x = (wrap ? fract(s) : s) * W - 0.5,
+      y = t * H - 0.5;
+    const x0 = Math.floor(x),
+      y0 = Math.floor(y);
+    const tx = x - x0,
+      ty = y - y0;
     const top = px(x0, y0) * (1 - tx) + px(x0 + 1, y0) * tx;
     const bottom = px(x0, y0 + 1) * (1 - tx) + px(x0 + 1, y0 + 1) * tx;
     const v = top * (1 - ty) + bottom * ty;
+
     return invert ? 1 - v : v;
   };
 }
@@ -62,5 +73,6 @@ export function decodeHeightImage(img: { width: number; height: number; pixels: 
   const bin = atob(img.pixels);
   const pixels = new Uint8Array(img.width * img.height);
   for (let i = 0; i < pixels.length && i < bin.length; i++) pixels[i] = bin.charCodeAt(i);
+
   return { width: img.width, height: img.height, pixels };
 }

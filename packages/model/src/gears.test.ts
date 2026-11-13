@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { centerDistance, GEAR_DEFAULTS, gearDims, gearShape, helixTwist, inverseInvolute, involute, meshHelix, meshPlacement, outlineArea, type GearParams } from "./gears.js";
+import {
+  centerDistance,
+  GEAR_DEFAULTS,
+  gearDims,
+  gearShape,
+  helixTwist,
+  inverseInvolute,
+  involute,
+  meshHelix,
+  meshPlacement,
+  outlineArea,
+  type GearParams,
+} from "./gears.js";
 
-const spur = (teeth: number, module = 2, extra: Partial<GearParams> = {}): GearParams => ({ kind: "spur", module, teeth, herringbone: false, ...GEAR_DEFAULTS, ...extra });
+const spur = (teeth: number, module = 2, extra: Partial<GearParams> = {}): GearParams => ({
+  kind: "spur",
+  module,
+  teeth,
+  herringbone: false,
+  ...GEAR_DEFAULTS,
+  ...extra,
+});
 
 describe("gears", () => {
   it("sizes a spur gear", () => {
@@ -30,11 +49,19 @@ describe("gears", () => {
   it("outlines teeth of the right thickness", () => {
     const shape = gearShape(spur(20, 2, { backlash: 0 }));
     expect(shape.outer).toHaveLength(20 * 6);
+
     const area = outlineArea(shape.outer);
     expect(area).toBeGreaterThan((Math.PI * 35 ** 2) / 4);
     expect(area).toBeLessThan((Math.PI * 44 ** 2) / 4);
+
     // Every point lies between the root and tip circles.
-    for (const s of shape.outer) for (const [u, v] of s.pts) expect(Math.hypot(u, v)).toBeGreaterThan(17.5 - 1e-9), expect(Math.hypot(u, v)).toBeLessThan(22 + 1e-9);
+    for (const s of shape.outer) {
+      for (const [u, v] of s.pts) {
+        (expect(Math.hypot(u, v)).toBeGreaterThan(17.5 - 1e-9),
+          expect(Math.hypot(u, v)).toBeLessThan(22 + 1e-9));
+      }
+    }
+
     const rack = gearShape({ ...spur(10), kind: "rack" });
     expect(outlineArea(rack.outer)).toBeGreaterThan(0);
   });
@@ -50,7 +77,8 @@ describe("gears", () => {
 
 describe("gears by the standard (DIN 867 / DIN 3960)", () => {
   const ring = (teeth: number, module = 2) => spur(teeth, module, { kind: "internal" });
-  const rack = (teeth: number, module = 2, extra: Partial<GearParams> = {}) => spur(teeth, module, { kind: "rack", ...extra });
+  const rack = (teeth: number, module = 2, extra: Partial<GearParams> = {}) =>
+    spur(teeth, module, { kind: "rack", ...extra });
 
   it("a ring gear: tips inside the pitch circle, roots outside; centre distance to its pinion", () => {
     const d = gearDims(ring(60));
@@ -74,10 +102,14 @@ describe("gears by the standard (DIN 867 / DIN 3960)", () => {
   });
 
   it("warns or refuses teeth that cannot be made", () => {
-    expect(gearDims(spur(4, 2, { clearance: 2 })).warnings.join()).toMatch(/root circle is smaller than zero/);
+    expect(gearDims(spur(4, 2, { clearance: 2 })).warnings.join()).toMatch(
+      /root circle is smaller than zero/,
+    );
     expect(() => gearShape(spur(12, 2, { profileShift: 1.2 }))).toThrow(/come to a point/);
     expect(() => gearShape(ring(60), { rim: 125 })).toThrow(/outside diameter above 125.00 mm/);
-    expect(() => gearShape(rack(10, 2, { pressureAngle: 35, backlash: 3 }))).toThrow(/rack's teeth come to a point/);
+    expect(() => gearShape(rack(10, 2, { pressureAngle: 35, backlash: 3 }))).toThrow(
+      /rack's teeth come to a point/,
+    );
   });
 
   it("a rack: trapezoid teeth one pitch apart, length teeth × π m", () => {
@@ -88,17 +120,24 @@ describe("gears by the standard (DIN 867 / DIN 3960)", () => {
   });
 
   it("refuses pairs that cannot mesh, and places a gear on a rack and a rack on a gear", () => {
-    const at = (params: GearParams) => ({ params, center: [0, 0] as [number, number], rotation: 0, width: 5 });
+    const at = (params: GearParams) => ({
+      params,
+      center: [0, 0] as [number, number],
+      rotation: 0,
+      width: 5,
+    });
     expect(() => meshPlacement(at(rack(10)), rack(10), 0)).toThrow(/two racks/);
     expect(() => meshPlacement(at(ring(60)), ring(40), 0)).toThrow(/two ring gears/);
     expect(() => meshPlacement(at(ring(60)), rack(10), 0)).toThrow(/rack cannot mesh with a ring/);
     expect(() => meshPlacement(at(rack(10)), ring(60), 0)).toThrow(/ring gear cannot mesh with a rack/);
     // A pinion on a rack sits one pitch radius above its pitch line.
     expect(meshPlacement(at(rack(11)), spur(20), 0).center.map((v) => +v.toFixed(9))).toEqual([0, 20]);
+
     // A rack on a pinion lies one pitch radius out, along the direction.
     const r = meshPlacement(at(spur(20)), rack(10), 0);
     expect(r.center[0]).toBeCloseTo(20, 9);
     expect(Math.abs(r.center[1])).toBeLessThanOrEqual(Math.PI);
+
     // A ring around a pinion: centre distance (60 − 20) · 2 / 2 = 40.
     const around = meshPlacement(at(spur(20)), ring(60), 0);
     expect(around.center[0]).toBeCloseTo(40, 9);

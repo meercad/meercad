@@ -17,10 +17,38 @@ describe("grids that do not fit", () => {
     expect(() => drawerFit([30, 30])).toThrow(/the drawer must be at least/);
     expect(() => areaPlan({ rect: [20, 20] } as never)).toThrow(GridfinityError);
     expect(() => areaPlan({ loops: [], gap: 0 } as never)).toThrow(/the outline is empty/);
-    expect(() => areaPlan({ loops: [[[0, 0], [20, 0], [20, 20], [0, 20]]], gap: 0 } as never)).toThrow(/no 42 mm cell fits inside the outline/);
-    expect(() => areaPlan({ rect: [200, 200] } as never, [0, 100])).toThrow(/print bed's usable size must be greater than zero/);
-    expect(loopArea([[0, 0], [10, 0], [10, 5], [0, 5]])).toBe(50);
-    expect(loopArea([[0, 0], [0, 5], [10, 5], [10, 0]])).toBe(-50);
+    expect(() =>
+      areaPlan({
+        loops: [
+          [
+            [0, 0],
+            [20, 0],
+            [20, 20],
+            [0, 20],
+          ],
+        ],
+        gap: 0,
+      } as never),
+    ).toThrow(/no 42 mm cell fits inside the outline/);
+    expect(() => areaPlan({ rect: [200, 200] } as never, [0, 100])).toThrow(
+      /print bed's usable size must be greater than zero/,
+    );
+    expect(
+      loopArea([
+        [0, 0],
+        [10, 0],
+        [10, 5],
+        [0, 5],
+      ]),
+    ).toBe(50);
+    expect(
+      loopArea([
+        [0, 0],
+        [0, 5],
+        [10, 5],
+        [10, 0],
+      ]),
+    ).toBe(-50);
   });
 
   it("refuses a wall board smaller than one hole spacing", () => {
@@ -49,11 +77,13 @@ describe("versions with large files", () => {
     const blobs: Record<string, string> = {};
     const v = snapshot(doc(), "v1", 1, blobs);
     expect(Object.values(blobs)).toEqual([big]);
+
     const back = restored({ ...doc(), blobs, versions: [v] }, v);
     expect((back.features[0] as { image: { pixels: string } }).image.pixels).toBe(big);
     expect((back.features[1] as { data: string }).data).toBe(big);
     expect(back.references![0]!.data).toBe(big);
     expect(back.references![1]!.data).toBe("xyz");
+
     // Pruning keeps blobs a version uses.
     const kept = { ...doc(), blobs: { ...blobs, "blob:gone": "z" }, versions: [v] } as MeercadDocument;
     pruneBlobs(kept);
@@ -64,8 +94,13 @@ describe("versions with large files", () => {
     const blobs: Record<string, string> = {};
     const v = snapshot(doc(), "v1", 1, blobs);
     expect(() => restored({ ...doc(), blobs: {} }, v)).toThrow(/version "v1": the picture of li1 is missing/);
-    const noPicture = { ...v, state: { ...v.state, features: v.state.features.filter((f) => f.op !== "lithophane") } };
+
+    const noPicture = {
+      ...v,
+      state: { ...v.state, features: v.state.features.filter((f) => f.op !== "lithophane") },
+    };
     expect(() => restored({ ...doc(), blobs: {} }, noPicture)).toThrow(/the contents of a.stl are missing/);
+
     const onlyTerrain = { ...v, state: { ...v.state, features: [] } };
     expect(() => restored({ ...doc(), blobs: {} }, onlyTerrain)).toThrow(/the contents of Big are missing/);
   });
@@ -74,7 +109,10 @@ describe("versions with large files", () => {
     const blobs: Record<string, string> = {};
     const d = doc();
     const v = snapshot(d, "v1", 1, blobs);
-    const now: MeercadDocument = { ...d, features: [d.features[1]!, { id: "ex9", op: "delete", bodies: ["x"] } as Feature] };
+    const now: MeercadDocument = {
+      ...d,
+      features: [d.features[1]!, { id: "ex9", op: "delete", bodies: ["x"] } as Feature],
+    };
     expect(versionChanges(v.state, now)).toMatchObject({ added: ["ex9"], removed: ["li1", "im2"] });
   });
 });
@@ -83,9 +121,13 @@ describe("standard parts that cannot be made", () => {
   it("refuses lengths of 0, unknown sizes and a magnet of no size", () => {
     expect(leadOf("Tr8x8")).toBe(8);
     expect(leadOf(undefined)).toBeUndefined();
-    expect(() => standardShape("socket_screw", { size: "M3", length: 0 })).toThrow(/length must be greater than zero/);
+    expect(() => standardShape("socket_screw", { size: "M3", length: 0 })).toThrow(
+      /length must be greater than zero/,
+    );
     expect(() => standardShape("insert", { size: "M99" })).toThrow(/unknown size "M99"/);
     expect(() => standardShape("shaft", { size: "Ø999" })).toThrow(/unknown size "Ø999"/);
-    expect(() => standardShape("magnet", { diameter: 0, height: 2 })).toThrow(/magnet needs a diameter and a height/);
+    expect(() => standardShape("magnet", { diameter: 0, height: 2 })).toThrow(
+      /magnet needs a diameter and a height/,
+    );
   });
 });
