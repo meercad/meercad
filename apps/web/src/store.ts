@@ -558,6 +558,7 @@ export function scheduleRebuild(): void {
       if (docStore !== store) return;
       set(preview ? { output, previewing: true, building: !final } : { output, baseOutput: output, previewing: false, building: !final, selection: remapSelection(get().selection, get().baseOutput, output) });
       if (!preview && final) {
+        if (!shownDoc) noteOpening(null);
         shownDoc = doc;
         scheduleThumbnail();
         fillBodyProps(output);
@@ -594,6 +595,7 @@ export function scheduleRebuild(): void {
         rebuildsPending--;
         // A newer rebuild replaced this one; it clears the flag when it finishes.
         if (e instanceof SupersededError) return;
+        noteOpening(null);
         set({ building: false });
         const msg = e instanceof Error ? e.message : String(e);
         if (preview) set({ previewError: msg });
@@ -851,6 +853,33 @@ export function openProject(id: string): Promise<void> {
   return opening.run(id, (current) => openProjectNow(id, current));
 }
 
+/**
+ * iPad and iPhone: the big design being opened, noted until its first build is shown. When the
+ * page is ended on the way (out of memory) and loads again, it does not open that design by
+ * itself once more, which went round in circles until the app gave up (see openingDied).
+ */
+const OPENING_KEY = "meercad.opening";
+function noteOpening(id: string | null): void {
+  if (desktop || assistantWindow) return;
+  try {
+    if (id) localStorage.setItem(OPENING_KEY, id);
+    else localStorage.removeItem(OPENING_KEY);
+  } catch {
+    // not noted: the page opens it again after a crash, as before
+  }
+}
+/** The design this page was opening when the page before it was ended (iPad and iPhone), read once at start. */
+export const openingDied: string | null = (() => {
+  if (desktop || assistantWindow) return null;
+  try {
+    const id = localStorage.getItem(OPENING_KEY);
+    localStorage.removeItem(OPENING_KEY);
+    return id;
+  } catch {
+    return null;
+  }
+})();
+
 async function openProjectNow(id: string, current: () => boolean): Promise<void> {
   const held = assistantWindow ? undefined : get().assistantTabs.find((a) => a.project === id);
   if (held) return showAssistantTab(held.session);
@@ -942,6 +971,7 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
     kernelKind = kind;
   }
   kernelProject = meta.id;
+  noteOpening(doc.features.length > BIG_STEPS ? meta.id : null);
   docStore = store ?? new DocumentStore(doc);
   tabStores.set(meta.id, docStore);
   if (!get().tabs.some((t) => t.id === meta.id)) setTabs([...get().tabs, { id: meta.id, name: meta.name, ...(meta.folder ? { folder: meta.folder } : {}) }]);
@@ -1009,6 +1039,7 @@ function scheduleOutputCache(): void {
 export const undoAvailable = () => docStore.canUndo;
 
 export function goHome(): void {
+  noteOpening(null);
   const p = get().project;
   if (p) tabStores.set(p.id, docStore);
   void flushSave(true).then(refreshProjects);

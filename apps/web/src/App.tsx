@@ -33,7 +33,7 @@ import { actionFor, MODEL_ACTIONS, MODEL_CONTEXT, type ModelAction } from "./lib
 import type { FeatureOp } from "@meercad/schema";
 import { closeTab, cycleTab, dropCachedTab, handOverAssistantTab, reopenClosedTab, toggleSide } from "./store";
 import { AssistantPane } from "./components/AssistantTab";
-import { cancelDialog, commitDialog, editFeature, getViewport, goHome, hideSelectedParts, lastStartedFeature, newProject, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
+import { cancelDialog, commitDialog, editFeature, getViewport, goHome, hideSelectedParts, lastStartedFeature, newProject, openingDied, openProject, redo, startFeature, startSketch, toast, undo, useApp } from "./store";
 import { planeSpecForPick } from "./lib/topology";
 import type { StandardView } from "@meercad/viewport";
 import { CommandPalette } from "./components/CommandPalette";
@@ -93,12 +93,20 @@ function runModelAction(action: ModelAction): void {
   }
 }
 
-async function route(): Promise<void> {
+/** `start`: the page has just loaded (also after the iPhone ended it). */
+async function route(start = false): Promise<void> {
   const hash = location.hash;
   const m = /^#\/p\/(.+)$/.exec(hash);
   const s = useApp.getState();
   if (m) {
     const id = decodeURIComponent(m[1]!);
+    // The page was ended while opening this design (out of memory on the iPhone or iPad): the
+    // overview instead of the same again, round and round. A tap on it tries once more.
+    if (start && openingDied === id) {
+      history.replaceState(null, "", "#/");
+      toast(t("{name} did not fit into this device's memory and was closed. Tap it to try again.", { name: id.split("/").pop() ?? id }), "error");
+      return;
+    }
     if (s.screen !== "editor" || s.project?.id !== id) await openProject(id);
   } else if (s.screen === "editor") goHome();
 }
@@ -140,7 +148,7 @@ export function App() {
     if (!assistantWindow) startBackgroundPictures(EXAMPLES);
   }, []);
   useEffect(() => {
-    void route();
+    void route(true);
     initBridge();
     if (!desktop) return;
     document.documentElement.classList.add("is-desktop");

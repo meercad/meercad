@@ -129,6 +129,21 @@ app's console comes with `xcrun devicectl device process launch --console`):
   failed. A file that is on the device in an older version now opens as it is (`ICloudPlugin`), and
   reading shows as a task ("Opening …").
 
+A day later (2026-11-12) the robot had grown to 1169 steps (53 MB) and went round in circles on
+the iPhone again. On the Mac its first build now takes 1.49 GB (peak footprint, `open-memory.ts`)
+against 1.39 GB for the 1112 steps of the afternoon before: about 1.7 MB per step, which ate the
+250 MB to spare. Tried and dropped: a lean build that keeps no step's result and frees what later
+steps no longer use while building. It gave the same result (every step and part) but no less
+memory (1.28 against 1.26 GB): what the kernel holds is OCCT's own leak, not the kept steps. Only an
+OCCT build of our own helps here (see below). What was fixed instead:
+
+- **The circle.** The page loaded again after it was ended and opened the same design from its
+  address, which ended it again. The big design being opened is noted (`meercad.opening`) until its
+  first build shows; a page that finds it still noted at start shows the overview and says the
+  design did not fit (`openingDied` in the store, `route(true)` in `App.tsx`). A tap tries again.
+- **Two taps.** A second tap while the file was still being read opened it a second time (two
+  "Opening …" tasks, the file read and built twice). `openProject` now joins the opening under way.
+
 The heap a kernel reports (`wasmMemory.buffer.byteLength`) is what it has reserved, not what it
 uses: OCCT's allocator takes memory in large steps, so the same build reports 1.6 to 2.4 GB. Compare
 the process (`footprint`, or the RSS in `heap.ts`) instead.
