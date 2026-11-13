@@ -18,6 +18,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node scripts/third-party-licenses.mjs --check
+      # Formatting (Prettier) and layout rules (ESLint): blank lines, braces, line length.
+      - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:quick
       - run: pnpm build
