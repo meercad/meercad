@@ -6,7 +6,6 @@ import { openMaterialPicker } from "./MaterialPicker";
 import { partColors } from "../lib/partColors";
 import { formatMass, massOf, motion, partMaterial } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
-import { hasPack } from "../lib/premium";
 import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair } from "../lib/meshRepair";
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
 import {
@@ -1034,7 +1033,6 @@ export function ViewportView() {
       if (
         pick &&
         (pick.kind === "face" || pick.kind === "edge") &&
-        hasPack("scan") &&
         meshBodyIds(state.doc.features, state.output?.meshes ?? []).has(pick.bodyId)
       ) {
         return measureOnScan(pick.bodyId, pick.point);
@@ -1077,10 +1075,7 @@ export function ViewportView() {
       meshBodyIds(state.doc.features, state.output?.meshes ?? []).has(pick.bodyId);
 
     if (state.dialog) {
-      if (onMesh && state.dialog.field && !PART_FIELDS.has(state.dialog.field)) {
-        return toast(meshHint(hasPack("scan")));
-      }
-
+      if (onMesh && state.dialog.field && !PART_FIELDS.has(state.dialog.field)) return toast(meshHint());
       if (pick && state.dialog.field) dialogPick?.(pick, additive);
       // Clicking empty space accepts the tool unless a selection field is waiting.
       else if (!pick && !state.dialog.field) commitDialog();
@@ -1300,30 +1295,20 @@ export function ViewportView() {
           icon: <LayoutGrid />,
           onClick: () => binForPart(pick.bodyId),
         },
-        ...(hasPack("scan")
-          ? [
-              "sep" as const,
-              {
-                label: t("Convert to editable body"),
-                icon: <Shapes />,
-                onClick: () => convertMeshPart(pick.bodyId),
-              },
-              {
-                label: t("Rebuild with features"),
-                icon: <Wand2 />,
-                onClick: () => void rebuildMeshPart(pick.bodyId),
-              },
-              thicknessItem(pick.bodyId),
-              ...(importOf(pick.bodyId)
-                ? [
-                    {
-                      label: t("Clean up mesh…"),
-                      icon: <Eraser />,
-                      onClick: () => openMeshRepair(pick.bodyId),
-                    },
-                  ]
-                : []),
-            ]
+        "sep" as const,
+        {
+          label: t("Convert to editable body"),
+          icon: <Shapes />,
+          onClick: () => convertMeshPart(pick.bodyId),
+        },
+        {
+          label: t("Rebuild with features"),
+          icon: <Wand2 />,
+          onClick: () => void rebuildMeshPart(pick.bodyId),
+        },
+        thicknessItem(pick.bodyId),
+        ...(importOf(pick.bodyId)
+          ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(pick.bodyId) }]
           : []),
         "sep",
         ...common,
@@ -1407,7 +1392,8 @@ export function ViewportView() {
               },
             ]
           : []),
-        ...(hasPack("scan") ? [...deviationItems(pick.bodyId), thicknessItem(pick.bodyId)] : []),
+        ...deviationItems(pick.bodyId),
+        thicknessItem(pick.bodyId),
         ...common,
         "sep",
         {
@@ -1782,7 +1768,7 @@ function MeasureCard() {
             />
             <span className="muted">mm</span>
           </label>
-        ) : hasPack("scan") && !m.result ? (
+        ) : !m.result ? (
           <p className="muted small">
             {t(
               "On a scan or other mesh, a click fits the plane, cylinder, cone or sphere there; a second click measures between the two.",

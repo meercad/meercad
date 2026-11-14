@@ -2,14 +2,13 @@
  * Sharing a design: the .meercad file with its whole feature history, so whoever opens it can
  * change every step. It goes out through the system's sharing (AirDrop, Messages, Mail …): the
  * share menu on the Mac, the share sheet on the iPhone and iPad. Saved versions only go along when
- * asked for. Premium packs the design uses are named, with what happens without them.
+ * asked for.
  */
 import { Share, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { MeercadDocument } from "@meercad/schema";
 import { currentDoc, toast, useApp } from "../store";
-import { packsUsed, sharedDoc } from "../lib/packUse";
-import { PACKS } from "../lib/premium";
+import { sharedDoc } from "../lib/sharedDoc";
 import { nativeApp, shareFile } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { t, tn } from "../lib/i18n";
@@ -17,17 +16,6 @@ import { baseName } from "./io";
 
 /** Opens the share dialog for the open design (from menus and the command palette). */
 export const openShare = () => window.dispatchEvent(new Event("meercad:share"));
-
-/** What in a design uses a pack, as words for the dialog. */
-const WHAT: Record<string, string> = {
-  gears: t("gears"),
-  springs: t("springs"),
-  joints: t("joints"),
-  motions: t("motions"),
-  variants: t("variants"),
-  "saved versions": t("saved versions"),
-  "terrain models": t("terrain models"),
-};
 
 const fileSize = (bytes: number) =>
   bytes < 1024 * 1024
@@ -81,7 +69,6 @@ export function ShareDialog() {
   const versions = doc.versions?.length ?? 0;
   const text = shareText(doc, withVersions);
   const name = `${baseName()}.meercad`;
-  const packs = packsUsed(sharedDoc(doc, { versions: withVersions }));
 
   const go = async () => {
     setBusy(true);
@@ -129,25 +116,6 @@ export function ShareDialog() {
             />
             <span>{tn(versions, "Include the saved version", "Include the {n} saved versions")}</span>
           </label>
-        ) : null}
-        {packs.length ? (
-          <div className="callout info">
-            {packs.map((u) => (
-              <p key={u.pack}>
-                {t("Uses {pack}: {what}.", {
-                  pack: t(PACKS.find((pack) => pack.id === u.pack)!.name),
-                  what: u.what.map((w) => WHAT[w] ?? w).join(", "),
-                })}
-              </p>
-            ))}
-            <p>
-              {tn(
-                packs.length,
-                "Without this pack the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.",
-                "Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.",
-              )}
-            </p>
-          </div>
         ) : null}
         <div className="row share-actions">
           <button className="btn" onClick={() => setOpen(false)}>

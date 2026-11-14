@@ -36,10 +36,8 @@ export const FACE_TOOLS = new Set([
   "plane",
 ]);
 
-/** Why a mesh part's faces cannot be picked; names the way to editable faces when that is offered. */
-export const meshHint = (convertible: boolean): string =>
-  convertible
-    ? t(
-        "Imported meshes are edited as whole parts: combine, cut, move or pattern them. For editable faces, right-click or long-press the part: Convert to editable body, or Rebuild with features.",
-      )
-    : t("Imported meshes are edited as whole parts: combine, cut, move or pattern them.");
+/** Why a mesh part's faces cannot be picked, and the way to editable faces. */
+export const meshHint = (): string =>
+  t(
+    "Imported meshes are edited as whole parts: combine, cut, move or pattern them. For editable faces, right-click or long-press the part: Convert to editable body, or Rebuild with features.",
+  );

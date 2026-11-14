@@ -1,6 +1,5 @@
 /** Fully parametric starter models for the home screen. Home shows `name` and `description` through t(). */
 import { type Expr, type MeercadDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
-import { packsUsed, type PackId } from "./packUse";
 
 /** Rectangle anchored at the origin with width/height dimensions. */
 function rect(
@@ -611,19 +610,7 @@ export interface Example {
   feature?: true;
   /** A large example kept out of the app's code (`doc` is then empty): fetched when it is opened. */
   url?: string;
-  /** The packs a fetched example needs (the others' packs follow from their document). */
-  packs?: PackId[];
 }
-
-/**
- * The premium packs an example needs to be shown and changed. Variants do not count: without the
- * pack its variables still change it (a DIN box's `din`).
- */
-export const examplePacks = (example: Example): PackId[] =>
-  example.packs ??
-  packsUsed(example.doc)
-    .map((u) => u.pack)
-    .filter((p) => p !== "versions");
 
 /**
  * Larger examples as files in src/examples, with the name and line shown for them. Only real designs

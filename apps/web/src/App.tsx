@@ -1,6 +1,5 @@
 import { MotionPanel } from "./components/MotionPanel";
 import { toggleJoints, useMotion } from "./lib/mechanism";
-import { hasPack } from "./lib/premium";
 import { useEffect, useState } from "react";
 import { validateDocument } from "@meercad/schema";
 import { copyParts, cutParts, duplicateParts, pasteParts, selectAll } from "./lib/clipboard";
@@ -107,7 +106,7 @@ function runModelAction(action: ModelAction): void {
     case "measure":
       return useApp.setState({ measure: { active: !state.measure.active, picks: [], result: null } });
     case "joints":
-      return hasPack("mechanics") || state.doc.mechanism?.joints.length ? toggleJoints() : undefined;
+      return toggleJoints();
     case "sketch":
       if (hovered && (hovered.kind === "plane" || (hovered.kind === "face" && hovered.normal))) {
         const spec = planeSpecForPick(hovered, state.output?.meshes ?? []);
@@ -116,8 +115,6 @@ function runModelAction(action: ModelAction): void {
 
       return startFeature("sketch");
     default:
-      if ((action === "gear" || action === "spring") && !hasPack("mechanics")) return;
-
       return startFeature(action as FeatureOp);
   }
 }

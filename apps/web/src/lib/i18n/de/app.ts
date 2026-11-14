@@ -114,22 +114,6 @@ export default {
     "Voll parametrisch: Öffne eines und ändere seine Variablen. In den Einstellungen lässt sich dieser Bereich ausblenden.",
   "Start page": "Startseite",
   "Show the example models": "Beispielmodelle zeigen",
-  "Premium packs": "Premium-Pakete",
-  "Only in test builds. The App Store version hides these packs until they are on sale; switch one off to see the app without it.":
-    "Nur in Testversionen. Die App-Store-Version blendet diese Pakete aus, bis sie verkauft werden; schalte eins aus, um die App ohne es zu sehen.",
-  "Mechanics and robotics": "Mechanik und Robotik",
-  "Joints and moving parts, motions with collision check, gears, springs, interference check, robot export (MJCF/URDF)":
-    "Gelenke und bewegliche Teile, Bewegungsabläufe mit Kollisionsprüfung, Zahnräder, Federn, Überschneidungsprüfung, Roboter-Export (MJCF/URDF)",
-  "Scan and mesh": "Scan und Netze",
-  "3D scan with the camera or LiDAR, meshes to editable bodies, tracing mesh sections, measuring on scans, deviation and wall thickness maps, mesh clean-up, areas from drone photos":
-    "3D-Scan mit Kamera oder LiDAR, Netze in bearbeitbare Teile umwandeln, Netzschnitte nachzeichnen, auf Scans messen, Abweichungs- und Wandstärken-Karte, Netze aufräumen, Gelände aus Drohnenfotos",
-  "Technical drawings": "Technische Zeichnungen",
-  "Drawings as PDF, SVG and DXF": "Zeichnungen als PDF, SVG und DXF",
-  "Versions and variants": "Versionen und Varianten",
-  "Named versions in the file, versions as backup files, variants, exporting all variants":
-    "Benannte Versionen in der Datei, Versionen als Sicherungsdatei, Varianten, alle Varianten exportieren",
-  "Imported meshes are edited as whole parts: combine, cut, move or pattern them.":
-    "Importierte Netze bearbeitest du als ganze Teile: kombinieren, abziehen, verschieben oder als Muster anordnen.",
   "About meerCAD": "Über meerCAD",
   Privacy: "Datenschutz",
   Licences: "Lizenzen",
@@ -598,7 +582,7 @@ export default {
   "({n} already existed there and were left in place)": "({n} gab es dort schon, sie blieben an ihrem Platz)",
   "Projects are now saved in {dir}": "Projekte werden jetzt in {dir} gespeichert",
   "Could not use that folder: {msg}": "Dieser Ordner kann nicht verwendet werden: {msg}",
-  // Sharing a design, and designs that use packs not on here
+  // Sharing a design
   "Share…": "Teilen …",
   "Share design": "Modell teilen",
   "Share the design (with its history, editable)": "Modell teilen (mit Verlauf, bearbeitbar)",
@@ -608,33 +592,6 @@ export default {
   "Include the {n} saved versions": "Die {n} gespeicherten Versionen mitgeben",
   "{n} kB": "{n} kB",
   "{n} MB": "{n} MB",
-  "Uses {pack}: {what}.": "Nutzt {pack}: {what}.",
-  gears: "Zahnräder",
-  springs: "Federn",
-  joints: "Gelenke",
-  motions: "Bewegungsabläufe",
-  "saved versions": "gespeicherte Versionen",
-  "terrain models": "Geländemodelle",
-  "Without this pack the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.":
-    "Ohne dieses Paket lässt sich das Modell trotzdem öffnen, berechnen und exportieren, und alles andere bleibt änderbar; nur diese Teile bleiben, wie sie sind.",
-  "Without these packs the design still opens, builds and exports, and everything else can be changed; only those parts stay as they are.":
-    "Ohne diese Pakete lässt sich das Modell trotzdem öffnen, berechnen und exportieren, und alles andere bleibt änderbar; nur diese Teile bleiben, wie sie sind.",
-  "Changing joints needs the Mechanics pack.": "Gelenke ändern geht mit dem Paket Mechanik.",
-  "This design uses the {pack} pack": "Dieses Modell nutzt das Paket {pack}",
-  "This design uses the packs {packs}": "Dieses Modell nutzt die Pakete {packs}",
-  "You can look at it, print it and export it, and change everything else as usual. Saving keeps all of it.":
-    "Du kannst es ansehen, drucken und exportieren und alles andere wie gewohnt ändern. Beim Speichern bleibt alles erhalten.",
-  "Gears, springs, joints and motions are shown, move and play; changing them needs the Mechanics pack.":
-    "Zahnräder, Federn, Gelenke und Bewegungsabläufe werden angezeigt, bewegt und abgespielt; ändern geht mit dem Paket Mechanik.",
-  "Terrain models are shown; the scan and mesh tools need the Scan and mesh pack.":
-    "Geländemodelle werden angezeigt; die Scan- und Netzwerkzeuge gibt es mit dem Paket Scan und Netze.",
-  "Technical drawings need the Technical drawings pack.":
-    "Technische Zeichnungen gibt es mit dem Paket Technische Zeichnungen.",
-  "Variants can be switched; the saved versions stay in the file and are shown with the Versions and variants pack.":
-    "Varianten lassen sich umschalten; die gespeicherten Versionen bleiben in der Datei und werden mit dem Paket Versionen und Varianten angezeigt.",
-  "{name} needs the {pack} pack": "{name} braucht das Paket {pack}",
-  "This design came with it, so it stays, builds and exports as it is. Changing it needs the {pack} pack; you can still delete it or change the rest of the design.":
-    "Es kam mit dem Modell und bleibt, wird berechnet und exportiert wie es ist. Ändern geht mit dem Paket {pack}; löschen kannst du es trotzdem, und der Rest des Modells bleibt änderbar.",
   // Basic solids
   "Basic solid": "Grundkörper",
   "A box, cylinder or sphere without a sketch: stand-ins, quick assemblies, blocks to cut with":

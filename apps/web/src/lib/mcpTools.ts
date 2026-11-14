@@ -28,8 +28,7 @@ import {
   useApp,
 } from "../store";
 import { showDeviation, hideDeviation, useDeviation, TOLERANCE } from "./deviation";
-import { EXAMPLES, examplePacks } from "./examples";
-import { hasPack } from "./premium";
+import { EXAMPLES } from "./examples";
 import { partName } from "./features";
 import { t } from "./i18n";
 import { jointsFromGears } from "./mechanism";
@@ -595,8 +594,8 @@ export async function moveOpenProject(folder: string) {
   return { project: useApp.getState().project };
 }
 
-/** The examples the user's app shows: those its packs can show and change. */
-const shownExamples = () => EXAMPLES.filter((example) => examplePacks(example).every(hasPack));
+/** The examples the user's app shows. */
+const shownExamples = () => EXAMPLES;
 
 export const examples = () =>
   shownExamples().map((example, i) => ({ id: i, name: example.name, description: example.description }));

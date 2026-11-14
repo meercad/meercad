@@ -3,7 +3,7 @@ import Foundation
 
 /// The App Store side of the app. For now it only says where the installed app came from:
 /// TestFlight and Xcode installs carry a sandbox receipt, App Store downloads a production one.
-/// The web app shows the premium packs only to test builds.
+/// Later it carries the meerCAD Pro purchase (StoreKit 2).
 @objc(StorePlugin)
 public class StorePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "StorePlugin"

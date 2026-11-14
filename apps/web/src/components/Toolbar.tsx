@@ -62,7 +62,6 @@ import { canScan, scanObject } from "../lib/scan";
 import { buildTerrain, canBuildTerrain } from "../lib/terrain";
 import { canScanSpaces, scanArea, scanRoom } from "../lib/roomScan";
 import { t } from "../lib/i18n";
-import { usePack } from "../lib/premium";
 import { sureTap } from "../lib/gestures";
 
 /** Whether this device can scan objects (iPhone/iPad with LiDAR). */
@@ -128,12 +127,8 @@ function useEntries(): RailEntry[] {
   const ui = useSketchUi();
   usePrefs((prefs) => prefs.keys); // badges follow the shortcut preset
 
-  const mechanics = usePack("mechanics");
-  // A design with joints shows them without the pack too (to look at and move, not to change).
-  const hasJoints = useApp((state) => !!state.doc.mechanism?.joints.length);
-  const scanPack = usePack("scan");
   const canScanHere = useCanScan();
-  const scan = (canScanHere || canBuildTerrain) && scanPack;
+  const scan = canScanHere || canBuildTerrain;
 
   if (sketchId) {
     const cur = ui.tool;
@@ -181,7 +176,7 @@ function useEntries(): RailEntry[] {
           sketchTool("offset", CopyPlus, t("Offset curves"), cur),
           sketchTool("pattern", Grid3x3, t("Repeat curves"), cur),
           sketchTool("project", Waypoints, t("Project model edges"), cur),
-          ...(scanPack ? [sketchTool("section", ScanLine, t("Trace mesh section"), cur)] : []),
+          sketchTool("section", ScanLine, t("Trace mesh section"), cur),
           {
             id: "construction",
             icon: Crosshair,
@@ -221,7 +216,8 @@ function useEntries(): RailEntry[] {
         feature("box", activeOp),
         feature("snap_hook", activeOp),
         feature("lithophane", activeOp),
-        ...(mechanics ? [feature("gear", activeOp), feature("spring", activeOp)] : []),
+        feature("gear", activeOp),
+        feature("spring", activeOp),
         feature("plane", activeOp),
       ],
     },
@@ -256,19 +252,15 @@ function useEntries(): RailEntry[] {
       ],
     },
     "sep",
-    ...(mechanics || hasJoints
-      ? [
-          {
-            id: "joints",
-            icon: Link2,
-            label: t("Joints"),
-            ...withKbd(keyFor("joints")),
-            hint: t("Joints: parts that turn or slide; drag them to try"),
-            active: joints,
-            run: toggleJoints,
-          },
-        ]
-      : []),
+    {
+      id: "joints",
+      icon: Link2,
+      label: t("Joints"),
+      ...withKbd(keyFor("joints")),
+      hint: t("Joints: parts that turn or slide; drag them to try"),
+      active: joints,
+      run: toggleJoints,
+    },
     {
       id: "measure",
       icon: Ruler,

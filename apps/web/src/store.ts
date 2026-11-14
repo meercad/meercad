@@ -20,8 +20,6 @@ import {
 import { planeSpecForPick, setFeatureLabels } from "./lib/topology";
 import { usePrefs } from "./lib/keymap";
 import { FACE_TOOLS, meshBodyIds, meshHint } from "./lib/meshParts";
-import { hasPack } from "./lib/premium";
-import { notePacks, refuseLocked } from "./lib/packNotice";
 import { setUnitSource } from "./lib/units";
 import type { LengthUnit } from "@meercad/schema";
 import type { Pick, Viewport } from "@meercad/viewport";
@@ -863,7 +861,7 @@ export function startFeature(op: FeatureOp): void {
 
   if (FACE_TOOLS.has(op) && selectionOnMesh()) {
     if (op === "sketch") set({ selection: [] });
-    else return toast(meshHint(hasPack("scan")));
+    else return toast(meshHint());
   }
 
   if (op === "sketch") return startSketch();
@@ -882,8 +880,6 @@ export function editFeature(id: string): void {
   if (!feature) return;
   if (get().dialog) cancelDialog();
   if (feature.op === "sketch") return openSketch(id);
-  // A design shared with someone keeps its gears and springs, but only the pack changes them.
-  if (refuseLocked(feature, featureName(feature))) return;
 
   set({ dialog: { feature: structuredClone(feature), isNew: false, field: null }, selection: [] });
   scheduleRebuild();
@@ -1333,7 +1329,6 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
   syncDoc();
   set({ saveState: "saved" });
   showKeptOutput(meta.id);
-  void notePacks(meta.id, doc);
 }
 
 /**

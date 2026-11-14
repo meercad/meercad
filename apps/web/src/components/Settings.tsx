@@ -5,7 +5,6 @@ import {
   Grid3x3,
   HardDrive,
   Keyboard,
-  Gem,
   Gamepad2,
   Languages,
   LayoutGrid,
@@ -21,7 +20,6 @@ import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { CONTROL_SCHEMES, KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { iCloudFolder, nativeApp, storageKind } from "../lib/native";
 import { desktop, type UiScale } from "../lib/persistence";
-import { PACKS, setPack, usePremium } from "../lib/premium";
 import { changeProjectsFolder, folderLabel, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
 import { BED_PRESETS, DEFAULT_BED, type Bed } from "../lib/printBed";
@@ -31,7 +29,6 @@ import { openFitTest } from "../lib/fit";
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
   const prefs = usePrefs();
-  const premium = usePremium();
   const [dir, setDir] = useState<string | null>(null);
   const [cloud, setCloud] = useState<{ dir: string | null; available: boolean } | null>(null);
   const [nativeKind, setNativeKind] = useState<"local" | "icloud" | null>(null);
@@ -280,32 +277,6 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             {t("Show the example models")}
           </label>
         </section>
-
-        {premium.tester ? (
-          <section>
-            <h3>
-              <Gem /> {t("Premium packs")}
-            </h3>
-            {PACKS.map((pack) => (
-              <label className="check" key={pack.id}>
-                <input
-                  type="checkbox"
-                  checked={!premium.off[pack.id]}
-                  onChange={(event) => setPack(pack.id, event.target.checked)}
-                />
-                <span>
-                  {t(pack.name)}
-                  <small className="muted pack-contents">{t(pack.contents)}</small>
-                </span>
-              </label>
-            ))}
-            <p className="muted">
-              {t(
-                "Only in test builds. The App Store version hides these packs until they are on sale; switch one off to see the app without it.",
-              )}
-            </p>
-          </section>
-        ) : null}
 
         <section>
           <h3>

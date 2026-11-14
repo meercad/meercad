@@ -25,7 +25,6 @@ import { useSlicers } from "../lib/slicers";
 import { nativeApp } from "../lib/native";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
-import { hasPack, usePremium } from "../lib/premium";
 import { openShare } from "./ShareDialog";
 import { checkInterference } from "../lib/interference";
 import { Kbd } from "./Kbd";
@@ -116,7 +115,6 @@ export function CommandPalette({
   const sketchId = useApp((state) => state.sketchId);
   const screen = useApp((state) => state.screen);
   const keys = usePrefs((prefs) => prefs.keys);
-  const packs = usePremium();
 
   useEffect(() => {
     const toggle = () => {
@@ -139,9 +137,7 @@ export function CommandPalette({
 
     if (screen === "editor" && sketchId) {
       for (const [tool, label] of SKETCH_TOOLS) {
-        if (tool !== "section" || hasPack("scan")) {
-          list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
-        }
+        list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
       }
 
       for (const c of CONSTRAINT_TOOLS) {
@@ -164,14 +160,12 @@ export function CommandPalette({
       );
     } else if (screen === "editor") {
       for (const op of TOOLBAR) {
-        if ((op !== "gear" && op !== "spring") || hasPack("mechanics")) {
-          list.push({
-            group: G.modeling,
-            label: FEATURES[op].label,
-            ...kbd(op as Action),
-            run: () => startFeature(op as FeatureOp),
-          });
-        }
+        list.push({
+          group: G.modeling,
+          label: FEATURES[op].label,
+          ...kbd(op as Action),
+          run: () => startFeature(op as FeatureOp),
+        });
       }
 
       list.push({
@@ -192,10 +186,7 @@ export function CommandPalette({
         });
       }
 
-      if (hasPack("mechanics")) {
-        list.push({ group: G.modeling, label: t("Joints"), ...kbd("joints"), run: toggleJoints });
-      }
-
+      list.push({ group: G.modeling, label: t("Joints"), ...kbd("joints"), run: toggleJoints });
       list.push(
         { group: G.edit, label: t("Select all parts"), ...kbd("select_all"), run: selectAll },
         {
@@ -245,7 +236,7 @@ export function CommandPalette({
           run: () => void sendToSlicer(sl.id),
         })),
         { group: G.file, label: t("Export OBJ"), run: () => void exportMesh("obj") },
-        ...(hasPack("mechanics") && (useApp.getState().doc.mechanism?.joints.length ?? 0) > 0
+        ...((useApp.getState().doc.mechanism?.joints.length ?? 0) > 0
           ? [
               {
                 group: G.file,
@@ -262,27 +253,13 @@ export function CommandPalette({
             : t("Export USDZ (AR on iPhone and iPad)"),
           run: () => void viewInAr(),
         },
-        ...(hasPack("drawings")
-          ? [{ group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing }]
-          : []),
-        ...(hasPack("versions")
-          ? [
-              {
-                group: G.file,
-                label: t("Versions: save or restore a state of the design"),
-                run: openVersions,
-              },
-            ]
-          : []),
-        ...(hasPack("mechanics")
-          ? [
-              {
-                group: G.modeling,
-                label: t("Check whether parts overlap (interference)"),
-                run: () => void checkInterference(),
-              },
-            ]
-          : []),
+        { group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing },
+        { group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions },
+        {
+          group: G.modeling,
+          label: t("Check whether parts overlap (interference)"),
+          run: () => void checkInterference(),
+        },
         { group: G.file, label: t("Share the design (with its history, editable)"), run: openShare },
         { group: G.file, label: t("Save copy as .meercad"), kbd: "Shift+Mod+S", run: saveFile },
         { group: G.file, label: t("All projects"), run: goHome },
@@ -310,7 +287,7 @@ export function CommandPalette({
     );
 
     return list;
-  }, [sketchId, screen, keys, onHelp, onShortcuts, onTour, packs]);
+  }, [sketchId, screen, keys, onHelp, onShortcuts, onTour]);
 
   const results = commands
     .map((c) => ({ c, s: Math.max(score(q, c.label), score(q, `${c.group} ${c.label}`) - 2) }))

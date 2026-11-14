@@ -3,7 +3,6 @@ import { useState, type ReactNode } from "react";
 import { Kbd, rich } from "./Kbd";
 import { touchOnly } from "../lib/keyboard";
 import { t } from "../lib/i18n";
-import { hasPack } from "../lib/premium";
 
 interface Guide {
   title: string;
@@ -14,7 +13,7 @@ const li = (text: string) => <li>{rich(text)}</li>;
 const about = (detail?: string) =>
   window.dispatchEvent(new CustomEvent("meercad:about", detail ? { detail } : {}));
 
-/** Built when the panel opens, so it only describes the premium packs that are shown. */
+/** Built when the panel opens. */
 const guides = (): { section: string; guides: Guide[] }[] => [
   {
     section: t("Getting started"),
@@ -324,13 +323,11 @@ const guides = (): { section: string; guides: Guide[] }[] => [
                 "Multi-colour printing: give parts colours (click the swatch in the parts list) and export 3MF; parts with the same colour go to the same filament, so a multi-material slicer has them assigned already.",
               ),
             )}
-            {hasPack("drawings")
-              ? li(
-                  t(
-                    "Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.",
-                  ),
-                )
-              : null}
+            {li(
+              t(
+                "Technical drawing (File menu): front, top, side and isometric views with hidden edges dashed, overall dimensions and a title block on an A4–A2 sheet, as PDF, SVG or DXF for a workshop.",
+              ),
+            )}
             {li(
               t(
                 "Import: drag STEP, STL, 3MF, OBJ, DXF or SVG files into the window, or use Import [Mod+O]. In an open design the file is added to it; on the project overview it starts a new design. Meshes (STL, 3MF, OBJ) become solid bodies made of flat faces.",
