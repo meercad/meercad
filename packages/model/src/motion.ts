@@ -197,10 +197,58 @@ export class Mechanism {
     readonly joints: readonly MotionJoint[],
     readonly couplings: readonly MotionCoupling[] = [],
   ) {
+    const more = new Map<string, MotionJoint[]>();
+
     for (const j of joints) {
       this.byId.set(j.id, j);
-      if (this.byPart.has(j.a)) this.errors.push(`part "${j.a}" moves in two joints`);
-      else this.byPart.set(j.a, j);
+
+      if (this.byPart.has(j.a)) {
+        this.errors.push(`part "${j.a}" moves in two joints`);
+        more.set(j.a, [...(more.get(j.a) ?? []), j]);
+      } else {
+        this.byPart.set(j.a, j);
+      }
+    }
+
+    // Fixed joints hold whichever way round they were made: a part fixed to several hangs on one
+    // that moves (and does not lead back to it), and a part held only as the other side of a fixed
+    // joint follows the part that moves.
+    const chain = (j: MotionJoint | undefined, part: string): "back" | "moves" | "still" => {
+      let moving = false;
+
+      for (let i = 0; j && i <= joints.length; i++) {
+        if (j.type !== "fixed") moving = true;
+        if (j.b === part) return "back";
+
+        j = j.b === "ground" ? undefined : this.byPart.get(j.b);
+      }
+
+      return j ? "back" : moving ? "moves" : "still";
+    };
+
+    for (const [part, others] of more) {
+      const options = [this.byPart.get(part)!, ...others];
+      const pick =
+        options.find((j) => chain(j, part) === "moves") ?? options.find((j) => chain(j, part) !== "back");
+      if (pick) this.byPart.set(part, pick);
+    }
+
+    for (let changed = true; changed;) {
+      changed = false;
+
+      for (const j of joints) {
+        if (
+          j.type !== "fixed" ||
+          j.b === "ground" ||
+          this.byPart.has(j.b) ||
+          chain(this.byPart.get(j.a), j.b) !== "moves"
+        ) {
+          continue;
+        }
+
+        this.byPart.set(j.b, { ...j, a: j.b, b: j.a });
+        changed = true;
+      }
     }
 
     for (const coupling of couplings) {
@@ -339,7 +387,7 @@ export class Mechanism {
       return m;
     };
 
-    for (const j of this.joints) pose(j.a);
+    for (const part of this.byPart.keys()) pose(part);
 
     return out;
   }

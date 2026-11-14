@@ -12,6 +12,11 @@ export interface RepairOptions {
   fillHoles?: boolean;
   /** Merge triangles while the surface moves at most this far (mm); 0 or absent: no reduction. */
   reduce?: number;
+  /**
+   * Merge triangles, cheapest first, until at most this many are left (no tolerance unless `reduce` is set
+   * too).
+   */
+  target?: number;
 }
 
 export interface RepairReport {
@@ -44,7 +49,9 @@ export function repairMesh(
     report.holesFilled = filled;
   }
 
-  if (opts.reduce && opts.reduce > 0) tris = simplify(pos, tris, opts.reduce);
+  if ((opts.reduce && opts.reduce > 0) || (opts.target !== undefined && tris.length / 3 > opts.target)) {
+    tris = simplify(pos, tris, opts.reduce || Infinity, opts.target ?? 0);
+  }
 
   // Only the vertices still used, in order.
   const map = new Map<number, number>();
@@ -273,14 +280,16 @@ function earClip(p: [number, number][]): [number, number, number][] | null {
 
 /**
  * Edge collapses, cheapest first by quadric error (the mean squared distance of the new corner
- * from the planes of the triangles merged into it), while that stays within (tol/2)². Collapses that
+ * from the planes of the triangles merged into it), while that stays within (tol/2)² and more than
+ * `target` triangles are left. Collapses that
  * would fold a triangle over, pinch the surface or move an open rim are skipped.
  */
-function simplify(pos: number[], input: number[], tol: number): number[] {
+function simplify(pos: number[], input: number[], tol: number, target = 0): number[] {
   const nv = pos.length / 3;
   const tris = [...input];
   const nt = tris.length / 3;
   const alive = new Uint8Array(nt).fill(1);
+  let left = nt;
   const faces: Set<number>[] = Array.from({ length: nv }, () => new Set());
   for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) faces[tris[t * 3 + k]!]!.add(t);
 
@@ -437,7 +446,7 @@ function simplify(pos: number[], input: number[], tol: number): number[] {
     push(a, b);
   }
 
-  while (heap.length) {
+  while (heap.length && left > target) {
     const e = pop();
     if (version[e.v] !== e.sv || version[e.w] !== e.sw) continue;
 
@@ -475,6 +484,7 @@ function simplify(pos: number[], input: number[], tol: number): number[] {
 
     for (const t of shared) {
       alive[t] = 0;
+      left--;
       for (let k = 0; k < 3; k++) faces[tris[t * 3 + k]!]!.delete(t);
     }
 

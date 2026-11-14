@@ -476,8 +476,11 @@ function meshSlack(mesh: BodyMesh): number {
   const r = restBox(mesh);
   const diag = Math.hypot(r.max[0] - r.min[0], r.max[1] - r.min[1], r.max[2] - r.min[2]);
 
-  return Math.max(0.01, diag * 5e-4) * (matchMedia("(pointer: coarse)").matches ? 2 : 1);
+  return Math.max(0.01, diag * 5e-4) * coarseSlack;
 }
+
+/** Read once, as in the store: the check runs from a timer, which may fire after a test's page is gone. */
+const coarseSlack = matchMedia("(pointer: coarse)").matches ? 2 : 1;
 
 /** Parts that run into each other in the current pose, leaving out contacts that exist as drawn. */
 function findHits(): [string, string][] {
@@ -997,7 +1000,9 @@ export async function checkMotionRun(
 
       for (const clearance of now.pairs) {
         if (clearance.overlap > 1e-3) {
-          collisions.push({ at: t3, a: clearance.a, b: clearance.b, overlap: +clearance.overlap.toFixed(3) });
+          const overlap = +clearance.overlap.toFixed(3);
+
+          collisions.push({ at: t3, a: clearance.a, b: clearance.b, overlap });
         }
 
         const key = `${clearance.a}|${clearance.b}`;

@@ -7,6 +7,13 @@ import type { Arena } from "./arena.js";
 import type { OC } from "./occt.js";
 
 export class Geom {
+  /**
+   * How closely (mm) spline edges follow the sketch's curve. 1 µm is far below anything printable;
+   * a tighter fit gives about one pole per sample point, and lofts through such curves come out
+   * broken. A loft that still fails tries again with a looser fit (see `loft` in the backend).
+   */
+  splineTolerance = 1e-3;
+
   constructor(
     readonly oc: OC,
     readonly arena: Arena,
@@ -75,7 +82,9 @@ export class Geom {
     const arr = this.arena.track(new oc.NCollection_Array1_gp_Pnt(1, pts.length));
     pts.forEach((p, k) => arr.SetValue(k + 1, this.pnt(toWorld(frame, p))));
 
-    const fit = this.arena.track(new oc.GeomAPI_PointsToBSpline(arr, 3, 8, "GeomAbs_C2" as never, 1e-6));
+    const fit = this.arena.track(
+      new oc.GeomAPI_PointsToBSpline(arr, 3, 8, "GeomAbs_C2" as never, this.splineTolerance),
+    );
 
     return this.arena.track(
       this.arena.track(new oc.BRepBuilderAPI_MakeEdge(this.arena.track(fit.Curve()), vertex, v1)).Edge(),

@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import { startTask, useApp } from "../store";
 import { t } from "./i18n";
-import { measureWalls, type ThicknessStats, type WallMeasure } from "./wallMeasure";
+import { measureWalls, WALL_TOLERANCE, type ThicknessStats, type WallMeasure } from "./wallMeasure";
 
 export {
   measureWalls,
@@ -99,7 +99,11 @@ function colorFor(d: number, minWall: number, out: Float32Array, o: number): voi
   if (!Number.isNaN(d)) {
     const u = Math.max(0, Math.min(1, (d - minWall) / (2 * minWall)));
     const [from, to, k] =
-      d < minWall ? [RED, RED, 0] : u < 0.5 ? [RED, YELLOW, u * 2] : [YELLOW, GREEN, (u - 0.5) * 2];
+      d < minWall - WALL_TOLERANCE
+        ? [RED, RED, 0]
+        : u < 0.5
+          ? [RED, YELLOW, u * 2]
+          : [YELLOW, GREEN, (u - 0.5) * 2];
     rgb = [0, 1, 2].map((c) => from[c]! + (to[c]! - from[c]!) * k);
   }
 

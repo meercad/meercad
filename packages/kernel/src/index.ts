@@ -1,7 +1,7 @@
 export { loadOcct, occtErrorMessage, type OC } from "./occt.js";
 export { Arena } from "./arena.js";
 export { Body } from "./body.js";
-export { OcctBackend } from "./backend.js";
+export { meshPieces, OcctBackend } from "./backend.js";
 export {
   fitMesh,
   surfaceDistance,

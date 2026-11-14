@@ -36,6 +36,12 @@ export interface WallMeasure {
   spots: ThinSpot[];
 }
 
+/**
+ * A wall this much under the minimum still counts as the minimum (one drawn at exactly 2.4 mm measures
+ * 2.399).
+ */
+export const WALL_TOLERANCE = 0.01;
+
 /** Rays per part: "fine" for the colour map, "fast" a fifth of them for a quick answer. */
 export const WALL_SAMPLES = { fine: 40_000, fast: 8_000 } as const;
 
@@ -114,13 +120,20 @@ export async function measureWalls(
     const l = Math.hypot(nx, ny, nz);
     if (!l) continue;
 
-    const d = rayDistance(collider, c, [(into * nx) / l, (into * ny) / l, (into * nz) / l], 1e-4);
+    // Only the face it leaves through ends the wall (a grazing neighbour at a seam would give 0.005 mm).
+    const d = rayDistance(
+      collider,
+      c,
+      [(into * nx) / l, (into * ny) / l, (into * nz) / l],
+      1e-4,
+      into === -1 ? 1 : -1,
+    );
     // A ray that never comes out again started on an open edge of the mesh: no value.
     if (!Number.isFinite(d)) continue;
 
     wall[k] = d;
     area += (l / 2) * stride;
-    if (d < minWall) thinArea += (l / 2) * stride;
+    if (d < minWall - WALL_TOLERANCE) thinArea += (l / 2) * stride;
     if (d < min) min = d;
 
     samples.push({ d, a: (l / 2) * stride, c });
@@ -160,7 +173,7 @@ export function thinSpots(
   const spots: ThinSpot[] = [];
 
   for (const x of sorted) {
-    if (x.d >= minWall) break;
+    if (x.d >= minWall - WALL_TOLERANCE) break;
 
     const near = spots.find(
       (spot) => Math.hypot(spot.at[0] - x.c[0]!, spot.at[1] - x.c[1]!, spot.at[2] - x.c[2]!) <= reach,

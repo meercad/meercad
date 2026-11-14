@@ -1192,6 +1192,12 @@ server.registerTool(
       "Imports a file from this computer as the app does: STEP/STL/3MF/OBJ as parts, DXF/SVG as a sketch on XY, a .meercad file as a new project (opened in this session's tab; no project needs to be open first). (apply_ops with an import feature and `path` also works for STEP/STL/3MF/OBJ; replace {path} and add_features {path, ids?} take the design or features of a .meercad file into the open project.)",
     inputSchema: {
       path: z.string(),
+      fullDetail: z
+        .boolean()
+        .optional()
+        .describe(
+          "STL/3MF/OBJ: keep every triangle. Without it, a file's meshes above 100,000 triangles together are made lighter first (each triangle costs the kernel about 0.3 ms; the answer lists what was reduced)",
+        ),
       keep: z
         .boolean()
         .optional()
@@ -1200,7 +1206,7 @@ server.registerTool(
         ),
     },
   },
-  guard(async ({ path, keep }) => {
+  guard(async ({ path, keep, fullDetail }) => {
     const file = resolve(path);
     const data = await readFile(file);
 
@@ -1217,7 +1223,14 @@ server.registerTool(
       );
     }
 
-    return text(await call("import_file", { name: basename(file), base64: data.toString("base64"), keep }));
+    return text(
+      await call("import_file", {
+        name: basename(file),
+        base64: data.toString("base64"),
+        keep,
+        ...(fullDetail ? { fullDetail } : {}),
+      }),
+    );
   }),
 );
 

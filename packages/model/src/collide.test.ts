@@ -205,6 +205,28 @@ describe("rayDistance", () => {
     expect(rayDistance(plate, [10, 10, 2.5], [0, 0, 1])).toBe(Infinity);
   });
 
+  it("with exit, passes a flush neighbour it enters and stops where it leaves", () => {
+    // A plate 2.5 thick, plus a facet facing up just under its top (as at a tangent seam).
+    const p = [
+      0, 0, 0, 40, 0, 0, 40, 30, 0, 0, 30, 0, 0, 0, 2.5, 40, 0, 2.5, 40, 30, 2.5, 0, 30, 2.5, 5, 5, 2.495, 15,
+      5, 2.495, 5, 15, 2.495,
+    ];
+    const f = [
+      0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4,
+      7, 8, 9, 10,
+    ];
+    const plate = new MeshCollider(p, f);
+    expect(rayDistance(plate, [7, 7, 2.5], [0, 0, -1])).toBeCloseTo(0.005, 9);
+    expect(rayDistance(plate, [7, 7, 2.5], [0, 0, -1], 1e-6, 1)).toBeCloseTo(2.5, 9);
+
+    // Wound inside out: the same with exit -1.
+    const flipped = new MeshCollider(
+      p,
+      f.map((_, i) => f[i - (i % 3) + [0, 2, 1][i % 3]!]!),
+    );
+    expect(rayDistance(flipped, [7, 7, 2.5], [0, 0, -1], 1e-6, -1)).toBeCloseTo(2.5, 9);
+  });
+
   it("finds the nearest of many faces, in a tree", () => {
     const ball = sphere(10, 24);
     expect(rayDistance(ball, [-20, 0.3, 0.2], [1, 0, 0])).toBeCloseTo(10, 0);
