@@ -40,6 +40,8 @@ export interface Renewal {
   grown?: number;
 }
 const GB = 2 ** 30;
+/** How often a multi-threaded kernel may take over again after one broke on the model (see KernelClient.backToThreads). */
+const BACK_TO_THREADS = 2;
 
 /** A kernel being warmed up to take over (see Renewal). */
 interface Spare {
@@ -85,6 +87,15 @@ export class KernelClient {
   private coarse: number | null = null;
   /** How often a fresh kernel has taken over (see Renewal). */
   renewed = 0;
+  /**
+   * A multi-threaded kernel broke on the model and a single-threaded one carries on (see `crashed`):
+   * once the open requests are answered, a multi-threaded kernel builds the design in the background
+   * and takes over again, as in a Renewal. Without that, everything after one break ran on a single
+   * core until the app was restarted (booleans on a big design about ten times slower).
+   */
+  private backToThreads = false;
+  /** Multi-threaded kernels that broke on a model; after BACK_TO_THREADS of them the single-threaded one stays. */
+  private threadedBreaks = 0;
   /** The kernel's memory after the latest rebuild (bytes; 0 before the first). */
   get memoryUsed(): number {
     return this.memory.now;
@@ -149,7 +160,7 @@ export class KernelClient {
   private renew(): void {
     const r = this.renewal;
     if (!r || this.spare || !this.lastRebuild) return;
-    if (this.memory.now < (r.above ?? 2.6 * GB) || this.memory.now - this.memory.start < (r.grown ?? 0.6 * GB)) return;
+    if (!this.backToThreads && (this.memory.now < (r.above ?? 2.6 * GB) || this.memory.now - this.memory.start < (r.grown ?? 0.6 * GB))) return;
     const worker = r.worker();
     const spare: Spare = { worker, built: null, building: null, meshes: [], memory: 0 };
     this.spare = spare;
@@ -158,8 +169,10 @@ export class KernelClient {
       const msg = e.data;
       if (msg.type === "fatal" || msg.type === "crashed" || msg.type === "failed") {
         // No fresh kernel this time: go on in the running one, and try again when it has grown more.
+        // (A multi-threaded one that breaks on the design again is not tried any more.)
         worker.terminate();
         this.spare = null;
+        this.backToThreads = false;
         this.memory.start = this.memory.now;
         return;
       }
@@ -197,6 +210,7 @@ export class KernelClient {
       }),
     );
     this.memory = { start: spare.memory, now: spare.memory };
+    this.backToThreads = false;
     this.renewed++;
   }
 
@@ -229,6 +243,8 @@ export class KernelClient {
     // A kernel that broke when it was nearly full ran out of memory: a fresh one of the same kind
     // has room again. Otherwise the model broke OCCT, and `replace` gives a kernel that copes better.
     const full = this.renewal && this.memory.now > 3.2 * GB;
+    // The single-threaded kernel is for the request that broke the other one, not for good.
+    if (!full && msg.threads && this.renewal) this.backToThreads = ++this.threadedBreaks <= BACK_TO_THREADS;
     this.memory = { start: 0, now: 0 };
     this.attach(full ? this.renewal!.worker() : this.replace({ threads: msg.threads, message: msg.message }));
     if (this.coarse !== null) this.worker.postMessage({ type: "configure", seq: ++this.seq, meshCoarse: this.coarse } satisfies WorkerRequest);
@@ -326,12 +342,12 @@ export class KernelClient {
   /**
    * Overlaps of parts where they are modelled, for a big design: only pairs with one of `parts` (all
    * when left out), only parts reaching into `box`, and at most `budgetMs` of work; `left` counts
-   * the pairs there was no time for.
+   * the pairs there was no time for, `fine` the imported meshes too fine to check (see FINE_MESH_FACES).
    */
-  async overlaps(parts: string[], limits: { box?: { min: [number, number, number]; max: [number, number, number] }; budgetMs?: number } = {}): Promise<{ pairs: Clearance[]; left: number }> {
+  async overlaps(parts: string[], limits: { box?: { min: [number, number, number]; max: [number, number, number] }; budgetMs?: number } = {}): Promise<{ pairs: Clearance[]; left: number; fine: string[] }> {
     const r = await this.send({ type: "clearance", moving: parts, poses: {}, within: 0, ...limits });
     if (r.type !== "clearances") throw new Error("unexpected response");
-    return { pairs: r.result, left: r.left ?? 0 };
+    return { pairs: r.result, left: r.left ?? 0, fine: r.fine ?? [] };
   }
 
   async clearances(moving: string[], poses: Record<string, number[]>, within?: number, skip?: string[], rigid?: Record<string, number>): Promise<Clearance[]> {

@@ -391,6 +391,8 @@ export default {
   // lib/interference.ts
   "There is only one part: nothing can overlap": "Es gibt nur ein Teil, also kann sich nichts überschneiden",
   "No parts overlap": "Keine Teile überschneiden sich",
+  "Not checked: the imported mesh {list} has too many triangles": "Nicht geprüft: das importierte Netz {list} hat zu viele Dreiecke",
+  "Not checked: the imported meshes {list} have too many triangles": "Nicht geprüft: die importierten Netze {list} haben zu viele Dreiecke",
   "No parts overlap ({n} pair touches)": "Keine Teile überschneiden sich ({n} Paar berührt sich)",
   "No parts overlap ({n} pairs touch)": "Keine Teile überschneiden sich ({n} Paare berühren sich)",
   "{n} overlap: {list}": "{n} Überschneidung: {list}",

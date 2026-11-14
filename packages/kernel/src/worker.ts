@@ -3,7 +3,7 @@ import type { WorkerRequest, WorkerResponse } from "./protocol.js";
 import { crashOf, loadOcct, occtErrorMessage, reserveHeap, type OC } from "./occt.js";
 import { KernelSession } from "./session.js";
 import type { BodyMesh } from "./mesh.js";
-import { clearances, exportMeshes, exportStep, measure } from "./tools.js";
+import { clearances, exportMeshes, exportStep, measure, type ClearanceLimits } from "./tools.js";
 import { drawingViews } from "./drawing.js";
 
 interface WorkerScope {
@@ -123,9 +123,9 @@ export function startKernelWorker(scope: WorkerScope, wasm: { occt?: string; occ
         break;
       case "clearance":
       {
-        const limits = { ...(req.box ? { box: req.box } : {}), ...(req.budgetMs !== undefined ? { budgetMs: req.budgetMs } : {}), left: 0 };
+        const limits: ClearanceLimits = { ...(req.box ? { box: req.box } : {}), ...(req.budgetMs !== undefined ? { budgetMs: req.budgetMs } : {}), left: 0 };
         const result = clearances(oc!, session!.state!, req.moving, req.poses, req.within, req.skip, req.rigid, limits);
-        post({ type: "clearances", seq: req.seq, result, ...(limits.left ? { left: limits.left } : {}) });
+        post({ type: "clearances", seq: req.seq, result, ...(limits.left ? { left: limits.left } : {}), ...(limits.fine ? { fine: limits.fine } : {}) });
       }
         break;
       case "drawing": {

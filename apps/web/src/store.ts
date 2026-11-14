@@ -113,7 +113,8 @@ function threadsOff(): boolean {
   }
 }
 // OCCT broke on a model (seen with large booleans in the multi-threaded build): carry on in a fresh,
-// single-threaded kernel, which builds the same models with more room.
+// single-threaded kernel, which builds the same models with more room. On the Mac a multi-threaded
+// one takes over again once that request is answered (KernelClient.backToThreads).
 const kernelName: KernelKind = wantThreads && crossOriginIsolated ? "kernel-threads" : desktop ? "kernel" : "kernel-reserve";
 export const kernel = new KernelClient(
   new KernelWorker({ name: kernelName }),

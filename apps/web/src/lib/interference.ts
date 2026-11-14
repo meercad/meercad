@@ -11,11 +11,13 @@ export async function checkInterference(): Promise<void> {
   const out = useApp.getState().output;
   const ids = out?.report.bodies.map((b) => b.id) ?? [];
   if (ids.length < 2) return toast(t("There is only one part: nothing can overlap"), "info");
-  const pairs = await kernel.clearances(ids, {}, 0);
+  const { pairs, fine } = await kernel.overlaps(ids);
   const features = useApp.getState().doc.features;
   const name = (id: string) => partName(id, features);
   const overlaps = pairs.filter((p) => p.overlap > 1e-3).sort((a, b) => b.overlap - a.overlap);
   const touching = pairs.filter((p) => p.overlap <= 1e-3 && p.distance < 1e-4).length;
+  // Fine imported meshes are beyond the kernel (see FINE_MESH_FACES): said, not silently left out.
+  if (fine.length) toast(tn(fine.length, "Not checked: the imported mesh {list} has too many triangles", "Not checked: the imported meshes {list} have too many triangles", { list: fine.map(name).join(", ") }), "info");
   if (!overlaps.length) return toast(touching ? tn(touching, "No parts overlap ({n} pair touches)", "No parts overlap ({n} pairs touch)") : t("No parts overlap"));
   const list = overlaps
     .slice(0, 4)
