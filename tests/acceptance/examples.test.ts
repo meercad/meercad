@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateDocument } from "@meercad/schema";
-import { EXAMPLES, examplePacks } from "../../apps/web/src/lib/examples.js";
+import { EXAMPLES } from "../../apps/web/src/lib/examples.js";
 import { newSession, withParams } from "./helpers.js";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,15 +23,6 @@ describe("feature demos (tests/corpus)", () => {
 
 describe("home-screen examples", () => {
   it("names are unique", () => expect(new Set(EXAMPLES.map((e) => e.name)).size).toBe(EXAMPLES.length));
-
-  // The home screen shows an example only with the packs it needs.
-  it("know the packs they need", () => {
-    const of = (name: string) => examplePacks(EXAMPLES.find((e) => e.name === name)!);
-    expect(of("Mounting plate")).toEqual([]);
-    expect(of("Gear pair")).toContain("mechanics");
-    // Its variants are a shortcut; the din variable changes it without the versions pack.
-    expect(of("Stackable DIN box")).toEqual([]);
-  });
 
   it.each(EXAMPLES.filter((e) => !e.url).map((e) => [e.name, e] as const))("%s validates, is fully defined and rebuilds", async (_, ex) => {
     expect(validateDocument(ex.doc).ok).toBe(true);

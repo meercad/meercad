@@ -6,7 +6,6 @@ import { openMaterialPicker } from "./MaterialPicker";
 import { partColors } from "../lib/partColors";
 import { formatMass, massOf, motion, partMaterial } from "@meercad/model";
 import { DEVIATION_GRADIENT, hideDeviation, showDeviation, useDeviation } from "../lib/deviation";
-import { hasPack } from "../lib/premium";
 import { closeMeshRepair, importOf, openMeshRepair, runMeshRepair, useMeshRepair } from "../lib/meshRepair";
 import { hideThickness, setMinWall, showThickness, THICKNESS_GRADIENT, useThickness } from "../lib/thickness";
 import { hidePrintCheck, layOnFace, pickFaceToLay, PRINT_COLORS, printBestWayUp, setOverhangLimit, showPrintCheck, usePrintCheck } from "../lib/printability";
@@ -620,7 +619,7 @@ export function ViewportView() {
     }
     if (s.measure.active) {
       // On a scan or other mesh part: the shape the surface follows there.
-      if (pick && (pick.kind === "face" || pick.kind === "edge") && hasPack("scan") && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId)) return measureOnScan(pick.bodyId, pick.point);
+      if (pick && (pick.kind === "face" || pick.kind === "edge") && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId)) return measureOnScan(pick.bodyId, pick.point);
       clearScanMeasure();
       if (!pick || (pick.kind !== "face" && pick.kind !== "edge")) return useApp.setState({ measure: { active: true, picks: [], result: null } });
       const picks = s.measure.picks.length >= 2 || !additive && s.measure.picks.length >= 2 ? [pick] : [...s.measure.picks.filter((p) => !samePick(p, pick)), pick].slice(-2);
@@ -637,7 +636,7 @@ export function ViewportView() {
     // A mesh part is picked as a whole: its faces are thousands of triangles.
     const onMesh = pick && (pick.kind === "face" || pick.kind === "edge") && meshBodyIds(s.doc.features, s.output?.meshes ?? []).has(pick.bodyId);
     if (s.dialog) {
-      if (onMesh && s.dialog.field && !PART_FIELDS.has(s.dialog.field)) return toast(meshHint(hasPack("scan")));
+      if (onMesh && s.dialog.field && !PART_FIELDS.has(s.dialog.field)) return toast(meshHint());
       if (pick && s.dialog.field) dialogPick?.(pick, additive);
       // Clicking empty space accepts the tool unless a selection field is waiting.
       else if (!pick && !s.dialog.field) commitDialog();
@@ -707,15 +706,11 @@ export function ViewportView() {
         printItem(pick.bodyId),
         { label: t("Lay on this face"), icon: <ArrowDownToLine />, onClick: () => layOnFace(pick.bodyId, pick.face, pick.normal ?? pick.surface) },
         { label: t("Gridfinity bin for this part"), icon: <LayoutGrid />, onClick: () => binForPart(pick.bodyId) },
-        ...(hasPack("scan")
-          ? [
-              "sep" as const,
-              { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
-              { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
-              thicknessItem(pick.bodyId),
-              ...(importOf(pick.bodyId) ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(pick.bodyId) }] : []),
-            ]
-          : []),
+        "sep" as const,
+        { label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(pick.bodyId) },
+        { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(pick.bodyId) },
+        thicknessItem(pick.bodyId),
+        ...(importOf(pick.bodyId) ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(pick.bodyId) }] : []),
         "sep",
         ...common,
         "sep",
@@ -743,7 +738,8 @@ export function ViewportView() {
         "sep",
         printItem(pick.bodyId),
         ...(pick.normal ? [{ label: t("Lay on this face"), icon: <ArrowDownToLine />, onClick: () => layOnFace(pick.bodyId, pick.face) }] : []),
-        ...(hasPack("scan") ? [...deviationItems(pick.bodyId), thicknessItem(pick.bodyId)] : []),
+        ...deviationItems(pick.bodyId),
+        thicknessItem(pick.bodyId),
         ...common,
         "sep",
         { label: useApp.getState().selection.length > 1 ? t("Delete selection") : t("Delete face"), icon: <Trash />, kbd: "⌫", danger: true, onClick: () => void deleteModelSelection() },
@@ -963,7 +959,7 @@ function MeasureCard() {
             />
             <span className="muted">mm</span>
           </label>
-        ) : hasPack("scan") && !m.result ? (
+        ) : !m.result ? (
           <p className="muted small">{t("On a scan or other mesh, a click fits the plane, cylinder, cone or sphere there; a second click measures between the two.")}</p>
         ) : null}
         {hasTerrain() && !m.result ? <p className="muted small">{touchOnly() ? t("On a terrain, a tap shows where the point is (with GPS when the photos had it); a second tap gives the distance, the height difference, the slope and the direction from north.") : t("On a terrain, a click shows where the point is (with GPS when the photos had it); a second click gives the distance, the height difference, the slope and the direction from north.")}</p> : null}

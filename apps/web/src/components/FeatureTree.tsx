@@ -3,7 +3,6 @@ import { useState, type ReactNode } from "react";
 import { deleteBodies } from "../lib/deletion";
 import { askConfirm, askText } from "./Ask";
 import { checkInterference } from "../lib/interference";
-import { hasPack, usePack } from "../lib/premium";
 import { evaluate, formatInertia, formatMass, massOf, massProperties, partMaterial, referencedNames } from "@meercad/model";
 import { materialName } from "../lib/materials";
 import { openMaterialPicker } from "./MaterialPicker";
@@ -175,7 +174,7 @@ function FeatureList() {
           ]
         : []),
       // Also for a mesh that failed to import (a scan with holes): cleaning it up can close them.
-      ...(f.op === "import" && f.format === "stl" && hasPack("scan") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(f.id) }] : []),
+      ...(f.op === "import" && f.format === "stl" ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(f.id) }] : []),
       "sep",
       { label: t("Delete"), icon: <Trash />, danger: true, kbd: "⌫", onClick: () => void deleteFeature(f) },
     ]);
@@ -383,7 +382,6 @@ export async function deleteFeature(f: Feature): Promise<void> {
 
 /** Parts list: drag to reorder, drop onto a folder to group; order and folders are saved in the file. */
 function Bodies() {
-  const mechanics = usePack("mechanics");
   const bodies = useApp((s) => s.output?.report.bodies) ?? NONE;
   const doc = useApp((s) => s.doc);
   const hidden = useApp((s) => s.hidden);
@@ -517,7 +515,7 @@ function Bodies() {
             })(),
             ...terrainItems(id, { set: <ArrowDownToLine />, place: <MapPin /> }),
             { label: t("Gridfinity bin for this part"), icon: <LayoutGrid />, onClick: () => binForPart(id) },
-            ...(meshParts.has(id) && hasPack("scan") ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
+            ...(meshParts.has(id) ? [{ label: t("Convert to editable body"), icon: <Shapes />, onClick: () => convertMeshPart(id) }, { label: t("Rebuild with features"), icon: <Wand2 />, onClick: () => void rebuildMeshPart(id) }, ...(doc.features.some((f) => f.id === id && f.op === "import") ? [{ label: t("Clean up mesh…"), icon: <Eraser />, onClick: () => openMeshRepair(id) }] : [])] : []),
             { label: t("Colour…"), icon: <Palette />, onClick: () => pickColor(id) },
             { label: t("Material…"), icon: <Weight />, onClick: () => pickMaterial(id) },
             ...(doc.partColors?.[id] ? [{ label: t("Reset colour"), icon: <RotateCcw />, onClick: () => setColor(id, null) }] : []),
@@ -575,7 +573,7 @@ function Bodies() {
             </span>
           ) : null}
           {meshParts.has(id) ? (
-            <span className="part-badge" title={meshHint(hasPack("scan"))}>
+            <span className="part-badge" title={meshHint()}>
               {t("Mesh")}
             </span>
           ) : null}
@@ -598,7 +596,7 @@ function Bodies() {
         onToggle={toggle}
         actions={
           <>
-            {bodies.length > 1 && mechanics ? (
+            {bodies.length > 1 ? (
               <button className="icon-btn sm" title={t("Check whether parts overlap")} onClick={() => void checkInterference()}>
                 <ShieldCheck />
               </button>
@@ -753,8 +751,6 @@ function Params() {
   const [autoOpen, toggleAuto] = useSection("variables.auto", false);
   const [calcOpen, toggleCalc] = useSection("variables.calc", false);
   const [variantsOpen, toggleVariants] = useSection("variables.variants");
-  // Without the pack a design that already has variants keeps them, but no new ones are made.
-  const variantsPack = usePack("versions");
   const variants = doc.variants ?? [];
   const active = variants.find((v) => v.name === doc.variant);
   const [query, setQuery] = useState("");
@@ -868,18 +864,16 @@ function Params() {
               ) : null}
             </div>
           ) : null}
-          {total && (variantsPack || variants.length) ? (
+          {total ? (
             <>
               <SectionHead
                 open={variantsOpen}
                 onToggle={toggleVariants}
                 sub
                 actions={
-                  variantsPack ? (
-                    <button className="icon-btn sm" title={t("Add variant")} onClick={() => void addVariant()}>
-                      <Plus />
-                    </button>
-                  ) : undefined
+                  <button className="icon-btn sm" title={t("Add variant")} onClick={() => void addVariant()}>
+                    <Plus />
+                  </button>
                 }
               >
                 <span title={t("Named sets of values, e.g. one holder for three pipe sizes")}>{t("Variants")}</span> <span className="count">{variants.length}</span>

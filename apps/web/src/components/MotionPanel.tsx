@@ -10,7 +10,6 @@ import { describeEdgeSelector, describeFaceSelector } from "../lib/topology";
 import { apply, toast, useApp } from "../store";
 import { ExprInput } from "./ExprInput";
 import { t, tn } from "../lib/i18n";
-import { usePack } from "../lib/premium";
 import { setPrefs, usePrefs } from "../lib/keymap";
 
 const TYPES: [Joint["type"], string, string?][] = [
@@ -45,8 +44,6 @@ export function MotionPanel() {
   const draft = useMotion((s) => s.draft);
   const free = useMotion((s) => s.free);
   const playing = useMotion((s) => s.playing);
-  // Without the pack the joints of a design someone shared are there to look at and move, not to change.
-  const canEdit = usePack("mechanics");
   // Joint symbols in the scene can be switched off to watch the motion alone.
   const showJoints = usePrefs((s) => s.showJoints);
   const [filming, setFilming] = useState<string | null>(null);
@@ -83,7 +80,7 @@ export function MotionPanel() {
     <div className="dialog motion-panel">
       <div className="dialog-head">
         <Link2 className="ficon" />
-        <h3>{draft && canEdit ? (draft.isNew ? t("New joint") : t("Edit joint")) : t("Joints")}</h3>
+        <h3>{draft ? (draft.isNew ? t("New joint") : t("Edit joint")) : t("Joints")}</h3>
         {joints.length ? (
           <button className={`icon-btn sm ${showJoints ? "" : "active"}`} title={showJoints ? t("Hide joint symbols") : t("Show joint symbols")} aria-pressed={!showJoints} onClick={() => setPrefs({ showJoints: !showJoints })}>
             {showJoints ? <Eye /> : <EyeOff />}
@@ -94,7 +91,7 @@ export function MotionPanel() {
         </button>
       </div>
       <div className="dialog-body">
-        {draft && canEdit ? (
+        {draft ? (
           <JointForm />
         ) : (
           <>
@@ -116,16 +113,14 @@ export function MotionPanel() {
                         <Film />
                       </button>
                     ) : null}
-                    {canEdit ? (
-                      <>
-                        <button className="icon-btn sm" title={t("Edit")} onClick={() => editJoint(j.id)}>
-                          <Pencil />
-                        </button>
-                        <button className="icon-btn sm" title={t("Delete")} onClick={() => deleteJoint(j.id)}>
-                          <Trash2 />
-                        </button>
-                      </>
-                    ) : null}
+                    <>
+                      <button className="icon-btn sm" title={t("Edit")} onClick={() => editJoint(j.id)}>
+                        <Pencil />
+                      </button>
+                      <button className="icon-btn sm" title={t("Delete")} onClick={() => deleteJoint(j.id)}>
+                        <Trash2 />
+                      </button>
+                    </>
                   </div>
                   {problems[j.id] ? (
                     <div className="callout warn">{problems[j.id]}</div>
@@ -179,13 +174,10 @@ export function MotionPanel() {
                 {e}
               </div>
             ))}
-            {canEdit ? null : <p className="muted small">{t("Changing joints needs the Mechanics pack.")}</p>}
             <div className="row">
-              {canEdit ? (
-                <button className="btn" onClick={startJoint}>
-                  <Plus /> {t("Add joint")}
-                </button>
-              ) : null}
+              <button className="btn" onClick={startJoint}>
+                <Plus /> {t("Add joint")}
+              </button>
               {joints.length ? (
                 <button className="btn" onClick={restPose} title={t("Back to where the parts were drawn")}>
                   <RotateCcw /> {t("Rest position")}
@@ -193,8 +185,8 @@ export function MotionPanel() {
               ) : null}
             </div>
             {joints.length ? <ClearanceResults /> : null}
-            {joints.some((j) => j.type !== "fixed") && (canEdit || doc.mechanism?.motions?.length) ? <MotionsSection /> : null}
-            {gearsWithout && canEdit ? (
+            {joints.some((j) => j.type !== "fixed") ? <MotionsSection /> : null}
+            {gearsWithout ? (
               <button
                 className="btn"
                 onClick={() => {
@@ -226,8 +218,6 @@ function MotionsSection() {
   // The fallback stays outside the selector: a new [] on every call would re-render forever.
   const motions = useApp((s) => s.doc.mechanism?.motions) ?? [];
   const playingMotion = useMotion((s) => s.playingMotion);
-  // Without the pack the motions of a shared design play, film and check, but do not change.
-  const canEdit = usePack("mechanics");
   const [checks, setChecks] = useState<Record<string, { running: boolean; text?: string; bad?: boolean }>>({});
   const [filming, setFilming] = useState<string | null>(null);
   const features = useApp((s) => s.doc.features);
@@ -264,7 +254,7 @@ function MotionsSection() {
         <Footprints className="ficon" />
         <b>{t("Motions")}</b>
       </div>
-      {!motions.length && canEdit ? <p className="muted small">{t("Link joints into a motion: set a pose, add it as a moment, set the next one, add it, then play.")}</p> : null}
+      {!motions.length ? <p className="muted small">{t("Link joints into a motion: set a pose, add it as a moment, set the next one, add it, then play.")}</p> : null}
       {motions.map((m) => {
         const c = checks[m.id];
         return (
@@ -273,15 +263,13 @@ function MotionsSection() {
               <button className={`icon-btn sm ${playingMotion === m.id ? "active" : ""}`} title={playingMotion === m.id ? t("Stop") : t("Play the motion")} onClick={() => (playingMotion === m.id ? stopPlaying() : playMotion(m.id))}>
                 {playingMotion === m.id ? <Pause /> : <Play />}
               </button>
-              <input className="field" value={m.name ?? ""} placeholder={m.id} readOnly={!canEdit} onChange={(e) => update({ ...m, name: e.target.value || undefined })} style={{ flex: 1 }} />
+              <input className="field" value={m.name ?? ""} placeholder={m.id} onChange={(e) => update({ ...m, name: e.target.value || undefined })} style={{ flex: 1 }} />
               <button className={`icon-btn sm ${filming === m.id ? "active" : ""}`} title={t("Save a video (GIF) of this motion")} disabled={!!filming} onClick={() => void film(m)}>
                 <Film />
               </button>
-              {canEdit ? (
-                <button className="icon-btn sm" title={t("Delete")} onClick={() => (stopPlaying(), apply({ type: "delete_motion", id: m.id }))}>
-                  <Trash2 />
-                </button>
-              ) : null}
+              <button className="icon-btn sm" title={t("Delete")} onClick={() => (stopPlaying(), apply({ type: "delete_motion", id: m.id }))}>
+                <Trash2 />
+              </button>
             </div>
             <div className="row">
               <label className="fld" style={{ flex: 1 }}>
@@ -291,7 +279,6 @@ function MotionsSection() {
                   type="number"
                   min={0.1}
                   step={0.1}
-                  disabled={!canEdit}
                   value={m.duration}
                   onChange={(e) => {
                     const d = Number(e.target.value);
@@ -300,7 +287,7 @@ function MotionsSection() {
                 />
               </label>
               <label className="checkbox">
-                <input type="checkbox" checked={!!m.loop} disabled={!canEdit} onChange={(e) => update({ ...m, loop: e.target.checked || undefined })} /> {t("Loop")}
+                <input type="checkbox" checked={!!m.loop} onChange={(e) => update({ ...m, loop: e.target.checked || undefined })} /> {t("Loop")}
               </label>
             </div>
             <div className="motion-keys">
@@ -309,25 +296,21 @@ function MotionsSection() {
                   <button className="link" title={t("Show this pose")} onClick={() => (stopPlaying(), showMotionAt(m, k.at))}>
                     {k.at.toFixed(2)} s
                   </button>
-                  {canEdit ? (
-                    <button
-                      className="link"
-                      title={t("Delete")}
-                      // The last moment takes the motion with it: a motion without moments is none.
-                      onClick={() => (m.keys.length > 1 ? update({ ...m, keys: m.keys.filter((x) => x !== k) }) : (stopPlaying(), apply({ type: "delete_motion", id: m.id })))}
-                    >
-                      <X />
-                    </button>
-                  ) : null}
+                  <button
+                    className="link"
+                    title={t("Delete")}
+                    // The last moment takes the motion with it: a motion without moments is none.
+                    onClick={() => (m.keys.length > 1 ? update({ ...m, keys: m.keys.filter((x) => x !== k) }) : (stopPlaying(), apply({ type: "delete_motion", id: m.id })))}
+                  >
+                    <X />
+                  </button>
                 </span>
               ))}
             </div>
             <div className="row">
-              {canEdit ? (
-                <button className="btn" onClick={() => (stopPlaying(), addPoseToMotion(m.id))} title={t("Adds the pose shown now as the next moment")}>
-                  <Plus /> {t("Add this pose")}
-                </button>
-              ) : null}
+              <button className="btn" onClick={() => (stopPlaying(), addPoseToMotion(m.id))} title={t("Adds the pose shown now as the next moment")}>
+                <Plus /> {t("Add this pose")}
+              </button>
               <button className="btn" onClick={() => void check(m)} disabled={c?.running} title={t("Check for collisions")}>
                 <ShieldCheck /> {c?.running ? t("Checking…") : t("motion::Check")}
               </button>
@@ -336,11 +319,9 @@ function MotionsSection() {
           </div>
         );
       })}
-      {canEdit ? (
-        <button className="btn" onClick={() => (stopPlaying(), addPoseToMotion(nextMotionId(motions), 0))}>
-          <Plus /> {t("New motion from this pose")}
-        </button>
-      ) : null}
+      <button className="btn" onClick={() => (stopPlaying(), addPoseToMotion(nextMotionId(motions), 0))}>
+        <Plus /> {t("New motion from this pose")}
+      </button>
     </div>
   );
 }

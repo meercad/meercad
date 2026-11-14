@@ -11,7 +11,6 @@ import { useSlicers } from "../lib/slicers";
 import { nativeApp } from "../lib/native";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
-import { hasPack, usePremium } from "../lib/premium";
 import { openShare } from "./ShareDialog";
 import { checkInterference } from "../lib/interference";
 import { Kbd } from "./Kbd";
@@ -80,7 +79,6 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
   const sketchId = useApp((s) => s.sketchId);
   const screen = useApp((s) => s.screen);
   const keys = usePrefs((s) => s.keys);
-  const packs = usePremium();
 
   useEffect(() => {
     const toggle = () => {
@@ -99,15 +97,15 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
     const vp = () => getViewport();
     const list: Command[] = [];
     if (screen === "editor" && sketchId) {
-      for (const [tool, label] of SKETCH_TOOLS) if (tool !== "section" || hasPack("scan")) list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
+      for (const [tool, label] of SKETCH_TOOLS) list.push({ group: G.sketch, label, ...kbd(`sketch.${tool}`), run: () => setTool(tool) });
       for (const c of CONSTRAINT_TOOLS) list.push({ group: G.constraint, label: c.label, ...kbd(`constraint.${c.type}`), run: () => applyConstraint(c.type) });
       list.push({ group: G.sketch, label: t("Toggle construction"), ...kbd("sketch.construction"), run: toggleConstruction }, { group: G.sketch, label: t("Finish sketch"), kbd: "↵", run: closeSketch });
     } else if (screen === "editor") {
-      for (const op of TOOLBAR) if ((op !== "gear" && op !== "spring") || hasPack("mechanics")) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
+      for (const op of TOOLBAR) list.push({ group: G.modeling, label: FEATURES[op].label, ...kbd(op as Action), run: () => startFeature(op as FeatureOp) });
       list.push({ group: G.modeling, label: t("Measure"), ...kbd("measure"), run: () => useApp.setState({ measure: { active: true, picks: [], result: null } }) });
       const last = lastStartedFeature();
       if (last) list.push({ group: G.modeling, label: t("Repeat: {name}", { name: FEATURES[last].label }), ...kbd("repeat"), run: () => startFeature(last) });
-      if (hasPack("mechanics")) list.push({ group: G.modeling, label: t("Joints"), ...kbd("joints"), run: toggleJoints });
+      list.push({ group: G.modeling, label: t("Joints"), ...kbd("joints"), run: toggleJoints });
       list.push(
         { group: G.edit, label: t("Select all parts"), ...kbd("select_all"), run: selectAll },
         { group: G.edit, label: t("Delete selection"), ...kbd("delete"), run: () => void deleteModelSelection() },
@@ -133,12 +131,12 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
         { group: G.file, label: t("Export 3MF"), run: () => void exportMesh("3mf") },
         ...useSlicers.getState().slicers.map((sl) => ({ group: G.file, label: t("Send to {name}", { name: sl.name }), run: () => void sendToSlicer(sl.id) })),
         { group: G.file, label: t("Export OBJ"), run: () => void exportMesh("obj") },
-        ...(hasPack("mechanics") && (useApp.getState().doc.mechanism?.joints.length ?? 0) > 0 ? [{ group: G.file, label: t("Export robot (MJCF/URDF for simulation)"), run: () => void exportRobot() }] : []),
+        ...((useApp.getState().doc.mechanism?.joints.length ?? 0) > 0 ? [{ group: G.file, label: t("Export robot (MJCF/URDF for simulation)"), run: () => void exportRobot() }] : []),
         { group: G.file, label: t("Export STEP"), run: () => void exportStep() },
         { group: G.file, label: nativeApp ? t("View in AR (real size on the table)") : t("Export USDZ (AR on iPhone and iPad)"), run: () => void viewInAr() },
-        ...(hasPack("drawings") ? [{ group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing }] : []),
-        ...(hasPack("versions") ? [{ group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions }] : []),
-        ...(hasPack("mechanics") ? [{ group: G.modeling, label: t("Check whether parts overlap (interference)"), run: () => void checkInterference() }] : []),
+        { group: G.file, label: t("Technical drawing (PDF, SVG, DXF)"), run: openDrawing },
+        { group: G.file, label: t("Versions: save or restore a state of the design"), run: openVersions },
+        { group: G.modeling, label: t("Check whether parts overlap (interference)"), run: () => void checkInterference() },
         { group: G.file, label: t("Share the design (with its history, editable)"), run: openShare },
         { group: G.file, label: t("Save copy as .meercad"), kbd: "Shift+Mod+S", run: saveFile },
         { group: G.file, label: t("All projects"), run: goHome },
@@ -155,7 +153,7 @@ export function CommandPalette({ onHelp, onShortcuts, onTour }: { onHelp: () => 
       ...CONTROL_SCHEMES.map((c) => ({ group: G.help, label: t("Control scheme: {name}", { name: c.label }), run: () => setPrefs({ keys: c.keys, mouse: c.mouse }) })),
     );
     return list;
-  }, [sketchId, screen, keys, onHelp, onShortcuts, onTour, packs]);
+  }, [sketchId, screen, keys, onHelp, onShortcuts, onTour]);
 
   const results = commands
     .map((c) => ({ c, s: Math.max(score(q, c.label), score(q, `${c.group} ${c.label}`) - 2) }))

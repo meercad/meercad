@@ -11,7 +11,6 @@ import { useSlicers } from "../lib/slicers";
 import { openDrawing } from "./DrawingDialog";
 import { openVersions } from "./VersionsDialog";
 import { openShare } from "./ShareDialog";
-import { hasPack } from "../lib/premium";
 import { nativeApp } from "../lib/native";
 import { desktop } from "../lib/persistence";
 import { McpButton } from "./McpButton";
@@ -80,12 +79,12 @@ export function TopBar() {
     { label: t("OBJ (rendering, other 3D tools)"), icon: <FileDown />, onClick: () => void exportMesh("obj") },
     { label: t("STEP (CAD exchange)"), icon: <FileDown />, onClick: () => void exportStep() },
     // A design with joints can go to a physics simulator as a robot (MuJoCo, mjlab, ROS, Isaac Sim).
-    ...(hasJoints && hasPack("mechanics") ? [{ label: t("Robot (MJCF/URDF for simulation)"), icon: <Bot />, onClick: () => void exportRobot() }] : []),
+    ...(hasJoints ? [{ label: t("Robot (MJCF/URDF for simulation)"), icon: <Bot />, onClick: () => void exportRobot() }] : []),
     // In the apps AR is a top-level entry; the browser hands out the USDZ file instead.
     ...(nativeApp ? [] : [{ label: t("USDZ (AR on iPhone and iPad)"), icon: <Rotate3d />, onClick: () => void viewInAr() }]),
     "sep",
-    ...(hasPack("drawings") ? [{ label: t("Technical drawing (PDF, DXF)…"), icon: <FileText />, onClick: openDrawing }] : []),
-    ...(variants && hasPack("versions")
+    { label: t("Technical drawing (PDF, DXF)…"), icon: <FileText />, onClick: openDrawing },
+    ...(variants
       ? [
           {
             label: t("All {n} variants (zip)", { n: variants }),
@@ -122,7 +121,7 @@ export function TopBar() {
       ],
     },
     "sep",
-    ...(hasPack("versions") ? [{ label: t("Versions…"), icon: <History />, onClick: openVersions }] : []),
+    { label: t("Versions…"), icon: <History />, onClick: openVersions },
     { label: t("Share…"), icon: <Share />, onClick: openShare },
     { label: t("Save copy as .meercad…"), icon: <Download />, kbd: "Shift+Mod+S", onClick: saveFile },
   ];

@@ -24,7 +24,6 @@ import { Press, sureTap } from "../lib/gestures";
 import { ValueInput } from "../components/ValueInput";
 import { getSolver } from "./solver";
 import { chainAt, meshSections, traceSections } from "./section";
-import { usePack } from "../lib/premium";
 import { sameSel, setSketchSelection, setTool, useSketchUi, type SketchSel, type SketchTool } from "./state";
 
 /** "Done" in the phone header: answers the first tap, also while the sketch is still rebuilding. */
@@ -65,7 +64,6 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [hoverChain, setHoverChain] = useState(-1);
-  const scanPack = usePack("scan");
   const layer = useRef<HTMLDivElement>(null);
   const toolState = useRef<{ points: Snap[]; cursor: Vec2 | null; snap: Snap | null; sweep: number; dimFirst: SketchSel | null }>({ points: [], cursor: null, snap: null, sweep: 0, dimFirst: null });
   usePrefs(); // re-render when snapping settings change
@@ -283,7 +281,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     return planeEdges(output.meshes, frame, size * 1e-5 + 1e-4);
   }, [output, frame]);
   // Where the plane cuts imported meshes: a guide to draw over, and what the section tool traces.
-  const sections = useMemo(() => (frame && output && scanPack ? meshSections(doc.features, output.meshes, frame) : []), [output, frame, scanPack, doc.features]);
+  const sections = useMemo(() => (frame && output ? meshSections(doc.features, output.meshes, frame) : []), [output, frame, doc.features]);
 
   /**
    * Where the cursor lands: existing points, then (with smart snaps) midpoints, crossings, curves and

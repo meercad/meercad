@@ -681,7 +681,7 @@ function mcpEntry(): { command: string; args: string[]; env?: Record<string, str
  * Where an App Store build came from: TestFlight and development installs carry a sandbox receipt
  * (its environment field reads "ProductionSandbox"), App Store downloads a production one. Null
  * outside the App Store build or without a receipt; the web app treats anything but "production"
- * as a test build and shows the premium packs.
+ * as a test build.
  */
 function storeEnvironment(): "production" | "sandbox" | null {
   if (!MAS) return null;

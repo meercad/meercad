@@ -6,8 +6,7 @@ import { showMenu, type MenuEntry } from "./Menu";
 import { createFolder, deleteFolder, deleteProject, desktop, moveProject, renameFolder, type ProjectMeta } from "../lib/persistence";
 import { handOverAssistantTab, newProject, openProject, refreshProjects, startTask, toast, useApp } from "../store";
 import type { MeercadDocument } from "@meercad/schema";
-import { EXAMPLES, examplePacks, type Example } from "../lib/examples";
-import { hasPack, usePremium } from "../lib/premium";
+import { EXAMPLES, type Example } from "../lib/examples";
 import { importFile } from "./io";
 import { AiOrb } from "./AiOrb";
 import { McpButton } from "./McpButton";
@@ -209,9 +208,7 @@ function projectMenu(p: ProjectMeta, x: number, y: number): void {
 export function Home() {
   const projects = useApp((s) => s.projects);
   const folders = useApp((s) => s.folders);
-  // Only the examples this app can show and change with the packs it has.
-  usePremium();
-  const examples = EXAMPLES.filter((ex) => examplePacks(ex).every(hasPack));
+  const examples = EXAMPLES;
   const folder = useApp((s) => s.folder);
   const prefs = usePrefs();
   const [dropTarget, setDropTarget] = useState<string | null>(null);

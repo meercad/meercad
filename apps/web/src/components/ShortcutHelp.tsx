@@ -3,7 +3,6 @@ import { FEATURES, TOOLBAR } from "../lib/features";
 import { keymapFor, MOUSE_SCHEMES, usePrefs, type Action, type Keymap } from "../lib/keymap";
 import { Kbd } from "./Kbd";
 import { t } from "../lib/i18n";
-import { hasPack } from "../lib/premium";
 
 /** A key binding ("Shift+R", "Mod+Num1", "Escape", "?"), as opposed to a described gesture. */
 const isBinding = (part: string) => /^((Mod|Shift|Alt)\+)*([^\s]|Enter|Escape|Esc|Delete|Del|Backspace|Space|Home|Tab|F\d{1,2}|Num\d)$/.test(part);
@@ -16,9 +15,9 @@ function sections(map: Keymap, mouse: (typeof MOUSE_SCHEMES)[number]): { title: 
   {
     title: t("Modeling"),
     rows: [
-      ...TOOLBAR.filter((op) => map[op as Action][0] && ((op !== "gear" && op !== "spring") || hasPack("mechanics"))).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
+      ...TOOLBAR.filter((op) => map[op as Action][0]).map((op) => [FEATURES[op].label, map[op as Action][0]!] as [string, string]),
       [t("Measure"), keys(map, "measure")],
-      ...(hasPack("mechanics") ? [[t("Joints"), keys(map, "joints")] as [string, string]] : []),
+      [t("Joints"), keys(map, "joints")] as [string, string],
       [t("Command search"), keys(map, "palette")],
       ...(map.repeat[0] ? [[t("Repeat last command"), keys(map, "repeat")] as [string, string]] : []),
       [t("Import file"), "Mod+O"],

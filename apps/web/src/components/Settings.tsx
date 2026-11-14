@@ -1,11 +1,10 @@
 /** Settings (⌘,): control scheme (mouse and keys), and where projects are stored. */
-import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gem, Gamepad2, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
+import { Cloud, FolderOpen, Grid3x3, HardDrive, Keyboard, Gamepad2, Languages, LayoutGrid, Mouse, Printer, Ruler, TriangleAlert, Type, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { langChoice, setLang, t, type LangChoice } from "../lib/i18n";
 import { CONTROL_SCHEMES, KEY_SCHEMES, MOUSE_SCHEMES, setPrefs, usePrefs } from "../lib/keymap";
 import { iCloudFolder, nativeApp, storageKind } from "../lib/native";
 import { desktop, type UiScale } from "../lib/persistence";
-import { PACKS, setPack, usePremium } from "../lib/premium";
 import { changeProjectsFolder, folderLabel, switchNativeStorage } from "../lib/storage";
 import { Kbd } from "./Kbd";
 import { BED_PRESETS, DEFAULT_BED, type Bed } from "../lib/printBed";
@@ -15,7 +14,6 @@ import { openFitTest } from "../lib/fit";
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
   const prefs = usePrefs();
-  const premium = usePremium();
   const [dir, setDir] = useState<string | null>(null);
   const [cloud, setCloud] = useState<{ dir: string | null; available: boolean } | null>(null);
   const [nativeKind, setNativeKind] = useState<"local" | "icloud" | null>(null);
@@ -198,24 +196,6 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             {t("Show the example models")}
           </label>
         </section>
-
-        {premium.tester ? (
-          <section>
-            <h3>
-              <Gem /> {t("Premium packs")}
-            </h3>
-            {PACKS.map((p) => (
-              <label className="check" key={p.id}>
-                <input type="checkbox" checked={!premium.off[p.id]} onChange={(e) => setPack(p.id, e.target.checked)} />
-                <span>
-                  {t(p.name)}
-                  <small className="muted pack-contents">{t(p.contents)}</small>
-                </span>
-              </label>
-            ))}
-            <p className="muted">{t("Only in test builds. The App Store version hides these packs until they are on sale; switch one off to see the app without it.")}</p>
-          </section>
-        ) : null}
 
         <section>
           <h3>
