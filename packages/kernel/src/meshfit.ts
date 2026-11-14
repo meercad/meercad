@@ -109,9 +109,46 @@ export function surfaceDistance(p: Vec3, primitive: Primitive): number {
   }
 }
 
+/** Default dihedral angle (degrees) above which neighbouring triangles lie on different curved surfaces. */
+const SHARP_ANGLE = 30;
+/** Default largest angle (degrees) between the normals of triangles on one flat face. */
+const FLAT_ANGLE = 1;
+/** Smallest default tolerance (mm). */
+const MIN_TOLERANCE = 0.01;
+/** Default tolerance as a share of the bounding box diagonal. */
+const TOLERANCE_PER_DIAG = 2e-4;
+/** A triangle with less area than this share of the squared diagonal has no surface. */
+const DEGENERATE_AREA = 1e-12;
+/** A flat region is a thin strip when this many times its area is less than its perimeter squared. */
+const THIN_STRIP = 40;
+/** Smallest cosine between a triangle's normal and the surface normal for it to lie on the surface. */
+const NORMAL_AGREEMENT = 0.9;
+/** Rings of neighbouring units fitted together with a seed strip. */
+const SEED_RINGS = 2;
+/** Fewest triangles a grown curved surface keeps. */
+const MIN_SURFACE_TRIANGLES = 4;
+/** How much more area a later hypothesis must cover to win over an earlier one. */
+const WIN_MARGIN = 1.05;
+
 export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): MeshFit {
   const { positions, triangles } = weld(corners);
-  const n = triangles.length / 3;
+  const finder = new SurfaceFinder(positions, triangles, opts);
+
+  finder.fitSmoothPatches();
+  finder.fitCurvedSurfaces();
+  finder.absorbFlatStrips();
+  finder.facetUnclaimed();
+  finder.attachDegenerates();
+  finder.dropEmptyRegions();
+  finder.refreshResiduals();
+
+  const { triangleRegion, regions, twin, volume, bbox, diag, tolerance } = finder;
+  const segments = traceBoundaries(regions, triangleRegion, triangles, twin);
+
+  return { positions, triangles, triangleRegion, regions, segments, twin, volume, bbox, diag, tolerance };
+}
+
+function boundingBox(positions: Float64Array): { min: Vec3; max: Vec3 } {
   const bbox = {
     min: [Infinity, Infinity, Infinity] as Vec3,
     max: [-Infinity, -Infinity, -Infinity] as Vec3,
@@ -124,397 +161,585 @@ export function fitMesh(corners: ArrayLike<number>, opts: FitOptions = {}): Mesh
     }
   }
 
-  const diag = len(sub(bbox.max, bbox.min));
-  const tolerance = opts.tolerance ?? Math.max(0.01, diag * 2e-4);
-  const sharp = Math.cos(((opts.sharpAngle ?? 30) * Math.PI) / 180);
-  const flat = Math.cos(((opts.flatAngle ?? 1) * Math.PI) / 180);
+  return bbox;
+}
 
-  const p = (i: number): Vec3 => [positions[i * 3]!, positions[i * 3 + 1]!, positions[i * 3 + 2]!];
-  const tri = (t: number): [number, number, number] => [
-    triangles[t * 3]!,
-    triangles[t * 3 + 1]!,
-    triangles[t * 3 + 2]!,
-  ];
-  const normals: Vec3[] = [];
-  const areas: number[] = [];
-  const centroids: Vec3[] = [];
-  let volume = 0;
+/** A curved piece of the mesh while surfaces are grown in it. */
+interface Piece {
+  inPiece: Set<number>;
+  /** The flat region (or the lone triangle) each triangle of the piece moves with. */
+  unitOf: Map<number, number[]>;
+  claimed: Set<number>;
+}
 
-  for (let t = 0; t < n; t++) {
-    const [a, b, c] = tri(t).map(p) as [Vec3, Vec3, Vec3];
-    const nn = cross(sub(b, a), sub(c, a));
-    const l = len(nn);
-    areas.push(l / 2);
-    normals.push(l > 0 ? scale(nn, 1 / l) : [0, 0, 0]);
-    centroids.push(scale(add(add(a, b), c), 1 / 3));
-    volume += dot(a, cross(b, c)) / 6;
+/** Triangles grown on one fitted surface. */
+interface Surface {
+  tris: number[];
+  fit: Fit;
+  area: number;
+}
+
+/** The welded mesh and the regions found on it so far: each step of `fitMesh` is one method. */
+class SurfaceFinder {
+  readonly bbox: { min: Vec3; max: Vec3 };
+  readonly diag: number;
+  readonly tolerance: number;
+  readonly twin: Int32Array;
+  readonly triangleRegion: Int32Array;
+  readonly regions: Region[] = [];
+  volume = 0;
+
+  private readonly positions: Float64Array;
+  private readonly triangles: Uint32Array;
+  private readonly n: number;
+  /** Cosine of the sharp angle: smoother neighbours belong to one surface. */
+  private readonly sharp: number;
+  /** Cosine of the flat angle. */
+  private readonly flat: number;
+  private readonly normals: Vec3[] = [];
+  private readonly areas: number[] = [];
+  private readonly centroids: Vec3[] = [];
+  private readonly fitter: Fitter;
+
+  constructor(positions: Float64Array, triangles: Uint32Array, opts: FitOptions) {
+    this.positions = positions;
+    this.triangles = triangles;
+    this.n = triangles.length / 3;
+    this.bbox = boundingBox(positions);
+    this.diag = len(sub(this.bbox.max, this.bbox.min));
+    this.tolerance = opts.tolerance ?? Math.max(MIN_TOLERANCE, this.diag * TOLERANCE_PER_DIAG);
+    this.sharp = Math.cos(((opts.sharpAngle ?? SHARP_ANGLE) * Math.PI) / 180);
+    this.flat = Math.cos(((opts.flatAngle ?? FLAT_ANGLE) * Math.PI) / 180);
+
+    this.measureTriangles();
+    if (this.volume < 0) this.turnOutward();
+
+    this.twin = this.twinEdges();
+    this.triangleRegion = new Int32Array(this.n).fill(-1);
+    this.fitter = {
+      p: this.p,
+      normals: this.normals,
+      areas: this.areas,
+      centroids: this.centroids,
+      tolerance: this.tolerance,
+      diag: this.diag,
+      flat: this.flat,
+    };
   }
 
-  if (volume < 0) {
-    // Wound inside out: flip every triangle so boundary loops run the right way round.
-    for (let t = 0; t < n; t++) {
+  // ---------------------------------------------------------------- the steps
+
+  /**
+   * Smooth patches (connected through edges whose dihedral angle is below the sharp threshold) that
+   * fit one surface become a region; the others split into flat regions.
+   */
+  fitSmoothPatches() {
+    const patches = components(
+      this.n,
+      (t) => this.neighbours(t).filter((u) => dot(this.normals[t]!, this.normals[u]!) > this.sharp),
+      (t) => this.isDegenerate(t),
+    );
+
+    for (const patch of patches) {
+      const whole = fitPatch(patch, this.verticesOf(patch), this.fitter);
+
+      if (whole) {
+        this.newRegion(patch, whole.primitive, whole.residual);
+      } else {
+        this.splitFlatRegions(patch);
+      }
+    }
+  }
+
+  /**
+   * Curved surfaces: thin flat strips (a tessellated cylinder is a row of nearly flat quads) and
+   * claimed-by-nobody triangles, grouped by smooth connectivity and fitted as one surface. A group
+   * that fits nothing keeps its flat regions.
+   */
+  fitCurvedSurfaces() {
+    const leftovers = this.curvedCandidates();
+    const pieces = components(
+      this.n,
+      (t) =>
+        this.neighbours(t).filter(
+          (u) => leftovers.has(u) && dot(this.normals[t]!, this.normals[u]!) > this.sharp,
+        ),
+      (t) => !leftovers.has(t) || this.isDegenerate(t),
+    );
+
+    for (const piece of pieces) {
+      const whole = fitPatch(piece, this.verticesOf(piece), this.fitter, true);
+
+      if (whole) {
+        this.claim(piece, whole);
+      } else {
+        this.growSurfacesIn(piece);
+      }
+    }
+  }
+
+  /** Curved regions take in neighbouring flat strips that lie on them within tolerance. */
+  absorbFlatStrips() {
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+
+      for (const region of this.regions) {
+        const primitive = region.primitive;
+        if (!primitive || primitive.kind === "plane" || !region.triangles.length) continue;
+
+        for (const bi of this.borderRegions(region)) {
+          const other = this.regions[bi]!;
+          if (!other.triangles.length || other.primitive?.kind !== "plane") continue;
+          if (!this.liesAlong(other.triangles, primitive)) continue;
+
+          this.moveInto(other, region);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  /** Every triangle that no surface claimed is a flat facet of its own. */
+  facetUnclaimed() {
+    for (let t = 0; t < this.n; t++) {
+      if (this.isDegenerate(t)) continue;
+
+      const region = this.triangleRegion[t]! >= 0 ? this.regions[this.triangleRegion[t]!] : undefined;
+
+      if (!region || region.primitive === null) {
+        if (region) region.triangles = region.triangles.filter((x) => x !== t);
+
+        this.newRegion([t], null, 0);
+      }
+    }
+  }
+
+  /** Degenerate triangles join a neighbour (they add nothing to the surface). */
+  attachDegenerates() {
+    for (let t = 0; t < this.n; t++) {
+      if (!this.isDegenerate(t) || this.triangleRegion[t]! >= 0) continue;
+
+      const u = this.neighbours(t).find((x) => this.triangleRegion[x]! >= 0);
+
+      if (u === undefined) {
+        this.newRegion([t], null, 0);
+      } else {
+        this.triangleRegion[t] = this.triangleRegion[u]!;
+        this.regions[this.triangleRegion[u]!]!.triangles.push(t);
+      }
+    }
+  }
+
+  /** Drops emptied regions and renumbers the rest. */
+  dropEmptyRegions() {
+    const kept = this.regions.filter((region) => region.triangles.length);
+    kept.forEach((region, i) => {
+      region.index = i;
+      region.area = this.areaOf(region.triangles);
+      for (const t of region.triangles) this.triangleRegion[t] = i;
+    });
+    this.regions.length = 0;
+    // One by one: a scan can leave far more regions than a spread call takes arguments.
+    for (const region of kept) this.regions.push(region);
+  }
+
+  /** Measures every surface again against the triangles it ended up with. */
+  refreshResiduals() {
+    for (const region of this.regions) {
+      if (!region.primitive) continue;
+
+      region.residual = this.residualOn(region.triangles, region.primitive);
+    }
+  }
+
+  // ---------------------------------------------------------------- mesh preparation
+
+  private measureTriangles() {
+    for (let t = 0; t < this.n; t++) {
+      const [a, b, c] = this.tri(t).map(this.p) as [Vec3, Vec3, Vec3];
+      const nn = cross(sub(b, a), sub(c, a));
+      const l = len(nn);
+      this.areas.push(l / 2);
+      this.normals.push(l > 0 ? scale(nn, 1 / l) : [0, 0, 0]);
+      this.centroids.push(scale(add(add(a, b), c), 1 / 3));
+      this.volume += dot(a, cross(b, c)) / 6;
+    }
+  }
+
+  /** Wound inside out: flips every triangle so boundary loops run the right way round. */
+  private turnOutward() {
+    const triangles = this.triangles;
+
+    for (let t = 0; t < this.n; t++) {
       const tmp = triangles[t * 3 + 1]!;
       triangles[t * 3 + 1] = triangles[t * 3 + 2]!;
       triangles[t * 3 + 2] = tmp;
-      normals[t] = scale(normals[t]!, -1);
+      this.normals[t] = scale(this.normals[t]!, -1);
     }
 
-    volume = -volume;
+    this.volume = -this.volume;
   }
 
-  const degenerate = (t: number) => areas[t]! <= diag * diag * 1e-12;
+  /** Twin half-edge across each directed edge (the mesh is closed and consistently wound). */
+  private twinEdges(): Int32Array {
+    const twin = new Int32Array(this.n * 3).fill(-1);
+    const byEdge = new Map<number, number>();
+    const vcount = this.positions.length / 3;
+    const key = (a: number, b: number) => a * vcount + b;
 
-  // Twin triangle across each directed edge (the mesh is closed and consistently wound).
-  const twin = new Int32Array(n * 3).fill(-1);
-  const byEdge = new Map<number, number>();
-  const vcount = positions.length / 3;
-  const key = (a: number, b: number) => a * vcount + b;
-
-  for (let t = 0; t < n; t++) {
-    const v = tri(t);
-    for (let e = 0; e < 3; e++) byEdge.set(key(v[e]!, v[(e + 1) % 3]!), t * 3 + e);
-  }
-
-  for (let t = 0; t < n; t++) {
-    const v = tri(t);
-
-    for (let e = 0; e < 3; e++) {
-      const other = byEdge.get(key(v[(e + 1) % 3]!, v[e]!));
-      if (other !== undefined) twin[t * 3 + e] = other >> 0;
-    }
-  }
-
-  const neighbours = (t: number) =>
-    [0, 1, 2]
-      .map((e) => twin[t * 3 + e]!)
-      .filter((h) => h >= 0)
-      .map((h) => Math.floor(h / 3));
-
-  const triangleRegion = new Int32Array(n).fill(-1);
-  const regions: Region[] = [];
-
-  const newRegion = (tris: number[], primitive: Primitive | null, residual: number) => {
-    const region: Region = {
-      index: regions.length,
-      triangles: tris,
-      primitive,
-      area: tris.reduce((s, t) => s + areas[t]!, 0),
-      residual,
-      loops: [],
-    };
-    for (const t of tris) triangleRegion[t] = region.index;
-    regions.push(region);
-
-    return region;
-  };
-
-  const verticesOf = (tris: number[]) => {
-    const set = new Set<number>();
-    for (const t of tris) for (const v of tri(t)) set.add(v);
-
-    return [...set];
-  };
-
-  const fitter = { p, normals, areas, centroids, tolerance, diag, flat };
-
-  // 1. Smooth patches: connected through edges whose dihedral angle is below the sharp threshold.
-  const patches = components(
-    n,
-    (t) => neighbours(t).filter((u) => dot(normals[t]!, normals[u]!) > sharp),
-    degenerate,
-  );
-
-  for (const patch of patches) {
-    const whole = fitPatch(patch, verticesOf(patch), fitter);
-
-    if (whole) {
-      newRegion(patch, whole.primitive, whole.residual);
-      continue;
+    for (let t = 0; t < this.n; t++) {
+      const v = this.tri(t);
+      for (let e = 0; e < 3; e++) byEdge.set(key(v[e]!, v[(e + 1) % 3]!), t * 3 + e);
     }
 
-    // 2. Flat regions inside the patch, grown from the largest triangles.
+    for (let t = 0; t < this.n; t++) {
+      const v = this.tri(t);
+
+      for (let e = 0; e < 3; e++) {
+        const other = byEdge.get(key(v[(e + 1) % 3]!, v[e]!));
+        if (other !== undefined) twin[t * 3 + e] = other >> 0;
+      }
+    }
+
+    return twin;
+  }
+
+  // ---------------------------------------------------------------- flat regions
+
+  /** Flat regions inside a patch, grown from the largest triangles. */
+  private splitFlatRegions(patch: number[]) {
     const inPatch = new Set(patch);
     const taken = new Set<number>();
 
-    for (const seed of [...patch].sort((a, b) => areas[b]! - areas[a]!)) {
+    for (const seed of [...patch].sort((a, b) => this.areas[b]! - this.areas[a]!)) {
       if (taken.has(seed)) continue;
 
-      const nrm = normals[seed]!;
-      const d = dot(nrm, centroids[seed]!);
-      const grown = grow(seed, (t) =>
-        neighbours(t).filter(
-          (u) =>
-            inPatch.has(u) &&
-            !taken.has(u) &&
-            dot(normals[u]!, nrm) > flat &&
-            tri(u).every((v) => Math.abs(dot(p(v), nrm) - d) <= tolerance),
-        ),
-      );
+      const grown = this.growFlat(seed, inPatch, taken);
       for (const t of grown) taken.add(t);
 
-      const fit = fitPlane(verticesOf(grown), grown, fitter);
-      newRegion(grown, fit.primitive, fit.residual);
+      const fit = fitPlane(this.verticesOf(grown), grown, this.fitter);
+      this.newRegion(grown, fit.primitive, fit.residual);
     }
   }
 
-  // 3. Curved surfaces: thin flat strips (a tessellated cylinder is a row of nearly flat quads)
-  // and claimed-by-nobody triangles, grouped by smooth connectivity and fitted as one surface.
-  // A group that fits nothing keeps its flat regions.
-  const perimeter = (tris: number[]) => {
-    const inside = new Set(tris);
-    let sum = 0;
+  /** The triangles around `seed` that lie on its plane within the flat angle and the tolerance. */
+  private growFlat(seed: number, inPatch: Set<number>, taken: Set<number>): number[] {
+    const nrm = this.normals[seed]!;
+    const d = dot(nrm, this.centroids[seed]!);
 
-    for (const t of tris) {
-      const v = tri(t);
-
-      for (let e = 0; e < 3; e++) {
-        const h = twin[t * 3 + e]!;
-        if (h < 0 || !inside.has(Math.floor(h / 3))) sum += len(sub(p(v[(e + 1) % 3]!), p(v[e]!)));
-      }
-    }
-
-    return sum;
-  };
-
-  const leftovers = new Set<number>();
-
-  for (const region of regions) {
-    if (region.primitive && region.primitive.kind !== "plane") continue;
-
-    const thin = region.triangles.length <= 2 || region.area * 40 < perimeter(region.triangles) ** 2;
-    if (!region.primitive || thin) for (const t of region.triangles) leftovers.add(t);
-  }
-
-  const curvedPieces = components(
-    n,
-    (t) => neighbours(t).filter((u) => leftovers.has(u) && dot(normals[t]!, normals[u]!) > sharp),
-    (t) => !leftovers.has(t) || degenerate(t),
-  );
-
-  const claim = (tris: number[], fit: Fit) => {
-    for (const t of tris) {
-      const old = regions[triangleRegion[t]!];
-      if (old) old.triangles = old.triangles.filter((x) => x !== t);
-    }
-
-    newRegion(tris, fit.primitive, fit.residual);
-  };
-
-  for (const piece of curvedPieces) {
-    const whole = fitPatch(piece, verticesOf(piece), fitter, true);
-
-    if (whole) {
-      claim(piece, whole);
-      continue;
-    }
-
-    // Several surfaces meet smoothly (the rounded edges around a face): grow each from a seed
-    // strip while the neighbouring strips still lie on the fitted surface.
-    const inPiece = new Set(piece);
-    const unitOf = new Map<number, number[]>();
-
-    for (const t of piece) {
-      const region = regions[triangleRegion[t]!];
-      unitOf.set(t, region && region.triangles.every((x) => inPiece.has(x)) ? region.triangles : [t]);
-    }
-
-    const units = [...new Set(unitOf.values())].sort(
-      (x, y) => y.reduce((s, t) => s + areas[t]!, 0) - x.reduce((s, t) => s + areas[t]!, 0),
+    return grow(seed, (t) =>
+      this.neighbours(t).filter(
+        (u) =>
+          inPatch.has(u) &&
+          !taken.has(u) &&
+          dot(this.normals[u]!, nrm) > this.flat &&
+          this.tri(u).every((v) => Math.abs(dot(this.p(v), nrm) - d) <= this.tolerance),
+      ),
     );
-    const claimed = new Set<number>();
-    const edgeLength = (t: number, e: number) => len(sub(p(tri(t)[(e + 1) % 3]!), p(tri(t)[e]!)));
+  }
 
-    /** Units next to `tris`; with `minEdge`, only across edges at least that long. */
-    const adjacentUnits = (tris: number[], minEdge = 0) => {
-      const out = new Set<number[]>();
+  // ---------------------------------------------------------------- curved surfaces
 
-      for (const t of tris) {
-        for (let e = 0; e < 3; e++) {
-          const h = twin[t * 3 + e]!;
-          if (h < 0 || (minEdge > 0 && edgeLength(t, e) < minEdge)) continue;
+  /** Triangles a curved surface may claim: those of thin flat strips and of no surface at all. */
+  private curvedCandidates(): Set<number> {
+    const leftovers = new Set<number>();
 
-          const u = Math.floor(h / 3);
+    for (const region of this.regions) {
+      if (region.primitive && region.primitive.kind !== "plane") continue;
 
-          if (inPiece.has(u) && !claimed.has(u) && dot(normals[t]!, normals[u]!) > sharp) {
-            out.add(unitOf.get(u)!);
-          }
-        }
-      }
+      const thin =
+        region.triangles.length <= 2 || region.area * THIN_STRIP < this.perimeter(region.triangles) ** 2;
+      if (!region.primitive || thin) for (const t of region.triangles) leftovers.add(t);
+    }
 
-      for (const t of tris) out.delete(unitOf.get(t)!);
+    return leftovers;
+  }
 
-      return [...out];
-    };
+  /**
+   * Several surfaces meet smoothly (the rounded edges around a face): grows each from a seed strip
+   * while the neighbouring strips still lie on the fitted surface.
+   */
+  private growSurfacesIn(tris: number[]) {
+    const piece = this.pieceOf(tris);
 
-    const fitsOn = (unit: number[], prim: Primitive) =>
-      verticesOf(unit).every((v) => Math.abs(surfaceDistance(p(v), prim)) <= tolerance) &&
-      unit.every((t) => dot(normals[t]!, primitiveNormal(centroids[t]!, prim)) > 0.9);
+    for (const seed of this.unitsBySize(piece)) {
+      if (seed.some((t) => piece.claimed.has(t))) continue;
 
-    for (const seed of units) {
-      if (seed.some((t) => claimed.has(t))) continue;
-
-      // Seed: the strip and two rings of neighbours.
-      let cand = [...seed];
-      for (let ring = 0; ring < 2; ring++) cand = [...new Set([...cand, ...adjacentUnits(cand).flat()])];
-
-      // A small seed fits several surfaces (a corner of a sphere looks like a cylinder up close):
-      // each hypothesis grows on its own and the one that covers the most area wins.
-      let starts = fitCurved(cand, verticesOf(cand), fitter);
-
-      if (!starts.length) {
-        // A strip of a cylinder whose ends meet another surface smoothly (a capsule's half
-        // spheres): the rings above took in triangles of that surface across the strip's short
-        // ends. Its neighbours across the long sides alone show the strip's own surface.
-        let side = [...seed];
-        const long = Math.max(...seed.flatMap((t) => [0, 1, 2].map((e) => edgeLength(t, e)))) / 2;
-
-        for (let ring = 0; ring < 2; ring++) {
-          side = [...new Set([...side, ...adjacentUnits(side, long).flat()])];
-        }
-
-        starts = fitCurved(side, verticesOf(side), fitter);
-      }
-
-      let best: { tris: number[]; fit: Fit; area: number } | null = null;
-
-      for (const start of starts) {
-        let fit = start;
-        let grown = [
-          ...new Set(cand.filter((t) => fitsOn([t], fit.primitive)).flatMap((t) => unitOf.get(t)!)),
-        ].filter((t) => fitsOn(unitOf.get(t)!, fit.primitive));
-        let sinceRefit = 0;
-
-        for (;;) {
-          const inGrown = new Set(grown);
-          const next = adjacentUnits(grown).filter(
-            (u) => u.every((t) => !inGrown.has(t)) && fitsOn(u, fit.primitive),
-          );
-          if (!next.length) break;
-
-          for (const u of next) for (const t of u) if (!inGrown.has(t)) (grown.push(t), inGrown.add(t));
-          sinceRefit += next.length;
-
-          if (sinceRefit * 2 >= grown.length) {
-            const refit = fitCurved(grown, verticesOf(grown), fitter).find(
-              (c) => c.primitive.kind === fit.primitive.kind,
-            );
-            if (refit) fit = refit;
-
-            sinceRefit = 0;
-          }
-        }
-
-        const final =
-          fitCurved(grown, verticesOf(grown), fitter).find((c) => c.primitive.kind === fit.primitive.kind) ??
-          fit;
-        grown = grown.filter((t) => fitsOn([t], final.primitive));
-        if (grown.length < 4) continue;
-
-        const area = grown.reduce((sum, t) => sum + areas[t]!, 0);
-        if (!best || area > best.area * 1.05) best = { tris: grown, fit: final, area };
-      }
-
+      const best = this.bestSurface(piece, seed);
       if (!best) continue;
 
-      for (const t of best.tris) claimed.add(t);
-      claim(best.tris, {
+      for (const t of best.tris) piece.claimed.add(t);
+      this.claim(best.tris, {
         primitive: best.fit.primitive,
-        residual: Math.max(
-          0,
-          ...verticesOf(best.tris).map((v) => Math.abs(surfaceDistance(p(v), best!.fit.primitive))),
-        ),
+        residual: this.residualOn(best.tris, best.fit.primitive),
       });
     }
   }
 
-  // Grow curved regions into neighbouring flat strips that fit them within tolerance.
-  let changed = true;
+  private pieceOf(tris: number[]): Piece {
+    const inPiece = new Set(tris);
+    const unitOf = new Map<number, number[]>();
 
-  while (changed) {
-    changed = false;
+    for (const t of tris) {
+      const region = this.regions[this.triangleRegion[t]!];
+      unitOf.set(t, region && region.triangles.every((x) => inPiece.has(x)) ? region.triangles : [t]);
+    }
 
-    for (const region of regions) {
-      if (!region.primitive || region.primitive.kind === "plane" || !region.triangles.length) continue;
+    return { inPiece, unitOf, claimed: new Set() };
+  }
 
-      const border = new Set<number>();
+  /** The units of a piece, largest area first. */
+  private unitsBySize(piece: Piece): number[][] {
+    return [...new Set(piece.unitOf.values())].sort((x, y) => this.areaOf(y) - this.areaOf(x));
+  }
 
-      for (const t of region.triangles) {
-        for (const u of neighbours(t)) {
-          if (triangleRegion[u]! >= 0 && triangleRegion[u] !== region.index) border.add(triangleRegion[u]!);
-        }
+  /**
+   * A small seed fits several surfaces (a corner of a sphere looks like a cylinder up close): each
+   * hypothesis grows on its own and the one that covers the most area wins.
+   */
+  private bestSurface(piece: Piece, seed: number[]): Surface | null {
+    const { cand, starts } = this.seedHypotheses(piece, seed);
+    let best: Surface | null = null;
+
+    for (const start of starts) {
+      const surface = this.growHypothesis(piece, cand, start);
+      if (!surface) continue;
+
+      if (!best || surface.area > best.area * WIN_MARGIN) best = surface;
+    }
+
+    return best;
+  }
+
+  /** The surfaces that fit the seed strip with its rings of neighbours. */
+  private seedHypotheses(piece: Piece, seed: number[]): { cand: number[]; starts: Fit[] } {
+    const cand = this.ringsAround(piece, seed);
+    let starts = fitCurved(cand, this.verticesOf(cand), this.fitter);
+
+    if (!starts.length) {
+      // A strip of a cylinder whose ends meet another surface smoothly (a capsule's half spheres):
+      // the rings above took in triangles of that surface across the strip's short ends. Its
+      // neighbours across the long sides alone show the strip's own surface.
+      const long = Math.max(...seed.flatMap((t) => [0, 1, 2].map((e) => this.edgeLength(t, e)))) / 2;
+      const side = this.ringsAround(piece, seed, long);
+      starts = fitCurved(side, this.verticesOf(side), this.fitter);
+    }
+
+    return { cand, starts };
+  }
+
+  /** The seed and its rings of neighbouring units; with `minEdge`, only across edges that long. */
+  private ringsAround(piece: Piece, seed: number[], minEdge = 0): number[] {
+    let out = [...seed];
+
+    for (let ring = 0; ring < SEED_RINGS; ring++) {
+      out = [...new Set([...out, ...this.adjacentUnits(piece, out, minEdge).flat()])];
+    }
+
+    return out;
+  }
+
+  /** Grows one hypothesis over the neighbouring units that lie on it, refitting as it grows. */
+  private growHypothesis(piece: Piece, cand: number[], start: Fit): Surface | null {
+    let fit = start;
+    let grown = [
+      ...new Set(cand.filter((t) => this.fitsOn([t], fit.primitive)).flatMap((t) => piece.unitOf.get(t)!)),
+    ].filter((t) => this.fitsOn(piece.unitOf.get(t)!, fit.primitive));
+    let sinceRefit = 0;
+
+    for (;;) {
+      const inGrown = new Set(grown);
+      const next = this.adjacentUnits(piece, grown).filter(
+        (u) => u.every((t) => !inGrown.has(t)) && this.fitsOn(u, fit.primitive),
+      );
+      if (!next.length) break;
+
+      for (const u of next) for (const t of u) if (!inGrown.has(t)) (grown.push(t), inGrown.add(t));
+      sinceRefit += next.length;
+
+      if (sinceRefit * 2 >= grown.length) {
+        const refit = this.refit(grown, fit);
+        if (refit) fit = refit;
+
+        sinceRefit = 0;
       }
+    }
 
-      for (const bi of border) {
-        const other = regions[bi]!;
-        if (!other.triangles.length || other.primitive?.kind !== "plane") continue;
+    const final = this.refit(grown, fit) ?? fit;
+    grown = grown.filter((t) => this.fitsOn([t], final.primitive));
+    if (grown.length < MIN_SURFACE_TRIANGLES) return null;
 
-        const vs = verticesOf(other.triangles);
-        if (!vs.every((v) => Math.abs(surfaceDistance(p(v), region.primitive!)) <= tolerance)) continue;
+    return { tris: grown, fit: final, area: this.areaOf(grown) };
+  }
+
+  /** The surface of the same kind as `fit` that fits `tris`, if any. */
+  private refit(tris: number[], fit: Fit): Fit | undefined {
+    return fitCurved(tris, this.verticesOf(tris), this.fitter).find(
+      (c) => c.primitive.kind === fit.primitive.kind,
+    );
+  }
+
+  /** Units next to `tris`; with `minEdge`, only across edges at least that long. */
+  private adjacentUnits(piece: Piece, tris: number[], minEdge = 0): number[][] {
+    const out = new Set<number[]>();
+
+    for (const t of tris) {
+      for (let e = 0; e < 3; e++) {
+        const h = this.twin[t * 3 + e]!;
+        if (h < 0 || (minEdge > 0 && this.edgeLength(t, e) < minEdge)) continue;
+
+        const u = Math.floor(h / 3);
 
         if (
-          !other.triangles.every(
-            (t) => Math.abs(dot(normals[t]!, primitiveNormal(centroids[t]!, region.primitive!))) > 0.9,
-          )
+          piece.inPiece.has(u) &&
+          !piece.claimed.has(u) &&
+          dot(this.normals[t]!, this.normals[u]!) > this.sharp
         ) {
-          continue;
+          out.add(piece.unitOf.get(u)!);
         }
-
-        for (const t of other.triangles) triangleRegion[t] = region.index;
-        for (const t of other.triangles) region.triangles.push(t);
-        other.triangles = [];
-        changed = true;
       }
     }
+
+    for (const t of tris) out.delete(piece.unitOf.get(t)!);
+
+    return [...out];
   }
 
-  // Every triangle that no surface claimed is a flat facet of its own.
-  for (let t = 0; t < n; t++) {
-    if (degenerate(t)) continue;
+  /** Whether a unit lies on the surface: every vertex within tolerance, every normal along it. */
+  private fitsOn(unit: number[], primitive: Primitive): boolean {
+    return (
+      this.verticesOn(unit, primitive) &&
+      unit.every(
+        (t) => dot(this.normals[t]!, primitiveNormal(this.centroids[t]!, primitive)) > NORMAL_AGREEMENT,
+      )
+    );
+  }
 
-    const region = triangleRegion[t]! >= 0 ? regions[triangleRegion[t]!] : undefined;
+  /** Like `fitsOn`, but a normal may also point against the surface's. */
+  private liesAlong(tris: number[], primitive: Primitive): boolean {
+    return (
+      this.verticesOn(tris, primitive) &&
+      tris.every(
+        (t) =>
+          Math.abs(dot(this.normals[t]!, primitiveNormal(this.centroids[t]!, primitive))) > NORMAL_AGREEMENT,
+      )
+    );
+  }
 
-    if (!region || region.primitive === null) {
-      if (region) region.triangles = region.triangles.filter((x) => x !== t);
+  private verticesOn(tris: number[], primitive: Primitive): boolean {
+    return this.verticesOf(tris).every(
+      (v) => Math.abs(surfaceDistance(this.p(v), primitive)) <= this.tolerance,
+    );
+  }
 
-      newRegion([t], null, 0);
+  /** Indices of the regions that share an edge with `region`. */
+  private borderRegions(region: Region): Set<number> {
+    const border = new Set<number>();
+
+    for (const t of region.triangles) {
+      for (const u of this.neighbours(t)) {
+        if (this.triangleRegion[u]! >= 0 && this.triangleRegion[u] !== region.index) {
+          border.add(this.triangleRegion[u]!);
+        }
+      }
     }
+
+    return border;
   }
 
-  // Degenerate triangles join a neighbour (they add nothing to the surface).
-  for (let t = 0; t < n; t++) {
-    if (!degenerate(t) || triangleRegion[t]! >= 0) continue;
+  private moveInto(from: Region, to: Region) {
+    for (const t of from.triangles) this.triangleRegion[t] = to.index;
+    for (const t of from.triangles) to.triangles.push(t);
+    from.triangles = [];
+  }
 
-    const u = neighbours(t).find((x) => triangleRegion[x]! >= 0);
+  // ---------------------------------------------------------------- regions and mesh helpers
 
-    if (u === undefined) {
-      newRegion([t], null, 0);
-    } else {
-      triangleRegion[t] = triangleRegion[u]!;
-      regions[triangleRegion[u]!]!.triangles.push(t);
+  private newRegion(tris: number[], primitive: Primitive | null, residual: number): Region {
+    const region: Region = {
+      index: this.regions.length,
+      triangles: tris,
+      primitive,
+      area: this.areaOf(tris),
+      residual,
+      loops: [],
+    };
+    for (const t of tris) this.triangleRegion[t] = region.index;
+    this.regions.push(region);
+
+    return region;
+  }
+
+  /** Takes the triangles out of their old regions into a new one on the fitted surface. */
+  private claim(tris: number[], fit: Fit) {
+    for (const t of tris) {
+      const old = this.regions[this.triangleRegion[t]!];
+      if (old) old.triangles = old.triangles.filter((x) => x !== t);
     }
+
+    this.newRegion(tris, fit.primitive, fit.residual);
   }
 
-  // Drop emptied regions and renumber.
-  const kept = regions.filter((region) => region.triangles.length);
-  kept.forEach((region, i) => {
-    region.index = i;
-    region.area = region.triangles.reduce((s, t) => s + areas[t]!, 0);
-    for (const t of region.triangles) triangleRegion[t] = i;
-  });
-  regions.length = 0;
-  // One by one: a scan can leave far more regions than a spread call takes arguments.
-  for (const region of kept) regions.push(region);
-
-  for (const region of regions) {
-    if (!region.primitive) continue;
-
-    const vs = verticesOf(region.triangles);
-    region.residual = Math.max(0, ...vs.map((v) => Math.abs(surfaceDistance(p(v), region.primitive!))));
+  private residualOn(tris: number[], primitive: Primitive): number {
+    return residualOf(this.verticesOf(tris), primitive, this.fitter);
   }
 
-  const segments = traceBoundaries(regions, triangleRegion, triangles, twin);
+  private areaOf(tris: number[]): number {
+    return tris.reduce((s, t) => s + this.areas[t]!, 0);
+  }
 
-  return { positions, triangles, triangleRegion, regions, segments, twin, volume, bbox, diag, tolerance };
+  private perimeter(tris: number[]): number {
+    const inside = new Set(tris);
+    let sum = 0;
+
+    for (const t of tris) {
+      const v = this.tri(t);
+
+      for (let e = 0; e < 3; e++) {
+        const h = this.twin[t * 3 + e]!;
+
+        if (h < 0 || !inside.has(Math.floor(h / 3))) {
+          sum += len(sub(this.p(v[(e + 1) % 3]!), this.p(v[e]!)));
+        }
+      }
+    }
+
+    return sum;
+  }
+
+  private edgeLength(t: number, e: number): number {
+    return len(sub(this.p(this.tri(t)[(e + 1) % 3]!), this.p(this.tri(t)[e]!)));
+  }
+
+  private verticesOf(tris: number[]): number[] {
+    const set = new Set<number>();
+    for (const t of tris) for (const v of this.tri(t)) set.add(v);
+
+    return [...set];
+  }
+
+  private neighbours(t: number): number[] {
+    return [0, 1, 2]
+      .map((e) => this.twin[t * 3 + e]!)
+      .filter((h) => h >= 0)
+      .map((h) => Math.floor(h / 3));
+  }
+
+  private isDegenerate(t: number): boolean {
+    return this.areas[t]! <= this.diag * this.diag * DEGENERATE_AREA;
+  }
+
+  private readonly p = (i: number): Vec3 => [
+    this.positions[i * 3]!,
+    this.positions[i * 3 + 1]!,
+    this.positions[i * 3 + 2]!,
+  ];
+
+  private tri(t: number): [number, number, number] {
+    return [this.triangles[t * 3]!, this.triangles[t * 3 + 1]!, this.triangles[t * 3 + 2]!];
+  }
 }
 
 /**
