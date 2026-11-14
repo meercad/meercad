@@ -1,7 +1,7 @@
 export { loadOcct, occtErrorMessage, type OC } from "./occt.js";
 export { Arena } from "./arena.js";
 export { Body } from "./body.js";
-export { OcctBackend } from "./backend.js";
+export { meshPieces, OcctBackend } from "./backend.js";
 export { fitMesh, surfaceDistance, type MeshFit, type Primitive, type Region, type Segment, type FitOptions } from "./meshfit.js";
 export { convertMesh, MAX_FACETS, type ConvertResult } from "./meshconvert.js";
 export { reconstruct, type Reconstruction, type Measurement as ReconstructMeasurement } from "./reconstruct.js";

@@ -153,6 +153,42 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse =
 }
 
 /**
+ * Volume, area, centroid and moments of a closed triangle mesh (corners, three per triangle), from
+ * the tetrahedra each triangle makes with the origin; a mesh wound inside out counts the same.
+ */
+export function meshProps(c: ArrayLike<number>): Pick<BodySummary, "volume" | "area" | "centroid" | "inertia"> {
+  let v = 0, area = 0;
+  let mx = 0, my = 0, mz = 0;
+  // ∫x², ∫y², ∫z², ∫xy, ∫xz, ∫yz over the volume
+  let sxx = 0, syy = 0, szz = 0, sxy = 0, sxz = 0, syz = 0;
+  for (let q = 0; q + 8 < c.length; q += 9) {
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = [c[q]!, c[q + 1]!, c[q + 2]!, c[q + 3]!, c[q + 4]!, c[q + 5]!, c[q + 6]!, c[q + 7]!, c[q + 8]!];
+    const d = ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx);
+    v += d / 6;
+    mx += (d * (ax + bx + cx)) / 24;
+    my += (d * (ay + by + cy)) / 24;
+    mz += (d * (az + bz + cz)) / 24;
+    const sq = (p: number, q2: number, r: number) => p * p + q2 * q2 + r * r + p * q2 + p * r + q2 * r;
+    const pr = (p1: number, p2: number, q1: number, q2: number, r1: number, r2: number) => 2 * (p1 * p2 + q1 * q2 + r1 * r2) + p1 * q2 + p2 * q1 + p1 * r2 + p2 * r1 + q1 * r2 + q2 * r1;
+    sxx += (d * sq(ax, bx, cx)) / 60;
+    syy += (d * sq(ay, by, cy)) / 60;
+    szz += (d * sq(az, bz, cz)) / 60;
+    sxy += (d * pr(ax, ay, bx, by, cx, cy)) / 120;
+    sxz += (d * pr(ax, az, bx, bz, cx, cz)) / 120;
+    syz += (d * pr(ay, az, by, bz, cy, cz)) / 120;
+    const ux = bx - ax, uy = by - ay, uz = bz - az, wx = cx - ax, wy = cy - ay, wz = cz - az;
+    area += Math.hypot(uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx) / 2;
+  }
+  if (!v) return { volume: 0, area };
+  const g: [number, number, number] = [mx / v, my / v, mz / v];
+  // About the centroid; the signs cancel for a mesh wound inside out.
+  const V = Math.abs(v);
+  const [xx, yy, zz] = [(sxx / v - g[0] * g[0]) * V, (syy / v - g[1] * g[1]) * V, (szz / v - g[2] * g[2]) * V];
+  const [xy, xz, yz] = [(sxy / v - g[0] * g[1]) * V, (sxz / v - g[0] * g[2]) * V, (syz / v - g[1] * g[2]) * V];
+  return { volume: V, area, centroid: g, inertia: [yy + zz, xx + zz, xx + yy, xy, xz, yz] };
+}
+
+/**
  * Moments about axes through the centroid: the matrix itself is not reachable from the bindings,
  * so the products come from moments about the diagonals (I along (x+y)/√2 is (Ixx+Iyy)/2 − ∫xy).
  */
@@ -173,14 +209,52 @@ function momentsAbout(oc: OC, props: GProp_GProps, c: [number, number, number]):
   return [xx, yy, zz, (xx + yy) / 2 - about([1, 1, 0]), (xx + zz) / 2 - about([1, 0, 1]), (yy + zz) / 2 - about([0, 1, 1])];
 }
 
+/**
+ * Whether a part has edges along splines of many spans: sketch splines (fitted through their
+ * points) and what lofts or sweeps make of them. Circles, lines and the few-span curves of booleans
+ * and lofts through circles integrate exactly the quick way. Mesh parts have none.
+ */
+function hasSplines(oc: OC, body: Body): boolean {
+  if (body.sourceMesh) return false;
+  return body.edges.some((e) => {
+    if (oc.BRep_Tool.Degenerated(e)) return false;
+    const c = new oc.BRepAdaptor_Curve(e);
+    try {
+      return String(c.GetType()) === "GeomAbs_BSplineCurve" && c.NbKnots() >= 16;
+    } finally {
+      c.delete();
+    }
+  });
+}
+
 /** Bounding box and counts; with `props`, also volume and surface area (integrals, slow on curved parts). */
 export function summarizeBody(oc: OC, body: Body, props = true): BodySummary {
+  // A part made from a mesh is its triangles: their integrals are exact and take milliseconds, where
+  // OCCT's go face by face (seconds for tens of thousands).
+  if (props && body.sourceMesh) {
+    const quick = summarizeBody(oc, body, false);
+    return { ...quick, ...meshProps(body.sourceMesh) };
+  }
   const vol = new oc.GProp_GProps();
   const surf = new oc.GProp_GProps();
   const box = new oc.Bnd_Box();
   try {
     if (props) {
       if (body.preciseProps) oc.BRepGProp.VolumeProperties(body.shape, vol, 1e-5, false, false);
+      // Spline edges and faces: the quick integration takes too few points along curves of many
+      // spans (a symmetric spline profile came out 0.7 mm off centre, its volume 1 % off), and the
+      // exact one per span takes seconds on a gear. A fine triangulation (5 µm, or 1/50000 of the
+      // part's size) is within 0.01 % and quick; it is dropped again so the display meshes as before.
+      else if (hasSplines(oc, body)) {
+        const box = new oc.Bnd_Box();
+        oc.BRepBndLib.Add(body.shape, box, false);
+        const [lo, hi] = [box.CornerMin(), box.CornerMax()];
+        const diag = Math.hypot(hi.X() - lo.X(), hi.Y() - lo.Y(), hi.Z() - lo.Z());
+        [lo, hi, box].forEach((x) => x.delete());
+        new oc.BRepMesh_IncrementalMesh(body.shape, Math.max(0.005, diag * 2e-5), false, 0.1, false).delete();
+        oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, true);
+        oc.BRepTools.Clean(body.shape, true);
+      }
       else oc.BRepGProp.VolumeProperties(body.shape, vol, false, false, false);
       oc.BRepGProp.SurfaceProperties(body.shape, surf, false, false);
     }

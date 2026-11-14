@@ -110,6 +110,37 @@ describe("project pictures", () => {
   });
 
   /**
+   * The first run starts before the projects are listed; on a fresh iPhone the examples were then
+   * built for minutes while the projects (and the pictures that came with them via iCloud) waited.
+   */
+  it("let the examples give way when projects arrive meanwhile", async () => {
+    const log: string[] = [];
+    let examplesStarted: () => void = () => undefined;
+    const started = new Promise<void>((r) => (examplesStarted = r));
+    let next: () => void = () => undefined;
+    let round = 0;
+    const run = pictureRunner({
+      projects: async () => void log.push(`projects ${++round}`),
+      examples: async (yieldNow) => {
+        for (const ex of ["a", "b", "c"]) {
+          if (yieldNow()) return void log.push(`examples yield before ${ex}`);
+          log.push(`example ${ex}`);
+          if (round === 1 && ex === "a") {
+            examplesStarted();
+            await new Promise<void>((r) => (next = r));
+          }
+        }
+      },
+    });
+    const first = run();
+    await started;
+    const second = run();
+    next();
+    await Promise.all([first, second]);
+    expect(log).toEqual(["projects 1", "example a", "examples yield before b", "projects 2", "example a", "example b", "example c"]);
+  });
+
+  /**
    * The iPad app died when Emil (1129 steps) was opened: the overview was building it for its picture
    * in the background kernel (1.5 GB) while the editor built it once more in its own, and the page
    * grew past what the system allows it.

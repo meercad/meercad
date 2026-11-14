@@ -61,7 +61,7 @@ import {
   type SolvedCurve,
   type Vec3,
 } from "@meercad/sketch";
-import type { TopoDS_Edge, TopoDS_Face, TopoDS_Shape, TopoDS_Vertex, TopoDS_Wire, gp_Trsf } from "replicad-opencascadejs";
+import type { TopoDS_Edge, TopoDS_Face, TopoDS_Shape, TopoDS_Solid, TopoDS_Vertex, TopoDS_Wire, gp_Trsf } from "replicad-opencascadejs";
 import { Arena } from "./arena.js";
 import { copyMap, trackState } from "./tracking.js";
 import { edgesIn, facesIn, partsReaching, reach } from "./lookup.js";
@@ -623,8 +623,26 @@ function thruSections(ctx: Ctx, id: string, wires: TopoDS_Wire[], ruled: boolean
  */
 function loft(f: LoftFeature, ctx: Ctx): Omit<ModelState, "arena"> {
   if (f.profiles.length < 2) throw new FeatureError("a loft needs at least two profiles");
-  const wires = f.profiles.map((p, i) => faceWires(ctx, profileFace(p, ctx, `profile ${i + 1}`)));
-  let tool = thruSections(ctx, f.id, wires.map((w) => w.outer), !!f.ruled);
+  // Spline profiles fitted closely can make OCCT's loft fail; fitted a little looser (10 and 50 µm,
+  // still far below a print's detail) the same profiles loft cleanly.
+  const looser = [ctx.g.splineTolerance, 1e-2, 5e-2];
+  const before = ctx.g.splineTolerance;
+  let wires!: ReturnType<typeof faceWires>[];
+  let tool!: Body;
+  try {
+    for (let k = 0; ; k++) {
+      ctx.g.splineTolerance = looser[k]!;
+      wires = f.profiles.map((p, i) => faceWires(ctx, profileFace(p, ctx, `profile ${i + 1}`)));
+      try {
+        tool = thruSections(ctx, f.id, wires.map((w) => w.outer), !!f.ruled);
+        break;
+      } catch (e) {
+        if (k + 1 >= looser.length || !(e instanceof FeatureError) || !f.profiles.some((p) => "sketch" in p)) throw e;
+      }
+    }
+  } finally {
+    ctx.g.splineTolerance = before;
+  }
   const holes = wires[0]!.holes.length;
   if (wires.some((w) => w.holes.length !== holes)) throw new FeatureError("all profiles need the same number of holes for a hollow loft");
   if (holes) {
@@ -1515,7 +1533,11 @@ function shell(f: ResolvedShell, ctx: Ctx): Omit<ModelState, "arena"> {
   try {
     mk.MakeThickSolidByJoin(input.shape, list, f.outward ? f.thickness : -f.thickness, 1e-3);
   } catch (e) {
-    throw new FeatureError(`shell failed: ${occtErrorMessage(oc, e)}`, "try a smaller thickness");
+    const message = occtErrorMessage(oc, e);
+    // Seen on lofts through polygons of many sides (a profile traced as ~100 lines): OCCT cannot offset
+    // so many narrow side faces. The same profile drawn as a spline lofts into few faces and shells.
+    const hint = /no parameter on edge/.test(message) ? "a part with many narrow faces (e.g. a loft through polygons of many lines) cannot be shelled: draw the profiles as splines, or cut a smaller copy out of it" : "try a smaller thickness";
+    throw new FeatureError(`shell failed: ${message}`, hint);
   }
   if (!mk.IsDone()) throw new FeatureError("shell failed", "try a smaller thickness or remove fewer faces");
   const body = new Body(oc, arena, input.bodyId, arena.track(mk.Shape()));
@@ -1750,21 +1772,74 @@ function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: st
   };
   const count = triangles(faces);
   if (!count) throw new FeatureError(`${what} contains no triangles`);
-  const toSolid = (shape: TopoDS_Shape): TopoDS_Shape | null => {
+  const shellOf = (list: TopoDS_Shape[]) => {
     const builder = arena.track(new oc.TopoDS_Builder());
     const shell = arena.track(new oc.TopoDS_Shell());
     builder.MakeShell(shell);
-    for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE")); e.More(); e.Next()) builder.Add(shell, arena.track(e.Current()));
-    const solid = arena.track(oc.TopoDS.Solid(arena.track(arena.track(new oc.BRepBuilderAPI_MakeSolid(shell)).Solid())));
-    // Trusted triangles all came through (none dropped as degenerate): the solid is closed.
-    if (trusted && count * 50 + 84 === bytes.length) return solid;
+    for (const f of list) builder.Add(shell, f);
+    return shell;
+  };
+  const checked = (solid: TopoDS_Solid): TopoDS_Shape | null => {
+    // In place: the solid itself turns round if it was wound inside out.
     oc.BRepLib.OrientClosedSolid(solid);
     if (!arena.track(new oc.BRepCheck_Analyzer(solid, true, false)).IsValid()) return null;
     const props = arena.track(new oc.GProp_GProps());
     oc.BRepGProp.VolumeProperties(solid, props, false, false, false);
     return props.Mass() > 0 ? solid : null;
   };
-  let solid = toSolid(faces);
+  const facesOf = (shape: TopoDS_Shape) => {
+    const out: TopoDS_Shape[] = [];
+    for (const e = arena.track(new oc.TopExp_Explorer(shape, "TopAbs_FACE")); e.More(); e.Next()) out.push(arena.track(e.Current()));
+    return out;
+  };
+  const toSolid = (shape: TopoDS_Shape): TopoDS_Shape | null => {
+    const solid = arena.track(oc.TopoDS.Solid(arena.track(arena.track(new oc.BRepBuilderAPI_MakeSolid(shellOf(facesOf(shape)))).Solid())));
+    // Trusted triangles all came through (none dropped as degenerate): the solid is closed.
+    if (trusted && count * 50 + 84 === bytes.length) return solid;
+    return checked(solid);
+  };
+  /**
+   * A mesh known closed and wound outwards from its corners alone (each edge run once each way, the
+   * volume positive) needs none of OCCT's checks, which take most of a minute on 70,000 triangles:
+   * one shell per piece, hollows set into the piece around them.
+   */
+  const closedSolid = (): TopoDS_Shape | null => {
+    const mesh = parseStl(bytes);
+    if (mesh.indices.length / 3 !== count) return null;
+    const pieces = meshPieces(mesh.positions, mesh.indices);
+    if (!pieces.every((p) => p.closed) || !pieces.some((p) => p.volume > 0)) return null;
+    return assemble(pieces);
+  };
+  const assemble = (pieces: ReturnType<typeof meshPieces>, check = false): TopoDS_Shape | null => {
+    const all = facesOf(faces);
+    const inside = (a: number[], b: number[]) => [0, 1, 2].every((k) => a[k]! >= b[k]! - 1e-6 && a[k + 3]! <= b[k + 3]! + 1e-6);
+    const solids: TopoDS_Shape[] = [];
+    for (const o of pieces.filter((p) => p.volume > 0)) {
+      const mk = arena.track(new oc.BRepBuilderAPI_MakeSolid(shellOf(o.triangles.map((t) => all[t]!))));
+      for (const h of pieces) if (h.volume <= 0 && inside(h.box, o.box)) mk.Add(shellOf(h.triangles.map((t) => all[t]!)));
+      const made = arena.track(oc.TopoDS.Solid(arena.track(mk.Solid())));
+      const solid = check ? checked(made) : made;
+      if (!solid) return null;
+      solids.push(solid);
+    }
+    if (solids.length === 1) return solids[0]!;
+    const builder = arena.track(new oc.TopoDS_Builder());
+    const compound = arena.track(new oc.TopoDS_Compound());
+    builder.MakeCompound(compound);
+    for (const x of solids) builder.Add(compound, x);
+    return compound;
+  };
+  /**
+   * A mesh of several closed pieces (a hollow inside the part, or parts side by side in one file)
+   * is no single shell: one shell per piece, hollows (wound inwards) added to the piece around them.
+   */
+  const piecesSolid = (): TopoDS_Shape | null => {
+    const mesh = parseStl(bytes);
+    if (mesh.indices.length / 3 !== count) return null;
+    const pieces = meshPieces(mesh.positions, mesh.indices);
+    return pieces.length < 2 ? null : assemble(pieces, true);
+  };
+  let solid = (!trusted && closedSolid()) || (toSolid(faces) ?? piecesSolid());
   if (!solid) {
     // Small gaps between triangles: sew them shut, then try again.
     const sew = arena.track(new oc.BRepBuilderAPI_Sewing(1e-3, true, true, true, false));
@@ -1776,6 +1851,60 @@ function meshSolid({ oc, arena }: Ctx, name: string, bytes: Uint8Array, what: st
   // Faces stay one per triangle: imported meshes are edited as whole parts, and keeping the file's
   // triangles lets display and export skip OCCT's meshing.
   return solid;
+}
+
+/**
+ * The closed pieces of a triangle mesh (corners joined where their coordinates are equal): each
+ * piece's triangles, signed volume (negative when wound inwards, as a hollow is) and box.
+ */
+export function meshPieces(positions: ArrayLike<number>, indices: ArrayLike<number>): { triangles: number[]; volume: number; box: number[]; closed: boolean }[] {
+  const ids = new Map<string, number>();
+  const weld = (v: number) => {
+    const key = `${positions[v * 3]},${positions[v * 3 + 1]},${positions[v * 3 + 2]}`;
+    let id = ids.get(key);
+    if (id === undefined) ids.set(key, (id = ids.size));
+    return id;
+  };
+  const up: number[] = [];
+  const find = (x: number): number => {
+    while (up[x] !== undefined && up[x] !== x) x = up[x]!;
+    return x;
+  };
+  const n = indices.length / 3;
+  const corner = new Int32Array(n * 3);
+  for (let k = 0; k < n * 3; k++) corner[k] = weld(indices[k]!);
+  for (let t = 0; t < n; t++) {
+    const [a, b, c] = [find(corner[t * 3]!), find(corner[t * 3 + 1]!), find(corner[t * 3 + 2]!)];
+    if (a !== b) up[a] = b;
+    const c2 = find(c);
+    const b2 = find(b);
+    if (c2 !== b2) up[c2] = b2;
+  }
+  // Closed and wound one way: every edge is run once each way (a → b in one triangle, b → a in its neighbour).
+  const runs = new Map<number, number>();
+  const open = new Set<number>();
+  const nv = ids.size;
+  for (let t = 0; t < n; t++)
+    for (let k = 0; k < 3; k++) {
+      const [a, b] = [corner[t * 3 + k]!, corner[t * 3 + ((k + 1) % 3)]!];
+      runs.set(a * nv + b, (runs.get(a * nv + b) ?? 0) + 1);
+    }
+  for (const [key, count] of runs) if (count !== 1 || runs.get((key % nv) * nv + Math.floor(key / nv)) !== 1) open.add(find(Math.floor(key / nv)));
+  const byRoot = new Map<number, { triangles: number[]; volume: number; box: number[]; closed: boolean }>();
+  for (let t = 0; t < n; t++) {
+    const r = find(corner[t * 3]!);
+    let p = byRoot.get(r);
+    if (!p) byRoot.set(r, (p = { triangles: [], volume: 0, box: [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity], closed: !open.has(r) }));
+    p.triangles.push(t);
+    const [a, b, c] = [indices[t * 3]! * 3, indices[t * 3 + 1]! * 3, indices[t * 3 + 2]! * 3];
+    const P = positions;
+    p.volume += (P[a]! * (P[b + 1]! * P[c + 2]! - P[b + 2]! * P[c + 1]!) - P[a + 1]! * (P[b]! * P[c + 2]! - P[b + 2]! * P[c]!) + P[a + 2]! * (P[b]! * P[c + 1]! - P[b + 1]! * P[c]!)) / 6;
+    for (const q of [a, b, c]) for (let k = 0; k < 3; k++) {
+      p.box[k] = Math.min(p.box[k]!, P[q + k]!);
+      p.box[k + 3] = Math.max(p.box[k + 3]!, P[q + k]!);
+    }
+  }
+  return [...byRoot.values()];
 }
 
 /** Holes cut into the parts they meet; tapped ones get a modelled thread in their bore. */
