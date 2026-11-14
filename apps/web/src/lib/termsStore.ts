@@ -5,7 +5,7 @@
  */
 import { desktop } from "./persistence";
 import { needsAcceptance, parseRecord, TERMS_KEY, TERMS_MCP_ERROR, type TermsRecord } from "./terms";
-import { uiTesting } from "./uitestProbe";
+import { uiTesting } from "./uitestFlag";
 
 const LOCAL_KEY = `meercad.${TERMS_KEY}`;
 
