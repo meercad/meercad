@@ -5,6 +5,7 @@
  */
 import { desktop } from "./persistence";
 import { needsAcceptance, parseRecord, TERMS_KEY, TERMS_MCP_ERROR, type TermsRecord } from "./terms";
+import { uiTesting } from "./uitestFlag";
 
 const LOCAL_KEY = `meercad.${TERMS_KEY}`;
 
@@ -28,7 +29,12 @@ export function termsRecord(): TermsRecord | null {
   return null;
 }
 
-export const termsAccepted = (): boolean => termsRecord() !== null;
+/**
+ * Whether the app may be used. Also when a UI test started it (apps/ios/uitests, the launch
+ * argument -meercadUITest): a test simulator is installed anew each time and has nobody to tick the
+ * points, so the screen would stand in front of every test. No record is written for that.
+ */
+export const termsAccepted = (): boolean => termsRecord() !== null || uiTesting();
 
 /** Every assistant request (mcpBridge) first: refused with TERMS_MCP_ERROR until the terms are accepted. */
 export function requireTerms(): void {

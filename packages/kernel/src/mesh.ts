@@ -108,6 +108,14 @@ export function exportTolerance(diag: number): { linear: number; angular: number
 }
 
 /**
+ * Tolerances of the display mesh of a part whose box has the diagonal `diag` (`coarse` with the part's own
+ * factor in it).
+ */
+export function displayTolerance(diag: number, coarse: number): { linear: number; angular: number } {
+  return { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
+}
+
+/**
  * Display tessellation: `coarse` > 1 loosens the tolerances by that factor (fewer triangles,
  * faster). `exact` asks for print/CNC quality instead (see `exportTolerance`).
  */
@@ -119,7 +127,7 @@ export function meshBody(oc: OC, body: Body, bbox: BodySummary["bbox"], coarse =
 
   const { linear, angular } = exact
     ? (body.exportTolerance ?? exportTolerance(diag))
-    : { linear: Math.max(0.01, diag * 5e-4) * coarse, angular: Math.min(0.3, 0.06 * coarse) };
+    : displayTolerance(diag, coarse);
 
   const faceByHash = new Map<number, number>();
   body.faces.forEach((face, i) => faceByHash.set(oc.ReplicadShapeHasher.HashCode(face, HASH_BOUND), i));
@@ -298,15 +306,15 @@ function momentsAbout(
 function hasSplines(oc: OC, body: Body): boolean {
   if (body.sourceMesh) return false;
 
-  return body.edges.some((e) => {
-    if (oc.BRep_Tool.Degenerated(e)) return false;
+  return body.edges.some((edge) => {
+    if (oc.BRep_Tool.Degenerated(edge)) return false;
 
-    const c = new oc.BRepAdaptor_Curve(e);
+    const curveAdaptor = new oc.BRepAdaptor_Curve(edge);
 
     try {
-      return String(c.GetType()) === "GeomAbs_BSplineCurve" && c.NbKnots() >= 16;
+      return String(curveAdaptor.GetType()) === "GeomAbs_BSplineCurve" && curveAdaptor.NbKnots() >= 16;
     } finally {
-      c.delete();
+      curveAdaptor.delete();
     }
   });
 }

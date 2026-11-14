@@ -141,7 +141,8 @@ function threadsOff(): boolean {
 }
 
 // OCCT broke on a model (seen with large booleans in the multi-threaded build): carry on in a fresh,
-// single-threaded kernel, which builds the same models with more room.
+// single-threaded kernel, which builds the same models with more room. On the Mac a multi-threaded
+// one takes over again once that request is answered (KernelClient.backToThreads).
 const kernelName: KernelKind =
   wantThreads && crossOriginIsolated ? "kernel-threads" : desktop ? "kernel" : "kernel-reserve";
 export const kernel = new KernelClient(
@@ -1336,20 +1337,15 @@ function loadDoc(doc: MeercadDocument, meta: ProjectMeta, store?: DocumentStore)
 }
 
 /**
- * Whether a design's last result is kept for its next opening. Not a big design's on the iPad and
- * iPhone: the kept result and the new one are both in memory for a moment (and a copy while it is
- * written), which the page has no room for next to the kernel of such a design.
- */
-const keepsOutput = (doc: MeercadDocument) => !!desktop || doc.features.length <= BIG_STEPS;
-
-/**
  * Shows what the project looked like when it was last built here (openCache), while the kernel
  * builds it again; only for exactly the same document, and only until the real result is there.
+ * Big designs on the iPad and iPhone were left out while the kernel kept every cut in memory
+ * (docs/REBUILD.md): the page had no room for the kept result next to the new one. It has now.
  */
 function showKeptOutput(project: string): void {
   const store = docStore;
   const doc = store.doc;
-  if (!doc.features.length || !keepsOutput(doc)) return;
+  if (!doc.features.length) return;
 
   void readOutput(project, outputKey(doc, editorMeshOptions())).then((kept) => {
     if (
@@ -1374,7 +1370,7 @@ function scheduleOutputCache(): void {
   const project = get().project?.id;
   const store = docStore;
   const doc = store.doc;
-  if (!project || !keepsOutput(doc)) return;
+  if (!project) return;
 
   clearTimeout(outputCacheTimer);
   outputCacheTimer = window.setTimeout(() => {

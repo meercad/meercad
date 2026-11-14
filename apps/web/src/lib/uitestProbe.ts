@@ -6,8 +6,7 @@
  */
 import type { useApp as UseApp } from "../store";
 
-export const uiTesting = (): boolean =>
-  !!(window as unknown as { __meercadUITest?: boolean }).__meercadUITest;
+export { uiTesting } from "./uitestFlag";
 
 export interface ProbeState {
   /** The page's own zoom: 1 unless the interface was zoomed like a web page. */

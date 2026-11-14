@@ -269,6 +269,67 @@ describe("kernel client", () => {
       expect(old.terminated).toBe(true);
     });
 
+    const props = (seq: number): WorkerResponse => ({ type: "props", seq, bodies: [] });
+    const broke = (seq: number): WorkerResponse => ({
+      type: "crashed",
+      seq,
+      message: "memory access out of bounds",
+      threads: true,
+    });
+
+    it("goes back to a multi-threaded kernel once the request that broke one is answered", async () => {
+      let crash = false;
+      const threaded = new FakeWorker((req) =>
+        crash && req.type !== "rebuild" ? broke(req.seq) : built(req.seq, GB),
+      );
+      const single = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, GB) : props(req.seq)));
+      const again = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, GB) : props(req.seq)));
+      const client = new KernelClient(threaded as unknown as Worker, () => single as unknown as Worker, {
+        worker: () => again as unknown as Worker,
+      });
+      await client.rebuild(doc(1));
+      crash = true;
+      // The request that broke the multi-threaded kernel is answered by the single-threaded one …
+      await client.bodyProps();
+      expect(single.sent.map((r) => r.type)).toEqual(["rebuild", "props"]);
+      await settle();
+      // … then a multi-threaded one builds the design in the background and takes over.
+      expect(again.sent.map((r) => r.type)).toEqual(["rebuild"]);
+      expect(single.terminated).toBe(true);
+      expect(client.renewed).toBe(1);
+      await client.bodyProps();
+      expect(again.sent.map((r) => r.type)).toEqual(["rebuild", "props"]);
+    });
+
+    it("keeps the single-threaded kernel when a multi-threaded one breaks on the design again", async () => {
+      // Builds the design once, breaks on anything after (also on the design itself when it starts fresh).
+      const breaking = () =>
+        new FakeWorker((req) =>
+          req.type === "rebuild" && !(req as { fresh?: boolean }).fresh ? built(req.seq, GB) : broke(req.seq),
+        );
+      const single = new FakeWorker((req) => (req.type === "rebuild" ? built(req.seq, GB) : props(req.seq)));
+      const threaded: FakeWorker[] = [];
+      const client = new KernelClient(breaking() as unknown as Worker, () => single as unknown as Worker, {
+        worker: () => {
+          const w = breaking();
+          threaded.push(w);
+
+          return w as unknown as Worker;
+        },
+      });
+      await client.rebuild(doc(1));
+      await client.bodyProps();
+      await settle();
+      expect(threaded.length).toBe(1);
+      expect(threaded[0]!.terminated).toBe(true);
+      // Work goes on in the single-threaded kernel, and no other multi-threaded one is started.
+      await client.rebuild(doc(2));
+      await client.bodyProps();
+      await settle();
+      expect(single.terminated).toBe(false);
+      expect(threaded.length).toBe(1);
+    });
+
     it("starts a kernel of the same kind when the running one broke nearly full", async () => {
       let crash = false;
       const old = new FakeWorker((req) =>

@@ -40,10 +40,42 @@ test model) change each step in turn and compare with a build from scratch.
 
 ## The kernel's memory
 
-OCCT (the prebuilt `replicad-opencascadejs` WebAssembly) never gives back part of the memory of a
+**Since 2026-11-13 the kernel gives memory back** (`replicad-opencascadejs` 1.2.1). What follows in
+this chapter was written while it did not, and the measures it describes stay as a safety net.
+
+What was wrong: in the package up to 1.1.0 `delete()` did nothing for most classes. The function
+the bindings call to destroy a `gp_Pnt`, a `TopoDS_Shape`, a `BRepPrimAPI_MakeBox` or a
+`BRepAlgoAPI_Cut` was one empty function (340 entries of the function table pointed to it; found by
+calling `delete()` with the table watched and reading that function's body in the .wasm: `00 0b`).
+A shape "deleted" in JavaScript kept its reference, so nothing of a cut was ever freed: not the
+algorithm, not its arguments, not the result. That was the "leak inside the package" below, and why
+native OCCT showed none. 1.2.1 has real destructors (upstream issue 282, with a test of its own).
+
+Robot design (a copy, 1180 steps, 58 MB file), first build:
+
+| | 1.1.0 | 1.2.1 |
+|---|---|---|
+| kernel heap after the build (Mac, no threads) | 1079 MB | 207 MB |
+| peak footprint of the process (`open-memory.ts`) | 1.65 GB | 1.0 GB |
+| two boxes cut, kept per call (`leak3.ts`) | 235 KB | 0 |
+| iPhone simulator: web process, growth while opening | 1.37 GB | 0.48 GB |
+
+The iPhone ends the page at about 1.6 GB above its idle size, so the robot sat at 86 % of that and
+is now at 30 %. The result is the same (570 parts, the same triangles and face names); the quick
+tests and the slow comparison of every corpus file and test model pass. With destructors that work,
+using an object after `delete()` is now a real error (before it went unnoticed): the arenas free a
+step's working objects (`Arena.trim`) and keep its shapes, which is safe because a shape holds what
+it needs itself. `packages/kernel/src/arena-occt.test.ts` keeps 1500 cuts from growing the heap.
+
+With threads the first build still takes 1.8 GB against 1.0 GB (each thread has memory of its own)
+and 22 s against 32 s on the Mac: big designs stay without threads on the iPad and iPhone.
+
+### How it was before
+
+OCCT (the prebuilt `replicad-opencascadejs` WebAssembly) never gave back part of the memory of a
 cut, join or common: 130 to 230 KB for two boxes, about 1 MB per step of the robot. Deleting the
-algorithm and its result does not help; it is inside the package
-(`tests/bench/leak3.ts` shows it per call). The kernel can hold 4 GB.
+algorithm and its result did not help (see above for why;
+`tests/bench/leak3.ts` shows it per call). The kernel can hold 4 GB.
 
 Before this work a small change built 200 to 500 steps again, about 500 MB lost each time: after
 some five changes the kernel broke, was replaced by a single-threaded one and built everything
@@ -151,9 +183,58 @@ the process (`footprint`, or the RSS in `heap.ts`) instead.
 `tests/bench/open-memory.ts file [--threads] [--by-step]` gives the kernel heap of a first build and
 the size of the meshes sent to the page (robot: meshes only 56 MB).
 
-Open: a build of OCCT of our own without the leak. Native OCCT 7.9 (Homebrew) keeps nothing of a cut
-or a meshing done 3000 times; the WebAssembly package keeps 250 KB per cut of two boxes and 20 KB per
-meshed box. Also building independent parts in several kernels at once when a design is opened.
+The build of OCCT of our own that was planned here is not needed for memory any more (see the top
+of this chapter). Still open for the time a first build takes: building independent parts in
+several kernels at once when a design is opened.
+
+With the memory back, a big design's last result is kept for its next opening on the iPad and
+iPhone as well (`showKeptOutput` in the store): an unchanged design shows at once while the kernel
+builds it.
+
+## Copies of a part share its mesh
+
+A design with a mirrored half, or the same part in many places, meshed every copy anew: of the
+robot's 570 parts 503 are another part moved, turned or mirrored, from 199 first parts. A part made
+by `transformBody` without scaling, whose faces come in the same order, knows the first part of its
+chain and the way from there (`Body.copyOf`). Its display mesh is then that part's mesh moved the
+same way (`CopyMeshes` in `packages/kernel/src/copymesh.ts`): the same triangles, turned round for
+a mirrored copy so they face outwards, with the copy's own face names. Nothing gets coarser: the
+tolerance follows the size of a part's box, which changes when a part is turned, so new parts are
+meshed finest first and a copy takes a mesh only when it is at least as fine as its own would be.
+A copy that is changed afterwards is an ordinary part again.
+
+Robot: meshing 12.1 s to 8.6 s of a first build (329 of 570 meshes taken over in 8 ms; the 241
+meshed ones are the costly ones). `tests/bench/copy-meshes.ts file` holds every such mesh against
+the mesh the part gets alone (faces, edges, names, which way the triangles face): no difference in
+the robot's 528 parts concerned; `tests/acceptance/copy-meshes.test.ts` does it for small designs.
+
+## After the kernel breaks: back to all cores
+
+On the Mac the kernel is the multi-threaded OCCT build: booleans run on all cores. When OCCT breaks
+on a model, a single-threaded kernel answers the request again (it copes with more). Until
+2026-11-14 that kernel then stayed until the app was restarted, and every later change ran on one
+core. The XGO head (a loft of 12 polygons of 99 lines, 9 booleans on it, 45 cut holes) shows the
+cost: the union of the lip took 5 s on all cores and 53 s on one, a whole build 23 s against
+about 90 s. Exports themselves take 0.4 s (one part) to 2 s (3MF), but wait for the build before
+them, so after one break every change plus export took minutes.
+
+Now the single-threaded kernel only answers the request that broke the other one. Then a
+multi-threaded kernel builds the design in the background and takes over between two requests, as
+a Renewal does (`KernelClient.backToThreads`). If that one breaks on the design too, the
+single-threaded kernel stays; after two such returns it stays for good.
+
+XGO head in the real app (`tests/bench/app-kernel-break.ts`, change of the lip, step 56 of 143):
+
+| | change | export STL (hood) |
+|---|---|---|
+| before the break | 23.9 s | 0.4 s |
+| right after (single-threaded) | 86.0 s | 3.1 s |
+| after the take-over (20 s later) | 22.2 s | 0.4 s |
+
+What broke it there: `check_interference` with the imported STL (30,000 triangles, one face each)
+against the hood. The gap alone took 63 s, the shared volume broke OCCT, and in the app the check
+stood 12 minutes first. Imported meshes with more than 2,000 faces (`FINE_MESH_FACES`) are now left
+out of the pairs and named (`meshesNotChecked`, a notice in the app).
 
 ## For assistants (MCP)
 
@@ -181,7 +262,12 @@ All in `tests/bench/`, run from `tests/` with `../node_modules/.bin/jiti bench/<
 | `feature-times.ts file` | time by kind of step |
 | `heap.ts`, `leak.ts`, `leak2.ts`, `leak3.ts` | kernel memory over edits, and per kernel call |
 | `mesh-density.ts file` | triangles and meshing time at several tolerances |
+| `mesh-breakdown.ts file` | meshing time part by part, and how much of it goes into copies |
+| `copy-meshes.ts file` | meshes taken over by copies against meshes made alone |
 | `export-time.ts file` | export meshes part by part, writing the 3MF |
+| `app-kernel-break.ts file id` | a change and an export in the real app before a kernel break, right after, and after the take-over |
+| `boolean-options.ts file id` | one boolean step with OCCT's options (oriented boxes) switched |
+| `pair-time.ts file a b` | gap and shared volume of two parts, as the interference check computes them |
 
 Robot design, calls as an assistant makes them (fresh app):
 

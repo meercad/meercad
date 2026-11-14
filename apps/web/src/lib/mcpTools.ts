@@ -134,7 +134,7 @@ export async function interference(
   const unknown = opts.parts?.filter((id) => !ids.includes(id)) ?? [];
   if (unknown.length) throw new Error(`no part ${unknown.map((id) => `"${id}"`).join(", ")}`);
 
-  const { pairs, left } = await kernel.overlaps(opts.parts?.length ? opts.parts : ids, {
+  const { pairs, left, fine } = await kernel.overlaps(opts.parts?.length ? opts.parts : ids, {
     ...(opts.box ? { box: opts.box } : {}),
     budgetMs: (opts.seconds ?? 120) * 1000,
   });
@@ -157,6 +157,13 @@ export async function interference(
       ? {
           unchecked: left,
           note: `Out of time: ${left} pairs of parts close to each other were not checked. Narrow the check with parts (ids) or box ({min, max}), or give it more seconds.`,
+        }
+      : {}),
+    ...(fine.length
+      ? {
+          meshesNotChecked: fine,
+          meshNote:
+            "imported meshes with many triangles are not checked against the parts they come close to (the geometry kernel cannot do it); check them in the app by eye, or simplify the mesh (repair_mesh with reduce) or rebuild it as a part (rebuild_mesh)",
         }
       : {}),
   };

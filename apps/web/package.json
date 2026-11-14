@@ -26,7 +26,7 @@
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "replicad-opencascadejs": "1.1.0",
+    "replicad-opencascadejs": "1.2.1",
     "zustand": "^5.0.16"
   },
   "devDependencies": {

@@ -81,7 +81,13 @@ export type WorkerResponse =
   | { type: "exported"; seq: number; data: Uint8Array }
   | { type: "exported_mesh"; seq: number; meshes: BodyMesh[] }
   | { type: "measured"; seq: number; result: Measurement }
-  | { type: "clearances"; seq: number; result: Clearance[]; left?: number }
+  | {
+      type: "clearances";
+      seq: number;
+      result: Clearance[];
+      left?: number;
+      /** Imported meshes too fine to check (see FINE_MESH_FACES). */ fine?: string[];
+    }
   | { type: "drawn"; seq: number; views: DrawingView[] }
   | { type: "configured"; seq: number }
   | { type: "props"; seq: number; bodies: BodySummary[] }

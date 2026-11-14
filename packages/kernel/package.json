@@ -22,7 +22,7 @@
     "@meercad/schema": "workspace:*",
     "@meercad/sketch": "workspace:*",
     "opentype.js": "1.3.4",
-    "replicad-opencascadejs": "1.1.0"
+    "replicad-opencascadejs": "1.2.1"
   },
   "devDependencies": {
     "@types/opentype.js": "1.3.8"

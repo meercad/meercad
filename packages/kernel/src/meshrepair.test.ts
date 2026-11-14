@@ -153,16 +153,12 @@ describe("repairMesh", () => {
   it("closes a slit where one long edge meets three short ones, with a fan round its middle", () => {
     // A tetrahedron whose bottom face has two extra corners on the edge A–B; the face above uses
     // the edge in one piece, so the two do not join: a hole of four corners in a line.
-    const [A, B, C, D]: V3[] = [
-      [0, 0, 0],
-      [3, 0, 0],
-      [0, 3, 0],
-      [0, 0, 3],
-    ];
-    const [P1, P2]: V3[] = [
-      [1, 0, 0],
-      [2, 0, 0],
-    ];
+    const A: V3 = [0, 0, 0];
+    const B: V3 = [3, 0, 0];
+    const C: V3 = [0, 3, 0];
+    const D: V3 = [0, 0, 3];
+    const P1: V3 = [1, 0, 0];
+    const P2: V3 = [2, 0, 0];
     const triangles: V3[][] = [
       [A, C, P1],
       [P1, C, P2],

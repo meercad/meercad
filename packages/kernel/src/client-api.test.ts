@@ -81,6 +81,7 @@ describe("kernel client calls", () => {
     expect(await c.overlaps(["x"], { budgetMs: 10 })).toEqual({
       pairs: [{ a: "x", b: "y", distance: 1, overlap: 0 }],
       left: 3,
+      fine: [],
     });
     expect(await c.clearances(["x"], {}, 2, ["wire"], { x: 1, y: 1 })).toHaveLength(1);
     expect(await c.drawing(["front"], ["b"], doc())).toEqual([{ name: "front" }]);
