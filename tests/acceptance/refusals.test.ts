@@ -179,6 +179,16 @@ describe("values out of range are refused with the limit named", () => {
       /the face selector matches 3 faces; pick exactly one cylindrical face/,
     ],
     [
+      "a nut without a head shape",
+      [{ id: "f", op: "screw", kind: "nut", diameter: 4, head: "none", mode: "new_body" }],
+      /nuts are hex, round or knob shaped/,
+    ],
+    [
+      "a screw whose pitch does not fit its diameter",
+      [{ id: "f", op: "screw", kind: "screw", diameter: 4, pitch: 10, length: 10, mode: "new_body" }],
+      /pitch 10 mm does not fit M4×10/,
+    ],
+    [
       "a screw of no length",
       [{ id: "f", op: "screw", kind: "screw", diameter: 4, length: 0, mode: "new_body" }],
       /the screw's length must be greater than zero/,
@@ -226,6 +236,9 @@ describe("borderline values build, with a warning that says what happened", () =
     ["a baseplate with screw holes", [baseplate({ units: [1, 1], screws: true, floor: 3 })]],
     ["a drawer baseplate with screw holes", [baseplate({ drawer: [100, 100], screws: true, floor: 3 })]],
     ["a split with a dovetail", split({ kind: "dovetail" })],
+    ["a lithophane curved a quarter turn", [lithophane({ width: 40, curve: 90 })]],
+    ["a label in the monospaced font", [{ id: "f", op: "label", text: "S8&", font: "mono" }]],
+    ["a label in the bold font", [{ id: "f", op: "label", text: "S8&", font: "sans-bold" }]],
   ])("builds %s", async (_name, features) => {
     expect((await outcome(features)).status).toBe("ok");
   });
