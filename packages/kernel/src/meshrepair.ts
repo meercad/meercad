@@ -210,8 +210,10 @@ function triangulate(pos: number[], loop: number[]): number[] {
   const ears = earClip(p2);
 
   if (ears) {
+    // The ears of a turned-round rim run against the rim: each is turned back, so the patch faces
+    // the same way as the triangles next to it.
     return ears.flatMap(([a, b, d]) =>
-      signed < 0 ? [loop[idx[a]!]!, loop[idx[b]!]!, loop[idx[d]!]!] : [loop[a]!, loop[b]!, loop[d]!],
+      signed < 0 ? [loop[idx[d]!]!, loop[idx[b]!]!, loop[idx[a]!]!] : [loop[a]!, loop[b]!, loop[d]!],
     );
   }
 

@@ -139,4 +139,14 @@ describe("repairMesh", () => {
     expect(closed(m.indices)).toBe(true);
     expect(volume(m)).toBeCloseTo(1000, 6);
   });
+
+  it("closes a missing face whichever way it looks, so the box is whole again", () => {
+    for (let face = 0; face < 6; face++) {
+      const m = repairMesh(box([10, 10, 10], 4, [0, 0, 0], face), { fillHoles: true });
+
+      expect(m.report.holesFilled, `face ${face}`).toBe(1);
+      expect(closed(m.indices), `face ${face}`).toBe(true);
+      expect(volume(m), `face ${face}`).toBeCloseTo(1000, 6);
+    }
+  });
 });
