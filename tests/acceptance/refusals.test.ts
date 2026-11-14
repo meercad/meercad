@@ -189,6 +189,23 @@ describe("values out of range are refused with the limit named", () => {
       /pitch 10 mm does not fit M4×10/,
     ],
     [
+      "a cut into a part that does not exist",
+      [
+        ...block,
+        sketch("sk9", { ref: "origin.XY" }, circle("c", 5, 5, 2)),
+        {
+          id: "f",
+          op: "extrude",
+          profile: { sketch: "sk9" },
+          extent: "blind",
+          distance: 5,
+          mode: "cut",
+          targets: ["nope"],
+        },
+      ],
+      /target body "nope" not found/,
+    ],
+    [
       "a screw of no length",
       [{ id: "f", op: "screw", kind: "screw", diameter: 4, length: 0, mode: "new_body" }],
       /the screw's length must be greater than zero/,

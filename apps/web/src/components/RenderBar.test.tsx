@@ -5,9 +5,11 @@ import type { Viewport } from "@meercad/viewport";
 
 const download = vi.fn();
 const toast = vi.fn();
+const showMenu = vi.fn();
 
 vi.mock("./io", () => ({ baseName: () => "Bracket", download: (...args: unknown[]) => download(...args) }));
 vi.mock("../store", () => ({ toast: (...args: unknown[]) => toast(...args) }));
+vi.mock("./Menu", () => ({ showMenu: (...args: unknown[]) => showMenu(...args) }));
 
 const { imageSizes, RenderBar, saveRender } = await import("./RenderBar");
 
@@ -100,5 +102,28 @@ describe("the bar", () => {
     expect(transparent.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(transparent);
     expect(transparent.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("offers the picture sizes in a menu below the button and saves the chosen one", async () => {
+    const viewport = fakeViewport();
+
+    render(<RenderBar vp={asViewport(viewport)} onExit={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /Transparent/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Save image/ }));
+
+    const items = showMenu.mock.lastCall![2] as { label: string; onClick: () => void }[];
+
+    expect(items.map((item) => item.label)).toEqual([
+      "As on screen, sharp (1600 × 1200)",
+      "Full HD (1920 × 1080)",
+      "4K (3840 × 2160)",
+      "Square (2048 × 2048)",
+    ]);
+
+    items[1]!.onClick();
+    await vi.waitFor(() => expect(download).toHaveBeenCalled());
+
+    expect(viewport.renderImage).toHaveBeenCalledWith(1920, 1080, { transparent: true });
+    expect(download.mock.lastCall![0]).toBe("Bracket 1920x1080.png");
   });
 });
