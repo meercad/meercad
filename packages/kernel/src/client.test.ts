@@ -196,9 +196,11 @@ describe("kernel client", () => {
         worker: () => (started++, broken as unknown as Worker),
       });
 
+      expect(client.memoryUsed).toBe(0);
       await client.rebuild(doc(1));
       await client.rebuild(doc(2));
       await client.rebuild(doc(3));
+      expect(client.memoryUsed).toBe(3 * GB);
       await settle();
       expect(started).toBe(1);
       // The fresh kernel is given up; the running one keeps the design.
