@@ -208,6 +208,34 @@ meshed ones are the costly ones). `tests/bench/copy-meshes.ts file` holds every 
 the mesh the part gets alone (faces, edges, names, which way the triangles face): no difference in
 the robot's 528 parts concerned; `tests/acceptance/copy-meshes.test.ts` does it for small designs.
 
+## After the kernel breaks: back to all cores
+
+On the Mac the kernel is the multi-threaded OCCT build: booleans run on all cores. When OCCT breaks
+on a model, a single-threaded kernel answers the request again (it copes with more). Until
+2026-11-14 that kernel then stayed until the app was restarted, and every later change ran on one
+core. The XGO head (a loft of 12 polygons of 99 lines, 9 booleans on it, 45 cut holes) shows the
+cost: the union of the lip took 5 s on all cores and 53 s on one, a whole build 23 s against
+about 90 s. Exports themselves take 0.4 s (one part) to 2 s (3MF), but wait for the build before
+them, so after one break every change plus export took minutes.
+
+Now the single-threaded kernel only answers the request that broke the other one. Then a
+multi-threaded kernel builds the design in the background and takes over between two requests, as
+a Renewal does (`KernelClient.backToThreads`). If that one breaks on the design too, the
+single-threaded kernel stays; after two such returns it stays for good.
+
+XGO head in the real app (`tests/bench/app-kernel-break.ts`, change of the lip, step 56 of 143):
+
+| | change | export STL (hood) |
+|---|---|---|
+| before the break | 23.9 s | 0.4 s |
+| right after (single-threaded) | 86.0 s | 3.1 s |
+| after the take-over (20 s later) | 22.2 s | 0.4 s |
+
+What broke it there: `check_interference` with the imported STL (30,000 triangles, one face each)
+against the hood. The gap alone took 63 s, the shared volume broke OCCT, and in the app the check
+stood 12 minutes first. Imported meshes with more than 2,000 faces (`FINE_MESH_FACES`) are now left
+out of the pairs and named (`meshesNotChecked`, a notice in the app).
+
 ## For assistants (MCP)
 
 - `open_project` answers with counts and what is not in order (830 characters instead of 112 000);
@@ -237,6 +265,9 @@ All in `tests/bench/`, run from `tests/` with `../node_modules/.bin/jiti bench/<
 | `mesh-breakdown.ts file` | meshing time part by part, and how much of it goes into copies |
 | `copy-meshes.ts file` | meshes taken over by copies against meshes made alone |
 | `export-time.ts file` | export meshes part by part, writing the 3MF |
+| `app-kernel-break.ts file id` | a change and an export in the real app before a kernel break, right after, and after the take-over |
+| `boolean-options.ts file id` | one boolean step with OCCT's options (oriented boxes) switched |
+| `pair-time.ts file a b` | gap and shared volume of two parts, as the interference check computes them |
 
 Robot design, calls as an assistant makes them (fresh app):
 

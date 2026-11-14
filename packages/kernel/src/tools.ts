@@ -239,7 +239,17 @@ export interface ClearanceLimits {
   box?: { min: [number, number, number]; max: [number, number, number] };
   budgetMs?: number;
   left?: number;
+  /** Set to the imported meshes too fine to check against the parts they come close to (see FINE_MESH_FACES). */
+  fine?: string[];
 }
+
+/**
+ * An imported mesh is a shape with one face per triangle. Gap and shared volume of such a part with
+ * another are beyond OCCT: the gap of a 30,000-triangle scan to an 850-face part took a minute, the
+ * shared volume broke the kernel (XGO head, 2026-11-14); in the app the check stood 12 minutes,
+ * and the app went on with a single-threaded kernel. Meshes with more faces are left out of the pairs.
+ */
+export const FINE_MESH_FACES = 2000;
 
 export function clearances(oc: OC, state: ModelState, moving: readonly string[], poses: Readonly<Record<string, number[]>>, within = 2, skip: readonly string[] = [], rigid: Readonly<Record<string, number>> = {}, limits: ClearanceLimits = {}): Clearance[] {
   const arena = new Arena();
@@ -249,6 +259,11 @@ export function clearances(oc: OC, state: ModelState, moving: readonly string[],
     const box = new Map([...shapes].map(([id, s]) => [id, bounds(oc, arena, s)]));
     const grow = (b: ReturnType<typeof bounds>) => ({ min: b.min.map((v) => v - within) as typeof b.min, max: b.max.map((v) => v + within) as typeof b.max });
     const ids = [...shapes.keys()].filter((id) => !limits.box || boundsOverlap(box.get(id)!, limits.box));
+    const tooFine = (id: string) => {
+      const b = state.bodies.get(id)!;
+      return !!b.sourceMesh && b.faces.length > FINE_MESH_FACES;
+    };
+    const fine = new Set<string>();
     const out: Clearance[] = [];
     const mover = new Set(moving);
     const started = performance.now();
@@ -260,6 +275,10 @@ export function clearances(oc: OC, state: ModelState, moving: readonly string[],
         if (!mover.has(a) && !mover.has(b)) continue;
         if (rigid[a] !== undefined && rigid[a] === rigid[b]) continue;
         if (!boundsOverlap(grow(box.get(a)!), box.get(b)!)) continue;
+        if (tooFine(a) || tooFine(b)) {
+          for (const id of [a, b]) if (tooFine(id)) fine.add(id);
+          continue;
+        }
         if (limits.budgetMs !== undefined && performance.now() - started > limits.budgetMs) {
           limits.left++;
           continue;
@@ -282,6 +301,7 @@ export function clearances(oc: OC, state: ModelState, moving: readonly string[],
         }
         out.push({ a, b, distance, overlap, points: [[p1.X(), p1.Y(), p1.Z()], [p2.X(), p2.Y(), p2.Z()]] });
       }
+    if (fine.size) limits.fine = [...fine];
     return out;
   } finally {
     arena.dispose();
