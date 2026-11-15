@@ -1,5 +1,5 @@
 /** Keyboard input of the sketch editor: shortcuts through the control scheme, and typed values. */
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { actionFor, SKETCH_CONTEXT } from "../../lib/keymap";
 import { closeSketch } from "../../store";
 import { applyConstraint, deleteSelection, selectAll, toggleConstruction } from "../actions";
@@ -17,8 +17,13 @@ export interface KeyEditor {
   rerender: () => void;
 }
 
-/** Listens to the keyboard while the editor is open (subscribed once, with the first render's editor). */
-export function useSketchKeys(editor: KeyEditor) {
+/**
+ * Listens to the keyboard while the editor is open. Subscribed once; the keys act on the latest
+ * render's editor, so a spline finished by a key is added to the sketch as it is now.
+ */
+export function useSketchKeys(current: KeyEditor) {
+  const latest = useRef(current);
+  latest.current = current;
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
@@ -39,6 +44,8 @@ export function useSketchKeys(editor: KeyEditor) {
       }
 
       if (event.metaKey || event.ctrlKey) return;
+
+      const editor = latest.current;
       if (typeValue(editor, event)) return;
       if (!action) return;
       if (action === "sketch.construction") return toggleConstruction();
