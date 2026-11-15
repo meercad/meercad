@@ -80,7 +80,7 @@ export function ViewportView() {
   usePoses(viewport, output, doc.mechanism, dialog);
   useJointGlyphs(viewport, output, doc.mechanism);
   useViewFlags(viewport, output, sketchId, dialog);
-  useViewPointer(viewport, boxRef, setBox, fitKey);
+  useViewPointer(viewport, boxRef, setBox);
 
   return (
     <div

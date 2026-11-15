@@ -39,6 +39,7 @@ import { copyParts, hasClip, pasteParts, selectAll, selectedParts } from "../../
 import { deleteBodies, deleteModelSelection } from "../../lib/deletion";
 import { hideDeviation, showDeviation, useDeviation } from "../../lib/deviation";
 import { FEATURES, partName } from "../../lib/features";
+import { keyFor } from "../../lib/keymap";
 import { t } from "../../lib/i18n";
 import { convertMeshPart, rebuildMeshPart } from "../../lib/meshConvert";
 import { importOf, openMeshRepair } from "../../lib/meshRepair";
@@ -70,13 +71,7 @@ interface Item {
 }
 
 /** Opens the menu for `pick` (null: empty space) at the screen point x, y. */
-export function openContextMenu(
-  viewport: Viewport,
-  fitKey: string | undefined,
-  pick: Pick | null,
-  x: number,
-  y: number,
-): void {
+export function openContextMenu(viewport: Viewport, pick: Pick | null, x: number, y: number): void {
   const state = useApp.getState();
   if (state.dialog || state.sketchId) return;
   if (pick && !state.selection.some((p) => samePick(p, pick))) useApp.setState({ selection: [pick] });
@@ -85,7 +80,7 @@ export function openContextMenu(
   const common = commonItems(pick, fid);
   const ground = !pick ? viewport.sceneryHit(x, y) : null;
 
-  if (!pick) return showMenu(x, y, emptySpaceMenu(viewport, fitKey, ground, state, x, y));
+  if (!pick) return showMenu(x, y, emptySpaceMenu(viewport, ground, state, x, y));
 
   if (pick.kind === "face" && meshBodyIds(state.doc.features, state.output?.meshes ?? []).has(pick.bodyId)) {
     return showMenu(x, y, meshPartMenu(pick, state, common));
@@ -147,7 +142,6 @@ function commonItems(pick: Pick | null, fid: string | null) {
 /** Empty space: the terrain tools where the ground is, then selecting, pasting and the view. */
 function emptySpaceMenu(
   viewport: Viewport,
-  fitKey: string | undefined,
   ground: Ground | null | undefined,
   state: AppState,
   x: number,
@@ -159,7 +153,7 @@ function emptySpaceMenu(
     ...(hasClip()
       ? [{ label: t("Paste"), icon: <ClipboardPaste />, kbd: "Mod+V", onClick: () => void pasteParts() }]
       : []),
-    { label: t("Fit view"), icon: <Focus />, kbd: fitKey, onClick: () => viewport.fit() },
+    { label: t("Fit view"), icon: <Focus />, kbd: keyFor("fit"), onClick: () => viewport.fit() },
     {
       label: state.showPlanes ? t("Hide planes") : t("Show planes"),
       icon: <Layers />,

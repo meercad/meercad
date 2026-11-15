@@ -546,11 +546,10 @@ export function useViewPointer(
   viewport: View,
   boxRef: { readonly current: SelectionBox | null },
   setBox: Dispatch<SetStateAction<SelectionBox | null>>,
-  fitKey: string | undefined,
 ): void {
   useEffect(() => {
     if (!viewport) return;
 
-    return new ViewPointer(viewport, boxRef, setBox, fitKey).attach();
+    return new ViewPointer(viewport, boxRef, setBox).attach();
   }, [viewport]); // eslint-disable-line react-hooks/exhaustive-deps
 }

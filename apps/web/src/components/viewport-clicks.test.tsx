@@ -4,11 +4,12 @@
  * the right-click menus on a part and on empty space do what they say.
  * The parts: a 40 × 20 × 10 block at the origin and a 10 × 10 × 25 post at x = 60.
  */
-import { act, cleanup, fireEvent } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import type { Viewport } from "@meercad/viewport";
 import { apply, getViewport, newProject, useApp } from "../store";
+import { setPrefs, usePrefs } from "../lib/keymap";
 import { pickMenu, rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "./ViewportView";
 
@@ -167,5 +168,20 @@ describe("clicks in the 3D view", () => {
     await pickMenu("Delete Extrude 1");
     await rebuilt();
     expect(volumes()).toEqual([2500, 2500]);
+  });
+
+  it("shows the fit key of the key scheme chosen after the view opened", async () => {
+    const was = usePrefs.getState().keys;
+    const fitEntry = () =>
+      screen.getAllByRole("menuitem").find((element) => element.textContent?.startsWith("Fit view"))
+        ?.textContent;
+    await clickAt(EMPTY, { button: 2 });
+    expect(fitEntry()).not.toContain("F6");
+    await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
+    await act(async () => setPrefs({ keys: "fusion" }));
+    await clickAt(EMPTY, { button: 2 });
+    expect(fitEntry()).toContain("F6");
+    await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
+    await act(async () => setPrefs({ keys: was }));
   });
 });

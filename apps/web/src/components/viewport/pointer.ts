@@ -91,7 +91,6 @@ export class ViewPointer {
     private readonly viewport: Viewport,
     private readonly boxRef: { readonly current: SelectionBox | null },
     private readonly setBox: Dispatch<SetStateAction<SelectionBox | null>>,
-    private readonly fitKey: string | undefined,
   ) {
     this.element = viewport.canvas;
     this.press = new Press(
@@ -147,7 +146,7 @@ export class ViewPointer {
     if (useApp.getState().sketchId || this.boxRef.current) return;
 
     this.down = null;
-    openContextMenu(this.viewport, this.fitKey, this.viewport.pick(x, y, pickKinds()), x, y);
+    openContextMenu(this.viewport, this.viewport.pick(x, y, pickKinds()), x, y);
 
     if (event.pointerType === "touch") {
       this.navOff = true;
@@ -335,7 +334,7 @@ export class ViewPointer {
 
     if (button === 2) {
       if (!confirmByRightClick()) {
-        openContextMenu(this.viewport, this.fitKey, pick, event.clientX, event.clientY);
+        openContextMenu(this.viewport, pick, event.clientX, event.clientY);
       }
 
       return;
