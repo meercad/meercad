@@ -13,6 +13,7 @@ import {
   type ProfileRef,
   type ThreadProfile,
 } from "@meercad/schema";
+import type { RebuildOutput } from "@meercad/kernel/client";
 import type { Pick, PickKind } from "@meercad/viewport";
 import {
   gearDims,
@@ -83,6 +84,9 @@ import { t, tn } from "../lib/i18n";
 
 type Of<O extends Feature["op"]> = Extract<Feature, { op: O }>;
 
+/** Changes the draft: the fields a step's form edits. */
+type SetPatch = (patch: Record<string, unknown>) => void;
+
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const toggle = <T,>(list: T[], item: T): T[] =>
   list.some((x) => same(x, item)) ? list.filter((x) => !same(x, item)) : [...list, item];
@@ -145,307 +149,366 @@ function featureOfFace(pick: Pick, features: Feature[]): string | null {
   return null;
 }
 
+/** The draft as a pick step changes it: a copy, written to by field name. */
+type Draft = Record<string, unknown> & Feature;
+
+/** What the view showed when the pick was made. */
+interface PickScene {
+  meshes: RebuildOutput["meshes"];
+  report: RebuildOutput["report"] | null;
+  features: Feature[];
+}
+
+/** One selection field's answer to a pick: changes the draft in place. */
+type PickStep = (draft: Draft, pick: Pick, scene: PickScene, field: string) => void;
+
+const bodyOf = (pick: Pick) => (pick.kind === "face" || pick.kind === "edge" ? pick.bodyId : null);
+const jointsNow = () => useApp.getState().doc.mechanism?.joints;
+
+/** Steps whose points are taps on the face of their plane. */
+const placesPoints = (draft: Feature) =>
+  draft.op === "hole" || draft.op === "standard_part" || draft.op === "snap_hook";
+
+/** Steps centred, or started, where their face was tapped. */
+const placedAtTap = (draft: Feature) =>
+  draft.op === "text" ||
+  draft.op === "label" ||
+  draft.op === "box" ||
+  draft.op === "lithophane" ||
+  (draft.op === "gridfinity" && !draft.baseplate) ||
+  (draft.op === "wall" && !draft.board);
+
+/** The regions of the picked sketch the profile has now; the odd-depth ones when it takes them all. */
+function profileRegions(
+  profile: { sketch: string; regions?: string[] | "all" },
+  pick: Extract<Pick, { kind: "region" }>,
+  report: PickScene["report"],
+): string[] {
+  if (profile.sketch !== pick.sketchId) return [];
+
+  if (Array.isArray(profile.regions)) return profile.regions;
+
+  if (profile.regions !== "all" && profile.regions !== undefined) return [];
+
+  return (
+    report?.sketches
+      .find((sketchView) => sketchView.id === pick.sketchId)
+      ?.regions.filter((r) => r.depth % 2 === 1)
+      .map((r) => r.key) ?? []
+  );
+}
+
+/** Extrude or revolve profile: a face (extrude only), a whole sketch, or regions toggled in and out. */
+const pickProfile: PickStep = (draft, pick, { meshes, report }) => {
+  const prof0 = (draft as Of<"extrude">).profile;
+  const prof = "sketch" in prof0 ? prof0 : { sketch: "", regions: undefined };
+
+  if (pick.kind === "face" && draft.op === "extrude") {
+    const fs = faceSelectorForPick(pick, meshes);
+    if (fs) (draft as Of<"extrude">).profile = { face: fs };
+  } else if (pick.kind === "sketch_curve") {
+    (draft as Of<"extrude">).profile = { sketch: pick.sketchId };
+  } else if (pick.kind === "region") {
+    const next = toggle(profileRegions(prof, pick, report), pick.key);
+    (draft as Of<"extrude">).profile = next.length
+      ? { sketch: pick.sketchId, regions: next }
+      : { sketch: "" };
+  }
+};
+
+/** Loft profiles, in the order picked; picking one again takes it out. */
+const pickLoftProfile: PickStep = (draft, pick, { meshes }) => {
+  if (draft.op !== "loft") return;
+
+  let item: ProfileRef | null = null;
+
+  if (pick.kind === "region") {
+    item = { sketch: pick.sketchId, regions: [pick.key] };
+  } else if (pick.kind === "sketch_curve") {
+    item = { sketch: pick.sketchId };
+  } else if (pick.kind === "face") {
+    const fs = faceSelectorForPick(pick, meshes);
+    if (fs) item = { face: fs };
+  }
+
+  if (item) draft.profiles = toggle(draft.profiles, item);
+};
+
+/** Align's two faces: flat faces mate; round ones line up by their axes. */
+const pickAlignFace: PickStep = (draft, pick, { meshes }, field) => {
+  if (draft.op !== "align" || pick.kind !== "face") return;
+
+  const fs = faceSelectorForPick(pick, meshes);
+  if (!fs) return;
+
+  draft[field] = pick.normal ? { face: fs } : { axisOf: fs };
+
+  // The moved part takes the parts joined to it along, unless the target is one of them
+  // (lining up parts of the same mechanism moves just the one).
+  if (field === "from") {
+    const group = joinedParts(pick.bodyId, jointsNow());
+    draft.bodies = group.length > 1 ? group : undefined;
+  } else if (draft.bodies?.includes(pick.bodyId)) {
+    draft.bodies = undefined;
+  }
+};
+
+/** Rib lines of one sketch; picking in another sketch starts over there. */
+const pickRibCurve: PickStep = (draft, pick) => {
+  if (draft.op !== "rib" || pick.kind !== "sketch_curve") return;
+
+  const curves = draft.sketch === pick.sketchId ? (draft.curves ?? []) : [];
+  const next = toggle(curves, pick.curveId);
+  draft.sketch = next.length ? pick.sketchId : "";
+  draft.curves = next.length ? next : undefined;
+};
+
+/** Sweep path: curves of one sketch; picking in another sketch starts over there. */
+const pickPathCurve: PickStep = (draft, pick) => {
+  if (draft.op !== "sweep" || pick.kind !== "sketch_curve") return;
+
+  const curves = draft.path.sketch === pick.sketchId ? (draft.path.curves ?? []) : [];
+  const next = toggle(curves, pick.curveId);
+  draft.path = next.length ? { sketch: pick.sketchId, curves: next } : { sketch: "" };
+};
+
+/** An axis or direction; a move's rotation keeps its axis in the rotation. */
+const pickAxis: PickStep = (draft, pick, { meshes }, field) => {
+  const a = axisForPick(pick, meshes);
+  if (a && draft.op === "transform" && draft.rotate) draft.rotate = { ...draft.rotate, axis: a };
+  else if (a) (draft as unknown as Record<string, AxisRef>)[field] = a;
+};
+
+const pickEdge: PickStep = (draft, pick, { meshes }) => {
+  const sel = edgeSelectorForPick(pick, meshes);
+  if (sel) (draft as Of<"fillet">).edges = toggle(asArray((draft as Of<"fillet">).edges), sel);
+};
+
+const pickFaces: PickStep = (draft, pick, { meshes }) => {
+  const sel = faceSelectorForPick(pick, meshes);
+  if (sel) (draft as Of<"shell">).faces = toggle((draft as Of<"shell">).faces, sel);
+};
+
+const pickFace: PickStep = (draft, pick, { meshes }) => {
+  const sel = faceSelectorForPick(pick, meshes);
+  if (sel) (draft as Of<"thread">).face = sel;
+};
+
+/** Parts an extrude or revolve may merge with. */
+const pickTargets: PickStep = (draft, pick) => {
+  const b = bodyOf(pick);
+  if (b) (draft as Of<"extrude">).targets = toggle((draft as Of<"extrude">).targets ?? [], b);
+};
+
+/** The part a boolean keeps; it stops being one of the tools. */
+const pickBooleanTarget: PickStep = (draft, pick) => {
+  const b = bodyOf(pick);
+
+  if (b) {
+    (draft as Of<"boolean">).target = b;
+    (draft as Of<"boolean">).tools = (draft as Of<"boolean">).tools.filter((t) => t !== b);
+  }
+};
+
+const pickBooleanTool: PickStep = (draft, pick) => {
+  const b = bodyOf(pick);
+
+  if (b && b !== (draft as Of<"boolean">).target) {
+    (draft as Of<"boolean">).tools = toggle((draft as Of<"boolean">).tools, b);
+  }
+};
+
+/** Parts to move, delete, split, scale or bend. */
+const pickBodies: PickStep = (draft, pick) => {
+  const b = bodyOf(pick);
+  if (!b) return;
+
+  const cur = (draft as Of<"transform" | "delete">).bodies;
+
+  // Moving a part takes the parts joined to it along, so the joints stay together.
+  if (draft.op === "transform" && !draft.copy && !cur.includes(b)) {
+    draft.bodies = [...new Set([...cur, ...joinedParts(b, jointsNow())])];
+  } else {
+    (draft as Of<"transform" | "delete">).bodies = toggle(cur, b);
+  }
+
+  // The first part picked for a bend sets which way it bends and how far, from its shape.
+  if (draft.op === "bend" && !cur.length && draft.bodies.length) {
+    const box = partsBox(useApp.getState().baseOutput, draft.bodies);
+    if (box) Object.assign(draft, bendDefaults(draft.mode, box));
+  }
+};
+
+/** Parts a snap hook catches in. */
+const pickCatch: PickStep = (draft, pick) => {
+  const b = bodyOf(pick);
+  if (b && draft.op === "snap_hook") draft.catchIn = toggle(draft.catchIn ?? [], b);
+};
+
+/** The mesh part to convert. */
+const pickMeshBody: PickStep = (draft, pick) => {
+  const b = bodyOf(pick);
+  if (b) (draft as Of<"mesh_convert">).body = b;
+};
+
+/** The part a Gridfinity bin holds (not the bin itself). */
+const pickPocket: PickStep = (draft, pick) => {
+  const b = bodyOf(pick);
+  if (b && draft.op === "gridfinity" && b !== draft.id) draft.pocket = { ...draft.pocket, body: b };
+};
+
+/** What a pattern or mirror repeats: features (by a face of theirs) or parts. */
+const pickSource: PickStep = (draft, pick, { features }) => {
+  const src = (draft as Of<"mirror">).source;
+
+  if ("features" in src) {
+    const fid = featureOfFace(pick, features);
+    if (fid) (draft as Of<"mirror">).source = { features: toggle(src.features, fid) };
+  } else {
+    const b = bodyOf(pick);
+    if (b) (draft as Of<"mirror">).source = { bodies: toggle(src.bodies, b) };
+  }
+};
+
+/**
+ * A plane, or a flat face; a step placed on a face also goes where it was tapped: a hole's point, a
+ * spring's or screw's centre, the start of a text, the centre of a label, box, bin, wall board or
+ * lithophane.
+ */
+const pickPlane: PickStep = (draft, pick, { meshes }, field) => {
+  const spec = planeSpecForPick(pick, meshes);
+  if (!spec) return;
+
+  (draft as unknown as Record<string, PlaneSpec>)[field] = spec;
+  if (pick.kind !== "face" || !pick.normal) return;
+
+  if (placesPoints(draft)) {
+    (draft as Of<"hole">).points = [holePoint(pick.point, pick.normal)];
+  } else if (draft.op === "spring" || draft.op === "screw") {
+    draft.center = holePoint(pick.point, pick.normal);
+  } else if (placedAtTap(draft)) {
+    (draft as Of<"text">).position = holePoint(pick.point, pick.normal);
+  }
+};
+
+/** A tapped edge puts a hole beside it, as far in as the wall to the edge needs. */
+function holeBesidePickedEdge(draft: Of<"hole">, pick: Extract<Pick, { kind: "edge" }>, scene: PickScene) {
+  const mesh = scene.meshes.find((mesh) => mesh.bodyId === pick.bodyId);
+  const inset = edgeInset(draft);
+  const tag = "face" in draft.plane && "face" in draft.plane.face ? draft.plane.face.face : undefined;
+  const at = mesh && inset !== undefined ? holeBesideEdge(mesh, pick.edge, pick.point, inset, tag) : null;
+  if (at) draft.points = [...draft.points, holePoint(at.point, at.normal)];
+}
+
+/** Points are the tap projected onto the hole's plane (u, v are the same on parallel faces). */
+const pickPoint: PickStep = (draft, pick, scene) => {
+  if (draft.op === "hole" && pick.kind === "edge") {
+    holeBesidePickedEdge(draft, pick, scene);
+
+    return;
+  }
+
+  if (!placesPoints(draft) || pick.kind !== "face" || !pick.normal) return;
+
+  (draft as Of<"hole">).points = [...(draft as Of<"hole">).points, holePoint(pick.point, pick.normal)];
+};
+
+/** What a pick in the view does, by the selection field that is active. */
+const PICK_STEPS = new Map<string, PickStep>([
+  ["profile", pickProfile],
+  ["profiles", pickLoftProfile],
+  ["from", pickAlignFace],
+  ["to", pickAlignFace],
+  ["curves", pickRibCurve],
+  ["path", pickPathCurve],
+  ["axis", pickAxis],
+  ["direction", pickAxis],
+  ["direction2", pickAxis],
+  ["edges", pickEdge],
+  ["faces", pickFaces],
+  ["face", pickFace],
+  ["targets", pickTargets],
+  ["target", pickBooleanTarget],
+  ["bodies", pickBodies],
+  ["catchIn", pickCatch],
+  ["body", pickMeshBody],
+  ["pocket", pickPocket],
+  ["tools", pickBooleanTool],
+  ["source", pickSource],
+  ["plane", pickPlane],
+  ["base", pickPlane],
+  ["neutral", pickPlane],
+  ["upTo", pickPlane],
+  ["points", pickPoint],
+]);
+
+/** Fields that hold one thing: a pick there moves on to the next field. */
+const SINGLE_VALUED = ["axis", "direction", "plane", "base", "neutral", "upTo", "target", "from", "to"];
+
+/** The field after a single-valued one: align's target face, boolean's tools, a hole's points. */
+function fieldAfter(op: Feature["op"], field: string): string | null {
+  if (op === "align" && field === "from") return "to";
+
+  if (op === "boolean" && field === "target") return "tools";
+
+  if ((op === "hole" || op === "standard_part" || op === "snap_hook") && field === "plane") return "points";
+
+  return null;
+}
+
 function handlePick(pick: Pick, dialog: DialogState): void {
   const { meshes, report } = useApp.getState().output ?? { meshes: [], report: null };
-  const features = useApp.getState().doc.features;
-  const feature = dialog.feature;
+  const scene: PickScene = { meshes, report, features: useApp.getState().doc.features };
   const field = dialog.field;
   if (!field) return;
 
-  const bodyOf = (pick: Pick) => (pick.kind === "face" || pick.kind === "edge" ? pick.bodyId : null);
   updateDraft((cur) => {
-    const g = structuredClone(cur) as Record<string, unknown> & Feature;
+    const draft = structuredClone(cur) as Draft;
+    PICK_STEPS.get(field)?.(draft, pick, scene, field);
 
-    switch (field) {
-      case "profile": {
-        const prof0 = (g as Of<"extrude">).profile;
-        const prof = "sketch" in prof0 ? prof0 : { sketch: "", regions: undefined };
-
-        if (pick.kind === "face" && g.op === "extrude") {
-          const fs = faceSelectorForPick(pick, meshes);
-          if (fs) (g as Of<"extrude">).profile = { face: fs };
-        } else if (pick.kind === "sketch_curve") {
-          (g as Of<"extrude">).profile = { sketch: pick.sketchId };
-        } else if (pick.kind === "region") {
-          const allKeys =
-            report?.sketches
-              .find((sketchView) => sketchView.id === pick.sketchId)
-              ?.regions.filter((r) => r.depth % 2 === 1)
-              .map((r) => r.key) ?? [];
-          const current =
-            prof.sketch === pick.sketchId
-              ? Array.isArray(prof.regions)
-                ? prof.regions
-                : prof.regions === "all" || prof.regions === undefined
-                  ? allKeys
-                  : []
-              : [];
-          const next = toggle(current, pick.key);
-          (g as Of<"extrude">).profile = next.length
-            ? { sketch: pick.sketchId, regions: next }
-            : { sketch: "" };
-        }
-
-        break;
-      }
-      case "profiles": {
-        // In the order picked; picking one again takes it out.
-        if (g.op !== "loft") break;
-
-        let item: ProfileRef | null = null;
-
-        if (pick.kind === "region") {
-          item = { sketch: pick.sketchId, regions: [pick.key] };
-        } else if (pick.kind === "sketch_curve") {
-          item = { sketch: pick.sketchId };
-        } else if (pick.kind === "face") {
-          const fs = faceSelectorForPick(pick, meshes);
-          if (fs) item = { face: fs };
-        }
-
-        if (item) g.profiles = toggle(g.profiles, item);
-
-        break;
-      }
-      case "from":
-      case "to": {
-        // Flat faces mate; round ones line up by their axes.
-        if (g.op !== "align" || pick.kind !== "face") break;
-
-        const fs = faceSelectorForPick(pick, meshes);
-        if (!fs) break;
-
-        g[field] = pick.normal ? { face: fs } : { axisOf: fs };
-
-        // The moved part takes the parts joined to it along, unless the target is one of them
-        // (lining up parts of the same mechanism moves just the one).
-        if (field === "from") {
-          const group = joinedParts(pick.bodyId, useApp.getState().doc.mechanism?.joints);
-          g.bodies = group.length > 1 ? group : undefined;
-        } else if (g.bodies?.includes(pick.bodyId)) {
-          g.bodies = undefined;
-        }
-
-        break;
-      }
-      case "curves": {
-        // Rib lines of one sketch; picking in another sketch starts over there.
-        if (g.op !== "rib" || pick.kind !== "sketch_curve") break;
-
-        const curves = g.sketch === pick.sketchId ? (g.curves ?? []) : [];
-        const next = toggle(curves, pick.curveId);
-        g.sketch = next.length ? pick.sketchId : "";
-        g.curves = next.length ? next : undefined;
-        break;
-      }
-      case "path": {
-        // Curves of one sketch; picking in another sketch starts over there.
-        if (g.op !== "sweep" || pick.kind !== "sketch_curve") break;
-
-        const curves = g.path.sketch === pick.sketchId ? (g.path.curves ?? []) : [];
-        const next = toggle(curves, pick.curveId);
-        g.path = next.length ? { sketch: pick.sketchId, curves: next } : { sketch: "" };
-        break;
-      }
-      case "axis":
-      case "direction":
-      case "direction2": {
-        const a = axisForPick(pick, meshes);
-        if (a && g.op === "transform" && g.rotate) g.rotate = { ...g.rotate, axis: a };
-        else if (a) (g as unknown as Record<string, AxisRef>)[field] = a;
-
-        break;
-      }
-      case "edges": {
-        const sel = edgeSelectorForPick(pick, meshes);
-        if (sel) (g as Of<"fillet">).edges = toggle(asArray((g as Of<"fillet">).edges), sel);
-
-        break;
-      }
-      case "faces": {
-        const sel = faceSelectorForPick(pick, meshes);
-        if (sel) (g as Of<"shell">).faces = toggle((g as Of<"shell">).faces, sel);
-
-        break;
-      }
-      case "face": {
-        const sel = faceSelectorForPick(pick, meshes);
-        if (sel) (g as Of<"thread">).face = sel;
-
-        break;
-      }
-      case "targets": {
-        const b = bodyOf(pick);
-        if (b) (g as Of<"extrude">).targets = toggle((g as Of<"extrude">).targets ?? [], b);
-
-        break;
-      }
-      case "target": {
-        const b = bodyOf(pick);
-
-        if (b) {
-          (g as Of<"boolean">).target = b;
-          (g as Of<"boolean">).tools = (g as Of<"boolean">).tools.filter((t) => t !== b);
-        }
-
-        break;
-      }
-      case "bodies": {
-        const b = bodyOf(pick);
-        if (!b) break;
-
-        const cur = (g as Of<"transform" | "delete">).bodies;
-
-        // Moving a part takes the parts joined to it along, so the joints stay together.
-        if (g.op === "transform" && !g.copy && !cur.includes(b)) {
-          g.bodies = [...new Set([...cur, ...joinedParts(b, useApp.getState().doc.mechanism?.joints)])];
-        } else {
-          (g as Of<"transform" | "delete">).bodies = toggle(cur, b);
-        }
-
-        // The first part picked for a bend sets which way it bends and how far, from its shape.
-        if (g.op === "bend" && !cur.length && g.bodies.length) {
-          const box = partsBox(useApp.getState().baseOutput, g.bodies);
-          if (box) Object.assign(g, bendDefaults(g.mode, box));
-        }
-
-        break;
-      }
-      case "catchIn": {
-        const b = bodyOf(pick);
-        if (b && g.op === "snap_hook") g.catchIn = toggle(g.catchIn ?? [], b);
-
-        break;
-      }
-      case "body": {
-        const b = bodyOf(pick);
-        if (b) (g as Of<"mesh_convert">).body = b;
-
-        break;
-      }
-      case "pocket": {
-        // The part a Gridfinity bin holds (not the bin itself).
-        const b = bodyOf(pick);
-        if (b && g.op === "gridfinity" && b !== g.id) g.pocket = { ...g.pocket, body: b };
-
-        break;
-      }
-      case "tools": {
-        const b = bodyOf(pick);
-
-        if (b && b !== (g as Of<"boolean">).target) {
-          (g as Of<"boolean">).tools = toggle((g as Of<"boolean">).tools, b);
-        }
-
-        break;
-      }
-      case "source": {
-        const src = (g as Of<"mirror">).source;
-
-        if ("features" in src) {
-          const fid = featureOfFace(pick, features);
-          if (fid) (g as Of<"mirror">).source = { features: toggle(src.features, fid) };
-        } else {
-          const b = bodyOf(pick);
-          if (b) (g as Of<"mirror">).source = { bodies: toggle(src.bodies, b) };
-        }
-
-        break;
-      }
-      case "plane":
-      case "base":
-      case "neutral":
-      case "upTo": {
-        const spec = planeSpecForPick(pick, meshes);
-        if (spec) (g as unknown as Record<string, PlaneSpec>)[field] = spec;
-
-        // A hole goes where the face was tapped.
-        if (
-          spec &&
-          (g.op === "hole" || g.op === "standard_part" || g.op === "snap_hook") &&
-          pick.kind === "face" &&
-          pick.normal
-        ) {
-          (g as Of<"hole">).points = [holePoint(pick.point, pick.normal)];
-        }
-
-        // Springs and screws stand where the face was tapped.
-        if (spec && (g.op === "spring" || g.op === "screw") && pick.kind === "face" && pick.normal) {
-          g.center = holePoint(pick.point, pick.normal);
-        }
-
-        // Text starts where the face was tapped.
-        if (spec && g.op === "text" && pick.kind === "face" && pick.normal) {
-          g.position = holePoint(pick.point, pick.normal);
-        }
-
-        if (
-          spec &&
-          (g.op === "label" ||
-            g.op === "box" ||
-            (g.op === "gridfinity" && !g.baseplate) ||
-            (g.op === "wall" && !g.board)) &&
-          pick.kind === "face" &&
-          pick.normal
-        ) {
-          g.position = holePoint(pick.point, pick.normal);
-        }
-
-        // Labels, free-standing bins and wall boards are centred where the face was tapped.
-        // Labels and free-standing bins are centred where the face was tapped.
-        if (
-          spec &&
-          (g.op === "label" || g.op === "lithophane" || (g.op === "gridfinity" && !g.baseplate)) &&
-          pick.kind === "face" &&
-          pick.normal
-        ) {
-          g.position = holePoint(pick.point, pick.normal);
-        }
-
-        break;
-      }
-      case "points": {
-        // A tapped edge puts a hole beside it, as far in as the wall to the edge needs.
-        if (g.op === "hole" && pick.kind === "edge") {
-          const mesh = meshes.find((mesh) => mesh.bodyId === pick.bodyId);
-          const inset = edgeInset(g);
-          const tag = "face" in g.plane && "face" in g.plane.face ? g.plane.face.face : undefined;
-          const at =
-            mesh && inset !== undefined ? holeBesideEdge(mesh, pick.edge, pick.point, inset, tag) : null;
-          if (at) g.points = [...g.points, holePoint(at.point, at.normal)];
-
-          break;
-        }
-
-        // Points are the tap projected onto the hole's plane (u, v are the same on parallel faces).
-        if (
-          (g.op !== "hole" && g.op !== "standard_part" && g.op !== "snap_hook") ||
-          pick.kind !== "face" ||
-          !pick.normal
-        ) {
-          break;
-        }
-
-        g.points = [...g.points, holePoint(pick.point, pick.normal)];
-        break;
-      }
-    }
-
-    return g as Feature;
+    return draft as Feature;
   });
 
-  // Single-valued fields advance to the next field automatically.
-  if (["axis", "direction", "plane", "base", "neutral", "upTo", "target", "from", "to"].includes(field)) {
-    const next =
-      feature.op === "align" && field === "from"
-        ? "to"
-        : feature.op === "boolean" && field === "target"
-          ? "tools"
-          : (feature.op === "hole" || feature.op === "standard_part" || feature.op === "snap_hook") &&
-              field === "plane"
-            ? "points"
-            : null;
-    setDialogField(next);
+  if (SINGLE_VALUED.includes(field)) setDialogField(fieldAfter(dialog.feature.op, field));
+}
+
+/** Whether a step takes whole parts: several parts selected before opening it become its parts. */
+const takesParts = (op: Feature["op"]) =>
+  op === "transform" ||
+  op === "delete" ||
+  op === "mirror" ||
+  op === "linear_pattern" ||
+  op === "circular_pattern";
+
+/**
+ * Picks made before opening the dialog seed its first field (select edges → Fillet); several selected
+ * parts become the parts to move, delete, mirror or pattern.
+ */
+function seedFromSelection(dialog: DialogState): void {
+  let pre = useApp.getState().selection;
+  const feature = dialog.feature;
+
+  if (pre.length > 1 && takesParts(feature.op)) {
+    let ids = [...new Set(pre.flatMap((pick) => (pick.kind === "face" ? [pick.bodyId] : [])))];
+    if (feature.op === "transform") ids = [...new Set(ids.flatMap((b) => joinedParts(b)))];
+
+    if (feature.op === "transform" || feature.op === "delete") {
+      updateDraft({ bodies: ids } as Partial<Feature>);
+    } else {
+      updateDraft({ source: { bodies: ids } } as Partial<Feature>);
+    }
+
+    pre = [];
+    useApp.setState({ selection: [] });
+  }
+
+  if (pre.length && dialog.isNew) {
+    for (const pick of pre) {
+      const cur = useApp.getState().dialog;
+      if (cur) handlePick(pick, cur);
+    }
+
+    useApp.setState({ selection: [] });
   }
 }
 
@@ -464,41 +527,7 @@ export function FeatureDialog() {
       const cur = useApp.getState().dialog;
       if (cur) handlePick(pick, cur);
     });
-
-    // Picks made before opening the dialog seed its first field (select edges → Fillet).
-    let pre = useApp.getState().selection;
-    // A whole selected part becomes a body selection for move/mirror/pattern.
-    const feature = dialog.feature;
-
-    if (
-      pre.length > 1 &&
-      (feature.op === "transform" ||
-        feature.op === "delete" ||
-        feature.op === "mirror" ||
-        feature.op === "linear_pattern" ||
-        feature.op === "circular_pattern")
-    ) {
-      let ids = [...new Set(pre.flatMap((pick) => (pick.kind === "face" ? [pick.bodyId] : [])))];
-      if (feature.op === "transform") ids = [...new Set(ids.flatMap((b) => joinedParts(b)))];
-
-      if (feature.op === "transform" || feature.op === "delete") {
-        updateDraft({ bodies: ids } as Partial<Feature>);
-      } else {
-        updateDraft({ source: { bodies: ids } } as Partial<Feature>);
-      }
-
-      pre = [];
-      useApp.setState({ selection: [] });
-    }
-
-    if (pre.length && dialog.isNew) {
-      for (const pick of pre) {
-        const cur = useApp.getState().dialog;
-        if (cur) handlePick(pick, cur);
-      }
-
-      useApp.setState({ selection: [] });
-    }
+    seedFromSelection(dialog);
 
     return () => {
       setDialogPick(null);
@@ -742,6 +771,43 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </div>
 );
 
+/** Turns a step the other way round: its `flip`, as an icon button beside the field it belongs to. */
+function FlipButton({ flip, title, set }: { flip: boolean | undefined; title: string; set: SetPatch }) {
+  return (
+    <button
+      className={`icon-btn ${flip ? "active" : ""}`}
+      title={title}
+      onClick={() => set({ flip: flip ? undefined : true })}
+    >
+      <ArrowLeftRight />
+    </button>
+  );
+}
+
+/** Picks a whole sketch from a list, for steps that also take its regions or lines one by one. */
+function SketchSelect({
+  sketches,
+  prompt,
+  onPick,
+}: {
+  sketches: Of<"sketch">[];
+  prompt: string;
+  onPick: (sketch: string) => void;
+}) {
+  if (!sketches.length) return null;
+
+  return (
+    <select className="field" value="" onChange={(event) => onPick(event.target.value)}>
+      <option value="">{prompt}</option>
+      {sketches.map((sketch) => (
+        <option key={sketch.id} value={sketch.id}>
+          {featureName(sketch)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 const MODES: [BooleanMode, string][] = [
   ["new_body", t("mode::New")],
   ["join", t("mode::Add")],
@@ -871,7 +937,7 @@ function ThreadForm({
   diameter?: Expr;
   pitch?: Expr;
   starts?: Expr;
-  set: (patch: Record<string, unknown>) => void;
+  set: SetPatch;
   diameterPlaceholder?: string;
   pitchPlaceholder?: string;
 }) {
@@ -930,13 +996,7 @@ function ThreadForm({
   );
 }
 
-function ThreadFields({
-  f: feature,
-  set,
-}: {
-  f: Of<"thread">;
-  set: (patch: Record<string, unknown>) => void;
-}) {
+function ThreadFields({ f: feature, set }: { f: Of<"thread">; set: SetPatch }) {
   const std = feature.size
     ? METRIC_THREADS.find((thread) => thread.d === parseMetric(feature.size!))
     : undefined;
@@ -1055,13 +1115,7 @@ function ThreadFields({
   );
 }
 
-function ThreadCommon({
-  f: feature,
-  set,
-}: {
-  f: Of<"thread">;
-  set: (patch: Record<string, unknown>) => void;
-}) {
+function ThreadCommon({ f: feature, set }: { f: Of<"thread">; set: SetPatch }) {
   return (
     <>
       <label className="checkbox">
@@ -1105,8 +1159,25 @@ function ThreadCommon({
   );
 }
 
+/**
+ * Switching how a bend works: values that fit the parts' box when there are parts, else the defaults
+ * of the new mode.
+ */
+function bendModePatch(mode: Of<"bend">["mode"], box: Parameters<typeof bendDefaults>[1] | null) {
+  return box
+    ? { ...bendDefaults(mode, box) }
+    : {
+        mode,
+        ...(mode === "spiral"
+          ? { radius: 20, gap: 1, angle: undefined }
+          : mode === "wrap"
+            ? { radius: 30, gap: undefined, angle: undefined }
+            : { angle: 90, radius: undefined, gap: undefined }),
+      };
+}
+
 /** Bend: parts, how (bend, wrap, spiral), axis and the values of that mode, and what it comes to. */
-function BendFields({ f: feature, set }: { f: Of<"bend">; set: (patch: Record<string, unknown>) => void }) {
+function BendFields({ f: feature, set }: { f: Of<"bend">; set: SetPatch }) {
   const features = useApp((state) => state.doc.features);
   const params = useApp((state) => state.baseOutput?.report.params);
   const base = useApp((state) => state.baseOutput);
@@ -1133,21 +1204,6 @@ function BendFields({ f: feature, set }: { f: Of<"bend">; set: (patch: Record<st
   const box = known ? unbentBox(known) : partsBox(base, feature.bodies);
   const gap = gapProblem(feature, feature.mode === "spiral" ? (num(feature.gap) ?? 1) : undefined);
 
-  const switchMode = (mode: Of<"bend">["mode"]) => {
-    set(
-      box && feature.bodies.length
-        ? { ...bendDefaults(mode, box) }
-        : {
-            mode,
-            ...(mode === "spiral"
-              ? { radius: 20, gap: 1, angle: undefined }
-              : mode === "wrap"
-                ? { radius: 30, gap: undefined, angle: undefined }
-                : { angle: 90, radius: undefined, gap: undefined }),
-          },
-    );
-  };
-
   return (
     <>
       <Field label={t("Parts")}>
@@ -1165,7 +1221,7 @@ function BendFields({ f: feature, set }: { f: Of<"bend">; set: (patch: Record<st
           ["wrap", t("Ring")],
           ["spiral", t("Spiral")],
         ]}
-        onChange={switchMode}
+        onChange={(mode) => set(bendModePatch(mode, feature.bodies.length ? box : null))}
       />
       <Field label={feature.mode === "spiral" ? t("Axis of the coil") : t("Bend axis")}>
         <SelBox field="axis" items={[describeAxis(feature.axis)]} placeholder={t("Pick an edge or line")} />
@@ -1276,7 +1332,7 @@ function BendFields({ f: feature, set }: { f: Of<"bend">; set: (patch: Record<st
 }
 
 /** Scale: parts, factor (typed, or from a measured and a wanted length), about what. */
-function ScaleFields({ f: feature, set }: { f: Of<"scale">; set: (patch: Record<string, unknown>) => void }) {
+function ScaleFields({ f: feature, set }: { f: Of<"scale">; set: SetPatch }) {
   const features = useApp((state) => state.doc.features);
   const [measured, setMeasured] = useState("");
   const [wanted, setWanted] = useState("");
@@ -1357,8 +1413,31 @@ const HOLE_KINDS: [Of<"hole">["kind"], string][] = [
   ["simple", t("Plain")],
 ];
 
+/** Switching a hole to another kind: a plain hole keeps a diameter, the others a size they come in. */
+function holeKindPatch(feature: Of<"hole">, kind: Of<"hole">["kind"]) {
+  const withoutInsert = kind === "insert" ? {} : { length: undefined, withInserts: undefined };
+
+  return kind === "simple"
+    ? {
+        kind,
+        size: undefined,
+        fit: undefined,
+        diameter: feature.diameter ?? 5,
+        allowance: feature.allowance ?? "2 * fit",
+        ...withoutInsert,
+      }
+    : {
+        kind,
+        diameter: undefined,
+        size: (kind === "insert" ? INSERT_SIZES : HOLE_SIZES).includes(feature.size ?? "")
+          ? feature.size
+          : "M3",
+        ...(kind === "insert" ? { depth: undefined, length: undefined } : withoutInsert),
+      };
+}
+
 /** Hole: kind and size, where (a flat face, tapped points), depth, printing allowance. */
-function HoleFields({ f: feature, set }: { f: Of<"hole">; set: (patch: Record<string, unknown>) => void }) {
+function HoleFields({ f: feature, set }: { f: Of<"hole">; set: SetPatch }) {
   const sizes = feature.kind === "insert" ? INSERT_SIZES : HOLE_SIZES;
   const screw =
     feature.kind === "clearance" || feature.kind === "counterbore" || feature.kind === "countersink";
@@ -1369,29 +1448,7 @@ function HoleFields({ f: feature, set }: { f: Of<"hole">; set: (patch: Record<st
         <select
           className="field"
           value={feature.kind}
-          onChange={(event) => {
-            const kind = event.target.value as Of<"hole">["kind"];
-            const leave = kind === "insert" ? {} : { length: undefined, withInserts: undefined };
-            set(
-              kind === "simple"
-                ? {
-                    kind,
-                    size: undefined,
-                    fit: undefined,
-                    diameter: feature.diameter ?? 5,
-                    allowance: feature.allowance ?? "2 * fit",
-                    ...leave,
-                  }
-                : {
-                    kind,
-                    diameter: undefined,
-                    size: (kind === "insert" ? INSERT_SIZES : HOLE_SIZES).includes(feature.size ?? "")
-                      ? feature.size
-                      : "M3",
-                    ...(kind === "insert" ? { depth: undefined, length: undefined } : leave),
-                  },
-            );
-          }}
+          onChange={(event) => set(holeKindPatch(feature, event.target.value as Of<"hole">["kind"]))}
         >
           {HOLE_KINDS.map(([k, label]) => (
             <option key={k} value={k}>
@@ -1453,48 +1510,17 @@ function HoleFields({ f: feature, set }: { f: Of<"hole">; set: (patch: Record<st
           placeholder={t("Tap a flat face where the hole goes")}
         />
       </Field>
-      <Field label={t("Holes ({n})", { n: feature.points.length })}>
-        <SelBox
-          field="points"
-          items={
-            feature.points.length
-              ? [
-                  tn(
-                    feature.points.length,
-                    "{n} point: tap the face to add",
-                    "{n} points: tap the face to add",
-                  ),
-                ]
-              : []
-          }
-          placeholder={t("Tap the face to place holes, or an edge for a hole beside it")}
-        />
-        {feature.points.map((pt, i) => (
-          <div className="row" key={i}>
-            {[0, 1].map((k) => (
-              <div key={k} style={{ flex: 1 }}>
-                <ExprInput
-                  value={pt[k]}
-                  onCommit={(expr) =>
-                    set({
-                      points: feature.points.map((q, j) =>
-                        j === i ? (k === 0 ? [expr, q[1]] : [q[0], expr]) : q,
-                      ),
-                    })
-                  }
-                />
-              </div>
-            ))}
-            <button
-              className="icon-btn sm"
-              title={t("Remove")}
-              onClick={() => set({ points: feature.points.filter((_, j) => j !== i) })}
-            >
-              <X />
-            </button>
-          </div>
-        ))}
-      </Field>
+      <PointsField
+        label={t("Holes ({n})", { n: feature.points.length })}
+        points={feature.points}
+        summary={tn(
+          feature.points.length,
+          "{n} point: tap the face to add",
+          "{n} points: tap the face to add",
+        )}
+        placeholder={t("Tap the face to place holes, or an edge for a hole beside it")}
+        set={set}
+      />
       {feature.kind !== "insert" ? (
         <label className="checkbox">
           <input
@@ -1523,13 +1549,7 @@ function HoleFields({ f: feature, set }: { f: Of<"hole">; set: (patch: Record<st
             onCommit={(allowance) => set({ allowance: allowance === 0 ? undefined : allowance })}
           />
         </Field>
-        <button
-          className={`icon-btn ${feature.flip ? "active" : ""}`}
-          title={t("Drill the other way")}
-          onClick={() => set({ flip: feature.flip ? undefined : true })}
-        >
-          <ArrowLeftRight />
-        </button>
+        <FlipButton flip={feature.flip} title={t("Drill the other way")} set={set} />
       </div>
       {feature.kind === "insert" ? (
         <label className="checkbox">
@@ -1554,16 +1574,52 @@ function HoleFields({ f: feature, set }: { f: Of<"hole">; set: (patch: Record<st
   );
 }
 
-/** An insert's length, from the lengths its size comes in (the usual one first). */
-function InsertLength({
-  size,
-  length,
+/** Points tapped on the step's face, each one editable and removable; `summary` says how many. */
+function PointsField({
+  label,
+  points,
+  summary,
+  placeholder,
   set,
 }: {
-  size: string;
-  length: Of<"hole">["length"];
-  set: (patch: Record<string, unknown>) => void;
+  label: string;
+  points: [Expr, Expr][];
+  summary: string;
+  placeholder: string;
+  set: SetPatch;
 }) {
+  return (
+    <Field label={label}>
+      <SelBox field="points" items={points.length ? [summary] : []} placeholder={placeholder} />
+      {points.map((pt, i) => (
+        <div className="row" key={i}>
+          {[0, 1].map((k) => (
+            <div key={k} style={{ flex: 1 }}>
+              <ExprInput
+                value={pt[k]}
+                onCommit={(expr) =>
+                  set({
+                    points: points.map((q, j) => (j === i ? (k === 0 ? [expr, q[1]] : [q[0], expr]) : q)),
+                  })
+                }
+              />
+            </div>
+          ))}
+          <button
+            className="icon-btn sm"
+            title={t("Remove")}
+            onClick={() => set({ points: points.filter((_, j) => j !== i) })}
+          >
+            <X />
+          </button>
+        </div>
+      ))}
+    </Field>
+  );
+}
+
+/** An insert's length, from the lengths its size comes in (the usual one first). */
+function InsertLength({ size, length, set }: { size: string; length: Of<"hole">["length"]; set: SetPatch }) {
   const lengths = insertLengths(size);
   if (lengths.length < 2) return null;
 
@@ -1608,8 +1664,11 @@ function insertNote(size: string, length: number | undefined): string {
 const EMPTY_PARAMS: Record<string, number> = {};
 const mm = (v: number) => `${v.toFixed(2).replace(/\.?0+$/, "")} mm`;
 
+type GearParams = NonNullable<ReturnType<typeof gearParams>>;
+type GearDims = ReturnType<typeof gearDims>;
+
 /** Gear: kind, size, placement or partner, helix, bore and hub, with the resulting sizes. */
-function GearFields({ f: feature, set }: { f: Of<"gear">; set: (patch: Record<string, unknown>) => void }) {
+function GearFields({ f: feature, set }: { f: Of<"gear">; set: SetPatch }) {
   const features = useApp((state) => state.doc.features);
   const values = useApp((state) => state.output?.report.params) ?? EMPTY_PARAMS;
   const others = features.filter((x): x is Of<"gear"> => x.op === "gear" && x.id !== feature.id);
@@ -1617,22 +1676,6 @@ function GearFields({ f: feature, set }: { f: Of<"gear">; set: (patch: Record<st
   const dims = p ? gearDims(p) : null;
   const pair = pairInfo(feature, features, values);
   const meshing = !!feature.meshWith;
-
-  const addMate = () => {
-    const teeth = typeof feature.teeth === "number" ? feature.teeth * 2 : 30;
-    if (!commitDialog()) return;
-
-    const mate = draftFeature("gear", useApp.getState().doc) as Of<"gear">;
-    // A ring gear or rack gets a gear; a gear gets a gear twice its size.
-    openDraft({
-      ...mate,
-      module: undefined,
-      plane: undefined,
-      teeth: feature.kind === "spur" ? teeth : 18,
-      width: feature.width,
-      meshWith: { gear: feature.id, direction: 0 },
-    } as Feature);
-  };
 
   return (
     <>
@@ -1652,67 +1695,8 @@ function GearFields({ f: feature, set }: { f: Of<"gear">; set: (patch: Record<st
           })
         }
       />
-      {others.length ? (
-        <Field label={t("Meshes with")}>
-          <select
-            className="field"
-            value={feature.meshWith?.gear ?? ""}
-            onChange={(event) =>
-              set(
-                event.target.value
-                  ? {
-                      meshWith: { gear: event.target.value, direction: feature.meshWith?.direction ?? 0 },
-                      module: undefined,
-                      pressureAngle: undefined,
-                      helix: undefined,
-                      herringbone: undefined,
-                      plane: undefined,
-                      center: undefined,
-                      rotation: undefined,
-                    }
-                  : { meshWith: undefined, module: p?.module ?? 1.5, plane: { ref: "origin.XY" } },
-              )
-            }
-          >
-            <option value="">{t("Nothing (place freely)")}</option>
-            {others.map((feature) => (
-              <option key={feature.id} value={feature.id}>
-                {featureName(feature)}
-              </option>
-            ))}
-          </select>
-        </Field>
-      ) : null}
-      <div className="row">
-        <Field label={t("Module")}>
-          {meshing ? (
-            <div className="field muted">{p ? mm(p.module) : "–"}</div>
-          ) : (
-            <ExprInput
-              value={feature.module}
-              autoFocus
-              onCommit={(module) => set({ module })}
-              onLive={(module) => set({ module })}
-            />
-          )}
-        </Field>
-        <Field label={t("Teeth")}>
-          <ExprInput
-            value={feature.teeth}
-            unit=""
-            integer
-            onCommit={(teeth) => set({ teeth })}
-            onLive={(teeth) => set({ teeth })}
-          />
-        </Field>
-        <Field label={t("Width")}>
-          <ExprInput
-            value={feature.width}
-            onCommit={(width) => set({ width })}
-            onLive={(width) => set({ width })}
-          />
-        </Field>
-      </div>
+      {others.length ? <GearPartner f={feature} set={set} others={others} p={p} /> : null}
+      <GearSize f={feature} set={set} meshing={meshing} p={p} />
       {meshing ? (
         feature.kind === "spur" || feature.kind === "internal" ? (
           <Field label={t("Direction from the partner")}>
@@ -1725,99 +1709,10 @@ function GearFields({ f: feature, set }: { f: Of<"gear">; set: (patch: Record<st
           </Field>
         ) : null
       ) : (
-        <>
-          <Field label={t("Plane")}>
-            <SelBox
-              field="plane"
-              items={[describePlane(feature.plane ?? { ref: "origin.XY" })]}
-              placeholder={t("Pick a plane or flat face")}
-            />
-            <PlaneButtons
-              value={feature.plane ?? { ref: "origin.XY" }}
-              onChange={(plane) => set({ plane })}
-            />
-          </Field>
-          <Field label={t("Centre (in the plane) and turn")}>
-            <div className="row">
-              {[0, 1].map((i) => (
-                <div key={i} style={{ flex: 1 }}>
-                  <ExprInput
-                    value={feature.center?.[i] ?? 0}
-                    onCommit={(expr) =>
-                      set({ center: [0, 1].map((j) => (j === i ? expr : (feature.center?.[j] ?? 0))) })
-                    }
-                    onLive={(expr) =>
-                      set({ center: [0, 1].map((j) => (j === i ? expr : (feature.center?.[j] ?? 0))) })
-                    }
-                  />
-                </div>
-              ))}
-              <div style={{ flex: 1 }}>
-                <ExprInput
-                  value={feature.rotation ?? 0}
-                  unit="deg"
-                  onCommit={(rotation) => set({ rotation: rotation === 0 ? undefined : rotation })}
-                  onLive={(rotation) => set({ rotation })}
-                />
-              </div>
-            </div>
-          </Field>
-        </>
+        <GearPlacement f={feature} set={set} />
       )}
-      {feature.kind === "internal" ? (
-        <Field label={t("Outside diameter")}>
-          <ExprInput
-            value={feature.rim}
-            placeholder={dims ? (dims.df + 4 * p!.module).toFixed(1) : ""}
-            onCommit={(rim) => set({ rim })}
-          />
-        </Field>
-      ) : feature.kind === "rack" ? (
-        <Field label={t("Back below the teeth")}>
-          <ExprInput
-            value={feature.rim}
-            placeholder={p ? String(2 * p.module) : ""}
-            onCommit={(rim) => set({ rim })}
-          />
-        </Field>
-      ) : null}
-      {!meshing ? (
-        <div className="row">
-          <Field label={t("Helix angle")}>
-            <ExprInput
-              value={feature.helix ?? 0}
-              unit="deg"
-              onCommit={(helix) => set({ helix: helix === 0 ? undefined : helix })}
-              onLive={(helix) => set({ helix })}
-            />
-          </Field>
-          <Field label={t("Pressure angle")}>
-            <select
-              className="field"
-              value={String(feature.pressureAngle ?? 20)}
-              onChange={(event) =>
-                set({ pressureAngle: event.target.value === "20" ? undefined : Number(event.target.value) })
-              }
-            >
-              {[14.5, 20, 25].map((a) => (
-                <option key={a} value={a}>
-                  {a}°
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      ) : null}
-      {!meshing && feature.helix !== undefined && feature.helix !== 0 ? (
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={!!feature.herringbone}
-            onChange={(event) => set({ herringbone: event.target.checked || undefined })}
-          />{" "}
-          {t("Herringbone (both hands, no side thrust)")}
-        </label>
-      ) : null}
+      <GearRim f={feature} set={set} p={p} dims={dims} />
+      {!meshing ? <GearHelix f={feature} set={set} /> : null}
       <div className="row">
         <Field label={t("Backlash (pair)")}>
           <ExprInput value={feature.backlash} placeholder="0.15" onCommit={(backlash) => set({ backlash })} />
@@ -1835,173 +1730,17 @@ function GearFields({ f: feature, set }: { f: Of<"gear">; set: (patch: Record<st
           </Field>
         ) : null}
       </div>
-      {feature.kind !== "rack" ? (
-        <>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={feature.chamfer !== undefined}
-              onChange={(event) =>
-                set({ chamfer: event.target.checked ? Math.min(0.5, (p?.module ?? 1) / 2) : undefined })
-              }
-            />{" "}
-            {t("Chamfer tooth ends")}
-          </label>
-          {feature.chamfer !== undefined ? (
-            <Field label={t("Chamfer (45°)")}>
-              <ExprInput
-                value={feature.chamfer}
-                onCommit={(chamfer) => set({ chamfer })}
-                onLive={(chamfer) => set({ chamfer })}
-              />
-            </Field>
-          ) : null}
-        </>
-      ) : null}
+      {feature.kind !== "rack" ? <GearChamfer f={feature} set={set} p={p} /> : null}
       {feature.kind === "spur" ? (
         <>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.bore}
-              onChange={(event) =>
-                set({ bore: event.target.checked ? { diameter: 5, allowance: "2 * fit" } : undefined })
-              }
-            />{" "}
-            {t("Bore")}
-          </label>
-          {feature.bore ? (
-            <>
-              <Seg
-                value={feature.bore.shape ?? "round"}
-                options={[
-                  ["round", t("Round")],
-                  ["d_flat", t("D shaft")],
-                  ["hex", t("Hex")],
-                ]}
-                onChange={(shape) =>
-                  set({ bore: { ...feature.bore!, shape: shape === "round" ? undefined : shape } })
-                }
-              />
-              <div className="row">
-                <Field label={feature.bore.shape === "hex" ? t("Across flats") : t("Diameter")}>
-                  <ExprInput
-                    value={feature.bore.diameter}
-                    onCommit={(diameter) => set({ bore: { ...feature.bore!, diameter } })}
-                    onLive={(diameter) => set({ bore: { ...feature.bore!, diameter } })}
-                  />
-                </Field>
-                {feature.bore.shape === "d_flat" ? (
-                  <Field label={t("Across the flat")}>
-                    <ExprInput
-                      value={feature.bore.flat}
-                      placeholder={t("0.9 × diameter")}
-                      onCommit={(flat) => set({ bore: { ...feature.bore!, flat } })}
-                    />
-                  </Field>
-                ) : null}
-                <Field label={t("Allowance")}>
-                  <ExprInput
-                    value={feature.bore.allowance}
-                    placeholder="0"
-                    onCommit={(allowance) => set({ bore: { ...feature.bore!, allowance } })}
-                  />
-                </Field>
-              </div>
-            </>
-          ) : null}
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.hub}
-              onChange={(event) =>
-                set({
-                  hub: event.target.checked
-                    ? { diameter: Math.max(8, (dims?.df ?? 20) / 2), length: 5 }
-                    : undefined,
-                })
-              }
-            />{" "}
-            {t("Hub")}
-          </label>
-          {feature.hub ? (
-            <div className="row">
-              <Field label={t("Diameter")}>
-                <ExprInput
-                  value={feature.hub.diameter}
-                  onCommit={(diameter) => set({ hub: { ...feature.hub!, diameter } })}
-                  onLive={(diameter) => set({ hub: { ...feature.hub!, diameter } })}
-                />
-              </Field>
-              <Field label={t("Length")}>
-                <ExprInput
-                  value={feature.hub.length}
-                  onCommit={(length) => set({ hub: { ...feature.hub!, length } })}
-                  onLive={(length) => set({ hub: { ...feature.hub!, length } })}
-                />
-              </Field>
-              <Field label={t("Side")}>
-                <select
-                  className="field"
-                  value={feature.hub.side ?? "front"}
-                  onChange={(event) =>
-                    set({
-                      hub: {
-                        ...feature.hub!,
-                        side: event.target.value === "front" ? undefined : event.target.value,
-                      },
-                    })
-                  }
-                >
-                  <option value="front">{t("Top")}</option>
-                  <option value="back">{t("Bottom")}</option>
-                  <option value="both">{t("Both")}</option>
-                </select>
-              </Field>
-            </div>
-          ) : null}
+          <GearBore f={feature} set={set} />
+          <GearHub f={feature} set={set} dims={dims} />
         </>
       ) : null}
       <Field label={t("Result")}>
         <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
       </Field>
-      {dims && p ? (
-        <div className="gear-sizes small">
-          {p.kind !== "rack" ? (
-            <>
-              <span>{t("Pitch Ø")}</span>
-              <b>{mm(dims.d)}</b>
-              <span>{p.kind === "internal" ? t("Inner Ø") : t("Outside Ø")}</span>
-              <b>{mm(dims.da)}</b>
-              <span>{t("Root Ø")}</span>
-              <b>{mm(dims.df)}</b>
-            </>
-          ) : (
-            <>
-              <span>{t("Length")}</span>
-              <b>{mm(p.teeth * dims.pitch)}</b>
-            </>
-          )}
-          {pair ? (
-            <>
-              {Number.isFinite(pair.distance) ? (
-                <>
-                  <span>{t("Centre distance")}</span>
-                  <b>{mm(pair.distance)}</b>
-                </>
-              ) : null}
-              <span>{t("Ratio")}</span>
-              <b>1 : {pair.ratio.toFixed(3).replace(/\.?0+$/, "")}</b>
-            </>
-          ) : null}
-          {dims.span ? (
-            <>
-              <span>{t("Span over {k} teeth", { k: dims.span.k })}</span>
-              <b>{mm(dims.span.w)}</b>
-            </>
-          ) : null}
-        </div>
-      ) : null}
+      {dims && p ? <GearSizes p={p} dims={dims} pair={pair} /> : null}
       {dims?.warnings.map((w) => (
         <div key={w} className="callout warn">
           {w}
@@ -2012,10 +1751,434 @@ function GearFields({ f: feature, set }: { f: Of<"gear">; set: (patch: Record<st
           {t("The rack runs along the plane's first axis, its pitch line through the centre.")}
         </p>
       )}
-      <button className="btn" onClick={addMate} disabled={!p}>
+      <button className="btn" onClick={() => addMatingGear(feature)} disabled={!p}>
         <Cog /> {t("Add mating gear")}
       </button>
     </>
+  );
+}
+
+/**
+ * Accepts the gear and opens a new one meshing with it: a ring gear or rack gets a gear; a gear gets a
+ * gear twice its size.
+ */
+function addMatingGear(feature: Of<"gear">): void {
+  const teeth = typeof feature.teeth === "number" ? feature.teeth * 2 : 30;
+  if (!commitDialog()) return;
+
+  const mate = draftFeature("gear", useApp.getState().doc) as Of<"gear">;
+  openDraft({
+    ...mate,
+    module: undefined,
+    plane: undefined,
+    teeth: feature.kind === "spur" ? teeth : 18,
+    width: feature.width,
+    meshWith: { gear: feature.id, direction: 0 },
+  } as Feature);
+}
+
+/** The gear this one meshes with: it then takes its module, angles and place from that one. */
+function GearPartner({
+  f: feature,
+  set,
+  others,
+  p,
+}: {
+  f: Of<"gear">;
+  set: SetPatch;
+  others: Of<"gear">[];
+  p: GearParams | null;
+}) {
+  return (
+    <Field label={t("Meshes with")}>
+      <select
+        className="field"
+        value={feature.meshWith?.gear ?? ""}
+        onChange={(event) =>
+          set(
+            event.target.value
+              ? {
+                  meshWith: { gear: event.target.value, direction: feature.meshWith?.direction ?? 0 },
+                  module: undefined,
+                  pressureAngle: undefined,
+                  helix: undefined,
+                  herringbone: undefined,
+                  plane: undefined,
+                  center: undefined,
+                  rotation: undefined,
+                }
+              : { meshWith: undefined, module: p?.module ?? 1.5, plane: { ref: "origin.XY" } },
+          )
+        }
+      >
+        <option value="">{t("Nothing (place freely)")}</option>
+        {others.map((feature) => (
+          <option key={feature.id} value={feature.id}>
+            {featureName(feature)}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
+/** Module, teeth and width; a meshing gear shows the module it takes from its partner. */
+function GearSize({
+  f: feature,
+  set,
+  meshing,
+  p,
+}: {
+  f: Of<"gear">;
+  set: SetPatch;
+  meshing: boolean;
+  p: GearParams | null;
+}) {
+  return (
+    <div className="row">
+      <Field label={t("Module")}>
+        {meshing ? (
+          <div className="field muted">{p ? mm(p.module) : "–"}</div>
+        ) : (
+          <ExprInput
+            value={feature.module}
+            autoFocus
+            onCommit={(module) => set({ module })}
+            onLive={(module) => set({ module })}
+          />
+        )}
+      </Field>
+      <Field label={t("Teeth")}>
+        <ExprInput
+          value={feature.teeth}
+          unit=""
+          integer
+          onCommit={(teeth) => set({ teeth })}
+          onLive={(teeth) => set({ teeth })}
+        />
+      </Field>
+      <Field label={t("Width")}>
+        <ExprInput
+          value={feature.width}
+          onCommit={(width) => set({ width })}
+          onLive={(width) => set({ width })}
+        />
+      </Field>
+    </div>
+  );
+}
+
+/** A free gear's plane, centre in it and turn. */
+function GearPlacement({ f: feature, set }: { f: Of<"gear">; set: SetPatch }) {
+  const setCenter = (i: number, expr: Expr) =>
+    set({ center: [0, 1].map((j) => (j === i ? expr : (feature.center?.[j] ?? 0))) });
+
+  return (
+    <>
+      <Field label={t("Plane")}>
+        <SelBox
+          field="plane"
+          items={[describePlane(feature.plane ?? { ref: "origin.XY" })]}
+          placeholder={t("Pick a plane or flat face")}
+        />
+        <PlaneButtons value={feature.plane ?? { ref: "origin.XY" }} onChange={(plane) => set({ plane })} />
+      </Field>
+      <Field label={t("Centre (in the plane) and turn")}>
+        <div className="row">
+          {[0, 1].map((i) => (
+            <div key={i} style={{ flex: 1 }}>
+              <ExprInput
+                value={feature.center?.[i] ?? 0}
+                onCommit={(expr) => setCenter(i, expr)}
+                onLive={(expr) => setCenter(i, expr)}
+              />
+            </div>
+          ))}
+          <div style={{ flex: 1 }}>
+            <ExprInput
+              value={feature.rotation ?? 0}
+              unit="deg"
+              onCommit={(rotation) => set({ rotation: rotation === 0 ? undefined : rotation })}
+              onLive={(rotation) => set({ rotation })}
+            />
+          </div>
+        </div>
+      </Field>
+    </>
+  );
+}
+
+/** A ring gear's outside diameter, or the back of a rack below its teeth. */
+function GearRim({
+  f: feature,
+  set,
+  p,
+  dims,
+}: {
+  f: Of<"gear">;
+  set: SetPatch;
+  p: GearParams | null;
+  dims: GearDims | null;
+}) {
+  if (feature.kind === "internal") {
+    return (
+      <Field label={t("Outside diameter")}>
+        <ExprInput
+          value={feature.rim}
+          placeholder={dims ? (dims.df + 4 * p!.module).toFixed(1) : ""}
+          onCommit={(rim) => set({ rim })}
+        />
+      </Field>
+    );
+  }
+
+  if (feature.kind === "rack") {
+    return (
+      <Field label={t("Back below the teeth")}>
+        <ExprInput
+          value={feature.rim}
+          placeholder={p ? String(2 * p.module) : ""}
+          onCommit={(rim) => set({ rim })}
+        />
+      </Field>
+    );
+  }
+
+  return null;
+}
+
+/** A free gear's helix and pressure angle; a helical one can be herringbone. */
+function GearHelix({ f: feature, set }: { f: Of<"gear">; set: SetPatch }) {
+  return (
+    <>
+      <div className="row">
+        <Field label={t("Helix angle")}>
+          <ExprInput
+            value={feature.helix ?? 0}
+            unit="deg"
+            onCommit={(helix) => set({ helix: helix === 0 ? undefined : helix })}
+            onLive={(helix) => set({ helix })}
+          />
+        </Field>
+        <Field label={t("Pressure angle")}>
+          <select
+            className="field"
+            value={String(feature.pressureAngle ?? 20)}
+            onChange={(event) =>
+              set({ pressureAngle: event.target.value === "20" ? undefined : Number(event.target.value) })
+            }
+          >
+            {[14.5, 20, 25].map((a) => (
+              <option key={a} value={a}>
+                {a}°
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      {feature.helix !== undefined && feature.helix !== 0 ? (
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={!!feature.herringbone}
+            onChange={(event) => set({ herringbone: event.target.checked || undefined })}
+          />{" "}
+          {t("Herringbone (both hands, no side thrust)")}
+        </label>
+      ) : null}
+    </>
+  );
+}
+
+/** A 45° chamfer on the tooth ends, at most half a module (and 0.5 mm) to start with. */
+function GearChamfer({ f: feature, set, p }: { f: Of<"gear">; set: SetPatch; p: GearParams | null }) {
+  return (
+    <>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={feature.chamfer !== undefined}
+          onChange={(event) =>
+            set({ chamfer: event.target.checked ? Math.min(0.5, (p?.module ?? 1) / 2) : undefined })
+          }
+        />{" "}
+        {t("Chamfer tooth ends")}
+      </label>
+      {feature.chamfer !== undefined ? (
+        <Field label={t("Chamfer (45°)")}>
+          <ExprInput
+            value={feature.chamfer}
+            onCommit={(chamfer) => set({ chamfer })}
+            onLive={(chamfer) => set({ chamfer })}
+          />
+        </Field>
+      ) : null}
+    </>
+  );
+}
+
+/** A gear's bore: round, D shaft or hex, with its printing allowance. */
+function GearBore({ f: feature, set }: { f: Of<"gear">; set: SetPatch }) {
+  return (
+    <>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.bore}
+          onChange={(event) =>
+            set({ bore: event.target.checked ? { diameter: 5, allowance: "2 * fit" } : undefined })
+          }
+        />{" "}
+        {t("Bore")}
+      </label>
+      {feature.bore ? (
+        <>
+          <Seg
+            value={feature.bore.shape ?? "round"}
+            options={[
+              ["round", t("Round")],
+              ["d_flat", t("D shaft")],
+              ["hex", t("Hex")],
+            ]}
+            onChange={(shape) =>
+              set({ bore: { ...feature.bore!, shape: shape === "round" ? undefined : shape } })
+            }
+          />
+          <div className="row">
+            <Field label={feature.bore.shape === "hex" ? t("Across flats") : t("Diameter")}>
+              <ExprInput
+                value={feature.bore.diameter}
+                onCommit={(diameter) => set({ bore: { ...feature.bore!, diameter } })}
+                onLive={(diameter) => set({ bore: { ...feature.bore!, diameter } })}
+              />
+            </Field>
+            {feature.bore.shape === "d_flat" ? (
+              <Field label={t("Across the flat")}>
+                <ExprInput
+                  value={feature.bore.flat}
+                  placeholder={t("0.9 × diameter")}
+                  onCommit={(flat) => set({ bore: { ...feature.bore!, flat } })}
+                />
+              </Field>
+            ) : null}
+            <Field label={t("Allowance")}>
+              <ExprInput
+                value={feature.bore.allowance}
+                placeholder="0"
+                onCommit={(allowance) => set({ bore: { ...feature.bore!, allowance } })}
+              />
+            </Field>
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** A hub on a gear's top, bottom or both sides; it starts half the root diameter wide. */
+function GearHub({ f: feature, set, dims }: { f: Of<"gear">; set: SetPatch; dims: GearDims | null }) {
+  return (
+    <>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.hub}
+          onChange={(event) =>
+            set({
+              hub: event.target.checked
+                ? { diameter: Math.max(8, (dims?.df ?? 20) / 2), length: 5 }
+                : undefined,
+            })
+          }
+        />{" "}
+        {t("Hub")}
+      </label>
+      {feature.hub ? (
+        <div className="row">
+          <Field label={t("Diameter")}>
+            <ExprInput
+              value={feature.hub.diameter}
+              onCommit={(diameter) => set({ hub: { ...feature.hub!, diameter } })}
+              onLive={(diameter) => set({ hub: { ...feature.hub!, diameter } })}
+            />
+          </Field>
+          <Field label={t("Length")}>
+            <ExprInput
+              value={feature.hub.length}
+              onCommit={(length) => set({ hub: { ...feature.hub!, length } })}
+              onLive={(length) => set({ hub: { ...feature.hub!, length } })}
+            />
+          </Field>
+          <Field label={t("Side")}>
+            <select
+              className="field"
+              value={feature.hub.side ?? "front"}
+              onChange={(event) =>
+                set({
+                  hub: {
+                    ...feature.hub!,
+                    side: event.target.value === "front" ? undefined : event.target.value,
+                  },
+                })
+              }
+            >
+              <option value="front">{t("Top")}</option>
+              <option value="back">{t("Bottom")}</option>
+              <option value="both">{t("Both")}</option>
+            </select>
+          </Field>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** What the gear comes to: diameters (or a rack's length), centre distance and ratio, span. */
+function GearSizes({
+  p,
+  dims,
+  pair,
+}: {
+  p: GearParams;
+  dims: NonNullable<GearDims>;
+  pair: ReturnType<typeof pairInfo>;
+}) {
+  return (
+    <div className="gear-sizes small">
+      {p.kind !== "rack" ? (
+        <>
+          <span>{t("Pitch Ø")}</span>
+          <b>{mm(dims.d)}</b>
+          <span>{p.kind === "internal" ? t("Inner Ø") : t("Outside Ø")}</span>
+          <b>{mm(dims.da)}</b>
+          <span>{t("Root Ø")}</span>
+          <b>{mm(dims.df)}</b>
+        </>
+      ) : (
+        <>
+          <span>{t("Length")}</span>
+          <b>{mm(p.teeth * dims.pitch)}</b>
+        </>
+      )}
+      {pair ? (
+        <>
+          {Number.isFinite(pair.distance) ? (
+            <>
+              <span>{t("Centre distance")}</span>
+              <b>{mm(pair.distance)}</b>
+            </>
+          ) : null}
+          <span>{t("Ratio")}</span>
+          <b>1 : {pair.ratio.toFixed(3).replace(/\.?0+$/, "")}</b>
+        </>
+      ) : null}
+      {dims.span ? (
+        <>
+          <span>{t("Span over {k} teeth", { k: dims.span.k })}</span>
+          <b>{mm(dims.span.w)}</b>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -2032,7 +2195,7 @@ function CoilFields({
   sketches,
 }: {
   f: Of<"coil">;
-  set: (patch: Record<string, unknown>) => void;
+  set: SetPatch;
   profileChip: (profile: ProfileRef) => string;
   sketches: Of<"sketch">[];
 }) {
@@ -2049,19 +2212,12 @@ function CoilFields({
           placeholder={t("Pick sketch regions beside the axis")}
           onRemove={() => set({ profile: { sketch: "" } })}
         />
-        {"sketch" in prof && !prof.sketch && sketches.length ? (
-          <select
-            className="field"
-            value=""
-            onChange={(event) => set({ profile: { sketch: event.target.value } })}
-          >
-            <option value="">{t("…or use a whole sketch")}</option>
-            {sketches.map((sketch) => (
-              <option key={sketch.id} value={sketch.id}>
-                {featureName(sketch)}
-              </option>
-            ))}
-          </select>
+        {"sketch" in prof && !prof.sketch ? (
+          <SketchSelect
+            sketches={sketches}
+            prompt={t("…or use a whole sketch")}
+            onPick={(sketch) => set({ profile: { sketch } })}
+          />
         ) : null}
       </Field>
       <Field label={t("Axis")}>
@@ -2095,13 +2251,7 @@ function CoilFields({
             onLive={(taper) => set({ taper })}
           />
         </Field>
-        <button
-          className={`icon-btn ${feature.flip ? "active" : ""}`}
-          title={t("Flip direction")}
-          onClick={() => set({ flip: feature.flip ? undefined : true })}
-        >
-          <ArrowLeftRight />
-        </button>
+        <FlipButton flip={feature.flip} title={t("Flip direction")} set={set} />
       </div>
       <label className="checkbox">
         <input
@@ -2140,13 +2290,7 @@ function CoilFields({
 }
 
 /** Placement on a plane at a centre point, shared by springs and screws. */
-function PlaceFields({
-  f,
-  set,
-}: {
-  f: Of<"spring"> | Of<"screw">;
-  set: (patch: Record<string, unknown>) => void;
-}) {
+function PlaceFields({ f, set }: { f: Of<"spring"> | Of<"screw">; set: SetPatch }) {
   return (
     <>
       <Field label={t("Plane")}>
@@ -2179,13 +2323,7 @@ function PlaceFields({
 const num = (v: number, digits = 2) => v.toFixed(digits).replace(/\.?0+$/, "");
 
 /** Spring: kind, wire, diameter, coils, length or gap, ends, legs, and its numbers. */
-function SpringFields({
-  f: feature,
-  set,
-}: {
-  f: Of<"spring">;
-  set: (patch: Record<string, unknown>) => void;
-}) {
+function SpringFields({ f: feature, set }: { f: Of<"spring">; set: SetPatch }) {
   const info = useFeatureInfo(feature.id);
 
   return (
@@ -2301,7 +2439,7 @@ function SpringFields({
               <b>{mm(info["solidHeight"] ?? 0)}</b>
             </>
           ) : null}
-          <span>{feature.kind === "torsion" ? t("Rate (spring steel)") : t("Rate (spring steel)")}</span>
+          <span>{t("Rate (spring steel)")}</span>
           <b>
             {feature.kind === "torsion"
               ? `${num(info["rateSteel"] ?? 0, 3)} N·mm/°`
@@ -2316,8 +2454,31 @@ function SpringFields({
   );
 }
 
+/** Accepts the screw and opens the matching nut beside it, with the same thread. */
+function addMatchingNut(feature: Of<"screw">): void {
+  if (!commitDialog()) return;
+
+  const draft = draftFeature("screw", useApp.getState().doc) as Of<"screw">;
+  const cx = typeof feature.center?.[0] === "number" ? feature.center[0] : 0;
+  const d = typeof feature.diameter === "number" ? feature.diameter : 8;
+  openDraft({
+    ...draft,
+    kind: "nut",
+    head: "hex",
+    profile: feature.profile,
+    diameter: feature.diameter,
+    pitch: feature.pitch,
+    starts: feature.starts,
+    leftHanded: feature.leftHanded,
+    clearance: feature.clearance,
+    length: undefined,
+    plane: feature.plane,
+    center: [cx + 3 * d, feature.center?.[1] ?? 0],
+  } as Feature);
+}
+
 /** Screw or nut: head, thread form, diameter, pitch, starts, length, printing clearance. */
-function ScrewFields({ f: feature, set }: { f: Of<"screw">; set: (patch: Record<string, unknown>) => void }) {
+function ScrewFields({ f: feature, set }: { f: Of<"screw">; set: SetPatch }) {
   const info = useFeatureInfo(feature.id);
   const nut = feature.kind === "nut";
   const heads: [NonNullable<Of<"screw">["head"]>, string][] = nut
@@ -2333,29 +2494,6 @@ function ScrewFields({ f: feature, set }: { f: Of<"screw">; set: (patch: Record<
         ["knob", t("Knurled")],
         ["none", t("None (threaded rod)")],
       ];
-
-  const addNut = () => {
-    if (!commitDialog()) return;
-
-    const draft = draftFeature("screw", useApp.getState().doc) as Of<"screw">;
-    // The matching nut beside the screw, with the same thread.
-    const cx = typeof feature.center?.[0] === "number" ? feature.center[0] : 0;
-    const d = typeof feature.diameter === "number" ? feature.diameter : 8;
-    openDraft({
-      ...draft,
-      kind: "nut",
-      head: "hex",
-      profile: feature.profile,
-      diameter: feature.diameter,
-      pitch: feature.pitch,
-      starts: feature.starts,
-      leftHanded: feature.leftHanded,
-      clearance: feature.clearance,
-      length: undefined,
-      plane: feature.plane,
-      center: [cx + 3 * d, feature.center?.[1] ?? 0],
-    } as Feature);
-  };
 
   return (
     <>
@@ -2444,7 +2582,7 @@ function ScrewFields({ f: feature, set }: { f: Of<"screw">; set: (patch: Record<
         )}
       </p>
       {!nut ? (
-        <button className="btn" onClick={addNut}>
+        <button className="btn" onClick={() => addMatchingNut(feature)}>
           {t("Add matching nut")}
         </button>
       ) : null}
@@ -2454,7 +2592,7 @@ function ScrewFields({ f: feature, set }: { f: Of<"screw">; set: (patch: Record<
 
 function Body({ d: dialog }: { d: DialogState }) {
   const feature = dialog.feature;
-  const set = (patch: Record<string, unknown>) => updateDraft(patch as Partial<Feature>);
+  const set: SetPatch = (patch) => updateDraft(patch as Partial<Feature>);
   const features = useApp((state) => state.doc.features);
   const sketches = features.filter((x): x is Of<"sketch"> => x.op === "sketch");
 
@@ -2471,328 +2609,17 @@ function Body({ d: dialog }: { d: DialogState }) {
 
   switch (feature.op) {
     case "loft":
-      return (
-        <>
-          <Field label={t("Profiles, in order")}>
-            <SelBox
-              field="profiles"
-              items={feature.profiles.map((profile, i) => `${i + 1}. ${profileChip(profile)}`)}
-              placeholder={t("Pick sketch regions or flat faces")}
-              onRemove={(i) => set({ profiles: feature.profiles.filter((_, j) => j !== i) })}
-            />
-          </Field>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.ruled}
-              onChange={(event) => set({ ruled: event.target.checked || undefined })}
-            />{" "}
-            {t("Straight sides between profiles")}
-          </label>
-          <Field label={t("Result")}>
-            <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
-          </Field>
-          <p className="muted small">
-            {t(
-              "Each profile is one closed region, on its own plane. Profiles that all have the same number of holes give a hollow loft.",
-            )}
-          </p>
-        </>
-      );
-    case "sweep": {
-      const pathSk = sketches.find((x) => x.id === feature.path.sketch);
-      const pathChips = !feature.path.sketch
-        ? []
-        : feature.path.curves
-          ? feature.path.curves.map((c) => `${pathSk ? featureName(pathSk) : feature.path.sketch} · ${c}`)
-          : [t("All lines of {name}", { name: pathSk ? featureName(pathSk) : feature.path.sketch })];
-      const prof = feature.profile;
-
-      return (
-        <>
-          <Field label={t("Profile")}>
-            <SelBox
-              field="profile"
-              items={"face" in prof || prof.sketch ? [profileChip(prof)] : []}
-              placeholder={t("Pick sketch regions")}
-              onRemove={() => set({ profile: { sketch: "" } })}
-            />
-          </Field>
-          <Field label={t("Path")}>
-            <SelBox
-              field="path"
-              items={pathChips}
-              placeholder={t("Pick lines and arcs")}
-              onRemove={(i) =>
-                set({
-                  path:
-                    feature.path.curves && feature.path.curves.length > 1
-                      ? { sketch: feature.path.sketch, curves: feature.path.curves.filter((_, j) => j !== i) }
-                      : { sketch: "" },
-                })
-              }
-            />
-            {sketches.length ? (
-              <select
-                className="field"
-                value=""
-                onChange={(event) => set({ path: { sketch: event.target.value } })}
-              >
-                <option value="">{t("…or follow a whole sketch")}</option>
-                {sketches.map((sketch) => (
-                  <option key={sketch.id} value={sketch.id}>
-                    {featureName(sketch)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-          </Field>
-          <Field label={t("Result")}>
-            <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
-          </Field>
-          <p className="muted small">
-            {t(
-              "Draw the path in its own sketch, usually on a plane across the profile's, starting in the profile.",
-            )}
-          </p>
-        </>
-      );
-    }
+      return <LoftFields f={feature} set={set} profileChip={profileChip} />;
+    case "sweep":
+      return <SweepFields f={feature} set={set} profileChip={profileChip} sketches={sketches} />;
     case "extrude":
-    case "revolve": {
-      const prof = feature.profile;
-      const sketch = "face" in prof ? undefined : sketches.find((x) => x.id === prof.sketch);
-      const skName = sketch ? featureName(sketch) : "sketch" in prof ? prof.sketch : "";
-      const regionChips =
-        "face" in prof
-          ? [describeFaceSelector(prof.face)]
-          : !prof.sketch
-            ? []
-            : Array.isArray(prof.regions)
-              ? prof.regions.map((k) => `${skName} · ${k.split("|")[0]}`)
-              : [t("All regions of {name}", { name: skName })];
-
-      return (
-        <>
-          <Field label={t("Profile")}>
-            <SelBox
-              field="profile"
-              items={regionChips}
-              placeholder={
-                feature.op === "extrude" ? t("Pick sketch regions or a face") : t("Pick sketch regions")
-              }
-              onRemove={() => set({ profile: { sketch: "" } })}
-            />
-            {"sketch" in prof && !prof.sketch && sketches.length ? (
-              <select
-                className="field"
-                value=""
-                onChange={(event) => set({ profile: { sketch: event.target.value } })}
-              >
-                <option value="">{t("…or use a whole sketch")}</option>
-                {sketches.map((sketch) => (
-                  <option key={sketch.id} value={sketch.id}>
-                    {featureName(sketch)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-          </Field>
-          <Field label={t("Result")}>
-            <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
-          </Field>
-          {feature.op === "extrude" ? (
-            <>
-              <Field label={t("End")}>
-                <select
-                  className="field"
-                  value={feature.extent}
-                  onChange={(event) =>
-                    set({
-                      extent: event.target.value,
-                      ...(event.target.value === "two_sided" && feature.distance2 === undefined
-                        ? { distance2: 10 }
-                        : {}),
-                    })
-                  }
-                >
-                  <option value="blind">{t("Blind")}</option>
-                  <option value="symmetric">{t("Symmetric")}</option>
-                  <option value="two_sided">{t("Two directions")}</option>
-                  <option value="through_all">{t("Through all")}</option>
-                </select>
-              </Field>
-              {feature.extent !== "through_all" ? (
-                <Field label={feature.extent === "two_sided" ? t("Distance (direction 1)") : t("Distance")}>
-                  <div className="row">
-                    <div style={{ flex: 1 }}>
-                      <ExprInput
-                        value={feature.distance}
-                        autoFocus
-                        onCommit={(distance) => set({ distance })}
-                        onLive={(distance) => set({ distance })}
-                      />
-                    </div>
-                    <button
-                      className={`icon-btn ${feature.flip ? "active" : ""}`}
-                      title={t("Flip direction")}
-                      onClick={() => set({ flip: feature.flip ? undefined : true })}
-                    >
-                      <ArrowLeftRight />
-                    </button>
-                  </div>
-                </Field>
-              ) : (
-                <button
-                  className={`btn ${feature.flip ? "primary" : ""}`}
-                  onClick={() => set({ flip: feature.flip ? undefined : true })}
-                >
-                  <ArrowLeftRight /> {t("Flip direction")}
-                </button>
-              )}
-              {feature.extent === "two_sided" ? (
-                <Field label={t("Distance (direction 2)")}>
-                  <ExprInput
-                    value={feature.distance2}
-                    onCommit={(distance2) => set({ distance2 })}
-                    onLive={(distance2) => set({ distance2 })}
-                  />
-                </Field>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Field label={t("Axis")}>
-                <SelBox
-                  field="axis"
-                  items={[describeAxis(feature.axis)]}
-                  placeholder={t("Pick a line or edge")}
-                />
-                <AxisButtons value={feature.axis} onChange={(axis) => set({ axis })} />
-              </Field>
-              <Field label={t("Angle")}>
-                <ExprInput
-                  value={feature.angle}
-                  unit="deg"
-                  onCommit={(angle) => set({ angle })}
-                  onLive={(angle) => set({ angle })}
-                />
-              </Field>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={!!feature.symmetric}
-                  onChange={(event) => set({ symmetric: event.target.checked || undefined })}
-                />{" "}
-                {t("Symmetric")}
-              </label>
-            </>
-          )}
-          {feature.mode !== "new_body" ? (
-            <Field label={t("Merge scope (optional)")}>
-              <SelBox
-                field="targets"
-                items={(feature.targets ?? []).map((t) => partName(t, features))}
-                placeholder={t("All touching parts")}
-                onRemove={(i) => set({ targets: (feature.targets ?? []).filter((_, j) => j !== i) })}
-              />
-            </Field>
-          ) : null}
-        </>
-      );
-    }
+    case "revolve":
+      return <ExtrudeFields f={feature} set={set} sketches={sketches} />;
     case "fillet":
-    case "chamfer": {
-      const edges = asArray(feature.edges) as EdgeSelector[];
-
-      return (
-        <>
-          <Field label={t("Edges and faces")}>
-            <SelBox
-              field="edges"
-              items={edges.map(describeEdgeSelector)}
-              placeholder={t("Pick edges or faces")}
-              onRemove={(i) => set({ edges: edges.filter((_, j) => j !== i) })}
-            />
-          </Field>
-          <Field label={feature.op === "fillet" ? t("Radius") : t("Distance")}>
-            {feature.op === "fillet" ? (
-              <ExprInput
-                value={feature.radius}
-                autoFocus
-                onCommit={(radius) => set({ radius })}
-                onLive={(radius) => set({ radius })}
-              />
-            ) : (
-              <ExprInput
-                value={feature.distance}
-                autoFocus
-                onCommit={(distance) => set({ distance })}
-                onLive={(distance) => set({ distance })}
-              />
-            )}
-          </Field>
-          {feature.op === "fillet" ? (
-            <>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={feature.radius2 !== undefined}
-                  onChange={(event) =>
-                    set({
-                      radius2: event.target.checked
-                        ? typeof feature.radius === "number"
-                          ? feature.radius * 2
-                          : 4
-                        : undefined,
-                    })
-                  }
-                />{" "}
-                {t("Variable: changes along the edge")}
-              </label>
-              {feature.radius2 !== undefined ? (
-                <Field label={t("Radius at the other end")}>
-                  <ExprInput
-                    value={feature.radius2}
-                    onCommit={(radius2) => set({ radius2 })}
-                    onLive={(radius2) => set({ radius2 })}
-                  />
-                </Field>
-              ) : null}
-            </>
-          ) : null}
-        </>
-      );
-    }
+    case "chamfer":
+      return <EdgeRoundFields f={feature} set={set} />;
     case "shell":
-      return (
-        <>
-          <Field label={t("Faces to remove")}>
-            <SelBox
-              field="faces"
-              items={feature.faces.map((selector: FaceSelector) => describeFaceSelector(selector))}
-              placeholder={t("Pick faces")}
-              onRemove={(i) => set({ faces: feature.faces.filter((_, j) => j !== i) })}
-            />
-          </Field>
-          <Field label={t("Thickness")}>
-            <ExprInput
-              value={feature.thickness}
-              autoFocus
-              onCommit={(thickness) => set({ thickness })}
-              onLive={(thickness) => set({ thickness })}
-            />
-          </Field>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.outward}
-              onChange={(event) => set({ outward: event.target.checked || undefined })}
-            />{" "}
-            {t("Thicken outward")}
-          </label>
-        </>
-      );
+      return <ShellFields f={feature} set={set} />;
     case "thread":
       return <ThreadFields f={feature} set={set} />;
     case "gear":
@@ -2818,987 +2645,1334 @@ function Body({ d: dialog }: { d: DialogState }) {
     case "hole":
       return <HoleFields f={feature} set={set} />;
     case "linear_pattern":
-      return (
-        <>
-          <SourceField value={feature.source} onChange={(source) => set({ source })} />
-          <Field label={t("Direction")}>
-            <SelBox
-              field="direction"
-              items={[describeAxis(feature.direction)]}
-              placeholder={t("Pick an edge or line")}
-            />
-            <AxisButtons
-              value={feature.direction}
-              onChange={(direction) => set({ direction })}
-              kind="direction"
-            />
-          </Field>
-          <div className="row">
-            <Field label={t("Count")}>
-              <ExprInput
-                value={feature.count}
-                unit=""
-                integer
-                onCommit={(count) => set({ count })}
-                onLive={(count) => set({ count })}
-              />
-            </Field>
-            <Field label={t("Spacing")}>
-              <ExprInput
-                value={feature.spacing}
-                onCommit={(spacing) => set({ spacing })}
-                onLive={(spacing) => set({ spacing })}
-              />
-            </Field>
-          </div>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.direction2}
-              onChange={(event) =>
-                set(
-                  event.target.checked
-                    ? { direction2: { ref: "origin.Y" }, count2: 2, spacing2: 20 }
-                    : { direction2: undefined, count2: undefined, spacing2: undefined },
-                )
-              }
-            />{" "}
-            {t("Second direction")}
-          </label>
-          {feature.direction2 ? (
-            <>
-              <SelBox
-                field="direction2"
-                items={[describeAxis(feature.direction2)]}
-                placeholder={t("Pick an edge or line")}
-              />
-              <AxisButtons
-                value={feature.direction2}
-                onChange={(direction2) => set({ direction2 })}
-                kind="direction"
-              />
-              <div className="row">
-                <Field label={t("Count")}>
-                  <ExprInput
-                    value={feature.count2}
-                    unit=""
-                    integer
-                    onCommit={(count2) => set({ count2 })}
-                    onLive={(count2) => set({ count2 })}
-                  />
-                </Field>
-                <Field label={t("Spacing")}>
-                  <ExprInput
-                    value={feature.spacing2}
-                    onCommit={(spacing2) => set({ spacing2 })}
-                    onLive={(spacing2) => set({ spacing2 })}
-                  />
-                </Field>
-              </div>
-            </>
-          ) : null}
-        </>
-      );
+      return <LinearPatternFields f={feature} set={set} />;
     case "circular_pattern":
-      return (
-        <>
-          <SourceField value={feature.source} onChange={(source) => set({ source })} />
-          <Field label={t("Axis")}>
-            <SelBox
-              field="axis"
-              items={[describeAxis(feature.axis)]}
-              placeholder={t("Pick an edge or line")}
-            />
-            <AxisButtons value={feature.axis} onChange={(axis) => set({ axis })} />
-          </Field>
-          <div className="row">
-            <Field label={t("Count")}>
-              <ExprInput
-                value={feature.count}
-                unit=""
-                integer
-                onCommit={(count) => set({ count })}
-                onLive={(count) => set({ count })}
-              />
-            </Field>
-            <Field label={t("Total angle")}>
-              <ExprInput
-                value={feature.angle ?? 360}
-                unit="deg"
-                onCommit={(angle) => set({ angle })}
-                onLive={(angle) => set({ angle })}
-              />
-            </Field>
-          </div>
-        </>
-      );
+      return <CircularPatternFields f={feature} set={set} />;
     case "mirror":
-      return (
-        <>
-          <SourceField value={feature.source} onChange={(source) => set({ source })} />
-          <Field label={t("Mirror plane")}>
-            <SelBox
-              field="plane"
-              items={[describePlane(feature.plane)]}
-              placeholder={t("Pick a plane or face")}
-            />
-            <PlaneButtons value={feature.plane} onChange={(plane) => set({ plane })} />
-          </Field>
-        </>
-      );
+      return <MirrorFields f={feature} set={set} />;
     case "boolean":
-      return (
-        <>
-          <Seg
-            value={feature.operation}
-            options={[
-              ["union", t("Union")],
-              ["subtract", t("Subtract")],
-              ["intersect", t("Intersect")],
-            ]}
-            onChange={(operation) => set({ operation })}
-          />
-          <Field label={t("Target part")}>
-            <SelBox
-              field="target"
-              items={feature.target ? [partName(feature.target, features)] : []}
-              placeholder={t("Pick the part to keep")}
-            />
-          </Field>
-          <Field label={t("Tool parts")}>
-            <SelBox
-              field="tools"
-              items={feature.tools.map((t) => partName(t, features))}
-              placeholder={t("Pick tool parts")}
-              onRemove={(i) => set({ tools: feature.tools.filter((_, j) => j !== i) })}
-            />
-          </Field>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.keepTools}
-              onChange={(event) => set({ keepTools: event.target.checked || undefined })}
-            />{" "}
-            {t("Keep tools")}
-          </label>
-        </>
-      );
+      return <BooleanFields f={feature} set={set} />;
     case "scale":
       return <ScaleFields f={feature} set={set} />;
     case "bend":
       return <BendFields f={feature} set={set} />;
-    case "align": {
-      const desc = (v: Of<"align">["from"]) => {
-        const sel = "face" in v ? v.face : v.axisOf;
-        if ("face" in sel && !sel.face) return [];
+    case "align":
+      return <AlignFields f={feature} set={set} />;
+    case "standard_part":
+      return <StandardPartFields f={feature} set={set} />;
+    case "primitive":
+      return <PrimitiveFields f={feature} set={set} />;
+    case "text":
+      return <TextFields f={feature} set={set} />;
+    case "draft":
+      return <DraftFields f={feature} set={set} />;
+    case "offset_face":
+      return <OffsetFaceFields f={feature} set={set} />;
+    case "rib":
+      return <RibFields f={feature} set={set} sketches={sketches} />;
+    case "split":
+      return <SplitFields f={feature} set={set} />;
+    case "delete":
+      return <DeleteFields f={feature} set={set} />;
+    case "mesh_convert":
+      return <MeshConvertFields f={feature} set={set} />;
+    case "transform":
+      return <TransformFields f={feature} set={set} />;
+    case "plane":
+      return <PlaneFields f={feature} set={set} />;
+    default:
+      return <div className="muted">{t("Nothing to set.")}</div>;
+  }
+}
 
-        return [
-          "axisOf" in v
-            ? t("Axis of {face}", { face: describeFaceSelector(sel) })
-            : describeFaceSelector(sel),
-        ];
-      };
+/** Loft: profiles in order, straight or smooth sides, result. */
+function LoftFields({
+  f: feature,
+  set,
+  profileChip,
+}: {
+  f: Of<"loft">;
+  set: SetPatch;
+  profileChip: (prof: ProfileRef) => string;
+}) {
+  return (
+    <>
+      <Field label={t("Profiles, in order")}>
+        <SelBox
+          field="profiles"
+          items={feature.profiles.map((profile, i) => `${i + 1}. ${profileChip(profile)}`)}
+          placeholder={t("Pick sketch regions or flat faces")}
+          onRemove={(i) => set({ profiles: feature.profiles.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.ruled}
+          onChange={(event) => set({ ruled: event.target.checked || undefined })}
+        />{" "}
+        {t("Straight sides between profiles")}
+      </label>
+      <Field label={t("Result")}>
+        <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+      <p className="muted small">
+        {t(
+          "Each profile is one closed region, on its own plane. Profiles that all have the same number of holes give a hollow loft.",
+        )}
+      </p>
+    </>
+  );
+}
 
-      return (
-        <>
-          <Field label={t("Face of the part to move")}>
-            <SelBox
-              field="from"
-              items={desc(feature.from)}
-              placeholder={t("Pick a flat face, or a round one for its axis")}
-            />
-          </Field>
-          <Field label={t("Onto")}>
-            <SelBox field="to" items={desc(feature.to)} placeholder={t("Pick the face on the other part")} />
-          </Field>
-          {feature.bodies && feature.bodies.length > 1 ? (
-            <p className="muted small">
-              {t("Parts joined to them come along, so their joints stay together.")}
-            </p>
-          ) : null}
+/** Sweep: profile, the path it follows, result. */
+function SweepFields({
+  f: feature,
+  set,
+  profileChip,
+  sketches,
+}: {
+  f: Of<"sweep">;
+  set: SetPatch;
+  profileChip: (prof: ProfileRef) => string;
+  sketches: Of<"sketch">[];
+}) {
+  const pathSk = sketches.find((x) => x.id === feature.path.sketch);
+  const pathChips = !feature.path.sketch
+    ? []
+    : feature.path.curves
+      ? feature.path.curves.map((c) => `${pathSk ? featureName(pathSk) : feature.path.sketch} · ${c}`)
+      : [t("All lines of {name}", { name: pathSk ? featureName(pathSk) : feature.path.sketch })];
+  const prof = feature.profile;
+
+  return (
+    <>
+      <Field label={t("Profile")}>
+        <SelBox
+          field="profile"
+          items={"face" in prof || prof.sketch ? [profileChip(prof)] : []}
+          placeholder={t("Pick sketch regions")}
+          onRemove={() => set({ profile: { sketch: "" } })}
+        />
+      </Field>
+      <Field label={t("Path")}>
+        <SelBox
+          field="path"
+          items={pathChips}
+          placeholder={t("Pick lines and arcs")}
+          onRemove={(i) =>
+            set({
+              path:
+                feature.path.curves && feature.path.curves.length > 1
+                  ? { sketch: feature.path.sketch, curves: feature.path.curves.filter((_, j) => j !== i) }
+                  : { sketch: "" },
+            })
+          }
+        />
+        <SketchSelect
+          sketches={sketches}
+          prompt={t("…or follow a whole sketch")}
+          onPick={(sketch) => set({ path: { sketch } })}
+        />
+      </Field>
+      <Field label={t("Result")}>
+        <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+      <p className="muted small">
+        {t(
+          "Draw the path in its own sketch, usually on a plane across the profile's, starting in the profile.",
+        )}
+      </p>
+    </>
+  );
+}
+
+/** Extrude or revolve: profile, result, how far (or about what), and which parts it may merge with. */
+function ExtrudeFields({
+  f: feature,
+  set,
+  sketches,
+}: {
+  f: Of<"extrude" | "revolve">;
+  set: SetPatch;
+  sketches: Of<"sketch">[];
+}) {
+  const features = useApp((state) => state.doc.features);
+
+  const prof = feature.profile;
+  const sketch = "face" in prof ? undefined : sketches.find((x) => x.id === prof.sketch);
+  const skName = sketch ? featureName(sketch) : "sketch" in prof ? prof.sketch : "";
+  const regionChips =
+    "face" in prof
+      ? [describeFaceSelector(prof.face)]
+      : !prof.sketch
+        ? []
+        : Array.isArray(prof.regions)
+          ? prof.regions.map((k) => `${skName} · ${k.split("|")[0]}`)
+          : [t("All regions of {name}", { name: skName })];
+
+  return (
+    <>
+      <Field label={t("Profile")}>
+        <SelBox
+          field="profile"
+          items={regionChips}
+          placeholder={
+            feature.op === "extrude" ? t("Pick sketch regions or a face") : t("Pick sketch regions")
+          }
+          onRemove={() => set({ profile: { sketch: "" } })}
+        />
+        {"sketch" in prof && !prof.sketch ? (
+          <SketchSelect
+            sketches={sketches}
+            prompt={t("…or use a whole sketch")}
+            onPick={(sketch) => set({ profile: { sketch } })}
+          />
+        ) : null}
+      </Field>
+      <Field label={t("Result")}>
+        <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+      {feature.op === "extrude" ? (
+        <ExtrudeEnd f={feature} set={set} />
+      ) : (
+        <RevolveAxis f={feature} set={set} />
+      )}
+      {feature.mode !== "new_body" ? (
+        <Field label={t("Merge scope (optional)")}>
+          <SelBox
+            field="targets"
+            items={(feature.targets ?? []).map((t) => partName(t, features))}
+            placeholder={t("All touching parts")}
+            onRemove={(i) => set({ targets: (feature.targets ?? []).filter((_, j) => j !== i) })}
+          />
+        </Field>
+      ) : null}
+    </>
+  );
+}
+
+/** How far an extrude goes: blind, symmetric, two directions or through all, and which way. */
+function ExtrudeEnd({ f: feature, set }: { f: Of<"extrude">; set: SetPatch }) {
+  return (
+    <>
+      <Field label={t("End")}>
+        <select
+          className="field"
+          value={feature.extent}
+          onChange={(event) =>
+            set({
+              extent: event.target.value,
+              ...(event.target.value === "two_sided" && feature.distance2 === undefined
+                ? { distance2: 10 }
+                : {}),
+            })
+          }
+        >
+          <option value="blind">{t("Blind")}</option>
+          <option value="symmetric">{t("Symmetric")}</option>
+          <option value="two_sided">{t("Two directions")}</option>
+          <option value="through_all">{t("Through all")}</option>
+        </select>
+      </Field>
+      {feature.extent !== "through_all" ? (
+        <Field label={feature.extent === "two_sided" ? t("Distance (direction 1)") : t("Distance")}>
           <div className="row">
-            <Field label={t("Gap")}>
+            <div style={{ flex: 1 }}>
               <ExprInput
-                value={feature.offset ?? 0}
-                onCommit={(offset) => set({ offset: offset === 0 ? undefined : offset })}
-                onLive={(offset) => set({ offset })}
+                value={feature.distance}
+                autoFocus
+                onCommit={(distance) => set({ distance })}
+                onLive={(distance) => set({ distance })}
+              />
+            </div>
+            <FlipButton flip={feature.flip} title={t("Flip direction")} set={set} />
+          </div>
+        </Field>
+      ) : (
+        <button
+          className={`btn ${feature.flip ? "primary" : ""}`}
+          onClick={() => set({ flip: feature.flip ? undefined : true })}
+        >
+          <ArrowLeftRight /> {t("Flip direction")}
+        </button>
+      )}
+      {feature.extent === "two_sided" ? (
+        <Field label={t("Distance (direction 2)")}>
+          <ExprInput
+            value={feature.distance2}
+            onCommit={(distance2) => set({ distance2 })}
+            onLive={(distance2) => set({ distance2 })}
+          />
+        </Field>
+      ) : null}
+    </>
+  );
+}
+
+/** What a revolve turns about, and how far. */
+function RevolveAxis({ f: feature, set }: { f: Of<"revolve">; set: SetPatch }) {
+  return (
+    <>
+      <Field label={t("Axis")}>
+        <SelBox field="axis" items={[describeAxis(feature.axis)]} placeholder={t("Pick a line or edge")} />
+        <AxisButtons value={feature.axis} onChange={(axis) => set({ axis })} />
+      </Field>
+      <Field label={t("Angle")}>
+        <ExprInput
+          value={feature.angle}
+          unit="deg"
+          onCommit={(angle) => set({ angle })}
+          onLive={(angle) => set({ angle })}
+        />
+      </Field>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.symmetric}
+          onChange={(event) => set({ symmetric: event.target.checked || undefined })}
+        />{" "}
+        {t("Symmetric")}
+      </label>
+    </>
+  );
+}
+
+/** Fillet or chamfer: edges and faces, radius or distance; a fillet can change along the edge. */
+function EdgeRoundFields({ f: feature, set }: { f: Of<"fillet" | "chamfer">; set: SetPatch }) {
+  const edges = asArray(feature.edges) as EdgeSelector[];
+
+  return (
+    <>
+      <Field label={t("Edges and faces")}>
+        <SelBox
+          field="edges"
+          items={edges.map(describeEdgeSelector)}
+          placeholder={t("Pick edges or faces")}
+          onRemove={(i) => set({ edges: edges.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      <Field label={feature.op === "fillet" ? t("Radius") : t("Distance")}>
+        {feature.op === "fillet" ? (
+          <ExprInput
+            value={feature.radius}
+            autoFocus
+            onCommit={(radius) => set({ radius })}
+            onLive={(radius) => set({ radius })}
+          />
+        ) : (
+          <ExprInput
+            value={feature.distance}
+            autoFocus
+            onCommit={(distance) => set({ distance })}
+            onLive={(distance) => set({ distance })}
+          />
+        )}
+      </Field>
+      {feature.op === "fillet" ? (
+        <>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={feature.radius2 !== undefined}
+              onChange={(event) =>
+                set({
+                  radius2: event.target.checked
+                    ? typeof feature.radius === "number"
+                      ? feature.radius * 2
+                      : 4
+                    : undefined,
+                })
+              }
+            />{" "}
+            {t("Variable: changes along the edge")}
+          </label>
+          {feature.radius2 !== undefined ? (
+            <Field label={t("Radius at the other end")}>
+              <ExprInput
+                value={feature.radius2}
+                onCommit={(radius2) => set({ radius2 })}
+                onLive={(radius2) => set({ radius2 })}
               />
             </Field>
-            <Field label={t("Turn")}>
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** Shell: faces to remove, wall thickness, inward or outward. */
+function ShellFields({ f: feature, set }: { f: Of<"shell">; set: SetPatch }) {
+  return (
+    <>
+      <Field label={t("Faces to remove")}>
+        <SelBox
+          field="faces"
+          items={feature.faces.map((selector: FaceSelector) => describeFaceSelector(selector))}
+          placeholder={t("Pick faces")}
+          onRemove={(i) => set({ faces: feature.faces.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      <Field label={t("Thickness")}>
+        <ExprInput
+          value={feature.thickness}
+          autoFocus
+          onCommit={(thickness) => set({ thickness })}
+          onLive={(thickness) => set({ thickness })}
+        />
+      </Field>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.outward}
+          onChange={(event) => set({ outward: event.target.checked || undefined })}
+        />{" "}
+        {t("Thicken outward")}
+      </label>
+    </>
+  );
+}
+
+/** Linear pattern: what to repeat, direction, count and spacing, optionally a second direction. */
+function LinearPatternFields({ f: feature, set }: { f: Of<"linear_pattern">; set: SetPatch }) {
+  return (
+    <>
+      <SourceField value={feature.source} onChange={(source) => set({ source })} />
+      <Field label={t("Direction")}>
+        <SelBox
+          field="direction"
+          items={[describeAxis(feature.direction)]}
+          placeholder={t("Pick an edge or line")}
+        />
+        <AxisButtons
+          value={feature.direction}
+          onChange={(direction) => set({ direction })}
+          kind="direction"
+        />
+      </Field>
+      <div className="row">
+        <Field label={t("Count")}>
+          <ExprInput
+            value={feature.count}
+            unit=""
+            integer
+            onCommit={(count) => set({ count })}
+            onLive={(count) => set({ count })}
+          />
+        </Field>
+        <Field label={t("Spacing")}>
+          <ExprInput
+            value={feature.spacing}
+            onCommit={(spacing) => set({ spacing })}
+            onLive={(spacing) => set({ spacing })}
+          />
+        </Field>
+      </div>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.direction2}
+          onChange={(event) =>
+            set(
+              event.target.checked
+                ? { direction2: { ref: "origin.Y" }, count2: 2, spacing2: 20 }
+                : { direction2: undefined, count2: undefined, spacing2: undefined },
+            )
+          }
+        />{" "}
+        {t("Second direction")}
+      </label>
+      {feature.direction2 ? (
+        <>
+          <SelBox
+            field="direction2"
+            items={[describeAxis(feature.direction2)]}
+            placeholder={t("Pick an edge or line")}
+          />
+          <AxisButtons
+            value={feature.direction2}
+            onChange={(direction2) => set({ direction2 })}
+            kind="direction"
+          />
+          <div className="row">
+            <Field label={t("Count")}>
               <ExprInput
-                value={feature.angle ?? 0}
-                unit="deg"
-                onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })}
+                value={feature.count2}
+                unit=""
+                integer
+                onCommit={(count2) => set({ count2 })}
+                onLive={(count2) => set({ count2 })}
+              />
+            </Field>
+            <Field label={t("Spacing")}>
+              <ExprInput
+                value={feature.spacing2}
+                onCommit={(spacing2) => set({ spacing2 })}
+                onLive={(spacing2) => set({ spacing2 })}
               />
             </Field>
           </div>
-          <button
-            className={`btn ${feature.flip ? "primary" : ""}`}
-            onClick={() => set({ flip: feature.flip ? undefined : true })}
-          >
-            <ArrowLeftRight />{" "}
-            {"axisOf" in feature.from ? t("Reverse direction") : t("Flush instead of facing")}
-          </button>
-          <p className="muted small">
-            {t(
-              "Flat faces end up touching, facing each other; round faces (a shaft, a hole) share their axis. The part keeps its place along the other directions.",
-            )}
-          </p>
         </>
-      );
-    }
-    case "standard_part": {
-      const sizes = STANDARD_SIZES[feature.kind];
+      ) : null}
+    </>
+  );
+}
 
-      return (
-        <>
-          <Field label={t("Part")}>
+/** Circular pattern: what to repeat, axis, count and total angle. */
+function CircularPatternFields({ f: feature, set }: { f: Of<"circular_pattern">; set: SetPatch }) {
+  return (
+    <>
+      <SourceField value={feature.source} onChange={(source) => set({ source })} />
+      <Field label={t("Axis")}>
+        <SelBox field="axis" items={[describeAxis(feature.axis)]} placeholder={t("Pick an edge or line")} />
+        <AxisButtons value={feature.axis} onChange={(axis) => set({ axis })} />
+      </Field>
+      <div className="row">
+        <Field label={t("Count")}>
+          <ExprInput
+            value={feature.count}
+            unit=""
+            integer
+            onCommit={(count) => set({ count })}
+            onLive={(count) => set({ count })}
+          />
+        </Field>
+        <Field label={t("Total angle")}>
+          <ExprInput
+            value={feature.angle ?? 360}
+            unit="deg"
+            onCommit={(angle) => set({ angle })}
+            onLive={(angle) => set({ angle })}
+          />
+        </Field>
+      </div>
+    </>
+  );
+}
+
+/** Mirror: what to mirror and the plane. */
+function MirrorFields({ f: feature, set }: { f: Of<"mirror">; set: SetPatch }) {
+  return (
+    <>
+      <SourceField value={feature.source} onChange={(source) => set({ source })} />
+      <Field label={t("Mirror plane")}>
+        <SelBox
+          field="plane"
+          items={[describePlane(feature.plane)]}
+          placeholder={t("Pick a plane or face")}
+        />
+        <PlaneButtons value={feature.plane} onChange={(plane) => set({ plane })} />
+      </Field>
+    </>
+  );
+}
+
+/** Boolean: union, subtract or intersect a target part with tool parts. */
+function BooleanFields({ f: feature, set }: { f: Of<"boolean">; set: SetPatch }) {
+  const features = useApp((state) => state.doc.features);
+
+  return (
+    <>
+      <Seg
+        value={feature.operation}
+        options={[
+          ["union", t("Union")],
+          ["subtract", t("Subtract")],
+          ["intersect", t("Intersect")],
+        ]}
+        onChange={(operation) => set({ operation })}
+      />
+      <Field label={t("Target part")}>
+        <SelBox
+          field="target"
+          items={feature.target ? [partName(feature.target, features)] : []}
+          placeholder={t("Pick the part to keep")}
+        />
+      </Field>
+      <Field label={t("Tool parts")}>
+        <SelBox
+          field="tools"
+          items={feature.tools.map((t) => partName(t, features))}
+          placeholder={t("Pick tool parts")}
+          onRemove={(i) => set({ tools: feature.tools.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.keepTools}
+          onChange={(event) => set({ keepTools: event.target.checked || undefined })}
+        />{" "}
+        {t("Keep tools")}
+      </label>
+    </>
+  );
+}
+
+/** Align: a face of the part to move onto a face of another, gap and turn. */
+function AlignFields({ f: feature, set }: { f: Of<"align">; set: SetPatch }) {
+  const desc = (v: Of<"align">["from"]) => {
+    const sel = "face" in v ? v.face : v.axisOf;
+    if ("face" in sel && !sel.face) return [];
+
+    return [
+      "axisOf" in v ? t("Axis of {face}", { face: describeFaceSelector(sel) }) : describeFaceSelector(sel),
+    ];
+  };
+
+  return (
+    <>
+      <Field label={t("Face of the part to move")}>
+        <SelBox
+          field="from"
+          items={desc(feature.from)}
+          placeholder={t("Pick a flat face, or a round one for its axis")}
+        />
+      </Field>
+      <Field label={t("Onto")}>
+        <SelBox field="to" items={desc(feature.to)} placeholder={t("Pick the face on the other part")} />
+      </Field>
+      {feature.bodies && feature.bodies.length > 1 ? (
+        <p className="muted small">{t("Parts joined to them come along, so their joints stay together.")}</p>
+      ) : null}
+      <div className="row">
+        <Field label={t("Gap")}>
+          <ExprInput
+            value={feature.offset ?? 0}
+            onCommit={(offset) => set({ offset: offset === 0 ? undefined : offset })}
+            onLive={(offset) => set({ offset })}
+          />
+        </Field>
+        <Field label={t("Turn")}>
+          <ExprInput
+            value={feature.angle ?? 0}
+            unit="deg"
+            onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })}
+          />
+        </Field>
+      </div>
+      <button
+        className={`btn ${feature.flip ? "primary" : ""}`}
+        onClick={() => set({ flip: feature.flip ? undefined : true })}
+      >
+        <ArrowLeftRight /> {"axisOf" in feature.from ? t("Reverse direction") : t("Flush instead of facing")}
+      </button>
+      <p className="muted small">
+        {t(
+          "Flat faces end up touching, facing each other; round faces (a shaft, a hole) share their axis. The part keeps its place along the other directions.",
+        )}
+      </p>
+    </>
+  );
+}
+
+/**
+ * Switching a standard part to another kind: a size it comes in, its usual length (kept when the old
+ * kind had one of the same sort), a magnet's size, the moving part along, the turn where it lies.
+ */
+function standardKindPatch(feature: Of<"standard_part">, kind: Of<"standard_part">["kind"]) {
+  const list = STANDARD_SIZES[kind];
+  const length = STANDARD_WITH_LENGTH.includes(kind)
+    ? STANDARD_WITH_LENGTH.includes(feature.kind)
+      ? (feature.length ?? 10)
+      : 10
+    : STANDARD_CUT_TO_LENGTH.includes(kind)
+      ? STANDARD_CUT_TO_LENGTH.includes(feature.kind)
+        ? (feature.length ?? 200)
+        : 200
+      : undefined;
+
+  return {
+    kind,
+    size: list.includes(feature.size ?? "") ? feature.size : STANDARD_DEFAULT_SIZE[kind],
+    length,
+    diameter: kind === "magnet" ? 6 : undefined,
+    height: kind === "magnet" ? 3 : undefined,
+    // A rail comes with its carriage and a lead screw with its nut, moving.
+    withMoving: STANDARD_WITH_MOVING.includes(kind) ? true : undefined,
+    angle: STANDARD_LYING.includes(kind) ? feature.angle : undefined,
+  };
+}
+
+/** Standard part: kind, size and length, the face it goes on and the places on it. */
+function StandardPartFields({ f: feature, set }: { f: Of<"standard_part">; set: SetPatch }) {
+  const sizes = STANDARD_SIZES[feature.kind];
+
+  return (
+    <>
+      <Field label={t("Part")}>
+        <select
+          className="field"
+          value={feature.kind}
+          onChange={(event) =>
+            set(standardKindPatch(feature, event.target.value as Of<"standard_part">["kind"]))
+          }
+        >
+          {STANDARD_GROUPS.map(([group, kinds]) => (
+            <optgroup key={group} label={t(group)}>
+              {kinds.map((k) => (
+                <option key={k} value={k}>
+                  {t(STANDARD_NAMES[k])}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </Field>
+      <div className="row">
+        {sizes.length ? (
+          <Field label={t("Size")}>
             <select
               className="field"
-              value={feature.kind}
-              onChange={(event) => {
-                const kind = event.target.value as Of<"standard_part">["kind"];
-                const list = STANDARD_SIZES[kind];
-                const length = STANDARD_WITH_LENGTH.includes(kind)
-                  ? STANDARD_WITH_LENGTH.includes(feature.kind)
-                    ? (feature.length ?? 10)
-                    : 10
-                  : STANDARD_CUT_TO_LENGTH.includes(kind)
-                    ? STANDARD_CUT_TO_LENGTH.includes(feature.kind)
-                      ? (feature.length ?? 200)
-                      : 200
-                    : undefined;
+              value={feature.size ?? ""}
+              onChange={(event) =>
                 set({
-                  kind,
-                  size: list.includes(feature.size ?? "") ? feature.size : STANDARD_DEFAULT_SIZE[kind],
-                  length,
-                  diameter: kind === "magnet" ? 6 : undefined,
-                  height: kind === "magnet" ? 3 : undefined,
-                  // A rail comes with its carriage and a lead screw with its nut, moving.
-                  withMoving: STANDARD_WITH_MOVING.includes(kind) ? true : undefined,
-                  angle: STANDARD_LYING.includes(kind) ? feature.angle : undefined,
-                });
-              }}
+                  size: event.target.value,
+                  ...(feature.kind === "insert" ? { length: undefined } : {}),
+                })
+              }
             >
-              {STANDARD_GROUPS.map(([group, kinds]) => (
-                <optgroup key={group} label={t(group)}>
-                  {kinds.map((k) => (
-                    <option key={k} value={k}>
-                      {t(STANDARD_NAMES[k])}
-                    </option>
-                  ))}
-                </optgroup>
+              {sizes.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
           </Field>
-          <div className="row">
-            {sizes.length ? (
-              <Field label={t("Size")}>
-                <select
-                  className="field"
-                  value={feature.size ?? ""}
-                  onChange={(event) =>
-                    set({
-                      size: event.target.value,
-                      ...(feature.kind === "insert" ? { length: undefined } : {}),
-                    })
-                  }
-                >
-                  {sizes.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            ) : null}
-            {STANDARD_WITH_LENGTH.includes(feature.kind) ? (
-              <Field label={t("Length")}>
-                <select
-                  className="field"
-                  value={String(feature.length ?? 10)}
-                  onChange={(event) => set({ length: Number(event.target.value) })}
-                >
-                  {SCREW_LENGTHS.map((l) => (
-                    <option key={l} value={l}>
-                      {l} mm
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            ) : null}
-            {feature.kind === "insert" ? (
-              <InsertLength size={feature.size ?? "M3"} length={feature.length} set={set} />
-            ) : null}
-            {STANDARD_CUT_TO_LENGTH.includes(feature.kind) ? (
-              <Field label={t("Length")}>
-                <ExprInput value={feature.length ?? 200} onCommit={(length) => set({ length })} />
-              </Field>
-            ) : null}
-            {feature.kind === "magnet" ? (
-              <>
-                <Field label={t("Diameter")}>
-                  <ExprInput value={feature.diameter ?? 6} onCommit={(diameter) => set({ diameter })} />
-                </Field>
-                <Field label={t("Height")}>
-                  <ExprInput value={feature.height ?? 3} onCommit={(height) => set({ height })} />
-                </Field>
-              </>
-            ) : null}
-          </div>
-          {/* Its own row: next to size and length the size would not fit. */}
-          {STANDARD_LYING.includes(feature.kind) ? (
-            <Field label={t("Turned")}>
-              <ExprInput
-                value={feature.angle ?? 0}
-                unit="deg"
-                onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })}
-              />
-            </Field>
-          ) : null}
-          {STANDARD_WITH_MOVING.includes(feature.kind) ? (
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={!!feature.withMoving}
-                onChange={(event) => set({ withMoving: event.target.checked ? true : undefined })}
-              />
-              {feature.kind === "rail"
-                ? t("With carriage (slides on the rail)")
-                : t("With nut (travels when the screw turns)")}
-            </label>
-          ) : null}
-          <Field label={t("Face")}>
-            <div className="row">
-              <div style={{ flex: 1 }}>
-                <SelBox
-                  field="plane"
-                  items={[describePlane(feature.plane)]}
-                  placeholder={t("Tap a flat face where the part goes")}
-                />
-              </div>
-              <button
-                className={`icon-btn ${feature.flip ? "active" : ""}`}
-                title={t("Turn the other way")}
-                onClick={() => set({ flip: feature.flip ? undefined : true })}
-              >
-                <ArrowLeftRight />
-              </button>
-            </div>
-          </Field>
-          <Field label={t("Places ({n})", { n: feature.points.length })}>
-            <SelBox
-              field="points"
-              items={
-                feature.points.length
-                  ? [
-                      tn(
-                        feature.points.length,
-                        "{n} place: tap the face to add",
-                        "{n} places: tap the face to add",
-                      ),
-                    ]
-                  : []
-              }
-              placeholder={t("Tap the face to place parts")}
-            />
-            {feature.points.map((pt, i) => (
-              <div className="row" key={i}>
-                {[0, 1].map((k) => (
-                  <div key={k} style={{ flex: 1 }}>
-                    <ExprInput
-                      value={pt[k]}
-                      onCommit={(expr) =>
-                        set({
-                          points: feature.points.map((q, j) =>
-                            j === i ? (k === 0 ? [expr, q[1]] : [q[0], expr]) : q,
-                          ),
-                        })
-                      }
-                    />
-                  </div>
-                ))}
-                <button
-                  className="icon-btn sm"
-                  title={t("Remove")}
-                  onClick={() => set({ points: feature.points.filter((_, j) => j !== i) })}
-                >
-                  <X />
-                </button>
-              </div>
-            ))}
-          </Field>
-          <p className="muted small">
-            {feature.kind === "socket_screw" || feature.kind === "hex_screw"
-              ? t("The head sits on the face, the shank goes in: tap the centre of a hole.")
-              : feature.kind === "countersunk_screw" ||
-                  feature.kind === "set_screw" ||
-                  feature.kind === "insert"
-                ? t("It sits in the hole, flush with the face: tap the centre of a hole.")
-                : t("The part stands on the face; turn it to set it into a recess.")}{" "}
-            {t("Each place is its own part.")}
-          </p>
-        </>
-      );
-    }
-    case "primitive": {
-      const c = feature.center ?? [0, 0, 0];
-      const size = feature.size ?? [20, 20, 20];
-      const setCenter = (k: number, v: string | number) =>
-        set({
-          center: c.map((x, i) => (i === k ? v : x)) as [string | number, string | number, string | number],
-        });
-
-      return (
-        <>
-          <Field label={t("Shape")}>
-            <Seg
-              value={feature.shape}
-              options={[
-                ["box", t("primitive::Box")],
-                ["cylinder", t("primitive::Cylinder")],
-                ["sphere", t("primitive::Sphere")],
-              ]}
-              onChange={(shape) =>
-                set(
-                  shape === "box"
-                    ? {
-                        shape,
-                        size: feature.size ?? [20, 20, 20],
-                        diameter: undefined,
-                        height: undefined,
-                        axis: undefined,
-                      }
-                    : {
-                        shape,
-                        diameter: feature.diameter ?? 20,
-                        height: shape === "cylinder" ? (feature.height ?? 20) : undefined,
-                        size: undefined,
-                        ...(shape === "sphere" ? { axis: undefined } : {}),
-                      },
-                )
-              }
-            />
-          </Field>
-          {feature.shape === "box" ? (
-            <div className="row">
-              {(["X", "Y", "Z"] as const).map((a, k) => (
-                <Field key={a} label={t("Size {axis}", { axis: a })}>
-                  <ExprInput
-                    value={size[k]!}
-                    onCommit={(expr) =>
-                      set({
-                        size: size.map((x, i) => (i === k ? expr : x)) as [
-                          string | number,
-                          string | number,
-                          string | number,
-                        ],
-                      })
-                    }
-                    onLive={(expr) =>
-                      set({
-                        size: size.map((x, i) => (i === k ? expr : x)) as [
-                          string | number,
-                          string | number,
-                          string | number,
-                        ],
-                      })
-                    }
-                  />
-                </Field>
-              ))}
-            </div>
-          ) : (
-            <div className="row">
-              <Field label={t("Diameter")}>
-                <ExprInput
-                  value={feature.diameter ?? 20}
-                  onCommit={(diameter) => set({ diameter })}
-                  onLive={(diameter) => set({ diameter })}
-                />
-              </Field>
-              {feature.shape === "cylinder" ? (
-                <Field label={t("Height")}>
-                  <ExprInput
-                    value={feature.height ?? 20}
-                    onCommit={(height) => set({ height })}
-                    onLive={(height) => set({ height })}
-                  />
-                </Field>
-              ) : null}
-            </div>
-          )}
-          {feature.shape === "cylinder" ? (
-            <Field label={t("Axis")}>
-              <Seg
-                value={feature.axis ?? "Z"}
-                options={[
-                  ["X", "X"],
-                  ["Y", "Y"],
-                  ["Z", "Z"],
-                ]}
-                onChange={(axis) => set({ axis: axis === "Z" ? undefined : axis })}
-              />
-            </Field>
-          ) : null}
-          <div className="row">
-            {(["X", "Y", "Z"] as const).map((a, k) => (
-              <Field key={a} label={t("Centre {axis}", { axis: a })}>
-                <ExprInput
-                  value={c[k]!}
-                  onCommit={(expr) => setCenter(k, expr)}
-                  onLive={(expr) => setCenter(k, expr)}
-                />
-              </Field>
-            ))}
-          </div>
-          <Field label={t("Result")}>
-            <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
-          </Field>
-        </>
-      );
-    }
-    case "text": {
-      const pos = feature.position ?? [0, 0];
-
-      return (
-        <>
-          <Field label={t("Text")}>
-            <textarea
+        ) : null}
+        {STANDARD_WITH_LENGTH.includes(feature.kind) ? (
+          <Field label={t("Length")}>
+            <select
               className="field"
-              rows={2}
-              value={feature.text}
-              autoFocus
-              onChange={(event) => set({ text: event.target.value })}
-            />
+              value={String(feature.length ?? 10)}
+              onChange={(event) => set({ length: Number(event.target.value) })}
+            >
+              {SCREW_LENGTHS.map((l) => (
+                <option key={l} value={l}>
+                  {l} mm
+                </option>
+              ))}
+            </select>
           </Field>
-          <Field label={t("On")}>
+        ) : null}
+        {feature.kind === "insert" ? (
+          <InsertLength size={feature.size ?? "M3"} length={feature.length} set={set} />
+        ) : null}
+        {STANDARD_CUT_TO_LENGTH.includes(feature.kind) ? (
+          <Field label={t("Length")}>
+            <ExprInput value={feature.length ?? 200} onCommit={(length) => set({ length })} />
+          </Field>
+        ) : null}
+        {feature.kind === "magnet" ? (
+          <>
+            <Field label={t("Diameter")}>
+              <ExprInput value={feature.diameter ?? 6} onCommit={(diameter) => set({ diameter })} />
+            </Field>
+            <Field label={t("Height")}>
+              <ExprInput value={feature.height ?? 3} onCommit={(height) => set({ height })} />
+            </Field>
+          </>
+        ) : null}
+      </div>
+      {/* Its own row: next to size and length the size would not fit. */}
+      {STANDARD_LYING.includes(feature.kind) ? (
+        <Field label={t("Turned")}>
+          <ExprInput
+            value={feature.angle ?? 0}
+            unit="deg"
+            onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })}
+          />
+        </Field>
+      ) : null}
+      {STANDARD_WITH_MOVING.includes(feature.kind) ? (
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={!!feature.withMoving}
+            onChange={(event) => set({ withMoving: event.target.checked ? true : undefined })}
+          />
+          {feature.kind === "rail"
+            ? t("With carriage (slides on the rail)")
+            : t("With nut (travels when the screw turns)")}
+        </label>
+      ) : null}
+      <Field label={t("Face")}>
+        <div className="row">
+          <div style={{ flex: 1 }}>
             <SelBox
               field="plane"
               items={[describePlane(feature.plane)]}
-              placeholder={t("Tap a flat face where the text starts")}
+              placeholder={t("Tap a flat face where the part goes")}
+            />
+          </div>
+          <FlipButton flip={feature.flip} title={t("Turn the other way")} set={set} />
+        </div>
+      </Field>
+      <PointsField
+        label={t("Places ({n})", { n: feature.points.length })}
+        points={feature.points}
+        summary={tn(
+          feature.points.length,
+          "{n} place: tap the face to add",
+          "{n} places: tap the face to add",
+        )}
+        placeholder={t("Tap the face to place parts")}
+        set={set}
+      />
+      <p className="muted small">
+        {feature.kind === "socket_screw" || feature.kind === "hex_screw"
+          ? t("The head sits on the face, the shank goes in: tap the centre of a hole.")
+          : feature.kind === "countersunk_screw" || feature.kind === "set_screw" || feature.kind === "insert"
+            ? t("It sits in the hole, flush with the face: tap the centre of a hole.")
+            : t("The part stands on the face; turn it to set it into a recess.")}{" "}
+        {t("Each place is its own part.")}
+      </p>
+    </>
+  );
+}
+
+/** `values` with the one at `k` replaced. */
+const replaced = (values: [Expr, Expr, Expr], k: number, v: Expr) =>
+  values.map((x, i) => (i === k ? v : x)) as [Expr, Expr, Expr];
+
+/** Switching a primitive's shape: a box takes its size, a cylinder or sphere its diameter (and height). */
+function primitiveShapePatch(feature: Of<"primitive">, shape: Of<"primitive">["shape"]) {
+  return shape === "box"
+    ? {
+        shape,
+        size: feature.size ?? [20, 20, 20],
+        diameter: undefined,
+        height: undefined,
+        axis: undefined,
+      }
+    : {
+        shape,
+        diameter: feature.diameter ?? 20,
+        height: shape === "cylinder" ? (feature.height ?? 20) : undefined,
+        size: undefined,
+        ...(shape === "sphere" ? { axis: undefined } : {}),
+      };
+}
+
+/** Primitive: box, cylinder or sphere, its size, axis, centre and result. */
+function PrimitiveFields({ f: feature, set }: { f: Of<"primitive">; set: SetPatch }) {
+  const c = feature.center ?? [0, 0, 0];
+  const size = feature.size ?? [20, 20, 20];
+  const setCenter = (k: number, v: Expr) => set({ center: replaced(c, k, v) });
+  const setSize = (k: number, v: Expr) => set({ size: replaced(size, k, v) });
+
+  return (
+    <>
+      <Field label={t("Shape")}>
+        <Seg
+          value={feature.shape}
+          options={[
+            ["box", t("primitive::Box")],
+            ["cylinder", t("primitive::Cylinder")],
+            ["sphere", t("primitive::Sphere")],
+          ]}
+          onChange={(shape) => set(primitiveShapePatch(feature, shape))}
+        />
+      </Field>
+      {feature.shape === "box" ? (
+        <div className="row">
+          {(["X", "Y", "Z"] as const).map((a, k) => (
+            <Field key={a} label={t("Size {axis}", { axis: a })}>
+              <ExprInput
+                value={size[k]!}
+                onCommit={(expr) => setSize(k, expr)}
+                onLive={(expr) => setSize(k, expr)}
+              />
+            </Field>
+          ))}
+        </div>
+      ) : (
+        <div className="row">
+          <Field label={t("Diameter")}>
+            <ExprInput
+              value={feature.diameter ?? 20}
+              onCommit={(diameter) => set({ diameter })}
+              onLive={(diameter) => set({ diameter })}
             />
           </Field>
-          <Field label={t("Result")}>
-            <Seg
-              value={feature.mode}
-              options={[
-                ["join", t("Raised")],
-                ["cut", t("Engraved")],
-                ["new_body", t("New part")],
-              ]}
-              onChange={(mode) => set({ mode })}
+          {feature.shape === "cylinder" ? (
+            <Field label={t("Height")}>
+              <ExprInput
+                value={feature.height ?? 20}
+                onCommit={(height) => set({ height })}
+                onLive={(height) => set({ height })}
+              />
+            </Field>
+          ) : null}
+        </div>
+      )}
+      {feature.shape === "cylinder" ? (
+        <Field label={t("Axis")}>
+          <Seg
+            value={feature.axis ?? "Z"}
+            options={[
+              ["X", "X"],
+              ["Y", "Y"],
+              ["Z", "Z"],
+            ]}
+            onChange={(axis) => set({ axis: axis === "Z" ? undefined : axis })}
+          />
+        </Field>
+      ) : null}
+      <div className="row">
+        {(["X", "Y", "Z"] as const).map((a, k) => (
+          <Field key={a} label={t("Centre {axis}", { axis: a })}>
+            <ExprInput
+              value={c[k]!}
+              onCommit={(expr) => setCenter(k, expr)}
+              onLive={(expr) => setCenter(k, expr)}
             />
           </Field>
-          <div className="row">
-            <Field label={t("Letter height")}>
-              <ExprInput
-                value={feature.size}
-                onCommit={(size) => set({ size })}
-                onLive={(size) => set({ size })}
-              />
-            </Field>
-            <Field label={feature.mode === "cut" ? t("Depth") : t("Height")}>
-              <ExprInput
-                value={feature.depth}
-                onCommit={(depth) => set({ depth })}
-                onLive={(depth) => set({ depth })}
-              />
-            </Field>
-          </div>
-          <div className="row">
-            <Field label={t("Font")}>
-              <select
-                className="field"
-                value={feature.font ?? "sans"}
-                onChange={(event) =>
-                  set({ font: event.target.value === "sans" ? undefined : event.target.value })
-                }
-              >
-                <option value="sans">{t("Sans")}</option>
-                <option value="sans-bold">{t("Sans bold")}</option>
-                <option value="mono">{t("Mono")}</option>
-              </select>
-            </Field>
-            <Field label={t("text::Align")}>
-              <Seg
-                value={feature.align ?? "left"}
-                options={[
-                  ["left", t("Left")],
-                  ["center", t("Centre")],
-                  ["right", t("Right")],
-                ]}
-                onChange={(align) => set({ align: align === "left" ? undefined : align })}
-              />
-            </Field>
-          </div>
-          <div className="row">
-            <Field label={t("Position x")}>
-              <ExprInput value={pos[0]} onCommit={(x) => set({ position: [x, pos[1]] })} />
-            </Field>
-            <Field label={t("Position y")}>
-              <ExprInput value={pos[1]} onCommit={(y) => set({ position: [pos[0], y] })} />
-            </Field>
-            <Field label={t("Angle")}>
-              <ExprInput
-                value={feature.angle ?? 0}
-                unit="deg"
-                onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })}
-              />
-            </Field>
-          </div>
-          <p className="muted small">
-            {t(
-              "Letter height is the height of capitals. For printing, about 5 mm high and 0.6–1 mm deep reads well.",
-            )}
-          </p>
-        </>
-      );
-    }
-    case "draft":
-      return (
-        <>
-          <Field label={t("Faces")}>
+        ))}
+      </div>
+      <Field label={t("Result")}>
+        <Seg value={feature.mode} options={MODES} onChange={(mode) => set({ mode })} />
+      </Field>
+    </>
+  );
+}
+
+/** Text: the words, the face they go on, raised or engraved, size, font, alignment and place. */
+function TextFields({ f: feature, set }: { f: Of<"text">; set: SetPatch }) {
+  const pos = feature.position ?? [0, 0];
+
+  return (
+    <>
+      <Field label={t("Text")}>
+        <textarea
+          className="field"
+          rows={2}
+          value={feature.text}
+          autoFocus
+          onChange={(event) => set({ text: event.target.value })}
+        />
+      </Field>
+      <Field label={t("On")}>
+        <SelBox
+          field="plane"
+          items={[describePlane(feature.plane)]}
+          placeholder={t("Tap a flat face where the text starts")}
+        />
+      </Field>
+      <Field label={t("Result")}>
+        <Seg
+          value={feature.mode}
+          options={[
+            ["join", t("Raised")],
+            ["cut", t("Engraved")],
+            ["new_body", t("New part")],
+          ]}
+          onChange={(mode) => set({ mode })}
+        />
+      </Field>
+      <div className="row">
+        <Field label={t("Letter height")}>
+          <ExprInput
+            value={feature.size}
+            onCommit={(size) => set({ size })}
+            onLive={(size) => set({ size })}
+          />
+        </Field>
+        <Field label={feature.mode === "cut" ? t("Depth") : t("Height")}>
+          <ExprInput
+            value={feature.depth}
+            onCommit={(depth) => set({ depth })}
+            onLive={(depth) => set({ depth })}
+          />
+        </Field>
+      </div>
+      <div className="row">
+        <Field label={t("Font")}>
+          <select
+            className="field"
+            value={feature.font ?? "sans"}
+            onChange={(event) =>
+              set({ font: event.target.value === "sans" ? undefined : event.target.value })
+            }
+          >
+            <option value="sans">{t("Sans")}</option>
+            <option value="sans-bold">{t("Sans bold")}</option>
+            <option value="mono">{t("Mono")}</option>
+          </select>
+        </Field>
+        <Field label={t("text::Align")}>
+          <Seg
+            value={feature.align ?? "left"}
+            options={[
+              ["left", t("Left")],
+              ["center", t("Centre")],
+              ["right", t("Right")],
+            ]}
+            onChange={(align) => set({ align: align === "left" ? undefined : align })}
+          />
+        </Field>
+      </div>
+      <div className="row">
+        <Field label={t("Position x")}>
+          <ExprInput value={pos[0]} onCommit={(x) => set({ position: [x, pos[1]] })} />
+        </Field>
+        <Field label={t("Position y")}>
+          <ExprInput value={pos[1]} onCommit={(y) => set({ position: [pos[0], y] })} />
+        </Field>
+        <Field label={t("Angle")}>
+          <ExprInput
+            value={feature.angle ?? 0}
+            unit="deg"
+            onCommit={(angle) => set({ angle: angle === 0 ? undefined : angle })}
+          />
+        </Field>
+      </div>
+      <p className="muted small">
+        {t(
+          "Letter height is the height of capitals. For printing, about 5 mm high and 0.6–1 mm deep reads well.",
+        )}
+      </p>
+    </>
+  );
+}
+
+/** Draft: side faces, angle and the neutral plane they lean from. */
+function DraftFields({ f: feature, set }: { f: Of<"draft">; set: SetPatch }) {
+  return (
+    <>
+      <Field label={t("Faces")}>
+        <SelBox
+          field="faces"
+          items={feature.faces.map(describeFaceSelector)}
+          placeholder={t("Pick side faces")}
+          onRemove={(i) => set({ faces: feature.faces.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      <Field label={t("Angle")}>
+        <ExprInput
+          value={feature.angle}
+          unit="deg"
+          autoFocus
+          onCommit={(angle) => set({ angle })}
+          onLive={(angle) => set({ angle })}
+        />
+      </Field>
+      <Field label={t("Neutral plane")}>
+        <div className="row">
+          <div style={{ flex: 1 }}>
             <SelBox
-              field="faces"
-              items={feature.faces.map(describeFaceSelector)}
-              placeholder={t("Pick side faces")}
-              onRemove={(i) => set({ faces: feature.faces.filter((_, j) => j !== i) })}
+              field="neutral"
+              items={[describePlane(feature.neutral)]}
+              placeholder={t("Pick a plane or flat face")}
+            />
+          </div>
+          <FlipButton flip={feature.flip} title={t("Pull the other way")} set={set} />
+        </div>
+        <PlaneButtons value={feature.neutral} onChange={(neutral) => set({ neutral })} />
+      </Field>
+      <p className="muted small">
+        {t(
+          "The faces keep their edge on the neutral plane (usually the bottom or the parting face) and lean inwards in the pull direction. 1–3° is typical for moulded parts.",
+        )}
+      </p>
+    </>
+  );
+}
+
+/** Offset faces: faces, by a distance or up to a plane. */
+function OffsetFaceFields({ f: feature, set }: { f: Of<"offset_face">; set: SetPatch }) {
+  return (
+    <>
+      <Field label={t("Faces")}>
+        <SelBox
+          field="faces"
+          items={feature.faces.map(describeFaceSelector)}
+          placeholder={t("Pick faces")}
+          onRemove={(i) => set({ faces: feature.faces.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      <Field label={t("Up to")}>
+        <div className="row">
+          <div style={{ flex: 1 }}>
+            <SelBox
+              field="upTo"
+              items={feature.upTo ? [describePlane(feature.upTo)] : []}
+              placeholder={t("Optional: a plane or flat face")}
+            />
+          </div>
+          {feature.upTo && (
+            <button className="icon-btn" title={t("Remove")} onClick={() => set({ upTo: undefined })}>
+              <X />
+            </button>
+          )}
+        </div>
+      </Field>
+      <Field label={feature.upTo ? t("Gap before it") : t("Distance")}>
+        <ExprInput
+          value={feature.distance}
+          unit="mm"
+          autoFocus
+          onCommit={(distance) => set({ distance })}
+          onLive={(distance) => set({ distance })}
+        />
+      </Field>
+      <p className="muted small">
+        {feature.upTo
+          ? t("Flat faces parallel to the plane move onto it, or stop short of it by the gap.")
+          : t(
+              "Positive moves the faces out of the part (it grows there), negative into it. A hole wall moved out makes the hole tighter.",
+            )}
+      </p>
+    </>
+  );
+}
+
+/** Rib: open lines of a sketch, thickness and side. */
+function RibFields({ f: feature, set, sketches }: { f: Of<"rib">; set: SetPatch; sketches: Of<"sketch">[] }) {
+  const sketch = sketches.find((x) => x.id === feature.sketch);
+  const name = sketch ? featureName(sketch) : feature.sketch;
+
+  return (
+    <>
+      <Field label={t("Lines")}>
+        <SelBox
+          field="curves"
+          items={
+            !feature.sketch
+              ? []
+              : feature.curves
+                ? feature.curves.map((c) => `${name} · ${c}`)
+                : [`All lines of ${name}`]
+          }
+          placeholder={t("Pick open lines in a sketch")}
+          onRemove={(i) =>
+            set(
+              feature.curves && feature.curves.length > 1
+                ? { curves: feature.curves.filter((_, j) => j !== i) }
+                : { sketch: "", curves: undefined },
+            )
+          }
+        />
+        <SketchSelect
+          sketches={sketches}
+          prompt={t("…or all lines of a sketch")}
+          onPick={(sketch) => set({ sketch, curves: undefined })}
+        />
+      </Field>
+      <Field label={t("Thickness")}>
+        <div className="row">
+          <div style={{ flex: 1 }}>
+            <ExprInput
+              value={feature.thickness}
+              autoFocus
+              onCommit={(thickness) => set({ thickness })}
+              onLive={(thickness) => set({ thickness })}
+            />
+          </div>
+          <FlipButton flip={feature.flip} title={t("Fill towards the other side")} set={set} />
+        </div>
+      </Field>
+      <p className="muted small">
+        {t(
+          "Draw the rib as an open line on a plane across the walls, e.g. from a wall to the floor. It fills from the line to the walls it meets, centred on the sketch plane.",
+        )}
+      </p>
+    </>
+  );
+}
+
+/** Split: plane, parts, which pieces to keep, connectors, and whether the pieces fit the bed. */
+function SplitFields({ f: feature, set }: { f: Of<"split">; set: SetPatch }) {
+  const features = useApp((state) => state.doc.features);
+
+  return (
+    <>
+      <Field label={t("Split at")}>
+        <SelBox
+          field="plane"
+          items={[describePlane(feature.plane)]}
+          placeholder={t("Pick a plane or flat face")}
+        />
+        <PlaneButtons value={feature.plane} onChange={(plane) => set({ plane })} />
+      </Field>
+      <Field label={t("Parts")}>
+        <SelBox
+          field="bodies"
+          items={feature.bodies.map((b) => partName(b, features))}
+          placeholder={t("All parts the plane crosses")}
+          onRemove={(i) => set({ bodies: feature.bodies.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      <Field label={t("Keep")}>
+        <Seg
+          value={feature.keep ?? "both"}
+          options={[
+            ["both", t("Both")],
+            ["front", t("Front")],
+            ["back", t("Back")],
+          ]}
+          onChange={(keep) => set(keep === "both" ? { keep: undefined } : { keep, connectors: undefined })}
+        />
+      </Field>
+      {(feature.keep ?? "both") === "both" ? <SplitConnectorFields f={feature} set={set} /> : null}
+      <p className="muted small">
+        {t(
+          "For a part larger than the printer: split at an offset plane, print both pieces. Front is the side the plane's arrow points to; that piece keeps the part's name.",
+        )}
+      </p>
+      <BedCheck />
+    </>
+  );
+}
+
+/** Delete: the parts to remove. */
+function DeleteFields({ f: feature, set }: { f: Of<"delete">; set: SetPatch }) {
+  const features = useApp((state) => state.doc.features);
+
+  return (
+    <Field label={t("Parts")}>
+      <SelBox
+        field="bodies"
+        items={feature.bodies.map((b) => partName(b, features))}
+        placeholder={t("Pick parts")}
+        onRemove={(i) => set({ bodies: feature.bodies.filter((_, j) => j !== i) })}
+      />
+    </Field>
+  );
+}
+
+/** Mesh to solid: the mesh part, tolerance and sharp edge angle. */
+function MeshConvertFields({ f: feature, set }: { f: Of<"mesh_convert">; set: SetPatch }) {
+  const features = useApp((state) => state.doc.features);
+
+  return (
+    <>
+      <Field label={t("Mesh part")}>
+        <SelBox
+          field="body"
+          items={feature.body ? [partName(feature.body, features)] : []}
+          placeholder={t("Pick a mesh part")}
+          onRemove={() => set({ body: "" })}
+        />
+      </Field>
+      <Field label={t("Tolerance")}>
+        <ExprInput
+          value={feature.tolerance}
+          placeholder="auto"
+          onCommit={(tolerance) => set({ tolerance: tolerance === 0 ? undefined : tolerance })}
+        />
+      </Field>
+      <Field label={t("Sharp edge angle")}>
+        <ExprInput value={feature.angle ?? 30} unit="deg" onCommit={(angle) => set({ angle })} />
+      </Field>
+      <p className="muted small">
+        {t(
+          "Flat, round, conical and spherical areas of the mesh become real faces (within the tolerance; by default a small fraction of the part's size). Triangles that match no surface stay flat facets. Raise the tolerance for rough meshes.",
+        )}
+      </p>
+    </>
+  );
+}
+
+/** Move: parts, offset, optional rotation, copy or not. */
+function TransformFields({ f: feature, set }: { f: Of<"transform">; set: SetPatch }) {
+  const features = useApp((state) => state.doc.features);
+
+  const tr = feature.translate ?? [0, 0, 0];
+  const setT = (i: number, expr: Expr) => set({ translate: tr.map((x, j) => (j === i ? expr : x)) });
+
+  return (
+    <>
+      <Field label={t("Parts")}>
+        <SelBox
+          field="bodies"
+          items={feature.bodies.map((b) => partName(b, features))}
+          placeholder={t("Pick parts")}
+          onRemove={(i) => set({ bodies: feature.bodies.filter((_, j) => j !== i) })}
+        />
+      </Field>
+      {!feature.copy && feature.bodies.some((b) => joinedParts(b).length > 1) ? (
+        <p className="muted small">{t("Parts joined to them come along, so their joints stay together.")}</p>
+      ) : null}
+      <Field label={t("Move by (X / Y / Z)")}>
+        <div className="row">
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ flex: 1 }}>
+              <ExprInput value={tr[i]} onCommit={(expr) => setT(i, expr)} onLive={(expr) => setT(i, expr)} />
+            </div>
+          ))}
+        </div>
+      </Field>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.rotate}
+          onChange={(event) =>
+            set({ rotate: event.target.checked ? { axis: { ref: "origin.Z" }, angle: 90 } : undefined })
+          }
+        />{" "}
+        {t("Rotate")}
+      </label>
+      {feature.rotate ? (
+        <>
+          <Field label={t("Axis")}>
+            <SelBox
+              field="axis"
+              items={[describeAxis(feature.rotate.axis)]}
+              placeholder={t("Pick an edge or line")}
+            />
+            <AxisButtons
+              value={feature.rotate.axis}
+              onChange={(axis) => set({ rotate: { ...feature.rotate!, axis } })}
             />
           </Field>
           <Field label={t("Angle")}>
             <ExprInput
-              value={feature.angle}
+              value={feature.rotate.angle}
               unit="deg"
-              autoFocus
-              onCommit={(angle) => set({ angle })}
-              onLive={(angle) => set({ angle })}
+              onCommit={(angle) => set({ rotate: { ...feature.rotate!, angle } })}
+              onLive={(angle) => set({ rotate: { ...feature.rotate!, angle } })}
             />
           </Field>
-          <Field label={t("Neutral plane")}>
-            <div className="row">
-              <div style={{ flex: 1 }}>
-                <SelBox
-                  field="neutral"
-                  items={[describePlane(feature.neutral)]}
-                  placeholder={t("Pick a plane or flat face")}
-                />
-              </div>
-              <button
-                className={`icon-btn ${feature.flip ? "active" : ""}`}
-                title={t("Pull the other way")}
-                onClick={() => set({ flip: feature.flip ? undefined : true })}
-              >
-                <ArrowLeftRight />
-              </button>
-            </div>
-            <PlaneButtons value={feature.neutral} onChange={(neutral) => set({ neutral })} />
-          </Field>
-          <p className="muted small">
-            {t(
-              "The faces keep their edge on the neutral plane (usually the bottom or the parting face) and lean inwards in the pull direction. 1–3° is typical for moulded parts.",
-            )}
-          </p>
         </>
-      );
-    case "offset_face":
-      return (
-        <>
-          <Field label={t("Faces")}>
-            <SelBox
-              field="faces"
-              items={feature.faces.map(describeFaceSelector)}
-              placeholder={t("Pick faces")}
-              onRemove={(i) => set({ faces: feature.faces.filter((_, j) => j !== i) })}
-            />
-          </Field>
-          <Field label={t("Up to")}>
-            <div className="row">
-              <div style={{ flex: 1 }}>
-                <SelBox
-                  field="upTo"
-                  items={feature.upTo ? [describePlane(feature.upTo)] : []}
-                  placeholder={t("Optional: a plane or flat face")}
-                />
-              </div>
-              {feature.upTo && (
-                <button className="icon-btn" title={t("Remove")} onClick={() => set({ upTo: undefined })}>
-                  <X />
-                </button>
-              )}
-            </div>
-          </Field>
-          <Field label={feature.upTo ? t("Gap before it") : t("Distance")}>
-            <ExprInput
-              value={feature.distance}
-              unit="mm"
-              autoFocus
-              onCommit={(distance) => set({ distance })}
-              onLive={(distance) => set({ distance })}
-            />
-          </Field>
-          <p className="muted small">
-            {feature.upTo
-              ? t("Flat faces parallel to the plane move onto it, or stop short of it by the gap.")
-              : t(
-                  "Positive moves the faces out of the part (it grows there), negative into it. A hole wall moved out makes the hole tighter.",
-                )}
-          </p>
-        </>
-      );
-    case "rib": {
-      const sketch = sketches.find((x) => x.id === feature.sketch);
-      const name = sketch ? featureName(sketch) : feature.sketch;
+      ) : null}
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={!!feature.copy}
+          onChange={(event) => set({ copy: event.target.checked || undefined })}
+        />{" "}
+        {t("Keep original (copy)")}
+      </label>
+    </>
+  );
+}
 
-      return (
-        <>
-          <Field label={t("Lines")}>
-            <SelBox
-              field="curves"
-              items={
-                !feature.sketch
-                  ? []
-                  : feature.curves
-                    ? feature.curves.map((c) => `${name} · ${c}`)
-                    : [`All lines of ${name}`]
-              }
-              placeholder={t("Pick open lines in a sketch")}
-              onRemove={(i) =>
-                set(
-                  feature.curves && feature.curves.length > 1
-                    ? { curves: feature.curves.filter((_, j) => j !== i) }
-                    : { sketch: "", curves: undefined },
-                )
-              }
-            />
-            {sketches.length ? (
-              <select
-                className="field"
-                value=""
-                onChange={(event) => set({ sketch: event.target.value, curves: undefined })}
-              >
-                <option value="">{t("…or all lines of a sketch")}</option>
-                {sketches.map((sketch) => (
-                  <option key={sketch.id} value={sketch.id}>
-                    {featureName(sketch)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-          </Field>
-          <Field label={t("Thickness")}>
-            <div className="row">
-              <div style={{ flex: 1 }}>
-                <ExprInput
-                  value={feature.thickness}
-                  autoFocus
-                  onCommit={(thickness) => set({ thickness })}
-                  onLive={(thickness) => set({ thickness })}
-                />
-              </div>
-              <button
-                className={`icon-btn ${feature.flip ? "active" : ""}`}
-                title={t("Fill towards the other side")}
-                onClick={() => set({ flip: feature.flip ? undefined : true })}
-              >
-                <ArrowLeftRight />
-              </button>
-            </div>
-          </Field>
-          <p className="muted small">
-            {t(
-              "Draw the rib as an open line on a plane across the walls, e.g. from a wall to the floor. It fills from the line to the walls it meets, centred on the sketch plane.",
-            )}
-          </p>
-        </>
-      );
-    }
-    case "split":
-      return (
-        <>
-          <Field label={t("Split at")}>
-            <SelBox
-              field="plane"
-              items={[describePlane(feature.plane)]}
-              placeholder={t("Pick a plane or flat face")}
-            />
-            <PlaneButtons value={feature.plane} onChange={(plane) => set({ plane })} />
-          </Field>
-          <Field label={t("Parts")}>
-            <SelBox
-              field="bodies"
-              items={feature.bodies.map((b) => partName(b, features))}
-              placeholder={t("All parts the plane crosses")}
-              onRemove={(i) => set({ bodies: feature.bodies.filter((_, j) => j !== i) })}
-            />
-          </Field>
-          <Field label={t("Keep")}>
-            <Seg
-              value={feature.keep ?? "both"}
-              options={[
-                ["both", t("Both")],
-                ["front", t("Front")],
-                ["back", t("Back")],
-              ]}
-              onChange={(keep) =>
-                set(keep === "both" ? { keep: undefined } : { keep, connectors: undefined })
-              }
-            />
-          </Field>
-          {(feature.keep ?? "both") === "both" ? <SplitConnectorFields f={feature} set={set} /> : null}
-          <p className="muted small">
-            {t(
-              "For a part larger than the printer: split at an offset plane, print both pieces. Front is the side the plane's arrow points to; that piece keeps the part's name.",
-            )}
-          </p>
-          <BedCheck />
-        </>
-      );
-    case "delete":
-      return (
-        <Field label={t("Parts")}>
-          <SelBox
-            field="bodies"
-            items={feature.bodies.map((b) => partName(b, features))}
-            placeholder={t("Pick parts")}
-            onRemove={(i) => set({ bodies: feature.bodies.filter((_, j) => j !== i) })}
-          />
-        </Field>
-      );
-    case "mesh_convert":
-      return (
-        <>
-          <Field label={t("Mesh part")}>
-            <SelBox
-              field="body"
-              items={feature.body ? [partName(feature.body, features)] : []}
-              placeholder={t("Pick a mesh part")}
-              onRemove={() => set({ body: "" })}
-            />
-          </Field>
-          <Field label={t("Tolerance")}>
-            <ExprInput
-              value={feature.tolerance}
-              placeholder="auto"
-              onCommit={(tolerance) => set({ tolerance: tolerance === 0 ? undefined : tolerance })}
-            />
-          </Field>
-          <Field label={t("Sharp edge angle")}>
-            <ExprInput value={feature.angle ?? 30} unit="deg" onCommit={(angle) => set({ angle })} />
-          </Field>
-          <p className="muted small">
-            {t(
-              "Flat, round, conical and spherical areas of the mesh become real faces (within the tolerance; by default a small fraction of the part's size). Triangles that match no surface stay flat facets. Raise the tolerance for rough meshes.",
-            )}
-          </p>
-        </>
-      );
-    case "transform": {
-      const tr = feature.translate ?? [0, 0, 0];
-      const setT = (i: number, expr: Expr) => set({ translate: tr.map((x, j) => (j === i ? expr : x)) });
-
-      return (
-        <>
-          <Field label={t("Parts")}>
-            <SelBox
-              field="bodies"
-              items={feature.bodies.map((b) => partName(b, features))}
-              placeholder={t("Pick parts")}
-              onRemove={(i) => set({ bodies: feature.bodies.filter((_, j) => j !== i) })}
-            />
-          </Field>
-          {!feature.copy && feature.bodies.some((b) => joinedParts(b).length > 1) ? (
-            <p className="muted small">
-              {t("Parts joined to them come along, so their joints stay together.")}
-            </p>
-          ) : null}
-          <Field label={t("Move by (X / Y / Z)")}>
-            <div className="row">
-              {[0, 1, 2].map((i) => (
-                <div key={i} style={{ flex: 1 }}>
-                  <ExprInput
-                    value={tr[i]}
-                    onCommit={(expr) => setT(i, expr)}
-                    onLive={(expr) => setT(i, expr)}
-                  />
-                </div>
-              ))}
-            </div>
-          </Field>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.rotate}
-              onChange={(event) =>
-                set({ rotate: event.target.checked ? { axis: { ref: "origin.Z" }, angle: 90 } : undefined })
-              }
-            />{" "}
-            {t("Rotate")}
-          </label>
-          {feature.rotate ? (
-            <>
-              <Field label={t("Axis")}>
-                <SelBox
-                  field="axis"
-                  items={[describeAxis(feature.rotate.axis)]}
-                  placeholder={t("Pick an edge or line")}
-                />
-                <AxisButtons
-                  value={feature.rotate.axis}
-                  onChange={(axis) => set({ rotate: { ...feature.rotate!, axis } })}
-                />
-              </Field>
-              <Field label={t("Angle")}>
-                <ExprInput
-                  value={feature.rotate.angle}
-                  unit="deg"
-                  onCommit={(angle) => set({ rotate: { ...feature.rotate!, angle } })}
-                  onLive={(angle) => set({ rotate: { ...feature.rotate!, angle } })}
-                />
-              </Field>
-            </>
-          ) : null}
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={!!feature.copy}
-              onChange={(event) => set({ copy: event.target.checked || undefined })}
-            />{" "}
-            {t("Keep original (copy)")}
-          </label>
-        </>
-      );
-    }
-    case "plane":
-      return (
-        <>
-          <Field label={t("Reference")}>
-            <SelBox
-              field="base"
-              items={[describePlane(feature.base)]}
-              placeholder={t("Pick a plane or face")}
-            />
-            <PlaneButtons value={feature.base} onChange={(base) => set({ base })} />
-          </Field>
-          <Field label={t("Offset")}>
-            <ExprInput
-              value={feature.offset}
-              autoFocus
-              onCommit={(offset) => set({ offset })}
-              onLive={(offset) => set({ offset })}
-            />
-          </Field>
-          <Field label={t("Tilt")}>
-            <ExprInput
-              value={feature.angle ?? 0}
-              unit="deg"
-              onCommit={(angle) => set({ angle })}
-              onLive={(angle) => set({ angle })}
-            />
-          </Field>
-        </>
-      );
-    default:
-      return <div className="muted">{t("Nothing to set.")}</div>;
-  }
+/** Construction plane: reference, offset and tilt. */
+function PlaneFields({ f: feature, set }: { f: Of<"plane">; set: SetPatch }) {
+  return (
+    <>
+      <Field label={t("Reference")}>
+        <SelBox field="base" items={[describePlane(feature.base)]} placeholder={t("Pick a plane or face")} />
+        <PlaneButtons value={feature.base} onChange={(base) => set({ base })} />
+      </Field>
+      <Field label={t("Offset")}>
+        <ExprInput
+          value={feature.offset}
+          autoFocus
+          onCommit={(offset) => set({ offset })}
+          onLive={(offset) => set({ offset })}
+        />
+      </Field>
+      <Field label={t("Tilt")}>
+        <ExprInput
+          value={feature.angle ?? 0}
+          unit="deg"
+          onCommit={(angle) => set({ angle })}
+          onLive={(angle) => set({ angle })}
+        />
+      </Field>
+    </>
+  );
 }
