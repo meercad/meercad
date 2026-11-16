@@ -296,7 +296,7 @@ struct AreaMesh: Sendable {
 struct AreaScanView: View {
     @StateObject var scanner: AreaScanner
     let done: (Result<[String: Any], Error>) -> Void
-    @State private var finished = false
+    @PlainState private var finished = false
 
     var body: some View {
         ZStack {

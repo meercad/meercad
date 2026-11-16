@@ -522,9 +522,26 @@ enum MeshExport {
 
 // MARK: - Views
 
+/// Use this instead of `@State` in this app. Xcode 27 turns `@State` into a macro whose code links
+/// `SwiftUI.LazyState` against SwiftUICore, but iOS 18 keeps it in SwiftUI: the app then ends at
+/// launch on iOS 18, before any of our code runs. A plain `State` value avoids the macro.
+@propertyWrapper
+struct PlainState<Value>: DynamicProperty {
+    private let state: State<Value>
+
+    init(wrappedValue: Value) { state = State(initialValue: wrappedValue) }
+
+    var wrappedValue: Value {
+        get { state.wrappedValue }
+        nonmutating set { state.wrappedValue = newValue }
+    }
+
+    var projectedValue: Binding<Value> { state.projectedValue }
+}
+
 @available(iOS 18, *)
 struct ScanView: View {
-    @State var flow: ScanFlow
+    @PlainState var flow: ScanFlow
     let done: (Result<[String: Any], Error>) -> Void
 
     var body: some View {
@@ -539,7 +556,7 @@ struct ScanFlowView: View {
     @ObservedObject var flow: ScanFlow
     let done: (Result<[String: Any], Error>) -> Void
     let discard: () -> Void
-    @State private var finished = false
+    @PlainState private var finished = false
 
     var body: some View {
         ZStack {

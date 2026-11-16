@@ -760,7 +760,7 @@ struct DepthSample: Sendable {
 struct LidarScanView: View {
     @StateObject var scanner: LidarScanner
     let done: (Result<[String: Any], Error>) -> Void
-    @State private var finished = false
+    @PlainState private var finished = false
 
     var body: some View {
         ZStack {
