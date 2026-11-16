@@ -55,7 +55,7 @@ integration-slow) and fails when a package's line coverage drops below its thres
 is where its package stands, so coverage can only go up: raise it when tests are added, never lower
 it. The app's calculating files have a floor of their own: 100 % lines, branches and functions per
 file, each with its own test file (docs/CODE_STYLE.md, `scripts/calculating.mjs`). Nov 2026: ai and naming 100 %, schema 100 %, io 99.0 %, sketch 99.6 %, model 98.4 %, kernel
-97.8 %, MCP 96.7 %, viewport 94.9 %, the app 85.8 % (≈ 1680 tests, 12 min on a Mac mini). `E2E_COVERAGE=1 pnpm test:e2e` records which of the app's
+97.8 %, MCP 96.7 %, viewport 94.9 %, the app 87.7 % (≈ 2160 tests, 16 min on a Mac mini). `E2E_COVERAGE=1 pnpm test:e2e` records which of the app's
 code a Mac E2E run executed; `node scripts/e2e-coverage.mjs [--files]` prints it per folder and file.
 
 Known answers live in `tests/acceptance/reference-values.test.ts` (sizes, booleans, fillets and
