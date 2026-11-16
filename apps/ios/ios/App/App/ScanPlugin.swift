@@ -523,8 +523,8 @@ enum MeshExport {
 // MARK: - Views
 
 /// Use this instead of `@State` in this app. Xcode 27 turns `@State` into a macro whose code links
-/// `SwiftUI.LazyState`, a symbol iOS 17 and 18 do not have: the app then ends at launch on those
-/// versions, before any of our code runs. A plain `State` value avoids the macro.
+/// `SwiftUI.LazyState` against SwiftUICore, but iOS 18 keeps it in SwiftUI: the app then ends at
+/// launch on iOS 18, before any of our code runs. A plain `State` value avoids the macro.
 @propertyWrapper
 struct PlainState<Value>: DynamicProperty {
     private let state: State<Value>
