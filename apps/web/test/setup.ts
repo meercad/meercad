@@ -4,7 +4,8 @@
  */
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { vi } from "vitest";
+import { cleanup } from "@testing-library/react";
+import { afterAll, vi } from "vitest";
 import type { MeercadDocument } from "@meercad/schema";
 
 interface Stored {
@@ -276,3 +277,11 @@ const urls = globalThis.URL as unknown as {
 };
 urls.createObjectURL ??= () => "blob:test";
 urls.revokeObjectURL ??= () => undefined;
+
+// A test file that renders in beforeAll and leaves the tree mounted let React finish a render after
+// the file's window was torn down ("window is not defined", seen in CI under coverage): unmount
+// everything at the end of each file and let React's scheduler run out while the window still exists.
+afterAll(async () => {
+  cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
