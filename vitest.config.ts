@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { calculatingFiles } from "./scripts/calculating.mjs";
 
 /**
  * The app imports its kernel worker the Vite way (`./kernel.worker.ts?worker`, `?worker&url`); in
@@ -79,6 +80,14 @@ export const WEB_SLOW = [
   "apps/web/src/components/FeatureDialog.fields.test.tsx",
 ];
 
+/**
+ * The app's calculating files (scripts/calculating.mjs: no React, store, kernel worker, native plugin
+ * or browser API) need every line, branch and function covered, each file on its own. A new one is
+ * found by itself, so it cannot come in with less (docs/CODE_STYLE.md).
+ */
+const FULL = { lines: 100, branches: 100, functions: 100, statements: 100 };
+const CALCULATING = Object.fromEntries(calculatingFiles().map((file) => [file, FULL]));
+
 /** `pnpm test:coverage`: coverage instrumentation slows the kernel tests down by about half again. */
 const COVERAGE = process.argv.some((a) => a.startsWith("--coverage"));
 
@@ -107,6 +116,7 @@ export default defineConfig({
         "packages/mcp/src/**": { lines: 96.5 },
         "packages/viewport/src/**": { lines: 94.5 },
         "apps/web/src/**": { lines: 86.5 },
+        ...CALCULATING,
       },
     },
     projects: [

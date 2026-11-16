@@ -30,6 +30,7 @@ const line = (id: string, p1: string, p2: string, construction = false): SketchE
   ...(construction ? { construction } : {}),
 });
 type SolvedLine = Extract<SolvedCurve, { kind: "line" }>;
+
 const solvedLine = (id: string, p1: string, p2: string, construction = false): SolvedLine => ({
   id,
   kind: "line",
