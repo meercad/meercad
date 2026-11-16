@@ -37,7 +37,11 @@ import {
   CopyPlus,
   Waves,
   Grid3x3,
+  Ellipsis,
+  Blocks,
+  X,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import {
   useEffect,
   useLayoutEffect,
@@ -54,10 +58,9 @@ import { keyFor, usePrefs, type Action } from "../lib/keymap";
 import { toggleConstruction } from "../sketch/actions";
 import { setTool, useSketchUi, type SketchTool } from "../sketch/state";
 import { closeSketch, startFeature, toggleSide, useApp } from "../store";
-import { useCompact, usePhoneSheets } from "../lib/layout";
+import { useCompact } from "../lib/layout";
 import { importFile } from "./io";
 import { Kbd } from "./Kbd";
-import { showMenu } from "./Menu";
 import { canScan, scanObject } from "../lib/scan";
 import { buildTerrain, canBuildTerrain } from "../lib/terrain";
 import { canScanSpaces, scanArea, scanRoom } from "../lib/roomScan";
@@ -89,8 +92,65 @@ interface RailGroup {
   icon: Icon;
   label: string;
   tools: RailTool[];
+  /** The same tools under headings ("From a sketch", "Mechanics"), when the group has more than a handful. */
+  sections?: RailSection[];
+}
+interface RailSection {
+  title: string;
+  tools: RailTool[];
 }
 type RailEntry = RailTool | RailGroup | "sep";
+
+/** A group whose tools sit under headings. */
+function sectioned(id: string, icon: Icon, label: string, sections: RailSection[]): RailGroup {
+  return { id, icon, label, sections, tools: sections.flatMap((s) => s.tools) };
+}
+
+/** The groups' tools under their headings, or under none (one untitled section). */
+const sectionsOf = (group: RailGroup): RailSection[] => group.sections ?? [{ title: "", tools: group.tools }];
+
+/**
+ * The phone bar shows only these, the rest goes into "More" (a sideways-scrolling bar hid half the
+ * tools: measuring, joints, dimensioning).
+ */
+const PHONE_BAR = new Set([
+  "sketch",
+  "create",
+  "components",
+  "modify",
+  "select",
+  "line",
+  "rects",
+  "circle",
+  "dimension",
+]);
+
+/** The phone's "More": every entry not on the bar, groups as their own headings, single tools together. */
+function phoneEntries(entries: RailEntry[]): RailEntry[] {
+  const bar: RailEntry[] = [];
+  const loose: RailTool[] = [];
+  const sections: RailSection[] = [];
+
+  for (const entry of entries) {
+    if (entry === "sep") continue;
+
+    if (PHONE_BAR.has(entry.id)) {
+      bar.push(entry);
+    }
+    // "More" inside the sketch tools (polygon, point) is no heading of its own in "More".
+    else if (isGroup(entry) && entry.id !== "shapes") {
+      sections.push(...sectionsOf(entry).map((s) => ({ ...s, title: s.title || entry.label })));
+    } else {
+      loose.push(...(isGroup(entry) ? entry.tools : [entry]));
+    }
+  }
+
+  if (!loose.length && !sections.length) return bar;
+
+  const more = [...(loose.length ? [{ title: t("Tools"), tools: loose }] : []), ...sections];
+
+  return [...bar, sectioned("more", Ellipsis, t("More"), more)];
+}
 
 /** Finishing a sketch has to answer the first tap (see sureTap). */
 const finishTap = sureTap(closeSketch);
@@ -195,32 +255,44 @@ function useEntries(): RailEntry[] {
   return [
     feature("sketch", activeOp),
     "sep",
-    {
-      id: "create",
-      icon: Box,
-      label: t("Create"),
-      tools: [
-        feature("extrude", activeOp),
-        feature("revolve", activeOp),
-        feature("loft", activeOp),
-        feature("sweep", activeOp),
-        feature("coil", activeOp),
-        feature("rib", activeOp),
-        feature("primitive", activeOp),
-        feature("text", activeOp),
-        feature("standard_part", activeOp),
-        feature("screw", activeOp),
-        feature("gridfinity", activeOp),
-        feature("wall", activeOp),
-        feature("label", activeOp),
-        feature("box", activeOp),
-        feature("snap_hook", activeOp),
-        feature("lithophane", activeOp),
-        feature("gear", activeOp),
-        feature("spring", activeOp),
-        feature("plane", activeOp),
-      ],
-    },
+    sectioned("create", Box, t("Create"), [
+      {
+        title: t("From a sketch"),
+        tools: [
+          feature("extrude", activeOp),
+          feature("revolve", activeOp),
+          feature("loft", activeOp),
+          feature("sweep", activeOp),
+          feature("coil", activeOp),
+          feature("rib", activeOp),
+        ],
+      },
+      { title: t("Without a sketch"), tools: [feature("primitive", activeOp), feature("text", activeOp)] },
+      { title: t("rail::Construction"), tools: [feature("plane", activeOp)] },
+    ]),
+    // Ready-made parts with their own settings, apart from the modelling tools.
+    sectioned("components", Blocks, t("rail::Components"), [
+      {
+        title: t("Mechanics"),
+        tools: [
+          feature("standard_part", activeOp),
+          feature("screw", activeOp),
+          feature("gear", activeOp),
+          feature("spring", activeOp),
+          feature("snap_hook", activeOp),
+        ],
+      },
+      {
+        title: t("Storage and labels"),
+        tools: [
+          feature("gridfinity", activeOp),
+          feature("wall", activeOp),
+          feature("box", activeOp),
+          feature("label", activeOp),
+          feature("lithophane", activeOp),
+        ],
+      },
+    ]),
     {
       id: "modify",
       icon: SquarePen,
@@ -360,17 +432,20 @@ function useEntries(): RailEntry[] {
 
 export function Toolbar() {
   const compact = useCompact();
-  // Phone: import is in the "⋯" menu and finishing a sketch in its header bar.
-  const entries = useEntries().filter(
+  // Phone: import is in the "⋯" menu and finishing a sketch in its header bar; a fixed bar with the
+  // main tools and "More" for the rest.
+  const all = useEntries().filter(
     (entry) => !(compact && typeof entry === "object" && (entry.id === "import" || entry.id === "finish")),
   );
+  const entries = compact ? phoneEntries(all) : all;
   const [open, setOpen] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
+  /** Phone: the group open as a sheet from below. */
+  const [sheet, setSheet] = useState<string | null>(null);
   const closeTimer = useRef<number>(0);
   const rail = useRef<HTMLDivElement>(null);
   const sideOpen = useApp((state) => state.sideOpen);
   const sketching = useApp((state) => !!state.sketchId);
-  const constraints = usePhoneSheets((s) => s.constraints);
 
   useEffect(() => {
     if (!open) return;
@@ -389,9 +464,12 @@ export function Toolbar() {
     };
   }, [open]);
 
-  // Any tool started by shortcut closes an open flyout.
+  // Any tool started by shortcut closes an open flyout or sheet.
   const entryKey = entries.map((entry) => (typeof entry === "object" ? entry.id : entry)).join();
-  useEffect(() => setOpen(null), [entryKey]);
+  useEffect(() => {
+    setOpen(null);
+    setSheet(null);
+  }, [entryKey]);
 
   const hover = (id: string | null) => {
     window.clearTimeout(closeTimer.current);
@@ -403,31 +481,11 @@ export function Toolbar() {
   const run = (t: RailTool) => {
     setOpen(null);
     setPinned(false);
+    setSheet(null);
     t.run();
   };
 
-  // Phone: the bar scrolls sideways; mark which ends hide more tools, for the fades there.
-  const [more, setMore] = useState<"left" | "right" | "both" | undefined>();
-  const scroller = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const element = scroller.current;
-    if (!element || !compact) return setMore(undefined);
-
-    const update = () => {
-      const left = element.scrollLeft > 4;
-      const right = element.scrollLeft + element.clientWidth < element.scrollWidth - 4;
-      setMore(left && right ? "both" : left ? "left" : right ? "right" : undefined);
-    };
-
-    update();
-    element.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-
-    return () => {
-      element.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [compact, entryKey]);
+  const sheetGroup = entries.find((entry): entry is RailGroup => isGroup(entry) && entry.id === sheet);
 
   return (
     <nav
@@ -435,27 +493,15 @@ export function Toolbar() {
       ref={rail}
       aria-label={t("Tools")}
       onPointerLeave={(event) => event.pointerType === "mouse" && hover(null)}
-      data-more={more}
     >
-      <div className="rail-items" ref={scroller}>
-        {/* Phone: the panels that have no room on screen open from the bar. */}
-        {compact ? (
-          sketching ? (
-            <button
-              className={`tool ${constraints ? "active" : ""}`}
-              onClick={() => usePhoneSheets.setState({ constraints: !constraints })}
-            >
-              <Link2 />
-              <span>{t("Constrain")}</span>
-            </button>
-          ) : (
-            <button className={`tool ${sideOpen ? "active" : ""}`} onClick={() => toggleSide()}>
-              <Layers />
-              <span>{t("Parts")}</span>
-            </button>
-          )
+      <div className="rail-items">
+        {/* Phone: the parts sheet opens from the bar (a sketch's constraints from its header). */}
+        {compact && !sketching ? (
+          <button className={`tool ${sideOpen ? "active" : ""}`} onClick={() => toggleSide()}>
+            <Layers />
+            <span>{t("Parts")}</span>
+          </button>
         ) : null}
-        {compact ? <div className="sep" /> : null}
         {entries.map((entry, i) => {
           if (entry === "sep") return <div className="sep" key={`sep${i}`} />;
 
@@ -485,22 +531,12 @@ export function Toolbar() {
               onPointerEnter={(event) => !compact && event.pointerType === "mouse" && hover(entry.id)}
             >
               <button
-                className={`tool group ${active ? "active" : ""} ${open === entry.id ? "open" : ""}`}
+                className={`tool group ${active ? "active" : ""} ${open === entry.id || sheet === entry.id ? "open" : ""}`}
                 aria-haspopup="menu"
-                aria-expanded={open === entry.id}
-                onClick={(event) => {
-                  // Phone: the group opens as a menu above the bar (the bar scrolls sideways and would clip a
-                  // flyout).
-                  if (compact) {
-                    const rect = event.currentTarget.getBoundingClientRect();
-
-                    return showMenu(
-                      rect.left,
-                      rect.top - 8,
-                      entry.tools.map((t) => ({ label: t.label, icon: <t.icon />, onClick: () => run(t) })),
-                      { above: true },
-                    );
-                  }
+                aria-expanded={open === entry.id || sheet === entry.id}
+                onClick={() => {
+                  // Phone: the group opens as a sheet from below, in columns, so long groups fit.
+                  if (compact) return setSheet(sheet === entry.id ? null : entry.id);
 
                   // Fingers and pens do not hover: a tap opens the group and keeps it open (a lift of the
                   // finger used to count as leaving the rail and closed it again at once).
@@ -511,26 +547,18 @@ export function Toolbar() {
               >
                 <GroupIcon />
                 <span>{entry.label}</span>
-                <i className="rail-more" />
+                {entry.id === "more" ? null : <i className="rail-more" />}
               </button>
-              {open === entry.id ? (
+              {open === entry.id && !compact ? (
                 <RailFlyout label={entry.label}>
                   <div className="rail-flyout-title">{entry.label}</div>
-                  {entry.tools.map((t) => (
-                    <button
-                      key={t.id}
-                      role="menuitem"
-                      className={t.active ? "active" : ""}
-                      onClick={() => run(t)}
-                      title={t.hint ?? t.label}
-                    >
-                      <t.icon />
-                      <span className="rail-flyout-label">
-                        {t.label}
-                        {t.hint ? <small>{t.hint}</small> : null}
-                      </span>
-                      {t.kbd ? <Kbd k={t.kbd} /> : null}
-                    </button>
+                  {sectionsOf(entry).map((section, i) => (
+                    <div className="rail-flyout-section" key={i}>
+                      {section.title ? <div className="rail-flyout-heading">{section.title}</div> : null}
+                      {section.tools.map((t) => (
+                        <ToolButton key={t.id} tool={t} onRun={run} />
+                      ))}
+                    </div>
                   ))}
                 </RailFlyout>
               ) : null}
@@ -538,7 +566,78 @@ export function Toolbar() {
           );
         })}
       </div>
+      {compact && sheetGroup ? (
+        <ToolSheet group={sheetGroup} onRun={run} onClose={() => setSheet(null)} />
+      ) : null}
     </nav>
+  );
+}
+
+/** One tool in a flyout or sheet: icon, name, a short description and the shortcut. */
+function ToolButton({ tool, onRun }: { tool: RailTool; onRun: (t: RailTool) => void }) {
+  return (
+    <button
+      role="menuitem"
+      className={tool.active ? "active" : ""}
+      onClick={() => onRun(tool)}
+      title={tool.hint ?? tool.label}
+    >
+      <tool.icon />
+      <span className="rail-flyout-label">
+        {tool.label}
+        {tool.hint ? <small>{tool.hint}</small> : null}
+      </span>
+      {tool.kbd ? <Kbd k={tool.kbd} /> : null}
+    </button>
+  );
+}
+
+/**
+ * Phone: a toolbar group as a sheet from below, its tools in columns under their headings (two columns
+ * upright, more turned sideways), clear of the status bar and the home indicator.
+ */
+function ToolSheet({
+  group,
+  onRun,
+  onClose,
+}: {
+  group: RailGroup;
+  onRun: (t: RailTool) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const esc = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+
+  // In the body: the bar's blurred glass would make it the frame of a fixed sheet.
+  return createPortal(
+    <div
+      className="tool-sheet-backdrop"
+      onPointerDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <div className="tool-sheet" role="menu" aria-label={group.label}>
+        <div className="tool-sheet-head">
+          <span>{group.label}</span>
+          <button className="icon-btn" aria-label={t("Close")} onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        {sectionsOf(group).map((section, i) => (
+          <div className="tool-sheet-section" key={i}>
+            {section.title ? <div className="rail-flyout-heading">{section.title}</div> : null}
+            <div className="tool-sheet-grid">
+              {section.tools.map((t) => (
+                <ToolButton key={t.id} tool={t} onRun={onRun} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -139,7 +139,7 @@ describe("sketch tools and pictures", () => {
     const png = join(dir, "gradient.png");
     writeFileSync(png, gradientPng(80, 40));
     await ui.newPart();
-    await ui.feature("Create", "Lithophane");
+    await ui.feature("Components", "Lithophane");
     await app.page.chooseFiles([png], () => ui.press("Choose a photo…", ".dialog button"));
     await ui.until("the picture in the step", "!!s.dialog?.feature.image?.pixels", 20000);
     await ui.accept();

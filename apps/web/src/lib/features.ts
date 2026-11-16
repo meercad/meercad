@@ -19,7 +19,6 @@ import {
   Copy,
   FileUp,
   Grid3x3,
-  Layers,
   Pencil,
   Rotate3d,
   Shell,
@@ -46,6 +45,9 @@ import {
 import { type EdgeSelector, type Feature, type FeatureOp, type MeercadDocument } from "@meercad/schema";
 import { nextFeatureId, standardShape } from "@meercad/model";
 import { t } from "./i18n";
+
+/** A construction plane: a tilted sheet (the layers icon is the parts list's). */
+const PlaneIcon = createLucideIcon("plane-sheet", [["path", { d: "M8 5h13l-5 14H3z", key: "sheet" }]]);
 
 /** A coil spring (lucide has none). */
 const Spring = createLucideIcon("spring", [
@@ -259,7 +261,7 @@ export const FEATURES: Record<FeatureOp, FeatureMeta> = {
   plane: {
     shortcut: "N",
     label: t("Plane"),
-    icon: Layers,
+    icon: PlaneIcon,
     hint: t("Construction plane offset from a plane or face"),
   },
   delete: { label: t("Delete part"), icon: Trash2, hint: t("Remove parts from the model") },

@@ -164,6 +164,12 @@ export default {
   Modify: "Ändern",
   Transform: "Anordnen",
   "rail::Tools": "Ändern",
+  "rail::Components": "Bauteile",
+  "From a sketch": "Aus Skizze",
+  "Without a sketch": "Ohne Skizze",
+  "rail::Construction": "Hilfsgeometrie",
+  Mechanics: "Mechanik",
+  "Storage and labels": "Aufbewahren und Beschriften",
   Joints: "Gelenke",
   "Joints: parts that turn or slide; drag them to try":
     "Gelenke: Teile, die sich drehen oder verschieben; zieh daran, um es auszuprobieren",

@@ -303,7 +303,7 @@ export const SCRIPTS: Record<string, Script> = {
   "17 Stirnrad": async (ui) => {
     await ui.addVariable("m", 2);
     await ui.addVariable("z", 20);
-    await ui.feature("Create", "Gear");
+    await ui.feature("Components", "Gear");
     await ui.field("Module", "m");
     await ui.field("Teeth", "z");
     await ui.field("Width", 10);
@@ -314,7 +314,7 @@ export const SCRIPTS: Record<string, Script> = {
   },
 
   "18 Zahnradpaar": async (ui) => {
-    await ui.feature("Create", "Gear");
+    await ui.feature("Components", "Gear");
     await ui.field("Module", 1.5);
     await ui.field("Teeth", 15);
     await ui.field("Width", 8);
@@ -333,7 +333,7 @@ export const SCRIPTS: Record<string, Script> = {
   },
 
   "19 Pfeilradpaar": async (ui) => {
-    await ui.feature("Create", "Gear");
+    await ui.feature("Components", "Gear");
     await ui.field("Module", 2);
     await ui.field("Teeth", 20);
     await ui.field("Width", 12);
@@ -350,7 +350,7 @@ export const SCRIPTS: Record<string, Script> = {
   },
 
   "20 Planetengetriebe": async (ui) => {
-    await ui.feature("Create", "Gear");
+    await ui.feature("Components", "Gear");
     await ui.option("Ring gear");
     await ui.field("Module", 1);
     await ui.field("Teeth", 60);
@@ -367,7 +367,7 @@ export const SCRIPTS: Record<string, Script> = {
       ["gr3", 120],
       ["gr4", 240],
     ] as const) {
-      await ui.feature("Create", "Gear");
+      await ui.feature("Components", "Gear");
       await ui.until(id, `s.dialog?.feature.id === "${id}"`);
       await ui.choose("Meshes with", "Gear 1");
       await ui.field("Teeth", 18);
@@ -376,7 +376,7 @@ export const SCRIPTS: Record<string, Script> = {
       await ui.accept();
     }
 
-    await ui.feature("Create", "Gear");
+    await ui.feature("Components", "Gear");
     await ui.choose("Meshes with", "Gear 2");
     await ui.field("Teeth", 24);
     await ui.field("Width", 6);
@@ -388,7 +388,7 @@ export const SCRIPTS: Record<string, Script> = {
   },
 
   "21 Zahnstange mit Ritzel": async (ui) => {
-    await ui.feature("Create", "Gear");
+    await ui.feature("Components", "Gear");
     await ui.option("Rack");
     await ui.field("Module", 1.5);
     await ui.field("Teeth", 20);
@@ -670,7 +670,7 @@ export const SCRIPTS: Record<string, Script> = {
   },
 
   "38 Gridfinity-Box mit Etikett": async (ui) => {
-    await ui.feature("Create", "Storage bin");
+    await ui.feature("Components", "Storage bin");
     await ui.field("Cells wide", 2);
     await ui.field("Cells deep", 1);
     await ui.field("Height (units)", 3);
@@ -679,14 +679,14 @@ export const SCRIPTS: Record<string, Script> = {
     await ui.field("Scoop radius", 6);
     await ui.checkOn("Label tab at the back");
     await ui.accept();
-    await ui.feature("Create", "Label");
+    await ui.feature("Components", "Label");
     await ui.clickFace(`(f) => f.tags.some((t) => t.endsWith(".tab"))`);
     await ui.field("Text", "M3×10");
     await ui.accept();
   },
 
   "41 Box mit Schnappdeckel": async (ui) => {
-    await ui.feature("Create", "Box with lid");
+    await ui.feature("Components", "Box with lid");
     await ui.option("Snap lid");
     await ui.option("Rectangular");
     await ui.field("Width", 80);
@@ -696,7 +696,7 @@ export const SCRIPTS: Record<string, Script> = {
   },
 
   "42 Schraubdose": async (ui) => {
-    await ui.feature("Create", "Box with lid");
+    await ui.feature("Components", "Box with lid");
     await ui.option("Screw lid");
     await ui.field("Diameter", 70);
     await ui.field("Height", 70);
@@ -924,7 +924,7 @@ async function standardPart(
     places: [string | number, string | number][];
   },
 ) {
-  await ui.feature("Create", "Standard part");
+  await ui.feature("Components", "Standard part");
   await ui.choose("Part", part);
   if (opts.size) await ui.choose("Size", opts.size);
   if (opts.length) await ui.choose("Length", opts.length);
@@ -1243,7 +1243,7 @@ export const PENDING: Record<string, Script> = {
   "43 Boxen und Schnapphaken": async (ui) => {
     await ui.addVariable("wall", "2 mm");
     await ui.addVariable("play", "0.2 mm");
-    await ui.feature("Create", "Box with lid");
+    await ui.feature("Components", "Box with lid");
     await ui.option("Snap lid");
     await ui.option("Rectangular");
     await ui.field("Width", 80);
@@ -1252,7 +1252,7 @@ export const PENDING: Record<string, Script> = {
     await ui.field("Wall", "wall");
     await ui.field("Play", "play");
     await ui.accept();
-    await ui.feature("Create", "Box with lid");
+    await ui.feature("Components", "Box with lid");
     await ui.option("Screw lid");
     await ui.field("Diameter", 70);
     await ui.field("Height", 70);
@@ -1309,7 +1309,7 @@ export const PENDING: Record<string, Script> = {
       [27.8, 0],
       [-27.8, 180],
     ] as const) {
-      await ui.feature("Create", "Snap hook");
+      await ui.feature("Components", "Snap hook");
       await ui.clickPlane("pl1", [0, -20, 25], [120, 0, 0], [0, 120, 0]);
       await ui.clickFace(lidTop, { any: true });
       await ui.fieldN("Places (1)", 0, x);

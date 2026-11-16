@@ -1121,12 +1121,18 @@ input.expr {
 }
 
 /* context menu */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
 .menu {
   position: fixed;
   min-width: 200px;
   width: max-content;
-  max-width: calc(100vw - 16px);
-  max-height: calc(100vh - 16px);
+  max-width: calc(100vw - 16px - var(--safe-left) - var(--safe-right));
+  max-height: calc(100vh - 16px - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px;
@@ -2822,7 +2828,7 @@ textarea.field:focus {
   stroke-width: 1.7;
 }
 .rail .tool > span {
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.1;
   color: var(--text-2);
   white-space: nowrap;
@@ -2904,14 +2910,35 @@ textarea.field:focus {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.rail-flyout {
+  width: 300px;
+}
+/* Too tall for the window: the headings' sections side by side, read down each column. */
 .rail-flyout.two-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(250px, 1fr));
+  display: block;
+  width: 600px;
+  column-count: 2;
   column-gap: 4px;
-  align-content: start;
 }
 .rail-flyout.two-columns .rail-flyout-title {
-  grid-column: 1 / -1;
+  column-span: all;
+}
+.rail-flyout.two-columns .rail-flyout-section {
+  break-inside: avoid;
+}
+.rail-flyout.two-columns button {
+  width: 100%;
+}
+.rail-flyout-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rail-flyout-heading {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 8px 10px 3px;
 }
 .rail-flyout-title {
   font-size: 10.5px;
@@ -2958,6 +2985,12 @@ textarea.field:focus {
   font-weight: 400;
   color: var(--text-2);
   margin-top: 1px;
+  /* Two lines at most; the whole text is in the tooltip. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 @keyframes flyout-in {
   from {
@@ -3261,6 +3294,25 @@ button.link {
 .terms-points .checkbox input {
   flex: none;
   margin: 1px 0 0;
+}
+/* Touch: each point a full-width 44 pt row, so a tap between two lines can't hit the wrong one. */
+@media (pointer: coarse) {
+  .terms-points {
+    gap: 2px;
+  }
+  .terms-points .checkbox {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 4px 6px;
+    border-radius: 10px;
+  }
+  .terms-points .checkbox input {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+  }
 }
 .terms-points .checkbox.disabled {
   opacity: 0.5;
@@ -4104,6 +4156,9 @@ body {
    scale the page, on iPad also with a trackpad or Pencil, where "pointer: coarse" does not hold. */
 html {
   touch-action: manipulation;
+  /* iOS enlarges some text when the phone is turned sideways; the layout sets its own sizes. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 input,
 textarea,
@@ -4521,19 +4576,25 @@ html[data-compact] .rail .sep {
   margin: 0 2px;
   flex: none;
 }
+/* A fixed bar: the tools share its width (the rest is under "More"). */
 html[data-compact] .rail .tool,
 html[data-compact] .rail-group > .tool {
-  width: 64px;
-  min-width: 64px;
+  width: 100%;
+  min-width: 0;
   height: 52px;
   flex: none;
+}
+html[data-compact] .rail-items > .tool,
+html[data-compact] .rail-items > .rail-group {
+  flex: 1 1 0;
+  min-width: 52px;
 }
 html[data-compact] .rail-group {
   flex: none;
 }
 html[data-compact] .rail .tool > span {
   display: block;
-  font-size: 10.5px;
+  font-size: 11px;
 }
 html[data-compact] .rail .tool.primary {
   width: 72px;
@@ -4712,6 +4773,24 @@ html[data-compact] .home-head {
 html[data-compact] .home-head .btn {
   padding: 0 9px;
 }
+/* Phone: the overview's buttons as icons in one row (they used to wrap into a second one). */
+html[data-compact] .home-btn-label {
+  display: none;
+}
+html[data-compact] .home-top {
+  flex-wrap: nowrap;
+}
+html[data-compact] .home-top .home-tab {
+  margin-right: auto;
+}
+html[data-compact] .home-top .btn,
+html[data-compact] .home-head .btn {
+  min-width: 40px;
+  justify-content: center;
+}
+html[data-compact] .home-head {
+  flex-wrap: nowrap;
+}
 html[data-compact] .key-hint {
   visibility: hidden;
 }
@@ -4761,7 +4840,7 @@ html[data-compact] .modal {
   overflow-y: auto;
 }
 .menu {
-  max-height: calc(100vh - 16px);
+  max-height: calc(100vh - 16px - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
 }
 .phone-only {
@@ -4783,8 +4862,21 @@ html[data-compact] .view-controls .grid-snap {
 html[data-compact] .sketch-hud .card2 .row {
   align-items: center;
 }
-html[data-compact] .sketch-done {
+html[data-compact] .sketch-constrain {
   margin-left: auto;
+  height: 34px;
+  padding: 0 10px;
+  gap: 5px;
+}
+html[data-compact] .sketch-constrain svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-compact] .sketch-constrain.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+html[data-compact] .sketch-done {
   height: 34px;
   padding: 0 14px;
 }
@@ -5776,4 +5868,77 @@ html.in-assistant-tab .ai-activity {
 .ai-release svg {
   width: 13px;
   height: 13px;
+}
+
+/* Phone: a toolbar group as a sheet from below (Toolbar.tsx ToolSheet), clear of the status bar,
+   the Dynamic Island and the home indicator. */
+.tool-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgb(0 0 0 / 0.18);
+}
+.tool-sheet {
+  position: absolute;
+  left: max(6px, env(safe-area-inset-left));
+  right: max(6px, env(safe-area-inset-right));
+  bottom: max(6px, env(safe-area-inset-bottom));
+  max-height: calc(100% - max(12px, env(safe-area-inset-top)) - max(6px, env(safe-area-inset-bottom)) - 6px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 8px 10px;
+  border-radius: 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  animation: sheet-in 0.2s ease-out;
+}
+.tool-sheet-head {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px 2px 8px;
+  background: var(--panel);
+  font-size: 16px;
+  font-weight: 650;
+}
+.tool-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 2px 6px;
+}
+.tool-sheet button[role="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.tool-sheet button[role="menuitem"]:active,
+.tool-sheet button[role="menuitem"].active {
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  color: var(--accent);
+}
+.tool-sheet button[role="menuitem"] svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  stroke-width: 1.7;
+}
+.tool-sheet .rail-flyout-label {
+  font-size: 14px;
+}
+.tool-sheet .rail-flyout-label small {
+  font-size: 11.5px;
+}
+.tool-sheet .kbd {
+  display: none;
 }

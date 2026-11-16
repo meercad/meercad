@@ -42,6 +42,30 @@ export function closeMenu(): void {
   openMenu?.(null);
 }
 
+/**
+ * The screen's safe-area insets (status bar, home indicator) in pixels: a custom property keeps env()
+ * unresolved, so a hidden element padded by them is measured instead.
+ */
+function safeArea(): { top: number; right: number; bottom: number; left: number } {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) " +
+    "env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+  document.body.appendChild(probe);
+
+  const style = getComputedStyle(probe);
+  const px = (v: string) => parseFloat(v) || 0;
+  const insets = {
+    top: px(style.paddingTop),
+    right: px(style.paddingRight),
+    bottom: px(style.paddingBottom),
+    left: px(style.paddingLeft),
+  };
+  probe.remove();
+
+  return insets;
+}
+
 /** Leaves out separators at the ends and doubled ones, so optional entries can drop out freely. */
 function tidy(items: MenuEntry[]): MenuEntry[] {
   const out: MenuEntry[] = [];
@@ -78,9 +102,11 @@ export function MenuHost() {
     // A submenu keeps the top edge of its parent (bottom edge for menus that open upwards), so it doesn't
     // jump.
     const left = menu.alignRight ? menu.x - rect.width : menu.x;
+    // Clear of the status bar, the Dynamic Island and the home indicator (iPhone).
+    const safe = safeArea();
     setPos({
-      left: Math.max(8, Math.min(left, innerWidth - rect.width - 8)),
-      top: Math.max(8, Math.min(top, innerHeight - rect.height - 8)),
+      left: Math.max(8 + safe.left, Math.min(left, innerWidth - rect.width - 8 - safe.right)),
+      top: Math.max(8 + safe.top, Math.min(top, innerHeight - rect.height - 8 - safe.bottom)),
     });
   }, [menu, stack]);
   useEffect(() => {

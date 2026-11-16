@@ -14,6 +14,8 @@ import { keyFor } from "../../lib/keymap";
 import { docUnit } from "../../lib/units";
 import { closeSketch } from "../../store";
 import { sureTap } from "../../lib/gestures";
+import { usePhoneSheets } from "../../lib/layout";
+import { Link2 } from "lucide-react";
 import { applyConstraint, CONSTRAINT_TOOLS } from "../actions";
 import { setSketchSelection, useSketchUi, type SketchSel, type SketchTool } from "../state";
 import type { ValueOf } from "./entry";
@@ -251,7 +253,8 @@ export function SketchHud({
       <div className="card2">
         <div className="row" style={{ gap: 10 }}>
           <b>{featureName(sketch)}</b>
-          <DofBadge diag={diag} />
+          <DofBadge diag={diag} empty={!sketch.entities.length} />
+          <PhoneConstrain />
           {/* Phone: finishing sits up here, where iOS puts "Done", not at the end of the scrolling bar. */}
           <button className="btn primary phone-only sketch-done" {...doneTap}>
             {t("Done")}
@@ -273,8 +276,34 @@ export function SketchHud({
   );
 }
 
+/** Phone: the constraints sheet opens from the header, beside "Done" (the bottom bar has no room). */
+function PhoneConstrain() {
+  const open = usePhoneSheets((s) => s.constraints);
+
+  return (
+    <button
+      className={`btn phone-only sketch-constrain ${open ? "active" : ""}`}
+      aria-pressed={open}
+      onClick={() => usePhoneSheets.setState({ constraints: !open })}
+    >
+      <Link2 />
+      {t("Constrain")}
+    </button>
+  );
+}
+
 /** How far the sketch is defined: solving, over-constrained, fully defined or the degrees of freedom left. */
-function DofBadge({ diag }: { diag: SolvedSketch["diagnostics"] | undefined }) {
+function DofBadge({ diag, empty }: { diag: SolvedSketch["diagnostics"] | undefined; empty: boolean }) {
+  // A new sketch has nothing to define yet: "fully defined" there reads as a mistake.
+  if (empty) {
+    return (
+      <span className="dof">
+        <i />
+        {t("sketch::Empty")}
+      </span>
+    );
+  }
+
   return (
     <span className={`dof ${diag && !diag.ok ? "bad" : diag?.dof === 0 ? "full" : ""}`}>
       <i />

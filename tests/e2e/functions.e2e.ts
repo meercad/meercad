@@ -125,7 +125,7 @@ describe("functions of the app", () => {
 
   it("screw and nut: an M8 × 25 hex screw has the right length and head", async () => {
     await ui.newPart();
-    await ui.feature("Create", "Screw and nut");
+    await ui.feature("Components", "Screw and nut");
     await ui.accept();
     expect(await failed()).toEqual([]);
 
@@ -144,7 +144,7 @@ describe("functions of the app", () => {
 
   it("spring: a compression spring Ø 15 × 40 mm", async () => {
     await ui.newPart();
-    await ui.feature("Create", "Spring");
+    await ui.feature("Components", "Spring");
     await ui.accept();
     expect(await failed()).toEqual([]);
 
@@ -157,7 +157,7 @@ describe("functions of the app", () => {
 
   it("wall storage: a 4 × 4 openGrid board is 112 × 112 mm", async () => {
     await ui.newPart();
-    await ui.feature("Create", "Wall storage");
+    await ui.feature("Components", "Wall storage");
     await ui.accept();
     expect(await failed()).toEqual([]);
 
