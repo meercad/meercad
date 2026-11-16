@@ -182,17 +182,14 @@ type HasConstraint = (types: string[]) => boolean;
 
 /** The chips with a new shape's size and angle, for the values that no constraint fixes yet. */
 export function quickDimensions(sketch: SketchFeature, lastCurve: SolvedCurve): QuickDim[] {
+  // The constraints asked about name their curve as `line`, `curve` or (an angle) `a`.
   const has: HasConstraint = (types) =>
     sketch.constraints.some(
       (constraint) =>
         types.includes(constraint.type) &&
-        ("line" in constraint
-          ? constraint.line
-          : "curve" in constraint
-            ? constraint.curve
-            : "a" in constraint
-              ? constraint.a
-              : "") === lastCurve.id,
+        Object.entries(constraint).some(
+          ([key, value]) => (key === "line" || key === "curve" || key === "a") && value === lastCurve.id,
+        ),
     );
 
   if (lastCurve.kind === "line") return lineChips(lastCurve, has);

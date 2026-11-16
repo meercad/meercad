@@ -196,13 +196,12 @@ function trimRound(
   const inner = hits
     .map((h) => ({ ...h, a: norm(ang(h.pt), start) }))
     .filter((h) => h.a > END_MARGIN && h.a < span - END_MARGIN);
-  // A circle has no ends: past the last crossing it goes on from the first one.
+  // A circle has no ends: past the last crossing it goes on from the first one. Its angles count
+  // from the click (ac = 0), so every crossing lies after it and the one before is the last.
   const before =
     inner.filter((h) => h.a < ac).sort((x, y) => y.a - x.a)[0] ??
     (target.kind === "circle" ? inner.sort((x, y) => y.a - x.a)[0] : undefined);
-  const after =
-    inner.filter((h) => h.a > ac).sort((x, y) => x.a - y.a)[0] ??
-    (target.kind === "circle" ? inner.sort((x, y) => x.a - y.a)[0] : undefined);
+  const after = inner.filter((h) => h.a > ac).sort((x, y) => x.a - y.a)[0];
   const entity = edit.draft.entities.find((x) => x.id === target.id);
   if (!entity || (entity.type !== "circle" && entity.type !== "arc")) return false;
 
