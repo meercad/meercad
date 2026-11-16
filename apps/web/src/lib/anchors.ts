@@ -76,13 +76,16 @@ export function faceAnchor(mesh: BodyMesh, face: number): { origin: Vec3; normal
   };
 }
 
+/**
+ * The resolvers throw when nothing matches, so a resolved face or edge always has a body among the
+ * meshes it was resolved on.
+ */
 export function faceSelectorAnchor(out: RebuildOutput, sel: FaceSelector) {
   try {
-    const refs = resolveFaces(sel, out.meshes.map(meshTopology));
-    const faceRef = refs[0];
-    const mesh = faceRef && out.meshes.find((x) => x.bodyId === faceRef.body);
+    const faceRef = resolveFaces(sel, out.meshes.map(meshTopology))[0]!;
+    const mesh = out.meshes.find((x) => x.bodyId === faceRef.body)!;
 
-    return mesh && faceRef ? faceAnchor(mesh, faceRef.faces[0]!) : null;
+    return faceAnchor(mesh, faceRef.faces[0]!);
   } catch {
     return null;
   }
@@ -105,9 +108,9 @@ export function edgeAnchor(mesh: BodyMesh, edge: number): { origin: Vec3; dir: V
 export function edgeSelectorAnchor(out: RebuildOutput, sel: EdgeSelector) {
   try {
     const r = resolveEdges([sel], out.meshes.map(meshTopology));
-    const mesh = out.meshes.find((x) => x.bodyId === r.body);
+    const mesh = out.meshes.find((x) => x.bodyId === r.body)!;
 
-    return mesh ? edgeAnchor(mesh, r.edges[0]!) : null;
+    return edgeAnchor(mesh, r.edges[0]!);
   } catch {
     return null;
   }
@@ -266,11 +269,12 @@ export function profileTriangles(
 
   if ("face" in profile) {
     try {
-      const faceRef = resolveFaces(profile.face, out.meshes.map(meshTopology))[0];
-      const mesh = faceRef && out.meshes.find((x) => x.bodyId === faceRef.body);
-      const face = faceRef?.faces[0];
-      const a = mesh && face !== undefined ? faceAnchor(mesh, face) : null;
-      if (!mesh || !a) return null;
+      const faceRef = resolveFaces(profile.face, out.meshes.map(meshTopology))[0]!;
+      const mesh = out.meshes.find((x) => x.bodyId === faceRef.body)!;
+      const face = faceRef.faces[0]!;
+      // A face of no area (only degenerate triangles) has no base to show.
+      const a = faceAnchor(mesh, face);
+      if (!a) return null;
 
       const nrm: number[] = [];
 
@@ -285,9 +289,7 @@ export function profileTriangles(
       }
 
       // A curved face grows along its surface: each vertex moves along its own normal.
-      return tris.length
-        ? { triangles: new Float32Array(tris), normal: a.normal, normals: new Float32Array(nrm) }
-        : null;
+      return { triangles: new Float32Array(tris), normal: a.normal, normals: new Float32Array(nrm) };
     } catch {
       return null;
     }

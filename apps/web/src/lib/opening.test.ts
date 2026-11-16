@@ -82,7 +82,7 @@ describe("tasksOnEditor", () => {
 
     expect(tasksOnEditor(tasks)).toEqual([{ id: 2 }]);
 
-    const others = [{ id: 2 }];
+    const others: { id: number; untilEditor?: boolean }[] = [{ id: 2 }];
 
     expect(tasksOnEditor(others)).toBe(others);
   });
