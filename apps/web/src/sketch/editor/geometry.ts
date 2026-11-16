@@ -501,10 +501,12 @@ export function nearestLineEnd(
 
 /** The lines and arcs joined end to end with `start`, construction geometry left out. */
 export function joinedChain(sketch: SketchFeature, start: string): string[] {
-  const ends = (entity: SketchEntity) =>
-    entity.type === "line" ? [entity.p1, entity.p2] : entity.type === "arc" ? [entity.start, entity.end] : [];
+  type Curve = Extract<SketchEntity, { type: "line" | "arc" }>;
+
+  const ends = (entity: Curve) =>
+    entity.type === "line" ? [entity.p1, entity.p2] : [entity.start, entity.end];
   const curves = sketch.entities.filter(
-    (entity) => (entity.type === "line" || entity.type === "arc") && !entity.construction,
+    (entity): entity is Curve => (entity.type === "line" || entity.type === "arc") && !entity.construction,
   );
   const chain = new Set([start]);
 
