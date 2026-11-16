@@ -75,17 +75,25 @@ describe("the projects overview", () => {
     expect([...testFiles.projects.values()].some((p) => p.name === "Beta")).toBe(false);
   });
 
-  it("sorts the projects and turns the order round", async () => {
-    await act(async () => void fireEvent.click(screen.getByTitle("Sort parts")));
+  it("sorts the projects and turns the order round, from one button", async () => {
+    const names = () =>
+      [...document.querySelector(".grid")!.querySelectorAll(".card:not(.new):not(.folder) .meta b")].map(
+        (e) => e.textContent,
+      );
 
-    const items = screen.getAllByRole("menuitem");
-    await act(async () => void fireEvent.click(items.at(-1)!));
+    const pick = async (label: string) => {
+      await act(async () => void fireEvent.click(screen.getByTitle("Sort parts")));
+      await act(async () => void fireEvent.click(screen.getByRole("menuitem", { name: label })));
+      await settle();
+    };
 
-    const order = screen
-      .getAllByRole("button")
-      .find((b) => /click to reverse/.test(b.getAttribute("title") ?? ""))!;
-    await act(async () => void fireEvent.click(order));
-    await settle();
+    await pick("Name");
+    expect(screen.getByTitle("Sort parts").getAttribute("aria-label")).toBe("Name, A to Z");
+
+    const az = names();
+    await pick("Z to A");
+    expect(screen.getByTitle("Sort parts").getAttribute("aria-label")).toBe("Name, Z to A");
+    expect(names()).toEqual([...az].reverse());
   });
 
   it("opens a project", async () => {

@@ -92,7 +92,9 @@ export function PlaneChooser({ viewport, planes }: { viewport: Viewport; planes:
               {plane.label}
             </button>
           ))}
-        <span className="muted">{t("or click a flat face")}</span>
+        <span className="muted">
+          {matchMedia("(pointer: coarse)").matches ? t("or tap a flat face") : t("or click a flat face")}
+        </span>
         <button
           className="plane-bar-cancel"
           onClick={() => useApp.setState({ pickingSketchPlane: false })}

@@ -1,7 +1,6 @@
 import {
   ArrowDown,
   ArrowUp,
-  ArrowUpDown,
   Box,
   Check,
   ChevronRight,
@@ -16,6 +15,7 @@ import {
   ListChecks,
   Lock,
   LockOpen,
+  SunMoon,
   Pencil,
   Plus,
   Trash,
@@ -498,14 +498,15 @@ export function Home() {
             <McpButton />
           </span>
         )}
-        <button className="btn" onClick={toggleTheme}>
-          {t("Theme")}
+        {/* A setting, not a main action: a small button. On a phone the bar keeps only icons. */}
+        <button className="icon-btn" onClick={toggleTheme} title={t("Theme")} aria-label={t("Theme")}>
+          <SunMoon />
         </button>
-        <button className="btn" onClick={() => void importFile()}>
-          <FileUp /> {t("Open file")}
+        <button className="btn" onClick={() => void importFile()} title={t("Open file")}>
+          <FileUp /> <span className="home-btn-label">{t("Open file")}</span>
         </button>
-        <button className="btn primary" onClick={() => void newProject()}>
-          <Plus /> {t("New part")}
+        <button className="btn primary" onClick={() => void newProject()} title={t("New part")}>
+          <Plus /> <span className="home-btn-label">{t("New part")}</span>
         </button>
       </div>
       <div className={`home-main ${selecting ? "selecting" : ""}`}>
@@ -547,36 +548,47 @@ export function Home() {
                 disabled={!order.length}
                 title={t("Select several parts to move or delete them together")}
               >
-                <ListChecks /> {t("Select")}
+                <ListChecks /> <span className="home-btn-label">{t("Select")}</span>
               </button>
+              {/* One button for what to sort by and which way round (two used to wrap on a phone). */}
               <button
                 className="btn"
                 title={t("Sort parts")}
+                aria-label={`${SORT_LABELS[sort.key]}, ${dirLabel}`}
                 onClick={(event) => {
                   const rect = event.currentTarget.getBoundingClientRect();
-                  showMenu(
-                    rect.left,
-                    rect.bottom + 4,
-                    (Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({
+                  const ways = (key: SortKey): [boolean, string][] =>
+                    key === "name"
+                      ? [
+                          [true, t("A to Z")],
+                          [false, t("Z to A")],
+                        ]
+                      : [
+                          [false, t("Newest first")],
+                          [true, t("Oldest first")],
+                        ];
+                  showMenu(rect.left, rect.bottom + 4, [
+                    ...(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({
                       label: SORT_LABELS[k],
                       icon: k === sort.key ? <Check /> : <span />,
                       onClick: () => changeSort({ key: k, asc: k === "name" }),
                     })),
-                  );
+                    "sep" as const,
+                    ...ways(sort.key).map(([asc, label]) => ({
+                      label,
+                      icon: asc === sort.asc ? <Check /> : <span />,
+                      onClick: () => changeSort({ ...sort, asc }),
+                    })),
+                  ]);
                 }}
               >
-                <ArrowUpDown /> {SORT_LABELS[sort.key]}
+                {sort.asc ? <ArrowUp /> : <ArrowDown />}{" "}
+                <span className="home-btn-label">
+                  {SORT_LABELS[sort.key]} · {dirLabel}
+                </span>
               </button>
-              <button
-                className="btn"
-                onClick={() => changeSort({ ...sort, asc: !sort.asc })}
-                title={t("{order} — click to reverse", { order: dirLabel })}
-                aria-label={t("Order: {order}", { order: dirLabel })}
-              >
-                {sort.asc ? <ArrowUp /> : <ArrowDown />} {dirLabel}
-              </button>
-              <button className="btn" onClick={() => void addFolder()}>
-                <FolderPlus /> {t("New folder")}
+              <button className="btn" onClick={() => void addFolder()} title={t("New folder")}>
+                <FolderPlus /> <span className="home-btn-label">{t("New folder")}</span>
               </button>
               {desktop ? (
                 <button
@@ -605,14 +617,17 @@ export function Home() {
               )}
         </p>
         <div className="grid">
-          <button className="card new" onClick={() => void newProject()}>
-            <div className="thumb">
-              <Plus />
-            </div>
-            <div className="meta">
-              <b>{t("New part")}</b>
-            </div>
-          </button>
+          {/* Only while the folder is empty: otherwise "New part" at the top is enough. */}
+          {order.length || subfolders.length ? null : (
+            <button className="card new" onClick={() => void newProject()}>
+              <div className="thumb">
+                <Plus />
+              </div>
+              <div className="meta">
+                <b>{t("New part")}</b>
+              </div>
+            </button>
+          )}
           {subfolders.map((f) => {
             const count = projects.filter(
               (project) => project.folder === f || project.folder?.startsWith(`${f}/`),
