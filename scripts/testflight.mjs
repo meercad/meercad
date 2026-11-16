@@ -120,6 +120,20 @@ run("xcodebuild", [
   "archive",
 ]);
 
+// Xcode 27's `@State` macro links SwiftUI.LazyState, which iOS 17 and 18 lack: such a build ends at
+// launch there (TestFlight crash on iOS 18.7.1, 2026-11-16). The app uses PlainState instead; this
+// stops a build that slipped an `@State` back in before it reaches testers.
+const binary = join(archive, "Products", "Applications", "App.app", "App");
+const imports = spawnSync("nm", ["-u", binary], { encoding: "utf8" });
+if (imports.status !== 0) throw new Error(`nm failed on ${binary}: ${imports.stderr}`);
+
+if (imports.stdout.includes("LazyState")) {
+  console.error(
+    "✗ the build links SwiftUI.LazyState and would crash at launch on iOS 17/18: use @PlainState instead of @State",
+  );
+  process.exit(1);
+}
+
 console.log(upload ? "› uploading to App Store Connect" : "› exporting the .ipa");
 run("xcodebuild", [
   "-exportArchive",
