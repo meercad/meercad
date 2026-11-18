@@ -61,6 +61,7 @@ import { Kbd } from "./Kbd";
 import { bendInfo } from "../lib/bend";
 import { capDrag } from "../lib/capDrag";
 import { t } from "../lib/i18n";
+import { dropMirrors, mirror } from "../lib/sceneMirror";
 
 const num = (expr: Expr | undefined, fallback = 0): number => {
   if (expr === undefined) return fallback;
@@ -878,6 +879,9 @@ function QuickActions({ selection }: { selection: Pick[] }) {
 }
 
 /** The value at each drag arrow; click it to type an exact value. */
+/** Ids of the arrows' values in the scene. */
+const ARROW_VALUE = "arrow:";
+
 function HandleLabels({ viewport }: { viewport: Viewport }) {
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const [typing, setTyping] = useState<string | null>(null);
@@ -886,16 +890,25 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
   const elements = useRef(new Map<string, HTMLDivElement>());
 
   const place = () => {
+    const drawn = new Set<string>();
+
     for (const [id, element] of elements.current) {
       const s = viewport.handleTipScreen(id);
-      if (!s) continue;
+      const at = viewport.handleTipAt(id);
+      if (!s || !at) continue;
 
       element.style.left = `${s[0] + 16}px`;
       element.style.top = `${s[1] - 16}px`;
+      // Drawn with the picture; the element stays for clicks and typing (lib/sceneMirror.ts).
+      mirror(viewport, `${ARROW_VALUE}${id}`, element, { at });
+      drawn.add(`${ARROW_VALUE}${id}`);
     }
+
+    dropMirrors(viewport, ARROW_VALUE, drawn);
   };
 
   useEffect(() => viewport.onChange(place), [viewport]);
+  useEffect(() => () => dropMirrors(viewport, ARROW_VALUE, new Set()), [viewport]);
   useLayoutEffect(place);
   useEffect(() => {
     const t = setInterval(tick, 250);
@@ -908,7 +921,7 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
   if (viewport.draggingHandle || !showValues) return null;
 
   return (
-    <div className="overlay-layer">
+    <div className="overlay-layer" onPointerOver={place} onPointerOut={place}>
       {handles.map((handle) => {
         const s = viewport.handleTipScreen(handle.id);
         // A sketch line's arrow moves it by an amount, not to one: its size is in the chip beside it.

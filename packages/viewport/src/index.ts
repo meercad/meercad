@@ -9,6 +9,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { SceneTexts } from "./sceneText.js";
 import { mouseZoomDelta, WheelClassifier } from "./wheel.js";
 import {
   applyLook,
@@ -23,6 +24,7 @@ import {
 } from "./looks.js";
 
 export type { BodyLook, SwatchSpec } from "./looks.js";
+export type { Quad, SceneTextSpec, SceneTexts, TextLook } from "./sceneText.js";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -393,6 +395,8 @@ export class Viewport {
   readonly scene = new THREE.Scene();
   /** Objects owned by tools (sketch editor, measure markers, manipulators). */
   readonly overlay = new THREE.Group();
+  /** Values drawn with the picture (dimensions, arrow values), so they never trail it while turning. */
+  texts!: SceneTexts;
   private persp = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 100000);
   private ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -100000, 100000);
   private camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = this.persp;
@@ -451,6 +455,10 @@ export class Viewport {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
+    this.texts = new SceneTexts(
+      () => this.renderer.getPixelRatio(),
+      () => this.renderer.capabilities.getMaxAnisotropy(),
+    );
     container.appendChild(this.renderer.domElement);
     this.bindPointerRoles();
     this.bindHandles();
@@ -507,6 +515,7 @@ export class Viewport {
       this.overlay,
       this.handleGroup,
       this.jointGroup,
+      this.texts.group,
     );
     this.axes = axesHelper();
     this.scene.add(this.axes);
@@ -2536,6 +2545,16 @@ export class Viewport {
   }
 
   /** Screen position (canvas CSS px) of a handle's arrow tip, for value labels. */
+  /** Where a drag arrow's tip is in the world (its value sits beside it), or null for no such arrow. */
+  handleTipAt(id: string): Vec3 | null {
+    const handle =
+      this.activeHandle?.h.id === id
+        ? { ...this.activeHandle.h, value: this.activeHandle.value }
+        : this.handles.find((x) => x.id === id);
+
+    return handle ? (this.handleTip(handle).toArray() as Vec3) : null;
+  }
+
   handleTipScreen(id: string): Vec2 | null {
     const handle =
       this.activeHandle?.h.id === id
@@ -3063,6 +3082,7 @@ export class Viewport {
       this.sketchGroup,
       this.refGroup,
       this.jointGroup,
+      this.texts.group,
     ];
     const shown = helpers.map((h) => h.visible);
     helpers.forEach((h) => (h.visible = false));
@@ -3232,6 +3252,7 @@ export class Viewport {
       this.sketchGroup,
       this.jointGroup,
       this.marksGroup,
+      this.texts.group,
     ];
     const shown = helpers.map((h) => h.visible);
     helpers.forEach((h) => (h.visible = false));
@@ -3296,7 +3317,15 @@ export class Viewport {
 
   snapshot(width = 480, height = 360, clean = false): string {
     // Thumbnails leave out helpers (joint symbols too) so only the model is pictured.
-    const helpers = [this.grid, this.planeGroup, this.handleGroup, this.overlay, this.axes, this.jointGroup];
+    const helpers = [
+      this.grid,
+      this.planeGroup,
+      this.handleGroup,
+      this.overlay,
+      this.axes,
+      this.jointGroup,
+      this.texts.group,
+    ];
     const shown = helpers.map((h) => h.visible);
     if (clean) helpers.forEach((h) => (h.visible = false));
 
@@ -3386,6 +3415,7 @@ export class Viewport {
       for (const fn of this.listeners) fn();
     }
 
+    this.texts.update(this.camera, this.renderer.domElement.clientHeight);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -3449,6 +3479,7 @@ export class Viewport {
     this.disposed = true;
     for (const c of this.textureCache.values()) c.tex?.dispose();
     this.textureCache.clear();
+    this.texts.dispose();
     this.resizeObserver.disconnect();
     this.renderer.setAnimationLoop(null);
     this.controls.dispose();

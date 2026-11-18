@@ -12,7 +12,8 @@ import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { sameSel, type SketchSel, type SketchTool } from "../state";
 import type { AngleArc, Segment } from "../../lib/angleDim";
-import { planeLabel } from "../../lib/planeLabel";
+import { boxToQuad, planeCorners } from "../../lib/planeLabel";
+import { dropMirrors, mirror } from "../../lib/sceneMirror";
 import { angleDrawing, extentOf, middleOf, sizesFor, type DimensionDrawing } from "../../lib/dimStyle";
 import {
   arcThrough,
@@ -585,6 +586,7 @@ export function placeOnScreen(
   viewport: Viewport,
 ) {
   const m = frameMatrix(frame);
+  const drawn = new Set<string>();
 
   for (const element of layer.querySelectorAll<HTMLElement>("[data-x]")) {
     const v = new THREE.Vector3(Number(element.dataset["x"]), Number(element.dataset["y"]), 0).applyMatrix4(
@@ -600,9 +602,29 @@ export function placeOnScreen(
     element.style.display = "";
     element.style.left = `${s[0]}px`;
     element.style.top = `${s[1]}px`;
-    if (element.dataset["ax"] !== undefined) layIntoPlane(element, v, m, viewport);
+
+    const laid = element.dataset["ax"] !== undefined ? layIntoPlane(element, v, m, viewport) : null;
+    // Drawn with the picture; the element stays for clicks and typing (lib/sceneMirror.ts).
+    const id = `${SKETCH_VALUE}${mirrorId(element)}`;
+    mirror(viewport, id, element, laid ?? { at: [v.x, v.y, v.z] });
+    drawn.add(id);
   }
+
+  dropMirrors(viewport, SKETCH_VALUE, drawn);
 }
+
+/** Ids of the sketch's values in the scene. */
+export const SKETCH_VALUE = "sketch:";
+
+const mirrorIds = new WeakMap<HTMLElement, number>();
+let lastMirrorId = 0;
+
+const mirrorId = (element: HTMLElement) => {
+  let id = mirrorIds.get(element);
+  if (id === undefined) mirrorIds.set(element, (id = ++lastMirrorId));
+
+  return id;
+};
 
 /**
  * Lays a dimension's text into the sketch plane along its line with a true perspective (data-ax/ay:
@@ -629,7 +651,7 @@ export function layIntoPlane(
   const pixel = viewport.pixelSize([...anchor]);
   const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
   const away = way(Number(d["ux"]), Number(d["uy"]));
-  const matrix = planeLabel(
+  const corners = planeCorners(
     anchor,
     way(Number(d["ax"]), Number(d["ay"])),
     away,
@@ -638,11 +660,12 @@ export function layIntoPlane(
     pixel,
     project,
   );
+  const seen = corners?.map(project);
 
-  if (!matrix) {
+  if (!corners || !seen || seen.some((p) => !p)) {
     element.style.transform = "translate(-50%, -50%)";
 
-    return;
+    return null;
   }
 
   element.style.left = "0px";
@@ -650,5 +673,7 @@ export function layIntoPlane(
   element.style.width = `${width}px`;
   element.style.height = `${height}px`;
   element.style.transformOrigin = "0 0";
-  element.style.transform = `matrix3d(${matrix.join(", ")})`;
+  element.style.transform = `matrix3d(${boxToQuad(width, height, seen as [number, number][]).join(", ")})`;
+
+  return { corners, size: [width, height] as const };
 }

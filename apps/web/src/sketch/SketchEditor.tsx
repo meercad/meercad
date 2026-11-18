@@ -27,6 +27,7 @@ import { usePhoneSheets } from "../lib/layout";
 import { closeSketch, toast, useApp } from "../store";
 import { t, tn } from "../lib/i18n";
 import { lengthExpr } from "../lib/units";
+import { dropMirrors } from "../lib/sceneMirror";
 import { usePrefs } from "../lib/keymap";
 import { activeSketch, setExternalKinds, writeSketch } from "./actions";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
@@ -45,6 +46,7 @@ import {
   drawDimensionLines,
   drawSketch,
   placeOnScreen,
+  SKETCH_VALUE,
   planeAxes,
   previewObjects,
   snapObjects,
@@ -681,6 +683,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   useLayoutEffect(() => {
     if (frame && layer.current) placeOnScreen(layer.current, frame, viewport);
   });
+  // The values are drawn in the scene (sketch/editor/scene.ts): gone with the editor.
+  useEffect(() => () => dropMirrors(viewport, SKETCH_VALUE, new Set()), [viewport]);
+
+  const placeAgain = () => {
+    if (frame && layer.current) placeOnScreen(layer.current, frame, viewport);
+  };
 
   // A length's dimension line drags like an arrow: the dimension moves parallel to itself (with the
   // select tool; a drawing tool's clicks go to the sketch).
@@ -751,7 +759,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
   return (
     <>
-      <div className="overlay-layer" ref={layer}>
+      {/* Hovering a value colours it: its copy in the scene follows. */}
+      <div className="overlay-layer" ref={layer} onPointerOver={placeAgain} onPointerOut={placeAgain}>
         <QuickChips
           quick={quick}
           shapeId={lastShape?.id}

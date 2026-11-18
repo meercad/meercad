@@ -48,13 +48,16 @@ export function boxToQuad(width: number, height: number, quad: readonly Screen[]
   return [a / width, d / width, 0, g / width, b / height, e / height, 0, h / height, 0, 0, 1, 0, c, f, 0, 1];
 }
 
+/** A text box's corners in the world: top left, top right, bottom right, bottom left. */
+export type PlaneQuad = readonly [V3, V3, V3, V3];
+
 /**
- * The matrix3d that lays a text box `width` × `height` (pixels) into its plane: at `anchor` on its
- * line, the line running along `along` and its far side (away from what it measures) along `away`
- * (unit directions in the plane), `pixel` world units per screen pixel there. Null when the line is
- * seen end on or a corner is behind the camera.
+ * The corners in its plane of a text box `width` × `height` (pixels): at `anchor` on its line, the
+ * line running along `along` and its far side (away from what it measures) along `away` (unit
+ * directions in the plane), `pixel` world units per screen pixel there. Null when the line is seen
+ * end on or a point is behind the camera.
  */
-export function planeLabel(
+export function planeCorners(
   anchor: V3,
   along: V3,
   away: V3,
@@ -62,7 +65,7 @@ export function planeLabel(
   height: number,
   pixel: number,
   project: (p: V3) => Screen | null,
-): number[] | null {
+): PlaneQuad | null {
   const at = project(anchor);
   const ahead = project(add(anchor, along));
   const aside = project(add(anchor, away));
@@ -76,8 +79,31 @@ export function planeLabel(
   const up = aside[1] > at[1] ? neg(away) : away;
   const outward = up === away ? 1 : -1;
   const [w, h] = halfSizes(anchor, x, up, width, height, pixel, project);
+  const centre = add(anchor, up, outward * (h + TEXT_GAP_PX * pixel));
 
-  return quad(add(anchor, up, outward * (h + TEXT_GAP_PX * pixel)), x, up, w, h, width, height, project);
+  return [
+    add(add(centre, x, -w), up, h),
+    add(add(centre, x, w), up, h),
+    add(add(centre, x, w), up, -h),
+    add(add(centre, x, -w), up, -h),
+  ];
+}
+
+/** The matrix3d that lays a text box into its plane (see planeCorners), or null. */
+export function planeLabel(
+  anchor: V3,
+  along: V3,
+  away: V3,
+  width: number,
+  height: number,
+  pixel: number,
+  project: (p: V3) => Screen | null,
+): number[] | null {
+  const corners = planeCorners(anchor, along, away, width, height, pixel, project);
+  const seen = corners?.map(project);
+  if (!seen || seen.some((p) => !p)) return null;
+
+  return boxToQuad(width, height, seen as Screen[]);
 }
 
 /**
@@ -104,28 +130,6 @@ function halfSizes(
     Math.max(1, Math.min(MAX_STRETCH, size / Math.max(across(dir, size), 1e-6)));
 
   return [(width / 2) * pixel * stretch(x, width), (height / 2) * pixel * stretch(up, height)];
-}
-
-/** The matrix3d for the text box onto the rectangle round `centre` (half sizes w, h along x and up). */
-function quad(
-  centre: V3,
-  x: V3,
-  up: V3,
-  w: number,
-  h: number,
-  width: number,
-  height: number,
-  project: (p: V3) => Screen | null,
-): number[] | null {
-  const corners = [
-    add(add(centre, x, -w), up, h),
-    add(add(centre, x, w), up, h),
-    add(add(centre, x, w), up, -h),
-    add(add(centre, x, -w), up, -h),
-  ].map(project);
-  if (corners.some((p) => !p)) return null;
-
-  return boxToQuad(width, height, corners as Screen[]);
 }
 
 /** A dimension's number: at most two decimals, no trailing zeros, with a decimal comma if asked. */

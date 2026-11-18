@@ -37,7 +37,8 @@ import {
   type DimensionDrawing,
 } from "../lib/dimStyle";
 import { dimensionColor } from "../sketch/editor/scene";
-import { dimensionNumber, planeLabel } from "../lib/planeLabel";
+import { boxToQuad, dimensionNumber, planeCorners, type PlaneQuad } from "../lib/planeLabel";
+import { dropMirrors, mirror } from "../lib/sceneMirror";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
 import { dimensionDrawing, dimensionGeometry } from "../sketch/editor/geometry";
@@ -649,7 +650,13 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
     // Dimension lines drag like arrows (moved parallel to themselves).
     viewport.setGrips(shown.current.flatMap((item) => (item.grip ? [item.grip] : [])));
   });
-  useEffect(() => () => viewport.setGrips([]), [viewport]);
+  useEffect(
+    () => () => {
+      viewport.setGrips([]);
+      dropMirrors(viewport, MIRROR, new Set());
+    },
+    [viewport],
+  );
   useEffect(() => preloadSolver(), []);
   useEffect(() => {
     refreshValues = tick;
@@ -728,7 +735,8 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   shown.current = items;
 
   return (
-    <div className="overlay-layer">
+    // Hovering a value colours it: its copy in the scene follows.
+    <div className="overlay-layer" onPointerOver={place} onPointerOut={place}>
       {items.map((item) => {
         return (
           <div
@@ -1137,8 +1145,9 @@ function laidStyle(item: Item, viewport: Viewport, slide: number) {
   const anchor: V3 = [0, 1, 2].map((i) => item.at[i]! + along[i]! * slide * pixel) as V3;
   const [width, height] = textBox(item.text);
   const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
-  const matrix = planeLabel(anchor, along, up, width, height, pixel, project);
-  if (!matrix) return { transform: "translate(-50%, -50%)" };
+  const corners = planeCorners(anchor, along, up, width, height, pixel, project);
+  const seen = corners?.map(project);
+  if (!corners || !seen || seen.some((p) => !p)) return { transform: "translate(-50%, -50%)" };
 
   return {
     left: 0,
@@ -1146,7 +1155,8 @@ function laidStyle(item: Item, viewport: Viewport, slide: number) {
     width,
     height,
     transformOrigin: "0 0",
-    transform: `matrix3d(${matrix.join(", ")})`,
+    transform: `matrix3d(${boxToQuad(width, height, seen as [number, number][]).join(", ")})`,
+    corners,
   };
 }
 
@@ -1170,11 +1180,14 @@ function measuredText(quick: { key: string; value: number; length: boolean }, ki
 
 /** Places the values on the screen where the camera now sees them (their elements' styles, directly). */
 function placeChips(items: Item[], elements: Map<string, HTMLDivElement>, viewport: Viewport): void {
+  const drawn = new Set<string>();
+
   for (const { it: item, s, slide } of layoutChips(items, viewport)) {
     const element = elements.get(item.key);
     if (!element) continue;
 
-    const laid = laidStyle(item, viewport, slide) as Record<string, string | number | undefined>;
+    const style = laidStyle(item, viewport, slide);
+    const laid = style as Record<string, string | number | undefined>;
     const px = (v: string | number | undefined) => (typeof v === "number" ? `${v}px` : (v ?? ""));
     element.style.left = px(laid["left"] ?? s[0]);
     element.style.top = px(laid["top"] ?? s[1]);
@@ -1182,8 +1195,19 @@ function placeChips(items: Item[], elements: Map<string, HTMLDivElement>, viewpo
     element.style.height = px(laid["height"]);
     element.style.transformOrigin = px(laid["transformOrigin"]);
     element.style.transform = px(laid["transform"]);
+
+    // Drawn with the picture; the element stays for clicks and typing (lib/sceneMirror.ts).
+    const id = `${MIRROR}${item.key}`;
+    const corners = "corners" in style ? (style.corners as PlaneQuad) : null;
+    mirror(viewport, id, element, corners ? { corners, size: textBox(item.text) } : { at: item.at });
+    drawn.add(id);
   }
+
+  dropMirrors(viewport, MIRROR, drawn);
 }
+
+/** Ids of the values' copies in the scene. */
+const MIRROR = "value:";
 
 /**
  * The grip of a dimension's line on the model: dragged across it, the dimension moves parallel to

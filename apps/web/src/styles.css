@@ -5993,3 +5993,8 @@ html.in-assistant-tab .ai-activity {
   width: auto;
   height: auto;
 }
+
+/* values drawn with the picture (lib/sceneMirror.ts): the element stays to be clicked, unseen */
+.in-scene {
+  opacity: 0;
+}
