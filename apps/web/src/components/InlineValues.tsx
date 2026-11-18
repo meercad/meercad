@@ -731,6 +731,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
     }
   }
 
+  slideApart(items, viewport);
   drawings.current = items.flatMap((item) => (item.drawn ? [item.drawn] : []));
   shown.current = items;
 
@@ -1124,6 +1125,54 @@ function clearGroup(group: THREE.Group): void {
 
 /** Size of a dimension's text box (pixels): its width from its length, one line high. */
 const textBox = (text: string): [number, number] => [text.length * 7.8 + 6, 18];
+
+/**
+ * Moves a dimension's text along its line where it would cover a drag arrow or another value, as the
+ * view is when they are laid out (picked, zoomed); fixed in the plane after that, so it stays put
+ * while orbiting. An angle's value stays on its arc.
+ */
+function slideApart(items: Item[], viewport: Viewport): void {
+  const taken: { x: number; y: number; r: number }[] = [];
+
+  for (const handle of viewport.handles) {
+    const tip = viewport.handleTipScreen(handle.id);
+    if (tip) taken.push({ x: tip[0], y: tip[1], r: HANDLE_ROOM_PX });
+  }
+
+  for (const item of items) {
+    const s = viewport.worldToScreen(item.at);
+    if (!s) continue;
+
+    const [width] = textBox(item.text);
+    const r = width / 2;
+    const ahead =
+      item.plane && !item.plane.onArc ? viewport.worldToScreen(add3(item.at, item.plane.along)) : null;
+    const run = ahead ? Math.hypot(ahead[0] - s[0], ahead[1] - s[1]) : 0;
+    const free = (x: number, y: number) => !taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + r);
+    // Steps along the line, in pixels on the screen and in the plane.
+    const step = [0, 1, -1, 2, -2, 3, -3].find((k) => {
+      if (!ahead || run < 1e-6) return true;
+
+      const d = k * width * 0.8;
+
+      return free(s[0] + ((ahead[0] - s[0]) / run) * d, s[1] + ((ahead[1] - s[1]) / run) * d);
+    });
+
+    if (ahead && run > 1e-6 && step) {
+      // The screen distance along the line, in the plane.
+      const d = (step * width * 0.8) / run;
+      item.at = add3(item.at, item.plane!.along, d);
+    }
+
+    const at = viewport.worldToScreen(item.at) ?? s;
+    taken.push({ x: at[0], y: at[1], r });
+  }
+}
+
+/** Room round a drag arrow's tip that values keep clear of (pixels). */
+const HANDLE_ROOM_PX = 22;
+
+const add3 = (a: V3, b: V3, k = 1): V3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
 
 /** Which way each dimension's text is turned, kept while orbiting near the turning point. */
 const turns = new Map<string, Turn>();
