@@ -12,7 +12,7 @@ import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { sameSel, type SketchSel, type SketchTool } from "../state";
 import type { AngleArc, Segment } from "../../lib/angleDim";
-import { levelLabel, planeLabel } from "../../lib/planeLabel";
+import { planeLabel } from "../../lib/planeLabel";
 import { angleDrawing, extentOf, middleOf, sizesFor, type DimensionDrawing } from "../../lib/dimStyle";
 import {
   arcThrough,
@@ -629,9 +629,15 @@ export function layIntoPlane(
   const pixel = viewport.pixelSize([...anchor]);
   const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
   const away = way(Number(d["ux"]), Number(d["uy"]));
-  const matrix = d["level"]
-    ? levelLabel(anchor, away, planeNormal(plane), width, height, pixel, project)
-    : planeLabel(anchor, way(Number(d["ax"]), Number(d["ay"])), away, width, height, pixel, project);
+  const matrix = planeLabel(
+    anchor,
+    way(Number(d["ax"]), Number(d["ay"])),
+    away,
+    width,
+    height,
+    pixel,
+    project,
+  );
 
   if (!matrix) {
     element.style.transform = "translate(-50%, -50%)";
@@ -645,11 +651,4 @@ export function layIntoPlane(
   element.style.height = `${height}px`;
   element.style.transformOrigin = "0 0";
   element.style.transform = `matrix3d(${matrix.join(", ")})`;
-}
-
-/** The normal of a sketch plane given by its matrix. */
-function planeNormal(plane: THREE.Matrix4): readonly [number, number, number] {
-  const n = new THREE.Vector3(0, 0, 1).transformDirection(plane);
-
-  return [n.x, n.y, n.z];
 }

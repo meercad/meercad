@@ -37,7 +37,7 @@ import {
   type DimensionDrawing,
 } from "../lib/dimStyle";
 import { dimensionColor } from "../sketch/editor/scene";
-import { dimensionNumber, levelLabel, planeLabel } from "../lib/planeLabel";
+import { dimensionNumber, planeLabel } from "../lib/planeLabel";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
 import { dimensionDrawing, dimensionGeometry } from "../sketch/editor/geometry";
@@ -76,9 +76,9 @@ interface Item {
   drawn?: Drawn;
   /**
    * Its text laid into the sketch plane along its line (world directions; `normal` the plane's); an
-   * angle's (`level`) in front of its arc, turned to look level.
+   * angle's (`onArc`) along its arc's tangent at the arc's middle, outside it, never slid away.
    */
-  plane?: { along: V3; up: V3; normal: V3; level?: boolean };
+  plane?: { along: V3; up: V3; normal: V3; onArc?: boolean };
   /** Plain text without a chip, as a sketch's dimensions are drawn. */
   bare?: boolean;
   /** Its dimension line, dragged to move the dimension parallel to itself. */
@@ -811,7 +811,7 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
     const steps = [0, 1, -1, 2, -2, 3, -3, 4, -4];
     // A dimension's text moves along its line out of the way, a chip up or down.
     // (An angle's value stays on its arc.)
-    const way = item.plane && !item.plane.level ? screenWay(item, viewport, s) : null;
+    const way = item.plane && !item.plane.onArc ? screenWay(item, viewport, s) : null;
     const box = steps
       .map((k) =>
         way
@@ -1033,8 +1033,8 @@ function inWorld(
   frame: Frame,
   onto?: V3,
   measured = false,
-  level = false,
-): { drawn: Drawn; plane: { along: V3; up: V3; normal: V3; level?: boolean } } {
+  onArc = false,
+): { drawn: Drawn; plane: { along: V3; up: V3; normal: V3; onArc?: boolean } } {
   const world = (p: Vec2) => placed(frame, p, onto);
 
   const way = (v: Vec2): V3 => {
@@ -1053,7 +1053,7 @@ function inWorld(
       along: way(drawing.text.along),
       up: way(drawing.text.up),
       normal: [...frame.normal] as V3,
-      ...(level ? { level } : {}),
+      ...(onArc ? { onArc } : {}),
     },
   };
 }
@@ -1137,9 +1137,7 @@ function laidStyle(item: Item, viewport: Viewport, slide: number) {
   const anchor: V3 = [0, 1, 2].map((i) => item.at[i]! + along[i]! * slide * pixel) as V3;
   const [width, height] = textBox(item.text);
   const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
-  const matrix = item.plane.level
-    ? levelLabel(anchor, up, item.plane.normal, width, height, pixel, project)
-    : planeLabel(anchor, along, up, width, height, pixel, project);
+  const matrix = planeLabel(anchor, along, up, width, height, pixel, project);
   if (!matrix) return { transform: "translate(-50%, -50%)" };
 
   return {

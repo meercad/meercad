@@ -135,7 +135,6 @@ export function ConstraintLabels({
                   "data-ay": l.along[1],
                   "data-ux": l.up[0],
                   "data-uy": l.up[1],
-                  ...(l.level ? { "data-level": "1" } : {}),
                 }
               : {})}
             className={`${l.dimension ? "sketch-label" : "glyph"} ${l.along ? "on-line" : ""} ${selection.some((sel) => sel.kind === "constraint" && sel.id === l.id) ? "sel" : ""} ${conflicting.has(l.id) ? "conflict" : ""}`}

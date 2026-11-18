@@ -18,8 +18,6 @@ export interface Label {
   /** Drawn in the plane on its dimension line: the way its text runs, and the side it stands on. */
   along?: Vec2;
   up?: Vec2;
-  /** An angle's value: laid level in front of its arc rather than along it. */
-  level?: boolean;
   /** A length's dimension line (its two ends): dragged, the dimension moves parallel to itself. */
   line?: [Vec2, Vec2];
 }
@@ -149,8 +147,9 @@ export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): L
           ? {
               along: drawing.text.along,
               up: drawing.text.up,
+              // A length's line drags; an angle's arc stays where it is.
               ...(constraint.type === "angle"
-                ? { level: true }
+                ? {}
                 : { line: [drawing.lines[0]!.a, drawing.lines[0]!.b] as [Vec2, Vec2] }),
             }
           : {}),

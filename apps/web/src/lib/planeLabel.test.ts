@@ -3,7 +3,7 @@
  * box onto four projected corners, which way the text runs and stands, and how numbers are written.
  */
 import { describe, expect, it } from "vitest";
-import { boxToQuad, dimensionNumber, levelLabel, planeLabel, squareToQuad } from "./planeLabel";
+import { boxToQuad, dimensionNumber, planeLabel, squareToQuad } from "./planeLabel";
 
 type V3 = readonly [number, number, number];
 
@@ -120,45 +120,5 @@ describe("text on a slanted plane", () => {
     let calls = 0;
     const partly = (p: V3) => (++calls >= 4 && calls <= 7 ? null : ([p[0] * 10, -p[1] * 10] as const));
     expect(planeLabel([0, 0, 0], [1, 0, 0], [0, 1, 0], 40, 10, 0.1, partly)).not.toBeNull();
-  });
-});
-
-describe("an angle's value", () => {
-  /** The plane z = 0 seen from above at a slant (y shortened, x as it is). */
-  const slant = (p: V3) => (p[2] >= 10 ? null : ([p[0] * 10, -p[1] * 5 - p[2] * 10] as const));
-  const normal: V3 = [0, 0, 1];
-
-  it("looks level on the screen, upright, centred on its arc", () => {
-    // The arc's middle points up and to the right in the plane.
-    const outward: V3 = [Math.SQRT1_2, Math.SQRT1_2, 0];
-    const m = levelLabel([0, 0, 0], outward, normal, 30, 10, 0.1, slant)!;
-    const [lx, ly] = apply(m, 0, 10);
-    const [rx, ry] = apply(m, 30, 10);
-    expect(rx).toBeGreaterThan(lx!);
-    expect(Math.abs(ry! - ly!)).toBeLessThan(1);
-
-    const [, top] = apply(m, 15, 0);
-    expect(top).toBeLessThan(ly!);
-
-    // Centred on the arc's middle.
-    const [cx, cy] = apply(m, 15, 5);
-    expect(cx).toBeCloseTo(0, 6);
-    expect(cy).toBeCloseTo(0, 6);
-  });
-
-  it("is none where its spot or every way through it cannot be seen", () => {
-    expect(levelLabel([0, 0, 20], [1, 0, 0], normal, 30, 10, 0.1, slant)).toBeNull();
-
-    let calls = 0;
-    const onlySpot = (p: V3) => (++calls === 1 ? slant(p) : null);
-    expect(levelLabel([0, 0, 0], [1, 0, 0], normal, 30, 10, 0.1, onlySpot)).toBeNull();
-  });
-
-  it("turns its top up when the plane is seen from below", () => {
-    const below = (p: V3) => [p[0] * 10, p[1] * 5] as const;
-    const m = levelLabel([0, 0, 0], [0, 1, 0], normal, 30, 10, 0.1, below)!;
-    const [, top] = apply(m, 15, 0);
-    const [, bottom] = apply(m, 15, 10);
-    expect(top).toBeLessThan(bottom!);
   });
 });

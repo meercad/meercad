@@ -128,60 +128,6 @@ function quad(
   return boxToQuad(width, height, corners as Screen[]);
 }
 
-/** In-plane directions tried for a level text (every 5°: plenty to look level). */
-const LEVEL_STEPS = 36;
-
-/**
- * An angle's value in its plane, centred on its arc at the arc's middle (`anchor`, `outward` the way
- * out from the arc's corner): turned in the plane so it looks as level as it can on the screen,
- * upright. `normal` is the plane's normal.
- */
-export function levelLabel(
-  anchor: V3,
-  outward: V3,
-  normal: V3,
-  width: number,
-  height: number,
-  pixel: number,
-  project: (p: V3) => Screen | null,
-): number[] | null {
-  const at = project(anchor);
-  if (!at) return null;
-
-  // The other way in the plane, across `outward`.
-  const side = cross(normal, outward);
-  let best: { x: V3; slope: number } | null = null;
-
-  for (let i = 0; i < LEVEL_STEPS; i++) {
-    const t = (i * Math.PI) / LEVEL_STEPS;
-    const dir = add(scale(outward, Math.cos(t)), side, Math.sin(t));
-    const p = project(add(anchor, dir));
-    if (!p) continue;
-
-    const [dx, dy] = [p[0] - at[0], p[1] - at[1]];
-    const slope = Math.abs(dy) / Math.max(Math.abs(dx), 1e-9);
-    if (!best || slope < best.slope) best = { x: dx < 0 ? neg(dir) : dir, slope };
-  }
-
-  if (!best) return null;
-
-  // Up in the plane, across the text, towards the top of the screen.
-  const across = cross(normal, best.x);
-  const ahead = project(add(anchor, across));
-  const up = ahead && ahead[1] > at[1] ? neg(across) : across;
-  const [w, h] = halfSizes(anchor, best.x, up, width, height, pixel, project);
-
-  // Centred on the arc at its middle, as on a drawing (its halo keeps it readable over the arc).
-  return quad(anchor, best.x, up, w, h, width, height, project);
-}
-
-const scale = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
-const cross = (a: V3, b: V3): V3 => [
-  a[1] * b[2] - a[2] * b[1],
-  a[2] * b[0] - a[0] * b[2],
-  a[0] * b[1] - a[1] * b[0],
-];
-
 /** A dimension's number: at most two decimals, no trailing zeros, with a decimal comma if asked. */
 export function dimensionNumber(value: number, decimalComma: boolean): string {
   const text = String(+value.toFixed(2));
