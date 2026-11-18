@@ -31,7 +31,7 @@ import { followChipDrag } from "../lib/chipDrag";
 import { angleArc, arcPoints, arcRays } from "../lib/angleDim";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
-import { angleOf, linePair } from "../sketch/editor/geometry";
+import { angleOf, dimensionGeometry, linePair } from "../sketch/editor/geometry";
 
 type V3 = [number, number, number];
 
@@ -404,7 +404,11 @@ function sketchItems(
       key: `${sketch.id}.${constraint.id}`,
       // Slid along the sketch normal to the picked face or edge, so the label sits on the model.
       at: placed(view.frame, at, onto),
-      ...(constraint.type === "angle" ? { arc: angleLines(constraint, view, onto) } : {}),
+      ...(constraint.type === "angle"
+        ? { arc: angleLines(constraint, view, onto) }
+        : constraint.label
+          ? { arc: leaderLines(constraint, view, onto) }
+          : {}),
       drag: {
         frame: shiftedFrame(view.frame, onto),
         to: (label) => commitLabel(sketch, constraint.id, label),
@@ -898,6 +902,29 @@ function angleLines(
   const lines = [arcPoints(angle.arc), ...arcRays(angle.arc, angle.p, angle.q).map((x) => [x.a, x.b])];
 
   return lines.map((points) => points.map((p) => placed(view.frame, p, onto)));
+}
+
+/**
+ * A moved dimension's lines to what it measures: extension lines from the ends to the dimension line
+ * through its value (a length, a distance), or a leader from the circle or arc (a radius, a diameter).
+ */
+function leaderLines(
+  constraint: SketchConstraint,
+  view: RebuildOutput["report"]["sketches"][number],
+  onto?: V3,
+): V3[][] {
+  const solved = {
+    points: new Map(view.points.map(([id, x, y]) => [id, [x, y] as Vec2])),
+    curves: view.curves,
+  };
+  const flat = dimensionGeometry(constraint, solved as Parameters<typeof dimensionGeometry>[1]) ?? [];
+  const lines: V3[][] = [];
+
+  for (let i = 0; i + 1 < flat.length; i += 2) {
+    lines.push([placed(view.frame, flat[i]!, onto), placed(view.frame, flat[i + 1]!, onto)]);
+  }
+
+  return lines;
 }
 
 /** Draws the lines in `lines` dashed over the model, again whenever they change. */

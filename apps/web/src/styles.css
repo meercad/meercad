@@ -2335,7 +2335,7 @@ textarea.field:focus {
 .quick-dim.sweep {
   transform: translate(10px, 10px);
 }
-/* an angle's value sits on its dashed arc */
+/* a value on its dashed arc or dimension line sits centred on it */
 .value-chip.pair-angle {
   transform: translate(-50%, -50%);
 }

@@ -162,5 +162,14 @@ describe("a dimension's value", () => {
     const label = (sketch().constraints.find((c) => c.id === "c3") as { label?: [number, number] }).label!;
     expect(label[0]).toBeCloseTo(20, 1);
     expect(label[1]).toBeCloseTo(-15, 1);
+
+    // Moved, it is joined to its line: extension lines and the dimension line, drawn on the model.
+    await select(curve("l1"));
+    expect(
+      chips()
+        .find((x) => x.textContent === "40")!
+        .classList.contains("pair-angle"),
+    ).toBe(true);
+    expect(getViewport()!.overlay.children.some((x) => x.children.length >= 3)).toBe(true);
   });
 });

@@ -439,7 +439,7 @@ export function dimensionGeometry(constraint: SketchConstraint, solved: SolvedSk
       const a2: Vec2 = ax ? [a[0], L[1]] : [L[0], a[1]];
       const b2: Vec2 = ax ? [b[0], L[1]] : [L[0], b[1]];
 
-      return [...seg(a, a2), ...seg(b, b2), ...seg(a2, b2)];
+      return [...seg(a, a2), ...seg(b, b2), ...seg(a2, b2), ...reachLabel(a2, b2, L)];
     }
 
     const d: Vec2 = [b[0] - a[0], b[1] - a[1]];
@@ -449,7 +449,7 @@ export function dimensionGeometry(constraint: SketchConstraint, solved: SolvedSk
     const a2: Vec2 = [a[0] + n[0] * off, a[1] + n[1] * off];
     const b2: Vec2 = [b[0] + n[0] * off, b[1] + n[1] * off];
 
-    return [...seg(a, a2), ...seg(b, b2), ...seg(a2, b2)];
+    return [...seg(a, a2), ...seg(b, b2), ...seg(a2, b2), ...reachLabel(a2, b2, L)];
   }
 
   if (constraint.type === "radius" || constraint.type === "diameter") {
@@ -557,4 +557,19 @@ export function angleOf(
   const arc = pair && angleArc(pair[0], pair[1], constraint.label, value);
 
   return arc ? { arc, p: pair![0], q: pair![1] } : null;
+}
+
+/**
+ * The dimension line's way on to a value moved past one of its ends (along the line): from that end to
+ * the value, so the value stays on its line. Nothing while the value lies between the ends.
+ */
+export function reachLabel(a: Vec2, b: Vec2, label: Vec2): Vec2[] {
+  const d = sub2(b, a);
+  const t = dot2(sub2(label, a), d) / (dot2(d, d) || 1);
+  if (t >= 0 && t <= 1) return [];
+
+  const end = t < 0 ? a : b;
+  const onLine: Vec2 = [a[0] + d[0] * t, a[1] + d[1] * t];
+
+  return [end, onLine];
 }
