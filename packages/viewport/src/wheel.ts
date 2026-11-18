@@ -38,6 +38,31 @@ export function isMouseWheel(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMod
   return Number.isInteger(v) && (multipleOf(v, 100) || multipleOf(v, 120));
 }
 
+/** Lines one notch scrolls when a wheel reports lines (Windows' default). */
+const LINES_PER_NOTCH = 3;
+/** The wheel delta one notch zooms by, whatever the device reported (OrbitControls: about 6 %). */
+export const NOTCH_ZOOM_DELTA = 120;
+
+/** How many notches a mouse wheel event turned (signed like its delta); 0 for none. */
+export function mouseNotches(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode">): number {
+  const v = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+  if (e.deltaMode === 1) return v / LINES_PER_NOTCH;
+  if (e.deltaMode === 2) return v;
+  if (multipleOf(v, 120)) return v / 120;
+  if (multipleOf(v, 100)) return v / 100;
+
+  return v / MAC_NOTCH;
+}
+
+/**
+ * The delta a mouse wheel event should zoom by: the same step per notch on every system and with
+ * Ctrl or ⌘ held (Chromium marks a pinch with ctrlKey, and the camera control zooms ten times as far
+ * for it; a notch with Ctrl held is not a pinch). Null for trackpads: they keep their own deltas.
+ */
+export function mouseZoomDelta(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode">): number | null {
+  return isMouseWheel(e) ? mouseNotches(e) * NOTCH_ZOOM_DELTA : null;
+}
+
 /** A gap longer than this starts a new gesture (momentum events follow each other every ~16 ms). */
 const GESTURE_GAP_MS = 250;
 

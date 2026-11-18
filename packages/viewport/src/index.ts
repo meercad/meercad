@@ -9,7 +9,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { WheelClassifier } from "./wheel.js";
+import { mouseZoomDelta, WheelClassifier } from "./wheel.js";
 import {
   applyLook,
   drawSwatches,
@@ -539,8 +539,10 @@ export class Viewport {
     const c = this.controls;
     if (!c.enabled) return;
 
+    if (this.evenWheels.has(event)) return;
+
     const gesture = this.wheel.classify(event, this.swipeOrbits);
-    if (gesture === "zoom") return;
+    if (gesture === "zoom") return this.evenMouseZoom(event);
 
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -559,6 +561,31 @@ export class Viewport {
     } else {
       c.pan(dx * c.panSpeed, dy * c.panSpeed);
     }
+  }
+
+  /** Wheel events sent again with an even zoom step, so they are not sorted a second time. */
+  private evenWheels = new WeakSet<Event>();
+
+  /**
+   * A mouse wheel zooms the same step per notch on every system, with or without Ctrl/⌘: the event is
+   * sent again with that delta (and without Ctrl, which would make it a pinch). Trackpads stay as they are.
+   */
+  private evenMouseZoom(event: WheelEvent): void {
+    const delta = mouseZoomDelta(event);
+    if (delta === null || (delta === event.deltaY && event.deltaMode === 0 && !event.ctrlKey)) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const even = new WheelEvent("wheel", {
+      deltaY: delta,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      bubbles: true,
+      cancelable: true,
+    });
+    this.evenWheels.add(even);
+    this.renderer.domElement.dispatchEvent(even);
   }
 
   private assignButtons(event: PointerEvent): void {

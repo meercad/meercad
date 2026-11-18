@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isMouseWheel, WheelClassifier, type WheelLike } from "./wheel";
+import {
+  isMouseWheel,
+  mouseNotches,
+  mouseZoomDelta,
+  NOTCH_ZOOM_DELTA,
+  WheelClassifier,
+  type WheelLike,
+} from "./wheel";
 
 const ev = (o: Partial<WheelLike>): WheelLike => ({
   deltaX: 0,
@@ -53,5 +60,27 @@ describe("WheelClassifier", () => {
   it("zooms everything when swiping should not orbit", () => {
     const c = new WheelClassifier();
     expect(c.classify(ev({ deltaY: 3 }), false)).toBe("zoom");
+  });
+});
+
+describe("zooming with a mouse wheel", () => {
+  const wheel = (deltaY: number, deltaMode = 0, deltaX = 0) => ({ deltaX, deltaY, deltaMode });
+
+  it("counts the notches whatever the system reports", () => {
+    expect(mouseNotches(wheel(-120))).toBe(-1);
+    expect(mouseNotches(wheel(240))).toBe(2);
+    expect(mouseNotches(wheel(-100))).toBe(-1);
+    expect(mouseNotches(wheel(-4.000244140625))).toBeCloseTo(-1, 9);
+    expect(mouseNotches(wheel(3, 1))).toBe(1);
+    expect(mouseNotches(wheel(1, 2))).toBe(1);
+    expect(mouseNotches(wheel(0, 0, 120))).toBe(1);
+  });
+
+  it("zooms the same step per notch, and leaves a trackpad's deltas alone", () => {
+    expect(mouseZoomDelta(wheel(-4.000244140625))).toBeCloseTo(-NOTCH_ZOOM_DELTA, 6);
+    expect(mouseZoomDelta(wheel(-200))).toBe(-2 * NOTCH_ZOOM_DELTA);
+    expect(mouseZoomDelta(wheel(-3, 1))).toBe(-NOTCH_ZOOM_DELTA);
+    expect(mouseZoomDelta(wheel(-3.5))).toBeNull();
+    expect(mouseZoomDelta(wheel(0))).toBeNull();
   });
 });
