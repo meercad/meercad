@@ -359,7 +359,8 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       if (!a || !fs) return [];
 
       // A flat face moves along its normal; a curved one grows or shrinks along the surface, so the
-      // arrow points straight out of it at the clicked spot.
+      // arrow points straight out of it at the clicked spot (always on the face, which its middle need
+      // not be: a ring or an L).
       const origin = p.normal ? onPlane(p.point, a.origin, a.normal) : p.point;
       const dir = p.normal ? a.normal : (p.surface ?? a.normal);
       // The end face of an extrusion: the drag changes its distance (or the variable behind it),
@@ -376,6 +377,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             dir,
             value: cap.distance,
             min: 0.05,
+            foot: "value",
             onStart: () => void apply(cap.write(cap.distance)),
             onDrag: (v) => void applyQuiet(cap.write(v)),
             onEnd: (v) => void applyQuiet(cap.write(v)),
@@ -389,6 +391,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           origin,
           dir,
           value: 0,
+          foot: "origin",
           onStart: () => {
             autoMode.current = true;
 
@@ -425,6 +428,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           origin,
           dir: a.normal,
           value: 0,
+          foot: "origin",
           onStart: () => {
             autoMode.current = true;
 

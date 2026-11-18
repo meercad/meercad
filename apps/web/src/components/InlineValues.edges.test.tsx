@@ -167,6 +167,28 @@ describe("the menu of an edge (right click, long press)", () => {
   });
 });
 
+describe("the end face of an extrusion", () => {
+  it("has one distance, at its drag arrow standing on the face, not a second chip", async () => {
+    const mesh = useApp.getState().output!.meshes.find((x) => x.bodyId === "ex1")!;
+    const face = mesh.faceTags.findIndex((tags) => tags.includes("ex1.end_cap"));
+    await click({
+      kind: "face",
+      bodyId: "ex1",
+      face,
+      tags: mesh.faceTags[face]!,
+      point: [10, 5, 10],
+      normal: [0, 0, 1],
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+
+    const arrow = getViewport()!.handles.find((x) => x.id === "cap");
+    // Drawn from the face it stands on: the extrusion's end, its distance up from where it starts.
+    expect(arrow?.foot).toBe("value");
+    expect(arrow!.origin[2] + arrow!.dir[2] * arrow!.value).toBeCloseTo(10, 6);
+    expect(texts().some((x) => x?.startsWith("↕"))).toBe(false);
+  });
+});
+
 describe("a line of a sketch in the view", () => {
   it("shows that curve's size", async () => {
     await click({ kind: "sketch_curve", sketchId: "sk2", curveId: "k1", point: [84, 0, 0] });

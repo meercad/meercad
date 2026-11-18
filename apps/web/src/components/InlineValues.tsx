@@ -580,7 +580,11 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const feature = doc.features.find((x) => x.id === selected);
   if (!feature) return null;
 
-  const items = [...featureItems(feature, out)];
+  // A picked end face of an extrusion has a drag arrow with the distance at it: one value, not two.
+  const capArrow = viewport.handles.some((handle) => handle.id === "cap");
+  const items = featureItems(feature, out).filter(
+    (item) => !(capArrow && feature.op === "extrude" && item.key === `${feature.id}.distance`),
+  );
   // Show the driving sketch's dimensions too, so the whole feature can be resized in place.
   const skId =
     feature.op === "sketch"

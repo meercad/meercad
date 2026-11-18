@@ -307,6 +307,12 @@ export interface Handle {
   twoWay?: boolean;
   /** A line (two world points) that grabs the arrow too: a selected sketch line is dragged by itself. */
   grip?: [Vec3, Vec3];
+  /**
+   * The arrow stands on a face (`dir` its normal), drawn from there with a flat ring round its foot:
+   * at `origin` ("origin"), or at `value` along `dir` from it ("value": the face moves with the
+   * value, as an extrusion's end does).
+   */
+  foot?: "origin" | "value";
 }
 
 /** `rendered`: materials in studio light with soft shadows on a ground, no edges (for pictures). */
@@ -2213,6 +2219,9 @@ export class Viewport {
       const tip = this.handleTip(h);
       const hot = this.activeHandle?.h.id === h.id || this.hoverHandle === h.id;
       const color = hot ? 0xff7a1a : (h.color ?? 0x4f46e5);
+      // Where the arrow is drawn from: its origin, or the face it stands on.
+      if (h.foot === "value") o.addScaledVector(d, h.value);
+
       const along = tip.clone().sub(o);
       const q = new THREE.Quaternion().setFromUnitVectors(
         new THREE.Vector3(0, 1, 0),
@@ -2240,6 +2249,26 @@ export class Viewport {
         dot.position.copy(o);
         dot.renderOrder = order;
         parts.push(track, dot);
+      }
+
+      // Standing on a face: a flat ring round the foot, lying in the face, so the arrow is seen to
+      // start there (drawn over the face, as the arrow is).
+      if (h.foot) {
+        const lying = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d);
+
+        for (const [inner, outer, col, opacity, order] of [
+          [5, 10, 0xffffff, 0.75, 50],
+          [6.2, 8.8, color, 0.95, 51],
+        ] as const) {
+          const ring = new THREE.Mesh(
+            new THREE.RingGeometry(px * inner, px * outer, 40),
+            onTop(new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide }), opacity),
+          );
+          ring.position.copy(o);
+          ring.quaternion.copy(lying);
+          ring.renderOrder = order;
+          parts.push(ring);
+        }
       }
 
       // The knob: a round, screen-facing button with chevrons along the drag direction.
