@@ -14,6 +14,7 @@ const ev = (o: Partial<WheelLike>): WheelLike => ({
   deltaMode: 0,
   ctrlKey: false,
   metaKey: false,
+  altKey: false,
   shiftKey: false,
   timeStamp: 0,
   ...o,
@@ -38,14 +39,16 @@ describe("isMouseWheel", () => {
 });
 
 describe("WheelClassifier", () => {
-  it("swipe orbits, Shift pans, pinch and Ctrl zoom", () => {
+  it("swipe orbits, Shift, ⌘ or Option pans, pinch and Ctrl zoom", () => {
     const c = new WheelClassifier();
     expect(c.classify(ev({ deltaY: 6, timeStamp: 0 }))).toBe("orbit");
     expect(c.classify(ev({ deltaY: 6, shiftKey: true, timeStamp: 16 }))).toBe("pan");
     expect(c.classify(ev({ deltaY: 6, ctrlKey: true, timeStamp: 32 }))).toBe("zoom");
-    expect(c.classify(ev({ deltaY: 6, metaKey: true, timeStamp: 48 }))).toBe("zoom");
+    expect(c.classify(ev({ deltaY: 6, metaKey: true, timeStamp: 48 }))).toBe("pan");
+    expect(c.classify(ev({ deltaX: 6, altKey: true, timeStamp: 64 }))).toBe("pan");
+    expect(c.classify(ev({ deltaY: 6, timeStamp: 80 }))).toBe("orbit");
   });
-  it("a mouse wheel keeps zooming, also with Shift", () => {
+  it("a mouse wheel keeps zooming, also with Shift, ⌘ or Ctrl", () => {
     const c = new WheelClassifier();
     expect(c.classify(ev({ deltaY: 4.000244140625, timeStamp: 0 }))).toBe("zoom");
     expect(c.classify(ev({ deltaX: 4.000244140625, shiftKey: true, timeStamp: 1000 }))).toBe("zoom");

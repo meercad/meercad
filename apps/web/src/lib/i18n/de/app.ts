@@ -556,7 +556,8 @@ export default {
   "Numpad views (Ctrl for the opposite side), Home fits.":
     "Ansichten auf dem Ziffernblock (Ctrl für die Gegenseite), Home zeigt alles.",
   "Right drag": "Rechte Taste ziehen",
-  "Middle drag or Shift + right drag": "Mittlere Taste ziehen oder Shift + rechte Taste ziehen",
+  "Middle drag, or Shift, ⌘ or Option + right drag":
+    "Mittlere Taste ziehen, oder Shift, ⌘ oder Option + rechte Taste ziehen",
   Wheel: "Mausrad",
   "Shift + middle drag": "Shift + mittlere Taste ziehen",
   "Middle drag": "Mittlere Taste ziehen",

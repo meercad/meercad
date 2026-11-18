@@ -2,15 +2,16 @@
  * What a wheel event means in the 3D view. A trackpad sends its two-finger swipes as wheel events
  * too, so they are told apart from a mouse wheel by the shape of their deltas:
  *
- * - two-finger swipe: orbit; with Shift: pan
- * - pinch (Chromium sends it with ctrlKey set) or Ctrl/⌘ + two-finger swipe: zoom
- * - a mouse wheel zooms as before, with or without Shift
+ * - two-finger swipe on a trackpad, one-finger swipe on a Magic Mouse: orbit; with Shift, ⌘ or
+ *   Option: pan
+ * - pinch (Chromium sends it with ctrlKey set) or Ctrl + swipe: zoom
+ * - a mouse wheel zooms, with any key held
  */
 export type WheelGesture = "orbit" | "pan" | "zoom";
 
 export type WheelLike = Pick<
   WheelEvent,
-  "deltaX" | "deltaY" | "deltaMode" | "ctrlKey" | "metaKey" | "shiftKey" | "timeStamp"
+  "deltaX" | "deltaY" | "deltaMode" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey" | "timeStamp"
 >;
 
 /** One notch of a mouse wheel on macOS: Cocoa's 0.1 line step (16.16 fixed point) times 40 px. */
@@ -79,11 +80,10 @@ export class WheelClassifier {
   classify(e: WheelLike, swipeOrbits = true): WheelGesture {
     const fresh = e.timeStamp - this.last > GESTURE_GAP_MS;
     this.last = e.timeStamp;
-    // Pinch arrives as ctrlKey without a key being held; Ctrl/⌘ + swipe zooms on purpose.
-    if (e.ctrlKey || e.metaKey) return "zoom";
     if (fresh) this.mouse = isMouseWheel(e);
-    if (this.mouse || !swipeOrbits) return "zoom";
+    // Pinch arrives as ctrlKey without a key being held; Ctrl + swipe zooms on purpose.
+    if (e.ctrlKey || this.mouse || !swipeOrbits) return "zoom";
 
-    return e.shiftKey ? "pan" : "orbit";
+    return e.shiftKey || e.metaKey || e.altKey ? "pan" : "orbit";
   }
 }

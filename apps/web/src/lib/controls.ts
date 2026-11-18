@@ -332,11 +332,16 @@ export const MOUSE_SCHEMES: MouseSchemeInfo[] = [
     id: "meercad",
     label: "meerCAD",
     orbit: t("Right drag"),
-    pan: t("Middle drag or Shift + right drag"),
+    pan: t("Middle drag, or Shift, ⌘ or Option + right drag"),
     zoom: t("Wheel"),
     nav: {
       orbit: [{ button: "right" }],
-      pan: [{ button: "middle" }, { button: "right", mod: "shift" }],
+      pan: [
+        { button: "middle" },
+        { button: "right", mod: "shift" },
+        { button: "right", mod: "ctrl" },
+        { button: "right", mod: "alt" },
+      ],
       zoom: [],
     },
     rightClick: "menu",
