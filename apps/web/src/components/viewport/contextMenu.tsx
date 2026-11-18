@@ -56,7 +56,7 @@ import { deleteFeature, toggleHidden, toggleSeeThrough } from "../FeatureTree";
 import { showMenu, type MenuEntry } from "../Menu";
 import { openMaterialPicker } from "../MaterialPicker";
 import { cleanUpMenu } from "../TerrainTools";
-import { wholePart } from "./click";
+import { ownerOfPick, wholePart } from "./click";
 import { featureOfPick } from "./scene";
 
 type AppState = ReturnType<typeof useApp.getState>;
@@ -74,7 +74,11 @@ interface Item {
 export function openContextMenu(viewport: Viewport, pick: Pick | null, x: number, y: number): void {
   const state = useApp.getState();
   if (state.dialog || state.sketchId) return;
-  if (pick && !state.selection.some((p) => samePick(p, pick))) useApp.setState({ selection: [pick] });
+
+  // Selected as by a click, so a sketch edge's dimensions show beside the menu too.
+  if (pick && !state.selection.some((p) => samePick(p, pick))) {
+    useApp.setState({ selection: [pick], selectedFeature: ownerOfPick(pick, state) });
+  }
 
   const fid = pick ? featureOfPick(pick, useApp.getState().doc.features) : null;
   const common = commonItems(pick, fid);

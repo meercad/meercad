@@ -68,7 +68,7 @@ export function clickInView(
  * The step a pick belongs to: for an edge a sketch's curve made, the step that swept it (so its
  * sketch's dimensions show on the model), else the step that made the face or part.
  */
-function ownerOfPick(pick: Pick, state: AppState): string | null {
+export function ownerOfPick(pick: Pick, state: AppState): string | null {
   const features = state.doc.features;
   const meshes = state.output?.meshes ?? state.baseOutput?.meshes ?? [];
 

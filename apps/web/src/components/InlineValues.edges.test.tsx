@@ -1,6 +1,6 @@
 /**
  * Sketch sizes at a picked edge of the model (InlineValues.tsx with sketchEdge.ts), in the real 3D
- * view: clicking an edge a sketch line was extruded from selects that extrusion
+ * view: clicking an edge a sketch line was extruded from (or opening its menu) selects that extrusion
  * and shows only that line's dimension; a line no dimension fixes shows its measured length, and a
  * value typed there adds the dimension to the sketch (one undo step); an edge along the extrusion
  * shows only its distance; a line of a sketch shown in the view shows its own size.
@@ -12,6 +12,7 @@ import type { Pick } from "@meercad/viewport";
 import { apply, currentDoc, getViewport, newProject, rebuildNow, undo, useApp } from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { clickInView } from "./viewport/click";
+import { openContextMenu } from "./viewport/contextMenu";
 import { ViewportView } from "./ViewportView";
 
 const rect: SketchEntity[] = [
@@ -149,6 +150,20 @@ describe("an edge a sketch line was extruded from", () => {
     await click(edgeBetween("ex1.side[sk1.l1]", "ex1.side[sk1.l2]"));
     expect(useApp.getState().selectedFeature).toBe("ex1");
     expect(texts()).toEqual(["↕ 10 mm"]);
+  });
+});
+
+describe("the menu of an edge (right click, long press)", () => {
+  it("selects the edge as a click does, so the line's dimension shows beside the menu", async () => {
+    await rebuilt();
+    await act(async () => useApp.setState({ selectedFeature: null, selection: [] }));
+    await act(async () =>
+      openContextMenu(getViewport()!, edgeBetween("ex1.side[sk1.l1]", "ex1.end_cap"), 50, 50),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+    expect(useApp.getState().selectedFeature).toBe("ex1");
+    expect(texts()).toContain("40");
+    await act(async () => void fireEvent.keyDown(document, { key: "Escape" }));
   });
 });
 
