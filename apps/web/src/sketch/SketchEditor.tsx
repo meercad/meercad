@@ -34,7 +34,7 @@ import { dimensionFor } from "./editor/dimension";
 import { entryTarget } from "./editor/entry";
 import { applySolution, joinedChain, nearestLineEnd, planeEdges } from "./editor/geometry";
 import { useSketchKeys } from "./editor/keys";
-import { constraintLabels, quickDimensions } from "./editor/labels";
+import { constraintLabels, pairAngle, quickDimensions } from "./editor/labels";
 import { ConstraintLabels, ConstraintPalette, DrawEntry, QuickChips, SketchHud } from "./editor/panels";
 import { useSketchPointer, type Tip } from "./editor/pointer";
 import {
@@ -663,6 +663,13 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   // Chips with the new shape's size and angle; tapping one fixes that value as a dimension.
   const lastCurve = lastShape && shown?.curves.find((curve) => curve.id === lastShape.id);
   const quick = sketch && lastCurve ? quickDimensions(sketch, lastCurve) : [];
+  // Two lines picked together: the angle between them, on its arc, ready to be fixed.
+  const pickedCurves = ui.selection.filter((sel) => sel.kind === "curve");
+  const angleChip =
+    sketch && shown && pickedCurves.length === 2 && ui.selection.length === 2
+      ? pairAngle(sketch, shown, pickedCurves[0]!.id, pickedCurves[1]!.id)
+      : null;
+  if (angleChip) quick.push(angleChip);
 
   const addQuickDim = (make: (expr: Expr) => NewConstraint, expr: Expr) => {
     if (!sketch) return;
@@ -696,6 +703,16 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           conflicting={conflicting}
           tool={ui.tool}
           onEdited={(constraints) => commit({ entities: sketch.entities, constraints }, true)}
+          onMoved={(id, clientX, clientY) => {
+            const at = toSketch({ clientX, clientY });
+            if (!at) return;
+
+            const label: [number, number] = [+at[0].toFixed(2), +at[1].toFixed(2)];
+            commit({
+              entities: sketch.entities,
+              constraints: sketch.constraints.map((x) => (x.id === id ? ({ ...x, label } as typeof x) : x)),
+            });
+          }}
         />
         {tip && !entry ? (
           <div className="cursor-tip" style={{ left: tip.x, top: tip.y }}>

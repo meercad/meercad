@@ -2,6 +2,7 @@
  * The sketch editor's HTML: value chips and constraint labels over the sketch, the typed-value
  * fields at the cursor, the constraint palette and the panel with the sketch's state and tool options.
  */
+import { followChipDrag } from "../../lib/chipDrag";
 import { useEffect, useState, type MutableRefObject } from "react";
 import type { Expr, SketchConstraint, SketchFeature } from "@meercad/schema";
 import type { SolvedSketch } from "@meercad/sketch";
@@ -80,6 +81,7 @@ export function ConstraintLabels({
   conflicting,
   tool,
   onEdited,
+  onMoved,
 }: {
   sketch: SketchFeature;
   labels: Label[];
@@ -89,6 +91,8 @@ export function ConstraintLabels({
   conflicting: Set<string>;
   tool: SketchTool;
   onEdited: (constraints: SketchConstraint[]) => void;
+  /** A dimension's value dragged to a spot on the screen. */
+  onMoved?: (id: string, clientX: number, clientY: number) => void;
 }) {
   return (
     <>
@@ -128,7 +132,11 @@ export function ConstraintLabels({
             // While drawing, a click on a dimension or symbol means the spot below it (a midpoint, a
             // centre).
             style={POINT_TOOLS.has(tool) ? { pointerEvents: "none" } : undefined}
-            onPointerDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              // A dimension's value can be dragged out of the way; a short press stays a click.
+              if (l.dimension && onMoved) followChipDrag(event, (x, y) => onMoved(l.id, x, y));
+            }}
             onClick={(event) => {
               const sel: SketchSel = { kind: "constraint", id: l.id };
               const cur = useSketchUi.getState().selection;

@@ -4,7 +4,8 @@ import { distance2, type SolvedCurve, type SolvedSketch, type Vec2 } from "@meer
 import { t } from "../../lib/i18n";
 import { docUnit, fmtLen } from "../../lib/units";
 import { GLYPH } from "../icons";
-import { fmt, sweepOf } from "./geometry";
+import { angleArc } from "../../lib/angleDim";
+import { fmt, linePair, sweepOf } from "./geometry";
 import type { QuickDim } from "./types";
 
 export interface Label {
@@ -92,7 +93,10 @@ export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): L
         } else if (constraint.type === "radius" || constraint.type === "diameter") {
           at = mid(constraint.curve);
         } else if (constraint.type === "angle") {
-          at = mid(constraint.a);
+          // Between the two lines, on the arc of the angle.
+          const pair = linePair(solved, constraint.a, constraint.b);
+          const value = typeof constraint.value === "number" ? constraint.value : undefined;
+          at = (pair && angleArc(pair[0], pair[1], null, value)?.label) ?? mid(constraint.a);
         } else if (constraint.type === "arc_angle") {
           // Inside the arc, halfway between its centre and its middle.
           const cv = curve(constraint.curve);
@@ -284,4 +288,43 @@ function arcChips(arc: Extract<SolvedCurve, { kind: "arc" }>, has: HasConstraint
   }
 
   return quick;
+}
+
+/** Constraint types that already fix the angle between two lines. */
+const ANGLE_FIXING = new Set(["angle", "parallel", "perpendicular", "collinear"]);
+
+/**
+ * The angle between two lines as a chip on its arc, for two lines picked together while nothing fixes
+ * their angle yet; typing a value adds that angle dimension (with its value where the chip was).
+ */
+export function pairAngle(
+  sketch: SketchFeature,
+  solved: Pick<SolvedSketch, "curves">,
+  a: string,
+  b: string,
+): QuickDim | null {
+  const pair = linePair(solved, a, b);
+  const arc = pair && angleArc(pair[0], pair[1]);
+  if (!arc) return null;
+
+  const fixed = sketch.constraints.some(
+    (constraint) =>
+      ANGLE_FIXING.has(constraint.type) &&
+      "a" in constraint &&
+      "b" in constraint &&
+      [constraint.a, constraint.b].sort().join() === [a, b].sort().join(),
+  );
+  if (fixed) return null;
+
+  const degrees = +arc.degrees.toFixed(2);
+  const label: [number, number] = [+arc.label[0].toFixed(2), +arc.label[1].toFixed(2)];
+
+  return {
+    key: "pair-angle",
+    at: arc.label,
+    text: `∠ ${fmt(degrees)}°`,
+    value: degrees,
+    length: false,
+    make: (expr) => ({ type: "angle", a, b, value: expr, label }),
+  };
 }

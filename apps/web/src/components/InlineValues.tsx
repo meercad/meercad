@@ -6,7 +6,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import type { Expr, Feature, SketchConstraint, SketchFeature } from "@meercad/schema";
 import { toWorld, type Vec2 } from "@meercad/sketch";
-import type { Viewport } from "@meercad/viewport";
+import type { Pick, Viewport } from "@meercad/viewport";
 import { faceAnchor, profileAnchor } from "../lib/anchors";
 import { Link2Off } from "lucide-react";
 import { evaluate } from "@meercad/model";
@@ -25,8 +25,11 @@ import {
   pointsOf,
   type SketchCurveRef,
 } from "../lib/sketchEdge";
-import { quickDimensions } from "../sketch/editor/labels";
+import { pairAngle, quickDimensions } from "../sketch/editor/labels";
 import { freshId } from "../sketch/actions";
+import { followChipDrag } from "../lib/chipDrag";
+import { angleArc } from "../lib/angleDim";
+import { linePair } from "../sketch/editor/geometry";
 
 type V3 = [number, number, number];
 
@@ -42,6 +45,8 @@ interface Item {
   unlinkable?: boolean;
   /** A measured size that no dimension fixes yet; typing a value adds the dimension. */
   measured?: boolean;
+  /** Dragging moves the chip: dropped on `frame`'s plane, it is stored there (sketch coordinates). */
+  drag?: { frame: Frame; to: (at: Vec2) => void };
   commit: (expr: Expr) => void;
 }
 
@@ -302,15 +307,22 @@ function featureItems(feature: Feature, out: RebuildOutput): Item[] {
   }
 }
 
-/** A point of a sketch in the world, slid along the sketch's normal onto the plane through `onto`. */
-function placed(frame: Parameters<typeof toWorld>[0], at: Vec2, onto?: V3): V3 {
-  const world = toWorld(frame, at);
-  if (!onto) return world;
+type Frame = Parameters<typeof toWorld>[0];
+
+/** A sketch's plane moved along its normal to go through `onto` (where its labels are shown). */
+function shiftedFrame(frame: Frame, onto?: V3): Frame {
+  if (!onto) return frame;
 
   const n = frame.normal;
-  const d = (onto[0] - world[0]) * n[0] + (onto[1] - world[1]) * n[1] + (onto[2] - world[2]) * n[2];
+  const o = frame.origin;
+  const d = (onto[0] - o[0]) * n[0] + (onto[1] - o[1]) * n[1] + (onto[2] - o[2]) * n[2];
 
-  return [world[0] + n[0] * d, world[1] + n[1] * d, world[2] + n[2] * d];
+  return { ...frame, origin: [o[0] + n[0] * d, o[1] + n[1] * d, o[2] + n[2] * d] };
+}
+
+/** A point of a sketch in the world, slid along the sketch's normal onto the plane through `onto`. */
+function placed(frame: Frame, at: Vec2, onto?: V3): V3 {
+  return toWorld(shiftedFrame(frame, onto), at);
 }
 
 /**
@@ -367,7 +379,10 @@ function sketchItems(
       } else if (constraint.type === "radius" || constraint.type === "diameter") {
         at = mid(constraint.curve);
       } else if (constraint.type === "angle") {
-        at = mid(constraint.a);
+        // Between the two lines, on the arc of the angle (as in the sketch editor).
+        const pair = linePair(view, constraint.a, constraint.b);
+        const value = typeof constraint.value === "number" ? constraint.value : undefined;
+        at = (pair && angleArc(pair[0], pair[1], null, value)?.label) ?? mid(constraint.a);
       } else if (constraint.type === "arc_angle") {
         at = mid(constraint.curve);
       } else if (constraint.type === "distance") {
@@ -385,6 +400,10 @@ function sketchItems(
       key: `${sketch.id}.${constraint.id}`,
       // Slid along the sketch normal to the picked face or edge, so the label sits on the model.
       at: placed(view.frame, at, onto),
+      drag: {
+        frame: shiftedFrame(view.frame, onto),
+        to: (label) => commitLabel(sketch, constraint.id, label),
+      },
       unit: constraint.type === "angle" || constraint.type === "arc_angle" ? "deg" : "mm",
       suggest:
         constraint.type === "diameter"
@@ -422,17 +441,26 @@ function sketchItems(
 function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: string, onto: V3): Item[] {
   const view = out.report.sketches.find((sketchView) => sketchView.id === sketch.id);
   const curve = view?.curves.find((x) => x.id === curveId);
-  if (!view || !curve || !needsSize(sketch, curveId)) return [];
+  if (!view || !curve) return [];
 
+  const sizeFree = needsSize(sketch, curveId);
+
+  // Sizes, and an arc's sweep (the angle at its centre); a line's slant would only clutter the model.
   return quickDimensions(sketch, curve)
-    .filter((quick) => quick.length)
+    .filter((quick) => (quick.length ? sizeFree : quick.key === "sweep"))
     .map((quick) => ({
       key: `${sketch.id}.${curveId}.${quick.key}`,
       at: placed(view.frame, quick.at, onto),
       text: quick.text,
       value: +quick.value.toFixed(3),
-      unit: "mm" as const,
-      suggest: curve.kind === "line" ? "length" : curve.kind === "circle" ? "diameter" : "radius",
+      unit: quick.length ? ("mm" as const) : ("deg" as const),
+      suggest: !quick.length
+        ? "angle"
+        : curve.kind === "line"
+          ? "length"
+          : curve.kind === "circle"
+            ? "diameter"
+            : "radius",
       measured: true,
       commit: (expr: Expr) =>
         apply({
@@ -446,6 +474,56 @@ function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: strin
           },
         }),
     }));
+}
+
+/** The curves of `sketchId` two picks were made from, or null unless both are of that sketch. */
+function linesOf(
+  picks: readonly Pick[],
+  out: RebuildOutput,
+  features: readonly Feature[],
+  sketchId: string,
+): [string, string] | null {
+  const ids = picks.map((x) => curveOfPick(x, out.meshes, features));
+  const [a, b] = ids.map((x) => (x?.sketchId === sketchId ? x.curveId : null));
+
+  return a && b && a !== b ? [a, b] : null;
+}
+
+/** The angle between two lines of a sketch: its dimension, or the measured angle to fix it. */
+function angleItems(sketch: SketchFeature, out: RebuildOutput, [a, b]: [string, string], onto: V3): Item[] {
+  const view = out.report.sketches.find((x) => x.id === sketch.id);
+  if (!view) return [];
+
+  const same = (x: SketchConstraint) =>
+    x.type === "angle" && [x.a, x.b].sort().join() === [a, b].sort().join();
+  const existing = sketch.constraints.filter(same).map((x) => x.id);
+  if (existing.length) return sketchItems(sketch, out, undefined, onto, new Set(existing));
+
+  const quick = pairAngle(sketch, view, a, b);
+  if (!quick) return [];
+
+  return [
+    {
+      key: `${sketch.id}.${a}.${b}.angle`,
+      at: placed(view.frame, quick.at, onto),
+      text: quick.text,
+      value: quick.value,
+      unit: "deg",
+      suggest: "angle",
+      measured: true,
+      commit: (expr: Expr) =>
+        apply({
+          type: "edit_feature",
+          id: sketch.id,
+          patch: {
+            constraints: [
+              ...sketch.constraints,
+              { id: freshId(sketch, "c"), ...quick.make(expr) } as SketchConstraint,
+            ],
+          },
+        }),
+    },
+  ];
 }
 
 /** The dimensions of one sketch curve behind a picked edge: its own, or its measured size. */
@@ -498,7 +576,12 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const pick = selection.length === 1 ? selection[0]! : null;
   const edge = pick ? curveOfPick(pick, out.meshes, doc.features) : null;
 
-  if (sketch && edge && fromSketch(edge, feature.id, sketch.id)) {
+  // Two lines (or edges they made) picked together: the angle between them.
+  const pair = sketch && selection.length === 2 ? linesOf(selection, out, doc.features, sketch.id) : null;
+
+  if (sketch && pair) {
+    items.push(...angleItems(sketch, out, pair, selection[1]!.point));
+  } else if (sketch && edge && fromSketch(edge, feature.id, sketch.id)) {
     if (edge.curveId) items.push(...curveItems(sketch, out, edge.curveId, pick!.point));
   } else if (sketch) {
     // A picked face of the feature narrows this to the dimensions of the shape it came from.
@@ -528,7 +611,17 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
             key={item.key}
             className={item.measured ? "value-chip quick-dim" : "value-chip"}
             style={{ left: s[0], top: s[1] }}
-            onPointerDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+
+              const drag = item.drag;
+              if (!drag || editing === item.key) return;
+
+              followChipDrag(event, (x, y) => {
+                const at = viewport.rayToPlane(x, y, drag.frame);
+                if (at) drag.to(at);
+              });
+            }}
           >
             {editing === item.key ? (
               <ValueInput
@@ -730,4 +823,19 @@ export function InlineInput({
       }}
     />
   );
+}
+
+/** Puts a sketch dimension's value where it was dragged to (sketch coordinates, 0.01 mm). */
+function commitLabel(sketch: SketchFeature, constraintId: string, at: Vec2): void {
+  const label: [number, number] = [+at[0].toFixed(2), +at[1].toFixed(2)];
+
+  apply({
+    type: "edit_feature",
+    id: sketch.id,
+    patch: {
+      constraints: sketch.constraints.map((x) =>
+        x.id === constraintId ? ({ ...x, label } as SketchConstraint) : x,
+      ),
+    },
+  });
 }
