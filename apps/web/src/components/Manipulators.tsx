@@ -25,7 +25,7 @@ import { deleteModelSelection } from "../lib/deletion";
 import { joinedParts } from "../lib/mechanism";
 import { keyFor, usePrefs } from "../lib/keymap";
 import { toggleHidden } from "./FeatureTree";
-import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { evaluate, nextFeatureId } from "@meercad/model";
 import { asArray, type EdgeSelector, type Expr, type Feature } from "@meercad/schema";
 import type { Handle, Pick, Viewport } from "@meercad/viewport";
@@ -881,7 +881,22 @@ function QuickActions({ selection }: { selection: Pick[] }) {
 function HandleLabels({ viewport }: { viewport: Viewport }) {
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const [typing, setTyping] = useState<string | null>(null);
-  useEffect(() => viewport.onChange(tick), [viewport]);
+  // Placed in the frame the camera moves, before the picture is drawn (a render later they would
+  // trail behind while orbiting); rendered again only when the arrows change.
+  const elements = useRef(new Map<string, HTMLDivElement>());
+
+  const place = () => {
+    for (const [id, element] of elements.current) {
+      const s = viewport.handleTipScreen(id);
+      if (!s) continue;
+
+      element.style.left = `${s[0] + 16}px`;
+      element.style.top = `${s[1] - 16}px`;
+    }
+  };
+
+  useEffect(() => viewport.onChange(place), [viewport]);
+  useLayoutEffect(place);
   useEffect(() => {
     const t = setInterval(tick, 250);
 
@@ -911,7 +926,10 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
           <div
             key={handle.id}
             className="value-chip handle-chip"
-            style={{ left: s[0] + 16, top: s[1] - 16 }}
+            ref={(element) => {
+              if (element) elements.current.set(handle.id, element);
+              else elements.current.delete(handle.id);
+            }}
             onPointerDown={(event) => event.stopPropagation()}
           >
             {typing === handle.id ? (

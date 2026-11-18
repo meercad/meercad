@@ -50,6 +50,14 @@ type V3 = [number, number, number];
  */
 let screenPixel = 0;
 
+/** Where measured sizes (not dimensions yet) were dragged to, by their key: kept while the app runs. */
+const movedMeasures = new Map<string, Vec2>();
+/** Lays the values out again (set by InlineValues while it is shown). */
+let refreshValues: () => void = () => undefined;
+
+/** The values are laid out again once the zoom changes by this share (the drawings' sizes follow it). */
+const ZOOM_RERENDER = 0.05;
+
 interface Item {
   key: string;
   at: V3;
@@ -435,7 +443,11 @@ function sketchItems(
           ? { drawn: { lines: leaderLines(constraint, view, onto), arrows: [] } }
           : {}),
       ...(drawing && constraint.type !== "angle"
-        ? { grip: dimensionGrip(sketch, constraint.id, drawing, view.frame, onto) }
+        ? {
+            grip: dimensionGrip(`${sketch.id}.${constraint.id}`, drawing, view.frame, onto, (label, quiet) =>
+              commitLabel(sketch, constraint.id, label, quiet),
+            ),
+          }
         : {}),
       // A length's line moves parallel to itself; an angle's arc stays where it is.
       ...(constraint.type === "angle"
@@ -492,16 +504,26 @@ function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: strin
     .filter((quick) => (quick.length ? sizeFree : quick.key === "sweep"))
     .map((quick) => {
       // A line's length is drawn as its dimension would be, grey until it is one.
+      const key = `${sketch.id}.${curveId}.${quick.key}`;
       const drawing =
         curve.kind === "line" && quick.length
-          ? lengthDrawing(curve.a, curve.b, sizes, null, middleOf(pts))
+          ? lengthDrawing(curve.a, curve.b, sizes, movedMeasures.get(key) ?? null, middleOf(pts))
           : null;
 
       return {
         key: `${sketch.id}.${curveId}.${quick.key}`,
         at: placed(view.frame, drawing?.text.at ?? quick.at, onto),
         bare: true,
-        ...(drawing ? inWorld(drawing, view.frame, onto, true) : {}),
+        ...(drawing
+          ? {
+              ...inWorld(drawing, view.frame, onto, true),
+              // Moved out of the way too, while the app runs (it is no dimension to keep).
+              grip: dimensionGrip(key, drawing, view.frame, onto, (label) => {
+                movedMeasures.set(key, label);
+                refreshValues();
+              }),
+            }
+          : {}),
         text: measuredText(quick, curve.kind),
         value: +quick.value.toFixed(3),
         unit: quick.length ? ("mm" as const) : ("deg" as const),
@@ -609,7 +631,19 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const place = () => placeChips(shown.current, elements.current, viewport);
   const placeLater = useRef(place);
   placeLater.current = place;
-  useEffect(() => viewport.onChange(() => (placeLater.current(), tick())), [viewport]);
+
+  // Rendered again only when the zoom changes enough to resize the drawings, not on every turn.
+  const renderedAt = useRef(0);
+  useEffect(
+    () =>
+      viewport.onChange(() => {
+        placeLater.current();
+
+        const pixel = viewport.pixelSize();
+        if (Math.abs(pixel - renderedAt.current) > renderedAt.current * ZOOM_RERENDER) tick();
+      }),
+    [viewport],
+  );
   useLayoutEffect(() => {
     place();
     // Dimension lines drag like arrows (moved parallel to themselves).
@@ -617,6 +651,13 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   });
   useEffect(() => () => viewport.setGrips([]), [viewport]);
   useEffect(() => preloadSolver(), []);
+  useEffect(() => {
+    refreshValues = tick;
+
+    return () => {
+      refreshValues = () => undefined;
+    };
+  }, []);
 
   // Drag arrows are set up after this renders (by the manipulators); lay out again once they change.
   const handleSig = useRef("");
@@ -634,6 +675,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   if (!feature) return null;
 
   screenPixel = viewport.pixelSize();
+  renderedAt.current = screenPixel;
 
   // A picked end face of an extrusion has a drag arrow with the distance at it: one value, not two.
   const capArrow = viewport.handles.some((handle) => handle.id === "cap");
@@ -1149,11 +1191,11 @@ function placeChips(items: Item[], elements: Map<string, HTMLDivElement>, viewpo
  * itself (its value's place, stored in the sketch); one undo step for the drag.
  */
 function dimensionGrip(
-  sketch: SketchFeature,
-  constraintId: string,
+  id: string,
   drawing: DimensionDrawing,
   frame: Frame,
-  onto?: V3,
+  onto: V3 | undefined,
+  to: (label: Vec2, quiet: boolean) => void,
 ): Handle {
   const { at, up } = drawing.text;
   const line = drawing.lines[0]!;
@@ -1169,12 +1211,12 @@ function dimensionGrip(
   const move = (offset: number) => {
     if (offset === 0 && !moved) return;
 
-    commitLabel(sketch, constraintId, [at[0] + up[0] * offset, at[1] + up[1] * offset], moved);
+    to([at[0] + up[0] * offset, at[1] + up[1] * offset], moved);
     moved = true;
   };
 
   return {
-    id: `dimension:${sketch.id}.${constraintId}`,
+    id: `dimension:${id}`,
     origin: placed(frame, at, onto),
     dir: way(up),
     value: 0,

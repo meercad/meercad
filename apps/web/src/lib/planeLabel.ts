@@ -128,16 +128,13 @@ function quad(
   return boxToQuad(width, height, corners as Screen[]);
 }
 
-/** Gap between an angle's arc and its value (screen pixels). */
-const ARC_GAP_PX = 4;
-
 /** In-plane directions tried for a level text (every 5°: plenty to look level). */
 const LEVEL_STEPS = 36;
 
 /**
- * An angle's value in its plane, right outside its arc at the arc's middle (`anchor`, `outward` the
- * way out from the arc's corner): turned in the plane so it looks as level as it can on the screen,
- * upright, its nearest edge a few pixels off the arc. `normal` is the plane's normal.
+ * An angle's value in its plane, centred on its arc at the arc's middle (`anchor`, `outward` the way
+ * out from the arc's corner): turned in the plane so it looks as level as it can on the screen,
+ * upright. `normal` is the plane's normal.
  */
 export function levelLabel(
   anchor: V3,
@@ -173,14 +170,12 @@ export function levelLabel(
   const ahead = project(add(anchor, across));
   const up = ahead && ahead[1] > at[1] ? neg(across) : across;
   const [w, h] = halfSizes(anchor, best.x, up, width, height, pixel, project);
-  // Right at the arc, on its outside: the text's nearest edge a few pixels off it.
-  const clear = Math.abs(dot(best.x, outward)) * w + Math.abs(dot(up, outward)) * h + ARC_GAP_PX * pixel;
 
-  return quad(add(anchor, outward, clear), best.x, up, w, h, width, height, project);
+  // Centred on the arc at its middle, as on a drawing (its halo keeps it readable over the arc).
+  return quad(anchor, best.x, up, w, h, width, height, project);
 }
 
 const scale = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V3, b: V3): V3 => [
   a[1] * b[2] - a[2] * b[1],
   a[2] * b[0] - a[0] * b[2],

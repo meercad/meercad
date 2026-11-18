@@ -128,7 +128,7 @@ describe("an angle's value", () => {
   const slant = (p: V3) => (p[2] >= 10 ? null : ([p[0] * 10, -p[1] * 5 - p[2] * 10] as const));
   const normal: V3 = [0, 0, 1];
 
-  it("looks level on the screen, upright, out in front of its arc", () => {
+  it("looks level on the screen, upright, centred on its arc", () => {
     // The arc's middle points up and to the right in the plane.
     const outward: V3 = [Math.SQRT1_2, Math.SQRT1_2, 0];
     const m = levelLabel([0, 0, 0], outward, normal, 30, 10, 0.1, slant)!;
@@ -140,9 +140,10 @@ describe("an angle's value", () => {
     const [, top] = apply(m, 15, 0);
     expect(top).toBeLessThan(ly!);
 
-    // Clear of the arc: all of it out in front of where it starts.
+    // Centred on the arc's middle.
     const [cx, cy] = apply(m, 15, 5);
-    expect(cx! * Math.SQRT1_2 - cy! * Math.SQRT1_2).toBeGreaterThan(0);
+    expect(cx).toBeCloseTo(0, 6);
+    expect(cy).toBeCloseTo(0, 6);
   });
 
   it("is none where its spot or every way through it cannot be seen", () => {
