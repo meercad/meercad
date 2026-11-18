@@ -11,6 +11,7 @@ import { layOnFace, pickFaceToLay, usePrintCheck } from "../../lib/printability"
 import { clearScanMeasure, measureOnScan } from "../../lib/scanMeasure";
 import { placeAt, sketchOnTerrain, useTerrainPlace } from "../../lib/terrain";
 import { addMarkPoint, measurePoint, useTerrainDraw, useTerrainMeasure } from "../../lib/terrainDraw";
+import { curveOfPick } from "../../lib/sketchEdge";
 import { planeSpecForPick } from "../../lib/topology";
 import { t } from "../../lib/i18n";
 import { commitDialog, dialogPick, kernel, startSketch, toast, useApp, type DialogState } from "../../store";
@@ -59,8 +60,19 @@ export function clickInView(
 
   useApp.setState({
     selection: toggledSelection(state.selection, pick, additive),
-    selectedFeature: featureOfPick(pick, useApp.getState().doc.features),
+    selectedFeature: ownerOfPick(pick, state),
   });
+}
+
+/**
+ * The step a pick belongs to: for an edge a sketch's curve made, the step that swept it (so its
+ * sketch's dimensions show on the model), else the step that made the face or part.
+ */
+export function ownerOfPick(pick: Pick, state: AppState): string | null {
+  const features = state.doc.features;
+  const meshes = state.output?.meshes ?? state.baseOutput?.meshes ?? [];
+
+  return curveOfPick(pick, meshes, features)?.featureId ?? featureOfPick(pick, features);
 }
 
 /**

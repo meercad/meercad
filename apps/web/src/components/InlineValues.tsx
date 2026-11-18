@@ -16,6 +16,17 @@ import { parseExpr } from "./ExprInput";
 import { ValueInput, type ValueUnit } from "./ValueInput";
 import { docUnit, fmtLen, lengthExpr, lengthText } from "../lib/units";
 import { t } from "../lib/i18n";
+import {
+  constraintRefs,
+  constraintsOfCurve,
+  curveOfFace,
+  curveOfPick,
+  needsSize,
+  pointsOf,
+  type SketchCurveRef,
+} from "../lib/sketchEdge";
+import { quickDimensions } from "../sketch/editor/labels";
+import { freshId } from "../sketch/actions";
 
 type V3 = [number, number, number];
 
@@ -29,6 +40,8 @@ interface Item {
   suggest: string;
   /** Can be detached from its variables (lengths only; angles are stored in other units). */
   unlinkable?: boolean;
+  /** A measured size that no dimension fixes yet; typing a value adds the dimension. */
+  measured?: boolean;
   commit: (expr: Expr) => void;
 }
 
@@ -289,10 +302,28 @@ function featureItems(feature: Feature, out: RebuildOutput): Item[] {
   }
 }
 
+/** A point of a sketch in the world, slid along the sketch's normal onto the plane through `onto`. */
+function placed(frame: Parameters<typeof toWorld>[0], at: Vec2, onto?: V3): V3 {
+  const world = toWorld(frame, at);
+  if (!onto) return world;
+
+  const n = frame.normal;
+  const d = (onto[0] - world[0]) * n[0] + (onto[1] - world[1]) * n[1] + (onto[2] - world[2]) * n[2];
+
+  return [world[0] + n[0] * d, world[1] + n[1] * d, world[2] + n[2] * d];
+}
+
 /**
- * Editable dimension labels of a sketch, placed on its plane (or only those of `only`, moved onto `onto`).
+ * Editable dimension labels of a sketch, placed on its plane (or only those of `only`, moved onto
+ * `onto`; with `ids` only those constraints).
  */
-function sketchItems(sketch: SketchFeature, out: RebuildOutput, only?: Set<string>, onto?: V3): Item[] {
+function sketchItems(
+  sketch: SketchFeature,
+  out: RebuildOutput,
+  only?: Set<string>,
+  onto?: V3,
+  ids?: Set<string>,
+): Item[] {
   const view = out.report.sketches.find((sketchView) => sketchView.id === sketch.id);
   if (!view) return [];
 
@@ -326,6 +357,7 @@ function sketchItems(sketch: SketchFeature, out: RebuildOutput, only?: Set<strin
       (constraint.type === "length" || constraint.type === "radius" || constraint.type === "diameter") &&
       equalPartners.has(constraintRefs(constraint)[0]!);
     if (only && !constraintRefs(constraint).some((r) => only.has(r)) && !sizedViaEqual) continue;
+    if (ids && !ids.has(constraint.id)) continue;
 
     let at: Vec2 | null = constraint.label ?? null;
 
@@ -348,18 +380,11 @@ function sketchItems(sketch: SketchFeature, out: RebuildOutput, only?: Set<strin
     if (!at) continue;
 
     const prefix = constraint.type === "diameter" ? "⌀ " : constraint.type === "radius" ? "R " : "";
-    let world = toWorld(view.frame, at);
-
-    // Slide the label along the sketch normal to the selected face, so it sits on the model.
-    if (onto) {
-      const n = view.frame.normal;
-      const d = (onto[0] - world[0]) * n[0] + (onto[1] - world[1]) * n[1] + (onto[2] - world[2]) * n[2];
-      world = [world[0] + n[0] * d, world[1] + n[1] * d, world[2] + n[2] * d];
-    }
 
     items.push({
       key: `${sketch.id}.${constraint.id}`,
-      at: world,
+      // Slid along the sketch normal to the picked face or edge, so the label sits on the model.
+      at: placed(view.frame, at, onto),
       unit: constraint.type === "angle" || constraint.type === "arc_angle" ? "deg" : "mm",
       suggest:
         constraint.type === "diameter"
@@ -388,6 +413,46 @@ function sketchItems(sketch: SketchFeature, out: RebuildOutput, only?: Set<strin
   }
 
   return items;
+}
+
+/**
+ * The measured size of a curve no dimension fixes yet (a line's length, a circle's diameter, an arc's
+ * radius) at the picked spot; typing a value adds that dimension to the sketch.
+ */
+function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: string, onto: V3): Item[] {
+  const view = out.report.sketches.find((sketchView) => sketchView.id === sketch.id);
+  const curve = view?.curves.find((x) => x.id === curveId);
+  if (!view || !curve || !needsSize(sketch, curveId)) return [];
+
+  return quickDimensions(sketch, curve)
+    .filter((quick) => quick.length)
+    .map((quick) => ({
+      key: `${sketch.id}.${curveId}.${quick.key}`,
+      at: placed(view.frame, quick.at, onto),
+      text: quick.text,
+      value: +quick.value.toFixed(3),
+      unit: "mm" as const,
+      suggest: curve.kind === "line" ? "length" : curve.kind === "circle" ? "diameter" : "radius",
+      measured: true,
+      commit: (expr: Expr) =>
+        apply({
+          type: "edit_feature",
+          id: sketch.id,
+          patch: {
+            constraints: [
+              ...sketch.constraints,
+              { id: freshId(sketch, "c"), ...quick.make(expr) } as SketchConstraint,
+            ],
+          },
+        }),
+    }));
+}
+
+/** The dimensions of one sketch curve behind a picked edge: its own, or its measured size. */
+function curveItems(sketch: SketchFeature, out: RebuildOutput, curveId: string, onto: V3): Item[] {
+  const own = sketchItems(sketch, out, undefined, onto, constraintsOfCurve(sketch, curveId));
+
+  return [...own, ...measuredItems(sketch, out, curveId, onto)];
 }
 
 export function InlineValues({ viewport }: { viewport: Viewport }) {
@@ -429,20 +494,18 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
     ? doc.features.find((x): x is SketchFeature => x.id === skId && x.op === "sketch")
     : undefined;
 
-  if (sketch) {
-    // A picked face of the feature narrows this to the dimensions of the shape it came from.
-    const face = selection.length === 1 && selection[0]!.kind === "face" ? selection[0]! : null;
-    const curve =
-      face?.kind === "face"
-        ? face.tags
-            .map(
-              (t) =>
-                new RegExp(`^${feature.id}\\.side\\[${sketch.id}\\.([\\w-]+?)(?::\\d+)?\\]$`).exec(t)?.[1],
-            )
-            .find(Boolean)
-        : undefined;
+  // A picked edge (or sketch line) the sketch's curve made shows that curve's dimensions only.
+  const pick = selection.length === 1 ? selection[0]! : null;
+  const edge = pick ? curveOfPick(pick, out.meshes, doc.features) : null;
 
-    if (curve && face?.kind === "face") {
+  if (sketch && edge && fromSketch(edge, feature.id, sketch.id)) {
+    if (edge.curveId) items.push(...curveItems(sketch, out, edge.curveId, pick!.point));
+  } else if (sketch) {
+    // A picked face of the feature narrows this to the dimensions of the shape it came from.
+    const face = pick?.kind === "face" ? pick : null;
+    const curve = face ? curveOfFace(face.tags, feature.id, sketch.id) : null;
+
+    if (curve && face) {
       const mesh = out.meshes.find((x) => x.bodyId === face.bodyId);
       items.push(
         ...sketchItems(
@@ -463,7 +526,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
         return (
           <div
             key={item.key}
-            className="value-chip"
+            className={item.measured ? "value-chip quick-dim" : "value-chip"}
             style={{ left: s[0], top: s[1] }}
             onPointerDown={(event) => event.stopPropagation()}
           >
@@ -538,14 +601,6 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
 
 /** Entity ids of the shape a curve belongs to: everything connected to it through shared points. */
 function shapeOf(sketch: SketchFeature, curve: string): Set<string> {
-  const pointsOf = (entity: SketchFeature["entities"][number]): string[] =>
-    entity.type === "line"
-      ? [entity.p1, entity.p2]
-      : entity.type === "circle"
-        ? [entity.center]
-        : entity.type === "arc"
-          ? [entity.center, entity.start, entity.end]
-          : [];
   const ids = new Set([curve]);
 
   for (let grew = true; grew;) {
@@ -586,11 +641,9 @@ function shapeOf(sketch: SketchFeature, curve: string): Set<string> {
   return ids;
 }
 
-/** Entity ids a constraint refers to ("l1.p1" counts as "l1"). */
-function constraintRefs(constraint: SketchConstraint): string[] {
-  return Object.entries(constraint)
-    .filter(([k, v]) => k !== "id" && k !== "type" && k !== "label" && typeof v === "string")
-    .map(([, v]) => (v as string).split(".")[0]!);
+/** True when the picked edge belongs to the selected step and its sketch. */
+function fromSketch(edge: SketchCurveRef, featureId: string, sketchId: string): boolean {
+  return edge.featureId === featureId && edge.sketchId === sketchId;
 }
 
 /**

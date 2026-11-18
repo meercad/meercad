@@ -2,6 +2,7 @@
  * Direct manipulation: drag arrows on the selection to push/pull faces, extrude
  * sketch regions and fillet edges; the same arrows edit distances while a dialog is open.
  */
+import { sketchLineHandle } from "./viewport/sketchLineDrag";
 import {
   ArrowUpFromLine,
   Bolt,
@@ -96,7 +97,9 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
           ? `R ${fmtLen(v)}`
           : id === "hole"
             ? `Ø ${fmtLen(2 * v)}`
-            : fmtLen(v);
+            : id === "sketch_line"
+              ? `${v > 0 ? "+" : ""}${fmtLen(v)}`
+              : fmtLen(v);
     viewport.onHandleDrag = (handle, v, screen) =>
       setTip(handle && screen ? { x: screen[0], y: screen[1], text: label(handle.id, v) } : null);
 
@@ -441,6 +444,10 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
         },
       ];
     }
+
+    // A selected line of a sketch: dragged across itself, by the line or its arrow.
+    const line = sel.length === 1 ? sketchLineHandle(out, sel[0]!) : null;
+    if (line) return [line];
 
     const edges = sel.filter((pick) => pick.kind === "edge");
 
@@ -883,7 +890,8 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
     <div className="overlay-layer">
       {handles.map((handle) => {
         const s = viewport.handleTipScreen(handle.id);
-        if (!s) return null;
+        // A sketch line's arrow moves it by an amount, not to one: its size is in the chip beside it.
+        if (!s || handle.id === "sketch_line") return null;
 
         // Hole handles carry the radius but show and take the diameter.
         const scale = handle.id === "hole" ? 2 : 1;

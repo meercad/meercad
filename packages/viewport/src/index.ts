@@ -305,6 +305,8 @@ export interface Handle {
   color?: number;
   /** Draw a double arrow head (the value can go either way). Defaults to true when there is no `min`. */
   twoWay?: boolean;
+  /** A line (two world points) that grabs the arrow too: a selected sketch line is dragged by itself. */
+  grip?: [Vec3, Vec3];
 }
 
 /** `rendered`: materials in studio light with soft shadows on a ground, no edges (for pictures). */
@@ -779,6 +781,7 @@ export class Viewport {
     if (this.hover && !this.pickStillValid(this.hover)) this.hover = null;
 
     this.paint();
+    this.drawHoverLine();
     this.applyDisplayMode();
 
     if (!this.framed && (data.bodies.length || data.sketches.length)) {
@@ -805,6 +808,87 @@ export class Viewport {
 
     this.hover = pick;
     this.paint();
+    this.drawHoverLine();
+
+    // A line under the pointer can be clicked: say so, unless a drag arrow has set its own cursor.
+    const style = this.renderer.domElement.style;
+    const onLine = pick?.kind === "edge" || pick?.kind === "sketch_curve";
+    if (onLine && !style.cursor.startsWith("grab")) style.cursor = "pointer";
+    else if (!onLine && style.cursor === "pointer") style.cursor = "";
+  }
+
+  /** The thick line over a hovered edge or sketch curve, so it stands out before it is clicked. */
+  private hoverLine: Line2 | null = null;
+
+  private drawHoverLine(): void {
+    if (this.hoverLine) {
+      this.hoverLine.removeFromParent();
+      this.hoverLine.material.dispose();
+      if (this.hoverLine.userData["ownGeometry"]) this.hoverLine.geometry.dispose();
+
+      this.hoverLine = null;
+    }
+
+    const pick = this.hover;
+    if (!pick || (pick.kind !== "edge" && pick.kind !== "sketch_curve")) return;
+
+    const color = this.selected.some((x) => samePick(x, pick)) ? C.edgeSel : C.edgeHover;
+    const line = pick.kind === "edge" ? this.edgeOverlay(pick.bodyId, pick.edge) : this.curveOverlay(pick);
+    if (!line) return;
+
+    line.material.color.copy(color);
+    line.material.linewidth = HOVER_LINE_WIDTH;
+    line.material.depthTest = false;
+    line.renderOrder = 7;
+    this.hoverLine = line;
+    this.invalidate();
+  }
+
+  /** A thick copy of an edge of a part, in the part's place. */
+  private edgeOverlay(bodyId: string, edge: number): Line2 | null {
+    const body = this.bodies.find((x) => x.mesh.bodyId === bodyId);
+    if (!body) return null;
+
+    const { edgeRanges, edgeLines } = body.mesh;
+    const points: THREE.Vector3[] = [];
+
+    for (let g = 0; g < edgeRanges.length; g += 3) {
+      if (edgeRanges[g + 2] !== edge) continue;
+
+      for (let k = edgeRanges[g]!; k < edgeRanges[g]! + edgeRanges[g + 1]!; k++) {
+        points.push(new THREE.Vector3(edgeLines[k * 3]!, edgeLines[k * 3 + 1]!, edgeLines[k * 3 + 2]!));
+      }
+    }
+
+    if (points.length < 2 || !body.edges.parent) return null;
+
+    const line = fatLine(points, { color: C.edgeHover.getHex() });
+    line.userData = { ownGeometry: true };
+    body.edges.parent.add(line);
+
+    return line;
+  }
+
+  /** A thick copy of a sketch curve drawn in the view, sharing its shape. */
+  private curveOverlay(pick: Extract<Pick, { kind: "sketch_curve" }>): Line2 | null {
+    let found: Line2 | null = null;
+
+    this.sketchGroup.traverse((object) => {
+      const data = object.userData as { sketch?: string; curve?: string };
+
+      if (object instanceof Line2 && data.sketch === pick.sketchId && data.curve === pick.curveId) {
+        found = object;
+      }
+    });
+
+    const source = found as Line2 | null;
+    if (!source?.parent) return null;
+
+    const line = new Line2(source.geometry, source.material.clone());
+    line.material.dashed = false;
+    source.parent.add(line);
+
+    return line;
   }
 
   /** Bodies that highlight as a whole on hover and selection (imported meshes), never face by face. */
@@ -820,6 +904,8 @@ export class Viewport {
   setSelection(picks: Pick[]): void {
     this.selected = picks;
     this.paint();
+    // The line over a hovered edge takes the selection colour once it is picked.
+    this.drawHoverLine();
   }
 
   private pickStillValid(pick: Pick): boolean {
@@ -2027,7 +2113,7 @@ export class Viewport {
         (o.material as THREE.MeshBasicMaterial).opacity = sel ? 0.5 : hov ? 0.32 : REGION_OPACITY;
       }
 
-      if (curve !== undefined && o instanceof THREE.Line) {
+      if (curve !== undefined && isLine(o)) {
         const sel = this.selected.some(
           (pick) => pick.kind === "sketch_curve" && pick.sketchId === sketch && pick.curveId === curve,
         );
@@ -2035,7 +2121,7 @@ export class Viewport {
           this.hover?.kind === "sketch_curve" &&
           this.hover.sketchId === sketch &&
           this.hover.curveId === curve;
-        const mat = o.material as THREE.LineBasicMaterial;
+        const mat = o.material as THREE.LineBasicMaterial | LineMaterial;
         if (mat.userData["base"] === undefined) mat.userData["base"] = mat.color.getHex();
 
         mat.color.setHex(
@@ -2173,13 +2259,28 @@ export class Viewport {
       const t = Math.max(0.35, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / l2));
       const dist = Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py) - (t > 0.9 ? 6 : 0);
 
-      if (dist < bd) {
-        bd = dist;
+      const onGrip = handle.grip ? this.screenDistanceToSegment(px, py, handle.grip) : Infinity;
+
+      if (Math.min(dist, onGrip) < bd) {
+        bd = Math.min(dist, onGrip);
         best = handle;
       }
     }
 
     return best;
+  }
+
+  /** Distance in pixels from a point of the view to a segment between two world points, as drawn. */
+  private screenDistanceToSegment(px: number, py: number, [from, to]: [Vec3, Vec3]): number {
+    const a = this.worldToScreen(from);
+    const b = this.worldToScreen(to);
+    if (!a || !b) return Infinity;
+
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+
+    return Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py);
   }
 
   /** Axis parameter closest to the pointer ray. */
@@ -2428,11 +2529,27 @@ export class Viewport {
     return flat;
   }
 
+  /**
+   * Fat lines measure their width (and the pick tolerance) on the screen they were last drawn on; one
+   * not drawn yet, or drawn before a resize, would miss. They get the screen's size before a pick.
+   */
+  private sizeFatLines(group: THREE.Object3D): void {
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+
+    group.traverse((object) => {
+      if (object instanceof Line2) object.material.resolution.copy(size);
+    });
+  }
+
   pick(clientX: number, clientY: number, kinds: ReadonlySet<PickKind>): Pick | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
 
     const px = this.pixelSize();
     this.raycaster.params.Line = { threshold: px * 6 };
+
+    // Sketch curves are fat lines (Line2): their tolerance is in drawn pixels, added to the line's width.
+    const threshold = CURVE_PICK_PX * 2 * this.renderer.getPixelRatio();
+    (this.raycaster.params as { Line2?: { threshold: number } }).Line2 = { threshold };
 
     const ray = this.raycaster;
     const v3 = (p: THREE.Vector3): Vec3 => [p.x, p.y, p.z];
@@ -2444,12 +2561,11 @@ export class Viewport {
     const occlusion = faceHit ? faceHit.distance + px * 4 : Infinity;
 
     if (kinds.has("sketch_curve") && this.sketchGroup.visible) {
+      this.sizeFatLines(this.sketchGroup);
+
       const hit = ray
         .intersectObject(this.sketchGroup, true)
-        .find(
-          (h) =>
-            h.object instanceof THREE.Line && (h.object.userData as { curve?: string }).curve !== undefined,
-        );
+        .find((h) => isLine(h.object) && (h.object.userData as { curve?: string }).curve !== undefined);
 
       if (hit) {
         const { sketch, curve } = hit.object.userData as { sketch: string; curve: string };
@@ -3459,10 +3575,21 @@ export { THREE };
 /** Sketch lines are drawn this wide (screen pixels); plain WebGL lines are one pixel on Apple devices. */
 export const SKETCH_LINE_WIDTH = 2.5;
 
+/** Width of the line over a hovered edge or sketch curve (pixels). */
+const HOVER_LINE_WIDTH = 5;
+
 /**
  * A line of a given width in screen pixels through the points (sketch curves, previews, guides).
  * `loop` closes it; `dashed` draws dashes in sketch units.
  */
+/** How far from a sketch curve a click still picks it (CSS pixels, each side). */
+const CURVE_PICK_PX = 6;
+
+/** A drawn line: a thin one, or a fat one (Line2, a mesh underneath) as sketch curves are drawn. */
+function isLine(object: THREE.Object3D): object is THREE.Line | Line2 {
+  return object instanceof THREE.Line || object instanceof Line2;
+}
+
 /** A round knob drawn over the model: the part of a symbol to take hold of. */
 function knob(at: THREE.Vector3, radius: number, color: number): THREE.Mesh {
   const m = new THREE.Mesh(
