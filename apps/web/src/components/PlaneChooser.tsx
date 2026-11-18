@@ -93,7 +93,9 @@ export function PlaneChooser({ viewport, planes }: { viewport: Viewport; planes:
             </button>
           ))}
         <span className="muted">
-          {matchMedia("(pointer: coarse)").matches ? t("or tap a flat face") : t("or click a flat face")}
+          {matchMedia("(pointer: coarse)").matches
+            ? t("or tap a flat face, or empty space for the ground")
+            : t("or click a flat face, or empty space (or Option-click) for the ground")}
         </span>
         <button
           className="plane-bar-cancel"

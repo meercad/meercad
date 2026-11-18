@@ -810,7 +810,8 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
     const w = item.text.length * 7.4 + 22 + (item.unlinkable && typeof item.value === "string" ? 26 : 0);
     const steps = [0, 1, -1, 2, -2, 3, -3, 4, -4];
     // A dimension's text moves along its line out of the way, a chip up or down.
-    const way = item.plane ? screenWay(item, viewport, s) : null;
+    // (An angle's value stays on its arc.)
+    const way = item.plane && !item.plane.level ? screenWay(item, viewport, s) : null;
     const box = steps
       .map((k) =>
         way

@@ -10,6 +10,7 @@ import type { Feature, SketchEntity } from "@meercad/schema";
 import { apply, closeSketch, currentDoc, getViewport, newProject, rebuildNow, useApp } from "../store";
 import { rebuilt, renderUi, withScreen } from "../../test/ui";
 import { installProbe, probeState, uiTesting } from "../lib/uitestProbe";
+import { clickInView } from "./viewport/click";
 import { ViewportView } from "./ViewportView";
 
 const rect: SketchEntity[] = [
@@ -82,6 +83,36 @@ describe("choosing a sketch plane", () => {
     await settle();
     await act(async () => void fireEvent.click(screen.getByTitle("Cancel (Esc)")));
     expect(useApp.getState().pickingSketchPlane).toBe(false);
+  });
+
+  it("starts on the ground for a click on nothing, or with Option over a part", async () => {
+    const newest = () =>
+      (
+        currentDoc().features.find((f) => f.id === useApp.getState().sketchId) as Extract<
+          Feature,
+          { op: "sketch" }
+        >
+      ).plane;
+    const viewport = getViewport()!;
+
+    await act(async () => useApp.setState({ pickingSketchPlane: true }));
+    await act(async () => clickInView(viewport, null, false, [5, 5]));
+    expect(newest()).toEqual({ ref: "origin.XY" });
+    await act(async () => closeSketch());
+
+    const onPart = viewport.worldToScreen([20, 10, 10])!;
+    const part = viewport.pick(onPart[0], onPart[1], new Set(["face"]));
+    expect(part?.kind).toBe("face");
+    await act(async () => useApp.setState({ pickingSketchPlane: true }));
+    await act(async () => clickInView(viewport, part, false, onPart, true));
+    expect(newest()).toEqual({ ref: "origin.XY" });
+    await act(async () => closeSketch());
+
+    // Without Option the part's face is taken.
+    await act(async () => useApp.setState({ pickingSketchPlane: true }));
+    await act(async () => clickInView(viewport, part, false, onPart));
+    expect(newest()).not.toEqual({ ref: "origin.XY" });
+    await act(async () => closeSketch());
   });
 });
 

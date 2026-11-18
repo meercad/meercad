@@ -12,6 +12,7 @@ import { clearScanMeasure, measureOnScan } from "../../lib/scanMeasure";
 import { placeAt, sketchOnTerrain, useTerrainPlace } from "../../lib/terrain";
 import { addMarkPoint, measurePoint, useTerrainDraw, useTerrainMeasure } from "../../lib/terrainDraw";
 import { curveOfPick } from "../../lib/sketchEdge";
+import { choosePlane } from "../../lib/sketchPlane";
 import { planeSpecForPick } from "../../lib/topology";
 import { t } from "../../lib/i18n";
 import { commitDialog, dialogPick, kernel, startSketch, toast, useApp, type DialogState } from "../../store";
@@ -44,11 +45,12 @@ export function clickInView(
   pick: Pick | null,
   additive: boolean,
   at?: [number, number],
+  ground = false,
 ): void {
   const state = useApp.getState();
   if (clickOnTerrainOrPlate(viewport, pick, at, state)) return;
   if (!state.dialog && jointPick(pick)) return;
-  if (state.pickingSketchPlane) return pickSketchPlane(viewport, pick, at, state);
+  if (state.pickingSketchPlane) return pickSketchPlane(viewport, pick, at, state, ground);
   if (state.measure.active) return measurePick(pick, state);
 
   // A mesh part is picked as a whole: its faces are thousands of triangles.
@@ -128,20 +130,22 @@ function clickOnTerrainOrPlate(
   return false;
 }
 
-/** Choosing where a new sketch goes: a plane, a flat face, or level on the terrain. */
+/**
+ * Choosing where a new sketch goes (lib/sketchPlane.ts): the flat face or plane clicked, the ground for
+ * a click on nothing or with Option/Alt held (`ground`: parts never block it), or level on the terrain.
+ */
 function pickSketchPlane(
   viewport: Viewport,
   pick: Pick | null,
   at: [number, number] | undefined,
   state: AppState,
+  ground: boolean,
 ): void {
-  // On the terrain (no part or plane in the way): a level sketch at that height.
-  const ground = !pick && at ? viewport.sceneryHit(at[0], at[1]) : null;
-  if (ground) return sketchOnTerrain(ground.point);
-  if (!pick) return;
+  const terrain = !pick && !ground && at ? viewport.sceneryHit(at[0], at[1]) : null;
+  const choice = choosePlane(pick, !!terrain, ground, (p) => planeSpecForPick(p, state.output?.meshes ?? []));
 
-  const spec = planeSpecForPick(pick, state.output?.meshes ?? []);
-  if (spec) startSketch(spec);
+  if (choice.kind === "terrain") sketchOnTerrain(terrain!.point);
+  else if (choice.kind === "plane") startSketch(choice.spec);
   else toast(t("Pick a plane or a flat face"), "error");
 }
 

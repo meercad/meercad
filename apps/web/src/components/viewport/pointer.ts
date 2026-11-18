@@ -208,7 +208,12 @@ export class ViewPointer {
     if (event.buttons) return;
     if (this.followGround(event)) return;
 
-    this.viewport.setHover(this.viewport.pick(event.clientX, event.clientY, pickKinds()));
+    // Choosing where a sketch goes: nothing under the pointer (or Option held) means the ground.
+    const choosing = useApp.getState().pickingSketchPlane;
+    const pick =
+      choosing && event.altKey ? null : this.viewport.pick(event.clientX, event.clientY, pickKinds());
+    const ground = choosing && !pick;
+    this.viewport.setHover(ground ? { kind: "plane", planeId: "origin.XY", point: [0, 0, 0] } : pick);
   }
 
   /**
@@ -346,7 +351,13 @@ export class ViewPointer {
     const doubleClicked = this.secondClickOnFace(pick, event);
     if (doubleClicked) return selectParts([doubleClicked], additive, true);
 
-    clickInView(this.viewport, pick, additive || event.pointerType === "pen", [event.clientX, event.clientY]);
+    clickInView(
+      this.viewport,
+      pick,
+      additive || event.pointerType === "pen",
+      [event.clientX, event.clientY],
+      event.altKey,
+    );
   }
 
   /**

@@ -162,8 +162,10 @@ export default {
   // components/PlaneChooser.tsx
   "Sketch plane": "Skizzenebene",
   "Sketch on": "Skizze auf",
-  "or click a flat face": "oder klicke auf eine ebene Fläche",
-  "or tap a flat face": "oder tippe auf eine ebene Fläche",
+  "or click a flat face, or empty space (or Option-click) for the ground":
+    "oder klicke auf eine ebene Fläche, ins Leere (oder mit Option) für den Boden",
+  "or tap a flat face, or empty space for the ground":
+    "oder tippe auf eine ebene Fläche, ins Leere für den Boden",
   "Cancel (Esc)": "Abbrechen (Esc)",
   Cancel: "Abbrechen",
   "Trace mesh section": "Netzschnitt nachzeichnen",
