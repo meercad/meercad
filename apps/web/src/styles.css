@@ -5946,3 +5946,39 @@ html.in-assistant-tab .ai-activity {
 .tool-sheet .kbd {
   display: none;
 }
+
+/*
+ * Dimensions drawn like a technical drawing's: the value is plain text on its dimension line or arc,
+ * laid into the sketch plane (sketch/editor/scene.ts layIntoPlane), no chip round it.
+ */
+.sketch-label.on-line,
+.value-chip.on-line button {
+  padding: 0 1px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  height: auto;
+  font: 600 12px var(--mono);
+  color: var(--text);
+  text-shadow:
+    0 0 2px var(--bg),
+    0 0 2px var(--bg);
+}
+.sketch-label.on-line.sel,
+.value-chip.on-line button:hover {
+  color: var(--accent);
+}
+/* not a dimension yet: grey */
+.value-chip.on-line.quick-dim button,
+.quick-dim.pair-angle button {
+  color: var(--text-2);
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+.value-chip.on-line {
+  transform: none;
+}

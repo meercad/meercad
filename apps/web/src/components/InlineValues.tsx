@@ -28,10 +28,19 @@ import {
 import { pairAngle, quickDimensions } from "../sketch/editor/labels";
 import { freshId } from "../sketch/actions";
 import { followChipDrag } from "../lib/chipDrag";
-import { angleArc, arcPoints, arcRays } from "../lib/angleDim";
+import {
+  angleDrawing,
+  extentOf,
+  lengthDrawing,
+  middleOf,
+  planeText,
+  sizesFor,
+  type DimensionDrawing,
+} from "../lib/dimStyle";
+import { dimensionColor } from "../sketch/editor/scene";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
-import { angleOf, dimensionGeometry, linePair } from "../sketch/editor/geometry";
+import { dimensionDrawing, dimensionGeometry } from "../sketch/editor/geometry";
 
 type V3 = [number, number, number];
 
@@ -49,8 +58,12 @@ interface Item {
   measured?: boolean;
   /** Dragging moves the chip: dropped on `frame`'s plane, it is stored there (sketch coordinates). */
   drag?: { frame: Frame; to: (at: Vec2) => void };
-  /** Lines drawn dashed with the value (an angle's arc and rays), in the world. */
-  arc?: V3[][];
+  /** Its dimension drawn on the model (lines and arrowheads in the world); dashed while only measured. */
+  drawn?: Drawn;
+  /** Its text laid into the sketch plane along its line (world directions). */
+  plane?: { along: V3; up: V3 };
+  /** Plain text without a chip, as a sketch's dimensions are drawn. */
+  bare?: boolean;
   commit: (expr: Expr) => void;
 }
 
@@ -344,6 +357,8 @@ function sketchItems(
   if (!view) return [];
 
   const pts = new Map(view.points.map(([id, x, y]) => [id, [x, y] as Vec2]));
+  const sizes = sizesFor(extentOf(pts.values()));
+  const inside = middleOf(pts.values());
 
   const mid = (id: string): Vec2 | null => {
     const curve = view.curves.find((x) => x.id === id);
@@ -375,18 +390,15 @@ function sketchItems(
     if (only && !constraintRefs(constraint).some((r) => only.has(r)) && !sizedViaEqual) continue;
     if (ids && !ids.has(constraint.id)) continue;
 
-    let at: Vec2 | null = constraint.label ?? null;
+    // Lengths, distances and angles drawn like a technical drawing's, their value on the line.
+    const drawing = dimensionDrawing(constraint, { points: pts, curves: view.curves }, sizes, inside);
+    let at: Vec2 | null = drawing?.text.at ?? constraint.label ?? null;
 
     if (!at) {
       if (constraint.type === "length") {
         at = mid(constraint.line);
       } else if (constraint.type === "radius" || constraint.type === "diameter") {
         at = mid(constraint.curve);
-      } else if (constraint.type === "angle") {
-        // Between the two lines, on the arc of the angle (as in the sketch editor).
-        const pair = linePair(view, constraint.a, constraint.b);
-        const value = typeof constraint.value === "number" ? constraint.value : undefined;
-        at = (pair && angleArc(pair[0], pair[1], null, value)?.label) ?? mid(constraint.a);
       } else if (constraint.type === "arc_angle") {
         at = mid(constraint.curve);
       } else if (constraint.type === "distance") {
@@ -404,15 +416,21 @@ function sketchItems(
       key: `${sketch.id}.${constraint.id}`,
       // Slid along the sketch normal to the picked face or edge, so the label sits on the model.
       at: placed(view.frame, at, onto),
-      ...(constraint.type === "angle"
-        ? { arc: angleLines(constraint, view, onto) }
+      bare: true,
+      ...(drawing
+        ? inWorld(drawing, view.frame, onto)
         : constraint.label
-          ? { arc: leaderLines(constraint, view, onto) }
+          ? { drawn: { lines: leaderLines(constraint, view, onto), arrows: [] } }
           : {}),
-      drag: {
-        frame: shiftedFrame(view.frame, onto),
-        to: (label) => commitLabel(sketch, constraint.id, label),
-      },
+      // A length's line moves parallel to itself; an angle's arc stays where it is.
+      ...(constraint.type === "angle"
+        ? {}
+        : {
+            drag: {
+              frame: shiftedFrame(view.frame, onto),
+              to: (label: Vec2) => commitLabel(sketch, constraint.id, label),
+            },
+          }),
       unit: constraint.type === "angle" || constraint.type === "arc_angle" ? "deg" : "mm",
       suggest:
         constraint.type === "diameter"
@@ -451,36 +469,48 @@ function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: strin
   if (!view || !curve) return [];
 
   const sizeFree = needsSize(sketch, curveId);
+  const pts = view.points.map(([, x, y]) => [x, y] as Vec2);
+  const sizes = sizesFor(extentOf(pts));
 
   // Sizes, and an arc's sweep (the angle at its centre); a line's slant would only clutter the model.
   return quickDimensions(sketch, curve)
     .filter((quick) => (quick.length ? sizeFree : quick.key === "sweep"))
-    .map((quick) => ({
-      key: `${sketch.id}.${curveId}.${quick.key}`,
-      at: placed(view.frame, quick.at, onto),
-      text: quick.text,
-      value: +quick.value.toFixed(3),
-      unit: quick.length ? ("mm" as const) : ("deg" as const),
-      suggest: !quick.length
-        ? "angle"
-        : curve.kind === "line"
-          ? "length"
-          : curve.kind === "circle"
-            ? "diameter"
-            : "radius",
-      measured: true,
-      commit: (expr: Expr) =>
-        apply({
-          type: "edit_feature",
-          id: sketch.id,
-          patch: {
-            constraints: [
-              ...sketch.constraints,
-              { id: freshId(sketch, "c"), ...quick.make(expr) } as SketchConstraint,
-            ],
-          },
-        }),
-    }));
+    .map((quick) => {
+      // A line's length is drawn as its dimension would be, dashed and grey until it is one.
+      const drawing =
+        curve.kind === "line" && quick.length
+          ? lengthDrawing(curve.a, curve.b, sizes, null, middleOf(pts))
+          : null;
+
+      return {
+        key: `${sketch.id}.${curveId}.${quick.key}`,
+        at: placed(view.frame, drawing?.text.at ?? quick.at, onto),
+        bare: true,
+        ...(drawing ? inWorld(drawing, view.frame, onto, true) : {}),
+        text: quick.text,
+        value: +quick.value.toFixed(3),
+        unit: quick.length ? ("mm" as const) : ("deg" as const),
+        suggest: !quick.length
+          ? "angle"
+          : curve.kind === "line"
+            ? "length"
+            : curve.kind === "circle"
+              ? "diameter"
+              : "radius",
+        measured: true,
+        commit: (expr: Expr) =>
+          apply({
+            type: "edit_feature",
+            id: sketch.id,
+            patch: {
+              constraints: [
+                ...sketch.constraints,
+                { id: freshId(sketch, "c"), ...quick.make(expr) } as SketchConstraint,
+              ],
+            },
+          }),
+      };
+    });
 }
 
 /** The curves of `sketchId` two picks were made from, or null unless both are of that sketch. */
@@ -497,13 +527,7 @@ function linesOf(
 }
 
 /** The angle between two lines of a sketch: its dimension, or the measured angle to fix it. */
-function angleItems(
-  sketch: SketchFeature,
-  out: RebuildOutput,
-  [a, b]: [string, string],
-  onto: V3,
-  label: PairLabel,
-): Item[] {
+function angleItems(sketch: SketchFeature, out: RebuildOutput, [a, b]: [string, string], onto: V3): Item[] {
   const view = out.report.sketches.find((x) => x.id === sketch.id);
   if (!view) return [];
 
@@ -512,11 +536,13 @@ function angleItems(
   const existing = sketch.constraints.filter(same).map((x) => x.id);
   if (existing.length) return sketchItems(sketch, out, undefined, onto, new Set(existing));
 
-  const key = `${a},${b}`;
-  const quick = pairAngle(sketch, view, a, b, label.value?.key === key ? label.value.at : null);
+  const quick = pairAngle(sketch, view, a, b);
   if (!quick?.angle) return [];
 
-  const world = (points: Vec2[]) => points.map((p) => placed(view.frame, p, onto));
+  const drawing = angleDrawing(
+    quick.angle.arc,
+    sizesFor(extentOf(view.points.map(([, x, y]) => [x, y] as Vec2))),
+  );
 
   return [
     {
@@ -527,11 +553,8 @@ function angleItems(
       unit: "deg",
       suggest: "angle",
       measured: true,
-      arc: [
-        arcPoints(quick.angle.arc),
-        ...arcRays(quick.angle.arc, quick.angle.p, quick.angle.q).map((x) => [x.a, x.b]),
-      ].map(world),
-      drag: { frame: shiftedFrame(view.frame, onto), to: (at) => label.set({ key, at }) },
+      bare: true,
+      ...inWorld(drawing, view.frame, onto, true),
       commit: (expr: Expr) =>
         commitConstraints(sketch, out, [
           ...sketch.constraints,
@@ -558,10 +581,9 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const [editing, setEditing] = useState<string | null>(null);
   const showValues = usePrefs((prefs) => prefs.showValues);
   const selection = useApp((state) => state.selection);
-  const [pairLabel, setPairLabel] = useState<PairLabel["value"]>(null);
-  const arcs = useRef<V3[][]>([]);
-  arcs.current = [];
-  useDashedLines(viewport, arcs);
+  const drawings = useRef<Drawn[]>([]);
+  drawings.current = [];
+  useDrawings(viewport, drawings);
   useEffect(() => viewport.onChange(tick), [viewport]);
   useEffect(() => preloadSolver(), []);
 
@@ -604,9 +626,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const pair = sketch && selection.length === 2 ? linesOf(selection, out, doc.features, sketch.id) : null;
 
   if (sketch && pair) {
-    items.push(
-      ...angleItems(sketch, out, pair, selection[1]!.point, { value: pairLabel, set: setPairLabel }),
-    );
+    items.push(...angleItems(sketch, out, pair, selection[1]!.point));
   } else if (sketch && edge && fromSketch(edge, feature.id, sketch.id)) {
     if (edge.curveId) items.push(...curveItems(sketch, out, edge.curveId, pick!.point));
   } else if (sketch) {
@@ -629,7 +649,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
     }
   }
 
-  arcs.current = items.flatMap((item) => item.arc ?? []);
+  drawings.current = items.flatMap((item) => (item.drawn ? [item.drawn] : []));
 
   return (
     <div className="overlay-layer">
@@ -637,8 +657,8 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
         return (
           <div
             key={item.key}
-            className={`value-chip${item.measured ? " quick-dim" : ""}${item.arc ? " pair-angle" : ""}`}
-            style={{ left: s[0], top: s[1] }}
+            className={`value-chip${item.measured ? " quick-dim" : ""}${item.bare ? " on-line" : ""}`}
+            style={{ left: s[0], top: s[1], ...laidStyle(item, viewport, s) }}
             onPointerDown={(event) => {
               event.stopPropagation();
 
@@ -888,26 +908,6 @@ function commitConstraints(sketch: SketchFeature, out: RebuildOutput, constraint
   });
 }
 
-/** Where the angle chip of two picked lines was dragged (sketch coordinates), and how to change it. */
-interface PairLabel {
-  value: { key: string; at: Vec2 } | null;
-  set: (value: { key: string; at: Vec2 }) => void;
-}
-
-/** An angle dimension's arc and rays, in the world (on the plane through `onto`). */
-function angleLines(
-  constraint: Extract<SketchConstraint, { type: "angle" }>,
-  view: RebuildOutput["report"]["sketches"][number],
-  onto?: V3,
-): V3[][] {
-  const angle = angleOf(constraint, view);
-  if (!angle) return [];
-
-  const lines = [arcPoints(angle.arc), ...arcRays(angle.arc, angle.p, angle.q).map((x) => [x.a, x.b])];
-
-  return lines.map((points) => points.map((p) => placed(view.frame, p, onto)));
-}
-
 /**
  * A moved dimension's lines to what it measures: extension lines from the ends to the dimension line
  * through its value (a length, a distance), or a leader from the circle or arc (a radius, a diameter).
@@ -931,8 +931,40 @@ function leaderLines(
   return lines;
 }
 
-/** Draws the lines in `lines` dashed over the model, again whenever they change. */
-function useDashedLines(viewport: Viewport, lines: { readonly current: V3[][] }): void {
+/** A dimension drawn on the model: lines and filled arrowheads in the world, dashed while only measured. */
+interface Drawn {
+  lines: V3[][];
+  arrows: V3[][];
+  measured?: boolean;
+}
+
+/** A dimension's drawing (sketch coordinates) on the model, with the way its text runs there. */
+function inWorld(
+  drawing: DimensionDrawing,
+  frame: Frame,
+  onto?: V3,
+  measured = false,
+): { drawn: Drawn; plane: { along: V3; up: V3 } } {
+  const world = (p: Vec2) => placed(frame, p, onto);
+
+  const way = (v: Vec2): V3 => {
+    const [o, w] = [toWorld(frame, [0, 0]), toWorld(frame, v)];
+
+    return [w[0] - o[0], w[1] - o[1], w[2] - o[2]];
+  };
+
+  return {
+    drawn: {
+      lines: drawing.lines.map(({ a, b }) => [world(a), world(b)]),
+      arrows: drawing.arrows.map((corners) => corners.map(world)),
+      measured,
+    },
+    plane: { along: way(drawing.text.along), up: way(drawing.text.up) },
+  };
+}
+
+/** Draws the dimensions in `drawings` on the model, again whenever they change. */
+function useDrawings(viewport: Viewport, drawings: { readonly current: Drawn[] }): void {
   const group = useMemo(() => new THREE.Group(), []);
   const drawn = useRef("");
 
@@ -946,50 +978,75 @@ function useDashedLines(viewport: Viewport, lines: { readonly current: V3[][] })
   }, [viewport, group]);
 
   useEffect(() => {
-    const signature = JSON.stringify(
-      lines.current.map((line) => line.map((p) => p.map((x) => +x.toFixed(3)))),
-    );
+    const signature = JSON.stringify(drawings.current);
     if (signature === drawn.current) return;
 
     drawn.current = signature;
     clearGroup(group);
 
-    for (const line of lines.current) group.add(dashedLine(line));
+    for (const drawing of drawings.current) group.add(drawingOnModel(drawing));
 
     viewport.invalidate();
   });
 }
 
-/** A dashed line through world points, drawn over the model; dashes sized to the line. */
-function dashedLine(points: V3[]): THREE.Line {
-  const length = points
-    .slice(1)
-    .reduce((sum, p, i) => sum + Math.hypot(...p.map((x, k) => x - points[i]![k]!)), 0);
-  const dash = Math.max(length / 24, 0.05);
-  const line = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(points.map((p) => new THREE.Vector3(...p))),
-    new THREE.LineDashedMaterial({
-      color: ANGLE_COLOR,
-      dashSize: dash,
-      gapSize: dash * 0.7,
-      depthTest: false,
-    }),
+/** Thin lines (dashed and grey for a measured size) and arrowheads, drawn over the model. */
+function drawingOnModel(drawing: Drawn): THREE.Group {
+  const group = new THREE.Group();
+  const color = drawing.measured ? MEASURED_GREY : dimensionColor();
+  const points = drawing.lines.flatMap((line) => line.map((p) => new THREE.Vector3(...p)));
+  const length = drawing.lines.reduce(
+    (sum, [a, b]) => sum + Math.hypot(b![0] - a![0], b![1] - a![1], b![2] - a![2]),
+    0,
   );
-  line.computeLineDistances();
-  line.renderOrder = 30;
+  const dash = Math.max(length / 60, 0.05);
+  const lines = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(points),
+    drawing.measured
+      ? new THREE.LineDashedMaterial({ color, dashSize: dash, gapSize: dash * 0.7, depthTest: false })
+      : new THREE.LineBasicMaterial({ color, depthTest: false }),
+  );
+  if (drawing.measured) lines.computeLineDistances();
 
-  return line;
+  lines.renderOrder = 30;
+  group.add(lines);
+
+  const arrows = new THREE.Mesh(
+    new THREE.BufferGeometry().setFromPoints(drawing.arrows.flat().map((p) => new THREE.Vector3(...p))),
+    new THREE.MeshBasicMaterial({ color, depthTest: false, side: THREE.DoubleSide }),
+  );
+  arrows.renderOrder = 30;
+  group.add(arrows);
+
+  return group;
 }
 
-/** Colour of an angle's dashed arc on the model (the accent of the value chips). */
-const ANGLE_COLOR = 0x4f46e5;
+/** A size measured but no dimension yet: grey. */
+const MEASURED_GREY = 0x6b7280;
 
 function clearGroup(group: THREE.Group): void {
   for (const child of [...group.children]) {
     child.removeFromParent();
-
-    const line = child as THREE.Line;
-    line.geometry.dispose();
-    (line.material as THREE.Material).dispose();
+    child.traverse((part) => {
+      const mesh = part as THREE.Mesh;
+      mesh.geometry?.dispose();
+      (mesh.material as THREE.Material | undefined)?.dispose();
+    });
   }
+}
+
+/** For text laid into the sketch plane: the CSS that turns it along its line (as in the sketch editor). */
+function laidStyle(item: Item, viewport: Viewport, at: [number, number]) {
+  if (!item.plane) return { transform: item.bare ? "translate(-50%, -50%)" : undefined };
+
+  const shift = (v: V3) => viewport.worldToScreen([item.at[0] + v[0], item.at[1] + v[1], item.at[2] + v[2]]);
+  const along = shift(item.plane.along);
+  const up = shift(item.plane.up);
+  const laid = along && up ? planeText(at, along, up, 1) : null;
+  if (!laid) return { transform: "translate(-50%, -50%)" };
+
+  return {
+    transformOrigin: "0 0",
+    transform: `matrix(${laid.matrix.join(", ")}, 0, 0) translate(-50%, ${laid.above ? "calc(-100% - 1px)" : "1px"})`,
+  };
 }

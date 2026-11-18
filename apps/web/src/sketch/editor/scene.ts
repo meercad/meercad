@@ -11,8 +11,23 @@ import {
 import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { sameSel, type SketchSel, type SketchTool } from "../state";
-import { arcPoints, arcRays, type AngleArc, type Segment } from "../../lib/angleDim";
-import { angleOf, arcThrough, curveSamples, dimensionGeometry, pointEntries, refsOf } from "./geometry";
+import type { AngleArc, Segment } from "../../lib/angleDim";
+import {
+  angleDrawing,
+  extentOf,
+  middleOf,
+  planeText,
+  sizesFor,
+  type DimensionDrawing,
+} from "../../lib/dimStyle";
+import {
+  arcThrough,
+  curveSamples,
+  dimensionDrawing,
+  dimensionGeometry,
+  pointEntries,
+  refsOf,
+} from "./geometry";
 import type { Snap } from "./types";
 
 export const COLORS = {
@@ -464,40 +479,53 @@ function drawPoints(group: THREE.Group, scene: SketchScene, full: boolean) {
   group.add(points);
 }
 
-/** Colour of dimension lines, and of the arc of an angle that is only measured so far. */
-const DIMENSION_COLOR = 0x6b7280;
-const MEASURED_COLOR = 0x4f46e5;
+/** Lines and text of dimensions: dark on a light background, light on a dark one. */
+export function dimensionColor(): number {
+  const root = document.documentElement;
+  const dark =
+    root.dataset["theme"] === "dark" ||
+    (!root.dataset["theme"] && matchMedia("(prefers-color-scheme: dark)").matches);
 
-/** An angle's arc and rays, dashed (dashes sized to the arc, so it looks the same at any size). */
-export function dashedAngle(arc: AngleArc, p: Segment, q: Segment, color = DIMENSION_COLOR): THREE.Group {
+  return dark ? 0xe5e7eb : 0x1f2937;
+}
+
+/** A measured size that is no dimension yet: grey. */
+const MEASURED_COLOR = 0x6b7280;
+
+/** A dimension's lines (thin, dashed for a measured one) and filled arrowheads, in a group. */
+export function drawingObjects(drawing: DimensionDrawing, color: number, dashed = false): THREE.Group {
   const group = new THREE.Group();
-  const dash = (arc.radius * 2 * Math.PI) / 60;
-  const material = new THREE.LineDashedMaterial({
-    color,
-    dashSize: dash,
-    gapSize: dash * 0.7,
-    depthTest: false,
-  });
+  const points = drawing.lines.flatMap(({ a, b }) => [
+    new THREE.Vector3(a[0], a[1], 0),
+    new THREE.Vector3(b[0], b[1], 0),
+  ]);
+  const dash = Math.max(drawing.offset === 0 ? 1 : Math.abs(drawing.offset) / 6, 1e-3);
+  const material = dashed
+    ? new THREE.LineDashedMaterial({ color, dashSize: dash, gapSize: dash * 0.7, depthTest: false })
+    : new THREE.LineBasicMaterial({ color, depthTest: false });
+  const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), material);
+  if (dashed) lines.computeLineDistances();
 
-  const add = (points: Vec2[]) => {
-    const line = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(points.map(([x, y]) => new THREE.Vector3(x, y, 0))),
-      material,
-    );
-    line.computeLineDistances();
-    line.renderOrder = 25;
-    group.add(line);
-  };
+  lines.renderOrder = 25;
+  group.add(lines);
 
-  add(arcPoints(arc));
-  for (const ray of arcRays(arc, p, q)) add([ray.a, ray.b]);
+  const heads = new THREE.BufferGeometry().setFromPoints(
+    drawing.arrows.flatMap((tri) => tri.map(([x, y]) => new THREE.Vector3(x, y, 0))),
+  );
+  const arrows = new THREE.Mesh(
+    heads,
+    new THREE.MeshBasicMaterial({ color, depthTest: false, side: THREE.DoubleSide }),
+  );
+  arrows.renderOrder = 25;
+  group.add(arrows);
 
   return group;
 }
 
 /**
- * The extension and dimension lines of the dimensions that have a label placed, every angle's dashed
- * arc, and the arc of the angle between two lines picked together (`pair`).
+ * Every dimension's lines: lengths, distances and angles drawn like a technical drawing's (dimension
+ * line or arc with arrowheads, extension lines), a moved radius or diameter with its leader, and the
+ * angle of two lines picked together (`pair`) in grey, as it is no dimension yet.
  */
 export function drawDimensionLines(
   group: THREE.Group,
@@ -505,22 +533,26 @@ export function drawDimensionLines(
   shown: SolvedSketch,
   pair?: { arc: AngleArc; p: Segment; q: Segment } | null,
 ) {
-  if (pair) group.add(dashedAngle(pair.arc, pair.p, pair.q, MEASURED_COLOR));
+  const sizes = sizesFor(extentOf(shown.points.values()));
+  const inside = middleOf(shown.points.values());
+  const color = dimensionColor();
+
+  if (pair) group.add(drawingObjects(angleDrawing(pair.arc, sizes), MEASURED_COLOR, true));
 
   for (const constraint of sketch?.constraints ?? []) {
-    if (constraint.type === "angle") {
-      const angle = angleOf(constraint, shown);
-      if (angle) group.add(dashedAngle(angle.arc, angle.p, angle.q));
+    const drawing = dimensionDrawing(constraint, shown, sizes, inside);
 
+    if (drawing) {
+      group.add(drawingObjects(drawing, color));
       continue;
     }
 
-    const geo = dimensionGeometry(constraint, shown);
+    const geo = constraint.type === "angle" ? null : dimensionGeometry(constraint, shown);
 
     if (geo) {
       const l = new THREE.LineSegments(
         new THREE.BufferGeometry().setFromPoints(geo.map(([x, y]) => new THREE.Vector3(x, y, 0))),
-        new THREE.LineBasicMaterial({ color: 0x6b7280, depthTest: false }),
+        new THREE.LineBasicMaterial({ color, depthTest: false }),
       );
       l.renderOrder = 25;
       group.add(l);
@@ -577,5 +609,37 @@ export function placeOnScreen(
     element.style.display = "";
     element.style.left = `${s[0]}px`;
     element.style.top = `${s[1]}px`;
+    if (element.dataset["ax"] !== undefined) layIntoPlane(element, v, m, viewport, s);
   }
+}
+
+/**
+ * Lays a dimension's text into the sketch plane along its line (data-ax/ay: the way it runs,
+ * data-ux/uy: its upper side, in sketch coordinates): turned and foreshortened like the plane on the
+ * screen, readable, standing on the side of the line away from what it measures.
+ */
+export function layIntoPlane(
+  element: HTMLElement,
+  at: THREE.Vector3,
+  plane: THREE.Matrix4,
+  viewport: Viewport,
+  screen: [number, number],
+) {
+  const d = element.dataset;
+  const step = 1;
+
+  const toScreen = (dx: number, dy: number) => {
+    const w = new THREE.Vector3(dx, dy, 0).transformDirection(plane).multiplyScalar(step).add(at);
+
+    return viewport.worldToScreen([w.x, w.y, w.z]);
+  };
+
+  const along = toScreen(Number(d["ax"]), Number(d["ay"]));
+  const up = toScreen(Number(d["ux"]), Number(d["uy"]));
+  const laid = along && up ? planeText(screen, along, up, step) : null;
+
+  element.style.transformOrigin = "0 0";
+  element.style.transform = laid
+    ? `matrix(${laid.matrix.join(", ")}, 0, 0) translate(-50%, ${laid.above ? "calc(-100% - 1px)" : "1px"})`
+    : "";
 }

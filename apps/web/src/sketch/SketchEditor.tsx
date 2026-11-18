@@ -80,8 +80,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const [drag, setDrag] = useState<SolvedSketch | null>(null);
   const [hover, setHover] = useState<SketchSel | null>(null);
   const [tip, setTip] = useState<Tip | null>(null);
-  /** Where the angle chip of two picked lines was dragged (sketch coordinates), for those lines. */
-  const [pairLabel, setPairLabel] = useState<{ key: string; at: Vec2 } | null>(null);
+
   const [editing, setEditing] = useState<string | null>(null);
   const [hoverChain, setHoverChain] = useState(-1);
   const layer = useRef<HTMLDivElement>(null);
@@ -221,19 +220,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
   }, [viewport, frame, axesGroup]);
 
-  // Two lines picked together: the angle between them, on its dashed arc, ready to be fixed; its value
-  // dragged into another corner measures that one.
+  // Two lines picked together: the angle between them, on its arc in grey, ready to be fixed.
   const pickedCurves = ui.selection.filter((sel) => sel.kind === "curve");
-  const pairKey = pickedCurves.map((sel) => sel.id).join();
   const angleChip =
     sketch && shown && pickedCurves.length === 2 && ui.selection.length === 2
-      ? pairAngle(
-          sketch,
-          shown,
-          pickedCurves[0]!.id,
-          pickedCurves[1]!.id,
-          pairLabel?.key === pairKey ? pairLabel.at : null,
-        )
+      ? pairAngle(sketch, shown, pickedCurves[0]!.id, pickedCurves[1]!.id)
       : null;
 
   const ts = toolState.current;
@@ -716,10 +707,6 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           typing={typingQuick}
           setTyping={setTypingQuick}
           onSet={addQuickDim}
-          onMoved={(_key, clientX, clientY) => {
-            const at = toSketch({ clientX, clientY });
-            if (at) setPairLabel({ key: pairKey, at });
-          }}
         />
         <ConstraintLabels
           sketch={sketch}

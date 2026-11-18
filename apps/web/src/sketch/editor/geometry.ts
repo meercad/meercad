@@ -1,5 +1,6 @@
 /** Plane geometry of the sketch editor: arcs, distances to curves, point lists and model edges. */
 import { angleArc, angleArcLines, type AngleArc, type Segment } from "../../lib/angleDim";
+import { angleDrawing, lengthDrawing, type DimensionDrawing, type DimensionSizes } from "../../lib/dimStyle";
 import type { SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import {
   add2,
@@ -572,4 +573,42 @@ export function reachLabel(a: Vec2, b: Vec2, label: Vec2): Vec2[] {
   const onLine: Vec2 = [a[0] + d[0] * t, a[1] + d[1] * t];
 
   return [end, onLine];
+}
+
+/**
+ * How a length, distance or angle dimension is drawn in the sketch plane (lib/dimStyle.ts); null for
+ * other constraints or when what it measures is missing. An angle's arc ignores a stored label: its
+ * radius is chosen, not dragged.
+ */
+export function dimensionDrawing(
+  constraint: SketchConstraint,
+  solved: Pick<SolvedSketch, "points" | "curves">,
+  sizes: DimensionSizes,
+  inside: Vec2 | null,
+): DimensionDrawing | null {
+  if (constraint.type === "angle") {
+    const angle = angleOf({ ...constraint, label: undefined }, solved);
+
+    return angle ? angleDrawing(angle.arc, sizes) : null;
+  }
+
+  const label = "label" in constraint ? (constraint.label ?? null) : null;
+
+  if (constraint.type === "length") {
+    const line = solved.curves.find((x) => x.id === constraint.line);
+
+    return line?.kind === "line" ? lengthDrawing(line.a, line.b, sizes, label, inside) : null;
+  }
+
+  if (constraint.type !== "distance") return null;
+
+  const a = solved.points.get(constraint.a);
+  const line = solved.curves.find((x) => x.id === constraint.b);
+  const b = solved.points.get(constraint.b) ?? (line?.kind === "line" && a ? projectOnCurve(line, a) : null);
+  if (!a || !b) return null;
+
+  const axis: Vec2 | undefined =
+    constraint.axis === "x" ? [1, 0] : constraint.axis === "y" ? [0, 1] : undefined;
+
+  return lengthDrawing(a, b, sizes, label, inside, axis);
 }

@@ -5,7 +5,8 @@ import { t } from "../../lib/i18n";
 import { docUnit, fmtLen } from "../../lib/units";
 import { GLYPH } from "../icons";
 import { angleArc } from "../../lib/angleDim";
-import { fmt, linePair, sweepOf } from "./geometry";
+import { extentOf, middleOf, sizesFor } from "../../lib/dimStyle";
+import { dimensionDrawing, fmt, linePair, sweepOf } from "./geometry";
 import type { QuickDim } from "./types";
 
 export interface Label {
@@ -14,6 +15,9 @@ export interface Label {
   text: string;
   title: string;
   dimension: boolean;
+  /** Drawn in the plane on its dimension line: the way its text runs, and the side it stands on. */
+  along?: Vec2;
+  up?: Vec2;
 }
 
 /** Constraint type names for the label tooltips (English shows the type id as before). */
@@ -83,9 +87,14 @@ export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): L
         ? fmtLen(expr)
         : `${fmt(expr)}${unit}`;
 
+  // Lengths, distances and angles are drawn like a technical drawing's; their text sits on the line.
+  const sizes = sizesFor(extentOf(solved.points.values()));
+  const inside = middleOf(solved.points.values());
+
   for (const constraint of sketch.constraints) {
     if ("value" in constraint) {
-      let at: Vec2 | null = constraint.label ?? null;
+      const drawing = dimensionDrawing(constraint, solved, sizes, inside);
+      let at: Vec2 | null = drawing?.text.at ?? constraint.label ?? null;
 
       if (!at) {
         if (constraint.type === "length") {
@@ -132,6 +141,7 @@ export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): L
           id: constraint.id,
         }),
         dimension: true,
+        ...(drawing ? { along: drawing.text.along, up: drawing.text.up } : {}),
       });
       continue;
     }

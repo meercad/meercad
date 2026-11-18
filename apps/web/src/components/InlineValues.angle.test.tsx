@@ -114,7 +114,7 @@ describe("two lines picked together", () => {
     // Now a dimension: shown as one, with its dashed arc; a new value turns the same line again.
     await select(curve("l2"), curve("l1"));
     expect(texts()).toEqual(["30°"]);
-    expect(chips()[0]!.classList.contains("pair-angle")).toBe(true);
+    expect(chips()[0]!.classList.contains("on-line")).toBe(true);
     expect(getViewport()!.overlay.children.some((x) => x.children.length > 0)).toBe(true);
 
     await type(chips()[0]!, "50");
@@ -163,13 +163,15 @@ describe("a dimension's value", () => {
     expect(label[0]).toBeCloseTo(20, 1);
     expect(label[1]).toBeCloseTo(-15, 1);
 
-    // Moved, it is joined to its line: extension lines and the dimension line, drawn on the model.
+    // Drawn like a drawing's dimension on the model: lines and arrowheads, its value on the line.
     await select(curve("l1"));
     expect(
       chips()
         .find((x) => x.textContent === "40")!
-        .classList.contains("pair-angle"),
+        .classList.contains("on-line"),
     ).toBe(true);
-    expect(getViewport()!.overlay.children.some((x) => x.children.length >= 3)).toBe(true);
+
+    const drawn = getViewport()!.overlay.children.flatMap((x) => x.children);
+    expect(drawn.some((x) => x.children.length === 2)).toBe(true);
   });
 });

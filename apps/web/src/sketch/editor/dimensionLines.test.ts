@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import type { SketchConstraint } from "@meercad/schema";
 import type { SolvedSketch } from "@meercad/sketch";
-import { dimensionGeometry, reachLabel } from "./geometry";
+import { dimensionDrawing, dimensionGeometry, reachLabel } from "./geometry";
 
 const solved = {
   points: new Map([
@@ -61,5 +61,29 @@ describe("a moved dimension", () => {
   it("of a diameter: a leader from the circle", () => {
     const diameter = { id: "c", type: "diameter", curve: "k", value: 10, label: [12, 0] } as SketchConstraint;
     expect(pairs(dimensionGeometry(diameter, solved)!)).toBe(1);
+  });
+});
+
+describe("dimensions drawn like a drawing's", () => {
+  const sizes = { gap: 1, overshoot: 2, arrow: 3, offset: 10 };
+  const draw = (c: Record<string, unknown>) =>
+    dimensionDrawing({ id: "c", value: 1, ...c } as SketchConstraint, solved, sizes, [20, 20]);
+
+  it("are drawn for lengths, distances and angles, through a moved value", () => {
+    expect(draw({ type: "length", line: "l1" })!.offset).toBe(-10);
+    expect(draw({ type: "length", line: "l1", label: [20, 6] })!.text.at).toEqual([20, 6]);
+    expect(draw({ type: "distance", a: "p1", b: "p2", axis: "x" })!.lines[0]).toEqual({
+      a: [0, -10],
+      b: [40, -10],
+    });
+    expect(draw({ type: "distance", a: "p1", b: "p2", axis: "y" })).toBeNull();
+    expect(draw({ type: "distance", a: "p2", b: "l1" })).toBeNull();
+  });
+
+  it("not for what they cannot find, nor for other kinds", () => {
+    expect(draw({ type: "length", line: "k" })).toBeNull();
+    expect(draw({ type: "distance", a: "gone", b: "p2" })).toBeNull();
+    expect(draw({ type: "radius", curve: "k" })).toBeNull();
+    expect(draw({ type: "angle", a: "l1", b: "k", label: [3, 3] })).toBeNull();
   });
 });

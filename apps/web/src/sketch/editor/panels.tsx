@@ -34,15 +34,12 @@ export function QuickChips({
   typing,
   setTyping,
   onSet,
-  onMoved,
 }: {
   quick: QuickDim[];
   shapeId: string | undefined;
   typing: string | null;
   setTyping: (key: string | null) => void;
   onSet: (make: QuickDim["make"], expr: Expr) => void;
-  /** An angle's chip dragged to a spot on the screen (it measures the corner it lands in). */
-  onMoved?: (key: string, clientX: number, clientY: number) => void;
 }) {
   return (
     <>
@@ -54,7 +51,6 @@ export function QuickChips({
           data-y={q.at[1]}
           onPointerDown={(event) => {
             event.stopPropagation();
-            if (q.angle && onMoved && typing !== q.key) followChipDrag(event, (x, y) => onMoved(q.key, x, y));
           }}
         >
           {typing === q.key ? (
@@ -133,15 +129,21 @@ export function ConstraintLabels({
             key={l.id}
             data-x={l.at[0]}
             data-y={l.at[1]}
-            className={`${l.dimension ? "sketch-label" : "glyph"} ${selection.some((sel) => sel.kind === "constraint" && sel.id === l.id) ? "sel" : ""} ${conflicting.has(l.id) ? "conflict" : ""}`}
+            {...(l.along && l.up
+              ? { "data-ax": l.along[0], "data-ay": l.along[1], "data-ux": l.up[0], "data-uy": l.up[1] }
+              : {})}
+            className={`${l.dimension ? "sketch-label" : "glyph"} ${l.along ? "on-line" : ""} ${selection.some((sel) => sel.kind === "constraint" && sel.id === l.id) ? "sel" : ""} ${conflicting.has(l.id) ? "conflict" : ""}`}
             title={l.title}
             // While drawing, a click on a dimension or symbol means the spot below it (a midpoint, a
             // centre).
             style={POINT_TOOLS.has(tool) ? { pointerEvents: "none" } : undefined}
             onPointerDown={(event) => {
               event.stopPropagation();
-              // A dimension's value can be dragged out of the way; a short press stays a click.
-              if (l.dimension && onMoved) followChipDrag(event, (x, y) => onMoved(l.id, x, y));
+
+              // A dimension's value can be dragged out of the way (a length parallel to itself; an
+              // angle's arc stays where it is); a short press stays a click.
+              const angle = sketch.constraints.find((x) => x.id === l.id)?.type === "angle";
+              if (l.dimension && onMoved && !angle) followChipDrag(event, (x, y) => onMoved(l.id, x, y));
             }}
             onClick={(event) => {
               const sel: SketchSel = { kind: "constraint", id: l.id };
