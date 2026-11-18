@@ -18,6 +18,8 @@ export interface Label {
   /** Drawn in the plane on its dimension line: the way its text runs, and the side it stands on. */
   along?: Vec2;
   up?: Vec2;
+  /** An angle's value: laid level in front of its arc rather than along it. */
+  level?: boolean;
 }
 
 /** Constraint type names for the label tooltips (English shows the type id as before). */
@@ -141,7 +143,9 @@ export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): L
           id: constraint.id,
         }),
         dimension: true,
-        ...(drawing ? { along: drawing.text.along, up: drawing.text.up } : {}),
+        ...(drawing
+          ? { along: drawing.text.along, up: drawing.text.up, level: constraint.type === "angle" }
+          : {}),
       });
       continue;
     }
@@ -335,7 +339,7 @@ export function pairAngle(
   return {
     key: "pair-angle",
     at: arc.label,
-    text: `∠ ${fmt(degrees)}°`,
+    text: `${fmt(degrees)}°`,
     value: degrees,
     length: false,
     make: (expr) => ({ type: "angle", a, b, value: expr, label: placed }),

@@ -5953,7 +5953,12 @@ html.in-assistant-tab .ai-activity {
  */
 .sketch-label.on-line,
 .value-chip.on-line button {
-  padding: 0 1px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  line-height: 18px;
+  text-align: center;
+  padding: 0;
   border: none;
   border-radius: 0;
   background: none;
@@ -5982,4 +5987,9 @@ html.in-assistant-tab .ai-activity {
 }
 .value-chip.on-line {
   transform: none;
+}
+/* the editor's text gets its box size when it is laid into the plane */
+.sketch-label.on-line {
+  width: auto;
+  height: auto;
 }

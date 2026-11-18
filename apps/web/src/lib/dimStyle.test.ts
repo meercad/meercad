@@ -11,7 +11,6 @@ import {
   extentOf,
   lengthDrawing,
   middleOf,
-  planeText,
   sizesFor,
   type DimensionSizes,
 } from "./dimStyle";
@@ -66,13 +65,18 @@ describe("a length", () => {
 
 describe("an angle", () => {
   it("is its arc with arrowheads at both ends, its value half way round", () => {
-    const arc = angleArc({ a: [0, 0], b: [40, 0] }, { a: [0, 0], b: [0, 40] })!;
+    const arc = angleArc({ a: [0, 0], b: [100, 0] }, { a: [0, 0], b: [0, 100] })!;
     const drawing = angleDrawing(arc, sizes);
     expect(drawing.lines.length).toBeGreaterThan(4);
     expect(drawing.arrows).toHaveLength(2);
     expect(drawing.arrows[0]![0][1]).toBeCloseTo(0, 9);
-    expect(drawing.text.at).toEqual(arc.label);
+    expect(drawing.text.at[0]).toBeCloseTo(arc.label[0], 9);
     expect(drawing.offset).toBe(arc.radius);
+
+    // A small one grows to fit its arrowheads and value.
+    const small = angleDrawing({ ...arc, radius: 2 }, sizes);
+    expect(small.offset).toBeCloseTo(20, 9);
+    expect(Math.hypot(...small.text.at)).toBeCloseTo(20, 9);
   });
 });
 
@@ -105,43 +109,5 @@ describe("pieces", () => {
       ]),
     ).toEqual([2, 1]);
     expect(middleOf([])).toBeNull();
-  });
-});
-
-describe("text in the plane", () => {
-  it("runs left to right along its line, standing on the side it should", () => {
-    const flat = planeText([100, 100], [110, 100], [100, 90], 1)!;
-    expect(flat.matrix[0]).toBeGreaterThan(0);
-    expect(flat.above).toBe(true);
-
-    // The line runs right to left on the screen: turned round, still readable and above.
-    const back = planeText([100, 100], [90, 100], [100, 90], 1)!;
-    expect(back.matrix[0]).toBeGreaterThan(0);
-    expect(back.above).toBe(true);
-
-    // Its upper side faces down the screen (the plane seen from below): not mirrored, hanging below.
-    const under = planeText([100, 100], [110, 100], [100, 110], 1)!;
-    expect(under.matrix[0] * under.matrix[3] - under.matrix[1] * under.matrix[2]).toBeGreaterThan(0);
-    expect(under.above).toBe(false);
-  });
-
-  it("follows the zoom within bounds, and is none for a line seen end on", () => {
-    const near = planeText([0, 0], [100, 0], [0, -100], 1)!;
-    const far = planeText([0, 0], [0.01, 0], [0, -0.01], 1)!;
-    expect(near.matrix[0]).toBeCloseTo(1.4, 9);
-    expect(far.matrix[0]).toBeCloseTo(0.85, 9);
-    expect(planeText([0, 0], [0, 0], [0, -1], 1)).toBeNull();
-    expect(near.edgeOn).toBe(false);
-
-    // The plane seen almost from its side: its up runs nearly along the line.
-    const low = planeText([0, 0], [10, 0], [10, -0.3], 1)!;
-    expect(low.edgeOn).toBe(true);
-    // Still not squashed flatter than readable.
-    expect(Math.abs(low.matrix[3]) / low.matrix[0]).toBeCloseTo(0.8, 9);
-    // Nor slanted further than readable.
-    expect(Math.abs(low.matrix[2]) / Math.abs(low.matrix[3])).toBeCloseTo(0.6, 9);
-
-    const leaning = planeText([0, 0], [10, 0], [-3, -10], 1)!;
-    expect(leaning.matrix[2] / leaning.matrix[0]).toBeCloseTo(0.3, 9);
   });
 });

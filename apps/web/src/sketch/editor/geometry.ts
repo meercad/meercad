@@ -1,6 +1,8 @@
 /** Plane geometry of the sketch editor: arcs, distances to curves, point lists and model edges. */
 import { angleArc, angleArcLines, type AngleArc, type Segment } from "../../lib/angleDim";
 import { angleDrawing, lengthDrawing, type DimensionDrawing, type DimensionSizes } from "../../lib/dimStyle";
+import { lang } from "../../lib/i18n";
+import { dimensionNumber } from "../../lib/planeLabel";
 import type { SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import {
   add2,
@@ -96,7 +98,8 @@ export function arcMidFor(
 }
 
 export const round = (n: number) => Math.round(n * 1000) / 1000;
-export const fmt = (n: number) => (Math.abs(n) >= 100 ? n.toFixed(1) : n.toFixed(2)).replace(/\.?0+$/, "");
+/** A value as dimensions show it: at most two decimals, a decimal comma in German. */
+export const fmt = (n: number) => dimensionNumber(n, lang === "de");
 export const normalizeAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export function parseSel(s: string): SketchSel {

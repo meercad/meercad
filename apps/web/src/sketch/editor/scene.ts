@@ -12,14 +12,8 @@ import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { sameSel, type SketchSel, type SketchTool } from "../state";
 import type { AngleArc, Segment } from "../../lib/angleDim";
-import {
-  angleDrawing,
-  extentOf,
-  middleOf,
-  planeText,
-  sizesFor,
-  type DimensionDrawing,
-} from "../../lib/dimStyle";
+import { levelLabel, planeLabel } from "../../lib/planeLabel";
+import { angleDrawing, extentOf, middleOf, sizesFor, type DimensionDrawing } from "../../lib/dimStyle";
 import {
   arcThrough,
   curveSamples,
@@ -606,47 +600,56 @@ export function placeOnScreen(
     element.style.display = "";
     element.style.left = `${s[0]}px`;
     element.style.top = `${s[1]}px`;
-    if (element.dataset["ax"] !== undefined) layIntoPlane(element, v, m, viewport, s);
+    if (element.dataset["ax"] !== undefined) layIntoPlane(element, v, m, viewport);
   }
 }
 
 /**
- * The CSS that lays a dimension's text into its plane along its line (lib/dimStyle.ts planeText), on
- * the side away from what it measures, a pixel off the line.
- */
-export function textTransform(laid: NonNullable<ReturnType<typeof planeText>>): string {
-  return `matrix(${laid.matrix.join(", ")}, 0, 0) translate(-50%, ${laid.above ? "calc(-100% - 1px)" : "1px"})`;
-}
-
-/** A dimension's text on a plane seen almost from its side: faint, as it cannot be read well. */
-export const EDGE_ON_OPACITY = "0.3";
-
-/**
- * Lays a dimension's text into the sketch plane along its line (data-ax/ay: the way it runs,
- * data-ux/uy: its upper side, in sketch coordinates): turned and foreshortened like the plane on the
- * screen, readable, on the side of the line away from what it measures.
+ * Lays a dimension's text into the sketch plane along its line with a true perspective (data-ax/ay:
+ * the way it runs, data-ux/uy: its side away from what it measures, in sketch coordinates; see
+ * lib/planeLabel.ts), as big there as one line of text is on the screen.
  */
 export function layIntoPlane(
   element: HTMLElement,
   at: THREE.Vector3,
   plane: THREE.Matrix4,
   viewport: Viewport,
-  screen: [number, number],
 ) {
   const d = element.dataset;
-  const step = 1;
 
-  const toScreen = (dx: number, dy: number) => {
-    const w = new THREE.Vector3(dx, dy, 0).transformDirection(plane).multiplyScalar(step).add(at);
+  const way = (dx: number, dy: number) => {
+    const w = new THREE.Vector3(dx, dy, 0).transformDirection(plane);
 
-    return viewport.worldToScreen([w.x, w.y, w.z]);
+    return [w.x, w.y, w.z] as const;
   };
 
-  const along = toScreen(Number(d["ax"]), Number(d["ay"]));
-  const up = toScreen(Number(d["ux"]), Number(d["uy"]));
-  const laid = along && up ? planeText(screen, along, up, step) : null;
+  const anchor = [at.x, at.y, at.z] as const;
+  const width = (element.textContent ?? "").length * 7.8 + 6;
+  const height = 18;
+  const pixel = viewport.pixelSize([...anchor]);
+  const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
+  const away = way(Number(d["ux"]), Number(d["uy"]));
+  const matrix = d["level"]
+    ? levelLabel(anchor, away, planeNormal(plane), width, height, pixel, project)
+    : planeLabel(anchor, way(Number(d["ax"]), Number(d["ay"])), away, width, height, pixel, project);
 
+  if (!matrix) {
+    element.style.transform = "translate(-50%, -50%)";
+
+    return;
+  }
+
+  element.style.left = "0px";
+  element.style.top = "0px";
+  element.style.width = `${width}px`;
+  element.style.height = `${height}px`;
   element.style.transformOrigin = "0 0";
-  element.style.transform = laid ? textTransform(laid) : "translate(-50%, -50%)";
-  element.style.opacity = laid?.edgeOn ? EDGE_ON_OPACITY : "";
+  element.style.transform = `matrix3d(${matrix.join(", ")})`;
+}
+
+/** The normal of a sketch plane given by its matrix. */
+function planeNormal(plane: THREE.Matrix4): readonly [number, number, number] {
+  const n = new THREE.Vector3(0, 0, 1).transformDirection(plane);
+
+  return [n.x, n.y, n.z];
 }

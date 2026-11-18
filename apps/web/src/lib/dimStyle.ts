@@ -30,6 +30,9 @@ export interface DimensionDrawing {
   offset: number;
 }
 
+/** An angle's arc is at least this many times a dimension's offset in radius (about 60 pixels). */
+const MIN_ARC_PER_OFFSET = 2;
+
 /** Arrowheads are this much narrower than long (half width per length). */
 const ARROW_HALF_WIDTH = 0.3;
 
@@ -107,11 +110,18 @@ function unit(v: Vec2): Vec2 | null {
 }
 
 /** An angle drawn as its arc with arrowheads at both ends (tangent to the arc), its value on the arc. */
-export function angleDrawing(arc: AngleArc, sizes: DimensionSizes): DimensionDrawing {
+export function angleDrawing(given: AngleArc, sizes: DimensionSizes): DimensionDrawing {
+  // Never smaller than its arrowheads and value need (about 60 pixels on the screen).
+  const radius = Math.max(given.radius, sizes.offset * MIN_ARC_PER_OFFSET);
+  const middle = (given.from + given.to) / 2;
+  const arc: AngleArc = {
+    ...given,
+    radius,
+    label: [given.corner[0] + radius * Math.cos(middle), given.corner[1] + radius * Math.sin(middle)],
+  };
   const points = arcPoints(arc);
   const lines = points.slice(1).map((b, i) => ({ a: points[i]!, b }));
   const tangent = (angle: number, way: number): Vec2 => [-Math.sin(angle) * way, Math.cos(angle) * way];
-  const middle = (arc.from + arc.to) / 2;
 
   return {
     lines,
@@ -180,54 +190,3 @@ const FONT_PX = 12;
 /** The text never shrinks or grows past these factors of its font size, however far it is zoomed. */
 const MIN_TEXT_SCALE = 0.85;
 const MAX_TEXT_SCALE = 1.4;
-
-type Screen = readonly [number, number];
-
-/** Below this much height per width (as seen), the plane counts as seen from its side. */
-const EDGE_ON = 0.1;
-/** Text is never squashed flatter than this (height per width as seen), however low the view, */
-const MIN_TEXT_HEIGHT = 0.8;
-const MAX_LEAN = 0.6;
-
-/**
- * How to lay a dimension's text into its plane as seen on the screen: from where the text's spot
- * (`at`), a point `step` along its line and one `step` to its upper side land on the screen, the
- * matrix (CSS `matrix(a, b, c, d, 0, 0)`) that runs the text along the line, foreshortened like the
- * plane, readable (never mirrored or upside down), at a size that follows the zoom within bounds;
- * `above` tells whether the text stands on the upper side of its spot (else hangs below it, which is
- * then the side away from what it measures), `edgeOn` that the plane is seen almost from its side.
- * Null when the line is seen end on.
- */
-export function planeText(
-  at: Screen,
-  alongPoint: Screen,
-  upPoint: Screen,
-  step: number,
-): { matrix: [number, number, number, number]; above: boolean; edgeOn: boolean } | null {
-  const su: Vec2 = [alongPoint[0] - at[0], alongPoint[1] - at[1]];
-  const sv: Vec2 = [upPoint[0] - at[0], upPoint[1] - at[1]];
-  const length = Math.hypot(su[0], su[1]);
-  if (length < 1e-6) return null;
-
-  // Left to right on the screen.
-  const x = scaled(su, (su[0] < 0 ? -1 : 1) / length);
-  const w = scaled(sv, 1 / length);
-  // CSS y runs down: the text's up is -y; keep it unmirrored (positive determinant).
-  const det = x[0] * -w[1] - x[1] * -w[0];
-  const flat = det >= 0 ? scaled(w, -1) : w;
-  // Foreshortened, but never flatter than this: a plane seen low still shows readable text.
-  // and never slanted further than this (its lean along the line per height). (Its height across the
-  // line is never negative: it was chosen unmirrored.)
-  const n: Vec2 = [-x[1], x[0]];
-  const height = Math.max(dot2(flat, n), MIN_TEXT_HEIGHT);
-  const lean = Math.min(Math.max(dot2(flat, x), -MAX_LEAN * height), MAX_LEAN * height);
-  const y = plus(scaled(x, lean), scaled(n, height));
-  const k = Math.min(MAX_TEXT_SCALE, Math.max(MIN_TEXT_SCALE, ((length / step) * TEXT_HEIGHT) / FONT_PX));
-
-  return {
-    matrix: [x[0] * k, x[1] * k, y[0] * k, y[1] * k],
-    above: det >= 0,
-    // The plane seen almost from its side: the text would be squashed flat, so it is kept faint.
-    edgeOn: Math.abs(det) < EDGE_ON,
-  };
-}

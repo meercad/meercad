@@ -15,7 +15,7 @@ import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";
 import { ValueInput, type ValueUnit } from "./ValueInput";
 import { docUnit, fmtLen, lengthExpr, lengthText } from "../lib/units";
-import { t } from "../lib/i18n";
+import { lang, t } from "../lib/i18n";
 import {
   constraintRefs,
   constraintsOfCurve,
@@ -33,11 +33,11 @@ import {
   extentOf,
   lengthDrawing,
   middleOf,
-  planeText,
   sizesFor,
   type DimensionDrawing,
 } from "../lib/dimStyle";
-import { dimensionColor, EDGE_ON_OPACITY, textTransform } from "../sketch/editor/scene";
+import { dimensionColor } from "../sketch/editor/scene";
+import { dimensionNumber, levelLabel, planeLabel } from "../lib/planeLabel";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
 import { dimensionDrawing, dimensionGeometry } from "../sketch/editor/geometry";
@@ -66,8 +66,11 @@ interface Item {
   drag?: { frame: Frame; to: (at: Vec2) => void };
   /** Its dimension drawn on the model (lines and arrowheads in the world); grey while only measured. */
   drawn?: Drawn;
-  /** Its text laid into the sketch plane along its line (world directions). */
-  plane?: { along: V3; up: V3 };
+  /**
+   * Its text laid into the sketch plane along its line (world directions; `normal` the plane's); an
+   * angle's (`level`) in front of its arc, turned to look level.
+   */
+  plane?: { along: V3; up: V3; normal: V3; level?: boolean };
   /** Plain text without a chip, as a sketch's dimensions are drawn. */
   bare?: boolean;
   commit: (expr: Expr) => void;
@@ -79,7 +82,8 @@ const fmt = (expr: Expr, unit = " mm") => {
   if (unit === " mm") return fmtLen(expr);
   if (unit === "" && docUnit() === "in") return fmtLen(expr);
 
-  return `${+expr.toFixed(3)}${unit}`;
+  // A sketch's dimension: as on a drawing (two decimals at most, a decimal comma in German).
+  return `${dimensionNumber(expr, lang === "de")}${unit}`;
 };
 
 /**
@@ -424,7 +428,7 @@ function sketchItems(
       at: placed(view.frame, at, onto),
       bare: true,
       ...(drawing
-        ? inWorld(drawing, view.frame, onto)
+        ? inWorld(drawing, view.frame, onto, false, constraint.type === "angle")
         : constraint.label
           ? { drawn: { lines: leaderLines(constraint, view, onto), arrows: [] } }
           : {}),
@@ -493,7 +497,7 @@ function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: strin
         at: placed(view.frame, drawing?.text.at ?? quick.at, onto),
         bare: true,
         ...(drawing ? inWorld(drawing, view.frame, onto, true) : {}),
-        text: quick.text,
+        text: measuredText(quick, curve.kind),
         value: +quick.value.toFixed(3),
         unit: quick.length ? ("mm" as const) : ("deg" as const),
         suggest: !quick.length
@@ -560,7 +564,7 @@ function angleItems(sketch: SketchFeature, out: RebuildOutput, [a, b]: [string, 
       suggest: "angle",
       measured: true,
       bare: true,
-      ...inWorld(drawing, view.frame, onto, true),
+      ...inWorld(drawing, view.frame, onto, true, true),
       commit: (expr: Expr) =>
         commitConstraints(sketch, out, [
           ...sketch.constraints,
@@ -661,12 +665,12 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
 
   return (
     <div className="overlay-layer">
-      {layoutChips(items, viewport).map(({ it: item, s }) => {
+      {layoutChips(items, viewport).map(({ it: item, s, slide }) => {
         return (
           <div
             key={item.key}
             className={`value-chip${item.measured ? " quick-dim" : ""}${item.bare ? " on-line" : ""}`}
-            style={{ left: s[0], top: s[1], ...laidStyle(item, viewport, s) }}
+            style={{ left: s[0], top: s[1], ...laidStyle(item, viewport, slide) }}
             onPointerDown={(event) => {
               event.stopPropagation();
 
@@ -716,7 +720,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
  * Screen positions for the chips, nudged up or down so none overlaps another chip or a drag
  * arrow's value label (several dimensions often project onto the same spot).
  */
-function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number, number] }[] {
+function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number, number]; slide: number }[] {
   type Box = { x: number; y: number; w: number; h: number };
 
   const H = 26;
@@ -730,7 +734,7 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
     if (t) placed.push({ x: t[0] + 16, y: t[1] - 16, w: 90, h: H }, { x: t[0], y: t[1], w: 40, h: 40 });
   }
 
-  const out: { it: Item; s: [number, number] }[] = [];
+  const out: { it: Item; s: [number, number]; slide: number }[] = [];
 
   for (const item of items) {
     const s = viewport.worldToScreen(item.at);
@@ -748,7 +752,10 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
       )
       .find((b) => !placed.some((p) => overlaps(b, p))) ?? { x: s[0], y: s[1], w, h: H };
     placed.push(box);
-    out.push({ it: item, s: [box.x, box.y] });
+
+    // How far a dimension's text slid along its line (pixels, along the way it runs).
+    const slide = way ? (box.x - s[0]) * way[0] + (box.y - s[1]) * way[1] : 0;
+    out.push({ it: item, s: [box.x, box.y], slide });
   }
 
   return out;
@@ -958,7 +965,8 @@ function inWorld(
   frame: Frame,
   onto?: V3,
   measured = false,
-): { drawn: Drawn; plane: { along: V3; up: V3 } } {
+  level = false,
+): { drawn: Drawn; plane: { along: V3; up: V3; normal: V3; level?: boolean } } {
   const world = (p: Vec2) => placed(frame, p, onto);
 
   const way = (v: Vec2): V3 => {
@@ -973,7 +981,12 @@ function inWorld(
       arrows: drawing.arrows.map((corners) => corners.map(world)),
       measured,
     },
-    plane: { along: way(drawing.text.along), up: way(drawing.text.up) },
+    plane: {
+      along: way(drawing.text.along),
+      up: way(drawing.text.up),
+      normal: [...frame.normal] as V3,
+      ...(level ? { level } : {}),
+    },
   };
 }
 
@@ -1041,19 +1054,33 @@ function clearGroup(group: THREE.Group): void {
   }
 }
 
-/** For a dimension's text: the CSS that lays it into its plane along its line (as in the sketch editor). */
-function laidStyle(item: Item, viewport: Viewport, at: [number, number]) {
+/** Size of a dimension's text box (pixels): its width from its length, one line high. */
+const textBox = (text: string): [number, number] => [text.length * 7.8 + 6, 18];
+
+/**
+ * For a dimension's text: laid into its plane along its line with a true perspective (lib/planeLabel.ts),
+ * moved `slide` pixels along the line where it would cover something; a chip otherwise.
+ */
+function laidStyle(item: Item, viewport: Viewport, slide: number) {
   if (!item.plane) return { transform: item.bare ? "translate(-50%, -50%)" : undefined };
 
-  const shift = (v: V3) => viewport.worldToScreen([item.at[0] + v[0], item.at[1] + v[1], item.at[2] + v[2]]);
-  const along = shift(item.plane.along);
-  const up = shift(item.plane.up);
-  const laid = along && up ? planeText(at, along, up, 1) : null;
+  const pixel = viewport.pixelSize(item.at);
+  const { along, up } = item.plane;
+  const anchor: V3 = [0, 1, 2].map((i) => item.at[i]! + along[i]! * slide * pixel) as V3;
+  const [width, height] = textBox(item.text);
+  const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
+  const matrix = item.plane.level
+    ? levelLabel(anchor, up, item.plane.normal, width, height, pixel, project)
+    : planeLabel(anchor, along, up, width, height, pixel, project);
+  if (!matrix) return { transform: "translate(-50%, -50%)" };
 
   return {
+    left: 0,
+    top: 0,
+    width,
+    height,
     transformOrigin: "0 0",
-    transform: laid ? textTransform(laid) : "translate(-50%, -50%)",
-    ...(laid?.edgeOn ? { opacity: EDGE_ON_OPACITY } : {}),
+    transform: `matrix3d(${matrix.join(", ")})`,
   };
 }
 
@@ -1066,4 +1093,11 @@ function screenWay(item: Item, viewport: Viewport, at: [number, number]): [numbe
   const length = Math.hypot(end[0] - at[0], end[1] - at[1]);
 
   return length > 1e-6 ? [(end[0] - at[0]) / length, (end[1] - at[1]) / length] : null;
+}
+
+/** A measured size's text as dimensions show it ("25,83 mm", "⌀ 8 mm", "∠ 21°"). */
+function measuredText(quick: { key: string; value: number; length: boolean }, kind: string): string {
+  const prefix = quick.key === "sweep" ? "∠ " : kind === "circle" ? "⌀ " : kind === "arc" ? "R " : "";
+
+  return `${prefix}${dimensionNumber(quick.value, lang === "de")}${quick.length ? " mm" : "°"}`;
 }

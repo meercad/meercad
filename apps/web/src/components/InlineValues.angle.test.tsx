@@ -98,7 +98,7 @@ afterAll(cleanup);
 describe("two lines picked together", () => {
   it("show the angle between them, and a typed angle becomes a dimension", async () => {
     await select(curve("l1"), curve("l2"));
-    expect(texts()).toEqual(["∠ 45°"]);
+    expect(texts()).toEqual(["45°"]);
     expect(chips()[0]!.classList.contains("quick-dim")).toBe(true);
 
     const before = ends("l1");
@@ -129,7 +129,7 @@ describe("two lines picked together", () => {
     const point = (id: string) => free().entities.find((x) => x.id === id);
     const [q1, q2, q3] = ["q1", "q2", "q3"].map(point);
     await select(curve("m2", "sk2"), curve("m1", "sk2"));
-    expect(texts()).toEqual(["∠ 45°"]);
+    expect(texts()).toEqual(["45°"]);
     await type(chips()[0]!, "70");
 
     expect([point("q1"), point("q3")]).toEqual([q1, q3]);

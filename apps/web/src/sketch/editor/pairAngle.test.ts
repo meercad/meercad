@@ -39,7 +39,7 @@ const sketch = (constraints: SketchConstraint[] = []): SketchFeature => ({
 describe("two lines picked together", () => {
   it("show their angle on its arc, and typing it adds the angle with its place", () => {
     const chip = pairAngle(sketch(), solved, "l1", "l2")!;
-    expect(chip.text).toBe("∠ 45°");
+    expect(chip.text).toBe("45°");
     expect(chip.value).toBeCloseTo(45, 6);
     expect(chip.length).toBe(false);
     expect(chip.make(30)).toMatchObject({ type: "angle", a: "l1", b: "l2", value: 30 });
