@@ -208,7 +208,22 @@ export class ViewPointer {
     if (event.buttons) return;
     if (this.followGround(event)) return;
 
-    this.viewport.setHover(this.viewport.pick(event.clientX, event.clientY, pickKinds()));
+    this.hoverAt(event.clientX, event.clientY);
+  }
+
+  /** Where the pointer last was, picked once per frame (a fast mouse sends many moves per frame). */
+  private hoverPoint: [number, number] | null = null;
+
+  private hoverAt(x: number, y: number): void {
+    const scheduled = this.hoverPoint !== null;
+    this.hoverPoint = [x, y];
+    if (scheduled) return;
+
+    requestAnimationFrame(() => {
+      const at = this.hoverPoint;
+      this.hoverPoint = null;
+      if (at) this.viewport.setHover(this.viewport.pick(at[0], at[1], pickKinds()));
+    });
   }
 
   /**

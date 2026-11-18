@@ -779,6 +779,7 @@ export class Viewport {
     if (this.hover && !this.pickStillValid(this.hover)) this.hover = null;
 
     this.paint();
+    this.drawHoverLine();
     this.applyDisplayMode();
 
     if (!this.framed && (data.bodies.length || data.sketches.length)) {
@@ -805,6 +806,87 @@ export class Viewport {
 
     this.hover = pick;
     this.paint();
+    this.drawHoverLine();
+
+    // A line under the pointer can be clicked: say so, unless a drag arrow has set its own cursor.
+    const style = this.renderer.domElement.style;
+    const onLine = pick?.kind === "edge" || pick?.kind === "sketch_curve";
+    if (onLine && !style.cursor.startsWith("grab")) style.cursor = "pointer";
+    else if (!onLine && style.cursor === "pointer") style.cursor = "";
+  }
+
+  /** The thick line over a hovered edge or sketch curve, so it stands out before it is clicked. */
+  private hoverLine: Line2 | null = null;
+
+  private drawHoverLine(): void {
+    if (this.hoverLine) {
+      this.hoverLine.removeFromParent();
+      this.hoverLine.material.dispose();
+      if (this.hoverLine.userData["ownGeometry"]) this.hoverLine.geometry.dispose();
+
+      this.hoverLine = null;
+    }
+
+    const pick = this.hover;
+    if (!pick || (pick.kind !== "edge" && pick.kind !== "sketch_curve")) return;
+
+    const color = this.selected.some((x) => samePick(x, pick)) ? C.edgeSel : C.edgeHover;
+    const line = pick.kind === "edge" ? this.edgeOverlay(pick.bodyId, pick.edge) : this.curveOverlay(pick);
+    if (!line) return;
+
+    line.material.color.copy(color);
+    line.material.linewidth = HOVER_LINE_WIDTH;
+    line.material.depthTest = false;
+    line.renderOrder = 7;
+    this.hoverLine = line;
+    this.invalidate();
+  }
+
+  /** A thick copy of an edge of a part, in the part's place. */
+  private edgeOverlay(bodyId: string, edge: number): Line2 | null {
+    const body = this.bodies.find((x) => x.mesh.bodyId === bodyId);
+    if (!body) return null;
+
+    const { edgeRanges, edgeLines } = body.mesh;
+    const points: THREE.Vector3[] = [];
+
+    for (let g = 0; g < edgeRanges.length; g += 3) {
+      if (edgeRanges[g + 2] !== edge) continue;
+
+      for (let k = edgeRanges[g]!; k < edgeRanges[g]! + edgeRanges[g + 1]!; k++) {
+        points.push(new THREE.Vector3(edgeLines[k * 3]!, edgeLines[k * 3 + 1]!, edgeLines[k * 3 + 2]!));
+      }
+    }
+
+    if (points.length < 2 || !body.edges.parent) return null;
+
+    const line = fatLine(points, { color: C.edgeHover.getHex() });
+    line.userData = { ownGeometry: true };
+    body.edges.parent.add(line);
+
+    return line;
+  }
+
+  /** A thick copy of a sketch curve drawn in the view, sharing its shape. */
+  private curveOverlay(pick: Extract<Pick, { kind: "sketch_curve" }>): Line2 | null {
+    let found: Line2 | null = null;
+
+    this.sketchGroup.traverse((object) => {
+      const data = object.userData as { sketch?: string; curve?: string };
+
+      if (object instanceof Line2 && data.sketch === pick.sketchId && data.curve === pick.curveId) {
+        found = object;
+      }
+    });
+
+    const source = found as Line2 | null;
+    if (!source?.parent) return null;
+
+    const line = new Line2(source.geometry, source.material.clone());
+    line.material.dashed = false;
+    source.parent.add(line);
+
+    return line;
   }
 
   /** Bodies that highlight as a whole on hover and selection (imported meshes), never face by face. */
@@ -3473,6 +3555,9 @@ export { THREE };
 
 /** Sketch lines are drawn this wide (screen pixels); plain WebGL lines are one pixel on Apple devices. */
 export const SKETCH_LINE_WIDTH = 2.5;
+
+/** Width of the line over a hovered edge or sketch curve (pixels). */
+const HOVER_LINE_WIDTH = 5;
 
 /**
  * A line of a given width in screen pixels through the points (sketch curves, previews, guides).

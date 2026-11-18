@@ -1,6 +1,7 @@
 /**
  * Lines of a sketch shown in the 3D view (drawn as fat lines) are picked where they are drawn,
- * before the sketch's region inside them, and a click there selects the sketch with that line.
+ * before the sketch's region inside them, and a click there selects the sketch with that line. A
+ * hovered line or edge of a part gets a thick line over it, gone again when the pointer leaves it.
  */
 import { act, cleanup } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -28,7 +29,25 @@ const design: Feature[] = [
     ],
     constraints: [],
   },
+  {
+    id: "sk2",
+    op: "sketch",
+    plane: { ref: "origin.XY" },
+    entities: [
+      { id: "q1", type: "point", x: 100, y: 0 },
+      { id: "q2", type: "point", x: 120, y: 0 },
+      { id: "q3", type: "point", x: 120, y: 20 },
+      { id: "m1", type: "line", p1: "q1", p2: "q2" },
+      { id: "m2", type: "line", p1: "q2", p2: "q3" },
+      { id: "m3", type: "line", p1: "q3", p2: "q1" },
+    ],
+    constraints: [],
+  },
+  { id: "ex1", op: "extrude", profile: { sketch: "sk2" }, extent: "blind", distance: 10, mode: "new_body" },
 ];
+/** The thick line drawn over what the pointer is on, if any. */
+const hoverLine = () =>
+  (vp as unknown as { hoverLine: { material: { linewidth: number }; parent: unknown } | null }).hoverLine;
 let vp: Viewport;
 
 beforeAll(async () => {
@@ -65,5 +84,23 @@ describe("a sketch line in the 3D view", () => {
     await act(async () => clickInView(vp, vp.pick(on[0], on[1], DEFAULT_KINDS), false));
     expect(useApp.getState().selectedFeature).toBe("sk1");
     expect(useApp.getState().selection).toMatchObject([{ kind: "sketch_curve", curveId: "l3" }]);
+  });
+
+  it("stands out under the pointer with a thick line, as does an edge of a part", async () => {
+    const on = vp.worldToScreen([50, 25, 0])!;
+    await act(async () => vp.setHover(vp.pick(on[0], on[1], DEFAULT_KINDS)));
+    expect(hoverLine()?.material.linewidth).toBe(5);
+    expect(hoverLine()?.parent).toBeTruthy();
+    expect(vp.renderer.domElement.style.cursor).toBe("pointer");
+
+    const edge = vp.worldToScreen([110, 0, 10])!;
+    const edgePick = vp.pick(edge[0], edge[1], DEFAULT_KINDS);
+    expect(edgePick?.kind).toBe("edge");
+    await act(async () => vp.setHover(edgePick));
+    expect(hoverLine()?.material.linewidth).toBe(5);
+
+    await act(async () => vp.setHover(null));
+    expect(hoverLine()).toBeNull();
+    expect(vp.renderer.domElement.style.cursor).not.toBe("pointer");
   });
 });
