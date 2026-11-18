@@ -59,6 +59,8 @@ export interface Turn {
  * about 15°): near it the text keeps its way, so it does not flip back and forth while orbiting.
  */
 const TURN_HYSTERESIS = 0.26;
+/** The plane is seen this nearly edge on (a square in it this much of a square on the screen, ~6°). */
+const EDGE_ON = 0.1;
 
 /**
  * The corners in its plane of a text box `width` × `height` (pixels), lying there like a sticker: its
@@ -83,15 +85,20 @@ export function planeCorners(
   const aside = project(add(anchor, away));
   if (!at || !ahead || !aside) return null;
 
-  const run = unit([ahead[0] - at[0], ahead[1] - at[1]]);
-  const side = unit([aside[0] - at[0], aside[1] - at[1]]);
-  if (!run || !side) return null;
+  const r: Screen = [ahead[0] - at[0], ahead[1] - at[1]];
+  const a: Screen = [aside[0] - at[0], aside[1] - at[1]];
+  const run = unit(r);
+  if (!run || !unit(a)) return null;
 
   // Left to right on the screen, once clearly past the turning point. Its top then is the side that
   // keeps the letters unmirrored (y runs down the screen): one turn of half a circle, never a flip of
-  // one axis alone. (From behind the plane, that is the other side.)
+  // one axis alone. (From behind the plane, that is the other side; which side the camera is on is
+  // kept while it looks along the plane, where the text cannot be read anyway.)
   const x = turn && turn.x * run[0] > -TURN_HYSTERESIS ? turn.x : run[0] < 0 ? -1 : 1;
-  const up: 1 | -1 = run[0] * side[1] - run[1] * side[0] > 0 ? (x === 1 ? -1 : 1) : x;
+  // How open the plane is seen: the screen area of a square in it against its longer side's square.
+  const cross = (r[0] * a[1] - r[1] * a[0]) / Math.max(r[0] ** 2 + r[1] ** 2, a[0] ** 2 + a[1] ** 2);
+  const behind = turn && Math.abs(cross) < EDGE_ON ? turn.up !== turn.x : cross > 0;
+  const up: 1 | -1 = behind ? (x === 1 ? -1 : 1) : x;
   const [w, h] = [(width / 2) * pixel, (height / 2) * pixel];
   const centre = add(anchor, away, h + TEXT_GAP_PX * pixel);
   const [ax, ay] = [scaled(along, x), scaled(away, up)];

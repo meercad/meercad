@@ -149,6 +149,35 @@ describe("text lying in its plane like a sticker", () => {
     close(middle(back.corners), middle(first.corners));
   });
 
+  it("keeps which side of the plane it is seen from while the camera looks along the plane", () => {
+    const along: V3 = [1, 0, 0];
+    const away: V3 = [0, 1, 0];
+    /** The plane seen from `k` above it (negative: below), nearly along it. */
+    const grazing = (k: number) => (p: V3) => [p[0] * 10, -p[1] * k] as const;
+    const above = planeCorners([0, 0, 0], along, away, 40, 10, 0.1, grazing(3))!;
+    expect(above.turn).toEqual({ x: 1, up: 1 });
+
+    // Just through the plane: kept (it cannot be read there anyway), no flicker.
+    expect(planeCorners([0, 0, 0], along, away, 40, 10, 0.1, grazing(-0.5), above.turn)!.turn).toEqual(
+      above.turn,
+    );
+    // Clearly below it: the letters read right from there.
+    expect(planeCorners([0, 0, 0], along, away, 40, 10, 0.1, grazing(-3), above.turn)!.turn).toEqual({
+      x: 1,
+      up: -1,
+    });
+    // Its line running the other way, seen from the far side: turned round as well, still unmirrored.
+    expect(planeCorners([0, 0, 0], [-1, 0, 0], away, 40, 10, 0.1, grazing(3))!.turn).toEqual({
+      x: -1,
+      up: 1,
+    });
+    // Coming back up, nearly along the plane: still from below.
+    expect(planeCorners([0, 0, 0], along, away, 40, 10, 0.1, grazing(0.5), { x: 1, up: -1 })!.turn).toEqual({
+      x: 1,
+      up: -1,
+    });
+  });
+
   it("is none when a corner cannot be seen", () => {
     let calls = 0;
     const partly = (p: V3) => (++calls >= 4 && calls <= 5 ? null : flat(p));
