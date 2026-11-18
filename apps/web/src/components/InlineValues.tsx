@@ -37,12 +37,18 @@ import {
   sizesFor,
   type DimensionDrawing,
 } from "../lib/dimStyle";
-import { dimensionColor } from "../sketch/editor/scene";
+import { dimensionColor, EDGE_ON_OPACITY, textTransform } from "../sketch/editor/scene";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
 import { dimensionDrawing, dimensionGeometry } from "../sketch/editor/geometry";
 
 type V3 = [number, number, number];
+
+/**
+ * World units per screen pixel where the model is shown, as of this render: dimensions drawn on the
+ * model keep their arrowheads readable at any distance (set by InlineValues before it lays them out).
+ */
+let screenPixel = 0;
 
 interface Item {
   key: string;
@@ -58,7 +64,7 @@ interface Item {
   measured?: boolean;
   /** Dragging moves the chip: dropped on `frame`'s plane, it is stored there (sketch coordinates). */
   drag?: { frame: Frame; to: (at: Vec2) => void };
-  /** Its dimension drawn on the model (lines and arrowheads in the world); dashed while only measured. */
+  /** Its dimension drawn on the model (lines and arrowheads in the world); grey while only measured. */
   drawn?: Drawn;
   /** Its text laid into the sketch plane along its line (world directions). */
   plane?: { along: V3; up: V3 };
@@ -357,7 +363,7 @@ function sketchItems(
   if (!view) return [];
 
   const pts = new Map(view.points.map(([id, x, y]) => [id, [x, y] as Vec2]));
-  const sizes = sizesFor(extentOf(pts.values()));
+  const sizes = sizesFor(extentOf(pts.values()), screenPixel);
   const inside = middleOf(pts.values());
 
   const mid = (id: string): Vec2 | null => {
@@ -470,13 +476,13 @@ function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: strin
 
   const sizeFree = needsSize(sketch, curveId);
   const pts = view.points.map(([, x, y]) => [x, y] as Vec2);
-  const sizes = sizesFor(extentOf(pts));
+  const sizes = sizesFor(extentOf(pts), screenPixel);
 
   // Sizes, and an arc's sweep (the angle at its centre); a line's slant would only clutter the model.
   return quickDimensions(sketch, curve)
     .filter((quick) => (quick.length ? sizeFree : quick.key === "sweep"))
     .map((quick) => {
-      // A line's length is drawn as its dimension would be, dashed and grey until it is one.
+      // A line's length is drawn as its dimension would be, grey until it is one.
       const drawing =
         curve.kind === "line" && quick.length
           ? lengthDrawing(curve.a, curve.b, sizes, null, middleOf(pts))
@@ -541,7 +547,7 @@ function angleItems(sketch: SketchFeature, out: RebuildOutput, [a, b]: [string, 
 
   const drawing = angleDrawing(
     quick.angle.arc,
-    sizesFor(extentOf(view.points.map(([, x, y]) => [x, y] as Vec2))),
+    sizesFor(extentOf(view.points.map(([, x, y]) => [x, y] as Vec2)), screenPixel),
   );
 
   return [
@@ -601,6 +607,8 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
 
   const feature = doc.features.find((x) => x.id === selected);
   if (!feature) return null;
+
+  screenPixel = viewport.pixelSize();
 
   // A picked end face of an extrusion has a drag arrow with the distance at it: one value, not two.
   const capArrow = viewport.handles.some((handle) => handle.id === "cap");
@@ -719,7 +727,7 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
   // Drag arrows keep their labels where they are; chips make room around them.
   for (const handle of viewport.handles) {
     const t = viewport.handleTipScreen(handle.id);
-    if (t) placed.push({ x: t[0] + 16, y: t[1] - 16, w: 90, h: H });
+    if (t) placed.push({ x: t[0] + 16, y: t[1] - 16, w: 90, h: H }, { x: t[0], y: t[1], w: 40, h: 40 });
   }
 
   const out: { it: Item; s: [number, number] }[] = [];
@@ -730,8 +738,14 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
 
     const w = item.text.length * 7.4 + 22 + (item.unlinkable && typeof item.value === "string" ? 26 : 0);
     const steps = [0, 1, -1, 2, -2, 3, -3, 4, -4];
+    // A dimension's text moves along its line out of the way, a chip up or down.
+    const way = item.plane ? screenWay(item, viewport, s) : null;
     const box = steps
-      .map((k) => ({ x: s[0], y: s[1] + k * (H + 4), w, h: H }))
+      .map((k) =>
+        way
+          ? { x: s[0] + way[0] * k * w * 0.6, y: s[1] + way[1] * k * w * 0.6, w, h: H }
+          : { x: s[0], y: s[1] + k * (H + 4), w, h: H },
+      )
       .find((b) => !placed.some((p) => overlaps(b, p))) ?? { x: s[0], y: s[1], w, h: H };
     placed.push(box);
     out.push({ it: item, s: [box.x, box.y] });
@@ -931,7 +945,7 @@ function leaderLines(
   return lines;
 }
 
-/** A dimension drawn on the model: lines and filled arrowheads in the world, dashed while only measured. */
+/** A dimension drawn on the model: lines and filled arrowheads in the world, grey while only measured. */
 interface Drawn {
   lines: V3[][];
   arrows: V3[][];
@@ -990,23 +1004,15 @@ function useDrawings(viewport: Viewport, drawings: { readonly current: Drawn[] }
   });
 }
 
-/** Thin lines (dashed and grey for a measured size) and arrowheads, drawn over the model. */
+/** Thin lines (grey for a measured size) and arrowheads, drawn over the model. */
 function drawingOnModel(drawing: Drawn): THREE.Group {
   const group = new THREE.Group();
   const color = drawing.measured ? MEASURED_GREY : dimensionColor();
   const points = drawing.lines.flatMap((line) => line.map((p) => new THREE.Vector3(...p)));
-  const length = drawing.lines.reduce(
-    (sum, [a, b]) => sum + Math.hypot(b![0] - a![0], b![1] - a![1], b![2] - a![2]),
-    0,
-  );
-  const dash = Math.max(length / 60, 0.05);
   const lines = new THREE.LineSegments(
     new THREE.BufferGeometry().setFromPoints(points),
-    drawing.measured
-      ? new THREE.LineDashedMaterial({ color, dashSize: dash, gapSize: dash * 0.7, depthTest: false })
-      : new THREE.LineBasicMaterial({ color, depthTest: false }),
+    new THREE.LineBasicMaterial({ color, depthTest: false }),
   );
-  if (drawing.measured) lines.computeLineDistances();
 
   lines.renderOrder = 30;
   group.add(lines);
@@ -1035,7 +1041,7 @@ function clearGroup(group: THREE.Group): void {
   }
 }
 
-/** For text laid into the sketch plane: the CSS that turns it along its line (as in the sketch editor). */
+/** For a dimension's text: the CSS that lays it into its plane along its line (as in the sketch editor). */
 function laidStyle(item: Item, viewport: Viewport, at: [number, number]) {
   if (!item.plane) return { transform: item.bare ? "translate(-50%, -50%)" : undefined };
 
@@ -1043,10 +1049,21 @@ function laidStyle(item: Item, viewport: Viewport, at: [number, number]) {
   const along = shift(item.plane.along);
   const up = shift(item.plane.up);
   const laid = along && up ? planeText(at, along, up, 1) : null;
-  if (!laid) return { transform: "translate(-50%, -50%)" };
 
   return {
     transformOrigin: "0 0",
-    transform: `matrix(${laid.matrix.join(", ")}, 0, 0) translate(-50%, ${laid.above ? "calc(-100% - 1px)" : "1px"})`,
+    transform: laid ? textTransform(laid) : "translate(-50%, -50%)",
+    ...(laid?.edgeOn ? { opacity: EDGE_ON_OPACITY } : {}),
   };
+}
+
+/** The unit direction a dimension's line runs on the screen at its text, or null if seen end on. */
+function screenWay(item: Item, viewport: Viewport, at: [number, number]): [number, number] | null {
+  const along = item.plane!.along;
+  const end = viewport.worldToScreen([item.at[0] + along[0], item.at[1] + along[1], item.at[2] + along[2]]);
+  if (!end) return null;
+
+  const length = Math.hypot(end[0] - at[0], end[1] - at[1]);
+
+  return length > 1e-6 ? [(end[0] - at[0]) / length, (end[1] - at[1]) / length] : null;
 }

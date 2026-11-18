@@ -492,20 +492,17 @@ export function dimensionColor(): number {
 /** A measured size that is no dimension yet: grey. */
 const MEASURED_COLOR = 0x6b7280;
 
-/** A dimension's lines (thin, dashed for a measured one) and filled arrowheads, in a group. */
-export function drawingObjects(drawing: DimensionDrawing, color: number, dashed = false): THREE.Group {
+/** A dimension's thin lines and filled arrowheads, in a group. */
+export function drawingObjects(drawing: DimensionDrawing, color: number): THREE.Group {
   const group = new THREE.Group();
   const points = drawing.lines.flatMap(({ a, b }) => [
     new THREE.Vector3(a[0], a[1], 0),
     new THREE.Vector3(b[0], b[1], 0),
   ]);
-  const dash = Math.max(drawing.offset === 0 ? 1 : Math.abs(drawing.offset) / 6, 1e-3);
-  const material = dashed
-    ? new THREE.LineDashedMaterial({ color, dashSize: dash, gapSize: dash * 0.7, depthTest: false })
-    : new THREE.LineBasicMaterial({ color, depthTest: false });
-  const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), material);
-  if (dashed) lines.computeLineDistances();
-
+  const lines = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color, depthTest: false }),
+  );
   lines.renderOrder = 25;
   group.add(lines);
 
@@ -537,7 +534,7 @@ export function drawDimensionLines(
   const inside = middleOf(shown.points.values());
   const color = dimensionColor();
 
-  if (pair) group.add(drawingObjects(angleDrawing(pair.arc, sizes), MEASURED_COLOR, true));
+  if (pair) group.add(drawingObjects(angleDrawing(pair.arc, sizes), MEASURED_COLOR));
 
   for (const constraint of sketch?.constraints ?? []) {
     const drawing = dimensionDrawing(constraint, shown, sizes, inside);
@@ -614,9 +611,20 @@ export function placeOnScreen(
 }
 
 /**
+ * The CSS that lays a dimension's text into its plane along its line (lib/dimStyle.ts planeText), on
+ * the side away from what it measures, a pixel off the line.
+ */
+export function textTransform(laid: NonNullable<ReturnType<typeof planeText>>): string {
+  return `matrix(${laid.matrix.join(", ")}, 0, 0) translate(-50%, ${laid.above ? "calc(-100% - 1px)" : "1px"})`;
+}
+
+/** A dimension's text on a plane seen almost from its side: faint, as it cannot be read well. */
+export const EDGE_ON_OPACITY = "0.3";
+
+/**
  * Lays a dimension's text into the sketch plane along its line (data-ax/ay: the way it runs,
  * data-ux/uy: its upper side, in sketch coordinates): turned and foreshortened like the plane on the
- * screen, readable, standing on the side of the line away from what it measures.
+ * screen, readable, on the side of the line away from what it measures.
  */
 export function layIntoPlane(
   element: HTMLElement,
@@ -639,7 +647,6 @@ export function layIntoPlane(
   const laid = along && up ? planeText(screen, along, up, step) : null;
 
   element.style.transformOrigin = "0 0";
-  element.style.transform = laid
-    ? `matrix(${laid.matrix.join(", ")}, 0, 0) translate(-50%, ${laid.above ? "calc(-100% - 1px)" : "1px"})`
-    : "";
+  element.style.transform = laid ? textTransform(laid) : "translate(-50%, -50%)";
+  element.style.opacity = laid?.edgeOn ? EDGE_ON_OPACITY : "";
 }

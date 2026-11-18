@@ -87,6 +87,10 @@ describe("pieces", () => {
   it("sizes follow the sketch, small ones as if 10 mm across", () => {
     expect(sizesFor(350).arrow).toBeCloseTo(9, 9);
     expect(sizesFor(1).offset).toBeCloseTo(sizesFor(10).offset, 9);
+    // On the model: within bounds on the screen, however near or far.
+    expect(sizesFor(350, 0.1).arrow).toBeCloseTo(9 * 0.16, 9);
+    expect(sizesFor(350, 10).arrow).toBeCloseTo(9 * 9, 9);
+    expect(sizesFor(350, 1).arrow).toBeCloseTo(9, 9);
     expect(
       extentOf([
         [0, 0],
@@ -127,5 +131,17 @@ describe("text in the plane", () => {
     expect(near.matrix[0]).toBeCloseTo(1.4, 9);
     expect(far.matrix[0]).toBeCloseTo(0.85, 9);
     expect(planeText([0, 0], [0, 0], [0, -1], 1)).toBeNull();
+    expect(near.edgeOn).toBe(false);
+
+    // The plane seen almost from its side: its up runs nearly along the line.
+    const low = planeText([0, 0], [10, 0], [10, -0.3], 1)!;
+    expect(low.edgeOn).toBe(true);
+    // Still not squashed flatter than readable.
+    expect(Math.abs(low.matrix[3]) / low.matrix[0]).toBeCloseTo(0.8, 9);
+    // Nor slanted further than readable.
+    expect(Math.abs(low.matrix[2]) / Math.abs(low.matrix[3])).toBeCloseTo(0.6, 9);
+
+    const leaning = planeText([0, 0], [10, 0], [-3, -10], 1)!;
+    expect(leaning.matrix[2] / leaning.matrix[0]).toBeCloseTo(0.3, 9);
   });
 });
