@@ -1,20 +1,17 @@
 /**
- * A dimension's text laid into its sketch plane as the camera really sees it: a rectangle in the plane
- * (as big there as the text is on the screen), its four corners projected, and the CSS matrix3d that
- * maps the text box onto that quadrilateral (a true perspective, no slanting stand-in). The text runs
- * along its dimension line, left to right on the screen, its top towards the top of the screen (turned
- * in the plane as needed, never mirrored), on the side of the line away from what it measures.
+ * A dimension's text laid into its sketch plane like a sticker: a rectangle fixed in the plane (its size
+ * from the zoom), on the side of its line away from what it measures, and the CSS matrix3d that maps
+ * the text box onto its projected corners (a true perspective). It runs along its dimension line, left
+ * to right on the screen, its top towards the top of the screen (turned round in the plane about its
+ * middle when the view needs it, never mirrored).
  */
 type V3 = readonly [number, number, number];
 type Screen = readonly [number, number];
 
 /** Gap between a dimension line and its text (screen pixels). */
 const TEXT_GAP_PX = 2;
-/** A slanted plane enlarges its text at most this much, so it does not grow huge near the horizon. */
-const MAX_STRETCH = 2.5;
 
 const add = (a: V3, b: V3, k = 1): V3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
-const neg = (a: V3): V3 => [-a[0], -a[1], -a[2]];
 
 /**
  * The homography that takes the unit square's corners (0,0), (1,0), (1,1), (0,1) to `quad`'s, as
@@ -51,11 +48,25 @@ export function boxToQuad(width: number, height: number, quad: readonly Screen[]
 /** A text box's corners in the world: top left, top right, bottom right, bottom left. */
 export type PlaneQuad = readonly [V3, V3, V3, V3];
 
+/** Which way the text is turned in its plane: along its line (or back), towards its side (or back). */
+export interface Turn {
+  x: 1 | -1;
+  up: 1 | -1;
+}
+
 /**
- * The corners in its plane of a text box `width` × `height` (pixels): at `anchor` on its line, the
- * line running along `along` and its far side (away from what it measures) along `away` (unit
- * directions in the plane), `pixel` world units per screen pixel there. Null when the line is seen
- * end on or a point is behind the camera.
+ * How far past the turning point the view must go before the text turns round (sine of the angle,
+ * about 15°): near it the text keeps its way, so it does not flip back and forth while orbiting.
+ */
+const TURN_HYSTERESIS = 0.26;
+
+/**
+ * The corners in its plane of a text box `width` × `height` (pixels), lying there like a sticker: its
+ * middle fixed just off `anchor` on the side `away` from what it measures (unit directions in the
+ * plane, its line running `along`), its size `pixel` world units per pixel (from the zoom, not the
+ * angle it is seen at). Only which way it is turned depends on the view: left to right and upright on
+ * the screen, turned round about its middle once the view is clearly past the turning point (`turn`,
+ * the way it was before). Null when the line is seen end on or a point is behind the camera.
  */
 export function planeCorners(
   anchor: V3,
@@ -65,28 +76,35 @@ export function planeCorners(
   height: number,
   pixel: number,
   project: (p: V3) => Screen | null,
-): PlaneQuad | null {
+  turn?: Turn,
+): { corners: PlaneQuad; turn: Turn } | null {
   const at = project(anchor);
   const ahead = project(add(anchor, along));
   const aside = project(add(anchor, away));
   if (!at || !ahead || !aside) return null;
 
-  const run: Screen = [ahead[0] - at[0], ahead[1] - at[1]];
-  if (Math.hypot(run[0], run[1]) < 1e-6) return null;
+  const run = unit([ahead[0] - at[0], ahead[1] - at[1]]);
+  const side = unit([aside[0] - at[0], aside[1] - at[1]]);
+  if (!run || !side) return null;
 
-  // Left to right, top up on the screen (y runs down); the text stands on the far side of the line.
-  const x = run[0] < 0 ? neg(along) : along;
-  const up = aside[1] > at[1] ? neg(away) : away;
-  const outward = up === away ? 1 : -1;
-  const [w, h] = halfSizes(anchor, x, up, width, height, pixel, project);
-  const centre = add(anchor, up, outward * (h + TEXT_GAP_PX * pixel));
+  // Left to right on the screen, once clearly past the turning point. Its top then is the side that
+  // keeps the letters unmirrored (y runs down the screen): one turn of half a circle, never a flip of
+  // one axis alone. (From behind the plane, that is the other side.)
+  const x = turn && turn.x * run[0] > -TURN_HYSTERESIS ? turn.x : run[0] < 0 ? -1 : 1;
+  const up: 1 | -1 = run[0] * side[1] - run[1] * side[0] > 0 ? (x === 1 ? -1 : 1) : x;
+  const [w, h] = [(width / 2) * pixel, (height / 2) * pixel];
+  const centre = add(anchor, away, h + TEXT_GAP_PX * pixel);
+  const [ax, ay] = [scaled(along, x), scaled(away, up)];
 
-  return [
-    add(add(centre, x, -w), up, h),
-    add(add(centre, x, w), up, h),
-    add(add(centre, x, w), up, -h),
-    add(add(centre, x, -w), up, -h),
-  ];
+  return {
+    corners: [
+      add(add(centre, ax, -w), ay, h),
+      add(add(centre, ax, w), ay, h),
+      add(add(centre, ax, w), ay, -h),
+      add(add(centre, ax, -w), ay, -h),
+    ],
+    turn: { x, up },
+  };
 }
 
 /** The matrix3d that lays a text box into its plane (see planeCorners), or null. */
@@ -98,38 +116,21 @@ export function planeLabel(
   height: number,
   pixel: number,
   project: (p: V3) => Screen | null,
+  turn?: Turn,
 ): number[] | null {
-  const corners = planeCorners(anchor, along, away, width, height, pixel, project);
-  const seen = corners?.map(project);
+  const laid = planeCorners(anchor, along, away, width, height, pixel, project, turn);
+  const seen = laid?.corners.map(project);
   if (!seen || seen.some((p) => !p)) return null;
 
   return boxToQuad(width, height, seen as Screen[]);
 }
 
-/**
- * Half the text's width and height in the plane. Seen at a slant the plane shortens the text; it is
- * made that much larger there (within bounds), so it reads as on the screen while lying in the plane.
- */
-function halfSizes(
-  anchor: V3,
-  x: V3,
-  up: V3,
-  width: number,
-  height: number,
-  pixel: number,
-  project: (p: V3) => Screen | null,
-): [number, number] {
-  const across = (dir: V3, size: number) => {
-    const p = project(add(anchor, dir, (size / 2) * pixel));
-    const q = project(add(anchor, dir, (-size / 2) * pixel));
+const scaled = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
 
-    return p && q ? Math.hypot(p[0] - q[0], p[1] - q[1]) : size;
-  };
+function unit(v: Screen): Screen | null {
+  const length = Math.hypot(v[0], v[1]);
 
-  const stretch = (dir: V3, size: number) =>
-    Math.max(1, Math.min(MAX_STRETCH, size / Math.max(across(dir, size), 1e-6)));
-
-  return [(width / 2) * pixel * stretch(x, width), (height / 2) * pixel * stretch(up, height)];
+  return length > 1e-6 ? [v[0] / length, v[1] / length] : null;
 }
 
 /** A dimension's number: at most two decimals, no trailing zeros, with a decimal comma if asked. */

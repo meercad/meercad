@@ -12,7 +12,7 @@ import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { sameSel, type SketchSel, type SketchTool } from "../state";
 import type { AngleArc, Segment } from "../../lib/angleDim";
-import { boxToQuad, planeCorners } from "../../lib/planeLabel";
+import { boxToQuad, planeCorners, type Turn } from "../../lib/planeLabel";
 import { dropMirrors, mirror } from "../../lib/sceneMirror";
 import { angleDrawing, extentOf, middleOf, sizesFor, type DimensionDrawing } from "../../lib/dimStyle";
 import {
@@ -626,10 +626,15 @@ const mirrorId = (element: HTMLElement) => {
   return id;
 };
 
+/** Which way each label's text is turned, kept while orbiting near the turning point. */
+const turns = new WeakMap<HTMLElement, Turn>();
+
 /**
  * Lays a dimension's text into the sketch plane along its line with a true perspective (data-ax/ay:
  * the way it runs, data-ux/uy: its side away from what it measures, in sketch coordinates; see
- * lib/planeLabel.ts), as big there as one line of text is on the screen.
+ * lib/planeLabel.ts), fixed there like a sticker: as big as one line of text at the zoom (the size of a
+ * pixel at the orbit's centre, which turning does not change), turned round only clearly past the
+ * turning point.
  */
 export function layIntoPlane(
   element: HTMLElement,
@@ -648,10 +653,10 @@ export function layIntoPlane(
   const anchor = [at.x, at.y, at.z] as const;
   const width = (element.textContent ?? "").length * 7.8 + 6;
   const height = 18;
-  const pixel = viewport.pixelSize([...anchor]);
+  const pixel = viewport.pixelSize();
   const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
   const away = way(Number(d["ux"]), Number(d["uy"]));
-  const corners = planeCorners(
+  const laid = planeCorners(
     anchor,
     way(Number(d["ax"]), Number(d["ay"])),
     away,
@@ -659,7 +664,11 @@ export function layIntoPlane(
     height,
     pixel,
     project,
+    turns.get(element),
   );
+  if (laid) turns.set(element, laid.turn);
+
+  const corners = laid?.corners;
   const seen = corners?.map(project);
 
   if (!corners || !seen || seen.some((p) => !p)) {

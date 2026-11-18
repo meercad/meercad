@@ -37,7 +37,7 @@ import {
   type DimensionDrawing,
 } from "../lib/dimStyle";
 import { dimensionColor } from "../sketch/editor/scene";
-import { boxToQuad, dimensionNumber, planeCorners, type PlaneQuad } from "../lib/planeLabel";
+import { boxToQuad, dimensionNumber, planeCorners, type PlaneQuad, type Turn } from "../lib/planeLabel";
 import { dropMirrors, mirror } from "../lib/sceneMirror";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
@@ -795,7 +795,7 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
  * Screen positions for the chips, nudged up or down so none overlaps another chip or a drag
  * arrow's value label (several dimensions often project onto the same spot).
  */
-function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number, number]; slide: number }[] {
+function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number, number] }[] {
   type Box = { x: number; y: number; w: number; h: number };
 
   const H = 26;
@@ -809,29 +809,21 @@ function layoutChips(items: Item[], viewport: Viewport): { it: Item; s: [number,
     if (t) placed.push({ x: t[0] + 16, y: t[1] - 16, w: 90, h: H }, { x: t[0], y: t[1], w: 40, h: 40 });
   }
 
-  const out: { it: Item; s: [number, number]; slide: number }[] = [];
+  const out: { it: Item; s: [number, number] }[] = [];
 
   for (const item of items) {
     const s = viewport.worldToScreen(item.at);
     if (!s) continue;
 
     const w = item.text.length * 7.4 + 22 + (item.unlinkable && typeof item.value === "string" ? 26 : 0);
-    const steps = [0, 1, -1, 2, -2, 3, -3, 4, -4];
-    // A dimension's text moves along its line out of the way, a chip up or down.
-    // (An angle's value stays on its arc.)
-    const way = item.plane && !item.plane.onArc ? screenWay(item, viewport, s) : null;
+    // A chip moves up or down out of the way. A dimension's text lies fixed in its plane, like the
+    // line it belongs to (moved on the screen it would jump about while orbiting); it can be dragged.
+    const steps = item.plane ? [0] : [0, 1, -1, 2, -2, 3, -3, 4, -4];
     const box = steps
-      .map((k) =>
-        way
-          ? { x: s[0] + way[0] * k * w * 0.6, y: s[1] + way[1] * k * w * 0.6, w, h: H }
-          : { x: s[0], y: s[1] + k * (H + 4), w, h: H },
-      )
+      .map((k) => ({ x: s[0], y: s[1] + k * (H + 4), w, h: H }))
       .find((b) => !placed.some((p) => overlaps(b, p))) ?? { x: s[0], y: s[1], w, h: H };
     placed.push(box);
-
-    // How far a dimension's text slid along its line (pixels, along the way it runs).
-    const slide = way ? (box.x - s[0]) * way[0] + (box.y - s[1]) * way[1] : 0;
-    out.push({ it: item, s: [box.x, box.y], slide });
+    out.push({ it: item, s: [box.x, box.y] });
   }
 
   return out;
@@ -1133,19 +1125,25 @@ function clearGroup(group: THREE.Group): void {
 /** Size of a dimension's text box (pixels): its width from its length, one line high. */
 const textBox = (text: string): [number, number] => [text.length * 7.8 + 6, 18];
 
+/** Which way each dimension's text is turned, kept while orbiting near the turning point. */
+const turns = new Map<string, Turn>();
+
 /**
- * For a dimension's text: laid into its plane along its line with a true perspective (lib/planeLabel.ts),
- * moved `slide` pixels along the line where it would cover something; a chip otherwise.
+ * For a dimension's text: laid into its plane along its line like a sticker (lib/planeLabel.ts), its
+ * size from the zoom (the size of a pixel at the orbit's centre, which turning does not change); a chip
+ * otherwise.
  */
-function laidStyle(item: Item, viewport: Viewport, slide: number) {
+function laidStyle(item: Item, viewport: Viewport) {
   if (!item.plane) return { transform: item.bare ? "translate(-50%, -50%)" : undefined };
 
-  const pixel = viewport.pixelSize(item.at);
+  const pixel = viewport.pixelSize();
   const { along, up } = item.plane;
-  const anchor: V3 = [0, 1, 2].map((i) => item.at[i]! + along[i]! * slide * pixel) as V3;
   const [width, height] = textBox(item.text);
   const project = (p: readonly [number, number, number]) => viewport.worldToScreen([...p]);
-  const corners = planeCorners(anchor, along, up, width, height, pixel, project);
+  const laid = planeCorners(item.at, along, up, width, height, pixel, project, turns.get(item.key));
+  if (laid) turns.set(item.key, laid.turn);
+
+  const corners = laid?.corners;
   const seen = corners?.map(project);
   if (!corners || !seen || seen.some((p) => !p)) return { transform: "translate(-50%, -50%)" };
 
@@ -1160,17 +1158,6 @@ function laidStyle(item: Item, viewport: Viewport, slide: number) {
   };
 }
 
-/** The unit direction a dimension's line runs on the screen at its text, or null if seen end on. */
-function screenWay(item: Item, viewport: Viewport, at: [number, number]): [number, number] | null {
-  const along = item.plane!.along;
-  const end = viewport.worldToScreen([item.at[0] + along[0], item.at[1] + along[1], item.at[2] + along[2]]);
-  if (!end) return null;
-
-  const length = Math.hypot(end[0] - at[0], end[1] - at[1]);
-
-  return length > 1e-6 ? [(end[0] - at[0]) / length, (end[1] - at[1]) / length] : null;
-}
-
 /** A measured size's text as dimensions show it ("25,83 mm", "⌀ 8 mm", "∠ 21°"). */
 function measuredText(quick: { key: string; value: number; length: boolean }, kind: string): string {
   const prefix = quick.key === "sweep" ? "∠ " : kind === "circle" ? "⌀ " : kind === "arc" ? "R " : "";
@@ -1182,11 +1169,11 @@ function measuredText(quick: { key: string; value: number; length: boolean }, ki
 function placeChips(items: Item[], elements: Map<string, HTMLDivElement>, viewport: Viewport): void {
   const drawn = new Set<string>();
 
-  for (const { it: item, s, slide } of layoutChips(items, viewport)) {
+  for (const { it: item, s } of layoutChips(items, viewport)) {
     const element = elements.get(item.key);
     if (!element) continue;
 
-    const style = laidStyle(item, viewport, slide);
+    const style = laidStyle(item, viewport);
     const laid = style as Record<string, string | number | undefined>;
     const px = (v: string | number | undefined) => (typeof v === "number" ? `${v}px` : (v ?? ""));
     element.style.left = px(laid["left"] ?? s[0]);
