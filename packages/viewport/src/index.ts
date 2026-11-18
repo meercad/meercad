@@ -305,6 +305,8 @@ export interface Handle {
   color?: number;
   /** Draw a double arrow head (the value can go either way). Defaults to true when there is no `min`. */
   twoWay?: boolean;
+  /** A line (two world points) that grabs the arrow too: a selected sketch line is dragged by itself. */
+  grip?: [Vec3, Vec3];
 }
 
 /** `rendered`: materials in studio light with soft shadows on a ground, no edges (for pictures). */
@@ -902,6 +904,8 @@ export class Viewport {
   setSelection(picks: Pick[]): void {
     this.selected = picks;
     this.paint();
+    // The line over a hovered edge takes the selection colour once it is picked.
+    this.drawHoverLine();
   }
 
   private pickStillValid(pick: Pick): boolean {
@@ -2255,13 +2259,28 @@ export class Viewport {
       const t = Math.max(0.35, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / l2));
       const dist = Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py) - (t > 0.9 ? 6 : 0);
 
-      if (dist < bd) {
-        bd = dist;
+      const onGrip = handle.grip ? this.screenDistanceToSegment(px, py, handle.grip) : Infinity;
+
+      if (Math.min(dist, onGrip) < bd) {
+        bd = Math.min(dist, onGrip);
         best = handle;
       }
     }
 
     return best;
+  }
+
+  /** Distance in pixels from a point of the view to a segment between two world points, as drawn. */
+  private screenDistanceToSegment(px: number, py: number, [from, to]: [Vec3, Vec3]): number {
+    const a = this.worldToScreen(from);
+    const b = this.worldToScreen(to);
+    if (!a || !b) return Infinity;
+
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+
+    return Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py);
   }
 
   /** Axis parameter closest to the pointer ray. */
