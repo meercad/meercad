@@ -106,3 +106,36 @@ describe("a sketch line selected on the model", () => {
     expect(lineHandle()).toBeUndefined();
   });
 });
+
+describe("a dimension line's grip", () => {
+  it("is caught only close to its line, and drags without an arrow drawn", () => {
+    const grip: Handle = {
+      id: "dimension:test",
+      origin: [20, -10, 0],
+      dir: [0, -1, 0],
+      value: 0,
+      hidden: true,
+      grip: [
+        [0, -10, 0],
+        [40, -10, 0],
+      ],
+      onDrag: () => undefined,
+      onEnd: () => undefined,
+    };
+    vp.setGrips([grip]);
+
+    const rect = vp.canvas.getBoundingClientRect();
+    const hit = (x: number, y: number) =>
+      (vp as unknown as { hitHandle(x: number, y: number): Handle | null }).hitHandle(
+        rect.left + x,
+        rect.top + y,
+      );
+    const on = vp.worldToScreen([10, -10, 0])!;
+    expect(hit(on[0], on[1])?.id).toBe("dimension:test");
+    expect(hit(on[0], on[1] + 30)).toBeNull();
+    expect(vp.handles.some((x) => x.id === "dimension:test")).toBe(false);
+
+    vp.setGrips([]);
+    expect(hit(on[0], on[1])).toBeNull();
+  });
+});

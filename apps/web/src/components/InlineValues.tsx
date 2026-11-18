@@ -2,15 +2,15 @@
  * Values shown right on the model: the parameters of the selected feature, the dimensions of its
  * sketch, and the value at every drag arrow. Click a value to type a new number or expression.
  */
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import type { Expr, Feature, SketchConstraint, SketchFeature } from "@meercad/schema";
 import { toWorld, type Vec2 } from "@meercad/sketch";
-import { THREE, type Pick, type Viewport } from "@meercad/viewport";
+import { THREE, type Handle, type Pick, type Viewport } from "@meercad/viewport";
 import { faceAnchor, profileAnchor } from "../lib/anchors";
 import { Link2Off } from "lucide-react";
 import { evaluate } from "@meercad/model";
-import { apply, toast, useApp } from "../store";
+import { apply, applyQuiet, toast, useApp } from "../store";
 import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";
 import { ValueInput, type ValueUnit } from "./ValueInput";
@@ -73,6 +73,8 @@ interface Item {
   plane?: { along: V3; up: V3; normal: V3; level?: boolean };
   /** Plain text without a chip, as a sketch's dimensions are drawn. */
   bare?: boolean;
+  /** Its dimension line, dragged to move the dimension parallel to itself. */
+  grip?: Handle;
   commit: (expr: Expr) => void;
 }
 
@@ -432,6 +434,9 @@ function sketchItems(
         : constraint.label
           ? { drawn: { lines: leaderLines(constraint, view, onto), arrows: [] } }
           : {}),
+      ...(drawing && constraint.type !== "angle"
+        ? { grip: dimensionGrip(sketch, constraint.id, drawing, view.frame, onto) }
+        : {}),
       // A length's line moves parallel to itself; an angle's arc stays where it is.
       ...(constraint.type === "angle"
         ? {}
@@ -594,7 +599,23 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const drawings = useRef<Drawn[]>([]);
   drawings.current = [];
   useDrawings(viewport, drawings);
-  useEffect(() => viewport.onChange(tick), [viewport]);
+
+  // The values follow the camera in the same frame it moves (set straight on their elements before the
+  // picture is drawn), not a render later: they would trail behind while orbiting.
+  const shown = useRef<Item[]>([]);
+  shown.current = [];
+
+  const elements = useRef(new Map<string, HTMLDivElement>());
+  const place = () => placeChips(shown.current, elements.current, viewport);
+  const placeLater = useRef(place);
+  placeLater.current = place;
+  useEffect(() => viewport.onChange(() => (placeLater.current(), tick())), [viewport]);
+  useLayoutEffect(() => {
+    place();
+    // Dimension lines drag like arrows (moved parallel to themselves).
+    viewport.setGrips(shown.current.flatMap((item) => (item.grip ? [item.grip] : [])));
+  });
+  useEffect(() => () => viewport.setGrips([]), [viewport]);
   useEffect(() => preloadSolver(), []);
 
   // Drag arrows are set up after this renders (by the manipulators); lay out again once they change.
@@ -662,15 +683,19 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   }
 
   drawings.current = items.flatMap((item) => (item.drawn ? [item.drawn] : []));
+  shown.current = items;
 
   return (
     <div className="overlay-layer">
-      {layoutChips(items, viewport).map(({ it: item, s, slide }) => {
+      {items.map((item) => {
         return (
           <div
             key={item.key}
+            ref={(element) => {
+              if (element) elements.current.set(item.key, element);
+              else elements.current.delete(item.key);
+            }}
             className={`value-chip${item.measured ? " quick-dim" : ""}${item.bare ? " on-line" : ""}`}
-            style={{ left: s[0], top: s[1], ...laidStyle(item, viewport, slide) }}
             onPointerDown={(event) => {
               event.stopPropagation();
 
@@ -895,10 +920,10 @@ export function InlineInput({
 }
 
 /** Puts a sketch dimension's value where it was dragged to (sketch coordinates, 0.01 mm). */
-function commitLabel(sketch: SketchFeature, constraintId: string, at: Vec2): void {
+function commitLabel(sketch: SketchFeature, constraintId: string, at: Vec2, quiet = false): void {
   const label: [number, number] = [+at[0].toFixed(2), +at[1].toFixed(2)];
 
-  apply({
+  (quiet ? applyQuiet : apply)({
     type: "edit_feature",
     id: sketch.id,
     patch: {
@@ -1100,4 +1125,62 @@ function measuredText(quick: { key: string; value: number; length: boolean }, ki
   const prefix = quick.key === "sweep" ? "∠ " : kind === "circle" ? "⌀ " : kind === "arc" ? "R " : "";
 
   return `${prefix}${dimensionNumber(quick.value, lang === "de")}${quick.length ? " mm" : "°"}`;
+}
+
+/** Places the values on the screen where the camera now sees them (their elements' styles, directly). */
+function placeChips(items: Item[], elements: Map<string, HTMLDivElement>, viewport: Viewport): void {
+  for (const { it: item, s, slide } of layoutChips(items, viewport)) {
+    const element = elements.get(item.key);
+    if (!element) continue;
+
+    const laid = laidStyle(item, viewport, slide) as Record<string, string | number | undefined>;
+    const px = (v: string | number | undefined) => (typeof v === "number" ? `${v}px` : (v ?? ""));
+    element.style.left = px(laid["left"] ?? s[0]);
+    element.style.top = px(laid["top"] ?? s[1]);
+    element.style.width = px(laid["width"]);
+    element.style.height = px(laid["height"]);
+    element.style.transformOrigin = px(laid["transformOrigin"]);
+    element.style.transform = px(laid["transform"]);
+  }
+}
+
+/**
+ * The grip of a dimension's line on the model: dragged across it, the dimension moves parallel to
+ * itself (its value's place, stored in the sketch); one undo step for the drag.
+ */
+function dimensionGrip(
+  sketch: SketchFeature,
+  constraintId: string,
+  drawing: DimensionDrawing,
+  frame: Frame,
+  onto?: V3,
+): Handle {
+  const { at, up } = drawing.text;
+  const line = drawing.lines[0]!;
+
+  const way = (v: Vec2): V3 => {
+    const [o, w] = [toWorld(frame, [0, 0]), toWorld(frame, v)];
+
+    return [w[0] - o[0], w[1] - o[1], w[2] - o[2]];
+  };
+
+  let moved = false;
+
+  const move = (offset: number) => {
+    if (offset === 0 && !moved) return;
+
+    commitLabel(sketch, constraintId, [at[0] + up[0] * offset, at[1] + up[1] * offset], moved);
+    moved = true;
+  };
+
+  return {
+    id: `dimension:${sketch.id}.${constraintId}`,
+    origin: placed(frame, at, onto),
+    dir: way(up),
+    value: 0,
+    hidden: true,
+    grip: [placed(frame, line.a, onto), placed(frame, line.b, onto)],
+    onDrag: move,
+    onEnd: move,
+  };
 }

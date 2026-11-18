@@ -313,6 +313,8 @@ export interface Handle {
    * value, as an extrusion's end does).
    */
   foot?: "origin" | "value";
+  /** No arrow is drawn: only its `grip` (a dimension line on the model) is dragged. */
+  hidden?: boolean;
 }
 
 /** `rendered`: materials in studio light with soft shadows on a ground, no edges (for pictures). */
@@ -426,6 +428,18 @@ export class Viewport {
   private dark = false;
   private sceneData: SceneData | null = null;
   handles: Handle[] = [];
+  /**
+   * Lines that drag like arrows without one being drawn (dimension lines, moved parallel to themselves),
+   * set apart from the tools' arrows so the two never replace each other.
+   */
+  private grips: Handle[] = [];
+
+  setGrips(grips: Handle[]): void {
+    this.grips = this.activeHandle?.h.hidden
+      ? [this.activeHandle.h, ...grips.filter((grip) => grip.id !== this.activeHandle!.h.id)]
+      : grips;
+  }
+
   private handleGroup = new THREE.Group();
   private jointGroup = new THREE.Group();
   private activeHandle: { h: Handle; value: number; start: number; pointer: number } | null = null;
@@ -2302,7 +2316,19 @@ export class Viewport {
     let best: Handle | null = null;
     let bd = radius;
 
-    for (const handle of this.handles) {
+    for (const handle of [...this.handles, ...this.grips]) {
+      // A bare grip (a dimension line) is caught only close to its line.
+      if (handle.hidden) {
+        const near = handle.grip ? this.screenDistanceToSegment(px, py, handle.grip) : Infinity;
+
+        if (near < Math.min(bd, GRIP_PX)) {
+          bd = near;
+          best = handle;
+        }
+
+        continue;
+      }
+
       const tip = this.handleTip(handle);
       const a = this.worldToScreen(handle.origin);
       const b = this.worldToScreen([tip.x, tip.y, tip.z]);
@@ -3630,6 +3656,9 @@ export { THREE };
 
 /** Sketch lines are drawn this wide (screen pixels); plain WebGL lines are one pixel on Apple devices. */
 export const SKETCH_LINE_WIDTH = 2.5;
+
+/** How near a dimension line a press catches it (pixels, each side). */
+const GRIP_PX = 8;
 
 /** Width of the line over a hovered edge or sketch curve (pixels). */
 const HOVER_LINE_WIDTH = 5;

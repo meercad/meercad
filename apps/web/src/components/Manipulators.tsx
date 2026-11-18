@@ -101,7 +101,9 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
               ? `${v > 0 ? "+" : ""}${fmtLen(v)}`
               : fmtLen(v);
     viewport.onHandleDrag = (handle, v, screen) =>
-      setTip(handle && screen ? { x: screen[0], y: screen[1], text: label(handle.id, v) } : null);
+      setTip(
+        handle && screen && !handle.hidden ? { x: screen[0], y: screen[1], text: label(handle.id, v) } : null,
+      );
 
     return () => {
       viewport.onHandleDrag = null;

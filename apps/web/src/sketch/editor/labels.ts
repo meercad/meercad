@@ -20,6 +20,8 @@ export interface Label {
   up?: Vec2;
   /** An angle's value: laid level in front of its arc rather than along it. */
   level?: boolean;
+  /** A length's dimension line (its two ends): dragged, the dimension moves parallel to itself. */
+  line?: [Vec2, Vec2];
 }
 
 /** Constraint type names for the label tooltips (English shows the type id as before). */
@@ -144,7 +146,13 @@ export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): L
         }),
         dimension: true,
         ...(drawing
-          ? { along: drawing.text.along, up: drawing.text.up, level: constraint.type === "angle" }
+          ? {
+              along: drawing.text.along,
+              up: drawing.text.up,
+              ...(constraint.type === "angle"
+                ? { level: true }
+                : { line: [drawing.lines[0]!.a, drawing.lines[0]!.b] as [Vec2, Vec2] }),
+            }
           : {}),
       });
       continue;

@@ -4,7 +4,7 @@
  * with PlaneGCS temporary constraints. The steps live in `./editor`: geometry, snapping, the shapes
  * the tools draw, trimming, dimensions, typed values, pointer and keyboard input, and the panels.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { evaluate, resolveFeature } from "@meercad/model";
 import type { Expr, SketchFeature } from "@meercad/schema";
 import {
@@ -14,12 +14,14 @@ import {
   offsetCurves,
   patternCurves,
   SketchEditError,
+  sub3,
+  toWorld,
   type ResolvedConstraint,
   type SketchSolver,
   type SolvedSketch,
   type Vec2,
 } from "@meercad/sketch";
-import { frameMatrix, THREE, type Viewport } from "@meercad/viewport";
+import { frameMatrix, THREE, type Handle, type Viewport } from "@meercad/viewport";
 import { parseExpr } from "../components/ExprInput";
 import { usePhoneSheets } from "../lib/layout";
 import { closeSketch, toast, useApp } from "../store";
@@ -665,20 +667,69 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
   // ---------------------------------------------------------------- HTML labels
   const labels = useMemo(() => (sketch && shown ? constraintLabels(sketch, shown) : []), [sketch, shown]);
+  // Placed in the frame the camera moves (before the picture is drawn), so labels never trail behind
+  // while orbiting; and after each render, for labels that came or changed.
   useEffect(() => {
-    let raf = 0;
-
-    const loop = () => {
-      raf = requestAnimationFrame(loop);
-      if (!frame || !layer.current) return;
-
-      placeOnScreen(layer.current, frame, viewport);
+    const place = () => {
+      if (frame && layer.current) placeOnScreen(layer.current, frame, viewport);
     };
 
-    loop();
+    place();
 
-    return () => cancelAnimationFrame(raf);
+    return viewport.onChange(place);
   }, [frame, viewport]);
+  useLayoutEffect(() => {
+    if (frame && layer.current) placeOnScreen(layer.current, frame, viewport);
+  });
+
+  // A length's dimension line drags like an arrow: the dimension moves parallel to itself (with the
+  // select tool; a drawing tool's clicks go to the sketch).
+  useEffect(() => {
+    if (!frame || !sketch || ui.tool !== "select") return void viewport.setGrips([]);
+
+    const world = (p: Vec2) => toWorld(frame, p);
+    const way = (v: Vec2) => sub3(toWorld(frame, v), toWorld(frame, [0, 0]));
+
+    viewport.setGrips(
+      labels.flatMap((l): Handle[] => {
+        if (!l.line || !l.up) return [];
+
+        const [at, up] = [l.at, l.up];
+        let moved = false;
+
+        const move = (offset: number) => {
+          if (offset === 0 && !moved) return;
+
+          const label: [number, number] = [
+            +(at[0] + up[0] * offset).toFixed(2),
+            +(at[1] + up[1] * offset).toFixed(2),
+          ];
+          commit(
+            {
+              entities: sketch.entities,
+              constraints: sketch.constraints.map((x) => (x.id === l.id ? ({ ...x, label } as typeof x) : x)),
+            },
+            moved,
+          );
+          moved = true;
+        };
+
+        return [
+          {
+            id: `dimension:${l.id}`,
+            origin: world(at),
+            dir: way(up),
+            value: 0,
+            hidden: true,
+            grip: [world(l.line[0]), world(l.line[1])],
+            onDrag: move,
+            onEnd: move,
+          },
+        ];
+      }),
+    );
+  });
+  useEffect(() => () => viewport.setGrips([]), [viewport]);
 
   // Chips with the new shape's size and angle; tapping one fixes that value as a dimension.
   const lastCurve = lastShape && shown?.curves.find((curve) => curve.id === lastShape.id);
