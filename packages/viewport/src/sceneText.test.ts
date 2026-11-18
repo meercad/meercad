@@ -145,6 +145,13 @@ describe("SceneTexts", () => {
     expect(ghost.material.map).toBe(mesh.material.map);
     t.set("h", null);
     expect(t.group.children).toHaveLength(0);
+
+    // Facing the screen, hidden behind parts too: no face to take the slope from.
+    t.set("s", { look, size: [10, 4], at: [0, 0, 0], hides: true });
+    expect(
+      (t.group.getObjectByName("s") as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material
+        .depthTest,
+    ).toBe(true);
   });
 
   it("turns values facing the screen to the camera", () => {

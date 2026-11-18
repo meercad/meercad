@@ -5,7 +5,7 @@
  * frame before or after the picture while the view turns; drawn with the picture it never trails.
  */
 import * as THREE from "three";
-import { biasTowardCamera, hiddenCopy } from "./depthBias.js";
+import { biasTowardCamera, hiddenCopy, triangleNormal } from "./depthBias.js";
 
 export type V3 = readonly [number, number, number];
 /** A box's corners: top left, top right, bottom right, bottom left. */
@@ -242,7 +242,9 @@ export class SceneTexts {
       ghost.renderOrder = RENDER_ORDER - 1;
       ghost.frustumCulled = false;
       mesh.add(ghost);
-      biasTowardCamera(material);
+
+      const [a, b, , d] = spec.corners ?? [];
+      biasTowardCamera(material, a && b && d ? triangleNormal(a, b, d) : undefined);
     }
 
     const entry: Entry = { spec, mesh, canvas, texture, key: "" };

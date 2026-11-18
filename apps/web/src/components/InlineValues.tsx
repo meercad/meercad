@@ -1043,6 +1043,8 @@ interface Drawn {
   lines: V3[][];
   arrows: V3[][];
   measured?: boolean;
+  /** The normal of the plane it lies in (world). */
+  normal?: V3;
 }
 
 /** A dimension's drawing (sketch coordinates) on the model, with the way its text runs there. */
@@ -1066,6 +1068,7 @@ function inWorld(
       lines: drawing.lines.map(({ a, b }) => [world(a), world(b)]),
       arrows: drawing.arrows.map((corners) => corners.map(world)),
       measured,
+      normal: [...frame.normal] as V3,
     },
     plane: {
       along: way(drawing.text.along),
@@ -1123,7 +1126,7 @@ function drawingOnModel(drawing: Drawn): THREE.Group {
     const faint = make(hiddenCopy(material));
     faint.renderOrder = 29;
 
-    const shown = make(biasTowardCamera(material));
+    const shown = make(biasTowardCamera(material, drawing.normal));
     shown.renderOrder = 30;
     group.add(faint, shown);
   }
