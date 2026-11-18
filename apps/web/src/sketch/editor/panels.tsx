@@ -34,12 +34,15 @@ export function QuickChips({
   typing,
   setTyping,
   onSet,
+  onMoved,
 }: {
   quick: QuickDim[];
   shapeId: string | undefined;
   typing: string | null;
   setTyping: (key: string | null) => void;
   onSet: (make: QuickDim["make"], expr: Expr) => void;
+  /** An angle's chip dragged to a spot on the screen (it measures the corner it lands in). */
+  onMoved?: (key: string, clientX: number, clientY: number) => void;
 }) {
   return (
     <>
@@ -49,7 +52,10 @@ export function QuickChips({
           className={`value-chip quick-dim ${q.key}`}
           data-x={q.at[0]}
           data-y={q.at[1]}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            if (q.angle && onMoved && typing !== q.key) followChipDrag(event, (x, y) => onMoved(q.key, x, y));
+          }}
         >
           {typing === q.key ? (
             <InlineInput

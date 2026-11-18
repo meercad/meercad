@@ -1,3 +1,4 @@
+import type { AngleArc, Segment } from "../../lib/angleDim";
 /** Types the sketch editor's parts share. */
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import type { Vec2 } from "@meercad/sketch";
@@ -56,4 +57,6 @@ export interface QuickDim {
   value: number;
   length: boolean;
   make: (expr: Expr) => NewConstraint;
+  /** For an angle between two lines: its arc and the two lines, to draw it. */
+  angle?: { arc: AngleArc; p: Segment; q: Segment };
 }

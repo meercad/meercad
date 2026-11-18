@@ -45,6 +45,13 @@ describe("two lines picked together", () => {
     expect(chip.make(30)).toMatchObject({ type: "angle", a: "l1", b: "l2", value: 30 });
   });
 
+  it("measure the corner their chip was dragged into, with its arc", () => {
+    const chip = pairAngle(sketch(), solved, "l1", "l2", [-10, 3])!;
+    expect(chip.value).toBeCloseTo(135, 6);
+    expect(chip.angle!.arc.degrees).toBeCloseTo(135, 6);
+    expect(chip.make(130)).toMatchObject({ value: 130 });
+  });
+
   it("show none when parallel, not both lines, or their angle is already fixed", () => {
     expect(pairAngle(sketch(), solved, "l1", "l3")).toBeNull();
     expect(pairAngle(sketch(), solved, "l1", "k")).toBeNull();

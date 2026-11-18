@@ -2335,6 +2335,10 @@ textarea.field:focus {
 .quick-dim.sweep {
   transform: translate(10px, 10px);
 }
+/* an angle's value sits on its dashed arc */
+.value-chip.pair-angle {
+  transform: translate(-50%, -50%);
+}
 .quick-dim button {
   border-style: dashed;
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);

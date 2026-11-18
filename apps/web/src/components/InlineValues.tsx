@@ -2,11 +2,11 @@
  * Values shown right on the model: the parameters of the selected feature, the dimensions of its
  * sketch, and the value at every drag arrow. Click a value to type a new number or expression.
  */
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { RebuildOutput } from "@meercad/kernel/client";
 import type { Expr, Feature, SketchConstraint, SketchFeature } from "@meercad/schema";
 import { toWorld, type Vec2 } from "@meercad/sketch";
-import type { Pick, Viewport } from "@meercad/viewport";
+import { THREE, type Pick, type Viewport } from "@meercad/viewport";
 import { faceAnchor, profileAnchor } from "../lib/anchors";
 import { Link2Off } from "lucide-react";
 import { evaluate } from "@meercad/model";
@@ -28,8 +28,10 @@ import {
 import { pairAngle, quickDimensions } from "../sketch/editor/labels";
 import { freshId } from "../sketch/actions";
 import { followChipDrag } from "../lib/chipDrag";
-import { angleArc } from "../lib/angleDim";
-import { linePair } from "../sketch/editor/geometry";
+import { angleArc, arcPoints, arcRays } from "../lib/angleDim";
+import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
+import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
+import { angleOf, linePair } from "../sketch/editor/geometry";
 
 type V3 = [number, number, number];
 
@@ -47,6 +49,8 @@ interface Item {
   measured?: boolean;
   /** Dragging moves the chip: dropped on `frame`'s plane, it is stored there (sketch coordinates). */
   drag?: { frame: Frame; to: (at: Vec2) => void };
+  /** Lines drawn dashed with the value (an angle's arc and rays), in the world. */
+  arc?: V3[][];
   commit: (expr: Expr) => void;
 }
 
@@ -400,6 +404,7 @@ function sketchItems(
       key: `${sketch.id}.${constraint.id}`,
       // Slid along the sketch normal to the picked face or edge, so the label sits on the model.
       at: placed(view.frame, at, onto),
+      ...(constraint.type === "angle" ? { arc: angleLines(constraint, view, onto) } : {}),
       drag: {
         frame: shiftedFrame(view.frame, onto),
         to: (label) => commitLabel(sketch, constraint.id, label),
@@ -419,15 +424,13 @@ function sketchItems(
       value: constraint.value,
       unlinkable: constraint.type !== "angle" && constraint.type !== "arc_angle",
       commit: (expr) =>
-        apply({
-          type: "edit_feature",
-          id: sketch.id,
-          patch: {
-            constraints: sketch.constraints.map((x) =>
-              x.id === constraint.id ? ({ ...x, value: expr } as SketchConstraint) : x,
-            ),
-          },
-        }),
+        commitConstraints(
+          sketch,
+          out,
+          sketch.constraints.map((x) =>
+            x.id === constraint.id ? ({ ...x, value: expr } as SketchConstraint) : x,
+          ),
+        ),
     });
   }
 
@@ -490,7 +493,13 @@ function linesOf(
 }
 
 /** The angle between two lines of a sketch: its dimension, or the measured angle to fix it. */
-function angleItems(sketch: SketchFeature, out: RebuildOutput, [a, b]: [string, string], onto: V3): Item[] {
+function angleItems(
+  sketch: SketchFeature,
+  out: RebuildOutput,
+  [a, b]: [string, string],
+  onto: V3,
+  label: PairLabel,
+): Item[] {
   const view = out.report.sketches.find((x) => x.id === sketch.id);
   if (!view) return [];
 
@@ -499,8 +508,11 @@ function angleItems(sketch: SketchFeature, out: RebuildOutput, [a, b]: [string, 
   const existing = sketch.constraints.filter(same).map((x) => x.id);
   if (existing.length) return sketchItems(sketch, out, undefined, onto, new Set(existing));
 
-  const quick = pairAngle(sketch, view, a, b);
-  if (!quick) return [];
+  const key = `${a},${b}`;
+  const quick = pairAngle(sketch, view, a, b, label.value?.key === key ? label.value.at : null);
+  if (!quick?.angle) return [];
+
+  const world = (points: Vec2[]) => points.map((p) => placed(view.frame, p, onto));
 
   return [
     {
@@ -511,17 +523,16 @@ function angleItems(sketch: SketchFeature, out: RebuildOutput, [a, b]: [string, 
       unit: "deg",
       suggest: "angle",
       measured: true,
+      arc: [
+        arcPoints(quick.angle.arc),
+        ...arcRays(quick.angle.arc, quick.angle.p, quick.angle.q).map((x) => [x.a, x.b]),
+      ].map(world),
+      drag: { frame: shiftedFrame(view.frame, onto), to: (at) => label.set({ key, at }) },
       commit: (expr: Expr) =>
-        apply({
-          type: "edit_feature",
-          id: sketch.id,
-          patch: {
-            constraints: [
-              ...sketch.constraints,
-              { id: freshId(sketch, "c"), ...quick.make(expr) } as SketchConstraint,
-            ],
-          },
-        }),
+        commitConstraints(sketch, out, [
+          ...sketch.constraints,
+          { id: freshId(sketch, "c"), ...quick.make(expr) } as SketchConstraint,
+        ]),
     },
   ];
 }
@@ -543,7 +554,12 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const [editing, setEditing] = useState<string | null>(null);
   const showValues = usePrefs((prefs) => prefs.showValues);
   const selection = useApp((state) => state.selection);
+  const [pairLabel, setPairLabel] = useState<PairLabel["value"]>(null);
+  const arcs = useRef<V3[][]>([]);
+  arcs.current = [];
+  useDashedLines(viewport, arcs);
   useEffect(() => viewport.onChange(tick), [viewport]);
+  useEffect(() => preloadSolver(), []);
 
   // Drag arrows are set up after this renders (by the manipulators); lay out again once they change.
   const handleSig = useRef("");
@@ -580,7 +596,9 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
   const pair = sketch && selection.length === 2 ? linesOf(selection, out, doc.features, sketch.id) : null;
 
   if (sketch && pair) {
-    items.push(...angleItems(sketch, out, pair, selection[1]!.point));
+    items.push(
+      ...angleItems(sketch, out, pair, selection[1]!.point, { value: pairLabel, set: setPairLabel }),
+    );
   } else if (sketch && edge && fromSketch(edge, feature.id, sketch.id)) {
     if (edge.curveId) items.push(...curveItems(sketch, out, edge.curveId, pick!.point));
   } else if (sketch) {
@@ -603,13 +621,15 @@ export function InlineValues({ viewport }: { viewport: Viewport }) {
     }
   }
 
+  arcs.current = items.flatMap((item) => item.arc ?? []);
+
   return (
     <div className="overlay-layer">
       {layoutChips(items, viewport).map(({ it: item, s }) => {
         return (
           <div
             key={item.key}
-            className={item.measured ? "value-chip quick-dim" : "value-chip"}
+            className={`value-chip${item.measured ? " quick-dim" : ""}${item.arc ? " pair-angle" : ""}`}
             style={{ left: s[0], top: s[1] }}
             onPointerDown={(event) => {
               event.stopPropagation();
@@ -838,4 +858,107 @@ function commitLabel(sketch: SketchFeature, constraintId: string, at: Vec2): voi
       ),
     },
   });
+}
+
+/**
+ * Writes a sketch's changed constraints; a changed angle turns one line only, the other held where
+ * it is (lib/angleHold.ts), solved here so the kernel starts from that.
+ */
+function commitConstraints(sketch: SketchFeature, out: RebuildOutput, constraints: SketchConstraint[]): void {
+  const angle = changedAngle(sketch.constraints, constraints);
+  const view = out.report.sketches.find((x) => x.id === sketch.id);
+  const next = { ...sketch, constraints };
+  const keep = angle ? anchorLine(next, angle[0], angle[1]) : null;
+  const points = new Map(view?.points.map(([id, x, y]) => [id, [x, y] as Vec2]));
+  const solved = keep ? solveOnModel(next, constraints, holdLine(next, keep, points), out) : null;
+  const entities = solved && keep ? keepLine(sketch.entities, solved.entities, keep) : undefined;
+
+  apply({
+    type: "edit_feature",
+    id: sketch.id,
+    patch: entities ? { entities, constraints } : { constraints },
+  });
+}
+
+/** Where the angle chip of two picked lines was dragged (sketch coordinates), and how to change it. */
+interface PairLabel {
+  value: { key: string; at: Vec2 } | null;
+  set: (value: { key: string; at: Vec2 }) => void;
+}
+
+/** An angle dimension's arc and rays, in the world (on the plane through `onto`). */
+function angleLines(
+  constraint: Extract<SketchConstraint, { type: "angle" }>,
+  view: RebuildOutput["report"]["sketches"][number],
+  onto?: V3,
+): V3[][] {
+  const angle = angleOf(constraint, view);
+  if (!angle) return [];
+
+  const lines = [arcPoints(angle.arc), ...arcRays(angle.arc, angle.p, angle.q).map((x) => [x.a, x.b])];
+
+  return lines.map((points) => points.map((p) => placed(view.frame, p, onto)));
+}
+
+/** Draws the lines in `lines` dashed over the model, again whenever they change. */
+function useDashedLines(viewport: Viewport, lines: { readonly current: V3[][] }): void {
+  const group = useMemo(() => new THREE.Group(), []);
+  const drawn = useRef("");
+
+  useEffect(() => {
+    viewport.overlay.add(group);
+
+    return () => {
+      viewport.overlay.remove(group);
+      clearGroup(group);
+    };
+  }, [viewport, group]);
+
+  useEffect(() => {
+    const signature = JSON.stringify(
+      lines.current.map((line) => line.map((p) => p.map((x) => +x.toFixed(3)))),
+    );
+    if (signature === drawn.current) return;
+
+    drawn.current = signature;
+    clearGroup(group);
+
+    for (const line of lines.current) group.add(dashedLine(line));
+
+    viewport.invalidate();
+  });
+}
+
+/** A dashed line through world points, drawn over the model; dashes sized to the line. */
+function dashedLine(points: V3[]): THREE.Line {
+  const length = points
+    .slice(1)
+    .reduce((sum, p, i) => sum + Math.hypot(...p.map((x, k) => x - points[i]![k]!)), 0);
+  const dash = Math.max(length / 24, 0.05);
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(points.map((p) => new THREE.Vector3(...p))),
+    new THREE.LineDashedMaterial({
+      color: ANGLE_COLOR,
+      dashSize: dash,
+      gapSize: dash * 0.7,
+      depthTest: false,
+    }),
+  );
+  line.computeLineDistances();
+  line.renderOrder = 30;
+
+  return line;
+}
+
+/** Colour of an angle's dashed arc on the model (the accent of the value chips). */
+const ANGLE_COLOR = 0x4f46e5;
+
+function clearGroup(group: THREE.Group): void {
+  for (const child of [...group.children]) {
+    child.removeFromParent();
+
+    const line = child as THREE.Line;
+    line.geometry.dispose();
+    (line.material as THREE.Material).dispose();
+  }
 }

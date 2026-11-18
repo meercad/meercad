@@ -144,32 +144,34 @@ export function angleArc(p: Segment, q: Segment, label?: Vec2 | null, wanted?: n
   };
 }
 
-/**
- * Lines to draw for an angle: the arc, and a ray from the corner out to each end of the arc where the
- * line itself does not reach that far (as extension lines show where a length is measured).
- */
-export function angleArcLines(arc: AngleArc, p: Segment, q: Segment): Segment[] {
-  const at = (angle: number, r = arc.radius): Vec2 => [
-    arc.corner[0] + r * Math.cos(angle),
-    arc.corner[1] + r * Math.sin(angle),
-  ];
+/** The arc as a line of points, from one ray round to the other. */
+export function arcPoints(arc: AngleArc): Vec2[] {
   const steps = Math.max(2, Math.ceil(((arc.to - arc.from) / (2 * Math.PI)) * ARC_STEPS_PER_TURN));
-  const lines: Segment[] = [];
 
-  for (let i = 0; i < steps; i++) {
-    const a = arc.from + ((arc.to - arc.from) * i) / steps;
-    const b = arc.from + ((arc.to - arc.from) * (i + 1)) / steps;
-    lines.push({ a: at(a), b: at(b) });
-  }
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const angle = arc.from + ((arc.to - arc.from) * i) / steps;
 
-  // From the corner to the arc, along each side: only the stretch the line does not cover.
-  for (const angle of [arc.from, arc.to]) {
-    const end = at(angle);
-    const covered = [p, q].some((segment) => onSegment(segment, end));
-    if (!covered) lines.push({ a: arc.corner, b: end });
-  }
+    return [arc.corner[0] + arc.radius * Math.cos(angle), arc.corner[1] + arc.radius * Math.sin(angle)];
+  });
+}
 
-  return lines;
+/**
+ * Rays from the corner out to each end of the arc, where the line itself does not reach that far (as
+ * extension lines show where a length is measured).
+ */
+export function arcRays(arc: AngleArc, p: Segment, q: Segment): Segment[] {
+  const points = arcPoints(arc);
+
+  return [points[0]!, points.at(-1)!]
+    .filter((end) => ![p, q].some((segment) => onSegment(segment, end)))
+    .map((end) => ({ a: arc.corner, b: end }));
+}
+
+/** Lines to draw for an angle: the arc in short pieces, and its rays. */
+export function angleArcLines(arc: AngleArc, p: Segment, q: Segment): Segment[] {
+  const points = arcPoints(arc);
+
+  return [...points.slice(1).map((b, i) => ({ a: points[i]!, b })), ...arcRays(arc, p, q)];
 }
 
 /** True when a point lies on a segment (within a hair). */

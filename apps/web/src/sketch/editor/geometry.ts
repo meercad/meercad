@@ -1,5 +1,5 @@
 /** Plane geometry of the sketch editor: arcs, distances to curves, point lists and model edges. */
-import { angleArc, angleArcLines, type Segment } from "../../lib/angleDim";
+import { angleArc, angleArcLines, type AngleArc, type Segment } from "../../lib/angleDim";
 import type { SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import {
   add2,
@@ -403,11 +403,9 @@ export function nearestOnPolyline(pts: Vec2[], p: Vec2): { pos: Vec2; dist: numb
 export function dimensionGeometry(constraint: SketchConstraint, solved: SolvedSketch): Vec2[] | null {
   // An angle always shows its arc between the two lines, placed or not.
   if (constraint.type === "angle") {
-    const pair = linePair(solved, constraint.a, constraint.b);
-    const value = typeof constraint.value === "number" ? constraint.value : undefined;
-    const arc = pair && angleArc(pair[0], pair[1], constraint.label, value);
+    const angle = angleOf(constraint, solved);
 
-    return arc ? angleArcLines(arc, pair![0], pair![1]).flatMap((x) => [x.a, x.b]) : null;
+    return angle ? angleArcLines(angle.arc, angle.p, angle.q).flatMap((x) => [x.a, x.b]) : null;
   }
 
   if (!("value" in constraint) || !constraint.label) return null;
@@ -547,4 +545,16 @@ export function linePair(
     { a: p.a, b: p.b },
     { a: q.a, b: q.b },
   ];
+}
+
+/** The arc an angle dimension is drawn with, and its two lines; null unless both are lines that meet. */
+export function angleOf(
+  constraint: Extract<SketchConstraint, { type: "angle" }>,
+  solved: Pick<SolvedSketch, "curves">,
+): { arc: AngleArc; p: Segment; q: Segment } | null {
+  const pair = linePair(solved, constraint.a, constraint.b);
+  const value = typeof constraint.value === "number" ? constraint.value : undefined;
+  const arc = pair && angleArc(pair[0], pair[1], constraint.label, value);
+
+  return arc ? { arc, p: pair![0], q: pair![1] } : null;
 }

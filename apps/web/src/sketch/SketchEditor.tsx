@@ -27,6 +27,7 @@ import { t, tn } from "../lib/i18n";
 import { lengthExpr } from "../lib/units";
 import { usePrefs } from "../lib/keymap";
 import { activeSketch, setExternalKinds, writeSketch } from "./actions";
+import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { getSolver } from "./solver";
 import { meshSections, traceSections } from "./section";
 import { setSketchSelection, setTool, useSketchUi, type SketchSel } from "./state";
@@ -79,6 +80,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const [drag, setDrag] = useState<SolvedSketch | null>(null);
   const [hover, setHover] = useState<SketchSel | null>(null);
   const [tip, setTip] = useState<Tip | null>(null);
+  /** Where the angle chip of two picked lines was dragged (sketch coordinates), for those lines. */
+  const [pairLabel, setPairLabel] = useState<{ key: string; at: Vec2 } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [hoverChain, setHoverChain] = useState(-1);
   const layer = useRef<HTMLDivElement>(null);
@@ -168,8 +171,19 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       return writeSketch(next, merge);
     }
 
-    const solved = solver.solve({ entities: next.entities, constraints: cons, external });
-    const entities = solved.diagnostics.ok ? applySolution(next.entities, solved) : next.entities;
+    // A changed angle turns one line: the other is held where it is (see lib/angleHold.ts).
+    const angle = changedAngle(sketch!.constraints, next.constraints);
+    const keep = angle && shown ? anchorLine({ ...sketch!, ...next }, angle[0], angle[1]) : null;
+    const drag = keep ? holdLine({ ...sketch!, ...next }, keep, shown!.points) : undefined;
+    const solved = solver.solve(
+      { entities: next.entities, constraints: cons, external },
+      drag ? { drag } : {},
+    );
+    const entities = !solved.diagnostics.ok
+      ? next.entities
+      : keep
+        ? keepLine(next.entities, applySolution(next.entities, solved), keep)
+        : applySolution(next.entities, solved);
 
     if (!solved.diagnostics.ok && solved.diagnostics.conflicting.length) {
       toast(t("Over-constrained: {list}", { list: solved.diagnostics.conflicting.join(", ") }), "error");
@@ -207,6 +221,21 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     };
   }, [viewport, frame, axesGroup]);
 
+  // Two lines picked together: the angle between them, on its dashed arc, ready to be fixed; its value
+  // dragged into another corner measures that one.
+  const pickedCurves = ui.selection.filter((sel) => sel.kind === "curve");
+  const pairKey = pickedCurves.map((sel) => sel.id).join();
+  const angleChip =
+    sketch && shown && pickedCurves.length === 2 && ui.selection.length === 2
+      ? pairAngle(
+          sketch,
+          shown,
+          pickedCurves[0]!.id,
+          pickedCurves[1]!.id,
+          pairLabel?.key === pairKey ? pairLabel.at : null,
+        )
+      : null;
+
   const ts = toolState.current;
   useEffect(() => {
     disposeGroup(group);
@@ -227,7 +256,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     for (const obj of previewObjects(ui.tool, { ...ts, cursor: typedTarget() ?? ts.cursor })) group.add(obj);
     if (ts.snap) for (const obj of snapObjects(ts.snap, viewport.pixelSize(frame.origin))) group.add(obj);
 
-    drawDimensionLines(group, sketch, shown);
+    drawDimensionLines(group, sketch, shown, angleChip?.angle);
   });
 
   // ---------------------------------------------------------------- hit testing and snapping
@@ -663,12 +692,6 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   // Chips with the new shape's size and angle; tapping one fixes that value as a dimension.
   const lastCurve = lastShape && shown?.curves.find((curve) => curve.id === lastShape.id);
   const quick = sketch && lastCurve ? quickDimensions(sketch, lastCurve) : [];
-  // Two lines picked together: the angle between them, on its arc, ready to be fixed.
-  const pickedCurves = ui.selection.filter((sel) => sel.kind === "curve");
-  const angleChip =
-    sketch && shown && pickedCurves.length === 2 && ui.selection.length === 2
-      ? pairAngle(sketch, shown, pickedCurves[0]!.id, pickedCurves[1]!.id)
-      : null;
   if (angleChip) quick.push(angleChip);
 
   const addQuickDim = (make: (expr: Expr) => NewConstraint, expr: Expr) => {
@@ -693,6 +716,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
           typing={typingQuick}
           setTyping={setTypingQuick}
           onSet={addQuickDim}
+          onMoved={(_key, clientX, clientY) => {
+            const at = toSketch({ clientX, clientY });
+            if (at) setPairLabel({ key: pairKey, at });
+          }}
         />
         <ConstraintLabels
           sketch={sketch}

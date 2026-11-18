@@ -295,16 +295,19 @@ const ANGLE_FIXING = new Set(["angle", "parallel", "perpendicular", "collinear"]
 
 /**
  * The angle between two lines as a chip on its arc, for two lines picked together while nothing fixes
- * their angle yet; typing a value adds that angle dimension (with its value where the chip was).
+ * their angle yet; typing a value adds that angle dimension (with its value where the chip was). The
+ * chip dragged to `label` measures the corner it lies in.
  */
 export function pairAngle(
   sketch: SketchFeature,
   solved: Pick<SolvedSketch, "curves">,
   a: string,
   b: string,
+  label?: Vec2 | null,
 ): QuickDim | null {
   const pair = linePair(solved, a, b);
-  const arc = pair && angleArc(pair[0], pair[1]);
+  // The corner the value was dragged into (inside, outside, beside) is the angle measured.
+  const arc = pair && angleArc(pair[0], pair[1], label);
   if (!arc) return null;
 
   const fixed = sketch.constraints.some(
@@ -317,7 +320,7 @@ export function pairAngle(
   if (fixed) return null;
 
   const degrees = +arc.degrees.toFixed(2);
-  const label: [number, number] = [+arc.label[0].toFixed(2), +arc.label[1].toFixed(2)];
+  const placed: [number, number] = [+arc.label[0].toFixed(2), +arc.label[1].toFixed(2)];
 
   return {
     key: "pair-angle",
@@ -325,6 +328,7 @@ export function pairAngle(
     text: `∠ ${fmt(degrees)}°`,
     value: degrees,
     length: false,
-    make: (expr) => ({ type: "angle", a, b, value: expr, label }),
+    make: (expr) => ({ type: "angle", a, b, value: expr, label: placed }),
+    angle: { arc, p: pair![0], q: pair![1] },
   };
 }

@@ -11,7 +11,8 @@ import {
 import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
 import { sameSel, type SketchSel, type SketchTool } from "../state";
-import { arcThrough, curveSamples, dimensionGeometry, pointEntries, refsOf } from "./geometry";
+import { arcPoints, arcRays, type AngleArc, type Segment } from "../../lib/angleDim";
+import { angleOf, arcThrough, curveSamples, dimensionGeometry, pointEntries, refsOf } from "./geometry";
 import type { Snap } from "./types";
 
 export const COLORS = {
@@ -463,13 +464,57 @@ function drawPoints(group: THREE.Group, scene: SketchScene, full: boolean) {
   group.add(points);
 }
 
-/** The extension and dimension lines of the dimensions that have a label placed. */
+/** Colour of dimension lines, and of the arc of an angle that is only measured so far. */
+const DIMENSION_COLOR = 0x6b7280;
+const MEASURED_COLOR = 0x4f46e5;
+
+/** An angle's arc and rays, dashed (dashes sized to the arc, so it looks the same at any size). */
+export function dashedAngle(arc: AngleArc, p: Segment, q: Segment, color = DIMENSION_COLOR): THREE.Group {
+  const group = new THREE.Group();
+  const dash = (arc.radius * 2 * Math.PI) / 60;
+  const material = new THREE.LineDashedMaterial({
+    color,
+    dashSize: dash,
+    gapSize: dash * 0.7,
+    depthTest: false,
+  });
+
+  const add = (points: Vec2[]) => {
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points.map(([x, y]) => new THREE.Vector3(x, y, 0))),
+      material,
+    );
+    line.computeLineDistances();
+    line.renderOrder = 25;
+    group.add(line);
+  };
+
+  add(arcPoints(arc));
+  for (const ray of arcRays(arc, p, q)) add([ray.a, ray.b]);
+
+  return group;
+}
+
+/**
+ * The extension and dimension lines of the dimensions that have a label placed, every angle's dashed
+ * arc, and the arc of the angle between two lines picked together (`pair`).
+ */
 export function drawDimensionLines(
   group: THREE.Group,
   sketch: SketchFeature | undefined,
   shown: SolvedSketch,
+  pair?: { arc: AngleArc; p: Segment; q: Segment } | null,
 ) {
+  if (pair) group.add(dashedAngle(pair.arc, pair.p, pair.q, MEASURED_COLOR));
+
   for (const constraint of sketch?.constraints ?? []) {
+    if (constraint.type === "angle") {
+      const angle = angleOf(constraint, shown);
+      if (angle) group.add(dashedAngle(angle.arc, angle.p, angle.q));
+
+      continue;
+    }
+
     const geo = dimensionGeometry(constraint, shown);
 
     if (geo) {
