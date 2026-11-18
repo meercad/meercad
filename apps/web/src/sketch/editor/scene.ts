@@ -524,6 +524,7 @@ export function drawDimensionLines(
   sketch: SketchFeature | undefined,
   shown: SolvedSketch,
   pair?: { arc: AngleArc; p: Segment; q: Segment } | null,
+  onFace?: ((p: Vec2) => boolean) | null,
 ) {
   const sizes = sizesFor(extentOf(shown.points.values()));
   const inside = middleOf(shown.points.values());
@@ -532,7 +533,7 @@ export function drawDimensionLines(
   if (pair) group.add(drawingObjects(angleDrawing(pair.arc, sizes), MEASURED_COLOR));
 
   for (const constraint of sketch?.constraints ?? []) {
-    const drawing = dimensionDrawing(constraint, shown, sizes, inside);
+    const drawing = dimensionDrawing(constraint, shown, sizes, inside, onFace);
 
     if (drawing) {
       group.add(drawingObjects(drawing, color));

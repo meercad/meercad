@@ -63,6 +63,25 @@ describe("a length", () => {
   });
 });
 
+describe("a length on a part's face", () => {
+  // The face: y from -50 to 5, so outside the line (y below 0) there is room, inside (above) little.
+  const face = (p: readonly [number, number]) => p[1] >= -50 && p[1] <= 5;
+
+  it("goes to the inside where the outside would hang past the face's edge", () => {
+    // The shape's middle below the line: outside is up, past the face's edge at y = 5.
+    const drawing = lengthDrawing([0, 0], [40, 0], sizes, null, [20, -15], undefined, (p) => p[1] <= 5)!;
+    expect(drawing.offset).toBe(-10);
+  });
+
+  it("stays outside where it fits there, or where neither side fits, or once it was moved", () => {
+    expect(lengthDrawing([0, 0], [40, 0], sizes, null, [20, 15], undefined, face)!.offset).toBe(-10);
+    expect(lengthDrawing([0, 0], [40, 0], sizes, null, [20, -15], undefined, () => false)!.offset).toBe(10);
+    expect(
+      lengthDrawing([0, 0], [40, 0], sizes, [20, 8], [20, -15], undefined, (p) => p[1] <= 5)!.offset,
+    ).toBe(8);
+  });
+});
+
 describe("an angle", () => {
   it("is its arc with arrowheads at both ends, its value half way round", () => {
     const arc = angleArc({ a: [0, 0], b: [100, 0] }, { a: [0, 0], b: [0, 100] })!;

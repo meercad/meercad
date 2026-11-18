@@ -33,6 +33,9 @@ export interface DimensionDrawing {
 /** An angle's arc is at least this many times a dimension's offset in radius (about 60 pixels). */
 const MIN_ARC_PER_OFFSET = 2;
 
+/** A value stands this far (per dimension offset) off its line: its gap and height. */
+const TEXT_PER_OFFSET = 0.75;
+
 /** Arrowheads are this much narrower than long (half width per length). */
 const ARROW_HALF_WIDTH = 0.3;
 
@@ -51,7 +54,9 @@ export function arrowhead(tip: Vec2, dir: Vec2, length: number): [Vec2, Vec2, Ve
  * A length between `a` and `b`, measured along `axis` (a unit direction; by default the way from `a`
  * to `b`). The dimension line goes through `label` when it has been moved (its distance off the
  * points, and where along it the value sits); otherwise it stands `sizes.offset` off, on the side
- * away from `inside` (the middle of the shape, so it does not run through it).
+ * away from `inside` (the middle of the shape, so it does not run through it) — unless the sketch
+ * lies on a part and only the other side keeps the dimension on the part's face (`onFace`): past the
+ * face's edge it would hang in the air.
  */
 export function lengthDrawing(
   a: Vec2,
@@ -60,13 +65,27 @@ export function lengthDrawing(
   label?: Vec2 | null,
   inside?: Vec2 | null,
   axis?: Vec2,
+  onFace?: ((p: Vec2) => boolean) | null,
 ): DimensionDrawing | null {
   const u = axis ?? unit(sub2(b, a));
   if (!u) return null;
 
   const n: Vec2 = [-u[1], u[0]];
   const middle: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  const awaySide = inside && dot2(sub2(inside, middle), n) > 0 ? -1 : 1;
+  const away = inside && dot2(sub2(inside, middle), n) > 0 ? -1 : 1;
+
+  // The dimension line's ends and its value (standing off the line by about its height) on the face.
+  const fits = (side: number) => {
+    const ends = [
+      plus(a, scaled(n, side * sizes.offset)),
+      plus(b, scaled(n, side * sizes.offset - dot2(sub2(b, a), n))),
+    ];
+    const text = plus(middleOf(ends)!, scaled(n, side * sizes.offset * TEXT_PER_OFFSET));
+
+    return [...ends, text].every((p) => onFace!(p));
+  };
+
+  const awaySide = onFace && !label && !fits(away) && fits(-away) ? -away : away;
   const moved = label ? dot2(sub2(label, a), n) : 0;
   const offset = label && Math.abs(moved) > sizes.gap ? moved : awaySide * sizes.offset;
   const side = Math.sign(offset);

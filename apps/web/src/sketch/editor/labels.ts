@@ -48,7 +48,11 @@ const CONSTRAINT_NAMES: Record<string, string> = {
 const constraintName = (type: string) => CONSTRAINT_NAMES[type] ?? type;
 
 /** Positions for dimension values and constraint glyphs (sketch coordinates). */
-export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): Label[] {
+export function constraintLabels(
+  sketch: SketchFeature,
+  solved: SolvedSketch,
+  onFace?: ((p: Vec2) => boolean) | null,
+): Label[] {
   const out: Label[] = [];
   const P = (r: string) => solved.points.get(r);
   const curve = (id: string) => solved.curves.find((curve) => curve.id === id);
@@ -95,7 +99,7 @@ export function constraintLabels(sketch: SketchFeature, solved: SolvedSketch): L
 
   for (const constraint of sketch.constraints) {
     if ("value" in constraint) {
-      const drawing = dimensionDrawing(constraint, solved, sizes, inside);
+      const drawing = dimensionDrawing(constraint, solved, sizes, inside, onFace);
       let at: Vec2 | null = drawing?.text.at ?? constraint.label ?? null;
 
       if (!at) {

@@ -171,7 +171,8 @@ describe("a dimension's value", () => {
         .classList.contains("on-line"),
     ).toBe(true);
 
+    // Lines and arrowheads, each also as a faint copy for where a part hides them.
     const drawn = getViewport()!.overlay.children.flatMap((x) => x.children);
-    expect(drawn.some((x) => x.children.length === 2)).toBe(true);
+    expect(drawn.some((x) => x.children.length === 4)).toBe(true);
   });
 });

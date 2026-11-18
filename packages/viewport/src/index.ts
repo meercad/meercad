@@ -25,6 +25,7 @@ import {
 
 export type { BodyLook, SwatchSpec } from "./looks.js";
 export type { Quad, SceneTextSpec, SceneTexts, TextLook } from "./sceneText.js";
+export { biasTowardCamera, hiddenCopy } from "./depthBias.js";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];

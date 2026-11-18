@@ -27,6 +27,7 @@ import { usePhoneSheets } from "../lib/layout";
 import { closeSketch, toast, useApp } from "../store";
 import { t, tn } from "../lib/i18n";
 import { lengthExpr } from "../lib/units";
+import { planeSupport } from "../lib/planeSupport";
 import { dropMirrors } from "../lib/sceneMirror";
 import { usePrefs } from "../lib/keymap";
 import { activeSketch, setExternalKinds, writeSketch } from "./actions";
@@ -79,6 +80,11 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const sketch = doc.features.find((feature) => feature.id === sketchId) as SketchFeature | undefined;
   const view = output?.report.sketches.find((sketchView) => sketchView.id === sketchId);
   const frame = view?.frame;
+  // Dimensions stay on the part's face the sketch lies on (lib/planeSupport.ts).
+  const onFace = useMemo(
+    () => (output && frame ? planeSupport(output.meshes, frame) : null),
+    [output, frame],
+  );
   const params = output?.report.params;
   const [solver, setSolver] = useState<SketchSolver | null>(null);
   const [drag, setDrag] = useState<SolvedSketch | null>(null);
@@ -251,7 +257,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     for (const obj of previewObjects(ui.tool, { ...ts, cursor: typedTarget() ?? ts.cursor })) group.add(obj);
     if (ts.snap) for (const obj of snapObjects(ts.snap, viewport.pixelSize(frame.origin))) group.add(obj);
 
-    drawDimensionLines(group, sketch, shown, angleChip?.angle);
+    drawDimensionLines(group, sketch, shown, angleChip?.angle, onFace);
   });
 
   // ---------------------------------------------------------------- hit testing and snapping
@@ -668,7 +674,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   useSketchKeys({ ts, setEntry, setTip, finishSpline, rerender });
 
   // ---------------------------------------------------------------- HTML labels
-  const labels = useMemo(() => (sketch && shown ? constraintLabels(sketch, shown) : []), [sketch, shown]);
+  const labels = useMemo(
+    () => (sketch && shown ? constraintLabels(sketch, shown, onFace) : []),
+    [sketch, shown, onFace],
+  );
   // Placed in the frame the camera moves (before the picture is drawn), so labels never trail behind
   // while orbiting; and after each render, for labels that came or changed.
   useEffect(() => {

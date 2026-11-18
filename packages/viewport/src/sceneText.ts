@@ -5,6 +5,7 @@
  * frame before or after the picture while the view turns; drawn with the picture it never trails.
  */
 import * as THREE from "three";
+import { biasTowardCamera, hiddenCopy } from "./depthBias.js";
 
 export type V3 = readonly [number, number, number];
 /** A box's corners: top left, top right, bottom right, bottom left. */
@@ -30,6 +31,11 @@ export interface SceneTextSpec {
   /** Facing the screen: centred `offset` CSS pixels (right, down) from `at`. */
   at?: V3;
   offset?: readonly [number, number];
+  /**
+   * Hidden by parts in front of it like the part it lies on, and drawn only faintly there; otherwise
+   * over everything.
+   */
+  hides?: boolean;
 }
 
 /** Room round the box for the halo and the chip's border (CSS pixels each side). */
@@ -230,6 +236,15 @@ export class SceneTexts {
     mesh.name = id;
     this.group.add(mesh);
 
+    if (spec.hides) {
+      // A faint copy over everything where it is hidden, the text itself depth tested.
+      const ghost = new THREE.Mesh(geometry, hiddenCopy(material));
+      ghost.renderOrder = RENDER_ORDER - 1;
+      ghost.frustumCulled = false;
+      mesh.add(ghost);
+      biasTowardCamera(material);
+    }
+
     const entry: Entry = { spec, mesh, canvas, texture, key: "" };
     this.entries.set(id, entry);
 
@@ -255,8 +270,14 @@ export class SceneTexts {
       texture.anisotropy = this.anisotropy();
       texture.minFilter = THREE.LinearMipmapLinearFilter;
       e.texture = texture;
-      e.mesh.material.map = texture;
-      e.mesh.material.needsUpdate = true;
+
+      for (const m of [e.mesh, ...e.mesh.children] as THREE.Mesh<
+        THREE.BufferGeometry,
+        THREE.MeshBasicMaterial
+      >[]) {
+        m.material.map = texture;
+        m.material.needsUpdate = true;
+      }
     } else {
       e.texture.needsUpdate = true;
     }
@@ -280,6 +301,11 @@ export class SceneTexts {
     e.mesh.removeFromParent();
     e.mesh.geometry.dispose();
     e.mesh.material.dispose();
+
+    for (const ghost of e.mesh.children as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[]) {
+      ghost.material.dispose();
+    }
+
     e.texture.dispose();
     this.entries.delete(id);
   }

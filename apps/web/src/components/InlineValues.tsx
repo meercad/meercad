@@ -6,7 +6,14 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } fro
 import type { RebuildOutput } from "@meercad/kernel/client";
 import type { Expr, Feature, SketchConstraint, SketchFeature } from "@meercad/schema";
 import { toWorld, type Vec2 } from "@meercad/sketch";
-import { THREE, type Handle, type Pick, type Viewport } from "@meercad/viewport";
+import {
+  biasTowardCamera,
+  hiddenCopy,
+  THREE,
+  type Handle,
+  type Pick,
+  type Viewport,
+} from "@meercad/viewport";
 import { faceAnchor, profileAnchor } from "../lib/anchors";
 import { Link2Off } from "lucide-react";
 import { evaluate } from "@meercad/model";
@@ -38,6 +45,7 @@ import {
 } from "../lib/dimStyle";
 import { dimensionColor } from "../sketch/editor/scene";
 import { boxToQuad, dimensionNumber, planeCorners, type PlaneQuad, type Turn } from "../lib/planeLabel";
+import { planeSupport } from "../lib/planeSupport";
 import { dropMirrors, mirror } from "../lib/sceneMirror";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
@@ -380,6 +388,7 @@ function sketchItems(
   const pts = new Map(view.points.map(([id, x, y]) => [id, [x, y] as Vec2]));
   const sizes = sizesFor(extentOf(pts.values()), screenPixel);
   const inside = middleOf(pts.values());
+  const onFace = planeSupport(out.meshes, shiftedFrame(view.frame, onto));
 
   const mid = (id: string): Vec2 | null => {
     const curve = view.curves.find((x) => x.id === id);
@@ -412,7 +421,7 @@ function sketchItems(
     if (ids && !ids.has(constraint.id)) continue;
 
     // Lengths, distances and angles drawn like a technical drawing's, their value on the line.
-    const drawing = dimensionDrawing(constraint, { points: pts, curves: view.curves }, sizes, inside);
+    const drawing = dimensionDrawing(constraint, { points: pts, curves: view.curves }, sizes, inside, onFace);
     let at: Vec2 | null = drawing?.text.at ?? constraint.label ?? null;
 
     if (!at) {
@@ -508,7 +517,15 @@ function measuredItems(sketch: SketchFeature, out: RebuildOutput, curveId: strin
       const key = `${sketch.id}.${curveId}.${quick.key}`;
       const drawing =
         curve.kind === "line" && quick.length
-          ? lengthDrawing(curve.a, curve.b, sizes, movedMeasures.get(key) ?? null, middleOf(pts))
+          ? lengthDrawing(
+              curve.a,
+              curve.b,
+              sizes,
+              movedMeasures.get(key) ?? null,
+              middleOf(pts),
+              undefined,
+              planeSupport(out.meshes, shiftedFrame(view.frame, onto)),
+            )
           : null;
 
       return {
@@ -1091,20 +1108,25 @@ function drawingOnModel(drawing: Drawn): THREE.Group {
   const group = new THREE.Group();
   const color = drawing.measured ? MEASURED_GREY : dimensionColor();
   const points = drawing.lines.flatMap((line) => line.map((p) => new THREE.Vector3(...p)));
-  const lines = new THREE.LineSegments(
-    new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color, depthTest: false }),
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+  const arrowGeometry = new THREE.BufferGeometry().setFromPoints(
+    drawing.arrows.flat().map((p) => new THREE.Vector3(...p)),
   );
 
-  lines.renderOrder = 30;
-  group.add(lines);
+  // Hidden by parts in front of it like the face it lies on; only faint where it is hidden.
+  for (const [geometry, material, kind] of [
+    [lineGeometry, new THREE.LineBasicMaterial({ color }), "line"],
+    [arrowGeometry, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }), "arrows"],
+  ] as const) {
+    const make = (m: THREE.Material) =>
+      kind === "line" ? new THREE.LineSegments(geometry, m) : new THREE.Mesh(geometry, m);
+    const faint = make(hiddenCopy(material));
+    faint.renderOrder = 29;
 
-  const arrows = new THREE.Mesh(
-    new THREE.BufferGeometry().setFromPoints(drawing.arrows.flat().map((p) => new THREE.Vector3(...p))),
-    new THREE.MeshBasicMaterial({ color, depthTest: false, side: THREE.DoubleSide }),
-  );
-  arrows.renderOrder = 30;
-  group.add(arrows);
+    const shown = make(biasTowardCamera(material));
+    shown.renderOrder = 30;
+    group.add(faint, shown);
+  }
 
   return group;
 }
@@ -1235,7 +1257,12 @@ function placeChips(items: Item[], elements: Map<string, HTMLDivElement>, viewpo
     // Drawn with the picture; the element stays for clicks and typing (lib/sceneMirror.ts).
     const id = `${MIRROR}${item.key}`;
     const corners = "corners" in style ? (style.corners as PlaneQuad) : null;
-    mirror(viewport, id, element, corners ? { corners, size: textBox(item.text) } : { at: item.at });
+    mirror(
+      viewport,
+      id,
+      element,
+      corners ? { corners, size: textBox(item.text), hides: true } : { at: item.at },
+    );
     drawn.add(id);
   }
 

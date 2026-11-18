@@ -124,6 +124,18 @@ describe("mirror", () => {
     expect(e.classList.contains(IN_SCENE)).toBe(true);
   });
 
+  it("hides a value lying on a face behind parts when asked", () => {
+    const { viewport, shown } = fakeViewport();
+    const corners = [
+      [0, 1, 0],
+      [1, 1, 0],
+      [1, 0, 0],
+      [0, 0, 0],
+    ] as const;
+    mirror(viewport, "v:z", chip(), { corners, size: [40, 18], hides: true });
+    expect(shown.get("v:z")!.hides).toBe(true);
+  });
+
   it("faces the screen where its element is, anchored to a point", () => {
     const { viewport, shown } = fakeViewport();
     mirror(viewport, "v:b", chip(), { at: [1, 2, 3] });

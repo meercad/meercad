@@ -129,6 +129,24 @@ describe("SceneTexts", () => {
     expect(positions(t, "a")[2]).toBeCloseTo(1, 9);
   });
 
+  it("hides a value lying on a face behind parts, a faint copy showing through", () => {
+    const t = texts();
+    t.set("h", { look, size: [10, 4], corners: box, hides: true });
+
+    const mesh = t.group.getObjectByName("h") as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+    expect(mesh.material.depthTest).toBe(true);
+
+    const ghost = mesh.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+    expect(ghost.material.depthTest).toBe(false);
+    expect(ghost.geometry).toBe(mesh.geometry);
+
+    // A new texture reaches the copy too; removed with it.
+    t.set("h", { look, size: [40, 4], corners: box, hides: true });
+    expect(ghost.material.map).toBe(mesh.material.map);
+    t.set("h", null);
+    expect(t.group.children).toHaveLength(0);
+  });
+
   it("turns values facing the screen to the camera", () => {
     const t = texts();
     t.set("b", { look, size: [10, 4], at: [0, 0, -10], offset: [5, 0] });

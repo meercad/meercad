@@ -588,6 +588,7 @@ export function dimensionDrawing(
   solved: Pick<SolvedSketch, "points" | "curves">,
   sizes: DimensionSizes,
   inside: Vec2 | null,
+  onFace?: ((p: Vec2) => boolean) | null,
 ): DimensionDrawing | null {
   if (constraint.type === "angle") {
     const angle = angleOf({ ...constraint, label: undefined }, solved);
@@ -600,7 +601,9 @@ export function dimensionDrawing(
   if (constraint.type === "length") {
     const line = solved.curves.find((x) => x.id === constraint.line);
 
-    return line?.kind === "line" ? lengthDrawing(line.a, line.b, sizes, label, inside) : null;
+    return line?.kind === "line"
+      ? lengthDrawing(line.a, line.b, sizes, label, inside, undefined, onFace)
+      : null;
   }
 
   if (constraint.type !== "distance") return null;
@@ -613,5 +616,5 @@ export function dimensionDrawing(
   const axis: Vec2 | undefined =
     constraint.axis === "x" ? [1, 0] : constraint.axis === "y" ? [0, 1] : undefined;
 
-  return lengthDrawing(a, b, sizes, label, inside, axis);
+  return lengthDrawing(a, b, sizes, label, inside, axis, onFace);
 }

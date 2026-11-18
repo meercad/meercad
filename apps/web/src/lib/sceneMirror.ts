@@ -80,7 +80,8 @@ const face = (element: HTMLElement): HTMLElement =>
 const ownView = (element: HTMLElement) => !!element.querySelector("input, textarea, select, .unlink");
 
 /**
- * Copies `element` into the scene under `id`, lying in a plane on `corners` (its box `size` pixels), or
+ * Copies `element` into the scene under `id`, lying in a plane on `corners` (its box `size` pixels;
+ * hidden behind parts like the face it lies on with `hides`), or
  * facing the screen where the element is, anchored to the world point `at`. Removes the copy and shows
  * the element itself when it is being edited or cannot be copied.
  */
@@ -88,7 +89,7 @@ export function mirror(
   viewport: Viewport,
   id: string,
   element: HTMLElement,
-  place: { corners: Quad; size: readonly [number, number] } | { at: V3 },
+  place: { corners: Quad; size: readonly [number, number]; hides?: boolean } | { at: V3 },
 ): void {
   const look = ownView(element) || element.style.display === "none" ? null : lookOf(face(element));
   const spec = look ? specFor(viewport, element, look, place) : null;
@@ -100,9 +101,11 @@ function specFor(
   viewport: Viewport,
   element: HTMLElement,
   look: TextLook,
-  place: { corners: Quad; size: readonly [number, number] } | { at: V3 },
+  place: { corners: Quad; size: readonly [number, number]; hides?: boolean } | { at: V3 },
 ): SceneTextSpec | null {
-  if ("corners" in place) return { look, size: place.size, corners: place.corners };
+  if ("corners" in place) {
+    return { look, size: place.size, corners: place.corners, ...(place.hides ? { hides: true } : {}) };
+  }
 
   const s = viewport.worldToScreen([...place.at]);
   if (!s) return null;
