@@ -211,10 +211,12 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
           <label className="check">
             <input
               type="checkbox"
-              checked={prefs.swipeOrbits}
-              onChange={(event) => setPrefs({ swipeOrbits: event.target.checked })}
+              checked={prefs.swipeRotates}
+              onChange={(event) => setPrefs({ swipeRotates: event.target.checked })}
             />
-            {t("Trackpad: two-finger swipe rotates, Shift + swipe pans, pinch or Ctrl + swipe zooms")}
+            {t(
+              "Trackpad / Magic Mouse: swiping rotates, the mouse wheel zooms (off: scrolling always zooms)",
+            )}
           </label>
         </section>
 

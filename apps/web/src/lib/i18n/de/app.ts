@@ -258,8 +258,8 @@ export default {
   Pan: "Verschieben",
   Zoom: "Zoomen",
   "Reverse zoom direction (scroll up zooms out)": "Zoomrichtung umkehren (nach oben scrollen zoomt heraus)",
-  "Trackpad: two-finger swipe rotates, Shift + swipe pans, pinch or Ctrl + swipe zooms":
-    "Trackpad: mit zwei Fingern wischen dreht, Shift + wischen verschiebt, Zwei-Finger-Zoom oder Ctrl + wischen zoomt",
+  "Trackpad / Magic Mouse: swiping rotates, the mouse wheel zooms (off: scrolling always zooms)":
+    "Trackpad / Magic Mouse: Wischen dreht, das Mausrad zoomt (aus: Scrollen zoomt immer)",
   "Show shortcut badges on tools and menus": "Tastenkürzel an Werkzeugen und in Menüs zeigen",
   "Every badge in the app follows this choice.": "Alle Tastenkürzel in der App folgen dieser Wahl.",
   "Show all shortcuts": "Alle Tastenkürzel zeigen",

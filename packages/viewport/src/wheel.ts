@@ -68,22 +68,28 @@ export function mouseZoomDelta(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaM
 const GESTURE_GAP_MS = 250;
 
 /**
- * Sorts wheel events into gestures. The device is judged on the first event of a gesture and kept
- * until it pauses, so a trackpad delta that happens to look like a notch does not zoom halfway
- * through a swipe.
+ * Sorts wheel events into gestures and tells a mouse wheel from fingers. A notched wheel is known on
+ * the first event of a gesture. Fingers (a trackpad, a Magic Mouse) are known once a gesture moves
+ * sideways too: a wheel only ever scrolls up and down, also one that scrolls smoothly in uneven pixel
+ * steps (as many mice do). Until then a scroll zooms: a wheel must always zoom, and a swipe that
+ * starts straight up or down turns the view as soon as it wavers. Kept until the gesture pauses, so a
+ * finger delta that happens to look like a notch does not zoom halfway through a swipe.
  */
 export class WheelClassifier {
-  private mouse = false;
+  private device: "mouse" | "fingers" | "unknown" = "unknown";
   private last = -Infinity;
 
-  /** `swipeOrbits` false: everything zooms, as a plain wheel would. */
+  /** `swipeOrbits` false: a swipe without keys zooms too, as a mouse wheel does (Shift/⌘/Option: pans). */
   classify(e: WheelLike, swipeOrbits = true): WheelGesture {
     const fresh = e.timeStamp - this.last > GESTURE_GAP_MS;
     this.last = e.timeStamp;
-    if (fresh) this.mouse = isMouseWheel(e);
+    if (fresh) this.device = isMouseWheel(e) ? "mouse" : "unknown";
+    // Sideways without Shift (which turns a wheel sideways on macOS): fingers.
+    if (this.device === "unknown" && e.deltaX !== 0 && !e.shiftKey) this.device = "fingers";
     // Pinch arrives as ctrlKey without a key being held; Ctrl + swipe zooms on purpose.
-    if (e.ctrlKey || this.mouse || !swipeOrbits) return "zoom";
+    if (e.ctrlKey || this.device === "mouse") return "zoom";
+    if (e.shiftKey || e.metaKey || e.altKey) return "pan";
 
-    return e.shiftKey || e.metaKey || e.altKey ? "pan" : "orbit";
+    return swipeOrbits && this.device === "fingers" ? "orbit" : "zoom";
   }
 }

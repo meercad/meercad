@@ -24,8 +24,12 @@ interface Prefs {
   keys: KeyScheme;
   mouse: MouseScheme;
   invertZoom: boolean;
-  /** A two-finger swipe on a trackpad orbits (Shift: pans); off, it zooms like a mouse wheel. */
-  swipeOrbits: boolean;
+  /**
+   * Swiping on a trackpad or Magic Mouse turns the view (Shift/⌘/Option: pans); a mouse wheel always
+   * zooms. Off: every scroll zooms (a way out should fingers ever be taken for a wheel or the other
+   * way round). Replaces `swipeOrbits`, under which a smoothly scrolling mouse wheel turned the view.
+   */
+  swipeRotates: boolean;
   /** Shortcut badges on tools and menus. */
   showKeys: boolean;
   /** Dimension and size chips on the model. */
@@ -66,7 +70,7 @@ function load(): Prefs {
     keys: "meercad",
     mouse: "meercad",
     invertZoom: false,
-    swipeOrbits: true,
+    swipeRotates: true,
     showKeys: true,
     showValues: true,
     colorParts: true,
@@ -89,7 +93,7 @@ function load(): Prefs {
       keys: KEY_SCHEMES.some((s) => s.id === raw.keys) ? raw.keys! : fallback.keys,
       mouse: MOUSE_SCHEMES.some((s) => s.id === raw.mouse) ? raw.mouse! : fallback.mouse,
       invertZoom: raw.invertZoom === true,
-      swipeOrbits: raw.swipeOrbits !== false,
+      swipeRotates: raw.swipeRotates !== false,
       showKeys: raw.showKeys !== false,
       showValues: raw.showValues !== false,
       colorParts: raw.colorParts !== false,

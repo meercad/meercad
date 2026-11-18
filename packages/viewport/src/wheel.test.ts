@@ -39,30 +39,51 @@ describe("isMouseWheel", () => {
 });
 
 describe("WheelClassifier", () => {
-  it("swipe orbits, Shift, ⌘ or Option pans, pinch and Ctrl zoom", () => {
+  it("fingers swiping orbit, with Shift, ⌘ or Option pan, pinch and Ctrl zoom", () => {
     const c = new WheelClassifier();
-    expect(c.classify(ev({ deltaY: 6, timeStamp: 0 }))).toBe("orbit");
-    expect(c.classify(ev({ deltaY: 6, shiftKey: true, timeStamp: 16 }))).toBe("pan");
-    expect(c.classify(ev({ deltaY: 6, ctrlKey: true, timeStamp: 32 }))).toBe("zoom");
-    expect(c.classify(ev({ deltaY: 6, metaKey: true, timeStamp: 48 }))).toBe("pan");
-    expect(c.classify(ev({ deltaX: 6, altKey: true, timeStamp: 64 }))).toBe("pan");
-    expect(c.classify(ev({ deltaY: 6, timeStamp: 80 }))).toBe("orbit");
+    // Sideways as well as up and down: fingers.
+    expect(c.classify(ev({ deltaX: 2, deltaY: 6, timeStamp: 0 }))).toBe("orbit");
+    expect(c.classify(ev({ deltaY: 6, timeStamp: 16 }))).toBe("orbit");
+    expect(c.classify(ev({ deltaY: 6, shiftKey: true, timeStamp: 32 }))).toBe("pan");
+    expect(c.classify(ev({ deltaY: 6, ctrlKey: true, timeStamp: 48 }))).toBe("zoom");
+    expect(c.classify(ev({ deltaY: 6, metaKey: true, timeStamp: 64 }))).toBe("pan");
+    expect(c.classify(ev({ deltaX: 6, altKey: true, timeStamp: 80 }))).toBe("pan");
   });
-  it("a mouse wheel keeps zooming, also with Shift, ⌘ or Ctrl", () => {
+
+  it("a mouse wheel zooms, notched or smooth, also with Shift, ⌘ or Ctrl", () => {
     const c = new WheelClassifier();
     expect(c.classify(ev({ deltaY: 4.000244140625, timeStamp: 0 }))).toBe("zoom");
     expect(c.classify(ev({ deltaX: 4.000244140625, shiftKey: true, timeStamp: 1000 }))).toBe("zoom");
+
+    // A smoothly scrolling wheel: uneven pixel steps, never sideways.
+    for (const [deltaY, t] of [
+      [-3, 2000],
+      [-7.5, 2016],
+      [-12, 2032],
+      [-1.5, 2048],
+    ]) {
+      expect(c.classify(ev({ deltaY: deltaY!, timeStamp: t! }))).toBe("zoom");
+    }
+
+    // Shift turns a wheel sideways on macOS: that is no sign of fingers.
+    expect(c.classify(ev({ deltaX: -6, shiftKey: true, timeStamp: 3000 }))).toBe("pan");
+    expect(c.classify(ev({ deltaY: -6, timeStamp: 3016 }))).toBe("zoom");
   });
-  it("keeps the device for the whole gesture", () => {
+
+  it("zooms a swipe until it moves sideways, then keeps the fingers for the whole gesture", () => {
     const c = new WheelClassifier();
-    expect(c.classify(ev({ deltaY: 3, timeStamp: 0 }))).toBe("orbit");
+    expect(c.classify(ev({ deltaY: 3, timeStamp: 0 }))).toBe("zoom");
+    expect(c.classify(ev({ deltaX: 1, deltaY: 3, timeStamp: 16 }))).toBe("orbit");
     // looks like a notch, still the swipe
-    expect(c.classify(ev({ deltaY: 100, timeStamp: 16 }))).toBe("orbit");
+    expect(c.classify(ev({ deltaY: 100, timeStamp: 32 }))).toBe("orbit");
     expect(c.classify(ev({ deltaY: 100, timeStamp: 600 }))).toBe("zoom"); // a new gesture
   });
-  it("zooms everything when swiping should not orbit", () => {
+
+  it("zooms every scroll when swiping should not turn the view, pans with a key", () => {
     const c = new WheelClassifier();
-    expect(c.classify(ev({ deltaY: 3 }), false)).toBe("zoom");
+    expect(c.classify(ev({ deltaX: 2, deltaY: 3 }), false)).toBe("zoom");
+    expect(c.classify(ev({ deltaY: 6, shiftKey: true, timeStamp: 16 }), false)).toBe("pan");
+    expect(c.classify(ev({ deltaY: 6, ctrlKey: true, timeStamp: 32 }), false)).toBe("zoom");
   });
 });
 

@@ -65,7 +65,7 @@ export function useCreateViewport(
 
     const applyNav = () => {
       const prefs = usePrefs.getState();
-      viewport.setNavigation(navigationFor(prefs.mouse), prefs.invertZoom, prefs.swipeOrbits);
+      viewport.setNavigation(navigationFor(prefs.mouse), prefs.invertZoom, prefs.swipeRotates);
       // The grid button shows the grid and snaps to it; off, it is hidden and nothing snaps to it.
       viewport.setGridVisible(prefs.snapGrid);
       viewport.invalidate();
