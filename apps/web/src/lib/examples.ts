@@ -1,51 +1,33 @@
 /** Fully parametric starter models for the home screen. Home shows `name` and `description` through t(). */
 import { type Expr, type MeercadDocument, type SketchConstraint, type SketchEntity } from "@meercad/schema";
 
-/** Rectangle anchored at the origin with width/height dimensions. */
+/** Rectangle centred on the origin with width/height dimensions. */
 function rect(
   expr: Expr,
   h: Expr,
-  centered: boolean,
-  x = 40,
-  y = 20,
+  x: number,
+  y: number,
 ): { entities: SketchEntity[]; constraints: SketchConstraint[] } {
   const entities: SketchEntity[] = [
-    { id: "p1", type: "point", x: centered ? -x / 2 : 0, y: centered ? -y / 2 : 0 },
-    { id: "p2", type: "point", x: centered ? x / 2 : x, y: centered ? -y / 2 : 0 },
-    { id: "p3", type: "point", x: centered ? x / 2 : x, y: centered ? y / 2 : y },
-    { id: "p4", type: "point", x: centered ? -x / 2 : 0, y: centered ? y / 2 : y },
+    { id: "p1", type: "point", x: -x / 2, y: -y / 2 },
+    { id: "p2", type: "point", x: x / 2, y: -y / 2 },
+    { id: "p3", type: "point", x: x / 2, y: y / 2 },
+    { id: "p4", type: "point", x: -x / 2, y: y / 2 },
     { id: "l1", type: "line", p1: "p1", p2: "p2" },
     { id: "l2", type: "line", p1: "p2", p2: "p3" },
     { id: "l3", type: "line", p1: "p3", p2: "p4" },
     { id: "l4", type: "line", p1: "p4", p2: "p1" },
+    { id: "d1", type: "line", p1: "p1", p2: "p3", construction: true },
   ];
   const constraints: SketchConstraint[] = [
     { id: "c1", type: "horizontal", line: "l1" },
     { id: "c2", type: "horizontal", line: "l3" },
     { id: "c3", type: "vertical", line: "l2" },
     { id: "c4", type: "vertical", line: "l4" },
-    {
-      id: "c5",
-      type: "length",
-      line: "l1",
-      value: expr,
-      label: [centered ? 0 : x / 2, centered ? -y / 2 - 6 : -6],
-    },
-    {
-      id: "c6",
-      type: "length",
-      line: "l2",
-      value: h,
-      label: [centered ? x / 2 + 8 : x + 8, centered ? 0 : y / 2],
-    },
+    { id: "c5", type: "length", line: "l1", value: expr, label: [0, -y / 2 - 6] },
+    { id: "c6", type: "length", line: "l2", value: h, label: [x / 2 + 8, 0] },
+    { id: "c7", type: "midpoint", point: "origin", line: "d1" },
   ];
-
-  if (centered) {
-    entities.push({ id: "d1", type: "line", p1: "p1", p2: "p3", construction: true });
-    constraints.push({ id: "c7", type: "midpoint", point: "origin", line: "d1" });
-  } else {
-    constraints.push({ id: "c7", type: "coincident", a: "p1", b: "origin" });
-  }
 
   return { entities, constraints };
 }
@@ -62,7 +44,7 @@ export const EXAMPLE_GREYS = ["#bcc0c5", "#5a5f66", "#9da2a8"] as const;
 export const exampleGreys = (...ids: string[]): Record<string, string> =>
   Object.fromEntries(ids.map((id, i) => [id, EXAMPLE_GREYS[i % EXAMPLE_GREYS.length]!]));
 
-const plate = rect("width", "depth", true, 60, 40);
+const plate = rect("width", "depth", 60, 40);
 const bracket: MeercadDocument = {
   format: "meercad/1",
   params: {
@@ -153,7 +135,7 @@ const bracket: MeercadDocument = {
   rollback: null,
 };
 
-const boxRect = rect("width", "length", true, 80, 50);
+const boxRect = rect("width", "length", 80, 50);
 const box: MeercadDocument = {
   format: "meercad/1",
   params: { width: "80 mm", length: "50 mm", height: "30 mm", wall: "2 mm", round: "4 mm" },
@@ -295,7 +277,7 @@ const gearPair: MeercadDocument = {
 };
 
 /** A box with a lid on a pin: the lid swings open in the joints panel. */
-const hingeRect = rect("width", "depth", true, 60, 40);
+const hingeRect = rect("width", "depth", 60, 40);
 const hingedBox: MeercadDocument = {
   format: "meercad/1",
   params: { width: "60 mm", depth: "40 mm", height: "20 mm", lid: "3 mm", pin: "5 mm" },
@@ -373,7 +355,7 @@ const hingedBox: MeercadDocument = {
 };
 
 /** A name plate with raised and engraved text. */
-const plateRect = rect("width", "height", true, 80, 30);
+const plateRect = rect("width", "height", 80, 30);
 const namePlate: MeercadDocument = {
   format: "meercad/1",
   params: { width: "80 mm", height: "30 mm", thickness: "4 mm", letters: "8 mm" },
@@ -657,6 +639,19 @@ const MORE: [file: string, name: string, description: string][] = [
   ],
 ];
 
+/** The larger examples from their files (`files`: their text by path); a missing file is an error. */
+export function fileExamples(
+  files: Record<string, string>,
+  list: readonly [file: string, name: string, description: string][],
+): Example[] {
+  return list.map(([file, name, description]) => {
+    const raw = files[`../examples/${file}.meercad`];
+    if (!raw) throw new Error(`example ${file} is missing`);
+
+    return { name, description, doc: JSON.parse(raw) as MeercadDocument, feature: true as const };
+  });
+}
+
 export const EXAMPLES: Example[] = [
   { name: "Mounting plate", description: "Holes, countersinks, rounded corners", doc: bracket },
   { name: "Project box", description: "Shelled enclosure with fillets", doc: box },
@@ -676,10 +671,5 @@ export const EXAMPLES: Example[] = [
     doc: toolWall,
     feature: true,
   },
-  ...MORE.map(([file, name, description]) => {
-    const raw = files[`../examples/${file}.meercad`];
-    if (!raw) throw new Error(`example ${file} is missing`);
-
-    return { name, description, doc: JSON.parse(raw) as MeercadDocument, feature: true as const };
-  }),
+  ...fileExamples(files, MORE),
 ];

@@ -33,14 +33,17 @@ export function openGuard(): OpenGuard {
 
       const ticket = ++latest;
       const entry = { ticket, done: Promise.resolve() };
+
+      // Registered before `open` starts: one that fails at once must still free the key. While it
+      // runs, no other opening of the key can take its place.
+      running.set(key, entry);
       entry.done = (async () => {
         try {
           await open(() => latest === ticket);
         } finally {
-          if (running.get(key) === entry) running.delete(key);
+          running.delete(key);
         }
       })();
-      running.set(key, entry);
 
       return entry.done;
     },

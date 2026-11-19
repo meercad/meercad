@@ -34,3 +34,20 @@ Behaviour must not change. Rename with the editor's rename (it follows scope), n
 replace. Where a formula is rewritten, keep the order of the operations: floating point results
 differ otherwise. Run the package's tests after every step and `pnpm test:coverage` before a merge.
 The test models in `tests/models` are never reformatted.
+
+## Calculating files of the app are fully tested
+
+A `.ts` file under `apps/web/src` that only computes (geometry, units, parsers, lookups: no React,
+no app store, no kernel worker, no Capacitor plugin and no browser API such as `document`,
+`localStorage` or `indexedDB` at run time) is a calculating file. `scripts/calculating.mjs` finds
+them by those imports and globals, so a new one is caught without a list to keep:
+
+- It needs a test file of its own next to it: `<name>.test.ts` (or `<name>.<topic>.test.ts`).
+  `pnpm lint` fails otherwise (`node scripts/calculating.mjs --list` shows all of them).
+- It needs 100 % of its lines, branches, functions and statements covered, on its own: `vitest.config.ts`
+  sets that floor per file, and `pnpm test:coverage` fails below it.
+
+Test the calculation with plain inputs and known answers, not through the UI. A branch no input can
+reach is dead code: remove it (without changing behaviour) instead of excluding it from coverage. A
+file that needs the store or the page belongs with the UI code, which the app's overall floor covers;
+keep the formulas it uses in a calculating file of their own.

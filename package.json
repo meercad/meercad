@@ -12,7 +12,7 @@
     "build": "pnpm --filter @meercad/web build",
     "typecheck": "pnpm -r --parallel typecheck && tsc --noEmit -p tests",
     "format": "prettier --write . && eslint --fix .",
-    "lint": "prettier --check . && eslint .",
+    "lint": "prettier --check . && eslint . && node scripts/calculating.mjs",
     "test": "vitest run --project unit --project web --project web-slow --project integration --project integration-slow",
     "test:quick": "vitest run --project unit --project web --project integration",
     "test:coverage": "vitest run --project unit --project web --project web-slow --project integration --project integration-slow --coverage.enabled",

@@ -43,9 +43,10 @@ export function timeShare(curve: PaceCurve, p: number): number {
     const [p1, t1] = curve[i]!;
 
     if (p <= p1) {
+      // p lies past the previous point (else the loop had returned there), so p1 > p0.
       const [p0, t0] = curve[i - 1]!;
 
-      return t0 + ((t1 - t0) * (p - p0)) / (p1 - p0 || 1);
+      return t0 + ((t1 - t0) * (p - p0)) / (p1 - p0);
     }
   }
 

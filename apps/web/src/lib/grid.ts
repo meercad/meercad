@@ -23,7 +23,8 @@ export const MIN_SPACING_PX = 12;
 export function gridLevels(pixel: number, unit: GridUnit): { minor: number; major: number; snap: number } {
   const list = MINOR[unit];
   const minor = list.find((n) => n / pixel >= MIN_SPACING_PX) ?? list[list.length - 1]!;
-  const major = unit === "in" ? (INCH_MAJOR.find((n) => n >= minor * 8 - 1e-9) ?? minor * 10) : minor * 10;
+  // The largest inch minor (100 ft) still has a major (1000 ft) eight steps on.
+  const major = unit === "in" ? INCH_MAJOR.find((n) => n >= minor * 8 - 1e-9)! : minor * 10;
 
   return { minor, major, snap: minor };
 }

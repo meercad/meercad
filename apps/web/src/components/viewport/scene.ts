@@ -184,9 +184,6 @@ export function featureOfPick(pick: Pick, features: readonly Feature[]): string 
     }
   }
 
-  if (pick.kind === "edge" || pick.kind === "face") {
-    return features.find((feature) => feature.id === pick.bodyId)?.id ?? null;
-  }
-
-  return null;
+  // An edge, or a face no feature tagged: the part's own feature.
+  return features.find((feature) => feature.id === pick.bodyId)?.id ?? null;
 }

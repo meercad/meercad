@@ -154,15 +154,18 @@ export function traceSections(
   return { draft: draft, curves };
 }
 
-/** Unit direction of travel along a piece (from `a` to `b`) at a point on it. */
+/**
+ * Unit direction of travel along a piece (from `a` to `b`) at a point on it. A piece of no length
+ * gives NaN, which no tangency test passes.
+ */
 function direction(pc: Exclude<SectionPiece, { kind: "circle" }>, at: Vec2): Vec2 {
   if (pc.kind === "line") {
-    const l = distance2(pc.a, pc.b) || 1;
+    const l = distance2(pc.a, pc.b);
 
     return [(pc.b[0] - pc.a[0]) / l, (pc.b[1] - pc.a[1]) / l];
   }
 
-  const r = distance2(pc.center, at) || 1;
+  const r = distance2(pc.center, at);
   const [rx, ry] = [(at[0] - pc.center[0]) / r, (at[1] - pc.center[1]) / r];
 
   return pc.ccw ? [-ry, rx] : [ry, -rx];
