@@ -37,6 +37,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertMinOs } from "./min-os.mjs";
 
 const VERSION = "1.0";
 
@@ -271,6 +272,20 @@ if (dev) {
   console.log(`✓ ${app}`);
   process.exit(0);
 }
+
+// Every binary the app loads must run on the oldest macOS it is offered for (its Info.plist).
+const masApp = find(outDir, (n) => n === "meerCAD.app");
+if (!masApp) fail(`no meerCAD.app in ${outDir}`);
+
+const minimum = spawnSync("defaults", ["read", join(masApp, "Contents/Info"), "LSMinimumSystemVersion"], {
+  encoding: "utf8",
+}).stdout.trim();
+if (!minimum) fail(`no LSMinimumSystemVersion in ${masApp}`);
+
+// The photo helper is started as a process of its own, only where Apple's photogrammetry runs.
+assertMinOs(masApp, minimum, "macOS", {
+  "Contents/Resources/app.asar.unpacked/dist/native/meercad-photos": "14.0",
+});
 
 const pkgFile = find(outDir, (n) => n.endsWith(".pkg"));
 if (!pkgFile) fail(`no .pkg in ${outDir}`);

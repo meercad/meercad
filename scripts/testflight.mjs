@@ -22,6 +22,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertMinOs } from "./min-os.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const project = join(root, "apps/ios/ios/App/App.xcodeproj");
@@ -133,6 +134,14 @@ if (imports.stdout.includes("LazyState")) {
   );
   process.exit(1);
 }
+
+// Every framework in the app must load on the oldest iOS the app is offered for.
+const minimum = /IPHONEOS_DEPLOYMENT_TARGET = ([\d.]+);/.exec(
+  readFileSync(join(project, "project.pbxproj"), "utf8"),
+)?.[1];
+if (!minimum) fail("no IPHONEOS_DEPLOYMENT_TARGET in the Xcode project");
+
+assertMinOs(dirname(binary), minimum, "iOS");
 
 console.log(upload ? "› uploading to App Store Connect" : "› exporting the .ipa");
 run("xcodebuild", [
