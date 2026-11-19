@@ -188,7 +188,8 @@ describe("spring", () => {
       ]),
     ).report;
     expect(tooShort.features[0]!.message).toMatch(/too many coils/);
-  });
+    // Takes 95 to 120 s on the CI runner, right at the usual limit.
+  }, 300_000);
 
   it("builds extension springs with loops and torsion springs with legs", async () => {
     const s = await newSession();
