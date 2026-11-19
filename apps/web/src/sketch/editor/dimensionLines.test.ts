@@ -72,6 +72,8 @@ describe("dimensions drawn like a drawing's", () => {
   it("are drawn for lengths, distances and angles, through a moved value", () => {
     expect(draw({ type: "length", line: "l1" })!.offset).toBe(-10);
     expect(draw({ type: "length", line: "l1", label: [20, 6] })!.text.at).toEqual([20, 6]);
+    // A label taken off again (left as undefined) is the same as none.
+    expect(draw({ type: "length", line: "l1", label: undefined })!.offset).toBe(-10);
     expect(draw({ type: "distance", a: "p1", b: "p2", axis: "x" })!.lines[0]).toEqual({
       a: [0, -10],
       b: [40, -10],

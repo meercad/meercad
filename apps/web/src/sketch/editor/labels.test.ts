@@ -125,6 +125,28 @@ describe("constraintLabels", () => {
     expect(byId.d1!.title).toContain("d1");
   });
 
+  it("puts angles and distances that cannot be drawn by what they measure", () => {
+    const parallel = { ...solved, curves: [...solved.curves, line("l3", [0, 3], [10, 3])] };
+    const labels = constraintLabels(
+      sketchWith([
+        // Not two lines, or two that never meet: by the first of them.
+        { id: "d1", type: "angle", a: "c1", b: "l1", value: 30 },
+        { id: "d2", type: "angle", a: "l1", b: "l3", value: "w" },
+        { id: "d3", type: "angle", a: "gone", b: "l1", value: 30 },
+        // A point and a curve: halfway between the point and the curve's middle.
+        { id: "d4", type: "distance", a: "p3", b: "s1", value: 2 },
+      ]),
+      parallel,
+    );
+    const byId = Object.fromEntries(labels.map((label) => [label.id, label]));
+
+    expect(byId.d1!.text).toBe("30°");
+    expect(byId.d2!.at[0]).toBeCloseTo(5);
+    expect(byId.d2!.at[1]).toBeCloseTo(0);
+    expect(byId.d3).toBeUndefined();
+    expect(byId.d4!.at[0]).toBeGreaterThan(0);
+  });
+
   it("leaves out dimensions on what is not there", () => {
     const labels = constraintLabels(
       sketchWith([

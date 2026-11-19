@@ -471,20 +471,16 @@ export function dimensionGeometry(constraint: SketchConstraint, solved: SolvedSk
       : ([curve.center, L].concat([onCurve, L]) as Vec2[]);
   }
 
-  if (constraint.type === "arc_angle") {
-    // Spokes from the centre to both ends show what the angle measures.
-    const curve = solved.curves.find((x) => x.id === constraint.curve);
-    if (!curve || curve.kind !== "arc") return null;
+  // What is left is an arc's angle: spokes from the centre to both ends show what it measures.
+  const curve = solved.curves.find((x) => x.id === constraint.curve);
+  if (!curve || curve.kind !== "arc") return null;
 
-    const end = (a: number): Vec2 => [
-      curve.center[0] + curve.radius * Math.cos(a),
-      curve.center[1] + curve.radius * Math.sin(a),
-    ];
+  const end = (a: number): Vec2 => [
+    curve.center[0] + curve.radius * Math.cos(a),
+    curve.center[1] + curve.radius * Math.sin(a),
+  ];
 
-    return [curve.center, end(curve.a0), curve.center, end(curve.a1)];
-  }
-
-  return null;
+  return [curve.center, end(curve.a0), curve.center, end(curve.a1)];
 }
 
 /** The end of a (non-construction) line nearest `p` within `within`; a corner on the origin counts. */
