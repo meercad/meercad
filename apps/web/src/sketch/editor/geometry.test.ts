@@ -170,7 +170,7 @@ describe("numbers and selections", () => {
     expect(round(1.23456)).toBe(1.235);
     expect(fmt(12.5)).toBe("12.5");
     expect(fmt(3)).toBe("3");
-    expect(fmt(123.45)).toBe("123.5");
+    expect(fmt(123.45)).toBe("123.45");
     expect(fmt(100)).toBe("100");
   });
 

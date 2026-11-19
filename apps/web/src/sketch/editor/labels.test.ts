@@ -100,14 +100,23 @@ describe("constraintLabels", () => {
     );
     const byId = Object.fromEntries(labels.map((label) => [label.id, label]));
 
-    expect(byId.d1).toMatchObject({ at: [5, 0], text: "10", dimension: true });
+    // A length without a stored place sits on its dimension line, off the measured line.
+    expect(byId.d1).toMatchObject({ text: "10", dimension: true });
+    expect(byId.d1!.at[0]).toBeCloseTo(5);
+    expect(byId.d1!.at[1]).toBeCloseTo(-0.8);
     expect(byId.d2).toMatchObject({ at: [0, 5], text: "⌀10" });
     expect(byId.d3!.text).toBe("Rr");
-    expect(byId.d4).toMatchObject({ at: [5, 0], text: "90°" });
+    // An angle sits on its arc, halfway between the two lines.
+    expect(byId.d4!.text).toBe("90°");
+    expect(byId.d4!.at[0]).toBeCloseTo(byId.d4!.at[1]);
+    expect(byId.d4!.at[0]).toBeGreaterThan(0);
     expect(byId.d5!.text).toBe("∠90°");
     expect(byId.d5!.at[0]).toBeCloseTo(5 * Math.SQRT1_2);
-    expect(byId.d6!.at).toEqual([2, 0]);
-    expect(byId.d7!.at).toEqual([2.5, 1]);
+    // Distances sit on their dimension lines too, off what they measure.
+    expect(byId.d6!.at[0]).toBeCloseTo(2);
+    expect(byId.d6!.at[1]).toBeCloseTo(-0.8);
+    expect(byId.d7!.at[0]).toBeCloseTo(-0.8);
+    expect(byId.d7!.at[1]).toBeCloseTo(1);
     expect(byId.d8!.at).toEqual([7, 7]);
     expect(byId.d9!.at).toEqual([1, 1]);
     // An arc that runs past angle zero: its middle is on the far side.
