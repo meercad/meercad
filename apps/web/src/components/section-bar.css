@@ -1,0 +1,117 @@
+/* The section view's bar: at the top of the view (under the rendered view's bar when both show). */
+.section-bar {
+  position: absolute;
+  top: var(--top, 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px;
+  max-width: calc(100% - 24px);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px);
+  z-index: 4;
+}
+.section-bar.lower {
+  top: calc(var(--top, 14px) + 54px);
+}
+.section-bar .icon-btn {
+  width: auto;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 560;
+}
+.section-bar .icon-btn.axis {
+  font-weight: 700;
+  padding: 0;
+}
+.section-bar .icon-btn.active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.section-bar .bar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 2px;
+  background: var(--border);
+}
+.section-bar input[type="range"] {
+  width: 160px;
+  min-width: 60px;
+  flex: 1 1 160px;
+  accent-color: var(--accent);
+}
+.section-bar .section-value {
+  min-width: 74px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.section-bar .section-value button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: text;
+}
+.section-bar .section-value button:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.section-bar .section-value .value-input {
+  width: 74px;
+}
+.section-bar .section-hint {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+@media (max-width: 700px) {
+  /* Phone: above the bottom bar, full width, labels left out. */
+  .section-bar,
+  .section-bar.lower {
+    top: auto;
+    bottom: 76px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    max-width: none;
+  }
+  .section-bar.lower {
+    bottom: 128px;
+  }
+  .section-bar .icon-btn span,
+  .section-bar .section-value {
+    display: none;
+  }
+  .section-bar .section-hint {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+}
+@media (pointer: coarse) {
+  .section-bar .icon-btn {
+    height: 44px;
+    min-width: 44px;
+  }
+}

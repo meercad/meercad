@@ -4,12 +4,23 @@
  * hint while a face is picked to lay a part on.
  */
 import type { DisplayMode, Viewport } from "@meercad/viewport";
-import { Box, Layers, Palette, PencilLine, Ruler, Scan, SlidersHorizontal, Waves } from "lucide-react";
+import {
+  Box,
+  Layers,
+  Palette,
+  PencilLine,
+  Ruler,
+  Scan,
+  SlidersHorizontal,
+  SquareSplitHorizontal,
+  Waves,
+} from "lucide-react";
 import { useState } from "react";
 import { t, tn } from "../../lib/i18n";
 import { touchOnly } from "../../lib/keyboard";
 import { setPrefs, usePrefs } from "../../lib/keymap";
 import { pickFaceToLay } from "../../lib/printability";
+import { toggleSection, useViewSection } from "../../lib/viewSection";
 import { useApp } from "../../store";
 import { withKey } from "../Kbd";
 import { showMenu } from "../Menu";
@@ -63,6 +74,7 @@ export function ViewControls({
   const showTextures = usePrefs((prefs) => prefs.showTextures);
   const colorParts = usePrefs((prefs) => prefs.colorParts);
   const hasTextures = useHasTextures();
+  const sectionOn = useViewSection((s) => !!s.section);
   const [ortho, setOrtho] = useState(false);
 
   const toggleProjection = () => {
@@ -84,6 +96,7 @@ export function ViewControls({
       [
         ...modeItems(check),
         "sep" as const,
+        { label: `${check(sectionOn)}${t("Section view")}`, onClick: () => toggleSection(viewport) },
         { label: `${check(ortho)}${t("Orthographic")}`, onClick: toggleProjection },
         {
           label: `${check(showPlanes)}${t("Planes")}`,
@@ -150,6 +163,14 @@ export function ViewControls({
         onClick={(event) => modeMenu((event.currentTarget as HTMLElement).getBoundingClientRect())}
       >
         <Box /> <span className="mode-label">{MODE_LABEL[mode]}</span>
+      </button>
+      <button
+        className={`icon-btn sm phone-hide ${sectionOn ? "active" : ""}`}
+        title={t("Section view: cut the parts open (view only)")}
+        aria-pressed={sectionOn}
+        onClick={() => toggleSection(viewport)}
+      >
+        <SquareSplitHorizontal />
       </button>
       <button
         className={`icon-btn sm phone-hide ${showPlanes ? "active" : ""}`}

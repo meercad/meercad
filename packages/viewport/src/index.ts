@@ -10,6 +10,17 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { SceneTexts } from "./sceneText.js";
+import {
+  clipPlane,
+  facingSection,
+  handleOrigin,
+  keeps,
+  outline as sectionOutline,
+  unit,
+  withCap,
+  type Section,
+  type SectionAxis,
+} from "./section.js";
 import { mouseZoomDelta, WheelClassifier } from "./wheel.js";
 import {
   applyLook,
@@ -26,6 +37,16 @@ import {
 export type { BodyLook, SwatchSpec } from "./looks.js";
 export type { Quad, SceneTextSpec, SceneTexts, TextLook } from "./sceneText.js";
 export { biasTowardCamera, hiddenCopy } from "./depthBias.js";
+export {
+  axisSection,
+  faceSection,
+  flipSection,
+  offsetForShown,
+  offsetRange,
+  shownValue,
+  type Section,
+  type SectionAxis,
+} from "./section.js";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -410,6 +431,17 @@ export class Viewport {
   private sceneryGroup = new THREE.Group();
   private scenery = new Map<string, { data: ArrayBuffer; object: THREE.Object3D | null }>();
   private bodies: BodyObj[] = [];
+  /** The section view's plane (null: the parts whole), its outline and its drag arrow. */
+  private section: Section | null = null;
+  private clip = new THREE.Plane();
+  /** 1 while the section is on: the parts' faces seen from behind draw as the cut face. */
+  private sectionCap = { value: 0 };
+  private sectionGroup = new THREE.Group();
+  private sectionHandle: Handle | null = null;
+  /** The section's offset while its arrow is dragged (the app keeps its controls in step). */
+  onSectionChange: ((section: Section) => void) | null = null;
+  /** The arrows the tools asked for (the section's own arrow is added to them). */
+  private toolHandles: Handle[] = [];
   private hover: Pick | null = null;
   private selected: Pick[] = [];
   private framed = false;
@@ -516,6 +548,7 @@ export class Viewport {
       this.overlay,
       this.handleGroup,
       this.jointGroup,
+      this.sectionGroup,
       this.texts.group,
     );
     this.axes = axesHelper();
@@ -840,6 +873,7 @@ export class Viewport {
     this.paint();
     this.drawHoverLine();
     this.applyDisplayMode();
+    if (this.section) this.setSection(this.section);
 
     if (!this.framed && (data.bodies.length || data.sketches.length)) {
       this.framed = true;
@@ -1281,18 +1315,21 @@ export class Viewport {
 
     const faces = new THREE.Mesh(
       geo,
-      new THREE.MeshPhysicalMaterial({
-        vertexColors: true,
-        metalness: PLAIN_LOOK.metalness,
-        roughness: PLAIN_LOOK.roughness,
-        polygonOffset: true,
-        polygonOffsetFactor: 1,
-        polygonOffsetUnits: 1,
-        transparent: ghost,
-        opacity: ghost ? 0.25 : 1,
-        depthWrite: !ghost,
-        side: THREE.DoubleSide,
-      }),
+      withCap(
+        new THREE.MeshPhysicalMaterial({
+          vertexColors: true,
+          metalness: PLAIN_LOOK.metalness,
+          roughness: PLAIN_LOOK.roughness,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1,
+          transparent: ghost,
+          opacity: ghost ? 0.25 : 1,
+          depthWrite: !ghost,
+          side: THREE.DoubleSide,
+        }),
+        this.sectionCap,
+      ),
     );
     faces.userData = { body: mesh.bodyId };
     faces.castShadow = !ghost;
@@ -1889,6 +1926,8 @@ export class Viewport {
       em.depthTest = !(m === "wireframe" || m === "xray");
       em.needsUpdate = true;
     }
+
+    this.sectionCap.value = this.section && m !== "xray" ? 1 : 0;
   }
 
   setPlanesVisible(v: boolean): void {
@@ -1959,6 +1998,8 @@ export class Viewport {
         }),
       );
       m.userData = { heat: true };
+      if (this.section) m.material.clippingPlanes = [this.clip];
+
       // Not pickable: picks keep landing on the part's own faces.
       m.raycast = () => undefined;
       b.group.add(m);
@@ -2203,6 +2244,13 @@ export class Viewport {
   // ---------------------------------------------------------------- handles
 
   setHandles(handles: Handle[]): void {
+    this.toolHandles = handles;
+    this.composeHandles();
+  }
+
+  private composeHandles(): void {
+    let handles = this.sectionHandle ? [...this.toolHandles, this.sectionHandle] : this.toolHandles;
+
     // While dragging, the grabbed handle keeps its own callbacks and position until release.
     if (this.activeHandle) {
       handles = [this.activeHandle.h, ...handles.filter((handle) => handle.id !== this.activeHandle!.h.id)];
@@ -2210,6 +2258,112 @@ export class Viewport {
 
     this.handles = handles;
     this.drawHandles();
+  }
+
+  /**
+   * The section view: `section` cuts every part open (what lies where `normal · p > offset` is left
+   * out, the cut faces show filled and hatched), with the plane's outline and an arrow that drags it
+   * along its normal; null shows the parts whole. Only the view changes, never the model.
+   */
+  setSection(section: Section | null): void {
+    this.section = section;
+    this.applyClip(section);
+
+    disposeTree(this.sectionGroup);
+    this.sectionHandle = null;
+
+    const box = section ? this.modelBox() : null;
+
+    if (section && box) {
+      const corners = sectionOutline(section, box).map((p) => new THREE.Vector3(...p));
+      const line = new THREE.LineLoop(
+        new THREE.BufferGeometry().setFromPoints(corners),
+        new THREE.LineBasicMaterial({ color: C.plane, transparent: true, opacity: 0.85, depthTest: false }),
+      );
+      line.renderOrder = 5;
+
+      const fill = new THREE.Mesh(
+        new THREE.BufferGeometry().setFromPoints([
+          corners[0]!,
+          corners[1]!,
+          corners[2]!,
+          corners[2]!,
+          corners[3]!,
+          corners[0]!,
+        ]),
+        new THREE.MeshBasicMaterial({
+          color: C.plane,
+          transparent: true,
+          opacity: 0.07,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      this.sectionGroup.add(fill, line);
+
+      this.sectionHandle = {
+        id: "section",
+        origin: handleOrigin(section, box),
+        dir: section.normal,
+        value: section.offset,
+        foot: "value",
+        color: C.plane,
+        onDrag: (offset) => this.moveSection(offset),
+        onEnd: (offset) => this.moveSection(offset),
+      };
+    }
+
+    this.composeHandles();
+    this.invalidate();
+  }
+
+  private moveSection(offset: number): void {
+    if (!this.section) return;
+
+    const next = { normal: this.section.normal, offset };
+    this.setSection(next);
+    this.onSectionChange?.(next);
+  }
+
+  get sectionView(): Section | null {
+    return this.section;
+  }
+
+  /**
+   * A section square to `axis` (else to the axis the view looks most along) through the middle of the
+   * model, cutting away the half toward the viewer; null without parts.
+   */
+  facingSection(axis?: SectionAxis): Section | null {
+    const box = this.modelBox();
+    const toCamera = new THREE.Vector3(0, 0, 1).applyQuaternion(this.camera.quaternion);
+
+    return box ? facingSection(box, toCamera.toArray(), axis) : null;
+  }
+
+  /** Clips every part's faces, edges and analysis colours at `section` (null: no clipping). */
+  private applyClip(section: Section | null): void {
+    if (section) clipPlane(section, this.clip);
+
+    this.renderer.localClippingEnabled = !!section;
+    // See-through parts show their inside anyway: no cut face over it.
+    this.sectionCap.value = section && this.displayMode !== "xray" ? 1 : 0;
+
+    const planes = section ? [this.clip] : null;
+
+    for (const b of this.bodies) {
+      for (const o of [b.faces, b.edges, ...b.group.children.filter((c) => c.userData["heat"])]) {
+        const m = (o as THREE.Mesh).material as THREE.Material;
+
+        // A new array (or none) only when switching: the shader is built once for each.
+        if (!!m.clippingPlanes?.length !== !!planes) {
+          m.clippingPlanes = planes;
+          m.clipShadows = !!planes;
+          m.needsUpdate = true;
+        }
+      }
+    }
+
+    if (this.stage.active) this.renderer.shadowMap.needsUpdate = true;
   }
 
   private handleBase(handle: Handle): number {
@@ -2643,6 +2797,13 @@ export class Viewport {
     });
   }
 
+  /** True when the ray meets the hit triangle from its back (the inside of a part). */
+  private seenFromBehind(hit: THREE.Intersection, ray: THREE.Ray): boolean {
+    const n = hit.face!.normal.clone().transformDirection(hit.object.matrixWorld);
+
+    return n.dot(ray.direction) > 0;
+  }
+
   pick(clientX: number, clientY: number, kinds: ReadonlySet<PickKind>): Pick | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
 
@@ -2656,11 +2817,16 @@ export class Viewport {
     const ray = this.raycaster;
     const v3 = (p: THREE.Vector3): Vec3 => [p.x, p.y, p.z];
 
-    const faceHit = ray.intersectObjects(
-      this.bodies.map((b) => b.faces),
-      false,
-    )[0];
-    const occlusion = faceHit ? faceHit.distance + px * 4 : Infinity;
+    // With a section, what it cuts away is not there to pick, and a face seen from behind is the cut
+    // face: it hides what lies beyond but picks nothing.
+    const firstHit = ray
+      .intersectObjects(
+        this.bodies.map((b) => b.faces),
+        false,
+      )
+      .find((h) => keeps(this.section, h.point.toArray(), px));
+    const faceHit = firstHit && this.section && this.seenFromBehind(firstHit, ray.ray) ? undefined : firstHit;
+    const occlusion = firstHit ? firstHit.distance + px * 4 : Infinity;
 
     if (kinds.has("sketch_curve") && this.sketchGroup.visible) {
       this.sizeFatLines(this.sketchGroup);
@@ -2682,7 +2848,7 @@ export class Viewport {
           this.bodies.map((b) => b.edges),
           false,
         )
-        .find((h) => h.distance <= occlusion);
+        .find((h) => h.distance <= occlusion && keeps(this.section, h.point.toArray(), px));
 
       if (hit && hit.index !== undefined) {
         const b = this.bodies.find((x) => x.edges === hit.object)!;
@@ -3052,7 +3218,7 @@ export class Viewport {
   /**
    * A picture for assistants and exports: the model framed from a standard view or any direction,
    * optionally zoomed onto some parts (`focus`, `isolate` hides the rest), cut open by a plane
-   * (`section`: the cut shows red) and with parts or faces highlighted. Helpers (grid, planes,
+   * (`section`: as in the section view) and with parts or faces highlighted. Helpers (grid, planes,
    * handles) are left out. `box` fixes the framing (frames of a motion).
    */
   render(o: {
@@ -3078,6 +3244,7 @@ export class Viewport {
       this.grid,
       this.planeGroup,
       this.handleGroup,
+      this.sectionGroup,
       this.overlay,
       this.axes,
       this.sketchGroup,
@@ -3105,29 +3272,9 @@ export class Viewport {
 
     if (o.faces) this.setSelection(o.faces);
 
-    // The cut: clip everything, and show the inside (back faces) in red where the plane opens it.
-    const caps: THREE.Mesh[] = [];
-    // three.js keeps the side a plane's normal points to; the section removes that side, so the plane faces
-    // away.
-    const plane = o.section
-      ? new THREE.Plane(new THREE.Vector3(...o.section.normal).normalize().negate(), o.section.offset)
-      : null;
-
-    if (plane) {
-      this.renderer.localClippingEnabled = true;
-
-      for (const b of this.bodies) {
-        (b.faces.material as THREE.Material).clippingPlanes = [plane];
-        (b.edges.material as THREE.Material).clippingPlanes = [plane];
-
-        const cap = new THREE.Mesh(
-          b.faces.geometry,
-          new THREE.MeshBasicMaterial({ color: 0xd94a4a, side: THREE.BackSide, clippingPlanes: [plane] }),
-        );
-        b.group.add(cap);
-        caps.push(cap);
-      }
-    }
+    // The cut as in the section view (the view's own section is not in the picture unless asked for).
+    const viewSection = this.section;
+    this.applyClip(o.section ? { normal: unit(o.section.normal), offset: o.section.offset } : null);
 
     const prev = this.renderer.getSize(new THREE.Vector2());
     const prevRatio = this.renderer.getPixelRatio();
@@ -3183,19 +3330,7 @@ export class Viewport {
     this.renderer.setSize(prev.x, prev.y, false);
     this.applyInset();
 
-    for (const cap of caps) {
-      cap.removeFromParent();
-      (cap.material as THREE.Material).dispose();
-    }
-
-    if (plane) {
-      for (const body of this.bodies) {
-        (body.faces.material as THREE.Material).clippingPlanes = null;
-        (body.edges.material as THREE.Material).clippingPlanes = null;
-      }
-
-      this.renderer.localClippingEnabled = false;
-    }
+    this.applyClip(viewSection);
 
     if (o.faces) this.setSelection(savedSel);
 
@@ -3248,6 +3383,7 @@ export class Viewport {
       this.grid,
       this.planeGroup,
       this.handleGroup,
+      this.sectionGroup,
       this.overlay,
       this.axes,
       this.sketchGroup,
@@ -3322,6 +3458,7 @@ export class Viewport {
       this.grid,
       this.planeGroup,
       this.handleGroup,
+      this.sectionGroup,
       this.overlay,
       this.axes,
       this.jointGroup,
@@ -3329,6 +3466,8 @@ export class Viewport {
     ];
     const shown = helpers.map((h) => h.visible);
     if (clean) helpers.forEach((h) => (h.visible = false));
+    // Thumbnails show the parts whole, whatever section is looked at.
+    if (clean) this.applyClip(null);
 
     const prev = this.renderer.getSize(new THREE.Vector2());
     // Pictures are of the whole model, without the room kept free for a sheet.
@@ -3383,6 +3522,7 @@ export class Viewport {
     this.updateClipping();
     this.applyInset();
     if (clean) helpers.forEach((h, i) => (h.visible = shown[i]!));
+    if (clean) this.applyClip(this.section);
 
     return url;
   }

@@ -7,6 +7,7 @@ import dialogs from "./dialogs";
 import materials from "./materials";
 import motion from "./motion";
 import printability from "./printability";
+import section from "./section";
 import sketch from "./sketch";
 import storage from "./storage";
 import lithophane from "./lithophane";
@@ -22,6 +23,7 @@ export const DE_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>
   materials,
   motion,
   printability,
+  section,
   sketch,
   storage,
   workspace,
