@@ -150,10 +150,10 @@ export default {
   "constraint::coincident": "Deckungsgleich",
 
   // components/SnapControls.tsx
-  "Magnet on: snap to points, lines, circle centres and model edges":
-    "Magnet an: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
-  "Magnet off: snap to points, lines, circle centres and model edges":
-    "Magnet aus: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
+  "Magnet on: snap to points, lines, circle centres, model edges and the grid":
+    "Magnet an: rastet an Punkten, Linien, Kreismittelpunkten, Modellkanten und am Raster ein",
+  "Magnet off: points land where you place them (only existing points still catch)":
+    "Magnet aus: Punkte landen, wo du sie setzt (nur vorhandene Punkte fangen noch)",
   "Grid on: shown and snapped to; its spacing follows the zoom (Alt places freely)":
     "Raster an: sichtbar und zum Einrasten; der Abstand folgt dem Zoom (Alt setzt frei)",
   "Grid off: shown and snapped to; its spacing follows the zoom (Alt places freely)":
