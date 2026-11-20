@@ -3,6 +3,7 @@ import type { SketchFeature } from "@meercad/schema";
 import {
   intersectionPoints,
   trimSpline,
+  type SplinePiece,
   type SolvedCurve,
   type SolvedSketch,
   type Vec2,
@@ -159,6 +160,12 @@ function trimSplineAt(
   const ids = pieces.map((piece) =>
     piece.map((x) => ("point" in x ? entity.points[x.point]! : edit.endpoint(hits[x.cut]!))),
   );
+  // Kept points keep their own tangents; the cut ends are automatic.
+  const tangentsOf = (piece: SplinePiece) => {
+    const own = piece.map((x) => ("point" in x ? (entity.tangents?.[x.point] ?? null) : null));
+
+    return own.some((v) => !!v) ? { tangents: own } : {};
+  };
   // The first piece keeps the spline's id (and what refers to it), the others are new.
   draft.entities = draft.entities.map((x) =>
     x.id === entity.id && ids[0]
@@ -166,17 +173,23 @@ function trimSplineAt(
           id: entity.id,
           type: "spline",
           points: ids[0],
+          ...tangentsOf(pieces[0]!),
           ...(entity.construction ? { construction: true } : {}),
         }
       : x,
   );
 
-  for (const points of ids.slice(1)) {
+  ids.slice(1).forEach((points, k) => {
     edit.builder.entity(
-      { type: "spline", points, ...(entity.construction ? { construction: true } : {}) },
+      {
+        type: "spline",
+        points,
+        ...tangentsOf(pieces[k + 1]!),
+        ...(entity.construction ? { construction: true } : {}),
+      },
       "s",
     );
-  }
+  });
 
   return true;
 }

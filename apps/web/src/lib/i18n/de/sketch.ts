@@ -33,6 +33,9 @@ export default {
   "a line and an arc/circle, or two arcs/circles": "eine Linie und einen Bogen/Kreis, oder zwei Bögen/Kreise",
   "two lines or two circles/arcs": "zwei Linien oder zwei Kreise/Bögen",
 
+  // sketch/editor/pointer.ts
+  "Drag to bend · double-click: automatic": "Ziehen biegt die Kurve · Doppelklick: automatisch",
+
   // sketch/SketchEditor.tsx
   "Over-constrained: {list}": "Überbestimmt: {list}",
   "Cannot repeat: {reason}": "Wiederholen nicht möglich: {reason}",

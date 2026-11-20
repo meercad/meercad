@@ -75,7 +75,15 @@ export type SketchCurveView =
       construction: boolean;
       external: boolean;
     }
-  | { id: string; kind: "spline"; pts: Vec2[]; construction: boolean; external: boolean };
+  | {
+      id: string;
+      kind: "spline";
+      pts: Vec2[];
+      /** Finer samples for drawing, where it bends. */
+      fine?: Vec2[];
+      construction: boolean;
+      external: boolean;
+    };
 
 export interface SketchView {
   id: string;
@@ -3546,7 +3554,7 @@ export function frameMatrix(frame: Frame): THREE.Matrix4 {
 
 export function curvePoints(c: SketchCurveView): Vec2[] {
   if (c.kind === "line") return [c.a, c.b];
-  if (c.kind === "spline") return c.pts;
+  if (c.kind === "spline") return c.fine ?? c.pts;
 
   const [a0, sweep] =
     c.kind === "circle"

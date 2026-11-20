@@ -87,6 +87,10 @@ function checkSketch(sketch: SketchFeature, at: string, errors: string[]): void 
       errors.push(`${at}: closed spline ${entity.id} needs at least 3 points`);
     }
 
+    if (entity.type === "spline" && entity.tangents && entity.tangents.length !== entity.points.length) {
+      errors.push(`${at}: spline ${entity.id} needs one tangent (or null) per point`);
+    }
+
     for (const ref of refs) {
       if (!isPoint(ref)) errors.push(`${at}: entity ${entity.id} refers to missing point "${ref}"`);
     }
