@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   isMouseWheel,
+  isPinch,
   mouseNotches,
   mouseZoomDelta,
   NOTCH_ZOOM_DELTA,
+  pinchDelta,
+  pinchScale,
   WheelClassifier,
   type WheelLike,
 } from "./wheel";
@@ -106,5 +109,33 @@ describe("zooming with a mouse wheel", () => {
     expect(mouseZoomDelta(wheel(-3, 1))).toBe(-NOTCH_ZOOM_DELTA);
     expect(mouseZoomDelta(wheel(-3.5))).toBeNull();
     expect(mouseZoomDelta(wheel(0))).toBeNull();
+  });
+});
+
+describe("trackpad pinch", () => {
+  it("is a ctrlKey wheel event without the Ctrl key down, and not a notched wheel", () => {
+    expect(isPinch(ev({ deltaY: -1.73, ctrlKey: true }), false)).toBe(true);
+    expect(isPinch(ev({ deltaY: -1.73, ctrlKey: true }), true)).toBe(false); // Ctrl + swipe
+    expect(isPinch(ev({ deltaY: 4.000244140625, ctrlKey: true }), false)).toBe(false); // Ctrl + wheel
+    expect(isPinch(ev({ deltaY: -1.73 }), false)).toBe(false); // a swipe
+  });
+  it("zooms as far as the fingers spread, also with the wheel inverted", () => {
+    // Chromium: spreading the fingers to twice their distance sends deltaY summing to -100 · ln 2.
+    const steps = [-20, -15.31, -34];
+    const scale = steps.reduce((s, d) => s * pinchScale(d), 1);
+    expect(scale).toBeCloseTo(2, 3);
+
+    for (const speed of [1, -1]) {
+      // What OrbitControls dollies by for the delta sent on: 0.95^(speed · |d| / 100), towards for d < 0.
+      const dolly = steps.reduce((s, d) => {
+        const sent = pinchDelta(pinchScale(d), speed);
+        const f = Math.pow(0.95, speed * Math.abs(sent * 0.01));
+
+        return s * (sent < 0 ? f : 1 / f);
+      }, 1);
+      expect(1 / dolly).toBeCloseTo(2, 3);
+    }
+
+    expect(pinchDelta(pinchScale(5), 1)).toBeGreaterThan(0); // closing the fingers zooms out
   });
 });

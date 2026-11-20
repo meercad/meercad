@@ -93,3 +93,31 @@ export class WheelClassifier {
     return swipeOrbits && this.device === "fingers" ? "orbit" : "zoom";
   }
 }
+
+/**
+ * Whether a wheel event is a trackpad pinch: Chromium sends a pinch as a wheel event with ctrlKey set
+ * while the Ctrl key itself is up (`ctrlHeld`: the key is down, so it is Ctrl + swipe or Ctrl + wheel).
+ */
+export function isPinch(
+  e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode" | "ctrlKey">,
+  ctrlHeld: boolean,
+): boolean {
+  return e.ctrlKey && !ctrlHeld && !isMouseWheel(e);
+}
+
+/**
+ * How much a pinch event scales the view: Chromium reports a pinch by `scale` as deltaY = -100 · ln(scale),
+ * so the fingers spreading to twice their distance zoom in twice as far (above 1: closer).
+ */
+export function pinchScale(deltaY: number): number {
+  return Math.exp(-deltaY / 100);
+}
+
+/**
+ * The wheel delta OrbitControls needs (without Ctrl, which it would take ten times) to dolly by `scale`:
+ * it dollies by 0.95^(zoomSpeed · |delta| / 100). Divided by zoomSpeed, so "invert zoom" (a negative
+ * speed, meant for the wheel) never turns a pinch round.
+ */
+export function pinchDelta(scale: number, zoomSpeed: number): number {
+  return (100 * Math.log(scale)) / (zoomSpeed * Math.log(0.95));
+}
