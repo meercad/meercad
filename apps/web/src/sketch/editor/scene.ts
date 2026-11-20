@@ -10,7 +10,7 @@ import {
 } from "@meercad/sketch";
 import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
-import { sameSel, type SketchSel, type SketchTool } from "../state";
+import { POLYGON_SIDES_DEFAULT, sameSel, type SketchSel, type SketchTool } from "../state";
 import type { AngleArc, Segment } from "../../lib/angleDim";
 import { boxToQuad, planeCorners, type Turn } from "../../lib/planeLabel";
 import { dropMirrors, mirror } from "../../lib/sceneMirror";
@@ -23,6 +23,7 @@ import {
   pointEntries,
   refsOf,
 } from "./geometry";
+import { polygonCorners } from "./shapes";
 import type { Snap } from "./types";
 
 export const COLORS = {
@@ -95,6 +96,7 @@ function curveObject(curve: SolvedCurve, color: number, dashed: boolean): THREE.
 export function previewObjects(
   tool: SketchTool,
   ts: { points: Snap[]; cursor: Vec2 | null; sweep: number },
+  sides = POLYGON_SIDES_DEFAULT,
 ): THREE.Object3D[] {
   const out: THREE.Object3D[] = [];
   const cur = ts.cursor;
@@ -126,21 +128,7 @@ export function previewObjects(
 
   if (tool === "select") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
 
-  if (tool === "polygon") {
-    const r = distance2(p0, cur);
-    const a0 = Math.atan2(cur[1] - p0[1], cur[0] - p0[0]);
-    line(
-      Array.from(
-        { length: 6 },
-        (_, i) =>
-          [
-            p0[0] + r * Math.cos(a0 + (i * Math.PI) / 3),
-            p0[1] + r * Math.sin(a0 + (i * Math.PI) / 3),
-          ] as Vec2,
-      ),
-      true,
-    );
-  }
+  if (tool === "polygon") line(polygonCorners(p0, cur, sides), true);
 
   if (tool === "arc" && ts.points.length === 1) line([p0, cur]);
 

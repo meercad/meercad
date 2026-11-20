@@ -16,11 +16,19 @@ import { docUnit } from "../../lib/units";
 import { closeSketch } from "../../store";
 import { sureTap } from "../../lib/gestures";
 import { usePhoneSheets } from "../../lib/layout";
-import { Link2 } from "lucide-react";
+import { Link2, Minus, Plus } from "lucide-react";
 import { applyConstraint, CONSTRAINT_TOOLS } from "../actions";
-import { setSketchSelection, useSketchUi, type SketchSel, type SketchTool } from "../state";
+import {
+  POLYGON_SIDES_MAX,
+  POLYGON_SIDES_MIN,
+  setSketchSelection,
+  useSketchUi,
+  type SketchSel,
+  type SketchTool,
+} from "../state";
 import type { ValueOf } from "./entry";
 import type { Label } from "./labels";
+import { clampPolygonSides } from "./shapes";
 import { ANGLE_FIELD, EDIT_TOOLS, ENTRY_FIELDS, isAngleField, POINT_TOOLS } from "./tools";
 import type { Entry, QuickDim } from "./types";
 
@@ -290,6 +298,7 @@ export function SketchHud({
           {hint}
         </div>
         {tool === "pattern" ? <PatternPanel onRepeat={onRepeat} /> : null}
+        {tool === "polygon" ? <PolygonSidesField /> : null}
         {tool === "section" ? <SectionPanel count={sectionCount} onTraceAll={onTraceAll} /> : null}
         {EDIT_TOOLS.has(tool) && tool !== "trim" ? <EditSizeField tool={tool} /> : null}
       </div>
@@ -423,6 +432,61 @@ function SectionPanel({ count, onTraceAll }: { count: number; onTraceAll: () => 
       </label>
       <button className="btn primary" disabled={!count} onClick={onTraceAll}>
         {t("Trace all ({n})", { n: count })}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The polygon tool's corner count: minus and plus for a tap (iPad, iPhone) and a field to type in
+ * (Mac). It is a `.row`, so the compact phone panel keeps showing it.
+ */
+function PolygonSidesField() {
+  const sides = useSketchUi((state) => state.polygonSides);
+  const [text, setText] = useState(String(sides));
+  useEffect(() => setText(String(sides)), [sides]);
+
+  const set = (v: number) => useSketchUi.setState({ polygonSides: clampPolygonSides(v, sides) });
+
+  return (
+    <div className="row polygon-sides" style={{ gap: 6, marginTop: 6 }}>
+      <span className="polygon-sides-label">{t("Corners")}</span>
+      <button
+        className="btn"
+        aria-label={t("Fewer corners")}
+        disabled={sides <= POLYGON_SIDES_MIN}
+        onClick={() => set(sides - 1)}
+      >
+        <Minus />
+      </button>
+      <input
+        className="field"
+        type="text"
+        inputMode="numeric"
+        aria-label={t("Corners")}
+        style={{ width: 48, textAlign: "center" }}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+
+          const v = Number(event.target.value);
+          if (event.target.value.trim() && Number.isFinite(v) && v >= POLYGON_SIDES_MIN) set(v);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+            event.preventDefault();
+            set(sides + (event.key === "ArrowUp" ? 1 : -1));
+          }
+        }}
+        onBlur={() => setText(String(sides))}
+      />
+      <button
+        className="btn"
+        aria-label={t("More corners")}
+        disabled={sides >= POLYGON_SIDES_MAX}
+        onClick={() => set(sides + 1)}
+      >
+        <Plus />
       </button>
     </div>
   );

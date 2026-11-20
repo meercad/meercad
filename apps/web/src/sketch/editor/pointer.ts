@@ -434,7 +434,7 @@ class SketchPointer {
       ts.sweep = unwrapSweep(ts.sweep, ts.points[0]!.pos, ts.points[1]!.pos, s.pos);
     }
 
-    const text = drawingTip(tool, ts.points, s);
+    const text = drawingTip(tool, ts.points, s, useSketchUi.getState().polygonSides);
     setTip(text === null ? null : { x: event.clientX - rect.left, y: event.clientY - rect.top, text });
     this.ed.rerender();
   }
