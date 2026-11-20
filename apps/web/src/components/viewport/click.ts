@@ -16,7 +16,7 @@ import { choosePlane } from "../../lib/sketchPlane";
 import { planeSpecForPick } from "../../lib/topology";
 import { t } from "../../lib/i18n";
 import { commitDialog, dialogPick, kernel, startSketch, toast, useApp, type DialogState } from "../../store";
-import { pickKindsFor } from "../FeatureDialog";
+import { pickKindsFor, placesOnGround } from "../FeatureDialog";
 import { featureOfPick } from "./scene";
 
 type AppState = ReturnType<typeof useApp.getState>;
@@ -55,7 +55,11 @@ export function clickInView(
 
   // A mesh part is picked as a whole: its faces are thousands of triangles.
   const meshPick = onMeshPart(pick, state);
-  if (state.dialog) return dialogClick(pick, additive, !!meshPick, state.dialog);
+
+  if (state.dialog) {
+    return dialogClick(pick ?? groundPick(viewport, at, state.dialog), additive, !!meshPick, state.dialog);
+  }
+
   if (!pick) return void useApp.setState({ selection: [], selectedFeature: null });
 
   if (meshPick) return selectMeshPart(meshPick, state);
@@ -186,6 +190,27 @@ function measureRef(pick: Pick) {
     : pick.kind === "edge"
       ? { bodyId: pick.bodyId, kind: "edge" as const, index: pick.edge }
       : null;
+}
+
+/**
+ * A tap on nothing while a tool that sets a part down waits for its face (a standard part, a spring,
+ * a box…): the point on the ground (origin.XY) under it, as a pick of that plane. Null when the tool
+ * does not stand on the ground or the view looks along it.
+ */
+export function groundPick(
+  viewport: Viewport,
+  at: [number, number] | undefined,
+  dialog: DialogState,
+): Pick | null {
+  if (!at || !placesOnGround(dialog)) return null;
+
+  const { origin, dir } = viewport.ray(at[0], at[1]);
+  if (Math.abs(dir[2]) < 1e-9) return null;
+
+  const s = -origin[2] / dir[2];
+  if (s < 0) return null;
+
+  return { kind: "plane", planeId: "origin.XY", point: [origin[0] + s * dir[0], origin[1] + s * dir[1], 0] };
 }
 
 /** An open tool: the pick fills its selection field; empty space accepts the tool when none waits. */
