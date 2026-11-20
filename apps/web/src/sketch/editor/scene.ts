@@ -23,7 +23,7 @@ import {
   pointEntries,
   refsOf,
 } from "./geometry";
-import type { Handle } from "./handles";
+import type { TangentHandle } from "./handles";
 import type { Snap } from "./types";
 
 export const COLORS = {
@@ -348,8 +348,8 @@ export interface SketchScene {
   selection: SketchSel[];
   hover: SketchSel | null;
   /** Tangent handles of the selected splines, and the knob under the cursor. */
-  handles?: Handle[];
-  hoverHandle?: Handle | null;
+  handles?: TangentHandle[];
+  hoverHandle?: TangentHandle | null;
 }
 
 /** Adds the sketch to `group`: regions, mesh sections, curves, then points. */
@@ -365,11 +365,11 @@ export function drawSketch(group: THREE.Group, scene: SketchScene) {
 const HANDLE_COLOR = 0x7b8494;
 
 /** The same knob: same spline, point and side. */
-export const sameHandle = (a: Handle | null | undefined, b: Handle | null | undefined) =>
+export const sameHandle = (a: TangentHandle | null | undefined, b: TangentHandle | null | undefined) =>
   !!a && !!b && a.spline === b.spline && a.index === b.index && a.side === b.side;
 
 /** Spline handles: a thin line from each point to its knobs, the knobs as ringed dots. */
-function drawHandles(group: THREE.Group, handles: readonly Handle[], hover: Handle | null) {
+function drawHandles(group: THREE.Group, handles: readonly TangentHandle[], hover: TangentHandle | null) {
   if (!handles.length) return;
 
   for (const h of handles) {
@@ -378,7 +378,7 @@ function drawHandles(group: THREE.Group, handles: readonly Handle[], hover: Hand
     group.add(arm);
   }
 
-  const layer = (size: number, color: (h: Handle) => number, order: number) => {
+  const layer = (size: number, color: (h: TangentHandle) => number, order: number) => {
     const pos: number[] = [];
     const cols: number[] = [];
     const col = new THREE.Color();

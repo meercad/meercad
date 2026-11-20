@@ -31,7 +31,7 @@ import {
   pointEntries,
   refsOfEntity,
 } from "./geometry";
-import { hitHandle, tangentFor, withTangent, type Handle } from "./handles";
+import { hitHandle, tangentFor, withTangent, type TangentHandle } from "./handles";
 import { draftBuilder } from "./shapes";
 import { DRAG_TOOLS, drawingTip, picksGeometry, POINT_TOOLS, unwrapSweep } from "./tools";
 import type { Draft, Entry, Snap, ToolState } from "./types";
@@ -62,8 +62,8 @@ export interface PointerEditor {
   hitPoint: (p: Vec2, tol: number) => string | null;
   hitCurve: (p: Vec2, tol: number) => SolvedCurve | null;
   /** Tangent knobs of the selected splines. */
-  handles: Handle[];
-  setHoverHandle: (h: Handle | null) => void;
+  handles: TangentHandle[];
+  setHoverHandle: (h: TangentHandle | null) => void;
   rerender: () => void;
   setDrag: (solved: SolvedSketch | null) => void;
   setHover: (hover: SketchSel | null) => void;
@@ -95,13 +95,13 @@ interface Gesture {
     p: Vec2;
     target: SketchSel | null;
     /** The tangent knob pressed (select tool). */
-    handle: Handle | null;
+    handle: TangentHandle | null;
     moved: boolean;
     started: boolean;
   } | null;
   dragState: { ids: string[]; start: Vec2; origin: Map<string, Vec2>; solved: SolvedSketch | null } | null;
   /** A tangent knob being dragged, and the tangent it gives so far. */
-  handleDrag: { handle: Handle; tangent: [number, number] | null; solved: SolvedSketch | null } | null;
+  handleDrag: { handle: TangentHandle; tangent: [number, number] | null; solved: SolvedSketch | null } | null;
   box: { a: Vec2; b: Vec2 } | null;
   /** Where the right button went down: released there, it is a right click (not a drag). */
   right: { x: number; y: number } | null;
@@ -177,7 +177,7 @@ class SketchPointer {
   }
 
   /** The tangent knob under the cursor (select tool), unless a sketch point is nearer. */
-  private handleAt(p: Vec2): Handle | null {
+  private handleAt(p: Vec2): TangentHandle | null {
     const { handles, hitPoint, shown, px } = this.ed;
     if (!handles.length || useSketchUi.getState().tool !== "select") return null;
 
@@ -445,7 +445,7 @@ class SketchPointer {
   }
 
   /** Gives the dragged knob's point the tangent towards the cursor and shows the curve with it. */
-  private dragHandle(p: Vec2, handle: Handle) {
+  private dragHandle(p: Vec2, handle: TangentHandle) {
     const { solver, sketch } = this.ed;
     if (!solver || !sketch) return;
 

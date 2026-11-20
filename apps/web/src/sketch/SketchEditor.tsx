@@ -41,7 +41,7 @@ import { applySolution, joinedChain, nearestLineEnd, planeEdges } from "./editor
 import { useSketchKeys } from "./editor/keys";
 import { constraintLabels, pairAngle, quickDimensions } from "./editor/labels";
 import { ConstraintLabels, ConstraintPalette, DrawEntry, QuickChips, SketchHud } from "./editor/panels";
-import { activeSplines, splineHandles, type Handle } from "./editor/handles";
+import { activeSplines, splineHandles, type TangentHandle } from "./editor/handles";
 import { useSketchPointer, type Tip } from "./editor/pointer";
 import {
   disposeGroup,
@@ -91,8 +91,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const [solver, setSolver] = useState<SketchSolver | null>(null);
   const [drag, setDrag] = useState<SolvedSketch | null>(null);
   const [hover, setHover] = useState<SketchSel | null>(null);
-  const [hoverHandle, setHoverHandleState] = useState<Handle | null>(null);
-  const setHoverHandle = (h: Handle | null) => {
+  const [hoverHandle, setHoverHandleState] = useState<TangentHandle | null>(null);
+  const setHoverHandle = (h: TangentHandle | null) => {
     if (!sameHandle(h, hoverHandle) && (h || hoverHandle)) setHoverHandleState(h);
   };
   const [tip, setTip] = useState<Tip | null>(null);

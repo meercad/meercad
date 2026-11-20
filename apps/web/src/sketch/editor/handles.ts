@@ -10,7 +10,7 @@ import type { SketchSel } from "../state";
 type SplineEntity = Extract<SketchEntity, { type: "spline" }>;
 
 /** One knob of a spline point's handle. */
-export interface Handle {
+export interface TangentHandle {
   spline: string;
   /** The point's index in the spline. */
   index: number;
@@ -52,10 +52,10 @@ export function splineHandles(
   shown: SolvedSketch,
   splines: readonly string[],
   px: number,
-): Handle[] {
+): TangentHandle[] {
   if (!sketch) return [];
 
-  const out: Handle[] = [];
+  const out: TangentHandle[] = [];
 
   for (const id of splines) {
     const entity = sketch.entities.find((x) => x.id === id);
@@ -92,12 +92,12 @@ export function splineHandles(
  * leaves the point to be dragged.
  */
 export function hitHandle(
-  handles: readonly Handle[],
+  handles: readonly TangentHandle[],
   p: Vec2,
   tol: number,
   pointDistance = Infinity,
-): Handle | null {
-  let best: Handle | null = null;
+): TangentHandle | null {
+  let best: TangentHandle | null = null;
   let bestD = Math.min(tol, pointDistance);
 
   for (const h of handles) {
@@ -113,7 +113,7 @@ export function hitHandle(
 }
 
 /** The tangent a knob dragged to `p` gives its point (the forward arm; a backward knob mirrors). */
-export function tangentFor(h: Pick<Handle, "at" | "side">, p: Vec2): [number, number] | null {
+export function tangentFor(h: Pick<TangentHandle, "at" | "side">, p: Vec2): [number, number] | null {
   const v: Vec2 = h.side === "ahead" ? [p[0] - h.at[0], p[1] - h.at[1]] : [h.at[0] - p[0], h.at[1] - p[1]];
   if (!(Math.hypot(v[0], v[1]) > 1e-9)) return null;
 
