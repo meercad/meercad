@@ -305,6 +305,16 @@ describe("section view", () => {
     await act(async () => vp.setDisplayMode("shaded_edges"));
   });
 
+  it("ends when another project opens", async () => {
+    await act(async () => toggleSection(vp));
+    expect(vp.sectionView).not.toBeNull();
+    await act(async () => newProject(undefined, "Other"));
+    expect(vp.sectionView).toBeNull();
+    await act(async () => newProject(undefined, "Section again"));
+    apply({ type: "add_features", features: design });
+    await rebuilt();
+  });
+
   it("leaves the parts whole when the view goes", async () => {
     await act(async () => toggleSection(vp));
     expect(vp.sectionView).not.toBeNull();
