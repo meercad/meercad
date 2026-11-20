@@ -29,6 +29,7 @@ import { t, tn } from "../lib/i18n";
 import { lengthExpr } from "../lib/units";
 import { planeSupport } from "../lib/planeSupport";
 import { dropMirrors } from "../lib/sceneMirror";
+import { shownWithLabel, withLabel, type MovingLabel } from "../lib/labelDrag";
 import { usePrefs } from "../lib/keymap";
 import { activeSketch, setExternalKinds, writeSketch } from "./actions";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
@@ -88,6 +89,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const params = output?.report.params;
   const [solver, setSolver] = useState<SketchSolver | null>(null);
   const [drag, setDrag] = useState<SolvedSketch | null>(null);
+  // A dimension's value being dragged: shown at its new place, written when the drag ends.
+  const [movingLabel, setMovingLabel] = useState<MovingLabel | null>(null);
+  const seen = useMemo(() => sketch && shownWithLabel(sketch, movingLabel), [sketch, movingLabel]);
   const [hover, setHover] = useState<SketchSel | null>(null);
   const [tip, setTip] = useState<Tip | null>(null);
 
@@ -257,7 +261,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     for (const obj of previewObjects(ui.tool, { ...ts, cursor: typedTarget() ?? ts.cursor })) group.add(obj);
     if (ts.snap) for (const obj of snapObjects(ts.snap, viewport.pixelSize(frame.origin))) group.add(obj);
 
-    drawDimensionLines(group, sketch, shown, angleChip?.angle, onFace);
+    drawDimensionLines(group, seen!, shown, angleChip?.angle, onFace);
   });
 
   // ---------------------------------------------------------------- hit testing and snapping
@@ -675,8 +679,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
 
   // ---------------------------------------------------------------- HTML labels
   const labels = useMemo(
-    () => (sketch && shown ? constraintLabels(sketch, shown, onFace) : []),
-    [sketch, shown, onFace],
+    () => (seen && shown ? constraintLabels(seen, shown, onFace) : []),
+    [seen, shown, onFace],
   );
   // Placed in the frame the camera moves (before the picture is drawn), so labels never trail behind
   // while orbiting; and after each render, for labels that came or changed.
@@ -700,7 +704,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   };
 
   // A length's dimension line drags like an arrow: the dimension moves parallel to itself (with the
-  // select tool; a drawing tool's clicks go to the sketch).
+  // select tool; a drawing tool's clicks go to the sketch). Only the picture follows the drag; the
+  // sketch gets the new place once, on release (lib/labelDrag.ts).
   useEffect(() => {
     if (!frame || !sketch || ui.tool !== "select") return void viewport.setGrips([]);
 
@@ -714,21 +719,15 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         const [at, up] = [l.at, l.up];
         let moved = false;
 
-        const move = (offset: number) => {
+        const move = (offset: number, end: boolean) => {
           if (offset === 0 && !moved) return;
 
-          const label: [number, number] = [
-            +(at[0] + up[0] * offset).toFixed(2),
-            +(at[1] + up[1] * offset).toFixed(2),
-          ];
-          commit(
-            {
-              entities: sketch.entities,
-              constraints: sketch.constraints.map((x) => (x.id === l.id ? ({ ...x, label } as typeof x) : x)),
-            },
-            moved,
-          );
           moved = true;
+          const to: Vec2 = [at[0] + up[0] * offset, at[1] + up[1] * offset];
+          if (!end) return setMovingLabel({ id: l.id, at: to });
+
+          writeSketch({ entities: sketch.entities, constraints: withLabel(sketch.constraints, l.id, to) });
+          setMovingLabel(null);
         };
 
         return [
@@ -739,8 +738,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             value: 0,
             hidden: true,
             grip: [world(l.line[0]), world(l.line[1])],
-            onDrag: move,
-            onEnd: move,
+            onDrag: (offset) => move(offset, false),
+            onEnd: (offset) => move(offset, true),
           },
         ];
       }),
@@ -790,11 +789,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
             const at = toSketch({ clientX, clientY });
             if (!at) return;
 
-            const label: [number, number] = [+at[0].toFixed(2), +at[1].toFixed(2)];
-            commit({
-              entities: sketch.entities,
-              constraints: sketch.constraints.map((x) => (x.id === id ? ({ ...x, label } as typeof x) : x)),
-            });
+            writeSketch({ entities: sketch.entities, constraints: withLabel(sketch.constraints, id, at) });
           }}
         />
         {tip && !entry ? (
