@@ -8,6 +8,7 @@ import type { RebuildOutput } from "@meercad/kernel/client";
 import { jointPick } from "../../lib/mechanism";
 import { meshBodyIds, meshHint } from "../../lib/meshParts";
 import { layOnFace, pickFaceToLay, usePrintCheck } from "../../lib/printability";
+import { sectionOnPick, useViewSection } from "../../lib/viewSection";
 import { clearScanMeasure, measureOnScan } from "../../lib/scanMeasure";
 import { placeAt, sketchOnTerrain, useTerrainPlace } from "../../lib/terrain";
 import { addMarkPoint, measurePoint, useTerrainDraw, useTerrainMeasure } from "../../lib/terrainDraw";
@@ -32,6 +33,7 @@ const PART_FIELDS = new Set(["targets", "target", "tools", "bodies", "source", "
 /** What a click may pick right now. */
 export function pickKinds(): ReadonlySet<PickKind> {
   const state = useApp.getState();
+  if (useViewSection.getState().picking) return new Set(["face"]);
   if (state.pickingSketchPlane) return new Set(["plane", "face"]);
   if (state.measure.active) return new Set(["face", "edge"]);
   if (state.dialog) return pickKindsFor(state.dialog);
@@ -104,6 +106,13 @@ function clickOnTerrainOrPlate(
     const hit = at && viewport.sceneryHit(at[0], at[1]);
     if (hit) placeAt(hit.point);
     else toast(t("Click on the terrain"), "error");
+
+    return true;
+  }
+
+  // Laying the section plane on a face.
+  if (useViewSection.getState().picking) {
+    sectionOnPick(pick);
 
     return true;
   }

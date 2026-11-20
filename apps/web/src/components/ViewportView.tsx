@@ -15,6 +15,8 @@ import { InlineValues } from "./InlineValues";
 import { Manipulators } from "./Manipulators";
 import { PlaneChooser } from "./PlaneChooser";
 import { RenderBar } from "./RenderBar";
+import { SectionBar, useSectionSync } from "./SectionBar";
+import { useViewSection } from "../lib/viewSection";
 import { TerrainHud, TerrainLabels } from "./TerrainTools";
 import { ViewCube } from "./ViewCube";
 import {
@@ -60,6 +62,7 @@ export function ViewportView() {
   const placing = useTerrainPlace((s) => !!s.body) || usePrintCheck((s) => s.picking);
   const doc = useApp((state) => state.doc);
   const layingOnFace = usePrintCheck((s) => s.picking);
+  const pickingSection = useViewSection((s) => s.picking);
   const [mode, setMode] = useState<DisplayMode>("shaded_edges");
   const [box, setBox] = useState<SelectionBox | null>(null);
   const boxRef = useRef(box);
@@ -91,10 +94,11 @@ export function ViewportView() {
   useJointGlyphs(viewport, output, doc.mechanism);
   useViewFlags(viewport, output, sketchId, dialog);
   useViewPointer(viewport, boxRef, setBox);
+  useSectionSync(viewport);
 
   return (
     <div
-      className={`view ${dialog?.field || pickingPlane || measure.active || placing ? "picking" : ""}`}
+      className={`view ${dialog?.field || pickingPlane || measure.active || placing || pickingSection ? "picking" : ""}`}
       ref={host}
     >
       {viewport ? <ViewCube viewport={viewport} /> : null}
@@ -113,6 +117,7 @@ export function ViewportView() {
           onExit={() => (viewport.setDisplayMode("shaded_edges"), setMode("shaded_edges"))}
         />
       ) : null}
+      {viewport ? <SectionBar viewport={viewport} lower={mode === "rendered"} /> : null}
       <LoadingOverlay />
       <DeviationLegend />
       <ThicknessLegend />
