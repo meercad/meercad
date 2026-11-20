@@ -345,6 +345,8 @@ export default {
   // components/Manipulators.tsx
   "Fillet R {value}": "Rundung R {value}",
   "Chamfer {value}": "Fase {value}",
+  "Click to set · Esc cancels": "Klicken zum Setzen · Esc bricht ab",
+  "Drag anywhere · Lift to set": "Irgendwo ziehen · Loslassen setzt",
   'the variable "{name}"': "der Variable „{name}“",
   "another circle (Equal)": "einem anderen Kreis (Gleich)",
   "{n} other circles (Equal)": "{n} anderen Kreisen (Gleich)",

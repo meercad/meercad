@@ -1474,6 +1474,11 @@ input.expr {
   white-space: nowrap;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
 }
+.cursor-tip-hint {
+  margin-top: 2px;
+  font: 500 11px var(--font);
+  opacity: 0.75;
+}
 /* A finger covers the arrow head: the value sits above it. */
 @media (pointer: coarse) {
   .cursor-tip {

@@ -54,6 +54,11 @@ export interface DialogState {
   field: string | null;
   /** Opened by dragging an arrow: no dialog is shown, only the value at the arrow, until the drag ends. */
   gesture?: boolean;
+  /**
+   * Opened on a selection (fillet, chamfer, shell, extrude): the value's arrow is live from the start,
+   * following the mouse until a click sets it (Handle.arm). A new number for each tool started.
+   */
+  arm?: number;
 }
 
 export interface Toast {
@@ -854,6 +859,10 @@ let lastStarted: FeatureOp | null = null;
 /** The tool started last, for "repeat last command". */
 export const lastStartedFeature = (): FeatureOp | null => lastStarted;
 
+/** Tools whose arrow is live when started on a selection (DialogState.arm). */
+const ARMED_OPS: ReadonlySet<FeatureOp> = new Set(["fillet", "chamfer", "shell", "extrude"]);
+let arms = 0;
+
 export function startFeature(op: FeatureOp): void {
   const state = get();
   lastStarted = op;
@@ -867,9 +876,10 @@ export function startFeature(op: FeatureOp): void {
   if (op === "sketch") return startSketch();
 
   const feature = draftFeature(op, docStore.doc);
+  const arm = ARMED_OPS.has(op) && state.selection.length ? ++arms : undefined;
   // Seed selections from what the user already picked.
   set({
-    dialog: { feature, isNew: true, field: firstField(op) },
+    dialog: { feature, isNew: true, field: firstField(op), ...(arm ? { arm } : {}) },
     measure: { active: false, picks: [], result: null },
   });
   scheduleRebuild();

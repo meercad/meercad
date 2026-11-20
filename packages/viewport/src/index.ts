@@ -2250,13 +2250,21 @@ export class Viewport {
 
       if (armed) {
         this.lastArm = armed.arm!;
-        this.activeHandle = { h: armed, value: armed.value, start: armed.value, pointer: -1, grab: null, armed: true };
+        this.activeHandle = {
+          h: armed,
+          value: armed.value,
+          start: armed.value,
+          pointer: -1,
+          grab: null,
+          armed: true,
+        };
         armed.onStart?.();
       }
     }
 
     this.handles = handles;
     this.drawHandles();
+
     // Only once, when armed: the report re-renders the caller, which sets its handles again.
     if (this.activeHandle?.armed && !this.activeHandle.reported) {
       this.activeHandle.reported = true;
@@ -2525,7 +2533,14 @@ export class Viewport {
           active.h.onEnd(active.start);
 
           if (active.commit) {
-            this.activeHandle = { h: active.h, value: active.start, start: active.start, pointer: -1, grab: null, armed: true };
+            this.activeHandle = {
+              h: active.h,
+              value: active.start,
+              start: active.start,
+              pointer: -1,
+              grab: null,
+              armed: true,
+            };
             active.h.onStart?.();
           }
 
@@ -2550,7 +2565,13 @@ export class Viewport {
         event.preventDefault();
         element.setPointerCapture(event.pointerId);
 
-        const a: ActiveHandle = { h: handle, value: handle.value, start: handle.value, pointer: event.pointerId, grab: 0 };
+        const a: ActiveHandle = {
+          h: handle,
+          value: handle.value,
+          start: handle.value,
+          pointer: event.pointerId,
+          grab: 0,
+        };
         // Offset between where the arrow was grabbed and its value, so it does not jump.
         a.grab = grabAt(a, event);
         this.activeHandle = a;
@@ -2611,6 +2632,7 @@ export class Viewport {
     const regrab = () => {
       if (this.activeHandle?.armed) this.activeHandle.grab = null;
     };
+
     element.addEventListener("pointerleave", regrab);
     element.addEventListener("wheel", regrab, { passive: true });
 
