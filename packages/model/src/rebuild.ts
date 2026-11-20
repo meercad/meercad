@@ -113,6 +113,25 @@ export function effectiveParams(
   };
 }
 
+/**
+ * What a resolved step is built from, as text: a sketch dimension's value place (`label`) only shows
+ * where its number is drawn, so moving it builds nothing again.
+ */
+export function definition(resolved: ResolvedFeature): string {
+  if (resolved.op !== "sketch") return JSON.stringify(resolved);
+
+  return JSON.stringify({
+    ...resolved,
+    constraints: resolved.constraints.map((c) => {
+      if (!("label" in c)) return c;
+
+      const { label: _place, ...rest } = c;
+
+      return rest;
+    }),
+  });
+}
+
 export class RebuildEngine<S> {
   private cache: CacheEntry<S>[] = [];
   private readonly root: S;
@@ -201,7 +220,7 @@ export class RebuildEngine<S> {
       const def = off
         ? `S:${feature.id}`
         : resolved
-          ? JSON.stringify(resolved)
+          ? definition(resolved)
           : `E:${feature.id}:${resolveError}`;
       key = hashString(`${key}|${def}`);
 
