@@ -40,6 +40,10 @@ export function useSectionSync(viewport: Viewport | null): void {
   useEffect(() => {
     if (viewport && viewport.sectionView !== section) viewport.setSection(section);
   }, [viewport, section]);
+
+  // Another project (or tab) opens with its parts whole.
+  const project = useApp((state) => state.project?.id);
+  useEffect(() => closeSection, [project]);
 }
 
 export function SectionBar({ viewport, lower }: { viewport: Viewport; lower?: boolean }) {
