@@ -19,7 +19,10 @@ function catmullRom(through: readonly Vec2[], closed = false): Vec2[] {
   const at = (i: number): Vec2 => {
     if (closed) return through[((i % n) + n) % n]!;
     if (i < 0) return [2 * through[0]![0] - through[1]![0], 2 * through[0]![1] - through[1]![1]];
-    if (i >= n) return [2 * through[n - 1]![0] - through[n - 2]![0], 2 * through[n - 1]![1] - through[n - 2]![1]];
+
+    if (i >= n) {
+      return [2 * through[n - 1]![0] - through[n - 2]![0], 2 * through[n - 1]![1] - through[n - 2]![1]];
+    }
 
     return through[i]!;
   };
@@ -36,11 +39,13 @@ function catmullRom(through: readonly Vec2[], closed = false): Vec2[] {
 
     for (let k = 1; k <= SPLINE_SAMPLES; k++) {
       const t = t1 + ((t2 - t1) * k) / SPLINE_SAMPLES;
+
       const lerp = (a: Vec2, b: Vec2, ta: number, tb: number): Vec2 => {
         const w = (t - ta) / (tb - ta);
 
         return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w];
       };
+
       const [a1, a2, a3] = [lerp(p0, p1, t0, t1), lerp(p1, p2, t1, t2), lerp(p2, p3, t2, t3)];
       const [b1, b2] = [lerp(a1, a2, t0, t2), lerp(a2, a3, t1, t3)];
       out.push(k === SPLINE_SAMPLES ? (closed && i === spans - 1 ? through[0]! : p2) : lerp(b1, b2, t1, t2));
@@ -66,20 +71,51 @@ const wave: Vec2[] = [
 describe("spline without own tangents", () => {
   it("is the same curve as before, sample for sample (files keep their shape and regions)", () => {
     for (const closed of [false, true]) {
-      for (const through of [wave, wave.slice(0, 3), [[0, 0], [5, 5], [5, 5], [9, 0]] as Vec2[]]) {
+      for (const through of [
+        wave,
+        wave.slice(0, 3),
+        [
+          [0, 0],
+          [5, 5],
+          [5, 5],
+          [9, 0],
+        ] as Vec2[],
+      ]) {
         const before = catmullRom(through, closed);
         const now = splinePoints(through, closed);
         expect(now).toHaveLength(before.length);
         now.forEach((p, i) => near(p, before[i]!));
         // Null tangents are automatic too.
-        expect(splinePoints(through, closed, through.map(() => null))).toEqual(now);
+        expect(
+          splinePoints(
+            through,
+            closed,
+            through.map(() => null),
+          ),
+        ).toEqual(now);
       }
     }
   });
 
   it("keeps a two-point open spline as its two ends, and a single point as it is", () => {
-    expect(splinePoints([[0, 0], [4, 0]])).toEqual([[0, 0], [4, 0]]);
-    expect(splineDisplayPoints([[0, 0], [4, 0]])).toEqual([[0, 0], [4, 0]]);
+    expect(
+      splinePoints([
+        [0, 0],
+        [4, 0],
+      ]),
+    ).toEqual([
+      [0, 0],
+      [4, 0],
+    ]);
+    expect(
+      splineDisplayPoints([
+        [0, 0],
+        [4, 0],
+      ]),
+    ).toEqual([
+      [0, 0],
+      [4, 0],
+    ]);
     expect(splinePoints([[1, 2]])).toEqual([[1, 2]]);
     expect(splineSpans([[1, 2]])).toEqual([]);
     expect(splineArms([[1, 2]])).toEqual([{ back: [0, 0], ahead: [0, 0] }]);
@@ -90,6 +126,7 @@ describe("spline without own tangents", () => {
     // The open end leaves straight towards the next point.
     const a = arms[0]!.ahead;
     expect(Math.abs(a[0] * 10 - a[1] * 10)).toBeLessThan(1e-9);
+
     // Backward and forward arms of a point are collinear and opposite.
     for (const { back, ahead } of arms.slice(1, -1)) {
       expect(Math.abs(back[0] * ahead[1] - back[1] * ahead[0])).toBeLessThan(1e-9);
@@ -116,6 +153,7 @@ describe("spline with own tangents", () => {
     const arms = splineArms(wave, false, tangents);
     expect(arms[1]).toEqual({ back: [-6, -0], ahead: [6, 0] });
     expect(arms[2]).toEqual(splineArms(wave)[2]);
+
     // The spans' control points are the arms' ends.
     const span = splineSpans(wave, false, tangents)[1]!;
     expect(span[0]).toEqual([10, 10]);
@@ -193,13 +231,23 @@ describe("tangentEnds and ownTangents", () => {
     { id: "c", type: "point", x: 10, y: 0 },
     { id: "d", type: "point", x: 20, y: 0 },
     { id: "e", type: "point", x: 0, y: 9 },
-    { id: "s", type: "spline", points: ["a", "b", "c"], tangents: [[1, 0], [2, 0], [3, 0]] },
+    {
+      id: "s",
+      type: "spline",
+      points: ["a", "b", "c"],
+      tangents: [
+        [1, 0],
+        [2, 0],
+        [3, 0],
+      ],
+    },
     { id: "l", type: "line", p1: "c", p2: "d" },
     { id: "r", type: "arc", center: "e", start: "a", end: "b" },
     { id: "t", type: "spline", points: ["d", "e"] },
     { id: "loop", type: "spline", points: ["a", "b", "c"], closed: true, tangents: [[1, 0], null, null] },
   ];
-  const spline = (id: string) => entities.find((x) => x.id === id) as Extract<SketchEntity, { type: "spline" }>;
+  const spline = (id: string) =>
+    entities.find((x) => x.id === id) as Extract<SketchEntity, { type: "spline" }>;
 
   it("finds the ends that are tangent to a line, an arc or another spline", () => {
     expect([...tangentEnds(spline("s"), entities, [])]).toEqual([]);
@@ -208,22 +256,24 @@ describe("tangentEnds and ownTangents", () => {
     expect([...tangentEnds(spline("t"), entities, [{ type: "tangent", a: "t", b: "l" }])]).toEqual([0]);
     expect([...tangentEnds(spline("s"), entities, [{ type: "tangent", a: "s", b: "t" }])]).toEqual([]);
     // Other constraints, other curves, closed splines and unknown ids count for nothing.
-    expect(
-      [
-        ...tangentEnds(spline("s"), entities, [
-          { type: "parallel", a: "s", b: "l" },
-          { type: "tangent", a: "l", b: "r" },
-          { type: "tangent", a: "s", b: "loop" },
-          { type: "tangent", a: "s", b: "zz" },
-        ]),
-      ],
-    ).toEqual([]);
+    expect([
+      ...tangentEnds(spline("s"), entities, [
+        { type: "parallel", a: "s", b: "l" },
+        { type: "tangent", a: "l", b: "r" },
+        { type: "tangent", a: "s", b: "loop" },
+        { type: "tangent", a: "s", b: "zz" },
+      ]),
+    ]).toEqual([]);
     expect([...tangentEnds(spline("loop"), entities, [{ type: "tangent", a: "loop", b: "l" }])]).toEqual([]);
   });
 
   it("keeps the own tangents except at tangent ends", () => {
     expect(ownTangents(spline("t"), entities, [])).toBeUndefined();
-    expect(ownTangents(spline("s"), entities, [])).toEqual([[1, 0], [2, 0], [3, 0]]);
+    expect(ownTangents(spline("s"), entities, [])).toEqual([
+      [1, 0],
+      [2, 0],
+      [3, 0],
+    ]);
     expect(ownTangents(spline("s"), entities, [{ type: "tangent", a: "s", b: "l" }])).toEqual([
       [1, 0],
       [2, 0],
@@ -238,5 +288,67 @@ describe("tangentEnds and ownTangents", () => {
       tangents: [null, [1, 1]],
     };
     expect(ownTangents(ends, entities, [{ type: "tangent", a: "s", b: "l" }])).toBeUndefined();
+  });
+});
+
+describe("splines as the solver gives them", () => {
+  it("a closed spline comes with its fine drawing, closed as well", async () => {
+    const { SketchSolver } = await import("./index.js");
+    const solver = await SketchSolver.create();
+    const s = solver.solve({
+      entities: [
+        { id: "a", type: "point", x: 0, y: 0 },
+        { id: "b", type: "point", x: 20, y: 0 },
+        { id: "c", type: "point", x: 10, y: 15 },
+        { id: "sp", type: "spline", points: ["a", "b", "c"], closed: true },
+      ],
+      constraints: [],
+    });
+    const sp = s.curves.find((c) => c.id === "sp")!;
+
+    expect(sp.kind === "spline" && sp.closed).toBe(true);
+    if (sp.kind !== "spline") return;
+
+    expect(sp.fine!.length).toBeGreaterThan(sp.pts.length);
+    // The fine drawing ends where it starts, like the curve.
+    expect(sp.fine![sp.fine!.length - 1]).toEqual(sp.fine![0]);
+    expect(sp.tangents).toBeUndefined();
+
+    // A point with its own tangent: the solved curve carries the tangents.
+    const own = solver.solve({
+      entities: [
+        { id: "a", type: "point", x: 0, y: 0 },
+        { id: "b", type: "point", x: 20, y: 0 },
+        { id: "sp", type: "spline", points: ["a", "b"], tangents: [[0, 10], null] },
+      ],
+      constraints: [],
+    });
+    const bent = own.curves.find((c) => c.id === "sp")!;
+    expect(bent.kind === "spline" && bent.tangents).toEqual([[0, 10], null]);
+  });
+});
+
+describe("splineDisplayPoints on a point given twice", () => {
+  it("adds nothing where two samples coincide (no direction to bend from)", () => {
+    const through: Vec2[] = [
+      [0, 0],
+      [0, 0],
+      [10, 10],
+    ];
+    const fine = splineDisplayPoints(through);
+
+    expect(fine[0]).toEqual([0, 0]);
+    expect(fine[fine.length - 1]).toEqual([10, 10]);
+    expect(fine.every((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]))).toBe(true);
+
+    // A closed spline of one spot twice: no direction anywhere, only the samples.
+    const spot = splineDisplayPoints(
+      [
+        [1, 1],
+        [1, 1],
+      ],
+      true,
+    );
+    expect(spot.every((p) => p[0] === 1 && p[1] === 1)).toBe(true);
   });
 });

@@ -345,6 +345,26 @@ describe("trimming splines", () => {
     }
   });
 
+  it("keeps the kept points' own tangents; the cut ends are automatic", () => {
+    const own = entities().map((e) =>
+      e.id === "sp1" ? ({ ...e, tangents: [[1, 2], null, [3, -1]] } as SketchEntity) : e,
+    );
+    const [sketch, shown] = sketchOf(own, [spline(), cutter(10), cutter(30)]);
+    const draft = trimDraft(sketch, shown, shown.curves[0]!, [20, 20], noPoint)!;
+
+    expect(byId(draft, "sp1")).toMatchObject({ points: ["s1", "p3"], tangents: [[1, 2], null] });
+    expect(byId(draft, "s4")).toMatchObject({ points: ["p4", "s3"], tangents: [null, [3, -1]] });
+
+    // Only the middle point had its own tangent, and it is cut away: no piece keeps a tangents field.
+    const middle = entities().map((e) =>
+      e.id === "sp1" ? ({ ...e, tangents: [null, [5, 0], null] } as SketchEntity) : e,
+    );
+    const [sketch2, shown2] = sketchOf(middle, [spline(), cutter(10), cutter(30)]);
+    const draft2 = trimDraft(sketch2, shown2, shown2.curves[0]!, [20, 20], noPoint)!;
+    expect("tangents" in byId(draft2, "sp1")!).toBe(false);
+    expect("tangents" in byId(draft2, "s4")!).toBe(false);
+  });
+
   it("removes a spline nothing bounds", () => {
     const [sketch, shown] = sketchOf(entities(), [spline()]);
 

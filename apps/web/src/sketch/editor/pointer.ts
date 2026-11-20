@@ -105,6 +105,11 @@ interface Gesture {
   box: { a: Vec2; b: Vec2 } | null;
   /** Where the right button went down: released there, it is a right click (not a drag). */
   right: { x: number; y: number } | null;
+  /**
+   * The fingers on the view. Kept with the gesture: the handlers are made anew on every render,
+   * which a drag causes, and a second finger must still be seen as the second.
+   */
+  touches: Set<number>;
 }
 
 type MoveFrame = ReturnType<typeof perFrame<PointerEvent>>;
@@ -118,7 +123,14 @@ const PICK_PIXELS = { point: 9, curve: 7, section: 10, closeSpline: 6, newPoint:
 
 /** Subscribes the editor's pointer input to the canvas; it re-subscribes on every render. */
 export function useSketchPointer(editor: PointerEditor) {
-  const gesture = useRef<Gesture>({ down: null, dragState: null, handleDrag: null, box: null, right: null });
+  const gesture = useRef<Gesture>({
+    down: null,
+    dragState: null,
+    handleDrag: null,
+    box: null,
+    right: null,
+    touches: new Set(),
+  });
   const pressRef = useRef(new Press(() => {}));
   // Moves are handled once per frame by whichever moveCursor the latest render installed.
   const moveRef = useRef<(event: PointerEvent) => void>(() => {});
@@ -134,8 +146,6 @@ export function useSketchPointer(editor: PointerEditor) {
 
 /** One render's pointer handlers. */
 class SketchPointer {
-  private readonly touches = new Set<number>();
-
   constructor(
     private readonly ed: PointerEditor,
     private readonly g: Gesture,
@@ -205,7 +215,7 @@ class SketchPointer {
   private onMove = (event: PointerEvent) => {
     if (event.pointerType !== "mouse") this.press.move(event);
 
-    if (event.pointerType !== "touch" || (this.fingerDraws() && this.touches.size === 1)) {
+    if (event.pointerType !== "touch" || (this.fingerDraws() && this.g.touches.size === 1)) {
       this.moveFrame(event);
     }
   };
@@ -220,10 +230,10 @@ class SketchPointer {
     if (event.pointerType !== "mouse") this.press.down(event);
 
     if (event.pointerType === "touch") {
-      this.touches.add(event.pointerId);
+      this.g.touches.add(event.pointerId);
       if (!this.fingerDraws()) return;
       // A second finger means navigating: drop what the first one started.
-      if (this.touches.size > 1) return this.dropGesture();
+      if (this.g.touches.size > 1) return this.dropGesture();
     }
 
     this.start(event);
@@ -248,7 +258,7 @@ class SketchPointer {
     if (event.pointerType !== "touch") this.moveFrame.flush();
 
     const r = event.pointerType === "mouse" ? null : this.press.up(event);
-    if (event.pointerType === "touch") this.touches.delete(event.pointerId);
+    if (event.pointerType === "touch") this.g.touches.delete(event.pointerId);
 
     if (event.pointerType !== "touch" || this.fingerDraws()) {
       this.finish(event);
@@ -294,7 +304,7 @@ class SketchPointer {
 
   private onCancel = (event: PointerEvent) => {
     this.press.up(event);
-    this.touches.delete(event.pointerId);
+    this.g.touches.delete(event.pointerId);
   };
 
   private onLeave = () => {
