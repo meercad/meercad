@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { nodeCount } from "./grid.js";
-import { brickStiffness, cellForce, solveFem, Stiffness, stresses } from "./solve.js";
+import { solveFem } from "./multigrid.js";
+import { brickStiffness, cellForce, Stiffness, stresses } from "./solve.js";
 import { boxGrid } from "./testParts.js";
 
 describe("one cube", () => {

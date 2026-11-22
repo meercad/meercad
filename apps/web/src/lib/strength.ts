@@ -26,7 +26,7 @@ import { runStrength, type StrengthRun } from "./strengthRunner";
 
 /** About how many cubes the check and the (much longer) optimisation calculate with. */
 export const CHECK_CELLS = 30_000;
-export const TOPOLOGY_CELLS = 12_000;
+export const TOPOLOGY_CELLS = 50_000;
 
 export interface StrengthSummary {
   safety: number;

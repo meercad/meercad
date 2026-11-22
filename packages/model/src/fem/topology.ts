@@ -6,6 +6,7 @@
  * nearly all-or-nothing).
  */
 import { cellCount, type VoxelGrid } from "./grid.js";
+import { multigrid } from "./multigrid.js";
 import { Stiffness, type FemProblem } from "./solve.js";
 
 export interface TopologyJob {
@@ -34,10 +35,12 @@ const LEAST = 1e-3;
 /** The most a density changes in one round. */
 const MOVE = 0.2;
 /**
- * Cubes whose centres are closer than this (in cubes) share their weights: no checkerboards, no hair-thin
- * struts.
+ * Cubes whose centres are closer than this (in cubes) share their weights: no checkerboards, and
+ * struts a few cubes thick instead of thin skins. A part only a few cubes thin gets less, down to
+ * the least, or nothing of it would be left to shape.
  */
-const RADIUS = 1.5;
+const RADIUS = 2.5;
+const LEAST_RADIUS = 1.5;
 /** Densities changing less than this in a round are settled. */
 const SETTLED = 0.01;
 
@@ -69,6 +72,7 @@ export function optimiseTopology(job: TopologyJob): TopologyResult {
       tolerance: 1e-3,
       maxIterations: 300,
       start: displacement,
+      precondition: multigrid({ ...job.problem, stiffness }, system) ?? undefined,
     }).displacement;
 
     const energies = system.energies(displacement, job.problem.young);
@@ -91,7 +95,8 @@ export function optimiseTopology(job: TopologyJob): TopologyResult {
 
 /** For every cube the material cubes around it (itself too) with their weights, as [cell, weight, …]. */
 function neighbourhood(grid: VoxelGrid): (cell: number) => number[] {
-  const reach = Math.floor(RADIUS);
+  const radius = Math.max(LEAST_RADIUS, Math.min(RADIUS, Math.min(grid.nx, grid.ny, grid.nz) / 4));
+  const reach = Math.floor(radius);
 
   return (cell) => {
     const x = cell % grid.nx;
@@ -102,7 +107,7 @@ function neighbourhood(grid: VoxelGrid): (cell: number) => number[] {
     for (let dz = -reach; dz <= reach; dz++) {
       for (let dy = -reach; dy <= reach; dy++) {
         for (let dx = -reach; dx <= reach; dx++) {
-          const weight = RADIUS - Math.hypot(dx, dy, dz);
+          const weight = radius - Math.hypot(dx, dy, dz);
           const inside =
             x + dx >= 0 &&
             y + dy >= 0 &&

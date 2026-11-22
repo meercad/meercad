@@ -5,7 +5,8 @@
  * lighter part.
  */
 import { cellsAt, nearestSolid, nodesOf, solidVolume, voxelize, type Vec3, type VoxelGrid } from "./grid.js";
-import { cellForce, solveFem, stresses } from "./solve.js";
+import { solveFem } from "./multigrid.js";
+import { cellForce, stresses } from "./solve.js";
 import { strengthCheck, type Strength } from "./strength.js";
 import { smoothSurface } from "./smooth.js";
 import { optimiseTopology, solidify } from "./topology.js";

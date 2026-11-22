@@ -89,7 +89,8 @@ export class Stiffness {
   readonly free: Uint8Array;
   private readonly brick: Float64Array;
   private readonly nodes: Int32Array;
-  private readonly diagonal: Float64Array;
+  /** The stiffness of each degree of freedom against its own movement alone. */
+  readonly diagonal: Float64Array;
 
   constructor(problem: Pick<FemProblem, "grid" | "young" | "poisson" | "stiffness" | "fixed">) {
     const { grid, stiffness } = problem;
@@ -184,17 +185,32 @@ export class Stiffness {
     return out;
   }
 
-  /** Conjugate gradients, each equation divided by its own stiffness first. */
+  /**
+   * Conjugate gradients. Each round the remaining forces are turned into a guess of the movements
+   * still missing: by `precondition` if given, else by dividing each by its own stiffness.
+   */
   solve(
     force: ArrayLike<number>,
-    options: { tolerance?: number; maxIterations?: number; start?: ArrayLike<number> } = {},
+    options: {
+      tolerance?: number;
+      maxIterations?: number;
+      start?: ArrayLike<number>;
+      precondition?: (residual: Float64Array, guess: Float64Array) => void;
+    } = {},
   ): FemSolution {
     const size = this.free.length;
     const displacement = new Float64Array(size);
     const residual = new Float64Array(size);
     const direction = new Float64Array(size);
     const pushed = new Float64Array(size);
-    const conditioned = (i: number) => (this.free[i] ? residual[i]! / this.diagonal[i]! : 0);
+    const guess = new Float64Array(size);
+
+    const conditioned = () => {
+      if (options.precondition) return options.precondition(residual, guess);
+
+      for (let i = 0; i < size; i++) guess[i] = this.free[i] ? residual[i]! / this.diagonal[i]! : 0;
+    };
+
     let load = 0;
 
     for (let i = 0; i < size; i++) {
@@ -207,7 +223,8 @@ export class Stiffness {
 
     if (options.start) this.apply(displacement, pushed).forEach((value, i) => (residual[i]! -= value));
 
-    for (let i = 0; i < size; i++) direction[i] = conditioned(i);
+    conditioned();
+    direction.set(guess);
 
     const limit = (options.tolerance ?? 1e-6) ** 2 * load;
     const maxIterations = options.maxIterations ?? 4000;
@@ -220,15 +237,17 @@ export class Stiffness {
       if (!(curvature > 0)) break;
 
       const step = energy / curvature;
-      let next = 0;
 
       for (let i = 0; i < size; i++) {
         displacement[i]! += step * direction[i]!;
         residual[i]! -= step * pushed[i]!;
-        next += conditioned(i) * residual[i]!;
       }
 
-      for (let i = 0; i < size; i++) direction[i] = conditioned(i) + (next / energy) * direction[i]!;
+      conditioned();
+
+      const next = dot(guess, residual);
+
+      for (let i = 0; i < size; i++) direction[i] = guess[i]! + (next / energy) * direction[i]!;
 
       energy = next;
       iterations++;
@@ -238,7 +257,7 @@ export class Stiffness {
   }
 }
 
-function dot(a: Float64Array, b: Float64Array): number {
+export function dot(a: Float64Array, b: Float64Array): number {
   let sum = 0;
 
   for (let i = 0; i < a.length; i++) sum += a[i]! * b[i]!;
@@ -265,11 +284,6 @@ export function cellForce(
   }
 
   return into;
-}
-
-/** How far the part gives under the forces. */
-export function solveFem(problem: FemProblem, options?: Parameters<Stiffness["solve"]>[1]): FemSolution {
-  return new Stiffness(problem).solve(problem.force, options);
 }
 
 /**
