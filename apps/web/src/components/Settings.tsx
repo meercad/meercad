@@ -1,6 +1,7 @@
 /** Settings (⌘,): control scheme (mouse and keys), and where projects are stored. */
 import {
   Cloud,
+  FlaskConical,
   FolderOpen,
   Grid3x3,
   HardDrive,
@@ -25,6 +26,7 @@ import { Kbd } from "./Kbd";
 import { BED_PRESETS, DEFAULT_BED, type Bed } from "../lib/printBed";
 import { DEFAULT_FIT } from "@meercad/model";
 import { openFitTest } from "../lib/fit";
+import { BETA_FEATURES, setBeta, useBeta } from "../lib/beta";
 
 export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
   const [open, setOpen] = useState(false);
@@ -464,8 +466,38 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
             )}
           </section>
         ) : null}
+
+        <BetaSection />
       </div>
     </div>
+  );
+}
+
+/** Beta functions: only in test builds, each off until switched on here. */
+function BetaSection() {
+  const { available, on } = useBeta();
+
+  if (!available) return null;
+
+  return (
+    <section>
+      <h3>
+        <FlaskConical /> {t("Beta")}
+      </h3>
+      <p className="muted">
+        {t("Unfinished functions, only in test builds. Each one is off until you switch it on.")}
+      </p>
+      {BETA_FEATURES.map((f) => (
+        <label key={f.id} className="check">
+          <input
+            type="checkbox"
+            checked={!!on[f.id]}
+            onChange={(event) => setBeta(f.id, event.target.checked)}
+          />
+          {t(f.name)}: {t(f.about)}
+        </label>
+      ))}
+    </section>
   );
 }
 
