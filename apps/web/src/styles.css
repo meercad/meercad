@@ -5113,6 +5113,7 @@ html[data-compact] .sketch-done {
   overflow-y: auto;
 }
 .strength-card .strength-row {
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
 }

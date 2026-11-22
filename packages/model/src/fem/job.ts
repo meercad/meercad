@@ -7,7 +7,7 @@
 import { cellsAt, nearestSolid, nodesOf, solidVolume, voxelize, type Vec3, type VoxelGrid } from "./grid.js";
 import { cellForce, solveFem, stresses } from "./solve.js";
 import { strengthCheck, type Strength } from "./strength.js";
-import { surfaceMesh } from "./surface.js";
+import { smoothSurface } from "./smooth.js";
 import { optimiseTopology, solidify } from "./topology.js";
 
 export interface StrengthJob {
@@ -52,8 +52,9 @@ interface Setup {
   loads: { cells: Int32Array; force: Vec3 }[];
 }
 
-function setup(job: StrengthJob): Setup {
-  const grid = voxelize(job.positions, job.indices, job.cells);
+/** The part of a job as cubes, with the cubes at the faces it is held and pushed at. */
+function setup(job: StrengthJob, part: Pick<StrengthJob, "positions" | "indices"> = job): Setup {
+  const grid = voxelize(part.positions, part.indices, job.cells);
   const held = cellsAt(grid, job.positions, job.holds);
   const loads = job.loads.map((load) => ({
     cells: cellsAt(grid, job.positions, load.triangles),
@@ -66,7 +67,27 @@ function setup(job: StrengthJob): Setup {
   return { grid, held, loads };
 }
 
-function check({ grid, held, loads }: Setup, material: Strength, up: Vec3): StrengthReport {
+function check(start: Setup, material: Strength, up: Vec3): StrengthReport {
+  // Material that does not hang on a held cube carries nothing and could not stand still.
+  const grid = solidify(start.grid, start.grid.solid, start.held);
+  const held = start.held;
+  const loads = start.loads.map((load) => ({
+    ...load,
+    cells: load.cells.filter((cell) => grid.solid[cell]),
+  }));
+
+  // A pushed face without a way to the hold: the part is in pieces.
+  if (loads.some((load) => !load.cells.length)) {
+    return {
+      grid,
+      used: new Float32Array(grid.solid.length),
+      safety: 0,
+      worstAt: null,
+      deflection: 0,
+      converged: false,
+    };
+  }
+
   const force = new Float64Array((grid.nx + 1) * (grid.ny + 1) * (grid.nz + 1) * 3);
 
   for (const load of loads) cellForce(grid, load.cells, load.force, force);
@@ -109,7 +130,7 @@ export const checkStrength = (job: StrengthJob): StrengthReport => check(setup(j
 export interface TopologySuggestion {
   /** The lighter part as triangles. */
   mesh: { positions: Float32Array; indices: Uint32Array };
-  /** Its volume as a share of the part's (both as cubes). */
+  /** Its volume as a share of the part's. */
   share: number;
   /** The part as it was, and the lighter part, checked with the same holds and loads. */
   before: StrengthReport;
@@ -124,6 +145,8 @@ export function suggestTopology(
   job: StrengthJob & {
     share: number;
     steps?: number;
+    /** About how many cubes to check the suggestion with: more than `cells`, as its struts are thin. */
+    checkCells?: number;
     onStep?: (step: number, steps: number) => boolean | void;
   },
 ): TopologySuggestion {
@@ -150,12 +173,15 @@ export function suggestTopology(
     onStep: job.onStep,
   });
   const lighter = solidify(grid, density, keep);
+  const share = solidVolume(lighter) / solidVolume(grid);
+  const mesh = smoothSurface({ grid, density, keep, positions: job.positions, indices: job.indices, share });
 
+  // The check of the suggestion starts from its own triangles again, like the check of any part.
   return {
-    mesh: surfaceMesh(lighter, keep),
-    share: solidVolume(lighter) / solidVolume(grid),
+    mesh,
+    share,
     before,
-    after: check({ grid: lighter, held, loads }, job.material, job.up),
+    after: check(setup({ ...job, cells: job.checkCells ?? job.cells }, mesh), job.material, job.up),
   };
 }
 
@@ -193,7 +219,7 @@ export function strengthColors(
 
 export type StrengthRequest =
   | { kind: "check"; job: StrengthJob }
-  | { kind: "topology"; job: StrengthJob & { share: number; steps?: number } };
+  | { kind: "topology"; job: StrengthJob & { share: number; steps?: number; checkCells?: number } };
 
 export type StrengthAnswer =
   | { kind: "check"; report: StrengthReport }

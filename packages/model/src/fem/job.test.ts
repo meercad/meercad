@@ -90,7 +90,8 @@ describe("the lighter suggestion", () => {
   const suggestion = suggestTopology({
     ...beam,
     share: 0.5,
-    steps: 12,
+    steps: 25,
+    checkCells: 8 * 1024,
     onStep: (step) => void steps.push(step),
   });
 
@@ -102,11 +103,13 @@ describe("the lighter suggestion", () => {
 
   it("keeps the faces it is held and pushed at, and is a closed part", () => {
     const xs = suggestion.mesh.positions.filter((_, i) => i % 3 === 0);
-    const corners = (x: number) => xs.filter((value) => value === x).length;
+    const on = (x: number) => xs.filter((value) => Math.abs(value - x) < 1e-4).length;
 
-    // All 5 × 9 corners of both end faces are where they were.
-    expect(corners(0)).toBe(45);
-    expect(corners(32)).toBe(45);
+    // Both end faces are flat and where they were, nothing sticks out of the part.
+    expect(on(0)).toBeGreaterThan(40);
+    expect(on(32)).toBeGreaterThan(40);
+    expect(Math.min(...xs)).toBeGreaterThan(-1e-4);
+    expect(Math.max(...xs)).toBeLessThan(32 + 1e-4);
     expect(suggestion.mesh.indices.length % 3).toBe(0);
   });
 

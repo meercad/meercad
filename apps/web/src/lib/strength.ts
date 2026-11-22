@@ -66,7 +66,7 @@ const CLOSED: StrengthState = {
   newton: 100,
   direction: "into",
   up: 2,
-  share: 0.5,
+  share: 0.4,
   cells: { check: CHECK_CELLS, topology: TOPOLOGY_CELLS },
   steps: 40,
   running: null,
@@ -154,7 +154,12 @@ async function run(kind: "check" | "topology", label: string): Promise<StrengthA
       ? { kind, job: request }
       : {
           kind,
-          job: { ...request, share: useStrength.getState().share, steps: useStrength.getState().steps },
+          job: {
+            ...request,
+            share: useStrength.getState().share,
+            steps: useStrength.getState().steps,
+            checkCells: useStrength.getState().cells.check,
+          },
         },
     (share) => task.update(share),
   );
