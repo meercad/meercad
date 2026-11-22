@@ -208,7 +208,7 @@ export function smoothSurface(job: SmoothJob): { positions: Float32Array; indice
     if (value > 0 && !(inside[index] && deep[cellAt(at)])) {
       const point = at.map((v, axis) => grid.origin[axis]! + v * grid.h) as Vec3;
 
-      value = Math.min(value, -signedDistance(collider, point) / grid.h);
+      value = roundedMin(value, -signedDistance(collider, point) / grid.h);
     }
 
     raster.values[index] = value;
@@ -255,7 +255,7 @@ const ON_PART = 0.3;
  */
 const PULL = 0.5;
 const PUSH = -0.53;
-const ROUNDS = 12;
+const ROUNDS = 30;
 
 /**
  * The corners of a skin evened out: ripples of the raster go, the shape stays. Corners on the
@@ -306,6 +306,23 @@ function evened(
   }
 
   return now;
+}
+
+/**
+ * Over how many cubes the skin turns from following the density to following the part's surface.
+ * Less than the half cube a full cube lies above the level, so full material ends exactly at the
+ * part's faces.
+ */
+const BLEND = 0.4;
+
+/**
+ * The smaller of two numbers, with the kink where they are equal rounded off: where a strut runs
+ * into the part's surface the skin turns smoothly instead of in a sharp, jagged rim.
+ */
+function roundedMin(a: number, b: number): number {
+  const near = Math.max(BLEND - Math.abs(a - b), 0) / BLEND;
+
+  return Math.min(a, b) - (near * near * BLEND) / 4;
 }
 
 /** 1 for the cubes with material all around them (edges and corners too): far from the part's surface. */

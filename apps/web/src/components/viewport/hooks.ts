@@ -7,6 +7,7 @@ import type { RebuildOutput } from "@meercad/kernel/client";
 import type { MeercadDocument } from "@meercad/schema";
 import { THREE, Viewport, type SceneData } from "@meercad/viewport";
 import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { hasBeta, useBeta } from "../../lib/beta";
 import { useDeviation } from "../../lib/deviation";
 import { useStrength } from "../../lib/strength";
 import { dragStep, gridLevels } from "../../lib/grid";
@@ -58,6 +59,10 @@ export function useCreateViewport(
 ): void {
   useEffect(() => {
     const viewport = new Viewport(host.current!);
+    // With the topology beta on, imported meshes (its suggestions too) are shaded smooth.
+    viewport.smoothMeshes = hasBeta("topology");
+
+    const offBeta = useBeta.subscribe(() => (viewport.smoothMeshes = hasBeta("topology")));
     // Named for screen readers (and the touch tests, which aim gestures with several fingers at it).
     viewport.renderer.domElement.setAttribute("role", "img");
     viewport.renderer.domElement.setAttribute("aria-label", t("3D view"));
@@ -87,6 +92,7 @@ export function useCreateViewport(
     const offPrefs = usePrefs.subscribe(applyNav);
 
     return () => {
+      offBeta();
       offPrefs();
       setViewport(null);
       viewport.dispose();
