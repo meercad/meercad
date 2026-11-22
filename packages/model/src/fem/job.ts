@@ -128,9 +128,29 @@ function check(start: Setup, material: Strength, up: Vec3): StrengthReport {
 /** How well a part holds its loads. */
 export const checkStrength = (job: StrengthJob): StrengthReport => check(setup(job), job.material, job.up);
 
+export interface TriangleSkin {
+  positions: Float32Array;
+  indices: Uint32Array;
+}
+
+/** The cubes that stay material whatever they carry: where the part is held and pushed. */
+const keptCells = ({ held, loads }: Setup): number[] => [
+  ...held,
+  ...loads.flatMap((load) => [...load.cells]),
+];
+
+/** The forces and holds of a set-up as the equations to solve. */
+function problemOf({ grid, held, loads }: Setup, material: Strength) {
+  const force = new Float64Array((grid.nx + 1) * (grid.ny + 1) * (grid.nz + 1) * 3);
+
+  for (const load of loads) cellForce(grid, load.cells, load.force, force);
+
+  return { grid, young: material.young, poisson: material.poisson, fixed: nodesOf(grid, held), force };
+}
+
 export interface TopologySuggestion {
   /** The lighter part as triangles. */
-  mesh: { positions: Float32Array; indices: Uint32Array };
+  mesh: TriangleSkin;
   /** Its volume as a share of the part's. */
   share: number;
   /** The part as it was, and the lighter part, checked with the same holds and loads. */
@@ -148,26 +168,17 @@ export function suggestTopology(
     steps?: number;
     /** About how many cubes to check the suggestion with: more than `cells`, as its struts are thin. */
     checkCells?: number;
+    /** Works the suggestion's triangles over before it is checked and handed out (made lighter, say). */
+    finish?: (mesh: TriangleSkin) => TriangleSkin;
     onStep?: (step: number, steps: number) => boolean | void;
   },
 ): TopologySuggestion {
   const start = setup(job);
   const { grid, held, loads } = start;
   const before = check(start, job.material, job.up);
-  const keep = [...held, ...loads.flatMap((load) => [...load.cells])];
-  const force = new Float64Array((grid.nx + 1) * (grid.ny + 1) * (grid.nz + 1) * 3);
-
-  for (const load of loads) cellForce(grid, load.cells, load.force, force);
-
-  const problem = {
-    grid,
-    young: job.material.young,
-    poisson: job.material.poisson,
-    fixed: nodesOf(grid, held),
-    force,
-  };
+  const keep = keptCells(start);
   const { density } = optimiseTopology({
-    problem,
+    problem: problemOf(start, job.material),
     keep,
     share: job.share,
     steps: job.steps,
@@ -175,7 +186,8 @@ export function suggestTopology(
   });
   const lighter = solidify(grid, density, keep);
   const share = solidVolume(lighter) / solidVolume(grid);
-  const mesh = smoothSurface({ grid, density, keep, positions: job.positions, indices: job.indices, share });
+  const skin = smoothSurface({ grid, density, keep, positions: job.positions, indices: job.indices, share });
+  const mesh = job.finish?.(skin) ?? skin;
 
   // The check of the suggestion starts from its own triangles again, like the check of any part.
   return {
@@ -227,17 +239,21 @@ export type StrengthAnswer =
   | { kind: "topology"; suggestion: TopologySuggestion }
   | { kind: "error"; reason: "hold" | "load" | "failed" };
 
-/** Answers a request, whatever happens (for the worker the calculation runs in). */
+/**
+ * Answers a request, whatever happens (for the worker the calculation runs in). `finish` works a
+ * suggestion's triangles over before it is checked.
+ */
 export function answerStrength(
   request: StrengthRequest,
   onProgress: (share: number) => void,
+  finish?: (mesh: TriangleSkin) => TriangleSkin,
 ): StrengthAnswer {
   try {
     if (request.kind === "check") return { kind: "check", report: checkStrength(request.job) };
 
     const onStep = (step: number, steps: number) => onProgress(step / steps);
 
-    return { kind: "topology", suggestion: suggestTopology({ ...request.job, onStep }) };
+    return { kind: "topology", suggestion: suggestTopology({ ...request.job, onStep, finish }) };
   } catch (error) {
     return { kind: "error", reason: error instanceof StrengthError ? error.reason : "failed" };
   }

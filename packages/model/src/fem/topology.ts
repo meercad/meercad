@@ -39,7 +39,7 @@ const MOVE = 0.2;
  * struts a few cubes thick instead of thin skins. A part only a few cubes thin gets less, down to
  * the least, or nothing of it would be left to shape.
  */
-const RADIUS = 2.5;
+const RADIUS = 3;
 const LEAST_RADIUS = 1.5;
 /** Densities changing less than this in a round are settled. */
 const SETTLED = 0.01;

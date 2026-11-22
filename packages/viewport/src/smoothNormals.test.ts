@@ -37,7 +37,18 @@ describe("smooth normals", () => {
     const { positions, flat } = roof(90);
 
     expect(Array.from(smoothNormals(positions, flat))).toEqual(Array.from(flat));
-    expect(smoothNormals(positions, flat, 60)[0]).toBeCloseTo(-Math.SQRT1_2, 5);
+    expect(smoothNormals(positions, flat, undefined, 60)[0]).toBeCloseTo(-Math.SQRT1_2, 5);
+  });
+
+  it("work on corners shared through indices, and leave unused corners alone", () => {
+    const { positions, flat } = roof(20);
+    // The same two triangles, with a seventh corner nothing uses.
+    const more = Float32Array.from([...positions, 9, 9, 9]);
+    const moreFlat = Float32Array.from([...flat, 1, 0, 0]);
+    const smooth = smoothNormals(more, moreFlat, [0, 1, 2, 3, 4, 5]);
+
+    expect(Array.from(smooth.subarray(0, 18))).toEqual(Array.from(smoothNormals(positions, flat)));
+    expect(Array.from(smooth.subarray(18))).toEqual([1, 0, 0]);
   });
 
   it("keep the flat direction where triangles cancel each other out", () => {

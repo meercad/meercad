@@ -121,6 +121,25 @@ describe("the lighter suggestion", () => {
   });
 });
 
+describe("finishing a suggestion", () => {
+  it("checks the triangles the finishing step hands back, and hands those out", () => {
+    // A finishing step that swaps the suggestion for the part itself.
+    const whole = { positions: Float32Array.from(mesh.positions), indices: Uint32Array.from(mesh.indices) };
+    const finished = suggestTopology({ ...beam, share: 0.5, steps: 2, finish: () => whole });
+
+    expect(finished.mesh).toBe(whole);
+    expect(finished.after.safety).toBeCloseTo(finished.before.safety, 5);
+
+    const answer = answerStrength(
+      { kind: "topology", job: { ...beam, share: 0.5, steps: 2 } },
+      () => undefined,
+      () => whole,
+    );
+
+    expect(answer).toMatchObject({ kind: "topology", suggestion: { mesh: whole } });
+  });
+});
+
 describe("requests", () => {
   it("are answered with the report, the suggestion and its progress, or the reason why not", () => {
     const progress: number[] = [];
