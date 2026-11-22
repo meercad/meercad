@@ -8,6 +8,7 @@ import type { MeercadDocument } from "@meercad/schema";
 import { THREE, Viewport, type SceneData } from "@meercad/viewport";
 import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { useDeviation } from "../../lib/deviation";
+import { useStrength } from "../../lib/strength";
 import { dragStep, gridLevels } from "../../lib/grid";
 import { t } from "../../lib/i18n";
 import { navigationFor, usePrefs } from "../../lib/keymap";
@@ -93,14 +94,15 @@ export function useCreateViewport(
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/** The printability, wall thickness or deviation map on the part, in that order of precedence. */
+/** The strength, printability, wall thickness or deviation map on the part, in that order of precedence. */
 export function useAnalysisMaps(viewport: View): void {
   const heat = useDeviation((s) => s.maps);
   const wall = useThickness((s) => s.maps);
   const print = usePrintCheck((s) => s.maps);
+  const strength = useStrength((s) => s.maps);
   useEffect(
-    () => viewport?.setBodyHeat(print.size ? print : wall.size ? wall : heat),
-    [viewport, heat, wall, print],
+    () => viewport?.setBodyHeat(strength.size ? strength : print.size ? print : wall.size ? wall : heat),
+    [viewport, heat, wall, print, strength],
   );
 }
 

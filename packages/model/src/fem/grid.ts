@@ -168,7 +168,7 @@ const distance = (a: Vec3, b: Vec3): number => Math.hypot(a[0] - b[0], a[1] - b[
  * The material cube whose centre is nearest to a point, among the point's cube and its neighbours; −1 if
  * none.
  */
-function nearestSolid(grid: VoxelGrid, point: Vec3): number {
+export function nearestSolid(grid: VoxelGrid, point: Vec3): number {
   const at = point.map((value, axis) => (value - grid.origin[axis]!) / grid.h);
   const home = at.map(Math.floor);
   let best = -1;

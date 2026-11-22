@@ -2,6 +2,7 @@
  * The 3D view: the viewport kept in step with the app (hooks in viewport/hooks.ts, in the order their
  * effects run), its input (viewport/pointer.ts, click.ts, contextMenu.tsx) and what lies over it.
  */
+import { StrengthCard } from "./StrengthCard";
 import type { DisplayMode, Viewport } from "@meercad/viewport";
 import { useRef, useState } from "react";
 import { useKey, usePrefs } from "../lib/keymap";
@@ -106,6 +107,7 @@ export function ViewportView() {
       <LoadingOverlay />
       <DeviationLegend />
       <ThicknessLegend />
+      <StrengthCard />
       <PrintCheckCard />
       {layingOnFace ? <LayOnFaceHud /> : null}
       <MeshRepairCard />

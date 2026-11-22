@@ -4,7 +4,7 @@
  * hide, lay down), and a click while a new sketch waits for its plane (a flat face takes it) or a
  * part waits to be laid on a face.
  */
-import { act, cleanup, fireEvent } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Feature, SketchEntity } from "@meercad/schema";
 import { writeStl } from "@meercad/io";
@@ -13,6 +13,8 @@ import { prism } from "../../../../tests/acceptance/meshes";
 import { testCall } from "../lib/mcpBridge";
 import { apply, cancelDialog, closeSketch, currentDoc, getViewport, rebuildNow, useApp } from "../store";
 import { usePrintCheck } from "../lib/printability";
+import { useBeta } from "../lib/beta";
+import { closeStrength, useStrength } from "../lib/strength";
 import { pickMenu, rebuilt, renderUi, withScreen } from "../../test/ui";
 import { ViewportView } from "./ViewportView";
 
@@ -142,6 +144,23 @@ describe("more right-click menus", () => {
     await pickMenu(/^Move/);
     expect(useApp.getState().dialog?.feature.op).toBe("transform");
     await act(async () => cancelDialog());
+  });
+
+  it("offers strength and topology on a face only with the beta function switched on", async () => {
+    const entries = () => screen.getAllByRole("menuitem").map((element) => element.textContent ?? "");
+
+    await clickAt([20, 10, 10], 2);
+    expect(entries().some((text) => text.startsWith("Wall thickness"))).toBe(true);
+    expect(entries().some((text) => text.startsWith("Strength"))).toBe(false);
+    await act(async () => void fireEvent.keyDown(window, { key: "Escape" }));
+
+    useBeta.setState({ available: true, on: { topology: true } });
+    await clickAt([20, 10, 10], 2);
+    await pickMenu("Strength and topology (beta)");
+    expect(useStrength.getState().body).toBe("ex1");
+    expect(document.querySelector(".strength-card")).not.toBeNull();
+    await act(async () => closeStrength());
+    useBeta.setState({ available: false, on: {} });
   });
 
   it("sketches on a flat face clicked while a new sketch waits for its plane", async () => {
