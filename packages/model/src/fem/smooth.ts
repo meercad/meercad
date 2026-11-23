@@ -221,14 +221,16 @@ export function smoothSurface(job: SmoothJob): { positions: Float32Array; indice
     (index) => inCubes(index).map((v, axis) => grid.origin[axis]! + v * grid.h) as Vec3,
   );
   const away = (point: Vec3) => signedDistance(collider, point);
-  const onPart = Uint8Array.from({ length: mesh.positions.length / 3 }, (_, corner) =>
-    Math.abs(away(Array.from(mesh.positions.subarray(corner * 3, corner * 3 + 3)) as Vec3)) < ON_PART * grid.h
-      ? 1
-      : 0,
+  // Only corners near the part's surface can leave the part while the skin is evened out.
+  const near = Uint8Array.from({ length: mesh.positions.length / 3 }, (_, corner) =>
+    away(Array.from(mesh.positions.subarray(corner * 3, corner * 3 + 3)) as Vec3) > -NEAR * grid.h ? 1 : 0,
   );
 
-  // Corners on the part's own surface may slide along it, and are set back onto it.
+  // A corner that has left the part is set back onto its surface, straight down.
   const backOnPart = (point: Vec3): Vec3 => {
+    const distance = away(point);
+    if (!(distance > 0)) return point;
+
     const reach = 0.01 * grid.h;
     const slope = point.map((_, axis) => {
       const step = point.map((value, k) => (k === axis ? value + reach : value)) as Vec3;
@@ -236,19 +238,18 @@ export function smoothSurface(job: SmoothJob): { positions: Float32Array; indice
 
       return (away(step) - away(back)) / (2 * reach);
     });
-    const distance = away(point);
 
     return point.map((value, axis) => value - distance * slope[axis]!) as Vec3;
   };
 
-  return { positions: evened(mesh.positions, mesh.indices, onPart, backOnPart), indices: mesh.indices };
+  return { positions: evened(mesh.positions, mesh.indices, near, backOnPart), indices: mesh.indices };
 }
 
 /**
- * A corner closer to the part's surface than this (in cubes) belongs on it: also the corners the
- * raster set a little inside along the part's edges, and along the rims where struts meet a face.
+ * Corners further inside the part than this (in cubes) never reach its surface while the skin is
+ * evened out, and need not be watched.
  */
-const ON_PART = 0.3;
+const NEAR = 1.5;
 /**
  * How far a corner goes towards the middle of its neighbours in a round, and back out in the next:
  * pulling alone would thin every strut, the push after it keeps their size (Taubin smoothing).
@@ -258,16 +259,18 @@ const PUSH = -0.53;
 const ROUNDS = 30;
 
 /**
- * The corners of a skin evened out: ripples of the raster go, the shape stays. Corners on the
- * part's surface are set back onto it after every pull and push.
+ * The corners of a skin evened out: ripples of the raster go, the shape stays. The skin may not
+ * leave the part: after every pull and push the corners near its surface are set back into it. All
+ * corners are treated alike, so the skin runs into the part's faces in a smooth line (corners held
+ * on the faces while their neighbours move would leave that line jagged).
  */
 function evened(
   positions: Float32Array,
   indices: Uint32Array,
-  onPart: Uint8Array,
+  near: Uint8Array,
   backOnPart: (point: Vec3) => Vec3,
 ): Float32Array {
-  const linked: Set<number>[] = Array.from(onPart, () => new Set());
+  const linked: Set<number>[] = Array.from(near, () => new Set());
 
   // Each face is two triangles a b c, a c d: its edges are a–b, b–c, c–d, d–a (not the diagonal).
   for (let t = 0; t < indices.length; t += 6) {
@@ -295,8 +298,8 @@ function evened(
     });
 
     if (round % 2) {
-      onPart.forEach((on, corner) => {
-        if (on) {
+      near.forEach((watched, corner) => {
+        if (watched) {
           next.set(backOnPart(Array.from(next.subarray(corner * 3, corner * 3 + 3)) as Vec3), corner * 3);
         }
       });
