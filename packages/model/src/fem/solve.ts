@@ -7,6 +7,7 @@
  * Units: mm, N, MPa.
  */
 import { cellCount, cellNodes, nodeCount, type VoxelGrid } from "./grid.js";
+import { applyRange, floats, sharedWork, type SharedWork } from "./shared.js";
 
 export interface FemProblem {
   grid: VoxelGrid;
@@ -79,6 +80,9 @@ export function brickStiffness(poisson: number): Float64Array {
   return matrix;
 }
 
+/** From this many carrying cubes on the work is shared out among helper threads, if there are any. */
+const SHARED_FROM = 4000;
+
 /** The stiffness of a whole grid, applied cube by cube. */
 export class Stiffness {
   readonly grid: VoxelGrid;
@@ -89,6 +93,10 @@ export class Stiffness {
   readonly free: Uint8Array;
   private readonly brick: Float64Array;
   private readonly nodes: Int32Array;
+  /** With helper threads: where each row of cubes along x starts, and the helpers taking part. */
+  private readonly slabs: Int32Array | null;
+  private helpers = 0;
+  private readonly shared: SharedWork | null;
   /** The stiffness of each degree of freedom against its own movement alone. */
   readonly diagonal: Float64Array;
 
@@ -100,10 +108,37 @@ export class Stiffness {
     );
 
     this.grid = grid;
-    this.brick = brickStiffness(problem.poisson);
+
+    const work = sharedWork();
+    // Worth sharing out among threads only for many cubes; the lists then lie in the shared memory.
+    const together = work && carrying.length >= SHARED_FROM ? work : null;
+
+    this.brick = together ? together.floats(576) : new Float64Array(576);
+    this.brick.set(brickStiffness(problem.poisson));
     this.cells = Int32Array.from(carrying);
-    this.scale = Float64Array.from(carrying, (cell) => share(cell) * problem.young * grid.h);
-    this.nodes = new Int32Array(carrying.length * 8);
+    this.scale = together ? together.floats(carrying.length) : new Float64Array(carrying.length);
+    carrying.forEach((cell, k) => (this.scale[k] = share(cell) * problem.young * grid.h));
+    this.nodes = together ? together.integers(carrying.length * 8) : new Int32Array(carrying.length * 8);
+    this.shared = null;
+    this.slabs = null;
+
+    if (together) {
+      // Where each row of cubes along x starts in the list of carrying cubes (which runs row by row).
+      const rows = together.integers(grid.ny * grid.nz + 1);
+
+      for (let row = 1, k = 0; row <= grid.ny * grid.nz; row++) {
+        while (k < carrying.length && carrying[k]! < row * grid.nx) k++;
+
+        rows[row] = k;
+      }
+
+      if ([this.brick, this.scale, this.nodes, rows].every((list) => together.holds(list))) {
+        this.shared = together;
+        this.slabs = rows;
+        this.helpers = together.ready;
+      }
+    }
+
     this.diagonal = new Float64Array(nodeCount(grid) * 3);
     this.free = new Uint8Array(nodeCount(grid) * 3);
 
@@ -138,21 +173,26 @@ export class Stiffness {
 
   /** The forces that hold the movements `displacement` (held nodes: none). */
   apply(displacement: Float64Array, out: Float64Array): Float64Array {
-    const local = new Float64Array(24);
-    const brick = this.brick;
+    const together = this.shared;
 
     out.fill(0);
 
-    for (let k = 0; k < this.cells.length; k++) {
-      this.gather(k, displacement, local);
+    if (together && this.helpers && together.holds(displacement) && together.holds(out)) {
+      const { ny, nz } = this.grid;
 
-      for (let row = 0; row < 24; row++) {
-        let sum = 0;
-
-        for (let column = 0; column < 24; column++) sum += brick[row * 24 + column]! * local[column]!;
-
-        out[this.nodes[k * 8 + Math.floor(row / 3)]! * 3 + (row % 3)]! += this.scale[k]! * sum;
-      }
+      together.apply(
+        this.brick,
+        this.nodes,
+        this.scale,
+        this.slabs!,
+        ny,
+        nz,
+        this.helpers,
+        displacement,
+        out,
+      );
+    } else {
+      applyRange(this.brick, this.nodes, this.scale, 0, this.cells.length, displacement, out);
     }
 
     for (let i = 0; i < out.length; i++) out[i]! *= this.free[i]!;
@@ -199,11 +239,11 @@ export class Stiffness {
     } = {},
   ): FemSolution {
     const size = this.free.length;
-    const displacement = new Float64Array(size);
-    const residual = new Float64Array(size);
-    const direction = new Float64Array(size);
-    const pushed = new Float64Array(size);
-    const guess = new Float64Array(size);
+    const displacement = floats(size);
+    const residual = floats(size);
+    const direction = floats(size);
+    const pushed = floats(size);
+    const guess = floats(size);
 
     const conditioned = () => {
       if (options.precondition) return options.precondition(residual, guess);

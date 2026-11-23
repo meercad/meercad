@@ -39,6 +39,8 @@ import type { ReactNode } from "react";
 import { copyParts, hasClip, pasteParts, selectAll, selectedParts } from "../../lib/clipboard";
 import { deleteBodies, deleteModelSelection } from "../../lib/deletion";
 import { hasBeta } from "../../lib/beta";
+import { isCompact } from "../../lib/layout";
+import { nativeApp } from "../../lib/native";
 import { hideDeviation, showDeviation, useDeviation } from "../../lib/deviation";
 import { openStrength } from "../../lib/strength";
 import { FEATURES, partName } from "../../lib/features";
@@ -443,7 +445,8 @@ function thicknessItem(body: string): Item {
 
 /** The strength check with the topology suggestion: only with the beta function switched on. */
 function strengthItems(body: string): Item[] {
-  if (!hasBeta("topology")) return [];
+  // Not on the iPhone: minutes of full load on one core are no use there.
+  if (!hasBeta("topology") || (nativeApp && isCompact())) return [];
 
   return [
     {

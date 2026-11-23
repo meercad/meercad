@@ -7,6 +7,7 @@
  */
 import { cellCount, type VoxelGrid } from "./grid.js";
 import { multigrid } from "./multigrid.js";
+import { sharedWork } from "./shared.js";
 import { Stiffness, type FemProblem } from "./solve.js";
 
 export interface TopologyJob {
@@ -43,6 +44,12 @@ const RADIUS = 3;
 const LEAST_RADIUS = 1.5;
 /** Densities changing less than this in a round are settled. */
 const SETTLED = 0.01;
+/**
+ * A round that makes the part less than this share stiffer has gained nothing; after this many
+ * such rounds in a row the optimisation ends.
+ */
+const GAINED = 0.004;
+const CALM_ROUNDS = 2;
 
 export function optimiseTopology(job: TopologyJob): TopologyResult {
   const { grid } = job.problem;
@@ -64,16 +71,25 @@ export function optimiseTopology(job: TopologyJob): TopologyResult {
   let displacement: Float64Array | undefined;
   let step = 0;
 
+  let compliance = Infinity;
+  let calm = 0;
+
   while (step < steps) {
+    // What the round before laid into the shared memory is no longer needed.
+    sharedWork()?.reset();
+
     const stiffness = Float32Array.from(density, (value) => LEAST + value ** PENALTY * (1 - LEAST));
     const system = new Stiffness({ ...job.problem, stiffness });
 
-    displacement = system.solve(job.problem.force, {
-      tolerance: 1e-3,
-      maxIterations: 300,
-      start: displacement,
-      precondition: multigrid({ ...job.problem, stiffness }, system) ?? undefined,
-    }).displacement;
+    // Solved roughly: the densities move far more from round to round than a finer answer would.
+    displacement = system
+      .solve(job.problem.force, {
+        tolerance: 1e-2,
+        maxIterations: 300,
+        start: displacement,
+        precondition: multigrid({ ...job.problem, stiffness }, system) ?? undefined,
+      })
+      .displacement.slice();
 
     const energies = system.energies(displacement, job.problem.young);
     const gain = new Float64Array(cellCount(grid));
@@ -83,11 +99,17 @@ export function optimiseTopology(job: TopologyJob): TopologyResult {
       (cell, k) => (gain[cell] = PENALTY * density[cell]! ** (PENALTY - 1) * (1 - LEAST) * energies[k]!),
     );
 
+    // How much the part gives under its forces: the measure that gets smaller round by round.
+    const given = displacement.reduce((sum, moved, i) => sum + moved * job.problem.force[i]!, 0);
+
+    calm = Math.abs(compliance - given) < GAINED * given ? calm + 1 : 0;
+    compliance = given;
+
     const change = redistribute(density, free, smoothed(gain, density, free, neighbours), budget);
 
     step++;
 
-    if (job.onStep?.(step, steps) === false || change < SETTLED) break;
+    if (job.onStep?.(step, steps) === false || change < SETTLED || calm >= CALM_ROUNDS) break;
   }
 
   return { density, steps: step };

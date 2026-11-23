@@ -11,7 +11,7 @@ it("answers a request and reports the progress", async () => {
   vi.stubGlobal("self", { postMessage: (message: { kind: string }) => posted.push(message) });
   await import("./strength.worker");
 
-  const worker = self as unknown as { onmessage(event: { data: StrengthRequest }): void };
+  const worker = self as unknown as { onmessage(event: { data: StrengthRequest }): Promise<void> };
   // A 2 × 1 × 1 box held at one end and pulled at the other.
   const positions = [0, 0, 0, 2, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 1, 2, 0, 1, 0, 1, 1, 2, 1, 1];
   const quads = [
@@ -33,10 +33,10 @@ it("answers a request and reports the progress", async () => {
     cells: 2,
   };
 
-  worker.onmessage({ data: { kind: "check", job: { ...job, holds: [] } } });
+  await worker.onmessage({ data: { kind: "check", job: { ...job, holds: [] } } });
   expect(posted).toEqual([{ kind: "error", reason: "hold" }]);
 
-  worker.onmessage({ data: { kind: "topology", job: { ...job, share: 0.5, steps: 1 } } });
+  await worker.onmessage({ data: { kind: "topology", job: { ...job, share: 0.5, steps: 1 } } });
   expect(posted.map((message) => message.kind)).toEqual(["error", "progress", "topology"]);
   vi.unstubAllGlobals();
 });

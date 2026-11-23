@@ -9,6 +9,7 @@ import { Anchor, ArrowDownToLine, FlaskConical, X } from "lucide-react";
 import { partName } from "../lib/features";
 import { t } from "../lib/i18n";
 import { materialName } from "../lib/materials";
+import { nativeApp } from "../lib/native";
 import {
   checkNow,
   closeStrength,
@@ -201,15 +202,18 @@ export function StrengthCard() {
           }}
         />
         <span className="muted">%</span>
-        <select
-          className="field"
-          aria-label={t("Detail of the topology")}
-          value={state.detail}
-          onChange={(event) => setStrength({ detail: event.target.value as Detail })}
-        >
-          <option value="fast">{t("Quick, 2 min")}</option>
-          <option value="fine">{t("Fine, 5 min")}</option>
-        </select>
+        {/* The fine level needs several cores, which iPhone and iPad do not give the app. */}
+        {nativeApp ? null : (
+          <select
+            className="field"
+            aria-label={t("Detail of the topology")}
+            value={state.detail}
+            onChange={(event) => setStrength({ detail: event.target.value as Detail })}
+          >
+            <option value="fast">{t("Quick, 2 min")}</option>
+            <option value="fine">{t("Fine, 5 min")}</option>
+          </select>
+        )}
       </label>
       <div className="row strength-row">
         <label className="check">

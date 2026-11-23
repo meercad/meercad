@@ -6,6 +6,7 @@
  * the part as a whole at once; the fine grid only has to add the detail.
  */
 import { cellCount, type VoxelGrid } from "./grid.js";
+import { floats, sharedWork } from "./shared.js";
 import { dot, Stiffness, type FemProblem, type FemSolution } from "./solve.js";
 
 type Setup = Pick<FemProblem, "grid" | "young" | "poisson" | "stiffness" | "fixed">;
@@ -124,9 +125,11 @@ function transfer(
 /** The largest factor by which an evening-out step can blow a movement up, found by trying. */
 function overshoot(system: Stiffness): number {
   const size = system.free.length;
-  let vector = Float64Array.from({ length: size }, (_, i) => system.free[i]! * (1 + (i % 7)));
-  const pushed = new Float64Array(size);
+  const vector = floats(size);
+  const pushed = floats(size);
   let factor = 1;
+
+  for (let i = 0; i < size; i++) vector[i] = system.free[i]! * (1 + (i % 7));
 
   for (let probe = 0; probe < PROBES; probe++) {
     system.apply(vector, pushed);
@@ -135,7 +138,7 @@ function overshoot(system: Stiffness): number {
 
     // Nothing free to move: any step is fine.
     factor = Math.sqrt(dot(pushed, pushed) / dot(vector, vector)) || 1;
-    vector = pushed.map((value) => value / factor);
+    for (let i = 0; i < size; i++) vector[i] = pushed[i]! / factor;
   }
 
   return factor;
@@ -212,9 +215,9 @@ export function multigrid(
     const level: Level = {
       system: current,
       damping: 0,
-      force: new Float64Array(size),
-      guess: new Float64Array(size),
-      left: new Float64Array(size),
+      force: floats(size),
+      guess: floats(size),
+      left: floats(size),
     };
 
     levels.push(level);
@@ -287,7 +290,15 @@ export function solveFem(
   problem: FemProblem,
   options: { tolerance?: number; maxIterations?: number; start?: ArrayLike<number> } = {},
 ): FemSolution {
-  const system = new Stiffness(problem);
+  // What an earlier calculation laid into the shared memory is no longer needed.
+  sharedWork()?.reset();
 
-  return system.solve(problem.force, { ...options, precondition: multigrid(problem, system) ?? undefined });
+  const system = new Stiffness(problem);
+  const solution = system.solve(problem.force, {
+    ...options,
+    precondition: multigrid(problem, system) ?? undefined,
+  });
+
+  // A copy of its own: the shared memory is used again by the next calculation.
+  return { ...solution, displacement: solution.displacement.slice() };
 }
