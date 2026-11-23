@@ -4,7 +4,7 @@
  */
 import { meshVolume } from "@meercad/io";
 import { describe, expect, it } from "vitest";
-import { lightSuggestion, SUGGESTION_TRIANGLES } from "./strengthFinish";
+import { lightTopology, TOPOLOGY_TRIANGLES } from "./strengthFinish";
 
 /** A ball of radius 10 as a grid of triangles. */
 function ball(rings: number): { positions: Float32Array; indices: Uint32Array } {
@@ -50,7 +50,7 @@ const volume = (mesh: { positions: Float32Array; indices: Uint32Array }) => {
 describe("a lighter suggestion", () => {
   it("has fewer triangles and nearly the same volume when over the budget", () => {
     const fine = ball(40);
-    const light = lightSuggestion(fine, 2500);
+    const light = lightTopology(fine, 2500);
 
     expect(fine.indices.length / 3).toBeGreaterThan(6000);
     expect(light.indices.length / 3).toBeLessThanOrEqual(2500);
@@ -60,7 +60,7 @@ describe("a lighter suggestion", () => {
   it("is left alone within the budget", () => {
     const fine = ball(12);
 
-    expect(lightSuggestion(fine)).toBe(fine);
-    expect(SUGGESTION_TRIANGLES).toBe(15000);
+    expect(lightTopology(fine)).toBe(fine);
+    expect(TOPOLOGY_TRIANGLES).toBe(100000);
   });
 });

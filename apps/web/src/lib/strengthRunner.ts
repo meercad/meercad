@@ -3,7 +3,7 @@
  * there are no workers (the tests) it runs in place.
  */
 import { answerStrength, type StrengthAnswer, type StrengthRequest } from "@meercad/model";
-import { lightSuggestion } from "./strengthFinish";
+import { lightTopology } from "./strengthFinish";
 
 export interface StrengthRun {
   answer: Promise<StrengthAnswer | null>;
@@ -14,7 +14,7 @@ export interface StrengthRun {
 export function runStrength(request: StrengthRequest, onProgress: (share: number) => void): StrengthRun {
   if (typeof Worker === "undefined") {
     return {
-      answer: Promise.resolve().then(() => answerStrength(request, onProgress, lightSuggestion)),
+      answer: Promise.resolve().then(() => answerStrength(request, onProgress, lightTopology)),
       cancel: () => undefined,
     };
   }

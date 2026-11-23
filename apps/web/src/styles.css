@@ -5108,7 +5108,7 @@ html[data-compact] .sketch-done {
 }
 /* Strength check and topology suggestion (beta): the same card, with its inputs. */
 .strength-card {
-  width: 320px;
+  width: 350px;
   max-height: calc(100% - 140px);
   overflow-y: auto;
 }
@@ -5121,7 +5121,7 @@ html[data-compact] .sketch-done {
   white-space: nowrap;
 }
 .strength-card input.field {
-  width: 76px;
+  width: 64px;
   flex: none;
 }
 .strength-card select.field {

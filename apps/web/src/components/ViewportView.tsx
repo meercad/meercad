@@ -2,9 +2,10 @@
  * The 3D view: the viewport kept in step with the app (hooks in viewport/hooks.ts, in the order their
  * effects run), its input (viewport/pointer.ts, click.ts, contextMenu.tsx) and what lies over it.
  */
+import { useStrength, viewedScene } from "../lib/strength";
 import { StrengthCard } from "./StrengthCard";
 import type { DisplayMode, Viewport } from "@meercad/viewport";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useKey, usePrefs } from "../lib/keymap";
 import { usePrintCheck } from "../lib/printability";
 import { useTerrainPlace } from "../lib/terrain";
@@ -76,7 +77,15 @@ export function ViewportView() {
   useCreateViewport(host, setVp);
   useGridUnit(viewport);
 
-  const scene = useScene(viewport, output, doc, hidden, sketchId, dialog);
+  // A part with a topology is shown as its shadow, or one of the two alone (see lib/strength.ts).
+  const linkBody = useStrength((state) => state.body);
+  const linkTopology = useStrength((state) => state.topology);
+  const linkView = useStrength((state) => state.view);
+  const viewed = useMemo(
+    () => viewedScene(doc, hidden, { body: linkBody, topology: linkTopology, view: linkView }),
+    [doc, hidden, linkBody, linkTopology, linkView],
+  );
+  const scene = useScene(viewport, output, viewed.doc, viewed.hidden, sketchId, dialog);
   usePhoneInset(viewport, dialog, measure.active, sketchId);
   usePoses(viewport, output, doc.mechanism, dialog);
   useJointGlyphs(viewport, output, doc.mechanism);

@@ -73,3 +73,52 @@ export function loadForce(
 
   return facing.map((value) => (-value / length) * newton) as Vec3;
 }
+
+/** A face's name that survives changes to the part: its tags, joined. */
+export const faceKey = (tags: readonly string[]): string => tags.join("|");
+
+/** The faces of a part (their numbers) with these names; faces the part no longer has are left out. */
+export function facesByKey(mesh: Pick<BodyMesh, "faceTags">, keys: readonly string[]): number[] {
+  const wanted = new Set(keys);
+
+  return mesh.faceTags.flatMap((tags, face) => (tags.length && wanted.has(faceKey(tags)) ? [face] : []));
+}
+
+// Linear red, green, blue: the faces a part is held at, pushed at, and the rest of it.
+const HELD: Vec3 = [0.05, 0.22, 0.75];
+const PUSHED: Vec3 = [0.9, 0.3, 0.03];
+const PLAIN: Vec3 = [0.45, 0.47, 0.5];
+
+/**
+ * The part as loose triangles with a colour per corner, showing where it is held (blue) and where
+ * it is pushed (orange): what the 3D view lays over the part while the set-up is made.
+ */
+export function faceMarkers(
+  mesh: Pick<BodyMesh, "positions" | "indices" | "faceRanges">,
+  holds: readonly number[],
+  loads: readonly number[],
+): { positions: Float32Array; colors: Float32Array } {
+  const positions = new Float32Array(mesh.indices.length * 3);
+  const colors = new Float32Array(mesh.indices.length * 3);
+
+  for (let r = 0; r < mesh.faceRanges.length; r += 3) {
+    const face = mesh.faceRanges[r + 2]!;
+    const color = holds.includes(face) ? HELD : loads.includes(face) ? PUSHED : PLAIN;
+
+    for (let i = mesh.faceRanges[r]!; i < mesh.faceRanges[r]! + mesh.faceRanges[r + 1]!; i++) {
+      positions.set(mesh.positions.subarray(mesh.indices[i]! * 3, mesh.indices[i]! * 3 + 3), i * 3);
+      colors.set(color, i * 3);
+    }
+  }
+
+  return { positions, colors };
+}
+
+/** A number that changes when a part's shape does: tells whether a result still belongs to the part. */
+export function shapeKey(mesh: Pick<BodyMesh, "positions">): string {
+  let sum = 0;
+
+  for (let i = 0; i < mesh.positions.length; i++) sum = (sum * 31 + mesh.positions[i]! * 1000) % 2147483647;
+
+  return `${mesh.positions.length}:${Math.round(sum)}`;
+}

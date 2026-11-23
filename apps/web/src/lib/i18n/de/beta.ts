@@ -31,21 +31,30 @@ export default {
   "The calculation failed.": "Die Berechnung ist fehlgeschlagen.",
   "share of the strength used": "genutzter Anteil der Festigkeit",
   "This part": "Dieses Teil",
-  Before: "Vorher",
-  Suggestion: "Vorschlag",
   "safety factor {factor}": "Sicherheitsfaktor {factor}",
   "gives by {mm} mm at most": "gibt höchstens {mm} mm nach",
   "The part is not held well enough to stand still: hold more faces.":
     "Das Teil ist nicht fest genug eingespannt: weitere Flächen einspannen.",
   "Keep material": "Material behalten",
   "Share of material to keep, per cent": "Anteil des Materials, der bleibt, in Prozent",
-  "Suggest lighter part": "Leichteres Teil vorschlagen",
-  "Suggestion {part}: {share} % of the material.": "Vorschlag {part}: {share} % des Materials.",
   "An estimate on a coarse grid, not a verification: check a part that carries load yourself before relying on it.":
     "Eine Schätzung auf einem groben Gitter, kein Nachweis: Ein tragendes Teil selbst prüfen, bevor du dich darauf verlässt.",
   "Checking the strength": "Festigkeit wird geprüft",
   "Optimising the topology": "Topologie wird optimiert",
-  "Topology suggestion for {part}": "Topologie-Vorschlag für {part}",
-  "Topology suggestion added as a new part. It is a suggestion, not a verified part.":
-    "Topologie-Vorschlag als neues Teil hinzugefügt. Er ist ein Vorschlag, kein geprüftes Teil.",
+  Both: "Beide",
+  Original: "Original",
+  Topology: "Topologie",
+  "Detail of the topology": "Feinheit der Topologie",
+  "Quick, 2 min": "Schnell, 2 min",
+  "Fine, 5 min": "Fein, 5 min",
+  "Keep up to date": "Aktuell halten",
+  "Make topology": "Topologie erzeugen",
+  "Update topology": "Topologie aktualisieren",
+  "The topology is being made again…": "Die Topologie wird neu erzeugt …",
+  "The part or the set-up has changed since the topology was made.":
+    "Das Teil oder die Vorgaben haben sich geändert, seit die Topologie erzeugt wurde.",
+  "Topology: {share} % of the material.": "Topologie: {share} % des Materials.",
+  "Topology of {part}": "Topologie von {part}",
+  "Topology added as a new part. It is a suggestion, not a verified part.":
+    "Topologie als neues Teil hinzugefügt. Sie ist ein Vorschlag, kein geprüftes Teil.",
 };

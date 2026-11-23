@@ -1,6 +1,6 @@
 /** The strength check and the topology suggestion run here, so the app stays responsive meanwhile. */
 import { answerStrength, type StrengthRequest } from "@meercad/model";
-import { lightSuggestion } from "./lib/strengthFinish";
+import { lightTopology } from "./lib/strengthFinish";
 
 const scope = self as unknown as {
   onmessage: (event: MessageEvent<StrengthRequest>) => void;
@@ -12,7 +12,7 @@ scope.onmessage = (event) => {
     answerStrength(
       event.data,
       (progress) => scope.postMessage({ kind: "progress", progress }),
-      lightSuggestion,
+      lightTopology,
     ),
   );
 };
