@@ -9,7 +9,7 @@ import { solveFem } from "./multigrid.js";
 import { cellForce, stresses } from "./solve.js";
 import { strengthCheck, type Strength } from "./strength.js";
 import { smoothSurface } from "./smooth.js";
-import { optimiseTopology, solidify } from "./topology.js";
+import { filterRadius, optimiseTopology, solidify } from "./topology.js";
 
 export interface StrengthJob {
   /** The part's triangles. */
@@ -133,6 +133,9 @@ export interface TriangleSkin {
   indices: Uint32Array;
 }
 
+/** Over how much of the filter radius of the optimisation the skin's edges are rounded. */
+const ROUNDING_SHARE = 0.4;
+
 /** The cubes that stay material whatever they carry: where the part is held and pushed. */
 const keptCells = ({ held, loads }: Setup): number[] => [
   ...held,
@@ -186,16 +189,31 @@ export function suggestTopology(
   });
   const lighter = solidify(grid, density, keep);
   const share = solidVolume(lighter) / solidVolume(grid);
-  const skin = smoothSurface({ grid, density, keep, positions: job.positions, indices: job.indices, share });
-  const mesh = job.finish?.(skin) ?? skin;
 
-  // The check of the suggestion starts from its own triangles again, like the check of any part.
-  return {
-    mesh,
-    share,
-    before,
-    after: check(setup({ ...job, cells: job.checkCells ?? job.cells }, mesh), job.material, job.up),
+  const checked = (rounding: number) => {
+    const skin = smoothSurface({
+      grid,
+      density,
+      keep,
+      positions: job.positions,
+      indices: job.indices,
+      share,
+      rounding,
+    });
+    const mesh = job.finish?.(skin) ?? skin;
+
+    // The check of the suggestion starts from its own triangles again, like the check of any part.
+    return {
+      mesh,
+      after: check(setup({ ...job, cells: job.checkCells ?? job.cells }, mesh), job.material, job.up),
+    };
   };
+
+  // Struts are a few times the filter radius thick: rounded over less than that, they keep their shape.
+  const round = checked(ROUNDING_SHARE * filterRadius(grid));
+
+  // Rounding cut a thin strut through: then the skin stays as it came, edges and all.
+  return { share, before, ...(round.after.converged ? round : checked(0)) };
 }
 
 // Green where little of the strength is used, yellow at half, red from all of it.

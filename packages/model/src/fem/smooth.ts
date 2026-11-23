@@ -19,6 +19,8 @@ export interface SmoothJob {
   share: number;
   /** Raster points per cube edge. */
   fine?: number;
+  /** Over how far (in cubes) corners and edges of the skin are rounded off; 0: not at all. */
+  rounding?: number;
 }
 
 /** Cubes added around the grid, so blurring and reading between cubes never run out of data. */
@@ -200,19 +202,30 @@ export function smoothSurface(job: SmoothJob): { positions: Float32Array; indice
   const collider = new MeshCollider(job.positions, job.indices);
   const deep = deepCells(grid);
 
-  for (let index = 0; index < raster.values.length; index++) {
-    const at = inCubes(index);
-    let value = raster.values[index]! - level;
+  // How far inside the part each raster point lies, in cubes (negative outside); found when asked for.
+  const depth = new Float32Array(raster.values.length).fill(NaN);
 
-    // Material only where the part is: the distance to its surface (in cubes) ends it there.
-    if (value > 0 && !(inside[index] && deep[cellAt(at)])) {
+  const depthAt = (index: number): number => {
+    if (Number.isNaN(depth[index]!)) {
+      const at = inCubes(index);
       const point = at.map((v, axis) => grid.origin[axis]! + v * grid.h) as Vec3;
 
-      value = roundedMin(value, -signedDistance(collider, point) / grid.h);
+      depth[index] = inside[index] && deep[cellAt(at)] ? DEEP : -signedDistance(collider, point) / grid.h;
     }
 
-    raster.values[index] = value;
+    return depth[index]!;
+  };
+
+  for (let index = 0; index < raster.values.length; index++) {
+    const value = raster.values[index]! - level;
+
+    // Material only where the part is: the distance to its surface ends it there.
+    raster.values[index] = value > 0 ? roundedMin(value, depthAt(index)) : value;
   }
+
+  const rounding = job.rounding ?? ROUNDING;
+
+  if (rounding > 0) rounded(raster, rounding * fine, depthAt, keptPoints(raster, job, fine));
 
   dropCrumbs(raster, job, fine);
 
@@ -221,15 +234,26 @@ export function smoothSurface(job: SmoothJob): { positions: Float32Array; indice
     (index) => inCubes(index).map((v, axis) => grid.origin[axis]! + v * grid.h) as Vec3,
   );
   const away = (point: Vec3) => signedDistance(collider, point);
-  // Only corners near the part's surface can leave the part while the skin is evened out.
-  const near = Uint8Array.from({ length: mesh.positions.length / 3 }, (_, corner) =>
-    away(Array.from(mesh.positions.subarray(corner * 3, corner * 3 + 3)) as Vec3) > -NEAR * grid.h ? 1 : 0,
-  );
+  const keptCell = new Uint8Array(cellCount(grid));
 
-  // A corner that has left the part is set back onto its surface, straight down.
-  const backOnPart = (point: Vec3): Vec3 => {
+  for (let i = 0; i < job.keep.length; i++) keptCell[job.keep[i]!] = 1;
+
+  // Corners near the part's surface (1) can leave the part while the skin is evened out. Corners on
+  // it at a kept cube (2) stay on it (they may slide along it): the faces a part is held and pushed
+  // at keep their edges.
+  const near = Uint8Array.from({ length: mesh.positions.length / 3 }, (_, corner) => {
+    const point = Array.from(mesh.positions.subarray(corner * 3, corner * 3 + 3)) as Vec3;
+    const distance = away(point) / grid.h;
+    const cell = cellAt(point.map((value, axis) => (value - grid.origin[axis]!) / grid.h) as Vec3);
+
+    return Math.abs(distance) < ON_FACE && cell >= 0 && keptCell[cell] ? 2 : distance > -NEAR ? 1 : 0;
+  });
+
+  // A corner that has left the part is set back onto its surface, straight down; a corner that
+  // belongs on the surface (`always`) also when it has sunk into the part.
+  const backOnPart = (point: Vec3, always: boolean): Vec3 => {
     const distance = away(point);
-    if (!(distance > 0)) return point;
+    if (!always && !(distance > 0)) return point;
 
     const reach = 0.01 * grid.h;
     const slope = point.map((_, axis) => {
@@ -245,6 +269,8 @@ export function smoothSurface(job: SmoothJob): { positions: Float32Array; indice
   return { positions: evened(mesh.positions, mesh.indices, near, backOnPart), indices: mesh.indices };
 }
 
+/** A corner closer to the part's surface than this (in cubes) lies on it. */
+const ON_FACE = 0.3;
 /**
  * Corners further inside the part than this (in cubes) never reach its surface while the skin is
  * evened out, and need not be watched.
@@ -268,7 +294,7 @@ function evened(
   positions: Float32Array,
   indices: Uint32Array,
   near: Uint8Array,
-  backOnPart: (point: Vec3) => Vec3,
+  backOnPart: (point: Vec3, always: boolean) => Vec3,
 ): Float32Array {
   const linked: Set<number>[] = Array.from(near, () => new Set());
 
@@ -300,7 +326,9 @@ function evened(
     if (round % 2) {
       near.forEach((watched, corner) => {
         if (watched) {
-          next.set(backOnPart(Array.from(next.subarray(corner * 3, corner * 3 + 3)) as Vec3), corner * 3);
+          const point = Array.from(next.subarray(corner * 3, corner * 3 + 3)) as Vec3;
+
+          next.set(backOnPart(point, watched === 2), corner * 3);
         }
       });
     }
@@ -326,6 +354,107 @@ function roundedMin(a: number, b: number): number {
   const near = Math.max(BLEND - Math.abs(a - b), 0) / BLEND;
 
   return Math.min(a, b) - (near * near * BLEND) / 4;
+}
+
+/** The depth given to raster points far inside the part: more than any distance that matters. */
+const DEEP = 1000;
+/** Over how far (in cubes) corners and edges of the skin are rounded off, unless a job says. */
+const ROUNDING = 1.2;
+/** The skin's field is cut off at ±1 this many cubes⁻¹ from the skin: all that rounding needs of it. */
+const STEEP = 2;
+
+/**
+ * Rounds the skin: struts cut flat by the part's surface get round shoulders, sharp edges become
+ * soft, corners between struts fill in a little. The field (positive in the material) is cut off
+ * to ±1 near the skin and blurred along each axis in turn; where it changes sign afterwards lies
+ * the rounded skin. Large flat faces stay where they are (the blur is the same on both sides),
+ * the kept cubes stay whole, and the skin still never leaves the part.
+ */
+function rounded(raster: Field, sigma: number, depthAt: (index: number) => number, kept: Uint8Array): void {
+  const reach = Math.ceil(3 * sigma);
+  const weights = Array.from({ length: reach + 1 }, (_, k) => Math.exp(-(k * k) / (2 * sigma * sigma)));
+  const total = weights.reduce((sum, weight, k) => sum + (k ? 2 : 1) * weight, 0);
+  const stride = [1, raster.nx, raster.nx * raster.ny];
+  const size = [raster.nx, raster.ny, raster.nz];
+  const sharp = raster.values.map((value) => Math.max(-1, Math.min(1, value * STEEP)));
+  let from = sharp;
+
+  for (let axis = 0; axis < 3; axis++) {
+    const to = new Float32Array(from.length);
+
+    for (let index = 0; index < from.length; index++) {
+      const along = Math.floor(index / stride[axis]!) % size[axis]!;
+      let sum = weights[0]! * from[index]!;
+
+      for (let k = 1; k <= reach; k++) {
+        // Past the rim of the raster there is no material.
+        const before = along - k >= 0 ? from[index - k * stride[axis]!]! : -1;
+        const after = along + k < size[axis]! ? from[index + k * stride[axis]!]! : -1;
+
+        sum += weights[k]! * (before + after);
+      }
+
+      to[index] = sum / total;
+    }
+
+    from = to;
+  }
+
+  // Rounding alone would thin every strut: the skin is moved out until it holds as much as before.
+  const shift = levelOfCount(
+    from,
+    sharp.reduce((count, value) => count + (value > 0 ? 1 : 0), 0),
+  );
+
+  for (let index = 0; index < from.length; index++) {
+    // Where the part is held or pushed nothing is rounded away: those faces and their edges stay.
+    const value = kept[index] ? Math.max(from[index]! - shift, sharp[index]!) : from[index]! - shift;
+
+    raster.values[index] = value > 0 ? Math.min(value, depthAt(index) * STEEP) : value;
+  }
+}
+
+/** The level above which `count` of the values lie (to a thousandth), found by halving. */
+function levelOfCount(values: Float32Array, count: number): number {
+  let low = -1;
+  let high = 1;
+
+  for (let round = 0; round < 11; round++) {
+    const level = (low + high) / 2;
+    let above = 0;
+
+    for (let i = 0; i < values.length; i++) above += values[i]! > level ? 1 : 0;
+
+    if (above > count) low = level;
+    else high = level;
+  }
+
+  return (low + high) / 2;
+}
+
+/** 1 for the raster points in or on the kept cubes. */
+function keptPoints(raster: Field, job: SmoothJob, fine: number): Uint8Array {
+  const { grid } = job;
+  const kept = new Uint8Array(raster.values.length);
+
+  for (let i = 0; i < job.keep.length; i++) {
+    const cell = job.keep[i]!;
+    const at = [cell % grid.nx, Math.floor(cell / grid.nx) % grid.ny, Math.floor(cell / (grid.nx * grid.ny))];
+
+    for (let dz = 0; dz <= fine; dz++) {
+      for (let dy = 0; dy <= fine; dy++) {
+        for (let dx = 0; dx <= fine; dx++) {
+          kept[
+            (at[0]! + 1) * fine +
+              dx +
+              raster.nx * ((at[1]! + 1) * fine + dy + raster.ny * ((at[2]! + 1) * fine + dz))
+          ] = 1;
+        }
+      }
+    }
+  }
+
+  return kept;
 }
 
 /** 1 for the cubes with material all around them (edges and corners too): far from the part's surface. */
@@ -378,6 +507,9 @@ function dropCrumbs(raster: Field, job: SmoothJob, fine: number): void {
         raster.nx * (Math.round((at[1]! + 1.5) * fine) + raster.ny * Math.round((at[2]! + 1.5) * fine)),
     );
   }
+
+  // No kept cube with material in its middle (rounded away at a corner): nothing to hang on.
+  if (!open.length) return;
 
   while (open.length) around(raster, open.pop()!, reach);
 

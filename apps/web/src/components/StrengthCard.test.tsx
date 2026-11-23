@@ -252,6 +252,9 @@ describe("the topology", () => {
   });
 
   it("says why when the part is not held, or gone", async () => {
+    // A result of the model still on its way would clear the message again.
+    await rebuilt();
+    await settle(50);
     await act(async () => useStrength.setState({ holds: ["nothing"] }));
     await act(async () => checkNow());
     expect(useStrength.getState().error).toBe("hold");

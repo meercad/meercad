@@ -93,9 +93,15 @@ export function optimiseTopology(job: TopologyJob): TopologyResult {
   return { density, steps: step };
 }
 
+/**
+ * Over how many cubes the cubes of a grid share their weights: about how thick its struts come out, halved.
+ */
+export const filterRadius = (grid: VoxelGrid): number =>
+  Math.max(LEAST_RADIUS, Math.min(RADIUS, Math.min(grid.nx, grid.ny, grid.nz) / 4));
+
 /** For every cube the material cubes around it (itself too) with their weights, as [cell, weight, …]. */
 function neighbourhood(grid: VoxelGrid): (cell: number) => number[] {
-  const radius = Math.max(LEAST_RADIUS, Math.min(RADIUS, Math.min(grid.nx, grid.ny, grid.nz) / 4));
+  const radius = filterRadius(grid);
   const reach = Math.floor(radius);
 
   return (cell) => {
