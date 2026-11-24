@@ -82,7 +82,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
   const base = useApp((state) => state.baseOutput);
   const sketchId = useApp((state) => state.sketchId);
   const measure = useApp((state) => state.measure.active);
-  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [tip, setTip] = useState<{ x: number; y: number; text: string; hint?: string } | null>(null);
   /** Push/pull drafts follow the drag direction (out = add, in = remove). */
   const autoMode = useRef(false);
   /** Where a push/pull was grabbed, so the arrow stays at the clicked spot once its feature dialog opens. */
@@ -103,7 +103,19 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
               : fmtLen(v);
     viewport.onHandleDrag = (handle, v, screen) =>
       setTip(
-        handle && screen && !handle.hidden ? { x: screen[0], y: screen[1], text: label(handle.id, v) } : null,
+        handle && screen && !handle.hidden
+          ? {
+              x: screen[0],
+              y: screen[1],
+              text: label(handle.id, v),
+              // Armed (the tool started on a selection): how to set the value, mouse or finger.
+              hint: viewport.handleArmed
+                ? touchOnly()
+                  ? t("Drag anywhere · Lift to set")
+                  : t("Click to set · Esc cancels")
+                : undefined,
+            }
+          : null,
       );
 
     return () => {
@@ -183,6 +195,9 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
 
     if (d) {
       const feature = d.feature;
+      // Started on a selection: the arrow is live at once, a click (or lifting the finger) sets it.
+      const armed = (arm: number | undefined): { arm?: string; onCommit?: Handle["onCommit"] } =>
+        arm === undefined ? {} : { arm: `${feature.id}#${arm}`, onCommit: () => void commitDialog() };
 
       if (feature.op === "extrude" && feature.extent !== "through_all") {
         const a = profileAnchor(out, feature.profile);
@@ -199,6 +214,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             value,
             onDrag: (v) => updateDraft(extrudePatch(v)),
             onEnd: () => undefined,
+            ...armed(d.arm),
           },
         ];
       }
@@ -216,6 +232,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             min: 0.05,
             onDrag: (v) => updateDraft(feature.op === "fillet" ? { radius: v } : { distance: v }),
             onEnd: () => undefined,
+            ...armed(d.arm),
           },
         ];
       }
@@ -306,6 +323,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
             min: 0.05,
             onDrag: (v) => updateDraft({ thickness: v }),
             onEnd: () => undefined,
+            ...armed(d.arm),
           },
         ];
       }
@@ -709,6 +727,7 @@ export function Manipulators({ viewport }: { viewport: Viewport }) {
       {tip ? (
         <div className="cursor-tip" style={{ left: tip.x, top: tip.y }}>
           {tip.text}
+          {tip.hint ? <div className="cursor-tip-hint">{tip.hint}</div> : null}
         </div>
       ) : null}
       {!dialog && !sketchId && !measure && selection.length ? <QuickActions selection={selection} /> : null}
@@ -983,6 +1002,15 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
         );
       })}
     </div>
+  );
+}
+
+/** A finger or pen only, no mouse or trackpad (iPhone, iPad without one). */
+function touchOnly(): boolean {
+  return (
+    typeof matchMedia === "function" &&
+    matchMedia("(pointer: coarse)").matches &&
+    !matchMedia("(any-pointer: fine)").matches
   );
 }
 
