@@ -12,6 +12,7 @@ import {
 } from "@salusoft89/planegcs";
 import type { SketchConstraint, SketchEntity } from "@meercad/schema";
 import {
+  splineDisplayPoints,
   splinePoints,
   sweep,
   type SolvedCurve,
@@ -22,6 +23,60 @@ import {
   dot2,
   sub2,
 } from "./geometry.js";
+
+type SplineEntity = Extract<SketchEntity, { type: "spline" }>;
+
+/**
+ * The indices of an open spline's ends that are tangent to another curve: the tangency sets the
+ * direction there, so the point's own tangent does not count.
+ */
+export function tangentEnds(
+  spline: SplineEntity,
+  entities: readonly SketchEntity[],
+  constraints: readonly { type: string; a?: unknown; b?: unknown }[],
+): Set<number> {
+  const out = new Set<number>();
+  if (spline.closed) return out;
+
+  const ends = (id: unknown): string[] => {
+    const e = entities.find((x) => x.id === id);
+    if (e?.type === "line") return [e.p1, e.p2];
+    if (e?.type === "arc") return [e.start, e.end];
+    if (e?.type === "spline" && !e.closed) return [e.points[0]!, e.points[e.points.length - 1]!];
+
+    return [];
+  };
+
+  const last = spline.points.length - 1;
+
+  for (const c of constraints) {
+    if (c.type !== "tangent" || (c.a !== spline.id && c.b !== spline.id)) continue;
+
+    const other = ends(c.a === spline.id ? c.b : c.a);
+    if (other.includes(spline.points[0]!)) out.add(0);
+    if (other.includes(spline.points[last]!)) out.add(last);
+  }
+
+  return out;
+}
+
+/** A spline's own tangents as the curve uses them (see `tangentEnds`); none when no point has one. */
+export function ownTangents(
+  spline: SplineEntity,
+  entities: readonly SketchEntity[],
+  constraints: readonly { type: string; a?: unknown; b?: unknown }[],
+): (Vec2 | null)[] | undefined {
+  if (!spline.tangents?.some((x) => !!x)) return undefined;
+
+  const locked = tangentEnds(spline, entities, constraints);
+  const tangents = spline.points.map((_, i) => {
+    const own = spline.tangents![i];
+
+    return own && !locked.has(i) ? ([own[0], own[1]] as Vec2) : null;
+  });
+
+  return tangents.some((x) => !!x) ? tangents : undefined;
+}
 
 /** A sketch constraint whose expression has been evaluated (mm / degrees). */
 export type ResolvedConstraint = SketchConstraint extends infer C
@@ -133,11 +188,14 @@ export class SketchSolver {
         }
       } else if (entity.type === "spline") {
         const through = entity.points.map(pt);
+        const tangents = ownTangents(entity, input.entities, input.constraints);
         curves.push({
           id: entity.id,
           kind: "spline",
-          pts: splinePoints(through, !!entity.closed),
+          pts: splinePoints(through, !!entity.closed, tangents),
+          fine: splineDisplayPoints(through, !!entity.closed, tangents),
           through,
+          ...(tangents ? { tangents } : {}),
           points: entity.points,
           closed: !!entity.closed,
           construction,

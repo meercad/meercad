@@ -328,6 +328,53 @@ describe("patternCurves", () => {
     ]);
   });
 
+  it("copies a spline's own tangents: the same in a row, turned round a centre", async () => {
+    const { patternCurves } = await import("./index.js");
+    const es: SketchEntity[] = [
+      { id: "a", type: "point", x: 10, y: 0 },
+      { id: "b", type: "point", x: 20, y: 0 },
+      { id: "sp", type: "spline", points: ["a", "b"], tangents: [[1, 0], null] },
+    ];
+    const tangentsOf = (d: { entities: SketchEntity[] }) =>
+      d.entities
+        .filter((e) => e.type === "spline" && e.id !== "sp")
+        .map((e) => (e.type === "spline" ? e.tangents : undefined));
+
+    const row = patternCurves({ entities: es, constraints: [] }, positions(es), ["sp"], {
+      kind: "linear",
+      count: 2,
+      dx: 0,
+      dy: 10,
+    });
+    expect(tangentsOf(row)).toEqual([[[1, 0], null]]);
+
+    const ring = patternCurves({ entities: es, constraints: [] }, positions(es), ["sp"], {
+      kind: "circular",
+      count: 2,
+      angle: 90,
+      center: [0, 0],
+    });
+    const [turned] = tangentsOf(ring);
+    expect(turned![0]![0]).toBeCloseTo(0, 9);
+    expect(turned![0]![1]).toBeCloseTo(1, 9);
+    expect(turned![1]).toBeNull();
+
+    // A spline without own tangents gets none.
+    const plain = es.map((e) => (e.type === "spline" ? { id: e.id, type: e.type, points: e.points } : e));
+    const copy = patternCurves(
+      { entities: plain as SketchEntity[], constraints: [] },
+      positions(es),
+      ["sp"],
+      {
+        kind: "linear",
+        count: 2,
+        dx: 0,
+        dy: 10,
+      },
+    );
+    expect(tangentsOf(copy)).toEqual([undefined]);
+  });
+
   it("keeps shared corners shared in each copy", async () => {
     const { patternCurves } = await import("./index.js");
     const sk = { entities: rect(0, 0, 10, 5), constraints: [] };

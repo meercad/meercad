@@ -741,10 +741,12 @@ export function sketchCurves(sketchId: string): Curve2[] {
   return (
     (sketchView?.curves ?? [])
       .filter((curve) => !curve.construction)
-      // Splines go out as the fine polyline of their samples.
+      // Splines go out as the fine polyline of their samples (finer where they bend).
       .flatMap((curve): Curve2[] =>
         curve.kind === "spline"
-          ? curve.pts.slice(1).map((b, k) => ({ kind: "line", a: curve.pts[k]!, b }))
+          ? (curve.fine ?? curve.pts)
+              .slice(1)
+              .map((b, k) => ({ kind: "line", a: (curve.fine ?? curve.pts)[k]!, b }))
           : [
               curve.kind === "line"
                 ? { kind: "line", a: curve.a, b: curve.b }
