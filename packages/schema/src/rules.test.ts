@@ -54,6 +54,19 @@ const refuses = (d: unknown, pattern: RegExp) => {
 describe("sketch rules", () => {
   it("accepts a sound sketch", () => expect(errorsOf(doc([sk(), ex]))).toEqual([]));
 
+  it("refuses a spline whose tangents do not match its points one by one", () => {
+    const spline = (tangents: unknown[]) =>
+      sk({
+        entities: [
+          ...rect.entities,
+          { id: "s1", type: "spline", points: ["p1", "p2", "p3"], tangents } as never,
+        ],
+      });
+
+    expect(errorsOf(doc([spline([null, [1, 0], null]), ex]))).toEqual([]);
+    refuses(doc([spline([null, [1, 0]]), ex]), /spline s1 needs one tangent \(or null\) per point/);
+  });
+
   it.each([
     ["coincident", { type: "coincident", a: "p1", b: "nope" }, /unknown point "nope"/],
     ["horizontal", { type: "horizontal", line: "nope" }, /unknown line "nope"/],
