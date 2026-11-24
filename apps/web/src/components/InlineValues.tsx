@@ -17,7 +17,7 @@ import {
 import { faceAnchor, profileAnchor } from "../lib/anchors";
 import { Link2Off } from "lucide-react";
 import { evaluate } from "@meercad/model";
-import { apply, applyQuiet, toast, useApp } from "../store";
+import { apply, toast, useApp } from "../store";
 import { usePrefs } from "../lib/keymap";
 import { parseExpr } from "./ExprInput";
 import { ValueInput, type ValueUnit } from "./ValueInput";
@@ -46,6 +46,7 @@ import {
 import { dimensionColor } from "../sketch/editor/scene";
 import { boxToQuad, dimensionNumber, planeCorners, type PlaneQuad, type Turn } from "../lib/planeLabel";
 import { planeSupport } from "../lib/planeSupport";
+import { storedLabel, withLabel } from "../lib/labelDrag";
 import { dropMirrors, mirror } from "../lib/sceneMirror";
 import { anchorLine, changedAngle, holdLine, keepLine } from "../lib/angleHold";
 import { preloadSolver, solveOnModel } from "../sketch/solveOnModel";
@@ -61,6 +62,11 @@ let screenPixel = 0;
 
 /** Where measured sizes (not dimensions yet) were dragged to, by their key: kept while the app runs. */
 const movedMeasures = new Map<string, Vec2>();
+/**
+ * Sketch dimensions being dragged (by item key), shown at that place until the drag ends and the
+ * sketch gets it (lib/labelDrag.ts).
+ */
+const movingLabels = new Map<string, Vec2>();
 /** Lays the values out again (set by InlineValues while it is shown). */
 let refreshValues: () => void = () => undefined;
 
@@ -420,9 +426,12 @@ function sketchItems(
     if (only && !constraintRefs(constraint).some((r) => only.has(r)) && !sizedViaEqual) continue;
     if (ids && !ids.has(constraint.id)) continue;
 
+    const key = `${sketch.id}.${constraint.id}`;
+    const moving = movingLabels.get(key);
+    const shown = moving ? { ...constraint, label: storedLabel(moving) } : constraint;
     // Lengths, distances and angles drawn like a technical drawing's, their value on the line.
-    const drawing = dimensionDrawing(constraint, { points: pts, curves: view.curves }, sizes, inside, onFace);
-    let at: Vec2 | null = drawing?.text.at ?? constraint.label ?? null;
+    const drawing = dimensionDrawing(shown, { points: pts, curves: view.curves }, sizes, inside, onFace);
+    let at: Vec2 | null = drawing?.text.at ?? shown.label ?? null;
 
     if (!at) {
       if (constraint.type === "length") {
@@ -443,20 +452,28 @@ function sketchItems(
     const prefix = constraint.type === "diameter" ? "⌀ " : constraint.type === "radius" ? "R " : "";
 
     items.push({
-      key: `${sketch.id}.${constraint.id}`,
+      key,
       // Slid along the sketch normal to the picked face or edge, so the label sits on the model.
       at: placed(view.frame, at, onto),
       bare: true,
       ...(drawing
         ? inWorld(drawing, view.frame, onto, false, constraint.type === "angle")
-        : constraint.label
-          ? { drawn: { lines: leaderLines(constraint, view, onto), arrows: [] } }
+        : shown.label
+          ? { drawn: { lines: leaderLines(shown, view, onto), arrows: [] } }
           : {}),
       ...(drawing && constraint.type !== "angle"
         ? {
-            grip: dimensionGrip(`${sketch.id}.${constraint.id}`, drawing, view.frame, onto, (label, quiet) =>
-              commitLabel(sketch, constraint.id, label, quiet),
-            ),
+            // Only the picture follows the drag; the sketch gets the place once, on release.
+            grip: dimensionGrip(key, drawing, view.frame, onto, (label, end) => {
+              if (!end) {
+                movingLabels.set(key, label);
+
+                return refreshValues();
+              }
+
+              movingLabels.delete(key);
+              commitLabel(sketch, constraint.id, label);
+            }),
           }
         : {}),
       // A length's line moves parallel to itself; an angle's arc stays where it is.
@@ -981,17 +998,11 @@ export function InlineInput({
 }
 
 /** Puts a sketch dimension's value where it was dragged to (sketch coordinates, 0.01 mm). */
-function commitLabel(sketch: SketchFeature, constraintId: string, at: Vec2, quiet = false): void {
-  const label: [number, number] = [+at[0].toFixed(2), +at[1].toFixed(2)];
-
-  (quiet ? applyQuiet : apply)({
+function commitLabel(sketch: SketchFeature, constraintId: string, at: Vec2): void {
+  apply({
     type: "edit_feature",
     id: sketch.id,
-    patch: {
-      constraints: sketch.constraints.map((x) =>
-        x.id === constraintId ? ({ ...x, label } as SketchConstraint) : x,
-      ),
-    },
+    patch: { constraints: withLabel(sketch.constraints, constraintId, at) },
   });
 }
 
@@ -1277,14 +1288,14 @@ const MIRROR = "value:";
 
 /**
  * The grip of a dimension's line on the model: dragged across it, the dimension moves parallel to
- * itself (its value's place, stored in the sketch); one undo step for the drag.
+ * itself (its value's place, stored in the sketch); `to` hears each move and, with `end`, the release.
  */
 function dimensionGrip(
   id: string,
   drawing: DimensionDrawing,
   frame: Frame,
   onto: V3 | undefined,
-  to: (label: Vec2, quiet: boolean) => void,
+  to: (label: Vec2, end: boolean) => void,
 ): Handle {
   const { at, up } = drawing.text;
   const line = drawing.lines[0]!;
@@ -1297,11 +1308,11 @@ function dimensionGrip(
 
   let moved = false;
 
-  const move = (offset: number) => {
+  const move = (offset: number, end: boolean) => {
     if (offset === 0 && !moved) return;
 
-    to([at[0] + up[0] * offset, at[1] + up[1] * offset], moved);
     moved = true;
+    to([at[0] + up[0] * offset, at[1] + up[1] * offset], end);
   };
 
   return {
@@ -1311,7 +1322,7 @@ function dimensionGrip(
     value: 0,
     hidden: true,
     grip: [placed(frame, line.a, onto), placed(frame, line.b, onto)],
-    onDrag: move,
-    onEnd: move,
+    onDrag: (offset) => move(offset, false),
+    onEnd: (offset) => move(offset, true),
   };
 }

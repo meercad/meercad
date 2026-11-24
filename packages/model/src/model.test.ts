@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MeercadDocument } from "@meercad/schema";
+import type { MeercadDocument, SketchFeature } from "@meercad/schema";
 import { evaluate, resolveParams } from "./expr.js";
 import { FeatureError, RebuildEngine, type KernelBackend } from "./rebuild.js";
 import { DocumentStore, OpError } from "./store.js";
@@ -156,6 +156,37 @@ describe("RebuildEngine", () => {
     bad.release();
     expect(k.disposed).toBe(2);
     expect(e.rebuild(doc(10)).firstRecomputed).toBe(-1);
+  });
+
+  it("builds nothing again when only a sketch dimension's value moved", () => {
+    const k = fake();
+    const e = new RebuildEngine(k);
+
+    const sized = (label?: [number, number], value = 40): MeercadDocument => {
+      const d = doc(10);
+      d.features[0] = {
+        ...(d.features[0] as SketchFeature),
+        entities: [
+          { id: "p1", type: "point", x: 0, y: 0 },
+          { id: "p2", type: "point", x: 40, y: 0 },
+          { id: "l1", type: "line", p1: "p1", p2: "p2" },
+        ],
+        constraints: [
+          { id: "c1", type: "length", line: "l1", value, ...(label ? { label } : {}) },
+          { id: "c2", type: "horizontal", line: "l1" },
+        ],
+      };
+
+      return d;
+    };
+
+    e.rebuild(sized());
+    k.runs.length = 0;
+    expect(e.rebuild(sized([20, -8])).firstRecomputed).toBe(-1);
+    expect(e.rebuild(sized([20, 12])).firstRecomputed).toBe(-1);
+    expect(k.runs).toEqual([]);
+    // Its value is geometry: that builds again.
+    expect(e.rebuild(sized([20, 12], 50)).firstRecomputed).toBe(0);
   });
 
   it("reports errors with hints and passes state through", () => {
