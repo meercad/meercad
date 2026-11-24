@@ -163,6 +163,10 @@ export const definitions: Record<string, Json> = {
         type: { const: "spline" },
         points: arr(id, { minItems: 2, maxItems: 500 }),
         closed: bool,
+        tangents: arr(oneOf({ type: "null" }, vec2), {
+          maxItems: 500,
+          description: "Per point: its own tangent (the handle's forward arm, mm) or null for automatic.",
+        }),
         ...construction,
       },
       ["id", "type", "points"],

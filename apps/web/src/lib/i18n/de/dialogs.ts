@@ -87,7 +87,8 @@ export default {
   "Pick the parts to scale": "Wähle die Teile zum Skalieren",
   "Pick the face of the part to move": "Wähle die Fläche des Teils, das bewegt wird",
   "Pick the face to set it onto": "Wähle die Fläche, auf die es gesetzt wird",
-  "Tap a flat face where the part goes": "Tippe auf eine plane Fläche, wo das Teil hin soll",
+  "Tap a flat face or the ground where the part goes":
+    "Tippe auf eine plane Fläche oder den Boden, wo das Teil hin soll",
   "Pick the side faces to draft": "Wähle die Seitenflächen für die Formschräge",
   "Pick the faces to move": "Wähle die Flächen, die versetzt werden sollen",
   "Pick the rib's line in a sketch": "Wähle die Linie der Rippe in einer Skizze",

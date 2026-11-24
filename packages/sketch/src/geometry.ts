@@ -127,12 +127,18 @@ export type SolvedCurve =
       construction: boolean;
       external: boolean;
     }
-  /** Smooth curve through the points `through` (ids `points`); `pts` samples it densely, ends included. */
+  /**
+   * Smooth curve through the points `through` (ids `points`); `pts` samples it densely, ends
+   * included, `fine` finer still where it bends (for drawing). `tangents` are the points' own
+   * tangents (null: automatic).
+   */
   | {
       id: string;
       kind: "spline";
       pts: Vec2[];
+      fine?: Vec2[];
       through: Vec2[];
+      tangents?: (Vec2 | null)[];
       points: string[];
       closed: boolean;
       construction: boolean;
@@ -143,14 +149,28 @@ export type SolvedCurve =
 export const SPLINE_SAMPLES = 16;
 
 /**
- * A centripetal Catmull-Rom spline through the points (no cusps or loops within a span, no
- * overshoot), sampled SPLINE_SAMPLES times per span. Open ends repeat their end point's neighbour
- * mirrored, so the curve leaves straight towards the next point.
+ * A spline point's handle: where the curve leaves the point backwards (`back`) and forwards
+ * (`ahead`), as offsets from the point. They are the inner control points of the cubic Bézier
+ * spans on either side, so the curve runs along them.
  */
-export function splinePoints(through: readonly Vec2[], closed = false): Vec2[] {
+export interface SplineArms {
+  back: Vec2;
+  ahead: Vec2;
+}
+
+/**
+ * The handles of a spline's points. A point without its own tangent (`tangents[i]` missing or
+ * null) gets the centripetal Catmull-Rom tangent (no cusps or loops within a span, no
+ * overshoot); open ends repeat their neighbour mirrored, so the curve leaves straight towards the
+ * next point. A point's own tangent is its forward arm, the backward arm mirrors it.
+ */
+export function splineArms(
+  through: readonly Vec2[],
+  closed = false,
+  tangents?: readonly (Vec2 | null | undefined)[],
+): SplineArms[] {
   const n = through.length;
-  if (n < 2) return [...through];
-  if (n === 2 && !closed) return [through[0]!, through[1]!];
+  if (n < 2) return through.map(() => ({ back: [0, 0], ahead: [0, 0] }));
 
   const at = (i: number): Vec2 => {
     if (closed) return through[((i % n) + n) % n]!;
@@ -163,33 +183,125 @@ export function splinePoints(through: readonly Vec2[], closed = false): Vec2[] {
     return through[i]!;
   };
 
-  const out: Vec2[] = [through[0]!];
+  // Knot spacing by the square root of the chord lengths (centripetal).
+  const dt = (a: Vec2, b: Vec2) => Math.max(Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])), 1e-9);
+
+  return through.map((p, i) => {
+    const own = tangents?.[i];
+    if (own) return { back: [-own[0], -own[1]], ahead: [own[0], own[1]] };
+
+    const [p0, p2] = [at(i - 1), at(i + 1)];
+    const [d0, d1] = [dt(p0, p), dt(p, p2)];
+    // The curve's velocity at the point (Barry-Goldman), scaled to each side's span.
+    const v = [0, 1].map(
+      (k) => (p[k]! - p0[k]!) / d0 - (p2[k]! - p0[k]!) / (d0 + d1) + (p2[k]! - p[k]!) / d1,
+    ) as Vec2;
+
+    return { back: [(-v[0] * d0) / 3, (-v[1] * d0) / 3], ahead: [(v[0] * d1) / 3, (v[1] * d1) / 3] };
+  });
+}
+
+/** The cubic Bézier spans of a spline: start, two control points, end. */
+export function splineSpans(
+  through: readonly Vec2[],
+  closed = false,
+  tangents?: readonly (Vec2 | null | undefined)[],
+): [Vec2, Vec2, Vec2, Vec2][] {
+  const n = through.length;
+  if (n < 2) return [];
+
+  const arms = splineArms(through, closed, tangents);
   const spans = closed ? n : n - 1;
 
-  for (let i = 0; i < spans; i++) {
-    const [p0, p1, p2, p3] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
-    // Knot spacing by the square root of the chord lengths (centripetal).
-    const dt = (a: Vec2, b: Vec2) => Math.max(Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])), 1e-9);
-    const t0 = 0,
-      t1 = t0 + dt(p0, p1),
-      t2 = t1 + dt(p1, p2),
-      t3 = t2 + dt(p2, p3);
+  return Array.from({ length: spans }, (_, i) => {
+    const [a, b] = [through[i]!, through[(i + 1) % n]!];
+    const [out, back] = [arms[i]!.ahead, arms[(i + 1) % n]!.back];
 
+    return [a, [a[0] + out[0], a[1] + out[1]], [b[0] + back[0], b[1] + back[1]], b];
+  });
+}
+
+function bezier([a, b, c, d]: readonly [Vec2, Vec2, Vec2, Vec2], s: number): Vec2 {
+  const r = 1 - s;
+  const [w0, w1, w2, w3] = [r * r * r, 3 * r * r * s, 3 * r * s * s, s * s * s];
+
+  return [w0 * a[0] + w1 * b[0] + w2 * c[0] + w3 * d[0], w0 * a[1] + w1 * b[1] + w2 * c[1] + w3 * d[1]];
+}
+
+/** Whether any point of the spline has its own tangent. */
+const hasOwn = (tangents?: readonly (Vec2 | null | undefined)[]) => !!tangents?.some((x) => !!x);
+
+/**
+ * The spline through the points sampled SPLINE_SAMPLES times per span (an open spline of two
+ * points without tangents is just its two ends). Regions and the model are built from these
+ * samples, so their number per span stays fixed.
+ */
+export function splinePoints(
+  through: readonly Vec2[],
+  closed = false,
+  tangents?: readonly (Vec2 | null | undefined)[],
+): Vec2[] {
+  return sampleSpans(through, closed, tangents);
+}
+
+/** Largest turn of the drawn curve between two samples (radians), about 1.5°. */
+const DISPLAY_TURN = Math.PI / 120;
+/** How often a stretch between two of the model's samples is halved at most for drawing. */
+const DISPLAY_DEPTH = 6;
+
+/** The angle between two directions (radians, 0 when one of them is empty). */
+function turnBetween(u: Vec2, w: Vec2): number {
+  if (!Math.hypot(u[0], u[1]) || !Math.hypot(w[0], w[1])) return 0;
+
+  return Math.abs(Math.atan2(u[0] * w[1] - u[1] * w[0], u[0] * w[0] + u[1] * w[1]));
+}
+
+/**
+ * The spline sampled for drawing: the model's samples (`splinePoints`), and more between them
+ * where it bends, so that it turns no more than about 1.5° from one sample to the next at any zoom.
+ */
+export function splineDisplayPoints(
+  through: readonly Vec2[],
+  closed = false,
+  tangents?: readonly (Vec2 | null | undefined)[],
+): Vec2[] {
+  return sampleSpans(through, closed, tangents, (span, s0, s1, out) => {
+    const refine = (a: number, pa: Vec2, b: number, pb: Vec2, depth: number) => {
+      const m = (a + b) / 2;
+      const pm = bezier(span, m);
+      const bent =
+        turnBetween([pm[0] - pa[0], pm[1] - pa[1]], [pb[0] - pm[0], pb[1] - pm[1]]) > DISPLAY_TURN / 2;
+
+      if (bent && depth < DISPLAY_DEPTH) {
+        refine(a, pa, m, pm, depth + 1);
+        refine(m, pm, b, pb, depth + 1);
+      } else if (depth) {
+        out.push(pm);
+      }
+    };
+
+    refine(s0, bezier(span, s0), s1, bezier(span, s1), 0);
+  });
+}
+
+function sampleSpans(
+  through: readonly Vec2[],
+  closed: boolean,
+  tangents: readonly (Vec2 | null | undefined)[] | undefined,
+  /** Adds samples strictly between the span's parameters `s0` and `s1` (display only). */
+  between?: (span: readonly [Vec2, Vec2, Vec2, Vec2], s0: number, s1: number, out: Vec2[]) => void,
+): Vec2[] {
+  const n = through.length;
+  if (n < 2) return [...through];
+  if (n === 2 && !closed && !hasOwn(tangents)) return [through[0]!, through[1]!];
+
+  const out: Vec2[] = [through[0]!];
+
+  for (const span of splineSpans(through, closed, tangents)) {
     for (let k = 1; k <= SPLINE_SAMPLES; k++) {
-      const t = t1 + ((t2 - t1) * k) / SPLINE_SAMPLES;
-
-      const lerp = (a: Vec2, b: Vec2, ta: number, tb: number): Vec2 => {
-        const w = (t - ta) / (tb - ta);
-
-        return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w];
-      };
-
-      const a1 = lerp(p0, p1, t0, t1),
-        a2 = lerp(p1, p2, t1, t2),
-        a3 = lerp(p2, p3, t2, t3);
-      const b1 = lerp(a1, a2, t0, t2),
-        b2 = lerp(a2, a3, t1, t3);
-      out.push(k === SPLINE_SAMPLES ? (closed && i === spans - 1 ? through[0]! : p2) : lerp(b1, b2, t1, t2));
+      between?.(span, (k - 1) / SPLINE_SAMPLES, k / SPLINE_SAMPLES, out);
+      // Through-points exactly, so neighbouring curves still meet them.
+      out.push(k === SPLINE_SAMPLES ? span[3] : bezier(span, k / SPLINE_SAMPLES));
     }
   }
 

@@ -31,6 +31,7 @@ import {
   pointEntries,
   refsOfEntity,
 } from "./geometry";
+import { hitHandle, tangentFor, withTangent, type TangentHandle } from "./handles";
 import { draftBuilder } from "./shapes";
 import { DRAG_TOOLS, drawingTip, picksGeometry, POINT_TOOLS, unwrapSweep } from "./tools";
 import type { Draft, Entry, Snap, ToolState } from "./types";
@@ -60,6 +61,9 @@ export interface PointerEditor {
   snap: (p: Vec2, exclude?: Set<string>, from?: Vec2, free?: boolean) => Snap;
   hitPoint: (p: Vec2, tol: number) => string | null;
   hitCurve: (p: Vec2, tol: number) => SolvedCurve | null;
+  /** Tangent knobs of the selected splines. */
+  handles: TangentHandle[];
+  setHoverHandle: (h: TangentHandle | null) => void;
   rerender: () => void;
   setDrag: (solved: SolvedSketch | null) => void;
   setHover: (hover: SketchSel | null) => void;
@@ -90,13 +94,22 @@ interface Gesture {
     y: number;
     p: Vec2;
     target: SketchSel | null;
+    /** The tangent knob pressed (select tool). */
+    handle: TangentHandle | null;
     moved: boolean;
     started: boolean;
   } | null;
   dragState: { ids: string[]; start: Vec2; origin: Map<string, Vec2>; solved: SolvedSketch | null } | null;
+  /** A tangent knob being dragged, and the tangent it gives so far. */
+  handleDrag: { handle: TangentHandle; tangent: [number, number] | null; solved: SolvedSketch | null } | null;
   box: { a: Vec2; b: Vec2 } | null;
   /** Where the right button went down: released there, it is a right click (not a drag). */
   right: { x: number; y: number } | null;
+  /**
+   * The fingers on the view. Kept with the gesture: the handlers are made anew on every render,
+   * which a drag causes, and a second finger must still be seen as the second.
+   */
+  touches: Set<number>;
 }
 
 type MoveFrame = ReturnType<typeof perFrame<PointerEvent>>;
@@ -106,11 +119,18 @@ const CLICK_SLOP = 4;
 /** A drawing tool's press moved further than this drew a shape (pixels). */
 const DRAWN_BY_DRAG = 6;
 /** Pick distances, in screen pixels. */
-const PICK_PIXELS = { point: 9, curve: 7, section: 10, closeSpline: 6, newPoint: 2 };
+const PICK_PIXELS = { point: 9, curve: 7, section: 10, closeSpline: 6, newPoint: 2, handle: 11 };
 
 /** Subscribes the editor's pointer input to the canvas; it re-subscribes on every render. */
 export function useSketchPointer(editor: PointerEditor) {
-  const gesture = useRef<Gesture>({ down: null, dragState: null, box: null, right: null });
+  const gesture = useRef<Gesture>({
+    down: null,
+    dragState: null,
+    handleDrag: null,
+    box: null,
+    right: null,
+    touches: new Set(),
+  });
   const pressRef = useRef(new Press(() => {}));
   // Moves are handled once per frame by whichever moveCursor the latest render installed.
   const moveRef = useRef<(event: PointerEvent) => void>(() => {});
@@ -126,8 +146,6 @@ export function useSketchPointer(editor: PointerEditor) {
 
 /** One render's pointer handlers. */
 class SketchPointer {
-  private readonly touches = new Set<number>();
-
   constructor(
     private readonly ed: PointerEditor,
     private readonly g: Gesture,
@@ -168,6 +186,17 @@ class SketchPointer {
     return !this.ed.viewport.penSeen;
   }
 
+  /** The tangent knob under the cursor (select tool), unless a sketch point is nearer. */
+  private handleAt(p: Vec2): TangentHandle | null {
+    const { handles, hitPoint, shown, px } = this.ed;
+    if (!handles.length || useSketchUi.getState().tool !== "select") return null;
+
+    const pt = hitPoint(p, px() * PICK_PIXELS.point);
+    const q = pt ? shown?.points.get(pt) : undefined;
+
+    return hitHandle(handles, p, px() * PICK_PIXELS.handle, q ? distance2(p, q) : Infinity);
+  }
+
   /** The sketch point or curve under the cursor; curves win over the origin. */
   private targetAt(p: Vec2): SketchSel | null {
     const { hitPoint, hitCurve, px } = this.ed;
@@ -186,7 +215,7 @@ class SketchPointer {
   private onMove = (event: PointerEvent) => {
     if (event.pointerType !== "mouse") this.press.move(event);
 
-    if (event.pointerType !== "touch" || (this.fingerDraws() && this.touches.size === 1)) {
+    if (event.pointerType !== "touch" || (this.fingerDraws() && this.g.touches.size === 1)) {
       this.moveFrame(event);
     }
   };
@@ -201,10 +230,10 @@ class SketchPointer {
     if (event.pointerType !== "mouse") this.press.down(event);
 
     if (event.pointerType === "touch") {
-      this.touches.add(event.pointerId);
+      this.g.touches.add(event.pointerId);
       if (!this.fingerDraws()) return;
       // A second finger means navigating: drop what the first one started.
-      if (this.touches.size > 1) return this.dropGesture();
+      if (this.g.touches.size > 1) return this.dropGesture();
     }
 
     this.start(event);
@@ -229,7 +258,7 @@ class SketchPointer {
     if (event.pointerType !== "touch") this.moveFrame.flush();
 
     const r = event.pointerType === "mouse" ? null : this.press.up(event);
-    if (event.pointerType === "touch") this.touches.delete(event.pointerId);
+    if (event.pointerType === "touch") this.g.touches.delete(event.pointerId);
 
     if (event.pointerType !== "touch" || this.fingerDraws()) {
       this.finish(event);
@@ -251,6 +280,18 @@ class SketchPointer {
 
     const p = toSketch(event);
 
+    // A double-click on a tangent knob makes the tangent automatic again.
+    const knob = p && sketch ? this.handleAt(p) : null;
+
+    if (knob && sketch) {
+      this.ed.commit({
+        entities: withTangent(sketch.entities, knob.spline, knob.index, null),
+        constraints: sketch.constraints,
+      });
+
+      return;
+    }
+
     if (tool === "select" && p) {
       const selection = this.targetAt(p);
 
@@ -263,7 +304,7 @@ class SketchPointer {
 
   private onCancel = (event: PointerEvent) => {
     this.press.up(event);
-    this.touches.delete(event.pointerId);
+    this.g.touches.delete(event.pointerId);
   };
 
   private onLeave = () => {
@@ -279,8 +320,9 @@ class SketchPointer {
     g.down = null;
     g.box = null;
 
-    if (g.dragState) {
+    if (g.dragState || g.handleDrag) {
       g.dragState = null;
+      g.handleDrag = null;
       this.ed.setDrag(null);
     }
 
@@ -315,6 +357,8 @@ class SketchPointer {
     if (!down.moved && Math.hypot(event.clientX - down.x, event.clientY - down.y) < CLICK_SLOP) return;
 
     down.moved = true;
+
+    if (down.handle) return this.dragHandle(p, down.handle);
 
     if (
       down.target &&
@@ -410,9 +454,55 @@ class SketchPointer {
     this.ed.setDrag(solved);
   }
 
+  /** Gives the dragged knob's point the tangent towards the cursor and shows the curve with it. */
+  private dragHandle(p: Vec2, handle: TangentHandle) {
+    const { solver, sketch } = this.ed;
+    if (!solver || !sketch) return;
+
+    const tangent = tangentFor(handle, p);
+    const solved = solver.solve({
+      entities: withTangent(sketch.entities, handle.spline, handle.index, tangent),
+      constraints: this.ed.constraints,
+      external: this.ed.external,
+    });
+    this.g.handleDrag = { handle, tangent, solved };
+    this.ed.setDrag(solved);
+  }
+
+  /** Keeps the tangent the knob was dragged to. */
+  private endHandleDrag(sketch: SketchFeature) {
+    const { handle, tangent, solved } = this.g.handleDrag!;
+    this.g.handleDrag = null;
+    this.ed.setDrag(null);
+
+    if (solved?.diagnostics.ok) {
+      this.ed.commit({
+        entities: withTangent(sketch.entities, handle.spline, handle.index, tangent),
+        constraints: sketch.constraints,
+      });
+    }
+  }
+
   /** Hover highlight, the snapped cursor and the tool's preview and tip. */
   private previewTool(event: PointerEvent, p: Vec2, tool: SketchTool, rect: DOMRect) {
     const { ts, setTip, px } = this.ed;
+    const knob = this.handleAt(p);
+    this.ed.setHoverHandle(knob);
+
+    if (knob) {
+      this.ed.setHover(null);
+      ts.cursor = p;
+      ts.snap = null;
+      setTip({
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+        text: t("Drag to bend · double-click: automatic"),
+      });
+      this.ed.rerender();
+
+      return;
+    }
+
     this.ed.setHover(picksGeometry(tool) ? this.targetAt(p) : null);
     if (tool === "project") return;
 
@@ -434,7 +524,7 @@ class SketchPointer {
       ts.sweep = unwrapSweep(ts.sweep, ts.points[0]!.pos, ts.points[1]!.pos, s.pos);
     }
 
-    const text = drawingTip(tool, ts.points, s);
+    const text = drawingTip(tool, ts.points, s, useSketchUi.getState().polygonSides);
     setTip(text === null ? null : { x: event.clientX - rect.left, y: event.clientY - rect.top, text });
     this.ed.rerender();
   }
@@ -458,7 +548,16 @@ class SketchPointer {
       this.ed.setEntry(null);
     }
 
-    this.g.down = { x: event.clientX, y: event.clientY, p, target: this.targetAt(p), moved: false, started };
+    const handle = started ? null : this.handleAt(p);
+    this.g.down = {
+      x: event.clientX,
+      y: event.clientY,
+      p,
+      target: handle ? null : this.targetAt(p),
+      handle,
+      moved: false,
+      started,
+    };
 
     // A finger tap is replayed after it lifted, when its pointer can no longer be captured.
     if ((tool === "select" || started) && (event.pointerType !== "touch" || this.fingerDraws())) {
@@ -483,6 +582,8 @@ class SketchPointer {
     if (!p || !sketch) return;
 
     const tool = useSketchUi.getState().tool;
+    if (g.handleDrag) return this.endHandleDrag(sketch);
+    if (d.handle) return;
     if (g.dragState) return this.endDrag(sketch);
     if (g.box) return this.endBox(event, sketch);
     if (d.moved && tool === "select") return;

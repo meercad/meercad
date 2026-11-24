@@ -8,8 +8,10 @@ import { nativeApp } from "./lib/native";
 import { installLongPressMenus } from "./lib/gestures";
 import { installKeyboardDetection } from "./lib/keyboard";
 import { installProbe, uiTesting } from "./lib/uitestProbe";
+import { detectBetaBuild } from "./lib/beta";
 
 installLongPressMenus();
+void detectBetaBuild();
 
 // Development builds expose the stores so test runs can read the document and the result (docs/TESTING.md).
 // So does an iOS app started by a UI test, which also reads the state from an accessibility label.

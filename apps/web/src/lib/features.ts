@@ -670,7 +670,7 @@ export function draftProblem(feature: Feature): string | null {
           : null;
     }
     case "standard_part":
-      return feature.points.length ? null : t("Tap a flat face where the part goes");
+      return feature.points.length ? null : t("Tap a flat face or the ground where the part goes");
     case "draft":
       return feature.faces.length ? null : t("Pick the side faces to draft");
     case "offset_face":

@@ -467,11 +467,21 @@ export function patternCurves(
           ...construction,
         });
       } else if (entity.type === "spline") {
+        // Own tangents turn with a circular pattern.
+        const turn = (v: [number, number]): [number, number] => {
+          if (o.kind === "linear") return [v[0], v[1]];
+
+          const [a, b] = [move([v[0], v[1]], k), move([0, 0], k)];
+
+          return [round(a[0] - b[0]), round(a[1] - b[1])];
+        };
+
         out.entities.push({
           id,
           type: "spline",
           points: pts,
           ...(entity.closed ? { closed: true } : {}),
+          ...(entity.tangents ? { tangents: entity.tangents.map((v) => (v ? turn(v) : null)) } : {}),
           ...construction,
         });
       }

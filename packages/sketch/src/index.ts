@@ -2,6 +2,8 @@ export * from "./geometry.js";
 export {
   SketchSolver,
   SketchSolveError,
+  ownTangents,
+  tangentEnds,
   type ResolvedConstraint,
   type SolveInput,
   type SolveOptions,

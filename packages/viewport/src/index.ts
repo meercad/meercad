@@ -3,6 +3,7 @@
  * filters; maps screen points onto sketch planes; drives standard views for the view cube.
  */
 
+import { smoothNormals } from "./smoothNormals.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -38,6 +39,9 @@ export interface Frame {
 }
 
 /** Structural copy of the kernel's BodyMesh so the viewport does not depend on the kernel. */
+/** A body with at least this many faces is taken as made of facets (a mesh that was cut or joined). */
+const FACETED_FACES = 1500;
+
 export interface ViewMesh {
   bodyId: string;
   positions: Float32Array;
@@ -75,7 +79,15 @@ export type SketchCurveView =
       construction: boolean;
       external: boolean;
     }
-  | { id: string; kind: "spline"; pts: Vec2[]; construction: boolean; external: boolean };
+  | {
+      id: string;
+      kind: "spline";
+      pts: Vec2[];
+      /** Finer samples for drawing, where it bends. */
+      fine?: Vec2[];
+      construction: boolean;
+      external: boolean;
+    };
 
 export interface SketchView {
   id: string;
@@ -318,6 +330,32 @@ export interface Handle {
   foot?: "origin" | "value";
   /** No arrow is drawn: only its `grip` (a dimension line on the model) is dragged. */
   hidden?: boolean;
+  /**
+   * Live from the start, without grabbing the arrow (a tool opened on a selection): the value follows
+   * the mouse with no button pressed and a click sets it; a finger or pen drags anywhere on the view
+   * and lifting it sets the value; Esc puts the value back. Each key arms once, so the same handle
+   * set again (every render) does not arm anew after it was set or let go.
+   */
+  arm?: string;
+  /** Called after `onEnd` when an armed value is set by a click or by lifting the finger. */
+  onCommit?: (value: number) => void;
+}
+
+/** The arrow being dragged, or armed and following the mouse. */
+interface ActiveHandle {
+  h: Handle;
+  value: number;
+  start: number;
+  /** The pointer dragging it; -1 while armed (no button pressed yet). */
+  pointer: number;
+  /** Where along the arrow it was grabbed relative to its value, so it does not jump; null: not yet. */
+  grab: number | null;
+  /** Following the mouse with no button pressed. */
+  armed?: boolean;
+  /** Picked up from an armed state: releasing sets the value for good (`onCommit`). */
+  commit?: boolean;
+  /** The armed value was reported to `onHandleDrag`. */
+  reported?: boolean;
 }
 
 /** `rendered`: materials in studio light with soft shadows on a ground, no edges (for pictures). */
@@ -447,7 +485,11 @@ export class Viewport {
 
   private handleGroup = new THREE.Group();
   private jointGroup = new THREE.Group();
-  private activeHandle: { h: Handle; value: number; start: number; pointer: number } | null = null;
+  private activeHandle: ActiveHandle | null = null;
+  /** The last `arm` key taken (lib docs at `Handle.arm`). */
+  private lastArm: string | null = null;
+  /** Window listeners of the arrows, removed with the view. */
+  private handleListeners = new AbortController();
   private hoverHandle: string | null = null;
   /** Reports the value being dragged and its screen position (for a value tooltip). */
   onHandleDrag: ((handle: Handle | null, value: number, screen: Vec2 | null) => void) | null = null;
@@ -1310,10 +1352,24 @@ export class Viewport {
     element.addEventListener("pointercancel", end, { capture: true });
   }
 
+  /**
+   * Imported meshes shaded smooth (curved where their triangles meet at a shallow angle) instead of
+   * triangle by triangle. Counts for bodies built from now on.
+   */
+  smoothMeshes = false;
+
   private buildBody(mesh: ViewMesh, ghost: boolean): BodyObj {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
-    geo.setAttribute("normal", new THREE.BufferAttribute(mesh.normals, 3));
+
+    // An imported mesh comes as loose triangles, each a face of its own, with flat directions; cut
+    // or joined it is a body of as many small flat faces.
+    const looseTriangles = mesh.edgeLines.length === 0 && mesh.faceRanges.length === mesh.indices.length;
+    const facets = looseTriangles || mesh.faceRanges.length / 3 >= FACETED_FACES;
+    const normals =
+      this.smoothMeshes && facets ? smoothNormals(mesh.positions, mesh.normals, mesh.indices) : mesh.normals;
+
+    geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(mesh.positions.length), 3));
     geo.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     geo.computeBoundingSphere();
@@ -2252,13 +2308,54 @@ export class Viewport {
   // ---------------------------------------------------------------- handles
 
   setHandles(handles: Handle[]): void {
+    const a = this.activeHandle;
+
+    // An armed value whose tool went away (set or cancelled from its dialog) is let go as it is.
+    if (a?.armed && !handles.some((handle) => handle.id === a.h.id)) {
+      this.activeHandle = null;
+      this.onHandleDrag?.(null, a.value, null);
+      a.h.onEnd(a.value);
+    }
+
     // While dragging, the grabbed handle keeps its own callbacks and position until release.
     if (this.activeHandle) {
       handles = [this.activeHandle.h, ...handles.filter((handle) => handle.id !== this.activeHandle!.h.id)];
+    } else {
+      const armed = handles.find((handle) => handle.arm !== undefined && handle.arm !== this.lastArm);
+
+      if (armed) {
+        this.lastArm = armed.arm!;
+        this.activeHandle = {
+          h: armed,
+          value: armed.value,
+          start: armed.value,
+          pointer: -1,
+          grab: null,
+          armed: true,
+        };
+        armed.onStart?.();
+      }
     }
 
     this.handles = handles;
     this.drawHandles();
+
+    // Only once, when armed: the report re-renders the caller, which sets its handles again.
+    if (this.activeHandle?.armed && !this.activeHandle.reported) {
+      this.activeHandle.reported = true;
+      this.reportHandle(this.activeHandle);
+    }
+  }
+
+  /** Whether an arrow's value follows the mouse until a click sets it (`Handle.arm`). */
+  get handleArmed(): boolean {
+    return !!this.activeHandle?.armed;
+  }
+
+  /** Tells `onHandleDrag` the value being changed and where its arrow tip is on the screen. */
+  private reportHandle(a: ActiveHandle): void {
+    const tip = this.handleTip(a.h, a.value);
+    this.onHandleDrag?.(a.h, a.value, this.worldToScreen([tip.x, tip.y, tip.z]));
   }
 
   private handleBase(handle: Handle): number {
@@ -2452,7 +2549,7 @@ export class Viewport {
 
   private bindHandles(): void {
     const element = this.renderer.domElement;
-    let grab = 0;
+    const signal = this.handleListeners.signal;
     // A plain click (not on an arrow): the arrow that appears where it selected a face must not
     // catch the second click of a double-click there, which selects the whole part.
     let lastClick: { at: number; x: number; y: number } | null = null;
@@ -2468,16 +2565,37 @@ export class Viewport {
       },
       { capture: true },
     );
+
+    /** Where along the arrow the pointer is, relative to the handle's value. */
+    const grabAt = (a: ActiveHandle, event: PointerEvent) =>
+      (this.axisParam(a.h, event.clientX, event.clientY) ?? 0) - (a.value + this.handleBase(a.h));
+
     element.addEventListener(
       "pointerdown",
       (event) => {
         if (event.button !== 0 || (event.pointerType === "touch" && this.penSeen)) return;
 
-        // A second finger while one drags an arrow: the two fingers pinch or pan the view, so the
-        // drag is called off and the value goes back to where it was (a pinch over a selected face
-        // changed its thickness).
         const active = this.activeHandle;
 
+        // An armed value is taken by a press anywhere on the view: the mouse keeps it where it
+        // hovered, a finger or pen picks it up where it lands; releasing sets it.
+        if (active?.armed) {
+          grabbed = true;
+          event.stopImmediatePropagation();
+          event.preventDefault();
+          element.setPointerCapture(event.pointerId);
+          if (event.pointerType !== "mouse" || active.grab === null) active.grab = grabAt(active, event);
+
+          active.armed = false;
+          active.commit = true;
+          active.pointer = event.pointerId;
+
+          return;
+        }
+
+        // A second finger while one drags an arrow: the two fingers pinch or pan the view, so the
+        // drag is called off and the value goes back to where it was (a pinch over a selected face
+        // changed its thickness). An armed value is armed again for the next touch.
         if (active && event.pointerId !== active.pointer) {
           this.activeHandle = null;
           dragTo.cancel();
@@ -2488,6 +2606,19 @@ export class Viewport {
           if (active.value !== active.start) active.h.onDrag(active.start);
 
           active.h.onEnd(active.start);
+
+          if (active.commit) {
+            this.activeHandle = {
+              h: active.h,
+              value: active.start,
+              start: active.start,
+              pointer: -1,
+              grab: null,
+              armed: true,
+            };
+            active.h.onStart?.();
+          }
+
           this.drawHandles();
 
           return;
@@ -2509,10 +2640,16 @@ export class Viewport {
         event.preventDefault();
         element.setPointerCapture(event.pointerId);
 
-        const t = this.axisParam(handle, event.clientX, event.clientY);
+        const a: ActiveHandle = {
+          h: handle,
+          value: handle.value,
+          start: handle.value,
+          pointer: event.pointerId,
+          grab: 0,
+        };
         // Offset between where the arrow was grabbed and its value, so it does not jump.
-        grab = (t ?? 0) - (handle.value + this.handleBase(handle));
-        this.activeHandle = { h: handle, value: handle.value, start: handle.value, pointer: event.pointerId };
+        a.grab = grabAt(a, event);
+        this.activeHandle = a;
         handle.onStart?.();
       },
       { capture: true },
@@ -2521,6 +2658,24 @@ export class Viewport {
       "pointermove",
       (event) => {
         const a = this.activeHandle;
+
+        if (a?.armed) {
+          // Only a mouse hovers: a finger or pen picks an armed value up when it touches down. While a
+          // button orbits or pans the view, the value waits and is caught again from where it ends.
+          if (event.pointerType !== "mouse") return;
+
+          if (event.buttons) {
+            a.grab = null;
+
+            return;
+          }
+
+          event.stopImmediatePropagation();
+          a.grab ??= grabAt(a, event);
+          dragTo(event);
+
+          return;
+        }
 
         if (!a) {
           // Fingers do not hover; a finger orbiting across an arrow must not be swallowed.
@@ -2547,6 +2702,15 @@ export class Viewport {
       { capture: true },
     );
 
+    // The view moved under a hovering mouse (wheel zoom) or the mouse left it: the armed value is
+    // caught again from where the mouse next moves, rather than jumping.
+    const regrab = () => {
+      if (this.activeHandle?.armed) this.activeHandle.grab = null;
+    };
+
+    element.addEventListener("pointerleave", regrab);
+    element.addEventListener("wheel", regrab, { passive: true });
+
     const dragTo = perFrame((event: PointerEvent) => {
       const a = this.activeHandle;
       if (!a) return;
@@ -2554,7 +2718,7 @@ export class Viewport {
       const t = this.axisParam(a.h, event.clientX, event.clientY);
       if (t === null) return;
 
-      const raw = t - grab - this.handleBase(a.h);
+      const raw = t - (a.grab ?? 0) - this.handleBase(a.h);
       const step = this.snapStep(a.h.origin);
       let v = Math.round(raw / step) * step;
       if (a.h.min !== undefined) v = Math.max(a.h.min, v);
@@ -2567,8 +2731,7 @@ export class Viewport {
         this.drawHandles();
       }
 
-      const tip = this.handleTip(a.h, v);
-      this.onHandleDrag?.(a.h, v, this.worldToScreen([tip.x, tip.y, tip.z]));
+      this.reportHandle(a);
     });
 
     const end = (event: PointerEvent) => {
@@ -2581,6 +2744,8 @@ export class Viewport {
       element.style.cursor = "";
       this.onHandleDrag?.(null, a.value, null);
       a.h.onEnd(a.value);
+      if (a.commit) a.h.onCommit?.(a.value);
+
       this.drawHandles();
 
       if (this.pendingInset !== null) {
@@ -2592,6 +2757,41 @@ export class Viewport {
 
     element.addEventListener("pointerup", end, { capture: true });
     element.addEventListener("pointercancel", end, { capture: true });
+
+    /** Lets go of an armed value (or one picked up from it): kept as it is, or put back. */
+    const release = (keep: boolean) => {
+      const a = this.activeHandle;
+      if (!a || !(a.armed || a.commit)) return;
+
+      dragTo.cancel();
+      this.activeHandle = null;
+      if (!a.armed && element.hasPointerCapture(a.pointer)) element.releasePointerCapture(a.pointer);
+
+      const v = keep ? a.value : a.start;
+      if (v !== a.value) a.h.onDrag(v);
+
+      this.onHandleDrag?.(null, v, null);
+      a.h.onEnd(v);
+      this.drawHandles();
+    };
+
+    // Esc puts an armed value back (and the app closes its tool); any other key (typing the value,
+    // Enter) or a press outside the view (the tool's dialog) keeps it and stops it following the mouse.
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") release(false);
+        else if (!MODIFIER_KEYS.has(event.key)) release(true);
+      },
+      { capture: true, signal },
+    );
+    window.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (this.activeHandle?.armed && event.target !== element) release(true);
+      },
+      { capture: true, signal },
+    );
   }
 
   /** Screen position (canvas CSS px) of a handle's arrow tip, for value labels. */
@@ -3527,6 +3727,7 @@ export class Viewport {
     if (this.disposed) return;
 
     this.disposed = true;
+    this.handleListeners.abort();
     this.untrackCtrl();
     for (const c of this.textureCache.values()) c.tex?.dispose();
     this.textureCache.clear();
@@ -3544,6 +3745,9 @@ export class Viewport {
 }
 
 // ---------------------------------------------------------------- helpers
+
+/** Keys held with others: pressing one does not let go of an armed arrow. */
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock"]);
 
 /**
  * Wraps a pointermove handler so it runs at most once per frame, with the latest event. iPad
@@ -3596,7 +3800,7 @@ export function frameMatrix(frame: Frame): THREE.Matrix4 {
 
 export function curvePoints(c: SketchCurveView): Vec2[] {
   if (c.kind === "line") return [c.a, c.b];
-  if (c.kind === "spline") return c.pts;
+  if (c.kind === "spline") return c.fine ?? c.pts;
 
   const [a0, sweep] =
     c.kind === "circle"

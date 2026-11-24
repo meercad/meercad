@@ -5,6 +5,7 @@
 import type { Expr, SketchConstraint, SketchEntity, SketchFeature } from "@meercad/schema";
 import { distance2, type Vec2 } from "@meercad/sketch";
 import { freshId } from "../actions";
+import { POLYGON_SIDES_MAX, POLYGON_SIDES_MIN } from "../state";
 import { arcThrough } from "./geometry";
 import type { Draft, NewConstraint, NewEntity, Snap } from "./types";
 
@@ -258,10 +259,8 @@ export function polygonDraft(
   const builder = draftBuilder(sketch);
   const centerId = builder.point(center);
   const circle = builder.entity({ type: "circle", center: centerId, radius: r, construction: true }, "c");
-  const a0 = Math.atan2(corner[1] - center.pos[1], corner[0] - center.pos[0]);
-  const pts = Array.from({ length: sides }, (_, i) => {
-    const a = a0 + (i * 2 * Math.PI) / sides;
-    const id = builder.point({ pos: [center.pos[0] + r * Math.cos(a), center.pos[1] + r * Math.sin(a)] });
+  const pts = polygonCorners(center.pos, corner, sides).map((pos) => {
+    const id = builder.point({ pos });
     builder.constraint({ type: "point_on", point: id, curve: circle });
 
     return id;
@@ -272,6 +271,28 @@ export function polygonDraft(
   for (let i = 1; i < lines.length; i++) builder.constraint({ type: "equal", a: lines[0]!, b: lines[i]! });
 
   return builder.draft;
+}
+
+/**
+ * A typed or stepped corner count made usable: whole, between a triangle and 64 corners.
+ * Anything that is not a number keeps `fallback`.
+ */
+export function clampPolygonSides(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+
+  return Math.min(POLYGON_SIDES_MAX, Math.max(POLYGON_SIDES_MIN, Math.round(value)));
+}
+
+/** The corners of a regular polygon round `center`, the first at `corner`, going anticlockwise. */
+export function polygonCorners(center: Vec2, corner: Vec2, sides: number): Vec2[] {
+  const r = distance2(center, corner);
+  const a0 = Math.atan2(corner[1] - center[1], corner[0] - center[0]);
+
+  return Array.from({ length: sides }, (_, i) => {
+    const a = a0 + (i * 2 * Math.PI) / sides;
+
+    return [center[0] + r * Math.cos(a), center[1] + r * Math.sin(a)];
+  });
 }
 
 /** A spline through the clicked points (at least two), open or closed. */

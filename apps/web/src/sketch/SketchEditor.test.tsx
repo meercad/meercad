@@ -3,7 +3,7 @@
  * above on an 800 × 600 screen: lines, rectangles and circles land at the sketch coordinates
  * pointed at, typed sizes are exact, and the sketch's closed region has the drawn area.
  */
-import { act, cleanup, fireEvent } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SketchEntity, SketchFeature } from "@meercad/schema";
 import { THREE, type Viewport } from "@meercad/viewport";
@@ -180,6 +180,43 @@ describe("drawing in a sketch", () => {
     await act(async () => setTool("point"));
     await clickAt(-10, -10);
     expect(points().some((p) => Math.abs(p.x + 10) < 0.6 && Math.abs(p.y + 10) < 0.6)).toBe(true);
+  });
+
+  it("draws a polygon with the corners set in the panel: minus, plus or typed", async () => {
+    await act(async () => setTool("polygon"));
+
+    const field = () => screen.getByLabelText<HTMLInputElement>("Corners");
+    expect(field().value).toBe("6");
+    await act(async () => void fireEvent.click(screen.getByLabelText("Fewer corners")));
+    await act(async () => void fireEvent.click(screen.getByLabelText("Fewer corners")));
+    expect(useSketchUi.getState().polygonSides).toBe(4);
+    await act(async () => void fireEvent.click(screen.getByLabelText("More corners")));
+    expect(field().value).toBe("5");
+    // A count still being typed ("1" on the way to "12") waits; leaving the field shows the count.
+    await act(async () => void fireEvent.change(field(), { target: { value: "1" } }));
+    expect(useSketchUi.getState().polygonSides).toBe(5);
+    await act(async () => void fireEvent.change(field(), { target: { value: "12" } }));
+    expect(useSketchUi.getState().polygonSides).toBe(12);
+    await act(async () => void fireEvent.keyDown(field(), { key: "ArrowDown" }));
+    await act(async () => void fireEvent.keyDown(field(), { key: "ArrowUp" }));
+    await act(async () => void fireEvent.keyDown(field(), { key: "ArrowUp" }));
+    await act(async () => void fireEvent.keyDown(field(), { key: "a" }));
+    expect(useSketchUi.getState().polygonSides).toBe(13);
+    await act(async () => void fireEvent.change(field(), { target: { value: "" } }));
+    await act(async () => void fireEvent.blur(field()));
+    expect(field().value).toBe("13");
+    await act(async () => void fireEvent.change(field(), { target: { value: "999" } }));
+    expect(field().value).toBe("64");
+    expect((screen.getByLabelText("More corners") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => void fireEvent.change(field(), { target: { value: "3" } }));
+    expect((screen.getByLabelText("Fewer corners") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => void fireEvent.change(field(), { target: { value: "5" } }));
+
+    const before = sketch().entities.filter((e) => e.type === "line").length;
+    await clickAt(20, 10);
+    await clickAt(30, 10);
+    expect(sketch().entities.filter((e) => e.type === "line").length - before).toBe(5);
+    await act(async () => useSketchUi.setState({ polygonSides: 6 }));
   });
 
   it("dimensions, constrains and deletes what is selected", async () => {

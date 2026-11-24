@@ -56,13 +56,19 @@ export interface ArcEntity {
 /**
  * A smooth curve through points, in order (`closed` joins the last to the first). The points are
  * ordinary sketch points, so they can be dimensioned and constrained; the curve is a centripetal
- * Catmull-Rom spline through them (no overshoot, no loops), a smooth B-spline in the model.
+ * Catmull-Rom spline through them (no overshoot, no loops) unless a point has its own tangent,
+ * a smooth B-spline in the model.
  */
 export interface SplineEntity {
   id: string;
   type: "spline";
   points: string[];
   closed?: boolean;
+  /**
+   * The points' own tangents, one per point (null: automatic), in sketch units: the forward arm
+   * of the point's handle, whose end is a control point of the curve; the backward arm mirrors it.
+   */
+  tangents?: ([number, number] | null)[];
   construction?: boolean;
 }
 /** Model edges projected into the sketch as fixed reference geometry. */

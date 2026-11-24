@@ -31,9 +31,16 @@ interface SketchUi {
   editSize: number;
   /** How closely traced mesh sections follow the cut (mm). */
   traceTol: number;
+  /** Polygon tool: how many corners (and sides) the next polygon gets. */
+  polygonSides: number;
   /** Pattern tool: a row (dx, dy apart) or round the origin (angle apart), count in all. */
   pattern: { kind: "linear" | "circular"; count: number; dx: number; dy: number; angle: number };
 }
+
+/** The polygon tool's corners: a hexagon to start with, from a triangle up to a near-circle. */
+export const POLYGON_SIDES_DEFAULT = 6;
+export const POLYGON_SIDES_MIN = 3;
+export const POLYGON_SIDES_MAX = 64;
 
 export const useSketchUi = create<SketchUi>(() => ({
   tool: "line",
@@ -41,6 +48,7 @@ export const useSketchUi = create<SketchUi>(() => ({
   selection: [],
   editSize: 2,
   traceTol: 0.1,
+  polygonSides: POLYGON_SIDES_DEFAULT,
   pattern: { kind: "linear", count: 3, dx: 10, dy: 0, angle: 60 },
 }));
 

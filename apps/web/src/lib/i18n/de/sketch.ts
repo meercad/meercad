@@ -33,6 +33,9 @@ export default {
   "a line and an arc/circle, or two arcs/circles": "eine Linie und einen Bogen/Kreis, oder zwei Bögen/Kreise",
   "two lines or two circles/arcs": "zwei Linien oder zwei Kreise/Bögen",
 
+  // sketch/editor/pointer.ts
+  "Drag to bend · double-click: automatic": "Ziehen biegt die Kurve · Doppelklick: automatisch",
+
   // sketch/SketchEditor.tsx
   "Over-constrained: {list}": "Überbestimmt: {list}",
   "Cannot repeat: {reason}": "Wiederholen nicht möglich: {reason}",
@@ -42,7 +45,7 @@ export default {
   "Cannot offset: {reason}": "Versetzen nicht möglich: {reason}",
   "Dimension: pick a line, circle, arc, two points, a point and a line, or two lines":
     "Maß: wähle eine Linie, einen Kreis, einen Bogen, zwei Punkte, einen Punkt und eine Linie, oder zwei Linien",
-  "hexagon R {r}": "Sechseck R {r}",
+  "{n}-gon R {r}": "{n}-Eck R {r}",
   "Click a model edge to project it into the sketch":
     "Klicke auf eine Modellkante, um sie in die Skizze zu projizieren",
   "Tap to set this value exactly": "Tippe, um diesen Wert genau festzulegen",
@@ -102,8 +105,13 @@ export default {
   "Click the end point (move clockwise to flip) · type the angle":
     "Klicke auf den Endpunkt (im Uhrzeigersinn bewegen dreht die Richtung) · tippe den Winkel",
   "Click to place a point": "Klicke, um einen Punkt zu setzen",
-  "Click a corner (hexagon; constraints keep it regular)":
-    "Klicke auf eine Ecke (Sechseck; Bedingungen halten es regelmäßig)",
+  "Click a corner ({n} corners; constraints keep it regular)":
+    "Klicke auf eine Ecke ({n} Ecken; Bedingungen halten es regelmäßig)",
+  "Click the center · set the number of corners in the panel":
+    "Klicke auf den Mittelpunkt · die Anzahl der Ecken stellst du im Feld ein",
+  Corners: "Ecken",
+  "Fewer corners": "Weniger Ecken",
+  "More corners": "Mehr Ecken",
   "Click the center": "Klicke auf den Mittelpunkt",
   "Click the next point · double-click, Enter or Esc finishes · click the first point to close":
     "Klicke auf den nächsten Punkt · Doppelklick, Eingabe oder Esc beendet · klicke auf den ersten Punkt, um zu schließen",
@@ -150,10 +158,10 @@ export default {
   "constraint::coincident": "Deckungsgleich",
 
   // components/SnapControls.tsx
-  "Magnet on: snap to points, lines, circle centres and model edges":
-    "Magnet an: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
-  "Magnet off: snap to points, lines, circle centres and model edges":
-    "Magnet aus: rastet an Punkten, Linien, Kreismittelpunkten und Modellkanten ein",
+  "Magnet on: snap to points, lines, circle centres, model edges and the grid":
+    "Magnet an: rastet an Punkten, Linien, Kreismittelpunkten, Modellkanten und am Raster ein",
+  "Magnet off: points land where you place them (only existing points still catch)":
+    "Magnet aus: Punkte landen, wo du sie setzt (nur vorhandene Punkte fangen noch)",
   "Grid on: shown and snapped to; its spacing follows the zoom (Alt places freely)":
     "Raster an: sichtbar und zum Einrasten; der Abstand folgt dem Zoom (Alt setzt frei)",
   "Grid off: shown and snapped to; its spacing follows the zoom (Alt places freely)":

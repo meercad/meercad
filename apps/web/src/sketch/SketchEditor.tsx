@@ -41,6 +41,7 @@ import { applySolution, joinedChain, nearestLineEnd, planeEdges } from "./editor
 import { useSketchKeys } from "./editor/keys";
 import { constraintLabels, pairAngle, quickDimensions } from "./editor/labels";
 import { ConstraintLabels, ConstraintPalette, DrawEntry, QuickChips, SketchHud } from "./editor/panels";
+import { activeSplines, splineHandles, type TangentHandle } from "./editor/handles";
 import { useSketchPointer, type Tip } from "./editor/pointer";
 import {
   disposeGroup,
@@ -50,6 +51,7 @@ import {
   SKETCH_VALUE,
   planeAxes,
   previewObjects,
+  sameHandle,
   snapObjects,
 } from "./editor/scene";
 import {
@@ -89,6 +91,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
   const [solver, setSolver] = useState<SketchSolver | null>(null);
   const [drag, setDrag] = useState<SolvedSketch | null>(null);
   const [hover, setHover] = useState<SketchSel | null>(null);
+  const [hoverHandle, setHoverHandleState] = useState<TangentHandle | null>(null);
+
+  const setHoverHandle = (h: TangentHandle | null) => {
+    if (!sameHandle(h, hoverHandle) && (h || hoverHandle)) setHoverHandleState(h);
+  };
+
   const [tip, setTip] = useState<Tip | null>(null);
 
   const [editing, setEditing] = useState<string | null>(null);
@@ -237,6 +245,12 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       ? pairAngle(sketch, shown, pickedCurves[0]!.id, pickedCurves[1]!.id)
       : null;
 
+  // Tangent knobs of the selected splines (select tool only).
+  const handles =
+    ui.tool === "select" && shown && frame
+      ? splineHandles(sketch, shown, activeSplines(sketch, ui.selection), viewport.pixelSize(frame.origin))
+      : [];
+
   const ts = toolState.current;
   useEffect(() => {
     disposeGroup(group);
@@ -252,9 +266,13 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       hotSection: ui.tool === "section" ? hoverChain : -1,
       selection: ui.selection,
       hover,
+      handles,
+      hoverHandle,
     });
 
-    for (const obj of previewObjects(ui.tool, { ...ts, cursor: typedTarget() ?? ts.cursor })) group.add(obj);
+    const preview = { ...ts, cursor: typedTarget() ?? ts.cursor };
+    for (const obj of previewObjects(ui.tool, preview, ui.polygonSides)) group.add(obj);
+
     if (ts.snap) for (const obj of snapObjects(ts.snap, viewport.pixelSize(frame.origin))) group.add(obj);
 
     drawDimensionLines(group, sketch, shown, angleChip?.angle, onFace);
@@ -369,9 +387,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     setLastShape({ kind: "arc", id: made.arc });
   };
 
-  const addPolygon = (center: Snap, corner: Vec2, sides = 6) => {
+  const addPolygon = (center: Snap, corner: Vec2) => {
     if (!sketch) return;
 
+    const sides = useSketchUi.getState().polygonSides;
     const draft = polygonDraft(sketch, center, corner, sides, shapeStyle());
     if (draft) commit(draft);
   };
@@ -629,6 +648,8 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     snap,
     hitPoint: (p, tol) => pointNear(p, tol),
     hitCurve: (p, tol) => curveNear(p, tol),
+    handles,
+    setHoverHandle,
     rerender,
     setDrag,
     setHover,
@@ -819,7 +840,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         sketch={sketch}
         diag={diag}
         tool={ui.tool}
-        hint={toolHint(ui.tool, ts.points.length, !!ts.dimFirst)}
+        hint={toolHint(ui.tool, ts.points.length, !!ts.dimFirst, ui.polygonSides)}
         sectionCount={sections.length}
         onRepeat={repeatSelection}
         onTraceAll={() => traceSection(sections)}

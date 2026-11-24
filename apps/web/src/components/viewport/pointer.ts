@@ -19,6 +19,7 @@ import { commitDialog, editFeature, redo, undo, useApp } from "../../store";
 import { closeMenu } from "../Menu";
 import { clickInView, DEFAULT_KINDS, pickKinds } from "./click";
 import { openContextMenu } from "./contextMenu";
+import { placesOnGround } from "../FeatureDialog";
 import { featureOfPick } from "./scene";
 
 /** What a selection box takes: faces and edges, or one of them. */
@@ -212,7 +213,9 @@ export class ViewPointer {
     const choosing = useApp.getState().pickingSketchPlane;
     const pick =
       choosing && event.altKey ? null : this.viewport.pick(event.clientX, event.clientY, pickKinds());
-    const ground = choosing && !pick;
+    // A part waiting to be set down goes on the ground where nothing else is under the pointer.
+    const dialog = useApp.getState().dialog;
+    const ground = !pick && (choosing || (!!dialog && placesOnGround(dialog)));
     this.viewport.setHover(ground ? { kind: "plane", planeId: "origin.XY", point: [0, 0, 0] } : pick);
   }
 

@@ -12,6 +12,7 @@ import {
   Copy,
   CopyPlus,
   Eraser,
+  FlaskConical,
   Eye,
   EyeOff,
   Focus,
@@ -37,7 +38,11 @@ import {
 import type { ReactNode } from "react";
 import { copyParts, hasClip, pasteParts, selectAll, selectedParts } from "../../lib/clipboard";
 import { deleteBodies, deleteModelSelection } from "../../lib/deletion";
+import { hasBeta } from "../../lib/beta";
+import { isCompact } from "../../lib/layout";
+import { nativeApp } from "../../lib/native";
 import { hideDeviation, showDeviation, useDeviation } from "../../lib/deviation";
+import { openStrength } from "../../lib/strength";
 import { FEATURES, partName } from "../../lib/features";
 import { keyFor } from "../../lib/keymap";
 import { t } from "../../lib/i18n";
@@ -297,6 +302,7 @@ function faceMenu(pick: FacePick, state: AppState, common: MenuEntry[]): MenuEnt
       : []),
     ...deviationItems(pick.bodyId),
     thicknessItem(pick.bodyId),
+    ...strengthItems(pick.bodyId),
     ...common,
     "sep",
     {
@@ -435,6 +441,20 @@ function thicknessItem(body: string): Item {
     icon: <Layers />,
     onClick: () => (hideDeviation(), hidePrintCheck(), showThickness(body)),
   };
+}
+
+/** The strength check with the topology suggestion: only with the beta function switched on. */
+function strengthItems(body: string): Item[] {
+  // Not on the iPhone: minutes of full load on one core are no use there.
+  if (!hasBeta("topology") || (nativeApp && isCompact())) return [];
+
+  return [
+    {
+      label: t("Strength and topology (beta)"),
+      icon: <FlaskConical />,
+      onClick: () => (hideDeviation(), hideThickness(), hidePrintCheck(), openStrength(body)),
+    },
+  ];
 }
 
 function printItem(body: string): Item {

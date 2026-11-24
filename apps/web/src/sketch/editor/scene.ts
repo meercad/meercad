@@ -2,7 +2,7 @@
 import type { SketchFeature } from "@meercad/schema";
 import {
   distance2,
-  splinePoints,
+  splineDisplayPoints,
   type findRegions,
   type SolvedCurve,
   type SolvedSketch,
@@ -10,7 +10,7 @@ import {
 } from "@meercad/sketch";
 import type { SectionChain } from "@meercad/kernel/fit";
 import { fatLine, frameMatrix, SKETCH_LINE_WIDTH, THREE, type Viewport } from "@meercad/viewport";
-import { sameSel, type SketchSel, type SketchTool } from "../state";
+import { POLYGON_SIDES_DEFAULT, sameSel, type SketchSel, type SketchTool } from "../state";
 import type { AngleArc, Segment } from "../../lib/angleDim";
 import { boxToQuad, planeCorners, type Turn } from "../../lib/planeLabel";
 import { dropMirrors, mirror } from "../../lib/sceneMirror";
@@ -23,6 +23,8 @@ import {
   pointEntries,
   refsOf,
 } from "./geometry";
+import type { TangentHandle } from "./handles";
+import { polygonCorners } from "./shapes";
 import type { Snap } from "./types";
 
 export const COLORS = {
@@ -58,16 +60,17 @@ function dotTexture(): THREE.Texture {
 }
 
 function curveObject(curve: SolvedCurve, color: number, dashed: boolean): THREE.Object3D {
-  const pts = curveSamples(curve.kind === "line" ? curve : { ...curve }).map(
+  const pts = (curve.kind === "spline" ? (curve.fine ?? curve.pts) : curveSamples(curve)).map(
     ([x, y]) => new THREE.Vector3(x, y, 0),
   );
 
   if (curve.kind === "circle" || curve.kind === "arc") {
-    const n = 96;
     const [a0, sw] =
       curve.kind === "circle"
         ? [0, 2 * Math.PI]
         : [curve.a0, (curve.a1 - curve.a0 + 4 * Math.PI) % (2 * Math.PI) || 2 * Math.PI];
+    // About 1.5° per piece: round at any zoom.
+    const n = Math.max(16, Math.ceil(sw / (Math.PI / 120)));
     pts.length = 0;
 
     for (let i = 0; i <= n; i++) {
@@ -95,6 +98,7 @@ function curveObject(curve: SolvedCurve, color: number, dashed: boolean): THREE.
 export function previewObjects(
   tool: SketchTool,
   ts: { points: Snap[]; cursor: Vec2 | null; sweep: number },
+  sides = POLYGON_SIDES_DEFAULT,
 ): THREE.Object3D[] {
   const out: THREE.Object3D[] = [];
   const cur = ts.cursor;
@@ -109,7 +113,7 @@ export function previewObjects(
   const p0 = ts.points[0]?.pos;
   if (!p0) return out;
   if (tool === "line") line([p0, cur]);
-  if (tool === "spline") line(splinePoints([...ts.points.map((snap) => snap.pos), cur]));
+  if (tool === "spline") line(splineDisplayPoints([...ts.points.map((snap) => snap.pos), cur]));
   if (tool === "rect") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
 
   if (tool === "rect_center") {
@@ -126,21 +130,7 @@ export function previewObjects(
 
   if (tool === "select") line([p0, [cur[0], p0[1]], cur, [p0[0], cur[1]]], true);
 
-  if (tool === "polygon") {
-    const r = distance2(p0, cur);
-    const a0 = Math.atan2(cur[1] - p0[1], cur[0] - p0[0]);
-    line(
-      Array.from(
-        { length: 6 },
-        (_, i) =>
-          [
-            p0[0] + r * Math.cos(a0 + (i * Math.PI) / 3),
-            p0[1] + r * Math.sin(a0 + (i * Math.PI) / 3),
-          ] as Vec2,
-      ),
-      true,
-    );
-  }
+  if (tool === "polygon") line(polygonCorners(p0, cur, sides), true);
 
   if (tool === "arc" && ts.points.length === 1) line([p0, cur]);
 
@@ -345,6 +335,9 @@ export interface SketchScene {
   hotSection: number;
   selection: SketchSel[];
   hover: SketchSel | null;
+  /** Tangent handles of the selected splines, and the knob under the cursor. */
+  handles?: TangentHandle[];
+  hoverHandle?: TangentHandle | null;
 }
 
 /** Adds the sketch to `group`: regions, mesh sections, curves, then points. */
@@ -353,7 +346,60 @@ export function drawSketch(group: THREE.Group, scene: SketchScene) {
   drawRegions(group, scene.regions);
   drawSections(group, scene.sections, scene.hotSection);
   drawCurves(group, scene, full);
+  drawHandles(group, scene.handles ?? [], scene.hoverHandle ?? null);
   drawPoints(group, scene, full);
+}
+
+const HANDLE_COLOR = 0x7b8494;
+
+/** The same knob: same spline, point and side. */
+export const sameHandle = (a: TangentHandle | null | undefined, b: TangentHandle | null | undefined) =>
+  !!a && !!b && a.spline === b.spline && a.index === b.index && a.side === b.side;
+
+/** Spline handles: a thin line from each point to its knobs, the knobs as ringed dots. */
+function drawHandles(group: THREE.Group, handles: readonly TangentHandle[], hover: TangentHandle | null) {
+  if (!handles.length) return;
+
+  for (const h of handles) {
+    const arm = fatLine([h.at, h.knob], { color: h.own ? COLORS.sel : HANDLE_COLOR, width: 1.25 });
+    arm.renderOrder = 29;
+    group.add(arm);
+  }
+
+  const layer = (size: number, color: (h: TangentHandle) => number, order: number) => {
+    const pos: number[] = [];
+    const cols: number[] = [];
+    const col = new THREE.Color();
+
+    for (const h of handles) {
+      pos.push(h.knob[0], h.knob[1], 0);
+      col.setHex(color(h));
+      cols.push(col.r, col.g, col.b);
+    }
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
+
+    const dots = new THREE.Points(
+      g,
+      new THREE.PointsMaterial({
+        size,
+        sizeAttenuation: false,
+        vertexColors: true,
+        depthTest: false,
+        map: dotTexture(),
+        transparent: true,
+        alphaTest: 0.5,
+      }),
+    );
+    dots.renderOrder = order;
+    group.add(dots);
+  };
+
+  // A ring: a coloured dot with a white one inside.
+  layer(11, (h) => (sameHandle(h, hover) ? COLORS.hover : h.own ? COLORS.sel : HANDLE_COLOR), 31);
+  layer(6, () => 0xffffff, 32);
 }
 
 /** Regions (closed profiles) as a light fill. */

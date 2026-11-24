@@ -1,6 +1,7 @@
 /** German interface texts by their English source text, split by area of the app. */
 import app from "./app";
 import bend from "./bend";
+import beta from "./beta";
 import closures from "./closures";
 import controls from "./controls";
 import dialogs from "./dialogs";
@@ -15,6 +16,7 @@ import workspace from "./workspace";
 export const DE_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   app,
   bend,
+  beta,
   closures,
   controls,
   dialogs,
