@@ -46,6 +46,8 @@ describe("hints and fields", () => {
     expect(new Set([0, 1, 2].map((n) => toolHint("arc", n, false))).size).toBe(3);
     expect(new Set([0, 1, 2].map((n) => toolHint("arc_center", n, false))).size).toBe(3);
     expect(toolHint("dimension", 0, true)).not.toBe(toolHint("dimension", 0, false));
+    expect(toolHint("polygon", 1, false)).toContain("6 corners");
+    expect(toolHint("polygon", 1, false, 8)).toContain("8 corners");
   });
 
   it("knows the angle fields and the tools that pick geometry", () => {
@@ -71,6 +73,8 @@ describe("drawingTip", () => {
     expect(drawingTip("circle", [snap([0, 0])], at)).toBe("R 5 mm");
     expect(drawingTip("arc_center", [snap([0, 0])], at)).toBe("R 5 mm");
     expect(drawingTip("polygon", [snap([0, 0])], at)).toContain("5 mm");
+    expect(drawingTip("polygon", [snap([0, 0])], at)).toBe("6-gon R 5 mm");
+    expect(drawingTip("polygon", [snap([0, 0])], at, 5)).toBe("5-gon R 5 mm");
     expect(drawingTip("rect", [snap([0, 0])], at)).toBe("3 × 4 mm");
     expect(drawingTip("rect_center", [snap([0, 0])], at)).toBe("6 × 8 mm");
   });

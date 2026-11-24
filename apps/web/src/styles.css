@@ -1475,6 +1475,20 @@ input.expr {
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
 }
 /* A finger covers the arrow head: the value sits above it. */
+/* The polygon tool's corner count: square minus and plus around the number, roomy under a finger. */
+.polygon-sides .btn {
+  width: 30px;
+  padding: 0;
+}
+@media (pointer: coarse) {
+  .polygon-sides .btn,
+  .polygon-sides .field {
+    height: 36px;
+  }
+  .polygon-sides .btn {
+    width: 36px;
+  }
+}
 @media (pointer: coarse) {
   .cursor-tip {
     transform: translate(-50%, calc(-100% - 44px));

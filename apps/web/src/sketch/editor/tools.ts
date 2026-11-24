@@ -3,7 +3,7 @@ import type { Vec2 } from "@meercad/sketch";
 import { distance2 } from "@meercad/sketch";
 import { t } from "../../lib/i18n";
 import { fmtLen, inUnit } from "../../lib/units";
-import type { SketchTool } from "../state";
+import { POLYGON_SIDES_DEFAULT, type SketchTool } from "../state";
 import { arcThrough, fmt, normalizeAngle } from "./geometry";
 import type { Snap } from "./types";
 
@@ -48,7 +48,12 @@ export const SNAP_LABEL: Record<NonNullable<Snap["kind"]>, string> = {
   edge: t("On edge"),
 };
 
-export function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string {
+export function toolHint(
+  tool: SketchTool,
+  n: number,
+  dimFirst: boolean,
+  sides = POLYGON_SIDES_DEFAULT,
+): string {
   switch (tool) {
     case "line":
       return n
@@ -83,7 +88,9 @@ export function toolHint(tool: SketchTool, n: number, dimFirst: boolean): string
     case "point":
       return t("Click to place a point");
     case "polygon":
-      return n ? t("Click a corner (hexagon; constraints keep it regular)") : t("Click the center");
+      return n
+        ? t("Click a corner ({n} corners; constraints keep it regular)", { n: sides })
+        : t("Click the center · set the number of corners in the panel");
     case "spline":
       return n
         ? t("Click the next point · double-click, Enter or Esc finishes · click the first point to close")
@@ -122,7 +129,12 @@ export const picksGeometry = (tool: SketchTool) =>
   tool === "select" || tool === "pattern" || tool === "dimension" || EDIT_TOOLS.has(tool);
 
 /** The text beside the cursor while drawing: the shape's size so far, or what the cursor snapped to. */
-export function drawingTip(tool: SketchTool, points: Snap[], snap: Snap): string | null {
+export function drawingTip(
+  tool: SketchTool,
+  points: Snap[],
+  snap: Snap,
+  sides = POLYGON_SIDES_DEFAULT,
+): string | null {
   if (tool === "line" && points.length) {
     const a = points[0]!.pos;
     const len = distance2(a, snap.pos);
@@ -144,7 +156,7 @@ export function drawingTip(tool: SketchTool, points: Snap[], snap: Snap): string
   }
 
   if (tool === "polygon" && points.length) {
-    return t("hexagon R {r}", { r: fmtLen(distance2(points[0]!.pos, snap.pos)) });
+    return t("{n}-gon R {r}", { n: sides, r: fmtLen(distance2(points[0]!.pos, snap.pos)) });
   }
 
   if ((tool === "rect" || tool === "rect_center") && points.length) {

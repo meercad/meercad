@@ -254,7 +254,9 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
       hover,
     });
 
-    for (const obj of previewObjects(ui.tool, { ...ts, cursor: typedTarget() ?? ts.cursor })) group.add(obj);
+    const preview = { ...ts, cursor: typedTarget() ?? ts.cursor };
+    for (const obj of previewObjects(ui.tool, preview, ui.polygonSides)) group.add(obj);
+
     if (ts.snap) for (const obj of snapObjects(ts.snap, viewport.pixelSize(frame.origin))) group.add(obj);
 
     drawDimensionLines(group, sketch, shown, angleChip?.angle, onFace);
@@ -369,9 +371,10 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
     setLastShape({ kind: "arc", id: made.arc });
   };
 
-  const addPolygon = (center: Snap, corner: Vec2, sides = 6) => {
+  const addPolygon = (center: Snap, corner: Vec2) => {
     if (!sketch) return;
 
+    const sides = useSketchUi.getState().polygonSides;
     const draft = polygonDraft(sketch, center, corner, sides, shapeStyle());
     if (draft) commit(draft);
   };
@@ -819,7 +822,7 @@ export function SketchEditor({ viewport, sketchId }: { viewport: Viewport; sketc
         sketch={sketch}
         diag={diag}
         tool={ui.tool}
-        hint={toolHint(ui.tool, ts.points.length, !!ts.dimFirst)}
+        hint={toolHint(ui.tool, ts.points.length, !!ts.dimFirst, ui.polygonSides)}
         sectionCount={sections.length}
         onRepeat={repeatSelection}
         onTraceAll={() => traceSection(sections)}

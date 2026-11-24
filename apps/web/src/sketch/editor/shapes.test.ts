@@ -5,8 +5,10 @@ import type { Vec2 } from "@meercad/sketch";
 import {
   centerArcDraft,
   circleDraft,
+  clampPolygonSides,
   draftBuilder,
   lineDraft,
+  polygonCorners,
   polygonDraft,
   rectDraft,
   splineDraft,
@@ -227,6 +229,32 @@ describe("polygons and splines", () => {
       "construction",
     );
     expect(polygonDraft(sketch, at([0, 0]), [0.1, 0], 6, style)).toBeNull();
+  });
+
+  it("draws as many corners as asked, all on the circle and evenly round it", () => {
+    const draft = polygonDraft(sketch, at([0, 0]), [10, 0], 8, style)!;
+
+    expect(added(draft).filter((e) => e.type === "line")).toHaveLength(8);
+    expect(types(draft).filter((t) => t === "equal")).toHaveLength(7);
+
+    const corners = polygonCorners([1, 2], [1, 7], 4);
+    expect(corners).toHaveLength(4);
+    corners.forEach(([x, y], i) => {
+      expect(Math.hypot(x - 1, y - 2)).toBeCloseTo(5);
+      // The first corner is where the cursor is, the next a quarter turn on (anticlockwise).
+      expect(x).toBeCloseTo([1, -4, 1, 6][i]!);
+      expect(y).toBeCloseTo([7, 2, -3, 2][i]!);
+    });
+  });
+
+  it("keeps a typed or stepped corner count between a triangle and 64", () => {
+    expect(clampPolygonSides(5, 6)).toBe(5);
+    expect(clampPolygonSides(7.4, 6)).toBe(7);
+    expect(clampPolygonSides(2, 6)).toBe(3);
+    expect(clampPolygonSides(-1, 6)).toBe(3);
+    expect(clampPolygonSides(500, 6)).toBe(64);
+    expect(clampPolygonSides(Number.NaN, 6)).toBe(6);
+    expect(clampPolygonSides(Infinity, 8)).toBe(8);
   });
 
   it("draws a spline through the points, open or closed", () => {
