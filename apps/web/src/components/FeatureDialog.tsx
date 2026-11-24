@@ -43,7 +43,7 @@ const STANDARD_GROUPS: [string, (keyof typeof STANDARD_NAMES)[]][] = [
   ["Linear motion", ["rail", "lead_screw", "linear_bearing", "shaft"]],
   ["Bearings and magnets", ["bearing", "magnet"]],
 ];
-import { frameFromPlane, toSketch } from "@meercad/sketch";
+import { frameFromPlane, ORIGIN_FRAMES, toSketch } from "@meercad/sketch";
 import { draftFeature, FEATURES, featureName, partName } from "../lib/features";
 import { edgeInset, holeBesideEdge } from "../lib/holes";
 import { gearParams, pairInfo } from "../lib/gears";
@@ -119,8 +119,8 @@ export function pickKindsFor(dialog: DialogState | null): Set<PickKind> {
     base: ["plane", "face"],
     neutral: ["plane", "face"],
     upTo: ["plane", "face"],
-    // Holes also go beside a tapped edge, the right distance in.
-    points: op === "hole" ? ["face", "edge"] : ["face"],
+    // Holes also go beside a tapped edge, the right distance in; parts also stand on an origin plane.
+    points: op === "hole" ? ["face", "edge"] : ["face", "plane"],
     catchIn: ["face", "edge"],
   };
   if (op === "linear_pattern" && dialog.field === "direction") return new Set(map["direction"]);
@@ -168,6 +168,34 @@ const jointsNow = () => useApp.getState().doc.mechanism?.joints;
 /** Steps whose points are taps on the face of their plane. */
 const placesPoints = (draft: Feature) =>
   draft.op === "hole" || draft.op === "standard_part" || draft.op === "snap_hook";
+
+/**
+ * Steps that make a part of their own where they are tapped: these also go on the ground (origin.XY)
+ * when the tap hits nothing, in their plane field and a standard part's places.
+ */
+export function placesOnGround(dialog: DialogState): boolean {
+  const { feature, field } = dialog;
+  if (field === "points") return feature.op === "standard_part";
+
+  return (
+    field === "plane" &&
+    (feature.op === "standard_part" ||
+      feature.op === "spring" ||
+      feature.op === "screw" ||
+      placedAtTap(feature))
+  );
+}
+
+/** The normal of a flat pick: a flat face's, or an origin plane's (the ground is origin.XY). */
+function flatNormal(pick: Pick): [number, number, number] | null {
+  if (pick.kind === "face") return pick.normal;
+
+  if (pick.kind === "plane" && pick.planeId in ORIGIN_FRAMES) {
+    return ORIGIN_FRAMES[pick.planeId as keyof typeof ORIGIN_FRAMES].normal;
+  }
+
+  return null;
+}
 
 /** Steps centred, or started, where their face was tapped. */
 const placedAtTap = (draft: Feature) =>
@@ -380,14 +408,16 @@ const pickPlane: PickStep = (draft, pick, { meshes }, field) => {
   if (!spec) return;
 
   (draft as unknown as Record<string, PlaneSpec>)[field] = spec;
-  if (pick.kind !== "face" || !pick.normal) return;
+
+  const normal = flatNormal(pick);
+  if (!normal) return;
 
   if (placesPoints(draft)) {
-    (draft as Of<"hole">).points = [holePoint(pick.point, pick.normal)];
+    (draft as Of<"hole">).points = [holePoint(pick.point, normal)];
   } else if (draft.op === "spring" || draft.op === "screw") {
-    draft.center = holePoint(pick.point, pick.normal);
+    draft.center = holePoint(pick.point, normal);
   } else if (placedAtTap(draft)) {
-    (draft as Of<"text">).position = holePoint(pick.point, pick.normal);
+    (draft as Of<"text">).position = holePoint(pick.point, normal);
   }
 };
 
@@ -400,17 +430,26 @@ function holeBesidePickedEdge(draft: Of<"hole">, pick: Extract<Pick, { kind: "ed
   if (at) draft.points = [...draft.points, holePoint(at.point, at.normal)];
 }
 
-/** Points are the tap projected onto the hole's plane (u, v are the same on parallel faces). */
+/**
+ * Points are the tap projected onto the hole's plane (u, v are the same on parallel faces). A tap on
+ * an origin plane (or the ground) the parts are not on yet puts them there, starting with this place.
+ */
 const pickPoint: PickStep = (draft, pick, scene) => {
+  if (pick.kind === "plane") {
+    const on = (draft as Of<"hole">).plane;
+    if (!("ref" in on) || on.ref !== pick.planeId) return pickPlane(draft, pick, scene, "plane");
+  }
+
   if (draft.op === "hole" && pick.kind === "edge") {
     holeBesidePickedEdge(draft, pick, scene);
 
     return;
   }
 
-  if (!placesPoints(draft) || pick.kind !== "face" || !pick.normal) return;
+  const normal = flatNormal(pick);
+  if (!placesPoints(draft) || !normal) return;
 
-  (draft as Of<"hole">).points = [...(draft as Of<"hole">).points, holePoint(pick.point, pick.normal)];
+  (draft as Of<"hole">).points = [...(draft as Of<"hole">).points, holePoint(pick.point, normal)];
 };
 
 /** What a pick in the view does, by the selection field that is active. */
@@ -3403,7 +3442,7 @@ function StandardPartFields({ f: feature, set }: { f: Of<"standard_part">; set: 
             <SelBox
               field="plane"
               items={[describePlane(feature.plane)]}
-              placeholder={t("Tap a flat face where the part goes")}
+              placeholder={t("Tap a flat face or the ground where the part goes")}
             />
           </div>
           <FlipButton flip={feature.flip} title={t("Turn the other way")} set={set} />
