@@ -3,6 +3,7 @@
  * filters; maps screen points onto sketch planes; drives standard views for the view cube.
  */
 
+import { smoothNormals } from "./smoothNormals.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -38,6 +39,9 @@ export interface Frame {
 }
 
 /** Structural copy of the kernel's BodyMesh so the viewport does not depend on the kernel. */
+/** A body with at least this many faces is taken as made of facets (a mesh that was cut or joined). */
+const FACETED_FACES = 1500;
+
 export interface ViewMesh {
   bodyId: string;
   positions: Float32Array;
@@ -1299,10 +1303,24 @@ export class Viewport {
     element.addEventListener("pointercancel", end, { capture: true });
   }
 
+  /**
+   * Imported meshes shaded smooth (curved where their triangles meet at a shallow angle) instead of
+   * triangle by triangle. Counts for bodies built from now on.
+   */
+  smoothMeshes = false;
+
   private buildBody(mesh: ViewMesh, ghost: boolean): BodyObj {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
-    geo.setAttribute("normal", new THREE.BufferAttribute(mesh.normals, 3));
+
+    // An imported mesh comes as loose triangles, each a face of its own, with flat directions; cut
+    // or joined it is a body of as many small flat faces.
+    const looseTriangles = mesh.edgeLines.length === 0 && mesh.faceRanges.length === mesh.indices.length;
+    const facets = looseTriangles || mesh.faceRanges.length / 3 >= FACETED_FACES;
+    const normals =
+      this.smoothMeshes && facets ? smoothNormals(mesh.positions, mesh.normals, mesh.indices) : mesh.normals;
+
+    geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(mesh.positions.length), 3));
     geo.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     geo.computeBoundingSphere();

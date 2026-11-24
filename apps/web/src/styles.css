@@ -5125,6 +5125,40 @@ html[data-compact] .sketch-done {
   font: 11px var(--mono);
   color: var(--text-2);
 }
+/* Strength check and topology suggestion (beta): the same card, with its inputs. */
+.strength-card {
+  width: 350px;
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+}
+.strength-card .strength-row {
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.strength-card .strength-row .muted {
+  white-space: nowrap;
+}
+.strength-card input.field {
+  width: 64px;
+  flex: none;
+}
+.strength-card select.field {
+  min-width: 0;
+  flex: 1;
+}
+.strength-card hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2px 0;
+}
+.strength-card .strength-low {
+  color: var(--warn, #b7791f);
+}
+.strength-card .strength-bad {
+  color: var(--danger, #c53030);
+}
 html[data-compact] .deviation-card {
   left: 6px;
   right: 6px;
