@@ -944,7 +944,8 @@ function HandleLabels({ viewport }: { viewport: Viewport }) {
       {handles.map((handle) => {
         const s = viewport.handleTipScreen(handle.id);
         // A sketch line's arrow moves it by an amount, not to one: its size is in the chip beside it.
-        if (!s || handle.id === "sketch_line") return null;
+        // The section's arrow has its value in the section bar.
+        if (!s || handle.id === "sketch_line" || handle.id === "section") return null;
 
         // Hole handles carry the radius but show and take the diameter.
         const scale = handle.id === "hole" ? 2 : 1;
