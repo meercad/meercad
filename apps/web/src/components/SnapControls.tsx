@@ -28,8 +28,8 @@ export function SnapControls({ viewport }: { viewport: Viewport | null }) {
           aria-pressed={snapGeometry}
           title={
             snapGeometry
-              ? t("Magnet on: snap to points, lines, circle centres and model edges")
-              : t("Magnet off: snap to points, lines, circle centres and model edges")
+              ? t("Magnet on: snap to points, lines, circle centres, model edges and the grid")
+              : t("Magnet off: points land where you place them (only existing points still catch)")
           }
           onClick={() => setPrefs({ snapGeometry: !snapGeometry })}
         >

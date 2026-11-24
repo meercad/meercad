@@ -362,7 +362,7 @@ export function Settings({ onShortcuts }: { onShortcuts: () => void }) {
               onChange={(event) => setPrefs({ snapGeometry: event.target.checked })}
             />
             {t(
-              "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings and alignments",
+              "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings, alignments and the grid",
             )}
           </label>
           <p className="muted">

@@ -243,8 +243,19 @@ describe("snapPoint", () => {
     expect(snapPoint(scene(), [133, 137])).toEqual({ pos: [133, 137] });
   });
 
-  it("skips geometry and alignments with smart snaps off", () => {
+  it("with the magnet off, only existing points catch: no geometry, alignments, axes or grid", () => {
     expect(snapPoint(scene({ snapGeometry: false }), [76, 51])).toEqual({ pos: [76, 51] });
     expect(snapPoint(scene({ snapGeometry: false }), [52, 133])).toEqual({ pos: [52, 133] });
+    // The grid stays on (shown) but no longer catches the cursor, nor do the origin axes.
+    expect(snapPoint(scene({ snapGeometry: false, snapGrid: true }), [133, 137])).toEqual({
+      pos: [133, 137],
+    });
+    expect(snapPoint(scene({ snapGeometry: false, snapGrid: true }), [33, 2])).toEqual({ pos: [33, 2] });
+    // Endpoints still connect.
+    expect(snapPoint(scene({ snapGeometry: false, snapGrid: true }), [52, 51])).toEqual({
+      pos: [50, 50],
+      point: "pa",
+      kind: "point",
+    });
   });
 });

@@ -99,6 +99,7 @@ export interface SnapScene {
   /** One screen pixel in sketch units: the snap distances are in pixels. */
   unit: number;
   snapGrid: boolean;
+  /** The magnet: off, nothing snaps but existing points (no geometry, axes, alignments or grid). */
   snapGeometry: boolean;
   targets: SnapTargets;
   modelEdges: ModelEdge[];
@@ -111,19 +112,22 @@ export interface SnapScene {
 const SNAP_PIXELS = { point: 10, curve: 7, axis: 6, align: 8 };
 
 /**
- * Where the cursor at `p` lands: existing points, then (with smart snaps) midpoints, crossings,
+ * Where the cursor at `p` lands: existing points, then (with the magnet on) midpoints, crossings,
  * curves and the model's edges, then the origin axes, alignments with other points and the grid.
- * `from` is the point being drawn from, so lines line up with it.
+ * With the magnet off only existing points still catch (so lines connect); everything else lands
+ * where it was placed, the grid included. `from` is the point being drawn from, so lines line up
+ * with it.
  */
 export function snapPoint(scene: SnapScene, p: Vec2, exclude?: Set<string>, from?: Vec2): Snap {
   const tol = scene.unit * SNAP_PIXELS.point;
   const pt = hitPoint(scene.sketch, scene.shown, p, tol, exclude);
   if (pt) return { pos: scene.shown.points.get(pt)!, point: pt, kind: "point" };
 
-  if (scene.snapGeometry) {
-    const onGeometry = snapToGeometry(scene, p, exclude) ?? snapToModel(scene, p);
-    if (onGeometry) return onGeometry;
-  }
+  // The magnet is the switch for all snapping in a sketch: off, the grid no longer catches either.
+  if (!scene.snapGeometry) return { pos: p };
+
+  const onGeometry = snapToGeometry(scene, p, exclude) ?? snapToModel(scene, p);
+  if (onGeometry) return onGeometry;
 
   return snapToAxis(scene, p) ?? alignOrGrid(scene, p, exclude, from);
 }
@@ -218,15 +222,13 @@ function alignOrGrid(scene: SnapScene, p: Vec2, exclude?: Set<string>, from?: Ve
   let ax: { v: number; from: Vec2 } | null = null;
   let ay: { v: number; from: Vec2 } | null = null;
 
-  if (scene.snapGeometry) {
-    const alignTol = scene.unit * SNAP_PIXELS.align;
+  const alignTol = scene.unit * SNAP_PIXELS.align;
 
-    for (const q of alignCandidates(scene, exclude, from)) {
-      const dx = Math.abs(q[0] - p[0]);
-      const dy = Math.abs(q[1] - p[1]);
-      if (dx < alignTol && (!ax || dx < Math.abs(ax.v - p[0]))) ax = { v: q[0], from: q };
-      if (dy < alignTol && (!ay || dy < Math.abs(ay.v - p[1]))) ay = { v: q[1], from: q };
-    }
+  for (const q of alignCandidates(scene, exclude, from)) {
+    const dx = Math.abs(q[0] - p[0]);
+    const dy = Math.abs(q[1] - p[1]);
+    if (dx < alignTol && (!ax || dx < Math.abs(ax.v - p[0]))) ax = { v: q[0], from: q };
+    if (dy < alignTol && (!ay || dy < Math.abs(ay.v - p[1]))) ay = { v: q[1], from: q };
   }
 
   const pos: Vec2 = [ax ? ax.v : toGrid(scene, p[0]), ay ? ay.v : toGrid(scene, p[1])];

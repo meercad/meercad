@@ -275,8 +275,8 @@ export default {
   Sketching: "Skizzieren",
   "Grid: show it and snap to it (its spacing follows the zoom; also for drag arrows)":
     "Raster: anzeigen und daran einrasten (der Abstand folgt dem Zoom; gilt auch für Ziehpfeile)",
-  "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings and alignments":
-    "Magnet: an Punkten, Linien, Modellkanten, Kreismitten, Mittelpunkten, Schnittpunkten und Ausrichtungen einrasten",
+  "Magnet: snap to points, lines, model edges, circle centres, midpoints, crossings, alignments and the grid":
+    "Magnet: an Punkten, Linien, Modellkanten, Kreismitten, Mittelpunkten, Schnittpunkten, Ausrichtungen und am Raster einrasten",
   "Endpoints always snap so lines connect. Hold Alt (⌥) while drawing to place a point freely.":
     "Endpunkte rasten immer ein, damit Linien verbunden sind. Halte beim Zeichnen Alt (⌥), um einen Punkt frei zu setzen.",
   "Projects folder": "Projektordner",
