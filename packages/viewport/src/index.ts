@@ -11,7 +11,7 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { SceneTexts } from "./sceneText.js";
-import { mouseZoomDelta, WheelClassifier } from "./wheel.js";
+import { isPinch, mouseZoomDelta, pinchDelta, pinchScale, WheelClassifier } from "./wheel.js";
 import {
   applyLook,
   drawSwatches,
@@ -568,6 +568,7 @@ export class Viewport {
       capture: true,
     });
     this.renderer.domElement.addEventListener("contextmenu", (event) => event.preventDefault());
+    this.trackCtrl();
     // Trackpad swipes orbit and pan before OrbitControls would zoom with them (see ./wheel).
     this.renderer.domElement.addEventListener("wheel", (event) => this.trackpadWheel(event), {
       capture: true,
@@ -614,6 +615,7 @@ export class Viewport {
     if (this.evenWheels.has(event)) return;
 
     const gesture = this.wheel.classify(event, this.swipeOrbits);
+    if (gesture === "zoom" && isPinch(event, this.ctrlHeld)) return this.pinchZoom(event);
     if (gesture === "zoom") return this.evenMouseZoom(event);
 
     event.preventDefault();
@@ -633,6 +635,53 @@ export class Viewport {
     } else {
       c.pan(dx * c.panSpeed, dy * c.panSpeed);
     }
+  }
+
+  /** The Ctrl key is down: a wheel event with ctrlKey is then Ctrl + swipe, not a pinch. */
+  private ctrlHeld = false;
+
+  /** Stops following the Ctrl key (on dispose). */
+  private untrackCtrl = () => {};
+
+  private trackCtrl(): void {
+    const set = (event: KeyboardEvent) => {
+      if (event.key === "Control") this.ctrlHeld = event.type === "keydown";
+    };
+
+    // Released outside the window: the keyup never arrives.
+    const blur = () => (this.ctrlHeld = false);
+    document.addEventListener("keydown", set, { capture: true, passive: true });
+    document.addEventListener("keyup", set, { capture: true, passive: true });
+    window.addEventListener("blur", blur);
+
+    this.untrackCtrl = () => {
+      document.removeEventListener("keydown", set, { capture: true });
+      document.removeEventListener("keyup", set, { capture: true });
+      window.removeEventListener("blur", blur);
+    };
+  }
+
+  /**
+   * A trackpad pinch zooms as far as the fingers spread or close (as in Shapr3D), towards the point
+   * under them, and never inverted. OrbitControls alone zooms only about half as far for it (it takes
+   * a pinch as ten wheel steps) and turns it round with "invert zoom". Sent again as an even event.
+   */
+  private pinchZoom(event: WheelEvent): void {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const deltaY = pinchDelta(pinchScale(event.deltaY), this.controls.zoomSpeed);
+    if (!Number.isFinite(deltaY) || deltaY === 0) return;
+
+    const even = new WheelEvent("wheel", {
+      deltaY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      bubbles: true,
+      cancelable: true,
+    });
+    this.evenWheels.add(even);
+    this.renderer.domElement.dispatchEvent(even);
   }
 
   /** Wheel events sent again with an even zoom step, so they are not sorted a second time. */
@@ -3679,6 +3728,7 @@ export class Viewport {
 
     this.disposed = true;
     this.handleListeners.abort();
+    this.untrackCtrl();
     for (const c of this.textureCache.values()) c.tex?.dispose();
     this.textureCache.clear();
     this.texts.dispose();
