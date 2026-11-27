@@ -1,4 +1,5 @@
 import { parseStl, writeStl } from "@meercad/io";
+import { withoutSlivers } from "./slivers.js";
 import { propagateTags, type resolveEdges, ResolveError, selectorForEdge } from "@meercad/naming";
 import {
   FeatureError,
@@ -2820,6 +2821,16 @@ function importFeature(feature: ImportFeature, ctx: Ctx): Omit<ModelState, "aren
   const { oc, arena } = ctx;
 
   if (feature.format === "stl") {
+    // Triangles without area go first (OCCT drops them and the mesh is no longer closed). A mesh
+    // with a picture keeps its triangles: the picture's coordinates go by their order.
+    const whole = feature.texture ? null : withoutSlivers(parseStl(bytes).positions);
+
+    if (whole) {
+      bytes = writeStl([
+        { positions: whole, indices: Uint32Array.from({ length: whole.length / 3 }, (_, i) => i) },
+      ]);
+    }
+
     const body = new Body(oc, arena, feature.id, stlSolid(ctx, feature, bytes));
     body.faceTags = body.faces.map((_, i) => [`${feature.id}.face[${i}]`]);
 
@@ -2885,6 +2896,9 @@ function importFeature(feature: ImportFeature, ctx: Ctx): Omit<ModelState, "aren
 function stlSolid(ctx: Ctx, feature: ImportFeature, bytes: Uint8Array): TopoDS_Shape {
   return meshSolid(ctx, `import-${feature.id}`, bytes, `STL file "${feature.fileName}"`);
 }
+
+/** Meshes with more triangles than this are not sewn shut (see meshSolid). */
+const SEW_LIMIT = 75_000;
 
 /**
  * Solid from a binary STL in memory, one face per triangle (see `stlSolid`). `trusted`: the
@@ -3035,6 +3049,15 @@ function meshSolid(
   };
 
   let solid = (!trusted && closedSolid()) || (toSolid(faces) ?? piecesSolid());
+
+  // Sewing looks at every pair of nearby edges: a minute and a half at 73,000 triangles, and at
+  // 90,000 the kernel ran out of memory and broke off. A large open mesh is reported instead.
+  if (!solid && count > SEW_LIMIT) {
+    throw new FeatureError(
+      `${what} is not a closed solid (${count} triangles)`,
+      "close its holes with repair_mesh or in your mesh tool, or reduce it to fewer triangles, and import it again",
+    );
+  }
 
   if (!solid) {
     // Small gaps between triangles: sew them shut, then try again.
