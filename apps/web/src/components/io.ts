@@ -124,6 +124,15 @@ export function seeThroughDoc(doc: MeercadDocument, parts: readonly string[], on
   const next: MeercadDocument = { ...doc, seeThrough: [...set] };
   if (!set.size) delete next.seeThrough;
 
+  // A part shown solid again forgets how much showed through it.
+  if (!on && doc.seeThroughAmount) {
+    const amounts = Object.fromEntries(
+      Object.entries(doc.seeThroughAmount).filter(([part]) => !parts.includes(part)),
+    );
+    if (Object.keys(amounts).length) next.seeThroughAmount = amounts;
+    else delete next.seeThroughAmount;
+  }
+
   return next;
 }
 

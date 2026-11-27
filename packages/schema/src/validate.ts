@@ -270,7 +270,7 @@ export function withoutRemovedFeatures<T>(input: T): { doc: T; removed: string[]
   const without = (r: unknown) =>
     r && typeof r === "object" ? Object.fromEntries(Object.entries(r).filter(([k]) => !gonePart(k))) : r;
   const listWithout = (l: unknown) => (Array.isArray(l) ? l.filter((x) => !gonePart(x)) : l);
-  for (const k of ["partColors", "partMaterials"]) if (k in d) out[k] = without(d[k]);
+  for (const k of ["partColors", "partMaterials", "seeThroughAmount"]) if (k in d) out[k] = without(d[k]);
   for (const k of ["partOrder", "seeThrough"]) if (k in d) out[k] = listWithout(d[k]);
 
   if (Array.isArray(d["partGroups"])) {

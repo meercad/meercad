@@ -37,10 +37,13 @@ const SKETCH_TOOLS = ["extrude", "revolve", "loft", "sweep", "rib"];
 
 type Report = RebuildOutput["report"];
 
+/** How solid a see-through part is drawn for the amount that shows through it (0.75: the usual 0.25). */
+export const ghostOpacity = (amount: number) => Math.min(0.95, Math.max(0.05, 1 - amount));
+
 /** What the view shows of a rebuild. */
 export function sceneFor(
   output: RebuildOutput,
-  doc: { features: readonly Feature[]; seeThrough?: string[] },
+  doc: { features: readonly Feature[]; seeThrough?: string[]; seeThroughAmount?: Record<string, number> },
   hidden: ReadonlySet<string>,
   sketchId: string | null,
   dialogOp: string,
@@ -54,6 +57,13 @@ export function sceneFor(
     references: output.references,
     hiddenBodies: hidden,
     ghostBodies: new Set(doc.seeThrough ?? []),
+    ...(doc.seeThroughAmount
+      ? {
+          ghostOpacity: new Map(
+            Object.entries(doc.seeThroughAmount).map(([part, amount]) => [part, ghostOpacity(amount)]),
+          ),
+        }
+      : {}),
     editingSketch: sketchId,
   };
 }

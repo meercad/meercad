@@ -396,7 +396,7 @@ export function useScene(
   const dialogOp = dialog?.feature.op;
   const scene = useMemo<SceneData | null>(
     () => (output ? sceneFor(output, doc, hidden, sketchId, dialogOp ?? "") : null),
-    [output, hidden, sketchId, doc.features, doc.seeThrough, dialogOp],
+    [output, hidden, sketchId, doc.features, doc.seeThrough, doc.seeThroughAmount, dialogOp],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

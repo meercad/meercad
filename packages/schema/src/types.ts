@@ -1304,6 +1304,11 @@ export interface MeercadDocument {
   /** Parts drawn see-through, as a reference to model against (a scan, for instance). */
   seeThrough?: string[];
   /**
+   * How much shows through a see-through part (by body id), from just above 0 (nearly solid, like
+   * milky filament) to 1 (clear). Parts of `seeThrough` without an entry show the usual 0.75.
+   */
+  seeThroughAmount?: Record<string, number>;
+  /**
    * Materials of parts (by body id): an id from the built-in library in model/materials ("petg")
    * or of one of the document's own `materials`. Gives mass and weight, the look in the viewport
    * and the filament in 3MF exports.
@@ -1431,7 +1436,8 @@ export type DocOp =
    */
   | { type: "set_part_color"; part: string; color: string | null }
   /** Draws parts see-through (a reference to model against, e.g. a scan), or solid again. */
-  | { type: "set_see_through"; parts: string[]; on: boolean }
+  /** `amount` (above 0 to 1): how much shows through; without it the usual look. */
+  | { type: "set_see_through"; parts: string[]; on: boolean; amount?: number }
   /** The parts list: named folders of parts and/or the order of parts (body ids); null clears it. */
   | { type: "set_part_list"; groups?: { name: string; parts: string[] }[] | null; order?: string[] | null }
   /** The unit lengths are shown and typed in; stored values stay as they are. */
