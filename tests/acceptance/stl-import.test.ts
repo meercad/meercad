@@ -83,4 +83,110 @@ describe("STL import", () => {
     expect(f.status).toBe("error");
     expect(f.message).toMatch(/not a closed solid/);
   });
+
+  /** A cube of `size` with each side cut into n × n squares, corner by corner (wound outwards). */
+  function cube(size: number, n: number): number[] {
+    const out: number[] = [];
+    const step = size / n;
+    // Each side: where it starts and its two directions, so that u × v points out.
+    const sides: [number[], number[], number[]][] = [
+      [
+        [0, 0, 0],
+        [0, 1, 0],
+        [1, 0, 0],
+      ],
+      [
+        [0, 0, size],
+        [1, 0, 0],
+        [0, 1, 0],
+      ],
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+        [0, 0, 1],
+      ],
+      [
+        [0, size, 0],
+        [0, 0, 1],
+        [1, 0, 0],
+      ],
+      [
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+      ],
+      [
+        [size, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+      ],
+    ];
+
+    for (const [o, u, v] of sides) {
+      const at = (i: number, j: number) => o.map((c, k) => c + (u[k]! * i + v[k]! * j) * step);
+
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          out.push(...at(i, j), ...at(i + 1, j), ...at(i + 1, j + 1));
+          out.push(...at(i, j), ...at(i + 1, j + 1), ...at(i, j + 1));
+        }
+      }
+    }
+
+    return out;
+  }
+
+  const asStl = (corners: number[]) =>
+    Buffer.from(
+      writeStl([
+        {
+          positions: Float32Array.from(corners),
+          indices: Uint32Array.from({ length: corners.length / 3 }, (_, i) => i),
+        },
+      ]),
+    ).toString("base64");
+
+  it("takes a closed mesh with a triangle of no area (a point on an edge) as a solid", async () => {
+    // The bottom's edge from the origin to (10, 0, 0) has a point in its middle on the front's side
+    // only; a triangle without area closes the gap, as mesh tools leave it after reducing a mesh.
+    const [o, x, y, z, m] = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [0, 10, 0],
+      [0, 0, 10],
+      [5, 0, 0],
+    ] as [number[], number[], number[], number[], number[]];
+    const corners = [
+      [o, y, x],
+      [o, m, z],
+      [m, x, z],
+      [x, m, o],
+      [o, z, y],
+      [x, y, z],
+    ].flat(2) as number[];
+    const s = await newSession();
+    const r = s.rebuild(
+      doc([{ id: "im1", op: "import", format: "stl", fileName: "t.stl", data: asStl(corners) }]),
+    );
+
+    expect(r.report.features[0]).toMatchObject({ status: "ok" });
+    expect(r.report.bodies[0]!.volume).toBeCloseTo(1000 / 6, 3);
+    // Shown with its own triangles: six, none of them without area.
+    expect(r.report.bodies[0]!.faces).toBe(6);
+    expect(r.meshes[0]!.indices.length / 3).toBe(6);
+  });
+
+  it("reports a large open mesh at once instead of sewing it for minutes", async () => {
+    // 6 × 2 × 80² = 76,800 triangles, one missing.
+    const corners = cube(40, 80).slice(9);
+    const started = Date.now();
+    const r = (await newSession()).rebuild(
+      doc([{ id: "im1", op: "import", format: "stl", fileName: "big.stl", data: asStl(corners) }]),
+    ).report;
+
+    expect(r.features[0]).toMatchObject({ status: "error" });
+    expect(r.features[0]!.message).toMatch(/not a closed solid \(76799 triangles\)/);
+    expect(r.features[0]!.hint).toMatch(/repair_mesh/);
+    expect(Date.now() - started).toBeLessThan(60_000);
+  }, 120_000);
 });
