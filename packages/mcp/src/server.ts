@@ -1090,7 +1090,7 @@ server.registerTool(
   {
     title: "Wall thickness",
     description:
-      'Measures a part\'s walls (rays into the material from all over the surface) against the wall a printer needs (minWall, default 1 mm): the thinnest wall and where, the share of the surface thinner than minWall, and the thin spots (each place thinner than minWall: its thinnest point, that wall, the area). quality: "fast" shoots a fifth of the rays (a quick check after a change; it can miss small spots). box measures only the surface inside it (the part still counts whole as material). The colour map stays shown in the app (red thin → green) unless show: false.',
+      'Measures a part\'s walls (rays into the material from all over the surface) against the wall a printer needs (minWall, default 1 mm): the thinnest wall and where, the share of the surface thinner than minWall, and the thin spots (each place thinner than minWall: its thinnest wall that covers more than a speck, a point there, the area). Rays that leave round a corner of more than 60° do not count as walls, and the sliver of a feather edge does not name a place; smallestRayMm still gives the smallest ray of all. quality: "fast" shoots a fifth of the rays (a quick check after a change; it can miss small spots). box measures only the surface inside it (the part still counts whole as material). The colour map stays shown in the app (red thin → green) unless show: false.',
     inputSchema: {
       part: z.string(),
       minWall: z.number().positive().optional(),
