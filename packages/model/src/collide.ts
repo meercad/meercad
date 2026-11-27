@@ -585,9 +585,18 @@ export function signedDistance(c: MeshCollider, p: V3): number {
  * the surface it leaves. With `exit` only faces the ray leaves through count: faces whose winding
  * normal points along the ray (1) or against it (-1, for meshes wound inside out). A ray that starts
  * on a facet beside a nearly flush neighbour (a tangent seam, tessellated a little differently) first
- * passes into that neighbour; this skips such hits.
+ * passes into that neighbour; this skips such hits. `hit.facing` gets how squarely the ray meets the
+ * face it ends on: 1 head-on, towards 0 the flatter it grazes it (the cosine of the angle between
+ * the ray and the face's normal).
  */
-export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6, exit?: 1 | -1): number {
+export function rayDistance(
+  c: MeshCollider,
+  o: V3,
+  d: V3,
+  skip = 1e-6,
+  exit?: 1 | -1,
+  hit?: { facing: number },
+): number {
   const T = c.tri;
   let best = Infinity;
   const inv = [1 / d[0], 1 / d[1], 1 / d[2]];
@@ -652,7 +661,16 @@ export function rayDistance(c: MeshCollider, o: V3, d: V3, skip = 1e-6, exit?: 1
       if (v < 0 || u + v > 1) continue;
 
       const t = (e2x * qx + e2y * qy + e2z * qz) / det;
-      if (t > skip && t < best) best = t;
+
+      if (t > skip && t < best) {
+        best = t;
+
+        if (hit) {
+          // |det| = |d·(e1×e2)|, and |e1×e2| is twice the triangle's area.
+          const area2 = Math.hypot(e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z, e1x * e2y - e1y * e2x);
+          hit.facing = Math.abs(det) / area2;
+        }
+      }
     }
   }
 

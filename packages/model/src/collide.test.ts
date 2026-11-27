@@ -227,6 +227,24 @@ describe("rayDistance", () => {
     expect(rayDistance(flipped, [7, 7, 2.5], [0, 0, -1], 1e-6, -1)).toBeCloseTo(2.5, 9);
   });
 
+  it("says how squarely the ray meets the face it ends on", () => {
+    const plate = box(0, 0, 0, 40, 30, 2.5);
+    const hit = { facing: 0 };
+
+    // Straight through: head-on.
+    expect(rayDistance(plate, [10, 10, 2.5], [0, 0, -1], 1e-6, 1, hit)).toBeCloseTo(2.5, 9);
+    expect(hit.facing).toBeCloseTo(1, 9);
+
+    // At 60° to the bottom's normal: twice as far, and the cosine is a half.
+    const slant: [number, number, number] = [Math.sin(Math.PI / 3), 0, -Math.cos(Math.PI / 3)];
+    expect(rayDistance(plate, [10, 10, 2.5], slant, 1e-6, undefined, hit)).toBeCloseTo(5, 9);
+    expect(hit.facing).toBeCloseTo(0.5, 9);
+
+    // A ray that meets nothing leaves the last value alone.
+    expect(rayDistance(plate, [10, 10, 2.5], [0, 0, 1], 1e-6, 1, hit)).toBe(Infinity);
+    expect(hit.facing).toBeCloseTo(0.5, 9);
+  });
+
   it("finds the nearest of many faces, in a tree", () => {
     const ball = sphere(10, 24);
     expect(rayDistance(ball, [-20, 0.3, 0.2], [1, 0, 0])).toBeCloseTo(10, 0);
