@@ -4,6 +4,7 @@
  * into the document's `blobs`, so ten versions of a scanned part hold the scan once.
  */
 import type { Feature, MeercadDocument, Version, VersionState } from "@meercad/schema";
+import { cloneJson } from "./clone.js";
 
 /** Contents shorter than this stay in the version itself. */
 const INLINE = 4096;
@@ -38,7 +39,7 @@ export function snapshot(
   at: number,
   blobs: Record<string, string>,
 ): Version {
-  const { format: _f, ...state } = structuredClone(designOf(doc));
+  const { format: _f, ...state } = cloneJson(designOf(doc));
 
   const keep = (data: string) => {
     if (data.length < INLINE) return data;
@@ -85,7 +86,7 @@ export function snapshot(
 
 /** A version as a whole document, imports filled in again; the file's versions and blobs are kept. */
 export function restored(doc: MeercadDocument, version: Version): MeercadDocument {
-  const state: VersionState = structuredClone(version.state);
+  const state: VersionState = cloneJson(version.state);
   state.features = state.features.map((feature): Feature => {
     if (feature.op === "lithophane" && feature.image.pixels.startsWith("blob:")) {
       const pixels = doc.blobs?.[feature.image.pixels];

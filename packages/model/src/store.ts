@@ -12,6 +12,7 @@ import { renameInExpr } from "./expr.js";
 import { FIT_VAR } from "./fit.js";
 import { mapFeatureExprs } from "./resolve.js";
 import { designOf, pruneBlobs, restored, snapshot } from "./versions.js";
+import { cloneJson } from "./clone.js";
 
 export class OpError extends Error {}
 
@@ -21,7 +22,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
   if (!v.ok) throw new OpError(`invalid op: ${v.errors.join("; ")}`);
 
   const op = v.value;
-  const next = structuredClone(doc);
+  const next = cloneJson(doc);
 
   switch (op.type) {
     case "add_features": {
@@ -33,7 +34,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
         at = indexOf(next, next.rollback) + 1;
       }
 
-      next.features.splice(at, 0, ...structuredClone(op.features));
+      next.features.splice(at, 0, ...cloneJson(op.features));
       if (next.rollback !== null && op.after === undefined) next.rollback = op.features.at(-1)!.id;
 
       break;
@@ -45,7 +46,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
         throw new OpError("edit_feature cannot change a feature id");
       }
 
-      const merged = { ...next.features[i], ...structuredClone(op.patch) };
+      const merged = { ...next.features[i], ...cloneJson(op.patch) };
 
       for (const [k, val] of Object.entries(merged)) {
         if (val === null) delete (merged as Record<string, unknown>)[k];
@@ -162,7 +163,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     }
     case "set_part_list":
       if (op.groups !== undefined) {
-        if (op.groups?.length) next.partGroups = structuredClone(op.groups);
+        if (op.groups?.length) next.partGroups = cloneJson(op.groups);
         else delete next.partGroups;
       }
 
@@ -185,8 +186,8 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     case "set_joint": {
       const mechanism = (next.mechanism ??= { joints: [] });
       const i = mechanism.joints.findIndex((j) => j.id === op.joint.id);
-      if (i >= 0) mechanism.joints[i] = structuredClone(op.joint);
-      else mechanism.joints.push(structuredClone(op.joint));
+      if (i >= 0) mechanism.joints[i] = cloneJson(op.joint);
+      else mechanism.joints.push(cloneJson(op.joint));
 
       break;
     }
@@ -222,8 +223,8 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       const mechanism = (next.mechanism ??= { joints: [] });
       const list = (mechanism.couplings ??= []);
       const i = list.findIndex((coupling) => coupling.id === op.coupling.id);
-      if (i >= 0) list[i] = structuredClone(op.coupling);
-      else list.push(structuredClone(op.coupling));
+      if (i >= 0) list[i] = cloneJson(op.coupling);
+      else list.push(cloneJson(op.coupling));
 
       break;
     }
@@ -243,7 +244,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
       break;
     }
     case "define_material": {
-      const material = structuredClone(op.material);
+      const material = cloneJson(op.material);
 
       if (MATERIALS.some((x) => x.id === material.id)) {
         throw new OpError(`"${material.id}" is a library material; give your own material another id`);
@@ -286,7 +287,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
         throw new OpError(`a variant named "${name}" already exists`);
       }
 
-      const v = { name, params: structuredClone(op.params) };
+      const v = { name, params: cloneJson(op.params) };
       if (i >= 0) list[i] = v;
       else list.push(v);
       if (next.variant === op.name) next.variant = name;
@@ -364,8 +365,8 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     case "set_reference": {
       const list = (next.references ??= []);
       const i = list.findIndex((reference) => reference.id === op.reference.id);
-      if (i >= 0) list[i] = structuredClone(op.reference);
-      else list.push(structuredClone(op.reference));
+      if (i >= 0) list[i] = cloneJson(op.reference);
+      else list.push(cloneJson(op.reference));
 
       break;
     }
@@ -394,7 +395,7 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     case "set_motion": {
       const mechanism = (next.mechanism ??= { joints: [] });
       const list = (mechanism.motions ??= []);
-      const motion = structuredClone(op.motion);
+      const motion = cloneJson(op.motion);
       motion.keys.sort((a, b) => a.at - b.at);
 
       const i = list.findIndex((x) => x.id === motion.id);

@@ -7,7 +7,7 @@ import {
   type RebuildOutput,
   type RebuildProgress,
 } from "@meercad/kernel/client";
-import { DocumentStore, OpError, withMotion } from "@meercad/model";
+import { cloneJson, DocumentStore, OpError, withMotion } from "@meercad/model";
 import {
   emptyDocument,
   withoutRemovedFeatures,
@@ -533,7 +533,7 @@ function displayDoc(): { doc: MeercadDocument; preview: boolean; problem: string
   const problem = draftProblem(dialog.feature);
   if (problem) return { doc: docStore.doc, preview: false, problem };
 
-  const doc = structuredClone(docStore.doc);
+  const doc = cloneJson(docStore.doc);
 
   if (dialog.isNew) {
     const at = doc.rollback
