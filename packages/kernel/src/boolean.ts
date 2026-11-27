@@ -93,6 +93,51 @@ export function booleanBodies(
   return unify(oc, arena, pre);
 }
 
+/** The volume of a shape's solids (always positive). */
+export function shapeVolume(oc: OC, arena: Arena, shape: TopoDS_Shape): number {
+  const props = arena.track(new oc.GProp_GProps());
+  oc.BRepGProp.VolumeProperties(shape, props, false, false, false);
+
+  return Math.abs(props.Mass());
+}
+
+/**
+ * Whether a joined part still holds its inputs: at least the volume of the biggest one, and it
+ * reaches as far as each of them. OCCT's fuse can report success and leave material out (a stack of
+ * 118 layers joined one by one came out at a third of its volume, 2026-11-14).
+ */
+export function joinKeptAll(oc: OC, arena: Arena, merged: Body, inputs: readonly Body[]): boolean {
+  const volume = shapeVolume(oc, arena, merged.shape);
+  const box = bounds(oc, arena, merged.shape);
+
+  return inputs.every((input) => {
+    const b = bodyBounds(oc, input);
+    const reaches = [0, 1, 2].every(
+      (a) => box.min[a]! <= b.min[a]! + 1e-3 && box.max[a]! >= b.max[a]! - 1e-3,
+    );
+
+    return reaches && volume >= shapeVolume(oc, arena, input.shape) * (1 - 1e-6) - 1e-9;
+  });
+}
+
+/**
+ * `target` joined with `tool`, checked: a fuse that lost material runs once more with a little
+ * tolerance, and if that loses material too the step fails instead of dropping it silently.
+ * Imported meshes (one face per triangle) are not measured, their volume integral takes too long.
+ */
+export function joinBodies(oc: OC, arena: Arena, target: Body, tool: Body, join = booleanBodies): Body {
+  const merged = join(oc, arena, target, tool, "fuse");
+  if (target.sourceMesh || tool.sourceMesh || joinKeptAll(oc, arena, merged, [target, tool])) return merged;
+
+  const again = join(oc, arena, target, tool, "fuse", target.bodyId, 1e-5);
+  if (joinKeptAll(oc, arena, again, [target, tool])) return again;
+
+  throw new FeatureError(
+    "join failed: the result would lose material",
+    "make the shapes overlap a little, or build them as new bodies and combine them in one boolean union",
+  );
+}
+
 /** Merges same-domain faces/edges and re-derives tags geometrically. */
 export function unify(oc: OC, arena: Arena, body: Body): Body {
   const u = arena.track(new oc.ShapeUpgrade_UnifySameDomain(body.shape, true, true, false));

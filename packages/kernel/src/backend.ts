@@ -88,7 +88,7 @@ import { copyMap, trackState } from "./tracking.js";
 import { edgesIn, facesIn, partsReaching, reach } from "./lookup.js";
 import { Body, listToArray } from "./body.js";
 import { composeMoves } from "./copymesh.js";
-import { bodyBounds, booleanBodies, bounds, boundsOverlap, unify } from "./boolean.js";
+import { bodyBounds, booleanBodies, bounds, boundsOverlap, joinBodies, unify } from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import {
@@ -2411,10 +2411,10 @@ function applyTool(
   }
 
   if (mode === "join") {
-    let merged = booleanBodies(ctx.oc, ctx.arena, candidates[0]!, tool, "fuse");
+    let merged = joinBodies(ctx.oc, ctx.arena, candidates[0]!, tool);
 
     for (const other of candidates.slice(1)) {
-      merged = booleanBodies(ctx.oc, ctx.arena, merged, other, "fuse");
+      merged = joinBodies(ctx.oc, ctx.arena, merged, other);
       bodies.delete(other.bodyId);
     }
 
