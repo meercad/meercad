@@ -196,8 +196,22 @@ describe("parts and joints", () => {
     d = applyOp(d, { type: "set_part_color", part: "ex1", color: null });
     expect(d.partColors).toBeUndefined();
     d = applyOp(d, { type: "set_see_through", parts: ["ex1", "ex2"], on: true });
+    expect(d.seeThroughAmount).toBeUndefined();
+    // How much shows through, per part; set again without an amount it is the usual look.
+    d = applyOp(d, { type: "set_see_through", parts: ["ex1", "ex2"], on: true, amount: 0.3 });
+    expect(d.seeThrough).toEqual(["ex1", "ex2"]);
+    expect(d.seeThroughAmount).toEqual({ ex1: 0.3, ex2: 0.3 });
+    d = applyOp(d, { type: "set_see_through", parts: ["ex1"], on: true });
+    expect(d.seeThroughAmount).toEqual({ ex2: 0.3 });
     d = applyOp(d, { type: "set_see_through", parts: ["ex1", "ex2"], on: false });
     expect(d.seeThrough).toBeUndefined();
+    expect(d.seeThroughAmount).toBeUndefined();
+    expect(() => applyOp(d, { type: "set_see_through", parts: ["ex1"], on: true, amount: 0 })).toThrow(
+      /invalid op/,
+    );
+    expect(() => applyOp(d, { type: "set_see_through", parts: ["ex1"], on: true, amount: 1.5 })).toThrow(
+      /invalid op/,
+    );
     d = applyOp(d, {
       type: "set_part_list",
       groups: [{ name: "Box", parts: ["ex1"] }],

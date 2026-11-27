@@ -231,9 +231,22 @@ describe("the side panel's menus and dialogs", () => {
     await contextMenu(partRow(/10 × 10/));
     await pickMenu("Show see-through");
     expect(currentDoc().seeThrough).toEqual(["ex2"]);
+    // An assistant set how much shows through this part and another: solid again forgets its own.
+    act(() => {
+      apply({ type: "set_see_through", parts: ["ex1", "ex2"], on: true, amount: 0.3 });
+    });
+    await contextMenu(partRow(/10 × 10/));
+    await pickMenu("Show solid");
+    expect(currentDoc().seeThrough).toEqual(["ex1"]);
+    expect(currentDoc().seeThroughAmount).toEqual({ ex1: 0.3 });
+    act(() => {
+      apply({ type: "set_see_through", parts: ["ex2"], on: true, amount: 0.3 });
+      apply({ type: "set_see_through", parts: ["ex1"], on: false });
+    });
     await contextMenu(partRow(/10 × 10/));
     await pickMenu("Show solid");
     expect(currentDoc().seeThrough ?? []).toEqual([]);
+    expect(currentDoc().seeThroughAmount).toBeUndefined();
     await contextMenu(partRow(/10 × 10/));
     await pickMenu("Hide");
     expect(useApp.getState().hidden.has("ex2")).toBe(true);

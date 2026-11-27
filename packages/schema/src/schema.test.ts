@@ -20,6 +20,18 @@ describe("validateDocument", () => {
     expect(validateDocument({ ...corpus("box-fillet.meercad.json"), seeThrough: "ex1" }).ok).toBe(false);
   });
 
+  it("keeps how much shows through a part, between 0 and 1", () => {
+    const withAmount = (seeThroughAmount: unknown) =>
+      validateDocument({ ...corpus("box-fillet.meercad.json"), seeThrough: ["ex1"], seeThroughAmount });
+    const r = withAmount({ ex1: 0.3 });
+
+    expect(r.ok ? r.value.seeThroughAmount : r.errors).toEqual({ ex1: 0.3 });
+    expect(withAmount({ ex1: 1 }).ok).toBe(true);
+    expect(withAmount({ ex1: 0 }).ok).toBe(false);
+    expect(withAmount({ ex1: 1.2 }).ok).toBe(false);
+    expect(withAmount({ ex1: "half" }).ok).toBe(false);
+  });
+
   it("reads files saved before the rename (leocad/1) as the current format", () => {
     const r = validateDocument({ ...corpus("box-fillet.meercad.json"), format: "leocad/1" });
     expect(r.ok ? r.value.format : r.errors).toBe("meercad/1");

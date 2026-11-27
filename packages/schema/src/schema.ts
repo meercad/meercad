@@ -873,6 +873,11 @@ export const documentSchema = {
         additionalProperties: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
       },
       seeThrough: arr({ type: "string", maxLength: 128 }),
+      seeThroughAmount: {
+        type: "object",
+        propertyNames: { maxLength: 128 },
+        additionalProperties: { type: "number", exclusiveMinimum: 0, maximum: 1 },
+      },
       partMaterials: {
         type: "object",
         propertyNames: { maxLength: 128 },
@@ -957,7 +962,10 @@ export const docOpSchema = {
       },
       ["part", "color"],
     ),
-    set_see_through: obj({ type: true, parts: arr(id), on: bool }, ["parts", "on"]),
+    set_see_through: obj(
+      { type: true, parts: arr(id), on: bool, amount: { type: "number", exclusiveMinimum: 0, maximum: 1 } },
+      ["parts", "on"],
+    ),
     set_part_list: obj(
       {
         type: true,

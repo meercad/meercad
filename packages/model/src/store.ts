@@ -154,9 +154,20 @@ export function applyOp(doc: MeercadDocument, input: unknown): MeercadDocument {
     }
     case "set_see_through": {
       const set = new Set(next.seeThrough ?? []);
-      for (const p of op.parts) op.on ? set.add(p) : set.delete(p);
+      const amounts = { ...(next.seeThroughAmount ?? {}) };
+
+      for (const p of op.parts) {
+        op.on ? set.add(p) : set.delete(p);
+        // Without an amount the part shows the usual look again.
+        if (op.on && op.amount !== undefined) amounts[p] = op.amount;
+        else delete amounts[p];
+      }
+
       if (set.size) next.seeThrough = [...set];
       else delete next.seeThrough;
+
+      if (Object.keys(amounts).length) next.seeThroughAmount = amounts;
+      else delete next.seeThroughAmount;
 
       break;
     }

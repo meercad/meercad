@@ -310,6 +310,8 @@ export interface SceneData {
   hiddenBodies?: ReadonlySet<string>;
   /** Bodies drawn transparent (e.g. the result before a cut preview). */
   ghostBodies?: ReadonlySet<string>;
+  /** How solid single ghost bodies are drawn (0 to 1); the others 0.25. */
+  ghostOpacity?: ReadonlyMap<string, number>;
   /** Sketch being edited: drawn by the editor overlay instead. */
   editingSketch?: string | null;
 }
@@ -410,6 +412,14 @@ const C = {
 
 /** A sketch's closed areas, neither hovered nor selected. */
 const REGION_OPACITY = 0.2;
+/** How solid a see-through part is drawn unless the scene says otherwise. */
+const GHOST_OPACITY = 0.25;
+/**
+ * Whether a body hides what lies behind it in the depth buffer: solid ones do, and a ghost drawn
+ * half solid or more, which then looks milky (its own back and the parts inside it stay dim) instead
+ * of clear as glass.
+ */
+const ghostHides = (ghost: boolean, opacity: number) => !ghost || opacity >= 0.5;
 
 interface BodyObj {
   mesh: ViewMesh;
@@ -420,6 +430,8 @@ interface BodyObj {
   segEdge: Int32Array;
   /** Drawn see-through (a reference part). */
   ghost: boolean;
+  /** How solid it is drawn: 1, or a ghost's share. */
+  opacity: number;
   /** What the colours were last painted for, so unchanged bodies are skipped. */
   painted?: string;
   /** Shows its picture (the colours under it stay white, so the picture is seen as it is). */
@@ -1110,13 +1122,14 @@ export class Viewport {
       if (data.hiddenBodies?.has(m.bodyId)) continue;
 
       const ghost = !!data.ghostBodies?.has(m.bodyId);
+      const opacity = ghost ? (data.ghostOpacity?.get(m.bodyId) ?? GHOST_OPACITY) : 1;
       const kept = old.get(m);
 
-      if (kept && kept.ghost === ghost) {
+      if (kept && kept.ghost === ghost && kept.opacity === opacity) {
         old.delete(m);
         next.push(kept);
       } else {
-        next.push(this.buildBody(m, ghost));
+        next.push(this.buildBody(m, ghost, opacity));
       }
     }
 
@@ -1392,7 +1405,7 @@ export class Viewport {
    */
   smoothMeshes = false;
 
-  private buildBody(mesh: ViewMesh, ghost: boolean): BodyObj {
+  private buildBody(mesh: ViewMesh, ghost: boolean, opacity = ghost ? GHOST_OPACITY : 1): BodyObj {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
 
@@ -1429,8 +1442,8 @@ export class Viewport {
           polygonOffsetFactor: 1,
           polygonOffsetUnits: 1,
           transparent: ghost,
-          opacity: ghost ? 0.25 : 1,
-          depthWrite: !ghost,
+          opacity,
+          depthWrite: ghostHides(ghost, opacity),
           side: THREE.DoubleSide,
         }),
         this.sectionCap,
@@ -1467,14 +1480,18 @@ export class Viewport {
 
     const edges = new THREE.LineSegments(
       lineGeo,
-      new THREE.LineBasicMaterial({ vertexColors: true, transparent: ghost, opacity: ghost ? 0.35 : 1 }),
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: ghost,
+        opacity: ghost ? Math.min(1, opacity + 0.1) : 1,
+      }),
     );
     edges.userData = { body: mesh.bodyId };
 
     const group = new THREE.Group();
     group.add(faces, edges);
 
-    return { mesh, group, faces, edges, triFace, segEdge, ghost };
+    return { mesh, group, faces, edges, triFace, segEdge, ghost, opacity };
   }
 
   private rebuildSketches(data: SceneData): void {
@@ -2022,8 +2039,8 @@ export class Viewport {
       b.faces.visible = m !== "wireframe";
       b.edges.visible = m !== "shaded" && !rendered;
       fm.transparent = m === "xray" || b.ghost;
-      fm.opacity = m === "xray" ? 0.22 : b.ghost ? 0.25 : 1;
-      fm.depthWrite = m !== "xray" && !b.ghost;
+      fm.opacity = m === "xray" ? 0.22 : b.opacity;
+      fm.depthWrite = m !== "xray" && ghostHides(b.ghost, b.opacity);
       // Hidden-line: flat white faces that only occlude, plus visible edges.
       fm.emissive.setHex(m === "hidden_line" ? 0xffffff : 0x000000);
       fm.emissiveIntensity = m === "hidden_line" ? 1 : 0;

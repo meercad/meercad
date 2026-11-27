@@ -4,7 +4,7 @@ import type { RebuildOutput } from "@meercad/kernel/client";
 import type { Feature, Joint } from "@meercad/schema";
 import type { Pick } from "@meercad/viewport";
 import { CUSTOM_PLANE_COLOR } from "../PlaneChooser";
-import { EMPTY_SCENE, featureOfPick, jointGlyphsFor, ORIGIN_FRAMES, sceneFor } from "./scene";
+import { EMPTY_SCENE, featureOfPick, ghostOpacity, jointGlyphsFor, ORIGIN_FRAMES, sceneFor } from "./scene";
 
 const frame = ORIGIN_FRAMES["origin.XY"]!;
 const sketchView = (id: string) => ({
@@ -65,6 +65,26 @@ describe("sceneFor", () => {
     expect(scene.bodies[1]!.edgeRanges.length).toBe(0);
     expect(scene.bodies[2]).toBe(output.meshes[2]);
     expect([...scene.ghostBodies!]).toEqual(["im1"]);
+    expect(scene.ghostOpacity).toBeUndefined();
+  });
+
+  it("draws a see-through part as solid as its amount says", () => {
+    const scene = sceneFor(
+      output,
+      { features, seeThrough: ["im1", "ex1"], seeThroughAmount: { im1: 0.3, ex1: 1 } },
+      new Set(),
+      null,
+      "",
+    );
+
+    expect([...scene.ghostOpacity!]).toEqual([
+      ["im1", 0.7],
+      ["ex1", 0.05],
+    ]);
+    // The usual see-through look is an amount of 0.75; nothing is drawn fully solid or not at all.
+    expect(ghostOpacity(0.75)).toBe(0.25);
+    expect(ghostOpacity(0.01)).toBe(0.95);
+    expect(ghostOpacity(1)).toBe(0.05);
   });
 
   it("keeps used sketches while one is edited or a profile tool is open", () => {
