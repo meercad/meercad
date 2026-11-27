@@ -88,7 +88,15 @@ import { copyMap, trackState } from "./tracking.js";
 import { edgesIn, facesIn, partsReaching, reach } from "./lookup.js";
 import { Body, listToArray } from "./body.js";
 import { composeMoves } from "./copymesh.js";
-import { bodyBounds, booleanBodies, bounds, boundsOverlap, joinBodies, unify } from "./boolean.js";
+import {
+  bodyBounds,
+  booleanBodies,
+  bounds,
+  boundsOverlap,
+  joinBodies,
+  pointOnFace,
+  unify,
+} from "./boolean.js";
 import { Geom } from "./geom.js";
 import { gearBody } from "./gear.js";
 import {
@@ -1907,9 +1915,106 @@ function draft(f: ResolvedDraft, ctx: Ctx): Omit<ModelState, "arena"> {
  * Faces moved along their normals. Each face is thickened into a slab of the distance (out of the
  * material, or into it for a negative distance), which is joined to the part or cut from it. The
  * slab's far side takes the face's tags, so later steps on that face still find it; its sides are
- * `<step>.side`. Neighbours at right angles extend flush; slanted ones get a step.
+ * `<step>.side`. Neighbours at right angles extend flush; slanted ones that stay get a step. Two flat
+ * neighbours that both move meet again in a sharp corner: the wedge their slabs leave open at the
+ * shared edge is filled (see mitres).
  */
 const OVERLAP = 1e-3;
+/** A corner is filled up to this many times the distance; a sharper one keeps its step. */
+const MITRE_LIMIT = 4;
+
+/**
+ * Wedges between the slabs of flat neighbours that move in the same direction. A slab stands square
+ * on its face, so at a shared edge two slabs leave a wedge open: outside a convex edge when the faces
+ * grow (a box grown on all sides lacked its corners), inside a concave one when they shrink (a spike
+ * stayed, on which later rounds failed). Each wedge is a prism along the edge from the edge to the
+ * line where the two moved faces meet; its faces on the moved faces take their tags.
+ */
+function mitres(ctx: Ctx, id: string, input: Body, these: { fi: number; d: number }[]): Body[] {
+  const { oc, arena, g } = ctx;
+  const moved = new Map(these.map((m) => [m.fi, m.d]));
+  const out: Body[] = [];
+  const add = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  input.edgeFaces.forEach((pair, ei) => {
+    if (pair.length !== 2 || !moved.has(pair[0]!) || !moved.has(pair[1]!)) return;
+
+    const [fa, fb] = pair as [number, number];
+    const na = input.faceInfo[fa]!.normal;
+    const nb = input.faceInfo[fb]!.normal;
+    const curve = arena.track(new oc.BRepAdaptor_Curve(input.edges[ei]!));
+    if (!na || !nb || String(curve.GetType()) !== "GeomAbs_Line") return;
+
+    const c = dot(na, nb);
+    if (Math.abs(c) > 1 - 1e-9) return;
+
+    const end = (t: number): Vec3 => {
+      const p = arena.track(curve.Value(t));
+
+      return [p.X(), p.Y(), p.Z()];
+    };
+
+    const p0 = end(curve.FirstParameter());
+    const p1 = end(curve.LastParameter());
+    const along = add(p1, p0, -1);
+    const length = Math.hypot(...along);
+    if (length < 1e-7) return;
+
+    // Into face b from the edge, within b's plane: the side of the edge on which b lies.
+    const e: Vec3 = [along[0] / length, along[1] / length, along[2] / length];
+    const side: Vec3 = [
+      nb[1] * e[2] - nb[2] * e[1],
+      nb[2] * e[0] - nb[0] * e[2],
+      nb[0] * e[1] - nb[1] * e[0],
+    ];
+    const mid = add(p0, along, 0.5);
+    const step = Math.min(1e-2, length / 10);
+    const into = pointOnFace(oc, arena, add(mid, side, step), input.faces[fb]!) ? 1 : -1;
+    const da = moved.get(fa)!;
+    const db = moved.get(fb)!;
+    // The slabs gape where a's slab leans away from b (and overlap where it leans over it).
+    if (da * into * dot(na, side) > -1e-9) return;
+
+    const ka = (da - c * db) / (1 - c * c);
+    const kb = (db - c * da) / (1 - c * c);
+    if (Math.max(Math.abs(ka), Math.abs(kb)) > MITRE_LIMIT * Math.max(Math.abs(da), Math.abs(db))) return;
+
+    const corners = [p0, add(p0, na, da), add(add(p0, na, ka), nb, kb), add(p0, nb, db)];
+    const wireBuilder = arena.track(new oc.BRepBuilderAPI_MakeWire());
+    const vs = corners.map((p) => g.vertex(p));
+    vs.forEach((vertex, i) =>
+      wireBuilder.Add(
+        arena.track(arena.track(new oc.BRepBuilderAPI_MakeEdge(vertex, vs[(i + 1) % vs.length]!)).Edge()),
+      ),
+    );
+
+    const section = arena.track(
+      arena.track(new oc.BRepBuilderAPI_MakeFace(arena.track(wireBuilder.Wire()), true)).Face(),
+    );
+    const wedge = new Body(
+      oc,
+      arena,
+      id,
+      arena.track(arena.track(new oc.BRepPrimAPI_MakePrism(section, g.vec(along), false, true)).Shape()),
+    );
+    wedge.faceTags = wedge.faces.map((_, i) => {
+      const n = wedge.faceInfo[i]!.normal;
+      const at = add(wedge.facePoints[i]!, p0, -1);
+
+      for (const [fi, normal, d] of [[fa, na, da] as const, [fb, nb, db] as const]) {
+        if (n && Math.abs(dot(n, normal)) > 1 - 1e-9 && Math.abs(dot(at, normal) - d) < 1e-6) {
+          return [...(input.faceTags[fi] ?? []), `${id}.face`];
+        }
+      }
+
+      return [`${id}.side`];
+    });
+    out.push(wedge);
+  });
+
+  return out;
+}
 
 function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena, g } = ctx;
@@ -2035,6 +2140,8 @@ function offsetFace(f: ResolvedOffsetFace, ctx: Ctx): Omit<ModelState, "arena"> 
 
       return slab;
     });
+    slabs.push(...mitres(ctx, f.id, input, these));
+
     const tool =
       slabs.length === 1 ? slabs[0]! : booleanBodies(oc, arena, slabs[0]!, slabs.slice(1), "fuse", f.id);
     body = booleanBodies(oc, arena, body, tool, sign > 0 ? "fuse" : "cut");
@@ -2443,6 +2550,11 @@ function applyTool(
   return { ...ctx.prev, bodies, tools };
 }
 
+/** BRepFilletAPI_MakeFillet.SetParams: angle, 3D, 2D, 3D and 2D approximation tolerances, deflection. */
+const FILLET_LOOSE = [1e-2, 1e-3, 1e-4, 1e-3, 1e-4, 1e-2] as const;
+const FILLET_TIGHT = [1e-3, 1e-5, 1e-6, 1e-5, 1e-6, 1e-3] as const;
+const FILLET_LOOSER = [1e-2, 1e-2, 1e-3, 1e-2, 1e-3, 1e-1] as const;
+
 function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<ModelState, "arena"> {
   const { oc, arena } = ctx;
   const size = f.op === "fillet" ? f.radius : f.distance;
@@ -2456,11 +2568,12 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
   const r2 = f.op === "fillet" ? f.radius2 : undefined;
   if (r2 !== undefined && !(r2 > 0)) throw new FeatureError("the end radius must be greater than zero");
 
-  const attempt = (r: number) => {
+  const attempt = (r: number, fit?: readonly [number, number, number, number, number, number]) => {
     const mk =
       f.op === "fillet"
         ? arena.track(new oc.BRepFilletAPI_MakeFillet(input.shape, "ChFi3d_Rational"))
         : arena.track(new oc.BRepFilletAPI_MakeChamfer(input.shape));
+    if (fit && mk instanceof oc.BRepFilletAPI_MakeFillet) mk.SetParams(...fit);
 
     for (const ei of ref.edges) {
       if (r2 !== undefined && mk instanceof oc.BRepFilletAPI_MakeFillet) {
@@ -2484,7 +2597,13 @@ function edgeTreatment(f: ResolvedFillet | ResolvedChamfer, ctx: Ctx): Omit<Mode
     return check.IsValid() ? { mk, shape } : null;
   };
 
-  const ok = attempt(size);
+  // On free-form faces (a loft through splines or arcs, rounded along the edge to its end face) OCCT's
+  // usual fitting of the round fails or gives a broken part; fitted looser or tighter it comes out whole.
+  const ok =
+    attempt(size) ??
+    (f.op === "fillet"
+      ? (attempt(size, FILLET_LOOSE) ?? attempt(size, FILLET_TIGHT) ?? attempt(size, FILLET_LOOSER))
+      : null);
 
   if (!ok) {
     let r = size;
@@ -2867,7 +2986,7 @@ function importFeature(feature: ImportFeature, ctx: Ctx): Omit<ModelState, "aren
       const body = new Body(oc, arena, id, shape);
       if (!body.faces.length) throw new FeatureError(`STEP file "${feature.fileName}" contains no faces`);
 
-      body.faceTags = body.faces.map((_, i) => [`${id}.face[${i}]`]);
+      body.faceTags = stepFaceTags(ctx, id, body);
       bodies.set(id, unifyIfNeeded(ctx, body));
     });
 
@@ -2875,6 +2994,37 @@ function importFeature(feature: ImportFeature, ctx: Ctx): Omit<ModelState, "aren
   } finally {
     oc.FS.unlink(path);
   }
+}
+
+const STEP_FACE_KINDS: Record<string, string> = {
+  GeomAbs_Plane: "plane",
+  GeomAbs_Cylinder: "cylinder",
+  GeomAbs_Cone: "cone",
+  GeomAbs_Sphere: "sphere",
+  GeomAbs_Torus: "torus",
+};
+
+/**
+ * Tags of a STEP part's faces: `<id>.face[i]` for each, and for the plain kinds of surface a second
+ * one that says what the face is, `<id>.plane[n]`, `<id>.cylinder[n]`, `<id>.cone[n]`,
+ * `<id>.sphere[n]`, `<id>.torus[n]` (counted per kind). A STEP file names no faces, so a number alone
+ * told nobody which face is the shaft a joint should turn about: `{face: "<id>.cylinder[*]", near}`
+ * picks the round face at a point.
+ */
+function stepFaceTags({ oc, arena }: Ctx, id: string, body: Body): string[][] {
+  const count: Record<string, number> = {};
+
+  return body.faces.map((face, i) => {
+    const kind = STEP_FACE_KINDS[String(arena.track(new oc.BRepAdaptor_Surface(face, true)).GetType())];
+    const tags = [`${id}.face[${i}]`];
+
+    if (kind) {
+      count[kind] = (count[kind] ?? 0) + 1;
+      tags.push(`${id}.${kind}[${count[kind] - 1}]`);
+    }
+
+    return tags;
+  });
 }
 
 /**
