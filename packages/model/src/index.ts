@@ -16,6 +16,7 @@ export * as motion from "./motion.js";
 export * as linkage from "./linkage.js";
 export * from "./rebuild.js";
 export { applyOp, nextFeatureId, DocumentStore, OpError } from "./store.js";
+export { cloneJson } from "./clone.js";
 export * from "./drawing.js";
 export * from "./materials.js";
 export * from "./standardParts.js";
