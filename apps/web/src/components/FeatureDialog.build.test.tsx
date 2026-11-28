@@ -86,5 +86,6 @@ describe("the step dialog", () => {
       .output!.report.features.filter((f) => f.status === "error")
       .map((f) => `${f.id}: ${f.message}`);
     expect(failed).toEqual([]);
-  });
+    // Every tool is built once: 49 s on an M4, over the usual two minutes on the CI runner (2026-11-28).
+  }, 600_000);
 });
